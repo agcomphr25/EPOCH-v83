@@ -206,6 +206,9 @@ import forensicAuditRoutes from './forensicAudit';
 import vaultRoutes from './vault';
 import cmmcRoutes from './cmmc';
 import chargeCodesRoutes from './chargeCodes';
+import purchaseRequisitionsRoutes from './purchaseRequisitions';
+import farFlowdownClausesRoutes from './farFlowdownClauses';
+import vendorDebarmentChecksRoutes from './vendorDebarmentChecks';
 import continuityRoutes from './continuity';
 import proteusLabsRoutes from './proteusLabs';
 import devSeedPunchesRoutes from './timekeeping/devSeedPunches';
@@ -754,6 +757,10 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   
   // Vendor purchase orders routes
   app.use('/api/vendor-pos', vendorPOsRoutes);
+  // Task #83 — Purchasing Controls
+  app.use('/api/purchase-requisitions', purchaseRequisitionsRoutes);
+  app.use('/api/far-flowdown-clauses', farFlowdownClausesRoutes);
+  app.use('/api/vendor-debarment-checks', vendorDebarmentChecksRoutes);
 
   // Quote management routes
   app.use(quotesRoutes);

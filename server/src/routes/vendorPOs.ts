@@ -585,7 +585,42 @@ router.get('/:id', async (req: Request, res: Response) => {
 // POST /api/vendor-pos - Create a new vendor PO
 router.post('/', requirePermission('purchasing.manage_pos'), async (req: Request, res: Response) => {
   try {
-    const data = insertVendorPOSchema.parse(req.body);
+    // Task #83: strip privileged exception fields from client input — they may
+    // ONLY be set by the dedicated /:id/direct-po-exception endpoint with
+    // session-bound actor capture, never via free-form create/update.
+    const sanitized = { ...(req.body ?? {}) };
+    delete sanitized.directPoExceptionApprovedAt;
+    delete sanitized.directPoExceptionApprovedById;
+    delete sanitized.directPoExceptionApprovedByName;
+    delete sanitized.directPoExceptionReason;
+    const requestedExceptionPath = sanitized.directPoExceptionRequested === true;
+    delete sanitized.directPoExceptionRequested;
+
+    const data = insertVendorPOSchema.parse(sanitized);
+
+    // Task #83: gate at creation — every PO must be backed by an APPROVED
+    // requisition OR explicitly opt into the direct-PO exception path
+    // (which is then unusable for issuance until /direct-po-exception runs).
+    if ((data as any).requisitionId) {
+      const { db: drizzleDb } = await import('../../db');
+      const { purchaseRequisitions } = await import('../../schema');
+      const { eq: dEq } = await import('drizzle-orm');
+      const [r] = await drizzleDb.select().from(purchaseRequisitions)
+        .where(dEq(purchaseRequisitions.id, (data as any).requisitionId));
+      if (!r) return res.status(400).json({ error: 'Linked requisition not found' });
+      if (r.status !== 'APPROVED' && r.status !== 'CONVERTED_TO_PO') {
+        return res.status(422).json({
+          error: 'Requisition not approved',
+          message: `Linked requisition ${r.reqNumber} is in status ${r.status}; only APPROVED requisitions may seed a vendor PO.`,
+        });
+      }
+    } else if (!requestedExceptionPath) {
+      return res.status(422).json({
+        error: 'Requisition required',
+        message: 'Vendor POs must reference an APPROVED requisition. Set { requisitionId } from an approved purchase requisition, or pass { directPoExceptionRequested: true } and have an authorized user approve the exception via POST /api/vendor-pos/:id/direct-po-exception.',
+      });
+    }
+
     const vendorPO = await storage.createVendorPO(data);
     res.status(201).json(vendorPO);
   } catch (error) {
@@ -616,7 +651,14 @@ router.put('/:id', requirePermission('purchasing.manage_pos'), async (req: Reque
 
     // Block edits on issued POs - except for status changes which are allowed
     const issuedStatuses = ['Sent', 'Partially Received', 'Fully Received'];
-    const data = insertVendorPOSchema.partial().parse(req.body);
+    // Task #83: strip privileged direct-PO exception fields — only the
+    // dedicated /:id/direct-po-exception endpoint may set these.
+    const sanitizedPut = { ...(req.body ?? {}) };
+    delete sanitizedPut.directPoExceptionApprovedAt;
+    delete sanitizedPut.directPoExceptionApprovedById;
+    delete sanitizedPut.directPoExceptionApprovedByName;
+    delete sanitizedPut.directPoExceptionReason;
+    const data = insertVendorPOSchema.partial().parse(sanitizedPut);
     
     // Prevent setting status to 'Sent' via PUT — must use POST /:id/issue for atomic number generation
     if (data.status === 'Sent') {
@@ -1376,6 +1418,73 @@ router.post('/:id/send-rfq', async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/vendor-pos/:id/direct-po-exception
+// Task #83: Dedicated, session-bound endpoint that records a direct-PO
+// exception. The approver identity is taken from the authenticated session —
+// it is NEVER trusted from the request body. Requires the
+// `purchasing.direct_po_exception` capability (admin/owner roles bypass per
+// requirePermission contract).
+router.post('/:id/direct-po-exception', requirePermission('purchasing.direct_po_exception'), async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ error: 'Invalid vendor PO ID' });
+
+    const { reason } = (req.body ?? {}) as { reason?: string };
+    const trimmed = String(reason ?? '').trim();
+    if (trimmed.length < 10) {
+      return res.status(400).json({ error: 'Reason (≥10 chars) is required for the audit trail' });
+    }
+
+    const existing = await storage.getVendorPO(id);
+    if (!existing) return res.status(404).json({ error: 'Vendor PO not found' });
+    if (existing.requisitionId) {
+      return res.status(409).json({
+        error: 'PO is already linked to a requisition',
+        message: 'Direct-PO exceptions are only valid for POs not backed by a purchase requisition.',
+      });
+    }
+
+    // Honor the kill-switch from procurement_settings
+    const { db: drizzleDb2 } = await import('../../db');
+    const { procurementSettings } = await import('../../schema');
+    const sRows = await drizzleDb2.select().from(procurementSettings).limit(1);
+    const allow = sRows[0]?.allowDirectPo ?? false;
+    if (!allow) {
+      return res.status(403).json({
+        error: 'Direct-PO exceptions are disabled',
+        message: 'Procurement settings have allow_direct_po=false. An administrator must enable it before exceptions can be approved.',
+      });
+    }
+
+    const u: any = (req as any).user;
+    const approverId = u?.id;
+    const approverName = u?.fullName || u?.username || u?.email || `user:${approverId}`;
+    if (!approverId) return res.status(401).json({ error: 'Unauthenticated' });
+
+    const updated = await storage.updateVendorPO(id, {
+      directPoExceptionApprovedAt: new Date(),
+      directPoExceptionApprovedById: approverId,
+      directPoExceptionApprovedByName: String(approverName),
+      directPoExceptionReason: trimmed,
+    } as any);
+
+    const { auditService: aSvc } = await import('../services/auditService');
+    await aSvc.logEvent({
+      entityType: 'vendor' as any,
+      entityId: String(id),
+      action: 'DIRECT_PO_EXCEPTION_APPROVED',
+      actor: { id: approverId, username: u?.username, role: u?.role },
+      reason: trimmed,
+      meta: { poNumber: existing.poNumber ?? null },
+    }).catch(() => {});
+
+    res.json({ ok: true, vendorPO: updated });
+  } catch (err: any) {
+    console.error('Direct-PO exception error:', err);
+    res.status(500).json({ error: err?.message ?? 'Failed to record direct-PO exception' });
+  }
+});
+
 // POST /api/vendor-pos/:id/issue - Issue a PO, optionally sending confirmation email to vendor
 router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req: Request, res: Response) => {
   try {
@@ -1404,6 +1513,117 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
 
     const performedBy = String((req as any).user?.username ?? (req as any).user?.id ?? 'unknown');
     const performedByEmail = (req as any).user?.email as string | undefined;
+
+    // ── PURCHASING-CONTROLS GATE (Task #83): require approved requisition + fresh debarment check + FAR flowdowns ─
+    {
+      const { db: drizzleDb } = await import('../../db');
+      const {
+        purchaseRequisitions,
+        vendorPoFarFlowdowns,
+        vendorDebarmentChecks,
+        procurementSettings,
+      } = await import('../../schema');
+      const { eq: dEq, and: dAnd, gte: dGte, desc: dDesc } = await import('drizzle-orm');
+
+      const [setting] = await drizzleDb.select().from(procurementSettings).limit(1);
+      const allowDirectPo = setting?.allowDirectPo ?? false;
+      const directPoCap = setting?.directPoExceptionCapability ?? 'purchasing.direct_po_exception';
+      const freshnessDays = setting?.debarmentCheckFreshnessDays ?? 30;
+
+      const purchasingBlockers: string[] = [];
+
+      // (1) Requisition linkage
+      if (vendorPO.requisitionId) {
+        const [r] = await drizzleDb.select().from(purchaseRequisitions)
+          .where(dEq(purchaseRequisitions.id, vendorPO.requisitionId));
+        if (!r) purchasingBlockers.push('Linked requisition not found');
+        else if (r.status !== 'APPROVED' && r.status !== 'CONVERTED_TO_PO') {
+          purchasingBlockers.push(`Linked requisition must be APPROVED (currently ${r.status})`);
+        }
+      } else if (vendorPO.directPoExceptionApprovedAt && allowDirectPo) {
+        if (!vendorPO.directPoExceptionReason || vendorPO.directPoExceptionReason.trim().length < 10) {
+          purchasingBlockers.push('Direct-PO exception reason missing or too short');
+        }
+        if (!vendorPO.directPoExceptionApprovedById || !vendorPO.directPoExceptionApprovedByName) {
+          purchasingBlockers.push('Direct-PO exception is missing the approver identity');
+        } else {
+          // Verify the recorded approver actually held the exception capability
+          // at approval time, using the approver's ACTUAL role (not a hard-coded
+          // 'EMPLOYEE' assumption). Admin/owner roles bypass capability check.
+          try {
+            const { db: dDb2 } = await import('../../db');
+            const { users: usersTable } = await import('../../schema');
+            const { eq: dEq2 } = await import('drizzle-orm');
+            const [approverUser] = await dDb2.select().from(usersTable)
+              .where(dEq2(usersTable.id, vendorPO.directPoExceptionApprovedById));
+            if (!approverUser) {
+              purchasingBlockers.push(`Direct-PO exception approver id=${vendorPO.directPoExceptionApprovedById} no longer exists`);
+            } else if (approverUser.role !== 'ADMIN' && approverUser.role !== 'OWNER') {
+              const { getUserPermissions: gup } = await import('../services/permissionService');
+              const { permissionSet } = await gup(approverUser.id, approverUser.role);
+              if (!permissionSet.has(directPoCap)) {
+                purchasingBlockers.push(`Direct-PO exception approver (${vendorPO.directPoExceptionApprovedByName}) lacks capability "${directPoCap}"`);
+              }
+            }
+          } catch (e) {
+            purchasingBlockers.push('Could not verify direct-PO exception approver permissions');
+          }
+        }
+      } else if (vendorPO.directPoExceptionApprovedAt && !allowDirectPo) {
+        purchasingBlockers.push('Direct-PO exceptions are disabled in procurement settings; link an approved requisition instead');
+      } else {
+        purchasingBlockers.push('PO has no approved requisition. Either link a requisition or record a direct-PO exception.');
+      }
+
+      // (2) Competition method must be set
+      if (!vendorPO.competitionMethod) {
+        purchasingBlockers.push('Competition method must be recorded (competed | sole-source | small-purchase | exception)');
+      }
+      if (vendorPO.competitionMethod === 'sole-source' &&
+          (!vendorPO.soleSourceJustification || vendorPO.soleSourceJustification.trim().length < 10)) {
+        purchasingBlockers.push('Sole-source justification required (≥10 characters)');
+      }
+
+      // (3) FAR flowdowns recorded (at least one row)
+      const flowdowns = await drizzleDb.select().from(vendorPoFarFlowdowns)
+        .where(dEq(vendorPoFarFlowdowns.vendorPoId, id));
+      if (flowdowns.length === 0) {
+        purchasingBlockers.push('FAR flowdown checklist has not been recorded for this PO');
+      } else {
+        for (const fd of flowdowns) {
+          if (!fd.reasoning || fd.reasoning.trim().length < 3) {
+            purchasingBlockers.push(`FAR flowdown clause ${fd.clauseId}: applicability reasoning missing`);
+            break;
+          }
+        }
+      }
+
+      // (4) Vendor debarment check freshness
+      const cutoff = new Date(Date.now() - freshnessDays * 86_400_000);
+      const fresh = await drizzleDb.select().from(vendorDebarmentChecks).where(dAnd(
+        dEq(vendorDebarmentChecks.vendorId, vendorPO.vendorId),
+        dGte(vendorDebarmentChecks.checkedAt, cutoff),
+        dEq(vendorDebarmentChecks.result, 'pass'),
+      )).orderBy(dDesc(vendorDebarmentChecks.checkedAt)).limit(1);
+      if (fresh.length === 0) {
+        purchasingBlockers.push(`No fresh passing debarment check for vendor (within ${freshnessDays} days)`);
+      } else {
+        // Defer po_issuance evidence creation until AFTER issuance succeeds —
+        // a failed issuance attempt must not leave behind issuance evidence.
+        (req as any)._task83_freshDebarmentCheckId = fresh[0].id;
+        (req as any)._task83_freshDebarmentSource = fresh[0].source;
+        (req as any)._task83_freshDebarmentResult = fresh[0].result;
+      }
+
+      if (purchasingBlockers.length > 0) {
+        return res.status(422).json({
+          error: 'Purchasing controls gate failed',
+          message: `Cannot issue PO. Reason(s): ${purchasingBlockers.join('; ')}.`,
+          purchasingBlocked: true,
+          blockingReasons: purchasingBlockers,
+        });
+      }
+    }
 
     // ── COMPLIANCE GATE: Server-side enforcement (UI gate is not sufficient) ─
     // All four conditions are checked independently; status field alone is not trusted
@@ -1466,6 +1686,42 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
       });
 
       console.log(`[VendorPOIssuedNoEmail] PO ${poNumber} issued WITHOUT email by ${performedBy} — reason: ${trimmedReason}`);
+
+      // Task #83: NOW (post-issuance success) record po_issuance debarment evidence
+      try {
+        const fid = (req as any)._task83_freshDebarmentCheckId;
+        if (fid && vendorPO.vendorId) {
+          const { db: dDb } = await import('../../db');
+          const { vendorDebarmentChecks: vdc } = await import('../../schema');
+          await dDb.insert(vdc).values({
+            vendorId: vendorPO.vendorId,
+            context: 'po_issuance',
+            contextRefId: id,
+            source: (req as any)._task83_freshDebarmentSource,
+            result: (req as any)._task83_freshDebarmentResult,
+            checkedByUserId: (req as any).user?.id ?? null,
+            checkedByDisplayName: (req as any).user?.username ?? null,
+            notes: `Auto-recorded at PO issuance; references debarment check #${fid}`,
+          });
+        }
+      } catch (e) { console.error('[Task #83] failed to record po_issuance evidence', e); }
+
+      // Task #83: auto-convert linked requisition
+      if (vendorPO.requisitionId) {
+        try {
+          const { db: drizzleDb } = await import('../../db');
+          const { purchaseRequisitions } = await import('../../schema');
+          const { eq: dEq } = await import('drizzle-orm');
+          await drizzleDb.update(purchaseRequisitions).set({
+            status: 'CONVERTED_TO_PO',
+            convertedToPoId: id,
+            convertedAt: new Date(),
+            updatedAt: new Date(),
+          }).where(dEq(purchaseRequisitions.id, vendorPO.requisitionId));
+        } catch (e) {
+          console.error('[Task #83] failed to auto-convert requisition', e);
+        }
+      }
 
       return res.json({
         ...issuedPO,
@@ -1555,6 +1811,42 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
     }
 
     console.log(`[VendorPOIssuedEmailSent] PO ${poNumber} issued by ${performedBy} — email sent to ${issueToEmail}, cc: ${issueCcList.join(', ')}`);
+
+    // Task #83: NOW (post-issuance success + email confirmed) record po_issuance evidence
+    try {
+      const fid = (req as any)._task83_freshDebarmentCheckId;
+      if (fid && vendorPO.vendorId) {
+        const { db: dDb } = await import('../../db');
+        const { vendorDebarmentChecks: vdc } = await import('../../schema');
+        await dDb.insert(vdc).values({
+          vendorId: vendorPO.vendorId,
+          context: 'po_issuance',
+          contextRefId: id,
+          source: (req as any)._task83_freshDebarmentSource,
+          result: (req as any)._task83_freshDebarmentResult,
+          checkedByUserId: (req as any).user?.id ?? null,
+          checkedByDisplayName: (req as any).user?.username ?? null,
+          notes: `Auto-recorded at PO issuance; references debarment check #${fid}`,
+        });
+      }
+    } catch (e) { console.error('[Task #83] failed to record po_issuance evidence', e); }
+
+    // Task #83: auto-convert linked requisition
+    if (vendorPO.requisitionId) {
+      try {
+        const { db: drizzleDb } = await import('../../db');
+        const { purchaseRequisitions } = await import('../../schema');
+        const { eq: dEq } = await import('drizzle-orm');
+        await drizzleDb.update(purchaseRequisitions).set({
+          status: 'CONVERTED_TO_PO',
+          convertedToPoId: id,
+          convertedAt: new Date(),
+          updatedAt: new Date(),
+        }).where(dEq(purchaseRequisitions.id, vendorPO.requisitionId));
+      } catch (e) {
+        console.error('[Task #83] failed to auto-convert requisition', e);
+      }
+    }
 
     return res.json({
       ...issuedPO,

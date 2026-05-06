@@ -3733,6 +3733,14 @@ export const vendorPOs = pgTable('vendor_pos', {
   vendorConfirmedAt: timestamp('vendor_confirmed_at'),
   vendorConfirmedAction: text('vendor_confirmed_action'), // 'confirm' | 'reject' | 'acknowledge'
   archived: boolean('archived').default(false).notNull(),
+  // Task #83 — Purchasing Controls (Requisition → Approval → PO)
+  requisitionId: integer('requisition_id'), // FK to purchase_requisitions; required unless directPoException is set
+  competitionMethod: text('competition_method'), // competed | sole-source | small-purchase | exception
+  soleSourceJustification: text('sole_source_justification'),
+  directPoExceptionApprovedById: integer('direct_po_exception_approved_by_id'),
+  directPoExceptionApprovedByName: text('direct_po_exception_approved_by_name'),
+  directPoExceptionReason: text('direct_po_exception_reason'),
+  directPoExceptionApprovedAt: timestamp('direct_po_exception_approved_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
@@ -16942,3 +16950,170 @@ export const policyAcknowledgments = pgTable('policy_acknowledgments', {
 export type Policy = typeof policies.$inferSelect;
 export type PolicyVersion = typeof policyVersions.$inferSelect;
 export type PolicyAcknowledgment = typeof policyAcknowledgments.$inferSelect;
+
+// ─── Purchasing Controls: Requisitions, FAR Flowdowns, Debarment Checks ─────
+// Task #83 — auditable purchasing chain for government-contracting compliance.
+// Pipeline: purchase_requisitions → approvals → vendor_pos (link via requisitionId)
+//   + FAR flowdown evidence per PO
+//   + Vendor debarment-check events at requisition approval and PO issuance.
+
+export const purchaseRequisitions = pgTable('purchase_requisitions', {
+  id: serial('id').primaryKey(),
+  reqNumber: text('req_number').notNull().unique(),
+  status: text('status').notNull().default('DRAFT'),
+  projectId: text('project_id'),
+  chargeCodeId: integer('charge_code_id'),
+  category: text('category').notNull().default('default'),
+  vendorId: integer('vendor_id').references(() => vendors.id),
+  estimatedTotal: numeric('estimated_total').notNull().default('0'),
+  needByDate: date('need_by_date'),
+  justification: text('justification').notNull(),
+  competitionMethod: text('competition_method').notNull().default('competed'),
+  soleSourceJustification: text('sole_source_justification'),
+  requestedByUserId: integer('requested_by_user_id'),
+  requestedByDisplayName: text('requested_by_display_name'),
+  submittedAt: timestamp('submitted_at'),
+  approvedAt: timestamp('approved_at'),
+  rejectedAt: timestamp('rejected_at'),
+  rejectionReason: text('rejection_reason'),
+  convertedToPoId: integer('converted_to_po_id'),
+  convertedAt: timestamp('converted_at'),
+  cancelledAt: timestamp('cancelled_at'),
+  cancellationReason: text('cancellation_reason'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+export const purchaseRequisitionLines = pgTable('purchase_requisition_lines', {
+  id: serial('id').primaryKey(),
+  requisitionId: integer('requisition_id').notNull().references(() => purchaseRequisitions.id, { onDelete: 'cascade' }),
+  lineNumber: integer('line_number').notNull(),
+  description: text('description').notNull(),
+  partNumber: text('part_number'),
+  quantity: real('quantity').notNull(),
+  unit: text('unit'),
+  unitPrice: real('unit_price').notNull().default(0),
+  lineTotal: real('line_total').notNull().default(0),
+  notes: text('notes'),
+});
+
+export const purchaseRequisitionApprovals = pgTable('purchase_requisition_approvals', {
+  id: serial('id').primaryKey(),
+  requisitionId: integer('requisition_id').notNull().references(() => purchaseRequisitions.id, { onDelete: 'cascade' }),
+  stage: integer('stage').notNull(),
+  capability: text('capability').notNull(),
+  decision: text('decision'),
+  decidedByUserId: integer('decided_by_user_id'),
+  decidedByDisplayName: text('decided_by_display_name'),
+  decidedAt: timestamp('decided_at'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+
+export const purchaseRequisitionApprovalChain = pgTable('purchase_requisition_approval_chain', {
+  id: serial('id').primaryKey(),
+  category: text('category').notNull().default('default'),
+  minAmount: numeric('min_amount').notNull().default('0'),
+  maxAmount: numeric('max_amount'),
+  stage: integer('stage').notNull(),
+  capability: text('capability').notNull(),
+  description: text('description'),
+  isActive: boolean('is_active').notNull().default(true),
+});
+
+export const farFlowdownClauses = pgTable('far_flowdown_clauses', {
+  id: serial('id').primaryKey(),
+  clauseNumber: text('clause_number').notNull().unique(),
+  title: text('title').notNull(),
+  description: text('description'),
+  applicabilityRule: jsonb('applicability_rule'),
+  defaultApplicable: boolean('default_applicable').notNull().default(false),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+export const vendorPoFarFlowdowns = pgTable('vendor_po_far_flowdowns', {
+  id: serial('id').primaryKey(),
+  vendorPoId: integer('vendor_po_id').notNull().references(() => vendorPOs.id, { onDelete: 'cascade' }),
+  clauseId: integer('clause_id').notNull().references(() => farFlowdownClauses.id),
+  applicable: boolean('applicable').notNull(),
+  reasoning: text('reasoning').notNull(),
+  recordedByUserId: integer('recorded_by_user_id'),
+  recordedByDisplayName: text('recorded_by_display_name'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (t) => ({ uniq: unique().on(t.vendorPoId, t.clauseId) }));
+
+export const vendorDebarmentChecks = pgTable('vendor_debarment_checks', {
+  id: serial('id').primaryKey(),
+  vendorId: integer('vendor_id').notNull().references(() => vendors.id),
+  context: text('context').notNull(),
+  contextRefId: integer('context_ref_id'),
+  source: text('source').notNull(),
+  result: text('result').notNull(),
+  checkedAt: timestamp('checked_at').defaultNow().notNull(),
+  checkedByUserId: integer('checked_by_user_id'),
+  checkedByDisplayName: text('checked_by_display_name'),
+  evidenceUrl: text('evidence_url'),
+  attestationText: text('attestation_text'),
+  notes: text('notes'),
+});
+
+export const procurementSettings = pgTable('procurement_settings', {
+  id: serial('id').primaryKey(),
+  debarmentCheckFreshnessDays: integer('debarment_check_freshness_days').notNull().default(30),
+  allowDirectPo: boolean('allow_direct_po').notNull().default(false),
+  directPoExceptionCapability: text('direct_po_exception_capability').notNull().default('purchasing.direct_po_exception'),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+export const insertPurchaseRequisitionSchema = createInsertSchema(purchaseRequisitions).omit({
+  id: true, createdAt: true, updatedAt: true, submittedAt: true, approvedAt: true,
+  rejectedAt: true, rejectionReason: true, convertedToPoId: true, convertedAt: true,
+  cancelledAt: true, cancellationReason: true, reqNumber: true, status: true,
+}).extend({
+  justification: z.string().min(10, 'Justification must be at least 10 characters'),
+  competitionMethod: z.enum(['competed', 'sole-source', 'small-purchase', 'exception']).default('competed'),
+  estimatedTotal: z.union([z.number(), z.string()]).transform(v => String(v)),
+  needByDate: z.string().optional().nullable(),
+  vendorId: z.number().int().positive().optional().nullable(),
+  category: z.string().default('default'),
+});
+
+export const insertPurchaseRequisitionLineSchema = createInsertSchema(purchaseRequisitionLines).omit({
+  id: true,
+}).extend({
+  description: z.string().min(1, 'Description required'),
+  quantity: z.number().positive('Quantity must be > 0'),
+  unitPrice: z.number().min(0).default(0),
+});
+
+export const insertFarFlowdownClauseSchema = createInsertSchema(farFlowdownClauses).omit({
+  id: true, createdAt: true, updatedAt: true,
+}).extend({
+  clauseNumber: z.string().min(1),
+  title: z.string().min(1),
+});
+
+export const insertVendorDebarmentCheckSchema = createInsertSchema(vendorDebarmentChecks).omit({
+  id: true, checkedAt: true,
+}).extend({
+  vendorId: z.number().int().positive(),
+  context: z.enum(['requisition_approval', 'po_issuance', 'periodic']),
+  source: z.enum(['sam.gov', 'manual_attestation', 'document_upload']),
+  result: z.enum(['pass', 'fail', 'inconclusive']),
+});
+
+export type PurchaseRequisition = typeof purchaseRequisitions.$inferSelect;
+export type InsertPurchaseRequisition = z.infer<typeof insertPurchaseRequisitionSchema>;
+export type PurchaseRequisitionLine = typeof purchaseRequisitionLines.$inferSelect;
+export type InsertPurchaseRequisitionLine = z.infer<typeof insertPurchaseRequisitionLineSchema>;
+export type PurchaseRequisitionApproval = typeof purchaseRequisitionApprovals.$inferSelect;
+export type PurchaseRequisitionApprovalChain = typeof purchaseRequisitionApprovalChain.$inferSelect;
+export type FarFlowdownClause = typeof farFlowdownClauses.$inferSelect;
+export type InsertFarFlowdownClause = z.infer<typeof insertFarFlowdownClauseSchema>;
+export type VendorPoFarFlowdown = typeof vendorPoFarFlowdowns.$inferSelect;
+export type VendorDebarmentCheck = typeof vendorDebarmentChecks.$inferSelect;
+export type InsertVendorDebarmentCheck = z.infer<typeof insertVendorDebarmentCheckSchema>;
+export type ProcurementSettings = typeof procurementSettings.$inferSelect;

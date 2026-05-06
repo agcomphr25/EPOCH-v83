@@ -153,3 +153,28 @@ Cross-reference: Task #1206 — "Excise standalone timekeeping module."
 | April 21, 2026 | Initial constitution created. Supersedes all prior ad-hoc architectural guidance on labor, WAD, GL, and DCAA domains. |
 | April 21, 2026 | Section 7 added: standalone timekeeping module (`modules/timekeeping/`) permanently excised per Task #1206. `timekeeping.employees` table intentionally preserved as native FK anchor. |
 | May 6, 2026 | §5.2 enforcement (Task #77): TRAVELER-source punches now default to `approval_status = 'PENDING_APPROVAL'` at every write site (`punchLedger.openSession`, `switchAssignment`, `openOrSwitchForTraveler`, `timeClock` clock-in/job-switch, kiosk + portal punch routes, `storage.switchPunchLedgerAssignment`). Three DB CHECK constraints make the rule physically unbypassable: (a) `punch_ledger_approval_status_chk` pins the enum, (b) `punch_ledger_traveler_no_auto_chk` forbids TRAVELER+AUTO, (c) `punch_ledger_approved_requires_link_chk` requires `labor_approval_id` on every APPROVED, WAD-linked TRAVELER row (and `labor_approval_id` or `labor_budget_override_id` on APPROVED_OVERRUN), so no future code path can flip a punch to APPROVED without inserting the matching `labor_approvals` audit row first. `AUTO` remains a valid status only for non-TRAVELER system-reconciliation entries (e.g., `SALARIED_ENTRY` draft posting; KIOSK/PORTAL punches with no traveler/WAD link). Supervisor approval via `POST /api/timekeeping/labor-approvals` is the sole transition that flips `PENDING_APPROVAL`/`FLAGGED` → `APPROVED` (route performs the `labor_approvals` insert and the `punch_ledger` UPDATE atomically). Migration `0099` opens with a fail-fast `DO $$ ... $$` precondition that aborts with an actionable message if any unbackfilled TRAVELER+AUTO rows or APPROVED-but-unlinked rows still exist. Historical rows are reconciled by `server/scripts/backfillPunchApprovals.ts --cutover <ISO-DATE> [--apply] [--report ./report.json]`, which only touches rows created strictly before the cutover (post-cutover writes already obey the new default and are intentionally left untouched), warns if any post-cutover TRAVELER+AUTO rows exist, and produces a deterministic JSON reconciliation report listing every group it backfilled and every row it could not. |
+| May 6, 2026 | Section 8 added: Purchasing Controls (requisition → approval → PO chain) per Task #83. |
+
+---
+
+## Section 8 — Purchasing Controls (Requisition → Approval → PO)
+
+Added by Task #83 (May 6, 2026). Government-contracting (FAR/DFARS) compliance requires that vendor purchase orders trace back to an auditable purchase request decision and capture FAR clause flowdowns plus vendor responsibility (debarment) evidence.
+
+**Authoritative pipeline:**
+```
+purchase_requisitions → purchase_requisition_approvals → vendor_pos
+  + vendor_po_far_flowdowns (per-PO clause checklist)
+  + vendor_debarment_checks  (SAM.gov / attestation evidence, freshness-bound)
+```
+
+**Vendor PO issuance gate (`POST /api/vendor-pos/:id/issue`)** evaluates, in addition to the existing compliance review gate:
+
+1. PO is linked to an `APPROVED` requisition, **or** carries a populated direct-PO exception (only when `procurement_settings.allow_direct_po = true`).
+2. `competition_method` is recorded; `sole_source_justification` is non-empty (≥10 chars) when method = `sole-source`.
+3. At least one `vendor_po_far_flowdowns` row is recorded for the PO with `reasoning` ≥3 chars per row (applicable=false rows still count and are required to record reasoning).
+4. A passing `vendor_debarment_checks` row exists for the vendor within `procurement_settings.debarment_check_freshness_days` (default 30). The issuance flow auto-records a `po_issuance` evidence row referencing that check.
+
+Direct-PO without requisition is a **deviation path** and is intentionally discouraged. It must be approved by a holder of the `purchasing.direct_po_exception` capability, with a written reason captured on the PO itself, and is surfaced in the procurement audit report.
+
+See `docs/procurement-policy.md` for the full policy, capability matrix, recommended approval-chain seeds, and audit report endpoint.

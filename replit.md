@@ -37,6 +37,7 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed to streamline oper
 *   **User Permissions (Source of Truth):** `userPermissions.ts`
 *   **Architecture Constitution:** `docs/EPOCH_ARCHITECTURE_CONSTITUTION.md`
 *   **Payroll Export Design:** `docs/payroll-export-design.md`
+*   **Procurement Policy:** `docs/procurement-policy.md`
 *   **Financial Review Config:** `client/src/config/financialReviewConfig.json`
 *   **User Identity Layer:** `server/identity/userIdentity.ts`
 *   **PWA Service Worker:** `client/public/sw.js`
@@ -63,6 +64,7 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed to streamline oper
 *   **Order Management:** End-to-end order processing with atomic ID reservation, rush fees, priority system, path-based signature emails, and card-before-save flows.
 *   **Inventory & Production:** Parts list management, POs, inventory CSV import, FIFO packet building with AS9100 traceability, dynamic inventory thresholds, demand-filtered BOM assignment, and cutting table management with barcode scanning.
 *   **Quality Control:** Nonconformance Record System, Vendor Evaluation, Hard QC Stops with authorized deviation workflows.
+*   **Purchasing Controls:** Purchase Requisition → multi-stage approval → Vendor PO chain. Vendor PO issuance is gated on an approved requisition (or recorded direct-PO exception), competition method, FAR/DFARS flowdown checklist with reasoning, and a fresh passing vendor debarment check (SAM.gov / attestation).
 *   **Employee Portal:** Employee-facing interface for timekeeping, PTO requests, and salaried time entry.
 *   **BOM System:** Supports both robust revision-controlled BOMs and a simpler P2 BOM Wizard, with a fallback mechanism for production order generation.
 *   **Timekeeping & Payroll:** DCAA-compliant employee time certification (hourly/salaried), salaried manual draft time entry, WAD-based labor charging enforcement, and a robust payroll export system with audit trails.
@@ -102,6 +104,7 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed to streamline oper
 *   **P2 Employee Data:** Portal employees require both a `timekeeping.employees` record (linked via `epochEmployeeId`) and a `users` record (linked via `users.employeeId`) for `createdBy` FKs; missing either results in a 403.
 *   **WAD Labor Charging Phase 1 (WARN):** Budget overrun or certification issues are currently only warnings and do not block sessions, but are recorded for supervisor review.
 *   **Timekeeping Dual-Pool Deprecation:** The standalone `modules/timekeeping` architecture and its dual-pool pattern (`tkDb` vs. `db`) are superseded. Do NOT introduce new imports from `modules/timekeeping/` or `tkDb`.
+*   **Purchasing Controls Gate:** `POST /api/vendor-pos/:id/issue` enforces requisition-linkage, FAR flowdown checklist, and vendor debarment check freshness *in addition to* the existing compliance review gate. Bypassing requires a direct-PO exception with `procurement_settings.allow_direct_po=true`. See `docs/procurement-policy.md`.
 
 ## Pointers
 

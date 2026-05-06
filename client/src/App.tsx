@@ -271,6 +271,7 @@ import SystemHealthChecksPage from './pages/SystemHealthChecksPage';
 import CommunicationLogsPage from './pages/CommunicationLogsPage';
 import MonitoredLinksManager from './pages/MonitoredLinksManager';
 import VendorsPage from './pages/VendorsPage';
+import PurchaseRequisitionsPage from './pages/PurchaseRequisitionsPage';
 import VendorPOPage from './pages/VendorPOPage';
 import VendorPOComplianceBackfillPage from './pages/VendorPOComplianceBackfillPage';
 import PDFTemplateManager from './pages/PDFTemplateManager';
@@ -653,6 +654,7 @@ function App() {
                   <Route path="/vendors" component={VendorManagement} />
                   <Route path="/vendor-pos/compliance-backfill" component={VendorPOComplianceBackfillPage} />
                   <Route path="/vendor-pos" component={VendorPOPage} />
+                  <Route path="/purchase-requisitions" component={PurchaseRequisitionsPage} />
                   
                   {/* Cost Accounting Routes */}
                   <Route path="/cost-accounting" component={CostAccountingPage} />

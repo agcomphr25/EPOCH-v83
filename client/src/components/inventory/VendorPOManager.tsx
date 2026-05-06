@@ -2175,6 +2175,8 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
   const [showForm, setShowForm] = useState(false);
   const [showDetailView, setShowDetailView] = useState(false);
   const [activeTab, setActiveTab] = useState('details');
+  // Task #83: Purchasing Controls modal
+  const [purchasingControlsOpen, setPurchasingControlsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [listTab, setListTab] = useState<'active' | 'closed' | 'archived'>('active');
   const [statusFilter, setStatusFilter] = useState<string>('any');
@@ -3321,6 +3323,17 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
               onClick={() => openComplianceModal(selectedVendorPO.id)}
             />
 
+            {/* Task #83: Purchasing Controls quick-link */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPurchasingControlsOpen(true)}
+              data-testid="button-purchasing-controls"
+              title="Requisition link, competition method, FAR flowdowns, debarment evidence, direct-PO exception"
+            >
+              Purchasing Controls
+            </Button>
+
             {/* Send RFQ Button (only for Draft) */}
             {selectedVendorPO.status === 'Draft' && (
               <Button
@@ -4302,6 +4315,224 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
           onAutoSelectOptionals={handleAutoSelectOptionals}
         />
       )}
+
+      {/* Task #83: Purchasing Controls Modal — captures requisition link,
+          competition method, sole-source justification, FAR flowdown
+          checklist, debarment-check evidence, and direct-PO exception. */}
+      {selectedVendorPO && (
+        <PurchasingControlsDialog
+          open={purchasingControlsOpen}
+          onOpenChange={setPurchasingControlsOpen}
+          vendorPo={selectedVendorPO}
+          onChanged={() => {
+            queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
+            queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', selectedVendorPO.id] });
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Task #83: Purchasing Controls dialog
+// ─────────────────────────────────────────────────────────────────────────────
+function PurchasingControlsDialog({
+  open, onOpenChange, vendorPo, onChanged,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  vendorPo: any;
+  onChanged: () => void;
+}) {
+  const [requisitionId, setRequisitionId] = useState<string>(vendorPo.requisitionId ? String(vendorPo.requisitionId) : '');
+  const [competitionMethod, setCompetitionMethod] = useState<string>(vendorPo.competitionMethod ?? '');
+  const [soleSourceJustification, setSoleSourceJustification] = useState<string>(vendorPo.soleSourceJustification ?? '');
+  const [exceptionReason, setExceptionReason] = useState('');
+  const [debarmentNotes, setDebarmentNotes] = useState('');
+  const [debarmentSource, setDebarmentSource] = useState<'sam.gov' | 'manual_attestation' | 'document_upload'>('manual_attestation');
+  const [debarmentResult, setDebarmentResult] = useState<'pass' | 'fail' | 'inconclusive'>('pass');
+
+  const { data: clauses = [] } = useQuery<any[]>({ queryKey: ['/api/far-flowdown-clauses'] });
+  const { data: appliedFlowdowns = [], refetch: refetchFlowdowns } = useQuery<any[]>({
+    queryKey: ['/api/far-flowdown-clauses/po', vendorPo.id],
+    queryFn: () => apiRequest(`/api/far-flowdown-clauses/po/${vendorPo.id}`),
+    enabled: open,
+  });
+  const [flowdownReasoning, setFlowdownReasoning] = useState<string>('Required by contract scope');
+
+  const saveBasics = useMutation({
+    mutationFn: () => apiRequest(`/api/vendor-pos/${vendorPo.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        requisitionId: requisitionId ? Number(requisitionId) : null,
+        competitionMethod: competitionMethod || null,
+        soleSourceJustification: soleSourceJustification || null,
+      }),
+    }),
+    onSuccess: () => { toast.success('Saved'); onChanged(); },
+    onError: (e: any) => toast.error(e?.message ?? 'Save failed'),
+  });
+
+  const recordDebarment = useMutation({
+    mutationFn: () => apiRequest('/api/vendor-debarment-checks', {
+      method: 'POST',
+      body: JSON.stringify({
+        vendorId: vendorPo.vendorId,
+        context: 'po_issuance',
+        contextRefId: vendorPo.id,
+        source: debarmentSource,
+        result: debarmentResult,
+        notes: debarmentNotes,
+      }),
+    }),
+    onSuccess: () => { toast.success('Debarment check recorded'); setDebarmentNotes(''); onChanged(); },
+    onError: (e: any) => toast.error(e?.message ?? 'Record failed'),
+  });
+
+  const recordException = useMutation({
+    mutationFn: () => apiRequest(`/api/vendor-pos/${vendorPo.id}/direct-po-exception`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: exceptionReason }),
+    }),
+    onSuccess: () => { toast.success('Direct-PO exception approved'); setExceptionReason(''); onChanged(); },
+    onError: (e: any) => toast.error(e?.message ?? 'Exception failed'),
+  });
+
+  // The backend uses PUT /api/far-flowdown-clauses/po/:poId with the FULL list
+  // (replace-all semantics). Compose the new list locally and PUT it.
+  const putFlowdowns = useMutation({
+    mutationFn: (flowdowns: { clauseId: number; applicable: boolean; reasoning: string }[]) =>
+      apiRequest(`/api/far-flowdown-clauses/po/${vendorPo.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ flowdowns }),
+      }),
+    onSuccess: () => { toast.success('FAR flowdowns saved'); refetchFlowdowns(); onChanged(); },
+    onError: (e: any) => toast.error(e?.message ?? 'Update failed'),
+  });
+
+  const appliedById = new Map<number, any>(appliedFlowdowns.map((f: any) => [f.clauseId, f]));
+  const toggleClause = (clauseId: number, applicable: boolean) => {
+    const next = clauses.map((c: any) => {
+      const existing = appliedById.get(c.id);
+      const isThis = c.id === clauseId;
+      const eff = isThis ? applicable : (existing?.applicable ?? false);
+      const reasoning = isThis
+        ? (flowdownReasoning.trim() || 'Required by contract scope')
+        : (existing?.reasoning ?? 'Not applicable');
+      return { clauseId: c.id, applicable: eff, reasoning };
+    });
+    putFlowdowns.mutate(next);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" data-testid="dialog-purchasing-controls">
+        <DialogHeader>
+          <DialogTitle>Purchasing Controls — PO #{vendorPo.poNumber ?? vendorPo.id}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-5">
+          <section className="space-y-2">
+            <h3 className="font-semibold">Requisition & Competition</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Linked Requisition ID</Label>
+                <Input value={requisitionId} onChange={(e) => setRequisitionId(e.target.value)} placeholder="APPROVED requisition id" data-testid="input-po-requisition-id" />
+              </div>
+              <div>
+                <Label>Competition Method</Label>
+                <select className="w-full border rounded px-2 py-2 text-sm" value={competitionMethod} onChange={(e) => setCompetitionMethod(e.target.value)} data-testid="select-po-competition-method">
+                  <option value="">— select —</option>
+                  <option value="competed">Competed</option>
+                  <option value="sole-source">Sole-Source</option>
+                  <option value="small-purchase">Small Purchase</option>
+                  <option value="exception">Exception</option>
+                </select>
+              </div>
+            </div>
+            {competitionMethod === 'sole-source' && (
+              <div>
+                <Label>Sole-Source Justification</Label>
+                <Textarea rows={2} value={soleSourceJustification} onChange={(e) => setSoleSourceJustification(e.target.value)} data-testid="input-po-sole-source-justification" />
+              </div>
+            )}
+            <Button size="sm" onClick={() => saveBasics.mutate()} disabled={saveBasics.isPending} data-testid="button-save-purchasing-basics">
+              {saveBasics.isPending ? 'Saving…' : 'Save'}
+            </Button>
+          </section>
+
+          <section className="space-y-2">
+            <h3 className="font-semibold">FAR Flowdown Checklist</h3>
+            <div>
+              <Label>Applicability Reasoning (used when toggling on)</Label>
+              <Input value={flowdownReasoning} onChange={(e) => setFlowdownReasoning(e.target.value)} data-testid="input-flowdown-reasoning" />
+            </div>
+            <div className="border rounded divide-y max-h-60 overflow-y-auto">
+              {clauses.map((c: any) => {
+                const existing = appliedById.get(c.id);
+                const on = !!existing?.applicable;
+                return (
+                  <div key={c.id} className="p-2 flex items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={on}
+                      onCheckedChange={(v) => toggleClause(c.id, !!v)}
+                      data-testid={`checkbox-flowdown-${c.id}`}
+                    />
+                    <div className="flex-1">
+                      <div className="font-mono text-xs">{c.clauseNumber}</div>
+                      <div>{c.title}</div>
+                      {existing?.reasoning && (
+                        <div className="text-xs text-gray-500 italic">{existing.reasoning}</div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className="space-y-2">
+            <h3 className="font-semibold">Debarment Check Evidence</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Source</Label>
+                <select className="w-full border rounded px-2 py-2 text-sm" value={debarmentSource} onChange={(e) => setDebarmentSource(e.target.value as any)} data-testid="select-debarment-source">
+                  <option value="manual_attestation">Manual Attestation</option>
+                  <option value="sam.gov">SAM.gov</option>
+                  <option value="document_upload">Document Upload</option>
+                </select>
+              </div>
+              <div>
+                <Label>Result</Label>
+                <select className="w-full border rounded px-2 py-2 text-sm" value={debarmentResult} onChange={(e) => setDebarmentResult(e.target.value as any)} data-testid="select-debarment-result">
+                  <option value="pass">Pass</option>
+                  <option value="fail">Fail</option>
+                  <option value="inconclusive">Inconclusive</option>
+                </select>
+              </div>
+            </div>
+            <Textarea rows={2} value={debarmentNotes} onChange={(e) => setDebarmentNotes(e.target.value)} placeholder="Notes / evidence reference" data-testid="input-debarment-notes" />
+            <Button size="sm" onClick={() => recordDebarment.mutate()} disabled={recordDebarment.isPending || !vendorPo.vendorId} data-testid="button-record-debarment">
+              {recordDebarment.isPending ? 'Recording…' : 'Record Debarment Check'}
+            </Button>
+          </section>
+
+          {!vendorPo.requisitionId && (
+            <section className="space-y-2 border-t pt-4">
+              <h3 className="font-semibold">Direct-PO Exception (privileged)</h3>
+              <p className="text-xs text-gray-600">
+                Records an exception when no approved requisition backs this PO. Requires the
+                <code className="mx-1 px-1 bg-gray-100 rounded">purchasing.direct_po_exception</code>
+                capability. Approver identity is captured from your session.
+              </p>
+              <Textarea rows={2} value={exceptionReason} onChange={(e) => setExceptionReason(e.target.value)} placeholder="Reason (≥10 chars) — recorded in audit trail" data-testid="input-direct-po-exception-reason" />
+              <Button size="sm" variant="destructive" onClick={() => recordException.mutate()} disabled={recordException.isPending || exceptionReason.trim().length < 10} data-testid="button-direct-po-exception">
+                {recordException.isPending ? 'Approving…' : 'Approve Direct-PO Exception'}
+              </Button>
+            </section>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

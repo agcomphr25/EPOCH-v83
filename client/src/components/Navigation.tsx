@@ -501,6 +501,12 @@ export default function Navigation() {
       icon: FileSearch,
       description: 'Browse all system audit reports as formatted documents',
     },
+    {
+      path: '/admin/policies',
+      label: 'Policies Administration',
+      icon: FileText,
+      description: 'Publish, upload, and monitor written policy versions and acknowledgments',
+    },
   ];
 
   const estimatingItems: NavItemDef[] = [

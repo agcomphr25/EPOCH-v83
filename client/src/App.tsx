@@ -48,6 +48,9 @@ import SignPDFPage from './pages/SignPDFPage';
 import SignedDocumentsLibrary from './pages/SignedDocumentsLibrary';
 import SignatureWorkflowPage from './pages/SignatureWorkflowPage';
 import ReferenceDocsPage from './pages/ReferenceDocsPage';
+import PolicyLibraryPage from './pages/PolicyLibraryPage';
+import PoliciesAdminPage from './pages/admin/PoliciesAdminPage';
+import PolicyAcknowledgmentGate from './components/PolicyAcknowledgmentGate';
 import VoiceNotesPage from './pages/VoiceNotesPage';
 import ProcessRuns from './pages/ProcessRuns';
 import ProductionStationDashboard from './pages/ProductionStationDashboard';
@@ -547,6 +550,7 @@ function App() {
             <div className="min-h-screen bg-gray-50">
               <ConditionalNavigation />
               <ConditionalOfflineIndicator />
+              <PolicyAcknowledgmentGate />
               <ConditionalMainWrapper>
                 <RouteGuard>
                   <Switch>
@@ -620,6 +624,8 @@ function App() {
                   <Route path="/qr-error" component={QRErrorPage} />
                   <Route path="/audit-settings" component={AuditSettings} />
                   <Route path="/vault" component={VaultPage} />
+                  <Route path="/policies" component={PolicyLibraryPage} />
+                  <Route path="/admin/policies" component={PoliciesAdminPage} />
                   <Route path="/order-timeline/:entityType/:entityId" component={OrderTimeline} />
                   <Route path="/media-library" component={MediaLibrary} />
                   <Route path="/sign-pdf" component={SignPDFPage} />

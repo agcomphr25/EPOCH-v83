@@ -43,6 +43,7 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed to streamline oper
 *   **Offline Mutation Queue (IndexedDB):** `client/src/offline/`
 *   **Control Tower Service:** `server/src/services/controlTowerService.ts`
 *   **CMMC Control Taxonomy & Evidence Mapping:** `server/src/services/cmmcControlTaxonomy.ts`, `server/src/services/cmmcEvidenceMapping.ts`
+*   **Written Policies Library:** drafts in `docs/policies/`, service `server/src/services/policiesService.ts`, routes `server/src/routes/policies.ts`, drift job `server/src/jobs/policiesDriftCheck.ts`, UI `client/src/pages/PolicyLibraryPage.tsx` & `client/src/pages/admin/PoliciesAdminPage.tsx`
 *   `Navigation.tsx`: Frontend navigation menu
 
 ## Architecture decisions
@@ -68,7 +69,7 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed to streamline oper
 *   **Project & Task Management:** Flexible project workflow steps (skip, reopen, status tracking), P2 Pipeline Board (Kanban), PM Control Center for project health visibility.
 *   **Financial & Reporting:** Cost Center Management, dynamic discounts, Credit Memo Management, Payment Analytics, Historical Data Module, Refund Request/Queue, AR Invoice and Payment Allocation systems, Monthly Financial Review module, AR Aging Dashboard.
 *   **Forecast & Simulation:** Discrete Event Simulation (DES) forecast engine, self-learning cycle time engine, and forecast accuracy tracking.
-*   **Compliance & Security:** Document Vault with CUI/ITAR classification, CMMC 2.0 Level 2 readiness system, comprehensive audit systems.
+*   **Compliance & Security:** Document Vault with CUI/ITAR classification, CMMC 2.0 Level 2 readiness system, comprehensive audit systems, Written Policies Library (DCAA policies with publish/upload, immutable versions, employee acknowledgments, nightly drift detection, coverage CSV export).
 *   **AI Integration:** AI-powered prompt library, AI + Template-driven Production Control Wizard for routing/traveler/QC template recommendations.
 *   **User Interface:** Modern, responsive UI with ShadCN UI, Tailwind CSS, and Framer Motion for animations.
 *   **Advanced control centers:** PM, P2 PO, Production, Cutting Table.

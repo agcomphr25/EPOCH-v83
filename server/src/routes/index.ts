@@ -87,6 +87,7 @@ import cuttingTableRoutes from './cuttingTable';
 import controlledDocumentsRoutes from './controlledDocuments';
 import vaultRoutes from './vault';
 import adminRoutes from './admin';
+import policiesRoutes from './policies';
 import quotesRoutes from './quotes';
 import costCentersRoutes from './costCenters';
 import costAccountingRoutes from './costAccounting';
@@ -1103,6 +1104,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // Offline mutation replay endpoint
   app.use('/api/offline', offlineReplayRoutes);
+
+  // Written Policies Library (DCAA acknowledgments + drift detection)
+  app.use('/api/policies', policiesRoutes);
 
   // UPS Test endpoint
   app.post('/api/test-ups-auth', async (req, res) => {

@@ -16886,3 +16886,59 @@ export const wadDocumentLinks = pgTable('wad_document_links', {
 });
 
 export type WadDocumentLink = typeof wadDocumentLinks.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// Written Policies Library — DCAA-aligned policy versioning + acknowledgments
+// ---------------------------------------------------------------------------
+
+export const policies = pgTable('policies', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  key: text('key').notNull().unique(),
+  title: text('title').notNull(),
+  description: text('description'),
+  source: text('source').notNull().default('in-repo'), // 'in-repo' | 'external-upload'
+  owner: text('owner'),
+  effectiveDate: date('effective_date'),
+  requiresAcknowledgment: boolean('requires_acknowledgment').notNull().default(true),
+  acknowledgmentRoles: text('acknowledgment_roles').array().notNull().default(sql`ARRAY[]::text[]`),
+  currentVersionId: uuid('current_version_id'),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
+});
+
+export const policyVersions = pgTable('policy_versions', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  policyId: uuid('policy_id').notNull().references(() => policies.id, { onDelete: 'cascade' }),
+  versionNumber: integer('version_number').notNull(),
+  body: text('body'),
+  sourcePath: text('source_path'),
+  uploadedFileUrl: text('uploaded_file_url'),
+  uploadedFileName: text('uploaded_file_name'),
+  uploadedFileMime: text('uploaded_file_mime'),
+  contentHash: text('content_hash').notNull(),
+  changeSummary: text('change_summary'),
+  publishedAt: timestamp('published_at', { withTimezone: true }).notNull().default(sql`now()`),
+  publishedByUserId: integer('published_by_user_id').references(() => users.id),
+  publishedByDisplayName: text('published_by_display_name'),
+}, (table) => ({
+  policyVersionUnique: unique('policy_versions_policy_version_unique').on(table.policyId, table.versionNumber),
+}));
+
+export const policyAcknowledgments = pgTable('policy_acknowledgments', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  policyId: uuid('policy_id').notNull().references(() => policies.id, { onDelete: 'cascade' }),
+  policyVersionId: uuid('policy_version_id').notNull().references(() => policyVersions.id, { onDelete: 'cascade' }),
+  userId: integer('user_id').notNull().references(() => users.id),
+  userDisplayName: text('user_display_name').notNull(),
+  userRole: text('user_role'),
+  ipAddress: text('ip_address'),
+  userAgent: text('user_agent'),
+  acknowledgedAt: timestamp('acknowledged_at', { withTimezone: true }).notNull().default(sql`now()`),
+}, (table) => ({
+  ackVersionUserUnique: unique('policy_acks_version_user_unique').on(table.policyVersionId, table.userId),
+}));
+
+export type Policy = typeof policies.$inferSelect;
+export type PolicyVersion = typeof policyVersions.$inferSelect;
+export type PolicyAcknowledgment = typeof policyAcknowledgments.$inferSelect;

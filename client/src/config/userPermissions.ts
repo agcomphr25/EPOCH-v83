@@ -30,7 +30,7 @@ export function getRequiredCapability(route: string): string | undefined {
 export const DEFAULT_USER_ROUTES: string[] = ['/employee-portal'];
 
 // Universal routes that ALL authenticated users can access regardless of permissions
-export const UNIVERSAL_ACCESS_ROUTES: string[] = ['/communications/inbox', '/employee-portal', '/badge-scanner', '/help', '/pdf-signature-tool', '/routing-document-management', '/tickets', '/quick-notes', '/training'];
+export const UNIVERSAL_ACCESS_ROUTES: string[] = ['/communications/inbox', '/employee-portal', '/badge-scanner', '/help', '/pdf-signature-tool', '/routing-document-management', '/tickets', '/quick-notes', '/training', '/policies'];
 
 // All valid navbar routes for reference (from Navigation.tsx)
 // This helps ensure permissions use correct paths
@@ -51,6 +51,8 @@ export const VALID_NAVBAR_ROUTES = [
   '/admin/qr-codes',
   '/admin/checklist-management',
   '/admin/continuity',
+  '/admin/policies',
+  '/policies',
   '/prompt-library',
   '/proteus-labs',
   '/analytics',
@@ -624,6 +626,7 @@ export function hasRouteAccess(
  */
 export const ROLE_ROUTE_ACCESS: Record<string, string[]> = {
   '/admin/orders': ['ADMIN', 'OWNER'],
+  '/admin/policies': ['ADMIN', 'OWNER'],
   '/system-audits': ['ADMIN', 'OWNER'],
   '/gateway-reports': ['ADMIN', 'OWNER'],
   '/metrics-sandbox': ['ADMIN', 'OWNER'],

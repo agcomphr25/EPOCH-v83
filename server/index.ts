@@ -419,6 +419,7 @@ async function initializeBackgroundServices() {
           '0095_production_control_templates.sql',
           '0096_wad_document_links.sql',
           '0097_wad_wizard_data.sql',
+          '0099_policies_library.sql',
         ];
         const criticalMigrations = new Set([
           '0060_punch_ledger.sql',
@@ -5658,6 +5659,19 @@ async function initializeBackgroundServices() {
       }
     });
     console.log(`📊 EDRI scheduled refresh active (schedule: ${edriCronSchedule})`);
+
+    // ── Written Policies drift check — nightly at 2:30am ──
+    // Verifies docs/policies/*.md content hashes match the latest published in-repo
+    // policy versions. Drift is logged and visible at /api/policies/admin/drift.
+    cron.schedule('30 2 * * *', async () => {
+      try {
+        const { runPoliciesDriftCheck } = await import('./src/jobs/policiesDriftCheck');
+        await runPoliciesDriftCheck();
+      } catch (err) {
+        console.error('[policiesDriftCheck] cron error:', err);
+      }
+    });
+    console.log('📜 Policies drift check cron scheduled (daily at 2:30 AM)');
 
     // ── Refund request pending reminder — daily check, reminds every 48 hours ──
     // Runs daily at 9:00 AM. Sends a reminder for each PENDING refund request

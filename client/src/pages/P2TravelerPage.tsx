@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
 import { apiRequest, queryClient } from '@/lib/queryClient';
@@ -321,6 +321,8 @@ export default function P2TravelerPage() {
   const [traceabilityMode, setTraceabilityMode] = useState<'scan' | 'manual'>('scan');
   const [pendingFocusMaterialIndex, setPendingFocusMaterialIndex] = useState<number | null>(null);
   const [validatedMaterialIndices, setValidatedMaterialIndices] = useState<Set<number>>(new Set());
+  const validateAbortControllersRef = useRef<Map<number, AbortController>>(new Map());
+  const latestValidationIcnRef = useRef<Map<number, string>>(new Map());
   const [cameraTarget, setCameraTarget] = useState<'badge' | 'part' | null>(null);
   const [showTimerModal, setShowTimerModal] = useState(false);
   const [showOvenModal, setShowOvenModal] = useState(false);
@@ -836,10 +838,20 @@ export default function P2TravelerPage() {
     if (item.type === 'material_lot' && value.trim()) {
       const icn = value.trim();
       const matIdxForValidation = item.materialIndex;
-      fetch(`/api/material-lots/validate/${encodeURIComponent(icn)}`)
+      const abortKey = matIdxForValidation ?? -1;
+      const previousController = validateAbortControllersRef.current.get(abortKey);
+      if (previousController) {
+        previousController.abort();
+      }
+      const controller = new AbortController();
+      validateAbortControllersRef.current.set(abortKey, controller);
+      latestValidationIcnRef.current.set(abortKey, icn);
+      fetch(`/api/material-lots/validate/${encodeURIComponent(icn)}`, { signal: controller.signal })
         .then(res => res.ok ? res.json() : null)
         .then(result => {
           if (!result) return;
+          // Drop stale responses: only act if the field value still matches what we asked for.
+          if (latestValidationIcnRef.current.get(abortKey) !== icn) return;
           const isValidated =
             result.valid !== false &&
             ((result.status === 'PACKET' && result.packet) || !!result.lot);
@@ -923,48 +935,61 @@ export default function P2TravelerPage() {
             return;
           }
 
-          const lot = result.lot || result;
-          if (lot) {
+          if (result.lot) {
+            const lot = result.lot;
             setTraceabilityData(prev => {
               const next = [...prev];
               const lotField = next.find(
                 f => f.materialIndex === item.materialIndex && f.type === 'material_lot'
               );
-              if (lotField && primaryRoll) {
-                lotField.value = primaryRoll.internalControlNumber || primaryRoll.lotNumber || data.packet.barcode;
+              if (lotField) {
+                lotField.value = lot.internalControlNumber || lot.lotNumber || lotField.value;
               }
               const expirationField = next.find(
                 f => f.materialIndex === item.materialIndex && f.type === 'material_expiration_date'
               );
-              if (expirationField && primaryRoll?.expirationDate) {
-                expirationField.value = new Date(primaryRoll.expirationDate).toLocaleDateString();
+              if (expirationField && lot.expirationDate) {
+                expirationField.value = new Date(lot.expirationDate).toLocaleDateString();
               }
               return next;
             });
+            if (result.valid === false) {
+              toast({
+                title: 'Material lot issue',
+                description: result.message || 'Material lot cannot be used',
+                variant: 'destructive',
+              });
+            } else {
+              toast({
+                title: 'Material lot validated',
+                description: result.message || `Lot ${lot.internalControlNumber || lot.lotNumber || icn} is valid for use`,
+              });
+            }
+            return;
+          }
+
+          if (result.valid === false || result.status === 'NOT_FOUND') {
             toast({
-              title: 'Packet found',
-              description: `Packet ${data.packet.barcode} matched with ${data.fabricRolls?.length || 0} fabric roll(s)`,
-            });
-          } else {
-            setTraceabilityData(prev => {
-              const next = [...prev];
-              const expirationField = next.find(
-                f => f.materialIndex === item.materialIndex && f.type === 'material_expiration_date'
-              );
-              if (expirationField && data.expirationDate) {
-                expirationField.value = new Date(data.expirationDate).toLocaleDateString();
-              }
-              return next;
+              title: 'Barcode not found',
+              description: result.message || `No material lot or packet found for ${icn}`,
+              variant: 'destructive',
             });
           }
         })
         .catch((err: Error) => {
-          toast({
-            title: 'Barcode not found',
-            description: err.message,
-            variant: 'destructive',
-          });
+          if (err.name === 'AbortError') return;
+          console.error('Material lot validation failed:', err);
         });
+    } else if (item.type === 'material_lot') {
+      // Field cleared — cancel any in-flight validation and forget the latest ICN
+      // so a late response cannot pop a "Barcode not found" toast.
+      const abortKey = item.materialIndex ?? -1;
+      const previousController = validateAbortControllersRef.current.get(abortKey);
+      if (previousController) {
+        previousController.abort();
+        validateAbortControllersRef.current.delete(abortKey);
+      }
+      latestValidationIcnRef.current.delete(abortKey);
     }
   };
 

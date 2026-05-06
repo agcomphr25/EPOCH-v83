@@ -551,7 +551,7 @@ export default function EdriDashboard() {
           )}
         </div>
         <div className="flex items-center gap-3 flex-wrap">
-          <Button variant="outline" asChild><Link href="/admin/edri/history">My Score History</Link></Button>
+          <Button variant="outline" asChild><Link href="/admin/edri/history">Score History</Link></Button>
           {(session?.role === 'ADMIN' || session?.role === 'OWNER') && (
             <Button
               variant="outline"
@@ -1060,7 +1060,7 @@ export default function EdriDashboard() {
               <Link href="/admin/edri/history">
                 <div className="group hover:bg-muted rounded-md p-2 cursor-pointer transition-colors">
                   <Activity className="h-5 w-5 mx-auto text-muted-foreground group-hover:text-foreground" />
-                  <p className="text-xs mt-1 text-muted-foreground group-hover:text-foreground">My Score History</p>
+                  <p className="text-xs mt-1 text-muted-foreground group-hover:text-foreground">Score History</p>
                 </div>
               </Link>
               <Link href="/admin/edri/executive-matrix">

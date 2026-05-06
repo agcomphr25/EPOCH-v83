@@ -17,7 +17,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Heatmap',          path: '/admin/edri/heatmap',            icon: BarChart3     },
   { label: 'Red Flags',        path: '/admin/edri/red-flags',          icon: AlertOctagon  },
   { label: 'Remediation',      path: '/admin/edri/remediation',        icon: Wrench        },
-  { label: 'My Score History', path: '/admin/edri/history',            icon: Clock         },
+  { label: 'Score History',    path: '/admin/edri/history',            icon: Clock         },
 ];
 
 export default function EdriSubNav() {

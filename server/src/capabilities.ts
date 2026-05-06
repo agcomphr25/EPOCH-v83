@@ -73,6 +73,12 @@ export const REQUIRED_CAPABILITY_KEYS: readonly string[] = [
   // Purchasing
   'purchasing.manage_pos',
   'purchasing.approve_po',
+  'purchasing.view_requisitions',
+  'purchasing.create_requisition',
+  'purchasing.approve_requisition',
+  'purchasing.admin_chain',
+  'purchasing.record_debarment_check',
+  'purchasing.direct_po_exception',
 
   // Assets
   'assets.manage',

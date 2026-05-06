@@ -445,8 +445,11 @@ async function initializeBackgroundServices() {
           '0098_payroll_export_batches.sql',
           '0099_audit_evidence_hardening.sql',
           '0099_policies_library.sql',
+          '0099_punch_ledger_pending_approval.sql',
           '0100_audit_ledger_privilege_hardening.sql',
+          '0100_burden_rates_engine.sql',
           '0101_audit_tamper_attempts_durable.sql',
+          '0102_traveler_off_system_completion_link.sql',
         ];
         const criticalMigrations = new Set([
           '0060_punch_ledger.sql',
@@ -4238,6 +4241,12 @@ async function initializeBackgroundServices() {
           // Purchasing
           { key: 'purchasing.manage_pos', description: 'Create, update, and delete vendor purchase orders', category: 'purchasing' },
           { key: 'purchasing.approve_po', description: 'Issue and formally approve a vendor purchase order', category: 'purchasing' },
+          { key: 'purchasing.view_requisitions', description: 'View purchase requisitions, FAR flowdown clauses, and vendor debarment checks', category: 'purchasing' },
+          { key: 'purchasing.create_requisition', description: 'Create, submit, and cancel purchase requisitions', category: 'purchasing' },
+          { key: 'purchasing.approve_requisition', description: 'Approve or deny purchase requisitions at the standard approval stage', category: 'purchasing' },
+          { key: 'purchasing.admin_chain', description: 'Administer the purchasing approval chain, FAR flowdown clauses, and override requisition cancellations', category: 'purchasing' },
+          { key: 'purchasing.record_debarment_check', description: 'Record vendor debarment / SAM exclusion checks', category: 'purchasing' },
+          { key: 'purchasing.direct_po_exception', description: 'Issue a vendor purchase order without a backing approved requisition (direct-PO exception)', category: 'purchasing' },
 
           // Assets
           { key: 'assets.manage', description: 'Create, update, and delete assets', category: 'assets' },

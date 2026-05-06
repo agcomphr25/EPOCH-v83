@@ -49,6 +49,7 @@ import {
   Thermometer,
   Timer,
   X,
+  Plus,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CameraScanner } from '@/components/CameraScanner';
@@ -318,6 +319,8 @@ export default function P2TravelerPage() {
   }>>([]);
   const [notes, setNotes] = useState('');
   const [traceabilityMode, setTraceabilityMode] = useState<'scan' | 'manual'>('scan');
+  const [pendingFocusMaterialIndex, setPendingFocusMaterialIndex] = useState<number | null>(null);
+  const [validatedMaterialIndices, setValidatedMaterialIndices] = useState<Set<number>>(new Set());
   const [cameraTarget, setCameraTarget] = useState<'badge' | 'part' | null>(null);
   const [showTimerModal, setShowTimerModal] = useState(false);
   const [showOvenModal, setShowOvenModal] = useState(false);
@@ -432,6 +435,8 @@ export default function P2TravelerPage() {
     setFinishQcResults([]);
     setNotes('');
     setTraceabilityMode('scan');
+    setValidatedMaterialIndices(new Set());
+    setPendingFocusMaterialIndex(null);
     setShowOvenModal(false);
     setOvenData({
       ovenId: '', cycleNumber: '', targetTemperature: '', actualTemperature: '',
@@ -819,12 +824,33 @@ export default function P2TravelerPage() {
     setTraceabilityData(updated);
 
     const item = updated[index];
+    // Reset the validation flag for this material group whenever the lot field is edited
+    if (item.type === 'material_lot' && item.materialIndex !== undefined) {
+      setValidatedMaterialIndices(prev => {
+        if (!prev.has(item.materialIndex!)) return prev;
+        const next = new Set(prev);
+        next.delete(item.materialIndex!);
+        return next;
+      });
+    }
     if (item.type === 'material_lot' && value.trim()) {
       const icn = value.trim();
+      const matIdxForValidation = item.materialIndex;
       fetch(`/api/material-lots/validate/${encodeURIComponent(icn)}`)
         .then(res => res.ok ? res.json() : null)
         .then(result => {
           if (!result) return;
+          const isValidated =
+            result.valid !== false &&
+            ((result.status === 'PACKET' && result.packet) || !!result.lot);
+          if (isValidated && matIdxForValidation !== undefined) {
+            setValidatedMaterialIndices(prev => {
+              if (prev.has(matIdxForValidation)) return prev;
+              const next = new Set(prev);
+              next.add(matIdxForValidation);
+              return next;
+            });
+          }
 
           if (result.status === 'PACKET' && result.packet) {
             setTraceabilityData(prev => {
@@ -945,6 +971,21 @@ export default function P2TravelerPage() {
     }));
     setTraceabilityData(prev => [...prev, ...newEntries]);
   };
+
+  // Auto-focus the material_lot input of a newly-added material group
+  useEffect(() => {
+    if (pendingFocusMaterialIndex === null) return;
+    const targetIdx = traceabilityData.findIndex(
+      (item) => item.materialIndex === pendingFocusMaterialIndex && item.type === 'material_lot'
+    );
+    if (targetIdx === -1) return;
+    const el = document.getElementById(`trace-${targetIdx}`) as HTMLInputElement | null;
+    if (el) {
+      el.focus();
+      try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch {}
+    }
+    setPendingFocusMaterialIndex(null);
+  }, [pendingFocusMaterialIndex, traceabilityData]);
 
   // Remove a material group by index
   const removeMaterialGroup = (materialIndex: number) => {
@@ -1295,7 +1336,15 @@ export default function P2TravelerPage() {
                             )
                           )}
 
-                          {materialGroupEntries.map(([matIdx, items]) => (
+                          {materialGroupEntries.map(([matIdx, items], groupArrayIdx) => {
+                            const isLastGroup = groupArrayIdx === materialGroupEntries.length - 1;
+                            const lotItem = (items as any[]).find((i) => i.type === 'material_lot');
+                            const showAddAnotherPrompt =
+                              isLastGroup &&
+                              traceabilityMode === 'manual' &&
+                              !!lotItem?.value?.trim() &&
+                              validatedMaterialIndices.has(matIdx);
+                            return (
                             <div key={matIdx} className="border rounded-lg p-3 bg-blue-50/30 dark:bg-blue-950/20 space-y-2">
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
@@ -1337,8 +1386,28 @@ export default function P2TravelerPage() {
                                   />
                                 </div>
                               ))}
+                              {showAddAnotherPrompt && (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  className="w-full mt-2 bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
+                                  onClick={() => {
+                                    const existing = traceabilityData
+                                      .filter((it) => it.materialIndex !== undefined)
+                                      .map((it) => it.materialIndex!);
+                                    const nextIdx = existing.length > 0 ? Math.max(...existing) + 1 : 0;
+                                    addMaterialTraceEntry();
+                                    setPendingFocusMaterialIndex(nextIdx);
+                                  }}
+                                  data-testid={`button-add-another-control-number-${matIdx}`}
+                                >
+                                  <Plus className="h-4 w-4 mr-2" />
+                                  Add Another Control Number
+                                </Button>
+                              )}
                             </div>
-                          ))}
+                            );
+                          })}
 
                           {ungrouped.map((item: any) => (
                             <div key={item._originalIndex} className="space-y-2">

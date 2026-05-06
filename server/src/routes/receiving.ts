@@ -14,6 +14,7 @@ import {
   materialLots,
   materialLotTransactions,
   mediaLibrary,
+  vendorPOs,
   vendorPOItems,
   inventoryItems,
   insertMaterialLotSchema,
@@ -268,10 +269,69 @@ router.patch('/:id', requireReceivingAccess, async (req: Request, res: Response)
       rawPatch.receivedAt = new Date(rawPatch.receivedAt);
     }
     const updates = insertReceiptSchema.partial().parse(rawPatch);
-    const [updated] = await db.update(receipts).set({ ...updates, updatedAt: new Date() }).where(eq(receipts.id, id)).returning();
-    if (!updated) return res.status(404).json({ error: 'Receipt not found' });
+
+    const result = await db.transaction(async (tx) => {
+      const [updated] = await tx.update(receipts).set({ ...updates, updatedAt: new Date() }).where(eq(receipts.id, id)).returning();
+      if (!updated) return { updated: null as Receipt | null, parentPoStatus: null as string | null };
+
+      // Auto-close parent vendor PO when receipt is marked complete and all
+      // ordered quantities have been received across this PO's receipts.
+      let parentPoStatus: string | null = null;
+      if (updates.status === 'complete' && updated.vendorPoId) {
+        const vendorPoId = updated.vendorPoId;
+
+        // Sum received_qty per vendor_po_item across ALL receipts for this PO
+        const recvRows = sqlRows<{ vendor_po_item_id: number | null; total_received: string | null }>(
+          await tx.execute(sql`
+            SELECT rl.vendor_po_item_id, SUM(rl.received_qty)::text AS total_received
+            FROM ${receiptLines} rl
+            INNER JOIN ${receipts} r ON r.id = rl.receipt_id
+            WHERE r.vendor_po_id = ${vendorPoId}
+              AND rl.vendor_po_item_id IS NOT NULL
+            GROUP BY rl.vendor_po_item_id
+          `)
+        );
+        const receivedByItem = new Map<number, number>();
+        for (const row of recvRows) {
+          if (row.vendor_po_item_id != null) {
+            receivedByItem.set(row.vendor_po_item_id, parseFloat(row.total_received ?? '0') || 0);
+          }
+        }
+
+        const poItems = await tx.select({
+          id: vendorPOItems.id,
+          quantity: vendorPOItems.quantity,
+        }).from(vendorPOItems).where(eq(vendorPOItems.vendorPoId, vendorPoId));
+
+        if (poItems.length > 0) {
+          const allFullyReceived = poItems.every(item => {
+            const ordered = item.quantity ?? 0;
+            const received = receivedByItem.get(item.id) ?? 0;
+            return received >= ordered;
+          });
+
+          if (allFullyReceived) {
+            await tx.update(vendorPOs)
+              .set({ status: 'Fully Received', updatedAt: new Date() })
+              .where(eq(vendorPOs.id, vendorPoId));
+            parentPoStatus = 'Fully Received';
+          }
+        }
+      }
+
+      return { updated, parentPoStatus };
+    });
+
+    if (!result.updated) return res.status(404).json({ error: 'Receipt not found' });
+
     await logAudit(id, 'receipt_updated', user?.employeeId, actorName(user), updates as Record<string, unknown>);
-    res.json(updated);
+    if (result.parentPoStatus === 'Fully Received' && result.updated.vendorPoId) {
+      await logAudit(id, 'po_auto_closed', user?.employeeId, actorName(user), {
+        vendorPoId: result.updated.vendorPoId,
+        newStatus: 'Fully Received',
+      });
+    }
+    res.json(result.updated);
   } catch (err: any) {
     console.error('PATCH /api/receipts/:id:', err);
     res.status(500).json({ error: 'Failed to update receipt' });
@@ -329,6 +389,10 @@ router.post('/:id/lines/:lineId/units', requireReceivingAccess, async (req: Requ
 
     // Server-side traceability field config enforcement
     const TRACE_FIELDS = ['lotNumber','batchNumber','serialNumber','expirationDate','manufactureDate','heatLot','rollNumber','certReference'] as const;
+    // Roll-split traceability relaxation: these four fields are always treated
+    // as optional from receiving even when the part config marks them required.
+    // Roll Number + Quantity remain the only enforced fields.
+    const ALWAYS_OPTIONAL_TRACE_FIELDS = new Set(['manufactureDate', 'expirationDate', 'batchNumber', 'lotNumber']);
     if (line.agPartNumber) {
       const [invItem] = await db.select({ traceabilityFieldConfig: inventoryItems.traceabilityFieldConfig })
         .from(inventoryItems)
@@ -336,9 +400,11 @@ router.post('/:id/lines/:lineId/units', requireReceivingAccess, async (req: Requ
         .limit(1);
       const fieldConfig = invItem?.traceabilityFieldConfig as Record<string, string> | null | undefined;
       if (fieldConfig && Object.keys(fieldConfig).length > 0) {
-        // Validate required fields
+        // Validate required fields (excluding the always-optional set)
         const missingRequired = TRACE_FIELDS.filter(
-          f => (fieldConfig[f] ?? 'optional') === 'required' && !req.body[f]?.toString().trim()
+          f => !ALWAYS_OPTIONAL_TRACE_FIELDS.has(f)
+            && (fieldConfig[f] ?? 'optional') === 'required'
+            && !req.body[f]?.toString().trim()
         );
         if (missingRequired.length > 0) {
           return res.status(422).json({ error: `Required traceability fields missing: ${missingRequired.join(', ')}` });

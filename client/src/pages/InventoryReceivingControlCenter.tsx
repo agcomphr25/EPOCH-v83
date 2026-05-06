@@ -840,6 +840,11 @@ function ShipmentInfoStep({ receipt, onNext, onUpdate }: {
     autoSaveTimerRef.current = setTimeout(() => saveForm(next), 1500);
   };
 
+  const [showDetails, setShowDetails] = useState(
+    !!(receipt.carrier || receipt.trackingNumber || receipt.packingSlipNumber || receipt.notes ||
+      (receipt.conditionOnArrival && receipt.conditionOnArrival !== 'good'))
+  );
+
   const mutation = useMutation({
     mutationFn: () => saveForm(form, true),
     onSuccess: () => {
@@ -850,31 +855,6 @@ function ShipmentInfoStep({ receipt, onNext, onUpdate }: {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <Label className="text-xs">Carrier</Label>
-          <Input className="h-8 text-xs mt-1" value={form.carrier} onChange={e => handleChange({ carrier: e.target.value })} placeholder="UPS, FedEx..." />
-        </div>
-        <div>
-          <Label className="text-xs">Tracking Number</Label>
-          <Input className="h-8 text-xs mt-1" value={form.trackingNumber} onChange={e => handleChange({ trackingNumber: e.target.value })} />
-        </div>
-        <div>
-          <Label className="text-xs">Packing Slip #</Label>
-          <Input className="h-8 text-xs mt-1" value={form.packingSlipNumber} onChange={e => handleChange({ packingSlipNumber: e.target.value })} />
-        </div>
-        <div>
-          <Label className="text-xs">Condition on Arrival</Label>
-          <Select value={form.conditionOnArrival} onValueChange={v => handleChange({ conditionOnArrival: v })}>
-            <SelectTrigger className="h-8 text-xs mt-1">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {CONDITIONS.map(c => <SelectItem key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
       <div>
         <Label className="text-xs">Date / Time Received</Label>
         <Input
@@ -882,21 +862,65 @@ function ShipmentInfoStep({ receipt, onNext, onUpdate }: {
           className="h-8 text-xs mt-1"
           value={form.receivedAt}
           onChange={e => handleChange({ receivedAt: e.target.value })}
+          data-testid="input-received-at"
         />
-        <p className="text-xs text-gray-400 mt-0.5">When the shipment physically arrived at the dock</p>
+        <p className="text-xs text-gray-400 mt-0.5">Defaults to now — adjust if the shipment arrived earlier</p>
       </div>
-      <div>
-        <Label className="text-xs">Notes</Label>
-        <Textarea className="text-xs mt-1 resize-none" rows={3} value={form.notes} onChange={e => handleChange({ notes: e.target.value })} placeholder="Any additional notes..." />
-      </div>
+
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="w-full justify-start text-xs h-7 px-1 text-gray-600 hover:text-gray-900"
+        onClick={() => setShowDetails(s => !s)}
+        data-testid="button-toggle-shipment-details"
+      >
+        <ChevronDown className={`w-3 h-3 mr-1 transition-transform ${showDetails ? '' : '-rotate-90'}`} />
+        {showDetails ? 'Hide' : 'Add'} shipment details (optional)
+      </Button>
+
+      {showDetails && (
+        <div className="space-y-3 pl-1 border-l-2 border-gray-100 dark:border-gray-800 ml-1">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">Carrier</Label>
+              <Input className="h-8 text-xs mt-1" value={form.carrier} onChange={e => handleChange({ carrier: e.target.value })} placeholder="UPS, FedEx..." />
+            </div>
+            <div>
+              <Label className="text-xs">Tracking Number</Label>
+              <Input className="h-8 text-xs mt-1" value={form.trackingNumber} onChange={e => handleChange({ trackingNumber: e.target.value })} />
+            </div>
+            <div>
+              <Label className="text-xs">Packing Slip #</Label>
+              <Input className="h-8 text-xs mt-1" value={form.packingSlipNumber} onChange={e => handleChange({ packingSlipNumber: e.target.value })} />
+            </div>
+            <div>
+              <Label className="text-xs">Condition on Arrival</Label>
+              <Select value={form.conditionOnArrival} onValueChange={v => handleChange({ conditionOnArrival: v })}>
+                <SelectTrigger className="h-8 text-xs mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CONDITIONS.map(c => <SelectItem key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div>
+            <Label className="text-xs">Notes</Label>
+            <Textarea className="text-xs mt-1 resize-none" rows={3} value={form.notes} onChange={e => handleChange({ notes: e.target.value })} placeholder="Any additional notes..." />
+          </div>
+        </div>
+      )}
+
       {dirty && (
         <div className="text-xs text-amber-500 flex items-center gap-1">
           {saving ? <><Loader2 className="w-3 h-3 animate-spin" /> Autosaving…</> : '● Unsaved changes'}
         </div>
       )}
-      <Button size="sm" onClick={() => mutation.mutate()} disabled={mutation.isPending || saving} className="w-full">
+      <Button size="sm" onClick={() => mutation.mutate()} disabled={mutation.isPending || saving} className="w-full" data-testid="button-save-shipment-info">
         {mutation.isPending || saving ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Check className="w-3 h-3 mr-1" />}
-        Save Shipment Info & Continue
+        Continue
       </Button>
     </div>
   );
@@ -1315,10 +1339,16 @@ function UnitSplittingStep({ receipt, onNext, onUpdate }: {
       ? inventoryItem.traceabilityFieldConfig
       : null;
 
+  // Roll-split traceability relaxation: Manufacture Date, Expiration Date, Batch Number,
+  // and Lot Number are always optional from this UI even when the part config marks them
+  // required. Roll Number + Quantity remain the only enforced fields.
+  const ALWAYS_OPTIONAL_TRACE_KEYS = new Set(['manufactureDate', 'expirationDate', 'batchNumber', 'lotNumber']);
   const configuredFields = rawFieldConfig
     ? TRACE_CONFIG_FIELDS.filter(f => (rawFieldConfig[f.key] ?? 'optional') !== 'hidden').map(f => ({
         ...f,
-        required: (rawFieldConfig[f.key] ?? 'optional') === 'required',
+        required:
+          !ALWAYS_OPTIONAL_TRACE_KEYS.has(f.key) &&
+          (rawFieldConfig[f.key] ?? 'optional') === 'required',
       }))
     : null; // null = fall back to legacy traceFields behavior
 

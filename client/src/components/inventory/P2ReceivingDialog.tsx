@@ -141,16 +141,6 @@ export default function P2ReceivingDialog({
   });
 
   const handleSave = () => {
-    if (
-      !formData.manufactureDate ||
-      !formData.expirationDate ||
-      !formData.batchNumber ||
-      !formData.lotNumber
-    ) {
-      toast.error('Please fill in all required fields (Manufacture Date, Expiration Date, Batch Number, Lot Number)');
-      return;
-    }
-
     createScanMutation.mutate(formData);
   };
 
@@ -415,7 +405,7 @@ export default function P2ReceivingDialog({
               />
             </div>
             <div>
-              <Label htmlFor="manufactureDate">Manufacturing Date *</Label>
+              <Label htmlFor="manufactureDate">Manufacturing Date (optional)</Label>
               <Input
                 id="manufactureDate"
                 type="date"
@@ -426,11 +416,10 @@ export default function P2ReceivingDialog({
                     manufactureDate: e.target.value,
                   }))
                 }
-                required
               />
             </div>
             <div>
-              <Label htmlFor="expirationDate">Expiration Date *</Label>
+              <Label htmlFor="expirationDate">Expiration Date (optional)</Label>
               <Input
                 id="expirationDate"
                 type="date"
@@ -441,7 +430,6 @@ export default function P2ReceivingDialog({
                     expirationDate: e.target.value,
                   }))
                 }
-                required
               />
             </div>
           </div>
@@ -450,7 +438,7 @@ export default function P2ReceivingDialog({
           <div className="grid grid-cols-2 gap-4">
             <SmartLotInput
               id="batchNumber"
-              label="Batch Number"
+              label="Batch Number (optional)"
               value={formData.batchNumber}
               onChange={(value) =>
                 setFormData((prev) => ({
@@ -459,12 +447,11 @@ export default function P2ReceivingDialog({
                 }))
               }
               placeholder="Enter batch number"
-              required
               type="batch"
             />
             <SmartLotInput
               id="lotNumber"
-              label="Lot Number"
+              label="Lot Number (optional)"
               value={formData.lotNumber}
               onChange={(value) =>
                 setFormData((prev) => ({
@@ -473,7 +460,6 @@ export default function P2ReceivingDialog({
                 }))
               }
               placeholder="Enter lot number"
-              required
               type="lot"
             />
           </div>
@@ -491,7 +477,6 @@ export default function P2ReceivingDialog({
                 }))
               }
               placeholder="Enter aluminum heat number"
-              required
             />
           </div>
         </div>

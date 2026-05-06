@@ -44,6 +44,36 @@ export default function LoginPage() {
     }
   }, [activeMode]);
 
+  // Retry POSTs that hit the boot-window 503 ("Server starting, please retry")
+  // or transient network errors. Up to ~6 attempts over ~10s. Auth failures
+  // (401/400) are returned immediately so genuine errors aren't masked.
+  const fetchWithBootRetry = async (
+    url: string,
+    init: RequestInit,
+    maxAttempts = 6,
+    delayMs = 1500,
+  ): Promise<Response> => {
+    let lastErr: unknown;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const response = await fetch(url, init);
+        if (response.status !== 503) return response;
+        // Server is still booting — wait and retry.
+      } catch (err) {
+        lastErr = err;
+      }
+      if (attempt < maxAttempts) {
+        await new Promise((r) => setTimeout(r, delayMs));
+      }
+    }
+    if (lastErr) throw lastErr;
+    // Give up — return a synthetic 503 so the caller can show an error.
+    return new Response(
+      JSON.stringify({ error: 'Server is still starting. Please try again in a moment.' }),
+      { status: 503, headers: { 'Content-Type': 'application/json' } },
+    );
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -59,7 +89,7 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/auth/login', {
+      const response = await fetchWithBootRetry('/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -120,7 +150,7 @@ export default function LoginPage() {
     setIsBadgeLoading(true);
 
     try {
-      const response = await fetch('/api/auth/badge-login', {
+      const response = await fetchWithBootRetry('/api/auth/badge-login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

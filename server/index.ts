@@ -49,6 +49,25 @@ app.get('/healthz', (req, res) => {
   res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
 });
 
+// ─── Routes-ready gate ────────────────────────────────────────────────────────
+// While routes are still being registered (the ~10–15s window after early
+// listen but before `registerRoutes` resolves), any /api/* request would
+// otherwise be intercepted by middleware (auth, etc.) or fall through to
+// Express's default 404 handler and surface to clients as a confusing error
+// (e.g. login appearing broken). This gate short-circuits /api/* with a 503 +
+// Retry-After so callers can transparently retry. Non-/api paths (/, /healthz,
+// static assets) pass through untouched.
+//
+// MUST be mounted BEFORE the global /api auth middleware below so that no
+// /api/* request can ever produce a 401/404 during the boot window.
+let routesReady = false;
+app.use((req, res, next) => {
+  if (routesReady) return next();
+  if (!req.path.startsWith('/api/')) return next();
+  res.set('Retry-After', '2');
+  return res.status(503).json({ error: 'Server starting, please retry' });
+});
+
 // CRITICAL: Trust proxy for deployments behind Replit's infrastructure
 // This is required for express-rate-limit to work correctly with X-Forwarded-For headers
 // Enabled in both development and production since Replit uses a proxy
@@ -252,6 +271,10 @@ process.on('SIGINT',  () => gracefulShutdown('SIGINT'));
     // Pass the already-listening server so registerRoutes reuses it instead
     // of creating (and returning) a brand-new one.
     const server = await registerRoutes(app, earlyServer);
+
+    // Flip the routes-ready gate now that all /api/* handlers are mounted.
+    routesReady = true;
+    console.log('✅ Routes registered — /api gate lifted');
 
     notificationManager.initialize(server);
 

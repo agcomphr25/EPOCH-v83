@@ -358,6 +358,74 @@ export default function KioskPage() {
     }
   }, [employee, punchStatus, selectedChargeCode]);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      if (step === 'locked-out') return;
+
+      if (step === 'loading' || step === 'punching') return;
+
+      if (step === 'success' || step === 'error') {
+        e.preventDefault();
+        resetToIdle();
+        return;
+      }
+
+      if (step === 'idle') {
+        e.preventDefault();
+        handleIdleTap();
+        return;
+      }
+
+      if (step === 'pin-entry') {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          resetToIdle();
+          return;
+        }
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          if (pin.length === PIN_LENGTH) handlePinSubmit();
+          return;
+        }
+        if (e.key === 'Backspace') {
+          e.preventDefault();
+          handlePinKey('backspace');
+          return;
+        }
+        if (/^[0-9]$/.test(e.key)) {
+          e.preventDefault();
+          handlePinKey(e.key);
+          return;
+        }
+        return;
+      }
+
+      if (step === 'confirm') {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          resetToIdle();
+          return;
+        }
+        if (e.key === 'Enter') {
+          const active = document.activeElement;
+          const isTextInput =
+            active instanceof HTMLInputElement ||
+            active instanceof HTMLTextAreaElement ||
+            (active instanceof HTMLElement && active.isContentEditable);
+          if (isTextInput) return;
+          e.preventDefault();
+          handleConfirm();
+          return;
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [step, pin, handleIdleTap, handlePinKey, handlePinSubmit, handleConfirm, resetToIdle]);
+
   const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const dateStr = now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
 

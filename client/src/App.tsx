@@ -94,6 +94,7 @@ import FinancialReviewListPage from './pages/FinancialReviewListPage';
 import FinancialReviewSlidePage from './pages/FinancialReviewSlidePage';
 import CostCenterManagement from './pages/CostCenterManagement';
 import CostAccountingPage from './pages/CostAccountingPage';
+import BurdenRatesAdmin from './pages/BurdenRatesAdmin';
 import MonthlyFulfilledReport from './pages/MonthlyFulfilledReport';
 import MonthlyShippedReport from './pages/MonthlyShippedReport';
 import POProductionOrdersReport from './pages/POProductionOrdersReport';
@@ -961,6 +962,10 @@ function App() {
                   <Route
                     path="/finance/cost-accounting"
                     component={CostAccountingPage}
+                  />
+                  <Route
+                    path="/finance/burden-rates"
+                    component={BurdenRatesAdmin}
                   />
                   <Route
                     path="/finance/monthly-fulfilled"

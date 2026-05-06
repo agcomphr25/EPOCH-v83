@@ -46,6 +46,7 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed to streamline oper
 *   **CMMC Control Taxonomy & Evidence Mapping:** `server/src/services/cmmcControlTaxonomy.ts`, `server/src/services/cmmcEvidenceMapping.ts`
 *   **Written Policies Library:** drafts in `docs/policies/`, service `server/src/services/policiesService.ts`, routes `server/src/routes/policies.ts`, drift job `server/src/jobs/policiesDriftCheck.ts`, UI `client/src/pages/PolicyLibraryPage.tsx` & `client/src/pages/admin/PoliciesAdminPage.tsx`
 *   **Unified Audit Ledger:** `server/src/services/auditLedgerService.ts` (sole writer = `recordAuditEvent()`); reporting in `server/src/services/auditReportingService.ts`; routes at `server/src/routes/auditLedger.ts` (`/api/audit-ledger/*`); admin UI at `client/src/pages/AuditLedgerPage.tsx` (`/admin/audit-ledger`); policy doc `docs/audit-evidence-policy.md`.
+*   **Burden Rates Engine:** `server/src/services/burdenRatesService.ts`, routes `server/src/routes/burdenRates.ts`, UI `client/src/pages/BurdenRatesAdmin.tsx`, docs `docs/burden-rates-methodology.md`
 *   `Navigation.tsx`: Frontend navigation menu
 
 ## Architecture decisions
@@ -59,6 +60,7 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed to streamline oper
 *   **"Delete-First" Agent Implementation:** When re-architecting, the approach is to delete deprecated patterns and redesign, rather than creating compatibility layers, to maintain architectural purity and prevent technical debt.
 *   **Immutable Audit Trail:** Critical financial exports (e.g., Payroll Export) generate and store immutable CSVs with SHA-256 checksums for DCAA audit evidence.
 *   **Unified Audit Ledger (Task #85):** Single hash-chained `audit_events` ledger is the source of truth for compliance evidence. Sole writer is `recordAuditEvent()`; UPDATE/DELETE blocked by DB trigger; chain anchored nightly; reporting/export/verify exposed via `/api/audit-ledger`. See constitution §9 and `docs/audit-evidence-policy.md`.
+*   **Indirect Burden Before GL:** Indirect cost pools (FRINGE / OVERHEAD / G&A) are applied to direct labor cost records via the Burden Rates Engine before `laborPostingService` posts to GL. Rates are insert-only and effective-dated; `INITIAL` runs are idempotent; rate corrections use `TRUE_UP` runs that reference the INITIAL via `supersedes_run_id` and store delta amounts. The pre-post gate (`verifyPeriodBurdenComplete`) makes it physically impossible to post unburdened labor.
 *   **Context-Aware Forecasting:** Production forecast engine uses a 3-tier cycle time priority (model-specific, department-level historical, hardcoded fallbacks) and weighted queues based on model complexity for more accurate predictions.
 
 ## Product
@@ -103,7 +105,7 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed to streamline oper
 *   **Legacy Payroll Export:** The `GET /api/timekeeping/admin/export/gusto` route now serves pre-generated, immutable CSV batches with checksum verification, not fresh computations.
 *   **P2 PO Locking:** Locked P2 Purchase Orders (via `locked_at`/`locked_by`) block all edit/delete actions except for attachment management.
 *   **BOM PKs:** All BOM primary keys are UUIDs; never use `parseInt()` when referencing them.
-*   **P2 Employee Data:** Portal employees require both a `timekeeping.employees` record (linked via `epochEmployeeId`) and a `users` record (linked via `users.employeeId`) for `createdBy` FKs; missing either results in a 403.
+*   **P2 Employee Data:** Portal employees require both a `timekeeping.employees` record (linked via `epochEmployeeId`) and a `users` record (linked via `users.employeeId`) for `createdBy` FKs; missing either results in a 422.
 *   **WAD Labor Charging Phase 1 (WARN):** Budget overrun or certification issues are currently only warnings and do not block sessions, but are recorded for supervisor review.
 *   **Timekeeping Dual-Pool Deprecation:** The standalone `modules/timekeeping` architecture and its dual-pool pattern (`tkDb` vs. `db`) are superseded. Do NOT introduce new imports from `modules/timekeeping/` or `tkDb`.
 *   **Purchasing Controls Gate:** `POST /api/vendor-pos/:id/issue` enforces requisition-linkage, FAR flowdown checklist, and vendor debarment check freshness *in addition to* the existing compliance review gate. Bypassing requires a direct-PO exception with `procurement_settings.allow_direct_po=true`. See `docs/procurement-policy.md`.

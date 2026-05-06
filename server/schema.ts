@@ -16028,6 +16028,102 @@ export type LaborBurdenRate = typeof laborBurdenRates.$inferSelect;
 export type InsertLaborBurdenRate = z.infer<typeof insertLaborBurdenRateSchema>;
 
 // ============================================================================
+// BURDEN RATES ENGINE — DCAA indirect cost pools, bases, rates, applications
+// See migration 0100_burden_rates_engine.sql for the canonical DDL.
+// ============================================================================
+
+export const allocationBases = pgTable('allocation_bases', {
+  id: serial('id').primaryKey(),
+  code: text('code').notNull().unique(),
+  name: text('name').notNull(),
+  description: text('description'),
+  resolverKind: text('resolver_kind').notNull(), // DIRECT_LABOR_DOLLARS | DIRECT_LABOR_HOURS | TOTAL_COST_INPUT
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+export const insertAllocationBaseSchema = createInsertSchema(allocationBases).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+export type AllocationBase = typeof allocationBases.$inferSelect;
+export type InsertAllocationBase = z.infer<typeof insertAllocationBaseSchema>;
+
+export const indirectCostPools = pgTable('indirect_cost_pools', {
+  id: serial('id').primaryKey(),
+  code: text('code').notNull().unique(),
+  name: text('name').notNull(),
+  poolType: text('pool_type').notNull(), // FRINGE | OVERHEAD | G_AND_A | CUSTOM
+  allocationBaseId: integer('allocation_base_id').notNull().references(() => allocationBases.id),
+  description: text('description'),
+  applyOrder: integer('apply_order').notNull().default(100),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+export const insertIndirectCostPoolSchema = createInsertSchema(indirectCostPools).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+export type IndirectCostPool = typeof indirectCostPools.$inferSelect;
+export type InsertIndirectCostPool = z.infer<typeof insertIndirectCostPoolSchema>;
+
+export const indirectRates = pgTable('indirect_rates', {
+  id: serial('id').primaryKey(),
+  poolId: integer('pool_id').notNull().references(() => indirectCostPools.id, { onDelete: 'cascade' }),
+  rateType: text('rate_type').notNull(), // PROVISIONAL | BILLING | FINAL
+  rate: numeric('rate', { precision: 10, scale: 6 }).notNull(),
+  effectiveFrom: date('effective_from').notNull(),
+  notes: text('notes'),
+  createdBy: text('created_by').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+export const insertIndirectRateSchema = createInsertSchema(indirectRates).omit({
+  id: true, createdAt: true,
+});
+export type IndirectRate = typeof indirectRates.$inferSelect;
+export type InsertIndirectRate = z.infer<typeof insertIndirectRateSchema>;
+
+export const burdenApplicationRuns = pgTable('burden_application_runs', {
+  id: serial('id').primaryKey(),
+  periodYear: integer('period_year').notNull(),
+  periodMonth: integer('period_month').notNull(),
+  runType: text('run_type').notNull().default('INITIAL'), // INITIAL | TRUE_UP
+  rateType: text('rate_type').notNull(),                  // PROVISIONAL | BILLING | FINAL
+  status: text('status').notNull().default('PENDING'),    // PENDING | COMPLETED | FAILED
+  supersedesRunId: integer('supersedes_run_id'),
+  appliedBy: text('applied_by').notNull(),
+  recordCount: integer('record_count').notNull().default(0),
+  totalBurden: numeric('total_burden', { precision: 14, scale: 2 }).notNull().default('0'),
+  errorMessage: text('error_message'),
+  startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+});
+export const insertBurdenApplicationRunSchema = createInsertSchema(burdenApplicationRuns).omit({
+  id: true, startedAt: true, completedAt: true,
+});
+export type BurdenApplicationRun = typeof burdenApplicationRuns.$inferSelect;
+export type InsertBurdenApplicationRun = z.infer<typeof insertBurdenApplicationRunSchema>;
+
+export const appliedBurdenAmounts = pgTable('applied_burden_amounts', {
+  id: serial('id').primaryKey(),
+  applicationRunId: integer('application_run_id').notNull().references(() => burdenApplicationRuns.id, { onDelete: 'cascade' }),
+  sourceTable: text('source_table').notNull(), // 'labor_cost_records'
+  sourceRecordId: integer('source_record_id').notNull(),
+  poolId: integer('pool_id').notNull().references(() => indirectCostPools.id),
+  rateId: integer('rate_id').notNull().references(() => indirectRates.id),
+  baseAmount: numeric('base_amount', { precision: 14, scale: 4 }).notNull(),
+  rateUsed: numeric('rate_used', { precision: 10, scale: 6 }).notNull(),
+  burdenAmount: numeric('burden_amount', { precision: 14, scale: 4 }).notNull(),
+  isTrueUp: boolean('is_true_up').notNull().default(false),
+  priorAmount: numeric('prior_amount', { precision: 14, scale: 4 }),
+  appliedAt: timestamp('applied_at', { withTimezone: true }).notNull().defaultNow(),
+});
+export const insertAppliedBurdenAmountSchema = createInsertSchema(appliedBurdenAmounts).omit({
+  id: true, appliedAt: true,
+});
+export type AppliedBurdenAmount = typeof appliedBurdenAmounts.$inferSelect;
+export type InsertAppliedBurdenAmount = z.infer<typeof insertAppliedBurdenAmountSchema>;
+
+// ============================================================================
 // CYCLE COUNT SESSIONS — AS9100 Physical Inventory Verification Workflow
 // ============================================================================
 

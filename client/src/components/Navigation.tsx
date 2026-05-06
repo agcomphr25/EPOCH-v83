@@ -994,6 +994,12 @@ export default function Navigation() {
       description: 'Manage chart of accounts, monthly entries, and cost allocations',
     },
     {
+      path: '/finance/burden-rates',
+      label: 'Burden Rates',
+      icon: Calculator,
+      description: 'Indirect cost pools, rates, and applied burden runs (Fringe / Overhead / G&A)',
+    },
+    {
       path: '/finance/accounting',
       label: 'Accounting Journal',
       icon: Calculator,

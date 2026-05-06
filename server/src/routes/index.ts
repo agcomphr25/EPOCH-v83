@@ -155,6 +155,7 @@ import { registerCodebaseChatRoutes } from '../../replit_integrations/chat/codeb
 import { getAccessToken } from '../utils/upsShipping';
 import punchesRoutes from './punches';
 import laborRoutes from './labor';
+import burdenRatesRoutes from './burdenRates';
 import timekeepingRoutes from './timekeeping';
 import tkPunchesRoutes from './timekeeping/punches';
 import tkTimesheetsRoutes from './timekeeping/timesheets';
@@ -771,6 +772,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // Cost Accounting routes
   app.use('/api/cost-accounting', costAccountingRoutes);
+  app.use('/api/burden-rates', burdenRatesRoutes);
 
   // Employee Badge Actions routes
   app.use('/api/employee-badges', employeeBadgesRoutes);

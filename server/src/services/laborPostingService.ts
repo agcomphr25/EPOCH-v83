@@ -1,6 +1,7 @@
 import { db } from '../../db';
 import { journalEntries, journalLines, laborAccountConfig, laborCostRecords, laborPostingRuns } from '../../schema';
 import { and, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
+import { verifyPeriodBurdenComplete } from './burdenRatesService';
 
 // Compound grouping key for WAD-linked labor cost records.
 // Every WAD record must resolve to exactly one journal entry.
@@ -176,6 +177,30 @@ export async function postLaborToGL(year: number, month: number, postedBy: strin
         `${missingAttribution.length} WAD-linked cost record(s) have incomplete GL attribution.\n` +
         `Resolve the missing fields at punch-in time before posting:\n${details}`,
       );
+    }
+
+    // ── 6b. Burden gate — every DIRECT cost record must have applied burden ──
+    // EPOCH Constitution §5.6: indirect burden (fringe / overhead / G&A) must be
+    // applied via the Burden Rates Engine BEFORE labor posts to GL.  See
+    // docs/burden-rates-methodology.md and Task #80.
+    const burdenStatus = await verifyPeriodBurdenComplete(year, month);
+    if (!burdenStatus.ok) {
+      const missing = burdenStatus.missing
+        .slice(0, 25)
+        .map((m) => `  record ${m.recordId}: missing pools ${m.missingPoolCodes.join(', ')}`)
+        .join('\n');
+      const more = burdenStatus.missing.length > 25
+        ? `\n  ... and ${burdenStatus.missing.length - 25} more record(s)`
+        : '';
+      const err: any = new Error(
+        `Cannot post labor for ${year}-${month}: ` +
+        `${burdenStatus.missing.length} cost record(s) are missing applied burden. ` +
+        `Run the Burden Rates Engine for this period first.\n${missing}${more}`,
+      );
+      err.code = 'MISSING_BURDEN';
+      err.statusCode = 422;
+      err.missingBurden = burdenStatus.missing;
+      throw err;
     }
 
     // ── 7. Build aggregation buckets ──────────────────────────────────────────

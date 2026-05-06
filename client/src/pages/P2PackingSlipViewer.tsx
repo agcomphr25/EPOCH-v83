@@ -65,6 +65,7 @@ export default function P2PackingSlipViewer() {
   const [editMode, setEditMode] = useState(false);
   const [editSlipNumber, setEditSlipNumber] = useState('');
   const [editShipDate, setEditShipDate] = useState('');
+  const [editLotNumber, setEditLotNumber] = useState('');
   const [editReason, setEditReason] = useState('');
 
   const { data: currentUser } = useQuery<CurrentUser | null>({
@@ -101,7 +102,7 @@ export default function P2PackingSlipViewer() {
   });
 
   const editMutation = useMutation({
-    mutationFn: async (payload: { packingSlipNumber: string; shipDate: string | null; reason: string }) => {
+    mutationFn: async (payload: { packingSlipNumber: string; shipDate: string | null; lotNumber: string; reason: string }) => {
       return apiRequest(`/api/p2/packing-slips/${packingSlipId}`, {
         method: 'PATCH',
         body: payload,
@@ -126,6 +127,7 @@ export default function P2PackingSlipViewer() {
         ? format(new Date(packingSlip.shipDate), 'yyyy-MM-dd')
         : ''
     );
+    setEditLotNumber(packingSlip.lotNumber || '');
     setEditReason('');
     setEditMode(true);
   };
@@ -141,9 +143,14 @@ export default function P2PackingSlipViewer() {
       toast({ title: 'Reason required', description: 'Please provide a reason for the change.', variant: 'destructive' });
       return;
     }
+    if (!editLotNumber.trim()) {
+      toast({ title: 'Lot number required', description: 'Lot number cannot be empty.', variant: 'destructive' });
+      return;
+    }
     editMutation.mutate({
       packingSlipNumber: editSlipNumber,
       shipDate: editShipDate ? new Date(editShipDate).toISOString() : null,
+      lotNumber: editLotNumber.trim(),
       reason: editReason.trim(),
     });
   };
@@ -252,6 +259,16 @@ export default function P2PackingSlipViewer() {
                   onChange={e => setEditShipDate(e.target.value)}
                 />
               </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-lot-number">Lot Number <span className="text-red-500">*</span></Label>
+              <Input
+                id="edit-lot-number"
+                data-testid="input-edit-lot-number"
+                value={editLotNumber}
+                onChange={e => setEditLotNumber(e.target.value)}
+                className="font-mono"
+              />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="edit-reason">Reason for Change <span className="text-red-500">*</span></Label>

@@ -424,6 +424,7 @@ router.get('/packing-slips/:id', async (req: Request, res: Response) => {
 const editPackingSlipSchema = z.object({
   packingSlipNumber: z.string().trim().min(1).optional(),
   shipDate: z.string().datetime({ offset: true }).nullable().optional(),
+  lotNumber: z.string().trim().min(1, 'Lot number cannot be empty').optional(),
   reason: z.string().trim().min(1, 'Reason is required'),
 });
 
@@ -442,8 +443,10 @@ router.patch(
         id: string;
         packing_slip_number: string;
         ship_date: string | null;
+        lot_number: string | null;
+        lot_number_id: string | null;
       }>(
-        `SELECT id, packing_slip_number, ship_date FROM p2_packing_slips WHERE id = $1`,
+        `SELECT id, packing_slip_number, ship_date, lot_number, lot_number_id FROM p2_packing_slips WHERE id = $1`,
         [slipId]
       );
       if (slipRows.length === 0) {
@@ -487,6 +490,28 @@ router.patch(
         }
       }
 
+      let updateLotTable = false;
+      if (input.lotNumber !== undefined && input.lotNumber !== (slip.lot_number ?? '')) {
+        // Enforce uniqueness against p2_lot_numbers.lot_number, excluding this slip's own linked lot
+        const dupLotRows = await pool.query<{ id: string }>(
+          slip.lot_number_id
+            ? `SELECT id FROM p2_lot_numbers WHERE lot_number = $1 AND id != $2`
+            : `SELECT id FROM p2_lot_numbers WHERE lot_number = $1`,
+          slip.lot_number_id ? [input.lotNumber, slip.lot_number_id] : [input.lotNumber]
+        );
+        if (dupLotRows.length > 0) {
+          return res.status(409).json({ error: 'A lot with that number already exists' });
+        }
+        params.push(input.lotNumber);
+        setClauses.push(`lot_number = $${params.length}`);
+        auditEntries.push({
+          fieldName: 'lot_number',
+          oldValue: slip.lot_number,
+          newValue: input.lotNumber,
+        });
+        updateLotTable = !!slip.lot_number_id;
+      }
+
       if (auditEntries.length === 0) {
         // Nothing changed — return current record
         const currentRows = await pool.query(
@@ -505,6 +530,13 @@ router.patch(
         const updateSql = `UPDATE p2_packing_slips SET ${setClauses.join(', ')} WHERE id = $${params.length} RETURNING *`;
         const updateResult = await client.query(updateSql, params);
         const updated = updateResult.rows[0];
+
+        if (updateLotTable && input.lotNumber !== undefined) {
+          await client.query(
+            `UPDATE p2_lot_numbers SET lot_number = $1, updated_at = NOW() WHERE id = $2`,
+            [input.lotNumber, slip.lot_number_id]
+          );
+        }
 
         for (const entry of auditEntries) {
           await client.query(

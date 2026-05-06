@@ -10,6 +10,7 @@ import {
 import { eq, and } from 'drizzle-orm';
 import JSZip from 'jszip';
 import { ObjectStorageService } from '../../replit_integrations/object_storage';
+import { recordAuditEvent } from './auditLedgerService';
 
 const objectStorage = new ObjectStorageService();
 
@@ -30,6 +31,23 @@ export async function requestEvidencePacket(
     errorMessage: null,
   };
   const [packet] = await db.insert(edriEvidencePackets).values(insert).returning();
+
+  // Task #85: route through unified hash-chained ledger so the request
+  // for evidence (who/when/what scope) is tamper-evident DCAA evidence.
+  await recordAuditEvent({
+    eventType: 'EDRI_EVIDENCE_PACKET_REQUESTED',
+    subjectType: 'edri_evidence_packet',
+    subjectId: String(packet.id),
+    sourceService: 'edriEvidenceService',
+    actor: { id: userId, username: userDisplayName, role: 'user' },
+    payload: {
+      packetId: packet.id,
+      snapshotId,
+      domainKey,
+      requestedByUserId: userId,
+      requestedByDisplayName: userDisplayName,
+    },
+  });
 
   // Trigger generation asynchronously — do not await
   generateEvidencePacket(packet.id, snapshotId, domainKey).catch(err => {

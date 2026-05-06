@@ -134,6 +134,7 @@ import quoteFeedbackRoutes from './quoteFeedback';
 import modelAnalyticsRoutes from './modelAnalytics';
 import aqlSamplingRoutes from './aqlSampling';
 import auditRoutes from './audit';
+import auditLedgerRoutes from './auditLedger';
 import { auditService } from '../services/auditService';
 import mediaRoutes from './media';
 import voiceNotesRoutes from './voiceNotes';
@@ -815,6 +816,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // Audit System routes
   app.use('/api/audit', auditRoutes);
+  app.use('/api/audit-ledger', auditLedgerRoutes);
 
   // Media Library routes
   app.use('/api/media', mediaRoutes);

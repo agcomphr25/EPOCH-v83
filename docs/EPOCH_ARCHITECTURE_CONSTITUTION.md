@@ -146,6 +146,72 @@ Cross-reference: Task #1206 — "Excise standalone timekeeping module."
 
 ---
 
+## Section 9 — Unified Audit Ledger (Source of Truth for Compliance Evidence)
+
+There is exactly one authoritative audit evidence pipeline in EPOCH:
+
+```
+recordAuditEvent()  (server/src/services/auditLedgerService.ts)
+  → public.audit_events  (append-only; UPDATE/DELETE blocked by audit_events_block_dml trigger)
+       columns of record: subject_type, subject_id, payload_json, payload_hash,
+                          prev_hash, row_hash, occurred_at, recorded_at,
+                          source_service, sequence_number
+  → public.audit_anchors  (chain-head checkpoints)
+  → public.audit_retention_policies  (DCAA 7-year floor)
+  → /api/audit-ledger    (filter, export CSV+SHA-256 manifest, verify chain, list anchors, retention)
+```
+
+All compliance-relevant events — labor approvals, corrections, certifications, period close/reopen,
+WAD assignments, payroll export creation/supersede/void/download/processed, burden application, GL
+posting, procurement approvals (PO release/lock/unlock, vendor approval), policy acknowledgments,
+training completions, CMMC control changes, EDRI scoring runs, and any privileged administrative
+override — must be emitted through `recordAuditEvent()`.
+
+**Mandatory rules:**
+
+1. **No raw inserts.** Service code may not `INSERT INTO audit_events` directly. The single
+   authorized writer is `recordAuditEvent()`, which computes `payload_hash` (SHA-256 over canonical
+   JSON), `row_hash` (SHA-256 over `prev_hash || payload_hash || occurred_at || event_type ||
+   subject_type || subject_id || sequence_number`), and atomically reserves the next
+   `sequence_number` under a transactional advisory lock.
+2. **No mutations — durable tamper evidence.** The `audit_events_block_dml` trigger raises on
+   UPDATE/DELETE so the offending statement is rejected. Before raising, the trigger writes the
+   tamper attempt to `public.audit_dml_attempts` via `dblink_exec` (an autonomous backend
+   connection). Because that write commits in its own transaction, it survives the rollback of the
+   offending statement — the forensic evidence is durable. A scheduled drainer
+   (`drainTamperAttempts`, every 5 minutes) then mirrors each undrained attempt into the unified
+   ledger as a hash-chained `AUDIT_DML_BLOCKED` event with sequence + hash, so tamper attempts
+   appear in the integrity-verifiable timeline as well as the durable raw sink.
+   Direct DML privileges on `audit_events` are also REVOKEd from the application role (migration
+   0100); the only sanctioned bypass is the SECURITY DEFINER `audit_archive_delete_segment()`
+   function, executable only by the dedicated `audit_archiver` role. No application code may set
+   the `audit.allow_archive` GUC directly.
+3. **No parallel ledgers.** Per-service event tables (e.g. `payroll_export_events`,
+   `labor_entry_audit`) remain as the per-domain operational record but must additionally emit
+   through `recordAuditEvent()` so that the unified ledger is the single integrity-verifiable
+   timeline used for DCAA / CMMC evidence packages.
+4. **Retention floor.** `audit_retention_policies` declares minimum retention windows. The default
+   policy (`event_type = '*'`) is 2,555 days (7 years), aligned with DCAA. Per-event-type policies
+   may extend, never shorten. Archive/purge jobs MUST consult `getRetentionFloorDays()` and refuse
+   to delete rows younger than the resolved floor.
+5. **Anchors + scheduled verification.** A nightly cron writes a chain-head anchor
+   (`audit_anchors`). Anchors are also produced on demand by admins
+   (`POST /api/audit-ledger/anchors`), automatically by `audit_archive_delete_segment()` (one
+   pre-archive anchor at the segment floor and one post-archive anchor at the new head), and
+   immediately before any bulk evidence export. The chain verifier (`verifyChainSegment`) is
+   anchor-aware: when the row immediately preceding `from_sequence` is missing (archived) it
+   resumes from the most recent anchor at or below that sequence. A scheduled verifier
+   (`verifyRecentChain`, every 30 minutes, default window 5,000 events) re-walks the recent tail;
+   on mismatch it writes an `AUDIT_CHAIN_INTEGRITY_FAILED` ledger event so the compliance
+   dashboard surfaces tamper evidence between nightly anchors.
+6. **Exports.** All CSV exports of audit evidence MUST carry an SHA-256 checksum and a JSON
+   manifest containing the filter set, generation timestamp, row count, and column list, matching
+   the immutable-export convention already used by payroll batches.
+
+Cross-reference: Task #85 — "Audit Evidence Hardening."
+
+---
+
 ## Revision History
 
 | Date | Change |
@@ -154,6 +220,7 @@ Cross-reference: Task #1206 — "Excise standalone timekeeping module."
 | April 21, 2026 | Section 7 added: standalone timekeeping module (`modules/timekeeping/`) permanently excised per Task #1206. `timekeeping.employees` table intentionally preserved as native FK anchor. |
 | May 6, 2026 | §5.2 enforcement (Task #77): TRAVELER-source punches now default to `approval_status = 'PENDING_APPROVAL'` at every write site (`punchLedger.openSession`, `switchAssignment`, `openOrSwitchForTraveler`, `timeClock` clock-in/job-switch, kiosk + portal punch routes, `storage.switchPunchLedgerAssignment`). Three DB CHECK constraints make the rule physically unbypassable: (a) `punch_ledger_approval_status_chk` pins the enum, (b) `punch_ledger_traveler_no_auto_chk` forbids TRAVELER+AUTO, (c) `punch_ledger_approved_requires_link_chk` requires `labor_approval_id` on every APPROVED, WAD-linked TRAVELER row (and `labor_approval_id` or `labor_budget_override_id` on APPROVED_OVERRUN), so no future code path can flip a punch to APPROVED without inserting the matching `labor_approvals` audit row first. `AUTO` remains a valid status only for non-TRAVELER system-reconciliation entries (e.g., `SALARIED_ENTRY` draft posting; KIOSK/PORTAL punches with no traveler/WAD link). Supervisor approval via `POST /api/timekeeping/labor-approvals` is the sole transition that flips `PENDING_APPROVAL`/`FLAGGED` → `APPROVED` (route performs the `labor_approvals` insert and the `punch_ledger` UPDATE atomically). Migration `0099` opens with a fail-fast `DO $$ ... $$` precondition that aborts with an actionable message if any unbackfilled TRAVELER+AUTO rows or APPROVED-but-unlinked rows still exist. Historical rows are reconciled by `server/scripts/backfillPunchApprovals.ts --cutover <ISO-DATE> [--apply] [--report ./report.json]`, which only touches rows created strictly before the cutover (post-cutover writes already obey the new default and are intentionally left untouched), warns if any post-cutover TRAVELER+AUTO rows exist, and produces a deterministic JSON reconciliation report listing every group it backfilled and every row it could not. |
 | May 6, 2026 | Section 8 added: Purchasing Controls (requisition → approval → PO chain) per Task #83. |
+| May 6, 2026 | Section 9 added: Unified Audit Ledger established as the single source of truth for compliance evidence per Task #85. Append-only `audit_events` with hash chain, `audit_anchors` checkpoints, `audit_retention_policies` (DCAA 7-year floor), `recordAuditEvent()` as sole writer, DB trigger blocking UPDATE/DELETE. |
 
 ---
 

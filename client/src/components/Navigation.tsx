@@ -507,6 +507,12 @@ export default function Navigation() {
       icon: FileText,
       description: 'Publish, upload, and monitor written policy versions and acknowledgments',
     },
+    {
+      path: '/admin/audit-ledger',
+      label: 'Unified Audit Ledger',
+      icon: FileSearch,
+      description: 'Append-only, hash-chained DCAA / CMMC audit ledger',
+    },
   ];
 
   const estimatingItems: NavItemDef[] = [

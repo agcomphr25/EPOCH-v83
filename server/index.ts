@@ -419,7 +419,11 @@ async function initializeBackgroundServices() {
           '0095_production_control_templates.sql',
           '0096_wad_document_links.sql',
           '0097_wad_wizard_data.sql',
+          '0098_payroll_export_batches.sql',
+          '0099_audit_evidence_hardening.sql',
           '0099_policies_library.sql',
+          '0100_audit_ledger_privilege_hardening.sql',
+          '0101_audit_tamper_attempts_durable.sql',
         ];
         const criticalMigrations = new Set([
           '0060_punch_ledger.sql',
@@ -5636,6 +5640,73 @@ async function initializeBackgroundServices() {
       }
     });
     console.log('🧠 Nightly cycle time learning rebuild scheduled (every day at 2:00 AM)');
+
+    // ── Unified Audit Ledger nightly anchor ───────────────────────────────────
+    // Task #85: persist a tamper-evident checkpoint of the chain head every
+    // night so the verifier has stable known-good waypoints for DCAA evidence.
+    cron.schedule('15 2 * * *', async () => {
+      try {
+        const { writeAnchor } = await import('./src/services/auditLedgerService');
+        const anchor = await writeAnchor({
+          notes: 'Scheduled nightly anchor',
+          createdBy: 'system:cron',
+        });
+        console.log(`[AuditLedger] Nightly anchor #${anchor?.id ?? '?'} written at seq ${anchor?.headSequence ?? '?'}`);
+      } catch (err) {
+        console.error('[AuditLedger] Nightly anchor failed:', err);
+      }
+    });
+    console.log('🔒 Unified audit ledger nightly anchor scheduled (every day at 2:15 AM)');
+
+    // ── Tamper-attempt drainer — every 5 minutes ──────────────────────────────
+    // Task #85: pulls undrained rows from public.audit_dml_attempts (written
+    // autonomously via dblink from the audit_events block trigger so they
+    // survive the trigger's RAISE) and mirrors each attempt into the unified
+    // hash-chained ledger as an AUDIT_DML_BLOCKED event with sequence + hash.
+    cron.schedule('*/5 * * * *', async () => {
+      try {
+        const { drainTamperAttempts } = await import('./src/services/auditLedgerService');
+        const n = await drainTamperAttempts(500);
+        if (n > 0) console.log(`[AuditLedger] drained ${n} tamper attempt(s) into chain`);
+      } catch (err) {
+        console.error('[AuditLedger] tamper-attempt drainer failed:', err);
+      }
+    });
+    console.log('🔒 Unified audit ledger tamper-attempt drainer scheduled (every 5 minutes)');
+
+    // ── Scheduled chain verifier — every 30 minutes ───────────────────────────
+    // Task #85: re-walks the most recent ledger window (anchor-aware) and on
+    // mismatch records an AUDIT_CHAIN_INTEGRITY_FAILED event so the
+    // compliance dashboard surfaces tamper evidence between nightly anchors.
+    cron.schedule('*/30 * * * *', async () => {
+      try {
+        const { verifyRecentChain, recordAuditEvent } = await import('./src/services/auditLedgerService');
+        const result = await verifyRecentChain(5000);
+        if (!result.ok) {
+          console.error(`[AuditLedger] CHAIN INTEGRITY FAILED: ${result.message} (first mismatch seq=${result.firstMismatchSequence})`);
+          await recordAuditEvent({
+            eventType: 'AUDIT_CHAIN_INTEGRITY_FAILED',
+            subjectType: 'audit_chain',
+            subjectId: String(result.firstMismatchSequence ?? 'unknown'),
+            sourceService: 'audit_chain_verifier',
+            reason: result.message ?? 'Chain hash mismatch detected',
+            actor: { username: 'system:cron', role: 'system' },
+            payload: {
+              startSequence: result.startSequence,
+              endSequence: result.endSequence,
+              rowsChecked: result.rowsChecked,
+              firstMismatchSequence: result.firstMismatchSequence,
+              firstMismatchEventId: result.firstMismatchEventId,
+              verifiedAt: result.verifiedAt.toISOString(),
+              windowSize: result.windowSize,
+            },
+          });
+        }
+      } catch (err) {
+        console.error('[AuditLedger] scheduled chain verifier failed:', err);
+      }
+    });
+    console.log('🔒 Unified audit ledger chain verifier scheduled (every 30 minutes, window=5000)');
 
     // ── EDRI periodic refresh — every 4 hours ─────────────────────────────────
     // Keeps the EPOCH DCAA Readiness Index dashboard current as production data

@@ -23,6 +23,7 @@ import {
   getPracticeById,
 } from '../services/cmmcControlTaxonomy';
 import { getControlMapping } from '../services/cmmcEvidenceMapping';
+import { recordAuditEvent } from '../services/auditLedgerService';
 
 type CmmcStatus = 'implemented' | 'partial' | 'planned' | 'not_applicable';
 
@@ -294,7 +295,8 @@ router.patch('/controls/:practiceId', async (req: Request, res: Response) => {
       updatePayload.attestedByUserId = user.id;
       updatePayload.attestedByDisplayName = user.username;
     }
-    if (existing.length === 0) {
+    const wasInsert = existing.length === 0;
+    if (wasInsert) {
       const mapping = getControlMapping(practiceId);
       const seedStatus = mapping.seedStatus as CmmcStatus;
       await db.insert(cmmcControlStatus).values({
@@ -315,6 +317,30 @@ router.patch('/controls/:practiceId', async (req: Request, res: Response) => {
     }
 
     const updated = await db.select().from(cmmcControlStatus).where(eq(cmmcControlStatus.practiceId, practiceId));
+
+    // Task #85: route CMMC control status changes through the unified
+    // hash-chained ledger so attestations are tamper-evident DCAA evidence.
+    const eventType = attest === true
+      ? 'CMMC_CONTROL_ATTESTED'
+      : wasInsert ? 'CMMC_CONTROL_CREATED' : 'CMMC_CONTROL_UPDATED';
+    await recordAuditEvent({
+      eventType,
+      subjectType: 'cmmc_control',
+      subjectId: practiceId,
+      sourceService: 'cmmc.routes',
+      actor: { id: user.id, username: user.username, role: user.role },
+      ipAddress: req.ip ?? null,
+      userAgent: req.headers['user-agent'] ?? null,
+      payload: {
+        practiceId,
+        family: practice.family,
+        before: existing[0] ?? null,
+        after: updated[0] ?? null,
+        attest: attest === true,
+        policyDocumentId: policyDocumentId ?? null,
+      },
+    });
+
     return res.json({ ok: true, control: updated[0] });
   } catch (err) {
     console.error('[CMMC] PATCH /controls/:id error:', err);

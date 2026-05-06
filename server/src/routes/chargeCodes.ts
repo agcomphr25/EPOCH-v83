@@ -1,8 +1,8 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction, type RequestHandler } from 'express';
-import { db } from '../../db';
 import { authenticateToken, requireRole } from '../../middleware/auth';
 import { storage } from '../../storage';
-import { insertChargeCodeSchema, auditEvents } from '../../schema';
+import { insertChargeCodeSchema } from '../../schema';
+import { recordAuditEvent } from '../services/auditLedgerService';
 
 const router: IRouter = Router();
 
@@ -14,11 +14,11 @@ function h(fn: (req: Request, res: Response, next: NextFunction) => Promise<void
 }
 
 function extractActor(req: Request): { actorId: number | null; actorName: string; actorRole: string } {
-  const user = req.user as any;
+  const user = req.user;
   return {
     actorId: user?.id ?? null,
-    actorName: user?.username || user?.email || user?.name || 'admin',
-    actorRole: user?.role || 'admin',
+    actorName: user?.username ?? 'admin',
+    actorRole: user?.role ?? 'admin',
   };
 }
 
@@ -38,15 +38,14 @@ router.post('/', authenticateToken, requireRole('ADMIN'), h(async (req, res) => 
   }
   const created = await storage.createChargeCode(parsed.data);
 
-  // DCAA audit trail — only written after successful DB creation
+  // DCAA audit trail — unified hash-chained ledger (Task #85).
   const { actorId, actorName, actorRole } = extractActor(req);
-  await db.insert(auditEvents).values({
-    entityType: 'charge_code',
-    entityId: String(created.id),
-    action: 'CHARGE_CODE_CREATED',
-    actorId,
-    actorName,
-    actorRole,
+  await recordAuditEvent({
+    eventType: 'CHARGE_CODE_CREATED',
+    subjectType: 'charge_code',
+    subjectId: String(created.id),
+    sourceService: 'chargeCodes.routes',
+    actor: { id: actorId, username: actorName, role: actorRole },
     fieldsChanged: {
       code: created.code,
       type: created.type,
@@ -58,6 +57,13 @@ router.post('/', authenticateToken, requireRole('ADMIN'), h(async (req, res) => 
     },
     ipAddress: req.ip ?? null,
     userAgent: req.headers['user-agent'] ?? null,
+    payload: {
+      code: created.code,
+      type: created.type,
+      active: created.active,
+      billable: created.billable,
+      requiresApproval: created.requiresApproval,
+    },
   });
 
   res.status(201).json(created);
@@ -99,18 +105,18 @@ router.patch('/:id', authenticateToken, requireRole('ADMIN'), h(async (req, res)
     }
   }
 
-  await db.insert(auditEvents).values({
-    entityType: 'charge_code',
-    entityId: String(id),
-    action,
-    actorId,
-    actorName,
-    actorRole,
+  await recordAuditEvent({
+    eventType: action,
+    subjectType: 'charge_code',
+    subjectId: String(id),
+    sourceService: 'chargeCodes.routes',
+    actor: { id: actorId, username: actorName, role: actorRole },
     reason,
     fieldsChanged,
     meta: { isDeactivation },
     ipAddress: req.ip ?? null,
     userAgent: req.headers['user-agent'] ?? null,
+    payload: { id, isDeactivation, fieldsChanged },
   });
 
   res.json(updated);

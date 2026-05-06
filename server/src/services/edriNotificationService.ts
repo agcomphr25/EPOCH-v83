@@ -1,5 +1,6 @@
 import { db, pool } from '../../db';
-import { edriNotifications, edriRemediationItems, auditEvents, InsertEdriNotification } from '../../schema';
+import { edriNotifications, edriRemediationItems, InsertEdriNotification } from '../../schema';
+import { recordAuditEvent } from './auditLedgerService';
 import { eq, sql } from 'drizzle-orm';
 
 export type EdriEventType =
@@ -69,15 +70,16 @@ async function recordNotification(
     payload,
   };
   await db.insert(edriNotifications).values(insert);
-  // Mirror to audit log for compliance traceability
-  await db.insert(auditEvents).values({
-    entityType: 'edri_notification',
-    entityId: String(snapshotId),
-    action: `EDRI_${eventType}_SENT`,
-    actorName: 'EDRI System',
+  // Task #85: route through unified hash-chained ledger for compliance traceability.
+  await recordAuditEvent({
+    eventType: `EDRI_${eventType}_SENT`,
+    subjectType: 'edri_notification',
+    subjectId: String(snapshotId),
+    sourceService: 'edriNotificationService',
+    actor: { username: 'EDRI System', role: 'system' },
     reason: `EDRI notification sent: ${eventType} via ${channel}${recipientUserId ? ` to user ${recipientUserId}` : ' (broadcast)'}`,
-    meta: { channel, recipientUserId, payload, snapshotId },
-  }).catch(() => {}); // Non-blocking: audit log write failure must not break notification flow
+    payload: { channel, recipientUserId, payload, snapshotId },
+  });
 }
 
 export async function triggerEdriNotifications(

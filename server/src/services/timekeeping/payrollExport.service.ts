@@ -54,6 +54,7 @@ import {
 import { employees as publicEmployeesTable } from "../../../schema";
 import { splitName } from "../../lib/timekeepingEmployeeResolver";
 import type { AuditActor } from "./audit.service";
+import { recordAuditEvent } from "../auditLedgerService";
 
 // ---------------------------------------------------------------------------
 // Errors
@@ -714,6 +715,38 @@ export async function createRegularFullPeriodBatch(
       },
       ipAddress: input.actor.ip,
     });
+
+    // Task #85: also emit through the unified, hash-chained audit ledger.
+    // Fail-closed and transactionally coupled: we pass `tx` so the chain
+    // row commits or rolls back atomically with the payroll batch row.
+    // A ledger emit failure aborts the export — by design — because a
+    // batch that lacks compliance evidence violates the constitution's
+    // single-integrity-verifiable-timeline rule (constitution §8).
+    await recordAuditEvent(
+      {
+        eventType: "PAYROLL_EXPORT_CREATED",
+        subjectType: "payroll_export_batch",
+        subjectId: String(inserted.id),
+        sourceService: "payrollExport.service",
+        actor: {
+          id: actorId,
+          username: input.actor.email,
+          role: input.actor.role,
+        },
+        ipAddress: input.actor.ip ?? null,
+        payload: {
+          batchId: inserted.id,
+          periodStart: input.periodStart,
+          periodEnd: input.periodEnd,
+          revisionNumber: nextRevision,
+          supersededBatchId,
+          rowCount: rows.length,
+          csvChecksum,
+        },
+        reason: supersededBatchId != null ? supersedeReasonTrimmed : null,
+      },
+      tx as Parameters<typeof recordAuditEvent>[1],
+    );
 
     return {
       batchId: inserted.id,

@@ -33,6 +33,7 @@ import {
   serial,
   varchar,
   doublePrecision,
+  bigint,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { sql, relations } from 'drizzle-orm';
@@ -11123,12 +11124,26 @@ export const auditEvents = pgTable('audit_events', {
   userAgent: text('user_agent'), // Optional browser/client info
   timestamp: timestamp('timestamp').defaultNow(), // When the action occurred
   createdAt: timestamp('created_at').defaultNow(),
+  // ── Task #85: unified ledger / hash-chain columns ─────────────────────
+  subjectType: text('subject_type'),
+  subjectId: text('subject_id'),
+  payloadJson: jsonb('payload_json'),
+  payloadHash: text('payload_hash'),
+  prevHash: text('prev_hash'),
+  rowHash: text('row_hash'),
+  occurredAt: timestamp('occurred_at', { withTimezone: true }),
+  recordedAt: timestamp('recorded_at', { withTimezone: true }).defaultNow(),
+  sourceService: text('source_service'),
+  sequenceNumber: bigint('sequence_number', { mode: 'number' }),
 }, (table) => ({
   entityTypeIdx: index('audit_events_entity_type_idx').on(table.entityType),
   entityIdIdx: index('audit_events_entity_id_idx').on(table.entityId),
   actionIdx: index('audit_events_action_idx').on(table.action),
   actorIdIdx: index('audit_events_actor_id_idx').on(table.actorId),
   createdAtIdx: index('audit_events_created_at_idx').on(table.createdAt),
+  subjectIdx: index('audit_events_subject_idx').on(table.subjectType, table.subjectId),
+  sourceServiceIdx: index('audit_events_source_service_idx').on(table.sourceService),
+  occurredAtIdx: index('audit_events_occurred_at_idx').on(table.occurredAt),
 }));
 
 export const insertAuditEventSchema = createInsertSchema(auditEvents).omit({
@@ -17117,3 +17132,41 @@ export type VendorPoFarFlowdown = typeof vendorPoFarFlowdowns.$inferSelect;
 export type VendorDebarmentCheck = typeof vendorDebarmentChecks.$inferSelect;
 export type InsertVendorDebarmentCheck = z.infer<typeof insertVendorDebarmentCheckSchema>;
 export type ProcurementSettings = typeof procurementSettings.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// Task #85 — Audit Evidence Hardening
+// Hash-chain extension columns on `audit_events` (the unified ledger),
+// plus `audit_anchors` (periodic chain-head checkpoints) and
+// `audit_retention_policies` (per-event-type retention floor).
+// ---------------------------------------------------------------------------
+
+export const auditAnchors = pgTable('audit_anchors', {
+  id: serial('id').primaryKey(),
+  anchoredAt: timestamp('anchored_at', { withTimezone: true }).notNull().defaultNow(),
+  headEventId: integer('head_event_id').references(() => auditEvents.id),
+  headRowHash: text('head_row_hash'),
+  headSequence: bigint('head_sequence', { mode: 'number' }),
+  eventCount: bigint('event_count', { mode: 'number' }),
+  notes: text('notes'),
+  exportedTo: text('exported_to'),
+  createdBy: text('created_by'),
+}, (table) => ({
+  anchoredAtIdx: index('audit_anchors_anchored_at_idx').on(table.anchoredAt),
+}));
+
+export type AuditAnchor = typeof auditAnchors.$inferSelect;
+export const insertAuditAnchorSchema = createInsertSchema(auditAnchors).omit({ id: true, anchoredAt: true });
+export type InsertAuditAnchor = z.infer<typeof insertAuditAnchorSchema>;
+
+export const auditRetentionPolicies = pgTable('audit_retention_policies', {
+  id: serial('id').primaryKey(),
+  eventType: text('event_type').notNull().unique(),
+  minRetentionDays: integer('min_retention_days').notNull().default(2555),
+  archiveAfterDays: integer('archive_after_days'),
+  description: text('description'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type AuditRetentionPolicy = typeof auditRetentionPolicies.$inferSelect;
+export const insertAuditRetentionPolicySchema = createInsertSchema(auditRetentionPolicies).omit({ id: true, updatedAt: true });
+export type InsertAuditRetentionPolicy = z.infer<typeof insertAuditRetentionPolicySchema>;

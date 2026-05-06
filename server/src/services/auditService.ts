@@ -12,6 +12,7 @@ import { db } from '../../db';
 import { auditEvents, auditSettings, orderDepartmentTransitions, orderScrapCycles } from '../../schema';
 import { eq, and, desc, isNull, sql } from 'drizzle-orm';
 import { getChangedFields, getEventTypeForField } from '@shared/auditConfig';
+import { recordAuditEvent } from './auditLedgerService';
 
 export interface AuditActor {
   id?: number;
@@ -104,27 +105,29 @@ class AuditService {
       return 0;
     }
 
-    const now = new Date();
-    const result = await db.insert(auditEvents).values({
-      entityType: input.entityType,
-      entityId: input.entityId,
-      action: input.action,
-      actorId: input.actor?.id ?? null,
-      actorName: input.actor?.username ?? null,
-      actorRole: input.actor?.role ?? null,
+    // Task #85: route every event through the unified, hash-chained ledger.
+    const recorded = await recordAuditEvent({
+      eventType: input.action,
+      subjectType: input.entityType,
+      subjectId: input.entityId,
+      sourceService: 'auditService',
+      actor: input.actor
+        ? { id: input.actor.id ?? null, username: input.actor.username ?? null, role: input.actor.role ?? null }
+        : undefined,
       reason: input.reason ?? null,
-      fieldsChanged: input.fieldsChanged ?? null,
-      meta: input.meta ?? {},
       ipAddress: input.ipAddress ?? null,
       userAgent: input.userAgent ?? null,
-      createdAt: now,
-    }).returning({ id: auditEvents.id });
+      payload: {
+        fieldsChanged: input.fieldsChanged ?? null,
+        meta: input.meta ?? null,
+      },
+      fieldsChanged: input.fieldsChanged ?? null,
+      meta: input.meta ?? {},
+      entityType: input.entityType,
+      entityId: input.entityId,
+    });
 
-    if (!result[0]?.id) {
-      throw new Error("AUDIT ERROR: insert returned no ID");
-    }
-
-    return result[0].id;
+    return recorded.id;
   }
 
   /**

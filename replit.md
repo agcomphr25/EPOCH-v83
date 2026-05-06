@@ -45,6 +45,7 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed to streamline oper
 *   **Control Tower Service:** `server/src/services/controlTowerService.ts`
 *   **CMMC Control Taxonomy & Evidence Mapping:** `server/src/services/cmmcControlTaxonomy.ts`, `server/src/services/cmmcEvidenceMapping.ts`
 *   **Written Policies Library:** drafts in `docs/policies/`, service `server/src/services/policiesService.ts`, routes `server/src/routes/policies.ts`, drift job `server/src/jobs/policiesDriftCheck.ts`, UI `client/src/pages/PolicyLibraryPage.tsx` & `client/src/pages/admin/PoliciesAdminPage.tsx`
+*   **Unified Audit Ledger:** `server/src/services/auditLedgerService.ts` (sole writer = `recordAuditEvent()`); reporting in `server/src/services/auditReportingService.ts`; routes at `server/src/routes/auditLedger.ts` (`/api/audit-ledger/*`); admin UI at `client/src/pages/AuditLedgerPage.tsx` (`/admin/audit-ledger`); policy doc `docs/audit-evidence-policy.md`.
 *   `Navigation.tsx`: Frontend navigation menu
 
 ## Architecture decisions
@@ -57,6 +58,7 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed to streamline oper
 *   **No Dual-Pool Patterns:** Explicitly deprecated standalone modules and dual-pool database connection patterns (e.g., `modules/timekeeping/`). All system components must use the single `db` instance from the main server.
 *   **"Delete-First" Agent Implementation:** When re-architecting, the approach is to delete deprecated patterns and redesign, rather than creating compatibility layers, to maintain architectural purity and prevent technical debt.
 *   **Immutable Audit Trail:** Critical financial exports (e.g., Payroll Export) generate and store immutable CSVs with SHA-256 checksums for DCAA audit evidence.
+*   **Unified Audit Ledger (Task #85):** Single hash-chained `audit_events` ledger is the source of truth for compliance evidence. Sole writer is `recordAuditEvent()`; UPDATE/DELETE blocked by DB trigger; chain anchored nightly; reporting/export/verify exposed via `/api/audit-ledger`. See constitution §9 and `docs/audit-evidence-policy.md`.
 *   **Context-Aware Forecasting:** Production forecast engine uses a 3-tier cycle time priority (model-specific, department-level historical, hardcoded fallbacks) and weighted queues based on model complexity for more accurate predictions.
 
 ## Product

@@ -39,6 +39,7 @@ vi.mock('@/lib/editPunchHandler', () => ({
 const ALICE: {
   employee: {
     id: number;
+    epochEmployeeId?: number | null;
     firstName: string;
     lastName: string;
     employeeNumber: string | null;
@@ -54,6 +55,7 @@ const ALICE: {
 } = {
   employee: {
     id: 7,
+    epochEmployeeId: 20,
     firstName: 'Alice',
     lastName: 'Nguyen',
     employeeNumber: 'E007',
@@ -71,6 +73,7 @@ const ALICE: {
 const BOB: typeof ALICE = {
   employee: {
     id: 12,
+    epochEmployeeId: 31,
     firstName: 'Bob',
     lastName: 'Kastner',
     employeeNumber: 'E012',
@@ -250,5 +253,46 @@ describe('In/Out Board — row highlight on punch_recorded', () => {
     });
 
     expect(aliceRow.className).toContain('bg-green-100');
+  });
+
+  it('resolves punch review employee names from canonical employee ids', async () => {
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/api/timekeeping/punches')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve([
+            {
+              id: 101,
+              sessionId: 101,
+              employeeId: 20,
+              type: 'clock_in',
+              punchedAt: new Date('2026-05-05T13:00:00.000Z').toISOString(),
+              source: 'PORTAL',
+              isEdited: false,
+              editNote: null,
+              costCode: null,
+              note: null,
+              hasMissingClockOut: false,
+            },
+          ]),
+        } as Response);
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve([]),
+      } as Response);
+    });
+
+    await act(async () => {
+      await renderPage();
+    });
+
+    await act(async () => {
+      fireEvent.mouseDown(screen.getByRole('tab', { name: /^punch review$/i }));
+    });
+
+    expect(await screen.findByText('Alice Nguyen')).toBeInTheDocument();
+    expect(screen.queryByText('Employee #20')).not.toBeInTheDocument();
   });
 });

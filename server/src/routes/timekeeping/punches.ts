@@ -434,6 +434,9 @@ router.post("/kiosk/punch", optionalAuth, h(async (req, res): Promise<void> => {
   let operation: string | null = null;
   let laborApprovalId: number | null = null;
   let laborBudgetOverrideId: number | null = null;
+  // §5.2 (Task #77): kiosk path may produce a TRAVELER-source punch when a traveler
+  // barcode is supplied. Default to PENDING_APPROVAL in that case; non-traveler kiosk
+  // punches keep AUTO (no WAD link → not subject to the WAD approval gate).
   let approvalStatus = "AUTO";
 
   if (travelerId) {
@@ -447,7 +450,7 @@ router.post("/kiosk/punch", optionalAuth, h(async (req, res): Promise<void> => {
     operation = ctx.operation ?? null;
     laborApprovalId = ctx.laborApprovalId ?? null;
     laborBudgetOverrideId = ctx.laborBudgetOverrideId ?? null;
-    approvalStatus = ctx.approvalStatus ?? "AUTO";
+    approvalStatus = ctx.approvalStatus ?? "PENDING_APPROVAL";
     // Resolve chargeCodeId from chargeCodeStr
     if (chargeCodeStr) {
       const [ccRow] = await nativeDb
@@ -649,6 +652,8 @@ router.post("/punches/my", authenticateToken, h(async (req, res): Promise<void> 
   let operation: string | null = null;
   let laborApprovalId: number | null = null;
   let laborBudgetOverrideId: number | null = null;
+  // §5.2 (Task #77): portal path may produce a TRAVELER-source punch when a
+  // traveler barcode is supplied. Default to PENDING_APPROVAL in that case.
   let approvalStatus = "AUTO";
 
   if (travelerId) {
@@ -662,7 +667,7 @@ router.post("/punches/my", authenticateToken, h(async (req, res): Promise<void> 
     operation = ctx.operation ?? null;
     laborApprovalId = ctx.laborApprovalId ?? null;
     laborBudgetOverrideId = ctx.laborBudgetOverrideId ?? null;
-    approvalStatus = ctx.approvalStatus ?? "AUTO";
+    approvalStatus = ctx.approvalStatus ?? "PENDING_APPROVAL";
     if (chargeCodeStr) {
       const [ccRow] = await nativeDb
         .select({ id: chargeCodes.id })

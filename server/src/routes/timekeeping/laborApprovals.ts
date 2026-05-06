@@ -100,13 +100,38 @@ router.post(
       (req.user as any)?.email ??
       `user:${req.user?.id ?? 'unknown'}`;
 
-    const approval = await storage.createLaborApproval({
-      productionWorkOrderId,
-      employeeId,
-      approvedBy,
-      department: null,
-      reason,
-      hoursAtApproval,
+    // Per Architecture Constitution §5.2 (Task #77): creating a labor approval is the
+    // ONLY path that flips a TRAVELER-source punch from PENDING_APPROVAL → APPROVED.
+    // We perform the approval insert and the punch_ledger flip in a single transaction
+    // so a partial failure cannot leave a punch silently APPROVED without an audit row.
+    const approval = await db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(laborApprovals)
+        .values({
+          productionWorkOrderId,
+          employeeId,
+          approvedBy,
+          department: null,
+          reason,
+          hoursAtApproval,
+        })
+        .returning();
+
+      // Flip every PENDING_APPROVAL / FLAGGED punch in this (employee, WAD) group
+      // to APPROVED and stamp the labor_approval_id link. APPROVED_OVERRUN punches
+      // are left alone — they were already pre-approved at write time via override.
+      const flipResult = await tx.execute(sql`
+        UPDATE punch_ledger
+        SET approval_status = 'APPROVED',
+            labor_approval_id = ${created.id},
+            updated_at = NOW()
+        WHERE employee_id = ${numericEmpId}
+          AND production_work_order_id = ${productionWorkOrderId}::uuid
+          AND approval_status IN ('PENDING_APPROVAL', 'FLAGGED')
+      `);
+      const punchesFlipped = (flipResult as { rowCount?: number }).rowCount ?? 0;
+
+      return { ...created, punchesFlipped };
     });
 
     res.status(201).json({

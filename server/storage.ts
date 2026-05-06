@@ -8352,7 +8352,10 @@ export class DatabaseStorage implements IStorage {
         chargeCode,
         department: params.department ?? null,
         operation: params.operation ?? null,
-        approvalStatus: params.approvalStatus ?? 'AUTO',
+        // §5.2 (Task #77): switchPunchLedgerAssignment always rewrites source = 'TRAVELER'.
+        // TRAVELER-source punches must never carry approvalStatus = 'AUTO'; default to
+        // PENDING_APPROVAL when callers do not supply an explicit pre-approved value.
+        approvalStatus: params.approvalStatus ?? 'PENDING_APPROVAL',
         laborApprovalId: params.laborApprovalId ?? null,
         laborBudgetOverrideId: params.laborBudgetOverrideId ?? null,
         updatedBy: params.updatedBy ?? null,
@@ -17135,7 +17138,10 @@ export class DatabaseStorage implements IStorage {
           chargeCode: params.chargeCode,
           department: params.department,
           operation: params.operation,
-          approvalStatus: (params.laborApprovalId != null || params.laborBudgetOverrideId != null) ? 'APPROVED_OVERRUN' : 'AUTO',
+          // §5.2 (Task #77): legacy time_clock_entries duplicate-write path. Traveler-driven
+          // sessions enter PENDING_APPROVAL here as well unless an explicit override/approval
+          // id was already validated upstream (APPROVED_OVERRUN).
+          approvalStatus: (params.laborApprovalId != null || params.laborBudgetOverrideId != null) ? 'APPROVED_OVERRUN' : 'PENDING_APPROVAL',
           laborApprovalId: params.laborApprovalId ?? null,
           laborBudgetOverrideId: params.laborBudgetOverrideId ?? null,
         })

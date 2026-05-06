@@ -259,7 +259,10 @@ async function executeJobSwitch(params: {
     chargeCodeId: resolvedChargeCodeId,
     department: context.department ?? null,
     operation: context.operation ?? null,
-    approvalStatus: switchApprovalId != null || switchOverrideId != null ? 'APPROVED_OVERRUN' : 'AUTO',
+    // Per Architecture Constitution §5.2 (Task #77): TRAVELER-source punches
+    // default to PENDING_APPROVAL; APPROVED_OVERRUN is only valid when a
+    // pre-approved override or labor approval id is supplied.
+    approvalStatus: switchApprovalId != null || switchOverrideId != null ? 'APPROVED_OVERRUN' : 'PENDING_APPROVAL',
     laborApprovalId: switchApprovalId,
     laborBudgetOverrideId: switchOverrideId,
     updatedBy: numericEmployeeId,
@@ -1405,7 +1408,9 @@ export function registerTimeClockRoutes(app: Express) {
             certificationStatus: clockInCertStatus,
             isOverrun: false,
             overrunReason: null,
-            approvalStatus: 'AUTO',
+            // §5.2 (Task #77): WAD-linked traveler sessions enter PENDING_APPROVAL,
+            // even on the WARNING path — supervisor approval is still required.
+            approvalStatus: 'PENDING_APPROVAL',
           });
           return res.status(201).json({
             entry,
@@ -1436,7 +1441,9 @@ export function registerTimeClockRoutes(app: Express) {
         overrunReason: noWadLinked
           ? 'NO_WAD_LINKED — traveler has no production work order; charge code and project traceability are incomplete. Supervisor review required.'
           : null,
-        approvalStatus: noWadLinked ? 'FLAGGED' : 'AUTO',
+        // §5.2 (Task #77): TRAVELER-source WAD-linked sessions enter PENDING_APPROVAL.
+        // No-WAD traveler sessions are still FLAGGED for supervisor triage.
+        approvalStatus: noWadLinked ? 'FLAGGED' : 'PENDING_APPROVAL',
       });
 
       return res.status(201).json({ entry, chargeContext: { ...context, resolvedChargeCode: wadResolvedChargeCode } });

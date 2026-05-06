@@ -1904,7 +1904,12 @@ export const punchLedger = pgTable('punch_ledger', {
 
   // Budget / approval linkage
   overrideReason: text('override_reason'),
-  approvalStatus: text('approval_status').notNull().default('AUTO'), // AUTO | APPROVED_OVERRUN
+  // Allowed values: PENDING_APPROVAL | APPROVED | REJECTED | APPROVED_OVERRUN | FLAGGED | AUTO
+  // Per Architecture Constitution §5.2 (Task #77): TRAVELER-source punches must enter as
+  // PENDING_APPROVAL and may only become APPROVED via supervisor sign-off. AUTO is reserved
+  // for non-WAD system-reconciliation entries (e.g., salaried draft posting, kiosk/portal
+  // punches with no WAD link). A DB CHECK constraint forbids AUTO when source = 'TRAVELER'.
+  approvalStatus: text('approval_status').notNull().default('PENDING_APPROVAL'),
   laborApprovalId: integer('labor_approval_id').references((): AnyPgColumn => laborApprovals.id),
   laborBudgetOverrideId: integer('labor_budget_override_id').references((): AnyPgColumn => laborBudgetOverrides.id),
 

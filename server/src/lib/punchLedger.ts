@@ -87,6 +87,35 @@ export interface ListSessionsParams {
 }
 
 /**
+ * Resolve the default approvalStatus for a new session.
+ * Per Architecture Constitution §5.2 (Task #77):
+ *   - TRAVELER-source punches MUST default to PENDING_APPROVAL (no AUTO).
+ *   - Other sources (KIOSK / PORTAL / SALARIED_ENTRY / etc.) may default to AUTO
+ *     when no explicit status is supplied — they fall through to the existing
+ *     downstream approval gate which only blocks WAD-linked sessions.
+ */
+function defaultApprovalStatus(source: string, explicit?: string): string {
+  if (explicit) return explicit;
+  return source === 'TRAVELER' ? 'PENDING_APPROVAL' : 'AUTO';
+}
+
+/**
+ * Guard: traveler-source punches may never be written with approvalStatus = 'AUTO'.
+ * Per Architecture Constitution §5.2 (Task #77).
+ */
+function assertTravelerNotAuto(source: string, approvalStatus: string, ctx: string): void {
+  if (source === 'TRAVELER' && approvalStatus === 'AUTO') {
+    throw Object.assign(
+      new Error(
+        `[DCAA §5.2] ${ctx}: TRAVELER-source punches cannot be written with approvalStatus='AUTO'. ` +
+          `Use 'PENDING_APPROVAL' (default), 'APPROVED_OVERRUN' (with explicit override/approval id), or 'FLAGGED'.`,
+      ),
+      { code: 'TRAVELER_AUTO_APPROVAL_FORBIDDEN' },
+    );
+  }
+}
+
+/**
  * Open a new session (clock-in). Returns the created punch_ledger row.
  */
 export async function openSession(params: OpenSessionParams): Promise<PunchLedgerEntry> {
@@ -94,6 +123,8 @@ export async function openSession(params: OpenSessionParams): Promise<PunchLedge
   const effectiveClockIn = params.clockIn ?? now;
   // Derive chargeCode snapshot from FK — never accept free-text from caller
   const chargeCode = await deriveChargeCodeSnapshot(params.chargeCodeId);
+  const resolvedApprovalStatus = defaultApprovalStatus(params.source, params.approvalStatus);
+  assertTravelerNotAuto(params.source, resolvedApprovalStatus, 'openSession');
   const [entry] = await db
     .insert(punchLedger)
     .values({
@@ -114,7 +145,7 @@ export async function openSession(params: OpenSessionParams): Promise<PunchLedge
       isOverrun: params.isOverrun ?? false,
       overrunReason: params.overrunReason ?? null,
       overrideReason: params.overrideReason ?? null,
-      approvalStatus: params.approvalStatus ?? 'AUTO',
+      approvalStatus: resolvedApprovalStatus,
       laborApprovalId: params.laborApprovalId ?? null,
       laborBudgetOverrideId: params.laborBudgetOverrideId ?? null,
       createdBy: params.createdBy ?? null,
@@ -210,6 +241,10 @@ export async function switchAssignment(params: SwitchAssignmentParams): Promise<
   const now = new Date();
   // Derive chargeCode snapshot from FK — never store free-text from caller
   const chargeCode = await deriveChargeCodeSnapshot(params.chargeCodeId);
+  // switchAssignment always sets source = 'TRAVELER', so the resolved approvalStatus
+  // must satisfy the §5.2 traveler-AUTO prohibition.
+  const resolvedApprovalStatus = params.approvalStatus ?? 'PENDING_APPROVAL';
+  assertTravelerNotAuto('TRAVELER', resolvedApprovalStatus, 'switchAssignment');
   const [updated] = await db
     .update(punchLedger)
     .set({
@@ -219,7 +254,7 @@ export async function switchAssignment(params: SwitchAssignmentParams): Promise<
       chargeCode,
       department: params.department ?? null,
       operation: params.operation ?? null,
-      approvalStatus: params.approvalStatus ?? 'AUTO',
+      approvalStatus: resolvedApprovalStatus,
       laborApprovalId: params.laborApprovalId ?? null,
       laborBudgetOverrideId: params.laborBudgetOverrideId ?? null,
       updatedBy: params.updatedBy ?? null,
@@ -424,7 +459,7 @@ export async function openOrSwitchForTraveler(params: {
       chargeCodeId: params.chargeCodeId,
       department: params.department,
       operation: params.operation,
-      approvalStatus: params.approvalStatus ?? 'AUTO',
+      approvalStatus: params.approvalStatus ?? 'PENDING_APPROVAL',
       laborApprovalId: params.laborApprovalId ?? null,
       laborBudgetOverrideId: params.laborBudgetOverrideId ?? null,
       updatedBy: params.actorEmployeeId ?? null,
@@ -442,7 +477,7 @@ export async function openOrSwitchForTraveler(params: {
     chargeCodeId: params.chargeCodeId,
     department: params.department,
     operation: params.operation,
-    approvalStatus: params.approvalStatus ?? 'AUTO',
+    approvalStatus: params.approvalStatus ?? 'PENDING_APPROVAL',
     laborApprovalId: params.laborApprovalId ?? null,
     laborBudgetOverrideId: params.laborBudgetOverrideId ?? null,
     createdBy: params.actorEmployeeId ?? null,

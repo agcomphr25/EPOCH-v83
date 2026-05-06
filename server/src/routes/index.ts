@@ -2947,9 +2947,18 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const { storage } = await import('../../storage');
       const { pool: dbPool } = await import('../../db');
       const allPos = await storage.getAllP2PurchaseOrders();
-      // Only surface POs that have cleared the P2 Release Gate
-      const P2_GATED_STATUSES = ['ready_for_p2_release', 'in_production'];
-      const pos = allPos.filter((po: any) => P2_GATED_STATUSES.includes(po.status));
+      // Only surface POs that have cleared the P2 Release Gate. Status values
+      // have existed in both legacy lowercase and current uppercase forms.
+      const normalizeP2Status = (status: unknown) =>
+        String(status || '').trim().toUpperCase();
+      const P2_GATED_STATUSES = new Set([
+        'READY_FOR_P2_RELEASE',
+        'READY_FOR_PRODUCTION',
+        'IN_PRODUCTION',
+      ]);
+      const pos = allPos.filter((po: any) =>
+        P2_GATED_STATUSES.has(normalizeP2Status(po.status))
+      );
       const serializedItems = await storage.getP2SerializedItems({});
 
       // Look up projects linked to these POs
@@ -3000,6 +3009,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         // line item quantities that haven't had serialized items generated yet).
         const pendingItems = Math.max(0, totalItems - completedItems - inProductionItems);
         
+        const rawStatus = normalizeP2Status(po.status) || 'OPEN';
+
         return {
           id: po.id,
           poNumber: po.poNumber,
@@ -3012,9 +3023,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           hasBOMsNeeded: !po.bomConfigured,
           projectName: po.projectName || null,
           projectId: projectByPoId.get(po.id) ?? null,
-          rawStatus: po.status || 'OPEN',
+          rawStatus,
           status: completedItems === totalItems && totalItems > 0 ? 'completed' : 
-                  inProductionItems > 0 ? 'in_progress' : 'pending'
+                  (inProductionItems > 0 || rawStatus === 'IN_PRODUCTION') ? 'in_progress' : 'pending'
         };
       });
       

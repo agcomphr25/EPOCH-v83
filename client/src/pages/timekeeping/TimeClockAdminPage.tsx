@@ -693,9 +693,19 @@ export default function TimeClockAdminPage() {
   });
   const myPermSet = new Set(myPermissions?.permissions ?? []);
 
-  const employeeMap = (employees ?? []).reduce<Record<number, EmployeeRecord>>((m, e) => {
+  const employeeByTimekeepingId = (employees ?? []).reduce<Record<number, EmployeeRecord>>((m, e) => {
     m[e.id] = e; return m;
   }, {});
+  const employeeByEpochId = (employees ?? []).reduce<Record<number, EmployeeRecord>>((m, e) => {
+    if (e.epochEmployeeId != null) m[e.epochEmployeeId] = e;
+    return m;
+  }, {});
+  const employeeName = (employee: EmployeeRecord | undefined, fallbackId: number | string): string =>
+    employee ? `${employee.firstName} ${employee.lastName}` : `Employee #${fallbackId}`;
+  const employeeNameFromTimekeepingId = (employeeId: number): string =>
+    employeeName(employeeByTimekeepingId[employeeId], employeeId);
+  const employeeNameFromEpochId = (employeeId: number): string =>
+    employeeName(employeeByEpochId[employeeId], employeeId);
 
   const {
     data: unapprovedGroups,
@@ -1676,9 +1686,7 @@ export default function TimeClockAdminPage() {
               <FileText className="h-4 w-4 shrink-0 text-blue-500" />
               <span className="flex-1 min-w-0">
                 <span className="font-medium">
-                  {employeeMap[pinnedTs.employeeId]
-                    ? `${employeeMap[pinnedTs.employeeId].firstName} ${employeeMap[pinnedTs.employeeId].lastName}`
-                    : `Employee #${pinnedTs.employeeId}`}
+                  {employeeNameFromTimekeepingId(pinnedTs.employeeId)}
                 </span>
                 {' '}— {pinnedTs.periodStart} to {pinnedTs.periodEnd}
                 {' '}<StatusBadge status={pinnedTs.status} />
@@ -1766,10 +1774,7 @@ export default function TimeClockAdminPage() {
                   </TableHeader>
                   <TableBody>
                     {timesheets.map(ts => {
-                      const emp = employeeMap[ts.employeeId];
-                      const empName = emp
-                        ? `${emp.firstName} ${emp.lastName}`
-                        : `Employee #${ts.employeeId}`;
+                      const empName = employeeNameFromTimekeepingId(ts.employeeId);
                       const isHighlighted = ts.id === highlightedTsId;
                       return (
                         <Fragment key={ts.id}>
@@ -2125,10 +2130,7 @@ export default function TimeClockAdminPage() {
                   </TableHeader>
                   <TableBody>
                     {punches.map(p => {
-                      const emp = employeeMap[p.employeeId];
-                      const empName = emp
-                        ? `${emp.firstName} ${emp.lastName}`
-                        : `Employee #${p.employeeId}`;
+                      const empName = employeeNameFromEpochId(p.employeeId);
                       return (
                         <TableRow key={`${p.sessionId}-${p.type}`} className={p.hasMissingClockOut ? 'bg-amber-50/60 dark:bg-amber-900/10' : p.isEdited ? 'bg-yellow-50/40 dark:bg-yellow-900/10' : undefined}>
                           <TableCell className="font-medium">{empName}</TableCell>
@@ -2956,7 +2958,7 @@ export default function TimeClockAdminPage() {
                 </SelectTrigger>
                 <SelectContent>
                   {(employees ?? []).map(e => (
-                    <SelectItem key={e.id} value={String(e.id)}>
+                    <SelectItem key={e.epochEmployeeId ?? e.id} value={String(e.epochEmployeeId ?? e.employeeNumber ?? e.id)}>
                       {e.firstName} {e.lastName}
                       {e.employeeNumber ? ` (${e.employeeNumber})` : ''}
                     </SelectItem>
@@ -3470,7 +3472,7 @@ export default function TimeClockAdminPage() {
             </p>
             {deletePunchTarget && (
               <div className="rounded-md bg-muted p-3 text-sm space-y-1">
-                <div><span className="font-medium">Employee:</span> {(() => { const e = employeeMap[deletePunchTarget.employeeId]; return e ? `${e.firstName} ${e.lastName}` : `Employee #${deletePunchTarget.employeeId}`; })()}</div>
+                <div><span className="font-medium">Employee:</span> {employeeNameFromEpochId(deletePunchTarget.employeeId)}</div>
                 <div><span className="font-medium">Session ID:</span> {deletePunchTarget.sessionId}</div>
                 <div><span className="font-medium">Event:</span> {deletePunchTarget.type === 'clock_in' ? 'Clock-In' : deletePunchTarget.type === 'clock_out' ? 'Clock-Out' : deletePunchTarget.type}</div>
                 <div><span className="font-medium">Time:</span> {new Date(deletePunchTarget.punchedAt).toLocaleString()}</div>
@@ -3732,8 +3734,7 @@ export default function TimeClockAdminPage() {
         timesheetLabel={
           auditTrailTs
             ? (() => {
-                const emp = employeeMap[auditTrailTs.employeeId];
-                const name = emp ? `${emp.firstName} ${emp.lastName}` : `Employee #${auditTrailTs.employeeId}`;
+                const name = employeeNameFromTimekeepingId(auditTrailTs.employeeId);
                 return `${name} · ${auditTrailTs.periodStart} – ${auditTrailTs.periodEnd}`;
               })()
             : undefined

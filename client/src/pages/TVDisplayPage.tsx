@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Monitor, Play, X, ChevronLeft, ChevronRight, Upload, Trash2 } from 'lucide-react';
+import { Monitor, Play, X, ChevronLeft, ChevronRight, Upload, Trash2, ArrowLeft } from 'lucide-react';
+import { useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
@@ -384,6 +385,32 @@ export default function TVDisplayPage() {
   const [showExitHint, setShowExitHint] = useState(false);
   const [slides, setSlides] = useState<SlideData[]>(loadSlides);
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [, navigate] = useLocation();
+
+  const handleBack = () => {
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      window.history.back();
+    } else {
+      navigate('/');
+    }
+  };
+
+  useEffect(() => {
+    if (!isLive) return;
+    setShowExitHint(true);
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    hoverTimerRef.current = setTimeout(() => setShowExitHint(false), 4000);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsLive(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    };
+  }, [isLive]);
 
   const panelCount = config.layout === '2-panel' ? 2 : 4;
   const allWidgets = getAllWidgets();
@@ -469,9 +496,10 @@ export default function TVDisplayPage() {
             showExitHint ? 'opacity-100' : 'opacity-0 pointer-events-none'
           )}
           onClick={() => setIsLive(false)}
+          data-testid="button-tv-display-exit-live"
         >
           <X className="h-4 w-4" />
-          Exit Live Mode
+          Exit Live Mode (Esc)
         </button>
       </div>
     );
@@ -481,6 +509,16 @@ export default function TVDisplayPage() {
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-4xl mx-auto space-y-6">
         <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={handleBack}
+            data-testid="button-tv-display-back"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </Button>
           <Monitor className="h-7 w-7 text-primary" />
           <div>
             <h1 className="text-2xl font-bold text-gray-900">TV Display</h1>

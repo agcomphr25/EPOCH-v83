@@ -853,6 +853,13 @@ export default function P2TravelerPage() {
           }
 
           if (result.status === 'PACKET' && result.packet) {
+            const earliestExpirationMs = (result.fabricRolls || [])
+              .map((roll: any) => roll.expirationDate ? new Date(roll.expirationDate).getTime() : null)
+              .filter((ms: number | null): ms is number => ms !== null && !Number.isNaN(ms))
+              .reduce((min: number | null, ms: number) => (min === null || ms < min ? ms : min), null as number | null);
+            const earliestExpirationDisplay = earliestExpirationMs !== null
+              ? new Date(earliestExpirationMs).toLocaleDateString()
+              : null;
             setTraceabilityData(prev => {
               const sourceEntries = (result.fabricRolls || []).flatMap((roll: any, rollIdx: number) => {
                 const prefix = `Packet ${result.packet.packetNumber || result.packet.barcode} Source ${rollIdx + 1}`;
@@ -880,6 +887,13 @@ export default function P2TravelerPage() {
                 ].includes(field.type));
 
               const next = withoutExistingPacketDetails.map(({ field, originalIndex }) => {
+                if (
+                  earliestExpirationDisplay &&
+                  field.materialIndex === item.materialIndex &&
+                  field.type === 'material_expiration_date'
+                ) {
+                  return { ...field, value: earliestExpirationDisplay };
+                }
                 if (originalIndex !== index) return field;
                 return {
                   ...field,

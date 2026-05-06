@@ -1237,6 +1237,12 @@ export default function Navigation() {
       description: 'Complete P2 workflow: orders, BOMs, scheduling, routing, and certifications',
     },
     {
+      path: '/wad-wizard',
+      label: 'WAD Wizard',
+      icon: FileCheck,
+      description: 'Launch the Work Authorization Document wizard for any Production Work Order',
+    },
+    {
       path: '/help/p2-order-guide',
       label: 'P2 Order Guide',
       icon: BookOpen,

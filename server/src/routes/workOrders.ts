@@ -122,6 +122,36 @@ router.get('/', async (req: Request, res: Response) => {
 
 // ==================== PRODUCTION WORK ORDERS (WAD) — EPOCH v9 spine ====================
 
+// GET /production — list all production work orders (with project name) for WAD Wizard launcher
+router.get('/production', authenticateToken, requirePermission('work_orders.release'), async (_req: Request, res: Response) => {
+  try {
+    const rows = await db
+      .select({
+        id: productionWorkOrders.id,
+        workOrderNumber: productionWorkOrders.workOrderNumber,
+        projectId: productionWorkOrders.projectId,
+        partNumber: productionWorkOrders.partNumber,
+        description: productionWorkOrders.description,
+        status: productionWorkOrders.status,
+        wadStatus: productionWorkOrders.wadStatus,
+        dueDate: productionWorkOrders.dueDate,
+        updatedAt: productionWorkOrders.updatedAt,
+        createdAt: productionWorkOrders.createdAt,
+        projectName: projects.projectName,
+        projectCode: projects.projectCode,
+        poNumber: p2PurchaseOrders.poNumber,
+      })
+      .from(productionWorkOrders)
+      .leftJoin(projects, eq(productionWorkOrders.projectId, projects.id))
+      .leftJoin(p2PurchaseOrders, eq(projects.poId, p2PurchaseOrders.id))
+      .orderBy(desc(productionWorkOrders.createdAt));
+    return res.json(rows);
+  } catch (err: any) {
+    console.error('[ProductionWorkOrders] Error listing production work orders:', err);
+    return res.status(500).json({ error: err?.message || 'Failed to list production work orders' });
+  }
+});
+
 // GET /project/:projectId — list production work orders for a project, newest-first
 router.get('/project/:projectId', async (req: Request, res: Response) => {
   try {

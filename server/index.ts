@@ -154,7 +154,7 @@ const publicRoutes = [
   '/api/material-lots',  // Material lot validation needed by traveler execution
   '/api/cutting-table/fabric-inventory-by-icn', // ICN lookup for P2 traveler material scanner
   '/api/production/timers', // Production Timer Station - public for floor displays
-  '/api/work-orders/production', // Labor budget override request/poll (kiosk, soft auth — individual mutation routes enforce permissions)
+  '/api/work-orders/production/', // Labor budget override request/poll (kiosk, soft auth — individual mutation routes enforce permissions). Trailing slash keeps the bare /production listing endpoint behind strict auth.
 ];
 
 app.use('/api', (req, res, next) => {

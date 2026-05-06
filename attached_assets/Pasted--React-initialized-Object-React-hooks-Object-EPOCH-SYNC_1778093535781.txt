@@ -1,0 +1,635 @@
+ React initialized: Object
+ React hooks: Object
+ [EPOCH SYNC] Sync engine starting
+ [EPOCH SYNC] Sync engine started — interval: 30000 ms
+ App component is rendering...
+ Environment: production
+ Base URL: /
+ [EPOCH] Service Worker Registered https://agcompepoch.xyz/
+ [EPOCH] Install prompt captured and ready
+p2-control-center:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/admin/queue-integrity/status (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/admin/queue-integrity/status: 200
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+ 🌐 API Request to /api/cutting-table-mfg-queue/bulk-print-barcodes (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/cutting-table-mfg-queue/bulk-print-barcodes: 200
+api/uploads/request-url:1  Failed to load resource: the server responded with a status of 503 ()
+ [useUpload] request-url failed: Object
+ [CuttingDocuments] uploadFile returned null: null
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/admin/queue-integrity/status (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/admin/queue-integrity/status: 200
+ 🌐 API Request to /api/pos (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/customers (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/stock-models (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/pos: 200
+ ✅ API Response from /api/stock-models: 200
+ ✅ API Response from /api/customers: 200
+ 🌐 API Request to /api/production-orders/by-po/60 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/60/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/7 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/7/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/10 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/10/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/9 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/9/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/11 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/11/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/12 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/12/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/13 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/13/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/14 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/14/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/15 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/15/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/16 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/16/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/17 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/17/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/18 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/18/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/4 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/4/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/38 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/38/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/39 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/39/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/40 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/40/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/70 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/70/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/62 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/62/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/71 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/71/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/production-orders/by-po/69 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/pos/69/items (timeout: 15000ms, deployment: true)
+api/production-orders/by-po/40:1  Failed to load resource: the server responded with a status of 429 ()
+ ✅ API Response from /api/production-orders/by-po/40: 429
+ API error raw body: Too many requests
+ 💥 API Request failed for /api/production-orders/by-po/40: 
+ ✅ API Response from /api/pos/7/items: 200
+ ✅ API Response from /api/pos/40/items: 200
+ ✅ API Response from /api/pos/38/items: 200
+ ✅ API Response from /api/production-orders/by-po/16: 200
+ ✅ API Response from /api/pos/71/items: 200
+ ✅ API Response from /api/production-orders/by-po/39: 200
+ ✅ API Response from /api/pos/17/items: 200
+ ✅ API Response from /api/pos/13/items: 200
+ ✅ API Response from /api/production-orders/by-po/69: 200
+ ✅ API Response from /api/production-orders/by-po/10: 200
+ ✅ API Response from /api/production-orders/by-po/12: 200
+ ✅ API Response from /api/production-orders/by-po/15: 200
+ ✅ API Response from /api/production-orders/by-po/18: 200
+ ✅ API Response from /api/pos/10/items: 200
+ ✅ API Response from /api/pos/16/items: 200
+ ✅ API Response from /api/production-orders/by-po/14: 200
+ ✅ API Response from /api/pos/15/items: 200
+ ✅ API Response from /api/production-orders/by-po/11: 200
+ ✅ API Response from /api/pos/14/items: 200
+ ✅ API Response from /api/production-orders/by-po/60: 200
+ ✅ API Response from /api/pos/18/items: 200
+ ✅ API Response from /api/pos/60/items: 200
+ ✅ API Response from /api/production-orders/by-po/7: 200
+ ✅ API Response from /api/pos/11/items: 200
+ ✅ API Response from /api/pos/70/items: 200
+ ✅ API Response from /api/production-orders/by-po/13: 200
+ ✅ API Response from /api/pos/4/items: 200
+ ✅ API Response from /api/production-orders/by-po/71: 200
+ ✅ API Response from /api/pos/12/items: 200
+ ✅ API Response from /api/pos/9/items: 200
+ ✅ API Response from /api/production-orders/by-po/4: 200
+ ✅ API Response from /api/production-orders/by-po/17: 200
+ ✅ API Response from /api/pos/39/items: 200
+ ✅ API Response from /api/pos/69/items: 200
+ ✅ API Response from /api/pos/62/items: 200
+ ✅ API Response from /api/production-orders/by-po/9: 200
+ ✅ API Response from /api/production-orders/by-po/38: 200
+ ✅ API Response from /api/production-orders/by-po/70: 200
+ ✅ API Response from /api/production-orders/by-po/62: 200
+ 🌐 API Request to /api/production-orders/by-po/40 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/production-orders/by-po/40: 200
+ Tabs is changing from controlled to uncontrolled. Components should not switch from controlled to uncontrolled (or vice versa). Decide between using a controlled or uncontrolled value for the lifetime of the component.
+(anonymous) @ assets/index-yMIofO4q.js:235
+ 🌐 API Request to /api/po-products (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/po-products: 200
+ 🌐 API Request to /api/orders/cancel/FC1346 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/orders/cancel/FC1346: 200
+ 🌐 API Request to /api/production-orders/by-po/60 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/production-orders/by-po/60: 200
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+ 🌐 API Request to /api/cutting-table-mfg-queue/scan-start (timeout: 15000ms, deployment: true)
+api/cutting-table-mfg-queue/scan-start:1  Failed to load resource: the server responded with a status of 404 ()
+ ✅ API Response from /api/cutting-table-mfg-queue/scan-start: 404
+ API error raw body: {"error":"Cutting table queue item not found"}
+console.error @ assets/index-yMIofO4q.js:5448
+ 💥 API Request failed for /api/cutting-table-mfg-queue/scan-start: Error: Cutting table queue item not found
+    at we (assets/index-yMIofO4q.js:235:8142)
+console.error @ assets/index-yMIofO4q.js:5448
+ 🌐 API Request to /api/cutting-table-mfg-queue/scan-start (timeout: 15000ms, deployment: true)
+api/cutting-table-mfg-queue/scan-start:1  Failed to load resource: the server responded with a status of 404 ()
+ ✅ API Response from /api/cutting-table-mfg-queue/scan-start: 404
+ API error raw body: {"error":"Cutting table queue item not found"}
+console.error @ assets/index-yMIofO4q.js:5448
+ 💥 API Request failed for /api/cutting-table-mfg-queue/scan-start: Error: Cutting table queue item not found
+    at we (assets/index-yMIofO4q.js:235:8142)
+console.error @ assets/index-yMIofO4q.js:5448
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/admin/queue-integrity/status (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/admin/queue-integrity/status: 200
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+ [EPOCH SYNC] Connection restored — triggering sync
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/admin/queue-integrity/status (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/admin/queue-integrity/status: 200
+ 🌐 API Request to /api/p2/schedule-items (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/schedule-items: 200
+ 🌐 API Request to /api/p2/control-center/stamp-barcode-printed (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2/control-center/stamp-barcode-printed: 200
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/admin/queue-integrity/status (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/admin/queue-integrity/status: 200
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/admin/queue-integrity/status (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/admin/queue-integrity/status: 200
+ 🌐 API Request to /api/admin/queue-integrity/status (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/admin/queue-integrity/status: 200
+ Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ assets/index-yMIofO4q.js:1721
+ Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ assets/index-yMIofO4q.js:1721
+ 🌐 API Request to POST (timeout: 15000ms, deployment: true)
+ ✅ API Response from POST: 200
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 500 ()
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 500 ()
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 500 ()
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 500 ()
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 404 ()
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ [EPOCH SYNC] Connection restored — triggering sync
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+api/cmmc/summary:1  Failed to load resource: the server responded with a status of 404 ()
+api/cmmc/controls:1  Failed to load resource: the server responded with a status of 404 ()
+api/employees/recertification-count:1  Failed to load resource: the server responded with a status of 404 ()
+api/permissions/me:1  Failed to load resource: the server responded with a status of 404 ()
+api/vendor-pos/compliance-backfill:1  Failed to load resource: the server responded with a status of 404 ()
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 404 ()
+api/auth/session:1  Failed to load resource: the server responded with a status of 404 ()
+api/auth/session:1  Failed to load resource: the server responded with a status of 404 ()
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+api/auth/login:1  Failed to load resource: the server responded with a status of 500 ()
+ Login error: SyntaxError: Unexpected token 'I', "Internal S"... is not valid JSON
+console.error @ assets/index-yMIofO4q.js:5448
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+api/auth/login:1  Failed to load resource: the server responded with a status of 404 ()
+ Login error: SyntaxError: Unexpected token '<', "<!DOCTYPE "... is not valid JSON
+console.error @ assets/index-yMIofO4q.js:5448
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9929bd5aa91bdc187bab56f25ddae3e9014a3ac0b530cfd8f9b6dd3868ff7484' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=c3be228e2370c36ac7008b286050d5767b6d8d07cd6e8eec6924bd7fc79351b6' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9c5a005c66ba84fa5e0d3e242e47e768eb6a771d072d4aba91778cad29d55e8c' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9c5a005c66ba84fa5e0d3e242e47e768eb6a771d072d4aba91778cad29d55e8c' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9c5a005c66ba84fa5e0d3e242e47e768eb6a771d072d4aba91778cad29d55e8c' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9c5a005c66ba84fa5e0d3e242e47e768eb6a771d072d4aba91778cad29d55e8c' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9c5a005c66ba84fa5e0d3e242e47e768eb6a771d072d4aba91778cad29d55e8c' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9c5a005c66ba84fa5e0d3e242e47e768eb6a771d072d4aba91778cad29d55e8c' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9c5a005c66ba84fa5e0d3e242e47e768eb6a771d072d4aba91778cad29d55e8c' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9c5a005c66ba84fa5e0d3e242e47e768eb6a771d072d4aba91778cad29d55e8c' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9c5a005c66ba84fa5e0d3e242e47e768eb6a771d072d4aba91778cad29d55e8c' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9c5a005c66ba84fa5e0d3e242e47e768eb6a771d072d4aba91778cad29d55e8c' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9c5a005c66ba84fa5e0d3e242e47e768eb6a771d072d4aba91778cad29d55e8c' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9c5a005c66ba84fa5e0d3e242e47e768eb6a771d072d4aba91778cad29d55e8c' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9c5a005c66ba84fa5e0d3e242e47e768eb6a771d072d4aba91778cad29d55e8c' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9c5a005c66ba84fa5e0d3e242e47e768eb6a771d072d4aba91778cad29d55e8c' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9c5a005c66ba84fa5e0d3e242e47e768eb6a771d072d4aba91778cad29d55e8c' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9c5a005c66ba84fa5e0d3e242e47e768eb6a771d072d4aba91778cad29d55e8c' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9c5a005c66ba84fa5e0d3e242e47e768eb6a771d072d4aba91778cad29d55e8c' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9c5a005c66ba84fa5e0d3e242e47e768eb6a771d072d4aba91778cad29d55e8c' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9c5a005c66ba84fa5e0d3e242e47e768eb6a771d072d4aba91778cad29d55e8c' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9c5a005c66ba84fa5e0d3e242e47e768eb6a771d072d4aba91778cad29d55e8c' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9c5a005c66ba84fa5e0d3e242e47e768eb6a771d072d4aba91778cad29d55e8c' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9c5a005c66ba84fa5e0d3e242e47e768eb6a771d072d4aba91778cad29d55e8c' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9c5a005c66ba84fa5e0d3e242e47e768eb6a771d072d4aba91778cad29d55e8c' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9c5a005c66ba84fa5e0d3e242e47e768eb6a771d072d4aba91778cad29d55e8c' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=9c5a005c66ba84fa5e0d3e242e47e768eb6a771d072d4aba91778cad29d55e8c' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=54a44ef745677a5c3b6a785e8be4afb498cecc3434b95d37b7ec1e1dac56096f' failed: 
+(anonymous) @ assets/index-yMIofO4q.js:1724
+api/auth/login:1  Failed to load resource: the server responded with a status of 404 ()
+ Login error: SyntaxError: Unexpected token '<', "<!DOCTYPE "... is not valid JSON
+console.error @ assets/index-yMIofO4q.js:5448
+api/auth/login:1  Failed to load resource: the server responded with a status of 404 ()
+ Login error: SyntaxError: Unexpected token '<', "<!DOCTYPE "... is not valid JSON
+console.error @ assets/index-yMIofO4q.js:5448
+api/auth/login:1  Failed to load resource: the server responded with a status of 404 ()
+ Login error: SyntaxError: Unexpected token '<', "<!DOCTYPE "... is not valid JSON
+console.error @ assets/index-yMIofO4q.js:5448

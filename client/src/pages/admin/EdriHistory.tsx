@@ -1,10 +1,11 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'wouter';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { ChevronDown, ChevronRight, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import EdriSubNav from '@/components/EdriSubNav';
 import { format } from 'date-fns';
 import {
@@ -25,7 +26,23 @@ const DOMAIN_COLORS: Record<string, string> = {
   PROCUREMENT: '#3b82f6', INVENTORY: '#8b5cf6', POLICY: '#ec4899',
 };
 
+const DOMAIN_LABELS: Record<string, string> = {
+  TIMEKEEPING: 'Timekeeping',
+  CHARGE_CODE: 'Charge Code',
+  ACCOUNTING: 'Accounting',
+  PROCUREMENT: 'Procurement',
+  INVENTORY: 'Inventory',
+  POLICY: 'Policy',
+  GOVT_PROPERTY: 'Govt. Property',
+};
+
+function scoreDelta(current?: number | string | null, previous?: number | string | null): number {
+  return Number(current ?? 0) - Number(previous ?? 0);
+}
+
 export default function EdriHistory() {
+  const [showChangeDetails, setShowChangeDetails] = useState(false);
+
   const { data: snapshots = [], isLoading } = useQuery<any[]>({
     queryKey: ['/api/edri/snapshot/history'],
   });
@@ -56,18 +73,52 @@ export default function EdriHistory() {
     ? Number(latest.compositeScore) - Number(previous.compositeScore)
     : 0;
 
+  const domainChanges = latest && previous
+    ? Array.from(new Set([
+        ...Object.keys((latest.domainScores as Record<string, number>) ?? {}),
+        ...Object.keys((previous.domainScores as Record<string, number>) ?? {}),
+      ]))
+        .map((domain) => {
+          const previousScore = Number((previous.domainScores as Record<string, number> | undefined)?.[domain] ?? 0);
+          const latestScore = Number((latest.domainScores as Record<string, number> | undefined)?.[domain] ?? 0);
+          return {
+            domain,
+            label: DOMAIN_LABELS[domain] ?? domain,
+            previousScore,
+            latestScore,
+            delta: latestScore - previousScore,
+          };
+        })
+        .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+    : [];
+
+  const topDomainChanges = domainChanges.filter((item) => item.delta !== 0).slice(0, 6);
+  const summaryChanges = latest && previous
+    ? [
+        { label: 'Composite', previousScore: Number(previous.compositeScore), latestScore: Number(latest.compositeScore), delta: trend },
+        { label: 'Subcontractor', previousScore: Number(previous.subcontractorScore), latestScore: Number(latest.subcontractorScore), delta: scoreDelta(latest.subcontractorScore, previous.subcontractorScore) },
+        { label: 'Prime Contractor', previousScore: Number(previous.primeScore), latestScore: Number(latest.primeScore), delta: scoreDelta(latest.primeScore, previous.primeScore) },
+      ]
+    : [];
+
   return (
     <div className="p-6 space-y-6 max-w-6xl mx-auto">
       <EdriSubNav />
 
       <div>
-        <h1 className="text-3xl font-bold">My Score History</h1>
+        <h1 className="text-3xl font-bold">Score History</h1>
         <p className="text-muted-foreground">Historical trend of EDRI composite and domain scores</p>
       </div>
 
       {trend !== 0 && (
         <Card className={trend > 0 ? 'border-green-200 dark:border-green-800' : 'border-red-200 dark:border-red-800'}>
-          <CardContent className="pt-4 flex items-center gap-3">
+          <CardContent className="pt-4">
+            <button
+              type="button"
+              className="flex w-full items-center gap-3 text-left"
+              onClick={() => setShowChangeDetails((open) => !open)}
+              aria-expanded={showChangeDetails}
+            >
             {trend > 0
               ? <TrendingUp className="h-6 w-6 text-green-500" />
               : trend < 0 ? <TrendingDown className="h-6 w-6 text-red-500" /> : <Minus className="h-6 w-6 text-gray-500" />
@@ -78,6 +129,59 @@ export default function EdriHistory() {
             <span className="text-sm text-muted-foreground">
               ({Number(previous?.compositeScore ?? 0).toFixed(1)} → {Number(latest?.compositeScore ?? 0).toFixed(1)})
             </span>
+              <span className="ml-auto inline-flex items-center gap-1 text-sm font-medium text-muted-foreground">
+                What changed
+                {showChangeDetails ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+              </span>
+            </button>
+
+            {showChangeDetails && (
+              <div className="mt-4 space-y-4 border-t pt-4">
+                <div className="grid gap-3 md:grid-cols-3">
+                  {summaryChanges.map((item) => (
+                    <div key={item.label} className="rounded-md border bg-muted/20 p-3">
+                      <p className="text-xs text-muted-foreground">{item.label}</p>
+                      <p className="mt-1 text-lg font-semibold">
+                        {item.previousScore.toFixed(1)} to {item.latestScore.toFixed(1)}
+                      </p>
+                      <p className={item.delta >= 0 ? 'text-sm font-medium text-green-600' : 'text-sm font-medium text-red-600'}>
+                        {item.delta >= 0 ? '+' : ''}{item.delta.toFixed(1)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+
+                <div>
+                  <p className="mb-2 text-sm font-medium">Largest domain score changes</p>
+                  {topDomainChanges.length > 0 ? (
+                    <div className="space-y-2">
+                      {topDomainChanges.map((item) => (
+                        <div key={item.domain} className="flex items-center gap-3 rounded-md border p-2 text-sm">
+                          <span className="min-w-36 font-medium">{item.label}</span>
+                          <span className="text-muted-foreground">
+                            {item.previousScore.toFixed(1)} to {item.latestScore.toFixed(1)}
+                          </span>
+                          <span className={`ml-auto font-semibold ${item.delta >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {item.delta >= 0 ? '+' : ''}{item.delta.toFixed(1)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No domain-level score changes were recorded between these two runs.</p>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href={`/admin/edri/snapshot/${previous?.id}`}>View Previous Snapshot</Link>
+                  </Button>
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href={`/admin/edri/snapshot/${latest?.id}`}>View Latest Snapshot</Link>
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

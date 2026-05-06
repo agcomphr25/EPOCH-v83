@@ -136,10 +136,18 @@ export function useUpload(options: UseUploadOptions = {}) {
    * Upload a file using the presigned URL flow.
    *
    * @param file - The file to upload
-   * @returns The upload response containing the object path
+   * @returns A discriminated result. On success, `{ ok: true, response }`.
+   *   On failure, `{ ok: false, error }` containing the real error from the
+   *   server (e.g. `/api/uploads/request-url` reason/details). Callers should
+   *   prefer this returned error over the hook's `error` state, which is
+   *   stale within the same render cycle (React state updates are async).
    */
   const uploadFile = useCallback(
-    async (file: File): Promise<UploadResponse | null> => {
+    async (
+      file: File
+    ): Promise<
+      { ok: true; response: UploadResponse } | { ok: false; error: Error }
+    > => {
       setIsUploading(true);
       setError(null);
       setProgress(0);
@@ -155,12 +163,12 @@ export function useUpload(options: UseUploadOptions = {}) {
 
         setProgress(100);
         options.onSuccess?.(uploadResponse);
-        return uploadResponse;
+        return { ok: true, response: uploadResponse };
       } catch (err) {
         const error = err instanceof Error ? err : new Error("Upload failed");
         setError(error);
         options.onError?.(error);
-        return null;
+        return { ok: false, error };
       } finally {
         setIsUploading(false);
       }

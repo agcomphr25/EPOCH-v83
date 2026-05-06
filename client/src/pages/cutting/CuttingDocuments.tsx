@@ -143,7 +143,7 @@ export default function CuttingDocuments() {
     queryKey: ["/api/cutting-documents"],
   });
 
-  const { uploadFile, error: uploadError } = useUpload();
+  const { uploadFile } = useUpload();
 
   const createDocMutation = useMutation({
     mutationFn: async (data: Omit<CuttingDocument, "id" | "uploadedAt">) =>
@@ -168,16 +168,18 @@ export default function CuttingDocuments() {
     setIsUploading(true);
     try {
       const result = await uploadFile(file);
-      if (!result) {
-        const description =
-          uploadError?.message ?? "Could not upload file.";
-        console.error("[CuttingDocuments] uploadFile returned null:", uploadError);
-        toast({ title: "Upload failed", description, variant: "destructive" });
+      if (!result.ok) {
+        console.error("[CuttingDocuments] uploadFile failed:", result.error);
+        toast({
+          title: "Upload failed",
+          description: result.error.message || "Could not upload file.",
+          variant: "destructive",
+        });
         return;
       }
       await createDocMutation.mutateAsync({
         displayName: file.name,
-        fileUrl: result.objectPath,
+        fileUrl: result.response.objectPath,
         originalFilename: file.name,
         mimeType: file.type || "application/octet-stream",
         fileSize: file.size,

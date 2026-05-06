@@ -105,7 +105,7 @@ interface OrderSummary {
 }
 
 interface BarcodeScannerProps {
-  onOrderScanned?: (orderId: string) => void;
+  onOrderScanned?: (orderId: string, currentDepartment?: string) => void;
 }
 
 export function BarcodeScanner({ onOrderScanned }: BarcodeScannerProps = {}) {
@@ -167,7 +167,7 @@ export function BarcodeScanner({ onOrderScanned }: BarcodeScannerProps = {}) {
       // Only process if we haven't already processed this order
       if (!processedOrdersRef.current.has(orderSummary.orderId)) {
         processedOrdersRef.current.add(orderSummary.orderId);
-        onOrderScanned(orderSummary.orderId);
+        onOrderScanned(orderSummary.orderId, orderSummary.currentDepartment);
       }
     }
     // Always select the input after any successful scan for quick replacement

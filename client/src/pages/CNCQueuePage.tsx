@@ -659,39 +659,65 @@ export default function CNCQueuePage() {
 
   // Auto-select order when scanned - Select the order card
   const handleOrderScanned = useCallback(
-    (orderId: string) => {
+    (orderId: string, scannedCurrentDepartment?: string) => {
       // Prevent any navigation by maintaining current URL
       window.history.pushState(null, '', window.location.href);
 
-      // Check if the order exists in the current CNC queue
-      const orderExists = cncOrders.some(
-        (order: any) => order.orderId === orderId
+      // Refresh allOrders so newly-arrived CNC orders are visible
+      queryClient.invalidateQueries({ queryKey: ['/api/orders/all'] });
+
+      // First try to find the order in the current CNC queue (matches by orderId or fbOrderNumber)
+      const orderInQueue = cncOrders.find(
+        (o: any) =>
+          o.orderId === orderId ||
+          (o.fbOrderNumber && o.fbOrderNumber === orderId)
       );
 
-      if (orderExists) {
-        // Find the order and determine which queue it's in (gunsmith or finish)
-        const orderInQueue = cncOrders.find((o: any) => o.orderId === orderId);
-        if (orderInQueue) {
-          // Select the order card instead of showing modal
-          toggleOrderSelection(
-            orderInQueue.orderId,
-            orderInQueue.departmentType
-          );
+      if (orderInQueue) {
+        toggleOrderSelection(
+          orderInQueue.orderId,
+          orderInQueue.departmentType
+        );
+        toast({
+          title: 'Order Selected',
+          description: `Order ${orderInQueue.orderId} has been selected and ready for progression`,
+        });
+        return;
+      }
 
+      // Not in CNC queue — see if the order exists at all (in another department)
+      const orderAnywhere = (allOrders as any[]).find(
+        (o: any) =>
+          o.orderId === orderId ||
+          (o.fbOrderNumber && o.fbOrderNumber === orderId)
+      );
+      const actualDepartment =
+        orderAnywhere?.currentDepartment || scannedCurrentDepartment;
+
+      if (actualDepartment) {
+        const normalized = actualDepartment.trim().toLowerCase();
+        if (normalized === 'cnc') {
+          // Order is in CNC per server but not yet in our local queue — likely a stale cache
           toast({
-            title: 'Order Selected',
-            description: `Order ${orderId} has been selected and ready for progression`,
+            title: 'Refreshing CNC Queue',
+            description: `Order ${orderId} is in CNC but not yet loaded. Please scan again in a moment.`,
+          });
+        } else {
+          toast({
+            title: 'Order Not in CNC',
+            description: `Order ${orderId} is currently in ${actualDepartment}.`,
+            variant: 'destructive',
           });
         }
       } else {
         toast({
           title: 'Order Not Found',
-          description: `Order ${orderId} is not in the CNC department`,
+          description: `Order ${orderId} could not be located in any department.`,
           variant: 'destructive',
         });
       }
     },
-    [cncOrders, toast]
+    [cncOrders, allOrders, toast]
   );
 
   return (

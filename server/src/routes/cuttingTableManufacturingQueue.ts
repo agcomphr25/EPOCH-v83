@@ -913,22 +913,45 @@ router.post('/scan-start', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid packet barcode format. Expected: MFG-{id}-{partNumber} or MFG-{id}-{partNumber}-{seq}' });
     }
     
-    const queueId = parseInt(match[1]);
+    const printedQueueId = parseInt(match[1]);
     
-    if (isNaN(queueId)) {
+    if (isNaN(printedQueueId)) {
       return res.status(400).json({ error: 'Invalid queue ID in barcode' });
     }
     
     // Get the queue item - enforce Cutting Table department
-    const queueItem = await db.query.manufacturingQueue.findFirst({
+    let queueItem = await db.query.manufacturingQueue.findFirst({
       where: and(
-        eq(manufacturingQueue.id, queueId),
+        eq(manufacturingQueue.id, printedQueueId),
         eq(manufacturingQueue.department, 'Cutting Table')
       ),
     });
-    
+    let queueId = printedQueueId;
+    let aliasNotice: string | null = null;
+
     if (!queueItem) {
-      return res.status(404).json({ error: 'Cutting table queue item not found' });
+      // The printed barcode references a queue id that no longer exists. Try
+      // resolving via the alias map (populated by the duplicate-grouping
+      // backfill, the unschedule endpoint, and new-row creation).
+      const { resolveAliasedQueueRow } = await import('../utils/cuttingPacketBarcodeAlias');
+      const resolution = await resolveAliasedQueueRow(printedQueueId);
+      if (!resolution) {
+        return res.status(404).json({
+          error: 'Cutting table queue item not found',
+          message: 'This packet barcode is not recognized. Please reprint the label or escalate to a supervisor.',
+        });
+      }
+      if (!resolution.successorRow) {
+        return res.status(409).json({
+          error: 'Packet has been unscheduled',
+          message: 'This packet has been unscheduled from the cutting queue. Please reprint a fresh label or escalate to a supervisor.',
+          aliasReason: resolution.alias.reason,
+        });
+      }
+      queueItem = resolution.successorRow;
+      queueId = queueItem.id;
+      aliasNotice = `Original printed queue #${printedQueueId} was ${resolution.alias.reason}; routed to current queue #${queueId}.`;
+      console.log(`[scan-start] Resolved aliased barcode ${barcode}: printed queue #${printedQueueId} → current queue #${queueId} (${resolution.alias.reason})`);
     }
     
     if (queueItem.status === 'COMPLETED') {
@@ -1174,6 +1197,9 @@ router.post('/scan-start', async (req: Request, res: Response) => {
         remaining,
         estimatedCuts,
       },
+      aliasNotice,
+      printedQueueId,
+      resolvedQueueId: queueId,
       bom: packetBom ? {
         id: packetBom.id,
         packetType: packetBom.packetType,
@@ -1242,7 +1268,27 @@ router.delete('/:id', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Cannot unschedule an item that has partially completed work' });
     }
 
+    // Capture the packet identity BEFORE deleting so we can preserve barcode→packet
+    // mapping for any labels printed against this row. A future sync that creates a
+    // fresh queue row for the same packet+due-date+inventory_item will backfill
+    // the successor pointer; until then, scanned old labels will surface the
+    // "this packet was unscheduled" message instead of a generic 404.
+    let packetName: string | null = null;
+    try {
+      if (queueItem.notes) {
+        const parsedNotes = JSON.parse(queueItem.notes);
+        if (typeof parsedNotes?.packetName === 'string') packetName = parsedNotes.packetName;
+      }
+    } catch {}
+    const { recordAlias, dueDateBucket } = await import('../utils/cuttingPacketBarcodeAlias');
+
     await db.delete(manufacturingQueue).where(eq(manufacturingQueue.id, parsedId));
+
+    await recordAlias(parsedId, null, {
+      inventoryItemId: queueItem.inventoryItemId,
+      packetName,
+      dueDateBucket: dueDateBucket(queueItem.dueDate),
+    }, 'unscheduled');
 
     res.json({ success: true, message: 'Queue item unscheduled successfully' });
   } catch (error) {

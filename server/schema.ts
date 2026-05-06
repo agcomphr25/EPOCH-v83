@@ -9302,6 +9302,41 @@ export const insertManufacturingQueueSchema = createInsertSchema(manufacturingQu
   updatedAt: true,
 });
 
+// Cutting Packet Barcode Aliases — preserves the link between previously-printed
+// MFG-{id}-… barcodes and the surviving manufacturing_queue row after the original
+// row is consolidated by the duplicate-grouping backfill, deleted via the
+// unschedule endpoint, or replaced by a fresh sync. This lets scan-start keep
+// resolving old labels without forcing a reprint every time the queue churns.
+export const cuttingPacketBarcodeAliases = pgTable('cutting_packet_barcode_aliases', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  // The queue id that was baked into the printed barcode (now missing or merged).
+  originalQueueId: integer('original_queue_id').notNull().unique(),
+  // The surviving queue id that should answer this barcode, or NULL if there is
+  // currently no successor (e.g. the row was unscheduled and never replaced).
+  successorQueueId: integer('successor_queue_id'),
+  // Identity captured from the deleted/merged row so a future
+  // upsertGroupedCuttingQueueEntry can backfill the successor on the same packet.
+  inventoryItemId: integer('inventory_item_id'),
+  packetName: text('packet_name'),
+  // 'YYYY-MM-DD' (UTC date-of) or 'null' — same bucket key used by the grouping helper.
+  dueDateBucket: text('due_date_bucket'),
+  reason: text('reason').notNull(), // 'merged' | 'unscheduled' | 'replaced' | 'historical'
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  successorIdx: index('cutting_packet_barcode_aliases_successor_idx').on(table.successorQueueId),
+  packetIdx: index('cutting_packet_barcode_aliases_packet_idx').on(table.inventoryItemId, table.dueDateBucket),
+}));
+
+export const insertCuttingPacketBarcodeAliasSchema = createInsertSchema(cuttingPacketBarcodeAliases).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type CuttingPacketBarcodeAlias = typeof cuttingPacketBarcodeAliases.$inferSelect;
+export type InsertCuttingPacketBarcodeAlias = z.infer<typeof insertCuttingPacketBarcodeAliasSchema>;
+
 // Cutting Table Types
 export type CuttingMaterial = typeof cuttingMaterials.$inferSelect;
 export type InsertCuttingMaterial = z.infer<typeof insertCuttingMaterialSchema>;

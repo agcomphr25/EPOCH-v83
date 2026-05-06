@@ -307,6 +307,20 @@ export async function upsertGroupedCuttingQueueEntry(
     updatedAt: new Date(),
   }).returning();
 
+  // Point any orphan barcode aliases (whose successor was previously deleted
+  // or never set) at this fresh queue row so labels printed against the
+  // earlier row keep working.
+  try {
+    const { backfillAliasesForNewQueueRow, dueDateBucket } = await import('./cuttingPacketBarcodeAlias');
+    await backfillAliasesForNewQueueRow(newItem.id, {
+      inventoryItemId,
+      packetName,
+      dueDateBucket: dueDateBucket(dueDate),
+    });
+  } catch (aliasErr: any) {
+    console.warn('[upsertGroupedCuttingQueueEntry] alias backfill failed:', aliasErr?.message || aliasErr);
+  }
+
   return {
     queueItem: newItem,
     created: true,

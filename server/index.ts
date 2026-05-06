@@ -674,6 +674,38 @@ async function initializeBackgroundServices() {
         `);
         const dupGuardRow = (dupGuardResult as any).rows?.[0] || (dupGuardResult as any[])[0] || {};
         const legacyCount = parseInt(dupGuardRow.legacy_count ?? '0', 10);
+
+        // CRITICAL: ensure cutting_packet_barcode_aliases exists BEFORE the
+        // duplicate-grouping backfill runs. The backfill deletes merged rows
+        // and writes alias mappings so previously printed `MFG-{queueId}-...`
+        // labels still resolve. If the alias table is missing, those inserts
+        // are silently skipped and we permanently lose the mapping.
+        try {
+          const { sql: sqlAlias } = await import('drizzle-orm');
+          await db.execute(sqlAlias`
+            CREATE TABLE IF NOT EXISTS cutting_packet_barcode_aliases (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              original_queue_id INTEGER NOT NULL UNIQUE,
+              successor_queue_id INTEGER,
+              inventory_item_id INTEGER,
+              packet_name TEXT,
+              due_date_bucket TEXT,
+              reason TEXT NOT NULL,
+              created_at TIMESTAMP DEFAULT NOW(),
+              updated_at TIMESTAMP DEFAULT NOW()
+            )
+          `);
+          await db.execute(sqlAlias`CREATE INDEX IF NOT EXISTS cutting_packet_barcode_aliases_successor_idx ON cutting_packet_barcode_aliases(successor_queue_id)`);
+          await db.execute(sqlAlias`CREATE INDEX IF NOT EXISTS cutting_packet_barcode_aliases_packet_idx ON cutting_packet_barcode_aliases(inventory_item_id, due_date_bucket)`);
+          console.log('✅ cutting_packet_barcode_aliases table ensured (pre-dup-backfill)');
+        } catch (aliasTableErr: any) {
+          // HARD FAIL: do not run the consolidation if we can't preserve aliases.
+          // Surface a loud error so the operator knows barcode continuity is at
+          // risk — silent degradation is worse than a noisy boot.
+          console.error('❌ cutting_packet_barcode_aliases table creation FAILED — skipping duplicate-grouping backfill to preserve barcode continuity:', aliasTableErr?.message || aliasTableErr);
+          throw aliasTableErr;
+        }
+
         if (legacyCount > 0) {
           console.log(`🔄 P2 duplicate-grouping backfill: ${legacyCount} legacy PENDING P2 cutting rows found — running consolidation`);
           const { runP2DuplicateCuttingBackfill } = await import('./src/routes/cuttingTable');
@@ -684,6 +716,22 @@ async function initializeBackgroundServices() {
         }
       } catch (dupBfErr: any) {
         console.warn('⚠️ P2 duplicate-grouping boot backfill skipped:', dupBfErr.message);
+      }
+
+      // One-shot historical alias backfill — picks up labels printed before
+      // the alias table existed by mining cutting_built_packets barcodes for
+      // orphan queue ids. Runs AFTER the duplicate-grouping consolidation so
+      // it sees the final canonical rows.
+      try {
+        const { backfillHistoricalAliases } = await import('./src/utils/cuttingPacketBarcodeAlias');
+        const aliasSummary = await backfillHistoricalAliases(pool);
+        if (aliasSummary.candidatesScanned > 0) {
+          console.log(`✅ Cutting packet barcode aliases — historical backfill: ${JSON.stringify(aliasSummary)}`);
+        } else {
+          console.log('✅ Cutting packet barcode aliases — no historical orphan barcodes detected');
+        }
+      } catch (aliasBootErr: any) {
+        console.warn('⚠️ cutting_packet_barcode_aliases historical backfill skipped:', aliasBootErr.message);
       }
 
       // Data correction: PO 037517 item 225 (Grace Engineering) — fix cf_privateer → cf_beartooth

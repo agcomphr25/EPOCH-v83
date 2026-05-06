@@ -3084,8 +3084,27 @@ export async function runP2DuplicateCuttingBackfill(pool: any): Promise<{
         [totalQty, JSON.stringify(updatedNotes), canonical.row.id]
       );
 
-      for (const { row } of others) {
+      for (const { row, parsed, packetName: deletedPacketName, bucket } of others) {
         await pool.query(`DELETE FROM manufacturing_queue WHERE id = $1`, [row.id]);
+        // Record the alias so any labels printed against the deleted row still
+        // resolve to the surviving canonical row when scanned.
+        try {
+          await pool.query(
+            `INSERT INTO cutting_packet_barcode_aliases
+                (original_queue_id, successor_queue_id, inventory_item_id, packet_name, due_date_bucket, reason, created_at, updated_at)
+              VALUES ($1, $2, $3, $4, $5, 'merged', NOW(), NOW())
+              ON CONFLICT (original_queue_id) DO UPDATE
+                SET successor_queue_id = EXCLUDED.successor_queue_id,
+                    inventory_item_id = COALESCE(EXCLUDED.inventory_item_id, cutting_packet_barcode_aliases.inventory_item_id),
+                    packet_name = COALESCE(EXCLUDED.packet_name, cutting_packet_barcode_aliases.packet_name),
+                    due_date_bucket = COALESCE(EXCLUDED.due_date_bucket, cutting_packet_barcode_aliases.due_date_bucket),
+                    reason = 'merged',
+                    updated_at = NOW()`,
+            [row.id, canonical.row.id, row.inventory_item_id ?? null, deletedPacketName, bucket],
+          );
+        } catch (aliasErr: any) {
+          console.warn(`⚠️ P2 duplicate-grouping backfill: alias record failed for row ${row.id}:`, aliasErr?.message || aliasErr);
+        }
         rowsMerged++;
       }
 

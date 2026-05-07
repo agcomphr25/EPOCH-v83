@@ -207,7 +207,6 @@ import auditsRoutes from './audits';
 import commandCenterRoutes from './commandCenter';
 import edriRoutes from './edri';
 import forensicAuditRoutes from './forensicAudit';
-import vaultRoutes from './vault';
 import cmmcRoutes from './cmmc';
 import chargeCodesRoutes from './chargeCodes';
 import purchaseRequisitionsRoutes from './purchaseRequisitions';

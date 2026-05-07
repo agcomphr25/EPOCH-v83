@@ -1,0 +1,448 @@
+Immutable Inventory Transaction Ledger Framework
+EPOCH Aerospace / DCAA / AS9100 Control Design
+This is one of the most important systems you can add to EPOCH.
+It becomes the:
+
+
+source of truth for inventory history,
+
+
+audit reconstruction system,
+
+
+material traceability backbone,
+
+
+and compliance evidence layer.
+
+
+
+Core Goal
+Every inventory movement becomes:
+
+
+permanent,
+
+
+traceable,
+
+
+attributable,
+
+
+reconstructable,
+
+
+and non-editable.
+
+
+Think of it like:
+
+accounting journal entries for material.
+
+
+DESIGN PRINCIPLES
+1. Append-Only
+Never:
+
+
+UPDATE ledger rows
+
+
+DELETE ledger rows
+
+
+Only:
+INSERT
+Corrections are made through:
+REVERSAL ENTRY+ NEW CORRECT ENTRY
+Exactly like financial accounting.
+
+2. Every Material Movement Creates a Ledger Event
+No exceptions.
+
+Event Types
+Recommended Enum
+RECEIVEISSUERETURNTRANSFERMOVERESERVEUNRESERVECONSUMEADJUSTSCRAPSPLITMERGECOUNT_ADJUSTMENTSTATUS_CHANGEQUARANTINERELEASEEXPIRE
+
+3. Ledger Is the Source of Truth
+Inventory balances should eventually become:
+
+
+derived from ledger activity,
+OR
+
+
+validated against ledger totals.
+
+
+This is how enterprise ERPs work.
+
+DATABASE DESIGN
+Main Table
+inventory_transaction_ledger
+FieldTypePurposeiduuidimmutable identifiertransactionNumbertexthuman-readable audit reftransactionTypeenumRECEIVE/ISSUE/etcinventoryItemIdintitem referencelotIduuidlot trackinglocationIduuidwarehouse/binquantityDeltanumeric+ or - movementquantityBeforenumericbefore statequantityAfternumericafter stateunitOfMeasuretextEA/LB/M2/etcstatusBeforeenumAVAILABLE/etcstatusAfterenumAVAILABLE/etcperformedByuuidemployee/userapprovedByuuidoptional approvalapprovalIduuidworkflow linkageprojectIduuidproject linkageproductionWorkOrderIduuidWAD/work ordertravelerIduuidtraveler linkagetravelerStepIduuidoperation traceabilitychargeCodeIduuidDCAA linkagereasonCodetextwhy transaction occurrednotestextoperator notesdigitalSignatureIduuidsignature evidencesourceModuletextreceiving/layup/etcsourceRecordIduuidoriginating entityeventHashtexttamper evidencereversedTransactionIduuidcorrection linkagecreatedAttimestampimmutable timestamp
+
+Key Architectural Concepts
+quantityDelta
+Instead of:
+new quantity = 10
+Store:
+delta = -2before = 10after = 8
+Much easier to audit.
+
+sourceModule + sourceRecordId
+Critical.
+Lets you trace:
+ModuleExamplereceivingreceiving inspectiontravelerlayup consumecycleCountcount adjustmentpurchasingPO receiptMRBquarantine release
+Huge audit value.
+
+eventHash (Tamper Evidence)
+Enterprise-grade feature.
+Hash important fields:
+transactionTypeqtylottimestampperformedBy
+If data changes later:
+
+
+hash mismatch detected.
+
+
+Very strong compliance feature.
+
+IMMUTABILITY ENFORCEMENT
+Application Layer
+Never expose:
+PUT /ledger/:idDELETE /ledger/:id
+Only:
+POST /ledger/reversal
+
+Database Layer
+PostgreSQL Trigger
+Prevent:
+
+
+UPDATE
+
+
+DELETE
+
+
+Example concept:
+CREATE OR REPLACE FUNCTION prevent_ledger_modification()RETURNS trigger AS $$BEGIN  RAISE EXCEPTION 'Ledger entries are immutable';END;$$ LANGUAGE plpgsql;
+Attach trigger to:
+BEFORE UPDATEBEFORE DELETE
+
+REVERSAL SYSTEM
+Mistakes happen.
+Never edit.
+Instead:
+
+
+reverse original
+
+
+create corrected entry
+
+
+
+Example
+Wrong Issue
+ISSUE -5
+Reversal
+REVERSAL +5
+Corrected
+ISSUE -3
+Full audit history preserved.
+
+APPROVAL WORKFLOW INTEGRATION
+approvalId + approvedBy
+Critical for:
+
+
+negative inventory
+
+
+quarantine release
+
+
+expired material use
+
+
+manual adjustments
+
+
+
+Example
+ActionApproval RequiredScrapsupervisorNegative qtymanagerQuarantine releasequalityExpired useMRB
+
+DIGITAL SIGNATURES
+digitalSignatureId
+Links to:
+electronic_signatures
+Stores:
+
+
+password re-auth
+
+
+timestamp
+
+
+IP
+
+
+action meaning
+
+
+Needed for:
+
+
+AS9100 evidence
+
+
+FDA-style controls
+
+
+DCAA audit confidence
+
+
+
+LOT TRACEABILITY
+Every transaction tied to:
+
+
+lot
+
+
+ICN
+
+
+expiration
+
+
+out-time state
+
+
+
+Example Trace Chain
+PO Receipt→ freezer storage→ layup reserve→ consume at traveler step→ cure batch→ final assembly
+Auditor can reconstruct entire material lifecycle.
+
+INTEGRATION POINTS
+Receiving
+Creates:
+RECEIVE
+
+Traveler Consumption
+Creates:
+CONSUME
+with:
+
+
+travelerStepId
+
+
+WAD linkage
+
+
+charge code
+
+
+
+Scrap
+Creates:
+SCRAP
+with NCR linkage.
+
+Cycle Counts
+Creates:
+COUNT_ADJUSTMENT
+with variance reason.
+
+Inventory Moves
+Creates:
+TRANSFER
+between bins/freezers.
+
+DCAA BENEFITS
+This system directly supports:
+
+
+material accountability
+
+
+project traceability
+
+
+cost reconstruction
+
+
+audit evidence
+
+
+fraud prevention
+
+
+unauthorized movement detection
+
+
+
+AS9100 BENEFITS
+Supports:
+
+
+traceability
+
+
+disposition history
+
+
+nonconforming material controls
+
+
+process accountability
+
+
+operator attribution
+
+
+
+CMMC / SECURITY BENEFITS
+Supports:
+
+
+tamper evidence
+
+
+forensic reconstruction
+
+
+user accountability
+
+
+controlled access logging
+
+
+
+IMPLEMENTATION STRATEGY
+PHASE 1 — Minimal Viable Ledger
+Build:
+
+
+append-only ledger table
+
+
+transaction inserts
+
+
+immutable triggers
+
+
+before/after qty
+
+
+performedBy
+
+
+timestamps
+
+
+
+PHASE 2 — Compliance Layer
+Add:
+
+
+approvals
+
+
+digital signatures
+
+
+reversals
+
+
+status transitions
+
+
+reason codes
+
+
+
+PHASE 3 — Enterprise Auditability
+Add:
+
+
+event hashes
+
+
+linked chain hashing
+
+
+anomaly detection
+
+
+audit export engine
+
+
+reconciliation reports
+
+
+
+HIGH VALUE DASHBOARDS
+Inventory Audit Dashboard
+Widgets
+
+
+recent adjustments
+
+
+negative inventory attempts
+
+
+quarantine releases
+
+
+high-risk overrides
+
+
+unapproved changes
+
+
+reversal frequency
+
+
+
+Traceability Viewer
+Search by:
+
+
+lot
+
+
+project
+
+
+traveler
+
+
+WAD
+
+
+employee
+
+
+NCR
+
+
+Then reconstruct complete lifecycle.
+
+TARGET END STATE
+After implementation, EPOCH inventory becomes:
+CapabilityLevelInventory TrackingEnterpriseMaterial TraceabilityAerospace-gradeAuditabilityHighDCAA Material AccountabilityStrongAS9100 Evidence SupportStrongFraud ResistanceMedium-HighTamper ResistanceHigh
+This is one of the biggest systems that transforms EPOCH from:
+
+“inventory software”
+
+into:
+
+“controlled manufacturing accountability platform.”

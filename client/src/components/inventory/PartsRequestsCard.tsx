@@ -419,7 +419,7 @@ export default function PartsRequestsCard() {
                   {activeInventoryItems.map((item) => (
                     <CommandItem
                       key={item.id}
-                      value={`${item.agPartNumber} ${item.name} ${item.source || ''}`}
+                      value={`${item.agPartNumber} ${item.name}`}
                       onSelect={() => handleInventoryItemSelect(item)}
                     >
                       <Check
@@ -437,11 +437,6 @@ export default function PartsRequestsCard() {
                           </span>
                           <span className="truncate">{item.name}</span>
                         </div>
-                        {item.source && (
-                          <div className="text-xs text-muted-foreground">
-                            Vendor: {item.source}
-                          </div>
-                        )}
                       </div>
                     </CommandItem>
                   ))}

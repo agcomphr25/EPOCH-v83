@@ -109,8 +109,10 @@ export const REQUIRED_CAPABILITY_KEYS: readonly string[] = [
   'timekeeping.time_clock_admin.access',
 
   // Improvement Notes (workflow improvement capture)
+  // Note: 'improvement_notes.create' is seeded in perm_capabilities for future
+  // use but POST is intentionally auth-only (any logged-in user can submit a
+  // note), so it is not listed here as a requirePermission() callsite.
   'improvement_notes.view',
-  'improvement_notes.create',
   'improvement_notes.manage',
 ] as const;
 

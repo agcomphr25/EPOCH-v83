@@ -399,7 +399,11 @@ export default function TravelerManagement() {
   };
 
   const isOffSystemTraveler = (traveler: Traveler): boolean => {
-    if (traveler.offSystemCompletionLink) return true;
+    // Off-system completions always have a non-null offSystemCompletionLink
+    // (empty string is the sentinel for "off-system, no notes captured").
+    // We also fall back to the workOrderId 'Off-system' prefix so legacy
+    // rows recorded before the sentinel was introduced are still detected.
+    if (traveler.offSystemCompletionLink !== null && traveler.offSystemCompletionLink !== undefined) return true;
     return !!traveler.workOrderId && traveler.workOrderId.startsWith('Off-system');
   };
 

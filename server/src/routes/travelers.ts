@@ -2779,7 +2779,6 @@ router.patch('/:id/off-system-link', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const parsed = offSystemLinkSchema.parse(req.body);
-    const newValue = parsed.offSystemCompletionLink?.trim() ? parsed.offSystemCompletionLink.trim() : null;
 
     const [existing] = await db.select().from(travelers).where(eq(travelers.id, id)).limit(1);
     if (!existing) {
@@ -2790,6 +2789,13 @@ router.patch('/:id/off-system-link', async (req: Request, res: Response) => {
       existing.offSystemCompletionLink !== null && existing.offSystemCompletionLink !== undefined
         ? true
         : (existing.workOrderId ?? '').startsWith('Off-system');
+
+    // When clearing the link/notes, preserve the off-system marker by writing
+    // an empty string (sentinel) rather than null — so the row remains
+    // identifiable as an off-system completion even when the workOrderId is
+    // a real (non-off-system) value.
+    const trimmed = parsed.offSystemCompletionLink?.trim() ?? '';
+    const newValue = trimmed.length > 0 ? trimmed : (isOffSystem ? '' : null);
 
     if (!isOffSystem) {
       return res.status(400).json({

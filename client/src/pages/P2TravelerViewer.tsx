@@ -44,7 +44,9 @@ import {
   X,
   Trash2,
   RotateCcw,
+  Link2,
 } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
 import { format, isValid } from 'date-fns';
 import { TravelerCapturedDataBySerial } from '@/components/p2/TravelerCapturedData';
 import AuditTimeline from '@/components/AuditTimeline';
@@ -56,9 +58,17 @@ function safeFormat(dateValue: any, fmt: string): string {
   return format(d, fmt);
 }
 
+interface OffSystemCompletionInfo {
+  travelerId: string;
+  travelerNumber: string;
+  offSystemCompletionLink: string;
+  workOrderId: string | null;
+}
+
 interface TravelerData {
   serializedItem: any;
   travelerId: string | null;
+  offSystemCompletion: OffSystemCompletionInfo | null;
   allTravelerIds: { id: string; status: string; createdAt: string; cycleNumber: number }[];
   purchaseOrder: any;
   poItem: any;
@@ -106,6 +116,9 @@ export default function P2TravelerViewer() {
   const [expandedMaterials, setExpandedMaterials] = useState<Record<string, boolean>>({});
   const [editingMaterials, setEditingMaterials] = useState<Record<string, boolean>>({});
   const [materialFormValues, setMaterialFormValues] = useState<Record<string, Record<string, string>>>({});
+
+  const [showOffSystemLinkDialog, setShowOffSystemLinkDialog] = useState(false);
+  const [offSystemLinkDraft, setOffSystemLinkDraft] = useState('');
 
   useEffect(() => {
     if (urlBarcode && urlBarcode !== searchedBarcode) {
@@ -177,6 +190,41 @@ export default function P2TravelerViewer() {
       });
     },
   });
+
+  const offSystemLinkMutation = useMutation({
+    mutationFn: async (data: { travelerId: string; offSystemCompletionLink: string | null }) =>
+      apiRequest(`/api/travelers/${data.travelerId}/off-system-link`, {
+        method: 'PATCH',
+        body: JSON.stringify({ offSystemCompletionLink: data.offSystemCompletionLink }),
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    onSuccess: () => {
+      toast({
+        title: 'Off-system link updated',
+        description: 'The completion link has been saved on this traveler.',
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2-traveler-viewer/item', searchedBarcode] });
+      queryClient.invalidateQueries({ queryKey: ['/api/travelers'] });
+      setShowOffSystemLinkDialog(false);
+      setOffSystemLinkDraft('');
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to update off-system link',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const handleSaveOffSystemLink = () => {
+    if (!travelerData?.offSystemCompletion) return;
+    const trimmed = offSystemLinkDraft.trim();
+    offSystemLinkMutation.mutate({
+      travelerId: travelerData.offSystemCompletion.travelerId,
+      offSystemCompletionLink: trimmed.length === 0 ? null : trimmed,
+    });
+  };
 
   const saveTraceabilityMutation = useMutation({
     mutationFn: async (data: {
@@ -365,6 +413,61 @@ export default function P2TravelerViewer() {
 
       {travelerData && (
         <div className="space-y-6">
+          {travelerData.offSystemCompletion && (
+            <Card
+              className="border-indigo-200 bg-indigo-50/60"
+              data-testid="card-off-system-completion"
+            >
+              <CardContent className="py-4">
+                <div className="flex items-start justify-between gap-4 flex-wrap">
+                  <div className="flex items-start gap-3">
+                    <Link2 className="h-5 w-5 text-indigo-600 mt-0.5 shrink-0" />
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-indigo-900">
+                          Off-System Completion
+                        </span>
+                        <Badge className="bg-indigo-100 text-indigo-800 border-indigo-200">
+                          Traveler {travelerData.offSystemCompletion.travelerNumber}
+                        </Badge>
+                      </div>
+                      {travelerData.offSystemCompletion.offSystemCompletionLink ? (
+                        <p
+                          className="text-sm text-indigo-900 break-all whitespace-pre-wrap"
+                          data-testid="text-off-system-link"
+                        >
+                          {travelerData.offSystemCompletion.offSystemCompletionLink}
+                        </p>
+                      ) : (
+                        <p
+                          className="text-sm text-indigo-700/80 italic"
+                          data-testid="text-off-system-link-empty"
+                        >
+                          No link or notes were captured at completion time.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-indigo-300 text-indigo-700 hover:bg-indigo-100"
+                    data-testid="button-edit-off-system-link"
+                    onClick={() => {
+                      setOffSystemLinkDraft(
+                        travelerData.offSystemCompletion?.offSystemCompletionLink || ''
+                      );
+                      setShowOffSystemLinkDialog(true);
+                    }}
+                  >
+                    <Pencil className="h-3.5 w-3.5 mr-1.5" />
+                    Edit Link
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <Card data-testid="card-part-info">
               <CardHeader>
@@ -1873,6 +1976,62 @@ export default function P2TravelerViewer() {
             <Button onClick={() => window.open(previewDocument?.file_url || previewDocument?.fileUrl, '_blank')}>
               <ExternalLink className="h-4 w-4 mr-2" />
               Open in New Tab
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={showOffSystemLinkDialog}
+        onOpenChange={(open) => {
+          setShowOffSystemLinkDialog(open);
+          if (!open) setOffSystemLinkDraft('');
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-indigo-700">
+              <Link2 className="h-5 w-5" />
+              Off-System Completion Link
+            </DialogTitle>
+            <DialogDescription>
+              {travelerData?.offSystemCompletion ? (
+                <>Edit the link or notes recorded when traveler {travelerData.offSystemCompletion.travelerNumber} was completed off-system.</>
+              ) : null}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            <Label htmlFor="p2-off-system-link-textarea">Link / Notes</Label>
+            <Textarea
+              id="p2-off-system-link-textarea"
+              value={offSystemLinkDraft}
+              onChange={(e) => setOffSystemLinkDraft(e.target.value)}
+              placeholder="https://… or descriptive notes about the off-system completion"
+              rows={5}
+              data-testid="textarea-p2-off-system-link"
+            />
+            <p className="text-xs text-muted-foreground">
+              Leave empty to clear the link. The traveler will remain marked as an off-system completion.
+            </p>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowOffSystemLinkDialog(false)}
+              disabled={offSystemLinkMutation.isPending}
+              data-testid="button-cancel-p2-off-system-link"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveOffSystemLink}
+              disabled={offSystemLinkMutation.isPending}
+              className="bg-indigo-600 hover:bg-indigo-700"
+              data-testid="button-save-p2-off-system-link"
+            >
+              Save Link
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -68,6 +68,11 @@ const RunningTimesheetQuery = z.object({
   periodEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "periodEnd must be YYYY-MM-DD").optional(),
 });
 
+const MyTimesheetPrepareBody = z.object({
+  periodStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "periodStart must be YYYY-MM-DD"),
+  periodEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "periodEnd must be YYYY-MM-DD"),
+});
+
 /**
  * GET /api/timekeeping/timesheets/by-period
  * Lazy auto-create: returns existing or newly-created draft timesheet for the
@@ -131,6 +136,41 @@ router.get("/timesheets/my/running", authenticateToken, h(async (req, res): Prom
   }
 
   res.json(await svc.getRunningTimesheetForEmployee(employeeId, q.data.periodStart, q.data.periodEnd));
+}));
+
+router.post("/timesheets/my/prepare", authenticateToken, h(async (req, res): Promise<void> => {
+  const employeeId = req.user?.employeeId ?? null;
+  if (!employeeId) {
+    res.status(403).json({ error: "Your account is not linked to an employee record" });
+    return;
+  }
+
+  const body = MyTimesheetPrepareBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: body.error.errors.map((e) => e.message).join("; ") });
+    return;
+  }
+  if (body.data.periodStart > body.data.periodEnd) {
+    res.status(400).json({ error: "periodStart must not be after periodEnd" });
+    return;
+  }
+
+  const actor = actorFromUser(req.user ?? null, req.ip ?? null);
+  const timesheet = await svc.getOrAutoCreateTimesheet(
+    employeeId,
+    body.data.periodStart,
+    body.data.periodEnd,
+    actor,
+  );
+
+  if (timesheet === null) {
+    res.status(422).json({
+      error: "No recorded hours were found for this pay period, so no timesheet was created.",
+    });
+    return;
+  }
+
+  res.json(timesheet);
 }));
 
 // Gusto export — DEPRECATED read-only delegate.

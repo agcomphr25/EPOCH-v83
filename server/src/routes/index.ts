@@ -175,6 +175,7 @@ import historicalDataRoutes from './historicalData';
 import fillablePdfTemplatesRoutes from './fillablePdfTemplates';
 import pdfFormsRoutes from './pdfForms';
 import accountingPrepRoutes from './accountingPrep';
+import accountingControlRoutes from './accountingControl';
 import { qrResolverRouter, qrAdminRouter } from './qrCodes';
 import onboardingRoutes from './onboarding';
 import assetManagementRoutes from './assetManagement';
@@ -1077,6 +1078,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // Accounting Prep routes (Phase 0 - QuickBooks Journal Entry Prep)
   app.use('/api/accounting-prep', accountingPrepRoutes);
+
+  // Accounting Control Center - reimbursements, petty cash, owner expenses
+  app.use('/api/accounting-control', accountingControlRoutes);
 
   // Cutting Table routes
   app.use('/api/cutting-table', cuttingTableRoutes);

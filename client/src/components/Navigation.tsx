@@ -1000,6 +1000,12 @@ export default function Navigation() {
       description: 'Indirect cost pools, rates, and applied burden runs (Fringe / Overhead / G&A)',
     },
     {
+      path: '/finance/accounting-control',
+      label: 'Accounting Control Center',
+      icon: Receipt,
+      description: 'Expense reimbursements, petty cash, owner expenses, GL queue, and DCAA review',
+    },
+    {
       path: '/finance/accounting',
       label: 'Accounting Journal',
       icon: Calculator,

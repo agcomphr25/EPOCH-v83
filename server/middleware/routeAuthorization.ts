@@ -224,6 +224,7 @@ const ROLE_ROUTE_ACCESS: Record<string, string[]> = {
   '/finance/dashboard': ['ADMIN', 'OWNER'],
   '/finance/cost-centers': ['ADMIN', 'OWNER'],
   '/finance/cost-accounting': ['ADMIN', 'OWNER'],
+  '/finance/accounting-control': ['ADMIN', 'OWNER'],
   '/finance/accounting': ['ADMIN'],
   '/finance/bulk-payment': ['ADMIN', 'OWNER'],
   '/finance/ap': ['ADMIN', 'OWNER'],

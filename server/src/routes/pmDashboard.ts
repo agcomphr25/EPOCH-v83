@@ -127,6 +127,14 @@ interface MaterialItemRow {
   status: string;
 }
 
+const ORDERED_PARTS_REQUEST_STATUSES = [
+  'ORDERED',
+  'ORDERED_PARTIAL',
+  'RECEIVED',
+  'RECEIVED_PARTIAL',
+  'DELIVERED_TO_DEPT',
+];
+
 // GET /api/pm-dashboard/managers — distinct PMs who own at least one active project
 router.get('/managers', h(async (_req, res) => {
   const result = await pool.query<{ id: number; name: string }>(`
@@ -261,6 +269,14 @@ router.get('/:projectId/summary', h(async (req, res) => {
     )
   `, [projectId]);
 
+  const partsRequestMaterialRes = await pool.query<{ committedMaterialCost: string }>(`
+    SELECT COALESCE(SUM(quantity * COALESCE(estimated_cost, 0)), 0) AS "committedMaterialCost"
+    FROM parts_requests
+    WHERE project_id = $1
+      AND is_active = true
+      AND status = ANY($2::text[])
+  `, [projectId, ORDERED_PARTS_REQUEST_STATUSES]);
+
   // Quantity-based production percent
   const qtyProgressRes = await pool.query<{ totalRequired: string; totalCompleted: string }>(`
     SELECT
@@ -291,10 +307,12 @@ router.get('/:projectId/summary', h(async (req, res) => {
   const actualLaborHours = parseFloat(laborActualRes[0].actualLaborHours) || 0;
   const laborRemainingHours = budgetedLaborHours - actualLaborHours;
 
-  const committedMaterialCost = parseFloat(materialRes[0].committedMaterialCost) || 0;
+  const committedMaterialCost =
+    (parseFloat(materialRes[0].committedMaterialCost) || 0) +
+    (parseFloat(partsRequestMaterialRes[0]?.committedMaterialCost) || 0);
   const consumedMaterialCost = parseFloat(consumedRes[0].consumedMaterialCost) || 0;
   const plannedMaterialCost = parseFloat(materialRes[0].plannedMaterialCost) || 0;
-  const remainingMaterialBudget = plannedMaterialCost - consumedMaterialCost;
+  const remainingMaterialBudget = plannedMaterialCost - committedMaterialCost - consumedMaterialCost;
 
   res.json({
     ...projRes[0],
@@ -727,7 +745,7 @@ router.get('/:projectId/materials', h(async (req, res) => {
 
   const summaryRes = await pool.query<MaterialSummaryRow>(`
     SELECT
-      COALESCE(committed_sub.committed, 0) AS "committedCost",
+      COALESCE(committed_sub.committed, 0) + COALESCE(parts_request_sub.committed, 0) AS "committedCost",
       COALESCE(consumed_sub.consumed, 0) AS "consumedCost"
     FROM (
       SELECT SUM(mlr.quantity_reserved * COALESCE(ii.unit_cost, 0)) AS committed
@@ -746,8 +764,15 @@ router.get('/:projectId/materials', h(async (req, res) => {
       WHERE tmc.traveler_id IN (
         SELECT id FROM travelers WHERE project_id = $1
       )
-    ) consumed_sub
-  `, [projectId]);
+    ) consumed_sub,
+    (
+      SELECT SUM(quantity * COALESCE(estimated_cost, 0)) AS committed
+      FROM parts_requests
+      WHERE project_id = $1
+        AND is_active = true
+        AND status = ANY($2::text[])
+    ) parts_request_sub
+  `, [projectId, ORDERED_PARTS_REQUEST_STATUSES]);
 
   const rowsRes = await pool.query<MaterialItemRow>(`
     SELECT
@@ -800,6 +825,37 @@ router.get('/:projectId/materials', h(async (req, res) => {
       ii.ag_part_number ASC
   `, [projectId]);
 
+  const partsRequestRowsRes = await pool.query<MaterialItemRow>(`
+    SELECT
+      ('PR-' || pr.id::text) AS "inventoryItemId",
+      pr.part_number AS "itemCode",
+      pr.part_name AS "itemName",
+      NULL::text AS "lotNumber",
+      NULL::text AS "internalControlNumber",
+      pr.quantity::numeric AS "qtyRequired",
+      CASE
+        WHEN pr.status IN ('ORDERED', 'ORDERED_PARTIAL') THEN pr.quantity::numeric
+        ELSE 0::numeric
+      END AS "qtyAllocated",
+      CASE
+        WHEN pr.status IN ('RECEIVED', 'RECEIVED_PARTIAL', 'DELIVERED_TO_DEPT') THEN pr.quantity::numeric
+        ELSE 0::numeric
+      END AS "qtyIssued",
+      COALESCE(pr.estimated_cost, 0)::numeric AS "unitCost",
+      (pr.quantity * COALESCE(pr.estimated_cost, 0))::numeric AS "committedCost",
+      CASE
+        WHEN pr.status IN ('RECEIVED', 'RECEIVED_PARTIAL', 'DELIVERED_TO_DEPT')
+          THEN (pr.quantity * COALESCE(pr.estimated_cost, 0))::numeric
+        ELSE 0::numeric
+      END AS "consumedCost",
+      ('PART_REQUEST_' || pr.status) AS "status"
+    FROM parts_requests pr
+    WHERE pr.project_id = $1
+      AND pr.is_active = true
+      AND pr.status = ANY($2::text[])
+    ORDER BY pr.request_date DESC
+  `, [projectId, ORDERED_PARTS_REQUEST_STATUSES]);
+
   const committedCost = parseFloat(summaryRes[0]?.committedCost) || 0;
   const consumedCost = parseFloat(summaryRes[0]?.consumedCost) || 0;
 
@@ -808,9 +864,9 @@ router.get('/:projectId/materials', h(async (req, res) => {
       plannedCost: 0,
       committedCost,
       consumedCost,
-      remainingCost: committedCost - consumedCost,
+      remainingCost: 0 - committedCost - consumedCost,
     },
-    rows: rowsRes,
+    rows: [...rowsRes, ...partsRequestRowsRes],
   });
 }));
 

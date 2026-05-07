@@ -1,14 +1,39 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Edit, Trash2, Calendar, User, Package } from 'lucide-react';
+import {
+  Plus,
+  Edit,
+  Trash2,
+  Calendar,
+  User,
+  Package,
+  Factory,
+  FolderOpen,
+  Check,
+  ChevronsUpDown,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
-import type { PartsRequest } from '@shared/schema';
+import type { InventoryItem, PartsRequest } from '@shared/schema';
 
 import { apiRequest } from '@/lib/queryClient';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import {
   Select,
   SelectContent,
@@ -26,9 +51,12 @@ import {
 import { Badge } from '@/components/ui/badge';
 
 interface PartsRequestFormData {
+  agPartNumber: string;
   partNumber: string;
   partName: string;
   requestedBy: string;
+  productionLine: string;
+  projectId: string;
   department: string;
   quantity: string;
   urgency: string;
@@ -40,18 +68,44 @@ interface PartsRequestFormData {
   notes: string;
 }
 
+interface ProjectOption {
+  id: string;
+  projectCode: string;
+  projectName: string;
+  status?: string;
+}
+
+interface DepartmentOption {
+  id: number;
+  name: string;
+}
+
+type PartsRequestWithProject = PartsRequest & {
+  project?: {
+    id: string | null;
+    projectCode: string | null;
+    projectName: string | null;
+  };
+};
+
+const NONE_VALUE = '__none__';
+
 export default function PartsRequestsCard() {
   const queryClient = useQueryClient();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isPartSelectOpen, setIsPartSelectOpen] = useState(false);
   const [editingRequest, setEditingRequest] = useState<PartsRequest | null>(
     null
   );
 
   const [formData, setFormData] = useState<PartsRequestFormData>({
+    agPartNumber: '',
     partNumber: '',
     partName: '',
     requestedBy: '',
+    productionLine: '',
+    projectId: '',
     department: '',
     quantity: '',
     urgency: 'MEDIUM',
@@ -64,10 +118,43 @@ export default function PartsRequestsCard() {
   });
 
   // Load parts requests
-  const { data: requests = [], isLoading } = useQuery<PartsRequest[]>({
+  const { data: requests = [], isLoading } = useQuery<PartsRequestWithProject[]>({
     queryKey: ['/api/inventory/parts-requests'],
     queryFn: () => apiRequest('/api/inventory/parts-requests'),
   });
+
+  const { data: projects = [] } = useQuery<ProjectOption[]>({
+    queryKey: ['/api/projects'],
+    queryFn: () => apiRequest('/api/projects'),
+  });
+
+  const { data: departments = [] } = useQuery<DepartmentOption[]>({
+    queryKey: ['/api/inventory/departments'],
+    queryFn: () => apiRequest('/api/inventory/departments'),
+  });
+
+  const { data: inventoryItems = [], isLoading: isLoadingInventory } = useQuery<InventoryItem[]>({
+    queryKey: ['/api/inventory'],
+    queryFn: () => apiRequest('/api/inventory'),
+  });
+
+  const activeInventoryItems = useMemo(
+    () =>
+      inventoryItems
+        .filter((item) => item.isActive !== false)
+        .sort((a, b) =>
+          String(a.agPartNumber || '').localeCompare(String(b.agPartNumber || ''))
+        ),
+    [inventoryItems]
+  );
+
+  const selectedInventoryItem = useMemo(
+    () =>
+      activeInventoryItems.find(
+        (item) => item.agPartNumber === formData.agPartNumber
+      ),
+    [activeInventoryItems, formData.agPartNumber]
+  );
 
   // Group requests by department
   const requestsByDepartment = useMemo(() => {
@@ -147,9 +234,12 @@ export default function PartsRequestsCard() {
 
   const resetForm = () => {
     setFormData({
+      agPartNumber: '',
       partNumber: '',
       partName: '',
       requestedBy: '',
+      productionLine: '',
+      projectId: '',
       department: '',
       quantity: '',
       urgency: 'MEDIUM',
@@ -173,6 +263,21 @@ export default function PartsRequestsCard() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  const handleInventoryItemSelect = (item: InventoryItem) => {
+    setFormData((prev) => ({
+      ...prev,
+      agPartNumber: item.agPartNumber,
+      partNumber: item.agPartNumber,
+      partName: item.name,
+      supplier: item.source || prev.supplier,
+      estimatedCost:
+        item.costPer !== null && item.costPer !== undefined
+          ? String(item.costPer)
+          : prev.estimatedCost,
+    }));
+    setIsPartSelectOpen(false);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -187,9 +292,12 @@ export default function PartsRequestsCard() {
     }
 
     const submitData = {
+      agPartNumber: formData.agPartNumber,
       partNumber: formData.partNumber,
       partName: formData.partName,
       requestedBy: formData.requestedBy,
+      productionLine: formData.productionLine || null,
+      projectId: formData.projectId || null,
       department: formData.department || null,
       quantity: parseInt(formData.quantity),
       urgency: formData.urgency,
@@ -213,9 +321,12 @@ export default function PartsRequestsCard() {
   const handleEdit = (request: PartsRequest) => {
     setEditingRequest(request);
     setFormData({
+      agPartNumber: request.agPartNumber || '',
       partNumber: request.partNumber,
       partName: request.partName,
       requestedBy: request.requestedBy,
+      productionLine: request.productionLine || '',
+      projectId: request.projectId || '',
       department: request.department || '',
       quantity: request.quantity.toString(),
       urgency: request.urgency,
@@ -273,29 +384,77 @@ export default function PartsRequestsCard() {
 
   const FormContent = () => (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="partNumber">Part Number *</Label>
-          <Input
-            id="partNumber"
-            name="partNumber"
-            value={formData.partNumber}
-            onChange={handleChange}
-            placeholder="Enter part number"
-            required
-          />
-        </div>
-        <div>
-          <Label htmlFor="partName">Part Name *</Label>
-          <Input
-            id="partName"
-            name="partName"
-            value={formData.partName}
-            onChange={handleChange}
-            placeholder="Enter part name"
-            required
-          />
-        </div>
+      <div>
+        <Label htmlFor="inventoryItem">Inventory Part *</Label>
+        <Popover open={isPartSelectOpen} onOpenChange={setIsPartSelectOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              id="inventoryItem"
+              type="button"
+              variant="outline"
+              role="combobox"
+              aria-expanded={isPartSelectOpen}
+              className={cn(
+                'w-full justify-between',
+                !formData.agPartNumber && 'text-muted-foreground'
+              )}
+              disabled={isLoadingInventory}
+            >
+              {selectedInventoryItem
+                ? `${selectedInventoryItem.agPartNumber} - ${selectedInventoryItem.name}`
+                : formData.partNumber && formData.partName
+                  ? `${formData.partNumber} - ${formData.partName}`
+                  : isLoadingInventory
+                    ? 'Loading inventory...'
+                    : 'Search inventory by part number or name...'}
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+            <Command>
+              <CommandInput placeholder="Type part number or name..." />
+              <CommandList>
+                <CommandEmpty>No inventory items found.</CommandEmpty>
+                <CommandGroup>
+                  {activeInventoryItems.map((item) => (
+                    <CommandItem
+                      key={item.id}
+                      value={`${item.agPartNumber} ${item.name} ${item.source || ''}`}
+                      onSelect={() => handleInventoryItemSelect(item)}
+                    >
+                      <Check
+                        className={cn(
+                          'mr-2 h-4 w-4',
+                          item.agPartNumber === formData.agPartNumber
+                            ? 'opacity-100'
+                            : 'opacity-0'
+                        )}
+                      />
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-mono text-sm font-medium">
+                            {item.agPartNumber}
+                          </span>
+                          <span className="truncate">{item.name}</span>
+                        </div>
+                        {item.source && (
+                          <div className="text-xs text-muted-foreground">
+                            Vendor: {item.source}
+                          </div>
+                        )}
+                      </div>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
+        {formData.partNumber && formData.partName && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Selected part: {formData.partNumber} - {formData.partName}
+          </p>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -311,14 +470,68 @@ export default function PartsRequestsCard() {
           />
         </div>
         <div>
+          <Label htmlFor="productionLine">Production Line</Label>
+          <Select
+            value={formData.productionLine || NONE_VALUE}
+            onValueChange={(value) =>
+              handleSelectChange('productionLine', value === NONE_VALUE ? '' : value)
+            }
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Optional line" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NONE_VALUE}>No line selected</SelectItem>
+              <SelectItem value="P1">P1</SelectItem>
+              <SelectItem value="P2">P2</SelectItem>
+              <SelectItem value="P3">P3</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="projectId">Project</Label>
+          <Select
+            value={formData.projectId || NONE_VALUE}
+            onValueChange={(value) =>
+              handleSelectChange('projectId', value === NONE_VALUE ? '' : value)
+            }
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Optional project" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NONE_VALUE}>No project selected</SelectItem>
+              {projects.map((project) => (
+                <SelectItem key={project.id} value={project.id}>
+                  {project.projectCode} - {project.projectName}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
           <Label htmlFor="department">Department</Label>
-          <Input
-            id="department"
-            name="department"
-            value={formData.department}
-            onChange={handleChange}
-            placeholder="Enter department"
-          />
+          <Select
+            value={formData.department || NONE_VALUE}
+            onValueChange={(value) =>
+              handleSelectChange('department', value === NONE_VALUE ? '' : value)
+            }
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Optional department" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NONE_VALUE}>No department selected</SelectItem>
+              {departments.map((department) => (
+                <SelectItem key={department.id} value={department.name}>
+                  {department.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -398,7 +611,7 @@ export default function PartsRequestsCard() {
       </div>
 
       <div>
-        <Label htmlFor="expectedDelivery">Expected Delivery</Label>
+        <Label htmlFor="expectedDelivery">Estimated Arrival</Label>
         <Input
           id="expectedDelivery"
           name="expectedDelivery"
@@ -555,6 +768,23 @@ export default function PartsRequestsCard() {
                           <span>{request.requestedBy}</span>
                         </div>
 
+                        {(request.productionLine || request.project) && (
+                          <div className="flex flex-wrap gap-2">
+                            {request.productionLine && (
+                              <span className="inline-flex items-center gap-1 text-xs text-gray-600 bg-gray-50 px-2 py-1 rounded">
+                                <Factory className="h-3 w-3" />
+                                {request.productionLine}
+                              </span>
+                            )}
+                            {request.project && (
+                              <span className="inline-flex items-center gap-1 text-xs text-gray-600 bg-gray-50 px-2 py-1 rounded">
+                                <FolderOpen className="h-3 w-3" />
+                                {request.project.projectCode} - {request.project.projectName}
+                              </span>
+                            )}
+                          </div>
+                        )}
+
                         <div className="flex items-center gap-2">
                           <Package className="h-4 w-4 text-gray-400" />
                           <span>Qty: {request.quantity}</span>
@@ -577,7 +807,7 @@ export default function PartsRequestsCard() {
                           <div className="flex items-center gap-2">
                             <Calendar className="h-4 w-4 text-gray-400" />
                             <span>
-                              Expected:{' '}
+                              ETA:{' '}
                               {new Date(
                                 request.expectedDelivery
                               ).toLocaleDateString()}

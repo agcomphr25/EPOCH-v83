@@ -465,6 +465,7 @@ async function initializeBackgroundServices() {
           '0104_improvement_notes.sql',
           '0106_employee_payroll_item_attachments.sql',
           '0107_accounting_expense_attachments.sql',
+          '0108_parts_request_project_line_budget.sql',
           'investigation_308_order_duplication.sql',
         ];
         const criticalMigrations = new Set([

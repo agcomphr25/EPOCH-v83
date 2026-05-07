@@ -82,6 +82,7 @@ import {
   Fingerprint,
   FlaskConical,
   Tag,
+  HandCoins,
 } from 'lucide-react';
 
 interface NavItemDef {
@@ -1010,6 +1011,12 @@ export default function Navigation() {
       label: 'Accounting Journal',
       icon: Calculator,
       description: 'View double-entry journal entries for wire payments',
+    },
+    {
+      path: '/finance/payroll-control',
+      label: 'Payroll Control',
+      icon: HandCoins,
+      description: 'Track employee deductions, advances, reimbursements, and Gusto follow-through',
     },
     {
       path: '/payment-management',

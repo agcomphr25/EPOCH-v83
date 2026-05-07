@@ -165,6 +165,59 @@ router.get('/pending-by-po', requireReceivingAccess, async (req: Request, res: R
 });
 
 // ── GET /api/receipts ──────────────────────────────────────────────────────────
+// Supervisor queue: department-owned units that still need disposition or putaway.
+router.get('/department-actions', requireReceivingAccess, async (req: Request, res: Response) => {
+  try {
+    const departmentId = req.query.departmentId ? parseInt(req.query.departmentId as string, 10) : null;
+    const result = await db.execute(sql`
+      SELECT
+        r.id AS receipt_id,
+        r.receipt_number,
+        r.vendor_name,
+        r.vendor_po_number,
+        r.department_id,
+        d.name AS department_name,
+        rl.id AS receipt_line_id,
+        rl.ag_part_number,
+        rl.description,
+        ru.id AS unit_id,
+        ru.barcode,
+        ru.quantity::text AS quantity,
+        ru.uom,
+        ru.disposition,
+        ru.location,
+        ru.freezer_number,
+        CASE
+          WHEN ru.disposition = 'pending_inspection' THEN 'disposition_required'
+          WHEN ru.disposition = 'accepted'
+            AND COALESCE(NULLIF(TRIM(ru.location), ''), '') = ''
+            AND ru.freezer_number IS NULL THEN 'putaway_required'
+          ELSE NULL
+        END AS action_required
+      FROM received_units ru
+      INNER JOIN receipts r ON r.id = ru.receipt_id
+      INNER JOIN receipt_lines rl ON rl.id = ru.receipt_line_id
+      LEFT JOIN inventory_departments d ON d.id = r.department_id
+      WHERE r.status = 'in_progress'
+        AND r.department_id IS NOT NULL
+        AND (${departmentId}::int IS NULL OR r.department_id = ${departmentId})
+        AND (
+          ru.disposition = 'pending_inspection'
+          OR (
+            ru.disposition = 'accepted'
+            AND COALESCE(NULLIF(TRIM(ru.location), ''), '') = ''
+            AND ru.freezer_number IS NULL
+          )
+        )
+      ORDER BY r.receipt_date DESC, r.id DESC, ru.unit_sequence ASC
+    `);
+    res.json(sqlRows(result));
+  } catch (err: any) {
+    console.error('GET /api/receipts/department-actions:', err);
+    res.status(500).json({ error: 'Failed to fetch department receiving actions' });
+  }
+});
+
 router.get('/', requireReceivingAccess, async (req: Request, res: Response) => {
   try {
     const { status, vendorId, vendorPoId, from, to } = req.query;
@@ -525,13 +578,21 @@ router.post('/:id/units/:unitId/disposition', requireReceivingAccess, async (req
     const user = req.user;
     const { disposition, notes } = req.body as { disposition: string; notes?: string };
 
-    const allowedDispositions = ['pending_inspection', 'accepted', 'quarantine', 'rejected'];
+    const allowedDispositions = [
+      'pending_inspection',
+      'accepted',
+      'quarantine',
+      'rejected',
+      'rejected_returned',
+      'rejected_scrapped',
+      'rejected_reallocated',
+    ];
     if (!allowedDispositions.includes(disposition)) {
       return res.status(400).json({ error: 'Invalid disposition value' });
     }
 
     // Server-side enforcement: quarantine and rejected dispositions require notes
-    if ((disposition === 'quarantine' || disposition === 'rejected') && !notes?.trim()) {
+    if ((disposition === 'quarantine' || disposition.startsWith('rejected')) && !notes?.trim()) {
       return res.status(422).json({ error: `Notes are required when setting disposition to "${disposition}"` });
     }
 

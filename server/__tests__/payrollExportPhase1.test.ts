@@ -512,4 +512,57 @@ describe('CSV helpers', () => {
     expect(svc.sha256Hex('hello')).toBe('2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824');
     expect(svc.sha256Hex('hello')).not.toBe(svc.sha256Hex('hello!'));
   });
+
+  it('parseTimeTrakGoGustoCsv accepts Gusto-style TimeTrakGo columns', () => {
+    const rows = svc.parseTimeTrakGoGustoCsv([
+      'first_name,last_name,ssn,gusto_employee_id,regular_hours,overtime_hours,double_overtime_hours,sick_hours,vacation_hours',
+      'Alice,Adams,,e28940,40,2,,0,8',
+    ].join('\n'));
+
+    expect(rows).toEqual([
+      {
+        rowNumber: 2,
+        firstName: 'Alice',
+        lastName: 'Adams',
+        ssn: null,
+        gustoEmployeeId: 'e28940',
+        employeeNumber: null,
+        email: null,
+        regularHours: 40,
+        overtimeHours: 2,
+        doubleOvertimeHours: 0,
+        sickHours: 0,
+        vacationHours: 8,
+      },
+    ]);
+  });
+
+  it('parseTimeTrakGoGustoCsv rejects invalid hour values', () => {
+    expect(() => svc.parseTimeTrakGoGustoCsv([
+      'first_name,last_name,regular_hours',
+      'Alice,Adams,-1',
+    ].join('\n'))).toThrow(/regular hours/);
+  });
+
+  it('renderTimeTrakGoGustoCsv preserves the TimeTrakGo upload columns for Gusto', () => {
+    const csv = svc.renderTimeTrakGoGustoCsv([
+      {
+        rowNumber: 2,
+        firstName: 'Darlene',
+        lastName: 'Bearden',
+        ssn: null,
+        gustoEmployeeId: 'e28940',
+        employeeNumber: null,
+        email: null,
+        regularHours: 75.24,
+        overtimeHours: 0,
+        doubleOvertimeHours: 0,
+        sickHours: 0,
+        vacationHours: 0.5,
+      },
+    ]);
+
+    expect(csv.split('\n')[0]).toBe('first_name,last_name,ssn,gusto_employee_id,regular_hours,overtime_hours,double_overtime_hours,sick_hours,vacation_hours');
+    expect(csv.split('\n')[1]).toBe('Darlene,Bearden,,e28940,75.24,0,0,0,0.5');
+  });
 });

@@ -44,6 +44,7 @@ import {
   Users,
   Clock,
   FileText,
+  FileUp,
   Download,
   CheckCircle,
   XCircle,
@@ -1292,6 +1293,9 @@ export default function TimeClockAdminPage() {
     return d.toISOString().slice(0, 10);
   });
   const [exportLoading, setExportLoading] = useState(false);
+  const [timeTrakGoFile, setTimeTrakGoFile] = useState<File | null>(null);
+  const [timeTrakGoSupersedeReason, setTimeTrakGoSupersedeReason] = useState('');
+  const [timeTrakGoImportLoading, setTimeTrakGoImportLoading] = useState(false);
 
   async function handleGustoExport() {
     if (!gustoPeriodStart || !gustoPeriodEnd) {
@@ -1328,6 +1332,70 @@ export default function TimeClockAdminPage() {
       });
     } finally {
       setExportLoading(false);
+    }
+  }
+
+  async function downloadPayrollBatch(downloadUrl: string, filename: string) {
+    const res = await fetch(downloadUrl, { credentials: 'include' });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error((data as { error?: string }).error ?? 'Download failed');
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function handleTimeTrakGoImport() {
+    if (!gustoPeriodStart || !gustoPeriodEnd) {
+      toast({ title: 'Missing dates', description: 'Please select both period start and end.', variant: 'destructive' });
+      return;
+    }
+    if (gustoPeriodStart > gustoPeriodEnd) {
+      toast({ title: 'Invalid range', description: 'Period start must not be after period end.', variant: 'destructive' });
+      return;
+    }
+    if (!timeTrakGoFile) {
+      toast({ title: 'Missing file', description: 'Choose the TimeTrakGo CSV export first.', variant: 'destructive' });
+      return;
+    }
+
+    setTimeTrakGoImportLoading(true);
+    try {
+      const csvContent = await timeTrakGoFile.text();
+      const result = await apiRequest('/api/timekeeping/admin/payroll/batches/import/timetrakgo', {
+        method: 'POST',
+        body: {
+          periodStart: gustoPeriodStart,
+          periodEnd: gustoPeriodEnd,
+          csvContent,
+          sourceFileName: timeTrakGoFile.name,
+          supersedeReason: timeTrakGoSupersedeReason.trim() || undefined,
+        },
+      }) as { batchId: number; revisionNumber: number; rowCount: number; downloadUrl: string };
+
+      await downloadPayrollBatch(
+        result.downloadUrl,
+        `gusto-export-${gustoPeriodStart}-to-${gustoPeriodEnd}-rev${result.revisionNumber}.csv`,
+      );
+      toast({
+        title: 'TimeTrakGo import ready',
+        description: `Imported ${result.rowCount} payroll rows and downloaded batch #${result.batchId}.`,
+      });
+      setTimeTrakGoFile(null);
+      setTimeTrakGoSupersedeReason('');
+    } catch (err: unknown) {
+      toast({
+        title: 'Import failed',
+        description: err instanceof Error ? err.message : 'Unknown error',
+        variant: 'destructive',
+      });
+    } finally {
+      setTimeTrakGoImportLoading(false);
     }
   }
 
@@ -2335,7 +2403,8 @@ export default function TimeClockAdminPage() {
 
         {/* ── GUSTO EXPORT TAB ── */}
         <TabsContent value="export" className="space-y-4">
-          <Card className="max-w-lg">
+          <div className="grid gap-4 lg:grid-cols-2">
+          <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
                 <FileText className="h-5 w-5 text-muted-foreground" />
@@ -2391,6 +2460,63 @@ export default function TimeClockAdminPage() {
               </div>
             </CardContent>
           </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <FileUp className="h-5 w-5 text-muted-foreground" />
+                TimeTrakGo Import
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <p className="text-sm text-muted-foreground">
+                Imports a TimeTrakGo CSV that is already formatted for Gusto, stores it as an EPOCH payroll batch,
+                and downloads the checked batch for Gusto upload.
+              </p>
+
+              <div className="space-y-1">
+                <Label htmlFor="timetrakgo-csv">TimeTrakGo CSV</Label>
+                <Input
+                  id="timetrakgo-csv"
+                  type="file"
+                  accept=".csv,text/csv"
+                  onChange={e => setTimeTrakGoFile(e.target.files?.[0] ?? null)}
+                />
+                {timeTrakGoFile && (
+                  <p className="text-xs text-muted-foreground truncate">{timeTrakGoFile.name}</p>
+                )}
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="timetrakgo-reason">Supersede Reason</Label>
+                <Textarea
+                  id="timetrakgo-reason"
+                  value={timeTrakGoSupersedeReason}
+                  onChange={e => setTimeTrakGoSupersedeReason(e.target.value)}
+                  placeholder="Required only when replacing an active payroll batch"
+                  className="min-h-20"
+                />
+              </div>
+
+              <Button
+                onClick={handleTimeTrakGoImport}
+                disabled={timeTrakGoImportLoading || !gustoPeriodStart || !gustoPeriodEnd || !timeTrakGoFile}
+                className="w-full"
+              >
+                {timeTrakGoImportLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Importing file...
+                  </>
+                ) : (
+                  <>
+                    <FileUp className="h-4 w-4 mr-2" />
+                    Import and Download Gusto CSV
+                  </>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+          </div>
         </TabsContent>
 
         {/* ── SALARIED TIMESHEETS TAB ── */}

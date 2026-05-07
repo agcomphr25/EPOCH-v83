@@ -34,6 +34,7 @@ function h(fn: (req: Request, res: Response, next: NextFunction) => Promise<void
         res.status(status).json({
           error: message,
           errorCode: (err as Error)?.name ?? "Error",
+          details: (err as any)?.details,
         });
       }
     });
@@ -47,6 +48,11 @@ const PeriodBody = z.object({
   // Required when superseding an existing active batch.  When no prior active
   // batch exists, this field is ignored.  See SupersedeReasonRequiredError.
   supersedeReason: z.string().min(3).max(2000).optional(),
+});
+
+const TimeTrakGoImportBody = PeriodBody.extend({
+  csvContent: z.string().min(1, "csvContent is required"),
+  sourceFileName: z.string().max(255).optional().nullable(),
 });
 
 const PeriodQuery = z.object({
@@ -94,6 +100,42 @@ router.post(
       periodEnd: body.data.periodEnd,
       actor,
       supersedeReason: body.data.supersedeReason,
+    });
+    res.status(201).json({
+      ...result,
+      downloadUrl: `/api/timekeeping/admin/payroll/batches/${result.batchId}/download`,
+    });
+  }),
+);
+
+/**
+ * POST /admin/payroll/batches/import/timetrakgo
+ * Import a TimeTrakGo export that is already shaped for Gusto.  The service
+ * resolves each row to one EPOCH timekeeping employee, stores a checksummed
+ * payroll_export_batch, and returns the normal batch download URL.
+ */
+router.post(
+  "/admin/payroll/batches/import/timetrakgo",
+  authenticateToken,
+  requireRole("ADMIN", "OWNER"),
+  h(async (req, res) => {
+    const body = TimeTrakGoImportBody.safeParse(req.body);
+    if (!body.success) {
+      res.status(400).json({ error: body.error.errors.map((e) => e.message).join("; ") });
+      return;
+    }
+    if (body.data.periodStart > body.data.periodEnd) {
+      res.status(400).json({ error: "periodStart must not be after periodEnd" });
+      return;
+    }
+    const actor = actorFromUser(req.user ?? null, req.ip ?? null);
+    const result = await svc.importTimeTrakGoGustoCsvBatch({
+      periodStart: body.data.periodStart,
+      periodEnd: body.data.periodEnd,
+      csvContent: body.data.csvContent,
+      actor,
+      supersedeReason: body.data.supersedeReason,
+      sourceFileName: body.data.sourceFileName,
     });
     res.status(201).json({
       ...result,

@@ -8,6 +8,7 @@ import {
   computeHoursFromPunches,
   toTZDateStr,
   midnightInTZ,
+  startOfWeekInTZ,
   type TimesheetHours,
 } from "../../lib/timekeeping";
 import { punchLedger, type PunchLedgerEntry } from "../../../schema";
@@ -44,6 +45,188 @@ export async function getTimesheet(id: number): Promise<Timesheet | null> {
     .from(timesheetsTable)
     .where(eq(timesheetsTable.id, id));
   return row ?? null;
+}
+
+export interface RunningTimesheetSession {
+  id: number;
+  clockIn: string;
+  clockOut: string | null;
+  laborClass: string | null;
+  source: string;
+  chargeCode: string | null;
+  travelerId: string | null;
+  productionWorkOrderId: string | null;
+  hours: number;
+  isOpen: boolean;
+}
+
+export interface RunningTimesheetDay {
+  date: string;
+  workHours: number;
+  breakHours: number;
+  regularHours: number;
+  overtimeHours: number;
+  hasOpenSession: boolean;
+  sessions: RunningTimesheetSession[];
+}
+
+export interface RunningTimesheetView {
+  employeeId: number;
+  periodStart: string;
+  periodEnd: string;
+  generatedAt: string;
+  totalHours: number;
+  regularHours: number;
+  overtimeHours: number;
+  breakHours: number;
+  hasOpenSession: boolean;
+  persistedTimesheet: Timesheet | null;
+  days: RunningTimesheetDay[];
+}
+
+function addDays(dateStr: string, days: number): string {
+  const d = new Date(`${dateStr}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function roundHours(hours: number): number {
+  return Math.round(Math.max(0, hours) * 100) / 100;
+}
+
+function computeSessionHours(start: number, end: number): number {
+  return roundHours((end - start) / 3_600_000);
+}
+
+export async function getRunningTimesheetForEmployee(
+  employeeId: number,
+  requestedPeriodStart?: string | null,
+  requestedPeriodEnd?: string | null,
+): Promise<RunningTimesheetView> {
+  const settings = await getOrCreateSettings();
+  const tz = settings.timezone;
+
+  const periodStart = requestedPeriodStart
+    ?? toTZDateStr(startOfWeekInTZ(tz, settings.workweekStartDay), tz);
+  const periodEnd = requestedPeriodEnd ?? addDays(periodStart, 6);
+  const periodStartDate = midnightInTZ(periodStart, tz);
+  const nextDayAfterEnd = addDays(periodEnd, 1);
+  const periodEndDate = new Date(midnightInTZ(nextDayAfterEnd, tz).getTime() - 1);
+  const now = new Date();
+
+  const sessions = await db
+    .select()
+    .from(punchLedger)
+    .where(
+      and(
+        eq(punchLedger.employeeId, employeeId),
+        lte(punchLedger.clockIn, periodEndDate),
+        or(gte(punchLedger.clockOut, periodStartDate), isNull(punchLedger.clockOut)),
+      ),
+    );
+
+  const days = new Map<string, RunningTimesheetDay>();
+  for (let date = periodStart; date <= periodEnd; date = addDays(date, 1)) {
+    days.set(date, {
+      date,
+      workHours: 0,
+      breakHours: 0,
+      regularHours: 0,
+      overtimeHours: 0,
+      hasOpenSession: false,
+      sessions: [],
+    });
+  }
+
+  for (const session of sessions) {
+    const rawStart = new Date(session.clockIn).getTime();
+    const rawEnd = session.clockOut ? new Date(session.clockOut).getTime() : now.getTime();
+    const clippedStart = Math.max(rawStart, periodStartDate.getTime());
+    const clippedEnd = Math.min(rawEnd, periodEndDate.getTime());
+    if (clippedEnd <= clippedStart) continue;
+
+    let cursor = clippedStart;
+    while (cursor < clippedEnd) {
+      const dayKey = toTZDateStr(new Date(cursor), tz);
+      const day = days.get(dayKey);
+      if (!day) break;
+
+      const nextDay = addDays(dayKey, 1);
+      const dayEnd = midnightInTZ(nextDay, tz).getTime();
+      const segmentEnd = Math.min(clippedEnd, dayEnd);
+      const hours = computeSessionHours(cursor, segmentEnd);
+      const isBreak = session.laborClass === "BREAK";
+      const isOpen = session.clockOut == null;
+
+      if (isBreak) day.breakHours = roundHours(day.breakHours + hours);
+      else day.workHours = roundHours(day.workHours + hours);
+      if (isOpen) day.hasOpenSession = true;
+
+      day.sessions.push({
+        id: session.id,
+        clockIn: new Date(cursor).toISOString(),
+        clockOut: isOpen && segmentEnd === clippedEnd ? null : new Date(segmentEnd).toISOString(),
+        laborClass: session.laborClass ?? null,
+        source: session.source,
+        chargeCode: session.chargeCode ?? null,
+        travelerId: session.travelerId ?? null,
+        productionWorkOrderId: session.productionWorkOrderId ?? null,
+        hours,
+        isOpen: isOpen && segmentEnd === clippedEnd,
+      });
+
+      cursor = segmentEnd;
+    }
+  }
+
+  let totalHours = 0;
+  let dailyOvertime = 0;
+  let breakHours = 0;
+  let hasOpenSession = false;
+  const dayRows = [...days.values()].map((day) => {
+    const overtimeHours = roundHours(Math.max(0, day.workHours - settings.overtimeThresholdDaily));
+    const regularHours = roundHours(day.workHours - overtimeHours);
+    totalHours = roundHours(totalHours + day.workHours);
+    dailyOvertime = roundHours(dailyOvertime + overtimeHours);
+    breakHours = roundHours(breakHours + day.breakHours);
+    hasOpenSession = hasOpenSession || day.hasOpenSession;
+    return {
+      ...day,
+      sessions: [...day.sessions].sort((a, b) => a.clockIn.localeCompare(b.clockIn)),
+      regularHours,
+      overtimeHours,
+    };
+  });
+
+  const weeklyOvertime = roundHours(Math.max(0, totalHours - settings.overtimeThresholdWeekly));
+  const overtimeHours = Math.max(dailyOvertime, weeklyOvertime);
+  const regularHours = roundHours(totalHours - overtimeHours);
+
+  const [persistedTimesheet] = await db
+    .select()
+    .from(timesheetsTable)
+    .where(
+      and(
+        eq(timesheetsTable.employeeId, employeeId),
+        eq(timesheetsTable.periodStart, periodStart),
+        eq(timesheetsTable.periodEnd, periodEnd),
+      ),
+    )
+    .limit(1);
+
+  return {
+    employeeId,
+    periodStart,
+    periodEnd,
+    generatedAt: now.toISOString(),
+    totalHours,
+    regularHours,
+    overtimeHours: roundHours(overtimeHours),
+    breakHours,
+    hasOpenSession,
+    persistedTimesheet: persistedTimesheet ?? null,
+    days: dayRows,
+  };
 }
 
 export function useLedgerForPeriod(periodStart: string): boolean {

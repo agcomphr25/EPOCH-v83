@@ -63,6 +63,11 @@ const ByPeriodQuery = z.object({
   periodEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "periodEnd must be YYYY-MM-DD"),
 });
 
+const RunningTimesheetQuery = z.object({
+  periodStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "periodStart must be YYYY-MM-DD").optional(),
+  periodEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "periodEnd must be YYYY-MM-DD").optional(),
+});
+
 /**
  * GET /api/timekeeping/timesheets/by-period
  * Lazy auto-create: returns existing or newly-created draft timesheet for the
@@ -97,6 +102,35 @@ router.get("/timesheets", authenticateToken, h(async (req, res): Promise<void> =
   const q = ListTimesheetsQueryParams.safeParse(req.query);
   if (!q.success) { res.status(400).json({ error: q.error.message }); return; }
   res.json(await svc.listTimesheets(q.data));
+}));
+
+router.get("/timesheets/my", authenticateToken, h(async (req, res): Promise<void> => {
+  const employeeId = req.user?.employeeId ?? null;
+  if (!employeeId) {
+    res.status(403).json({ error: "Your account is not linked to an employee record" });
+    return;
+  }
+  res.json(await svc.listTimesheets({ employeeId }));
+}));
+
+router.get("/timesheets/my/running", authenticateToken, h(async (req, res): Promise<void> => {
+  const employeeId = req.user?.employeeId ?? null;
+  if (!employeeId) {
+    res.status(403).json({ error: "Your account is not linked to an employee record" });
+    return;
+  }
+
+  const q = RunningTimesheetQuery.safeParse(req.query);
+  if (!q.success) {
+    res.status(400).json({ error: q.error.errors.map((e) => e.message).join("; ") });
+    return;
+  }
+  if (q.data.periodStart && q.data.periodEnd && q.data.periodStart > q.data.periodEnd) {
+    res.status(400).json({ error: "periodStart must not be after periodEnd" });
+    return;
+  }
+
+  res.json(await svc.getRunningTimesheetForEmployee(employeeId, q.data.periodStart, q.data.periodEnd));
 }));
 
 // Gusto export — DEPRECATED read-only delegate.

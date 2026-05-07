@@ -156,6 +156,8 @@ export default function PartsRequestsCard() {
     [activeInventoryItems, formData.agPartNumber]
   );
 
+  const isManagerResponse = Boolean(editingRequest);
+
   // Group requests by department
   const requestsByDepartment = useMemo(() => {
     const grouped = requests.reduce(
@@ -269,11 +271,6 @@ export default function PartsRequestsCard() {
       agPartNumber: item.agPartNumber,
       partNumber: item.agPartNumber,
       partName: item.name,
-      supplier: item.source || prev.supplier,
-      estimatedCost:
-        item.costPer !== null && item.costPer !== undefined
-          ? String(item.costPer)
-          : prev.estimatedCost,
     }));
     setIsPartSelectOpen(false);
   };
@@ -291,7 +288,7 @@ export default function PartsRequestsCard() {
       return;
     }
 
-    const submitData = {
+    const submitData: Record<string, unknown> = {
       agPartNumber: formData.agPartNumber,
       partNumber: formData.partNumber,
       partName: formData.partName,
@@ -301,15 +298,18 @@ export default function PartsRequestsCard() {
       department: formData.department || null,
       quantity: parseInt(formData.quantity),
       urgency: formData.urgency,
-      supplier: formData.supplier || null,
-      estimatedCost: formData.estimatedCost
-        ? parseFloat(formData.estimatedCost)
-        : null,
       reason: formData.reason || null,
-      status: formData.status,
-      expectedDelivery: formData.expectedDelivery || null,
-      notes: formData.notes || null,
+      status: isManagerResponse ? formData.status : 'PENDING',
     };
+
+    if (isManagerResponse) {
+      submitData.supplier = formData.supplier || null;
+      submitData.estimatedCost = formData.estimatedCost
+        ? parseFloat(formData.estimatedCost)
+        : null;
+      submitData.expectedDelivery = formData.expectedDelivery || null;
+      submitData.notes = formData.notes || null;
+    }
 
     if (editingRequest) {
       updateMutation.mutate({ id: editingRequest.id, data: submitData });
@@ -419,7 +419,7 @@ export default function PartsRequestsCard() {
                   {activeInventoryItems.map((item) => (
                     <CommandItem
                       key={item.id}
-                      value={`${item.agPartNumber} ${item.name} ${item.source || ''}`}
+                      value={`${item.agPartNumber} ${item.name}`}
                       onSelect={() => handleInventoryItemSelect(item)}
                     >
                       <Check
@@ -437,11 +437,6 @@ export default function PartsRequestsCard() {
                           </span>
                           <span className="truncate">{item.name}</span>
                         </div>
-                        {item.source && (
-                          <div className="text-xs text-muted-foreground">
-                            Vendor: {item.source}
-                          </div>
-                        )}
                       </div>
                     </CommandItem>
                   ))}
@@ -535,7 +530,7 @@ export default function PartsRequestsCard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <Label htmlFor="quantity">Quantity *</Label>
           <Input
@@ -565,61 +560,65 @@ export default function PartsRequestsCard() {
             </SelectContent>
           </Select>
         </div>
-        <div>
-          <Label htmlFor="status">Status</Label>
-          <Select
-            value={formData.status}
-            onValueChange={(value) => handleSelectChange('status', value)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="PENDING">Pending</SelectItem>
-              <SelectItem value="APPROVED">Approved</SelectItem>
-              <SelectItem value="ORDERED">Ordered</SelectItem>
-              <SelectItem value="RECEIVED">Received</SelectItem>
-              <SelectItem value="REJECTED">Rejected</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="supplier">Supplier</Label>
-          <Input
-            id="supplier"
-            name="supplier"
-            value={formData.supplier}
-            onChange={handleChange}
-            placeholder="Enter supplier name"
-          />
-        </div>
-        <div>
-          <Label htmlFor="estimatedCost">Estimated Cost</Label>
-          <Input
-            id="estimatedCost"
-            name="estimatedCost"
-            type="number"
-            step="0.01"
-            value={formData.estimatedCost}
-            onChange={handleChange}
-            placeholder="0.00"
-          />
-        </div>
-      </div>
+      {isManagerResponse && (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <Label htmlFor="status">Status</Label>
+              <Select
+                value={formData.status}
+                onValueChange={(value) => handleSelectChange('status', value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="PENDING">Pending</SelectItem>
+                  <SelectItem value="APPROVED">Approved</SelectItem>
+                  <SelectItem value="ORDERED">Ordered</SelectItem>
+                  <SelectItem value="RECEIVED">Received</SelectItem>
+                  <SelectItem value="REJECTED">Rejected</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="supplier">Supplier</Label>
+              <Input
+                id="supplier"
+                name="supplier"
+                value={formData.supplier}
+                onChange={handleChange}
+                placeholder="Enter supplier name"
+              />
+            </div>
+            <div>
+              <Label htmlFor="estimatedCost">Estimated Cost</Label>
+              <Input
+                id="estimatedCost"
+                name="estimatedCost"
+                type="number"
+                step="0.01"
+                value={formData.estimatedCost}
+                onChange={handleChange}
+                placeholder="0.00"
+              />
+            </div>
+          </div>
 
-      <div>
-        <Label htmlFor="expectedDelivery">Estimated Arrival</Label>
-        <Input
-          id="expectedDelivery"
-          name="expectedDelivery"
-          type="date"
-          value={formData.expectedDelivery}
-          onChange={handleChange}
-        />
-      </div>
+          <div>
+            <Label htmlFor="expectedDelivery">Estimated Arrival</Label>
+            <Input
+              id="expectedDelivery"
+              name="expectedDelivery"
+              type="date"
+              value={formData.expectedDelivery}
+              onChange={handleChange}
+            />
+          </div>
+        </>
+      )}
 
       <div>
         <Label htmlFor="reason">Reason</Label>
@@ -633,17 +632,19 @@ export default function PartsRequestsCard() {
         />
       </div>
 
-      <div>
-        <Label htmlFor="notes">Notes</Label>
-        <Textarea
-          id="notes"
-          name="notes"
-          value={formData.notes}
-          onChange={handleChange}
-          placeholder="Additional notes"
-          rows={2}
-        />
-      </div>
+      {isManagerResponse && (
+        <div>
+          <Label htmlFor="notes">Inventory Manager Notes</Label>
+          <Textarea
+            id="notes"
+            name="notes"
+            value={formData.notes}
+            onChange={handleChange}
+            placeholder="Order, denial, RFQ, PO acceptance, or shipment notes"
+            rows={2}
+          />
+        </div>
+      )}
 
       <div className="flex justify-end space-x-2">
         <Button

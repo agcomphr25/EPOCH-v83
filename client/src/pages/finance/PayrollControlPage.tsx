@@ -6,11 +6,18 @@ import {
   CheckCircle2,
   CircleDollarSign,
   ClipboardCheck,
+  FileText,
   HandCoins,
+  Paperclip,
+  Pencil,
   Plus,
   RefreshCw,
+  Save,
   Search,
   ShieldCheck,
+  Trash2,
+  Upload,
+  X,
 } from 'lucide-react';
 
 import { apiRequest, queryClient } from '@/lib/queryClient';
@@ -89,6 +96,7 @@ interface PayrollItem {
   voidedAt: string | null;
   voidReason: string | null;
   notes: string | null;
+  attachmentCount: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -111,6 +119,16 @@ interface EventRow {
   note: string | null;
   actorEmail: string | null;
   createdAt: string;
+}
+
+interface AttachmentRow {
+  id: number;
+  itemId: number;
+  originalFileName: string;
+  storedFileName: string;
+  mimeType: string;
+  fileSizeBytes: number;
+  uploadedAt: string;
 }
 
 const statusLabels: Record<ItemStatus, string> = {
@@ -184,6 +202,39 @@ const blankForm = {
   ownerEmployeeId: '',
 };
 
+function itemToForm(item: PayrollItem) {
+  return {
+    employeeId: String(item.employeeId),
+    itemType: item.itemType,
+    category: item.category,
+    description: item.description,
+    originalAmount: String(item.originalAmount),
+    recurrenceType: item.recurrenceType,
+    recurringAmount:
+      item.recurringAmount === null || item.recurringAmount === undefined
+        ? ''
+        : String(item.recurringAmount),
+    maxTotalAmount:
+      item.maxTotalAmount === null || item.maxTotalAmount === undefined
+        ? ''
+        : String(item.maxTotalAmount),
+    startPayPeriod: item.startPayPeriod ?? '',
+    nextPayPeriod: item.nextPayPeriod ?? '',
+    expectedDeductionPayPeriod: item.expectedDeductionPayPeriod ?? '',
+    fundingSource: item.fundingSource ?? '',
+    givenDate: item.givenDate ?? '',
+    notes: item.notes ?? '',
+    createOwnerReimbursement: false,
+    ownerEmployeeId: '',
+  };
+}
+
+function fileSizeLabel(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
 export default function PayrollControlPage() {
   const { toast } = useToast();
   const [search, setSearch] = useState('');
@@ -198,6 +249,10 @@ export default function PayrollControlPage() {
   const [paymentNote, setPaymentNote] = useState('');
   const [statusReason, setStatusReason] = useState('');
   const [form, setForm] = useState(blankForm);
+  const [editForm, setEditForm] = useState(blankForm);
+  const [isEditing, setIsEditing] = useState(false);
+  const [createFiles, setCreateFiles] = useState<File[]>([]);
+  const [detailFiles, setDetailFiles] = useState<File[]>([]);
 
   const itemParams = new URLSearchParams();
   if (statusFilter !== 'active' && statusFilter !== 'all')
@@ -229,9 +284,19 @@ export default function PayrollControlPage() {
     enabled: !!selectedItem?.id,
   });
 
+  const { data: attachmentData } = useQuery<{
+    attachments: AttachmentRow[];
+  }>({
+    queryKey: ['/api/payroll-control/items', selectedItem?.id, 'attachments'],
+    queryFn: () =>
+      apiRequest(`/api/payroll-control/items/${selectedItem?.id}/attachments`),
+    enabled: !!selectedItem?.id,
+  });
+
   const employees = employeeData?.employees ?? [];
   const items = useMemo(() => itemData?.items ?? [], [itemData?.items]);
   const events = eventData?.events ?? [];
+  const attachments = attachmentData?.attachments ?? [];
 
   const filteredItems = useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -258,18 +323,153 @@ export default function PayrollControlPage() {
     });
   };
 
+  const openItem = (item: PayrollItem) => {
+    setSelectedItem(item);
+    setEditForm(itemToForm(item));
+    setIsEditing(false);
+    setStatusReason('');
+    setDetailFiles([]);
+  };
+
+  const uploadFiles = async (itemId: number, files: File[]) => {
+    if (!files.length) return;
+    const formData = new FormData();
+    files.forEach((file) => formData.append('files', file));
+    await apiRequest(`/api/payroll-control/items/${itemId}/attachments`, {
+      method: 'POST',
+      body: formData,
+      timeout: 120000,
+    });
+  };
+
   const createMutation = useMutation({
-    mutationFn: (body: Record<string, unknown>) =>
-      apiRequest('/api/payroll-control/items', { method: 'POST', body }),
+    mutationFn: async ({
+      body,
+      files,
+    }: {
+      body: Record<string, unknown>;
+      files: File[];
+    }) => {
+      const item = await apiRequest('/api/payroll-control/items', {
+        method: 'POST',
+        body,
+      });
+      await uploadFiles(item.id, files);
+      return item as PayrollItem;
+    },
     onSuccess: () => {
       invalidate();
       setShowCreate(false);
       setForm(blankForm);
+      setCreateFiles([]);
       toast({ title: 'Payroll control item created' });
     },
     onError: (error: Error) =>
       toast({
         title: 'Create failed',
+        description: error.message,
+        variant: 'destructive',
+      }),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({
+      id,
+      body,
+    }: {
+      id: number;
+      body: Record<string, unknown>;
+    }) =>
+      apiRequest(`/api/payroll-control/items/${id}`, {
+        method: 'PATCH',
+        body,
+      }),
+    onSuccess: (item: PayrollItem) => {
+      invalidate();
+      setSelectedItem(item);
+      setEditForm(itemToForm(item));
+      setIsEditing(false);
+      queryClient.invalidateQueries({
+        queryKey: ['/api/payroll-control/items', item.id, 'events'],
+      });
+      toast({ title: 'Payroll control item updated' });
+    },
+    onError: (error: Error) =>
+      toast({
+        title: 'Update failed',
+        description: error.message,
+        variant: 'destructive',
+      }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) =>
+      apiRequest(`/api/payroll-control/items/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      invalidate();
+      setSelectedItem(null);
+      setIsEditing(false);
+      toast({ title: 'Payroll control item deleted' });
+    },
+    onError: (error: Error) =>
+      toast({
+        title: 'Delete failed',
+        description: error.message,
+        variant: 'destructive',
+      }),
+  });
+
+  const attachmentMutation = useMutation({
+    mutationFn: ({ id, files }: { id: number; files: File[] }) =>
+      uploadFiles(id, files),
+    onSuccess: () => {
+      if (selectedItem?.id) {
+        queryClient.invalidateQueries({
+          queryKey: ['/api/payroll-control/items', selectedItem.id, 'attachments'],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ['/api/payroll-control/items', selectedItem.id, 'events'],
+        });
+      }
+      invalidate();
+      setDetailFiles([]);
+      toast({ title: 'Document uploaded' });
+    },
+    onError: (error: Error) =>
+      toast({
+        title: 'Upload failed',
+        description: error.message,
+        variant: 'destructive',
+      }),
+  });
+
+  const deleteAttachmentMutation = useMutation({
+    mutationFn: ({
+      itemId,
+      attachmentId,
+    }: {
+      itemId: number;
+      attachmentId: number;
+    }) =>
+      apiRequest(
+        `/api/payroll-control/items/${itemId}/attachments/${attachmentId}`,
+        { method: 'DELETE' }
+      ),
+    onSuccess: () => {
+      if (selectedItem?.id) {
+        queryClient.invalidateQueries({
+          queryKey: ['/api/payroll-control/items', selectedItem.id, 'attachments'],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ['/api/payroll-control/items', selectedItem.id, 'events'],
+        });
+      }
+      invalidate();
+      toast({ title: 'Document removed' });
+    },
+    onError: (error: Error) =>
+      toast({
+        title: 'Remove failed',
         description: error.message,
         variant: 'destructive',
       }),
@@ -366,29 +566,82 @@ export default function PayrollControlPage() {
     }
 
     createMutation.mutate({
-      employeeId: Number(form.employeeId),
-      itemType: form.itemType,
-      category: form.category,
-      description: form.description.trim(),
-      originalAmount: Number(form.originalAmount),
-      recurrenceType: form.recurrenceType,
-      recurringAmount: form.recurringAmount
-        ? Number(form.recurringAmount)
-        : null,
-      maxTotalAmount: form.maxTotalAmount ? Number(form.maxTotalAmount) : null,
-      startPayPeriod: form.startPayPeriod || null,
-      nextPayPeriod: form.nextPayPeriod || null,
-      expectedDeductionPayPeriod: form.expectedDeductionPayPeriod || null,
-      fundingSource: form.fundingSource || null,
-      givenDate: form.givenDate || null,
-      notes: form.notes || null,
-      createOwnerReimbursement:
-        form.itemType === 'advance' && form.createOwnerReimbursement,
-      ownerEmployeeId:
-        form.createOwnerReimbursement && form.ownerEmployeeId
-          ? Number(form.ownerEmployeeId)
+      body: {
+        employeeId: Number(form.employeeId),
+        itemType: form.itemType,
+        category: form.category,
+        description: form.description.trim(),
+        originalAmount: Number(form.originalAmount),
+        recurrenceType: form.recurrenceType,
+        recurringAmount: form.recurringAmount
+          ? Number(form.recurringAmount)
           : null,
+        maxTotalAmount: form.maxTotalAmount ? Number(form.maxTotalAmount) : null,
+        startPayPeriod: form.startPayPeriod || null,
+        nextPayPeriod: form.nextPayPeriod || null,
+        expectedDeductionPayPeriod: form.expectedDeductionPayPeriod || null,
+        fundingSource: form.fundingSource || null,
+        givenDate: form.givenDate || null,
+        notes: form.notes || null,
+        createOwnerReimbursement:
+          form.itemType === 'advance' && form.createOwnerReimbursement,
+        ownerEmployeeId:
+          form.createOwnerReimbursement && form.ownerEmployeeId
+            ? Number(form.ownerEmployeeId)
+            : null,
+      },
+      files: createFiles,
     });
+  }
+
+  function submitUpdate() {
+    if (!selectedItem) return;
+    if (
+      !editForm.employeeId ||
+      !editForm.description.trim() ||
+      !editForm.originalAmount
+    ) {
+      toast({
+        title: 'Missing fields',
+        description: 'Employee, description, and amount are required.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    updateMutation.mutate({
+      id: selectedItem.id,
+      body: {
+        employeeId: Number(editForm.employeeId),
+        category: editForm.category,
+        description: editForm.description.trim(),
+        originalAmount: Number(editForm.originalAmount),
+        recurrenceType: editForm.recurrenceType,
+        recurringAmount: editForm.recurringAmount
+          ? Number(editForm.recurringAmount)
+          : null,
+        maxTotalAmount: editForm.maxTotalAmount
+          ? Number(editForm.maxTotalAmount)
+          : null,
+        startPayPeriod: editForm.startPayPeriod || null,
+        nextPayPeriod: editForm.nextPayPeriod || null,
+        expectedDeductionPayPeriod:
+          editForm.expectedDeductionPayPeriod || editForm.nextPayPeriod || null,
+        fundingSource: editForm.fundingSource || null,
+        givenDate: editForm.givenDate || null,
+        notes: editForm.notes || null,
+      },
+    });
+  }
+
+  function deleteSelectedItem() {
+    if (!selectedItem) return;
+    if (
+      window.confirm(
+        `Delete payroll control item #${selectedItem.id} for ${selectedItem.employeeName}?`
+      )
+    ) {
+      deleteMutation.mutate(selectedItem.id);
+    }
   }
 
   function changeStatus(status: ItemStatus) {
@@ -581,7 +834,7 @@ export default function PayrollControlPage() {
             </Select>
           </div>
 
-          <div className="rounded-md border overflow-hidden">
+          <div className="rounded-md border max-h-[560px] overflow-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -589,6 +842,7 @@ export default function PayrollControlPage() {
                   <TableHead>Item</TableHead>
                   <TableHead>Schedule</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Docs</TableHead>
                   <TableHead className="text-right">Original</TableHead>
                   <TableHead className="text-right">Balance</TableHead>
                 </TableRow>
@@ -597,7 +851,7 @@ export default function PayrollControlPage() {
                 {isLoading ? (
                   <TableRow>
                     <TableCell
-                      colSpan={6}
+                      colSpan={7}
                       className="h-24 text-center text-muted-foreground"
                     >
                       Loading payroll control items...
@@ -606,7 +860,7 @@ export default function PayrollControlPage() {
                 ) : filteredItems.length === 0 ? (
                   <TableRow>
                     <TableCell
-                      colSpan={6}
+                      colSpan={7}
                       className="h-24 text-center text-muted-foreground"
                     >
                       No items found.
@@ -617,7 +871,7 @@ export default function PayrollControlPage() {
                     <TableRow
                       key={item.id}
                       className="cursor-pointer"
-                      onClick={() => setSelectedItem(item)}
+                      onClick={() => openItem(item)}
                     >
                       <TableCell>
                         <div className="font-medium">{item.employeeName}</div>
@@ -656,6 +910,12 @@ export default function PayrollControlPage() {
                           {statusLabels[item.status]}
                         </Badge>
                       </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                          <Paperclip className="h-4 w-4" />
+                          {item.attachmentCount ?? 0}
+                        </div>
+                      </TableCell>
                       <TableCell className="text-right font-mono">
                         {money(item.originalAmount)}
                       </TableCell>
@@ -672,7 +932,7 @@ export default function PayrollControlPage() {
       </Card>
 
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>New Payroll Control Item</DialogTitle>
           </DialogHeader>
@@ -882,6 +1142,39 @@ export default function PayrollControlPage() {
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
               />
             </div>
+            <div className="space-y-2 md:col-span-2 rounded-md border p-3">
+              <Label className="flex items-center gap-2">
+                <Upload className="h-4 w-4" />
+                Documents
+              </Label>
+              <Input
+                type="file"
+                multiple
+                accept="application/pdf,image/*"
+                capture="environment"
+                onChange={(e) =>
+                  setCreateFiles(Array.from(e.target.files ?? []))
+                }
+              />
+              <p className="text-xs text-muted-foreground">
+                Upload PDFs, photos, or camera images with the new item.
+              </p>
+              {createFiles.length > 0 && (
+                <div className="space-y-1 text-sm">
+                  {createFiles.map((file) => (
+                    <div
+                      key={`${file.name}-${file.lastModified}`}
+                      className="flex items-center justify-between gap-2 rounded border px-2 py-1"
+                    >
+                      <span className="truncate">{file.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {fileSizeLabel(file.size)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setShowCreate(false)}>
@@ -896,9 +1189,14 @@ export default function PayrollControlPage() {
 
       <Dialog
         open={!!selectedItem}
-        onOpenChange={(open) => !open && setSelectedItem(null)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedItem(null);
+            setIsEditing(false);
+          }
+        }}
       >
-        <DialogContent className="max-w-4xl">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           {selectedItem && (
             <>
               <DialogHeader>
@@ -911,10 +1209,54 @@ export default function PayrollControlPage() {
                   {itemTypeLabels[selectedItem.itemType]} -{' '}
                   {selectedItem.employeeName}
                 </DialogTitle>
+                <div className="flex flex-wrap gap-2 pt-2">
+                  {isEditing ? (
+                    <>
+                      <Button
+                        size="sm"
+                        onClick={submitUpdate}
+                        disabled={updateMutation.isPending}
+                      >
+                        <Save className="h-4 w-4 mr-2" />
+                        {updateMutation.isPending ? 'Saving...' : 'Save'}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setEditForm(itemToForm(selectedItem));
+                          setIsEditing(false);
+                        }}
+                      >
+                        <X className="h-4 w-4 mr-2" />
+                        Cancel
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setIsEditing(true)}
+                    >
+                      <Pencil className="h-4 w-4 mr-2" />
+                      Edit
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={deleteSelectedItem}
+                    disabled={deleteMutation.isPending}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+                  </Button>
+                </div>
               </DialogHeader>
               <Tabs defaultValue="details">
                 <TabsList>
                   <TabsTrigger value="details">Details</TabsTrigger>
+                  <TabsTrigger value="documents">Documents</TabsTrigger>
                   <TabsTrigger value="history">History</TabsTrigger>
                 </TabsList>
                 <TabsContent value="details" className="space-y-4 pt-4">
@@ -961,6 +1303,165 @@ export default function PayrollControlPage() {
                     </div>
                   </div>
                   <Separator />
+                  {isEditing && (
+                    <div className="grid gap-4 md:grid-cols-2 rounded-md border p-4">
+                      <div className="space-y-2">
+                        <Label>Employee</Label>
+                        <Select
+                          value={editForm.employeeId}
+                          onValueChange={(value) =>
+                            setEditForm({ ...editForm, employeeId: value })
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {employees.map((employee) => (
+                              <SelectItem
+                                key={employee.id}
+                                value={String(employee.id)}
+                              >
+                                {employee.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Category</Label>
+                        <Select
+                          value={editForm.category}
+                          onValueChange={(value) =>
+                            setEditForm({ ...editForm, category: value })
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {categoryOptions.map((category) => (
+                              <SelectItem key={category} value={category}>
+                                {category}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Amount</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={editForm.originalAmount}
+                          onChange={(e) =>
+                            setEditForm({
+                              ...editForm,
+                              originalAmount: e.target.value,
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Recurrence</Label>
+                        <Select
+                          value={editForm.recurrenceType}
+                          onValueChange={(value: RecurrenceType) =>
+                            setEditForm({
+                              ...editForm,
+                              recurrenceType: value,
+                            })
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="one_time">One Time</SelectItem>
+                            <SelectItem value="recurring">Recurring</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Recurring Amount</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={editForm.recurringAmount}
+                          onChange={(e) =>
+                            setEditForm({
+                              ...editForm,
+                              recurringAmount: e.target.value,
+                            })
+                          }
+                          disabled={editForm.recurrenceType !== 'recurring'}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Next / Expected Pay Period</Label>
+                        <Input
+                          type="date"
+                          value={editForm.nextPayPeriod}
+                          onChange={(e) =>
+                            setEditForm({
+                              ...editForm,
+                              nextPayPeriod: e.target.value,
+                              expectedDeductionPayPeriod: e.target.value,
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Cash Date</Label>
+                        <Input
+                          type="date"
+                          value={editForm.givenDate}
+                          onChange={(e) =>
+                            setEditForm({
+                              ...editForm,
+                              givenDate: e.target.value,
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Funding Source</Label>
+                        <Input
+                          value={editForm.fundingSource}
+                          onChange={(e) =>
+                            setEditForm({
+                              ...editForm,
+                              fundingSource: e.target.value,
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2 md:col-span-2">
+                        <Label>Description</Label>
+                        <Input
+                          value={editForm.description}
+                          onChange={(e) =>
+                            setEditForm({
+                              ...editForm,
+                              description: e.target.value,
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2 md:col-span-2">
+                        <Label>Notes</Label>
+                        <Textarea
+                          rows={3}
+                          value={editForm.notes}
+                          onChange={(e) =>
+                            setEditForm({ ...editForm, notes: e.target.value })
+                          }
+                        />
+                      </div>
+                    </div>
+                  )}
                   <div className="grid gap-4 md:grid-cols-2">
                     <div>
                       <Label className="text-xs text-muted-foreground">
@@ -1020,6 +1521,135 @@ export default function PayrollControlPage() {
                     >
                       Void
                     </Button>
+                  </div>
+                </TabsContent>
+                <TabsContent value="documents" className="space-y-4 pt-4">
+                  <div className="rounded-md border p-4 space-y-3">
+                    <Label className="flex items-center gap-2">
+                      <Upload className="h-4 w-4" />
+                      Upload Documents
+                    </Label>
+                    <Input
+                      type="file"
+                      multiple
+                      accept="application/pdf,image/*"
+                      capture="environment"
+                      onChange={(e) =>
+                        setDetailFiles(Array.from(e.target.files ?? []))
+                      }
+                    />
+                    {detailFiles.length > 0 && (
+                      <div className="space-y-1 text-sm">
+                        {detailFiles.map((file) => (
+                          <div
+                            key={`${file.name}-${file.lastModified}`}
+                            className="flex items-center justify-between gap-2 rounded border px-2 py-1"
+                          >
+                            <span className="truncate">{file.name}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {fileSizeLabel(file.size)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <Button
+                      onClick={() =>
+                        selectedItem &&
+                        attachmentMutation.mutate({
+                          id: selectedItem.id,
+                          files: detailFiles,
+                        })
+                      }
+                      disabled={
+                        !detailFiles.length || attachmentMutation.isPending
+                      }
+                    >
+                      <Upload className="h-4 w-4 mr-2" />
+                      {attachmentMutation.isPending
+                        ? 'Uploading...'
+                        : 'Upload'}
+                    </Button>
+                  </div>
+
+                  <div className="rounded-md border overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Document</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead>Size</TableHead>
+                          <TableHead>Uploaded</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {attachments.length === 0 ? (
+                          <TableRow>
+                            <TableCell
+                              colSpan={5}
+                              className="h-20 text-center text-muted-foreground"
+                            >
+                              No documents uploaded yet.
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          attachments.map((attachment) => (
+                            <TableRow key={attachment.id}>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <FileText className="h-4 w-4 text-muted-foreground" />
+                                  <span className="max-w-sm truncate">
+                                    {attachment.originalFileName}
+                                  </span>
+                                </div>
+                              </TableCell>
+                              <TableCell>{attachment.mimeType}</TableCell>
+                              <TableCell>
+                                {fileSizeLabel(attachment.fileSizeBytes)}
+                              </TableCell>
+                              <TableCell className="text-xs">
+                                {new Date(
+                                  attachment.uploadedAt
+                                ).toLocaleString()}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex justify-end gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() =>
+                                      window.open(
+                                        `/api/payroll-control/items/${selectedItem.id}/attachments/${attachment.id}/download`,
+                                        '_blank'
+                                      )
+                                    }
+                                  >
+                                    Open
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    onClick={() =>
+                                      selectedItem &&
+                                      deleteAttachmentMutation.mutate({
+                                        itemId: selectedItem.id,
+                                        attachmentId: attachment.id,
+                                      })
+                                    }
+                                    disabled={
+                                      deleteAttachmentMutation.isPending
+                                    }
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
                   </div>
                 </TabsContent>
                 <TabsContent value="history" className="pt-4">

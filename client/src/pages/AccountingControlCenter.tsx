@@ -7,10 +7,14 @@ import {
   CheckCircle,
   Download,
   FileCheck,
+  FileText,
   Landmark,
   Loader2,
+  Paperclip,
   Receipt,
   RefreshCw,
+  Trash2,
+  Upload,
   WalletCards,
 } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
@@ -19,6 +23,12 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -62,6 +72,17 @@ interface AccountingTransaction {
   dcaaReviewStatus: string;
   submittedByDisplayName: string;
   submittedAt: string;
+  attachmentCount: number;
+}
+
+interface AccountingAttachment {
+  id: number;
+  transactionId: string;
+  originalFileName: string;
+  storedFileName: string;
+  mimeType: string;
+  fileSizeBytes: number;
+  uploadedAt: string;
 }
 
 interface Summary {
@@ -111,6 +132,12 @@ function money(value: number | string | null | undefined) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(value ?? 0));
 }
 
+function fileSizeLabel(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
 function TypeBadge({ type }: { type: TransactionType }) {
   const label = {
     EMPLOYEE_REIMBURSEMENT: 'Employee',
@@ -143,6 +170,9 @@ export default function AccountingControlCenter() {
   const { toast } = useToast();
   const [tab, setTab] = useState('all');
   const [form, setForm] = useState(initialForm);
+  const [createFiles, setCreateFiles] = useState<File[]>([]);
+  const [documentRow, setDocumentRow] = useState<AccountingTransaction | null>(null);
+  const [detailFiles, setDetailFiles] = useState<File[]>([]);
 
   const { data: summary, isLoading: summaryLoading } = useQuery<Summary>({
     queryKey: ['/api/accounting-control/summary'],
@@ -156,16 +186,67 @@ export default function AccountingControlCenter() {
     queryKey: [`/api/accounting-control${buildQuery(tab)}`],
   });
 
+  const { data: attachmentData } = useQuery<{ attachments: AccountingAttachment[] }>({
+    queryKey: ['/api/accounting-control', documentRow?.id, 'attachments'],
+    queryFn: () => apiRequest(`/api/accounting-control/${documentRow?.id}/attachments`),
+    enabled: !!documentRow?.id,
+  });
+
+  const attachments = attachmentData?.attachments ?? [];
+
+  async function uploadFiles(transactionId: string, files: File[]) {
+    if (!files.length) return;
+    const formData = new FormData();
+    files.forEach((file) => formData.append('files', file));
+    await apiRequest(`/api/accounting-control/${transactionId}/attachments`, {
+      method: 'POST',
+      body: formData,
+      timeout: 120000,
+    });
+  }
+
   const createMutation = useMutation({
-    mutationFn: (payload: any) => apiRequest('/api/accounting-control', { method: 'POST', body: payload }),
+    mutationFn: async ({ payload, files }: { payload: any; files: File[] }) => {
+      const created = await apiRequest('/api/accounting-control', { method: 'POST', body: payload });
+      await uploadFiles(created.id, files);
+      return created;
+    },
     onSuccess: () => {
       toast({ title: 'Transaction submitted', description: 'The accounting control item is now in the review queue.' });
       queryClient.invalidateQueries({ queryKey: ['/api/accounting-control/summary'] });
       queryClient.invalidateQueries({ queryKey: [`/api/accounting-control${buildQuery(tab)}`] });
       setForm(initialForm);
+      setCreateFiles([]);
     },
     onError: (error: any) => {
       toast({ title: 'Submit failed', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const uploadMutation = useMutation({
+    mutationFn: ({ id, files }: { id: string; files: File[] }) => uploadFiles(id, files),
+    onSuccess: () => {
+      toast({ title: 'Documents uploaded' });
+      queryClient.invalidateQueries({ queryKey: ['/api/accounting-control', documentRow?.id, 'attachments'] });
+      queryClient.invalidateQueries({ queryKey: [`/api/accounting-control${buildQuery(tab)}`] });
+      queryClient.invalidateQueries({ queryKey: ['/api/accounting-control/summary'] });
+      setDetailFiles([]);
+    },
+    onError: (error: any) => {
+      toast({ title: 'Upload failed', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const deleteAttachmentMutation = useMutation({
+    mutationFn: ({ id, attachmentId }: { id: string; attachmentId: number }) =>
+      apiRequest(`/api/accounting-control/${id}/attachments/${attachmentId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      toast({ title: 'Document removed' });
+      queryClient.invalidateQueries({ queryKey: ['/api/accounting-control', documentRow?.id, 'attachments'] });
+      queryClient.invalidateQueries({ queryKey: [`/api/accounting-control${buildQuery(tab)}`] });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Remove failed', description: error.message, variant: 'destructive' });
     },
   });
 
@@ -183,7 +264,7 @@ export default function AccountingControlCenter() {
 
   const cards = useMemo(() => [
     { label: 'Open Intake', value: summary?.submittedCount ?? 0, icon: Receipt },
-    { label: 'Payroll Ready', value: summary?.payrollReadyCount ?? 0, icon: WalletCards },
+    { label: 'Ready to Reimburse', value: summary?.payrollReadyCount ?? 0, icon: WalletCards },
     { label: 'GL Pending', value: summary?.glPendingCount ?? 0, icon: Landmark },
     { label: 'DCAA Review', value: summary?.dcaaNeedsReviewCount ?? 0, icon: FileCheck },
   ], [summary]);
@@ -209,11 +290,15 @@ export default function AccountingControlCenter() {
     }
 
     createMutation.mutate({
-      ...form,
-      glAccountId: form.glAccountId === 'none' ? null : Number(form.glAccountId),
-      amount: Number(form.amount),
-      reimbursementRequired: Boolean(form.reimbursementRequired),
-      payrollReimbursement: Boolean(form.payrollReimbursement),
+      payload: {
+        ...form,
+        receiptStatus: createFiles.length ? 'ATTACHED' : form.receiptStatus,
+        glAccountId: form.glAccountId === 'none' ? null : Number(form.glAccountId),
+        amount: Number(form.amount),
+        reimbursementRequired: Boolean(form.reimbursementRequired),
+        payrollReimbursement: Boolean(form.payrollReimbursement),
+      },
+      files: createFiles,
     });
   }
 
@@ -227,7 +312,7 @@ export default function AccountingControlCenter() {
         <div>
           <h1 className="text-2xl font-bold">Accounting Control Center</h1>
           <p className="text-muted-foreground">
-            Expense intake, petty cash, owner-paid costs, payroll reimbursement readiness, and DCAA review.
+            Expense intake, reimbursement documentation, petty cash, owner-paid costs, GL queue, and DCAA review.
           </p>
         </div>
         <div className="flex gap-2">
@@ -266,18 +351,18 @@ export default function AccountingControlCenter() {
               <Banknote className="h-5 w-5" />
               New Accounting Item
             </CardTitle>
-            <CardDescription>One intake model supports employee, owner, and petty cash transactions.</CardDescription>
+            <CardDescription>One intake model supports employee reimbursements, owner-paid expense documentation, and petty cash transactions.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label>Widget</Label>
+                <Label>Type</Label>
                 <Select value={form.transactionType} onValueChange={(value) => setType(value as TransactionType)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="EMPLOYEE_REIMBURSEMENT">Employee Reimbursement</SelectItem>
                     <SelectItem value="PETTY_CASH">Petty Cash</SelectItem>
-                    <SelectItem value="OWNER_EXPENSE">Owner Expense</SelectItem>
+                    <SelectItem value="OWNER_EXPENSE">Owner-Paid Expense Documentation</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -387,8 +472,35 @@ export default function AccountingControlCenter() {
               </label>
               <label className="flex items-center gap-2 text-sm">
                 <Checkbox checked={form.payrollReimbursement} onCheckedChange={(checked) => setForm({ ...form, payrollReimbursement: checked === true })} />
-                Paycheck
+                Manual payroll payback
               </label>
+            </div>
+
+            <div className="space-y-2 rounded-md border p-3">
+              <Label className="flex items-center gap-2">
+                <Upload className="h-4 w-4" />
+                Receipts / Documents
+              </Label>
+              <Input
+                type="file"
+                multiple
+                accept="application/pdf,image/*"
+                capture="environment"
+                onChange={(event) => setCreateFiles(Array.from(event.target.files ?? []))}
+              />
+              <p className="text-xs text-muted-foreground">
+                Missing documents are allowed, but the item will remain flagged for support.
+              </p>
+              {createFiles.length > 0 && (
+                <div className="space-y-1 text-sm">
+                  {createFiles.map((file) => (
+                    <div key={`${file.name}-${file.lastModified}`} className="flex items-center justify-between gap-2 rounded border px-2 py-1">
+                      <span className="truncate">{file.name}</span>
+                      <span className="text-xs text-muted-foreground">{fileSizeLabel(file.size)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <Button className="w-full" onClick={submit} disabled={createMutation.isPending}>
@@ -441,6 +553,7 @@ export default function AccountingControlCenter() {
                           <TableHead>Purpose</TableHead>
                           <TableHead className="text-right">Amount</TableHead>
                           <TableHead>Controls</TableHead>
+                          <TableHead>Docs</TableHead>
                           <TableHead className="w-[220px]">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -482,6 +595,12 @@ export default function AccountingControlCenter() {
                               ) : null}
                             </TableCell>
                             <TableCell>
+                              <Button size="sm" variant="outline" onClick={() => setDocumentRow(row)}>
+                                <Paperclip className="h-3 w-3 mr-1" />
+                                {row.attachmentCount ?? 0}
+                              </Button>
+                            </TableCell>
+                            <TableCell>
                               <div className="flex flex-wrap gap-2">
                                 {row.status === 'SUBMITTED' && (
                                   <Button size="sm" variant="outline" onClick={() => quickPatch(row, { status: 'APPROVED' })}>
@@ -514,6 +633,112 @@ export default function AccountingControlCenter() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={!!documentRow} onOpenChange={(open) => !open && setDocumentRow(null)}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          {documentRow && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Paperclip className="h-5 w-5" />
+                  Documents - {documentRow.transactionNumber}
+                </DialogTitle>
+              </DialogHeader>
+
+              <div className="space-y-4">
+                <div className="rounded-md border p-4 space-y-3">
+                  <Label className="flex items-center gap-2">
+                    <Upload className="h-4 w-4" />
+                    Add Receipts / Documents
+                  </Label>
+                  <Input
+                    type="file"
+                    multiple
+                    accept="application/pdf,image/*"
+                    capture="environment"
+                    onChange={(event) => setDetailFiles(Array.from(event.target.files ?? []))}
+                  />
+                  {detailFiles.length > 0 && (
+                    <div className="space-y-1 text-sm">
+                      {detailFiles.map((file) => (
+                        <div key={`${file.name}-${file.lastModified}`} className="flex items-center justify-between gap-2 rounded border px-2 py-1">
+                          <span className="truncate">{file.name}</span>
+                          <span className="text-xs text-muted-foreground">{fileSizeLabel(file.size)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <Button
+                    onClick={() => uploadMutation.mutate({ id: documentRow.id, files: detailFiles })}
+                    disabled={!detailFiles.length || uploadMutation.isPending}
+                  >
+                    {uploadMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                    Upload
+                  </Button>
+                </div>
+
+                <div className="rounded-md border overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Document</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Size</TableHead>
+                        <TableHead>Uploaded</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {attachments.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={5} className="h-20 text-center text-muted-foreground">
+                            No documents uploaded yet.
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        attachments.map((attachment) => (
+                          <TableRow key={attachment.id}>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <FileText className="h-4 w-4 text-muted-foreground" />
+                                <span className="max-w-sm truncate">{attachment.originalFileName}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell>{attachment.mimeType}</TableCell>
+                            <TableCell>{fileSizeLabel(attachment.fileSizeBytes)}</TableCell>
+                            <TableCell className="text-xs">
+                              {new Date(attachment.uploadedAt).toLocaleString()}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => window.open(`/api/accounting-control/${documentRow.id}/attachments/${attachment.id}/download`, '_blank')}
+                                >
+                                  Open
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => deleteAttachmentMutation.mutate({ id: documentRow.id, attachmentId: attachment.id })}
+                                  disabled={deleteAttachmentMutation.isPending}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

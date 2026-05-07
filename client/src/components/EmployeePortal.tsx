@@ -28,7 +28,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import {
-  UserCheck,
   ClipboardList,
   FileText,
   CheckCircle,
@@ -45,11 +44,14 @@ import {
   Pause,
   FileCheck,
   ShieldCheck,
+  Receipt,
+  Upload,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import OnboardingDocs from './OnboardingDocs';
 import type { ChecklistItem } from '@shared/schema';
+import { Textarea } from '@/components/ui/textarea';
 
 
 const DCAA_CERTIFICATION_STATEMENT =
@@ -122,6 +124,47 @@ type WorkSession = {
   notes: string | null;
 };
 
+type CurrentUser = {
+  id: number;
+  username: string;
+  firstName?: string;
+  lastName?: string;
+  role: string;
+  employeeId: number | null;
+};
+
+type ExpenseForm = {
+  transactionType: 'EMPLOYEE_REIMBURSEMENT' | 'OWNER_EXPENSE';
+  transactionDate: string;
+  paidByName: string;
+  vendorName: string;
+  amount: string;
+  paymentMethod: string;
+  businessPurpose: string;
+  projectId: string;
+  contractNumber: string;
+  directIndirect: 'DIRECT' | 'INDIRECT' | 'UNASSIGNED';
+  costCategory: string;
+  notes: string;
+};
+
+function makeExpenseForm(): ExpenseForm {
+  return {
+    transactionType: 'EMPLOYEE_REIMBURSEMENT',
+    transactionDate: new Date().toISOString().slice(0, 10),
+    paidByName: '',
+    vendorName: '',
+    amount: '',
+    paymentMethod: '',
+    businessPurpose: '',
+    projectId: '',
+    contractNumber: '',
+    directIndirect: 'DIRECT',
+    costCategory: 'MATERIALS',
+    notes: '',
+  };
+}
+
 function formatDateTime(iso: string) {
   return new Date(iso).toLocaleString(undefined, {
     month: 'short',
@@ -148,6 +191,12 @@ function formatElapsed(iso: string) {
   const mins = totalMins % 60;
   if (hrs === 0) return `${mins}m`;
   return `${hrs}h ${mins}m`;
+}
+
+function fileSizeLabel(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function SessionStatusBadge({ status }: { status: string }) {
@@ -185,7 +234,7 @@ interface MyPunchStatus {
   openEntry?: Record<string, unknown> | null;
 }
 
-function portalFetch(url: string, init?: RequestInit) {
+function portalFetch(url: string, init?: Parameters<typeof fetch>[1]) {
   const token =
     localStorage.getItem('sessionToken') ||
     localStorage.getItem('jwtToken');
@@ -200,18 +249,46 @@ function portalFetch(url: string, init?: RequestInit) {
   });
 }
 
+function portalFormFetch(url: string, formData: FormData) {
+  const token =
+    localStorage.getItem('sessionToken') ||
+    localStorage.getItem('jwtToken');
+  return fetch(url, {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: formData,
+  });
+}
+
 export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
   const [activeTab, setActiveTab] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     const tab = params.get('tab');
-    const validTabs = ['checklist', 'certifications', 'onboarding', 'work-sessions', 'time-clock', 'my-timesheets'];
+    const validTabs = ['checklist', 'certifications', 'onboarding', 'work-sessions', 'time-clock', 'my-timesheets', 'expenses'];
     return validTabs.includes(tab ?? '') ? (tab as string) : 'checklist';
   });
+  const [expenseForm, setExpenseForm] = useState<ExpenseForm>(() => makeExpenseForm());
+  const [expenseFiles, setExpenseFiles] = useState<File[]>([]);
   const [, setTick] = useState(0);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const today = new Date().toISOString().substr(0, 10); // YYYY-MM-DD
+
+  const { data: currentUser } = useQuery<CurrentUser>({
+    queryKey: ['/api/auth/session'],
+    queryFn: async () => {
+      const response = await portalFetch('/api/auth/session');
+      if (!response.ok) throw new Error('Failed to fetch session');
+      return response.json();
+    },
+  });
+
+  const canSubmitOwnerExpense =
+    currentUser?.role === 'OWNER' || currentUser?.role === 'ADMIN';
 
   // Load daily checklist
   const { data: checklist = [], isLoading: checklistLoading } = useQuery({
@@ -556,8 +633,53 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
       });
       toast({ title: 'Checklist saved successfully!' });
     },
-    onError: (error) => {
+    onError: (_error) => {
       toast({ title: 'Failed to save checklist', variant: 'destructive' });
+    },
+  });
+
+  const expenseMutation = useMutation({
+    mutationFn: async () => {
+      if (
+        !expenseForm.vendorName.trim() ||
+        !expenseForm.amount ||
+        !expenseForm.businessPurpose.trim()
+      ) {
+        throw new Error('Vendor, amount, and business purpose are required.');
+      }
+      if (expenseForm.transactionType === 'OWNER_EXPENSE' && !canSubmitOwnerExpense) {
+        throw new Error('Only owners and admins can submit owner-paid expense documentation.');
+      }
+
+      const payload = new FormData();
+      Object.entries(expenseForm).forEach(([key, value]) => {
+        payload.append(key, String(value ?? ''));
+      });
+      expenseFiles.forEach((file) => payload.append('files', file));
+
+      const response = await portalFormFetch('/api/accounting-control/portal', payload);
+      if (!response.ok) {
+        const error = await response.json().catch(() => null);
+        throw new Error(error?.error || 'Failed to submit reimbursement request');
+      }
+      return response.json();
+    },
+    onSuccess: (created: { transactionNumber?: string }) => {
+      toast({
+        title: 'Request submitted',
+        description: created.transactionNumber
+          ? `${created.transactionNumber} is now in the accounting review queue.`
+          : 'Your request is now in the accounting review queue.',
+      });
+      setExpenseForm(makeExpenseForm());
+      setExpenseFiles([]);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Submit failed',
+        description: error.message,
+        variant: 'destructive',
+      });
     },
   });
 
@@ -630,7 +752,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-7">
           <TabsTrigger value="time-clock" className="flex items-center gap-2">
             <Timer className="h-4 w-4" />
             Time Clock
@@ -668,6 +790,10 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
                 {myTimesheets.filter(t => !t.employeeAttested && t.status === 'draft').length}
               </span>
             )}
+          </TabsTrigger>
+          <TabsTrigger value="expenses" className="flex items-center gap-2">
+            <Receipt className="h-4 w-4" />
+            Expenses
           </TabsTrigger>
         </TabsList>
 
@@ -816,6 +942,188 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
                   )}
                 </div>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="expenses" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Receipt className="h-5 w-5" />
+                Expense Reimbursement Request
+              </CardTitle>
+              <CardDescription>
+                Submit employee reimbursement requests or, for owners, owner-paid expense documentation.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Type</Label>
+                  <Select
+                    value={expenseForm.transactionType}
+                    onValueChange={(transactionType: 'EMPLOYEE_REIMBURSEMENT' | 'OWNER_EXPENSE') =>
+                      setExpenseForm((prev) => ({ ...prev, transactionType }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="EMPLOYEE_REIMBURSEMENT">Employee Reimbursement</SelectItem>
+                      {canSubmitOwnerExpense && (
+                        <SelectItem value="OWNER_EXPENSE">Owner-Paid Expense Documentation</SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Date</Label>
+                  <Input
+                    type="date"
+                    value={expenseForm.transactionDate}
+                    onChange={(event) => setExpenseForm((prev) => ({ ...prev, transactionDate: event.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Paid By</Label>
+                  <Input
+                    value={expenseForm.paidByName}
+                    onChange={(event) => setExpenseForm((prev) => ({ ...prev, paidByName: event.target.value }))}
+                    placeholder={currentUser ? `${currentUser.firstName ?? ''} ${currentUser.lastName ?? ''}`.trim() || currentUser.username : 'Your name'}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Vendor</Label>
+                  <Input
+                    value={expenseForm.vendorName}
+                    onChange={(event) => setExpenseForm((prev) => ({ ...prev, vendorName: event.target.value }))}
+                    placeholder="Vendor or merchant"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Amount</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={expenseForm.amount}
+                    onChange={(event) => setExpenseForm((prev) => ({ ...prev, amount: event.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Payment Method</Label>
+                  <Input
+                    value={expenseForm.paymentMethod}
+                    onChange={(event) => setExpenseForm((prev) => ({ ...prev, paymentMethod: event.target.value }))}
+                    placeholder="Personal card, cash, etc."
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Project / Job</Label>
+                  <Input
+                    value={expenseForm.projectId}
+                    onChange={(event) => setExpenseForm((prev) => ({ ...prev, projectId: event.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Contract</Label>
+                  <Input
+                    value={expenseForm.contractNumber}
+                    onChange={(event) => setExpenseForm((prev) => ({ ...prev, contractNumber: event.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Direct / Indirect</Label>
+                  <Select
+                    value={expenseForm.directIndirect}
+                    onValueChange={(directIndirect: 'DIRECT' | 'INDIRECT' | 'UNASSIGNED') =>
+                      setExpenseForm((prev) => ({ ...prev, directIndirect }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="DIRECT">Direct</SelectItem>
+                      <SelectItem value="INDIRECT">Indirect</SelectItem>
+                      <SelectItem value="UNASSIGNED">Unassigned</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Cost Category</Label>
+                  <Select
+                    value={expenseForm.costCategory}
+                    onValueChange={(costCategory) => setExpenseForm((prev) => ({ ...prev, costCategory }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="MATERIALS">Materials</SelectItem>
+                      <SelectItem value="SUPPLIES">Supplies</SelectItem>
+                      <SelectItem value="TRAVEL">Travel</SelectItem>
+                      <SelectItem value="TOOLS">Tools</SelectItem>
+                      <SelectItem value="OTHER">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Business Purpose</Label>
+                <Textarea
+                  rows={3}
+                  value={expenseForm.businessPurpose}
+                  onChange={(event) => setExpenseForm((prev) => ({ ...prev, businessPurpose: event.target.value }))}
+                  placeholder="Explain why this expense was for company business"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Notes</Label>
+                <Textarea
+                  rows={2}
+                  value={expenseForm.notes}
+                  onChange={(event) => setExpenseForm((prev) => ({ ...prev, notes: event.target.value }))}
+                />
+              </div>
+
+              <div className="rounded-md border p-4 space-y-3">
+                <Label className="flex items-center gap-2">
+                  <Upload className="h-4 w-4" />
+                  Receipts / Documents
+                </Label>
+                <Input
+                  type="file"
+                  multiple
+                  accept="application/pdf,image/*"
+                  capture="environment"
+                  onChange={(event) => setExpenseFiles(Array.from(event.target.files ?? []))}
+                />
+                {expenseFiles.length === 0 ? (
+                  <div className="flex items-center gap-2 text-sm text-amber-700">
+                    <AlertCircle className="h-4 w-4" />
+                    You can submit without a document, but accounting will see documentation is needed.
+                  </div>
+                ) : (
+                  <div className="space-y-1 text-sm">
+                    {expenseFiles.map((file) => (
+                      <div key={`${file.name}-${file.lastModified}`} className="flex items-center justify-between gap-2 rounded border px-2 py-1">
+                        <span className="truncate">{file.name}</span>
+                        <span className="text-xs text-gray-500">{fileSizeLabel(file.size)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <Button onClick={() => expenseMutation.mutate()} disabled={expenseMutation.isPending}>
+                {expenseMutation.isPending && <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />}
+                Submit Request
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>

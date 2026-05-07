@@ -1,10 +1,41 @@
 import { Router, type Request, type Response } from 'express';
+import crypto from 'crypto';
+import fs from 'fs';
+import multer from 'multer';
+import path from 'path';
 import { z } from 'zod';
 
 import { pgPool } from '../../db';
 import { authenticateToken, requireRole } from '../../middleware/auth';
 
 const router = Router();
+const payrollUploadDir = path.join(process.cwd(), 'uploads', 'payroll-control');
+
+if (!fs.existsSync(payrollUploadDir)) {
+  fs.mkdirSync(payrollUploadDir, { recursive: true });
+}
+
+const payrollAttachmentUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, payrollUploadDir),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      const safeBase = path
+        .basename(file.originalname, ext)
+        .replace(/[^a-zA-Z0-9_-]/g, '_')
+        .slice(0, 80);
+      cb(null, `${Date.now()}_${crypto.randomBytes(8).toString('hex')}_${safeBase}${ext}`);
+    },
+  }),
+  limits: { fileSize: 15 * 1024 * 1024, files: 10 },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype === 'application/pdf' || file.mimetype.startsWith('image/')) {
+      cb(null, true);
+      return;
+    }
+    cb(new Error('Only PDF files and camera/image uploads are allowed.'));
+  },
+});
 
 type PayrollControlUser = {
   id?: unknown;
@@ -17,6 +48,34 @@ type PayrollControlUser = {
 type QueryRunner = {
   query: (queryText: string, params?: unknown[]) => Promise<unknown>;
 };
+
+type UploadedFile = {
+  originalname: string;
+  filename: string;
+  mimetype: string;
+  size: number;
+  path: string;
+};
+
+async function ensureAttachmentTable() {
+  await pgPool.query(`
+    CREATE TABLE IF NOT EXISTS timekeeping.employee_payroll_item_attachments (
+      id SERIAL PRIMARY KEY,
+      item_id INTEGER NOT NULL REFERENCES timekeeping.employee_payroll_items(id) ON DELETE CASCADE,
+      original_file_name TEXT NOT NULL,
+      stored_file_name TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      file_size_bytes INTEGER NOT NULL,
+      file_path TEXT NOT NULL,
+      uploaded_by INTEGER REFERENCES users(id),
+      uploaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pgPool.query(`
+    CREATE INDEX IF NOT EXISTS idx_employee_payroll_attachments_item
+      ON timekeeping.employee_payroll_item_attachments(item_id, uploaded_at DESC)
+  `);
+}
 
 const ITEM_TYPES = ['deduction', 'advance', 'owner_reimbursement'] as const;
 const RECURRENCE_TYPES = ['one_time', 'recurring'] as const;
@@ -144,10 +203,16 @@ function itemSelectSql() {
       i.voided_at AS "voidedAt",
       i.void_reason AS "voidReason",
       i.notes,
+      COALESCE(a.attachment_count, 0)::int AS "attachmentCount",
       i.created_at AS "createdAt",
       i.updated_at AS "updatedAt"
     FROM timekeeping.employee_payroll_items i
     JOIN employees e ON e.id = i.employee_id
+    LEFT JOIN (
+      SELECT item_id, COUNT(*) AS attachment_count
+      FROM timekeeping.employee_payroll_item_attachments
+      GROUP BY item_id
+    ) a ON a.item_id = i.id
   `;
 }
 
@@ -203,6 +268,7 @@ router.get('/employees', async (_req: Request, res: Response) => {
 });
 
 router.get('/summary', async (_req: Request, res: Response) => {
+  await ensureAttachmentTable();
   const result = await pgPool.query(`
     SELECT
       COALESCE(SUM(balance_remaining) FILTER (WHERE item_type = 'advance' AND status <> 'voided'), 0)::float AS "openAdvanceBalance",
@@ -216,6 +282,7 @@ router.get('/summary', async (_req: Request, res: Response) => {
 });
 
 router.get('/items', async (req: Request, res: Response) => {
+  await ensureAttachmentTable();
   const parsed = listQuerySchema.safeParse(req.query);
   if (!parsed.success)
     return res.status(400).json({ error: parsed.error.message });
@@ -253,6 +320,7 @@ router.get('/items', async (req: Request, res: Response) => {
 });
 
 router.get('/items/:id/events', async (req: Request, res: Response) => {
+  await ensureAttachmentTable();
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0)
     return res.status(400).json({ error: 'Invalid item id' });
@@ -270,7 +338,67 @@ router.get('/items/:id/events', async (req: Request, res: Response) => {
   res.json({ events: result.rows });
 });
 
+router.get('/items/:id/attachments', async (req: Request, res: Response) => {
+  await ensureAttachmentTable();
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0)
+    return res.status(400).json({ error: 'Invalid item id' });
+
+  const result = await pgPool.query(
+    `
+      SELECT
+        id,
+        item_id AS "itemId",
+        original_file_name AS "originalFileName",
+        stored_file_name AS "storedFileName",
+        mime_type AS "mimeType",
+        file_size_bytes AS "fileSizeBytes",
+        uploaded_at AS "uploadedAt"
+      FROM timekeeping.employee_payroll_item_attachments
+      WHERE item_id = $1
+      ORDER BY uploaded_at DESC
+    `,
+    [id]
+  );
+  res.json({ attachments: result.rows });
+});
+
+router.get(
+  '/items/:id/attachments/:attachmentId/download',
+  async (req: Request, res: Response) => {
+    await ensureAttachmentTable();
+    const id = Number(req.params.id);
+    const attachmentId = Number(req.params.attachmentId);
+    if (!Number.isInteger(id) || id <= 0 || !Number.isInteger(attachmentId) || attachmentId <= 0)
+      return res.status(400).json({ error: 'Invalid attachment id' });
+
+    const result = await pgPool.query(
+      `
+        SELECT original_file_name, mime_type, file_path
+        FROM timekeeping.employee_payroll_item_attachments
+        WHERE id = $1 AND item_id = $2
+      `,
+      [attachmentId, id]
+    );
+    if (!result.rowCount)
+      return res.status(404).json({ error: 'Attachment not found' });
+
+    const attachment = result.rows[0];
+    const resolvedPath = path.resolve(attachment.file_path);
+    if (!resolvedPath.startsWith(path.resolve(payrollUploadDir)) || !fs.existsSync(resolvedPath))
+      return res.status(404).json({ error: 'Attachment file not found' });
+
+    res.setHeader('Content-Type', attachment.mime_type);
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename="${String(attachment.original_file_name).replace(/"/g, '')}"`
+    );
+    res.sendFile(resolvedPath);
+  }
+);
+
 router.post('/items', async (req: Request, res: Response) => {
+  await ensureAttachmentTable();
   const parsed = createItemSchema.safeParse(req.body);
   if (!parsed.success)
     return res.status(400).json({ error: parsed.error.message });
@@ -388,6 +516,7 @@ router.post('/items', async (req: Request, res: Response) => {
 });
 
 router.patch('/items/:id', async (req: Request, res: Response) => {
+  await ensureAttachmentTable();
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0)
     return res.status(400).json({ error: 'Invalid item id' });
@@ -437,7 +566,130 @@ router.patch('/items/:id', async (req: Request, res: Response) => {
   res.json(result.rows[0]);
 });
 
+router.post(
+  '/items/:id/attachments',
+  payrollAttachmentUpload.array('files', 10),
+  async (req: Request, res: Response) => {
+    await ensureAttachmentTable();
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0)
+      return res.status(400).json({ error: 'Invalid item id' });
+
+    const item = await pgPool.query(
+      'SELECT id FROM timekeeping.employee_payroll_items WHERE id = $1',
+      [id]
+    );
+    if (!item.rowCount)
+      return res.status(404).json({ error: 'Payroll control item not found' });
+
+    const files = (req.files ?? []) as UploadedFile[];
+    if (!files.length)
+      return res.status(400).json({ error: 'No files uploaded' });
+
+    const a = actor(req);
+    const inserted = [];
+    for (const file of files) {
+      const result = await pgPool.query(
+        `
+          INSERT INTO timekeeping.employee_payroll_item_attachments
+            (item_id, original_file_name, stored_file_name, mime_type, file_size_bytes, file_path, uploaded_by)
+          VALUES ($1, $2, $3, $4, $5, $6, $7)
+          RETURNING
+            id,
+            item_id AS "itemId",
+            original_file_name AS "originalFileName",
+            stored_file_name AS "storedFileName",
+            mime_type AS "mimeType",
+            file_size_bytes AS "fileSizeBytes",
+            uploaded_at AS "uploadedAt"
+        `,
+        [
+          id,
+          file.originalname,
+          file.filename,
+          file.mimetype,
+          file.size,
+          file.path,
+          a.id,
+        ]
+      );
+      inserted.push(result.rows[0]);
+    }
+
+    await logEvent(pgPool, {
+      itemId: id,
+      eventType: 'ATTACHMENTS_UPLOADED',
+      note: `${inserted.length} document(s) uploaded`,
+      metadata: { attachments: inserted.map((attachment) => attachment.id) },
+      req,
+    });
+
+    res.status(201).json({ attachments: inserted });
+  }
+);
+
+router.delete(
+  '/items/:id/attachments/:attachmentId',
+  async (req: Request, res: Response) => {
+    await ensureAttachmentTable();
+    const id = Number(req.params.id);
+    const attachmentId = Number(req.params.attachmentId);
+    if (!Number.isInteger(id) || id <= 0 || !Number.isInteger(attachmentId) || attachmentId <= 0)
+      return res.status(400).json({ error: 'Invalid attachment id' });
+
+    const result = await pgPool.query(
+      `
+        DELETE FROM timekeeping.employee_payroll_item_attachments
+        WHERE id = $1 AND item_id = $2
+        RETURNING file_path, original_file_name
+      `,
+      [attachmentId, id]
+    );
+    if (!result.rowCount)
+      return res.status(404).json({ error: 'Attachment not found' });
+
+    const resolvedPath = path.resolve(result.rows[0].file_path);
+    if (resolvedPath.startsWith(path.resolve(payrollUploadDir)) && fs.existsSync(resolvedPath)) {
+      fs.unlinkSync(resolvedPath);
+    }
+    await logEvent(pgPool, {
+      itemId: id,
+      eventType: 'ATTACHMENT_DELETED',
+      note: `Deleted ${result.rows[0].original_file_name}`,
+      req,
+    });
+    res.status(204).send();
+  }
+);
+
+router.delete('/items/:id', async (req: Request, res: Response) => {
+  await ensureAttachmentTable();
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0)
+    return res.status(400).json({ error: 'Invalid item id' });
+
+  const attachments = await pgPool.query(
+    'SELECT file_path FROM timekeeping.employee_payroll_item_attachments WHERE item_id = $1',
+    [id]
+  );
+  const result = await pgPool.query(
+    'DELETE FROM timekeeping.employee_payroll_items WHERE id = $1 RETURNING id',
+    [id]
+  );
+  if (!result.rowCount)
+    return res.status(404).json({ error: 'Payroll control item not found' });
+
+  for (const attachment of attachments.rows) {
+    const resolvedPath = path.resolve(attachment.file_path);
+    if (resolvedPath.startsWith(path.resolve(payrollUploadDir)) && fs.existsSync(resolvedPath)) {
+      fs.unlinkSync(resolvedPath);
+    }
+  }
+  res.status(204).send();
+});
+
 router.post('/items/:id/status', async (req: Request, res: Response) => {
+  await ensureAttachmentTable();
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0)
     return res.status(400).json({ error: 'Invalid item id' });
@@ -483,6 +735,7 @@ router.post('/items/:id/status', async (req: Request, res: Response) => {
 });
 
 router.post('/items/:id/payments', async (req: Request, res: Response) => {
+  await ensureAttachmentTable();
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0)
     return res.status(400).json({ error: 'Invalid item id' });

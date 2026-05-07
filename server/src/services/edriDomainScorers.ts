@@ -79,19 +79,27 @@ export async function scoreTimekeeping(): Promise<DomainScorerResult> {
   const timekeepingEffectiveDate = isValidIsoDate ? rawEffectiveDate : DEFAULT_TIMEKEEPING_EFFECTIVE_DATE;
   evidenceItems.push({ label: 'Timekeeping DCAA effective date', value: timekeepingEffectiveDate });
 
+  // Pre-effective-date window helper: when today is strictly before the configured DCAA
+  // effective date, post-effective-date checks have no opportunity to produce evidence
+  // yet. Treat them as DEFERRED — exclude them from the raw-score denominator entirely
+  // (rather than scoring 0.5) and suppress their "no evidence yet" red flags. Once the
+  // effective date arrives, scoring snaps back to the normal post-cutover behavior.
+  const nowMs = Date.now();
+  const effectiveMs = Date.parse(`${timekeepingEffectiveDate}T00:00:00Z`);
+  const isPreEffective = Number.isFinite(effectiveMs) && nowMs < effectiveMs;
+  if (isPreEffective) {
+    evidenceItems.push({
+      label: 'Post-effective-date controls',
+      value: `Deferred — effective date ${timekeepingEffectiveDate} not yet reached; post-effective-date checks excluded from scoring`,
+    });
+  }
+
   // Check 1: PIN enforcement mandatory. Kiosk PIN enforcement is an access control,
   // not a historical transaction control, so it is not date-scoped.
   checks['PIN_ENFORCEMENT'] = 1;
   evidenceItems.push({ label: 'PIN enforcement setting', value: 'Enforced (native punch_ledger identity gate)' });
 
   // Check 2: No AUTO-approval bypass, scoped to post-effective-date sessions.
-  const totalSessions = await safeCount(`
-    SELECT COUNT(*) as count
-    FROM punch_ledger
-    WHERE clock_out IS NOT NULL
-      AND labor_class = 'REGULAR'
-      AND clock_in::date >= $1::date
-  `, [timekeepingEffectiveDate]);
   const legacySessions = await safeCount(`
     SELECT COUNT(*) as count
     FROM punch_ledger
@@ -101,79 +109,73 @@ export async function scoreTimekeeping(): Promise<DomainScorerResult> {
   `, [timekeepingEffectiveDate]);
   evidenceItems.push({ label: 'Legacy pre-effective-date regular sessions', value: legacySessions ?? 'SCORER_UNAVAILABLE' });
 
-  const unapprovedSessions = await safeCount(`
-    SELECT COUNT(*) as count
-    FROM punch_ledger pl
-    WHERE pl.clock_out IS NOT NULL
-      AND pl.labor_class = 'REGULAR'
-      AND pl.clock_in::date >= $1::date
-      AND pl.production_work_order_id IS NOT NULL
-      AND NOT EXISTS (
-        SELECT 1 FROM labor_approvals la
-        WHERE la.employee_id = pl.employee_id::text
-          AND la.production_work_order_id = pl.production_work_order_id
-      )
-  `, [timekeepingEffectiveDate]);
-  const unapprovedRatio = (totalSessions === null || unapprovedSessions === null) ? null : (totalSessions > 0 ? unapprovedSessions / totalSessions : 0);
-  checks['NO_AUTO_APPROVAL'] = unapprovedRatio === null ? 0.5 : (unapprovedSessions === 0 ? 1 : (unapprovedRatio < 0.05 ? 0.5 : 0));
-  evidenceItems.push({ label: 'Post-effective-date sessions without supervisor labor approval', value: (totalSessions === null || unapprovedSessions === null) ? 'SCORER_UNAVAILABLE' : `${unapprovedSessions} / ${totalSessions}` });
-  if (unapprovedSessions !== null && unapprovedSessions > 0) {
-    redFlags.push({
-      domainKey: 'TIMEKEEPING', flagKey: 'AUTO_APPROVAL_BYPASS', severity: 'CRITICAL',
-      title: 'Unapproved Labor Sessions Detected',
-      description: `${unapprovedSessions} post-effective-date punch_ledger sessions are not covered by a labor_approval record, bypassing required supervisor review.`,
-      farCitation: 'FAR 31.201-2(c)', potentialScoreRecovery: 10,
-    });
-    remediationItems.push({ domainKey: 'TIMEKEEPING', flagKey: 'AUTO_APPROVAL_BYPASS', title: 'Ensure post-effective-date labor sessions have supervisor labor approval records', description: 'All post-effective-date punch_ledger sessions linked to a production work order must have a corresponding labor_approvals entry.', priority: 'P1_CRITICAL', potentialScoreRecovery: 10 });
+  if (!isPreEffective) {
+    const totalSessions = await safeCount(`
+      SELECT COUNT(*) as count
+      FROM punch_ledger
+      WHERE clock_out IS NOT NULL
+        AND labor_class = 'REGULAR'
+        AND clock_in::date >= $1::date
+    `, [timekeepingEffectiveDate]);
+    const unapprovedSessions = await safeCount(`
+      SELECT COUNT(*) as count
+      FROM punch_ledger pl
+      WHERE pl.clock_out IS NOT NULL
+        AND pl.labor_class = 'REGULAR'
+        AND pl.clock_in::date >= $1::date
+        AND pl.production_work_order_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM labor_approvals la
+          WHERE la.employee_id = pl.employee_id::text
+            AND la.production_work_order_id = pl.production_work_order_id
+        )
+    `, [timekeepingEffectiveDate]);
+    const unapprovedRatio = (totalSessions === null || unapprovedSessions === null) ? null : (totalSessions > 0 ? unapprovedSessions / totalSessions : 0);
+    checks['NO_AUTO_APPROVAL'] = unapprovedRatio === null ? 0.5 : (unapprovedSessions === 0 ? 1 : (unapprovedRatio < 0.05 ? 0.5 : 0));
+    evidenceItems.push({ label: 'Post-effective-date sessions without supervisor labor approval', value: (totalSessions === null || unapprovedSessions === null) ? 'SCORER_UNAVAILABLE' : `${unapprovedSessions} / ${totalSessions}` });
+    if (unapprovedSessions !== null && unapprovedSessions > 0) {
+      redFlags.push({
+        domainKey: 'TIMEKEEPING', flagKey: 'AUTO_APPROVAL_BYPASS', severity: 'CRITICAL',
+        title: 'Unapproved Labor Sessions Detected',
+        description: `${unapprovedSessions} post-effective-date punch_ledger sessions are not covered by a labor_approval record, bypassing required supervisor review.`,
+        farCitation: 'FAR 31.201-2(c)', potentialScoreRecovery: 10,
+      });
+      remediationItems.push({ domainKey: 'TIMEKEEPING', flagKey: 'AUTO_APPROVAL_BYPASS', title: 'Ensure post-effective-date labor sessions have supervisor labor approval records', description: 'All post-effective-date punch_ledger sessions linked to a production work order must have a corresponding labor_approvals entry.', priority: 'P1_CRITICAL', potentialScoreRecovery: 10 });
+    }
   }
 
   // Check 3: Stale unapproved sessions, scoped to post-effective-date sessions.
-  const staleSessions = await safeCount(`
-    SELECT COUNT(*) as count
-    FROM punch_ledger pl
-    WHERE pl.clock_out IS NOT NULL
-      AND pl.labor_class = 'REGULAR'
-      AND pl.production_work_order_id IS NOT NULL
-      AND pl.clock_in::date >= $1::date
-      AND pl.clock_in < NOW() - INTERVAL '7 days'
-      AND NOT EXISTS (
-        SELECT 1 FROM labor_approvals la
-        WHERE la.employee_id = pl.employee_id::text
-          AND la.production_work_order_id = pl.production_work_order_id
-      )
-  `, [timekeepingEffectiveDate]);
-  checks['TIMESHEET_APPROVAL_DEADLINE'] = staleSessions === null ? 0.5 : staleSessions === 0 ? 1 : (staleSessions < 5 ? 0.5 : 0);
-  evidenceItems.push({ label: 'Post-effective-date stale unapproved sessions (>7d)', value: staleSessions ?? 'SCORER_UNAVAILABLE' });
-  if (staleSessions !== null && staleSessions > 0) {
-    redFlags.push({
-      domainKey: 'TIMEKEEPING', flagKey: 'STALE_UNAPPROVED_TIMESHEETS', severity: 'HIGH',
-      title: 'Stale Unapproved Labor Records',
-      description: `${staleSessions} post-effective-date punch_ledger sessions older than 7 days have no supervisor labor approval coverage.`,
-      farCitation: 'FAR 31.201-2(c)', potentialScoreRecovery: 5,
-    });
-    remediationItems.push({ domainKey: 'TIMEKEEPING', flagKey: 'STALE_UNAPPROVED_TIMESHEETS', title: 'Approve stale post-effective-date punch_ledger sessions within 7 days', description: 'All closed post-effective-date sessions linked to a work order older than 7 days must have a labor_approvals entry.', priority: 'P2_HIGH', potentialScoreRecovery: 5 });
+  if (!isPreEffective) {
+    const staleSessions = await safeCount(`
+      SELECT COUNT(*) as count
+      FROM punch_ledger pl
+      WHERE pl.clock_out IS NOT NULL
+        AND pl.labor_class = 'REGULAR'
+        AND pl.production_work_order_id IS NOT NULL
+        AND pl.clock_in::date >= $1::date
+        AND pl.clock_in < NOW() - INTERVAL '7 days'
+        AND NOT EXISTS (
+          SELECT 1 FROM labor_approvals la
+          WHERE la.employee_id = pl.employee_id::text
+            AND la.production_work_order_id = pl.production_work_order_id
+        )
+    `, [timekeepingEffectiveDate]);
+    checks['TIMESHEET_APPROVAL_DEADLINE'] = staleSessions === null ? 0.5 : staleSessions === 0 ? 1 : (staleSessions < 5 ? 0.5 : 0);
+    evidenceItems.push({ label: 'Post-effective-date stale unapproved sessions (>7d)', value: staleSessions ?? 'SCORER_UNAVAILABLE' });
+    if (staleSessions !== null && staleSessions > 0) {
+      redFlags.push({
+        domainKey: 'TIMEKEEPING', flagKey: 'STALE_UNAPPROVED_TIMESHEETS', severity: 'HIGH',
+        title: 'Stale Unapproved Labor Records',
+        description: `${staleSessions} post-effective-date punch_ledger sessions older than 7 days have no supervisor labor approval coverage.`,
+        farCitation: 'FAR 31.201-2(c)', potentialScoreRecovery: 5,
+      });
+      remediationItems.push({ domainKey: 'TIMEKEEPING', flagKey: 'STALE_UNAPPROVED_TIMESHEETS', title: 'Approve stale post-effective-date punch_ledger sessions within 7 days', description: 'All closed post-effective-date sessions linked to a work order older than 7 days must have a labor_approvals entry.', priority: 'P2_HIGH', potentialScoreRecovery: 5 });
+    }
   }
 
   // Check 4: Employee certification - post-effective-date employee attestation on timekeeping.timesheets.
   // NOTE: timekeeping.timesheets.period_end is TEXT (see migration 0069); explicitly cast to date so
   // the comparison is chronological, not lexicographic — robust to non-ISO values that may exist.
-  const totalAttestableTimesheets = await safeCount(`
-    SELECT COUNT(*) as count
-    FROM timekeeping.timesheets
-    WHERE status IN ('submitted', 'certified', 'locked', 'correction_requested', 'correction_approved')
-      AND period_end::date >= $1::date
-  `, [timekeepingEffectiveDate]);
-  const fullyAttestedTimesheets = await safeCount(`
-    SELECT COUNT(*) as count
-    FROM timekeeping.timesheets
-    WHERE status IN ('submitted', 'certified', 'locked', 'correction_requested', 'correction_approved')
-      AND period_end::date >= $1::date
-      AND employee_attested = TRUE
-      AND attested_at IS NOT NULL
-      AND certification_statement IS NOT NULL
-      AND TRIM(certification_statement) != ''
-      AND certification_version IS NOT NULL
-  `, [timekeepingEffectiveDate]);
   const legacyAttestableTimesheets = await safeCount(`
     SELECT COUNT(*) as count
     FROM timekeeping.timesheets
@@ -182,118 +184,121 @@ export async function scoreTimekeeping(): Promise<DomainScorerResult> {
   `, [timekeepingEffectiveDate]);
   evidenceItems.push({ label: 'Legacy pre-effective-date attestable timesheets', value: legacyAttestableTimesheets ?? 'SCORER_UNAVAILABLE' });
 
-  const attestationRate = (totalAttestableTimesheets === null || fullyAttestedTimesheets === null)
-    ? null
-    : (totalAttestableTimesheets > 0 ? fullyAttestedTimesheets / totalAttestableTimesheets : 1);
-  checks['EMPLOYEE_CERTIFICATION'] = attestationRate === null ? 0.5 : attestationRate >= 0.95 ? 1 : (attestationRate >= 0.80 ? 0.5 : 0);
-  evidenceItems.push({
-    label: 'Post-effective-date employee-attested submitted/finalized timesheets',
-    value: (totalAttestableTimesheets === null || fullyAttestedTimesheets === null) ? 'SCORER_UNAVAILABLE' : `${fullyAttestedTimesheets} / ${totalAttestableTimesheets}`,
-  });
-  if (attestationRate !== null && attestationRate < 0.95 && totalAttestableTimesheets !== null && totalAttestableTimesheets > 0) {
-    redFlags.push({
-      domainKey: 'TIMEKEEPING', flagKey: 'MISSING_EMPLOYEE_ATTESTATION', severity: attestationRate < 0.8 ? 'HIGH' : 'MEDIUM',
-      title: 'Incomplete Employee Timesheet Certification',
-      description: `${totalAttestableTimesheets - (fullyAttestedTimesheets ?? 0)} post-effective-date submitted/finalized timesheets are missing complete employee attestation evidence.`,
-      farCitation: 'FAR 52.215-2', potentialScoreRecovery: 8,
+  if (!isPreEffective) {
+    const totalAttestableTimesheets = await safeCount(`
+      SELECT COUNT(*) as count
+      FROM timekeeping.timesheets
+      WHERE status IN ('submitted', 'certified', 'locked', 'correction_requested', 'correction_approved')
+        AND period_end::date >= $1::date
+    `, [timekeepingEffectiveDate]);
+    const fullyAttestedTimesheets = await safeCount(`
+      SELECT COUNT(*) as count
+      FROM timekeeping.timesheets
+      WHERE status IN ('submitted', 'certified', 'locked', 'correction_requested', 'correction_approved')
+        AND period_end::date >= $1::date
+        AND employee_attested = TRUE
+        AND attested_at IS NOT NULL
+        AND certification_statement IS NOT NULL
+        AND TRIM(certification_statement) != ''
+        AND certification_version IS NOT NULL
+    `, [timekeepingEffectiveDate]);
+
+    const attestationRate = (totalAttestableTimesheets === null || fullyAttestedTimesheets === null)
+      ? null
+      : (totalAttestableTimesheets > 0 ? fullyAttestedTimesheets / totalAttestableTimesheets : 1);
+    checks['EMPLOYEE_CERTIFICATION'] = attestationRate === null ? 0.5 : attestationRate >= 0.95 ? 1 : (attestationRate >= 0.80 ? 0.5 : 0);
+    evidenceItems.push({
+      label: 'Post-effective-date employee-attested submitted/finalized timesheets',
+      value: (totalAttestableTimesheets === null || fullyAttestedTimesheets === null) ? 'SCORER_UNAVAILABLE' : `${fullyAttestedTimesheets} / ${totalAttestableTimesheets}`,
     });
-    remediationItems.push({ domainKey: 'TIMEKEEPING', flagKey: 'MISSING_EMPLOYEE_ATTESTATION', title: 'Collect missing employee timesheet attestations', description: 'Post-effective-date submitted and finalized timesheets must retain employee_attested, attested_at, certification_statement, and certification_version evidence.', priority: attestationRate < 0.8 ? 'P2_HIGH' : 'P3_MEDIUM', potentialScoreRecovery: 8 });
+    if (attestationRate !== null && attestationRate < 0.95 && totalAttestableTimesheets !== null && totalAttestableTimesheets > 0) {
+      redFlags.push({
+        domainKey: 'TIMEKEEPING', flagKey: 'MISSING_EMPLOYEE_ATTESTATION', severity: attestationRate < 0.8 ? 'HIGH' : 'MEDIUM',
+        title: 'Incomplete Employee Timesheet Certification',
+        description: `${totalAttestableTimesheets - (fullyAttestedTimesheets ?? 0)} post-effective-date submitted/finalized timesheets are missing complete employee attestation evidence.`,
+        farCitation: 'FAR 52.215-2', potentialScoreRecovery: 8,
+      });
+      remediationItems.push({ domainKey: 'TIMEKEEPING', flagKey: 'MISSING_EMPLOYEE_ATTESTATION', title: 'Collect missing employee timesheet attestations', description: 'Post-effective-date submitted and finalized timesheets must retain employee_attested, attested_at, certification_statement, and certification_version evidence.', priority: attestationRate < 0.8 ? 'P2_HIGH' : 'P3_MEDIUM', potentialScoreRecovery: 8 });
+    }
   }
 
   // Check 4b: Supervisor labor approval coverage - post-effective-date, separate from employee certification.
-  const totalEmployeePunchers = await safeCount(`
-    SELECT COUNT(DISTINCT employee_id) as count
-    FROM punch_ledger
-    WHERE clock_out IS NOT NULL
-      AND labor_class = 'REGULAR'
-      AND clock_in::date >= $1::date
-  `, [timekeepingEffectiveDate]);
-  const employeesWithApprovals = await safeCount(`
-    SELECT COUNT(DISTINCT pl.employee_id) as count
-    FROM punch_ledger pl
-    WHERE pl.clock_out IS NOT NULL
-      AND pl.labor_class = 'REGULAR'
-      AND pl.clock_in::date >= $1::date
-      AND EXISTS (
-        SELECT 1 FROM labor_approvals la
-        WHERE la.employee_id = pl.employee_id::text
-          AND (pl.production_work_order_id IS NULL OR la.production_work_order_id = pl.production_work_order_id)
-      )
-  `, [timekeepingEffectiveDate]);
-  const approvalCoverageRate = (totalEmployeePunchers === null || employeesWithApprovals === null) ? null : (totalEmployeePunchers > 0 ? Math.min(1, employeesWithApprovals / totalEmployeePunchers) : 1);
-  checks['SUPERVISOR_LABOR_APPROVAL_COVERAGE'] = approvalCoverageRate === null ? 0.5 : approvalCoverageRate >= 0.95 ? 1 : (approvalCoverageRate >= 0.80 ? 0.5 : 0);
-  evidenceItems.push({ label: 'Post-effective-date supervisor labor approval coverage', value: (totalEmployeePunchers === null || employeesWithApprovals === null) ? 'SCORER_UNAVAILABLE' : `${(approvalCoverageRate! * 100).toFixed(1)}%` });
-  if (approvalCoverageRate !== null && approvalCoverageRate < 0.95 && totalEmployeePunchers !== null && totalEmployeePunchers > 0) {
-    redFlags.push({
-      domainKey: 'TIMEKEEPING', flagKey: 'LOW_SUPERVISOR_LABOR_APPROVAL_COVERAGE', severity: 'HIGH',
-      title: 'Incomplete Supervisor Labor Approval Coverage',
-      description: `${((1 - approvalCoverageRate) * 100).toFixed(1)}% of employees with post-effective-date punch_ledger sessions lack a formal supervisor labor approval record.`,
-      farCitation: 'FAR 31.201-2(c)', potentialScoreRecovery: 8,
-    });
-    remediationItems.push({ domainKey: 'TIMEKEEPING', flagKey: 'LOW_SUPERVISOR_LABOR_APPROVAL_COVERAGE', title: 'Ensure post-effective-date employees have supervisor labor approval records', description: 'All employees with post-effective-date punch_ledger sessions should have corresponding labor_approvals entries.', priority: 'P2_HIGH', potentialScoreRecovery: 8 });
+  if (!isPreEffective) {
+    const totalEmployeePunchers = await safeCount(`
+      SELECT COUNT(DISTINCT employee_id) as count
+      FROM punch_ledger
+      WHERE clock_out IS NOT NULL
+        AND labor_class = 'REGULAR'
+        AND clock_in::date >= $1::date
+    `, [timekeepingEffectiveDate]);
+    const employeesWithApprovals = await safeCount(`
+      SELECT COUNT(DISTINCT pl.employee_id) as count
+      FROM punch_ledger pl
+      WHERE pl.clock_out IS NOT NULL
+        AND pl.labor_class = 'REGULAR'
+        AND pl.clock_in::date >= $1::date
+        AND EXISTS (
+          SELECT 1 FROM labor_approvals la
+          WHERE la.employee_id = pl.employee_id::text
+            AND (pl.production_work_order_id IS NULL OR la.production_work_order_id = pl.production_work_order_id)
+        )
+    `, [timekeepingEffectiveDate]);
+    const approvalCoverageRate = (totalEmployeePunchers === null || employeesWithApprovals === null) ? null : (totalEmployeePunchers > 0 ? Math.min(1, employeesWithApprovals / totalEmployeePunchers) : 1);
+    checks['SUPERVISOR_LABOR_APPROVAL_COVERAGE'] = approvalCoverageRate === null ? 0.5 : approvalCoverageRate >= 0.95 ? 1 : (approvalCoverageRate >= 0.80 ? 0.5 : 0);
+    evidenceItems.push({ label: 'Post-effective-date supervisor labor approval coverage', value: (totalEmployeePunchers === null || employeesWithApprovals === null) ? 'SCORER_UNAVAILABLE' : `${(approvalCoverageRate! * 100).toFixed(1)}%` });
+    if (approvalCoverageRate !== null && approvalCoverageRate < 0.95 && totalEmployeePunchers !== null && totalEmployeePunchers > 0) {
+      redFlags.push({
+        domainKey: 'TIMEKEEPING', flagKey: 'LOW_SUPERVISOR_LABOR_APPROVAL_COVERAGE', severity: 'HIGH',
+        title: 'Incomplete Supervisor Labor Approval Coverage',
+        description: `${((1 - approvalCoverageRate) * 100).toFixed(1)}% of employees with post-effective-date punch_ledger sessions lack a formal supervisor labor approval record.`,
+        farCitation: 'FAR 31.201-2(c)', potentialScoreRecovery: 8,
+      });
+      remediationItems.push({ domainKey: 'TIMEKEEPING', flagKey: 'LOW_SUPERVISOR_LABOR_APPROVAL_COVERAGE', title: 'Ensure post-effective-date employees have supervisor labor approval records', description: 'All employees with post-effective-date punch_ledger sessions should have corresponding labor_approvals entries.', priority: 'P2_HIGH', potentialScoreRecovery: 8 });
+    }
   }
 
   // Check 5: Immutable approved records - post-effective-date audit events.
-  const postApprovalEdits = await safeCount(`
-    SELECT COUNT(*) as count FROM audit_events
-    WHERE entity_type = 'time_entry'
-      AND action IN ('PUNCH_MODIFIED', 'PUNCH_EDITED', 'TIME_ENTRY_EDITED')
-      AND COALESCE(timestamp, created_at)::date >= $1::date
-  `, [timekeepingEffectiveDate]);
   const legacyPostApprovalEdits = await safeCount(`
     SELECT COUNT(*) as count FROM audit_events
     WHERE entity_type = 'time_entry'
       AND action IN ('PUNCH_MODIFIED', 'PUNCH_EDITED', 'TIME_ENTRY_EDITED')
       AND COALESCE(timestamp, created_at)::date < $1::date
   `, [timekeepingEffectiveDate]);
-  checks['IMMUTABLE_APPROVED_RECORDS'] = postApprovalEdits === null ? 0.5 : postApprovalEdits === 0 ? 1 : 0;
-  evidenceItems.push({ label: 'Post-effective-date post-approval punch edits (audit log)', value: postApprovalEdits ?? 'SCORER_UNAVAILABLE' });
   evidenceItems.push({ label: 'Legacy pre-effective-date post-approval punch edits (audit log)', value: legacyPostApprovalEdits ?? 'SCORER_UNAVAILABLE' });
-  if (postApprovalEdits !== null && postApprovalEdits > 0) {
-    redFlags.push({
-      domainKey: 'TIMEKEEPING', flagKey: 'POST_APPROVAL_EDITS', severity: 'HIGH',
-      title: 'Post-Approval Labor Record Edits',
-      description: `${postApprovalEdits} post-effective-date punch_ledger entries were modified after approval per the audit log.`,
-      farCitation: 'FAR 31.201-2(d)', potentialScoreRecovery: 6,
-    });
-    remediationItems.push({ domainKey: 'TIMEKEEPING', flagKey: 'POST_APPROVAL_EDITS', title: 'Lock approved post-effective-date punch_ledger entries from editing', description: 'Implement immutability controls on approved post-effective-date punch_ledger entries.', priority: 'P2_HIGH', potentialScoreRecovery: 6 });
+
+  if (!isPreEffective) {
+    const postApprovalEdits = await safeCount(`
+      SELECT COUNT(*) as count FROM audit_events
+      WHERE entity_type = 'time_entry'
+        AND action IN ('PUNCH_MODIFIED', 'PUNCH_EDITED', 'TIME_ENTRY_EDITED')
+        AND COALESCE(timestamp, created_at)::date >= $1::date
+    `, [timekeepingEffectiveDate]);
+    checks['IMMUTABLE_APPROVED_RECORDS'] = postApprovalEdits === null ? 0.5 : postApprovalEdits === 0 ? 1 : 0;
+    evidenceItems.push({ label: 'Post-effective-date post-approval punch edits (audit log)', value: postApprovalEdits ?? 'SCORER_UNAVAILABLE' });
+    if (postApprovalEdits !== null && postApprovalEdits > 0) {
+      redFlags.push({
+        domainKey: 'TIMEKEEPING', flagKey: 'POST_APPROVAL_EDITS', severity: 'HIGH',
+        title: 'Post-Approval Labor Record Edits',
+        description: `${postApprovalEdits} post-effective-date punch_ledger entries were modified after approval per the audit log.`,
+        farCitation: 'FAR 31.201-2(d)', potentialScoreRecovery: 6,
+      });
+      remediationItems.push({ domainKey: 'TIMEKEEPING', flagKey: 'POST_APPROVAL_EDITS', title: 'Lock approved post-effective-date punch_ledger entries from editing', description: 'Implement immutability controls on approved post-effective-date punch_ledger entries.', priority: 'P2_HIGH', potentialScoreRecovery: 6 });
+    }
   }
 
   // Check 6: Single authoritative timekeeping source - post-effective-date source channels.
-  const distinctSources = await safeCount(`
-    SELECT COUNT(DISTINCT source) as count
-    FROM punch_ledger
-    WHERE source IS NOT NULL
-      AND clock_in::date >= $1::date
-  `, [timekeepingEffectiveDate]);
-  checks['DUAL_SYSTEM_GAP'] = 1;
-  evidenceItems.push({ label: 'Post-effective-date distinct punch source channels (native)', value: distinctSources ?? 'SCORER_UNAVAILABLE' });
+  if (!isPreEffective) {
+    const distinctSources = await safeCount(`
+      SELECT COUNT(DISTINCT source) as count
+      FROM punch_ledger
+      WHERE source IS NOT NULL
+        AND clock_in::date >= $1::date
+    `, [timekeepingEffectiveDate]);
+    checks['DUAL_SYSTEM_GAP'] = 1;
+    evidenceItems.push({ label: 'Post-effective-date distinct punch source channels (native)', value: distinctSources ?? 'SCORER_UNAVAILABLE' });
+  }
 
   // Check 7: Correction approval chain - post-effective-date formal correction workflow.
-  const totalCorrections = await safeCount(`
-    SELECT COUNT(*) as count
-    FROM timekeeping.timesheet_corrections tc
-    JOIN timekeeping.timesheets ts ON ts.id = tc.timesheet_id
-    WHERE tc.requested_at::date >= $1::date
-       OR ts.period_end::date >= $1::date
-  `, [timekeepingEffectiveDate]);
-  const fullyReviewedCorrections = await safeCount(`
-    SELECT COUNT(*) as count
-    FROM timekeeping.timesheet_corrections tc
-    JOIN timekeeping.timesheets ts ON ts.id = tc.timesheet_id
-    WHERE (tc.requested_at::date >= $1::date OR ts.period_end::date >= $1::date)
-      AND tc.status IN ('approved', 'rejected')
-      AND tc.requested_by_employee_id IS NOT NULL
-      AND tc.reason IS NOT NULL
-      AND TRIM(tc.reason) != ''
-      AND tc.original_snapshot IS NOT NULL
-      AND tc.proposed_changes IS NOT NULL
-      AND tc.reviewed_by_user_id IS NOT NULL
-      AND tc.reviewed_at IS NOT NULL
-      AND tc.reviewer_note IS NOT NULL
-      AND TRIM(tc.reviewer_note) != ''
-      AND (tc.status != 'approved' OR tc.after_snapshot IS NOT NULL)
-  `, [timekeepingEffectiveDate]);
   const legacyCorrections = await safeCount(`
     SELECT COUNT(*) as count
     FROM timekeeping.timesheet_corrections tc
@@ -303,54 +308,69 @@ export async function scoreTimekeeping(): Promise<DomainScorerResult> {
   `, [timekeepingEffectiveDate]);
   evidenceItems.push({ label: 'Legacy pre-effective-date correction records', value: legacyCorrections ?? 'SCORER_UNAVAILABLE' });
 
-  const correctionChainRate = (totalCorrections === null || fullyReviewedCorrections === null)
-    ? null
-    : (totalCorrections > 0 ? fullyReviewedCorrections / totalCorrections : null);
-  checks['CORRECTION_APPROVAL_CHAIN'] = correctionChainRate === null ? 0.5 : correctionChainRate >= 0.95 ? 1 : (correctionChainRate >= 0.80 ? 0.5 : 0);
-  evidenceItems.push({
-    label: 'Post-effective-date reviewed timesheet corrections with complete approval evidence',
-    value: (totalCorrections === null || fullyReviewedCorrections === null) ? 'SCORER_UNAVAILABLE' : `${fullyReviewedCorrections} / ${totalCorrections}`,
-  });
+  if (!isPreEffective) {
+    const totalCorrections = await safeCount(`
+      SELECT COUNT(*) as count
+      FROM timekeeping.timesheet_corrections tc
+      JOIN timekeeping.timesheets ts ON ts.id = tc.timesheet_id
+      WHERE tc.requested_at::date >= $1::date
+         OR ts.period_end::date >= $1::date
+    `, [timekeepingEffectiveDate]);
+    const fullyReviewedCorrections = await safeCount(`
+      SELECT COUNT(*) as count
+      FROM timekeeping.timesheet_corrections tc
+      JOIN timekeeping.timesheets ts ON ts.id = tc.timesheet_id
+      WHERE (tc.requested_at::date >= $1::date OR ts.period_end::date >= $1::date)
+        AND tc.status IN ('approved', 'rejected')
+        AND tc.requested_by_employee_id IS NOT NULL
+        AND tc.reason IS NOT NULL
+        AND TRIM(tc.reason) != ''
+        AND tc.original_snapshot IS NOT NULL
+        AND tc.proposed_changes IS NOT NULL
+        AND tc.reviewed_by_user_id IS NOT NULL
+        AND tc.reviewed_at IS NOT NULL
+        AND tc.reviewer_note IS NOT NULL
+        AND TRIM(tc.reviewer_note) != ''
+        AND (tc.status != 'approved' OR tc.after_snapshot IS NOT NULL)
+    `, [timekeepingEffectiveDate]);
 
-  const correctionAuditCount = await safeCount(`
-    SELECT COUNT(*) as count FROM audit_events
-    WHERE entity_type = 'time_entry'
-      AND action IN ('PUNCH_EDITED', 'PUNCH_MODIFIED', 'TIME_ENTRY_EDITED', 'ENTRY_UPDATED')
-      AND COALESCE(timestamp, created_at)::date >= $1::date
-  `, [timekeepingEffectiveDate]);
-  evidenceItems.push({ label: 'Post-effective-date supplemental punch correction audit_events', value: correctionAuditCount ?? 'SCORER_UNAVAILABLE' });
+    const correctionChainRate = (totalCorrections === null || fullyReviewedCorrections === null)
+      ? null
+      : (totalCorrections > 0 ? fullyReviewedCorrections / totalCorrections : null);
+    checks['CORRECTION_APPROVAL_CHAIN'] = correctionChainRate === null ? 0.5 : correctionChainRate >= 0.95 ? 1 : (correctionChainRate >= 0.80 ? 0.5 : 0);
+    evidenceItems.push({
+      label: 'Post-effective-date reviewed timesheet corrections with complete approval evidence',
+      value: (totalCorrections === null || fullyReviewedCorrections === null) ? 'SCORER_UNAVAILABLE' : `${fullyReviewedCorrections} / ${totalCorrections}`,
+    });
 
-  if (totalCorrections === 0) {
-    redFlags.push({
-      domainKey: 'TIMEKEEPING', flagKey: 'NO_CORRECTION_WORKFLOW_EVIDENCE', severity: 'MEDIUM',
-      title: 'No Post-Effective-Date Correction Workflow Evidence Yet',
-      description: 'No formal post-effective-date timesheet correction records exist yet, so the approval-chain control cannot be fully proven from live workflow evidence.',
-      farCitation: 'FAR 31.201-2(d)', potentialScoreRecovery: 3,
-    });
-    remediationItems.push({ domainKey: 'TIMEKEEPING', flagKey: 'NO_CORRECTION_WORKFLOW_EVIDENCE', title: 'Capture post-effective-date correction workflow evidence', description: 'When real corrections occur on or after the effective date, route them through timekeeping.timesheet_corrections with requester, reason, before/after snapshots, reviewer, timestamp, and reviewer note.', priority: 'P3_MEDIUM', potentialScoreRecovery: 3 });
-  } else if (correctionChainRate !== null && correctionChainRate < 0.95) {
-    redFlags.push({
-      domainKey: 'TIMEKEEPING', flagKey: 'INCOMPLETE_CORRECTION_APPROVAL_CHAIN', severity: correctionChainRate < 0.8 ? 'HIGH' : 'MEDIUM',
-      title: 'Incomplete Correction Approval Chain',
-      description: `${totalCorrections - (fullyReviewedCorrections ?? 0)} post-effective-date correction records are missing complete requester, reason, snapshot, reviewer, or after-snapshot evidence.`,
-      farCitation: 'FAR 31.201-2(d)', potentialScoreRecovery: 6,
-    });
-    remediationItems.push({ domainKey: 'TIMEKEEPING', flagKey: 'INCOMPLETE_CORRECTION_APPROVAL_CHAIN', title: 'Complete correction approval-chain evidence', description: 'Require every post-effective-date correction request to include a reason and original snapshot, then require supervisor/admin review with reviewer note and after snapshot before closure.', priority: correctionChainRate < 0.8 ? 'P2_HIGH' : 'P3_MEDIUM', potentialScoreRecovery: 6 });
+    const correctionAuditCount = await safeCount(`
+      SELECT COUNT(*) as count FROM audit_events
+      WHERE entity_type = 'time_entry'
+        AND action IN ('PUNCH_EDITED', 'PUNCH_MODIFIED', 'TIME_ENTRY_EDITED', 'ENTRY_UPDATED')
+        AND COALESCE(timestamp, created_at)::date >= $1::date
+    `, [timekeepingEffectiveDate]);
+    evidenceItems.push({ label: 'Post-effective-date supplemental punch correction audit_events', value: correctionAuditCount ?? 'SCORER_UNAVAILABLE' });
+
+    if (totalCorrections === 0) {
+      redFlags.push({
+        domainKey: 'TIMEKEEPING', flagKey: 'NO_CORRECTION_WORKFLOW_EVIDENCE', severity: 'MEDIUM',
+        title: 'No Post-Effective-Date Correction Workflow Evidence Yet',
+        description: 'No formal post-effective-date timesheet correction records exist yet, so the approval-chain control cannot be fully proven from live workflow evidence.',
+        farCitation: 'FAR 31.201-2(d)', potentialScoreRecovery: 3,
+      });
+      remediationItems.push({ domainKey: 'TIMEKEEPING', flagKey: 'NO_CORRECTION_WORKFLOW_EVIDENCE', title: 'Capture post-effective-date correction workflow evidence', description: 'When real corrections occur on or after the effective date, route them through timekeeping.timesheet_corrections with requester, reason, before/after snapshots, reviewer, timestamp, and reviewer note.', priority: 'P3_MEDIUM', potentialScoreRecovery: 3 });
+    } else if (correctionChainRate !== null && correctionChainRate < 0.95) {
+      redFlags.push({
+        domainKey: 'TIMEKEEPING', flagKey: 'INCOMPLETE_CORRECTION_APPROVAL_CHAIN', severity: correctionChainRate < 0.8 ? 'HIGH' : 'MEDIUM',
+        title: 'Incomplete Correction Approval Chain',
+        description: `${totalCorrections - (fullyReviewedCorrections ?? 0)} post-effective-date correction records are missing complete requester, reason, snapshot, reviewer, or after-snapshot evidence.`,
+        farCitation: 'FAR 31.201-2(d)', potentialScoreRecovery: 6,
+      });
+      remediationItems.push({ domainKey: 'TIMEKEEPING', flagKey: 'INCOMPLETE_CORRECTION_APPROVAL_CHAIN', title: 'Complete correction approval-chain evidence', description: 'Require every post-effective-date correction request to include a reason and original snapshot, then require supervisor/admin review with reviewer note and after snapshot before closure.', priority: correctionChainRate < 0.8 ? 'P2_HIGH' : 'P3_MEDIUM', potentialScoreRecovery: 6 });
+    }
   }
 
   // Check 8: Charge code registry compliance - post-effective-date punch sessions.
-  const invalidChargeCodePunches = await safeCount(`
-    SELECT COUNT(*) as count
-    FROM punch_ledger pl
-    WHERE pl.clock_in::date >= $1::date
-      AND pl.charge_code IS NOT NULL
-      AND trim(pl.charge_code) != ''
-      AND NOT EXISTS (
-        SELECT 1 FROM charge_codes cc
-        WHERE cc.code = pl.charge_code
-          AND cc.active = true
-      )
-  `, [timekeepingEffectiveDate]);
   const legacyInvalidChargeCodePunches = await safeCount(`
     SELECT COUNT(*) as count
     FROM punch_ledger pl
@@ -363,78 +383,97 @@ export async function scoreTimekeeping(): Promise<DomainScorerResult> {
           AND cc.active = true
       )
   `, [timekeepingEffectiveDate]);
-  checks['CHARGE_CODE_COMPLIANCE'] = invalidChargeCodePunches === null ? 0.5
-    : invalidChargeCodePunches === 0 ? 1
-    : (invalidChargeCodePunches < 3 ? 0.5 : 0);
-  evidenceItems.push({ label: 'Post-effective-date punches with invalid/inactive charge codes', value: invalidChargeCodePunches ?? 'SCORER_UNAVAILABLE' });
   evidenceItems.push({ label: 'Legacy pre-effective-date punches with invalid/inactive charge codes', value: legacyInvalidChargeCodePunches ?? 'SCORER_UNAVAILABLE' });
-  if (invalidChargeCodePunches !== null && invalidChargeCodePunches > 0) {
-    redFlags.push({
-      domainKey: 'TIMEKEEPING', flagKey: 'INVALID_CHARGE_CODE_USAGE', severity: 'HIGH',
-      title: 'Invalid Charge Code Usage in Punch Ledger',
-      description: `${invalidChargeCodePunches} post-effective-date punch_ledger sessions reference charge codes not found in the active charge_codes registry.`,
-      farCitation: 'FAR 31.201-2(c)', potentialScoreRecovery: 5,
-    });
-    remediationItems.push({ domainKey: 'TIMEKEEPING', flagKey: 'INVALID_CHARGE_CODE_USAGE', title: 'Correct post-effective-date punch entries using inactive or unregistered charge codes', description: 'Review and correct post-effective-date charge_code values in punch_ledger sessions that do not match an active charge_codes registry entry.', priority: 'P2_HIGH', potentialScoreRecovery: 5 });
+
+  if (!isPreEffective) {
+    const invalidChargeCodePunches = await safeCount(`
+      SELECT COUNT(*) as count
+      FROM punch_ledger pl
+      WHERE pl.clock_in::date >= $1::date
+        AND pl.charge_code IS NOT NULL
+        AND trim(pl.charge_code) != ''
+        AND NOT EXISTS (
+          SELECT 1 FROM charge_codes cc
+          WHERE cc.code = pl.charge_code
+            AND cc.active = true
+        )
+    `, [timekeepingEffectiveDate]);
+    checks['CHARGE_CODE_COMPLIANCE'] = invalidChargeCodePunches === null ? 0.5
+      : invalidChargeCodePunches === 0 ? 1
+      : (invalidChargeCodePunches < 3 ? 0.5 : 0);
+    evidenceItems.push({ label: 'Post-effective-date punches with invalid/inactive charge codes', value: invalidChargeCodePunches ?? 'SCORER_UNAVAILABLE' });
+    if (invalidChargeCodePunches !== null && invalidChargeCodePunches > 0) {
+      redFlags.push({
+        domainKey: 'TIMEKEEPING', flagKey: 'INVALID_CHARGE_CODE_USAGE', severity: 'HIGH',
+        title: 'Invalid Charge Code Usage in Punch Ledger',
+        description: `${invalidChargeCodePunches} post-effective-date punch_ledger sessions reference charge codes not found in the active charge_codes registry.`,
+        farCitation: 'FAR 31.201-2(c)', potentialScoreRecovery: 5,
+      });
+      remediationItems.push({ domainKey: 'TIMEKEEPING', flagKey: 'INVALID_CHARGE_CODE_USAGE', title: 'Correct post-effective-date punch entries using inactive or unregistered charge codes', description: 'Review and correct post-effective-date charge_code values in punch_ledger sessions that do not match an active charge_codes registry entry.', priority: 'P2_HIGH', potentialScoreRecovery: 5 });
+    }
   }
 
   // Forensic findings adjustment: only post-effective-date detections affect readiness.
+  // Pre-effective-date: skip the post-cutover scan entirely (it would always be empty),
+  // but still surface the legacy count below for context.
   let forensicDeduction = 0;
   let forensicCriticalCount = 0;
   let forensicHighCount = 0;
   let forensicTotalOpen = 0;
-  try {
-    const findingsRows = await safeQuery<{ severity: string; cnt: string }>(`
-      SELECT severity, COUNT(*)::int as cnt
-      FROM dcaa_audit_findings
-      WHERE domain = 'TIMEKEEPING'
-        AND status = 'open'
-        AND detected_at::date >= $1::date
-      GROUP BY severity
-    `, [timekeepingEffectiveDate]);
-    for (const row of findingsRows) {
-      const cnt = parseInt(row.cnt as unknown as string, 10) || 0;
-      forensicTotalOpen += cnt;
-      if (row.severity === 'critical') {
-        forensicDeduction += cnt * 5;
-        forensicCriticalCount = cnt;
-        if (cnt > 0) {
-          redFlags.push({
-            domainKey: 'TIMEKEEPING',
-            flagKey: `FORENSIC_CRITICAL_VIOLATIONS`,
-            severity: 'CRITICAL',
-            title: `${cnt} Critical Forensic Violations Active`,
-            description: `Forensic scan found ${cnt} post-effective-date critical timekeeping violations that must be remediated before an audit.`,
-            farCitation: 'FAR 31.201-2',
-            potentialScoreRecovery: Math.min(15, cnt * 5),
-          });
-          remediationItems.push({ domainKey: 'TIMEKEEPING', flagKey: 'FORENSIC_CRITICAL_VIOLATIONS', title: 'Resolve post-effective-date critical forensic timekeeping violations', description: 'Run the forensic scan and remediate all critical findings detected on or after the effective date.', priority: 'P1_CRITICAL', potentialScoreRecovery: Math.min(15, cnt * 5) });
+  if (!isPreEffective) {
+    try {
+      const findingsRows = await safeQuery<{ severity: string; cnt: string }>(`
+        SELECT severity, COUNT(*)::int as cnt
+        FROM dcaa_audit_findings
+        WHERE domain = 'TIMEKEEPING'
+          AND status = 'open'
+          AND detected_at::date >= $1::date
+        GROUP BY severity
+      `, [timekeepingEffectiveDate]);
+      for (const row of findingsRows) {
+        const cnt = parseInt(row.cnt as unknown as string, 10) || 0;
+        forensicTotalOpen += cnt;
+        if (row.severity === 'critical') {
+          forensicDeduction += cnt * 5;
+          forensicCriticalCount = cnt;
+          if (cnt > 0) {
+            redFlags.push({
+              domainKey: 'TIMEKEEPING',
+              flagKey: `FORENSIC_CRITICAL_VIOLATIONS`,
+              severity: 'CRITICAL',
+              title: `${cnt} Critical Forensic Violations Active`,
+              description: `Forensic scan found ${cnt} post-effective-date critical timekeeping violations that must be remediated before an audit.`,
+              farCitation: 'FAR 31.201-2',
+              potentialScoreRecovery: Math.min(15, cnt * 5),
+            });
+            remediationItems.push({ domainKey: 'TIMEKEEPING', flagKey: 'FORENSIC_CRITICAL_VIOLATIONS', title: 'Resolve post-effective-date critical forensic timekeeping violations', description: 'Run the forensic scan and remediate all critical findings detected on or after the effective date.', priority: 'P1_CRITICAL', potentialScoreRecovery: Math.min(15, cnt * 5) });
+          }
+        } else if (row.severity === 'high') {
+          forensicDeduction += cnt * 3;
+          forensicHighCount = cnt;
+          if (cnt > 0) {
+            redFlags.push({
+              domainKey: 'TIMEKEEPING',
+              flagKey: `FORENSIC_HIGH_VIOLATIONS`,
+              severity: 'HIGH',
+              title: `${cnt} High-Severity Forensic Violations Active`,
+              description: `Forensic scan found ${cnt} post-effective-date high-severity timekeeping violations.`,
+              farCitation: 'FAR 31.201-2',
+              potentialScoreRecovery: Math.min(10, cnt * 3),
+            });
+            remediationItems.push({ domainKey: 'TIMEKEEPING', flagKey: 'FORENSIC_HIGH_VIOLATIONS', title: 'Resolve post-effective-date high-severity forensic timekeeping violations', description: 'Run the forensic scan and remediate all high-severity findings detected on or after the effective date.', priority: 'P2_HIGH', potentialScoreRecovery: Math.min(10, cnt * 3) });
+          }
+        } else if (row.severity === 'medium') {
+          forensicDeduction += cnt * 1;
+        } else if (row.severity === 'low') {
+          forensicDeduction += cnt * 0.5;
         }
-      } else if (row.severity === 'high') {
-        forensicDeduction += cnt * 3;
-        forensicHighCount = cnt;
-        if (cnt > 0) {
-          redFlags.push({
-            domainKey: 'TIMEKEEPING',
-            flagKey: `FORENSIC_HIGH_VIOLATIONS`,
-            severity: 'HIGH',
-            title: `${cnt} High-Severity Forensic Violations Active`,
-            description: `Forensic scan found ${cnt} post-effective-date high-severity timekeeping violations.`,
-            farCitation: 'FAR 31.201-2',
-            potentialScoreRecovery: Math.min(10, cnt * 3),
-          });
-          remediationItems.push({ domainKey: 'TIMEKEEPING', flagKey: 'FORENSIC_HIGH_VIOLATIONS', title: 'Resolve post-effective-date high-severity forensic timekeeping violations', description: 'Run the forensic scan and remediate all high-severity findings detected on or after the effective date.', priority: 'P2_HIGH', potentialScoreRecovery: Math.min(10, cnt * 3) });
-        }
-      } else if (row.severity === 'medium') {
-        forensicDeduction += cnt * 1;
-      } else if (row.severity === 'low') {
-        forensicDeduction += cnt * 0.5;
       }
+    } catch {
+      // If dcaa_audit_findings table doesn't exist yet, skip silently
     }
-  } catch {
-    // If dcaa_audit_findings table doesn't exist yet, skip silently
+    evidenceItems.push({ label: 'Open post-effective-date forensic violations (timekeeping)', value: forensicTotalOpen });
   }
-  evidenceItems.push({ label: 'Open post-effective-date forensic violations (timekeeping)', value: forensicTotalOpen });
 
   const legacyForensicFindings = await safeCount(`
     SELECT COUNT(*) as count

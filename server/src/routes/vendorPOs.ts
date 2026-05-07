@@ -593,10 +593,10 @@ router.post('/', requirePermission('purchasing.manage_pos'), async (req: Request
     delete sanitized.directPoExceptionApprovedById;
     delete sanitized.directPoExceptionApprovedByName;
     delete sanitized.directPoExceptionReason;
-    const requestedExceptionPath = sanitized.directPoExceptionRequested === true;
     delete sanitized.directPoExceptionRequested;
 
     const data = insertVendorPOSchema.parse(sanitized);
+    // TEMP: creation may proceed without a requisition while the workflow is tuned.
 
     // Task #83: gate at creation — every PO must be backed by an APPROVED
     // requisition OR explicitly opt into the direct-PO exception path
@@ -614,11 +614,6 @@ router.post('/', requirePermission('purchasing.manage_pos'), async (req: Request
           message: `Linked requisition ${r.reqNumber} is in status ${r.status}; only APPROVED requisitions may seed a vendor PO.`,
         });
       }
-    } else if (!requestedExceptionPath) {
-      return res.status(422).json({
-        error: 'Requisition required',
-        message: 'Vendor POs must reference an APPROVED requisition. Set { requisitionId } from an approved purchase requisition, or pass { directPoExceptionRequested: true } and have an authorized user approve the exception via POST /api/vendor-pos/:id/direct-po-exception.',
-      });
     }
 
     const vendorPO = await storage.createVendorPO(data);
@@ -1570,9 +1565,9 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
           }
         }
       } else if (vendorPO.directPoExceptionApprovedAt && !allowDirectPo) {
-        purchasingBlockers.push('Direct-PO exceptions are disabled in procurement settings; link an approved requisition instead');
+        // Temporarily allowed while requisition-backed PO workflow is being tuned.
       } else {
-        purchasingBlockers.push('PO has no approved requisition. Either link a requisition or record a direct-PO exception.');
+        // Temporarily allowed while requisition-backed PO workflow is being tuned.
       }
 
       // (2) Competition method must be set

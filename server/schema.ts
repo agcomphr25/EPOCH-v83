@@ -3683,6 +3683,79 @@ export const inventoryTransactions = pgTable('inventory_transactions', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+export const inventoryLedgerTransactionTypeEnum = pgEnum('inventory_ledger_transaction_type', [
+  'RECEIVE',
+  'ISSUE',
+  'RETURN',
+  'TRANSFER',
+  'MOVE',
+  'RESERVE',
+  'UNRESERVE',
+  'CONSUME',
+  'ADJUST',
+  'SCRAP',
+  'SPLIT',
+  'MERGE',
+  'COUNT_ADJUSTMENT',
+  'STATUS_CHANGE',
+  'QUARANTINE',
+  'RELEASE',
+  'EXPIRE',
+  'REVERSAL',
+]);
+
+export const inventoryTransactionLedger = pgTable('inventory_transaction_ledger', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  transactionNumber: text('transaction_number').notNull().unique(),
+  transactionType: inventoryLedgerTransactionTypeEnum('transaction_type').notNull(),
+  inventoryItemId: integer('inventory_item_id')
+    .references(() => inventoryItems.id)
+    .notNull(),
+  agPartNumber: text('ag_part_number')
+    .references(() => inventoryItems.agPartNumber)
+    .notNull(),
+  lotId: uuid('lot_id').references(() => materialLots.id),
+  locationId: text('location_id'),
+  quantityDelta: numeric('quantity_delta', { precision: 14, scale: 4 }).notNull(),
+  quantityBefore: numeric('quantity_before', { precision: 14, scale: 4 }).notNull(),
+  quantityAfter: numeric('quantity_after', { precision: 14, scale: 4 }).notNull(),
+  unitOfMeasure: text('unit_of_measure').default('EA').notNull(),
+  statusBefore: text('status_before'),
+  statusAfter: text('status_after'),
+  performedByUserId: integer('performed_by_user_id').references(() => users.id),
+  performedByDisplayName: text('performed_by_display_name').notNull(),
+  approvedByUserId: integer('approved_by_user_id').references(() => users.id),
+  approvedByDisplayName: text('approved_by_display_name'),
+  approvalId: uuid('approval_id'),
+  projectId: uuid('project_id').references(() => projects.id),
+  productionWorkOrderId: uuid('production_work_order_id').references(() => productionWorkOrders.id),
+  travelerId: varchar('traveler_id', { length: 255 }).references(() => travelers.id),
+  travelerStepId: varchar('traveler_step_id', { length: 255 }).references(() => travelerSteps.id),
+  chargeCodeId: integer('charge_code_id').references(() => chargeCodes.id),
+  reasonCode: text('reason_code'),
+  notes: text('notes'),
+  digitalSignatureId: uuid('digital_signature_id'),
+  sourceModule: text('source_module').notNull(),
+  sourceRecordId: text('source_record_id'),
+  eventHash: text('event_hash').notNull(),
+  reversedTransactionId: uuid('reversed_transaction_id'),
+  metadata: jsonb('metadata').$type<Record<string, unknown>>(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  transactionTypeIdx: index('itl_transaction_type_idx').on(table.transactionType),
+  inventoryItemIdx: index('itl_inventory_item_idx').on(table.inventoryItemId),
+  agPartNumberIdx: index('itl_ag_part_number_idx').on(table.agPartNumber),
+  lotIdx: index('itl_lot_idx').on(table.lotId),
+  locationIdx: index('itl_location_idx').on(table.locationId),
+  projectIdx: index('itl_project_idx').on(table.projectId),
+  workOrderIdx: index('itl_work_order_idx').on(table.productionWorkOrderId),
+  travelerIdx: index('itl_traveler_idx').on(table.travelerId),
+  chargeCodeIdx: index('itl_charge_code_idx').on(table.chargeCodeId),
+  sourceIdx: index('itl_source_idx').on(table.sourceModule, table.sourceRecordId),
+  reversedTransactionIdx: index('itl_reversed_transaction_idx').on(table.reversedTransactionId),
+  createdAtIdx: index('itl_created_at_idx').on(table.createdAt),
+}));
+
 // Vendor Parts - Links parts to vendors with pricing and lead times
 export const vendorParts = pgTable('vendor_parts', {
   id: serial('id').primaryKey(),
@@ -4192,6 +4265,46 @@ export const insertInventoryTransactionSchema = createInsertSchema(inventoryTran
   });
 export type InsertInventoryTransaction = z.infer<typeof insertInventoryTransactionSchema>;
 export type InventoryTransaction = typeof inventoryTransactions.$inferSelect;
+
+export const insertInventoryTransactionLedgerSchema = createInsertSchema(inventoryTransactionLedger)
+  .omit({
+    id: true,
+    transactionNumber: true,
+    eventHash: true,
+    createdAt: true,
+  })
+  .extend({
+    transactionType: z.enum([
+      'RECEIVE',
+      'ISSUE',
+      'RETURN',
+      'TRANSFER',
+      'MOVE',
+      'RESERVE',
+      'UNRESERVE',
+      'CONSUME',
+      'ADJUST',
+      'SCRAP',
+      'SPLIT',
+      'MERGE',
+      'COUNT_ADJUSTMENT',
+      'STATUS_CHANGE',
+      'QUARANTINE',
+      'RELEASE',
+      'EXPIRE',
+      'REVERSAL',
+    ]),
+    inventoryItemId: z.number().int().positive(),
+    agPartNumber: z.string().min(1, 'Part number is required'),
+    quantityDelta: z.union([z.string(), z.number()]),
+    quantityBefore: z.union([z.string(), z.number()]),
+    quantityAfter: z.union([z.string(), z.number()]),
+    unitOfMeasure: z.string().min(1).default('EA'),
+    performedByDisplayName: z.string().min(1, 'Performed by is required'),
+    sourceModule: z.string().min(1, 'Source module is required'),
+  });
+export type InsertInventoryTransactionLedger = z.infer<typeof insertInventoryTransactionLedgerSchema>;
+export type InventoryTransactionLedger = typeof inventoryTransactionLedger.$inferSelect;
 
 export const insertVendorPartSchema = createInsertSchema(vendorParts)
   .omit({

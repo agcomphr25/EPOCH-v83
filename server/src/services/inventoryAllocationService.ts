@@ -2,6 +2,7 @@ import { db } from '../../db';
 import { inventoryBalances, inventoryTransactions, allocationRequirements } from '../../schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { evaluateQueueReadiness } from './queueReadinessService';
+import { recordInventoryBalanceLedgerChange } from './inventoryTransactionLedgerService';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -139,6 +140,24 @@ export async function allocateInventory(
       notes: notes ?? null,
       transactionDate: new Date(),
     });
+
+    await recordInventoryBalanceLedgerChange({
+      agPartNumber,
+      transactionType: 'RESERVE',
+      locationId,
+      quantityDelta: (updated.quantityAvailable ?? 0) - (row.quantityAvailable ?? 0),
+      quantityBefore: row.quantityAvailable ?? 0,
+      quantityAfter: updated.quantityAvailable ?? 0,
+      performedBy,
+      referenceType,
+      referenceId,
+      notes,
+      metadata: {
+        requirementId: requirementId ?? null,
+        queueId: queueId ?? null,
+        quantityBasis: 'available',
+      },
+    }, runner);
 
     return {
       allocated: toAllocate,
@@ -280,6 +299,22 @@ export async function deallocateInventory(
       transactionDate: new Date(),
     });
 
+    await recordInventoryBalanceLedgerChange({
+      agPartNumber,
+      transactionType: 'UNRESERVE',
+      locationId,
+      quantityDelta: (updated.quantityAvailable ?? 0) - (row.quantityAvailable ?? 0),
+      quantityBefore: row.quantityAvailable ?? 0,
+      quantityAfter: updated.quantityAvailable ?? 0,
+      performedBy,
+      referenceType,
+      referenceId,
+      notes,
+      metadata: {
+        quantityBasis: 'available',
+      },
+    }, tx);
+
     return {
       allocated: quantity,
       remaining: 0,
@@ -374,6 +409,22 @@ export async function consumeAllocatedInventory(
       notes: notes ?? null,
       transactionDate: new Date(),
     });
+
+    await recordInventoryBalanceLedgerChange({
+      agPartNumber,
+      transactionType: 'CONSUME',
+      locationId,
+      quantityDelta: updated.quantityOnHand - row.quantityOnHand,
+      quantityBefore: row.quantityOnHand,
+      quantityAfter: updated.quantityOnHand,
+      performedBy,
+      referenceType,
+      referenceId,
+      notes,
+      metadata: {
+        quantityBasis: 'on_hand',
+      },
+    }, tx);
 
     return {
       allocated: quantity,

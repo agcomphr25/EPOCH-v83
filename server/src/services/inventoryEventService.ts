@@ -1,6 +1,12 @@
 import { db } from '../../db';
 import { inventoryItems, inventoryTransactions, inventoryBalances } from '../../schema';
 import { eq, and, sql } from 'drizzle-orm';
+import {
+  recordInventoryBalanceLedgerChange,
+  type InventoryLedgerTransactionType,
+} from './inventoryTransactionLedgerService';
+
+type DbTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export const RECEIVING_LOCATION = 'RECEIVING';
 export const MAIN_WAREHOUSE_LOCATION = 'WAREHOUSE-MAIN';
@@ -31,6 +37,28 @@ export interface InventoryEventParams {
   transactionDate?: Date;
 }
 
+function toLedgerTransactionType(eventType: InventoryEventType): InventoryLedgerTransactionType {
+  switch (eventType) {
+    case 'receipt':
+    case 'receipt_pending':
+      return 'RECEIVE';
+    case 'putaway':
+      return 'MOVE';
+    case 'consumption':
+      return 'CONSUME';
+    case 'transfer':
+      return 'TRANSFER';
+    case 'adjustment':
+      return 'ADJUST';
+    case 'return':
+      return 'RETURN';
+    case 'issue':
+      return 'ISSUE';
+    default:
+      return 'ADJUST';
+  }
+}
+
 export async function createInventoryEvent(params: InventoryEventParams): Promise<void> {
   const {
     agPartNumber,
@@ -59,7 +87,8 @@ export async function createInventoryEvent(params: InventoryEventParams): Promis
     );
   }
 
-  const [item] = await db
+  await db.transaction(async (tx) => {
+  const [item] = await tx
     .select({ agPartNumber: inventoryItems.agPartNumber })
     .from(inventoryItems)
     .where(eq(inventoryItems.agPartNumber, agPartNumber));
@@ -71,7 +100,7 @@ export async function createInventoryEvent(params: InventoryEventParams): Promis
   const totalCost =
     costPerUnit != null ? String((costPerUnit * Math.abs(quantity)).toFixed(2)) : null;
 
-  await db.insert(inventoryTransactions).values({
+  await tx.insert(inventoryTransactions).values({
     agPartNumber,
     transactionType: eventType,
     quantity,
@@ -101,31 +130,120 @@ export async function createInventoryEvent(params: InventoryEventParams): Promis
 
   if (eventType === 'transfer') {
     if (fromLocation) {
-      await upsertBalance(agPartNumber, fromLocation, -Math.abs(quantity));
+      const change = await upsertBalance(agPartNumber, fromLocation, -Math.abs(quantity), tx);
+      await recordInventoryBalanceLedgerChange({
+        agPartNumber,
+        transactionType: 'TRANSFER',
+        locationId: fromLocation,
+        quantityDelta: change.delta,
+        quantityBefore: change.before,
+        quantityAfter: change.after,
+        unitOfMeasure,
+        performedBy,
+        referenceType,
+        referenceId,
+        notes,
+        metadata,
+      }, tx);
     }
     if (toLocation) {
-      await upsertBalance(agPartNumber, toLocation, Math.abs(quantity));
+      const change = await upsertBalance(agPartNumber, toLocation, Math.abs(quantity), tx);
+      await recordInventoryBalanceLedgerChange({
+        agPartNumber,
+        transactionType: 'TRANSFER',
+        locationId: toLocation,
+        quantityDelta: change.delta,
+        quantityBefore: change.before,
+        quantityAfter: change.after,
+        unitOfMeasure,
+        performedBy,
+        referenceType,
+        referenceId,
+        notes,
+        metadata,
+      }, tx);
     }
     return;
   }
 
   if (eventType === 'receipt' || eventType === 'putaway' || eventType === 'adjustment') {
     const location = toLocation || fromLocation || MAIN_WAREHOUSE_LOCATION;
-    await upsertBalance(agPartNumber, location, quantity);
+    const change = await upsertBalance(agPartNumber, location, quantity, tx);
+    await recordInventoryBalanceLedgerChange({
+      agPartNumber,
+      transactionType: toLedgerTransactionType(eventType),
+      locationId: location,
+      quantityDelta: change.delta,
+      quantityBefore: change.before,
+      quantityAfter: change.after,
+      unitOfMeasure,
+      performedBy,
+      referenceType,
+      referenceId,
+      notes,
+      metadata,
+    }, tx);
+
+    if (eventType === 'putaway' && fromLocation && fromLocation !== location) {
+      const sourceChange = await upsertBalance(agPartNumber, fromLocation, -Math.abs(quantity), tx);
+      await recordInventoryBalanceLedgerChange({
+        agPartNumber,
+        transactionType: 'MOVE',
+        locationId: fromLocation,
+        quantityDelta: sourceChange.delta,
+        quantityBefore: sourceChange.before,
+        quantityAfter: sourceChange.after,
+        unitOfMeasure,
+        performedBy,
+        referenceType,
+        referenceId,
+        notes,
+        metadata,
+      }, tx);
+    }
     return;
   }
 
   if (eventType === 'consumption' || eventType === 'issue') {
     const location = fromLocation || MAIN_WAREHOUSE_LOCATION;
-    await upsertBalance(agPartNumber, location, -Math.abs(quantity));
+    const change = await upsertBalance(agPartNumber, location, -Math.abs(quantity), tx);
+    await recordInventoryBalanceLedgerChange({
+      agPartNumber,
+      transactionType: toLedgerTransactionType(eventType),
+      locationId: location,
+      quantityDelta: change.delta,
+      quantityBefore: change.before,
+      quantityAfter: change.after,
+      unitOfMeasure,
+      performedBy,
+      referenceType,
+      referenceId,
+      notes,
+      metadata,
+    }, tx);
     return;
   }
 
   if (eventType === 'return') {
     const location = toLocation || MAIN_WAREHOUSE_LOCATION;
-    await upsertBalance(agPartNumber, location, Math.abs(quantity));
+    const change = await upsertBalance(agPartNumber, location, Math.abs(quantity), tx);
+    await recordInventoryBalanceLedgerChange({
+      agPartNumber,
+      transactionType: 'RETURN',
+      locationId: location,
+      quantityDelta: change.delta,
+      quantityBefore: change.before,
+      quantityAfter: change.after,
+      unitOfMeasure,
+      performedBy,
+      referenceType,
+      referenceId,
+      notes,
+      metadata,
+    }, tx);
     return;
   }
+  });
 }
 
 export async function putAwayInventory(params: {
@@ -152,16 +270,16 @@ export async function putAwayInventory(params: {
     referenceId,
   });
 
-  await upsertBalance(agPartNumber, fromLocation, -Math.abs(quantity));
 }
 
 async function upsertBalance(
   agPartNumber: string,
   locationId: string,
-  delta: number
-): Promise<void> {
-  const [existing] = await db
-    .select({ id: inventoryBalances.id })
+  delta: number,
+  runner: DbTransaction | typeof db = db,
+): Promise<{ before: number; delta: number; after: number }> {
+  const [existing] = await runner
+    .select({ id: inventoryBalances.id, quantityOnHand: inventoryBalances.quantityOnHand })
     .from(inventoryBalances)
     .where(
       and(
@@ -171,7 +289,9 @@ async function upsertBalance(
     );
 
   if (existing) {
-    await db
+    const before = existing.quantityOnHand;
+    const after = Math.max(0, before + delta);
+    await runner
       .update(inventoryBalances)
       .set({
         quantityOnHand: sql`GREATEST(0, ${inventoryBalances.quantityOnHand} + ${delta})`,
@@ -179,14 +299,16 @@ async function upsertBalance(
         updatedAt: new Date(),
       })
       .where(eq(inventoryBalances.id, existing.id));
+    return { before, delta: after - before, after };
   } else {
     const onHand = Math.max(0, delta);
-    await db.insert(inventoryBalances).values({
+    await runner.insert(inventoryBalances).values({
       agPartNumber,
       locationId,
       quantityOnHand: onHand,
       quantityAllocated: 0,
       quantityAvailable: onHand,
     });
+    return { before: 0, delta: onHand, after: onHand };
   }
 }

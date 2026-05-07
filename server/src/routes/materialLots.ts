@@ -23,6 +23,7 @@ import { db } from '../../db';
 import { eq, sql, and, like } from 'drizzle-orm';
 import { backfillPacketFromQueue } from '../lib/packetResolution';
 import { evaluateQueueReadiness } from '../services/queueReadinessService';
+import { recordInventoryLedgerEntry } from '../services/inventoryTransactionLedgerService';
 
 const router = Router();
 
@@ -1323,6 +1324,31 @@ router.post('/consume', async (req: Request, res: Response) => {
           .update(inventoryBalances)
           .set({ quantityOnHand: newOnHand, quantityAllocated: newAllocated, quantityAvailable: newAvailable, updatedAt: new Date() })
           .where(eq(inventoryBalances.id, balance.id));
+
+        await recordInventoryLedgerEntry({
+          transactionType: 'CONSUME',
+          inventoryItemId: lot.inventoryItemId,
+          agPartNumber: lot.materialPartNumber,
+          lotId: lot.id,
+          locationId: balance.locationId,
+          quantityDelta: newOnHand - balance.quantityOnHand,
+          quantityBefore: balance.quantityOnHand,
+          quantityAfter: newOnHand,
+          unitOfMeasure: lot.unitOfMeasure,
+          statusBefore: lot.status,
+          statusAfter: newStatus,
+          performedByDisplayName: validatedData.scannedBy,
+          travelerId: validatedData.travelerId ?? null,
+          travelerStepId: validatedData.travelerStepId ?? null,
+          reasonCode: 'TRAVELER_CONSUMPTION',
+          sourceModule: 'material-lots',
+          sourceRecordId: consumption.id,
+          metadata: {
+            fulfilledReservationId,
+            reservationUpdatedId,
+            receivedUnitId: resolvedRuId,
+          },
+        }, tx);
       }
 
       return { consumption, fulfilledReservationId, reservationUpdatedId };

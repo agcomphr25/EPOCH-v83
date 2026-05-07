@@ -118,7 +118,7 @@ export const settingsTable = timekeepingSchema.table("settings", {
   standardWorkWeekHours: doublePrecision("standard_work_week_hours").notNull().default(40),
   kioskMessage: text("kiosk_message"),
   dcaaChargeCodeEnforcement: boolean("dcaa_charge_code_enforcement").notNull().default(false),
-  salariedTimesheetEnabled: boolean("salaried_timesheet_enabled").notNull().default(false),
+  salariedTimesheetEnabled: boolean("salaried_timesheet_enabled").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

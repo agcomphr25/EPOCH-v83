@@ -71,6 +71,43 @@ type HourlyTimesheet = {
   certificationVersion: number | null;
 };
 
+type RunningTimesheetSession = {
+  id: number;
+  clockIn: string;
+  clockOut: string | null;
+  laborClass: string | null;
+  source: string;
+  chargeCode: string | null;
+  travelerId: string | null;
+  productionWorkOrderId: string | null;
+  hours: number;
+  isOpen: boolean;
+};
+
+type RunningTimesheetDay = {
+  date: string;
+  workHours: number;
+  breakHours: number;
+  regularHours: number;
+  overtimeHours: number;
+  hasOpenSession: boolean;
+  sessions: RunningTimesheetSession[];
+};
+
+type RunningTimesheet = {
+  employeeId: number;
+  periodStart: string;
+  periodEnd: string;
+  generatedAt: string;
+  totalHours: number;
+  regularHours: number;
+  overtimeHours: number;
+  breakHours: number;
+  hasOpenSession: boolean;
+  persistedTimesheet: HourlyTimesheet | null;
+  days: RunningTimesheetDay[];
+};
+
 type WorkSession = {
   id: number;
   employeeId: string;
@@ -167,7 +204,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
   const [activeTab, setActiveTab] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     const tab = params.get('tab');
-    const validTabs = ['checklist', 'certifications', 'onboarding', 'work-sessions', 'time-clock'];
+    const validTabs = ['checklist', 'certifications', 'onboarding', 'work-sessions', 'time-clock', 'my-timesheets'];
     return validTabs.includes(tab ?? '') ? (tab as string) : 'checklist';
   });
   const [, setTick] = useState(0);
@@ -273,14 +310,27 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
     isLoading: timesheetsLoading,
     refetch: refetchTimesheets,
   } = useQuery<HourlyTimesheet[]>({
-    queryKey: ['/api/timekeeping/timesheets', 'mine', employeeId],
+    queryKey: ['/api/timekeeping/timesheets', 'mine'],
     queryFn: async () => {
-      const params = new URLSearchParams({ employeeId: String(employeeId) });
-      const res = await portalFetch(`/api/timekeeping/timesheets?${params.toString()}`);
+      const res = await portalFetch('/api/timekeeping/timesheets/my');
       if (!res.ok) throw new Error('Failed to fetch timesheets');
       return res.json();
     },
     enabled: activeTab === 'my-timesheets',
+  });
+
+  const {
+    data: runningTimesheet,
+    isLoading: runningTimesheetLoading,
+  } = useQuery<RunningTimesheet>({
+    queryKey: ['/api/timekeeping/timesheets', 'mine', 'running'],
+    queryFn: async () => {
+      const res = await portalFetch('/api/timekeeping/timesheets/my/running');
+      if (!res.ok) throw new Error('Failed to fetch running timesheet');
+      return res.json();
+    },
+    enabled: activeTab === 'my-timesheets',
+    refetchInterval: 30000,
   });
 
   const certifyMutation = useMutation({
@@ -300,6 +350,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
       toast({ title: 'Timesheet Certified', description: 'Your certification has been recorded.' });
       setCertConfirmedId(null);
       refetchTimesheets();
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/timesheets', 'mine', 'running'] });
     },
     onError: (err: any) => {
       toast({ title: 'Certification failed', description: err?.message ?? 'Unable to certify timesheet.', variant: 'destructive' });
@@ -382,6 +433,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/punches/my/current'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/timesheets', 'mine', 'running'] });
     },
     onError: (err: Error) => {
       toast({ title: 'Punch failed', description: err.message, variant: 'destructive' });
@@ -1320,6 +1372,107 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
               </CardDescription>
             </CardHeader>
             <CardContent>
+              <div className="rounded-lg border border-blue-200 bg-blue-50/60 p-4 mb-6">
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold text-sm text-gray-900">Current Running Timesheet</h3>
+                      {runningTimesheet?.hasOpenSession && (
+                        <Badge className="bg-green-100 text-green-800 border-green-200">Live</Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {runningTimesheet
+                        ? `${runningTimesheet.periodStart} - ${runningTimesheet.periodEnd}`
+                        : 'Current pay period'}
+                    </p>
+                  </div>
+                  {runningTimesheet && (
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      <div className="rounded-md bg-white border px-3 py-2">
+                        <div className="text-base font-bold text-gray-900">{runningTimesheet.totalHours.toFixed(2)}</div>
+                        <div className="text-[11px] text-muted-foreground">Total</div>
+                      </div>
+                      <div className="rounded-md bg-white border px-3 py-2">
+                        <div className="text-base font-bold text-gray-900">{runningTimesheet.regularHours.toFixed(2)}</div>
+                        <div className="text-[11px] text-muted-foreground">Regular</div>
+                      </div>
+                      <div className="rounded-md bg-white border px-3 py-2">
+                        <div className="text-base font-bold text-gray-900">{runningTimesheet.overtimeHours.toFixed(2)}</div>
+                        <div className="text-[11px] text-muted-foreground">OT</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {runningTimesheetLoading ? (
+                  <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
+                    Loading running timesheet...
+                  </div>
+                ) : !runningTimesheet ? (
+                  <div className="flex items-center gap-2 rounded-md bg-white border p-3 text-sm text-muted-foreground">
+                    <AlertCircle className="h-4 w-4" />
+                    Could not load your running timesheet.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto rounded-md border bg-white">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-32">Date</TableHead>
+                          <TableHead>Entries</TableHead>
+                          <TableHead className="text-right">Regular</TableHead>
+                          <TableHead className="text-right">OT</TableHead>
+                          <TableHead className="text-right">Total</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {runningTimesheet.days.map((day) => (
+                          <TableRow key={day.date}>
+                            <TableCell className="font-medium whitespace-nowrap">
+                              {new Date(`${day.date}T12:00:00`).toLocaleDateString(undefined, {
+                                weekday: 'short',
+                                month: 'short',
+                                day: 'numeric',
+                              })}
+                            </TableCell>
+                            <TableCell>
+                              {day.sessions.length === 0 ? (
+                                <span className="text-xs text-muted-foreground">No punches recorded</span>
+                              ) : (
+                                <div className="space-y-1">
+                                  {day.sessions.map((session) => (
+                                    <div key={`${session.id}-${session.clockIn}`} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+                                      <Badge variant="outline" className={session.laborClass === 'BREAK' ? 'text-amber-700 border-amber-200' : 'text-blue-700 border-blue-200'}>
+                                        {session.laborClass === 'BREAK' ? 'Break' : 'Work'}
+                                      </Badge>
+                                      <span className="font-medium text-gray-700">
+                                        {new Date(session.clockIn).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                                        {' - '}
+                                        {session.clockOut
+                                          ? new Date(session.clockOut).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+                                          : 'Now'}
+                                      </span>
+                                      <span className="text-muted-foreground">{session.hours.toFixed(2)}h</span>
+                                      {session.chargeCode && <span className="text-muted-foreground">CC {session.chargeCode}</span>}
+                                      {session.travelerId && <span className="text-muted-foreground">Traveler {session.travelerId}</span>}
+                                      {session.isOpen && <span className="text-green-700 font-medium">open</span>}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right font-medium">{day.regularHours.toFixed(2)}</TableCell>
+                            <TableCell className="text-right font-medium">{day.overtimeHours.toFixed(2)}</TableCell>
+                            <TableCell className="text-right font-semibold">{day.workHours.toFixed(2)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </div>
+
               {timesheetsLoading ? (
                 <div className="flex items-center justify-center py-12 text-muted-foreground text-sm">
                   Loading timesheets…
@@ -1327,7 +1480,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
               ) : myTimesheets.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 gap-2 text-muted-foreground text-sm">
                   <FileCheck className="h-8 w-8 opacity-40" />
-                  No timesheets found for your employee record.
+                  No saved pay-period timesheets yet. Your running timesheet above updates from your punches.
                 </div>
               ) : (
                 <div className="space-y-6">

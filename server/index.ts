@@ -1606,7 +1606,9 @@ async function initializeBackgroundServices() {
         const { sql: sqlSalary } = await import('drizzle-orm');
 
         // Feature flag column on existing settings table
-        await pool.query(`ALTER TABLE timekeeping.settings ADD COLUMN IF NOT EXISTS salaried_timesheet_enabled BOOLEAN NOT NULL DEFAULT FALSE`);
+        await pool.query(`ALTER TABLE timekeeping.settings ADD COLUMN IF NOT EXISTS salaried_timesheet_enabled BOOLEAN NOT NULL DEFAULT TRUE`);
+        await pool.query(`ALTER TABLE timekeeping.settings ALTER COLUMN salaried_timesheet_enabled SET DEFAULT TRUE`);
+        await pool.query(`UPDATE timekeeping.settings SET salaried_timesheet_enabled = TRUE WHERE salaried_timesheet_enabled = FALSE`);
 
         // indirect_codes — charge categories for salaried lines
         await db.execute(sqlSalary`

@@ -177,6 +177,7 @@ import fillablePdfTemplatesRoutes from './fillablePdfTemplates';
 import pdfFormsRoutes from './pdfForms';
 import accountingPrepRoutes from './accountingPrep';
 import accountingControlRoutes from './accountingControl';
+import improvementNotesRoutes from './improvementNotes';
 import { qrResolverRouter, qrAdminRouter } from './qrCodes';
 import onboardingRoutes from './onboarding';
 import assetManagementRoutes from './assetManagement';
@@ -1082,6 +1083,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // Accounting Control Center - reimbursements, petty cash, owner expenses
   app.use('/api/accounting-control', accountingControlRoutes);
+
+  // Improvement Notes - workflow improvement capture (DB-backed)
+  app.use('/api/improvement-notes', authenticateToken, improvementNotesRoutes);
 
   // Cutting Table routes
   app.use('/api/cutting-table', cuttingTableRoutes);

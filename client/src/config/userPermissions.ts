@@ -56,6 +56,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/policies',
   '/prompt-library',
   '/proteus-labs',
+  '/improvement-notes',
   '/analytics',
   '/badge-configuration',
   '/badge-scanner',
@@ -713,6 +714,7 @@ export const ROLE_ROUTE_ACCESS: Record<string, string[]> = {
   '/admin/continuity': ['ADMIN', 'OWNER'],
   '/prompt-library': ['ADMIN', 'OWNER'],
   '/proteus-labs': ['ADMIN', 'OWNER'],
+  '/improvement-notes': ['ADMIN', 'OWNER'],
 };
 
 /**

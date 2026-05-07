@@ -1,27 +1,31 @@
 import { useMemo, useState } from 'react';
 import { Link, useLocation } from 'wouter';
+import { useMutation } from '@tanstack/react-query';
 import { ClipboardList, Lightbulb, MessageSquarePlus, X } from 'lucide-react';
 import {
-  makeImprovementNoteId,
+  IMPROVEMENT_NOTES_QUERY_KEY,
+  createImprovementNote,
   notePriorities,
   noteTypes,
   roleOptions,
-  saveImprovementNote,
   workflowOptions,
+  type ImprovementNoteInput,
   type ImprovementNotePriority,
   type ImprovementNoteType,
 } from '@/lib/improvementNotes';
+import { queryClient } from '@/lib/queryClient';
+import { useToast } from '@/hooks/use-toast';
 
 export default function ImprovementNoteCapture() {
   const [location] = useLocation();
   const [open, setOpen] = useState(false);
-  const [saved, setSaved] = useState(false);
   const [title, setTitle] = useState('');
   const [details, setDetails] = useState('');
   const [role, setRole] = useState('Inventory Manager');
   const [workflow, setWorkflow] = useState('PO creation');
   const [type, setType] = useState<ImprovementNoteType>('pain-point');
   const [priority, setPriority] = useState<ImprovementNotePriority>('medium');
+  const { toast } = useToast();
 
   const context = useMemo(() => {
     if (typeof window === 'undefined') {
@@ -44,10 +48,24 @@ export default function ImprovementNoteCapture() {
     setPriority('medium');
   };
 
+  const createMutation = useMutation({
+    mutationFn: (input: ImprovementNoteInput) => createImprovementNote(input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: IMPROVEMENT_NOTES_QUERY_KEY });
+      resetForm();
+      toast({ title: 'Note captured', description: 'Saved to the improvement log.' });
+    },
+    onError: (err: any) => {
+      toast({
+        title: 'Could not save note',
+        description: err?.message ?? 'Please try again.',
+        variant: 'destructive',
+      });
+    },
+  });
+
   const submitNote = () => {
-    const now = new Date().toISOString();
-    saveImprovementNote({
-      id: makeImprovementNoteId(),
+    createMutation.mutate({
       title: title.trim() || `${workflow} improvement`,
       details: details.trim(),
       role,
@@ -58,26 +76,17 @@ export default function ImprovementNoteCapture() {
       pagePath: context.pagePath,
       pageTitle: context.pageTitle,
       pageUrl: context.pageUrl,
-      createdAt: now,
-      updatedAt: now,
       source: 'context-capture',
     });
-    resetForm();
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
   };
 
   return (
     <>
       <div className="fixed bottom-5 right-5 z-50 flex items-center gap-3">
-        {saved && (
-          <div className="rounded-md border border-emerald-200 bg-white px-3 py-2 text-sm font-medium text-emerald-700 shadow-lg">
-            Note captured
-          </div>
-        )}
         <button
           type="button"
           onClick={() => setOpen(true)}
+          data-testid="button-improvement-note-open"
           className="inline-flex h-12 items-center gap-2 rounded-full bg-slate-950 px-4 text-sm font-semibold text-white shadow-xl shadow-slate-900/20 transition hover:bg-slate-800"
           title="Capture an improvement note for this page"
         >
@@ -100,6 +109,7 @@ export default function ImprovementNoteCapture() {
               <button
                 type="button"
                 onClick={() => setOpen(false)}
+                data-testid="button-improvement-note-close"
                 className="rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
                 title="Close"
               >
@@ -118,6 +128,7 @@ export default function ImprovementNoteCapture() {
                   <select
                     value={role}
                     onChange={event => setRole(event.target.value)}
+                    data-testid="select-improvement-note-role"
                     className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
                   >
                     {roleOptions.map(option => (
@@ -131,6 +142,7 @@ export default function ImprovementNoteCapture() {
                   <select
                     value={workflow}
                     onChange={event => setWorkflow(event.target.value)}
+                    data-testid="select-improvement-note-workflow"
                     className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
                   >
                     {workflowOptions.map(option => (
@@ -144,6 +156,7 @@ export default function ImprovementNoteCapture() {
                   <select
                     value={type}
                     onChange={event => setType(event.target.value as ImprovementNoteType)}
+                    data-testid="select-improvement-note-type"
                     className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
                   >
                     {noteTypes.map(option => (
@@ -157,6 +170,7 @@ export default function ImprovementNoteCapture() {
                   <select
                     value={priority}
                     onChange={event => setPriority(event.target.value as ImprovementNotePriority)}
+                    data-testid="select-improvement-note-priority"
                     className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
                   >
                     {notePriorities.map(option => (
@@ -171,6 +185,7 @@ export default function ImprovementNoteCapture() {
                 <input
                   value={title}
                   onChange={event => setTitle(event.target.value)}
+                  data-testid="input-improvement-note-title"
                   placeholder="Example: Need item history while creating PO"
                   className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
                 />
@@ -181,6 +196,7 @@ export default function ImprovementNoteCapture() {
                 <textarea
                   value={details}
                   onChange={event => setDetails(event.target.value)}
+                  data-testid="input-improvement-note-details"
                   placeholder="Write it the way she says it. The page, role, workflow, and timestamp are captured automatically."
                   rows={5}
                   className="w-full resize-none rounded-md border border-slate-300 px-3 py-2 text-sm"
@@ -199,6 +215,7 @@ export default function ImprovementNoteCapture() {
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
+                  data-testid="button-improvement-note-cancel"
                   className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
                 >
                   Cancel
@@ -206,9 +223,11 @@ export default function ImprovementNoteCapture() {
                 <button
                   type="button"
                   onClick={submitNote}
-                  className="rounded-md bg-cyan-600 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-700"
+                  disabled={createMutation.isPending}
+                  data-testid="button-improvement-note-submit"
+                  className="rounded-md bg-cyan-600 px-4 py-2 text-sm font-semibold text-white hover:bg-cyan-700 disabled:opacity-60"
                 >
-                  Save note
+                  {createMutation.isPending ? 'Saving…' : 'Save note'}
                 </button>
               </div>
             </div>

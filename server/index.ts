@@ -461,6 +461,7 @@ async function initializeBackgroundServices() {
           '0101_audit_tamper_attempts_durable.sql',
           '0102_traveler_off_system_completion_link.sql',
           '0103_accounting_control_center.sql',
+          '0104_improvement_notes.sql',
           'investigation_308_order_duplication.sql',
         ];
         const criticalMigrations = new Set([
@@ -4288,6 +4289,11 @@ async function initializeBackgroundServices() {
           { key: 'timekeeping.pto.view_all', description: 'View all PTO requests across the company', category: 'timekeeping' },
           { key: 'timekeeping.pto.cancel_request', description: 'Cancel a pending PTO request', category: 'timekeeping' },
           { key: 'timekeeping.time_clock_admin.access', description: 'Access the Time Clock Admin page', category: 'timekeeping' },
+
+          // Improvement Notes (workflow improvement capture)
+          { key: 'improvement_notes.view', description: 'View the Improvement Notes Dashboard and listing of captured workflow suggestions', category: 'improvement_notes' },
+          { key: 'improvement_notes.create', description: 'Submit a workflow improvement note from any page (held by all roles)', category: 'improvement_notes' },
+          { key: 'improvement_notes.manage', description: 'Update status, priority, or delete improvement notes', category: 'improvement_notes' },
         ];
 
         // Upsert each capability key (ignore conflicts on duplicate key)

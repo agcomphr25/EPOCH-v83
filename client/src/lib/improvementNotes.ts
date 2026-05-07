@@ -1,3 +1,5 @@
+import { apiRequest } from './queryClient';
+
 export type ImprovementNoteStatus = 'new' | 'reviewed' | 'planned' | 'built';
 
 export type ImprovementNoteType =
@@ -21,12 +23,28 @@ export interface ImprovementNote {
   pagePath: string;
   pageTitle: string;
   pageUrl: string;
+  source: 'context-capture' | 'dashboard';
+  createdByUserId?: number | null;
+  createdByDisplayName?: string;
   createdAt: string;
   updatedAt: string;
-  source: 'context-capture' | 'dashboard';
 }
 
-export const IMPROVEMENT_NOTES_STORAGE_KEY = 'epoch.improvementNotes.v1';
+export interface ImprovementNoteInput {
+  title: string;
+  details?: string;
+  role: string;
+  workflow: string;
+  type: ImprovementNoteType;
+  priority: ImprovementNotePriority;
+  status?: ImprovementNoteStatus;
+  pagePath?: string;
+  pageTitle?: string;
+  pageUrl?: string;
+  source?: 'context-capture' | 'dashboard';
+}
+
+export const IMPROVEMENT_NOTES_QUERY_KEY = ['/api/improvement-notes'] as const;
 
 export const noteTypes: { value: ImprovementNoteType; label: string }[] = [
   { value: 'pain-point', label: 'Pain point' },
@@ -72,45 +90,30 @@ export const workflowOptions = [
   'Other',
 ];
 
-export function makeImprovementNoteId() {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-    return crypto.randomUUID();
-  }
-
-  return `note-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+export async function fetchImprovementNotes(): Promise<ImprovementNote[]> {
+  const res = await apiRequest('/api/improvement-notes');
+  return res.json();
 }
 
-export function readImprovementNotes(): ImprovementNote[] {
-  if (typeof window === 'undefined') return [];
-
-  try {
-    const raw = window.localStorage.getItem(IMPROVEMENT_NOTES_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+export async function createImprovementNote(input: ImprovementNoteInput): Promise<ImprovementNote> {
+  const res = await apiRequest('/api/improvement-notes', {
+    method: 'POST',
+    body: input,
+  });
+  return res.json();
 }
 
-export function writeImprovementNotes(notes: ImprovementNote[]) {
-  if (typeof window === 'undefined') return;
-  window.localStorage.setItem(IMPROVEMENT_NOTES_STORAGE_KEY, JSON.stringify(notes));
+export async function updateImprovementNote(
+  noteId: string,
+  patch: Partial<ImprovementNoteInput>,
+): Promise<ImprovementNote> {
+  const res = await apiRequest(`/api/improvement-notes/${noteId}`, {
+    method: 'PATCH',
+    body: patch,
+  });
+  return res.json();
 }
 
-export function saveImprovementNote(note: ImprovementNote) {
-  const notes = readImprovementNotes();
-  const next = [note, ...notes.filter(existing => existing.id !== note.id)];
-  writeImprovementNotes(next);
-  window.dispatchEvent(new CustomEvent('epoch:improvement-notes-updated'));
-}
-
-export function updateImprovementNote(noteId: string, patch: Partial<ImprovementNote>) {
-  const notes = readImprovementNotes();
-  const now = new Date().toISOString();
-  const next = notes.map(note =>
-    note.id === noteId ? { ...note, ...patch, updatedAt: now } : note
-  );
-  writeImprovementNotes(next);
-  window.dispatchEvent(new CustomEvent('epoch:improvement-notes-updated'));
+export async function deleteImprovementNote(noteId: string): Promise<void> {
+  await apiRequest(`/api/improvement-notes/${noteId}`, { method: 'DELETE' });
 }

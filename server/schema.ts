@@ -15109,6 +15109,36 @@ export const insertQuickNoteShareSchema = createInsertSchema(quickNoteShares).om
 export type QuickNoteShare = typeof quickNoteShares.$inferSelect;
 export type InsertQuickNoteShare = z.infer<typeof insertQuickNoteShareSchema>;
 
+// ─── Improvement Notes ──────────────────────────────────────────────────────
+// Workflow improvement suggestions captured from any page in EPOCH.
+// Promoted from localStorage prototype to a real backed table in 0104.
+export const improvementNotes = pgTable('improvement_notes', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  title: text('title').notNull(),
+  details: text('details').notNull().default(''),
+  role: text('role').notNull().default('Other'),
+  workflow: text('workflow').notNull().default('Other'),
+  type: text('type').notNull().default('idea'),
+  priority: text('priority').notNull().default('medium'),
+  status: text('status').notNull().default('new'),
+  pagePath: text('page_path').notNull().default(''),
+  pageTitle: text('page_title').notNull().default(''),
+  pageUrl: text('page_url').notNull().default(''),
+  source: text('source').notNull().default('context-capture'),
+  createdByUserId: integer('created_by_user_id'),
+  createdByDisplayName: text('created_by_display_name').notNull().default('unknown'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const insertImprovementNoteSchema = createInsertSchema(improvementNotes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type ImprovementNote = typeof improvementNotes.$inferSelect;
+export type InsertImprovementNote = z.infer<typeof insertImprovementNoteSchema>;
+
 // ─── Schema Governance Audit Log ────────────────────────────────────────────
 
 export const schemaChangeLog = pgTable('schema_change_log', {

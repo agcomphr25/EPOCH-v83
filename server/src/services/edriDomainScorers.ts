@@ -1140,7 +1140,7 @@ export async function scoreInventory(): Promise<DomainScorerResult> {
 
   // Check 2: Lot traceability (ICN coverage)
   const totalLots = await safeCount(`SELECT COUNT(*) as count FROM material_lots`);
-  const lotsWithICN = await safeCount(`SELECT COUNT(*) as count FROM material_lots WHERE icn IS NOT NULL AND icn != ''`);
+  const lotsWithICN = await safeCount(`SELECT COUNT(*) as count FROM material_lots WHERE internal_control_number IS NOT NULL AND internal_control_number != ''`);
   const icnRate = (totalLots === null || lotsWithICN === null) ? null : (totalLots > 0 ? lotsWithICN / totalLots : 1);
   checks['LOT_TRACEABILITY'] = icnRate === null ? 0.5 : icnRate >= 0.95 ? 1 : (icnRate >= 0.75 ? 0.5 : 0);
   evidenceItems.push({ label: 'ICN coverage rate', value: (totalLots === null || lotsWithICN === null) ? 'SCORER_UNAVAILABLE' : `${(icnRate * 100).toFixed(1)}%` });

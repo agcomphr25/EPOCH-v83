@@ -580,6 +580,13 @@ export default function Navigation() {
         'Advanced inventory management with material requirements planning',
     },
     {
+      path: '/inventory/ledger',
+      label: 'Inventory Ledger',
+      icon: ClipboardList,
+      description:
+        'Filterable, exportable history of all inventory transactions',
+    },
+    {
       path: '/inventory/parts-request',
       label: 'Parts Requests',
       icon: FileText,

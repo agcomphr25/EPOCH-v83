@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs/promises';
-import { sql, eq } from 'drizzle-orm';
+import { sql, eq, and, gte, lte, ilike, or, inArray, desc, asc, type SQL } from 'drizzle-orm';
 import { validateSameFamily } from '../utils/unitConversionService';
 import {
   calculateMaterialDemand,
@@ -2716,6 +2716,309 @@ router.get('/inventory/transactions', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Get inventory transactions error:', error);
     res.status(500).json({ error: 'Failed to fetch inventory transactions' });
+  }
+});
+
+// ========================================
+// Inventory Ledger - Unified filterable view of all inventory transactions
+// ========================================
+
+const LEDGER_DEFAULT_LIMIT = 100;
+const LEDGER_MAX_LIMIT = 500;
+
+function parseMultiValue(raw: unknown): string[] {
+  if (raw == null) return [];
+  if (Array.isArray(raw)) {
+    return raw.flatMap((v) => String(v).split(',')).map((v) => v.trim()).filter(Boolean);
+  }
+  return String(raw).split(',').map((v) => v.trim()).filter(Boolean);
+}
+
+function ledgerDeltaForRow(row: { transactionType: string; quantity: number }): number {
+  const t = (row.transactionType || '').toLowerCase();
+  const q = Number(row.quantity) || 0;
+  switch (t) {
+    case 'receipt':
+    case 'return':
+    case 'putaway':
+      return Math.abs(q);
+    case 'issue':
+    case 'consumption':
+      return -Math.abs(q);
+    case 'adjustment':
+      return q;
+    case 'transfer':
+    case 'receipt_pending':
+    case 'allocation':
+      return 0;
+    default:
+      return q;
+  }
+}
+
+interface LedgerFilters {
+  agPartNumber?: string;
+  partSearch?: string;
+  location?: string;
+  types: string[];
+  departmentId?: number;
+  referenceNumber?: string;
+  createdBy?: string;
+  dateFrom?: Date;
+  dateTo?: Date;
+}
+
+function parseLedgerFilters(req: Request): LedgerFilters {
+  const q = req.query;
+  const types = parseMultiValue(q.transactionType).map((t) => t.toLowerCase());
+  const departmentRaw = typeof q.departmentId === 'string' ? q.departmentId : undefined;
+  const departmentId = departmentRaw && /^\d+$/.test(departmentRaw) ? parseInt(departmentRaw, 10) : undefined;
+  const dateFrom = typeof q.dateFrom === 'string' && q.dateFrom ? new Date(q.dateFrom) : undefined;
+  let dateTo: Date | undefined;
+  if (typeof q.dateTo === 'string' && q.dateTo) {
+    const d = new Date(q.dateTo);
+    if (!isNaN(d.getTime())) {
+      // If only a date (YYYY-MM-DD) was provided, expand to end-of-day so the
+      // entire dateTo day is included.
+      if (/^\d{4}-\d{2}-\d{2}$/.test(q.dateTo)) {
+        d.setUTCHours(23, 59, 59, 999);
+      }
+      dateTo = d;
+    }
+  }
+  return {
+    agPartNumber: typeof q.agPartNumber === 'string' && q.agPartNumber ? q.agPartNumber : undefined,
+    partSearch: typeof q.partSearch === 'string' && q.partSearch.trim() ? q.partSearch.trim() : undefined,
+    location: typeof q.location === 'string' && q.location ? q.location : undefined,
+    types,
+    departmentId,
+    referenceNumber: typeof q.referenceNumber === 'string' && q.referenceNumber ? q.referenceNumber : undefined,
+    createdBy: typeof q.createdBy === 'string' && q.createdBy ? q.createdBy : undefined,
+    dateFrom: dateFrom && !isNaN(dateFrom.getTime()) ? dateFrom : undefined,
+    dateTo: dateTo && !isNaN(dateTo.getTime()) ? dateTo : undefined,
+  };
+}
+
+interface LedgerRow {
+  id: number;
+  transactionDate: Date;
+  agPartNumber: string;
+  partName: string | null;
+  transactionType: string;
+  quantity: number;
+  unitOfMeasure: string | null;
+  fromLocation: string | null;
+  toLocation: string | null;
+  location: string;
+  costPerUnit: string | null;
+  totalCost: string | null;
+  referenceType: string | null;
+  referenceId: string | null;
+  notes: string | null;
+  performedBy: string;
+  departmentId?: number;
+  departmentName?: string;
+  delta: number;
+  runningBalance?: number;
+}
+
+async function fetchLedgerRows(filters: LedgerFilters): Promise<LedgerRow[]> {
+  const { inventoryTransactions, inventoryItems } = await import('../../schema');
+
+  const conditions: SQL[] = [];
+  if (filters.agPartNumber) {
+    conditions.push(eq(inventoryTransactions.agPartNumber, filters.agPartNumber));
+  }
+  if (filters.partSearch) {
+    const term = `%${filters.partSearch}%`;
+    const partOr = or(
+      ilike(inventoryTransactions.agPartNumber, term),
+      ilike(inventoryItems.name, term),
+    );
+    if (partOr) conditions.push(partOr);
+  }
+  if (filters.types.length > 0) {
+    conditions.push(inArray(sql`lower(${inventoryTransactions.transactionType})`, filters.types));
+  }
+  if (filters.location) {
+    const locOr = or(
+      eq(inventoryTransactions.toLocation, filters.location),
+      eq(inventoryTransactions.fromLocation, filters.location),
+    );
+    if (locOr) conditions.push(locOr);
+  }
+  if (filters.referenceNumber) {
+    conditions.push(ilike(inventoryTransactions.referenceId, `%${filters.referenceNumber}%`));
+  }
+  if (filters.createdBy) {
+    conditions.push(ilike(inventoryTransactions.performedBy, `%${filters.createdBy}%`));
+  }
+  if (filters.dateFrom) {
+    conditions.push(gte(inventoryTransactions.transactionDate, filters.dateFrom));
+  }
+  if (filters.dateTo) {
+    conditions.push(lte(inventoryTransactions.transactionDate, filters.dateTo));
+  }
+
+  const baseQuery = db
+    .select({
+      id: inventoryTransactions.id,
+      transactionDate: inventoryTransactions.transactionDate,
+      agPartNumber: inventoryTransactions.agPartNumber,
+      partName: inventoryItems.name,
+      transactionType: inventoryTransactions.transactionType,
+      quantity: inventoryTransactions.quantity,
+      unitOfMeasure: inventoryTransactions.unitOfMeasure,
+      fromLocation: inventoryTransactions.fromLocation,
+      toLocation: inventoryTransactions.toLocation,
+      costPerUnit: inventoryTransactions.costPerUnit,
+      totalCost: inventoryTransactions.totalCost,
+      referenceType: inventoryTransactions.referenceType,
+      referenceId: inventoryTransactions.referenceId,
+      notes: inventoryTransactions.notes,
+      performedBy: inventoryTransactions.performedBy,
+    })
+    .from(inventoryTransactions)
+    .leftJoin(inventoryItems, eq(inventoryItems.agPartNumber, inventoryTransactions.agPartNumber));
+
+  const rows = conditions.length > 0
+    ? await baseQuery.where(and(...conditions)).orderBy(desc(inventoryTransactions.transactionDate), desc(inventoryTransactions.id))
+    : await baseQuery.orderBy(desc(inventoryTransactions.transactionDate), desc(inventoryTransactions.id));
+
+  let enriched: LedgerRow[] = rows.map((r) => {
+    const location = r.toLocation || r.fromLocation || 'Unknown';
+    const deptInfo = location ? DEPARTMENT_LOCATION_MAP[location] : undefined;
+    return {
+      ...r,
+      location,
+      departmentId: deptInfo?.departmentId,
+      departmentName: deptInfo?.departmentName,
+      delta: ledgerDeltaForRow({ transactionType: r.transactionType, quantity: r.quantity }),
+    };
+  });
+
+  if (filters.departmentId != null) {
+    enriched = enriched.filter((r) => r.departmentId === filters.departmentId);
+  }
+
+  // Compute running balance only when narrowed to a single part
+  if (filters.agPartNumber) {
+    const ascending = [...enriched].reverse();
+    let balance = 0;
+    for (const row of ascending) {
+      balance += row.delta;
+      row.runningBalance = balance;
+    }
+  }
+
+  return enriched;
+}
+
+function ledgerCsvEscape(value: unknown): string {
+  if (value == null) return '';
+  const s = String(value);
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+const LEDGER_CSV_COLUMNS: Array<{ key: keyof LedgerRow | 'date' | 'reference'; label: string }> = [
+  { key: 'date', label: 'Date' },
+  { key: 'agPartNumber', label: 'AG Part #' },
+  { key: 'partName', label: 'Part Name' },
+  { key: 'location', label: 'Location' },
+  { key: 'departmentName', label: 'Department' },
+  { key: 'transactionType', label: 'Type' },
+  { key: 'quantity', label: 'Quantity' },
+  { key: 'delta', label: 'Signed Delta' },
+  { key: 'runningBalance', label: 'Running Balance' },
+  { key: 'unitOfMeasure', label: 'UOM' },
+  { key: 'costPerUnit', label: 'Unit Cost' },
+  { key: 'totalCost', label: 'Total Cost' },
+  { key: 'referenceType', label: 'Ref Type' },
+  { key: 'reference', label: 'Reference' },
+  { key: 'performedBy', label: 'Created By' },
+  { key: 'notes', label: 'Notes' },
+];
+
+// GET /api/inventory/ledger - Unified inventory ledger with filters and pagination
+router.get('/ledger', async (req: Request, res: Response) => {
+  try {
+    const filters = parseLedgerFilters(req);
+    const pageNum = Math.max(1, parseInt(String(req.query.page ?? '1'), 10) || 1);
+    const requested = parseInt(String(req.query.limit ?? String(LEDGER_DEFAULT_LIMIT)), 10);
+    const limit = Number.isFinite(requested) && requested > 0
+      ? Math.min(requested, LEDGER_MAX_LIMIT)
+      : LEDGER_DEFAULT_LIMIT;
+
+    const allRows = await fetchLedgerRows(filters);
+    const total = allRows.length;
+    const start = (pageNum - 1) * limit;
+    const paginated = allRows.slice(start, start + limit);
+
+    res.json({
+      data: paginated,
+      total,
+      page: pageNum,
+      limit,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+      hasRunningBalance: !!filters.agPartNumber,
+    });
+  } catch (error) {
+    console.error('Get inventory ledger error:', error);
+    res.status(500).json({ error: 'Failed to fetch inventory ledger' });
+  }
+});
+
+// GET /api/inventory/ledger/export.csv - CSV export of filtered ledger
+router.get('/ledger/export.csv', async (req: Request, res: Response) => {
+  try {
+    const filters = parseLedgerFilters(req);
+    const rows = await fetchLedgerRows(filters);
+
+    const header = LEDGER_CSV_COLUMNS.map((c) => ledgerCsvEscape(c.label)).join(',');
+    const lines = [header];
+    for (const r of rows) {
+      const reference = r.referenceId
+        ? (r.referenceType ? `${r.referenceType}:${r.referenceId}` : r.referenceId)
+        : '';
+      const dateStr = r.transactionDate ? new Date(r.transactionDate).toISOString() : '';
+      const values = LEDGER_CSV_COLUMNS.map((c) => {
+        switch (c.key) {
+          case 'date': return ledgerCsvEscape(dateStr);
+          case 'reference': return ledgerCsvEscape(reference);
+          default: return ledgerCsvEscape(r[c.key as keyof LedgerRow]);
+        }
+      });
+      lines.push(values.join(','));
+    }
+
+    const csv = lines.join('\r\n');
+    const ts = new Date().toISOString().replace(/[:.]/g, '-');
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="inventory-ledger-${ts}.csv"`);
+    res.send(csv);
+  } catch (error) {
+    console.error('Export inventory ledger CSV error:', error);
+    res.status(500).json({ error: 'Failed to export inventory ledger' });
+  }
+});
+
+// GET /api/inventory/ledger/locations - Distinct locations for filter dropdowns
+router.get('/ledger/locations', async (_req: Request, res: Response) => {
+  try {
+    const { inventoryTransactions } = await import('../../schema');
+    const rows = await db.execute(sql`
+      SELECT DISTINCT loc FROM (
+        SELECT to_location AS loc FROM ${inventoryTransactions} WHERE to_location IS NOT NULL
+        UNION
+        SELECT from_location AS loc FROM ${inventoryTransactions} WHERE from_location IS NOT NULL
+      ) t WHERE loc <> '' ORDER BY loc
+    `);
+    const locations = (rows.rows as Array<{ loc: string }>).map((r) => r.loc).filter(Boolean);
+    res.json({ locations, departments: DEPARTMENT_LOCATION_MAP });
+  } catch (error) {
+    console.error('Get ledger locations error:', error);
+    res.status(500).json({ error: 'Failed to fetch ledger locations' });
   }
 });
 

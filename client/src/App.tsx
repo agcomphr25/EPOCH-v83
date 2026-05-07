@@ -32,6 +32,7 @@ import ReportPage from './pages/ReportPage';
 import InventoryScannerPage from './pages/InventoryScannerPage';
 import InventoryDashboardPage from './pages/InventoryDashboardPage';
 import InventoryManagerPage from './pages/InventoryManagerPage';
+import InventoryLedgerPage from './pages/InventoryLedgerPage';
 import InventoryReceivingPage from './pages/InventoryReceivingPage';
 import InventoryReceivingControlCenter from './pages/InventoryReceivingControlCenter';
 import InventoryReceivingPageLegacy from './pages/InventoryReceivingPageLegacy';
@@ -750,6 +751,10 @@ function App() {
                   <Route
                     path="/inventory/enhanced-mrp"
                     component={EnhancedInventoryMRPPage}
+                  />
+                  <Route
+                    path="/inventory/ledger"
+                    component={InventoryLedgerPage}
                   />
                   <Route
                     path="/production/material-readiness"

@@ -1513,6 +1513,92 @@ function UnitSplittingStep({ receipt, onNext, onUpdate }: {
     onError: (err: any) => toast.error(err?.message ?? 'Failed to clone unit'),
   });
 
+  // Fetch traceability config for every line so we can preview which lines will
+  // auto-promote into a single Disposition unit vs. those that strictly require splitting.
+  // The Continue button is gated on this resolving so the user can never advance while
+  // strictness is unknown — and the final gate is the server's `skipped` response.
+  const [lineStrictMap, setLineStrictMap] = useState<Record<number, { strict: boolean; fields: string[] }>>({});
+  const [strictConfigLoading, setStrictConfigLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    setStrictConfigLoading(true);
+    (async () => {
+      const partNumbers = Array.from(new Set(
+        lines.map(l => l.agPartNumber).filter((p): p is string => !!p)
+      ));
+      const cfgByPart: Record<string, Record<string, string> | null> = {};
+      await Promise.all(partNumbers.map(async pn => {
+        try {
+          const item = await apiRequest(`/api/inventory/items/by-part-number/${pn}`);
+          cfgByPart[pn] = item?.traceabilityFieldConfig ?? null;
+        } catch {
+          cfgByPart[pn] = null;
+        }
+      }));
+      if (cancelled) return;
+      const STRICT_KEYS = ['serialNumber', 'rollNumber', 'lotNumber'] as const;
+      const next: Record<number, { strict: boolean; fields: string[] }> = {};
+      for (const line of lines) {
+        const cfg = line.agPartNumber ? cfgByPart[line.agPartNumber] : null;
+        const fields = cfg
+          ? STRICT_KEYS.filter(f => (cfg[f] ?? 'optional') === 'required')
+          : [];
+        next[line.id] = { strict: fields.length > 0, fields: [...fields] };
+      }
+      setLineStrictMap(next);
+      setStrictConfigLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [lines.map(l => `${l.id}:${l.agPartNumber ?? ''}`).join('|')]);
+
+  // Lines with received qty but no units yet — these are the auto-promote candidates.
+  const STRICT_FIELD_LABELS: Record<string, string> = {
+    serialNumber: 'Serial #',
+    rollNumber: 'Roll #',
+    lotNumber: 'Lot #',
+  };
+  const pendingLines = lines.filter(l => {
+    const qty = parseFloat(String(l.receivedQty ?? '0'));
+    if (!Number.isFinite(qty) || qty <= 0) return false;
+    return !units.some(u => u.receiptLineId === l.id);
+  });
+  const autoPromoteLines = pendingLines.filter(l => !(lineStrictMap[l.id]?.strict));
+  const strictPendingLines = pendingLines.filter(l => lineStrictMap[l.id]?.strict);
+
+  // Promote any non-split lines into single Disposition units before advancing.
+  const ensureUnitsMutation = useMutation({
+    mutationFn: () => apiRequest(`/api/receipts/${receipt.id}/ensure-units`, { method: 'POST' }),
+    onError: (err: any) => toast.error(err?.message ?? 'Failed to prepare units for Disposition'),
+  });
+
+  const handleAdvanceToDisposition = async () => {
+    try {
+      const result = await ensureUnitsMutation.mutateAsync();
+      const updated = await apiRequest(`/api/receipts/${receipt.id}`);
+      onUpdate(updated);
+
+      // Server is the source of truth for strict-traceability gating: if any lines
+      // were skipped, do NOT advance — surface a toast and keep the user on Step 3.
+      const skippedList: Array<{ agPartNumber: string | null; requiredFields: string[] }> =
+        Array.isArray(result?.skipped) ? result.skipped : [];
+      if (skippedList.length > 0) {
+        const summary = skippedList
+          .map(s => `${s.agPartNumber ?? 'Line'} (${(s.requiredFields ?? []).map(f => STRICT_FIELD_LABELS[f] ?? f).join(', ')})`)
+          .join('; ');
+        toast.error(`Split required before continuing: ${summary}`);
+        return;
+      }
+
+      const createdCount: number = result?.createdCount ?? 0;
+      if (createdCount > 0) {
+        toast.success(`Promoted ${createdCount} non-split line${createdCount === 1 ? '' : 's'} to Disposition`);
+      }
+      onNext();
+    } catch {
+      // toast already shown by mutation onError
+    }
+  };
+
   return (
     <div className="space-y-3">
       {/* Line selector */}
@@ -1903,9 +1989,64 @@ function UnitSplittingStep({ receipt, onNext, onUpdate }: {
         </Button>
       )}
 
-      {units.length > 0 && (
-        <Button size="sm" className="w-full" onClick={onNext}>
-          Continue to Disposition <ChevronRight className="w-3 h-3 ml-1" />
+      {(autoPromoteLines.length > 0 || strictPendingLines.length > 0) && (
+        <div className="space-y-1.5 text-xs">
+          {autoPromoteLines.length > 0 && (
+            <div className="border border-blue-200 bg-blue-50 dark:bg-blue-900/10 rounded p-2">
+              <div className="font-medium text-blue-700 mb-0.5">
+                Will be received as a single unit on Continue
+              </div>
+              <ul className="text-blue-700/80 list-disc ml-4">
+                {autoPromoteLines.map(l => (
+                  <li key={l.id} data-testid={`autopromote-line-${l.id}`}>
+                    {l.agPartNumber ?? 'Line'} — {l.receivedQty} {l.uom ?? ''}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {strictPendingLines.length > 0 && (
+            <div className="border border-amber-300 bg-amber-50 dark:bg-amber-900/10 rounded p-2">
+              <div className="font-medium text-amber-700 mb-0.5 flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3" /> Must be split before continuing
+              </div>
+              <ul className="text-amber-700/80 list-disc ml-4">
+                {strictPendingLines.map(l => {
+                  const fields = lineStrictMap[l.id]?.fields ?? [];
+                  return (
+                    <li key={l.id} data-testid={`strict-line-${l.id}`}>
+                      {l.agPartNumber ?? 'Line'} — requires {fields.map(f => STRICT_FIELD_LABELS[f] ?? f).join(', ')} per unit
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+
+      {(units.length > 0 || pendingLines.length > 0) && (
+        <Button
+          size="sm"
+          className="w-full"
+          onClick={handleAdvanceToDisposition}
+          disabled={
+            ensureUnitsMutation.isPending ||
+            strictConfigLoading ||
+            strictPendingLines.length > 0
+          }
+          data-testid="button-continue-to-disposition"
+          title={
+            strictConfigLoading
+              ? 'Checking traceability requirements…'
+              : strictPendingLines.length > 0
+                ? 'Split the highlighted lines before continuing'
+                : undefined
+          }
+        >
+          {ensureUnitsMutation.isPending || strictConfigLoading
+            ? <Loader2 className="w-3 h-3 animate-spin" />
+            : <>Continue to Disposition <ChevronRight className="w-3 h-3 ml-1" /></>}
         </Button>
       )}
     </div>
@@ -1928,6 +2069,43 @@ function DispositionStep({ receipt, onNext, onUpdate }: {
     supervisorConfirmed: boolean;
   } | null>(null);
   const [dispositionError, setDispositionError] = useState<{ error: string; missingDocuments?: string[] } | null>(null);
+
+  // Safety net: when Disposition opens, ensure any non-split lines have been promoted
+  // into single units so they appear here even if the Step 3 → 4 promotion was skipped
+  // (e.g., user navigated directly to Step 4 by other means). If the server reports any
+  // skipped strict-traceability lines, surface a persistent banner so the receiver knows
+  // those lines won't appear here until they go back to Step 3 and split them.
+  const [skippedStrictLines, setSkippedStrictLines] = useState<Array<{
+    lineId: number;
+    agPartNumber: string | null;
+    requiredFields: string[];
+  }>>([]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const result = await apiRequest(`/api/receipts/${receipt.id}/ensure-units`, { method: 'POST' });
+        if (cancelled) return;
+        const skippedList = Array.isArray(result?.skipped) ? result.skipped : [];
+        setSkippedStrictLines(skippedList);
+        if ((result?.createdCount ?? 0) > 0) {
+          const updated = await apiRequest(`/api/receipts/${receipt.id}`);
+          if (!cancelled) onUpdate(updated);
+        }
+      } catch {
+        // Non-fatal: Step 3 already attempted promotion; user can still split manually.
+      }
+    })();
+    return () => { cancelled = true; };
+  // Run once per receipt id; we deliberately don't depend on receipt.units to avoid loops.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [receipt.id]);
+
+  const STRICT_FIELD_LABELS_DISPO: Record<string, string> = {
+    serialNumber: 'Serial #',
+    rollNumber: 'Roll #',
+    lotNumber: 'Lot #',
+  };
 
   const { data: departments = [] } = useQuery<InventoryDepartment[]>({
     queryKey: ['/api/inventory/departments'],
@@ -1988,6 +2166,27 @@ function DispositionStep({ receipt, onNext, onUpdate }: {
 
   return (
     <div className="space-y-2">
+      {/* Strict-traceability lines that were skipped by ensure-units */}
+      {skippedStrictLines.length > 0 && (
+        <div
+          className="border border-amber-300 bg-amber-50 dark:bg-amber-900/10 rounded-lg p-3 text-xs"
+          data-testid="banner-skipped-strict-lines"
+        >
+          <div className="flex items-center gap-1.5 font-medium text-amber-700 mb-1">
+            <AlertTriangle className="w-3.5 h-3.5" /> Lines awaiting split — not shown below
+          </div>
+          {skippedStrictLines.map(s => (
+            <div key={s.lineId}>
+              <span className="font-medium">{s.agPartNumber ?? `Line ${s.lineId}`}:</span>{' '}
+              requires {(s.requiredFields ?? []).map(f => STRICT_FIELD_LABELS_DISPO[f] ?? f).join(', ')} per unit
+            </div>
+          ))}
+          <div className="text-amber-600 mt-1">
+            Go back to Step 3 (Unit Splitting) to split these lines before they can be dispositioned.
+          </div>
+        </div>
+      )}
+
       {/* Missing required docs banner */}
       {hasMissingDocs && (
         <div className="border border-amber-300 bg-amber-50 dark:bg-amber-900/10 rounded-lg p-3 text-xs">

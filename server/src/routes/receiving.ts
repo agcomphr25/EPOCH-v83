@@ -1031,6 +1031,98 @@ async function handleAcceptedUnit(unit: ReceivedUnit, receipt: Receipt, user: Au
   }
 }
 
+// ── Helper: determine whether a receipt line strictly requires per-unit traceability ──
+// Lines whose part config marks serial / roll / lot as "required" must be explicitly
+// split by the receiver — they cannot be auto-promoted to a single bulk unit because
+// each physical unit needs its own serial / roll / lot identifier.
+async function lineRequiresStrictSplit(line: ReceiptLine): Promise<{ requires: boolean; fields: string[] }> {
+  if (!line.agPartNumber) return { requires: false, fields: [] };
+  const [invItem] = await db.select({ traceabilityFieldConfig: inventoryItems.traceabilityFieldConfig })
+    .from(inventoryItems)
+    .where(eq(inventoryItems.agPartNumber, line.agPartNumber))
+    .limit(1);
+  const cfg = invItem?.traceabilityFieldConfig as Record<string, string> | null | undefined;
+  if (!cfg) return { requires: false, fields: [] };
+  const STRICT_KEYS = ['serialNumber', 'rollNumber', 'lotNumber'] as const;
+  const fields = STRICT_KEYS.filter(f => (cfg[f] ?? 'optional') === 'required');
+  return { requires: fields.length > 0, fields };
+}
+
+// ── POST /api/receipts/:id/ensure-units ──────────────────────────────────────
+// Idempotently promote each receipt line that has receivedQty > 0 and zero existing
+// units into a single default received_units record so it shows up in Disposition.
+// Lines whose part config strictly requires per-unit traceability (serial / roll / lot)
+// are skipped and reported back so the UI can prompt the receiver to split them.
+router.post('/:id/ensure-units', requireReceivingAccess, async (req: Request, res: Response) => {
+  try {
+    const receiptId = parseInt(req.params.id);
+    const user = req.user;
+
+    const [receipt] = await db.select().from(receipts).where(eq(receipts.id, receiptId));
+    if (!receipt) return res.status(404).json({ error: 'Receipt not found' });
+
+    const lines = await db.select().from(receiptLines).where(eq(receiptLines.receiptId, receiptId));
+    const created: ReceivedUnit[] = [];
+    const skipped: Array<{
+      lineId: number;
+      agPartNumber: string | null;
+      reason: 'strict_traceability_required';
+      requiredFields: string[];
+    }> = [];
+
+    for (const line of lines) {
+      const receivedQty = parseFloat(String(line.receivedQty ?? '0'));
+      if (!Number.isFinite(receivedQty) || receivedQty <= 0) continue;
+
+      const existing = await db.select({ id: receivedUnits.id })
+        .from(receivedUnits)
+        .where(eq(receivedUnits.receiptLineId, line.id))
+        .limit(1);
+      if (existing.length > 0) continue;
+
+      const strict = await lineRequiresStrictSplit(line);
+      if (strict.requires) {
+        skipped.push({
+          lineId: line.id,
+          agPartNumber: line.agPartNumber ?? null,
+          reason: 'strict_traceability_required',
+          requiredFields: strict.fields,
+        });
+        continue;
+      }
+
+      const unitSequence = await getNextUnitSequence(receiptId);
+      const barcode = generateUnitBarcode(receipt.receiptNumber, unitSequence);
+      const body = insertReceivedUnitSchema.parse({
+        receiptId,
+        receiptLineId: line.id,
+        unitSequence,
+        barcode,
+        unitType: 'other',
+        quantity: String(receivedQty),
+        uom: line.uom ?? 'EA',
+      });
+      const [unit] = await db.insert(receivedUnits).values(body).returning();
+      created.push(unit);
+
+      await logAudit(receiptId, 'unit_auto_created', user?.employeeId, actorName(user), {
+        lineId: line.id,
+        unitId: unit.id,
+        barcode,
+        unitSequence,
+        quantity: String(receivedQty),
+        reason: 'non_split_line_promoted_to_disposition',
+      });
+    }
+
+    res.json({ created, skipped, createdCount: created.length, skippedCount: skipped.length });
+  } catch (err: any) {
+    console.error('POST ensure-units:', err);
+    if (err instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: err.errors });
+    res.status(500).json({ error: 'Failed to ensure units for receipt' });
+  }
+});
+
 // ── POST /api/receipts/:id/lines/:lineId/split ────────────────────────────────
 // Split a receipt line into N units.
 // Equal-split mode (default): Body: { count: number, templateFields?: Partial<InsertReceivedUnit> }

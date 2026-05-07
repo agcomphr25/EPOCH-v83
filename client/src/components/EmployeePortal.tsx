@@ -110,6 +110,14 @@ type RunningTimesheet = {
   days: RunningTimesheetDay[];
 };
 
+type DailySignOffStatus = {
+  date: string;
+  hasActivity: boolean;
+  isCertified: boolean;
+  timesheetStatus: string | null;
+  certifiedAt: string | null;
+};
+
 type WorkSession = {
   id: number;
   employeeId: string;
@@ -379,8 +387,9 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
     localStorage.setItem('workSessions.filterDateTo', filterDateTo);
   }, [filterDateTo]);
 
-  // Hourly "My Timesheets" — self-certification
+  // Hourly timesheets: daily sign-off plus pay-period self-certification
   const [certConfirmedId, setCertConfirmedId] = useState<number | null>(null);
+  const [dailySignOffDate, setDailySignOffDate] = useState(today);
 
   const {
     data: myTimesheets = [],
@@ -410,6 +419,19 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
     refetchInterval: 30000,
   });
 
+  const {
+    data: dailySignOffStatus,
+    isLoading: dailySignOffLoading,
+  } = useQuery<DailySignOffStatus>({
+    queryKey: ['/api/timekeeping/daily-sign-off-status', dailySignOffDate],
+    queryFn: async () => {
+      const res = await portalFetch(`/api/timekeeping/daily-sign-off-status?date=${dailySignOffDate}`);
+      if (!res.ok) throw new Error('Failed to fetch daily sign-off status');
+      return res.json();
+    },
+    enabled: activeTab === 'my-timesheets' && !!dailySignOffDate,
+  });
+
   const certifyMutation = useMutation({
     mutationFn: async (timesheetId: number) => {
       const res = await portalFetch(`/api/timekeeping/timesheets/${timesheetId}/attest`, {
@@ -431,6 +453,53 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
     },
     onError: (err: any) => {
       toast({ title: 'Certification failed', description: err?.message ?? 'Unable to certify timesheet.', variant: 'destructive' });
+    },
+  });
+
+  const prepareTimesheetMutation = useMutation({
+    mutationFn: async () => {
+      if (!runningTimesheet) throw new Error('Current pay period is not loaded yet.');
+      const res = await portalFetch('/api/timekeeping/timesheets/my/prepare', {
+        method: 'POST',
+        body: JSON.stringify({
+          periodStart: runningTimesheet.periodStart,
+          periodEnd: runningTimesheet.periodEnd,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as any).error ?? 'Failed to prepare timesheet');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: 'Timesheet ready', description: 'Your pay-period timesheet is ready for certification.' });
+      refetchTimesheets();
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/timesheets', 'mine', 'running'] });
+    },
+    onError: (err: any) => {
+      toast({ title: 'Could not prepare timesheet', description: err?.message ?? 'Please try again.', variant: 'destructive' });
+    },
+  });
+
+  const dailySignOffMutation = useMutation({
+    mutationFn: async () => {
+      const res = await portalFetch('/api/timekeeping/daily-sign-off', {
+        method: 'POST',
+        body: JSON.stringify({ date: dailySignOffDate }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as any).error ?? 'Failed to record daily sign-off');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: 'Daily sign-off recorded', description: 'Your daily certification has been saved.' });
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/daily-sign-off-status', dailySignOffDate] });
+    },
+    onError: (err: any) => {
+      toast({ title: 'Daily sign-off failed', description: err?.message ?? 'Please try again.', variant: 'destructive' });
     },
   });
 
@@ -579,6 +648,95 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
   });
 
   const hasActiveFilters = filterChargeCode !== 'all' || filterDateFrom || filterDateTo;
+  const needsCertificationTimesheets = myTimesheets.filter((t) => !t.employeeAttested && t.status === 'draft');
+  const historicalTimesheets = myTimesheets.filter((t) => t.employeeAttested || t.status !== 'draft');
+
+  const renderTimesheetCard = (ts: HourlyTimesheet) => {
+    const needsCert = !ts.employeeAttested && ts.status === 'draft';
+    const isChecked = certConfirmedId === ts.id;
+    return (
+      <div key={ts.id} className={`rounded-lg border p-4 ${needsCert ? 'border-amber-300 bg-amber-50' : 'border-gray-200 bg-white'}`}>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+          <div>
+            <p className="font-semibold text-sm text-gray-900">
+              Pay Period: {ts.periodStart} - {ts.periodEnd}
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {ts.totalHours.toFixed(2)} total hrs &nbsp;|&nbsp; {ts.regularHours.toFixed(2)} regular &nbsp;|&nbsp; {ts.overtimeHours.toFixed(2)} OT
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {ts.employeeAttested ? (
+              <Badge className="bg-green-100 text-green-800 border-green-200 flex items-center gap-1">
+                <ShieldCheck className="h-3 w-3" />
+                Certified
+              </Badge>
+            ) : ts.status === 'draft' ? (
+              <Badge className="bg-amber-100 text-amber-800 border-amber-200">
+                Needs Certification
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="text-muted-foreground capitalize">
+                {ts.status}
+              </Badge>
+            )}
+          </div>
+        </div>
+
+        {ts.employeeAttested && ts.certificationStatement && (
+          <div className="mt-2 rounded bg-green-50 border border-green-200 p-3 text-xs text-green-800">
+            <p className="font-semibold mb-1">Certification recorded</p>
+            <p className="italic">"{ts.certificationStatement}"</p>
+            {ts.attestedAt && (
+              <p className="mt-1 text-green-700">
+                Certified on {new Date(ts.attestedAt).toLocaleString()}
+              </p>
+            )}
+          </div>
+        )}
+
+        {needsCert && (
+          <div className="mt-3 rounded-lg border border-amber-400 bg-amber-50 p-4 space-y-3">
+            <p className="text-xs font-semibold text-amber-900 uppercase">
+              DCAA Certification Required
+            </p>
+            <p className="text-sm text-gray-700 italic leading-relaxed border-l-4 border-amber-400 pl-3">
+              "{DCAA_CERTIFICATION_STATEMENT}"
+            </p>
+            <label className="flex items-start gap-3 cursor-pointer select-none">
+              <Checkbox
+                id={`cert-${ts.id}`}
+                checked={isChecked}
+                onCheckedChange={(checked) => setCertConfirmedId(checked ? ts.id : null)}
+                className="mt-0.5 border-amber-500 data-[state=checked]:bg-amber-500"
+              />
+              <span className="text-sm text-gray-800 font-medium leading-snug">
+                I have read the above statement and certify that it is true and accurate for this pay period.
+              </span>
+            </label>
+            <Button
+              size="sm"
+              disabled={!isChecked || certifyMutation.isPending}
+              onClick={() => certifyMutation.mutate(ts.id)}
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              {certifyMutation.isPending && certConfirmedId === ts.id ? (
+                <span className="flex items-center gap-2">
+                  <span className="h-3 w-3 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                  Certifying...
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4" />
+                  Submit Certification
+                </span>
+              )}
+            </Button>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   // Unique charge codes from loaded sessions for the filter dropdown
   const uniqueChargeCodes = Array.from(
@@ -772,7 +930,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
           </TabsTrigger>
           <TabsTrigger value="certifications" className="flex items-center gap-2">
             <Award className="h-4 w-4" />
-            Certifications
+            Training Certs
           </TabsTrigger>
           <TabsTrigger value="onboarding" className="flex items-center gap-2">
             <FileText className="h-4 w-4" />
@@ -780,14 +938,14 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
           </TabsTrigger>
           <TabsTrigger value="work-sessions" className="flex items-center gap-2">
             <Clock className="h-4 w-4" />
-            Work Sessions
+            Work Order Sessions
           </TabsTrigger>
           <TabsTrigger value="my-timesheets" className="flex items-center gap-2">
             <FileCheck className="h-4 w-4" />
-            My Timesheets
-            {myTimesheets.filter(t => !t.employeeAttested && t.status === 'draft').length > 0 && (
+            Timesheets
+            {needsCertificationTimesheets.length > 0 && (
               <span className="ml-1 inline-flex items-center justify-center rounded-full bg-amber-500 text-white text-xs w-4 h-4">
-                {myTimesheets.filter(t => !t.employeeAttested && t.status === 'draft').length}
+                {needsCertificationTimesheets.length}
               </span>
             )}
           </TabsTrigger>
@@ -1133,7 +1291,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Award className="h-5 w-5" />
-                My Certifications
+                My Training Certs
               </CardTitle>
               <CardDescription>
                 View your completed certifications and training records
@@ -1268,7 +1426,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Clock className="h-5 w-5" />
-                Work Sessions
+                Work Order Sessions
               </CardTitle>
               <CardDescription>
                 Your clock-in / clock-out history across work orders and travelers
@@ -1523,7 +1681,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
               <AlertCircle className="h-4 w-4 mt-0.5 shrink-0 text-blue-500" />
               <span>
                 <strong>Attendance only.</strong> This records when you start and end your workday.
-                Project/job labor attribution is tracked separately in the <strong>Work Sessions</strong> tab.
+                Project/job labor attribution is tracked separately in the <strong>Work Order Sessions</strong> tab.
               </span>
             </div>
 
@@ -1667,16 +1825,16 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
           </div>
         </TabsContent>
 
-        {/* ── My Timesheets (hourly self-certification) ───────────────────── */}
+        {/* ── Timesheets (hourly self-certification) ───────────────────── */}
         <TabsContent value="my-timesheets" className="mt-6">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <FileCheck className="h-5 w-5" />
-                My Timesheets
+                Timesheets
               </CardTitle>
               <CardDescription>
-                Review and certify your recorded hours each pay period. DCAA regulations require you to personally certify that your timesheets are complete and accurate.
+                Review daily sign-offs, certify pay periods, and view historical timesheets.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -1684,7 +1842,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-4">
                   <div>
                     <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-sm text-gray-900">Current Running Timesheet</h3>
+                      <h3 className="font-semibold text-sm text-gray-900">Current Period</h3>
                       {runningTimesheet?.hasOpenSession && (
                         <Badge className="bg-green-100 text-green-800 border-green-200">Live</Badge>
                       )}
@@ -1781,103 +1939,119 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
                 )}
               </div>
 
+              {runningTimesheet && !runningTimesheet.persistedTimesheet && (
+                <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-md border border-blue-200 bg-white p-3">
+                  <p className="text-sm text-blue-900">
+                    When the period is ready, create the draft record so it appears in Needs Certification.
+                  </p>
+                  <Button
+                    size="sm"
+                    onClick={() => prepareTimesheetMutation.mutate()}
+                    disabled={prepareTimesheetMutation.isPending || runningTimesheet.totalHours <= 0}
+                  >
+                    {prepareTimesheetMutation.isPending ? 'Preparing...' : 'Prepare for Certification'}
+                  </Button>
+                </div>
+              )}
+              {runningTimesheet?.persistedTimesheet && (
+                <div className="mb-6 flex items-center gap-2 rounded-md border border-green-200 bg-white p-3 text-sm text-green-800">
+                  <CheckCircle className="h-4 w-4" />
+                  This pay period has a saved timesheet record.
+                </div>
+              )}
+
+              <div className="rounded-lg border p-4 mb-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                  <div>
+                    <h3 className="font-semibold text-sm text-gray-900">Daily Sign-Off</h3>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Certify each day after reviewing the punches recorded for that date.
+                    </p>
+                  </div>
+                  <div className="w-full sm:w-48">
+                    <Label htmlFor="daily-sign-off-date" className="sr-only">Daily sign-off date</Label>
+                    <Input
+                      id="daily-sign-off-date"
+                      type="date"
+                      value={dailySignOffDate}
+                      onChange={(event) => setDailySignOffDate(event.target.value)}
+                    />
+                  </div>
+                </div>
+
+                {dailySignOffLoading ? (
+                  <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
+                    Checking daily sign-off...
+                  </div>
+                ) : dailySignOffStatus?.isCertified ? (
+                  <div className="rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800">
+                    <div className="flex items-center gap-2 font-semibold">
+                      <ShieldCheck className="h-4 w-4" />
+                      Signed off
+                    </div>
+                    {dailySignOffStatus.certifiedAt && (
+                      <p className="mt-1 text-xs text-green-700">
+                        Recorded on {new Date(dailySignOffStatus.certifiedAt).toLocaleString()}
+                      </p>
+                    )}
+                  </div>
+                ) : dailySignOffStatus && !dailySignOffStatus.hasActivity ? (
+                  <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
+                    No work activity is recorded for this date.
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 space-y-3">
+                    <p className="text-sm text-gray-700 italic leading-relaxed border-l-4 border-amber-400 pl-3">
+                      "{DCAA_CERTIFICATION_STATEMENT}"
+                    </p>
+                    <Button
+                      size="sm"
+                      onClick={() => dailySignOffMutation.mutate()}
+                      disabled={dailySignOffMutation.isPending || !dailySignOffDate}
+                      className="bg-amber-600 hover:bg-amber-700 text-white"
+                    >
+                      {dailySignOffMutation.isPending ? 'Signing off...' : 'Sign Off for This Day'}
+                    </Button>
+                  </div>
+                )}
+              </div>
+
               {timesheetsLoading ? (
                 <div className="flex items-center justify-center py-12 text-muted-foreground text-sm">
                   Loading timesheets…
                 </div>
-              ) : myTimesheets.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 gap-2 text-muted-foreground text-sm">
-                  <FileCheck className="h-8 w-8 opacity-40" />
-                  No saved pay-period timesheets yet. Your running timesheet above updates from your punches.
-                </div>
               ) : (
                 <div className="space-y-6">
-                  {myTimesheets.map((ts) => {
-                    const needsCert = !ts.employeeAttested && ts.status === 'draft';
-                    const isChecked = certConfirmedId === ts.id;
-                    return (
-                      <div key={ts.id} className={`rounded-lg border p-4 ${needsCert ? 'border-amber-300 bg-amber-50' : 'border-gray-200 bg-white'}`}>
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-                          <div>
-                            <p className="font-semibold text-sm text-gray-900">
-                              Pay Period: {ts.periodStart} – {ts.periodEnd}
-                            </p>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              {ts.totalHours.toFixed(2)} total hrs &nbsp;·&nbsp; {ts.regularHours.toFixed(2)} regular &nbsp;·&nbsp; {ts.overtimeHours.toFixed(2)} OT
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {ts.employeeAttested ? (
-                              <Badge className="bg-green-100 text-green-800 border-green-200 flex items-center gap-1">
-                                <ShieldCheck className="h-3 w-3" />
-                                Certified
-                              </Badge>
-                            ) : ts.status === 'draft' ? (
-                              <Badge className="bg-amber-100 text-amber-800 border-amber-200">
-                                Needs Certification
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline" className="text-muted-foreground capitalize">
-                                {ts.status}
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-
-                        {ts.employeeAttested && ts.certificationStatement && (
-                          <div className="mt-2 rounded bg-green-50 border border-green-200 p-3 text-xs text-green-800">
-                            <p className="font-semibold mb-1">Certification recorded</p>
-                            <p className="italic">"{ts.certificationStatement}"</p>
-                            {ts.attestedAt && (
-                              <p className="mt-1 text-green-700">
-                                Certified on {new Date(ts.attestedAt).toLocaleString()}
-                              </p>
-                            )}
-                          </div>
-                        )}
-
-                        {needsCert && (
-                          <div className="mt-3 rounded-lg border border-amber-400 bg-amber-50 p-4 space-y-3">
-                            <p className="text-xs font-semibold text-amber-900 uppercase tracking-wide">
-                              DCAA Certification Required
-                            </p>
-                            <p className="text-sm text-gray-700 italic leading-relaxed border-l-4 border-amber-400 pl-3">
-                              "{DCAA_CERTIFICATION_STATEMENT}"
-                            </p>
-                            <label className="flex items-start gap-3 cursor-pointer select-none">
-                              <Checkbox
-                                id={`cert-${ts.id}`}
-                                checked={isChecked}
-                                onCheckedChange={(checked) => setCertConfirmedId(checked ? ts.id : null)}
-                                className="mt-0.5 border-amber-500 data-[state=checked]:bg-amber-500"
-                              />
-                              <span className="text-sm text-gray-800 font-medium leading-snug">
-                                I have read the above statement and certify that it is true and accurate for this pay period.
-                              </span>
-                            </label>
-                            <Button
-                              size="sm"
-                              disabled={!isChecked || certifyMutation.isPending}
-                              onClick={() => certifyMutation.mutate(ts.id)}
-                              className="bg-amber-600 hover:bg-amber-700 text-white"
-                            >
-                              {certifyMutation.isPending && certConfirmedId === ts.id ? (
-                                <span className="flex items-center gap-2">
-                                  <span className="h-3 w-3 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                                  Certifying…
-                                </span>
-                              ) : (
-                                <span className="flex items-center gap-2">
-                                  <ShieldCheck className="h-4 w-4" />
-                                  Submit Certification
-                                </span>
-                              )}
-                            </Button>
-                          </div>
-                        )}
+                  <section className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-semibold text-sm text-gray-900">Needs Certification</h3>
+                      <Badge variant="outline">{needsCertificationTimesheets.length}</Badge>
+                    </div>
+                    {needsCertificationTimesheets.length === 0 ? (
+                      <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
+                        No pay-period timesheets need certification.
                       </div>
-                    );
-                  })}
+                    ) : (
+                      needsCertificationTimesheets.map(renderTimesheetCard)
+                    )}
+                  </section>
+
+                  <section className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-semibold text-sm text-gray-900">History</h3>
+                      <Badge variant="outline">{historicalTimesheets.length}</Badge>
+                    </div>
+                    {historicalTimesheets.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-8 gap-2 text-muted-foreground text-sm rounded-md border bg-muted/30">
+                        <FileCheck className="h-8 w-8 opacity-40" />
+                        No historical timesheets yet.
+                      </div>
+                    ) : (
+                      historicalTimesheets.map(renderTimesheetCard)
+                    )}
+                  </section>
+
+
                 </div>
               )}
             </CardContent>

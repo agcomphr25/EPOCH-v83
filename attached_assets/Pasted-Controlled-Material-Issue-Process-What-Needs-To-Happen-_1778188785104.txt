@@ -1,0 +1,385 @@
+Controlled Material Issue Process
+What Needs To Happen In EPOCH
+
+This is the control layer that prevents:
+
+material going to the wrong project,
+unauthorized consumption,
+hidden inventory loss,
+and untraceable job charging.
+
+Right now EPOCH already has:
+
+travelers,
+WAD linkage direction,
+queue readiness,
+reservations,
+lots,
+material traceability.
+
+So you are already close structurally.
+
+What’s missing is the hard enforcement engine.
+
+TARGET STATE
+
+Material can ONLY be consumed when ALL conditions are valid.
+
+Think of it like a manufacturing “gate.”
+
+REQUIRED CONTROL FLOW
+Operator scans traveler
+        ↓
+System validates WAD
+        ↓
+System validates traveler release
+        ↓
+System validates routing step
+        ↓
+System validates allocation
+        ↓
+System validates lot status
+        ↓
+System validates operator authorization
+        ↓
+Material issue allowed
+        ↓
+Immutable ledger entry created
+1. REQUIRE RELEASED TRAVELER
+Problem
+
+Operators may consume material before production authorization.
+
+Solution
+
+Traveler must be:
+
+status = RELEASED
+
+before:
+
+reserve,
+issue,
+consume,
+or transfer-to-job.
+Add Validation Layer
+
+Create centralized service:
+
+validateTravelerIssueEligibility()
+
+Checks:
+
+Check	Required
+traveler exists	yes
+traveler released	yes
+traveler not closed	yes
+routing active	yes
+project active	yes
+2. REQUIRE APPROVED WAD
+
+This is one of the most important DCAA controls.
+
+Problem
+
+Material should not issue against:
+
+unapproved work,
+unauthorized builds,
+expired jobs,
+or engineering-only activity.
+Required Rule
+WAD.status = APPROVED
+
+before any material issue.
+
+Recommended WAD States
+Status
+DRAFT
+REVIEW
+APPROVED
+RELEASED
+CLOSED
+CANCELLED
+Enforcement
+IF WAD.status != APPROVED
+→ block material issue
+3. REQUIRE VALID ROUTING STEP
+
+Critical aerospace manufacturing control.
+
+Problem
+
+Material can accidentally issue to:
+
+wrong department,
+wrong operation,
+wrong phase,
+wrong sequence.
+Required Validation
+
+Material consumption must occur against:
+
+active traveler step,
+current department,
+current operation.
+Example
+Layup material
+CANNOT issue during QC step
+Add Routing Validation Service
+validateRoutingStep()
+
+Checks:
+
+Validation
+step active
+step not completed
+step assigned correctly
+step sequence valid
+department valid
+4. ENFORCE ALLOCATION VALIDATION
+
+This is already partially in EPOCH.
+
+Now harden it.
+
+Required Rules
+Cannot consume:
+more than allocated
+wrong lot
+expired lot
+rejected lot
+quarantined lot
+Validation Logic
+IF consumedQty > reservedQty
+→ block
+
+IF lot.status != AVAILABLE
+→ block
+
+IF lot.expired = true
+→ block
+Required Allocation Data
+Field
+reservedQty
+consumedQty
+remainingQty
+reservationSource
+travelerId
+WADId
+5. REQUIRE OPERATOR AUTHENTICATION
+
+Critical DCAA accountability control.
+
+Problem
+
+Auditor asks:
+
+“Who issued this material?”
+
+You must always know.
+
+Required Authentication Methods
+Acceptable
+badge scan
+employee PIN
+SSO login
+re-auth for high-risk actions
+Required Stored Data
+Field
+operatorId
+timestamp
+workstation
+IP/device
+department
+Recommended Flow
+Scan traveler
+→ scan material
+→ badge authenticate
+→ consume material
+6. REQUIRE REASON CODES FOR OVERRIDES
+
+Huge audit maturity improvement.
+
+Override Examples
+Override
+negative inventory
+expired material
+allocation bypass
+substitute material
+emergency issue
+Required Fields
+Field
+overrideReason
+approvedBy
+approvalTimestamp
+digitalSignature
+Example
+Override Reason:
+"Emergency engineering authorization"
+7. CREATE IMMUTABLE LEDGER ENTRY
+
+Every issue creates permanent evidence.
+
+Required Entry
+Field
+transactionType
+beforeQty
+afterQty
+operator
+traveler
+WAD
+routingStep
+lot
+timestamp
+Example Ledger Event
+CONSUME
+Lot: HX-2201
+Traveler: TRV-1002
+Step: LAYUP-03
+Qty: -2.5m²
+Operator: EMP-22
+Timestamp: ISO
+8. PREVENT BACKDOOR INVENTORY CHANGES
+
+This is important.
+
+Problem
+
+Someone bypasses traveler process and manually edits inventory.
+
+Required Fix
+
+All inventory changes must route through:
+
+InventoryTransactionService
+
+Never:
+
+direct DB updates
+hidden admin adjustments
+bypass routes
+9. CREATE MATERIAL ISSUE SERVICE
+
+This becomes the central enforcement engine.
+
+Recommended Service
+MaterialIssueService
+Responsibilities
+Validation
+traveler
+WAD
+routing
+allocation
+lot
+operator
+Enforcement
+approvals
+override policy
+traceability rules
+Execution
+ledger write
+inventory balance update
+traveler linkage
+audit event creation
+10. ADD APPROVAL WORKFLOWS
+
+Some material actions should require authorization.
+
+Approval Examples
+Action	Approval
+expired material use	quality
+substitute material	engineering
+negative qty	manager
+quarantine release	MRB
+Recommended Table
+inventory_issue_approvals
+11. BUILD TRACEABILITY VIEWER
+
+Huge AS9100 value.
+
+Search By:
+lot
+traveler
+WAD
+operator
+project
+Reconstruct:
+received
+→ stored
+→ reserved
+→ issued
+→ consumed
+→ cured
+→ assembled
+→ shipped
+12. ADD REAL-TIME BLOCKERS
+
+Operator should immediately see:
+
+expired material
+invalid lot
+wrong routing step
+allocation shortage
+missing approval
+Example UI
+❌ Material blocked:
+Lot expired 2 days ago
+WHAT THIS ACHIEVES
+DCAA
+material accountability
+project traceability
+cost integrity
+operator attribution
+AS9100
+traceability
+controlled issue
+process enforcement
+material accountability
+CMMC
+user accountability
+audit reconstruction
+tamper resistance
+IMPLEMENTATION ORDER
+PHASE 1
+Build First
+centralized MaterialIssueService
+traveler/WAD validation
+allocation validation
+immutable ledger writes
+PHASE 2
+operator badge auth
+override approvals
+reason codes
+routing-step enforcement
+PHASE 3
+digital signatures
+anomaly detection
+traceability viewer
+approval escalation engine
+MOST IMPORTANT ARCHITECTURAL DECISION
+
+Do NOT let:
+
+travelers,
+receiving,
+inventory,
+layup,
+QC,
+or admin tools
+
+directly mutate inventory balances anymore.
+
+Everything should flow through:
+
+InventoryTransactionService
+→ MaterialIssueService
+→ Immutable Ledger
+
+That’s the transition from:
+
+“inventory edits”
+
+to:
+
+“controlled manufacturing transactions.”

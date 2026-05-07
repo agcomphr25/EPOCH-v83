@@ -7,6 +7,7 @@ import { Toaster } from '@/components/ui/toaster';
 import Navigation from './components/Navigation';
 import OfflineIndicator from './components/OfflineIndicator';
 import MessageNotificationPopup from './components/MessageNotificationPopup';
+import ImprovementNoteCapture from './components/ImprovementNoteCapture';
 import { useWebSocketNotifications } from './hooks/useWebSocketNotifications';
 import NotFound from './pages/not-found';
 import AccessDenied from './pages/AccessDenied';
@@ -318,6 +319,7 @@ import UrgentOrdersReport from './pages/UrgentOrdersReport';
 import OTDReport from './pages/OTDReport';
 import OrderHeatMap from './pages/OrderHeatMap';
 import QuickNotesPage from './pages/QuickNotesPage';
+import ImprovementNotesDashboard from './pages/ImprovementNotesDashboard';
 import RFQListPage from './pages/RFQListPage';
 import RFQBuilderPage from './pages/RFQBuilderPage';
 import SystemAuditsPage from './pages/SystemAuditsPage';
@@ -580,6 +582,7 @@ function App() {
                   <Route path="/otd-report" component={OTDReport} />
                   <Route path="/order-heat-map" component={OrderHeatMap} />
                   <Route path="/quick-notes" component={QuickNotesPage} />
+                  <Route path="/improvement-notes" component={ImprovementNotesDashboard} />
                   <Route path="/estimating" component={RFQListPage} />
                   <Route path="/rfq-builder" component={RFQBuilderPage} />
                   <Route path="/rfq-builder/:id" component={RFQBuilderPage} />
@@ -1355,6 +1358,7 @@ function App() {
             <WebSocketNotifications />
             <SessionAwareMessageNotificationPopup />
             <SessionExpiryListener />
+            <ImprovementNoteCapture />
           </Router>
         </DeploymentAuthWrapper>
       </QueryClientProvider>

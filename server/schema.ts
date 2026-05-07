@@ -13768,6 +13768,77 @@ export const insertShipmentAccountingAdjustmentSchema = createInsertSchema(shipm
 });
 
 export type ShipmentAccountingSnapshot = typeof shipmentAccountingSnapshots.$inferSelect;
+
+// ============================================================================
+// ACCOUNTING CONTROL CENTER - expense reimbursement, petty cash, owner expenses
+// ============================================================================
+
+export const accountingExpenseTransactions = pgTable('accounting_expense_transactions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  transactionNumber: text('transaction_number').notNull().unique(),
+  transactionType: text('transaction_type').notNull(), // EMPLOYEE_REIMBURSEMENT | PETTY_CASH | OWNER_EXPENSE
+  transactionDate: date('transaction_date').notNull(),
+  direction: text('direction').notNull().default('OUT'), // IN | OUT
+  status: text('status').notNull().default('SUBMITTED'), // SUBMITTED | APPROVED | REJECTED | PAID | CLOSED
+  paidByType: text('paid_by_type').notNull(), // EMPLOYEE | OWNER | PETTY_CASH | COMPANY
+  paidByName: text('paid_by_name').notNull(),
+  employeeId: integer('employee_id'),
+  employeeDisplayName: text('employee_display_name'),
+  vendorName: text('vendor_name').notNull(),
+  amount: numeric('amount', { precision: 12, scale: 2 }).notNull(),
+  paymentMethod: text('payment_method'),
+  businessPurpose: text('business_purpose').notNull(),
+  projectId: text('project_id'),
+  projectName: text('project_name'),
+  contractNumber: text('contract_number'),
+  costObjective: text('cost_objective'),
+  directIndirect: text('direct_indirect').notNull().default('DIRECT'), // DIRECT | INDIRECT | UNASSIGNED
+  costCategory: text('cost_category').notNull().default('MATERIALS'),
+  reimbursementRequired: boolean('reimbursement_required').default(false).notNull(),
+  payrollReimbursement: boolean('payroll_reimbursement').default(false).notNull(),
+  payrollStatus: text('payroll_status').notNull().default('NOT_APPLICABLE'), // NOT_APPLICABLE | READY | EXPORTED | PAID | BLOCKED
+  receiptStatus: text('receipt_status').notNull().default('MISSING'), // MISSING | ATTACHED | EXCEPTION_APPROVED
+  receiptUrl: text('receipt_url'),
+  glAccountId: integer('gl_account_id').references(() => chartOfAccounts.id),
+  glAccountNameSnapshot: text('gl_account_name_snapshot'),
+  glPostingStatus: text('gl_posting_status').notNull().default('PENDING_COA'), // PENDING_COA | READY | POSTED | HELD
+  allowabilityStatus: text('allowability_status').notNull().default('PENDING_REVIEW'), // PENDING_REVIEW | ALLOWABLE | UNALLOWABLE | NEEDS_REVIEW
+  dcaaReviewStatus: text('dcaa_review_status').notNull().default('NEEDS_REVIEW'), // NEEDS_REVIEW | COMPLETE | EXCEPTION
+  notes: text('notes'),
+  submittedByUserId: integer('submitted_by_user_id'),
+  submittedByDisplayName: text('submitted_by_display_name').notNull(),
+  submittedAt: timestamp('submitted_at').defaultNow().notNull(),
+  approvedByUserId: integer('approved_by_user_id'),
+  approvedByDisplayName: text('approved_by_display_name'),
+  approvedAt: timestamp('approved_at'),
+  reviewedByUserId: integer('reviewed_by_user_id'),
+  reviewedByDisplayName: text('reviewed_by_display_name'),
+  reviewedAt: timestamp('reviewed_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  transactionTypeIdx: index('acct_expense_transactions_type_idx').on(table.transactionType),
+  transactionDateIdx: index('acct_expense_transactions_date_idx').on(table.transactionDate),
+  statusIdx: index('acct_expense_transactions_status_idx').on(table.status),
+  payrollStatusIdx: index('acct_expense_transactions_payroll_status_idx').on(table.payrollStatus),
+  glPostingStatusIdx: index('acct_expense_transactions_gl_status_idx').on(table.glPostingStatus),
+  dcaaReviewStatusIdx: index('acct_expense_transactions_dcaa_status_idx').on(table.dcaaReviewStatus),
+}));
+
+export const insertAccountingExpenseTransactionSchema = createInsertSchema(accountingExpenseTransactions).omit({
+  id: true,
+  transactionNumber: true,
+  submittedAt: true,
+  approvedAt: true,
+  reviewedAt: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  amount: z.union([z.string(), z.number()]).transform(v => String(v)),
+});
+
+export type AccountingExpenseTransaction = typeof accountingExpenseTransactions.$inferSelect;
+export type InsertAccountingExpenseTransaction = z.infer<typeof insertAccountingExpenseTransactionSchema>;
 export type InsertShipmentAccountingSnapshot = z.infer<typeof insertShipmentAccountingSnapshotSchema>;
 export type ShipmentAccountingAdjustment = typeof shipmentAccountingAdjustments.$inferSelect;
 export type InsertShipmentAccountingAdjustment = z.infer<typeof insertShipmentAccountingAdjustmentSchema>;

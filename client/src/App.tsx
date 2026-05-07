@@ -103,6 +103,7 @@ import BulkPaymentPage from './pages/BulkPaymentPage';
 import BulkPaymentHistoryPage from './pages/BulkPaymentHistoryPage';
 import PaymentReconciliationPage from './pages/PaymentReconciliationPage';
 import AccountingPage from './pages/AccountingPage';
+import AccountingControlCenter from './pages/AccountingControlCenter';
 import EmployeeBadgeConfiguration from './pages/EmployeeBadgeConfiguration';
 import BadgeScanner from './pages/BadgeScanner';
 import OnboardingDashboard from './pages/OnboardingDashboard';
@@ -992,6 +993,10 @@ function App() {
                   <Route
                     path="/finance/accounting"
                     component={AccountingPage}
+                  />
+                  <Route
+                    path="/finance/accounting-control"
+                    component={AccountingControlCenter}
                   />
 
                   {/* Payment Processing Routes */}

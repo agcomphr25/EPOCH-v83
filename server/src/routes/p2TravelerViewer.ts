@@ -226,6 +226,7 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
     // Get traveler steps linked to this serialized item via serial number
     let travelerStepData: any[] = [];
     let activeTravelerId: string | null = null;
+    let activeTravelerRow: any = null;
     const linkedTravelers = await db.query.travelers.findMany({
       where: eq(travelers.serialNumber, serializedItem.serialNumber),
       orderBy: [asc(travelers.createdAt)],
@@ -235,7 +236,8 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
         || linkedTravelers.find(t => t.status === 'COMPLETED')
         || linkedTravelers[linkedTravelers.length - 1];
       activeTravelerId = activeTraveler.id;
-      
+      activeTravelerRow = activeTraveler;
+
       travelerStepData = await db.select()
         .from(travelerSteps)
         .where(eq(travelerSteps.travelerId, activeTraveler.id))
@@ -943,9 +945,42 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
       console.log('Routing documents not available:', (e as Error).message);
     }
 
+    // Off-system completion summary for the currently-viewed traveler.
+    // A traveler is treated as off-system when offSystemCompletionLink is
+    // non-null (empty string is the sentinel for "off-system, no notes")
+    // or when the workOrderId carries the legacy 'Off-system' prefix.
+    let offSystemCompletion: {
+      travelerId: string;
+      travelerNumber: string;
+      offSystemCompletionLink: string;
+      workOrderId: string | null;
+    } | null = null;
+    if (activeTravelerRow) {
+      const linkValue = activeTravelerRow.offSystemCompletionLink;
+      const woId: string | null = activeTravelerRow.workOrderId ?? null;
+      const isOffSystem =
+        (linkValue !== null && linkValue !== undefined) ||
+        (typeof woId === 'string' && woId.startsWith('Off-system'));
+      if (isOffSystem) {
+        let displayed = '';
+        if (linkValue) {
+          displayed = linkValue;
+        } else if (typeof woId === 'string' && woId.startsWith('Off-system: ')) {
+          displayed = woId.slice('Off-system: '.length);
+        }
+        offSystemCompletion = {
+          travelerId: activeTravelerRow.id,
+          travelerNumber: activeTravelerRow.travelerNumber,
+          offSystemCompletionLink: displayed,
+          workOrderId: woId,
+        };
+      }
+    }
+
     return res.json({
       serializedItem,
       travelerId: activeTravelerId,
+      offSystemCompletion,
       allTravelerIds: linkedTravelers.map((t, i) => ({
         id: t.id,
         status: t.status,

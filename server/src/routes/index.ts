@@ -3517,7 +3517,11 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
               .set({
                 serialNumber: existingTraveler.serialNumber || item.barcode,
                 status: 'COMPLETED',
-                offSystemCompletionLink: notes || existingTraveler.offSystemCompletionLink || null,
+                // Always store a non-null value so off-system completions are
+                // reliably detectable even when the user provided no notes
+                // and the existing traveler has a real (non-off-system)
+                // workOrderId. Empty string is the off-system sentinel.
+                offSystemCompletionLink: notes || existingTraveler.offSystemCompletionLink || '',
                 ...(shouldStampWorkOrderId ? { workOrderId: offSystemSummary } : {}),
                 updatedAt: new Date(),
               })
@@ -3534,7 +3538,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
               status: 'COMPLETED',
               createdBy: performedBy || 'System',
               workOrderId: notes ? `Off-system: ${notes.substring(0, 100)}` : 'Off-system production',
-              offSystemCompletionLink: notes || null,
+              offSystemCompletionLink: notes || '',
             });
             travelerCreated = true;
           }
@@ -3550,7 +3554,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
             status: 'COMPLETED',
             createdBy: performedBy || 'System',
             workOrderId: notes ? `Off-system: ${notes.substring(0, 100)}` : 'Off-system production',
-            offSystemCompletionLink: notes || null,
+            offSystemCompletionLink: notes || '',
           });
           travelerCreated = true;
         }

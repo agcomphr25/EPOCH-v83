@@ -39,6 +39,7 @@
 
 import { createHash } from "crypto";
 import { and, desc, eq, gte, inArray, lte, or, sql } from "drizzle-orm";
+import Papa from "papaparse";
 import { db } from "../../../db";
 import {
   employeesTable,
@@ -52,7 +53,7 @@ import {
   type PayrollExportRow,
 } from "../../schema/timekeeping";
 import { employees as publicEmployeesTable } from "../../../schema";
-import { splitName } from "../../lib/timekeepingEmployeeResolver";
+import { listResolvedEmployees, splitName } from "../../lib/timekeepingEmployeeResolver";
 import type { AuditActor } from "./audit.service";
 import { recordAuditEvent } from "../auditLedgerService";
 
@@ -155,6 +156,24 @@ export class BatchNotDownloadableError extends Error {
   }
 }
 
+export class PayrollImportParseError extends Error {
+  readonly httpStatus = 400;
+  constructor(message: string) {
+    super(message);
+    this.name = "PayrollImportParseError";
+  }
+}
+
+export class PayrollImportEmployeeMatchError extends Error {
+  readonly httpStatus = 422;
+  readonly details: unknown;
+  constructor(message: string, details: unknown) {
+    super(message);
+    this.name = "PayrollImportEmployeeMatchError";
+    this.details = details;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // CSV building
 // ---------------------------------------------------------------------------
@@ -167,6 +186,8 @@ export class BatchNotDownloadableError extends Error {
  */
 const GUSTO_CSV_HEADER =
   "first_name,last_name,regular_hours,overtime_hours,double_overtime_hours,sick_hours,vacation_hours";
+const TIMETRAKGO_GUSTO_CSV_HEADER =
+  "first_name,last_name,ssn,gusto_employee_id,regular_hours,overtime_hours,double_overtime_hours,sick_hours,vacation_hours";
 
 function csvField(value: string | number): string {
   const s = String(value);
@@ -464,6 +485,251 @@ export function sha256Hex(input: string): string {
   return createHash("sha256").update(input, "utf8").digest("hex");
 }
 
+function normalizeHeader(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[#%]/g, "")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function readField(row: Record<string, unknown>, aliases: string[]): string {
+  for (const alias of aliases) {
+    const normalizedAlias = normalizeHeader(alias);
+    for (const [key, value] of Object.entries(row)) {
+      if (normalizeHeader(key) === normalizedAlias && value != null) {
+        return String(value).trim();
+      }
+    }
+  }
+  return "";
+}
+
+function parseHours(raw: string, field: string, rowNumber: number): number {
+  if (!raw) return 0;
+  const cleaned = raw.replace(/[$,]/g, "").trim();
+  const value = Number(cleaned);
+  if (!Number.isFinite(value) || value < 0) {
+    throw new PayrollImportParseError(
+      `Invalid ${field} value "${raw}" on row ${rowNumber}. Hour values must be finite, non-negative numbers.`,
+    );
+  }
+  return value;
+}
+
+function normalizeNamePart(value: string): string {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function splitUploadedName(row: Record<string, unknown>): { firstName: string; lastName: string } {
+  const firstName = readField(row, ["first_name", "first name", "First Name"]);
+  const lastName = readField(row, ["last_name", "last name", "Last Name"]);
+  if (firstName || lastName) return { firstName, lastName };
+
+  const fullName = readField(row, ["employee", "employee name", "name"]);
+  if (!fullName) return { firstName: "", lastName: "" };
+  const parts = fullName.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) return { firstName: "", lastName: parts[0]! };
+  return {
+    firstName: parts.slice(0, -1).join(" "),
+    lastName: parts[parts.length - 1]!,
+  };
+}
+
+export interface TimeTrakGoImportPreviewRow {
+  rowNumber: number;
+  firstName: string;
+  lastName: string;
+  ssn: string | null;
+  gustoEmployeeId: string | null;
+  employeeNumber: string | null;
+  email: string | null;
+  regularHours: number;
+  overtimeHours: number;
+  doubleOvertimeHours: number;
+  sickHours: number;
+  vacationHours: number;
+}
+
+export function parseTimeTrakGoGustoCsv(csvContent: string): TimeTrakGoImportPreviewRow[] {
+  const trimmed = csvContent.trim();
+  if (!trimmed) throw new PayrollImportParseError("CSV content is required.");
+
+  const parsed = Papa.parse<Record<string, unknown>>(trimmed, {
+    header: true,
+    skipEmptyLines: "greedy",
+    transformHeader: (header) => header.trim(),
+  });
+
+  if (parsed.errors.length > 0) {
+    const first = parsed.errors[0]!;
+    throw new PayrollImportParseError(`CSV parse failed near row ${first.row ?? "unknown"}: ${first.message}`);
+  }
+
+  const rows = parsed.data
+    .map((row, index) => ({ row, rowNumber: index + 2 }))
+    .filter(({ row }) => Object.values(row).some((value) => String(value ?? "").trim().length > 0));
+
+  if (rows.length === 0) throw new PayrollImportParseError("CSV contains no payroll rows.");
+
+  return rows.map(({ row, rowNumber }) => {
+    const { firstName, lastName } = splitUploadedName(row);
+    if (!firstName || !lastName) {
+      throw new PayrollImportParseError(
+        `Row ${rowNumber} must include first/last name columns or an employee name column.`,
+      );
+    }
+
+    return {
+      rowNumber,
+      firstName,
+      lastName,
+      ssn: readField(row, ["ssn", "social security number"]) || null,
+      gustoEmployeeId: readField(row, ["gusto_employee_id", "gusto employee id", "gusto id"]) || null,
+      employeeNumber: readField(row, [
+        "employee_number",
+        "employee number",
+        "employee_id",
+        "employee id",
+        "employee code",
+      ]) || null,
+      email: readField(row, ["email", "employee email", "email address"]) || null,
+      regularHours: parseHours(
+        readField(row, ["regular_hours", "regular hours", "regular hrs", "regular"]),
+        "regular hours",
+        rowNumber,
+      ),
+      overtimeHours: parseHours(
+        readField(row, ["overtime_hours", "overtime hours", "overtime hrs", "overtime", "ot hours", "ot hrs", "ot"]),
+        "overtime hours",
+        rowNumber,
+      ),
+      doubleOvertimeHours: parseHours(
+        readField(row, ["double_overtime_hours", "double overtime hours", "double overtime hrs", "double overtime", "double ot hours", "double ot hrs", "dot"]),
+        "double overtime hours",
+        rowNumber,
+      ),
+      sickHours: parseHours(readField(row, ["sick_hours", "sick hours", "sick hrs", "sick"]), "sick hours", rowNumber),
+      vacationHours: parseHours(
+        readField(row, ["vacation_hours", "vacation hours", "vacation hrs", "vacation", "pto", "pto hours", "pto hrs"]),
+        "vacation hours",
+        rowNumber,
+      ),
+    };
+  });
+}
+
+export function renderTimeTrakGoGustoCsv(rows: TimeTrakGoImportPreviewRow[]): string {
+  const lines = rows.map((r) =>
+    [
+      r.firstName,
+      r.lastName,
+      r.ssn ?? "",
+      r.gustoEmployeeId ?? "",
+      r.regularHours,
+      r.overtimeHours,
+      r.doubleOvertimeHours,
+      r.sickHours,
+      r.vacationHours,
+    ]
+      .map(csvField)
+      .join(","),
+  );
+  return [TIMETRAKGO_GUSTO_CSV_HEADER, ...lines].join("\n");
+}
+
+async function resolveImportedRows(
+  rows: TimeTrakGoImportPreviewRow[],
+): Promise<PayrollExportRowSnapshot[]> {
+  const resolvedEmployees = (await listResolvedEmployees()).filter((e) => e.timekeepingId != null);
+  const byCode = new Map<string, typeof resolvedEmployees>();
+  const byEmail = new Map<string, typeof resolvedEmployees>();
+  const byName = new Map<string, typeof resolvedEmployees>();
+
+  function push(map: Map<string, typeof resolvedEmployees>, key: string | null | undefined, employee: typeof resolvedEmployees[number]) {
+    const normalized = key?.trim().toLowerCase();
+    if (!normalized) return;
+    map.set(normalized, [...(map.get(normalized) ?? []), employee]);
+  }
+
+  for (const employee of resolvedEmployees) {
+    push(byCode, employee.employeeCode, employee);
+    push(byEmail, employee.email, employee);
+    push(
+      byName,
+      `${normalizeNamePart(employee.firstName)}|${normalizeNamePart(employee.lastName)}`,
+      employee,
+    );
+  }
+
+  const errors: Array<{ rowNumber: number; employee: string; reason: string }> = [];
+  const snapshots: PayrollExportRowSnapshot[] = [];
+
+  for (const row of rows) {
+    const candidates =
+      (row.employeeNumber ? byCode.get(row.employeeNumber.trim().toLowerCase()) : undefined) ??
+      (row.email ? byEmail.get(row.email.trim().toLowerCase()) : undefined) ??
+      byName.get(`${normalizeNamePart(row.firstName)}|${normalizeNamePart(row.lastName)}`) ??
+      [];
+
+    if (candidates.length !== 1) {
+      errors.push({
+        rowNumber: row.rowNumber,
+        employee: `${row.firstName} ${row.lastName}`,
+        reason: candidates.length === 0 ? "No matching EPOCH timekeeping employee" : "Multiple matching employees",
+      });
+      continue;
+    }
+
+    const employee = candidates[0]!;
+    snapshots.push({
+      employeeId: employee.timekeepingId!,
+      epochEmployeeId: employee.epochEmployeeId ?? null,
+      employeeFirstNameSnapshot: employee.firstName,
+      employeeLastNameSnapshot: employee.lastName,
+      employeeNumberSnapshot: employee.employeeCode,
+      employeeEmailSnapshot: employee.email,
+      regularHours: row.regularHours,
+      overtimeHours: row.overtimeHours,
+      doubleOvertimeHours: row.doubleOvertimeHours,
+      sickHours: row.sickHours,
+      vacationHours: row.vacationHours,
+      sourceTimesheetIds: [],
+      sourceLeaveEntryIds: [],
+    });
+  }
+
+  if (errors.length > 0) {
+    throw new PayrollImportEmployeeMatchError(
+      "One or more TimeTrakGo rows could not be matched to a unique EPOCH timekeeping employee.",
+      errors,
+    );
+  }
+
+  const seen = new Set<number>();
+  const duplicates: string[] = [];
+  for (const row of snapshots) {
+    if (seen.has(row.employeeId)) {
+      duplicates.push(`${row.employeeFirstNameSnapshot} ${row.employeeLastNameSnapshot}`);
+    }
+    seen.add(row.employeeId);
+  }
+  if (duplicates.length > 0) {
+    throw new PayrollImportEmployeeMatchError(
+      "The import contains duplicate payroll rows for the same EPOCH employee.",
+      duplicates,
+    );
+  }
+
+  snapshots.sort((a, b) =>
+    (a.employeeLastNameSnapshot + a.employeeFirstNameSnapshot).localeCompare(
+      b.employeeLastNameSnapshot + b.employeeFirstNameSnapshot,
+    ),
+  );
+  return snapshots;
+}
+
 // ---------------------------------------------------------------------------
 // SERIALIZABLE wrapper with retry on 40001
 // ---------------------------------------------------------------------------
@@ -534,6 +800,15 @@ export interface CreateRegularFullPeriodBatchInput {
    * the data source from the active SERIALIZABLE transaction client.
    */
   dataSourceOverride?: PayrollSnapshotDataSource;
+}
+
+export interface ImportTimeTrakGoGustoCsvInput {
+  periodStart: string;
+  periodEnd: string;
+  csvContent: string;
+  actor: AuditActor;
+  supersedeReason?: string;
+  sourceFileName?: string | null;
 }
 
 function requireActorId(actor: AuditActor): number {
@@ -742,6 +1017,184 @@ export async function createRegularFullPeriodBatch(
           supersededBatchId,
           rowCount: rows.length,
           csvChecksum,
+        },
+        reason: supersededBatchId != null ? supersedeReasonTrimmed : null,
+      },
+      tx as Parameters<typeof recordAuditEvent>[1],
+    );
+
+    return {
+      batchId: inserted.id,
+      revisionNumber: nextRevision,
+      csvChecksum,
+      rowCount: rows.length,
+      employeeCount: rows.length,
+      supersededBatchId,
+    };
+  });
+}
+
+export async function importTimeTrakGoGustoCsvBatch(
+  input: ImportTimeTrakGoGustoCsvInput,
+): Promise<CreateRegularFullPeriodBatchResult> {
+  const actorId = requireActorId(input.actor);
+  const supersedeReasonTrimmed = input.supersedeReason?.trim() ?? "";
+  const parsedRows = parseTimeTrakGoGustoCsv(input.csvContent);
+  const rows = await resolveImportedRows(parsedRows);
+
+  return await withSerializableRetry(async (tx) => {
+    const prior = await tx
+      .select()
+      .from(payrollExportBatchesTable)
+      .where(
+        and(
+          eq(payrollExportBatchesTable.periodStart, input.periodStart),
+          eq(payrollExportBatchesTable.periodEnd, input.periodEnd),
+          eq(payrollExportBatchesTable.exportType, "regular_full_period"),
+        ),
+      )
+      .orderBy(desc(payrollExportBatchesTable.revisionNumber));
+
+    let supersededBatchId: number | null = null;
+    let nextRevision = 1;
+
+    if (prior.length > 0) {
+      const top = prior[0];
+      nextRevision = top.revisionNumber + 1;
+
+      const processedBatch = prior.find((b) => b.status === "processed");
+      if (processedBatch) throw new ProcessedBatchImmutableError(processedBatch.id);
+
+      const activeBatch = prior.find((b) => b.status === "active") ?? null;
+      if (activeBatch) {
+        if (supersedeReasonTrimmed.length === 0) {
+          throw new SupersedeReasonRequiredError(activeBatch.id, activeBatch.revisionNumber);
+        }
+        await tx
+          .update(payrollExportBatchesTable)
+          .set({ status: "superseded", supersededReason: supersedeReasonTrimmed })
+          .where(eq(payrollExportBatchesTable.id, activeBatch.id));
+        await tx.insert(payrollExportEventsTable).values({
+          batchId: activeBatch.id,
+          eventType: "BATCH_SUPERSEDED",
+          actorId,
+          actorEmail: input.actor.email,
+          actorRole: input.actor.role,
+          reason: supersedeReasonTrimmed,
+          metadata: {
+            supersededByRevision: nextRevision,
+            previousRevision: activeBatch.revisionNumber,
+            supersededByImportSource: "timetrakgo",
+          },
+          ipAddress: input.actor.ip,
+        });
+        supersededBatchId = activeBatch.id;
+      }
+    }
+
+    const csvContent = renderTimeTrakGoGustoCsv(parsedRows);
+    const csvChecksum = sha256Hex(csvContent);
+    const totalRegularHours = rows.reduce((s, r) => s + r.regularHours, 0);
+    const totalOvertimeHours = rows.reduce((s, r) => s + r.overtimeHours, 0);
+    const totalSickHours = rows.reduce((s, r) => s + r.sickHours, 0);
+    const totalVacationHours = rows.reduce((s, r) => s + r.vacationHours, 0);
+
+    let inserted: PayrollExportBatch;
+    try {
+      const [row] = await tx
+        .insert(payrollExportBatchesTable)
+        .values({
+          periodStart: input.periodStart,
+          periodEnd: input.periodEnd,
+          exportType: "regular_full_period",
+          revisionNumber: nextRevision,
+          status: "active",
+          exportFormat: "timetrakgo_gusto_csv",
+          csvContent,
+          csvChecksum,
+          rowCount: rows.length,
+          employeeCount: rows.length,
+          totalRegularHours,
+          totalOvertimeHours,
+          totalSickHours,
+          totalVacationHours,
+          includesAdjustments: false,
+          adjustmentIds: null,
+          sourceTimesheetIds: [],
+          sourceLeaveEntryIds: [],
+          supersedesBatchId: supersededBatchId,
+          createdBy: actorId,
+        })
+        .returning();
+      inserted = row;
+    } catch (err) {
+      if ((err as PgErrorLike)?.code === UNIQUE_VIOLATION) {
+        throw new ConcurrentExportConflictError(input.periodStart, input.periodEnd);
+      }
+      throw err;
+    }
+
+    await tx.insert(payrollExportRowsTable).values(
+      rows.map((r) => ({
+        batchId: inserted.id,
+        employeeId: r.employeeId,
+        epochEmployeeId: r.epochEmployeeId,
+        employeeFirstNameSnapshot: r.employeeFirstNameSnapshot,
+        employeeLastNameSnapshot: r.employeeLastNameSnapshot,
+        employeeNumberSnapshot: r.employeeNumberSnapshot,
+        employeeEmailSnapshot: r.employeeEmailSnapshot,
+        regularHours: r.regularHours,
+        overtimeHours: r.overtimeHours,
+        doubleOvertimeHours: r.doubleOvertimeHours,
+        sickHours: r.sickHours,
+        vacationHours: r.vacationHours,
+        sourceTimesheetIds: [],
+        sourceLeaveEntryIds: [],
+        adjustmentIds: null,
+      })),
+    );
+
+    await tx.insert(payrollExportEventsTable).values({
+      batchId: inserted.id,
+      eventType: "BATCH_CREATED",
+      actorId,
+      actorEmail: input.actor.email,
+      actorRole: input.actor.role,
+      reason: supersededBatchId != null ? supersedeReasonTrimmed : null,
+      metadata: {
+        revisionNumber: nextRevision,
+        supersededBatchId,
+        rowCount: rows.length,
+        csvChecksum,
+        importSource: "timetrakgo",
+        sourceFileName: input.sourceFileName ?? null,
+        uploadedRowNumbers: parsedRows.map((r) => r.rowNumber),
+      },
+      ipAddress: input.actor.ip,
+    });
+
+    await recordAuditEvent(
+      {
+        eventType: "PAYROLL_EXPORT_IMPORTED",
+        subjectType: "payroll_export_batch",
+        subjectId: String(inserted.id),
+        sourceService: "payrollExport.service",
+        actor: {
+          id: actorId,
+          username: input.actor.email,
+          role: input.actor.role,
+        },
+        ipAddress: input.actor.ip ?? null,
+        payload: {
+          batchId: inserted.id,
+          periodStart: input.periodStart,
+          periodEnd: input.periodEnd,
+          revisionNumber: nextRevision,
+          supersededBatchId,
+          rowCount: rows.length,
+          csvChecksum,
+          importSource: "timetrakgo",
+          sourceFileName: input.sourceFileName ?? null,
         },
         reason: supersededBatchId != null ? supersedeReasonTrimmed : null,
       },

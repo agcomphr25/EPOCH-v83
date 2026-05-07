@@ -91,27 +91,24 @@ export const workflowOptions = [
 ];
 
 export async function fetchImprovementNotes(): Promise<ImprovementNote[]> {
-  const res = await apiRequest('/api/improvement-notes');
-  return res.json();
+  return (await apiRequest('/api/improvement-notes')) as ImprovementNote[];
 }
 
 export async function createImprovementNote(input: ImprovementNoteInput): Promise<ImprovementNote> {
-  const res = await apiRequest('/api/improvement-notes', {
+  return (await apiRequest('/api/improvement-notes', {
     method: 'POST',
     body: input,
-  });
-  return res.json();
+  })) as ImprovementNote;
 }
 
 export async function updateImprovementNote(
   noteId: string,
   patch: Partial<ImprovementNoteInput>,
 ): Promise<ImprovementNote> {
-  const res = await apiRequest(`/api/improvement-notes/${noteId}`, {
+  return (await apiRequest(`/api/improvement-notes/${noteId}`, {
     method: 'PATCH',
     body: patch,
-  });
-  return res.json();
+  })) as ImprovementNote;
 }
 
 export async function deleteImprovementNote(noteId: string): Promise<void> {

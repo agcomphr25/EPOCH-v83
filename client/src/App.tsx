@@ -39,6 +39,7 @@ import EnhancedInventoryMRPPage from './pages/EnhancedInventoryMRPPage';
 import MaterialReadinessDashboard from './pages/MaterialReadinessDashboard';
 import MaterialIntelligenceDashboard from './pages/MaterialIntelligenceDashboard';
 import DepartmentPartsRequestPage from './pages/DepartmentPartsRequestPage';
+import PartsRequestsCard from './components/inventory/PartsRequestsCard';
 import ConsolidatedNeedsListPage from './pages/ConsolidatedNeedsListPage';
 import QCPage from './pages/QCPage';
 import AuditSettings from './pages/AuditSettings';
@@ -756,6 +757,14 @@ function App() {
                   />
                   <Route
                     path="/inventory/parts-request"
+                    component={() => (
+                      <div className="container mx-auto px-4 py-6">
+                        <PartsRequestsCard />
+                      </div>
+                    )}
+                  />
+                  <Route
+                    path="/inventory/parts-request-legacy"
                     component={DepartmentPartsRequestPage}
                   />
                   <Route

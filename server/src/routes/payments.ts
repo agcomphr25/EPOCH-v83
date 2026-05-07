@@ -184,6 +184,7 @@ async function processTransactionResult(data: {
 }) {
   const isApproved = data.responseCode === '1';
   const status = isApproved ? 'completed' : 'failed';
+  const recordedPaymentAmount = isApproved ? data.amount : 0;
 
   // Create payment record
   const [payment] = await db
@@ -191,11 +192,11 @@ async function processTransactionResult(data: {
     .values({
       orderId: data.orderId,
       paymentType: 'credit_card',
-      paymentAmount: data.amount,
+      paymentAmount: recordedPaymentAmount,
       paymentDate: new Date(),
       notes: isApproved
         ? `Credit card payment approved - Auth: ${data.authCode}`
-        : `Credit card payment failed - ${data.responseReasonText}`,
+        : `Credit card payment failed - ${data.responseReasonText}. Attempted amount: $${data.amount.toFixed(2)}`,
     })
     .returning();
 

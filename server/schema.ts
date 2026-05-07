@@ -2318,7 +2318,7 @@ export const insertPaymentSchema = createInsertSchema(payments)
     paymentType: z.enum(['credit_card', 'agr', 'check', 'cash', 'ach', 'aaaa', 'wire']),
     paymentAmount: z
       .number()
-      .min(0.01, 'Payment amount must be greater than 0'),
+      .min(0, 'Payment amount cannot be negative'),
     paymentDate: z.coerce.date(),
     notes: z.string().optional().nullable(),
   });

@@ -452,6 +452,7 @@ async function initializeBackgroundServices() {
           '0096_wad_document_links.sql',
           '0097_wad_wizard_data.sql',
           '0098_payroll_export_batches.sql',
+          '0099_employee_payroll_control.sql',
           '0099_audit_evidence_hardening.sql',
           '0099_policies_library.sql',
           '0099_punch_ledger_pending_approval.sql',

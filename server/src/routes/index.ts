@@ -91,6 +91,7 @@ import policiesRoutes from './policies';
 import quotesRoutes from './quotes';
 import costCentersRoutes from './costCenters';
 import costAccountingRoutes from './costAccounting';
+import payrollControlRoutes from './payrollControl';
 import employeeBadgesRoutes from './employeeBadges';
 import manufacturingQueueRoutes from './manufacturingQueue';
 import cuttingTableManufacturingQueueRoutes from './cuttingTableManufacturingQueue';
@@ -774,6 +775,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   // Cost Accounting routes
   app.use('/api/cost-accounting', costAccountingRoutes);
   app.use('/api/burden-rates', burdenRatesRoutes);
+  app.use('/api/payroll-control', payrollControlRoutes);
 
   // Employee Badge Actions routes
   app.use('/api/employee-badges', employeeBadgesRoutes);

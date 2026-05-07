@@ -1,0 +1,176 @@
+What needs to happen
+1. Add cycle count database tables
+
+Add a new migration, likely after 0109_inventory_transaction_ledger.sql.
+
+cycle_count_sessions
+
+Tracks the count event.
+
+Fields:
+
+id
+session_number
+status: DRAFT / SCHEDULED / IN_PROGRESS / PENDING_REVIEW / APPROVED / POSTED / CANCELLED
+count_type: FULL / LOCATION / ITEM / ABC / SPOT
+location_id
+scheduled_date
+started_at
+completed_at
+created_by_user_id
+assigned_to_user_id
+approved_by_user_id
+approved_at
+notes
+created_at
+updated_at
+cycle_count_lines
+
+Tracks each counted item/lot.
+
+id
+session_id
+inventory_item_id
+ag_part_number
+lot_id
+location_id
+expected_qty
+counted_qty
+variance_qty
+variance_percent
+unit_of_measure
+counter_user_id
+counted_at
+recount_required
+recount_counted_qty
+recount_user_id
+recounted_at
+disposition: ACCEPT / RECOUNT / INVESTIGATE / ADJUST / HOLD
+investigation_notes
+approval_required
+approved_by_user_id
+approved_at
+posted_ledger_transaction_id
+created_at
+updated_at
+2. Use the existing ledger for final adjustments
+
+Do not create a separate adjustment history. When a cycle count is approved and posted, write a COUNT_ADJUSTMENT row into inventory_transaction_ledger.
+
+That ledger already supports:
+
+transaction_type
+inventory_item_id
+lot_id
+location_id
+quantity_delta
+quantity_before
+quantity_after
+performed_by_user_id
+approved_by_user_id
+approval_id
+reason_code
+source_module
+source_record_id
+event_hash
+
+So for cycle count posting:
+
+transaction_type = COUNT_ADJUSTMENT
+source_module = cycle_count
+source_record_id = cycle_count_lines.id
+quantity_before = expected_qty
+quantity_after = counted_qty
+quantity_delta = counted_qty - expected_qty
+reason_code = CYCLE_COUNT_VARIANCE
+3. Add backend service
+
+Create:
+
+server/src/services/cycleCountService.ts
+
+Responsibilities:
+
+createCycleCountSession()
+generateCycleCountLines()
+startCycleCount()
+submitBlindCount()
+flagVariance()
+submitRecount()
+approveCycleCount()
+postCycleCountAdjustments()
+
+Important rule: users counting should not see expected_qty during the count. That is what makes it a blind count.
+
+4. Add inventory routes
+
+EPOCH already has a large server/src/routes/inventory.ts route file with permission checks such as requirePermission('inventory.adjust').
+
+Add routes like:
+
+GET    /api/inventory/cycle-counts
+POST   /api/inventory/cycle-counts
+GET    /api/inventory/cycle-counts/:id
+POST   /api/inventory/cycle-counts/:id/start
+POST   /api/inventory/cycle-counts/:id/lines/:lineId/count
+POST   /api/inventory/cycle-counts/:id/lines/:lineId/recount
+POST   /api/inventory/cycle-counts/:id/approve
+POST   /api/inventory/cycle-counts/:id/post-adjustments
+5. Add permissions
+
+Add capability gates:
+
+inventory.cycleCount.view
+inventory.cycleCount.create
+inventory.cycleCount.perform
+inventory.cycleCount.approve
+inventory.cycleCount.postAdjustments
+
+Do not let the same person count, approve, and post adjustment unless they are admin/owner. That separation helps DCAA readiness.
+
+6. Add UI page
+
+Add a page like:
+
+client/src/pages/inventory/CycleCountsPage.tsx
+
+Suggested tabs:
+
+Scheduled
+In Progress
+Pending Review
+Posted
+Variance History
+
+Main workflow:
+
+Create Count
+→ Select location/item/lot scope
+→ Generate blind count lines
+→ Counter enters counted qty
+→ System calculates variance
+→ Recount required if over threshold
+→ Supervisor approves
+→ System posts COUNT_ADJUSTMENT ledger entries
+7. Add variance thresholds
+
+Start simple:
+
+0% variance = auto pass
+Small variance = supervisor review
+Large variance = mandatory recount + investigation
+High-value material = always approval required
+Controlled/prepreg material = mandatory investigation if variance exists
+
+Example config table:
+
+cycle_count_variance_policies
+
+id
+item_category
+location_id
+qty_variance_threshold
+percent_variance_threshold
+requires_recount
+requires_approval
+requires_investigation

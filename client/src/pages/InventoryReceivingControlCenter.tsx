@@ -210,6 +210,26 @@ interface AuditEntry {
   createdAt: string;
 }
 
+interface DepartmentReceivingAction {
+  receipt_id: number;
+  receipt_number: string;
+  vendor_name?: string;
+  vendor_po_number?: string;
+  department_id: number;
+  department_name?: string;
+  receipt_line_id: number;
+  ag_part_number?: string;
+  description?: string;
+  unit_id: number;
+  barcode: string;
+  quantity: string;
+  uom?: string;
+  disposition: string;
+  location?: string;
+  freezer_number?: number;
+  action_required: 'disposition_required' | 'putaway_required';
+}
+
 // ── Constants ──────────────────────────────────────────────────────────────────
 
 const DISPOSITION_COLORS: Record<string, string> = {
@@ -217,6 +237,9 @@ const DISPOSITION_COLORS: Record<string, string> = {
   accepted: 'bg-green-100 text-green-800 border-green-200',
   quarantine: 'bg-orange-100 text-orange-800 border-orange-200',
   rejected: 'bg-red-100 text-red-800 border-red-200',
+  rejected_returned: 'bg-red-100 text-red-800 border-red-200',
+  rejected_scrapped: 'bg-red-100 text-red-800 border-red-200',
+  rejected_reallocated: 'bg-purple-100 text-purple-800 border-purple-200',
 };
 
 const DISPOSITION_LABELS: Record<string, string> = {
@@ -224,13 +247,34 @@ const DISPOSITION_LABELS: Record<string, string> = {
   accepted: 'Accepted',
   quarantine: 'Quarantine',
   rejected: 'Rejected',
+  rejected_returned: 'Rejected - Return',
+  rejected_scrapped: 'Rejected - Scrap',
+  rejected_reallocated: 'Rejected - Reallocate',
 };
 
-const DOC_TYPES = ['SDS', 'TDS', 'CoC', 'packing_slip', 'test_report', 'supplier_label_photo', 'damage_photo', 'other'];
+const DOC_TYPES = ['SDS', 'TDS', 'CoC', 'packing_slip', 'test_report', 'calibration_cert', 'supplier_label_photo', 'damage_photo', 'other'];
 
 const UNIT_TYPES = ['roll', 'box', 'bar', 'tube', 'serialized_piece', 'other'];
 
 const CONDITIONS = ['good', 'damaged', 'partial', 'refused'];
+
+const REJECTION_OUTCOMES = [
+  { value: 'rejected_returned', label: 'Returned to vendor' },
+  { value: 'rejected_scrapped', label: 'Scrapped' },
+  { value: 'rejected_reallocated', label: 'Reallocated' },
+] as const;
+
+const STORAGE_TYPES = ['conex', 'freezer', 'department', 'other'] as const;
+
+function buildStorageLocation(type: string, identifier: string, note: string): string {
+  const trimmedId = identifier.trim();
+  const trimmedNote = note.trim();
+  if (type === 'conex') return trimmedId ? `Conex ${trimmedId}` : '';
+  if (type === 'freezer') return trimmedId ? `Freezer ${trimmedId}` : '';
+  if (type === 'department') return trimmedNote || trimmedId || '';
+  if (type === 'other') return trimmedNote ? `Other: ${trimmedNote}` : '';
+  return trimmedNote || trimmedId;
+}
 
 function getExpirationStatus(expirationDate?: string | null): 'ok' | 'near_expiry' | 'expired' {
   if (!expirationDate) return 'ok';
@@ -867,6 +911,16 @@ function ShipmentInfoStep({ receipt, onNext, onUpdate }: {
         <p className="text-xs text-gray-400 mt-0.5">Defaults to now — adjust if the shipment arrived earlier</p>
       </div>
 
+      <div className="rounded-lg border bg-gray-50 dark:bg-gray-900 p-3 text-xs space-y-1">
+        <div className="font-semibold text-gray-700 dark:text-gray-200">Receiving proof snapshot</div>
+        <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-gray-500">
+          <span>Receipt: <span className="font-mono text-gray-700 dark:text-gray-300">{receipt.receiptNumber}</span></span>
+          <span>Receiver: {receipt.receiverDisplayName ?? 'Current user'}</span>
+          <span>Vendor: {receipt.vendorName ?? 'Manual receipt'}</span>
+          <span>PO: {receipt.vendorPoNumber ?? 'Not linked'}</span>
+        </div>
+      </div>
+
       <Button
         type="button"
         variant="ghost"
@@ -1356,6 +1410,15 @@ function UnitSplittingStep({ receipt, onNext, onUpdate }: {
   const [showSplitDialog, setShowSplitDialog] = useState(false);
   const [splitMode, setSplitMode] = useState<'equal' | 'by_rolls'>('equal');
   const [rollSqms, setRollSqms] = useState<string[]>(['', '']);
+  const [rollNumbers, setRollNumbers] = useState<string[]>(['', '']);
+  const [splitTemplate, setSplitTemplate] = useState({
+    lotNumber: '',
+    batchNumber: '',
+    heatLot: '',
+    manufactureDate: '',
+    expirationDate: '',
+    certReference: '',
+  });
   const [confirmDeleteUnitId, setConfirmDeleteUnitId] = useState<number | null>(null);
 
   const deleteUnitMutation = useMutation({
@@ -1402,6 +1465,12 @@ function UnitSplittingStep({ receipt, onNext, onUpdate }: {
   const splitLineMutation = useMutation({
     mutationFn: () => {
       const payload: Record<string, unknown> = { count: parseInt(splitCount, 10) };
+      const templateFields = Object.fromEntries(
+        Object.entries(splitTemplate).filter(([, value]) => value.trim() !== '')
+      );
+      if (Object.keys(templateFields).length > 0) {
+        payload.templateFields = templateFields;
+      }
       if (splitMode === 'by_rolls') {
         payload.sqmPerRollArray = rollSqms.map(v => parseFloat(v));
       }
@@ -1410,7 +1479,17 @@ function UnitSplittingStep({ receipt, onNext, onUpdate }: {
         body: JSON.stringify(payload),
       });
     },
-    onSuccess: async () => {
+    onSuccess: async (createdUnits: ReceivedUnit[]) => {
+      if (splitMode === 'by_rolls') {
+        await Promise.all((createdUnits ?? []).map((unit, idx) => {
+          const rollNumber = rollNumbers[idx]?.trim();
+          if (!rollNumber) return Promise.resolve();
+          return apiRequest(`/api/receipts/${receipt.id}/units/${unit.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ rollNumber }),
+          });
+        }));
+      }
       const updated = await apiRequest(`/api/receipts/${receipt.id}`);
       onUpdate(updated);
       setShowSplitDialog(false);
@@ -1475,6 +1554,10 @@ function UnitSplittingStep({ receipt, onNext, onUpdate }: {
                 <div className="font-mono text-blue-600">{unit.barcode}</div>
                 <div className="text-gray-500">{unit.quantity} {unit.uom} · {unit.unitType}</div>
                 {unit.lotNumber && <div className="text-gray-400">Lot: {unit.lotNumber}</div>}
+                {unit.batchNumber && <div className="text-gray-400">Batch: {unit.batchNumber}</div>}
+                {unit.rollNumber && <div className="text-gray-400">Roll: {unit.rollNumber}</div>}
+                {unit.heatLot && <div className="text-gray-400">Heat: {unit.heatLot}</div>}
+                {unit.certReference && <div className="text-gray-400">Cert: {unit.certReference}</div>}
                 {unit.expirationDate && (
                   <div className={`flex items-center gap-1 mt-0.5 ${expStatus === 'expired' ? 'text-red-600' : expStatus === 'near_expiry' ? 'text-amber-600' : 'text-gray-400'}`}>
                     <Clock className="w-2.5 h-2.5" />
@@ -1535,8 +1618,8 @@ function UnitSplittingStep({ receipt, onNext, onUpdate }: {
       )}
 
       {/* Split dialog */}
-      <Dialog open={showSplitDialog} onOpenChange={open => { setShowSplitDialog(open); if (!open) { setSplitMode('equal'); setSplitCount('2'); setRollSqms(['', '']); } }}>
-        <DialogContent className="max-w-xs">
+      <Dialog open={showSplitDialog} onOpenChange={open => { setShowSplitDialog(open); if (!open) { setSplitMode('equal'); setSplitCount('2'); setRollSqms(['', '']); setRollNumbers(['', '']); setSplitTemplate({ lotNumber: '', batchNumber: '', heatLot: '', manufactureDate: '', expirationDate: '', certReference: '' }); } }}>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-sm">Split Line into Units</DialogTitle>
             <DialogDescription className="text-xs">
@@ -1557,6 +1640,11 @@ function UnitSplittingStep({ receipt, onNext, onUpdate }: {
                     for (let i = 0; i < Math.min(prev.length, n); i++) arr[i] = prev[i];
                     return arr;
                   });
+                  setRollNumbers(prev => {
+                    const arr = Array(n).fill('');
+                    for (let i = 0; i < Math.min(prev.length, n); i++) arr[i] = prev[i];
+                    return arr;
+                  });
                 }
               }}>
                 <SelectTrigger className="h-8 text-xs mt-1">
@@ -1567,6 +1655,36 @@ function UnitSplittingStep({ receipt, onNext, onUpdate }: {
                   <SelectItem value="by_rolls">By rolls — enter SQM per roll</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="border rounded p-2 space-y-2 bg-gray-50 dark:bg-gray-900">
+              <div className="text-xs font-medium text-gray-600">Traceability copied to created units</div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-xs">Lot #</Label>
+                  <Input className="h-7 text-xs mt-0.5" value={splitTemplate.lotNumber} onChange={e => setSplitTemplate(f => ({ ...f, lotNumber: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-xs">Batch #</Label>
+                  <Input className="h-7 text-xs mt-0.5" value={splitTemplate.batchNumber} onChange={e => setSplitTemplate(f => ({ ...f, batchNumber: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-xs">Heat #</Label>
+                  <Input className="h-7 text-xs mt-0.5" value={splitTemplate.heatLot} onChange={e => setSplitTemplate(f => ({ ...f, heatLot: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-xs">Cert Ref</Label>
+                  <Input className="h-7 text-xs mt-0.5" value={splitTemplate.certReference} onChange={e => setSplitTemplate(f => ({ ...f, certReference: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-xs">Mfg Date</Label>
+                  <Input type="date" className="h-7 text-xs mt-0.5" value={splitTemplate.manufactureDate} onChange={e => setSplitTemplate(f => ({ ...f, manufactureDate: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-xs">Exp Date</Label>
+                  <Input type="date" className="h-7 text-xs mt-0.5" value={splitTemplate.expirationDate} onChange={e => setSplitTemplate(f => ({ ...f, expirationDate: e.target.value }))} />
+                </div>
+              </div>
             </div>
 
             {splitMode === 'equal' ? (
@@ -1598,13 +1716,28 @@ function UnitSplittingStep({ receipt, onNext, onUpdate }: {
                         for (let i = 0; i < Math.min(prev.length, n); i++) next[i] = prev[i];
                         return next;
                       });
+                      setRollNumbers(prev => {
+                        const next = Array(n).fill('');
+                        for (let i = 0; i < Math.min(prev.length, n); i++) next[i] = prev[i];
+                        return next;
+                      });
                     }}
                   />
                 </div>
                 <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
                   {rollSqms.map((val, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
+                    <div key={idx} className="grid grid-cols-[56px_1fr_1fr_34px] items-center gap-2">
                       <Label className="text-xs w-14 shrink-0">Roll {idx + 1}</Label>
+                      <Input
+                        className="h-7 text-xs"
+                        placeholder="Roll #"
+                        value={rollNumbers[idx] ?? ''}
+                        onChange={e => setRollNumbers(prev => {
+                          const next = [...prev];
+                          next[idx] = e.target.value;
+                          return next;
+                        })}
+                      />
                       <Input
                         type="number" min="0.001" step="0.001"
                         className="h-7 text-xs"
@@ -1786,8 +1919,19 @@ function DispositionStep({ receipt, onNext, onUpdate }: {
   onUpdate: (r: Receipt) => void;
 }) {
   const units = receipt.units ?? [];
-  const [settingDisposition, setSettingDisposition] = useState<{ unitId: number; disposition: string; notes: string } | null>(null);
+  const [settingDisposition, setSettingDisposition] = useState<{
+    unitId: number;
+    disposition: string;
+    notes: string;
+    rejectionOutcome: string;
+    departmentId: string;
+    supervisorConfirmed: boolean;
+  } | null>(null);
   const [dispositionError, setDispositionError] = useState<{ error: string; missingDocuments?: string[] } | null>(null);
+
+  const { data: departments = [] } = useQuery<InventoryDepartment[]>({
+    queryKey: ['/api/inventory/departments'],
+  });
 
   // Fetch missing required docs for this receipt
   const { data: requiredDocsData } = useQuery({
@@ -1801,10 +1945,28 @@ function DispositionStep({ receipt, onNext, onUpdate }: {
   const missingByPart: Record<string, string[]> = requiredDocsData?.missingByPartNumber ?? {};
 
   const dispositionMutation = useMutation({
-    mutationFn: () => apiRequest(`/api/receipts/${receipt.id}/units/${settingDisposition!.unitId}/disposition`, {
-      method: 'POST',
-      body: JSON.stringify({ disposition: settingDisposition!.disposition, notes: settingDisposition!.notes }),
-    }),
+    mutationFn: async () => {
+      const draft = settingDisposition!;
+      const selectedDepartment = departments.find(d => String(d.id) === draft.departmentId);
+      const finalDisposition = draft.disposition === 'rejected'
+        ? draft.rejectionOutcome
+        : draft.disposition;
+      const notes = [
+        draft.notes.trim(),
+        selectedDepartment ? `Department: ${selectedDepartment.name}` : '',
+        draft.supervisorConfirmed ? 'Supervisor confirmation recorded by current user' : '',
+      ].filter(Boolean).join('\n');
+      if (selectedDepartment && receipt.departmentId !== selectedDepartment.id) {
+        await apiRequest(`/api/receipts/${receipt.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ departmentId: selectedDepartment.id }),
+        });
+      }
+      return apiRequest(`/api/receipts/${receipt.id}/units/${draft.unitId}/disposition`, {
+        method: 'POST',
+        body: JSON.stringify({ disposition: finalDisposition, notes }),
+      });
+    },
     onSuccess: async () => {
       const updated = await apiRequest(`/api/receipts/${receipt.id}`);
       onUpdate(updated);
@@ -1873,7 +2035,17 @@ function DispositionStep({ receipt, onNext, onUpdate }: {
                   variant={unit.disposition === d ? 'default' : 'outline'}
                   className="h-6 text-xs px-2"
                   disabled={d === 'accepted' && expStatus === 'expired'}
-                  onClick={() => { setSettingDisposition({ unitId: unit.id, disposition: d, notes: '' }); setDispositionError(null); }}
+                  onClick={() => {
+                    setSettingDisposition({
+                      unitId: unit.id,
+                      disposition: d,
+                      notes: '',
+                      rejectionOutcome: 'rejected_returned',
+                      departmentId: receipt.departmentId ? String(receipt.departmentId) : '',
+                      supervisorConfirmed: false,
+                    });
+                    setDispositionError(null);
+                  }}
                 >
                   {d === 'accepted' && <CheckCircle2 className="w-2.5 h-2.5 mr-1" />}
                   {d === 'quarantine' && <AlertTriangle className="w-2.5 h-2.5 mr-1" />}
@@ -1897,6 +2069,41 @@ function DispositionStep({ receipt, onNext, onUpdate }: {
               <div className="text-xs text-gray-500">
                 Setting disposition to: <span className="font-medium">{DISPOSITION_LABELS[settingDisposition.disposition]}</span>
               </div>
+              <div>
+                <Label className="text-xs">Department / Supervisor Area</Label>
+                <Select
+                  value={settingDisposition.departmentId || '__none__'}
+                  onValueChange={v => setSettingDisposition(s => s ? { ...s, departmentId: v === '__none__' ? '' : v } : s)}
+                >
+                  <SelectTrigger className="h-8 text-xs mt-1">
+                    <SelectValue placeholder="Receiving or department supervisor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Receiving</SelectItem>
+                    {departments.map(dept => (
+                      <SelectItem key={dept.id} value={String(dept.id)}>{dept.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {settingDisposition.disposition === 'rejected' && (
+                <div>
+                  <Label className="text-xs">Rejected Disposition</Label>
+                  <Select
+                    value={settingDisposition.rejectionOutcome}
+                    onValueChange={v => setSettingDisposition(s => s ? { ...s, rejectionOutcome: v } : s)}
+                  >
+                    <SelectTrigger className="h-8 text-xs mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {REJECTION_OUTCOMES.map(outcome => (
+                        <SelectItem key={outcome.value} value={outcome.value}>{outcome.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               {(settingDisposition.disposition === 'quarantine' || settingDisposition.disposition === 'rejected') && (
                 <div>
                   <Label className="text-xs">Reason (required)</Label>
@@ -1909,6 +2116,15 @@ function DispositionStep({ receipt, onNext, onUpdate }: {
                   />
                 </div>
               )}
+              <label className="flex items-start gap-2 text-xs text-gray-600">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={settingDisposition.supervisorConfirmed}
+                  onChange={e => setSettingDisposition(s => s ? { ...s, supervisorConfirmed: e.target.checked } : s)}
+                />
+                Department supervisor reviewed or authorized this disposition.
+              </label>
               {/* Server-side doc / expiration error feedback */}
               {dispositionError && (
                 <div className="border border-red-300 bg-red-50 dark:bg-red-900/10 rounded p-2 text-xs text-red-700">
@@ -1956,6 +2172,9 @@ export function PutawayStep({ receipt, onComplete, onUpdate }: {
 
   const [batchLocation, setBatchLocation] = useState('');
   const [batchFreezer, setBatchFreezer] = useState('');
+  const [batchStorageType, setBatchStorageType] = useState<(typeof STORAGE_TYPES)[number]>('conex');
+  const [batchStorageIdentifier, setBatchStorageIdentifier] = useState('');
+  const [batchStorageNote, setBatchStorageNote] = useState('');
   const [batchAllocType, setBatchAllocType] = useState('stock');
   const [batchAllocId, setBatchAllocId] = useState('');
   const [batchPending, setBatchPending] = useState(false);
@@ -2038,14 +2257,19 @@ export function PutawayStep({ receipt, onComplete, onUpdate }: {
   });
 
   const handleBatchAssign = async () => {
-    if (!batchLocation && !batchFreezer && !batchAllocId) {
+    const structuredLocation = buildStorageLocation(batchStorageType, batchStorageIdentifier, batchStorageNote);
+    if (!batchLocation && !structuredLocation && !batchFreezer && !batchAllocId) {
       toast.error('Enter at least one field to batch-assign');
       return;
     }
     setBatchPending(true);
     const updates: Record<string, any> = { allocatedToType: batchAllocType };
-    if (batchLocation) updates.location = batchLocation;
-    if (batchFreezer) updates.freezerNumber = parseInt(batchFreezer, 10);
+    if (structuredLocation || batchLocation) updates.location = structuredLocation || batchLocation;
+    if (batchStorageType === 'freezer' && batchStorageIdentifier) {
+      updates.freezerNumber = parseInt(batchStorageIdentifier, 10);
+    } else if (batchFreezer) {
+      updates.freezerNumber = parseInt(batchFreezer, 10);
+    }
     if (batchAllocId) updates.allocatedToId = parseInt(batchAllocId, 10);
     try {
       await Promise.all(units.map(u =>
@@ -2123,7 +2347,28 @@ export function PutawayStep({ receipt, onComplete, onUpdate }: {
           <div className="text-xs font-semibold text-blue-700 dark:text-blue-300">Batch Assign All Units</div>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <Label className="text-xs">Location</Label>
+              <Label className="text-xs">Storage Type</Label>
+              <Select value={batchStorageType} onValueChange={v => setBatchStorageType(v as (typeof STORAGE_TYPES)[number])}>
+                <SelectTrigger className="h-7 text-xs mt-0.5"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="conex">Conex</SelectItem>
+                  <SelectItem value="freezer">Freezer</SelectItem>
+                  <SelectItem value="department">Department</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">{batchStorageType === 'other' ? 'Storage Note' : 'Number / Area'}</Label>
+              <Input
+                className="h-7 text-xs mt-0.5"
+                value={batchStorageType === 'other' ? batchStorageNote : batchStorageIdentifier}
+                onChange={e => batchStorageType === 'other' ? setBatchStorageNote(e.target.value) : setBatchStorageIdentifier(e.target.value)}
+                placeholder={batchStorageType === 'conex' ? '1, 2, 3...' : batchStorageType === 'freezer' ? '1, 2, 3...' : batchStorageType === 'department' ? 'CNC, paint...' : 'Description'}
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Manual Location Override</Label>
               <Input className="h-7 text-xs mt-0.5" value={batchLocation} onChange={e => setBatchLocation(e.target.value)} placeholder="Shelf, bin, rack..." />
             </div>
             <div>
@@ -2252,8 +2497,10 @@ export function PutawayStep({ receipt, onComplete, onUpdate }: {
 function RightPanel({ receipt, onUpdate }: { receipt: Receipt | null; onUpdate: (r: Receipt) => void }) {
   if (!receipt) {
     return (
-      <div className="h-full flex items-center justify-center text-gray-300 text-xs">
-        No active receipt
+      <div className="h-full overflow-y-auto p-2">
+        <div className="h-full flex items-center justify-center text-gray-300 text-xs">
+          No active receipt
+        </div>
       </div>
     );
   }
@@ -2277,6 +2524,79 @@ function RightPanel({ receipt, onUpdate }: { receipt: Receipt | null; onUpdate: 
         </TabsContent>
       </div>
     </Tabs>
+  );
+}
+
+function DepartmentActionQueue() {
+  const { data: actions = [], isLoading, isError, refetch } = useQuery<DepartmentReceivingAction[]>({
+    queryKey: ['/api/receipts/department-actions'],
+    queryFn: () => apiRequest('/api/receipts/department-actions'),
+    refetchInterval: 30000,
+  });
+
+  const grouped = actions.reduce<Record<string, DepartmentReceivingAction[]>>((acc, action) => {
+    const name = action.department_name ?? `Department ${action.department_id}`;
+    acc[name] = acc[name] ?? [];
+    acc[name].push(action);
+    return acc;
+  }, {});
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-6 text-xs text-gray-500">
+        <Loader2 className="w-3 h-3 animate-spin mr-1" /> Loading department queue...
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="border rounded-lg p-3 text-xs text-red-600 bg-red-50">
+        Failed to load department queue.
+        <Button variant="outline" size="sm" className="h-6 ml-2 text-xs" onClick={() => refetch()}>Retry</Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="border rounded-lg p-3 bg-blue-50 dark:bg-blue-950/40 text-xs">
+        <div className="font-semibold text-blue-800 dark:text-blue-200">Supervisor Receiving Queue</div>
+        <div className="text-blue-700 dark:text-blue-300 mt-1">
+          Department-assigned units appear here until disposition is set or accepted material is put away.
+        </div>
+      </div>
+      {actions.length === 0 && (
+        <div className="text-xs text-gray-500 text-center py-4">No department receiving actions are waiting.</div>
+      )}
+      {Object.entries(grouped).map(([department, deptActions]) => (
+        <div key={department} className="border rounded-lg overflow-hidden">
+          <div className="px-3 py-2 bg-gray-50 dark:bg-gray-800 flex items-center justify-between">
+            <span className="text-xs font-semibold">{department}</span>
+            <Badge variant="outline" className="text-xs">{deptActions.length}</Badge>
+          </div>
+          <div className="divide-y">
+            {deptActions.map(action => (
+              <div key={`${action.receipt_id}-${action.unit_id}`} className="p-3 text-xs space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-mono text-blue-600 truncate">{action.barcode}</span>
+                  <Badge className={action.action_required === 'disposition_required' ? 'bg-amber-100 text-amber-800' : 'bg-green-100 text-green-800'}>
+                    {action.action_required === 'disposition_required' ? 'Disposition' : 'Putaway'}
+                  </Badge>
+                </div>
+                <div className="font-medium truncate">{action.ag_part_number ?? 'Unlinked part'}</div>
+                <div className="text-gray-500 truncate">{action.description ?? action.vendor_name ?? 'Receiving unit'}</div>
+                <div className="flex flex-wrap gap-1 text-gray-400">
+                  <span>{action.quantity} {action.uom ?? ''}</span>
+                  <span>Receipt {action.receipt_number}</span>
+                  {action.vendor_po_number && <span>PO {action.vendor_po_number}</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -2626,6 +2946,7 @@ export default function InventoryReceivingControlCenter() {
   const queryClient = useQueryClient();
   const [activeReceipt, setActiveReceipt] = useState<Receipt | null>(null);
   const [mobileTab, setMobileTab] = useState<'pos' | 'workflow' | 'sidebar'>('pos');
+  const [showSupervisorQueue, setShowSupervisorQueue] = useState(false);
 
   const createReceiptMutation = useMutation({
     mutationFn: (data: Record<string, any>) => apiRequest('/api/receipts', {
@@ -2676,6 +2997,19 @@ export default function InventoryReceivingControlCenter() {
           )}
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant={showSupervisorQueue ? 'default' : 'outline'}
+            className="h-7 text-xs"
+            onClick={() => {
+              setShowSupervisorQueue(v => !v);
+              setMobileTab('workflow');
+            }}
+            data-testid="button-toggle-supervisor-receiving-queue"
+          >
+            {showSupervisorQueue ? 'Receipt Workflow' : 'Supervisor Queue'}
+          </Button>
           <Link href="/inventory/receiving-legacy" className="text-xs text-gray-400 hover:text-gray-600 underline">
             Legacy view
           </Link>
@@ -2707,7 +3041,11 @@ export default function InventoryReceivingControlCenter() {
             <LeftPanel onStartReceipt={handleStartReceipt} activeReceiptId={activeReceipt?.id ?? null} />
           </div>
           <div className="overflow-hidden border-r">
-            {createReceiptMutation.isPending ? (
+            {showSupervisorQueue ? (
+              <div className="h-full overflow-y-auto p-4">
+                <DepartmentActionQueue />
+              </div>
+            ) : createReceiptMutation.isPending ? (
               <div className="flex items-center justify-center h-full">
                 <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
               </div>
@@ -2726,7 +3064,11 @@ export default function InventoryReceivingControlCenter() {
             <LeftPanel onStartReceipt={handleStartReceipt} activeReceiptId={activeReceipt?.id ?? null} />
           )}
           {mobileTab === 'workflow' && (
-            createReceiptMutation.isPending ? (
+            showSupervisorQueue ? (
+              <div className="h-full overflow-y-auto p-3">
+                <DepartmentActionQueue />
+              </div>
+            ) : createReceiptMutation.isPending ? (
               <div className="flex items-center justify-center h-full">
                 <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
               </div>

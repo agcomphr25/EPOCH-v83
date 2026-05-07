@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Edit, Trash2, Calendar, User, Package } from 'lucide-react';
+import { Plus, Edit, Trash2, Calendar, User, Package, Factory, FolderOpen } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { PartsRequest } from '@shared/schema';
 
@@ -29,6 +29,8 @@ interface PartsRequestFormData {
   partNumber: string;
   partName: string;
   requestedBy: string;
+  productionLine: string;
+  projectId: string;
   department: string;
   quantity: string;
   urgency: string;
@@ -39,6 +41,28 @@ interface PartsRequestFormData {
   expectedDelivery: string;
   notes: string;
 }
+
+interface ProjectOption {
+  id: string;
+  projectCode: string;
+  projectName: string;
+  status?: string;
+}
+
+interface DepartmentOption {
+  id: number;
+  name: string;
+}
+
+type PartsRequestWithProject = PartsRequest & {
+  project?: {
+    id: string | null;
+    projectCode: string | null;
+    projectName: string | null;
+  };
+};
+
+const NONE_VALUE = '__none__';
 
 export default function PartsRequestsCard() {
   const queryClient = useQueryClient();
@@ -52,6 +76,8 @@ export default function PartsRequestsCard() {
     partNumber: '',
     partName: '',
     requestedBy: '',
+    productionLine: '',
+    projectId: '',
     department: '',
     quantity: '',
     urgency: 'MEDIUM',
@@ -64,9 +90,19 @@ export default function PartsRequestsCard() {
   });
 
   // Load parts requests
-  const { data: requests = [], isLoading } = useQuery<PartsRequest[]>({
+  const { data: requests = [], isLoading } = useQuery<PartsRequestWithProject[]>({
     queryKey: ['/api/inventory/parts-requests'],
     queryFn: () => apiRequest('/api/inventory/parts-requests'),
+  });
+
+  const { data: projects = [] } = useQuery<ProjectOption[]>({
+    queryKey: ['/api/projects'],
+    queryFn: () => apiRequest('/api/projects'),
+  });
+
+  const { data: departments = [] } = useQuery<DepartmentOption[]>({
+    queryKey: ['/api/inventory/departments'],
+    queryFn: () => apiRequest('/api/inventory/departments'),
   });
 
   // Group requests by department
@@ -150,6 +186,8 @@ export default function PartsRequestsCard() {
       partNumber: '',
       partName: '',
       requestedBy: '',
+      productionLine: '',
+      projectId: '',
       department: '',
       quantity: '',
       urgency: 'MEDIUM',
@@ -190,6 +228,8 @@ export default function PartsRequestsCard() {
       partNumber: formData.partNumber,
       partName: formData.partName,
       requestedBy: formData.requestedBy,
+      productionLine: formData.productionLine || null,
+      projectId: formData.projectId || null,
       department: formData.department || null,
       quantity: parseInt(formData.quantity),
       urgency: formData.urgency,
@@ -216,6 +256,8 @@ export default function PartsRequestsCard() {
       partNumber: request.partNumber,
       partName: request.partName,
       requestedBy: request.requestedBy,
+      productionLine: request.productionLine || '',
+      projectId: request.projectId || '',
       department: request.department || '',
       quantity: request.quantity.toString(),
       urgency: request.urgency,
@@ -311,14 +353,68 @@ export default function PartsRequestsCard() {
           />
         </div>
         <div>
+          <Label htmlFor="productionLine">Production Line</Label>
+          <Select
+            value={formData.productionLine || NONE_VALUE}
+            onValueChange={(value) =>
+              handleSelectChange('productionLine', value === NONE_VALUE ? '' : value)
+            }
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Optional line" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NONE_VALUE}>No line selected</SelectItem>
+              <SelectItem value="P1">P1</SelectItem>
+              <SelectItem value="P2">P2</SelectItem>
+              <SelectItem value="P3">P3</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="projectId">Project</Label>
+          <Select
+            value={formData.projectId || NONE_VALUE}
+            onValueChange={(value) =>
+              handleSelectChange('projectId', value === NONE_VALUE ? '' : value)
+            }
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Optional project" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NONE_VALUE}>No project selected</SelectItem>
+              {projects.map((project) => (
+                <SelectItem key={project.id} value={project.id}>
+                  {project.projectCode} - {project.projectName}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
           <Label htmlFor="department">Department</Label>
-          <Input
-            id="department"
-            name="department"
-            value={formData.department}
-            onChange={handleChange}
-            placeholder="Enter department"
-          />
+          <Select
+            value={formData.department || NONE_VALUE}
+            onValueChange={(value) =>
+              handleSelectChange('department', value === NONE_VALUE ? '' : value)
+            }
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Optional department" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NONE_VALUE}>No department selected</SelectItem>
+              {departments.map((department) => (
+                <SelectItem key={department.id} value={department.name}>
+                  {department.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -398,7 +494,7 @@ export default function PartsRequestsCard() {
       </div>
 
       <div>
-        <Label htmlFor="expectedDelivery">Expected Delivery</Label>
+        <Label htmlFor="expectedDelivery">Estimated Arrival</Label>
         <Input
           id="expectedDelivery"
           name="expectedDelivery"
@@ -555,6 +651,23 @@ export default function PartsRequestsCard() {
                           <span>{request.requestedBy}</span>
                         </div>
 
+                        {(request.productionLine || request.project) && (
+                          <div className="flex flex-wrap gap-2">
+                            {request.productionLine && (
+                              <span className="inline-flex items-center gap-1 text-xs text-gray-600 bg-gray-50 px-2 py-1 rounded">
+                                <Factory className="h-3 w-3" />
+                                {request.productionLine}
+                              </span>
+                            )}
+                            {request.project && (
+                              <span className="inline-flex items-center gap-1 text-xs text-gray-600 bg-gray-50 px-2 py-1 rounded">
+                                <FolderOpen className="h-3 w-3" />
+                                {request.project.projectCode} - {request.project.projectName}
+                              </span>
+                            )}
+                          </div>
+                        )}
+
                         <div className="flex items-center gap-2">
                           <Package className="h-4 w-4 text-gray-400" />
                           <span>Qty: {request.quantity}</span>
@@ -577,7 +690,7 @@ export default function PartsRequestsCard() {
                           <div className="flex items-center gap-2">
                             <Calendar className="h-4 w-4 text-gray-400" />
                             <span>
-                              Expected:{' '}
+                              ETA:{' '}
                               {new Date(
                                 request.expectedDelivery
                               ).toLocaleDateString()}

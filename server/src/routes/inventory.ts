@@ -1075,8 +1075,8 @@ router.put('/parts-requests/:id', async (req: Request, res: Response) => {
       const validTransitions: Record<string, string[]> = {
         'APPROVED': ['PENDING'],
         'REJECTED': ['PENDING', 'CANCEL_REQUESTED'],
-        'ORDERED': ['APPROVED'],
-        'ORDERED_PARTIAL': ['APPROVED'],
+        'ORDERED': ['PENDING', 'APPROVED'],
+        'ORDERED_PARTIAL': ['PENDING', 'APPROVED'],
         'RECEIVED': ['ORDERED', 'ORDERED_PARTIAL', 'RECEIVED_PARTIAL'],
         'RECEIVED_PARTIAL': ['ORDERED', 'ORDERED_PARTIAL'],
         'DELIVERED_TO_DEPT': ['RECEIVED', 'RECEIVED_PARTIAL'],
@@ -1097,6 +1097,15 @@ router.put('/parts-requests/:id', async (req: Request, res: Response) => {
             error: `Cannot change status to '${updates.status}' from '${existingRequest.status}'. Valid source statuses: ${allowedFromStatuses.join(', ')}.`
           });
         }
+      }
+
+      if (updates.status === 'ORDERED' || updates.status === 'ORDERED_PARTIAL') {
+        updates.orderDate = updates.orderDate ?? new Date();
+      }
+
+      if (updates.status === 'REJECTED') {
+        updates.rejectedAt = updates.rejectedAt ?? new Date();
+        updates.rejectionReason = updates.rejectionReason ?? updates.notes ?? null;
       }
     }
     

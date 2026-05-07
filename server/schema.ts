@@ -802,6 +802,8 @@ export const partsRequests = pgTable('parts_requests', {
   partNumber: text('part_number').notNull(), // Part number (can be AG part or external)
   partName: text('part_name').notNull(),
   requestedBy: text('requested_by').notNull(),
+  productionLine: text('production_line'), // Optional P1/P2/P3 line requested for this part
+  projectId: uuid('project_id').references((): AnyPgColumn => projects.id, { onDelete: 'set null' }),
   department: text('department'), // Department name (legacy text field)
   departmentId: integer('department_id').references(() => inventoryDepartments.id, { onDelete: 'set null' }), // FK to inventory_departments
   quantity: integer('quantity').notNull(),
@@ -2944,6 +2946,8 @@ export const insertPartsRequestSchema = createInsertSchema(partsRequests)
     partNumber: z.string().min(1, 'Part number is required'),
     partName: z.string().min(1, 'Part name is required'),
     requestedBy: z.string().min(1, 'Requested by is required'),
+    productionLine: z.enum(['P1', 'P2', 'P3']).optional().nullable(),
+    projectId: z.string().uuid().optional().nullable(),
     department: z.string().optional().nullable(),
     departmentId: z.number().optional().nullable(),
     quantity: z.number().positive('Quantity must be positive'),

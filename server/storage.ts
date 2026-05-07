@@ -6848,9 +6848,12 @@ export class DatabaseStorage implements IStorage {
         invSource: inventoryItems.source,
         invVendorId: inventoryItems.vendorId,
         invUsageUnit: inventoryItems.usageUnit,
+        projectCode: projects.projectCode,
+        projectName: projects.projectName,
       })
       .from(partsRequests)
       .leftJoin(inventoryItems, eq(inventoryItems.agPartNumber, partsRequests.agPartNumber))
+      .leftJoin(projects, eq(projects.id, partsRequests.projectId))
       .where(eq(partsRequests.isActive, true))
       .orderBy(desc(partsRequests.requestDate));
 
@@ -6863,6 +6866,11 @@ export class DatabaseStorage implements IStorage {
         source: r.invSource,
         vendorId: r.invVendorId,
         usageUnit: r.invUsageUnit,
+      } : undefined,
+      project: r.projectCode ? {
+        id: r.request.projectId,
+        projectCode: r.projectCode,
+        projectName: r.projectName,
       } : undefined,
     }));
   }
@@ -6954,10 +6962,13 @@ export class DatabaseStorage implements IStorage {
         request: partsRequests,
         inventoryItem: inventoryItems,
         department: departments,
+        projectCode: projects.projectCode,
+        projectName: projects.projectName,
       })
       .from(partsRequests)
       .leftJoin(inventoryItems, eq(partsRequests.agPartNumber, inventoryItems.agPartNumber))
       .leftJoin(departments, eq(partsRequests.departmentId, departments.id))
+      .leftJoin(projects, eq(projects.id, partsRequests.projectId))
       .where(and(
         or(
           eq(partsRequests.status, 'PENDING'),
@@ -6972,6 +6983,11 @@ export class DatabaseStorage implements IStorage {
       ...r.request,
       inventoryItem: r.inventoryItem,
       department: r.department,
+      project: r.projectCode ? {
+        id: r.request.projectId,
+        projectCode: r.projectCode,
+        projectName: r.projectName,
+      } : undefined,
     }));
   }
 

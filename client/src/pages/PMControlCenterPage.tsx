@@ -994,7 +994,7 @@ function MaterialBudgetTab({ projectId }: { projectId: string }) {
                   <TableRow key={`${row.inventoryItemId}-${idx}`}>
                     <TableCell>
                       <Badge className={MATERIAL_STATUS_COLORS[row.status] ?? 'bg-gray-100 text-gray-600'}>
-                        {row.status.replace('_', ' ')}
+                        {row.status.replace(/_/g, ' ')}
                       </Badge>
                     </TableCell>
                     <TableCell className="font-mono text-sm font-medium">{row.itemCode || '—'}</TableCell>

@@ -4329,6 +4329,9 @@ async function initializeBackgroundServices() {
           { key: 'improvement_notes.view', description: 'View the Improvement Notes Dashboard and listing of captured workflow suggestions', category: 'improvement_notes' },
           { key: 'improvement_notes.create', description: 'Submit a workflow improvement note from any page (held by all roles)', category: 'improvement_notes' },
           { key: 'improvement_notes.manage', description: 'Update status, priority, or delete improvement notes', category: 'improvement_notes' },
+
+          // Material Traceability Viewer (Task #147 — Phase 3)
+          { key: 'inventory.traceability.view', description: 'View the read-only Material Traceability Viewer (chain reconstruction, integrity verification, signed export).', category: 'inventory' },
         ];
 
         // Upsert each capability key (ignore conflicts on duplicate key)

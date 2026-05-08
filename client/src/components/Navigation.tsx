@@ -599,6 +599,13 @@ export default function Navigation() {
         'Filterable, exportable history of all inventory transactions',
     },
     {
+      path: '/inventory/traceability',
+      label: 'Material Traceability',
+      icon: Shield,
+      description:
+        'Reconstruct end-to-end material chain from a lot, traveler, WAD, NCR, or barcode',
+    },
+    {
       path: '/inventory/parts-request',
       label: 'Parts Requests',
       icon: FileText,

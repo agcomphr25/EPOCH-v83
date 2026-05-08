@@ -33,6 +33,7 @@ import InventoryScannerPage from './pages/InventoryScannerPage';
 import InventoryDashboardPage from './pages/InventoryDashboardPage';
 import InventoryManagerPage from './pages/InventoryManagerPage';
 import InventoryLedgerPage from './pages/InventoryLedgerPage';
+import InventoryTraceabilityPage from './pages/InventoryTraceabilityPage';
 import InventoryReceivingPage from './pages/InventoryReceivingPage';
 import InventoryReceivingControlCenter from './pages/InventoryReceivingControlCenter';
 import InventoryReceivingPageLegacy from './pages/InventoryReceivingPageLegacy';
@@ -763,6 +764,10 @@ function App() {
                   <Route
                     path="/inventory/ledger"
                     component={InventoryLedgerPage}
+                  />
+                  <Route
+                    path="/inventory/traceability"
+                    component={InventoryTraceabilityPage}
                   />
                   <Route
                     path="/production/material-readiness"

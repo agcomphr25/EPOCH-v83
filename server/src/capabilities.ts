@@ -62,6 +62,7 @@ export const REQUIRED_CAPABILITY_KEYS: readonly string[] = [
   // Inventory
   'inventory.adjust',
   'inventory.manage_requests',
+  'inventory.traceability.view',
 
   // Shipping
   'shipping.mark_shipped',

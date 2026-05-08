@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { asc, desc, eq, sql } from 'drizzle-orm';
+import { asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '../../db';
 import {
   inventoryBalances,
@@ -344,6 +344,57 @@ export async function verifyInventoryLedgerHashes(params: {
     .from(inventoryTransactionLedger)
     .orderBy(asc(inventoryTransactionLedger.createdAt), asc(inventoryTransactionLedger.transactionNumber))
     .limit(limit);
+
+  const mismatches = rows
+    .map((row) => {
+      const expectedHash = eventHash({
+        transactionType: row.transactionType,
+        inventoryItemId: row.inventoryItemId,
+        agPartNumber: row.agPartNumber,
+        lotId: row.lotId,
+        locationId: row.locationId,
+        quantityDelta: row.quantityDelta,
+        quantityBefore: row.quantityBefore,
+        quantityAfter: row.quantityAfter,
+        unitOfMeasure: row.unitOfMeasure,
+        statusBefore: row.statusBefore,
+        statusAfter: row.statusAfter,
+        performedByUserId: row.performedByUserId,
+        performedByDisplayName: row.performedByDisplayName,
+        sourceModule: row.sourceModule,
+        sourceRecordId: row.sourceRecordId,
+        reversedTransactionId: row.reversedTransactionId,
+      }, row.transactionNumber);
+
+      return expectedHash === row.eventHash
+        ? null
+        : {
+            id: row.id,
+            transactionNumber: row.transactionNumber,
+            expectedHash,
+            actualHash: row.eventHash,
+          };
+    })
+    .filter((row): row is { id: string; transactionNumber: string; expectedHash: string; actualHash: string } => Boolean(row));
+
+  return { checked: rows.length, mismatches };
+}
+
+/**
+ * Re-compute and compare event hashes for an explicit list of ledger entry IDs.
+ * Used by the Material Traceability Viewer to attest a reconstructed chain.
+ */
+export async function verifyInventoryLedgerHashesByIds(
+  ids: string[],
+): Promise<{
+  checked: number;
+  mismatches: Array<{ id: string; transactionNumber: string; expectedHash: string; actualHash: string }>;
+}> {
+  if (!ids.length) return { checked: 0, mismatches: [] };
+  const rows = await db
+    .select()
+    .from(inventoryTransactionLedger)
+    .where(inArray(inventoryTransactionLedger.id, ids));
 
   const mismatches = rows
     .map((row) => {

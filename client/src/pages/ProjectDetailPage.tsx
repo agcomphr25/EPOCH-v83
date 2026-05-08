@@ -269,6 +269,18 @@ interface ProjectWorkOrder {
   description: string | null;
 }
 
+interface ProjectFarFlowdown {
+  id: number;
+  clauseNumber: string;
+  title: string;
+  description: string | null;
+  applicable: boolean;
+  reasoning: string;
+  status: string;
+  purchaseReviewChecklistId: number | null;
+  updatedAt: string;
+}
+
 const STEP_CONFIG: Record<string, { label: string; route: string; icon: typeof FileText }> = {
   rfq_risk_assessment: { label: 'RFQ Risk Assessment', route: '/rfq-risk-assessment', icon: FileText },
   quote: { label: 'Quote', route: '/p2-quote-form', icon: FileText },
@@ -437,6 +449,12 @@ export default function ProjectDetailPage() {
     queryKey: ['/api/projects', id, 'p2-gate-status'],
     queryFn: () => fetch(`/api/projects/${id}/p2-gate-status`).then(r => r.json()),
     enabled: !!id && !!project && ['po_received', 'p2_release', 'purchase_review'].includes(project.currentStage || ''),
+  });
+
+  const { data: projectFarFlowdowns = [] } = useQuery<ProjectFarFlowdown[]>({
+    queryKey: ['/api/far-flowdown-clauses/project', id],
+    queryFn: () => fetch(`/api/far-flowdown-clauses/project/${id}`).then(r => r.json()),
+    enabled: !!id,
   });
 
   const releaseToP2Mutation = useMutation({
@@ -1480,7 +1498,7 @@ export default function ProjectDetailPage() {
                 title: 'Purchase Review Checklist',
                 description: 'Verify PO terms, pricing, and contract requirements before authorizing work.',
                 step: purchaseStep,
-                route: `/purchase-review-checklist${project.customerId ? `?customerId=${encodeURIComponent(project.customerId)}` : ''}`,
+                route: `/purchase-review-checklist?projectId=${encodeURIComponent(project.id)}${project.customerId ? `&customerId=${encodeURIComponent(project.customerId)}` : ''}`,
                 icon: <ListChecks className="h-5 w-5 text-blue-600" />,
                 gateLabel: 'Complete before WAD',
               },
@@ -1556,6 +1574,57 @@ export default function ProjectDetailPage() {
               </div>
             );
           })()}
+
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <ShieldCheck className="h-5 w-5 text-blue-600" />
+                    FAR Flowdown
+                  </CardTitle>
+                  <CardDescription>
+                    Contract clauses captured from the purchase review checklist and carried on this project.
+                  </CardDescription>
+                </div>
+                <Badge variant="outline">{projectFarFlowdowns.length} clause{projectFarFlowdowns.length === 1 ? '' : 's'}</Badge>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {projectFarFlowdowns.length === 0 ? (
+                <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+                  No FAR flowdowns have been captured yet. Open the Purchase Review Checklist for this project to record clause numbers and flowdown notes.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {projectFarFlowdowns.map((flowdown) => (
+                    <div key={flowdown.id} className="rounded-md border p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="font-medium">
+                          {flowdown.clauseNumber} - {flowdown.title}
+                        </div>
+                        <Badge className={flowdown.status === 'open' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}>
+                          {flowdown.status}
+                        </Badge>
+                      </div>
+                      <p className="mt-2 text-sm text-muted-foreground">{flowdown.reasoning}</p>
+                      {flowdown.purchaseReviewChecklistId && (
+                        <Button
+                          variant="link"
+                          size="sm"
+                          className="mt-2 h-auto p-0"
+                          onClick={() => setLocation(`/purchase-review-checklist?id=${flowdown.purchaseReviewChecklistId}&projectId=${encodeURIComponent(project.id)}${project.customerId ? `&customerId=${encodeURIComponent(project.customerId)}` : ''}`)}
+                        >
+                          <ExternalLink className="mr-1 h-3 w-3" />
+                          Open source checklist
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader>
@@ -1645,9 +1714,11 @@ export default function ProjectDetailPage() {
                                   onClick={() => {
                                     if (!config?.route) return;
                                     const CUSTOMER_ID_STEPS = ['rfq_risk_assessment', 'quote', 'purchase_review_checklist'];
-                                    const route = CUSTOMER_ID_STEPS.includes(step.stepType) && project?.customerId
-                                      ? `${config.route}?customerId=${encodeURIComponent(project.customerId)}`
-                                      : config.route;
+                                    const route = step.stepType === 'purchase_review_checklist'
+                                      ? `${config.route}?projectId=${encodeURIComponent(project.id)}${project.customerId ? `&customerId=${encodeURIComponent(project.customerId)}` : ''}`
+                                      : CUSTOMER_ID_STEPS.includes(step.stepType) && project?.customerId
+                                        ? `${config.route}?customerId=${encodeURIComponent(project.customerId)}`
+                                        : config.route;
                                     setLocation(route);
                                   }}
                                   data-testid={`button-open-${step.stepType}`}
@@ -1712,9 +1783,11 @@ export default function ProjectDetailPage() {
                                   onClick={() => {
                                     if (!config?.route) return;
                                     const CUSTOMER_ID_STEPS = ['rfq_risk_assessment', 'quote', 'purchase_review_checklist'];
-                                    const route = CUSTOMER_ID_STEPS.includes(step.stepType) && project?.customerId
-                                      ? `${config.route}?customerId=${encodeURIComponent(project.customerId)}`
-                                      : config.route;
+                                    const route = step.stepType === 'purchase_review_checklist'
+                                      ? `${config.route}?projectId=${encodeURIComponent(project.id)}${project.customerId ? `&customerId=${encodeURIComponent(project.customerId)}` : ''}`
+                                      : CUSTOMER_ID_STEPS.includes(step.stepType) && project?.customerId
+                                        ? `${config.route}?customerId=${encodeURIComponent(project.customerId)}`
+                                        : config.route;
                                     setLocation(route);
                                   }}
                                   data-testid={`button-view-${step.stepType}`}
@@ -1810,9 +1883,11 @@ export default function ProjectDetailPage() {
                                     startStepMutation.mutate(step.id);
                                     if (config?.route) {
                                       const CUSTOMER_ID_STEPS = ['rfq_risk_assessment', 'quote', 'purchase_review_checklist'];
-                                      const route = CUSTOMER_ID_STEPS.includes(step.stepType) && project?.customerId
-                                        ? `${config.route}?customerId=${encodeURIComponent(project.customerId)}`
-                                        : config.route;
+                                      const route = step.stepType === 'purchase_review_checklist'
+                                        ? `${config.route}?projectId=${encodeURIComponent(project.id)}${project.customerId ? `&customerId=${encodeURIComponent(project.customerId)}` : ''}`
+                                        : CUSTOMER_ID_STEPS.includes(step.stepType) && project?.customerId
+                                          ? `${config.route}?customerId=${encodeURIComponent(project.customerId)}`
+                                          : config.route;
                                       setLocation(route);
                                     }
                                   }}

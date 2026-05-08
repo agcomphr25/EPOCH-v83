@@ -64,6 +64,7 @@ export default function PurchaseReviewChecklist() {
   const [location, setLocation] = useLocation();
   const search = useSearch();
   const urlCustomerId = new URLSearchParams(search).get('customerId') ?? '';
+  const urlProjectId = new URLSearchParams(search).get('projectId') ?? '';
   const autoFilledRef = useRef(false);
   const [submissionId, setSubmissionId] = useState<string | null>(null);
   const [isLoadingSubmission, setIsLoadingSubmission] = useState(false);
@@ -234,6 +235,9 @@ export default function PurchaseReviewChecklist() {
     certifications: [] as string[],
     retentionRequirements: '',
     dpasRating: '',
+    farFlowdownClauseNumbers: '',
+    farFlowdownNotes: '',
+    projectId: urlProjectId,
 
     // Reviewers
     reviewerName: '',
@@ -260,7 +264,7 @@ export default function PurchaseReviewChecklist() {
             
             // Load form data
             if (submission.formData) {
-              setFormData(submission.formData);
+              setFormData((prev) => ({ ...prev, ...submission.formData }));
             }
             
             toast({
@@ -289,6 +293,12 @@ export default function PurchaseReviewChecklist() {
     
     loadSubmission();
   }, []);
+
+  useEffect(() => {
+    if (urlProjectId) {
+      setFormData((prev) => ({ ...prev, projectId: urlProjectId }));
+    }
+  }, [urlProjectId]);
 
   // Auto-fill customer when customerId is provided via URL param
   useEffect(() => {
@@ -1854,6 +1864,34 @@ export default function PurchaseReviewChecklist() {
                   <Label htmlFor="dpas-na">N/A</Label>
                 </div>
               </div>
+            </div>
+
+            <div>
+              <Label htmlFor="farFlowdownClauseNumbers">
+                FAR/DFARS Clauses to Flow Down
+              </Label>
+              <Textarea
+                id="farFlowdownClauseNumbers"
+                value={formData.farFlowdownClauseNumbers}
+                onChange={(e) =>
+                  handleInputChange('farFlowdownClauseNumbers', e.target.value)
+                }
+                rows={3}
+                placeholder="Example: FAR 52.204-21, DFARS 252.204-7012"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="farFlowdownNotes">FAR Flowdown Notes</Label>
+              <Textarea
+                id="farFlowdownNotes"
+                value={formData.farFlowdownNotes}
+                onChange={(e) =>
+                  handleInputChange('farFlowdownNotes', e.target.value)
+                }
+                rows={3}
+                placeholder="Capture contract-specific flowdown reasoning, subcontractor handling, or project constraints."
+              />
             </div>
           </CardContent>
         </Card>

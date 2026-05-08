@@ -17559,6 +17559,25 @@ export const vendorPoFarFlowdowns = pgTable('vendor_po_far_flowdowns', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (t) => ({ uniq: unique().on(t.vendorPoId, t.clauseId) }));
 
+export const projectFarFlowdowns = pgTable('project_far_flowdowns', {
+  id: serial('id').primaryKey(),
+  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  purchaseReviewChecklistId: integer('purchase_review_checklist_id').references(() => purchaseReviewChecklists.id, { onDelete: 'set null' }),
+  clauseId: integer('clause_id').notNull().references(() => farFlowdownClauses.id),
+  applicable: boolean('applicable').notNull().default(true),
+  reasoning: text('reasoning').notNull(),
+  source: text('source').notNull().default('purchase_review_checklist'),
+  status: text('status').notNull().default('open'),
+  recordedByUserId: integer('recorded_by_user_id'),
+  recordedByDisplayName: text('recorded_by_display_name'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (t) => ({
+  uniq: unique().on(t.projectId, t.clauseId),
+  projectIdx: index('idx_project_far_flowdowns_project_id').on(t.projectId),
+  checklistIdx: index('idx_project_far_flowdowns_checklist_id').on(t.purchaseReviewChecklistId),
+}));
+
 export const vendorDebarmentChecks = pgTable('vendor_debarment_checks', {
   id: serial('id').primaryKey(),
   vendorId: integer('vendor_id').notNull().references(() => vendors.id),
@@ -17628,6 +17647,7 @@ export type PurchaseRequisitionApprovalChain = typeof purchaseRequisitionApprova
 export type FarFlowdownClause = typeof farFlowdownClauses.$inferSelect;
 export type InsertFarFlowdownClause = z.infer<typeof insertFarFlowdownClauseSchema>;
 export type VendorPoFarFlowdown = typeof vendorPoFarFlowdowns.$inferSelect;
+export type ProjectFarFlowdown = typeof projectFarFlowdowns.$inferSelect;
 export type VendorDebarmentCheck = typeof vendorDebarmentChecks.$inferSelect;
 export type InsertVendorDebarmentCheck = z.infer<typeof insertVendorDebarmentCheckSchema>;
 export type ProcurementSettings = typeof procurementSettings.$inferSelect;

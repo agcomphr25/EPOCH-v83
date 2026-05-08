@@ -476,6 +476,7 @@ async function initializeBackgroundServices() {
           '0117_vendor_po_items_purchasing_unit_columns.sql',
           '0117_vendor_po_line_project_traceability.sql',
           '0118_vendor_po_traceability_columns_safe.sql',
+          '0119_inventory_item_shelf_life_columns_safe.sql',
           'investigation_308_order_duplication.sql',
         ];
         const criticalMigrations = new Set([
@@ -4172,6 +4173,12 @@ async function initializeBackgroundServices() {
         await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS requires_coc BOOLEAN NOT NULL DEFAULT FALSE`);
         await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS requires_test_report BOOLEAN NOT NULL DEFAULT FALSE`);
         await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS requires_packing_slip_photo BOOLEAN NOT NULL DEFAULT FALSE`);
+        await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS lot_controlled BOOLEAN NOT NULL DEFAULT FALSE`);
+        await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS serial_controlled BOOLEAN NOT NULL DEFAULT FALSE`);
+        await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS shelf_life_controlled BOOLEAN NOT NULL DEFAULT FALSE`);
+        await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS shelf_life_days INTEGER`);
+        await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS default_max_out_time_minutes INTEGER`);
+        await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS out_time_enforcement_required BOOLEAN NOT NULL DEFAULT FALSE`);
         console.log('✅ Ensured RCC Phase 1 columns (receipts.received_at + inventory_items doc-requirement flags)');
       } catch (rcc1Err: any) {
         console.warn('⚠️ RCC Phase 1 column migration:', rcc1Err.message);

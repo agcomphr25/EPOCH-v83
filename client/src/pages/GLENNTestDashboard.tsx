@@ -50,6 +50,7 @@ import WeeklyShippingWidget from '@/components/WeeklyShippingWidget';
 import WatchRuleCards from '@/components/WatchRuleCards';
 import MyTasksControlCenter from '@/components/MyTasksControlCenter';
 import SystemHealthWidget from '@/components/admin/SystemHealthWidget';
+import PartsRequestOwnerApprovals from '@/components/inventory/PartsRequestOwnerApprovals';
 
 export default function GLENNTestDashboard() {
   const [isPremiumMode, setIsPremiumMode] = useState(() => {
@@ -172,6 +173,10 @@ export default function GLENNTestDashboard() {
               <span>On target</span>
             </div>
           </div>
+        </div>
+
+        <div className="mb-8">
+          <PartsRequestOwnerApprovals userName={currentUser?.username} />
         </div>
 
         {/* Main Grid */}
@@ -680,6 +685,8 @@ function LightModeDashboard({
           </div>
         </div>
       )}
+
+      <PartsRequestOwnerApprovals userName={currentUser?.username} />
 
       {/* My Tasks Control Center */}
       {isUserLoading ? (

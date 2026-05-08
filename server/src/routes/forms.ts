@@ -4,11 +4,143 @@ import {
   insertFormSubmissionSchema,
   insertPurchaseReviewChecklistSchema,
   insertManufacturersCertificateSchema,
+  farFlowdownClauses,
+  projectFarFlowdowns,
 } from '@shared/schema';
+import { and, eq } from 'drizzle-orm';
 
 import { storage } from '../../storage';
+import { db } from '../../db';
 
 const router = Router();
+
+function splitClauseNumbers(value: unknown): string[] {
+  if (!value) return [];
+  return String(value)
+    .split(/[\n,;]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function hasMeaningfulValue(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some((item) => hasMeaningfulValue(item));
+  const normalized = String(value ?? '').trim().toLowerCase();
+  return normalized !== '' && normalized !== 'n/a' && normalized !== 'na' && normalized !== 'none';
+}
+
+async function ensureFlowdownClause(clauseNumber: string) {
+  const [existing] = await db
+    .select()
+    .from(farFlowdownClauses)
+    .where(eq(farFlowdownClauses.clauseNumber, clauseNumber))
+    .limit(1);
+  if (existing) return existing;
+
+  const [created] = await db
+    .insert(farFlowdownClauses)
+    .values({
+      clauseNumber,
+      title: `Manual FAR/DFARS clause ${clauseNumber}`,
+      description: 'Captured from the purchase review checklist for project flowdown continuity.',
+      defaultApplicable: false,
+      isActive: true,
+    })
+    .returning();
+  return created;
+}
+
+async function syncProjectFarFlowdownsFromChecklist(checklist: any) {
+  const formData = checklist?.formData ?? {};
+  const projectId = formData.projectId || formData.project_id;
+  if (!projectId) return;
+
+  const explicitClauseNumbers = splitClauseNumbers(formData.farFlowdownClauseNumbers);
+  const clauses = explicitClauseNumbers.length > 0
+    ? await Promise.all(explicitClauseNumbers.map(ensureFlowdownClause))
+    : await db
+        .select()
+        .from(farFlowdownClauses)
+        .where(eq(farFlowdownClauses.isActive, true));
+
+  const sourceSignals = [
+    hasMeaningfulValue(formData.farFlowdownNotes) && 'purchase review FAR/DFARS notes',
+    hasMeaningfulValue(formData.retentionRequirements) && 'record retention requirements',
+    hasMeaningfulValue(formData.dpasRating) && 'DPAS rating',
+    hasMeaningfulValue(formData.certifications) && 'certification requirements',
+    hasMeaningfulValue(formData.qualityRequirements) && 'quality requirements',
+    hasMeaningfulValue(formData.acceptanceRejectionCriteria) && 'acceptance criteria',
+  ].filter(Boolean);
+
+  const selectedClauses = clauses.filter((clause: any) => {
+    if (explicitClauseNumbers.length > 0) return true;
+    return clause.defaultApplicable;
+  });
+
+  for (const clause of selectedClauses) {
+    const reasoning = [
+      explicitClauseNumbers.length > 0
+        ? 'Clause listed on purchase review checklist.'
+        : 'Project contract requirements captured in purchase review checklist.',
+      sourceSignals.length > 0 ? `Signals: ${sourceSignals.join(', ')}.` : '',
+      formData.farFlowdownNotes ? `Notes: ${formData.farFlowdownNotes}` : '',
+    ].filter(Boolean).join(' ');
+
+    const existing = await db
+      .select()
+      .from(projectFarFlowdowns)
+      .where(and(
+        eq(projectFarFlowdowns.projectId, projectId),
+        eq(projectFarFlowdowns.clauseId, clause.id),
+      ))
+      .limit(1);
+
+    const values = {
+      projectId,
+      purchaseReviewChecklistId: checklist.id,
+      clauseId: clause.id,
+      applicable: true,
+      reasoning,
+      source: 'purchase_review_checklist',
+      status: 'open',
+      recordedByDisplayName: checklist.createdBy ?? null,
+      updatedAt: new Date(),
+    };
+
+    if (existing.length > 0) {
+      await db.update(projectFarFlowdowns)
+        .set(values)
+        .where(eq(projectFarFlowdowns.id, existing[0].id));
+    } else {
+      await db.insert(projectFarFlowdowns).values(values);
+    }
+  }
+
+  const steps = await storage.getProjectSteps(projectId);
+  const purchaseReviewStep = steps.find((step: any) => step.stepType === 'purchase_review_checklist');
+  if (purchaseReviewStep) {
+    const shouldComplete = checklist.status === 'SUBMITTED' || checklist.status === 'APPROVED';
+    await storage.updateProjectStep(purchaseReviewStep.id, {
+      linkedPurchaseReviewId: checklist.id,
+      ...(shouldComplete ? {
+        status: 'completed',
+        completedAt: new Date(),
+      } : {}),
+      notes: selectedClauses.length > 0
+        ? `FAR flowdown captured from purchase review checklist #${checklist.id}.`
+        : purchaseReviewStep.notes,
+    } as any);
+  }
+
+  if (selectedClauses.length > 0) {
+    await storage.createProjectActivityLog({
+      projectId,
+      activityType: 'far_flowdown_synced',
+      stepType: 'purchase_review_checklist' as any,
+      description: `FAR flowdown synced from purchase review checklist #${checklist.id} (${selectedClauses.length} clause${selectedClauses.length === 1 ? '' : 's'})`,
+      performedByDisplayName: checklist.createdBy ?? null,
+    } as any);
+  }
+}
 
 // Enhanced Forms Management
 router.get('/enhanced', async (req: Request, res: Response) => {
@@ -147,6 +279,7 @@ router.post(
       const checklistData = insertPurchaseReviewChecklistSchema.parse(req.body);
       const newChecklist =
         await storage.createPurchaseReviewChecklist(checklistData);
+      await syncProjectFarFlowdownsFromChecklist(newChecklist);
       res.status(201).json(newChecklist);
     } catch (error) {
       console.error('Create purchase review checklist error:', error);
@@ -170,6 +303,7 @@ router.put(
         id,
         updates
       );
+      await syncProjectFarFlowdownsFromChecklist(updatedChecklist);
       res.json(updatedChecklist);
     } catch (error) {
       console.error('Update purchase review checklist error:', error);

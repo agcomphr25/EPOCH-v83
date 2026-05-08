@@ -192,7 +192,7 @@ type VendorPO = {
   poNumber: string | null;
   vendorId: number;
   vendorName?: string; // From join
-  productionLine?: 'P1' | 'P2' | 'GENERAL' | string | null;
+  productionLine?: 'P1' | 'P2' | 'GENERAL' | 'R_AND_D' | string | null;
   status:
     | 'Draft'
     | 'RFQ Sent'
@@ -276,12 +276,23 @@ type VendorPOItem = {
 
 type CreateVendorPOData = {
   vendorId: number;
-  productionLine?: 'P1' | 'P2' | 'GENERAL';
+  productionLine?: 'P1' | 'P2' | 'GENERAL' | 'R_AND_D';
   expectedDeliveryDate?: string;
   shipVia?: string;
   notes?: string;
   externalPoNumber?: string;
 };
+
+function formatProductionLineLabel(value?: string | null): string {
+  switch (value) {
+    case 'GENERAL':
+      return 'General / Stock';
+    case 'R_AND_D':
+      return 'R&D';
+    default:
+      return value || '';
+  }
+}
 
 // Vendor PO line items display component
 function VendorPOItemsDisplay({ vendorPoId }: { vendorPoId: number }) {
@@ -751,7 +762,7 @@ function VendorPOCard({
                 </span>
                 {vendorPo.productionLine && (
                   <Badge variant="outline" className="text-xs">
-                    {vendorPo.productionLine === 'GENERAL' ? 'General / Stock' : vendorPo.productionLine}
+                    {formatProductionLineLabel(vendorPo.productionLine)}
                   </Badge>
                 )}
               </div>
@@ -1020,11 +1031,17 @@ function VendorPOForm({
             <SelectItem value="GENERAL">General / Stock</SelectItem>
             <SelectItem value="P1">P1</SelectItem>
             <SelectItem value="P2">P2</SelectItem>
+            <SelectItem value="R_AND_D">R&D</SelectItem>
           </SelectContent>
         </Select>
         {formData.productionLine === 'P2' && (
           <p className="mt-1 text-xs text-amber-700">
             P2 purchases require a completed compliance review before project allocation.
+          </p>
+        )}
+        {formData.productionLine === 'R_AND_D' && (
+          <p className="mt-1 text-xs text-emerald-700">
+            R&D purchases can push through project allocation without the P2 compliance hold.
           </p>
         )}
       </div>

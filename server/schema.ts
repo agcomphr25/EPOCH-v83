@@ -3796,7 +3796,7 @@ export const vendorPOs = pgTable('vendor_pos', {
   vendorId: integer('vendor_id')
     .references(() => vendors.id)
     .notNull(),
-  productionLine: text('production_line'), // P1 | P2 | GENERAL; P2 requires compliance review before project allocation
+  productionLine: text('production_line'), // P1 | P2 | GENERAL | R_AND_D; P2 requires compliance review before project allocation
   status: text('status').notNull().default('Draft'), // Draft, RFQ Sent, Quote Received, Declined, Expired, Sent, Partially Received, Fully Received, Cancelled
   orderDate: date('order_date'),
   expectedDeliveryDate: date('expected_delivery_date'),
@@ -4395,7 +4395,7 @@ export const insertVendorPOSchema = createInsertSchema(vendorPOs)
   .extend({
     poNumber: z.string().nullable().optional(),
     vendorId: z.number().int().positive('Vendor ID is required'),
-    productionLine: z.enum(['P1', 'P2', 'GENERAL'], {
+    productionLine: z.enum(['P1', 'P2', 'GENERAL', 'R_AND_D'], {
       required_error: 'Production line is required',
     }),
     status: z.enum(['Draft', 'RFQ Sent', 'Quote Received', 'Declined', 'Expired', 'Sent', 'Partially Received', 'Fully Received', 'Cancelled']).default('Draft'),

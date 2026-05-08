@@ -145,6 +145,19 @@ describe('Material Traceability HTTP routes (Task #147)', () => {
   // /search — 400 validation + 200 happy path for each of the 8 keys
   // ─────────────────────────────────────────────────────────────────────
 
+  it('GET /requirements returns the department traceability matrix', async () => {
+    const app = await makeApp();
+    const res = await request(app).get('/api/traceability/requirements');
+    expect(res.status).toBe(200);
+    expect(res.body.requirements).toEqual([
+      { department: 'Layup', requiredTraceability: ['ICN', 'lot', 'expiration', 'out-time'] },
+      { department: 'CNC', requiredTraceability: ['serial'] },
+      { department: 'Finish', requiredTraceability: ['batch number'] },
+      { department: 'QC', requiredTraceability: ['cert package'] },
+    ]);
+    expect(res.body.generatedAt).toBeDefined();
+  });
+
   it('GET /search rejects an unknown key with 400', async () => {
     const app = await makeApp();
     const res = await request(app).get('/api/traceability/search?key=bogusKey&value=x');

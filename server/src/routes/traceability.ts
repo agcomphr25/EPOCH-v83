@@ -31,11 +31,19 @@ import {
   type TraceabilitySearchInput,
   type TraceabilitySearchKey,
 } from '../services/traceabilityService';
+import { MATERIAL_TRACEABILITY_REQUIREMENTS } from '../constants/inventoryControls';
 
 const router = Router();
 
 router.use(authenticateToken);
 router.use(requirePermission('inventory.traceability.view'));
+
+router.get('/requirements', (_req: Request, res: Response) => {
+  res.json({
+    requirements: MATERIAL_TRACEABILITY_REQUIREMENTS,
+    generatedAt: new Date().toISOString(),
+  });
+});
 
 function isAllowedKey(key: unknown): key is TraceabilitySearchKey {
   return typeof key === 'string' && (TRACEABILITY_SEARCH_KEYS as readonly string[]).includes(key);

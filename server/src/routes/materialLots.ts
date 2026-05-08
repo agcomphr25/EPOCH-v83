@@ -24,14 +24,48 @@ import { eq, sql, and, like } from 'drizzle-orm';
 import { backfillPacketFromQueue } from '../lib/packetResolution';
 import { evaluateQueueReadiness } from '../services/queueReadinessService';
 import { recordInventoryLedgerEntry } from '../services/inventoryTransactionLedgerService';
+import {
+  type InventoryStatusAction,
+  validateInventoryStatusAction,
+} from '../constants/inventoryControls';
 
 const router = Router();
 
-type TransactionType = 'RECEIVE' | 'MOVE' | 'ISSUE' | 'ADJUST' | 'SCRAP' | 'RETURN' | 'SPLIT' | 'OUT_START' | 'OUT_END' | 'ACCEPT' | 'REJECT' | 'QUARANTINE';
-type MaterialLotStatus = 'RECEIVED' | 'ACCEPTED' | 'ISSUED' | 'EXPIRED' | 'QUARANTINE' | 'REJECTED' | 'CONSUMED' | 'SCRAPPED';
+type TransactionType = 'RECEIVE' | 'MOVE' | 'ISSUE' | 'ADJUST' | 'SCRAP' | 'RETURN' | 'SPLIT' | 'OUT_START' | 'OUT_END' | 'ACCEPT' | 'REJECT' | 'QUARANTINE' | 'EXPIRE' | 'HOLD';
+type MaterialLotStatus = 'RECEIVED' | 'ACCEPTED' | 'ISSUED' | 'EXPIRED' | 'QUARANTINE' | 'REJECTED' | 'CONSUMED' | 'SCRAPPED' | 'HOLD';
+
+const STATUS_TRANSACTION_TYPE: Partial<Record<MaterialLotStatus, TransactionType>> = {
+  ACCEPTED: 'ACCEPT',
+  REJECTED: 'REJECT',
+  QUARANTINE: 'QUARANTINE',
+  ISSUED: 'ISSUE',
+  EXPIRED: 'EXPIRE',
+  HOLD: 'HOLD',
+};
 
 function createTransaction(data: Omit<InsertMaterialLotTransaction, 'wasOverride'> & { wasOverride?: boolean }): InsertMaterialLotTransaction {
   return { ...data, wasOverride: data.wasOverride ?? false };
+}
+
+function getApprovalReference(req: Request): unknown {
+  return req.body?.approvalId ?? req.body?.approvedBy ?? req.body?.approvalReference;
+}
+
+function blockedInventoryActionResponse(
+  req: Request,
+  res: Response,
+  lot: { status: string },
+  action: InventoryStatusAction
+): boolean {
+  const validation = validateInventoryStatusAction(lot.status, action, getApprovalReference(req));
+  if (validation.ok) return false;
+  res.status(validation.code === 'APPROVAL_REQUIRED' ? 403 : 409).json({
+    error: validation.code,
+    message: validation.message,
+    status: lot.status,
+    action,
+  });
+  return true;
 }
 
 router.use((req: Request, res: Response, next: NextFunction) => {
@@ -740,10 +774,12 @@ router.post('/:id/status', async (req: Request, res: Response) => {
     }
 
     const validTransitions: Record<string, string[]> = {
-      'RECEIVED': ['QUARANTINE', 'ACCEPTED', 'REJECTED'],
-      'QUARANTINE': ['ACCEPTED', 'REJECTED'],
-      'ACCEPTED': ['ISSUED', 'QUARANTINE', 'REJECTED'],
-      'ISSUED': ['ACCEPTED', 'CONSUMED', 'QUARANTINE'],
+      'RECEIVED': ['QUARANTINE', 'ACCEPTED', 'REJECTED', 'HOLD'],
+      'QUARANTINE': ['ACCEPTED', 'REJECTED', 'HOLD'],
+      'ACCEPTED': ['ISSUED', 'QUARANTINE', 'REJECTED', 'HOLD', 'EXPIRED'],
+      'ISSUED': ['ACCEPTED', 'CONSUMED', 'QUARANTINE', 'HOLD', 'EXPIRED'],
+      'HOLD': ['ACCEPTED', 'ISSUED', 'QUARANTINE', 'REJECTED', 'EXPIRED'],
+      'REJECTED': ['QUARANTINE'],
     };
 
     if (!validTransitions[lot.status]?.includes(newStatus)) {
@@ -752,6 +788,12 @@ router.post('/:id/status', async (req: Request, res: Response) => {
         message: `Cannot transition from ${lot.status} to ${newStatus}`,
       });
     }
+
+    const statusAction = lot.status === 'REJECTED' && newStatus === 'QUARANTINE'
+      ? 'mrb'
+      : 'status_change';
+    if (blockedInventoryActionResponse(req, res, lot, statusAction)) return;
+    if (newStatus === 'HOLD' && blockedInventoryActionResponse(req, res, { status: 'HOLD' }, 'status_change')) return;
 
     const updateData: Record<string, any> = { status: newStatus };
     
@@ -766,7 +808,7 @@ router.post('/:id/status', async (req: Request, res: Response) => {
     await storage.createMaterialLotTransaction(createTransaction({
       materialLotId: id,
       internalControlNumber: lot.internalControlNumber,
-      transactionType: newStatus as TransactionType,
+      transactionType: STATUS_TRANSACTION_TYPE[newStatus as MaterialLotStatus] ?? 'ADJUST',
       qtyBefore: lot.remainingQty,
       qtyAfter: lot.remainingQty,
       performedBy,
@@ -787,6 +829,10 @@ router.post('/:id/move', async (req: Request, res: Response) => {
     const { id } = req.params;
     const { toLocation, performedBy, notes } = req.body;
 
+    const lot = await storage.getMaterialLot(id);
+    if (!lot) return res.status(404).json({ error: 'Material lot not found' });
+    if (blockedInventoryActionResponse(req, res, lot, 'move')) return;
+
     const updatedLot = await storage.moveMaterialLot(id, { toLocation, performedBy, notes });
     res.json(updatedLot);
   } catch (error: any) {
@@ -801,6 +847,10 @@ router.post('/:id/issue', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { performedBy, toLocation, notes } = req.body;
+
+    const lot = await storage.getMaterialLot(id);
+    if (!lot) return res.status(404).json({ error: 'Material lot not found' });
+    if (blockedInventoryActionResponse(req, res, lot, 'issue')) return;
 
     const updatedLot = await storage.issueMaterialLot(id, { performedBy, toLocation, notes });
     res.json(updatedLot);
@@ -836,6 +886,7 @@ router.post('/:id/return', async (req: Request, res: Response) => {
     if (!lot) {
       return res.status(404).json({ error: 'Material lot not found' });
     }
+    if (blockedInventoryActionResponse(req, res, lot, 'return')) return;
 
     const blockedStatuses: MaterialLotStatus[] = ['SCRAPPED', 'CONSUMED'];
     if (blockedStatuses.includes(lot.status as MaterialLotStatus)) {
@@ -884,6 +935,7 @@ router.post('/:id/scrap', async (req: Request, res: Response) => {
     if (!lot) {
       return res.status(404).json({ error: 'Material lot not found' });
     }
+    if (blockedInventoryActionResponse(req, res, lot, 'scrap')) return;
 
     const remaining = parseFloat(lot.remainingQty);
 
@@ -940,6 +992,7 @@ router.post('/:id/adjust', async (req: Request, res: Response) => {
     if (!lot) {
       return res.status(404).json({ error: 'Material lot not found' });
     }
+    if (blockedInventoryActionResponse(req, res, lot, 'adjust')) return;
 
     const remaining = parseFloat(lot.remainingQty);
     if (remaining + delta < 0 && !allowNegative) {
@@ -975,6 +1028,7 @@ router.post('/:id/split', async (req: Request, res: Response) => {
     if (!parentLot) {
       return res.status(404).json({ error: 'Material lot not found' });
     }
+    if (blockedInventoryActionResponse(req, res, parentLot, 'split')) return;
 
     const parentRemaining = parseFloat(parentLot.remainingQty);
     const splitAmount = parseFloat(splitQty);
@@ -1009,7 +1063,7 @@ router.post('/:id/split', async (req: Request, res: Response) => {
       manufactureDate: parentLot.manufactureDate,
       storageLocation: newLocation || parentLot.storageLocation,
       storageRequirements: parentLot.storageRequirements,
-      status: parentLot.status as 'RECEIVED' | 'ACCEPTED' | 'ISSUED' | 'EXPIRED' | 'QUARANTINE' | 'REJECTED' | 'CONSUMED' | 'SCRAPPED',
+      status: parentLot.status as MaterialLotStatus,
       totalOutTimeMinutes: parentLot.totalOutTimeMinutes ?? 0,
       maxOutTimeMinutes: parentLot.maxOutTimeMinutes,
       currentlyOutOfStorage: parentLot.currentlyOutOfStorage ?? false,
@@ -1104,9 +1158,10 @@ router.post('/consume', async (req: Request, res: Response) => {
     if (!lot) {
       return res.status(404).json({ error: 'Material lot not found' });
     }
+    if (blockedInventoryActionResponse(req, res, lot, 'consume')) return;
 
     // ── Guard 1: Lot status ────────────────────────────────────────────────────
-    const blockedStatuses: MaterialLotStatus[] = ['QUARANTINE', 'REJECTED', 'EXPIRED'];
+    const blockedStatuses: MaterialLotStatus[] = ['QUARANTINE', 'REJECTED', 'EXPIRED', 'SCRAPPED', 'HOLD'];
     if (blockedStatuses.includes(lot.status as MaterialLotStatus)) {
       return res.status(400).json({
         error: 'LOT_NOT_USABLE',
@@ -1436,6 +1491,7 @@ router.post('/:lotId/reserve', async (req: Request, res: Response) => {
     const { lotId } = req.params;
     const lot = await storage.getMaterialLot(lotId);
     if (!lot) return res.status(404).json({ error: 'Material lot not found' });
+    if (blockedInventoryActionResponse(req, res, lot, 'reserve')) return;
 
     if (lot.status !== 'ACCEPTED' && lot.status !== 'ISSUED') {
       return res.status(409).json({

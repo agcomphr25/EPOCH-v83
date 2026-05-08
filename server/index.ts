@@ -6049,6 +6049,27 @@ async function initializeBackgroundServices() {
     });
     console.log('🔍 DCAA Forensic Audit nightly scan scheduler active (default 2:30 AM, configurable from Admin UI)');
 
+    // ── Approval escalation engine — every minute (Task #148) ────────────────
+    // Advances any PENDING approval_request whose current level deadline has
+    // elapsed to the next level in the configured escalation chain, and
+    // EXPIRES the request when the chain (including backstop) is exhausted.
+    // Idempotent and safe to run on multiple instances — `escalateExpired`
+    // re-reads each candidate row under FOR UPDATE SKIP LOCKED.
+    cron.schedule('* * * * *', async () => {
+      try {
+        const { escalateExpired } = await import('./src/services/escalationService');
+        const result = await escalateExpired(new Date());
+        if (result.escalated > 0 || result.expired > 0) {
+          console.log(
+            `[escalationService] examined=${result.examined} escalated=${result.escalated} expired=${result.expired}`,
+          );
+        }
+      } catch (err: any) {
+        console.error('[escalationService] scheduled run failed:', err?.message ?? err);
+      }
+    });
+    console.log('🛗 Approval escalation engine scheduled (every minute)');
+
     // Queue integrity background monitor
     try {
       const { startQueueIntegrityService } = await import('./src/services/queueIntegrityService');

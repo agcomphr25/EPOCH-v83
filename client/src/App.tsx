@@ -329,6 +329,8 @@ import SystemAuditsPage from './pages/SystemAuditsPage';
 import AuditLedgerPage from './pages/AuditLedgerPage';
 import InventoryAnomalyDashboard from './pages/InventoryAnomalyDashboard';
 import AnomalyDetectorConfigPage from './pages/AnomalyDetectorConfigPage';
+import ApprovalsInbox from './pages/ApprovalsInbox';
+import EscalationPoliciesPage from './pages/admin/EscalationPoliciesPage';
 import CommandCenter from './pages/CommandCenter';
 import EdriDashboard from './pages/admin/EdriDashboard';
 import EdriDomainDetail from './pages/admin/EdriDomainDetail';
@@ -636,6 +638,8 @@ function App() {
                   <Route path="/admin/audit-ledger" component={AuditLedgerPage} />
                   <Route path="/admin/inventory-anomalies" component={InventoryAnomalyDashboard} />
                   <Route path="/admin/anomaly-config" component={AnomalyDetectorConfigPage} />
+                  <Route path="/approvals" component={ApprovalsInbox} />
+                  <Route path="/admin/escalation-policies" component={EscalationPoliciesPage} />
                   <Route path="/admin/locate-order" component={LocateOrder} />
                   <Route path="/qr-error" component={QRErrorPage} />
                   <Route path="/audit-settings" component={AuditSettings} />

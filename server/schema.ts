@@ -17606,3 +17606,96 @@ export const anomalyDetectorConfig = pgTable('anomaly_detector_config', {
 
 export type AnomalyDetectorConfig = typeof anomalyDetectorConfig.$inferSelect;
 
+// ─── Task #148 — Approval Escalation Engine ──────────────────────────────────
+// Generalized cross-domain approval pipeline. Override approvals, NCR
+// dispositions, scrap-over-threshold, quarantine release, and high-severity
+// anomalies all open an `approval_requests` row instead of (or in addition to)
+// their bespoke pending state. A scheduled job advances the request through
+// the configured `escalation_policies` chain, notifying the new approver at
+// each level, and ultimately rejects the originating operation if the backstop
+// also fails to act. Migration: 0111_approval_escalation_engine.sql.
+
+export const escalationPolicies = pgTable('escalation_policies', {
+  id: serial('id').primaryKey(),
+  requestType: text('request_type').notNull().unique(),
+  displayName: text('display_name').notNull(),
+  description: text('description'),
+  // chain is a jsonb array of `{ role: string, slaSeconds: number, isBackstop?: boolean }`.
+  chain: jsonb('chain').notNull().default(sql`'[]'::jsonb`),
+  requiresSignature: boolean('requires_signature').notNull().default(false),
+  reasonCodes: jsonb('reason_codes').notNull().default(sql`'[]'::jsonb`),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const approvalRequests = pgTable('approval_requests', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  requestType: text('request_type').notNull(),
+  requestPayload: jsonb('request_payload').notNull().default(sql`'{}'::jsonb`),
+  subjectType: text('subject_type'),
+  subjectId: text('subject_id'),
+  requestedByUserId: integer('requested_by_user_id'),
+  requestedByDisplayName: text('requested_by_display_name').notNull(),
+  status: text('status').notNull().default('PENDING'), // PENDING|APPROVED|REJECTED|EXPIRED|ESCALATED|CANCELLED
+  currentApproverRole: text('current_approver_role'),
+  currentApproverUserId: integer('current_approver_user_id'),
+  escalationLevel: integer('escalation_level').notNull().default(0),
+  currentLevelDeadline: timestamp('current_level_deadline'),
+  resolvedAt: timestamp('resolved_at'),
+  resolvedByUserId: integer('resolved_by_user_id'),
+  resolvedByDisplayName: text('resolved_by_display_name'),
+  resolutionNotes: text('resolution_notes'),
+  resolutionSignature: text('resolution_signature'),
+  resolutionReasonCode: text('resolution_reason_code'),
+  policyId: integer('policy_id').references(() => escalationPolicies.id),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (t) => ({
+  statusUserIdx: index('approval_requests_status_user_idx').on(t.status, t.currentApproverUserId),
+  statusRoleIdx: index('approval_requests_status_role_idx').on(t.status, t.currentApproverRole),
+  statusDeadlineIdx: index('approval_requests_status_deadline_idx').on(t.status, t.currentLevelDeadline),
+  typeIdx: index('approval_requests_request_type_idx').on(t.requestType),
+  subjectIdx: index('approval_requests_subject_idx').on(t.subjectType, t.subjectId),
+}));
+
+export const approvalRequestHistory = pgTable('approval_request_history', {
+  id: bigint('id', { mode: 'number' }).primaryKey().generatedByDefaultAsIdentity(),
+  approvalRequestId: uuid('approval_request_id').notNull().references(() => approvalRequests.id, { onDelete: 'cascade' }),
+  event: text('event').notNull(), // OPENED|ESCALATED|APPROVED|REJECTED|EXPIRED|NOTIFIED|CANCELLED
+  fromLevel: integer('from_level'),
+  toLevel: integer('to_level'),
+  fromStatus: text('from_status'),
+  toStatus: text('to_status'),
+  actorUserId: integer('actor_user_id'),
+  actorDisplayName: text('actor_display_name'),
+  notes: text('notes'),
+  metadata: jsonb('metadata'),
+  occurredAt: timestamp('occurred_at').notNull().defaultNow(),
+}, (t) => ({
+  requestIdx: index('approval_request_history_request_idx').on(t.approvalRequestId, t.occurredAt),
+}));
+
+export type EscalationPolicy = typeof escalationPolicies.$inferSelect;
+export type ApprovalRequest = typeof approvalRequests.$inferSelect;
+export type ApprovalRequestHistory = typeof approvalRequestHistory.$inferSelect;
+
+export const insertEscalationPolicySchema = createInsertSchema(escalationPolicies)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    requestType: z.string().min(1),
+    displayName: z.string().min(1),
+    chain: z.array(z.object({
+      role: z.string().min(1),
+      slaSeconds: z.number().int().positive(),
+      isBackstop: z.boolean().optional(),
+    })).min(1),
+    reasonCodes: z.array(z.string()).default([]),
+  });
+export type InsertEscalationPolicy = z.infer<typeof insertEscalationPolicySchema>;
+
+export type EscalationChainLevel = {
+  role: string;
+  slaSeconds: number;
+  isBackstop?: boolean;
+};

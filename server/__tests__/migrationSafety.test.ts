@@ -424,6 +424,15 @@ const KNOWN_BROKEN_ON_SCHEMA_BASELINE: Record<string, string> = {
   '0047_timekeeper_pin_and_timezone.sql':
     'Backfill references timekeeping.employees.pin, which was renamed by 0049 and dropped by 0066. ' +
     'Harmless on the post-0066 baseline — column no longer exists so backfill is a no-op in practice.',
+  // Migration 0027 patches a single legacy account by writing to users.password.
+  // The current users table no longer has a "password" column (auth moved to
+  // hashed credentials in a later migration), so this one-off backfill cannot
+  // re-apply on a modern pg_dump baseline. The original effect was applied at
+  // its proper place in history; the replay failure is a structural artifact,
+  // not a real bug introduced by any in-flight migration.
+  '0027_brian_ramirez_account_fix.sql':
+    'One-off backfill writes users.password, a column dropped in a later migration. ' +
+    'Harmless on the modern baseline — the row was already patched at its original epoch.',
 };
 
 // ---------------------------------------------------------------------------

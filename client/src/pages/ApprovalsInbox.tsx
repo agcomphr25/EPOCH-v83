@@ -1,0 +1,303 @@
+import { useState } from 'react';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { Link } from 'wouter';
+import { apiRequest, queryClient } from '@/lib/queryClient';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useToast } from '@/hooks/use-toast';
+import { CheckCircle2, XCircle, Clock, AlertTriangle, ShieldAlert } from 'lucide-react';
+
+interface ApprovalRequest {
+  id: string;
+  requestType: string;
+  requestPayload: any;
+  subjectType: string | null;
+  subjectId: string | null;
+  requestedByDisplayName: string;
+  status: string;
+  currentApproverRole: string | null;
+  currentApproverUserId: number | null;
+  escalationLevel: number;
+  currentLevelDeadline: string | null;
+  createdAt: string;
+}
+
+interface DecisionState {
+  notes: string;
+  reasonCode: string;
+  signature: string;
+}
+
+const emptyDecision: DecisionState = { notes: '', reasonCode: '', signature: '' };
+
+export default function ApprovalsInbox() {
+  const { toast } = useToast();
+  const [selected, setSelected] = useState<ApprovalRequest | null>(null);
+  const [decision, setDecision] = useState<DecisionState>(emptyDecision);
+
+  const { data: rows = [], isLoading } = useQuery<ApprovalRequest[]>({
+    queryKey: ['/api/approvals'],
+    refetchInterval: 30000,
+  });
+
+  const { data: detail } = useQuery<{
+    request: ApprovalRequest;
+    history: any[];
+    policy: any;
+  } | null>({
+    queryKey: ['/api/approvals', selected?.id],
+    enabled: !!selected?.id,
+  });
+
+  const decide = useMutation({
+    mutationFn: async (vars: { id: string; action: 'approve' | 'reject'; body: DecisionState }) =>
+      apiRequest(`/api/approvals/${vars.id}/${vars.action}`, {
+        method: 'POST',
+        body: JSON.stringify({
+          notes: vars.body.notes || null,
+          reasonCode: vars.body.reasonCode || null,
+          signature: vars.body.signature || null,
+        }),
+      }).then((r) => r.json()),
+    onSuccess: (_data, vars) => {
+      toast({
+        title: vars.action === 'approve' ? 'Approved' : 'Rejected',
+        description: `Request ${vars.id.slice(0, 8)} updated.`,
+      });
+      setSelected(null);
+      setDecision(emptyDecision);
+      queryClient.invalidateQueries({ queryKey: ['/api/approvals'] });
+    },
+    onError: (err: any) => {
+      toast({
+        title: 'Action failed',
+        description: err?.message ?? 'Could not record decision',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const policy = detail?.policy;
+  const requiresSignature = !!policy?.requiresSignature;
+  const reasonCodes: string[] = Array.isArray(policy?.reasonCodes) ? policy.reasonCodes : [];
+
+  return (
+    <div className="container mx-auto p-4 max-w-7xl" data-testid="page-approvals">
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-2xl font-bold">My Approvals</h1>
+        <Link href="/admin/escalation-policies">
+          <Button variant="outline" size="sm" data-testid="link-policies">
+            Manage policies
+          </Button>
+        </Link>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <Card className="lg:col-span-1">
+          <CardHeader>
+            <CardTitle className="text-base">Pending ({rows.length})</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 max-h-[70vh] overflow-y-auto">
+            {isLoading && <div className="text-sm text-muted-foreground">Loading…</div>}
+            {!isLoading && rows.length === 0 && (
+              <div className="text-sm text-muted-foreground">No pending approvals 🎉</div>
+            )}
+            {rows.map((r) => (
+              <button
+                key={r.id}
+                onClick={() => {
+                  setSelected(r);
+                  setDecision(emptyDecision);
+                }}
+                className={`w-full text-left p-3 rounded border hover:bg-accent transition-colors ${
+                  selected?.id === r.id ? 'bg-accent border-primary' : ''
+                }`}
+                data-testid={`button-request-${r.id}`}
+              >
+                <div className="flex justify-between items-start gap-2">
+                  <div className="font-medium text-sm">{r.requestType}</div>
+                  <DeadlineBadge deadline={r.currentLevelDeadline} level={r.escalationLevel} />
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  {r.subjectType && r.subjectId
+                    ? `${r.subjectType}#${r.subjectId}`
+                    : 'no subject'}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  by {r.requestedByDisplayName} · L{r.escalationLevel} ·{' '}
+                  {r.currentApproverRole ?? '—'}
+                </div>
+              </button>
+            ))}
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-base">
+              {selected ? `${selected.requestType} — ${selected.id.slice(0, 8)}` : 'Select a request'}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {!selected && (
+              <div className="text-sm text-muted-foreground">
+                Choose a pending approval from the list to review and act on it.
+              </div>
+            )}
+            {selected && (
+              <>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Status:</span>{' '}
+                    <Badge variant="outline" data-testid="text-status">{selected.status}</Badge>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Level:</span> {selected.escalationLevel}
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Approver role:</span>{' '}
+                    {selected.currentApproverRole ?? '—'}
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Requested by:</span>{' '}
+                    {selected.requestedByDisplayName}
+                  </div>
+                </div>
+
+                {selected.requestPayload && Object.keys(selected.requestPayload).length > 0 && (
+                  <div>
+                    <div className="text-xs font-semibold text-muted-foreground mb-1">Payload</div>
+                    <pre className="bg-muted p-2 rounded text-xs overflow-x-auto max-h-48">
+                      {JSON.stringify(selected.requestPayload, null, 2)}
+                    </pre>
+                  </div>
+                )}
+
+                {detail?.history && detail.history.length > 0 && (
+                  <div>
+                    <div className="text-xs font-semibold text-muted-foreground mb-1">History</div>
+                    <ul className="text-xs space-y-1 max-h-32 overflow-y-auto">
+                      {detail.history.map((h: any) => (
+                        <li key={h.id} className="border-l-2 border-muted-foreground/30 pl-2">
+                          <span className="font-medium">{h.event}</span>{' '}
+                          <span className="text-muted-foreground">
+                            L{h.fromLevel ?? '-'}→L{h.toLevel ?? '-'} ·{' '}
+                            {new Date(h.occurredAt).toLocaleString()} ·{' '}
+                            {h.actorDisplayName ?? 'system'}
+                          </span>
+                          {h.notes && <div className="ml-2 italic">{h.notes}</div>}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                <div className="space-y-2 pt-2 border-t">
+                  {reasonCodes.length > 0 && (
+                    <div>
+                      <label className="text-xs font-semibold">Reason code</label>
+                      <Select
+                        value={decision.reasonCode}
+                        onValueChange={(v) => setDecision((d) => ({ ...d, reasonCode: v }))}
+                      >
+                        <SelectTrigger data-testid="select-reason-code">
+                          <SelectValue placeholder="Select…" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {reasonCodes.map((c) => (
+                            <SelectItem key={c} value={c}>
+                              {c}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  <div>
+                    <label className="text-xs font-semibold">Notes</label>
+                    <Textarea
+                      value={decision.notes}
+                      onChange={(e) => setDecision((d) => ({ ...d, notes: e.target.value }))}
+                      placeholder="Required for rejection"
+                      data-testid="input-notes"
+                    />
+                  </div>
+                  {requiresSignature && (
+                    <div>
+                      <label className="text-xs font-semibold">Signature (type your name)</label>
+                      <Input
+                        value={decision.signature}
+                        onChange={(e) => setDecision((d) => ({ ...d, signature: e.target.value }))}
+                        placeholder="Required for approval"
+                        data-testid="input-signature"
+                      />
+                    </div>
+                  )}
+                  <div className="flex gap-2 pt-2">
+                    <Button
+                      onClick={() =>
+                        decide.mutate({ id: selected.id, action: 'approve', body: decision })
+                      }
+                      disabled={
+                        decide.isPending || (requiresSignature && !decision.signature)
+                      }
+                      data-testid="button-approve"
+                    >
+                      <CheckCircle2 className="h-4 w-4 mr-1" />
+                      Approve
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={() =>
+                        decide.mutate({ id: selected.id, action: 'reject', body: decision })
+                      }
+                      disabled={
+                        decide.isPending || (!decision.notes && !decision.reasonCode)
+                      }
+                      data-testid="button-reject"
+                    >
+                      <XCircle className="h-4 w-4 mr-1" />
+                      Reject
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function DeadlineBadge({ deadline, level }: { deadline: string | null; level: number }) {
+  if (!deadline) return <Badge variant="outline">L{level}</Badge>;
+  const ms = new Date(deadline).getTime() - Date.now();
+  const overdue = ms <= 0;
+  const hrs = Math.abs(ms) / 3_600_000;
+  if (overdue) {
+    return (
+      <Badge variant="destructive" className="text-xs gap-1">
+        <ShieldAlert className="h-3 w-3" /> overdue
+      </Badge>
+    );
+  }
+  if (hrs < 2) {
+    return (
+      <Badge variant="default" className="text-xs gap-1 bg-amber-500">
+        <AlertTriangle className="h-3 w-3" />
+        {hrs.toFixed(1)}h
+      </Badge>
+    );
+  }
+  return (
+    <Badge variant="outline" className="text-xs gap-1">
+      <Clock className="h-3 w-3" />
+      {hrs.toFixed(1)}h
+    </Badge>
+  );
+}

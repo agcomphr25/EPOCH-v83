@@ -220,6 +220,7 @@ import continuityRoutes from './continuity';
 import proteusLabsRoutes from './proteusLabs';
 import devSeedPunchesRoutes from './timekeeping/devSeedPunches';
 import p2ScheduleItemsRoutes from './p2ScheduleItems';
+import { approvalsRouter, escalationPoliciesRouter } from './approvals';
 
 export function registerRoutes(app: Express, existingServer?: Server): Server {
   // Debug routes — not mounted in production
@@ -825,6 +826,10 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   // Audit System routes
   app.use('/api/audit', auditRoutes);
   app.use('/api/audit-ledger', auditLedgerRoutes);
+
+  // Task #148 — Approval escalation engine
+  app.use('/api/approvals', approvalsRouter);
+  app.use('/api/escalation-policies', escalationPoliciesRouter);
   app.use('/api/inventory-transaction-ledger', inventoryTransactionLedgerRoutes);
   app.use('/api/inventory-anomalies', inventoryAnomaliesRoutes);
   app.use('/api/digital-signatures', digitalSignaturesRoutes);

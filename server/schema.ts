@@ -5375,7 +5375,7 @@ export const materialLots = pgTable('material_lots', {
   storageRequirements: text('storage_requirements'), // Temperature, humidity requirements
   
   // Status tracking
-  status: text('status').default('RECEIVED').notNull(), // RECEIVED | QUARANTINE | ACCEPTED | REJECTED | EXPIRED | ISSUED | CONSUMED | SCRAPPED
+  status: text('status').default('RECEIVED').notNull(), // RECEIVED | QUARANTINE | ACCEPTED | REJECTED | EXPIRED | ISSUED | CONSUMED | SCRAPPED | HOLD
   
   // Out-time tracking (for prepregs/time-sensitive materials)
   totalOutTimeMinutes: integer('total_out_time_minutes').default(0),
@@ -5418,7 +5418,7 @@ export const materialLotTransactions = pgTable('material_lot_transactions', {
   internalControlNumber: text('internal_control_number').notNull(), // Denormalized for queries
   
   // Transaction type
-  transactionType: text('transaction_type').notNull(), // RECEIVE | MOVE | ISSUE | ADJUST | SCRAP | RETURN | SPLIT | OUT_START | OUT_END | ACCEPT | REJECT | QUARANTINE
+  transactionType: text('transaction_type').notNull(), // RECEIVE | MOVE | ISSUE | ADJUST | SCRAP | RETURN | SPLIT | OUT_START | OUT_END | ACCEPT | REJECT | QUARANTINE | EXPIRE | HOLD
   
   // Quantity change
   qtyBefore: numeric('qty_before'),
@@ -6858,7 +6858,7 @@ export const insertMaterialLotSchema = createInsertSchema(materialLots)
     manufactureDate: z.coerce.date().optional().nullable(),
     storageLocation: z.string().optional().nullable(),
     storageRequirements: z.string().optional().nullable(),
-    status: z.enum(['RECEIVED', 'QUARANTINE', 'ACCEPTED', 'REJECTED', 'EXPIRED', 'ISSUED', 'CONSUMED', 'SCRAPPED']).default('RECEIVED'),
+    status: z.enum(['RECEIVED', 'QUARANTINE', 'ACCEPTED', 'REJECTED', 'EXPIRED', 'ISSUED', 'CONSUMED', 'SCRAPPED', 'HOLD']).default('RECEIVED'),
     totalOutTimeMinutes: z.number().int().default(0),
     maxOutTimeMinutes: z.number().int().optional().nullable(),
     currentlyOutOfStorage: z.boolean().default(false),
@@ -6886,7 +6886,7 @@ export const insertMaterialLotTransactionSchema = createInsertSchema(materialLot
   .extend({
     materialLotId: z.string().uuid('Invalid material lot ID'),
     internalControlNumber: z.string().min(1, 'ICN is required'),
-    transactionType: z.enum(['RECEIVE', 'MOVE', 'ISSUE', 'ADJUST', 'SCRAP', 'RETURN', 'SPLIT', 'OUT_START', 'OUT_END', 'ACCEPT', 'REJECT', 'QUARANTINE']),
+    transactionType: z.enum(['RECEIVE', 'MOVE', 'ISSUE', 'ADJUST', 'SCRAP', 'RETURN', 'SPLIT', 'OUT_START', 'OUT_END', 'ACCEPT', 'REJECT', 'QUARANTINE', 'EXPIRE', 'HOLD']),
     qtyBefore: z.string().optional().nullable(),
     qtyChange: z.string().optional().nullable(),
     qtyAfter: z.string().optional().nullable(),

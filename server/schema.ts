@@ -3872,6 +3872,12 @@ export const vendorPOItems = pgTable('vendor_po_items', {
   notes: text('notes'),
   customerPoId: integer('customer_po_id')
     .references(() => p2PurchaseOrders.id), // Optional link to customer PO (internal tracking only)
+  projectId: uuid('project_id')
+    .references((): AnyPgColumn => projects.id, { onDelete: 'set null' }), // Optional project traceability
+  productionWorkOrderId: uuid('production_work_order_id')
+    .references((): AnyPgColumn => productionWorkOrders.id, { onDelete: 'set null' }), // Optional WAD/work order traceability
+  chargeCodeId: integer('charge_code_id')
+    .references((): AnyPgColumn => chargeCodes.id, { onDelete: 'set null' }), // Optional cost objective traceability
   otherIdentifier: text('other_identifier'), // Optional identifier when no customer PO (internal tracking only)
   historicalAvgPrice: real('historical_avg_price'),
   priceVariancePercent: real('price_variance_percent'),

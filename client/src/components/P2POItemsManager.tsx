@@ -40,7 +40,8 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { ArrowLeft, Plus, Pencil, Trash2, Package, Send, Check, ChevronsUpDown } from 'lucide-react';
+import { ArrowLeft, Plus, Pencil, Trash2, Package, Send, Check, ChevronsUpDown, AlertCircle, ArrowDown, ArrowUp } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -81,8 +82,34 @@ export function P2POItemsManager({
     notes: '',
     inventoryItemId: null as number | null,
   });
+  const [editError, setEditError] = useState<{
+    message: string;
+    minQuantity?: number;
+  } | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Fetch unit-counts for the item being edited (used to preview qty-edit impact)
+  const { data: editingCounts } = useQuery<{
+    serializedTotal: number;
+    unstarted: number;
+    inProgress: number;
+    productionOrders: number;
+    productionOrdersPending: number;
+  }>({
+    queryKey: [
+      '/api/p2/purchase-orders',
+      poId,
+      'items',
+      editingItem?.id,
+      'unit-counts',
+    ],
+    queryFn: () =>
+      apiRequest(
+        `/api/p2/purchase-orders/${poId}/items/${editingItem!.id}/unit-counts`
+      ),
+    enabled: !!editingItem && dialogOpen,
+  });
 
   // Fetch P2 PO items for this specific PO
   const { data: items = [], isLoading } = useQuery<P2POItem[]>({
@@ -130,31 +157,87 @@ export function P2POItemsManager({
     },
   });
 
-  const updateMutation = useMutation({
-    mutationFn: ({
-      itemId,
-      data,
-    }: {
-      itemId: number;
-      data: typeof formData;
-    }) =>
+  type UpdateSync =
+    | null
+    | {
+        direction: 'increase';
+        delta: number;
+        serializedItemsAdded: number;
+        productionOrdersAdded: number;
+      }
+    | {
+        direction: 'decrease';
+        delta: number;
+        serializedItemsRemoved: number;
+        productionOrdersRemoved: number;
+      };
+  type UpdateResponse = P2POItem & { sync?: UpdateSync };
+  type QtyConflictPayload = {
+    error?: string;
+    code?: string;
+    minQuantity?: number;
+    inProgressCount?: number;
+    unstartedCount?: number;
+    currentQuantity?: number;
+    requestedQuantity?: number;
+  };
+  type ApiError = Error & {
+    status?: number;
+    responseData?: QtyConflictPayload;
+  };
+
+  const updateMutation = useMutation<
+    UpdateResponse,
+    ApiError,
+    { itemId: number; data: typeof formData }
+  >({
+    mutationFn: ({ itemId, data }) =>
       apiRequest(`/api/p2/purchase-orders/${poId}/items/${itemId}`, {
         method: 'PUT',
         body: data,
-      }),
-    onSuccess: () => {
+      }) as Promise<UpdateResponse>,
+    onSuccess: (data) => {
       queryClient.invalidateQueries({
         queryKey: ['/api/p2/purchase-orders', poId, 'items'],
       });
-      toast({
-        title: 'Success',
-        description: 'Item updated successfully',
+      queryClient.invalidateQueries({
+        queryKey: ['/api/p2/layup-schedules/unscheduled'],
       });
+      let description = 'Item updated successfully';
+      const sync = data.sync;
+      if (sync?.direction === 'increase') {
+        description = `Added ${sync.serializedItemsAdded} unit(s)` +
+          (sync.productionOrdersAdded
+            ? ` and ${sync.productionOrdersAdded} production order(s)`
+            : '');
+      } else if (sync?.direction === 'decrease') {
+        description = `Removed ${sync.serializedItemsRemoved} unstarted unit(s)` +
+          (sync.productionOrdersRemoved
+            ? ` and ${sync.productionOrdersRemoved} pending production order(s)`
+            : '');
+      }
+      toast({ title: 'Success', description });
       setDialogOpen(false);
       setEditingItem(null);
+      setEditError(null);
       resetForm();
     },
-    onError: (error: Error) => {
+    onError: (error) => {
+      // Backend assigns the JSON body onto the error object via Object.assign
+      const data: QtyConflictPayload = error.responseData ?? {};
+      const isQtyConflict =
+        error.status === 409 &&
+        (data.code === 'IN_PROGRESS_BLOCKS_DECREASE' || typeof data.minQuantity === 'number');
+
+      if (isQtyConflict) {
+        setEditError({
+          message: data.error || error.message || 'Quantity decrease blocked by in-progress units.',
+          minQuantity: data.minQuantity,
+        });
+        return;
+      }
+
+      setEditError({ message: error.message || 'Failed to update item' });
       toast({
         title: 'Error',
         description: error.message || 'Failed to update item',
@@ -247,11 +330,13 @@ export function P2POItemsManager({
 
   const handleOpenCreateDialog = () => {
     resetForm();
+    setEditError(null);
     setDialogOpen(true);
   };
 
   const handleOpenEditDialog = (item: P2POItem) => {
     setEditingItem(item);
+    setEditError(null);
     setFormData({
       partNumber: item.partNumber,
       partName: item.partName,
@@ -266,12 +351,24 @@ export function P2POItemsManager({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setEditError(null);
     if (editingItem) {
       updateMutation.mutate({ itemId: editingItem.id, data: formData });
     } else {
       createMutation.mutate(formData);
     }
   };
+
+  // Compute live impact preview when editing quantity on an item that already
+  // has serialized units / production orders generated.
+  const qtyDelta = editingItem ? formData.quantity - editingItem.quantity : 0;
+  const showQtyPreview =
+    !!editingItem && !!editingCounts && editingCounts.serializedTotal > 0 && qtyDelta !== 0;
+  const decreaseBlocked =
+    !!editingItem &&
+    !!editingCounts &&
+    qtyDelta < 0 &&
+    formData.quantity < editingCounts.inProgress;
 
   const totalValue = items.reduce((sum, item) => sum + item.totalPrice, 0);
 
@@ -397,7 +494,7 @@ export function P2POItemsManager({
                   <Input
                     id="quantity"
                     type="number"
-                    min="1"
+                    min={editingCounts?.inProgress || 1}
                     value={formData.quantity}
                     onChange={(e) =>
                       setFormData({
@@ -406,7 +503,17 @@ export function P2POItemsManager({
                       })
                     }
                     required
+                    data-testid="input-quantity"
                   />
+                  {editingItem && editingCounts && editingCounts.serializedTotal > 0 && (
+                    <p className="text-xs text-muted-foreground" data-testid="text-unit-counts">
+                      {editingCounts.serializedTotal} unit(s) generated · {editingCounts.unstarted} unstarted ·{' '}
+                      {editingCounts.inProgress} in progress
+                      {editingCounts.productionOrders > 0
+                        ? ` · ${editingCounts.productionOrders} production order(s)`
+                        : ''}
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="unitPrice">Unit Price ($)</Label>
@@ -449,12 +556,63 @@ export function P2POItemsManager({
                   rows={2}
                 />
               </div>
+
+              {/* Live preview of the impact of a quantity change */}
+              {showQtyPreview && qtyDelta > 0 && (
+                <Alert data-testid="alert-qty-increase-preview">
+                  <ArrowUp className="h-4 w-4" />
+                  <AlertTitle>Quantity increase</AlertTitle>
+                  <AlertDescription>
+                    {qtyDelta} new serialized unit(s) will be added with continued barcodes
+                    {editingCounts!.productionOrders > 0
+                      ? ', and matching production orders will be generated.'
+                      : '.'}
+                  </AlertDescription>
+                </Alert>
+              )}
+              {showQtyPreview && qtyDelta < 0 && !decreaseBlocked && (
+                <Alert data-testid="alert-qty-decrease-preview">
+                  <ArrowDown className="h-4 w-4" />
+                  <AlertTitle>Quantity decrease</AlertTitle>
+                  <AlertDescription>
+                    {Math.abs(qtyDelta)} unstarted unit(s) will be removed
+                    {editingCounts!.productionOrdersPending > 0
+                      ? ' along with matching pending production orders.'
+                      : '.'}{' '}
+                    {editingCounts!.inProgress} in-progress unit(s) are protected.
+                  </AlertDescription>
+                </Alert>
+              )}
+              {showQtyPreview && decreaseBlocked && (
+                <Alert variant="destructive" data-testid="alert-qty-blocked">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Quantity too low</AlertTitle>
+                  <AlertDescription>
+                    {editingCounts!.inProgress} unit(s) have already started production. Minimum
+                    quantity is {editingCounts!.inProgress}.
+                  </AlertDescription>
+                </Alert>
+              )}
+              {editError && (
+                <Alert variant="destructive" data-testid="alert-edit-error">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Update blocked</AlertTitle>
+                  <AlertDescription>
+                    {editError.message}
+                    {typeof editError.minQuantity === 'number' && (
+                      <> Minimum allowed quantity: {editError.minQuantity}.</>
+                    )}
+                  </AlertDescription>
+                </Alert>
+              )}
+
               <div className="flex justify-end gap-2">
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => {
                     setDialogOpen(false);
+                    setEditError(null);
                     resetForm();
                   }}
                 >
@@ -463,8 +621,11 @@ export function P2POItemsManager({
                 <Button
                   type="submit"
                   disabled={
-                    createMutation.isPending || updateMutation.isPending
+                    createMutation.isPending ||
+                    updateMutation.isPending ||
+                    decreaseBlocked
                   }
+                  data-testid="button-save-item"
                 >
                   {createMutation.isPending || updateMutation.isPending
                     ? 'Saving...'

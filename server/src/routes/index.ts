@@ -4796,57 +4796,95 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     }
   });
 
-  app.put('/api/p2/purchase-orders/:poId/items/:itemId', async (req, res) => {
+  // GET unit counts for a P2 PO item (preview impact of qty edits in UI)
+  app.get('/api/p2/purchase-orders/:poId/items/:itemId/unit-counts', async (req, res) => {
     try {
       const { itemId } = req.params;
       const { storage } = await import('../../storage');
-      const { insertP2PurchaseOrderItemSchema } = await import('../../schema');
-      const itemData = insertP2PurchaseOrderItemSchema.partial().omit({ poId: true }).parse(req.body);
-      
-      // Recalculate totalPrice if quantity or unitPrice changed
-      let updateData = { ...itemData };
-      if (itemData.quantity !== undefined || itemData.unitPrice !== undefined) {
-        // Get existing item to get current values
-        const existingItems = await storage.getP2PurchaseOrderItems(parseInt(req.params.poId));
-        const existingItem = existingItems.find(i => i.id === parseInt(itemId));
-        if (existingItem) {
-          const quantity = itemData.quantity ?? existingItem.quantity;
-          const unitPrice = itemData.unitPrice ?? existingItem.unitPrice ?? 0;
-          updateData.totalPrice = quantity * unitPrice;
-        }
-      }
-      
-      const item = await storage.updateP2PurchaseOrderItem(parseInt(itemId), updateData);
-
-      // If partNumber or partName changed, cascade update to all serialized items for this PO item
-      if (itemData.partNumber || itemData.partName) {
-        const { p2SerializedItems } = await import('../../schema');
-        const { eq } = await import('drizzle-orm');
-        const { db } = await import('../../db');
-
-        const serializedUpdateData: Record<string, any> = {};
-        if (itemData.partNumber) serializedUpdateData.partNumber = itemData.partNumber;
-        if (itemData.partName) serializedUpdateData.partName = itemData.partName;
-        serializedUpdateData.updatedAt = new Date();
-
-        const updated = await db
-          .update(p2SerializedItems)
-          .set(serializedUpdateData)
-          .where(eq(p2SerializedItems.poItemId, parseInt(itemId)))
-          .returning({ id: p2SerializedItems.id });
-
-        console.log(`[P2 PO Item Update] Cascaded part number/name change to ${updated.length} serialized items for PO item ${itemId}`);
-      }
-
-      res.json(item);
+      const counts = await storage.getP2PoItemUnitCounts(parseInt(itemId));
+      res.json(counts);
     } catch (error) {
-      console.error('Update P2 purchase order item error:', error);
+      console.error('Get P2 PO item unit counts error:', error);
+      res.status(500).json({ error: 'Failed to fetch unit counts' });
+    }
+  });
+
+  app.put('/api/p2/purchase-orders/:poId/items/:itemId', async (req, res) => {
+    try {
+      const { poId, itemId } = req.params;
+      const poIdNum = parseInt(poId);
+      const itemIdNum = parseInt(itemId);
+      const { storage } = await import('../../storage');
+      const { insertP2PurchaseOrderItemSchema } = await import('../../schema');
+
+      const itemData = insertP2PurchaseOrderItemSchema
+        .partial()
+        .omit({ poId: true })
+        .parse(req.body);
+
+      const reqUser = (req as Express.Request & {
+        user?: { username?: string; email?: string; role?: string };
+      }).user;
+      const actor = {
+        username: reqUser?.username || reqUser?.email || 'system',
+        role: reqUser?.role || 'SYSTEM',
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent') || null,
+      };
+
+      const result = await storage.updateP2PoItemWithQtySync(
+        poIdNum,
+        itemIdNum,
+        itemData,
+        actor,
+      );
+
+      res.json({ ...result.item, sync: result.sync });
+    } catch (error) {
       const { z } = await import('zod');
       if (error instanceof z.ZodError) {
-        res.status(400).json({ error: 'Invalid P2 purchase order item data', details: error.errors });
-      } else {
-        res.status(500).json({ error: 'Failed to update P2 purchase order item' });
+        return res.status(400).json({
+          error: 'Invalid P2 purchase order item data',
+          details: error.errors,
+        });
       }
+
+      const code = (error as Error & { code?: string }).code;
+      if (code === 'PO_NOT_FOUND' || code === 'ITEM_NOT_FOUND') {
+        return res.status(404).json({ error: (error as Error).message });
+      }
+      if (code === 'PO_LOCKED') {
+        const lockedErr = error as Error & {
+          lockedAt?: Date | null;
+          lockedBy?: number | null;
+        };
+        return res.status(403).json({
+          error: lockedErr.message,
+          lockedAt: lockedErr.lockedAt ?? null,
+          lockedBy: lockedErr.lockedBy ?? null,
+        });
+      }
+      if (code === 'IN_PROGRESS_BLOCKS_DECREASE') {
+        const conflictErr = error as Error & {
+          minQuantity: number;
+          inProgressCount: number;
+          unstartedCount: number;
+          currentQuantity: number;
+          requestedQuantity: number;
+        };
+        return res.status(409).json({
+          error: conflictErr.message,
+          code,
+          minQuantity: conflictErr.minQuantity,
+          inProgressCount: conflictErr.inProgressCount,
+          unstartedCount: conflictErr.unstartedCount,
+          currentQuantity: conflictErr.currentQuantity,
+          requestedQuantity: conflictErr.requestedQuantity,
+        });
+      }
+
+      console.error('Update P2 purchase order item error:', error);
+      res.status(500).json({ error: 'Failed to update P2 purchase order item' });
     }
   });
 

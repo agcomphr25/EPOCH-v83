@@ -707,6 +707,12 @@ import {
   type InsertLocalCalendarEvent,
 } from './schema';
 import { db, pool, rawSql } from './db';
+
+// Drizzle's transaction handle is API-compatible with `db` for the CRUD
+// surface our helpers use, but its TS type is a `PgTransaction` (not the
+// concrete `NodePgDatabase`). Accept either so helpers can be reused inside
+// `db.transaction()` without unsafe casts.
+type DbOrTx = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 import {
   eq,
   desc,
@@ -1808,7 +1814,65 @@ export interface IStorage {
   ): Promise<P2ProductionOrder>;
   deleteP2ProductionOrder(id: number): Promise<void>;
   deleteP2ProductionOrdersByPoId(poId: number): Promise<number>;
-  generateP2ProductionOrders(poId: number): Promise<P2ProductionOrder[]>;
+  generateP2ProductionOrders(
+    poId: number,
+    opts?: { onlyPoItemId?: number; quantityOverride?: number },
+    dbClient?: typeof db
+  ): Promise<P2ProductionOrder[]>;
+  addP2SerializedItemsForPoItem(
+    poItemId: number,
+    addCount: number,
+    dbClient?: typeof db
+  ): Promise<P2SerializedItem[]>;
+  removeUnstartedP2SerializedItemsForPoItem(
+    poItemId: number,
+    removeCount: number,
+    dbClient?: typeof db
+  ): Promise<{ removed: number; unstartedRemaining: number; inProgress: number }>;
+  removePendingP2ProductionOrdersForPoItem(
+    poItemId: number,
+    removeCount: number,
+    oldQty: number,
+    dbClient?: typeof db
+  ): Promise<number>;
+  getP2PoItemUnitCounts(
+    poItemId: number,
+    dbClient?: typeof db
+  ): Promise<{
+    serializedTotal: number;
+    unstarted: number;
+    inProgress: number;
+    productionOrders: number;
+    productionOrdersPending: number;
+  }>;
+  /**
+   * Atomic update of a P2 PO line item with auto-sync of serialized units and
+   * production orders. Wraps the entire update + sync sequence in a single DB
+   * transaction so quantity / serialized / production-order counts can never
+   * drift apart on partial failure.
+   */
+  updateP2PoItemWithQtySync(
+    poId: number,
+    itemId: number,
+    updateData: Partial<InsertP2PurchaseOrderItem>,
+    actor: { username: string; role: string; ipAddress?: string; userAgent?: string | null }
+  ): Promise<{
+    item: P2PurchaseOrderItem;
+    sync:
+      | null
+      | {
+          direction: 'increase';
+          delta: number;
+          serializedItemsAdded: number;
+          productionOrdersAdded: number;
+        }
+      | {
+          direction: 'decrease';
+          delta: number;
+          serializedItemsRemoved: number;
+          productionOrdersRemoved: number;
+        };
+  }>;
   getP2MaterialRequirements(poId: number): Promise<any[]>;
 
   // P2 Production Changes (PCF) CRUD
@@ -14943,15 +15007,26 @@ export class DatabaseStorage implements IStorage {
     return count;
   }
 
-  async generateP2ProductionOrders(poId: number): Promise<P2ProductionOrder[]> {
+  async generateP2ProductionOrders(
+    poId: number,
+    opts?: { onlyPoItemId?: number; quantityOverride?: number },
+    dbClient: DbOrTx = db
+  ): Promise<P2ProductionOrder[]> {
     const po = await this.getP2PurchaseOrder(poId);
     if (!po) {
       throw new Error(`P2 Purchase Order ${poId} not found`);
     }
 
-    const poItems = await this.getP2PurchaseOrderItems(poId);
-    if (poItems.length === 0) {
+    const allPoItems = await this.getP2PurchaseOrderItems(poId);
+    if (allPoItems.length === 0) {
       throw new Error(`No items found for P2 Purchase Order ${poId}`);
+    }
+
+    const poItems = opts?.onlyPoItemId
+      ? allPoItems.filter((it) => it.id === opts.onlyPoItemId)
+      : allPoItems;
+    if (opts?.onlyPoItemId && poItems.length === 0) {
+      throw new Error(`PO item ${opts.onlyPoItemId} not found on P2 PO ${poId}`);
     }
 
     const skippedParts: string[] = [];
@@ -14989,7 +15064,7 @@ export class DatabaseStorage implements IStorage {
       ancestorStack.add(partNumber);
       
       try {
-        const bomRecords = await db
+        const bomRecords = await dbClient
           .select()
           .from(boms)
           .where(and(
@@ -15000,7 +15075,7 @@ export class DatabaseStorage implements IStorage {
         if (bomRecords.length > 0) {
           const bom = bomRecords[0];
 
-          const revisions = await db
+          const revisions = await dbClient
             .select()
             .from(bomRevisions)
             .where(eq(bomRevisions.bomId, bom.id))
@@ -15013,7 +15088,7 @@ export class DatabaseStorage implements IStorage {
 
           const revision = revisions[0];
 
-          const lines = await db
+          const lines = await dbClient
             .select()
             .from(bomLines)
             .where(eq(bomLines.revisionId, revision.id))
@@ -15025,7 +15100,7 @@ export class DatabaseStorage implements IStorage {
           }
 
           for (const line of lines) {
-            const partInfo = await db
+            const partInfo = await dbClient
               .select()
               .from(inventoryItems)
               .where(eq(inventoryItems.agPartNumber, line.childPartAgNumber))
@@ -15085,7 +15160,7 @@ export class DatabaseStorage implements IStorage {
             );
           }
         } else {
-          const bomDefRecords = await db
+          const bomDefRecords = await dbClient
             .select()
             .from(bomDefinitions)
             .where(and(
@@ -15101,7 +15176,7 @@ export class DatabaseStorage implements IStorage {
           const bomDef = bomDefRecords[0];
           console.log(`📋 Found P2 BOM definition for ${partNumber}: ${bomDef.modelName}`);
 
-          const items = await db
+          const items = await dbClient
             .select()
             .from(bomItems)
             .where(and(
@@ -15123,7 +15198,7 @@ export class DatabaseStorage implements IStorage {
               continue;
             }
 
-            const partInfo = await db
+            const partInfo = await dbClient
               .select()
               .from(inventoryItems)
               .where(eq(inventoryItems.agPartNumber, itemPartNumber))
@@ -15186,9 +15261,10 @@ export class DatabaseStorage implements IStorage {
     };
 
     for (const poItem of poItems) {
-      console.log(`\n📋 Processing PO Item: ${poItem.partNumber} (Qty: ${poItem.quantity})`);
+      const effectiveQuantity = opts?.quantityOverride ?? poItem.quantity;
+      console.log(`\n📋 Processing PO Item: ${poItem.partNumber} (Qty: ${effectiveQuantity}${opts?.quantityOverride !== undefined ? ` - delta override (item.quantity=${poItem.quantity})` : ''})`);
       
-      const topLevelPart = await db
+      const topLevelPart = await dbClient
         .select()
         .from(inventoryItems)
         .where(eq(inventoryItems.agPartNumber, poItem.partNumber))
@@ -15205,9 +15281,9 @@ export class DatabaseStorage implements IStorage {
           : (topIsPacket ? 'Cutting Table' : part.manufacturingDepartment);
         
         if (topDepartment) {
-          console.log(`🔧 Top-level item ${poItem.partNumber} is ${topIsPacket ? 'Packet' : 'Manufactured'} (dept: ${topDepartment}) - queuing ${poItem.quantity} production orders`);
+          console.log(`🔧 Top-level item ${poItem.partNumber} is ${topIsPacket ? 'Packet' : 'Manufactured'} (dept: ${topDepartment}) - queuing ${effectiveQuantity} production orders`);
           
-          for (let unitIndex = 1; unitIndex <= poItem.quantity; unitIndex++) {
+          for (let unitIndex = 1; unitIndex <= effectiveQuantity; unitIndex++) {
             pendingOrders.push({
               p2PoId: poId,
               p2PoItemId: poItem.id,
@@ -15216,7 +15292,7 @@ export class DatabaseStorage implements IStorage {
               sku: poItem.partNumber,
               partName: part.name || poItem.partName || poItem.partNumber,
               department: topDepartment,
-              notes: `Generated from P2 PO ${po.poNumber} - ${topIsPacket ? 'PACKET DEMAND' : 'TOP-LEVEL ASSEMBLY'} ${poItem.partNumber} - Unit ${unitIndex} of ${poItem.quantity}`,
+              notes: `Generated from P2 PO ${po.poNumber} - ${topIsPacket ? 'PACKET DEMAND' : 'TOP-LEVEL ASSEMBLY'} ${poItem.partNumber} - Unit ${unitIndex} of ${effectiveQuantity}`,
             });
           }
         } else {
@@ -15230,7 +15306,7 @@ export class DatabaseStorage implements IStorage {
 
       await collectOrderSpecs(
         poItem.partNumber,
-        poItem.quantity,
+        effectiveQuantity,
         poItem,
         new Set<string>(),
         0
@@ -15276,7 +15352,7 @@ export class DatabaseStorage implements IStorage {
         };
       });
 
-      const inserted = await db
+      const inserted = await dbClient
         .insert(p2ProductionOrders)
         .values(insertValues)
         .returning();
@@ -15292,6 +15368,542 @@ export class DatabaseStorage implements IStorage {
     }
     
     return productionOrders;
+  }
+
+  async addP2SerializedItemsForPoItem(
+    poItemId: number,
+    addCount: number,
+    dbClient: DbOrTx = db
+  ): Promise<P2SerializedItem[]> {
+    if (addCount <= 0) return [];
+
+    const [poItem] = await dbClient
+      .select()
+      .from(p2PurchaseOrderItems)
+      .where(eq(p2PurchaseOrderItems.id, poItemId));
+    if (!poItem) {
+      throw new Error(`P2 PO item ${poItemId} not found`);
+    }
+
+    const [po] = await dbClient
+      .select()
+      .from(p2PurchaseOrders)
+      .where(eq(p2PurchaseOrders.id, poItem.poId));
+    if (!po) {
+      throw new Error(`P2 PO ${poItem.poId} not found`);
+    }
+
+    // Continue the per-PO barcode sequence (max+1 across ALL items on this PO)
+    const maxSeqResult = await dbClient
+      .select({ maxSeq: max(p2SerializedItems.sequenceNumber) })
+      .from(p2SerializedItems)
+      .where(eq(p2SerializedItems.poId, po.id));
+    const startSeq = (maxSeqResult[0]?.maxSeq ?? 0) + 1;
+
+    let itemRouting = await dbClient.query.partRoutings.findFirst({
+      where: and(eq(partRoutings.partNumber, poItem.partNumber), eq(partRoutings.isActive, true)),
+    });
+    if (!itemRouting) {
+      itemRouting = await dbClient.query.partRoutings.findFirst({
+        where: and(ilike(partRoutings.partNumber, poItem.partNumber), eq(partRoutings.isActive, true)),
+      });
+    }
+    const baseMatch = poItem.partNumber.match(/^(.+?)\s*Rev\s*\w+$/i);
+    const familyKey = baseMatch ? baseMatch[1].trim() : poItem.partNumber;
+
+    // The Drizzle-inferred insert type for p2SerializedItems is currently
+    // narrowed by an unrelated schema-wide `boolean -> never` cascade in
+    // server/schema.ts (pre-existing: many tables typecheck only via casts).
+    // Until that root issue is fixed we annotate the literal shape we
+    // actually persist and cast once at the .values() boundary.
+    type SerializedInsertShape = {
+      serialNumber: string;
+      barcode: string;
+      travelerBarcode: string;
+      poId: number;
+      poItemId: number;
+      poNumber: string;
+      partNumber: string;
+      partName: string;
+      customerId: string;
+      customerName: string;
+      sequenceNumber: number;
+      currentDepartment: string;
+      currentStageIndex: number;
+      status: string;
+      departmentHistory: unknown[];
+      metadata: { specifications: string } | null;
+      buildFamilyKey: string;
+      partRoutingId: string | null;
+      partRoutingRevision: number | null;
+    };
+    const itemsToCreate: SerializedInsertShape[] = [];
+    for (let i = 0; i < addCount; i++) {
+      const seq = startSeq + i;
+      const seq4 = seq.toString().padStart(4, '0');
+      const barcode = `${po.poNumber}-UNIT-${seq4}`;
+      itemsToCreate.push({
+        serialNumber: barcode,
+        barcode,
+        travelerBarcode: barcode,
+        poId: po.id,
+        poItemId: poItem.id,
+        poNumber: po.poNumber,
+        partNumber: poItem.partNumber,
+        partName: poItem.partName,
+        customerId: po.customerId,
+        customerName: po.customerName,
+        sequenceNumber: seq,
+        currentDepartment: 'Pending Layup',
+        currentStageIndex: 0,
+        status: 'ACTIVE',
+        departmentHistory: [],
+        metadata: poItem.specifications ? { specifications: poItem.specifications } : null,
+        buildFamilyKey: familyKey,
+        partRoutingId: itemRouting?.id ?? null,
+        partRoutingRevision: itemRouting?.routingRevision ?? null,
+      });
+    }
+
+    return await dbClient
+      .insert(p2SerializedItems)
+      .values(itemsToCreate as unknown as typeof p2SerializedItems.$inferInsert[])
+      .returning();
+  }
+
+  async removeUnstartedP2SerializedItemsForPoItem(
+    poItemId: number,
+    removeCount: number,
+    dbClient: DbOrTx = db
+  ): Promise<{ removed: number; unstartedRemaining: number; inProgress: number }> {
+    if (removeCount <= 0) {
+      const counts = await this.getP2PoItemUnitCounts(poItemId, dbClient);
+      return { removed: 0, unstartedRemaining: counts.unstarted, inProgress: counts.inProgress };
+    }
+
+    const all = await dbClient
+      .select()
+      .from(p2SerializedItems)
+      .where(eq(p2SerializedItems.poItemId, poItemId));
+
+    // Canonical "unstarted" definition: still in initial stage, not yet processed.
+    const isUnstarted = (s: typeof p2SerializedItems.$inferSelect) =>
+      s.status === 'ACTIVE' &&
+      (s.currentStageIndex ?? 0) === 0 &&
+      !s.layupCompletedAt &&
+      s.currentDepartment === 'Pending Layup';
+
+    const unstarted = all.filter(isUnstarted).sort(
+      (a, b) => (b.sequenceNumber ?? 0) - (a.sequenceNumber ?? 0)
+    );
+    const inProgress = all.length - unstarted.length;
+
+    const toRemove = unstarted.slice(0, removeCount);
+    if (toRemove.length === 0) {
+      return { removed: 0, unstartedRemaining: unstarted.length, inProgress };
+    }
+
+    await dbClient
+      .delete(p2SerializedItems)
+      .where(inArray(p2SerializedItems.id, toRemove.map((s) => s.id)));
+
+    return {
+      removed: toRemove.length,
+      unstartedRemaining: unstarted.length - toRemove.length,
+      inProgress,
+    };
+  }
+
+  async removePendingP2ProductionOrdersForPoItem(
+    poItemId: number,
+    removeCount: number,
+    oldQty: number,
+    dbClient: DbOrTx = db
+  ): Promise<number> {
+    if (removeCount <= 0 || oldQty <= 0) return 0;
+
+    const orders = await dbClient
+      .select()
+      .from(p2ProductionOrders)
+      .where(eq(p2ProductionOrders.p2PoItemId, poItemId));
+    if (orders.length === 0) return 0;
+
+    // Group production orders by routing/BOM key. Each group may contain
+    // `oldQty * factor` rows where `factor` is the per-unit multiplicity for
+    // that group (e.g. BOM `qtyPer` > 1 means several rows per finished unit).
+    // To remove `removeCount` units we must delete `removeCount * factor`
+    // deletable rows per group, otherwise per-unit topology is broken.
+    type ProdOrder = typeof p2ProductionOrders.$inferSelect;
+    const groups = new Map<string, ProdOrder[]>();
+    for (const o of orders) {
+      const key = `${o.sku}::${o.department}::${o.bomItemId ?? ''}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(o);
+    }
+
+    const idsToDelete: number[] = [];
+    for (const group of Array.from(groups.values())) {
+      // Derive per-unit factor from the existing topology. If the group does
+      // not divide evenly into `oldQty` units, treat factor as 1 and bail
+      // loudly — we will not silently delete the wrong number of rows.
+      const rawFactor = group.length / oldQty;
+      const factor = Number.isInteger(rawFactor) && rawFactor >= 1 ? rawFactor : 1;
+      if (!Number.isInteger(rawFactor) || rawFactor < 1) {
+        throw new Error(
+          `Sync failure: production-order group has ${group.length} rows for oldQty=${oldQty}; cannot derive integer per-unit factor.`
+        );
+      }
+      const requiredDeletes = removeCount * factor;
+
+      const deletable = group
+        .filter(
+          (o) =>
+            o.status === 'PENDING' &&
+            (o.quantityManufactured == null || o.quantityManufactured === 0)
+        )
+        .sort((a, b) => b.id - a.id);
+
+      if (deletable.length < requiredDeletes) {
+        // Per-unit minimum allowed quantity for this group:
+        // floor(deletable / factor) units can be removed, so minQty for the
+        // PO item is oldQty - floor(deletable/factor).
+        const removableUnits = Math.floor(deletable.length / factor);
+        const minForGroup = oldQty - removableUnits;
+        const inProgressUnits = Math.ceil((group.length - deletable.length) / factor);
+        const err = new Error(
+          `Cannot remove ${removeCount} unit(s) from production orders: routing group has only ${deletable.length} deletable row(s) (factor=${factor}).`
+        ) as Error & {
+          code: string;
+          minQuantity: number;
+          inProgressCount: number;
+        };
+        err.code = 'IN_PROGRESS_BLOCKS_DECREASE';
+        err.minQuantity = minForGroup;
+        err.inProgressCount = inProgressUnits;
+        throw err;
+      }
+
+      for (const o of deletable.slice(0, requiredDeletes)) idsToDelete.push(o.id);
+    }
+
+    if (idsToDelete.length === 0) return 0;
+
+    const deleted = await dbClient
+      .delete(p2ProductionOrders)
+      .where(inArray(p2ProductionOrders.id, idsToDelete))
+      .returning({ id: p2ProductionOrders.id });
+
+    if (deleted.length !== idsToDelete.length) {
+      throw new Error(
+        `Sync failure: planned to delete ${idsToDelete.length} production order row(s) but deleted ${deleted.length}`
+      );
+    }
+    return deleted.length;
+  }
+
+  async getP2PoItemUnitCounts(poItemId: number, dbClient: DbOrTx = db): Promise<{
+    serializedTotal: number;
+    unstarted: number;
+    inProgress: number;
+    productionOrders: number;
+    productionOrdersPending: number;
+  }> {
+    const serialized = await dbClient
+      .select()
+      .from(p2SerializedItems)
+      .where(eq(p2SerializedItems.poItemId, poItemId));
+
+    const unstarted = serialized.filter(
+      (s) =>
+        s.status === 'ACTIVE' &&
+        (s.currentStageIndex ?? 0) === 0 &&
+        !s.layupCompletedAt &&
+        s.currentDepartment === 'Pending Layup'
+    ).length;
+
+    const prodOrders = await dbClient
+      .select()
+      .from(p2ProductionOrders)
+      .where(eq(p2ProductionOrders.p2PoItemId, poItemId));
+    const productionOrdersPending = prodOrders.filter(
+      (o) =>
+        o.status === 'PENDING' &&
+        (o.quantityManufactured == null || o.quantityManufactured === 0)
+    ).length;
+
+    return {
+      serializedTotal: serialized.length,
+      unstarted,
+      inProgress: serialized.length - unstarted,
+      productionOrders: prodOrders.length,
+      productionOrdersPending,
+    };
+  }
+
+  async updateP2PoItemWithQtySync(
+    poId: number,
+    itemId: number,
+    updateData: Partial<InsertP2PurchaseOrderItem>,
+    actor: { username: string; role: string; ipAddress?: string; userAgent?: string | null }
+  ): Promise<{
+    item: P2PurchaseOrderItem;
+    sync:
+      | null
+      | {
+          direction: 'increase';
+          delta: number;
+          serializedItemsAdded: number;
+          productionOrdersAdded: number;
+        }
+      | {
+          direction: 'decrease';
+          delta: number;
+          serializedItemsRemoved: number;
+          productionOrdersRemoved: number;
+        };
+  }> {
+    return await db.transaction(async (tx) => {
+      // Lock the PO row first to serialize concurrent qty edits
+      const [po] = await tx
+        .select()
+        .from(p2PurchaseOrders)
+        .where(eq(p2PurchaseOrders.id, poId))
+        .for('update');
+      if (!po) {
+        const err = new Error('P2 purchase order not found');
+        (err as Error & { code: string }).code = 'PO_NOT_FOUND';
+        throw err;
+      }
+      if (po.lockedAt) {
+        const err = new Error('This PO has been locked and cannot be modified') as Error & {
+          code: string;
+          lockedAt: Date | null;
+          lockedBy: number | null;
+        };
+        err.code = 'PO_LOCKED';
+        err.lockedAt = po.lockedAt;
+        err.lockedBy = po.lockedBy;
+        throw err;
+      }
+
+      // Lock the item row too
+      const [existingItem] = await tx
+        .select()
+        .from(p2PurchaseOrderItems)
+        .where(eq(p2PurchaseOrderItems.id, itemId))
+        .for('update');
+      if (!existingItem || existingItem.poId !== poId) {
+        const err = new Error('P2 PO item not found') as Error & { code: string };
+        err.code = 'ITEM_NOT_FOUND';
+        throw err;
+      }
+
+      const oldQty = existingItem.quantity;
+      const newQty = updateData.quantity ?? oldQty;
+      const qtyChanged = updateData.quantity !== undefined && newQty !== oldQty;
+
+      // Re-read counts inside the transaction so the in-progress guard sees a
+      // consistent view of serialized units / production orders.
+      const preCounts = qtyChanged
+        ? await this.getP2PoItemUnitCounts(itemId, tx)
+        : null;
+
+      if (qtyChanged && preCounts && newQty < oldQty && preCounts.serializedTotal > 0) {
+        if (newQty < preCounts.inProgress) {
+          const err = new Error(
+            `Cannot reduce quantity below ${preCounts.inProgress}. ${preCounts.inProgress} unit(s) have already started production and cannot be removed.`
+          ) as Error & {
+            code: string;
+            minQuantity: number;
+            inProgressCount: number;
+            unstartedCount: number;
+            currentQuantity: number;
+            requestedQuantity: number;
+          };
+          err.code = 'IN_PROGRESS_BLOCKS_DECREASE';
+          err.minQuantity = preCounts.inProgress;
+          err.inProgressCount = preCounts.inProgress;
+          err.unstartedCount = preCounts.unstarted;
+          err.currentQuantity = oldQty;
+          err.requestedQuantity = newQty;
+          throw err;
+        }
+      }
+
+      // Build the partial update payload (recompute totalPrice if needed)
+      const persistData: Partial<InsertP2PurchaseOrderItem> & { totalPrice?: number } = {
+        ...updateData,
+      };
+      if (updateData.quantity !== undefined || updateData.unitPrice !== undefined) {
+        const unitPrice = updateData.unitPrice ?? existingItem.unitPrice ?? 0;
+        persistData.totalPrice = newQty * unitPrice;
+      }
+
+      const [updatedItem] = await tx
+        .update(p2PurchaseOrderItems)
+        .set(persistData)
+        .where(eq(p2PurchaseOrderItems.id, itemId))
+        .returning();
+
+      // Cascade partNumber/partName edits to existing serialized units
+      if (updateData.partNumber || updateData.partName) {
+        const cascadePayload: { partNumber?: string; partName?: string; updatedAt: Date } = {
+          updatedAt: new Date(),
+        };
+        if (updateData.partNumber) cascadePayload.partNumber = updateData.partNumber;
+        if (updateData.partName) cascadePayload.partName = updateData.partName;
+        await tx
+          .update(p2SerializedItems)
+          .set(cascadePayload)
+          .where(eq(p2SerializedItems.poItemId, itemId));
+      }
+
+      // Sync serialized items + production orders when quantity changed
+      let sync:
+        | null
+        | {
+            direction: 'increase';
+            delta: number;
+            serializedItemsAdded: number;
+            productionOrdersAdded: number;
+          }
+        | {
+            direction: 'decrease';
+            delta: number;
+            serializedItemsRemoved: number;
+            productionOrdersRemoved: number;
+          } = null;
+
+      if (qtyChanged && preCounts && preCounts.serializedTotal > 0) {
+        if (newQty > oldQty) {
+          const addCount = newQty - oldQty;
+          const created = await this.addP2SerializedItemsForPoItem(itemId, addCount, tx);
+          if (created.length !== addCount) {
+            throw new Error(
+              `Sync failure: tried to add ${addCount} serialized unit(s) but inserted ${created.length}. ` +
+                `Aborting to keep PO quantity, serialized units, and production orders consistent.`
+            );
+          }
+          let prodOrdersAdded = 0;
+          if (preCounts.productionOrders > 0) {
+            // Failures here MUST roll back the qty + serialized changes
+            const newOrders = await this.generateP2ProductionOrders(
+              poId,
+              { onlyPoItemId: itemId, quantityOverride: addCount },
+              tx
+            );
+            prodOrdersAdded = newOrders.length;
+          }
+          sync = {
+            direction: 'increase',
+            delta: addCount,
+            serializedItemsAdded: created.length,
+            productionOrdersAdded: prodOrdersAdded,
+          };
+        } else if (newQty < oldQty) {
+          const removeCount = oldQty - newQty;
+          const removeRes = await this.removeUnstartedP2SerializedItemsForPoItem(
+            itemId,
+            removeCount,
+            tx
+          );
+          if (removeRes.removed !== removeCount) {
+            // Treat insufficient unstarted units as a 409 (in-progress block)
+            // rather than a generic 500 — caller can present min-quantity UX.
+            const conflictErr = new Error(
+              `Cannot reduce quantity by ${removeCount}. Only ${removeRes.removed} unstarted unit(s) ` +
+                `are available to remove (${removeRes.inProgress} in progress).`
+            ) as Error & {
+              code: string;
+              minQuantity: number;
+              inProgressCount: number;
+              unstartedCount: number;
+              currentQuantity: number;
+              requestedQuantity: number;
+            };
+            conflictErr.code = 'IN_PROGRESS_BLOCKS_DECREASE';
+            conflictErr.minQuantity = oldQty - removeRes.removed;
+            conflictErr.inProgressCount = removeRes.inProgress;
+            conflictErr.unstartedCount = removeRes.unstartedRemaining + removeRes.removed;
+            conflictErr.currentQuantity = oldQty;
+            conflictErr.requestedQuantity = newQty;
+            throw conflictErr;
+          }
+          let prodOrdersRemoved = 0;
+          if (preCounts.productionOrders > 0) {
+            prodOrdersRemoved = await this.removePendingP2ProductionOrdersForPoItem(
+              itemId,
+              removeCount,
+              oldQty,
+              tx
+            );
+          }
+          sync = {
+            direction: 'decrease',
+            delta: removeCount,
+            serializedItemsRemoved: removeRes.removed,
+            productionOrdersRemoved: prodOrdersRemoved,
+          };
+        }
+      }
+
+      // Post-condition: assert PO/serialized/production-order topology is
+      // internally consistent before we commit. Any mismatch rolls back.
+      if (qtyChanged && preCounts && preCounts.serializedTotal > 0) {
+        const post = await this.getP2PoItemUnitCounts(itemId, tx);
+        if (post.serializedTotal !== newQty) {
+          throw new Error(
+            `Sync post-condition failed: PO item qty=${newQty} but serialized total=${post.serializedTotal}.`
+          );
+        }
+        if (preCounts.productionOrders > 0) {
+          // The pending production-order count must change in proportion to
+          // the qty delta times the per-unit factor. Validate divisibility.
+          const expectedProdDelta = preCounts.productionOrders / oldQty;
+          if (!Number.isInteger(expectedProdDelta) || expectedProdDelta < 1) {
+            throw new Error(
+              `Sync post-condition failed: pre-existing production-order count ${preCounts.productionOrders} not divisible by oldQty=${oldQty}.`
+            );
+          }
+          const expectedTotalProdOrders = expectedProdDelta * newQty;
+          // After increase the count should equal expected; after decrease
+          // it can be >= expected if some in-progress rows survived. Either
+          // way it must never be > pre + (delta * factor) on increase.
+          if (newQty > oldQty && post.productionOrders !== expectedTotalProdOrders) {
+            throw new Error(
+              `Sync post-condition failed (increase): expected ${expectedTotalProdOrders} production-order rows, got ${post.productionOrders}.`
+            );
+          }
+          if (newQty < oldQty && post.productionOrders < expectedTotalProdOrders) {
+            throw new Error(
+              `Sync post-condition failed (decrease): expected at least ${expectedTotalProdOrders} production-order rows, got ${post.productionOrders}.`
+            );
+          }
+        }
+      }
+
+      // Audit-log the qty change inside the same transaction. The sync
+      // breakdown is folded into newValue so the full evidence is preserved
+      // even though the inferred insert type omits the optional `reason` col.
+      if (qtyChanged) {
+        const auditValues: InsertAdminAuditLog = {
+          orderId: `P2-PO:${po.poNumber}/ITEM:${itemId}`,
+          fieldName: 'quantity',
+          fieldLabel: `P2 PO Item Quantity (${existingItem.partNumber})`,
+          oldValue: oldQty,
+          newValue: { quantity: newQty, sync },
+          changedBy: actor.username,
+          userRole: actor.role as InsertAdminAuditLog['userRole'],
+          changeType: 'INLINE',
+          ipAddress: actor.ipAddress ?? null,
+          userAgent: actor.userAgent ?? null,
+        };
+        // Cast at boundary: schema-wide type cascade narrows inferred insert type.
+        await tx.insert(adminAuditLog).values(auditValues as unknown as typeof adminAuditLog.$inferInsert);
+      }
+
+      return { item: updatedItem, sync };
+    });
   }
 
   async getP2MaterialRequirements(poId: number): Promise<any[]> {

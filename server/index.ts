@@ -473,6 +473,7 @@ async function initializeBackgroundServices() {
           '0112_material_issue_approvals.sql',
           '0113_routing_step_intent_backfill.sql',
           '0114_inventory_high_risk_approvals.sql',
+          '0117_vendor_po_items_purchasing_unit_columns.sql',
           'investigation_308_order_duplication.sql',
         ];
         const criticalMigrations = new Set([
@@ -3529,6 +3530,28 @@ async function initializeBackgroundServices() {
         console.log('✅ Ensured vendor_po_items.received_quantity is real (decimal-safe)');
       } catch (rqErr: any) {
         console.warn('⚠️ vendor_po_items received_quantity type migration:', rqErr.message);
+      }
+
+      // Ensure vendor_po_items has the newer purchasing-unit and allocation columns used by
+      // the RFQ/PO viewer. Some production databases started from the older baseline table.
+      try {
+        const { sql: sqlVpi } = await import('drizzle-orm');
+        await db.execute(sqlVpi`
+          ALTER TABLE vendor_po_items
+            ADD COLUMN IF NOT EXISTS purchase_qty REAL,
+            ADD COLUMN IF NOT EXISTS purchase_unit_price REAL,
+            ADD COLUMN IF NOT EXISTS purchase_unit TEXT,
+            ADD COLUMN IF NOT EXISTS vendor_unit TEXT,
+            ADD COLUMN IF NOT EXISTS conversion_factor REAL,
+            ADD COLUMN IF NOT EXISTS customer_po_id INTEGER,
+            ADD COLUMN IF NOT EXISTS other_identifier TEXT,
+            ADD COLUMN IF NOT EXISTS historical_avg_price REAL,
+            ADD COLUMN IF NOT EXISTS price_variance_percent REAL,
+            ADD COLUMN IF NOT EXISTS variance_flag BOOLEAN DEFAULT FALSE
+        `);
+        console.log('Ensured vendor_po_items purchasing-unit/allocation columns exist');
+      } catch (vpiErr: any) {
+        console.warn('vendor_po_items purchasing-unit/allocation migration:', vpiErr.message);
       }
 
       // Ensure cutting_fabric_inventory.quantity_in_stock is REAL (not integer)

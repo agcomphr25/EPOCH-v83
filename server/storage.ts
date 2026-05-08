@@ -9346,6 +9346,7 @@ export class DatabaseStorage implements IStorage {
           externalPoNumber: vendorPOs.externalPoNumber,
           vendorId: vendorPOs.vendorId,
           vendorName: vendors.name,
+          productionLine: vendorPOs.productionLine,
           status: vendorPOs.status,
           orderDate: vendorPOs.orderDate,
           expectedDeliveryDate: vendorPOs.expectedDeliveryDate,
@@ -9501,6 +9502,7 @@ export class DatabaseStorage implements IStorage {
         externalPoNumber: vendorPOs.externalPoNumber,
         vendorId: vendorPOs.vendorId,
         vendorName: vendors.name,
+        productionLine: vendorPOs.productionLine,
         status: vendorPOs.status,
         orderDate: vendorPOs.orderDate,
         expectedDeliveryDate: vendorPOs.expectedDeliveryDate,
@@ -9821,6 +9823,7 @@ export class DatabaseStorage implements IStorage {
       const revisionData = {
         poNumber: newPONumber,
         vendorId: originalPO.vendorId,
+        productionLine: originalPO.productionLine,
         status: 'Draft' as const,
         orderDate: originalPO.orderDate,
         expectedDeliveryDate: originalPO.expectedDeliveryDate,

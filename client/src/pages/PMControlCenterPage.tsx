@@ -1043,7 +1043,13 @@ export default function PMControlCenterPage() {
   const [activeTab, setActiveTab] = useState('production');
   const [blockersSheetOpen, setBlockersSheetOpen] = useState(false);
 
-  const { data: projects = [], isLoading: projectsLoading } = useQuery<ProjectOption[]>({
+  const {
+    data: projects = [],
+    isLoading: projectsLoading,
+    isError: projectsError,
+    isSuccess: projectsSuccess,
+    error: projectsErrorObj,
+  } = useQuery<ProjectOption[]>({
     queryKey: ['/api/pm-dashboard/projects'],
     queryFn: () => safeFetch<ProjectOption[]>('/api/pm-dashboard/projects'),
   });
@@ -1294,6 +1300,52 @@ export default function PMControlCenterPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Error state — projects query failed */}
+      {projectsError && (
+        <QueryErrorBanner
+          message={
+            projectsErrorObj instanceof Error
+              ? `Failed to load projects: ${projectsErrorObj.message}`
+              : 'Failed to load projects.'
+          }
+        />
+      )}
+
+      {/* Empty state — no projects exist at all (only on a successful empty response) */}
+      {projectsSuccess && projects.length === 0 && (
+        <Card data-testid="empty-state-no-projects">
+          <CardContent className="p-10 text-center">
+            <Briefcase className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-semibold mb-2">No active projects yet</h3>
+            <p className="text-sm text-muted-foreground max-w-md mx-auto mb-5">
+              Projects appear here once a quote is accepted and promoted into a
+              project. Create or accept a quote to get started.
+            </p>
+            <Link href="/p2-quotes-list">
+              <Button data-testid="button-go-to-quotes">
+                Go to Quotes
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Empty state — projects exist but filters hide them all */}
+      {projectsSuccess && projects.length > 0 && filteredProjects.length === 0 && (
+        <Card data-testid="empty-state-filtered-out">
+          <CardContent className="p-8 text-center">
+            <Filter className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
+            <p className="text-sm text-muted-foreground">
+              {onlyMyProjects
+                ? 'No projects are currently assigned to you.'
+                : pmFilter
+                  ? 'No active projects for the selected PM.'
+                  : 'No active projects match the current filters.'}
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* KPI Summary Cards */}
       {selectedProjectId && (

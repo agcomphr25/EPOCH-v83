@@ -619,10 +619,20 @@ router.patch('/api/quotes/:id/status', async (req: Request, res: Response) => {
         return projectId;
       });
     } catch (err) {
+      // Always log the full underlying error server-side so silent failures in
+      // the quote → project promotion path (project insert, project_steps
+      // insert, WAD insert, etc.) become visible to operators. The whole tx
+      // has already rolled back, so the quote's status is untouched.
       console.error('[Quote→Project] Failed to accept quote — transaction rolled back:', err);
-      return res.status(500).json({
+      const body: { error: string; detail?: string } = {
         error: 'Failed to accept quote: could not create the linked project. The quote status was not changed.',
-      });
+      };
+      // Only expose the raw error message in non-production environments to
+      // avoid leaking internal DB/application details to clients.
+      if (process.env.NODE_ENV !== 'production') {
+        body.detail = err instanceof Error ? err.message : String(err);
+      }
+      return res.status(500).json(body);
     }
 
     // Return the updated quote with projectId for the frontend to use

@@ -11,6 +11,7 @@ EPOCH v8 is a comprehensive Manufacturing ERP system designed to streamline oper
 *   **Generate Drizzle Migrations:** `drizzle-kit generate:pg`
 *   **Push DB Schema:** `drizzle-kit push:pg`
 *   **Run Phase E Cost Reconciliation Script:** `npx tsx server/scripts/phaseECostReconciliation.ts [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--output /path/to/file.json]`
+*   **Backfill Inventory Transaction Ledger (Task #183):** `npx tsx server/scripts/backfillInventoryTransactionLedger.ts [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--dry-run] [--source mlt|consumption|reservations|all]` — reconstructs ledger rows from `material_lot_transactions`, `traveler_material_consumption`, and `material_lot_reservations` so historical traveler chains (e.g. `roc2600007`) appear in the Material Traceability Viewer. Idempotent: re-runs are no-ops because each source row is keyed by `(sourceModule='backfill:<table>', sourceRecordId=<row id>)`. Note: `cutting_packet_session_lots` is intentionally NOT a source — cutting fabric has its own dedicated ledger.
 *   **Required Environment Variables:**
     *   `DATABASE_URL`: PostgreSQL connection string.
     *   `PORTAL_TOKEN_SECRET`: HMAC-SHA256 signing key for employee portal tokens.

@@ -30,6 +30,7 @@ import {
   type InventoryTransactionLedger,
 } from '../../schema';
 import { verifyInventoryLedgerHashesByIds } from './inventoryTransactionLedgerService';
+import { resolveTravelerBarcode } from '../helpers/travelerBarcodeResolver';
 
 // ─────────────────────────────────────────────────────────────────────
 // Types
@@ -150,6 +151,13 @@ export interface ResolvedTarget {
   label: string;
   detail?: string;
   matchedEntities: Array<{ kind: string; id: string; label: string; href: string | null }>;
+  /**
+   * True when the search anchor (e.g. traveler number) could not be matched
+   * to any underlying entity. Distinguishes "no such traveler" from "the
+   * traveler exists but has no ledger events yet". Consumers should surface
+   * different empty-state messaging based on this flag.
+   */
+  notFound?: boolean;
 }
 
 export interface TraceabilityChain {
@@ -379,6 +387,7 @@ interface ResolvedSearch {
   detail?: string;
   matchedEntities: Array<{ kind: string; id: string; label: string; href: string | null }>;
   ledgerCondition: SQL | undefined;
+  notFound?: boolean;
 }
 
 async function resolveSearch(input: TraceabilitySearchInput): Promise<ResolvedSearch> {
@@ -395,7 +404,7 @@ async function resolveSearch(input: TraceabilitySearchInput): Promise<ResolvedSe
         .where(eq(materialLots.internalControlNumber, value))
         .limit(1);
       if (!lot) {
-        return { label: `Lot ICN: ${value}`, matchedEntities: [], ledgerCondition: sql`FALSE` };
+        return { label: `Lot ICN: ${value}`, matchedEntities: [], ledgerCondition: sql`FALSE`, notFound: true };
       }
       return {
         label: `Lot ${lot.internalControlNumber}`,
@@ -411,13 +420,36 @@ async function resolveSearch(input: TraceabilitySearchInput): Promise<ResolvedSe
     }
 
     case 'travelerNumber': {
-      const [trav] = await db
+      // Case-insensitive match on traveler_number; UUID match for direct id;
+      // barcode-helper fallback for printable scan payloads (Task #183).
+      let [trav] = await db
         .select()
         .from(travelers)
-        .where(or(eq(travelers.travelerNumber, value), eq(travelers.id, value)))
+        .where(
+          or(
+            sql`LOWER(${travelers.travelerNumber}) = LOWER(${value})`,
+            eq(travelers.id, value),
+          ),
+        )
         .limit(1);
       if (!trav) {
-        return { label: `Traveler: ${value}`, matchedEntities: [], ledgerCondition: sql`FALSE` };
+        const scan = await resolveTravelerBarcode(value);
+        if (scan.ok) {
+          const [byScan] = await db
+            .select()
+            .from(travelers)
+            .where(eq(travelers.id, scan.context.travelerId))
+            .limit(1);
+          if (byScan) trav = byScan;
+        }
+      }
+      if (!trav) {
+        return {
+          label: `Traveler: ${value}`,
+          matchedEntities: [],
+          ledgerCondition: sql`FALSE`,
+          notFound: true,
+        };
       }
       return {
         label: `Traveler ${trav.travelerNumber}`,
@@ -439,7 +471,7 @@ async function resolveSearch(input: TraceabilitySearchInput): Promise<ResolvedSe
         .where(or(eq(productionWorkOrders.workOrderNumber, value), eq(productionWorkOrders.id, value)))
         .limit(1);
       if (!wo) {
-        return { label: `Work Order / WAD: ${value}`, matchedEntities: [], ledgerCondition: sql`FALSE` };
+        return { label: `Work Order / WAD: ${value}`, matchedEntities: [], ledgerCondition: sql`FALSE`, notFound: true };
       }
       return {
         label: `Work Order ${wo.workOrderNumber}`,
@@ -461,7 +493,7 @@ async function resolveSearch(input: TraceabilitySearchInput): Promise<ResolvedSe
         .where(eq(chargeCodes.code, value))
         .limit(1);
       if (!cc) {
-        return { label: `Charge Code: ${value}`, matchedEntities: [], ledgerCondition: sql`FALSE` };
+        return { label: `Charge Code: ${value}`, matchedEntities: [], ledgerCondition: sql`FALSE`, notFound: true };
       }
       return {
         label: `Charge Code ${cc.code}`,
@@ -483,7 +515,7 @@ async function resolveSearch(input: TraceabilitySearchInput): Promise<ResolvedSe
         .where(eq(projects.id, value))
         .limit(1);
       if (!proj) {
-        return { label: `Project: ${value}`, matchedEntities: [], ledgerCondition: sql`FALSE` };
+        return { label: `Project: ${value}`, matchedEntities: [], ledgerCondition: sql`FALSE`, notFound: true };
       }
       const projName = proj.projectName ?? proj.projectCode ?? proj.id;
       return {
@@ -506,7 +538,7 @@ async function resolveSearch(input: TraceabilitySearchInput): Promise<ResolvedSe
         .where(or(eq(employees.badgeScanCode, value), eq(employees.employeeCode, value)))
         .limit(1);
       if (!emp) {
-        return { label: `Operator badge: ${value}`, matchedEntities: [], ledgerCondition: sql`FALSE` };
+        return { label: `Operator badge: ${value}`, matchedEntities: [], ledgerCondition: sql`FALSE`, notFound: true };
       }
       let userId: number | null = null;
       if (emp.email) {
@@ -547,7 +579,7 @@ async function resolveSearch(input: TraceabilitySearchInput): Promise<ResolvedSe
         .where(ncrCondition)
         .limit(1);
       if (!ncr) {
-        return { label: `NCR: ${value}`, matchedEntities: [], ledgerCondition: sql`FALSE` };
+        return { label: `NCR: ${value}`, matchedEntities: [], ledgerCondition: sql`FALSE`, notFound: true };
       }
       return {
         label: `NCR #${ncr.id}${ncr.rmaNumber ? ` (${ncr.rmaNumber})` : ''}`,
@@ -604,7 +636,7 @@ async function resolveSearch(input: TraceabilitySearchInput): Promise<ResolvedSe
           ledgerCondition: eq(inventoryTransactionLedger.inventoryItemId, item.id),
         };
       }
-      return { label: `Barcode: ${value}`, matchedEntities: [], ledgerCondition: sql`FALSE` };
+      return { label: `Barcode: ${value}`, matchedEntities: [], ledgerCondition: sql`FALSE`, notFound: true };
     }
 
     default: {
@@ -845,6 +877,7 @@ export async function buildTraceabilityChain(
       label: resolved.label,
       detail: resolved.detail,
       matchedEntities: resolved.matchedEntities,
+      notFound: resolved.notFound,
     },
     nodes,
     edges,

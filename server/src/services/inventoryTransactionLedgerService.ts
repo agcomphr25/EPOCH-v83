@@ -61,6 +61,14 @@ export type InventoryLedgerEntryInput = {
   sourceRecordId?: string | number | null;
   reversedTransactionId?: string | null;
   metadata?: Record<string, unknown> | null;
+  /**
+   * BACKFILL ONLY — preserves the original event timestamp for historical
+   * rows reconstructed from pre-ledger source-of-truth tables (Task #183).
+   * Live writers must omit this; the database default `now()` is then used.
+   * The eventHash payload does NOT include createdAt, so back-dating a row
+   * does not alter the chained hash.
+   */
+  createdAtOverride?: Date | null;
 };
 
 export type InventoryLedgerBalanceChangeInput = {
@@ -186,6 +194,7 @@ export async function recordInventoryLedgerEntry(
       eventHash: hash,
       reversedTransactionId: input.reversedTransactionId ?? null,
       metadata: input.metadata ?? null,
+      ...(input.createdAtOverride ? { createdAt: input.createdAtOverride } : {}),
     })
     .returning();
 

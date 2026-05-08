@@ -10065,7 +10065,7 @@ export class DatabaseStorage implements IStorage {
         [vendorPoId]
       );
 
-      return coreItems.map((row: Record<string, unknown>) =>
+      return coreItems.rows.map((row: Record<string, unknown>) =>
         formatDates(row, VENDOR_PO_ITEM_DATE_COLUMNS)
       );
     }

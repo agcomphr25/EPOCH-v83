@@ -1087,8 +1087,19 @@ export default function PurchaseReviewChecklist() {
               </div>
             )}
             {inventoryError && (
-              <div className="bg-red-50 border border-red-200 rounded-md p-3 text-sm text-red-700">
+              <div
+                className="bg-red-50 border border-red-200 rounded-md p-3 text-sm text-red-700"
+                data-testid="status-inventory-error"
+              >
                 Failed to load inventory items. You can still enter Item # manually.
+              </div>
+            )}
+            {!isLoadingInventory && !inventoryError && inventoryItems.length === 0 && (
+              <div
+                className="bg-muted border rounded-md p-3 text-sm text-muted-foreground"
+                data-testid="status-inventory-empty"
+              >
+                No inventory items found. You can still enter Item # manually.
               </div>
             )}
 

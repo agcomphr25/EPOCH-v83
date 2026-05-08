@@ -238,7 +238,7 @@ type VendorPO = {
   // RFQ outcome notes (set when status is Declined or Expired)
   rfqOutcomeNotes?: string | null;
   // Compliance review status (augmented by list endpoint)
-  complianceStatus?: 'Pending Review' | 'Reviewed' | 'Blocked' | 'Requires Attention';
+  complianceStatus?: 'Pending Review' | 'Reviewed' | 'Blocked' | 'Requires Attention' | null;
   // Purchasing controls
   requisitionId?: number | null;
   competitionMethod?: 'competed' | 'sole-source' | 'small-purchase' | 'exception' | string | null;
@@ -848,8 +848,9 @@ function VendorPOCard({
               Edit
             </Button>
           )}
-          {/* Compliance Review button for non-issued POs that haven't been reviewed */}
-          {!isIssued && onReviewCompliance && vendorPo.complianceStatus !== 'Reviewed' && (
+          {/* Compliance Review button for non-issued POs that haven't been reviewed.
+              Hidden for non-P2 POs (complianceStatus === null) — compliance review only applies to P2. */}
+          {!isIssued && onReviewCompliance && vendorPo.complianceStatus != null && vendorPo.complianceStatus !== 'Reviewed' && (
             <Button
               variant="outline"
               size="sm"
@@ -1821,7 +1822,11 @@ function ComplianceSummaryCard({
 }
 
 // Compliance status badge helper
-function ComplianceBadge({ status, onClick }: { status?: string; onClick?: () => void }) {
+function ComplianceBadge({ status, onClick }: { status?: string | null; onClick?: () => void }) {
+  // Explicit null = compliance not applicable (non-P2 PO). Render nothing so a
+  // stale "Blocked / Requires Attention" badge doesn't show after switching the
+  // production line away from P2.
+  if (status === null) return null;
   const isActionable = onClick && (!status || status === 'Pending Review' || status === 'Requires Attention');
   const baseClick = isActionable ? onClick : undefined;
   const hoverClass = isActionable ? 'cursor-pointer hover:opacity-80 active:opacity-60' : '';
@@ -2381,11 +2386,26 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
         method: 'PUT',
         body: JSON.stringify(data),
       }),
-    onSuccess: () => {
+    onSuccess: (updated: any, vars) => {
+      // Invalidate the list AND the single-PO + compliance-review queries that
+      // drive the open detail view, so the saved value (e.g. productionLine)
+      // is reflected without requiring a manual reload.
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
+      if (vars?.id != null) {
+        queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', vars.id] });
+        queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', vars.id, 'compliance-review'] });
+      }
       toast.success('Vendor purchase order updated successfully');
-      setShowForm(false);
-      setSelectedVendorPO(null);
+      if (showForm) {
+        // Dialog edit — close the dialog as before.
+        setShowForm(false);
+        setSelectedVendorPO(null);
+      } else if (updated && selectedVendorPO && selectedVendorPO.id === vars?.id) {
+        // Inline edit from the detail view — keep the detail view open and
+        // sync the local selection to the server's authoritative response so
+        // the PO Details tab reflects the just-saved values immediately.
+        setSelectedVendorPO((prev) => (prev ? { ...prev, ...updated } : prev));
+      }
     },
     onError: (error: any) => {
       toast.error(error?.message || 'Failed to update vendor purchase order');

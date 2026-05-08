@@ -253,8 +253,13 @@ router.get('/', async (req: Request, res: Response) => {
       console.error('[VendorPO] Compliance review query failed:', complianceResult.reason);
     }
 
-    const augment = (po: POShape) => {
+    const augment = (po: POShape & { productionLine?: string | null }) => {
       const isIssued = ['Sent', 'Partially Received', 'Fully Received'].includes(po.status ?? '');
+      // Compliance review only gates P2 POs. For non-P2 lines (GENERAL/P1/R_AND_D)
+      // we hide the badge entirely so a stale review left over from when the PO
+      // was P2 doesn't show as "Blocked / Requires Attention". The DB row is left
+      // intact so flipping back to P2 re-surfaces the prior state.
+      const showCompliance = isP2ProductionLine(po.productionLine);
       return {
         ...po,
         pendingReceiptCount: countMap[po.id] ?? 0,
@@ -263,8 +268,10 @@ router.get('/', async (req: Request, res: Response) => {
         confirmationBadge: (isIssued ? (confirmMap[po.id] ?? 'no_link') : null) as ConfirmBadge,
         confirmationUsedAt: isIssued ? (confirmUsedAtMap[po.id] ?? null) : null,
         confirmationExpiresAt: isIssued ? (confirmExpiresAtMap[po.id] ?? null) : null,
-        // Compliance status badge: 'Pending Review' if no review exists
-        complianceStatus: (complianceMap[po.id] ?? 'Pending Review') as ComplianceStatusBadge,
+        // Compliance status badge: 'Pending Review' if no review exists; null when not a P2 PO
+        complianceStatus: (showCompliance
+          ? (complianceMap[po.id] ?? 'Pending Review')
+          : null) as ComplianceStatusBadge | null,
       };
     };
 
@@ -1705,10 +1712,17 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
     }
 
     // ── COMPLIANCE GATE: Server-side enforcement (UI gate is not sufficient) ─
-    // All four conditions are checked independently; status field alone is not trusted
-    // because DB edits or migration drift could leave it inconsistent.
-    const complianceReview = await storage.getVendorPOComplianceReview(id);
-    {
+    // Only enforced for P2 POs. Non-P2 production lines (GENERAL/P1/R_AND_D) are
+    // not gated by the compliance review even if a stale review row exists from
+    // when the PO was previously P2. The same isP2ProductionLine guard is used by
+    // requireP2ComplianceBeforeProjectAllocation so issuance and project-allocation
+    // gates stay consistent. The DB row is left intact so flipping back to P2
+    // re-surfaces the prior state (and invalidateVendorPoComplianceReview already
+    // marks it 'requires_attention' on production-line change).
+    const complianceReview = isP2ProductionLine(vendorPO.productionLine)
+      ? await storage.getVendorPOComplianceReview(id)
+      : null;
+    if (isP2ProductionLine(vendorPO.productionLine)) {
       const blockingReasons: string[] = [];
       if (!complianceReview) {
         blockingReasons.push('No compliance review found — complete the pre-issue review before issuing');

@@ -3368,6 +3368,15 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ vendor_pos rfq_outcome_notes migration:', vpoNotesErr.message);
       }
 
+      // Ensure production_line exists for P1/P2 purchasing allocation gates.
+      try {
+        const { sql: sqlVpoProductionLine } = await import('drizzle-orm');
+        await db.execute(sqlVpoProductionLine`ALTER TABLE vendor_pos ADD COLUMN IF NOT EXISTS production_line TEXT`);
+        console.log('✅ Ensured vendor_pos has production_line column');
+      } catch (vpoProductionLineErr: any) {
+        console.warn('⚠️ vendor_pos production_line migration:', vpoProductionLineErr.message);
+      }
+
       // Ensure Task #83 purchasing-control columns exist on vendor_pos.
       // Some Replit deployments run boot-time schema repair without replaying
       // every migration against the selected production database; without these

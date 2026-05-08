@@ -45,6 +45,8 @@ type VendorPOItemSelectorProps = {
   vendorPoId: number;
   vendorId: number;
   poNumber: string;
+  productionLine?: string | null;
+  complianceStatus?: string | null;
   onTotalChange?: (total: number) => void;
 };
 
@@ -194,7 +196,14 @@ function UnitPriceDisplay({ item }: { item: VendorPOItem }) {
   );
 }
 
-export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, onTotalChange }: VendorPOItemSelectorProps) {
+export default function VendorPOItemSelector({
+  vendorPoId,
+  vendorId,
+  poNumber,
+  productionLine,
+  complianceStatus,
+  onTotalChange,
+}: VendorPOItemSelectorProps) {
   const queryClient = useQueryClient();
   const [selectedPartId, setSelectedPartId] = useState<string>('');
   const [selectedInventoryItem, setSelectedInventoryItem] = useState<InventoryItem | null>(null);
@@ -229,6 +238,11 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
   const { data: p2PurchaseOrders = [] } = useQuery<P2PurchaseOrder[]>({
     queryKey: ['/api/p2-purchase-orders-bypass'],
   });
+
+  const isP2Purchase = String(productionLine || '').toUpperCase() === 'P2';
+  const isP2ComplianceComplete = complianceStatus === 'Reviewed';
+  const customerPoAllocationDisabled = isP2Purchase && !isP2ComplianceComplete;
+  const newLineCustomerPoDisabled = isP2Purchase;
 
   const hasUnitConversion = useMemo(() => {
     return selectedInventoryItem?.vendorUnit && 
@@ -429,6 +443,11 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
   };
 
   const handleAddItem = () => {
+    if (newLineCustomerPoDisabled && newItem.customerPoId) {
+      toast.error('Add the P2 line item first, complete compliance review, then allocate it to a customer PO');
+      return;
+    }
+
     if (!newItem.description && !newItem.agPartNumber) {
       toast.error('Please provide either AG Part# or description');
       return;
@@ -495,6 +514,11 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
   const handleSaveEdit = (itemId: number) => {
     const originalItem = items.find(item => item.id === itemId);
     if (!originalItem) return;
+
+    if (customerPoAllocationDisabled && editedItem.customerPoId) {
+      toast.error('Complete compliance review before allocating this P2 purchase to a customer PO');
+      return;
+    }
     
     const updatedData = {
       agPartNumber: editedItem.agPartNumber ?? originalItem.agPartNumber,
@@ -697,6 +721,7 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
                 <Select 
                   value={newItem.customerPoId?.toString() || 'none'} 
                   onValueChange={(value) => setNewItem({ ...newItem, customerPoId: value && value !== 'none' ? parseInt(value) : undefined })}
+                  disabled={newLineCustomerPoDisabled}
                 >
                   <SelectTrigger data-testid="select-customer-po">
                     <SelectValue placeholder="Select customer PO (optional)..." />
@@ -710,7 +735,13 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">Link this purchase to a customer order</p>
+                <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
+                  {customerPoAllocationDisabled
+                    ? 'P2 project allocation unlocks after compliance review is complete'
+                    : newLineCustomerPoDisabled
+                      ? 'Add the P2 line first, then allocate after compliance review'
+                    : 'Link this purchase to a customer order'}
+                </p>
               </div>
               <div>
                 <Label htmlFor="otherIdentifier">Other Identifier</Label>
@@ -838,6 +869,7 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
                       <Select 
                         value={editedItem.customerPoId?.toString() || 'none'} 
                         onValueChange={(value) => setEditedItem({ ...editedItem, customerPoId: value && value !== 'none' ? parseInt(value) : null as unknown as undefined })}
+                        disabled={customerPoAllocationDisabled}
                       >
                         <SelectTrigger className="w-32" data-testid={`select-edit-customer-po-${item.id}`}>
                           <SelectValue placeholder="None" />

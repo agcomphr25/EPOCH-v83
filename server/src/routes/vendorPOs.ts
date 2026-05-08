@@ -18,6 +18,47 @@ import { sql } from 'drizzle-orm';
 
 const router = Router();
 
+function isP2ProductionLine(value: unknown): boolean {
+  return String(value ?? '').trim().toUpperCase() === 'P2';
+}
+
+async function getVendorPOComplianceBlockers(vendorPoId: number): Promise<string[]> {
+  const review = await storage.getVendorPOComplianceReview(vendorPoId);
+  if (!review) {
+    return ['P2 purchase requires a completed compliance review before it can be allocated to a project'];
+  }
+
+  const blockers: string[] = [];
+  if (review.reviewStatus === 'requires_attention') {
+    blockers.push('Compliance review requires attention because the PO changed after review');
+  } else if (review.reviewStatus !== 'reviewed') {
+    blockers.push(`Compliance review status is "${review.reviewStatus}" and must be "reviewed"`);
+  }
+  if (!review.secondPartyComplete) blockers.push('Second-party approval is not complete');
+  if (!review.vendorApproved) blockers.push('Vendor is not approved');
+  if (!review.reviewNotes?.trim()) blockers.push('Compliance justification is missing');
+  return blockers;
+}
+
+async function requireP2ComplianceBeforeProjectAllocation(vendorPoId: number, customerPoId: unknown) {
+  if (customerPoId === undefined || customerPoId === null) return;
+  const vendorPO = await storage.getVendorPO(vendorPoId);
+  if (!vendorPO) {
+    const error: any = new Error('Vendor PO not found');
+    error.status = 404;
+    throw error;
+  }
+  if (!isP2ProductionLine(vendorPO.productionLine)) return;
+
+  const blockers = await getVendorPOComplianceBlockers(vendorPoId);
+  if (blockers.length > 0) {
+    const error: any = new Error(`Cannot allocate P2 vendor purchase to a project. Reason(s): ${blockers.join('; ')}.`);
+    error.status = 422;
+    error.blockingReasons = blockers;
+    throw error;
+  }
+}
+
 /**
  * Build the set of allowed recipient emails for a vendor:
  * primary email, additionalEmail, and all active vendor_contact emails.
@@ -684,6 +725,14 @@ router.put('/:id', requirePermission('purchasing.manage_pos'), async (req: Reque
         newValue: data.vendorId,
       });
     }
+    if ((data as any).productionLine !== undefined && (data as any).productionLine !== existingPO.productionLine) {
+      const actorId = (req as any).user?.id as number | undefined;
+      await storage.invalidateVendorPoComplianceReview(id, 'Production line changed after compliance review', actorId, {
+        changedField: 'productionLine',
+        previousValue: existingPO.productionLine,
+        newValue: (data as any).productionLine,
+      });
+    }
 
     const vendorPO = await storage.updateVendorPO(id, data);
 
@@ -825,10 +874,19 @@ router.post('/:id/items', async (req: Request, res: Response) => {
       { changedField: 'lineItems', action: 'added' },
     );
 
+    await requireP2ComplianceBeforeProjectAllocation(vendorPoId, data.customerPoId);
+
     const item = await storage.createVendorPOItem(data);
     res.status(201).json(item);
   } catch (error) {
     console.error('Create vendor PO item error:', error);
+    if ((error as any)?.status) {
+      return res.status((error as any).status).json({
+        error: (error as Error).message,
+        complianceBlocked: (error as any).status === 422,
+        blockingReasons: (error as any).blockingReasons ?? undefined,
+      });
+    }
     if (error instanceof z.ZodError) {
       return res
         .status(400)
@@ -849,19 +907,38 @@ router.put('/items/:itemId', async (req: Request, res: Response) => {
     // Fetch old item to compare material fields before updating.
     const oldItem = await storage.getVendorPOItemById(itemId);
     const data = insertVendorPOItemSchema.partial().parse(req.body);
+    const materialFields: Array<{ key: string; label: string }> = [
+      { key: 'quantity', label: 'quantity' },
+      { key: 'unitPrice', label: 'unit price' },
+      { key: 'purchaseQty', label: 'purchase quantity' },
+      { key: 'purchaseUnitPrice', label: 'purchase unit price' },
+    ];
+    const changedField = oldItem
+      ? materialFields.find(
+          (f) => data[f.key as keyof typeof data] !== undefined && Number(data[f.key as keyof typeof data]) !== Number(oldItem[f.key])
+        )
+      : undefined;
+
+    if (oldItem) {
+      const finalCustomerPoId = data.customerPoId !== undefined ? data.customerPoId : oldItem.customerPoId;
+      await requireP2ComplianceBeforeProjectAllocation(oldItem.vendorPoId, finalCustomerPoId);
+
+      if (changedField && finalCustomerPoId != null) {
+        const vendorPO = await storage.getVendorPO(oldItem.vendorPoId);
+        if (isP2ProductionLine(vendorPO?.productionLine)) {
+          const error: any = new Error(
+            `Cannot keep a P2 line allocated to a project while changing ${changedField.label}. Clear the project allocation, save the material change, complete compliance review, then allocate it again.`
+          );
+          error.status = 422;
+          error.blockingReasons = [error.message];
+          throw error;
+        }
+      }
+    }
 
     // Invalidate compliance review BEFORE updating the item so that if invalidation
     // fails the item mutation never commits (fail-safe).
     if (oldItem) {
-      const materialFields: Array<{ key: string; label: string }> = [
-        { key: 'quantity', label: 'quantity' },
-        { key: 'unitPrice', label: 'unit price' },
-        { key: 'purchaseQty', label: 'purchase quantity' },
-        { key: 'purchaseUnitPrice', label: 'purchase unit price' },
-      ];
-      const changedField = materialFields.find(
-        (f) => data[f.key as keyof typeof data] !== undefined && Number(data[f.key as keyof typeof data]) !== Number(oldItem[f.key])
-      );
       if (changedField) {
         const actorId = (req as any).user?.id as number | undefined;
         await storage.invalidateVendorPoComplianceReview(
@@ -882,6 +959,13 @@ router.put('/items/:itemId', async (req: Request, res: Response) => {
     res.json(item);
   } catch (error) {
     console.error('Update vendor PO item error:', error);
+    if ((error as any)?.status) {
+      return res.status((error as any).status).json({
+        error: (error as Error).message,
+        complianceBlocked: (error as any).status === 422,
+        blockingReasons: (error as any).blockingReasons ?? undefined,
+      });
+    }
     if (error instanceof z.ZodError) {
       return res
         .status(400)

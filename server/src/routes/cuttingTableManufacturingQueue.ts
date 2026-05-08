@@ -44,6 +44,10 @@ router.get('/cutting-table', async (req: Request, res: Response) => {
       whereClause = routingSignal;
     }
     
+    // Bound the result set so a runaway queue cannot starve memory and trip the
+    // routes-ready gate (task #178). 5,000 rows is well above expected steady
+    // state but small enough to keep response payloads in line.
+    const CUTTING_QUEUE_MAX_ROWS = 5000;
     const queueItems = await db
       .select({
         queue: manufacturingQueue,
@@ -52,10 +56,20 @@ router.get('/cutting-table', async (req: Request, res: Response) => {
       .from(manufacturingQueue)
       .leftJoin(inventoryItems, eq(manufacturingQueue.inventoryItemId, inventoryItems.id))
       .where(whereClause)
-      .orderBy(manufacturingQueue.priority, manufacturingQueue.createdAt);
-    
-    // Fetch all active BOMs once for efficient lookup
-    const allActiveBoms = await db.select().from(cuttingPacketBOMs).where(eq(cuttingPacketBOMs.isActive, true));
+      .orderBy(manufacturingQueue.priority, manufacturingQueue.createdAt)
+      .limit(CUTTING_QUEUE_MAX_ROWS);
+
+    // Fetch all active BOMs once for efficient lookup. Selecting only the
+    // columns we use downstream (id, partNumber, inventoryItemId) so the BOM
+    // table doesn't have to be fully materialised in memory.
+    const allActiveBoms = await db
+      .select({
+        id: cuttingPacketBOMs.id,
+        partNumber: cuttingPacketBOMs.partNumber,
+        inventoryItemId: cuttingPacketBOMs.inventoryItemId,
+      })
+      .from(cuttingPacketBOMs)
+      .where(eq(cuttingPacketBOMs.isActive, true));
 
     const formattedItems = queueItems.map(row => {
       // Extract bomId and other data from notes JSON if present
@@ -118,8 +132,13 @@ router.get('/cutting-table', async (req: Request, res: Response) => {
     });
     
     res.json(formattedItems);
-  } catch (error) {
-    console.error('Error fetching cutting table queue:', error);
+  } catch (error: any) {
+    console.error('[cutting-table-mfg-queue] DB error:', {
+      route: '/api/cutting-table-mfg-queue/cutting-table',
+      status: req.query?.status ?? null,
+      message: error?.message,
+      code: error?.code,
+    });
     res.status(500).json({ error: 'Failed to fetch cutting table queue' });
   }
 });

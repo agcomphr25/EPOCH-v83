@@ -11,7 +11,7 @@ import {
   cuttingPacketBOMCuts,
   cuttingFabricInventory,
 } from '../../schema';
-import { and, gte, lte, eq, desc, ilike } from 'drizzle-orm';
+import { and, gte, lte, eq, desc, ilike, or, isNull } from 'drizzle-orm';
 import {
   insertCuttingMaterialSchema,
   insertCuttingFabricTypeSchema,
@@ -322,22 +322,45 @@ router.get('/packet-composition-items', async (req, res) => {
 });
 
 // Fabric Items - Get inventory items marked as fabrics (is_fabric = true)
+// Max rows returned by these list endpoints. Bounds an otherwise-unbounded
+// SELECT so a runaway dataset cannot exhaust memory and crash the server
+// (root cause of task #178: full inventory_items scan via getAllInventoryItems).
+const CUTTING_LIST_MAX_ROWS = 5000;
+
+const inventoryActiveCondition = or(
+  eq(inventoryItems.isActive, true),
+  isNull(inventoryItems.isActive),
+);
+
 router.get('/fabric-items', async (req, res) => {
   try {
-    const allItems = await storage.getAllInventoryItems();
-    const fabricItems = allItems
-      .filter((item) => item.isFabric === true)
-      .map((item) => ({
-        id: item.id,
-        agPartNumber: item.agPartNumber,
-        name: item.name,
-        fabric: item.name,
-        sku: item.sku,
-      }));
-    
+    const rows = await db
+      .select({
+        id: inventoryItems.id,
+        agPartNumber: inventoryItems.agPartNumber,
+        name: inventoryItems.name,
+        sku: inventoryItems.sku,
+      })
+      .from(inventoryItems)
+      .where(and(eq(inventoryItems.isFabric, true), inventoryActiveCondition))
+      .orderBy(inventoryItems.name)
+      .limit(CUTTING_LIST_MAX_ROWS);
+
+    const fabricItems = rows.map((item) => ({
+      id: item.id,
+      agPartNumber: item.agPartNumber,
+      name: item.name,
+      fabric: item.name,
+      sku: item.sku,
+    }));
+
     res.json(fabricItems);
-  } catch (error) {
-    console.error('Error fetching fabric items:', error);
+  } catch (error: any) {
+    console.error('[cutting-table/fabric-items] DB error:', {
+      route: '/api/cutting-table/fabric-items',
+      message: error?.message,
+      code: error?.code,
+    });
     res.status(500).json({ error: 'Failed to fetch fabric items' });
   }
 });
@@ -345,19 +368,25 @@ router.get('/fabric-items', async (req, res) => {
 // Packet Items - Get inventory items marked as packets (is_packet = true)
 router.get('/packet-items', async (req, res) => {
   try {
-    const allItems = await storage.getAllInventoryItems();
-    const packetItems = allItems
-      .filter((item: any) => item.isPacket === true)
-      .map((item) => ({
-        id: item.id,
-        agPartNumber: item.agPartNumber,
-        name: item.name,
-        sku: item.sku,
-      }));
-    
-    res.json(packetItems);
-  } catch (error) {
-    console.error('Error fetching packet items:', error);
+    const rows = await db
+      .select({
+        id: inventoryItems.id,
+        agPartNumber: inventoryItems.agPartNumber,
+        name: inventoryItems.name,
+        sku: inventoryItems.sku,
+      })
+      .from(inventoryItems)
+      .where(and(eq(inventoryItems.isPacket, true), inventoryActiveCondition))
+      .orderBy(inventoryItems.name)
+      .limit(CUTTING_LIST_MAX_ROWS);
+
+    res.json(rows);
+  } catch (error: any) {
+    console.error('[cutting-table/packet-items] DB error:', {
+      route: '/api/cutting-table/packet-items',
+      message: error?.message,
+      code: error?.code,
+    });
     res.status(500).json({ error: 'Failed to fetch packet items' });
   }
 });
@@ -365,19 +394,25 @@ router.get('/packet-items', async (req, res) => {
 // Packet Part Items - Get inventory items with manufacturedCategory = 'PACKET'
 router.get('/packet-part-items', async (req, res) => {
   try {
-    const allItems = await storage.getAllInventoryItems();
-    const packetPartItems = allItems
-      .filter((item) => item.manufacturedCategory === 'PACKET')
-      .map((item) => ({
-        id: item.id,
-        agPartNumber: item.agPartNumber,
-        name: item.name,
-        sku: item.sku,
-      }));
-    
-    res.json(packetPartItems);
-  } catch (error) {
-    console.error('Error fetching packet part items:', error);
+    const rows = await db
+      .select({
+        id: inventoryItems.id,
+        agPartNumber: inventoryItems.agPartNumber,
+        name: inventoryItems.name,
+        sku: inventoryItems.sku,
+      })
+      .from(inventoryItems)
+      .where(and(eq(inventoryItems.manufacturedCategory, 'PACKET'), inventoryActiveCondition))
+      .orderBy(inventoryItems.name)
+      .limit(CUTTING_LIST_MAX_ROWS);
+
+    res.json(rows);
+  } catch (error: any) {
+    console.error('[cutting-table/packet-part-items] DB error:', {
+      route: '/api/cutting-table/packet-part-items',
+      message: error?.message,
+      code: error?.code,
+    });
     res.status(500).json({ error: 'Failed to fetch packet part items' });
   }
 });

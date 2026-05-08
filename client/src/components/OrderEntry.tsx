@@ -2969,6 +2969,29 @@ export default function OrderEntry() {
   };
 
   const selectedModel = modelOptions.find((m) => m.id === modelId);
+  const consoleWorkflowItems = [
+    {
+      label: 'Customer',
+      value: customer ? 'Locked' : 'Open',
+      active: Boolean(customer),
+    },
+    {
+      label: 'Model',
+      value: selectedModel ? 'Selected' : 'Open',
+      active: Boolean(selectedModel),
+    },
+    {
+      label: 'Validation',
+      value: Object.keys(errors).length ? 'Review' : 'Ready',
+      active: Object.keys(errors).length === 0,
+      warning: Object.keys(errors).length > 0,
+    },
+    {
+      label: 'Payment',
+      value: orderPayments.length ? `${orderPayments.length} logged` : 'Pending',
+      active: orderPayments.length > 0,
+    },
+  ];
 
   return (
     <div
@@ -2990,7 +3013,7 @@ export default function OrderEntry() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column - Order Form */}
         <div className="lg:col-span-2 space-y-6">
-          <Card>
+          <Card className={isConsoleMode ? 'order-console-workbench' : undefined}>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
@@ -3060,28 +3083,46 @@ export default function OrderEntry() {
                 )}
               </div>
               {isConsoleMode && (
-                <div className="order-console-display mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <div>
-                    <span>ORDER</span>
-                    <strong>{orderId || 'GENERATING'}</strong>
+                <div className="order-console-module">
+                  <div className="order-console-display grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div>
+                      <span>ORDER</span>
+                      <strong>{orderId || 'GENERATING'}</strong>
+                    </div>
+                    <div>
+                      <span>MODE</span>
+                      <strong>
+                        {isEditMode ? 'EDIT' : isDuplicateMode ? 'COPY' : 'CREATE'}
+                      </strong>
+                    </div>
+                    <div>
+                      <span>DUE</span>
+                      <strong>
+                        {dueDate && !isNaN(dueDate.getTime())
+                          ? dueDate.toISOString().split('T')[0]
+                          : 'PENDING'}
+                      </strong>
+                    </div>
+                    <div>
+                      <span>TOTAL</span>
+                      <strong>${(totalPrice + shipping).toFixed(2)}</strong>
+                    </div>
                   </div>
-                  <div>
-                    <span>MODE</span>
-                    <strong>
-                      {isEditMode ? 'EDIT' : isDuplicateMode ? 'COPY' : 'CREATE'}
-                    </strong>
-                  </div>
-                  <div>
-                    <span>DUE</span>
-                    <strong>
-                      {dueDate && !isNaN(dueDate.getTime())
-                        ? dueDate.toISOString().split('T')[0]
-                        : 'PENDING'}
-                    </strong>
-                  </div>
-                  <div>
-                    <span>TOTAL</span>
-                    <strong>${(totalPrice + shipping).toFixed(2)}</strong>
+                  <div className="order-console-workflow">
+                    {consoleWorkflowItems.map((item) => (
+                      <div
+                        key={item.label}
+                        className={`order-console-workflow-item ${
+                          item.active ? 'is-active' : ''
+                        } ${item.warning ? 'is-warning' : ''}`}
+                      >
+                        <span aria-hidden="true" />
+                        <div>
+                          <strong>{item.label}</strong>
+                          <small>{item.value}</small>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
@@ -5621,13 +5662,13 @@ export default function OrderEntry() {
 
         {/* Right Column - Order Summary */}
         <div className="space-y-6">
-          <Card>
+          <Card className={isConsoleMode ? 'order-console-summary-card' : undefined}>
             <CardHeader>
               <CardTitle>Order Summary</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Main Total Display */}
-              <div className="text-center space-y-2 border-b pb-4">
+              <div className="order-summary-total text-center space-y-2 border-b pb-4">
                 <div className="flex justify-between items-center">
                   <span className="text-3xl font-bold">1</span>
                   <span className="text-3xl font-bold text-blue-600">
@@ -6645,7 +6686,7 @@ export default function OrderEntry() {
               </div>
 
               {/* Action Buttons */}
-              <div className="space-y-2">
+              <div className="order-console-actions space-y-2">
                 <Button
                   type="button"
                   className="w-full"

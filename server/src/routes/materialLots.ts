@@ -28,6 +28,8 @@ import {
   type InventoryStatusAction,
   validateInventoryStatusAction,
 } from '../constants/inventoryControls';
+import { openRequest as openApprovalRequest, EscalationError } from '../services/escalationService';
+import { approvalRequests } from '../../schema';
 
 const router = Router();
 
@@ -767,10 +769,54 @@ router.post('/:id/status', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { newStatus, performedBy, reason, notes } = req.body;
+    const approvalRequestId: string | undefined = req.body?.approvalRequestId;
 
     const lot = await storage.getMaterialLot(id);
     if (!lot) {
       return res.status(404).json({ error: 'Material lot not found' });
+    }
+
+    // ── High-risk gate (Task #164): QUARANTINE → ACCEPTED/RELEASED ─────────
+    const isQuarantineRelease =
+      lot.status === 'QUARANTINE' && (newStatus === 'ACCEPTED' || newStatus === 'RELEASED');
+    if (isQuarantineRelease && !approvalRequestId) {
+      try {
+        const opened = await openApprovalRequest({
+          requestType: 'INV_QUARANTINE_RELEASE',
+          payload: {
+            lotId: id,
+            newStatus,
+            reasonCode: reason ?? null,
+            notes: notes ?? null,
+            performedBy,
+            internalControlNumber: lot.internalControlNumber,
+            partNumber: lot.materialPartNumber,
+            remainingQty: lot.remainingQty,
+          },
+          subjectType: 'material_lot',
+          subjectId: id,
+          requestedByUserId: req.user?.id ?? null,
+          requestedByDisplayName: req.user?.username ?? performedBy ?? 'unknown',
+          summary: `Release quarantined lot ${lot.internalControlNumber} → ${newStatus}`,
+        });
+        return res.status(202).json({
+          status: 'PENDING_APPROVAL',
+          approvalRequestId: opened.id,
+          requestType: 'INV_QUARANTINE_RELEASE',
+          message: `Quarantine release requires approval. Submitted to ${opened.currentApproverRole ?? 'approver'}.`,
+        });
+      } catch (err: any) {
+        if (err instanceof EscalationError) {
+          return res.status(500).json({ error: 'Approval engine error', code: err.code, message: err.message });
+        }
+        throw err;
+      }
+    }
+    if (isQuarantineRelease && approvalRequestId) {
+      const [appr] = await db.select().from(approvalRequests).where(eq(approvalRequests.id, approvalRequestId)).limit(1);
+      if (!appr || appr.status !== 'APPROVED' || appr.subjectId !== id) {
+        return res.status(409).json({ error: 'approval not valid for this lot/status change', code: 'APPROVAL_INVALID' });
+      }
     }
 
     const validTransitions: Record<string, string[]> = {
@@ -981,6 +1027,10 @@ router.post('/:id/adjust', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
+    // Allow approval flow extensions: approvalRequestId (executes already-approved request)
+    const approvalRequestId: string | undefined = req.body?.approvalRequestId;
+    const requireApproval: boolean = !!req.body?.requireApproval;
+
     const parsed = adjustBodySchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ error: 'Validation error', details: parsed.error.errors });
@@ -995,13 +1045,69 @@ router.post('/:id/adjust', async (req: Request, res: Response) => {
     if (blockedInventoryActionResponse(req, res, lot, 'adjust')) return;
 
     const remaining = parseFloat(lot.remainingQty);
-    if (remaining + delta < 0 && !allowNegative) {
+    const projected = remaining + delta;
+    const drivesNegative = projected < 0;
+
+    // ── High-risk gate (Task #164) ─────────────────────────────────────────
+    // ALL manual lot qty adjustments are high-risk. If the caller does not
+    // present a previously-approved approvalRequestId, open an approval row
+    // and return 202 so the operator's UI can show "submitted for approval".
+    if (!approvalRequestId) {
+      const requestType = drivesNegative && allowNegative
+        ? 'INV_NEGATIVE_INVENTORY'
+        : 'INV_MANUAL_ADJUSTMENT';
+      try {
+        const opened = await openApprovalRequest({
+          requestType,
+          payload: {
+            lotId: id,
+            delta,
+            reasonCode,
+            notes: notes ?? null,
+            performedBy,
+            allowNegative: !!allowNegative,
+            remainingBefore: remaining,
+            projectedAfter: projected,
+            unitOfMeasure: lot.unitOfMeasure,
+            internalControlNumber: lot.internalControlNumber,
+          },
+          subjectType: 'material_lot',
+          subjectId: id,
+          requestedByUserId: req.user?.id ?? null,
+          requestedByDisplayName: req.user?.username ?? performedBy,
+          summary: `Adjust lot ${lot.internalControlNumber} by ${delta} ${lot.unitOfMeasure} (${reasonCode})`,
+        });
+        return res.status(202).json({
+          status: 'PENDING_APPROVAL',
+          approvalRequestId: opened.id,
+          requestType,
+          message: `High-risk inventory adjustment requires approval. Submitted to ${opened.currentApproverRole ?? 'approver'}.`,
+        });
+      } catch (err: any) {
+        if (err instanceof EscalationError) {
+          return res.status(500).json({ error: 'Approval engine error', code: err.code, message: err.message });
+        }
+        throw err;
+      }
+    }
+
+    // ── Execution path: approvalRequestId supplied. Verify it is APPROVED ─
+    const [appr] = await db.select().from(approvalRequests).where(eq(approvalRequests.id, approvalRequestId)).limit(1);
+    if (!appr) return res.status(404).json({ error: 'approvalRequestId not found' });
+    if (appr.status !== 'APPROVED') {
+      return res.status(409).json({ error: `approval is ${appr.status}, expected APPROVED`, code: 'APPROVAL_NOT_APPROVED' });
+    }
+    if (appr.subjectType !== 'material_lot' || appr.subjectId !== id) {
+      return res.status(409).json({ error: 'approval does not match this lot', code: 'APPROVAL_MISMATCH' });
+    }
+
+    if (projected < 0 && !allowNegative) {
       return res.status(400).json({
         error: 'NEGATIVE_QTY',
-        message: `Adjustment of ${delta} would drive remainingQty to ${remaining + delta} (below zero). Set allowNegative: true to override.`,
+        message: `Adjustment of ${delta} would drive remainingQty to ${projected} (below zero). Set allowNegative: true to override.`,
         remainingQty: remaining,
         delta,
-        projectedQty: remaining + delta,
+        projectedQty: projected,
       });
     }
 
@@ -1160,9 +1266,13 @@ router.post('/consume', async (req: Request, res: Response) => {
     }
     if (blockedInventoryActionResponse(req, res, lot, 'consume')) return;
 
-    // ── Guard 1: Lot status ────────────────────────────────────────────────────
-    const blockedStatuses: MaterialLotStatus[] = ['QUARANTINE', 'REJECTED', 'EXPIRED', 'SCRAPPED', 'HOLD'];
-    if (blockedStatuses.includes(lot.status as MaterialLotStatus)) {
+    // ── Task #164: detect high-risk consume conditions ─────────────────────
+    const approvalRequestId: string | undefined = (req.body as any)?.approvalRequestId;
+    const isExpired = !!lot.expirationDate && new Date(lot.expirationDate) < new Date();
+
+    // ── Guard 1: Lot status (QUARANTINE/REJECTED/SCRAPPED/HOLD never consumable; EXPIRED handled below)
+    const hardBlockedStatuses: MaterialLotStatus[] = ['QUARANTINE', 'REJECTED', 'SCRAPPED', 'HOLD'];
+    if (hardBlockedStatuses.includes(lot.status as MaterialLotStatus)) {
       return res.status(400).json({
         error: 'LOT_NOT_USABLE',
         message: `Lot cannot be consumed — current status is ${lot.status}`,
@@ -1170,13 +1280,46 @@ router.post('/consume', async (req: Request, res: Response) => {
       });
     }
 
-    // ── Guard 2: Expiration date ───────────────────────────────────────────────
-    if (lot.expirationDate && new Date(lot.expirationDate) < new Date()) {
-      return res.status(400).json({
-        error: 'LOT_EXPIRED',
-        message: `Lot expired on ${new Date(lot.expirationDate).toISOString()}`,
-        expirationDate: lot.expirationDate,
-      });
+    // Expired lots: open an INV_EXPIRED_USE approval request unless one was
+    // already attached and approved.
+    if ((isExpired || lot.status === 'EXPIRED')) {
+      if (!approvalRequestId) {
+        try {
+          const opened = await openApprovalRequest({
+            requestType: 'INV_EXPIRED_USE',
+            payload: {
+              lotId: lot.id,
+              qtyUsed: validatedData.qtyUsed,
+              travelerId: validatedData.travelerId,
+              travelerStepId: validatedData.travelerStepId,
+              expirationDate: lot.expirationDate,
+              internalControlNumber: lot.internalControlNumber,
+              partNumber: lot.materialPartNumber,
+              performedBy: validatedData.scannedBy,
+            },
+            subjectType: 'material_lot',
+            subjectId: lot.id,
+            requestedByUserId: req.user?.id ?? null,
+            requestedByDisplayName: req.user?.username ?? validatedData.scannedBy,
+            summary: `Use expired lot ${lot.internalControlNumber} (${validatedData.qtyUsed} ${lot.unitOfMeasure})`,
+          });
+          return res.status(202).json({
+            status: 'PENDING_APPROVAL',
+            approvalRequestId: opened.id,
+            requestType: 'INV_EXPIRED_USE',
+            message: `Expired material use requires approval. Submitted to ${opened.currentApproverRole ?? 'approver'}.`,
+          });
+        } catch (err: any) {
+          if (err instanceof EscalationError) {
+            return res.status(500).json({ error: 'Approval engine error', code: err.code, message: err.message });
+          }
+          throw err;
+        }
+      }
+      const [appr] = await db.select().from(approvalRequests).where(eq(approvalRequests.id, approvalRequestId)).limit(1);
+      if (!appr || appr.status !== 'APPROVED' || appr.subjectId !== lot.id || appr.requestType !== 'INV_EXPIRED_USE') {
+        return res.status(409).json({ error: 'approval not valid for expired-use', code: 'APPROVAL_INVALID' });
+      }
     }
 
     const remaining = parseFloat(lot.remainingQty);
@@ -1212,14 +1355,58 @@ router.post('/consume', async (req: Request, res: Response) => {
     }
 
     if (consumed > effectiveAvailableQty) {
-      return res.status(409).json({
-        error: 'OVER_COMMITTED',
-        message: `Lot over-committed — only ${effectiveAvailableQty} ${lot.unitOfMeasure} available (${remaining} remaining, ${reservedQty} reserved by all work orders)`,
-        remaining,
-        reservedQty,
-        availableQty: effectiveAvailableQty,
-        requested: consumed,
-      });
+      // Task #164: an over-committed draw (consume against another WO's
+      // allocation) is high-risk. Open an INV_ALLOCATION_OVERRIDE request
+      // unless an approved one is attached.
+      if (!approvalRequestId) {
+        try {
+          const opened = await openApprovalRequest({
+            requestType: 'INV_ALLOCATION_OVERRIDE',
+            payload: {
+              lotId: lot.id,
+              qtyUsed: validatedData.qtyUsed,
+              remaining,
+              reservedQty,
+              availableQty: effectiveAvailableQty,
+              travelerId: validatedData.travelerId,
+              travelerStepId: validatedData.travelerStepId,
+              internalControlNumber: lot.internalControlNumber,
+              partNumber: lot.materialPartNumber,
+              performedBy: validatedData.scannedBy,
+            },
+            subjectType: 'material_lot',
+            subjectId: lot.id,
+            requestedByUserId: req.user?.id ?? null,
+            requestedByDisplayName: req.user?.username ?? validatedData.scannedBy,
+            summary: `Allocation override — consume ${consumed} ${lot.unitOfMeasure} from over-committed lot ${lot.internalControlNumber}`,
+          });
+          return res.status(202).json({
+            status: 'PENDING_APPROVAL',
+            approvalRequestId: opened.id,
+            requestType: 'INV_ALLOCATION_OVERRIDE',
+            message: `Allocation override requires approval. Submitted to ${opened.currentApproverRole ?? 'approver'}.`,
+            availableQty: effectiveAvailableQty,
+            requested: consumed,
+          });
+        } catch (err: any) {
+          if (err instanceof EscalationError) {
+            return res.status(500).json({ error: 'Approval engine error', code: err.code, message: err.message });
+          }
+          throw err;
+        }
+      }
+      const [appr] = await db.select().from(approvalRequests).where(eq(approvalRequests.id, approvalRequestId)).limit(1);
+      if (!appr || appr.status !== 'APPROVED' || appr.subjectId !== lot.id || appr.requestType !== 'INV_ALLOCATION_OVERRIDE') {
+        return res.status(409).json({
+          error: 'OVER_COMMITTED',
+          message: `Lot over-committed — only ${effectiveAvailableQty} ${lot.unitOfMeasure} available (${remaining} remaining, ${reservedQty} reserved). Approval required.`,
+          remaining,
+          reservedQty,
+          availableQty: effectiveAvailableQty,
+          requested: consumed,
+          code: 'APPROVAL_REQUIRED',
+        });
+      }
     }
 
     // ── Received unit integration (Phase 2) ───────────────────────────────────

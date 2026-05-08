@@ -21,6 +21,14 @@ import {
   upsertPolicy,
   EscalationError,
 } from '../services/escalationService';
+import {
+  executeInventoryApproval,
+  isInventoryApprovalRequestType,
+  InventoryExecutorError,
+} from '../services/inventoryApprovalExecutor';
+import { db } from '../../db';
+import { approvalRequests } from '../../schema';
+import { eq } from 'drizzle-orm';
 
 export const approvalsRouter = Router();
 export const escalationPoliciesRouter = Router();
@@ -115,6 +123,40 @@ approvalsRouter.post('/:id/approve', async (req: Request, res: Response) => {
   try {
     const body = decisionBodySchema.parse(req.body ?? {});
     const actor = actorFromReq(req);
+
+    // ── Pre-decision checks ────────────────────────────────────────────────
+    // Block self-approval: the actor who opened the request cannot be the one
+    // who approves it. Admins/owners are NOT exempted — segregation of duties
+    // applies to everyone for the high-risk inventory pipeline.
+    const [pre] = await db
+      .select()
+      .from(approvalRequests)
+      .where(eq(approvalRequests.id, req.params.id));
+    if (!pre) return res.status(404).json({ error: 'approval request not found', code: 'NOT_FOUND' });
+    if (
+      pre.requestedByUserId != null &&
+      actor.userId != null &&
+      pre.requestedByUserId === actor.userId
+    ) {
+      return res.status(403).json({
+        error: 'Self-approval is not permitted. Another approver in the chain must act on this request.',
+        code: 'SELF_APPROVAL_BLOCKED',
+      });
+    }
+    // High-risk inventory request types require the dedicated capability
+    // beyond the role-based escalation chain check.
+    if (isInventoryApprovalRequestType(pre.requestType)) {
+      const caps: string[] = (req as any).user?.permissions ?? [];
+      const role = req.user?.role;
+      const isAdmin = role === 'ADMIN' || role === 'OWNER';
+      if (!isAdmin && !caps.includes('inventory.approve_high_risk')) {
+        return res.status(403).json({
+          error: 'Missing capability inventory.approve_high_risk',
+          code: 'FORBIDDEN',
+        });
+      }
+    }
+
     const result = await approve({
       approvalRequestId: req.params.id,
       approver: { ...actor, isPrivilegedOverride: false },
@@ -122,7 +164,31 @@ approvalsRouter.post('/:id/approve', async (req: Request, res: Response) => {
       reasonCode: body.reasonCode ?? null,
       signature: body.signature ?? null,
     });
-    res.json(result);
+
+    // Run the inventory executor inline so the operator sees the outcome
+    // of the originating mutation in the same response. Failure surfaces as
+    // 200 with an `executor.error` field so the approval row remains APPROVED
+    // and the inbox history shows what went wrong on the floor side.
+    let executor: { ok: boolean; error?: string; code?: string; detail?: any; ledgerEntryId?: string | null } | undefined;
+    if (isInventoryApprovalRequestType(result.requestType)) {
+      try {
+        const r = await executeInventoryApproval({
+          request: result,
+          approver: { userId: actor.userId, displayName: actor.displayName },
+        });
+        if (r) {
+          executor = { ok: true, ledgerEntryId: r.ledgerEntryId, detail: r.detail };
+        }
+      } catch (execErr: any) {
+        executor = {
+          ok: false,
+          error: execErr?.message ?? 'inventory executor failed',
+          code: execErr instanceof InventoryExecutorError ? execErr.code : 'EXECUTOR_ERROR',
+        };
+      }
+    }
+
+    res.json({ ...result, executor });
   } catch (err: any) {
     handleEscalationError(err, res);
   }

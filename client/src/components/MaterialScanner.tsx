@@ -252,7 +252,7 @@ export default function MaterialScanner({
       overrideApprovedBy?: string;
     }) => {
       if (!validationResult?.lot) throw new Error('No material selected');
-      return apiRequest('/api/material-lots/consume', {
+      const res = await apiRequest('/api/material-lots/consume', {
         method: 'POST',
         body: JSON.stringify({
           materialLotId: validationResult.lot.id,
@@ -267,8 +267,25 @@ export default function MaterialScanner({
           overrideApprovedBy: data.overrideApprovedBy,
         }),
       });
+      // 202 → high-risk inventory approval was opened (Task #164).
+      // Surface as a structured outcome so onSuccess can route the operator
+      // to the approvals inbox instead of pretending the draw happened.
+      if (res && (res as any).status === 202) {
+        const body = await (res as any).json?.();
+        return { __pendingApproval: true, ...body };
+      }
+      return res;
     },
-    onSuccess: (result) => {
+    onSuccess: (result: any) => {
+      if (result?.__pendingApproval) {
+        toast(result.message ?? 'Submitted for approval', {
+          icon: '🛡️',
+          duration: 6000,
+        });
+        queryClient.invalidateQueries({ queryKey: ['/api/approvals'] });
+        resetScanner();
+        return;
+      }
       toast.success('Material consumption recorded');
       queryClient.invalidateQueries({ queryKey: ['/api/material-lots'] });
       onMaterialConsumed?.(result);

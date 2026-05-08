@@ -63,6 +63,7 @@ export const REQUIRED_CAPABILITY_KEYS: readonly string[] = [
   'inventory.adjust',
   'inventory.manage_requests',
   'inventory.traceability.view',
+  'inventory.approve_high_risk',
 
   // Inventory — Cycle Count subsystem (Task #142)
   'inventory.cycleCount.view',

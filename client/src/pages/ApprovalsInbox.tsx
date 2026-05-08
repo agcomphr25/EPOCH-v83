@@ -34,6 +34,81 @@ interface DecisionState {
 
 const emptyDecision: DecisionState = { notes: '', reasonCode: '', signature: '' };
 
+const INVENTORY_REQUEST_TYPES = new Set([
+  'INV_MANUAL_ADJUSTMENT',
+  'INV_NEGATIVE_INVENTORY',
+  'INV_ALLOCATION_OVERRIDE',
+  'INV_EXPIRED_USE',
+  'INV_QUARANTINE_RELEASE',
+]);
+
+const INVENTORY_REQUEST_LABELS: Record<string, string> = {
+  INV_MANUAL_ADJUSTMENT: 'Manual qty adjustment',
+  INV_NEGATIVE_INVENTORY: 'Negative inventory override',
+  INV_ALLOCATION_OVERRIDE: 'Allocation override',
+  INV_EXPIRED_USE: 'Expired material use',
+  INV_QUARANTINE_RELEASE: 'Quarantine release',
+};
+
+function InventoryApprovalSummary({
+  requestType,
+  payload,
+}: {
+  requestType: string;
+  payload: Record<string, any>;
+}) {
+  const label = INVENTORY_REQUEST_LABELS[requestType] ?? requestType;
+  const rows: Array<[string, React.ReactNode]> = [];
+  if (payload.internalControlNumber) rows.push(['ICN', payload.internalControlNumber]);
+  if (payload.partNumber) rows.push(['Part #', payload.partNumber]);
+  if (payload.lotId) rows.push(['Lot ID', String(payload.lotId).slice(0, 8) + '…']);
+  if (payload.delta != null)
+    rows.push([
+      'Delta',
+      <span className={Number(payload.delta) < 0 ? 'text-red-600 font-semibold' : 'font-semibold'}>
+        {payload.delta > 0 ? '+' : ''}{payload.delta} {payload.unitOfMeasure ?? ''}
+      </span>,
+    ]);
+  if (payload.remainingBefore != null)
+    rows.push(['Remaining before', `${payload.remainingBefore} ${payload.unitOfMeasure ?? ''}`]);
+  if (payload.projectedAfter != null)
+    rows.push([
+      'Projected after',
+      <span className={Number(payload.projectedAfter) < 0 ? 'text-red-600 font-semibold' : ''}>
+        {payload.projectedAfter} {payload.unitOfMeasure ?? ''}
+      </span>,
+    ]);
+  if (payload.qtyUsed != null) rows.push(['Qty to use', String(payload.qtyUsed)]);
+  if (payload.availableQty != null) rows.push(['Available qty', String(payload.availableQty)]);
+  if (payload.reservedQty != null) rows.push(['Reserved qty', String(payload.reservedQty)]);
+  if (payload.expirationDate)
+    rows.push(['Expired on', new Date(payload.expirationDate).toLocaleDateString()]);
+  if (payload.newStatus) rows.push(['New status', <Badge variant="outline">{payload.newStatus}</Badge>]);
+  if (payload.reasonCode) rows.push(['Reason code', payload.reasonCode]);
+  if (payload.travelerId) rows.push(['Traveler', String(payload.travelerId).slice(0, 8) + '…']);
+  if (payload.performedBy) rows.push(['Requested by', payload.performedBy]);
+  if (payload.notes) rows.push(['Operator notes', payload.notes]);
+
+  return (
+    <div className="border rounded p-3 bg-muted/30 space-y-2" data-testid="inventory-approval-summary">
+      <div className="flex items-center gap-2">
+        <Badge variant="destructive" className="text-xs">HIGH-RISK INVENTORY</Badge>
+        <span className="font-semibold text-sm">{label}</span>
+      </div>
+      <table className="text-xs w-full">
+        <tbody>
+          {rows.map(([k, v], i) => (
+            <tr key={i} className="border-t border-muted-foreground/20">
+              <td className="py-1 pr-3 text-muted-foreground font-medium">{k}</td>
+              <td className="py-1" data-testid={`inv-field-${k.toLowerCase().replace(/\s+/g, '-')}`}>{v}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export default function ApprovalsInbox() {
   const { toast } = useToast();
   const [selected, setSelected] = useState<ApprovalRequest | null>(null);
@@ -168,13 +243,20 @@ export default function ApprovalsInbox() {
                   </div>
                 </div>
 
-                {selected.requestPayload && Object.keys(selected.requestPayload).length > 0 && (
-                  <div>
-                    <div className="text-xs font-semibold text-muted-foreground mb-1">Payload</div>
-                    <pre className="bg-muted p-2 rounded text-xs overflow-x-auto max-h-48">
-                      {JSON.stringify(selected.requestPayload, null, 2)}
-                    </pre>
-                  </div>
+                {INVENTORY_REQUEST_TYPES.has(selected.requestType) ? (
+                  <InventoryApprovalSummary
+                    requestType={selected.requestType}
+                    payload={selected.requestPayload ?? {}}
+                  />
+                ) : (
+                  selected.requestPayload && Object.keys(selected.requestPayload).length > 0 && (
+                    <div>
+                      <div className="text-xs font-semibold text-muted-foreground mb-1">Payload</div>
+                      <pre className="bg-muted p-2 rounded text-xs overflow-x-auto max-h-48">
+                        {JSON.stringify(selected.requestPayload, null, 2)}
+                      </pre>
+                    </div>
+                  )
                 )}
 
                 {detail?.history && detail.history.length > 0 && (

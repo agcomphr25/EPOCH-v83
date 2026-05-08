@@ -472,6 +472,7 @@ async function initializeBackgroundServices() {
           '0111_routing_step_enforcement.sql',
           '0112_material_issue_approvals.sql',
           '0113_routing_step_intent_backfill.sql',
+          '0114_inventory_high_risk_approvals.sql',
           'investigation_308_order_duplication.sql',
         ];
         const criticalMigrations = new Set([
@@ -4342,6 +4343,7 @@ async function initializeBackgroundServices() {
 
           // Material Traceability Viewer (Task #147 — Phase 3)
           { key: 'inventory.traceability.view', description: 'View the read-only Material Traceability Viewer (chain reconstruction, integrity verification, signed export).', category: 'inventory' },
+          { key: 'inventory.approve_high_risk', description: 'Approve or reject high-risk inventory transactions (manual adjustments, negative qty, allocation overrides, expired material use, quarantine release)', category: 'inventory' },
         ];
 
         // Upsert each capability key (ignore conflicts on duplicate key)

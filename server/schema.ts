@@ -818,6 +818,12 @@ export const partsRequests = pgTable('parts_requests', {
   estimatedCost: real('estimated_cost'),
   reason: text('reason'), // Why the part is needed
   status: text('status').default('PENDING').notNull(), // PENDING, APPROVED, ORDERED, RECEIVED, DELIVERED_TO_DEPT, REJECTED
+  approvalRequiredRole: text('approval_required_role').default('INVENTORY_MANAGER'), // INVENTORY_MANAGER, OWNER
+  approvalStatus: text('approval_status').default('PENDING'), // PENDING, OWNER_PENDING, APPROVED, REJECTED
+  ownerApprovedBy: text('owner_approved_by'),
+  ownerApprovedAt: timestamp('owner_approved_at'),
+  digitalApprovalSignature: text('digital_approval_signature'),
+  approvalHistory: jsonb('approval_history').$type<Array<Record<string, unknown>>>().default(sql`'[]'::jsonb`),
   requestDate: timestamp('request_date').defaultNow().notNull(),
   approvedBy: text('approved_by'),
   approvedDate: timestamp('approved_date'),
@@ -2967,8 +2973,14 @@ export const insertPartsRequestSchema = createInsertSchema(partsRequests)
     estimatedCost: z.number().min(0).optional().nullable(),
     reason: z.string().optional().nullable(),
     status: z
-      .enum(['PENDING', 'APPROVED', 'ORDERED', 'ORDERED_PARTIAL', 'RECEIVED', 'RECEIVED_PARTIAL', 'DELIVERED_TO_DEPT', 'REJECTED', 'CANCEL_REQUESTED', 'CANCELED'])
+      .enum(['PENDING', 'PENDING_OWNER_APPROVAL', 'APPROVED', 'ORDERED', 'ORDERED_PARTIAL', 'RECEIVED', 'RECEIVED_PARTIAL', 'DELIVERED_TO_DEPT', 'REJECTED', 'CANCEL_REQUESTED', 'CANCELED'])
       .default('PENDING'),
+    approvalRequiredRole: z.enum(['INVENTORY_MANAGER', 'OWNER']).default('INVENTORY_MANAGER').optional(),
+    approvalStatus: z.enum(['PENDING', 'OWNER_PENDING', 'APPROVED', 'REJECTED']).default('PENDING').optional(),
+    ownerApprovedBy: z.string().optional().nullable(),
+    ownerApprovedAt: z.coerce.date().optional().nullable(),
+    digitalApprovalSignature: z.string().optional().nullable(),
+    approvalHistory: z.array(z.record(z.unknown())).optional().nullable(),
     approvedBy: z.string().optional().nullable(),
     approvedDate: z.coerce.date().optional().nullable(),
     orderDate: z.coerce.date().optional().nullable(),

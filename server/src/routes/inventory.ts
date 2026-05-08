@@ -1003,6 +1003,41 @@ router.get('/parts-requests', async (req: Request, res: Response) => {
   }
 });
 
+const OWNER_APPROVAL_THRESHOLD = 1000;
+
+function getPartsRequestTotalCost(request: { estimatedCost?: number | null }) {
+  return Number(request.estimatedCost || 0);
+}
+
+function appendApprovalHistory(
+  request: { approvalHistory?: Array<Record<string, unknown>> | null },
+  entry: Record<string, unknown>
+) {
+  const existing = Array.isArray(request.approvalHistory) ? request.approvalHistory : [];
+  return [...existing, { ...entry, occurredAt: new Date().toISOString() }];
+}
+
+function getApprovalActor(req: Request, fallback?: string | null) {
+  return req.user?.username || fallback?.trim() || 'Unknown approver';
+}
+
+router.get('/parts-requests/owner-approvals', async (_req: Request, res: Response) => {
+  try {
+    const requests = await storage.getAllPartsRequests();
+    res.json(
+      requests.filter(
+        (request) =>
+          request.isActive !== false &&
+          request.status === 'PENDING_OWNER_APPROVAL' &&
+          request.approvalStatus === 'OWNER_PENDING'
+      )
+    );
+  } catch (error) {
+    console.error('Get owner approval parts requests error:', error);
+    res.status(500).json({ error: 'Failed to fetch owner approval requests' });
+  }
+});
+
 // Resolve a free-text source string to a vendors.id via case-insensitive name match.
 // Future improvement: replace with inventory_items.source_vendor_id (FK) once schema migration is done.
 async function resolveSourceVendorId(sourceText: string | null | undefined, db: any): Promise<number | null> {
@@ -1021,6 +1056,20 @@ async function resolveSourceVendorId(sourceText: string | null | undefined, db: 
 router.post('/parts-requests', async (req: Request, res: Response) => {
   try {
     const requestData = insertPartsRequestSchema.parse(req.body);
+    const now = new Date();
+    requestData.status = 'PENDING';
+    requestData.approvalStatus = 'PENDING';
+    requestData.approvalRequiredRole = 'INVENTORY_MANAGER';
+    requestData.approvalHistory = [
+      {
+        event: 'REQUEST_CREATED',
+        actor: requestData.requestedBy,
+        fromStatus: null,
+        toStatus: 'PENDING',
+        notes: 'Parts request submitted for inventory manager review.',
+        occurredAt: now.toISOString(),
+      },
+    ];
 
     if (requestData.agPartNumber) {
       const { inventoryItems } = await import('../../schema');
@@ -1064,16 +1113,96 @@ router.post('/parts-requests', async (req: Request, res: Response) => {
   }
 });
 
+router.post('/parts-requests/:id/approve', async (req: Request, res: Response) => {
+  try {
+    const requestId = parseInt(req.params.id);
+    const {
+      approvedBy,
+      digitalSignature,
+      notes,
+      decision = 'APPROVED',
+    } = req.body as {
+      approvedBy?: string;
+      digitalSignature?: string;
+      notes?: string;
+      decision?: 'APPROVED' | 'REJECTED';
+    };
+
+    const existingRequest = await storage.getPartsRequest(requestId);
+    if (!existingRequest) {
+      return res.status(404).json({ error: 'Request not found' });
+    }
+
+    if (existingRequest.status !== 'PENDING_OWNER_APPROVAL') {
+      return res.status(400).json({ error: `Request is not waiting on owner approval. Current status: ${existingRequest.status}` });
+    }
+
+    const actor = getApprovalActor(req, approvedBy);
+    const now = new Date();
+    const isApproved = decision !== 'REJECTED';
+    const nextStatus = isApproved ? 'APPROVED' : 'REJECTED';
+    const signature = digitalSignature || `${actor} digital approval ${now.toISOString()}`;
+    const approvalHistory = appendApprovalHistory(existingRequest, {
+      event: isApproved ? 'OWNER_APPROVED' : 'OWNER_REJECTED',
+      actor,
+      fromStatus: existingRequest.status,
+      toStatus: nextStatus,
+      approvalLevel: 'OWNER',
+      digitalSignature: signature,
+      notes: notes || null,
+      totalCost: getPartsRequestTotalCost(existingRequest),
+    });
+
+    const updatedRequest = await storage.updatePartsRequest(requestId, {
+      status: nextStatus,
+      approvalStatus: isApproved ? 'APPROVED' : 'REJECTED',
+      approvedBy: isApproved ? actor : existingRequest.approvedBy,
+      approvedDate: isApproved ? now : existingRequest.approvedDate,
+      ownerApprovedBy: isApproved ? actor : existingRequest.ownerApprovedBy,
+      ownerApprovedAt: isApproved ? now : existingRequest.ownerApprovedAt,
+      digitalApprovalSignature: signature,
+      rejectionReason: isApproved ? existingRequest.rejectionReason : notes || existingRequest.rejectionReason,
+      rejectedBy: isApproved ? existingRequest.rejectedBy : actor,
+      rejectedAt: isApproved ? existingRequest.rejectedAt : now,
+      notes: notes ?? existingRequest.notes,
+      approvalHistory,
+      updatedAt: now,
+    } as any);
+
+    const { partsRequestStatusHistory } = await import('../../schema');
+    await db.insert(partsRequestStatusHistory).values({
+      partsRequestId: requestId,
+      fromStatus: existingRequest.status,
+      toStatus: nextStatus,
+      changedBy: actor,
+      reason: isApproved ? 'Owner digital approval completed.' : notes || 'Owner rejected approval request.',
+    });
+
+    res.json(updatedRequest);
+  } catch (error) {
+    console.error('Approve owner parts request error:', error);
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: 'Failed to approve parts request' });
+  }
+});
+
 router.put('/parts-requests/:id', async (req: Request, res: Response) => {
   try {
     const requestId = parseInt(req.params.id);
     const updates = insertPartsRequestSchema.partial().parse(req.body);
+    const existingRequest = await storage.getPartsRequest(requestId);
+    if (!existingRequest) {
+      return res.status(404).json({ error: 'Request not found' });
+    }
     
     // Enforce status transition rules: PENDING → APPROVED → ORDERED → RECEIVED → DELIVERED_TO_DEPT
     // Also allows PENDING → REJECTED
     if (updates.status) {
       const validTransitions: Record<string, string[]> = {
-        'APPROVED': ['PENDING'],
+        'PENDING_OWNER_APPROVAL': ['PENDING'],
+        'APPROVED': ['PENDING', 'PENDING_OWNER_APPROVAL'],
         'REJECTED': ['PENDING', 'CANCEL_REQUESTED'],
         'ORDERED': ['PENDING', 'APPROVED'],
         'ORDERED_PARTIAL': ['PENDING', 'APPROVED'],
@@ -1085,12 +1214,6 @@ router.put('/parts-requests/:id', async (req: Request, res: Response) => {
       };
       
       if (validTransitions[updates.status]) {
-        // Get current status
-        const existingRequest = await storage.getPartsRequest(requestId);
-        if (!existingRequest) {
-          return res.status(404).json({ error: 'Request not found' });
-        }
-        
         const allowedFromStatuses = validTransitions[updates.status];
         if (!allowedFromStatuses.includes(existingRequest.status)) {
           return res.status(400).json({ 
@@ -1107,6 +1230,35 @@ router.put('/parts-requests/:id', async (req: Request, res: Response) => {
         updates.rejectedAt = updates.rejectedAt ?? new Date();
         updates.rejectionReason = updates.rejectionReason ?? updates.notes ?? null;
       }
+    }
+
+    if (updates.status === 'APPROVED') {
+      const effectiveRequest = { ...existingRequest, ...updates };
+      const totalCost = getPartsRequestTotalCost(effectiveRequest);
+      const actor = getApprovalActor(req, updates.approvedBy ?? null);
+      const now = new Date();
+      const needsOwnerApproval = totalCost > OWNER_APPROVAL_THRESHOLD;
+      const nextStatus = needsOwnerApproval ? 'PENDING_OWNER_APPROVAL' : 'APPROVED';
+      const signature = updates.digitalApprovalSignature || `${actor} digital approval ${now.toISOString()}`;
+
+      updates.approvalRequiredRole = needsOwnerApproval ? 'OWNER' : 'INVENTORY_MANAGER';
+      updates.approvalStatus = needsOwnerApproval ? 'OWNER_PENDING' : 'APPROVED';
+      updates.status = nextStatus;
+      updates.approvedBy = needsOwnerApproval ? existingRequest.approvedBy : actor;
+      updates.approvedDate = needsOwnerApproval ? existingRequest.approvedDate : now;
+      updates.digitalApprovalSignature = needsOwnerApproval ? existingRequest.digitalApprovalSignature : signature;
+      updates.approvalHistory = appendApprovalHistory(existingRequest, {
+        event: needsOwnerApproval ? 'OWNER_APPROVAL_REQUESTED' : 'INVENTORY_MANAGER_APPROVED',
+        actor,
+        fromStatus: existingRequest.status,
+        toStatus: nextStatus,
+        approvalLevel: needsOwnerApproval ? 'OWNER' : 'INVENTORY_MANAGER',
+        digitalSignature: needsOwnerApproval ? null : signature,
+        notes: needsOwnerApproval
+          ? `Total cost $${totalCost.toFixed(2)} exceeds the $${OWNER_APPROVAL_THRESHOLD.toFixed(2)} inventory manager approval limit.`
+          : updates.notes ?? null,
+        totalCost,
+      });
     }
     
     const updatedRequest = await storage.updatePartsRequest(requestId, updates);

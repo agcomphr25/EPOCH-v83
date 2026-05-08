@@ -66,6 +66,7 @@ interface PartsRequestFormData {
   status: string;
   expectedDelivery: string;
   notes: string;
+  approvalSignature: string;
 }
 
 interface ProjectOption {
@@ -115,6 +116,7 @@ export default function PartsRequestsCard() {
     status: 'PENDING',
     expectedDelivery: '',
     notes: '',
+    approvalSignature: '',
   });
 
   // Load parts requests
@@ -251,6 +253,7 @@ export default function PartsRequestsCard() {
       status: 'PENDING',
       expectedDelivery: '',
       notes: '',
+      approvalSignature: '',
     });
   };
 
@@ -309,6 +312,14 @@ export default function PartsRequestsCard() {
         : null;
       submitData.expectedDelivery = formData.expectedDelivery || null;
       submitData.notes = formData.notes || null;
+      if (formData.status === 'APPROVED') {
+        if (!formData.approvalSignature.trim()) {
+          toast.error('Digital approval signature is required to approve a request');
+          return;
+        }
+        submitData.approvedBy = formData.approvalSignature.trim();
+        submitData.digitalApprovalSignature = `Inventory manager approval: ${formData.approvalSignature.trim()}`;
+      }
     }
 
     if (editingRequest) {
@@ -340,6 +351,7 @@ export default function PartsRequestsCard() {
         ? new Date(request.expectedDelivery).toISOString().split('T')[0]
         : '',
       notes: request.notes || '',
+      approvalSignature: '',
     });
     setIsEditOpen(true);
   };
@@ -354,6 +366,8 @@ export default function PartsRequestsCard() {
     switch (status) {
       case 'PENDING':
         return 'bg-yellow-100 text-yellow-800';
+      case 'PENDING_OWNER_APPROVAL':
+        return 'bg-amber-100 text-amber-900';
       case 'APPROVED':
         return 'bg-green-100 text-green-800';
       case 'ORDERED':
@@ -576,6 +590,9 @@ export default function PartsRequestsCard() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="PENDING">Pending</SelectItem>
+                  <SelectItem value="PENDING_OWNER_APPROVAL" disabled>
+                    Pending Owner Approval
+                  </SelectItem>
                   <SelectItem value="APPROVED">Approved</SelectItem>
                   <SelectItem value="ORDERED">Ordered</SelectItem>
                   <SelectItem value="RECEIVED">Received</SelectItem>
@@ -617,6 +634,22 @@ export default function PartsRequestsCard() {
               onChange={handleChange}
             />
           </div>
+
+          {formData.status === 'APPROVED' && (
+            <div>
+              <Label htmlFor="approvalSignature">Digital Approval Signature</Label>
+              <Input
+                id="approvalSignature"
+                name="approvalSignature"
+                value={formData.approvalSignature}
+                onChange={handleChange}
+                placeholder="Type inventory manager name"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Requests over $1,000 will move to owner approval after this review.
+              </p>
+            </div>
+          )}
         </>
       )}
 
@@ -754,7 +787,9 @@ export default function PartsRequestsCard() {
 
                       <div className="flex items-center gap-2">
                         <Badge className={getStatusBadgeColor(request.status)}>
-                          {request.status}
+                          {request.status === 'PENDING_OWNER_APPROVAL'
+                            ? 'OWNER APPROVAL'
+                            : request.status}
                         </Badge>
                         <Badge
                           className={getUrgencyBadgeColor(request.urgency)}
@@ -803,6 +838,34 @@ export default function PartsRequestsCard() {
                             </span>
                           </div>
                         )}
+
+                        {request.approvalStatus && (
+                          <div className="text-xs text-gray-600 bg-blue-50 p-2 rounded">
+                            Approval: {request.approvalStatus}
+                            {request.approvalRequiredRole === 'OWNER'
+                              ? ' - owner required'
+                              : ''}
+                            {request.approvedDate
+                              ? ` - ${new Date(request.approvedDate).toLocaleString()}`
+                              : ''}
+                          </div>
+                        )}
+
+                        {Array.isArray(request.approvalHistory) &&
+                          request.approvalHistory.length > 0 && (
+                            <div className="text-xs text-gray-600 bg-gray-50 p-2 rounded space-y-1">
+                              <div className="font-medium text-gray-700">Approval History</div>
+                              {request.approvalHistory.slice(-3).map((event, index) => (
+                                <div key={`${request.id}-approval-${index}`}>
+                                  {String(event.event || 'APPROVAL')} by{' '}
+                                  {String(event.actor || 'System')}
+                                  {event.occurredAt
+                                    ? ` - ${new Date(String(event.occurredAt)).toLocaleString()}`
+                                    : ''}
+                                </div>
+                              ))}
+                            </div>
+                          )}
 
                         {request.expectedDelivery && (
                           <div className="flex items-center gap-2">

@@ -110,20 +110,30 @@ export async function evaluateQueueReadiness(queueId: number): Promise<Readiness
       if (lot) {
         const violations: string[] = [];
 
-        // (a) Expiration check
+        // (a) Lock check (Task #165) — explicit LOCKED status takes precedence
+        if (lot.status === 'LOCKED') {
+          violations.push(
+            `lot ${lot.internalControlNumber ?? req.materialLotId.slice(0, 8)} is LOCKED${lot.lockedReason ? ` (${lot.lockedReason})` : ''}`
+          );
+        }
+
+        // (b) Expiration check
         if (lot.expirationDate && new Date(lot.expirationDate) < now) {
           violations.push(`lot ${lot.internalControlNumber ?? req.materialLotId.slice(0, 8)} is EXPIRED`);
         }
 
-        // (b) Out-time check
-        if (
-          lot.maxOutTimeMinutes != null &&
-          lot.totalOutTimeMinutes != null &&
-          lot.totalOutTimeMinutes >= lot.maxOutTimeMinutes
-        ) {
-          violations.push(
-            `out-time exceeded (${lot.totalOutTimeMinutes}/${lot.maxOutTimeMinutes} min)`
-          );
+        // (c) Out-time check — accounts for in-flight accumulation while currentlyOutOfStorage
+        if (lot.maxOutTimeMinutes != null && lot.maxOutTimeMinutes > 0) {
+          const base = lot.totalOutTimeMinutes ?? 0;
+          const inFlight = lot.currentlyOutOfStorage && lot.lastOutAt
+            ? Math.max(0, Math.floor((now.getTime() - new Date(lot.lastOutAt).getTime()) / 60000))
+            : 0;
+          const effective = base + inFlight;
+          if (effective >= lot.maxOutTimeMinutes) {
+            violations.push(
+              `out-time exceeded (${effective}/${lot.maxOutTimeMinutes} min)`
+            );
+          }
         }
 
         if (violations.length > 0) {

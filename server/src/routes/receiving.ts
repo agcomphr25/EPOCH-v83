@@ -970,13 +970,36 @@ async function handleAcceptedUnit(unit: ReceivedUnit, receipt: Receipt, user: Au
 
     // Find inventory item — required for material lot linkage; fail-fast if missing
     const invResult = await db.execute(
-      sql`SELECT id, name FROM inventory_items WHERE ag_part_number = ${line.agPartNumber} LIMIT 1`
+      sql`SELECT id, name, shelf_life_controlled, frozen_shelf_life_days, room_temp_shelf_life_days, default_max_out_time_minutes
+          FROM inventory_items WHERE ag_part_number = ${line.agPartNumber} LIMIT 1`
     );
-    const invRows = sqlRows<{ id: number; name: string }>(invResult);
+    const invRows = sqlRows<{
+      id: number;
+      name: string;
+      shelf_life_controlled: boolean | null;
+      frozen_shelf_life_days: number | null;
+      room_temp_shelf_life_days: number | null;
+      default_max_out_time_minutes: number | null;
+    }>(invResult);
     if (!invRows.length) {
       throw new Error(`No inventory_items record found for ag_part_number="${line.agPartNumber}" — create the inventory item before accepting units for this part`);
     }
     const invItem = invRows[0];
+
+    // Shelf-life prefill (Task #165) — only when the part is shelf-life-controlled
+    // and the receiving unit didn't already supply a value. Uses frozen days as
+    // the conservative default; falls back to room-temp days when frozen is unset.
+    let prefilledExpiration: Date | null = unit.expirationDate ?? null;
+    let prefilledMaxOutTime: number | null = invItem.default_max_out_time_minutes ?? null;
+    if (invItem.shelf_life_controlled && !prefilledExpiration) {
+      const days = invItem.frozen_shelf_life_days ?? invItem.room_temp_shelf_life_days;
+      if (days != null && days > 0) {
+        const base = unit.manufactureDate ? new Date(unit.manufactureDate) : new Date();
+        const exp = new Date(base);
+        exp.setDate(exp.getDate() + days);
+        prefilledExpiration = exp;
+      }
+    }
 
     // Type-safe material lot insert
     const lotValues: InsertMaterialLot = insertMaterialLotSchema.parse({
@@ -992,9 +1015,10 @@ async function handleAcceptedUnit(unit: ReceivedUnit, receipt: Receipt, user: Au
       receivedQty: String(unit.quantity),
       remainingQty: String(unit.quantity),
       unitOfMeasure: unit.uom ?? 'EA',
-      expirationDate: unit.expirationDate ?? null,
+      expirationDate: prefilledExpiration,
       manufactureDate: unit.manufactureDate ?? null,
       storageLocation: unit.location ?? null,
+      maxOutTimeMinutes: prefilledMaxOutTime,
       status: 'ACCEPTED',
       receivedBy: displayName,
       notes: `Auto-created from receipt ${receipt.receiptNumber} unit ${unit.barcode}`,

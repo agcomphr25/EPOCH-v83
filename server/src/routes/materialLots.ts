@@ -18,6 +18,7 @@ import {
   materialLotReservations,
   inventoryTransactions,
   inventoryBalances,
+  inventoryItems,
 } from '../../schema';
 import { db } from '../../db';
 import { eq, sql, and, like } from 'drizzle-orm';
@@ -30,11 +31,12 @@ import {
 } from '../constants/inventoryControls';
 import { openRequest as openApprovalRequest, EscalationError } from '../services/escalationService';
 import { approvalRequests } from '../../schema';
+import { checkLotUsability, enforceAndLockIfNeeded, computeEffectiveOutTimeMinutes } from '../services/lotUsability';
 
 const router = Router();
 
-type TransactionType = 'RECEIVE' | 'MOVE' | 'ISSUE' | 'ADJUST' | 'SCRAP' | 'RETURN' | 'SPLIT' | 'OUT_START' | 'OUT_END' | 'ACCEPT' | 'REJECT' | 'QUARANTINE' | 'EXPIRE' | 'HOLD';
-type MaterialLotStatus = 'RECEIVED' | 'ACCEPTED' | 'ISSUED' | 'EXPIRED' | 'QUARANTINE' | 'REJECTED' | 'CONSUMED' | 'SCRAPPED' | 'HOLD';
+type TransactionType = 'RECEIVE' | 'MOVE' | 'ISSUE' | 'ADJUST' | 'SCRAP' | 'RETURN' | 'SPLIT' | 'OUT_START' | 'OUT_END' | 'ACCEPT' | 'REJECT' | 'QUARANTINE' | 'EXPIRE' | 'HOLD' | 'PAUSE' | 'RESUME' | 'LOCK';
+type MaterialLotStatus = 'RECEIVED' | 'ACCEPTED' | 'ISSUED' | 'EXPIRED' | 'QUARANTINE' | 'REJECTED' | 'CONSUMED' | 'SCRAPPED' | 'HOLD' | 'LOCKED';
 
 const STATUS_TRANSACTION_TYPE: Partial<Record<MaterialLotStatus, TransactionType>> = {
   ACCEPTED: 'ACCEPT',
@@ -43,6 +45,7 @@ const STATUS_TRANSACTION_TYPE: Partial<Record<MaterialLotStatus, TransactionType
   ISSUED: 'ISSUE',
   EXPIRED: 'EXPIRE',
   HOLD: 'HOLD',
+  LOCKED: 'LOCK',
 };
 
 function createTransaction(data: Omit<InsertMaterialLotTransaction, 'wasOverride'> & { wasOverride?: boolean }): InsertMaterialLotTransaction {
@@ -570,6 +573,21 @@ router.get('/validate/:icn', async (req: Request, res: Response) => {
       }
     } catch (_) { /* non-fatal: received_units table may not exist in older deployments */ }
 
+    // Shelf-life lock check (Task #165) — auto-locks expired/over out-time lots
+    {
+      const { lot: maybeLockedLot, usability } = await enforceAndLockIfNeeded(lot, 'system');
+      if (!usability.usable) {
+        validationResults.valid = false;
+        validationResults.status = usability.status;
+        validationResults.message = `${usability.message ?? usability.status}. Lot is locked.`;
+        validationResults.errors.push(usability.message ?? usability.status);
+        validationResults.requiresOverride = true;
+        return res.json(validationResults);
+      }
+      // Refresh lot reference if needed (no mutation occurred when usable)
+      Object.assign(lot, maybeLockedLot);
+    }
+
     // Check expiration date
     if (lot.expirationDate) {
       const expDate = new Date(lot.expirationDate);
@@ -717,7 +735,43 @@ router.get('/:id', async (req: Request, res: Response) => {
 // Create a new material lot (receiving)
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const validatedData = insertMaterialLotSchema.parse(req.body);
+    const incoming = { ...req.body };
+
+    // Shelf-life prefill (Task #165) — when the inventory item is shelf-life
+    // controlled and the caller did not supply an expirationDate / maxOutTime,
+    // derive sensible defaults from the part policy.
+    if (incoming.inventoryItemId) {
+      try {
+        const [invItem] = await db
+          .select({
+            shelfLifeControlled: inventoryItems.shelfLifeControlled,
+            frozenShelfLifeDays: inventoryItems.frozenShelfLifeDays,
+            roomTempShelfLifeDays: inventoryItems.roomTempShelfLifeDays,
+            defaultMaxOutTimeMinutes: inventoryItems.defaultMaxOutTimeMinutes,
+          })
+          .from(inventoryItems)
+          .where(eq(inventoryItems.id, Number(incoming.inventoryItemId)))
+          .limit(1);
+        if (invItem) {
+          if (invItem.shelfLifeControlled && !incoming.expirationDate) {
+            const days = invItem.frozenShelfLifeDays ?? invItem.roomTempShelfLifeDays;
+            if (days != null && days > 0) {
+              const base = incoming.manufactureDate ? new Date(incoming.manufactureDate) : new Date();
+              const exp = new Date(base);
+              exp.setDate(exp.getDate() + days);
+              incoming.expirationDate = exp;
+            }
+          }
+          if (incoming.maxOutTimeMinutes == null && invItem.defaultMaxOutTimeMinutes != null) {
+            incoming.maxOutTimeMinutes = invItem.defaultMaxOutTimeMinutes;
+          }
+        }
+      } catch (prefillErr: any) {
+        console.warn('[materialLots POST] shelf-life prefill failed (non-fatal):', prefillErr.message);
+      }
+    }
+
+    const validatedData = insertMaterialLotSchema.parse(incoming);
     const lot = await storage.createMaterialLot(validatedData);
 
     // Create initial transaction record
@@ -822,9 +876,10 @@ router.post('/:id/status', async (req: Request, res: Response) => {
     const validTransitions: Record<string, string[]> = {
       'RECEIVED': ['QUARANTINE', 'ACCEPTED', 'REJECTED', 'HOLD'],
       'QUARANTINE': ['ACCEPTED', 'REJECTED', 'HOLD'],
-      'ACCEPTED': ['ISSUED', 'QUARANTINE', 'REJECTED', 'HOLD', 'EXPIRED'],
-      'ISSUED': ['ACCEPTED', 'CONSUMED', 'QUARANTINE', 'HOLD', 'EXPIRED'],
+      'ACCEPTED': ['ISSUED', 'QUARANTINE', 'REJECTED', 'HOLD', 'EXPIRED', 'LOCKED'],
+      'ISSUED': ['ACCEPTED', 'CONSUMED', 'QUARANTINE', 'HOLD', 'EXPIRED', 'LOCKED'],
       'HOLD': ['ACCEPTED', 'ISSUED', 'QUARANTINE', 'REJECTED', 'EXPIRED'],
+      'LOCKED': ['SCRAPPED', 'REJECTED', 'QUARANTINE'],
       'REJECTED': ['QUARANTINE'],
     };
 
@@ -898,6 +953,15 @@ router.post('/:id/issue', async (req: Request, res: Response) => {
     if (!lot) return res.status(404).json({ error: 'Material lot not found' });
     if (blockedInventoryActionResponse(req, res, lot, 'issue')) return;
 
+    const { usability } = await enforceAndLockIfNeeded(lot, performedBy ?? 'system');
+    if (!usability.usable) {
+      return res.status(409).json({
+        error: 'LOT_LOCKED',
+        status: usability.status,
+        message: `Cannot issue: ${usability.message ?? usability.status}`,
+      });
+    }
+
     const updatedLot = await storage.issueMaterialLot(id, { performedBy, toLocation, notes });
     res.json(updatedLot);
   } catch (error: any) {
@@ -934,7 +998,7 @@ router.post('/:id/return', async (req: Request, res: Response) => {
     }
     if (blockedInventoryActionResponse(req, res, lot, 'return')) return;
 
-    const blockedStatuses: MaterialLotStatus[] = ['SCRAPPED', 'CONSUMED'];
+    const blockedStatuses: MaterialLotStatus[] = ['SCRAPPED', 'CONSUMED', 'LOCKED'];
     if (blockedStatuses.includes(lot.status as MaterialLotStatus)) {
       return res.status(400).json({
         error: 'INVALID_LOT_STATUS',
@@ -1270,18 +1334,32 @@ router.post('/consume', async (req: Request, res: Response) => {
     const approvalRequestId: string | undefined = (req.body as any)?.approvalRequestId;
     const isExpired = !!lot.expirationDate && new Date(lot.expirationDate) < new Date();
 
-    // ── Guard 1: Lot status (QUARANTINE/REJECTED/SCRAPPED/HOLD never consumable; EXPIRED handled below)
-    const hardBlockedStatuses: MaterialLotStatus[] = ['QUARANTINE', 'REJECTED', 'SCRAPPED', 'HOLD'];
+    // ── Task #165 (run first): auto-lock expired/over-out-time lots so the
+    //     hard-block guard below catches them via the LOCKED status.
+    {
+      const { lot: maybeLockedLot, usability } = await enforceAndLockIfNeeded(lot, validatedData.scannedBy ?? 'system');
+      if (!usability.usable && lot.status !== 'EXPIRED') {
+        // EXPIRED is handled below by the approval-override flow (Task #164);
+        // anything else (LOCKED) is a hard block.
+        if (maybeLockedLot.status === 'LOCKED') {
+          Object.assign(lot, maybeLockedLot);
+        }
+      }
+    }
+
+    // ── Guard 1: Lot status (QUARANTINE/REJECTED/SCRAPPED/HOLD/LOCKED never consumable; EXPIRED handled below)
+    const hardBlockedStatuses: MaterialLotStatus[] = ['QUARANTINE', 'REJECTED', 'SCRAPPED', 'HOLD', 'LOCKED'];
     if (hardBlockedStatuses.includes(lot.status as MaterialLotStatus)) {
       return res.status(400).json({
         error: 'LOT_NOT_USABLE',
-        message: `Lot cannot be consumed — current status is ${lot.status}`,
+        message: `Lot cannot be consumed — current status is ${lot.status}${lot.lockedReason ? ` (${lot.lockedReason})` : ''}`,
         status: lot.status,
       });
     }
 
-    // Expired lots: open an INV_EXPIRED_USE approval request unless one was
-    // already attached and approved.
+    // ── Guard 2 (Task #164): Expired lots open an INV_EXPIRED_USE approval
+    //     request unless one was already attached and approved. This is the
+    //     deviation-override path; otherwise expired lots are hard-blocked.
     if ((isExpired || lot.status === 'EXPIRED')) {
       if (!approvalRequestId) {
         try {
@@ -1623,6 +1701,58 @@ router.post('/consume', async (req: Request, res: Response) => {
       });
     }
     res.status(500).json({ error: 'Failed to record consumption', message: error.message });
+  }
+});
+
+// ── Pause / Resume out-time accumulation (Task #165) ─────────────────────────
+const pauseResumeSchema = z.object({
+  performedBy: z.string().min(1, 'performedBy is required'),
+  reason: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+router.post('/:id/pause', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const parsed = pauseResumeSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Validation error', details: parsed.error.errors });
+    }
+    const lot = await storage.getMaterialLot(id);
+    if (!lot) return res.status(404).json({ error: 'Material lot not found' });
+    if (!lot.currentlyOutOfStorage) {
+      return res.status(409).json({ error: 'NOT_OUT_OF_STORAGE', message: 'Lot is not currently accumulating out-time' });
+    }
+    const updated = await storage.pauseMaterialLotOutTime(id, parsed.data);
+    res.json(updated);
+  } catch (error: any) {
+    console.error('Error pausing material lot:', error);
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({ error: 'Failed to pause lot', message: error.message });
+  }
+});
+
+router.post('/:id/resume', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const parsed = pauseResumeSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Validation error', details: parsed.error.errors });
+    }
+    const lot = await storage.getMaterialLot(id);
+    if (!lot) return res.status(404).json({ error: 'Material lot not found' });
+    if (lot.currentlyOutOfStorage) {
+      return res.status(409).json({ error: 'ALREADY_ACCUMULATING', message: 'Lot is already accumulating out-time' });
+    }
+    if (lot.status === 'LOCKED') {
+      return res.status(409).json({ error: 'LOT_LOCKED', message: 'Cannot resume out-time on a locked lot' });
+    }
+    const updated = await storage.resumeMaterialLotOutTime(id, parsed.data);
+    res.json(updated);
+  } catch (error: any) {
+    console.error('Error resuming material lot:', error);
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({ error: 'Failed to resume lot', message: error.message });
   }
 });
 

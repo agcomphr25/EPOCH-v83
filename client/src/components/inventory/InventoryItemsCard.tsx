@@ -133,6 +133,11 @@ interface InventoryFormData {
   defaultOrderMethod: string;
   purchaseUnitId: string;
   usageUnitId: string;
+  shelfLifeControlled: boolean;
+  frozenShelfLifeDays: string;
+  roomTempShelfLifeDays: string;
+  defaultMaxOutTimeMinutes: string;
+  outTimeEnforcementRequired: boolean;
 }
 
 const InventoryForm = ({
@@ -255,8 +260,15 @@ const InventoryForm = ({
       }
       onSubmit(e);
     }}
-    className="space-y-6 max-h-[70vh] overflow-y-auto pr-2"
+    className="max-h-[70vh] overflow-y-auto pr-2"
   >
+    <Tabs defaultValue="general" className="space-y-6">
+      <TabsList>
+        <TabsTrigger value="general" data-testid="tab-form-general">General</TabsTrigger>
+        <TabsTrigger value="shelf-life" data-testid="tab-form-shelf-life">Shelf Life &amp; Storage</TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="general" className="space-y-6 mt-0">
     {/* Section 1 — Item Identity */}
     <div className="space-y-4">
       <h4 className="text-md font-semibold border-b pb-2">Item Identity</h4>
@@ -1077,6 +1089,111 @@ const InventoryForm = ({
       </div>
     </div>
 
+      </TabsContent>
+
+      <TabsContent value="shelf-life" className="space-y-6 mt-0">
+        <div className="space-y-4">
+          <h4 className="text-md font-semibold border-b pb-2">Shelf Life &amp; Storage Policy</h4>
+          <p className="text-xs text-muted-foreground">
+            Configure how this part&rsquo;s lots are tracked for shelf-life expiration and out-of-storage time.
+            When enabled, receiving auto-fills lot defaults and the system locks lots that exceed these limits.
+          </p>
+
+          <div className="flex items-start gap-3 p-3 rounded border">
+            <input
+              id="shelfLifeControlled"
+              type="checkbox"
+              className="mt-1 h-4 w-4"
+              checked={formData.shelfLifeControlled}
+              onChange={(e) => onCheckboxChange('shelfLifeControlled', e.target.checked)}
+              data-testid="checkbox-shelfLifeControlled"
+            />
+            <div className="flex-1">
+              <Label htmlFor="shelfLifeControlled" className="font-medium cursor-pointer">
+                Shelf-life controlled
+              </Label>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                When checked, expiration date is required (or auto-derived from manufacture date) at receiving.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="frozenShelfLifeDays">Frozen Shelf Life (days)</Label>
+              <Input
+                id="frozenShelfLifeDays"
+                name="frozenShelfLifeDays"
+                type="number"
+                min="0"
+                value={formData.frozenShelfLifeDays}
+                onChange={onChange}
+                placeholder="e.g., 365"
+                disabled={!formData.shelfLifeControlled}
+                data-testid="input-frozenShelfLifeDays"
+              />
+              <p className="text-xs text-muted-foreground mt-1">Used to compute expiration when frozen.</p>
+            </div>
+            <div>
+              <Label htmlFor="roomTempShelfLifeDays">Room-Temp Shelf Life (days)</Label>
+              <Input
+                id="roomTempShelfLifeDays"
+                name="roomTempShelfLifeDays"
+                type="number"
+                min="0"
+                value={formData.roomTempShelfLifeDays}
+                onChange={onChange}
+                placeholder="e.g., 14"
+                disabled={!formData.shelfLifeControlled}
+                data-testid="input-roomTempShelfLifeDays"
+              />
+              <p className="text-xs text-muted-foreground mt-1">Fallback when frozen shelf life is unset.</p>
+            </div>
+          </div>
+
+          <div className="space-y-4 pt-4 border-t">
+            <h5 className="text-sm font-semibold">Out-of-Storage Time</h5>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="defaultMaxOutTimeMinutes">Default Max Out-Time (minutes)</Label>
+                <Input
+                  id="defaultMaxOutTimeMinutes"
+                  name="defaultMaxOutTimeMinutes"
+                  type="number"
+                  min="0"
+                  value={formData.defaultMaxOutTimeMinutes}
+                  onChange={onChange}
+                  placeholder="e.g., 480 (8 hours)"
+                  data-testid="input-defaultMaxOutTimeMinutes"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Pre-fills new lots at receiving. When a lot reaches this total, it is auto-locked.
+                </p>
+              </div>
+              <div className="flex items-start gap-3 p-3 rounded border">
+                <input
+                  id="outTimeEnforcementRequired"
+                  type="checkbox"
+                  className="mt-1 h-4 w-4"
+                  checked={formData.outTimeEnforcementRequired}
+                  onChange={(e) => onCheckboxChange('outTimeEnforcementRequired', e.target.checked)}
+                  data-testid="checkbox-outTimeEnforcementRequired"
+                />
+                <div className="flex-1">
+                  <Label htmlFor="outTimeEnforcementRequired" className="font-medium cursor-pointer">
+                    Out-time enforcement required
+                  </Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Block issue/consume on lots that exceed the max out-time.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </TabsContent>
+    </Tabs>
+
     <div className="flex justify-end space-x-2 pt-4 border-t">
       <Button
         type="button"
@@ -1206,6 +1323,11 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     hasOtherDocs: false,
     assignedToAsset: '',
     defaultOrderMethod: '',
+    shelfLifeControlled: false,
+    frozenShelfLifeDays: '',
+    roomTempShelfLifeDays: '',
+    defaultMaxOutTimeMinutes: '',
+    outTimeEnforcementRequired: false,
   });
 
   const [sdsFile, setSdsFile] = useState<File | null>(null);
@@ -1820,6 +1942,11 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       hasSds: false,
       hasTds: false,
       hasOtherDocs: false,
+      shelfLifeControlled: false,
+      frozenShelfLifeDays: '',
+      roomTempShelfLifeDays: '',
+      defaultMaxOutTimeMinutes: '',
+      outTimeEnforcementRequired: false,
     });
     setSdsFile(null);
     setCurrentSdsFileName(null);
@@ -1980,6 +2107,11 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
         machineType: formData.manufacturedCategory === 'MACHINED_PART' && formData.machineType
           ? formData.machineType
           : null,
+        shelfLifeControlled: formData.shelfLifeControlled,
+        frozenShelfLifeDays: formData.frozenShelfLifeDays !== '' ? parseInt(formData.frozenShelfLifeDays, 10) : null,
+        roomTempShelfLifeDays: formData.roomTempShelfLifeDays !== '' ? parseInt(formData.roomTempShelfLifeDays, 10) : null,
+        defaultMaxOutTimeMinutes: formData.defaultMaxOutTimeMinutes !== '' ? parseInt(formData.defaultMaxOutTimeMinutes, 10) : null,
+        outTimeEnforcementRequired: formData.outTimeEnforcementRequired,
       };
 
       if (editingItem) {
@@ -2047,6 +2179,11 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       hasOtherDocs: item.hasOtherDocs || false,
       assignedToAsset: (item as any).assignedToAsset || '',
       defaultOrderMethod: (item as any).defaultOrderMethod || '',
+      shelfLifeControlled: (item as any).shelfLifeControlled || false,
+      frozenShelfLifeDays: (item as any).frozenShelfLifeDays != null ? String((item as any).frozenShelfLifeDays) : '',
+      roomTempShelfLifeDays: (item as any).roomTempShelfLifeDays != null ? String((item as any).roomTempShelfLifeDays) : '',
+      defaultMaxOutTimeMinutes: (item as any).defaultMaxOutTimeMinutes != null ? String((item as any).defaultMaxOutTimeMinutes) : '',
+      outTimeEnforcementRequired: (item as any).outTimeEnforcementRequired || false,
     });
     setSdsFile(null);
     setCurrentSdsFileName(item.sdsFilePath ? item.sdsFilePath.split('/').pop() || null : null);

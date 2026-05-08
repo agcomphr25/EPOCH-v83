@@ -80,14 +80,22 @@ export default function P2ReceivingDialog({
     barcode: generateBarcode(),
   });
 
-  // Update item code when item changes
+  // Update item code when item changes — also pre-fill shelf-life expiration
+  // (Task #165) when the part is shelf-life controlled and exp not yet set.
   useEffect(() => {
-    if (item?.agPartNumber) {
-      setFormData((prev) => ({
-        ...prev,
-        itemCode: item.agPartNumber,
-      }));
-    }
+    if (!item?.agPartNumber) return;
+    setFormData((prev) => {
+      const next = { ...prev, itemCode: item.agPartNumber };
+      if (item.shelfLifeControlled && !prev.expirationDate) {
+        const days = item.frozenShelfLifeDays ?? item.roomTempShelfLifeDays;
+        if (days != null && days > 0) {
+          const base = prev.manufactureDate ? new Date(prev.manufactureDate) : new Date();
+          base.setDate(base.getDate() + Number(days));
+          next.expirationDate = base.toISOString().split('T')[0];
+        }
+      }
+      return next;
+    });
   }, [item]);
 
   const queryClient = useQueryClient();

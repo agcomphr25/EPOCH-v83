@@ -2854,6 +2854,8 @@ export interface IStorage {
   scrapMaterialLot(id: string, params: { qty: number; reason: string; performedBy: string }): Promise<{ lot: MaterialLot; transaction: MaterialLotTransaction }>;
   returnMaterialLot(id: string, params: { qty: number; reason: string; performedBy: string }): Promise<{ lot: MaterialLot; lotTransaction: MaterialLotTransaction }>;
   issueMaterialLot(id: string, params: { performedBy: string; toLocation?: string; notes?: string }): Promise<MaterialLot>;
+  pauseMaterialLotOutTime(id: string, params: { performedBy: string; reason?: string; notes?: string }): Promise<MaterialLot>;
+  resumeMaterialLotOutTime(id: string, params: { performedBy: string; reason?: string; notes?: string }): Promise<MaterialLot>;
   moveMaterialLot(id: string, params: { toLocation: string; performedBy: string; notes?: string }): Promise<MaterialLot>;
 
   adjustMaterialLot(id: string, params: { delta: number; reasonCode: string; notes?: string; performedBy: string; allowNegative?: boolean }): Promise<{ lot: MaterialLot; transaction: MaterialLotTransaction }>;
@@ -23702,6 +23704,88 @@ export class DatabaseStorage implements IStorage {
     });
 
     return updatedLot;
+  }
+
+  async pauseMaterialLotOutTime(
+    id: string,
+    params: { performedBy: string; reason?: string; notes?: string }
+  ): Promise<MaterialLot> {
+    const lot = await this.getMaterialLot(id);
+    if (!lot) throw Object.assign(new Error('Material lot not found'), { statusCode: 404 });
+    if (!lot.currentlyOutOfStorage) {
+      throw Object.assign(new Error('Lot is not currently accumulating out-time'), { statusCode: 409 });
+    }
+
+    const additional = lot.lastOutAt
+      ? Math.max(0, Math.floor((Date.now() - new Date(lot.lastOutAt).getTime()) / 60000))
+      : 0;
+    const newTotal = (lot.totalOutTimeMinutes ?? 0) + additional;
+
+    return await db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(materialLots)
+        .set({
+          currentlyOutOfStorage: false,
+          totalOutTimeMinutes: newTotal,
+          updatedAt: new Date(),
+        })
+        .where(eq(materialLots.id, id))
+        .returning();
+
+      await tx.insert(materialLotTransactions).values({
+        materialLotId: id,
+        internalControlNumber: lot.internalControlNumber,
+        transactionType: 'PAUSE',
+        qtyBefore: lot.remainingQty,
+        qtyAfter: lot.remainingQty,
+        performedBy: params.performedBy,
+        reason: params.reason ?? null,
+        notes: params.notes ?? `Out-time accumulation paused at ${newTotal} minutes`,
+        wasOverride: false,
+      });
+
+      return updated;
+    });
+  }
+
+  async resumeMaterialLotOutTime(
+    id: string,
+    params: { performedBy: string; reason?: string; notes?: string }
+  ): Promise<MaterialLot> {
+    const lot = await this.getMaterialLot(id);
+    if (!lot) throw Object.assign(new Error('Material lot not found'), { statusCode: 404 });
+    if (lot.currentlyOutOfStorage) {
+      throw Object.assign(new Error('Lot is already accumulating out-time'), { statusCode: 409 });
+    }
+    if (lot.status === 'LOCKED') {
+      throw Object.assign(new Error('Cannot resume out-time on a locked lot'), { statusCode: 409 });
+    }
+
+    return await db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(materialLots)
+        .set({
+          currentlyOutOfStorage: true,
+          lastOutAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(materialLots.id, id))
+        .returning();
+
+      await tx.insert(materialLotTransactions).values({
+        materialLotId: id,
+        internalControlNumber: lot.internalControlNumber,
+        transactionType: 'RESUME',
+        qtyBefore: lot.remainingQty,
+        qtyAfter: lot.remainingQty,
+        performedBy: params.performedBy,
+        reason: params.reason ?? null,
+        notes: params.notes ?? `Out-time accumulation resumed (current total ${lot.totalOutTimeMinutes ?? 0} minutes)`,
+        wasOverride: false,
+      });
+
+      return updated;
+    });
   }
 
   async moveMaterialLot(id: string, params: { toLocation: string; performedBy: string; notes?: string }): Promise<MaterialLot> {

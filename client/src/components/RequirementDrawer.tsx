@@ -35,6 +35,9 @@ import {
   Package,
   Layers,
   AlertCircle,
+  Lock,
+  Pause,
+  Play,
 } from 'lucide-react';
 
 function formatLayupRequirementType(type: string): string {
@@ -123,6 +126,9 @@ type MaterialLot = {
   expirationDate: string | null;
   totalOutTimeMinutes: number | null;
   maxOutTimeMinutes: number | null;
+  currentlyOutOfStorage?: boolean | null;
+  lastOutAt?: string | null;
+  lockedReason?: string | null;
 };
 
 type KitQueueItem = {
@@ -164,16 +170,52 @@ function ShortfallBadge({
   );
 }
 
-function LotComplianceBadges({ lot }: { lot: MaterialLot }) {
+function LotComplianceBadges({ lot, onActionComplete }: { lot: MaterialLot; onActionComplete?: () => void }) {
+  const { toast } = useToast();
   const now = new Date();
   const isExpired = lot.expirationDate ? new Date(lot.expirationDate) < now : false;
+
+  // Effective out-time = base + in-flight while currentlyOutOfStorage (Task #165)
+  const inFlight = lot.currentlyOutOfStorage && lot.lastOutAt
+    ? Math.max(0, Math.floor((now.getTime() - new Date(lot.lastOutAt).getTime()) / 60000))
+    : 0;
+  const effectiveOutTime = (lot.totalOutTimeMinutes ?? 0) + inFlight;
   const outTimeExceeded =
     lot.maxOutTimeMinutes != null &&
-    lot.totalOutTimeMinutes != null &&
-    lot.totalOutTimeMinutes >= lot.maxOutTimeMinutes;
+    lot.maxOutTimeMinutes > 0 &&
+    effectiveOutTime >= lot.maxOutTimeMinutes;
+  const isLocked = lot.status === 'LOCKED';
+
+  const pauseMutation = useMutation({
+    mutationFn: () =>
+      apiRequest(`/api/material-lots/${lot.id}/pause`, {
+        method: 'POST',
+        body: JSON.stringify({ performedBy: 'current-user', reason: 'manual pause from Layup queue' }),
+      }),
+    onSuccess: () => {
+      toast({ title: 'Out-time paused', description: `Lot ${lot.internalControlNumber ?? lot.id.slice(0, 8)} paused` });
+      queryClient.invalidateQueries({ queryKey: ['/api/material-lots/single', lot.id] });
+      onActionComplete?.();
+    },
+    onError: (err: any) => toast({ title: 'Pause failed', description: err?.message ?? 'Unknown error', variant: 'destructive' }),
+  });
+
+  const resumeMutation = useMutation({
+    mutationFn: () =>
+      apiRequest(`/api/material-lots/${lot.id}/resume`, {
+        method: 'POST',
+        body: JSON.stringify({ performedBy: 'current-user', reason: 'manual resume from Layup queue' }),
+      }),
+    onSuccess: () => {
+      toast({ title: 'Out-time resumed', description: `Lot ${lot.internalControlNumber ?? lot.id.slice(0, 8)} resumed` });
+      queryClient.invalidateQueries({ queryKey: ['/api/material-lots/single', lot.id] });
+      onActionComplete?.();
+    },
+    onError: (err: any) => toast({ title: 'Resume failed', description: err?.message ?? 'Unknown error', variant: 'destructive' }),
+  });
 
   return (
-    <div className="flex flex-wrap gap-1 mt-1">
+    <div className="flex flex-wrap items-center gap-1 mt-1">
       {lot.internalControlNumber && (
         <span className="inline-flex items-center text-xs text-blue-600 dark:text-blue-400 font-mono">
           ICN: {lot.internalControlNumber}
@@ -182,6 +224,16 @@ function LotComplianceBadges({ lot }: { lot: MaterialLot }) {
       <span className="inline-flex items-center text-xs text-muted-foreground dark:text-gray-400">
         Rem: {parseFloat(lot.remainingQty)} {lot.unitOfMeasure}
       </span>
+      {isLocked && (
+        <Badge
+          className="text-xs bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+          data-testid={`badge-locked-${lot.id}`}
+          title={lot.lockedReason ?? 'Lot locked by shelf-life policy'}
+        >
+          <Lock className="w-3 h-3 mr-1" />
+          LOCKED{lot.lockedReason ? `: ${lot.lockedReason}` : ''}
+        </Badge>
+      )}
       {lot.expirationDate && (
         <Badge
           className={`text-xs ${isExpired ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300' : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'}`}
@@ -195,8 +247,37 @@ function LotComplianceBadges({ lot }: { lot: MaterialLot }) {
           className={`text-xs ${outTimeExceeded ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300' : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'}`}
         >
           {outTimeExceeded ? <XCircle className="w-3 h-3 mr-1" /> : <CheckCircle2 className="w-3 h-3 mr-1" />}
-          Out-time: {lot.totalOutTimeMinutes ?? 0}/{lot.maxOutTimeMinutes} min
+          Out-time: {effectiveOutTime}/{lot.maxOutTimeMinutes} min
+          {inFlight > 0 ? ' (live)' : ''}
         </Badge>
+      )}
+      {/* Pause/Resume controls (Task #165) — only meaningful when out-time is tracked and lot is not locked */}
+      {!isLocked && lot.maxOutTimeMinutes != null && lot.maxOutTimeMinutes > 0 && (
+        lot.currentlyOutOfStorage ? (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-6 px-2 text-xs"
+            onClick={() => pauseMutation.mutate()}
+            disabled={pauseMutation.isPending}
+            data-testid={`button-pause-out-time-${lot.id}`}
+          >
+            <Pause className="w-3 h-3 mr-1" />
+            {pauseMutation.isPending ? 'Pausing…' : 'Pause'}
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-6 px-2 text-xs"
+            onClick={() => resumeMutation.mutate()}
+            disabled={resumeMutation.isPending}
+            data-testid={`button-resume-out-time-${lot.id}`}
+          >
+            <Play className="w-3 h-3 mr-1" />
+            {resumeMutation.isPending ? 'Resuming…' : 'Resume'}
+          </Button>
+        )
       )}
     </div>
   );
@@ -348,7 +429,7 @@ function RequirementRow({
             </p>
           )}
           {isLayup && req.materialLotId && reservedLotData && (
-            <LotComplianceBadges lot={reservedLotData} />
+            <LotComplianceBadges lot={reservedLotData} onActionComplete={onActionComplete} />
           )}
           {isLayup && !req.materialLotId && (
             <p className="text-xs text-muted-foreground dark:text-gray-500 italic">No lot reserved — quantity-only check applies</p>

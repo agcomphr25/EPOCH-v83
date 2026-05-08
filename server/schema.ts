@@ -709,6 +709,12 @@ export const inventoryItems = pgTable('inventory_items', {
   // Values: 'required' | 'optional' | 'hidden'
   // When null/absent, all fields are treated as optional (legacy behavior)
   traceabilityFieldConfig: jsonb('traceability_field_config').$type<Record<string, 'required' | 'optional' | 'hidden'>>(),
+  // Shelf-life & out-time policy (Task #165)
+  shelfLifeControlled: boolean('shelf_life_controlled').notNull().default(false),
+  frozenShelfLifeDays: integer('frozen_shelf_life_days'),
+  roomTempShelfLifeDays: integer('room_temp_shelf_life_days'),
+  defaultMaxOutTimeMinutes: integer('default_max_out_time_minutes'),
+  outTimeEnforcementRequired: boolean('out_time_enforcement_required').notNull().default(false),
 });
 
 // Inventory Item Cost History - Tracks price changes over time
@@ -2429,6 +2435,11 @@ export const insertInventoryItemSchema = createInsertSchema(inventoryItems)
     manufacturedCategory: z.enum(['PACKET', 'KIT', 'MACHINED_PART', 'CORE', 'SUB_ASSEMBLY', 'ASSEMBLY', 'COMPOSITE', 'COMPONENT']).optional().nullable(),
     manufacturingLevel: z.enum(['COMPONENT', 'INTERMEDIATE', 'FINAL']).optional().nullable(),
     machineType: z.enum(['CNC Mill 3rd Axis', 'CNC Mill 4th Axis', 'Lathe']).optional().nullable(),
+    shelfLifeControlled: z.boolean().default(false),
+    frozenShelfLifeDays: z.number().int().min(0).optional().nullable(),
+    roomTempShelfLifeDays: z.number().int().min(0).optional().nullable(),
+    defaultMaxOutTimeMinutes: z.number().int().min(0).optional().nullable(),
+    outTimeEnforcementRequired: z.boolean().default(false),
   });
 
 export const insertInventoryScanSchema = createInsertSchema(inventoryScans)
@@ -5375,13 +5386,16 @@ export const materialLots = pgTable('material_lots', {
   storageRequirements: text('storage_requirements'), // Temperature, humidity requirements
   
   // Status tracking
-  status: text('status').default('RECEIVED').notNull(), // RECEIVED | QUARANTINE | ACCEPTED | REJECTED | EXPIRED | ISSUED | CONSUMED | SCRAPPED | HOLD
+  status: text('status').default('RECEIVED').notNull(), // RECEIVED | QUARANTINE | ACCEPTED | REJECTED | EXPIRED | ISSUED | CONSUMED | SCRAPPED | HOLD | LOCKED
   
   // Out-time tracking (for prepregs/time-sensitive materials)
   totalOutTimeMinutes: integer('total_out_time_minutes').default(0),
   maxOutTimeMinutes: integer('max_out_time_minutes'), // Limit before material expires
   currentlyOutOfStorage: boolean('currently_out_of_storage').default(false),
   lastOutAt: timestamp('last_out_at'),
+  // Shelf-life lock metadata (Task #165)
+  lockedReason: text('locked_reason'),
+  lockedAt: timestamp('locked_at'),
   
   // Parent lot (for splits)
   parentLotId: uuid('parent_lot_id'),
@@ -6858,7 +6872,7 @@ export const insertMaterialLotSchema = createInsertSchema(materialLots)
     manufactureDate: z.coerce.date().optional().nullable(),
     storageLocation: z.string().optional().nullable(),
     storageRequirements: z.string().optional().nullable(),
-    status: z.enum(['RECEIVED', 'QUARANTINE', 'ACCEPTED', 'REJECTED', 'EXPIRED', 'ISSUED', 'CONSUMED', 'SCRAPPED', 'HOLD']).default('RECEIVED'),
+    status: z.enum(['RECEIVED', 'QUARANTINE', 'ACCEPTED', 'REJECTED', 'EXPIRED', 'ISSUED', 'CONSUMED', 'SCRAPPED', 'HOLD', 'LOCKED']).default('RECEIVED'),
     totalOutTimeMinutes: z.number().int().default(0),
     maxOutTimeMinutes: z.number().int().optional().nullable(),
     currentlyOutOfStorage: z.boolean().default(false),
@@ -6886,7 +6900,7 @@ export const insertMaterialLotTransactionSchema = createInsertSchema(materialLot
   .extend({
     materialLotId: z.string().uuid('Invalid material lot ID'),
     internalControlNumber: z.string().min(1, 'ICN is required'),
-    transactionType: z.enum(['RECEIVE', 'MOVE', 'ISSUE', 'ADJUST', 'SCRAP', 'RETURN', 'SPLIT', 'OUT_START', 'OUT_END', 'ACCEPT', 'REJECT', 'QUARANTINE', 'EXPIRE', 'HOLD']),
+    transactionType: z.enum(['RECEIVE', 'MOVE', 'ISSUE', 'ADJUST', 'SCRAP', 'RETURN', 'SPLIT', 'OUT_START', 'OUT_END', 'ACCEPT', 'REJECT', 'QUARANTINE', 'EXPIRE', 'HOLD', 'PAUSE', 'RESUME', 'LOCK']),
     qtyBefore: z.string().optional().nullable(),
     qtyChange: z.string().optional().nullable(),
     qtyAfter: z.string().optional().nullable(),

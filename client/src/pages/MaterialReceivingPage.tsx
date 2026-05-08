@@ -133,8 +133,50 @@ const UNIT_OPTIONS = [
   { value: 'SHEET', label: 'Sheet' },
 ];
 
+interface InventoryItemPreview {
+  id: number;
+  agPartNumber: string;
+  name: string;
+  shelfLifeControlled?: boolean;
+  frozenShelfLifeDays?: number | null;
+  roomTempShelfLifeDays?: number | null;
+  defaultMaxOutTimeMinutes?: number | null;
+}
+
 export default function MaterialReceivingPage() {
   const [formData, setFormData] = useState<FormData>(initialFormData);
+
+  // Lookup inventory item by AG part number to pre-fill shelf-life policy
+  // defaults when the user enters a known part. (Task #165)
+  const { data: allInventoryItems = [] } = useQuery<InventoryItemPreview[]>({
+    queryKey: ['/api/inventory/items'],
+  });
+
+  useEffect(() => {
+    if (!formData.materialPartNumber.trim()) return;
+    const match = allInventoryItems.find(
+      (it) => it.agPartNumber?.toLowerCase() === formData.materialPartNumber.trim().toLowerCase()
+    );
+    if (!match) return;
+    setFormData((prev) => {
+      const next = { ...prev };
+      if (!prev.inventoryItemId) next.inventoryItemId = String(match.id);
+      if (!prev.materialName && match.name) next.materialName = match.name;
+      if (!prev.maxOutTimeMinutes && match.defaultMaxOutTimeMinutes != null) {
+        next.maxOutTimeMinutes = String(match.defaultMaxOutTimeMinutes);
+      }
+      if (match.shelfLifeControlled && !prev.expirationDate) {
+        const days = match.frozenShelfLifeDays ?? match.roomTempShelfLifeDays;
+        if (days != null && days > 0) {
+          const base = prev.manufactureDate ? new Date(prev.manufactureDate) : new Date();
+          base.setDate(base.getDate() + days);
+          next.expirationDate = base.toISOString().split('T')[0];
+        }
+      }
+      return next;
+    });
+  }, [formData.materialPartNumber, formData.manufactureDate, allInventoryItems]);
+
   const [recentlyReceived, setRecentlyReceived] = useState<MaterialLot[]>([]);
   const [printDialogOpen, setPrintDialogOpen] = useState(false);
   const [selectedForPrint, setSelectedForPrint] = useState<MaterialLot | null>(null);

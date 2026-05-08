@@ -474,6 +474,7 @@ async function initializeBackgroundServices() {
           '0113_routing_step_intent_backfill.sql',
           '0114_inventory_high_risk_approvals.sql',
           '0117_vendor_po_items_purchasing_unit_columns.sql',
+          '0117_vendor_po_line_project_traceability.sql',
           'investigation_308_order_duplication.sql',
         ];
         const criticalMigrations = new Set([

@@ -475,6 +475,7 @@ async function initializeBackgroundServices() {
           '0114_inventory_high_risk_approvals.sql',
           '0117_vendor_po_items_purchasing_unit_columns.sql',
           '0117_vendor_po_line_project_traceability.sql',
+          '0118_vendor_po_traceability_columns_safe.sql',
           'investigation_308_order_duplication.sql',
         ];
         const criticalMigrations = new Set([
@@ -3553,6 +3554,25 @@ async function initializeBackgroundServices() {
         console.log('Ensured vendor_po_items purchasing-unit/allocation columns exist');
       } catch (vpiErr: any) {
         console.warn('vendor_po_items purchasing-unit/allocation migration:', vpiErr.message);
+      }
+
+      // Safe traceability repair for vendor PO viewing. The formal migration adds FK
+      // constraints, but production may reject that whole ALTER if referenced tables
+      // differ. These columns must exist before getVendorPOItems can render a PO/RFQ.
+      try {
+        const { sql: sqlVpiTrace } = await import('drizzle-orm');
+        await db.execute(sqlVpiTrace`
+          ALTER TABLE vendor_po_items
+            ADD COLUMN IF NOT EXISTS project_id UUID,
+            ADD COLUMN IF NOT EXISTS production_work_order_id UUID,
+            ADD COLUMN IF NOT EXISTS charge_code_id INTEGER
+        `);
+        await db.execute(sqlVpiTrace`CREATE INDEX IF NOT EXISTS vendor_po_items_project_id_idx ON vendor_po_items(project_id)`);
+        await db.execute(sqlVpiTrace`CREATE INDEX IF NOT EXISTS vendor_po_items_production_work_order_id_idx ON vendor_po_items(production_work_order_id)`);
+        await db.execute(sqlVpiTrace`CREATE INDEX IF NOT EXISTS vendor_po_items_charge_code_id_idx ON vendor_po_items(charge_code_id)`);
+        console.log('Ensured vendor_po_items traceability columns exist');
+      } catch (vpiTraceErr: any) {
+        console.warn('vendor_po_items traceability column repair:', vpiTraceErr.message);
       }
 
       // Ensure cutting_fabric_inventory.quantity_in_stock is REAL (not integer)

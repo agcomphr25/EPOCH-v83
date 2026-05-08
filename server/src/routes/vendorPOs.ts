@@ -40,8 +40,22 @@ async function getVendorPOComplianceBlockers(vendorPoId: number): Promise<string
   return blockers;
 }
 
-async function requireP2ComplianceBeforeProjectAllocation(vendorPoId: number, customerPoId: unknown) {
-  if (customerPoId === undefined || customerPoId === null) return;
+function hasTraceabilityLink(data: Record<string, unknown>): boolean {
+  return ['customerPoId', 'projectId', 'productionWorkOrderId', 'chargeCodeId'].some((key) => {
+    const value = data[key];
+    return value !== undefined && value !== null && String(value).trim() !== '';
+  });
+}
+
+async function requireP2ComplianceBeforeProjectAllocation(
+  vendorPoId: number,
+  traceability: { customerPoId?: unknown; projectId?: unknown; productionWorkOrderId?: unknown }
+) {
+  const hasProjectAllocation =
+    traceability.customerPoId !== undefined && traceability.customerPoId !== null ||
+    traceability.projectId !== undefined && traceability.projectId !== null ||
+    traceability.productionWorkOrderId !== undefined && traceability.productionWorkOrderId !== null;
+  if (!hasProjectAllocation) return;
   const vendorPO = await storage.getVendorPO(vendorPoId);
   if (!vendorPO) {
     const error: any = new Error('Vendor PO not found');
@@ -55,6 +69,20 @@ async function requireP2ComplianceBeforeProjectAllocation(vendorPoId: number, cu
     const error: any = new Error(`Cannot allocate P2 vendor purchase to a project. Reason(s): ${blockers.join('; ')}.`);
     error.status = 422;
     error.blockingReasons = blockers;
+    throw error;
+  }
+}
+
+async function requireP2LineTraceability(vendorPoId: number, data: Record<string, unknown>) {
+  const vendorPO = await storage.getVendorPO(vendorPoId);
+  if (!isP2ProductionLine(vendorPO?.productionLine)) return;
+
+  if (!hasTraceabilityLink(data)) {
+    const error: any = new Error(
+      'P2 vendor PO lines must include at least one traceability link: customer PO, project, WAD/work order, or charge code.'
+    );
+    error.status = 422;
+    error.blockingReasons = [error.message];
     throw error;
   }
 }
@@ -610,6 +638,22 @@ router.put('/compliance-effective-date', async (req: Request, res: Response) => 
   }
 });
 
+// GET /api/vendor-pos/traceability-options - Options for line-level project/WAD/charge-code links
+router.get('/traceability-options', async (_req: Request, res: Response) => {
+  try {
+    const [projects, productionWorkOrders, chargeCodes] = await Promise.all([
+      storage.getAllProjects(),
+      storage.getAllProductionWorkOrders(),
+      storage.listChargeCodes(true),
+    ]);
+
+    res.json({ projects, productionWorkOrders, chargeCodes });
+  } catch (error) {
+    console.error('Get vendor PO traceability options error:', error);
+    res.status(500).json({ error: 'Failed to retrieve traceability options' });
+  }
+});
+
 // GET /api/vendor-pos/:id - Get a single vendor PO
 router.get('/:id', async (req: Request, res: Response) => {
   try {
@@ -881,7 +925,8 @@ router.post('/:id/items', async (req: Request, res: Response) => {
       { changedField: 'lineItems', action: 'added' },
     );
 
-    await requireP2ComplianceBeforeProjectAllocation(vendorPoId, data.customerPoId);
+    await requireP2LineTraceability(vendorPoId, data as Record<string, unknown>);
+    await requireP2ComplianceBeforeProjectAllocation(vendorPoId, data);
 
     const item = await storage.createVendorPOItem(data);
     res.status(201).json(item);
@@ -927,14 +972,20 @@ router.put('/items/:itemId', async (req: Request, res: Response) => {
       : undefined;
 
     if (oldItem) {
-      const finalCustomerPoId = data.customerPoId !== undefined ? data.customerPoId : oldItem.customerPoId;
-      await requireP2ComplianceBeforeProjectAllocation(oldItem.vendorPoId, finalCustomerPoId);
+      const finalTraceability = {
+        customerPoId: data.customerPoId !== undefined ? data.customerPoId : oldItem.customerPoId,
+        projectId: data.projectId !== undefined ? data.projectId : oldItem.projectId,
+        productionWorkOrderId: data.productionWorkOrderId !== undefined ? data.productionWorkOrderId : oldItem.productionWorkOrderId,
+        chargeCodeId: data.chargeCodeId !== undefined ? data.chargeCodeId : oldItem.chargeCodeId,
+      };
+      await requireP2LineTraceability(oldItem.vendorPoId, finalTraceability);
+      await requireP2ComplianceBeforeProjectAllocation(oldItem.vendorPoId, finalTraceability);
 
-      if (changedField && finalCustomerPoId != null) {
+      if (changedField && hasTraceabilityLink(finalTraceability)) {
         const vendorPO = await storage.getVendorPO(oldItem.vendorPoId);
         if (isP2ProductionLine(vendorPO?.productionLine)) {
           const error: any = new Error(
-            `Cannot keep a P2 line allocated to a project while changing ${changedField.label}. Clear the project allocation, save the material change, complete compliance review, then allocate it again.`
+            `Cannot keep a P2 line linked to project traceability while changing ${changedField.label}. Clear the traceability links, save the material change, complete compliance review, then allocate it again.`
           );
           error.status = 422;
           error.blockingReasons = [error.message];

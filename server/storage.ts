@@ -9919,6 +9919,10 @@ export class DatabaseStorage implements IStorage {
         inventoryItems,
         eq(vendorPOItems.agPartNumber, inventoryItems.agPartNumber)
       )
+      .leftJoin(projects, eq(projects.id, vendorPOItems.projectId))
+      .leftJoin(productionWorkOrders, eq(productionWorkOrders.id, vendorPOItems.productionWorkOrderId))
+      .leftJoin(chargeCodes, eq(chargeCodes.id, vendorPOItems.chargeCodeId))
+      .leftJoin(p2PurchaseOrders, eq(p2PurchaseOrders.id, vendorPOItems.customerPoId))
       .where(eq(vendorPOItems.vendorPoId, vendorPoId))
       .orderBy(vendorPOItems.lineNumber);
     
@@ -9937,6 +9941,30 @@ export class DatabaseStorage implements IStorage {
         consumptionRate: row.inventory_items?.consumptionRate,
         usageUnit: row.inventory_items?.usageUnit,
         purchaseUnitLabel: row.inventory_items?.purchaseUnitLabel,
+        project: row.projects ? {
+          id: row.projects.id,
+          projectCode: row.projects.projectCode,
+          projectName: row.projects.projectName,
+        } : undefined,
+        productionWorkOrder: row.production_work_orders ? {
+          id: row.production_work_orders.id,
+          workOrderNumber: row.production_work_orders.workOrderNumber,
+          projectId: row.production_work_orders.projectId,
+          partNumber: row.production_work_orders.partNumber,
+          status: row.production_work_orders.status,
+        } : undefined,
+        chargeCode: row.charge_codes ? {
+          id: row.charge_codes.id,
+          code: row.charge_codes.code,
+          description: row.charge_codes.description,
+          type: row.charge_codes.type,
+        } : undefined,
+        customerPo: row.p2_purchase_orders ? {
+          id: row.p2_purchase_orders.id,
+          poNumber: row.p2_purchase_orders.poNumber,
+          customerName: row.p2_purchase_orders.customerName,
+          status: row.p2_purchase_orders.status,
+        } : undefined,
       };
       return formatDates(flat as Record<string, unknown>, VENDOR_PO_ITEM_DATE_COLUMNS) as typeof flat;
     });

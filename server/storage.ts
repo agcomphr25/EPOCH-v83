@@ -9912,8 +9912,54 @@ export class DatabaseStorage implements IStorage {
 
   // Vendor PO Items CRUD
   async getVendorPOItems(vendorPoId: number): Promise<any[]> {
-    const items = await db
-      .select()
+    try {
+      const items = await db.select({
+        id: vendorPOItems.id,
+        vendorPoId: vendorPOItems.vendorPoId,
+        lineNumber: vendorPOItems.lineNumber,
+        agPartNumber: vendorPOItems.agPartNumber,
+        description: vendorPOItems.description,
+        purchaseQty: vendorPOItems.purchaseQty,
+        purchaseUnitPrice: vendorPOItems.purchaseUnitPrice,
+        purchaseUnit: vendorPOItems.purchaseUnit,
+        quantity: vendorPOItems.quantity,
+        unitPrice: vendorPOItems.unitPrice,
+        vendorUnit: vendorPOItems.vendorUnit,
+        conversionFactor: vendorPOItems.conversionFactor,
+        lineTotal: vendorPOItems.lineTotal,
+        receivedQuantity: vendorPOItems.receivedQuantity,
+        receivedDate: vendorPOItems.receivedDate,
+        notes: vendorPOItems.notes,
+        customerPoId: vendorPOItems.customerPoId,
+        projectId: vendorPOItems.projectId,
+        productionWorkOrderId: vendorPOItems.productionWorkOrderId,
+        chargeCodeId: vendorPOItems.chargeCodeId,
+        otherIdentifier: vendorPOItems.otherIdentifier,
+        historicalAvgPrice: vendorPOItems.historicalAvgPrice,
+        priceVariancePercent: vendorPOItems.priceVariancePercent,
+        varianceFlag: vendorPOItems.varianceFlag,
+        createdAt: vendorPOItems.createdAt,
+        updatedAt: vendorPOItems.updatedAt,
+        supplierPartNumber: inventoryItems.supplierPartNumber,
+        inventoryVendorUnit: inventoryItems.vendorUnit,
+        inventoryPurchaseUnit: inventoryItems.purchaseUnit,
+        purchaseQuantity: inventoryItems.purchaseQuantity,
+        consumptionRate: inventoryItems.consumptionRate,
+        usageUnit: inventoryItems.usageUnit,
+        purchaseUnitLabel: inventoryItems.purchaseUnitLabel,
+        projectCode: projects.projectCode,
+        projectName: projects.projectName,
+        productionWorkOrderProjectId: productionWorkOrders.projectId,
+        workOrderNumber: productionWorkOrders.workOrderNumber,
+        workOrderPartNumber: productionWorkOrders.partNumber,
+        workOrderStatus: productionWorkOrders.status,
+        chargeCode: chargeCodes.code,
+        chargeCodeDescription: chargeCodes.description,
+        chargeCodeType: chargeCodes.type,
+        customerPoNumber: p2PurchaseOrders.poNumber,
+        customerName: p2PurchaseOrders.customerName,
+        customerPoStatus: p2PurchaseOrders.status,
+      })
       .from(vendorPOItems)
       .leftJoin(
         inventoryItems,
@@ -9930,44 +9976,98 @@ export class DatabaseStorage implements IStorage {
     // Prioritize stored purchase unit data from vendor_po_items over inventory_items
     return items.map(row => {
       const flat = {
-        ...row.vendor_po_items,
+        id: row.id,
+        vendorPoId: row.vendorPoId,
+        lineNumber: row.lineNumber,
+        agPartNumber: row.agPartNumber,
+        description: row.description,
+        purchaseQty: row.purchaseQty,
+        purchaseUnitPrice: row.purchaseUnitPrice,
+        purchaseUnit: row.purchaseUnit || row.inventoryPurchaseUnit,
+        quantity: row.quantity,
+        unitPrice: row.unitPrice,
+        vendorUnit: row.vendorUnit || row.inventoryVendorUnit,
+        conversionFactor: row.conversionFactor,
+        lineTotal: row.lineTotal,
+        receivedQuantity: row.receivedQuantity,
+        receivedDate: row.receivedDate,
+        notes: row.notes,
+        customerPoId: row.customerPoId,
+        projectId: row.projectId,
+        productionWorkOrderId: row.productionWorkOrderId,
+        chargeCodeId: row.chargeCodeId,
+        otherIdentifier: row.otherIdentifier,
+        historicalAvgPrice: row.historicalAvgPrice,
+        priceVariancePercent: row.priceVariancePercent,
+        varianceFlag: row.varianceFlag,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
         // Include supplier part number from inventory items
-        supplierPartNumber: row.inventory_items?.supplierPartNumber,
-        // Use stored vendor/purchase unit if available, fall back to inventory_items
-        vendorUnit: row.vendor_po_items?.vendorUnit || row.inventory_items?.vendorUnit,
-        purchaseUnit: row.vendor_po_items?.purchaseUnit || row.inventory_items?.purchaseUnit,
+        supplierPartNumber: row.supplierPartNumber,
         // purchaseQuantity from inventory_items represents the conversion factor
-        purchaseQuantity: row.inventory_items?.purchaseQuantity,
-        consumptionRate: row.inventory_items?.consumptionRate,
-        usageUnit: row.inventory_items?.usageUnit,
-        purchaseUnitLabel: row.inventory_items?.purchaseUnitLabel,
-        project: row.projects ? {
-          id: row.projects.id,
-          projectCode: row.projects.projectCode,
-          projectName: row.projects.projectName,
+        purchaseQuantity: row.purchaseQuantity,
+        consumptionRate: row.consumptionRate,
+        usageUnit: row.usageUnit,
+        purchaseUnitLabel: row.purchaseUnitLabel,
+        project: row.projectId ? {
+          id: row.projectId,
+          projectCode: row.projectCode,
+          projectName: row.projectName,
         } : undefined,
-        productionWorkOrder: row.production_work_orders ? {
-          id: row.production_work_orders.id,
-          workOrderNumber: row.production_work_orders.workOrderNumber,
-          projectId: row.production_work_orders.projectId,
-          partNumber: row.production_work_orders.partNumber,
-          status: row.production_work_orders.status,
+        productionWorkOrder: row.productionWorkOrderId ? {
+          id: row.productionWorkOrderId,
+          workOrderNumber: row.workOrderNumber,
+          projectId: row.productionWorkOrderProjectId,
+          partNumber: row.workOrderPartNumber,
+          status: row.workOrderStatus,
         } : undefined,
-        chargeCode: row.charge_codes ? {
-          id: row.charge_codes.id,
-          code: row.charge_codes.code,
-          description: row.charge_codes.description,
-          type: row.charge_codes.type,
+        chargeCode: row.chargeCodeId ? {
+          id: row.chargeCodeId,
+          code: row.chargeCode,
+          description: row.chargeCodeDescription,
+          type: row.chargeCodeType,
         } : undefined,
-        customerPo: row.p2_purchase_orders ? {
-          id: row.p2_purchase_orders.id,
-          poNumber: row.p2_purchase_orders.poNumber,
-          customerName: row.p2_purchase_orders.customerName,
-          status: row.p2_purchase_orders.status,
+        customerPo: row.customerPoId ? {
+          id: row.customerPoId,
+          poNumber: row.customerPoNumber,
+          customerName: row.customerName,
+          status: row.customerPoStatus,
         } : undefined,
       };
       return formatDates(flat as Record<string, unknown>, VENDOR_PO_ITEM_DATE_COLUMNS) as typeof flat;
     });
+    } catch (error: any) {
+      if (error?.code !== '42703') throw error;
+
+      console.warn(
+        '[VendorPO] Falling back to core vendor_po_items query because enrichment schema is missing:',
+        error.message
+      );
+
+      const coreItems = await db
+        .select({
+          id: vendorPOItems.id,
+          vendorPoId: vendorPOItems.vendorPoId,
+          lineNumber: vendorPOItems.lineNumber,
+          agPartNumber: vendorPOItems.agPartNumber,
+          description: vendorPOItems.description,
+          quantity: vendorPOItems.quantity,
+          unitPrice: vendorPOItems.unitPrice,
+          lineTotal: vendorPOItems.lineTotal,
+          receivedQuantity: vendorPOItems.receivedQuantity,
+          receivedDate: vendorPOItems.receivedDate,
+          notes: vendorPOItems.notes,
+          createdAt: vendorPOItems.createdAt,
+          updatedAt: vendorPOItems.updatedAt,
+        })
+        .from(vendorPOItems)
+        .where(eq(vendorPOItems.vendorPoId, vendorPoId))
+        .orderBy(vendorPOItems.lineNumber);
+
+      return coreItems.map((row) =>
+        formatDates(row as Record<string, unknown>, VENDOR_PO_ITEM_DATE_COLUMNS)
+      );
+    }
   }
 
   async getVendorPOItemById(id: number): Promise<any | undefined> {

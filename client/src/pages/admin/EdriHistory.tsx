@@ -5,12 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ChevronDown, ChevronRight, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ChevronDown, ChevronRight, TrendingUp, TrendingDown, Minus, CalendarRange } from 'lucide-react';
 import EdriSubNav from '@/components/EdriSubNav';
 import { format } from 'date-fns';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  ResponsiveContainer, ReferenceLine, ReferenceArea
+  ResponsiveContainer, ReferenceLine
 } from 'recharts';
 
 const BAND_CONFIG: Record<string, { label: string; color: string }> = {
@@ -36,15 +37,37 @@ const DOMAIN_LABELS: Record<string, string> = {
   GOVT_PROPERTY: 'Govt. Property',
 };
 
+type HistoryRange = '7d' | '30d' | '90d' | '180d' | '365d' | 'all';
+
+const HISTORY_RANGES: Array<{ value: HistoryRange; label: string; description: string; limit: number }> = [
+  { value: '7d', label: '7 days', description: 'Recent movement', limit: 200 },
+  { value: '30d', label: '30 days', description: 'Short-term progress', limit: 300 },
+  { value: '90d', label: '90 days', description: 'Quarter view', limit: 500 },
+  { value: '180d', label: '6 months', description: 'Half-year trend', limit: 700 },
+  { value: '365d', label: '1 year', description: 'Year-over-year view', limit: 900 },
+  { value: 'all', label: 'All time', description: 'Full recorded history', limit: 1000 },
+];
+
 function scoreDelta(current?: number | string | null, previous?: number | string | null): number {
   return Number(current ?? 0) - Number(previous ?? 0);
 }
 
 export default function EdriHistory() {
   const [showChangeDetails, setShowChangeDetails] = useState(false);
+  const [historyRange, setHistoryRange] = useState<HistoryRange>('365d');
+  const selectedRange = HISTORY_RANGES.find((range) => range.value === historyRange) ?? HISTORY_RANGES[4];
+  const historyParams = new URLSearchParams({
+    range: selectedRange.value,
+    limit: String(selectedRange.limit),
+  });
 
   const { data: snapshots = [], isLoading } = useQuery<any[]>({
-    queryKey: ['/api/edri/snapshot/history'],
+    queryKey: ['/api/edri/snapshot/history', historyRange],
+    queryFn: async () => {
+      const res = await fetch(`/api/edri/snapshot/history?${historyParams.toString()}`);
+      if (!res.ok) throw new Error('Failed to fetch EDRI history');
+      return res.json();
+    },
   });
 
   if (isLoading) return <div className="p-6"><Skeleton className="h-96" /></div>;
@@ -68,6 +91,16 @@ export default function EdriHistory() {
 
   const latest = snapshots[0];
   const previous = snapshots[1];
+  const oldestVisible = snapshots[snapshots.length - 1];
+  const visibleDelta = latest && oldestVisible
+    ? Number(latest.compositeScore) - Number(oldestVisible.compositeScore)
+    : 0;
+  const bestVisible = snapshots.reduce((best: any | null, snap: any) => {
+    if (!best) return snap;
+    return Number(snap.compositeScore) > Number(best.compositeScore) ? snap : best;
+  }, null);
+  const visibleStartLabel = oldestVisible ? format(new Date(oldestVisible.computedAt), 'MMM d, yyyy') : 'No baseline';
+  const visibleEndLabel = latest ? format(new Date(latest.computedAt), 'MMM d, yyyy') : 'No current score';
 
   const trend = latest && previous
     ? Number(latest.compositeScore) - Number(previous.compositeScore)
@@ -109,6 +142,63 @@ export default function EdriHistory() {
         <h1 className="text-3xl font-bold">Score History</h1>
         <p className="text-muted-foreground">Historical trend of EDRI composite and domain scores</p>
       </div>
+
+      <Card>
+        <CardContent className="pt-4">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-start gap-3">
+              <CalendarRange className="mt-1 h-5 w-5 text-muted-foreground" />
+              <div>
+                <p className="font-medium">History range</p>
+                <p className="text-sm text-muted-foreground">
+                  Showing {snapshots.length} snapshot{snapshots.length === 1 ? '' : 's'} from {visibleStartLabel} to {visibleEndLabel}
+                </p>
+              </div>
+            </div>
+            <Select value={historyRange} onValueChange={(value) => setHistoryRange(value as HistoryRange)}>
+              <SelectTrigger className="w-full sm:w-56">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {HISTORY_RANGES.map((range) => (
+                  <SelectItem key={range.value} value={range.value}>
+                    {range.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {latest && oldestVisible && (
+            <div className="mt-4 grid gap-3 md:grid-cols-4">
+              <div className="rounded-md border bg-muted/20 p-3">
+                <p className="text-xs text-muted-foreground">Baseline</p>
+                <p className="mt-1 text-2xl font-semibold">{Number(oldestVisible.compositeScore).toFixed(1)}</p>
+                <p className="text-xs text-muted-foreground">{visibleStartLabel}</p>
+              </div>
+              <div className="rounded-md border bg-muted/20 p-3">
+                <p className="text-xs text-muted-foreground">Current</p>
+                <p className="mt-1 text-2xl font-semibold">{Number(latest.compositeScore).toFixed(1)}</p>
+                <p className="text-xs text-muted-foreground">{visibleEndLabel}</p>
+              </div>
+              <div className="rounded-md border bg-muted/20 p-3">
+                <p className="text-xs text-muted-foreground">Net progress</p>
+                <p className={`mt-1 text-2xl font-semibold ${visibleDelta >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {visibleDelta >= 0 ? '+' : ''}{visibleDelta.toFixed(1)}
+                </p>
+                <p className="text-xs text-muted-foreground">{selectedRange.description}</p>
+              </div>
+              <div className="rounded-md border bg-muted/20 p-3">
+                <p className="text-xs text-muted-foreground">Best score in range</p>
+                <p className="mt-1 text-2xl font-semibold">{Number(bestVisible?.compositeScore ?? 0).toFixed(1)}</p>
+                <p className="text-xs text-muted-foreground">
+                  {bestVisible ? format(new Date(bestVisible.computedAt), 'MMM d, yyyy') : 'No snapshots'}
+                </p>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {trend !== 0 && (
         <Card className={trend > 0 ? 'border-green-200 dark:border-green-800' : 'border-red-200 dark:border-red-800'}>
@@ -190,7 +280,7 @@ export default function EdriHistory() {
       <Card>
         <CardHeader>
           <CardTitle>Composite Score Trend</CardTitle>
-          <CardDescription>EDRI composite score over time with scoring band thresholds</CardDescription>
+          <CardDescription>EDRI composite score over {selectedRange.label.toLowerCase()} with scoring band thresholds</CardDescription>
         </CardHeader>
         <CardContent>
           {chartData.length < 2 ? (
@@ -259,6 +349,7 @@ export default function EdriHistory() {
       <Card>
         <CardHeader>
           <CardTitle>Snapshot History</CardTitle>
+          <CardDescription>{selectedRange.label} view, newest first</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-2">

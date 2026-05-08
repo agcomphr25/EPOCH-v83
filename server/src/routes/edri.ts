@@ -167,9 +167,35 @@ router.get('/snapshot/latest', requireEdriAccess, async (_req: Request, res: Res
 // GET /api/edri/snapshot/history
 router.get('/snapshot/history', requireEdriAccess, async (req: Request, res: Response) => {
   try {
-    const limit = parseInt(req.query.limit as string) || 20;
-    const offset = parseInt(req.query.offset as string) || 0;
-    const snapshots = await getSnapshotHistory(limit, offset);
+    const rawLimit = parseInt(req.query.limit as string);
+    const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 1000) : 20;
+    const rawOffset = parseInt(req.query.offset as string);
+    const offset = Number.isFinite(rawOffset) ? Math.max(rawOffset, 0) : 0;
+
+    const parseDate = (value: unknown): Date | undefined => {
+      if (typeof value !== 'string' || value.trim() === '') return undefined;
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+    };
+
+    const startDate = parseDate(req.query.startDate);
+    const endDate = parseDate(req.query.endDate);
+    const range = typeof req.query.range === 'string' ? req.query.range : undefined;
+    const rangeDays: Record<string, number> = {
+      '7d': 7,
+      '30d': 30,
+      '90d': 90,
+      '180d': 180,
+      '365d': 365,
+    };
+    const derivedStartDate = !startDate && range && rangeDays[range]
+      ? new Date(Date.now() - rangeDays[range] * 24 * 60 * 60 * 1000)
+      : startDate;
+
+    const snapshots = await getSnapshotHistory(limit, offset, {
+      startDate: range === 'all' ? undefined : derivedStartDate,
+      endDate,
+    });
     res.json(snapshots);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Failed to fetch history';

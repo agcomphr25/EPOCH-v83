@@ -236,6 +236,10 @@ async function withScratchDatabase(
 const KNOWN_DUPLICATE_PREFIXES = new Set<string>([
   '0075', // 0075_cutting_documents_table.sql vs 0075_time_off_requests.sql — parallel development
   '0077', // 0077_compliance_requires_attention.sql vs 0077_phase_a_salaried_labor_capture.sql — parallel development
+  '0094', // 0094_enable_salaried_timesheets.sql vs 0094_labor_entry_drafts.sql — parallel development (salaried timesheets + labor entry drafts merged the same week)
+  '0099', // 0099_audit_evidence_hardening.sql vs 0099_employee_payroll_control.sql vs 0099_policies_library.sql vs 0099_punch_ledger_pending_approval.sql — four parallel tasks merged in one window (audit evidence, payroll control, policies library, punch ledger)
+  '0100', // 0100_audit_ledger_privilege_hardening.sql vs 0100_burden_rates_engine.sql — parallel development (audit ledger privilege + burden rates engine)
+  '0109', // 0109_inventory_transaction_ledger.sql vs 0109_vendor_pos_purchasing_controls_columns.sql — vendor_pos hotfix landed in parallel with the immutable inventory ledger task
 ]);
 
 describe('Migration file structure', () => {

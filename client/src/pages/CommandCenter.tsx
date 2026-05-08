@@ -10,9 +10,17 @@ interface CommandCenterCard {
   id: string;
   workOrderNumber: string;
   partNumber: string | null;
+  partDescription: string | null;
+  quantity: number | null;
   projectId: string | null;
+  projectCode: string | null;
+  projectName: string | null;
+  customerName: string | null;
+  agOrderId: string | null;
+  fbOrderNumber: string | null;
   status: string;
   percentUsed: number | null;
+  hasLaborBudget: boolean;
   dueDate: string | null;
   lastUpdatedAt: string | null;
   reason?: string;
@@ -109,17 +117,36 @@ const SECTIONS: SectionConfig[] = [
 ];
 
 function formatDate(dateStr: string | null): string {
-  if (!dateStr) return '—';
+  if (!dateStr) return '';
   return new Date(dateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function MissingValue({ children, testId }: { children: React.ReactNode; testId?: string }) {
+  return (
+    <span className="italic text-gray-400" data-testid={testId}>
+      {children}
+    </span>
+  );
 }
 
 function WADCard({ card, showReason }: { card: CommandCenterCard; showReason?: boolean }) {
   const recent = isRecentlyUpdated(card.lastUpdatedAt);
+
+  const partLabel = card.partDescription ?? card.partNumber;
+  const isPartUnset = !partLabel || partLabel.trim().toUpperCase() === 'TBD';
+
+  const hasLinkedOrder = !!(card.agOrderId || card.fbOrderNumber);
+
   return (
     <Link href={`/work-orders/${card.id}`}>
-      <div className={`bg-white rounded-lg p-4 shadow-sm space-y-2 cursor-pointer transition-shadow ${recent ? 'border-2 border-amber-400 ring-1 ring-amber-300 hover:border-amber-500 hover:shadow-md' : 'border border-gray-200 hover:border-blue-400 hover:shadow-md'}`}>
+      <div
+        className={`bg-white rounded-lg p-4 shadow-sm space-y-2 cursor-pointer transition-shadow ${recent ? 'border-2 border-amber-400 ring-1 ring-amber-300 hover:border-amber-500 hover:shadow-md' : 'border border-gray-200 hover:border-blue-400 hover:shadow-md'}`}
+        data-testid={`card-wad-${card.id}`}
+      >
         <div className="flex items-center justify-between">
-          <span className="font-semibold text-gray-900">{card.workOrderNumber}</span>
+          <span className="font-semibold text-gray-900" data-testid={`text-wad-number-${card.id}`}>
+            {card.workOrderNumber}
+          </span>
           <div className="flex items-center gap-1.5">
             {recent && (
               <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
@@ -130,26 +157,80 @@ function WADCard({ card, showReason }: { card: CommandCenterCard; showReason?: b
             <Badge variant="outline" className="text-xs">{card.status}</Badge>
           </div>
         </div>
-        <div className="text-sm text-gray-600 grid grid-cols-2 gap-x-4 gap-y-1">
-          <div>
-            <span className="font-medium text-gray-500">Part:</span>{' '}
-            {card.partNumber ?? '—'}
+
+        <div className="text-sm space-y-1.5">
+          <div className="flex items-baseline gap-2" data-testid={`text-project-${card.id}`}>
+            <span className="font-medium text-gray-500 w-16 shrink-0">Project:</span>
+            {card.projectCode || card.projectName ? (
+              <span className="text-gray-900 truncate">
+                <span className="font-mono">{card.projectCode ?? '—'}</span>
+                {card.projectName && <span className="text-gray-600"> · {card.projectName}</span>}
+              </span>
+            ) : (
+              <MissingValue testId={`text-project-empty-${card.id}`}>No project linked</MissingValue>
+            )}
           </div>
-          <div>
-            <span className="font-medium text-gray-500">Project:</span>{' '}
-            {card.projectId ? card.projectId.slice(0, 8) + '…' : '—'}
+
+          <div className="flex items-baseline gap-2" data-testid={`text-customer-${card.id}`}>
+            <span className="font-medium text-gray-500 w-16 shrink-0">Customer:</span>
+            {card.customerName ? (
+              <span className="text-gray-900 truncate">{card.customerName}</span>
+            ) : (
+              <MissingValue testId={`text-customer-empty-${card.id}`}>No customer on file</MissingValue>
+            )}
           </div>
-          <div>
-            <span className="font-medium text-gray-500">Labor:</span>{' '}
-            {card.percentUsed != null ? `${card.percentUsed}%` : '—'}
+
+          <div className="flex items-baseline gap-2" data-testid={`text-order-${card.id}`}>
+            <span className="font-medium text-gray-500 w-16 shrink-0">Order:</span>
+            {hasLinkedOrder ? (
+              <span className="text-gray-900 truncate">
+                {card.agOrderId && <span className="font-mono">{card.agOrderId}</span>}
+                {card.agOrderId && card.fbOrderNumber && <span className="text-gray-400"> · </span>}
+                {card.fbOrderNumber && (
+                  <span className="font-mono text-gray-600">FB {card.fbOrderNumber}</span>
+                )}
+              </span>
+            ) : (
+              <MissingValue testId={`text-order-empty-${card.id}`}>No linked order</MissingValue>
+            )}
           </div>
-          <div>
-            <span className="font-medium text-gray-500">Due:</span>{' '}
-            {formatDate(card.dueDate)}
+
+          <div className="flex items-baseline gap-2" data-testid={`text-part-${card.id}`}>
+            <span className="font-medium text-gray-500 w-16 shrink-0">Part:</span>
+            {isPartUnset ? (
+              <MissingValue testId={`text-part-empty-${card.id}`}>No part assigned</MissingValue>
+            ) : (
+              <span className="text-gray-900 truncate">
+                {partLabel}
+                {card.quantity != null && (
+                  <span className="text-gray-500"> · qty {card.quantity}</span>
+                )}
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-x-4">
+            <div data-testid={`text-due-${card.id}`}>
+              <span className="font-medium text-gray-500">Due:</span>{' '}
+              {card.dueDate ? (
+                <span className="text-gray-900">{formatDate(card.dueDate)}</span>
+              ) : (
+                <MissingValue testId={`text-due-empty-${card.id}`}>No due date</MissingValue>
+              )}
+            </div>
+            <div data-testid={`text-labor-${card.id}`}>
+              <span className="font-medium text-gray-500">Labor:</span>{' '}
+              {card.hasLaborBudget && card.percentUsed != null ? (
+                <span className="text-gray-900">{card.percentUsed}%</span>
+              ) : (
+                <MissingValue testId={`text-labor-empty-${card.id}`}>No budget set</MissingValue>
+              )}
+            </div>
           </div>
         </div>
+
         {showReason && card.reason && (
-          <div className="text-xs text-red-700 bg-red-50 rounded px-2 py-1 mt-1">
+          <div className="text-xs text-red-700 bg-red-50 rounded px-2 py-1 mt-1" data-testid={`text-reason-${card.id}`}>
             {card.reason}
           </div>
         )}
@@ -167,11 +248,11 @@ function SectionSkeleton() {
             <Skeleton className="h-4 w-24" />
             <Skeleton className="h-4 w-16" />
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <Skeleton className="h-3 w-20" />
-            <Skeleton className="h-3 w-20" />
-            <Skeleton className="h-3 w-16" />
-            <Skeleton className="h-3 w-24" />
+          <div className="space-y-1.5">
+            <Skeleton className="h-3 w-40" />
+            <Skeleton className="h-3 w-32" />
+            <Skeleton className="h-3 w-36" />
+            <Skeleton className="h-3 w-28" />
           </div>
         </div>
       ))}
@@ -214,6 +295,7 @@ export default function CommandCenter() {
             onClick={() => refetch()}
             disabled={isFetching}
             className="flex items-center gap-1.5"
+            data-testid="button-refresh"
           >
             {isFetching ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />

@@ -1129,6 +1129,7 @@ function App() {
                   <Route path="/material-inventory" component={MaterialInventoryPage} />
                   <Route path="/inventory/restock-signals" component={InventoryRestockSignalsPage} />
                   <Route path="/inventory/cycle-count" component={CycleCountPage} />
+                  <Route path="/inventory/cycle-counts" component={CycleCountPage} />
                   <Route
                     path="/master-document-register"
                     component={MasterDocumentRegister}

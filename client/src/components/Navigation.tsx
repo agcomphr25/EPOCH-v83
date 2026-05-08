@@ -612,6 +612,13 @@ export default function Navigation() {
         'Reconstruct end-to-end material chain from a lot, traveler, WAD, NCR, or barcode',
     },
     {
+      path: '/inventory/cycle-counts',
+      label: 'Cycle Counts',
+      icon: ClipboardList,
+      description:
+        'Schedule, perform, approve, and post blind cycle counts to the inventory ledger',
+    },
+    {
       path: '/inventory/parts-request',
       label: 'Parts Requests',
       icon: FileText,

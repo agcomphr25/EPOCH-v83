@@ -4284,6 +4284,13 @@ async function initializeBackgroundServices() {
           { key: 'inventory.adjust', description: 'Update and delete inventory items and balances', category: 'inventory' },
           { key: 'inventory.manage_requests', description: 'Receive or reject inventory parts requests', category: 'inventory' },
 
+          // Inventory — Cycle Count subsystem (Task #142)
+          { key: 'inventory.cycleCount.view', description: 'View cycle count sessions, lines, and variance history', category: 'inventory' },
+          { key: 'inventory.cycleCount.create', description: 'Create and schedule cycle count sessions', category: 'inventory' },
+          { key: 'inventory.cycleCount.perform', description: 'Record blind physical counts on cycle count lines', category: 'inventory' },
+          { key: 'inventory.cycleCount.approve', description: 'Approve a cycle count session\'s variances after review', category: 'inventory' },
+          { key: 'inventory.cycleCount.postAdjustments', description: 'Post approved cycle count variances to the immutable inventory ledger', category: 'inventory' },
+
           // Shipping
           { key: 'shipping.mark_shipped', description: 'Mark an order as shipped and record tracking information', category: 'shipping' },
           { key: 'shipping.create_label', description: 'Create carrier shipping labels via UPS API', category: 'shipping' },
@@ -4447,6 +4454,10 @@ async function initializeBackgroundServices() {
           'finance.manage_payments',
           'inventory.adjust',
           'inventory.manage_requests',
+          'inventory.cycleCount.view',
+          'inventory.cycleCount.create',
+          'inventory.cycleCount.approve',
+          'inventory.cycleCount.postAdjustments',
           'shipping.mark_shipped',
           'shipping.create_label',
           'quality.manage_definitions',
@@ -4478,6 +4489,9 @@ async function initializeBackgroundServices() {
         // SUPERVISOR role: inventory requests, shipping (mark shipped), quality definitions, training content, scheduling
         const supervisorCaps = [
           'inventory.manage_requests',
+          'inventory.cycleCount.view',
+          'inventory.cycleCount.perform',
+          'inventory.cycleCount.approve',
           'shipping.mark_shipped',
           'quality.manage_definitions',
           'training.manage_content',
@@ -6623,7 +6637,62 @@ async function initializeBackgroundServices() {
           notes TEXT
         )
       `);
-      console.log('✅ Ensured cycle_count_sessions and cycle_count_lines tables exist');
+      // Task #142 — Cycle Count Subsystem extensions
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS cycle_count_variance_policies (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          name TEXT NOT NULL UNIQUE,
+          description TEXT,
+          qty_tolerance NUMERIC(14,4) NOT NULL DEFAULT 0,
+          percent_tolerance NUMERIC(6,3) NOT NULL DEFAULT 0,
+          auto_approve_within_tolerance BOOLEAN NOT NULL DEFAULT TRUE,
+          requires_dual_approval BOOLEAN NOT NULL DEFAULT FALSE,
+          is_default BOOLEAN NOT NULL DEFAULT FALSE,
+          created_by_user_id INTEGER REFERENCES users(id),
+          created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+      `);
+      await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS ccvp_default_idx ON cycle_count_variance_policies(is_default) WHERE is_default = TRUE`);
+      await pool.query(`
+        INSERT INTO cycle_count_variance_policies (name, description, qty_tolerance, percent_tolerance, is_default)
+        SELECT 'Default', 'Default tolerance: 0 units / 0% — all variances require approval', 0, 0, TRUE
+        WHERE NOT EXISTS (SELECT 1 FROM cycle_count_variance_policies WHERE is_default = TRUE)
+      `);
+      await pool.query(`
+        ALTER TABLE cycle_count_sessions
+          ADD COLUMN IF NOT EXISTS session_number TEXT,
+          ADD COLUMN IF NOT EXISTS count_type TEXT NOT NULL DEFAULT 'CYCLE',
+          ADD COLUMN IF NOT EXISTS scheduled_for TIMESTAMP,
+          ADD COLUMN IF NOT EXISTS blind_count BOOLEAN NOT NULL DEFAULT TRUE,
+          ADD COLUMN IF NOT EXISTS variance_policy_id UUID REFERENCES cycle_count_variance_policies(id),
+          ADD COLUMN IF NOT EXISTS created_by_user_id INTEGER REFERENCES users(id),
+          ADD COLUMN IF NOT EXISTS performed_by_user_id INTEGER REFERENCES users(id),
+          ADD COLUMN IF NOT EXISTS performed_by_display_name TEXT,
+          ADD COLUMN IF NOT EXISTS performed_at TIMESTAMP,
+          ADD COLUMN IF NOT EXISTS approved_by_user_id INTEGER REFERENCES users(id),
+          ADD COLUMN IF NOT EXISTS approved_by_display_name TEXT,
+          ADD COLUMN IF NOT EXISTS approved_at TIMESTAMP,
+          ADD COLUMN IF NOT EXISTS posted_by_user_id INTEGER REFERENCES users(id),
+          ADD COLUMN IF NOT EXISTS posted_by_display_name TEXT
+      `);
+      await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS ccs_session_number_idx ON cycle_count_sessions(session_number) WHERE session_number IS NOT NULL`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS ccs_status_idx ON cycle_count_sessions(status)`);
+      await pool.query(`
+        ALTER TABLE cycle_count_lines
+          ADD COLUMN IF NOT EXISTS inventory_item_id INTEGER REFERENCES inventory_items(id),
+          ADD COLUMN IF NOT EXISTS lot_id UUID REFERENCES material_lots(id),
+          ADD COLUMN IF NOT EXISTS counted_by_user_id INTEGER REFERENCES users(id),
+          ADD COLUMN IF NOT EXISTS counted_by_display_name TEXT,
+          ADD COLUMN IF NOT EXISTS counted_at TIMESTAMP,
+          ADD COLUMN IF NOT EXISTS variance_within_tolerance BOOLEAN,
+          ADD COLUMN IF NOT EXISTS recount_required BOOLEAN NOT NULL DEFAULT FALSE,
+          ADD COLUMN IF NOT EXISTS approval_status TEXT,
+          ADD COLUMN IF NOT EXISTS ledger_entry_id UUID REFERENCES inventory_transaction_ledger(id)
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS ccl_session_idx ON cycle_count_lines(session_id)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS ccl_lot_idx ON cycle_count_lines(lot_id)`);
+      console.log('✅ Ensured cycle_count_sessions and cycle_count_lines tables exist (with Task #142 extensions)');
     } catch (cycleCountErr: any) {
       console.warn('⚠️ cycle_count tables migration skipped:', cycleCountErr?.message);
     }

@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiRequest } from '@/lib/queryClient';
+import { apiRequest, queryClient } from '@/lib/queryClient';
 import { toast } from 'react-hot-toast';
 import { format } from 'date-fns';
 import {
@@ -14,6 +14,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
   Dialog,
   DialogContent,
@@ -21,6 +24,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from '@/components/ui/dialog';
 import {
   Table,
@@ -31,6 +35,13 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   ClipboardList,
   Plus,
   ChevronLeft,
@@ -38,21 +49,18 @@ import {
   CheckCircle2,
   AlertTriangle,
   Lock,
-  PackageSearch,
-  RefreshCw,
+  Eye,
+  EyeOff,
+  ShieldCheck,
+  Send,
+  X,
 } from 'lucide-react';
 
-interface CycleCountSession {
-  id: number;
-  location: string;
-  partFilter: string | null;
-  status: string;
-  createdBy: string;
-  createdAt: string;
-  postedAt: string | null;
-  notes: string | null;
-  lines?: CycleCountLine[];
-}
+// ── Types ──────────────────────────────────────────────────────────────────
+
+type SessionStatus =
+  | 'SCHEDULED' | 'IN_PROGRESS' | 'PENDING_REVIEW' | 'APPROVED' | 'POSTED' | 'CANCELLED'
+  | 'DRAFT' | 'COMPLETED'; // legacy
 
 interface CycleCountLine {
   id: number;
@@ -62,24 +70,75 @@ interface CycleCountLine {
   expectedQty: string;
   countedQty: string | null;
   varianceQty: string | null;
+  varianceWithinTolerance: boolean | null;
+  approvalStatus: string | null;
+  countedByDisplayName: string | null;
+  countedAt: string | null;
+  ledgerEntryId: string | null;
   notes: string | null;
 }
 
-interface ApiError {
-  responseData?: { error?: string };
-  message?: string;
+interface CycleCountSession {
+  id: number;
+  sessionNumber: string | null;
+  status: SessionStatus;
+  countType: string;
+  location: string;
+  partFilter: string | null;
+  scheduledFor: string | null;
+  blindCount: boolean;
+  variancePolicyId: string | null;
+  notes: string | null;
+  createdBy: string;
+  createdAt: string | null;
+  performedByDisplayName: string | null;
+  performedAt: string | null;
+  approvedByDisplayName: string | null;
+  approvedAt: string | null;
+  postedByDisplayName: string | null;
+  postedAt: string | null;
+  lines?: CycleCountLine[];
+}
+
+interface VariancePolicy {
+  id: string;
+  name: string;
+  description: string | null;
+  qtyTolerance: string;
+  percentTolerance: string;
+  isDefault: boolean;
+}
+
+interface VarianceHistoryRow extends CycleCountLine {
+  sessionNumber: string | null;
+  postedAt: string | null;
+}
+
+const API_BASE = '/api/inventory/cycle-counts';
+
+// ── Utilities ──────────────────────────────────────────────────────────────
+
+function formatQty(v: string | number | null | undefined): string {
+  if (v == null || v === '') return '—';
+  const n = typeof v === 'string' ? parseFloat(v) : v;
+  if (!isFinite(n)) return '—';
+  return n.toLocaleString(undefined, { maximumFractionDigits: 4 });
 }
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; className: string }> = {
-    DRAFT: { label: 'Draft', className: 'border-gray-300 text-gray-600' },
+    SCHEDULED: { label: 'Scheduled', className: 'border-gray-300 text-gray-700 bg-gray-50' },
+    DRAFT: { label: 'Draft', className: 'border-gray-300 text-gray-700' },
     IN_PROGRESS: { label: 'In Progress', className: 'border-blue-400 text-blue-700 bg-blue-50' },
-    COMPLETED: { label: 'Completed', className: 'border-green-400 text-green-700 bg-green-50' },
+    PENDING_REVIEW: { label: 'Pending Review', className: 'border-amber-400 text-amber-700 bg-amber-50' },
+    COMPLETED: { label: 'Pending Review', className: 'border-amber-400 text-amber-700 bg-amber-50' },
+    APPROVED: { label: 'Approved', className: 'border-green-400 text-green-700 bg-green-50' },
     POSTED: { label: 'Posted', className: 'border-purple-400 text-purple-700 bg-purple-50' },
+    CANCELLED: { label: 'Cancelled', className: 'border-red-300 text-red-700 bg-red-50' },
   };
-  const cfg = map[status] ?? { label: status, className: 'border-gray-300 text-gray-600' };
+  const cfg = map[status] ?? { label: status, className: 'border-gray-300 text-gray-700' };
   return (
-    <Badge variant="outline" className={`text-xs ${cfg.className}`}>
+    <Badge variant="outline" className={`text-xs ${cfg.className}`} data-testid={`status-${status}`}>
       {status === 'POSTED' && <Lock className="h-3 w-3 mr-1" />}
       {cfg.label}
     </Badge>
@@ -94,673 +153,541 @@ function VarianceBadge({ variance }: { variance: number }) {
       </Badge>
     );
   }
-  if (variance > 0) {
-    return (
-      <Badge variant="outline" className="border-emerald-400 text-emerald-700 bg-emerald-50 text-xs">
-        +{variance.toLocaleString(undefined, { maximumFractionDigits: 4 })}
-      </Badge>
-    );
-  }
+  const cls = variance > 0
+    ? 'border-emerald-400 text-emerald-700 bg-emerald-50'
+    : 'border-red-400 text-red-700 bg-red-50';
+  const sign = variance > 0 ? '+' : '';
   return (
-    <Badge variant="outline" className="border-red-400 text-red-700 bg-red-50 text-xs">
+    <Badge variant="outline" className={`${cls} text-xs`}>
       <AlertTriangle className="h-3 w-3 mr-1" />
-      {variance.toLocaleString(undefined, { maximumFractionDigits: 4 })}
+      {sign}{variance.toLocaleString(undefined, { maximumFractionDigits: 4 })}
     </Badge>
   );
 }
 
-function formatQty(n: number | string | null | undefined): string {
-  if (n == null) return '—';
-  const num = typeof n === 'string' ? parseFloat(n) : n;
-  if (isNaN(num)) return '—';
-  return Number.isInteger(num)
-    ? num.toLocaleString()
-    : num.toLocaleString(undefined, { maximumFractionDigits: 4 });
-}
+// ── Create Session Dialog ──────────────────────────────────────────────────
 
-// ── Session List View ──────────────────────────────────────────────────────────
-
-function SessionList({ onSelect }: { onSelect: (id: number) => void }) {
-  const { data: sessions = [], isLoading, isFetching, refetch } = useQuery<CycleCountSession[]>({
-    queryKey: ['/api/inventory/cycle-count'],
-    staleTime: 30_000,
-  });
-
-  const [newOpen, setNewOpen] = useState(false);
-  const [location, setLocation] = useState('');
+function CreateSessionDialog({ onCreated }: { onCreated: (id: number) => void }) {
+  const [open, setOpen] = useState(false);
+  const [location, setLocation] = useState('ALL');
   const [partFilter, setPartFilter] = useState('');
-  const queryClient = useQueryClient();
+  const [countType, setCountType] = useState<'CYCLE' | 'FULL' | 'SPOT' | 'ABC'>('CYCLE');
+  const [scheduledFor, setScheduledFor] = useState('');
+  const [blindCount, setBlindCount] = useState(true);
+  const [variancePolicyId, setVariancePolicyId] = useState<string>('');
+  const [notes, setNotes] = useState('');
+
+  const { data: policies = [] } = useQuery<VariancePolicy[]>({
+    queryKey: [API_BASE, 'variance-policies'],
+    queryFn: async () => (await apiRequest('GET', `${API_BASE}/variance-policies`)).json(),
+    enabled: open,
+  });
 
   const createMutation = useMutation({
-    mutationFn: (body: { location: string; partFilter?: string }) =>
-      apiRequest('/api/inventory/cycle-count', { method: 'POST', body: JSON.stringify(body) }),
-    onSuccess: (session: CycleCountSession) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/inventory/cycle-count'] });
-      toast.success('Cycle count session created');
-      setNewOpen(false);
-      setLocation('');
-      setPartFilter('');
-      onSelect(session.id);
+    mutationFn: async () => {
+      const body = {
+        location,
+        partFilter: partFilter.trim() || null,
+        countType,
+        scheduledFor: scheduledFor ? new Date(scheduledFor).toISOString() : null,
+        blindCount,
+        variancePolicyId: variancePolicyId || null,
+        notes: notes.trim() || null,
+      };
+      const res = await apiRequest('POST', API_BASE, body);
+      return (await res.json()) as CycleCountSession;
     },
-    onError: (err: ApiError) => {
-      toast.error(err?.responseData?.error || err?.message || 'Failed to create session');
+    onSuccess: (sess) => {
+      toast.success(`Session ${sess.sessionNumber ?? `#${sess.id}`} created`);
+      queryClient.invalidateQueries({ queryKey: [API_BASE] });
+      setOpen(false);
+      setPartFilter(''); setNotes(''); setScheduledFor('');
+      onCreated(sess.id);
     },
+    onError: (e: any) => toast.error(e?.responseData?.error ?? e?.message ?? 'Create failed'),
   });
 
-  const handleCreate = () => {
-    if (!location.trim()) { toast.error('Location is required'); return; }
-    createMutation.mutate({
-      location: location.trim(),
-      partFilter: partFilter.trim() || undefined,
-    });
-  };
-
-  const activeSessions = sessions.filter(s => s.status !== 'POSTED');
-  const postedSessions = sessions.filter(s => s.status === 'POSTED');
-
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <ClipboardList className="h-6 w-6" />
-            Cycle Counts
-          </h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            Physical inventory verification sessions for AS9100 audit readiness.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
-            {isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-          </Button>
-          <Button size="sm" onClick={() => setNewOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            New Session
-          </Button>
-        </div>
-      </div>
-
-      {isLoading ? (
-        <div className="flex items-center justify-center py-20 gap-3 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" />
-          <span>Loading sessions…</span>
-        </div>
-      ) : sessions.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
-            <PackageSearch className="h-10 w-10 opacity-40" />
-            <p className="text-sm">No cycle count sessions yet. Create one to get started.</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <>
-          {activeSessions.length > 0 && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Active Sessions</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>ID</TableHead>
-                      <TableHead>Location</TableHead>
-                      <TableHead>Part Filter</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Created By</TableHead>
-                      <TableHead>Created</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {activeSessions.map(s => (
-                      <TableRow
-                        key={s.id}
-                        className="cursor-pointer hover:bg-muted/50"
-                        onClick={() => onSelect(s.id)}
-                      >
-                        <TableCell className="font-mono text-sm">#{s.id}</TableCell>
-                        <TableCell className="font-medium">{s.location}</TableCell>
-                        <TableCell className="text-muted-foreground text-sm">{s.partFilter ?? '—'}</TableCell>
-                        <TableCell><StatusBadge status={s.status} /></TableCell>
-                        <TableCell className="text-sm">{s.createdBy}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {format(new Date(s.createdAt), 'MMM d, yyyy h:mm a')}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          )}
-
-          {postedSessions.length > 0 && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base text-muted-foreground">Posted Sessions (Audit Records)</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>ID</TableHead>
-                      <TableHead>Location</TableHead>
-                      <TableHead>Part Filter</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Created By</TableHead>
-                      <TableHead>Posted</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {postedSessions.map(s => (
-                      <TableRow
-                        key={s.id}
-                        className="cursor-pointer hover:bg-muted/50 opacity-75"
-                        onClick={() => onSelect(s.id)}
-                      >
-                        <TableCell className="font-mono text-sm">#{s.id}</TableCell>
-                        <TableCell className="font-medium">{s.location}</TableCell>
-                        <TableCell className="text-muted-foreground text-sm">{s.partFilter ?? '—'}</TableCell>
-                        <TableCell><StatusBadge status={s.status} /></TableCell>
-                        <TableCell className="text-sm">{s.createdBy}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
-                          {s.postedAt ? format(new Date(s.postedAt), 'MMM d, yyyy h:mm a') : '—'}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          )}
-        </>
-      )}
-
-      <Dialog open={newOpen} onOpenChange={setNewOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>New Cycle Count Session</DialogTitle>
-            <DialogDescription>
-              Select a storage location to count. The system will pre-populate expected quantities from active material lots.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-1">
-              <Label htmlFor="cc-location">Location <span className="text-red-500">*</span></Label>
-              <Input
-                id="cc-location"
-                placeholder="e.g. Freezer #1, Rack A, ALL"
-                value={location}
-                onChange={e => setLocation(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">Enter "ALL" to include all locations.</p>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button data-testid="button-create-cycle-count">
+          <Plus className="h-4 w-4 mr-2" /> New Cycle Count
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>New Cycle Count Session</DialogTitle>
+          <DialogDescription>
+            Pre-populate the count list from active material lots at the chosen location.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Count Type</Label>
+              <Select value={countType} onValueChange={(v: any) => setCountType(v)}>
+                <SelectTrigger data-testid="select-count-type"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="CYCLE">Cycle (recurring)</SelectItem>
+                  <SelectItem value="FULL">Full Inventory</SelectItem>
+                  <SelectItem value="SPOT">Spot Check</SelectItem>
+                  <SelectItem value="ABC">ABC Class</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            <div className="space-y-1">
-              <Label htmlFor="cc-part">Part Number Filter (optional)</Label>
+            <div>
+              <Label>Location</Label>
               <Input
-                id="cc-part"
-                placeholder="e.g. 10042"
-                value={partFilter}
-                onChange={e => setPartFilter(e.target.value)}
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder="ALL or specific location"
+                data-testid="input-location"
               />
-              <p className="text-xs text-muted-foreground">Leave blank to include all parts at the selected location.</p>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setNewOpen(false)}>Cancel</Button>
-            <Button onClick={handleCreate} disabled={createMutation.isPending}>
-              {createMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Create Session
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          <div>
+            <Label>Part Filter (optional)</Label>
+            <Input
+              value={partFilter}
+              onChange={(e) => setPartFilter(e.target.value)}
+              placeholder="Specific AG Part#"
+              data-testid="input-part-filter"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Scheduled For (optional)</Label>
+              <Input
+                type="datetime-local"
+                value={scheduledFor}
+                onChange={(e) => setScheduledFor(e.target.value)}
+                data-testid="input-scheduled-for"
+              />
+            </div>
+            <div>
+              <Label>Variance Policy</Label>
+              <Select value={variancePolicyId} onValueChange={setVariancePolicyId}>
+                <SelectTrigger data-testid="select-variance-policy">
+                  <SelectValue placeholder="Default" />
+                </SelectTrigger>
+                <SelectContent>
+                  {policies.map(p => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}{p.isDefault ? ' (default)' : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 pt-1">
+            <Switch
+              id="blind-count"
+              checked={blindCount}
+              onCheckedChange={setBlindCount}
+              data-testid="switch-blind-count"
+            />
+            <Label htmlFor="blind-count" className="cursor-pointer flex items-center gap-2">
+              {blindCount ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              Blind count (counter cannot see expected quantity)
+            </Label>
+          </div>
+          <div>
+            <Label>Notes</Label>
+            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} data-testid="input-notes" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+          <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending} data-testid="button-confirm-create">
+            {createMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            Create Session
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Session List ───────────────────────────────────────────────────────────
+
+function SessionTable({ sessions, onSelect }: { sessions: CycleCountSession[]; onSelect: (id: number) => void }) {
+  if (sessions.length === 0) {
+    return (
+      <div className="text-center py-12 text-muted-foreground text-sm" data-testid="text-no-sessions">
+        No sessions in this view.
+      </div>
+    );
+  }
+  return (
+    <div className="border rounded-md">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Session #</TableHead>
+            <TableHead>Type</TableHead>
+            <TableHead>Location</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Created</TableHead>
+            <TableHead>Counted by</TableHead>
+            <TableHead>Approved by</TableHead>
+            <TableHead>Posted by</TableHead>
+            <TableHead></TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {sessions.map((s) => (
+            <TableRow key={s.id} data-testid={`row-session-${s.id}`}>
+              <TableCell className="font-mono text-xs">{s.sessionNumber ?? `#${s.id}`}</TableCell>
+              <TableCell className="text-xs">{s.countType ?? 'CYCLE'}</TableCell>
+              <TableCell className="text-xs">{s.location}</TableCell>
+              <TableCell><StatusBadge status={s.status} /></TableCell>
+              <TableCell className="text-xs">{s.createdAt ? format(new Date(s.createdAt), 'MMM d, h:mm a') : '—'}</TableCell>
+              <TableCell className="text-xs">{s.performedByDisplayName ?? '—'}</TableCell>
+              <TableCell className="text-xs">{s.approvedByDisplayName ?? '—'}</TableCell>
+              <TableCell className="text-xs">{s.postedByDisplayName ?? '—'}</TableCell>
+              <TableCell>
+                <Button size="sm" variant="ghost" onClick={() => onSelect(s.id)} data-testid={`button-open-session-${s.id}`}>
+                  Open
+                </Button>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </div>
   );
 }
 
-// ── Session Detail View ────────────────────────────────────────────────────────
+// ── Session Detail ─────────────────────────────────────────────────────────
 
 function SessionDetail({ sessionId, onBack }: { sessionId: number; onBack: () => void }) {
-  const queryClient = useQueryClient();
-
-  const { data: session, isLoading } = useQuery<CycleCountSession & { lines: CycleCountLine[] }>({
-    queryKey: ['/api/inventory/cycle-count', sessionId],
-    staleTime: 10_000,
-  });
-
-  // Local state for editing counted quantities
+  const qc = useQueryClient();
+  const [reveal, setReveal] = useState(false);
   const [localCounts, setLocalCounts] = useState<Record<number, string>>({});
   const [localNotes, setLocalNotes] = useState<Record<number, string>>({});
-  const [isSaving, setIsSaving] = useState(false);
-  const [postConfirmOpen, setPostConfirmOpen] = useState(false);
-  const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false);
 
-  const isPosted = session?.status === 'POSTED';
-  const isCompleted = session?.status === 'COMPLETED';
-  const isLocked = isPosted || isCompleted;
-
-  const submitMutation = useMutation({
-    mutationFn: () =>
-      apiRequest(`/api/inventory/cycle-count/${sessionId}/submit`, {
-        method: 'POST',
-        body: JSON.stringify({}),
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/inventory/cycle-count', sessionId] });
-      queryClient.invalidateQueries({ queryKey: ['/api/inventory/cycle-count'] });
-      toast.success('Session submitted for review');
-      setSubmitConfirmOpen(false);
-    },
-    onError: (err: ApiError) => {
-      toast.error(err?.responseData?.error || err?.message || 'Failed to submit session');
-      setSubmitConfirmOpen(false);
-    },
+  const { data: session, isLoading } = useQuery<CycleCountSession>({
+    queryKey: [API_BASE, sessionId, reveal],
+    queryFn: async () => (await apiRequest('GET', `${API_BASE}/${sessionId}${reveal ? '?reveal=true' : ''}`)).json(),
   });
 
-  const postMutation = useMutation({
-    mutationFn: () =>
-      apiRequest(`/api/inventory/cycle-count/${sessionId}/post`, {
-        method: 'POST',
-        body: JSON.stringify({}),
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/inventory/cycle-count', sessionId] });
-      queryClient.invalidateQueries({ queryKey: ['/api/inventory/cycle-count'] });
-      toast.success('Cycle count posted and inventory adjusted');
-      setPostConfirmOpen(false);
-    },
-    onError: (err: ApiError) => {
-      toast.error(err?.responseData?.error || err?.message || 'Failed to post session');
-      setPostConfirmOpen(false);
-    },
-  });
-
-  const handleSaveCounts = async (): Promise<boolean> => {
-    if (!session) return false;
-    setIsSaving(true);
-    try {
-      const updates = session.lines
-        .filter(l => localCounts[l.id] !== undefined || localNotes[l.id] !== undefined)
-        .map(l => ({
-          id: l.id,
-          countedQty: localCounts[l.id] !== undefined ? (localCounts[l.id] === '' ? null : localCounts[l.id]) : l.countedQty,
-          notes: localNotes[l.id] !== undefined ? localNotes[l.id] : (l.notes ?? undefined),
+  const recordMutation = useMutation({
+    mutationFn: async () => {
+      const counts = Object.entries(localCounts)
+        .filter(([_, v]) => v !== '' && !Number.isNaN(parseFloat(v)))
+        .map(([lineId, v]) => ({
+          lineId: parseInt(lineId, 10),
+          countedQty: parseFloat(v),
+          notes: localNotes[parseInt(lineId, 10)],
         }));
-
-      if (updates.length === 0) { toast('No changes to save'); setIsSaving(false); return true; }
-
-      await apiRequest(`/api/inventory/cycle-count/${sessionId}/lines`, {
-        method: 'PATCH',
-        body: JSON.stringify({ lines: updates }),
-      });
-      queryClient.invalidateQueries({ queryKey: ['/api/inventory/cycle-count', sessionId] });
-      setLocalCounts({});
-      setLocalNotes({});
+      if (counts.length === 0) throw new Error('No counts to save');
+      return (await apiRequest('POST', `${API_BASE}/${sessionId}/counts`, { counts })).json();
+    },
+    onSuccess: () => {
       toast.success('Counts saved');
-      return true;
-    } catch (err) {
-      const apiErr = err as ApiError;
-      toast.error(apiErr?.responseData?.error || apiErr?.message || 'Failed to save counts');
-      return false;
-    } finally {
-      setIsSaving(false);
-    }
-  };
+      setLocalCounts({}); setLocalNotes({});
+      qc.invalidateQueries({ queryKey: [API_BASE] });
+    },
+    onError: (e: any) => toast.error(e?.responseData?.error ?? e?.message ?? 'Save failed'),
+  });
 
-  const handleSubmit = async () => {
-    // Auto-save any pending local changes before submitting
-    if (hasPendingLocalChanges) {
-      const saved = await handleSaveCounts();
-      if (!saved) {
-        toast.error('Could not save counts before submitting. Please save manually first.');
-        return;
-      }
-    }
-    submitMutation.mutate();
-  };
+  const transitionMutation = useMutation({
+    mutationFn: async (action: 'submit' | 'approve' | 'post' | 'cancel') => {
+      return (await apiRequest('POST', `${API_BASE}/${sessionId}/${action}`)).json();
+    },
+    onSuccess: (_data, action) => {
+      toast.success(`Session ${action}ed`);
+      qc.invalidateQueries({ queryKey: [API_BASE] });
+    },
+    onError: (e: any) => toast.error(e?.responseData?.error ?? e?.message ?? 'Action failed'),
+  });
 
-  const handlePost = () => {
-    postMutation.mutate();
-  };
-
-  const getEffectiveCounted = (line: CycleCountLine): number | null => {
-    if (localCounts[line.id] !== undefined) {
-      const v = localCounts[line.id];
-      if (v === '') return null;
-      const n = parseFloat(v);
-      return isNaN(n) ? null : n;
-    }
-    if (line.countedQty != null) return parseFloat(line.countedQty);
-    return null;
-  };
-
-  const getEffectiveVariance = (line: CycleCountLine): number | null => {
-    const counted = getEffectiveCounted(line);
-    if (counted == null) return null;
-    return counted - parseFloat(line.expectedQty);
-  };
-
-  // Totals
-  const lines = session?.lines ?? [];
-  const totalExpected = lines.reduce((sum, l) => sum + parseFloat(l.expectedQty), 0);
-  const totalCounted = lines.reduce((sum, l) => {
-    const c = getEffectiveCounted(l);
-    return c != null ? sum + c : sum;
-  }, 0);
-  const totalVariance = lines.reduce((sum, l) => {
-    const v = getEffectiveVariance(l);
-    return v != null ? sum + v : sum;
-  }, 0);
-
-  const hasAnyCounts = lines.some(l => getEffectiveCounted(l) != null);
-  const hasPendingLocalChanges = Object.keys(localCounts).length > 0 || Object.keys(localNotes).length > 0;
-
-  if (isLoading) {
+  if (isLoading || !session) {
     return (
-      <div className="flex items-center justify-center py-20 gap-3 text-muted-foreground">
-        <Loader2 className="h-5 w-5 animate-spin" />
-        <span>Loading session…</span>
+      <div className="p-8 flex items-center gap-2 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" /> Loading session…
       </div>
     );
   }
 
-  if (!session) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
-        <PackageSearch className="h-10 w-10 opacity-40" />
-        <p>Session not found.</p>
-        <Button variant="outline" onClick={onBack}>Back to Sessions</Button>
-      </div>
-    );
-  }
+  const lines = session.lines ?? [];
+  const isInProgress = session.status === 'IN_PROGRESS';
+  const isLocked = session.status === 'POSTED' || session.status === 'CANCELLED';
+  const canSubmit = isInProgress;
+  const canApprove = session.status === 'PENDING_REVIEW' || session.status === 'COMPLETED';
+  const canPost = session.status === 'APPROVED';
+
+  const totalVariance = lines.reduce((s, l) => s + (l.varianceQty ? parseFloat(l.varianceQty) : 0), 0);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-start gap-3">
-          <Button variant="ghost" size="sm" onClick={onBack} className="mt-1">
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold tracking-tight">Cycle Count #{session.id}</h1>
-              <StatusBadge status={session.status} />
-            </div>
-            <p className="text-muted-foreground text-sm mt-1">
-              Location: <span className="font-medium text-foreground">{session.location}</span>
-              {session.partFilter && (
-                <> · Part filter: <span className="font-medium text-foreground">{session.partFilter}</span></>
-              )}
-              {' · '}Created by <span className="font-medium text-foreground">{session.createdBy}</span>
-              {' '}on {format(new Date(session.createdAt), 'MMM d, yyyy h:mm a')}
-              {session.postedAt && (
-                <> · Posted {format(new Date(session.postedAt), 'MMM d, yyyy h:mm a')}</>
-              )}
-            </p>
-          </div>
+    <div className="space-y-4 p-4 md:p-6">
+      <div className="flex items-center justify-between">
+        <Button variant="ghost" size="sm" onClick={onBack} data-testid="button-back-to-list">
+          <ChevronLeft className="h-4 w-4 mr-1" /> Back
+        </Button>
+        <div className="flex items-center gap-2">
+          {session.blindCount && isInProgress && (
+            <Button size="sm" variant="outline" onClick={() => setReveal((r) => !r)} data-testid="button-toggle-reveal">
+              {reveal ? <EyeOff className="h-4 w-4 mr-2" /> : <Eye className="h-4 w-4 mr-2" />}
+              {reveal ? 'Hide Expected' : 'Reveal Expected (Admin)'}
+            </Button>
+          )}
         </div>
-        {session.status === 'IN_PROGRESS' && (
-          <div className="flex gap-2 shrink-0">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleSaveCounts}
-              disabled={isSaving || !hasPendingLocalChanges}
-            >
-              {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Save Counts
-            </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => setSubmitConfirmOpen(true)}
-              disabled={!hasAnyCounts || submitMutation.isPending || isSaving}
-            >
-              {submitMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Submit for Review
-            </Button>
-          </div>
-        )}
-        {session.status === 'COMPLETED' && (
-          <div className="flex gap-2 shrink-0">
-            <Button
-              size="sm"
-              onClick={() => setPostConfirmOpen(true)}
-              disabled={postMutation.isPending}
-            >
-              {postMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Post Session
-            </Button>
-          </div>
-        )}
       </div>
 
-      {/* Totals Row */}
-      <div className="grid grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Total Expected</CardDescription>
-            <CardTitle className="text-2xl tabular-nums">{formatQty(totalExpected)}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Total Counted</CardDescription>
-            <CardTitle className="text-2xl tabular-nums">{hasAnyCounts ? formatQty(totalCounted) : '—'}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card className={Math.abs(totalVariance) > 0 ? 'border-orange-300' : ''}>
-          <CardHeader className="pb-2">
-            <CardDescription>Total Variance</CardDescription>
-            <CardTitle className={`text-2xl tabular-nums ${totalVariance < 0 ? 'text-red-600' : totalVariance > 0 ? 'text-emerald-600' : 'text-green-600'}`}>
-              {hasAnyCounts ? (totalVariance > 0 ? '+' : '') + formatQty(totalVariance) : '—'}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-      </div>
-
-      {/* Count Table */}
       <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">
-            Count Lines
-            {lines.length > 0 && (
-              <span className="ml-2 text-muted-foreground font-normal text-sm">({lines.length} parts)</span>
-            )}
-          </CardTitle>
-          {session.status === 'IN_PROGRESS' && (
-            <CardDescription>
-              Enter counted quantities below. Variance is calculated automatically.
-            </CardDescription>
-          )}
-          {isCompleted && (
-            <CardDescription className="text-amber-600">
-              Session submitted for review. Counts are locked. Click Post Session to apply inventory adjustments.
-            </CardDescription>
-          )}
-        </CardHeader>
-        <CardContent className="p-0">
-          {lines.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 gap-3 text-muted-foreground">
-              <PackageSearch className="h-8 w-8 opacity-40" />
-              <p className="text-sm">No material lots found for the selected location and filter.</p>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-3">
+                <span className="font-mono">{session.sessionNumber ?? `#${session.id}`}</span>
+                <StatusBadge status={session.status} />
+                {session.blindCount && (
+                  <Badge variant="outline" className="text-xs border-blue-300 text-blue-700">
+                    <EyeOff className="h-3 w-3 mr-1" /> Blind
+                  </Badge>
+                )}
+              </CardTitle>
+              <CardDescription>
+                {session.countType} · {session.location} · created by {session.createdBy}
+                {session.scheduledFor && ` · scheduled ${format(new Date(session.scheduledFor), 'MMM d, h:mm a')}`}
+              </CardDescription>
             </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {canSubmit && (
+                <Button size="sm" onClick={() => transitionMutation.mutate('submit')} disabled={transitionMutation.isPending} data-testid="button-submit">
+                  <Send className="h-4 w-4 mr-2" /> Submit for Review
+                </Button>
+              )}
+              {canApprove && (
+                <Button size="sm" variant="secondary" onClick={() => transitionMutation.mutate('approve')} disabled={transitionMutation.isPending} data-testid="button-approve">
+                  <ShieldCheck className="h-4 w-4 mr-2" /> Approve
+                </Button>
+              )}
+              {canPost && (
+                <Button size="sm" onClick={() => transitionMutation.mutate('post')} disabled={transitionMutation.isPending} data-testid="button-post">
+                  <Lock className="h-4 w-4 mr-2" /> Post Adjustments
+                </Button>
+              )}
+              {!isLocked && session.status !== 'POSTED' && (
+                <Button size="sm" variant="ghost" onClick={() => transitionMutation.mutate('cancel')} disabled={transitionMutation.isPending} data-testid="button-cancel">
+                  <X className="h-4 w-4 mr-2" /> Cancel
+                </Button>
+              )}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm border-b pb-3 mb-3">
+            <div><div className="text-muted-foreground text-xs">Counted by</div><div>{session.performedByDisplayName ?? '—'}</div></div>
+            <div><div className="text-muted-foreground text-xs">Approved by</div><div>{session.approvedByDisplayName ?? '—'}</div></div>
+            <div><div className="text-muted-foreground text-xs">Posted by</div><div>{session.postedByDisplayName ?? '—'}</div></div>
+            <div><div className="text-muted-foreground text-xs">Total variance</div><div className={totalVariance < 0 ? 'text-red-600' : totalVariance > 0 ? 'text-emerald-600' : ''}>{totalVariance > 0 ? '+' : ''}{formatQty(totalVariance)}</div></div>
+          </div>
+
+          {lines.length === 0 ? (
+            <div className="text-center py-8 text-sm text-muted-foreground">No lines in this session.</div>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Part Number</TableHead>
-                    <TableHead>Material Name</TableHead>
-                    <TableHead className="text-right">Expected Qty</TableHead>
-                    <TableHead className="text-right w-36">Counted Qty</TableHead>
-                    <TableHead className="text-right">Variance</TableHead>
-                    {!isLocked && <TableHead>Notes</TableHead>}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {lines.map(line => {
-                    const effectiveCounted = getEffectiveCounted(line);
-                    const effectiveVariance = getEffectiveVariance(line);
-                    const hasVariance = effectiveVariance != null && effectiveVariance !== 0;
-                    return (
-                      <TableRow
-                        key={line.id}
-                        className={hasVariance
-                          ? effectiveVariance! < 0
-                            ? 'bg-red-50 dark:bg-red-950/20'
-                            : 'bg-emerald-50 dark:bg-emerald-950/20'
-                          : ''}
-                      >
-                        <TableCell className="font-mono font-medium text-sm">{line.agPartNumber}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">
-                          {line.materialName ?? '—'}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums text-sm">
-                          {formatQty(line.expectedQty)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {isLocked ? (
-                            <span className="tabular-nums text-sm">{formatQty(line.countedQty)}</span>
-                          ) : (
-                            <Input
-                              type="number"
-                              step="any"
-                              min="0"
-                              className="w-28 h-7 text-right text-sm ml-auto"
-                              placeholder="Enter qty"
-                              value={localCounts[line.id] ?? line.countedQty ?? ''}
-                              onChange={e => setLocalCounts(prev => ({ ...prev, [line.id]: e.target.value }))}
-                            />
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {effectiveVariance != null ? (
-                            <VarianceBadge variance={effectiveVariance} />
-                          ) : (
-                            <span className="text-muted-foreground text-xs">—</span>
-                          )}
-                        </TableCell>
-                        {!isLocked && (
-                          <TableCell>
-                            <Input
-                              className="h-7 text-sm min-w-[120px]"
-                              placeholder="Notes…"
-                              value={localNotes[line.id] ?? line.notes ?? ''}
-                              onChange={e => setLocalNotes(prev => ({ ...prev, [line.id]: e.target.value }))}
-                            />
-                          </TableCell>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>AG Part#</TableHead>
+                  <TableHead>Material</TableHead>
+                  <TableHead className="text-right">Expected</TableHead>
+                  <TableHead className="text-right">Counted</TableHead>
+                  <TableHead className="text-right">Variance</TableHead>
+                  <TableHead>Approval</TableHead>
+                  <TableHead>Notes</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {lines.map((line) => {
+                  const expected = parseFloat(line.expectedQty || '0');
+                  const counted = localCounts[line.id] ?? line.countedQty ?? '';
+                  const variance = line.varianceQty != null ? parseFloat(line.varianceQty) : null;
+                  const blind = session.blindCount && isInProgress && !reveal;
+                  return (
+                    <TableRow key={line.id} data-testid={`row-line-${line.id}`}>
+                      <TableCell className="font-mono text-xs">{line.agPartNumber}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">{line.materialName ?? '—'}</TableCell>
+                      <TableCell className="text-right tabular-nums text-sm">
+                        {blind ? <span className="text-muted-foreground italic text-xs">hidden</span> : formatQty(expected)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {isInProgress ? (
+                          <Input
+                            type="number"
+                            step="any"
+                            min="0"
+                            className="w-28 h-7 text-right text-sm ml-auto"
+                            value={counted as string}
+                            onChange={(e) => setLocalCounts(prev => ({ ...prev, [line.id]: e.target.value }))}
+                            data-testid={`input-count-${line.id}`}
+                          />
+                        ) : (
+                          <span className="tabular-nums text-sm">{formatQty(line.countedQty)}</span>
                         )}
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {blind ? <span className="text-muted-foreground italic text-xs">—</span> : (variance != null ? <VarianceBadge variance={variance} /> : <span className="text-xs text-muted-foreground">—</span>)}
+                      </TableCell>
+                      <TableCell>
+                        {line.approvalStatus && (
+                          <Badge variant="outline" className="text-xs">
+                            {line.approvalStatus}
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {isInProgress ? (
+                          <Input
+                            className="h-7 text-sm min-w-[120px]"
+                            placeholder="Notes…"
+                            value={localNotes[line.id] ?? line.notes ?? ''}
+                            onChange={(e) => setLocalNotes(prev => ({ ...prev, [line.id]: e.target.value }))}
+                          />
+                        ) : (
+                          <span className="text-xs text-muted-foreground">{line.notes ?? '—'}</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
+
+          {isInProgress && Object.keys(localCounts).length > 0 && (
+            <div className="flex justify-end mt-3">
+              <Button onClick={() => recordMutation.mutate()} disabled={recordMutation.isPending} data-testid="button-save-counts">
+                {recordMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Save Counts ({Object.keys(localCounts).length})
+              </Button>
             </div>
           )}
         </CardContent>
       </Card>
-
-      {isLocked && (
-        <p className="text-xs text-muted-foreground flex items-center gap-1">
-          <Lock className="h-3 w-3" />
-          {isPosted
-            ? 'This session is posted and read-only. All inventory adjustments have been applied.'
-            : 'This session is submitted and counts are locked. Post the session to apply inventory adjustments.'}
-        </p>
-      )}
-
-      {/* Submit Confirmation Dialog */}
-      <Dialog open={submitConfirmOpen} onOpenChange={setSubmitConfirmOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Submit for Review</DialogTitle>
-            <DialogDescription>
-              This will lock the counted quantities and move the session to review. You can then Post the session to apply inventory adjustments.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-3 space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Lines with counts entered:</span>
-              <span className="font-medium">{lines.filter(l => getEffectiveCounted(l) != null).length} / {lines.length}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Non-zero variance lines:</span>
-              <span className="font-medium">{lines.filter(l => getEffectiveVariance(l) !== null && getEffectiveVariance(l) !== 0).length}</span>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSubmitConfirmOpen(false)}>Cancel</Button>
-            <Button
-              variant="secondary"
-              onClick={handleSubmit}
-              disabled={submitMutation.isPending}
-            >
-              {submitMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Submit for Review
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Post Confirmation Dialog */}
-      <Dialog open={postConfirmOpen} onOpenChange={setPostConfirmOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Post Cycle Count Session</DialogTitle>
-            <DialogDescription>
-              This will apply inventory adjustments for all non-zero variance lines and permanently lock this session.
-              This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-3 space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Lines with counts entered:</span>
-              <span className="font-medium">{lines.filter(l => getEffectiveCounted(l) != null).length} / {lines.length}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Non-zero variance lines:</span>
-              <span className="font-medium">{lines.filter(l => getEffectiveVariance(l) !== null && getEffectiveVariance(l) !== 0).length}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Total variance to apply:</span>
-              <span className={`font-medium ${totalVariance < 0 ? 'text-red-600' : totalVariance > 0 ? 'text-emerald-600' : 'text-green-600'}`}>
-                {totalVariance > 0 ? '+' : ''}{formatQty(totalVariance)}
-              </span>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPostConfirmOpen(false)}>Cancel</Button>
-            <Button
-              onClick={handlePost}
-              disabled={postMutation.isPending}
-            >
-              {postMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Post Session
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
 
-// ── Main Page ─────────────────────────────────────────────────────────────────
+// ── Variance History ───────────────────────────────────────────────────────
+
+function VarianceHistoryTab() {
+  const { data: history = [], isLoading } = useQuery<VarianceHistoryRow[]>({
+    queryKey: [API_BASE, 'variance-history'],
+    queryFn: async () => (await apiRequest('GET', `${API_BASE}/variance-history?limit=200`)).json(),
+  });
+  if (isLoading) return <div className="p-8 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin inline mr-2" /> Loading…</div>;
+  if (history.length === 0) return <div className="text-center py-12 text-muted-foreground text-sm">No posted variances yet.</div>;
+  const significant = history.filter(r => r.varianceQty != null && parseFloat(r.varianceQty) !== 0);
+  return (
+    <div className="border rounded-md">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Posted At</TableHead>
+            <TableHead>Session</TableHead>
+            <TableHead>AG Part#</TableHead>
+            <TableHead className="text-right">Expected</TableHead>
+            <TableHead className="text-right">Counted</TableHead>
+            <TableHead className="text-right">Variance</TableHead>
+            <TableHead>Counter</TableHead>
+            <TableHead>Ledger Entry</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {significant.map((row) => (
+            <TableRow key={row.id} data-testid={`row-history-${row.id}`}>
+              <TableCell className="text-xs">{row.postedAt ? format(new Date(row.postedAt), 'MMM d, h:mm a') : '—'}</TableCell>
+              <TableCell className="font-mono text-xs">{row.sessionNumber ?? '—'}</TableCell>
+              <TableCell className="font-mono text-xs">{row.agPartNumber}</TableCell>
+              <TableCell className="text-right tabular-nums text-sm">{formatQty(row.expectedQty)}</TableCell>
+              <TableCell className="text-right tabular-nums text-sm">{formatQty(row.countedQty)}</TableCell>
+              <TableCell className="text-right">
+                <VarianceBadge variance={row.varianceQty ? parseFloat(row.varianceQty) : 0} />
+              </TableCell>
+              <TableCell className="text-xs">{row.countedByDisplayName ?? '—'}</TableCell>
+              <TableCell className="font-mono text-[10px] text-muted-foreground truncate max-w-[140px]">{row.ledgerEntryId ?? '—'}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
+// ── Main Page ──────────────────────────────────────────────────────────────
 
 export default function CycleCountPage() {
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState<string>('in_progress');
+
+  const { data: sessions = [], isLoading } = useQuery<CycleCountSession[]>({
+    queryKey: [API_BASE],
+    queryFn: async () => (await apiRequest('GET', API_BASE)).json(),
+  });
+
+  const buckets = useMemo(() => {
+    const scheduled = sessions.filter(s => s.status === 'SCHEDULED');
+    const inProgress = sessions.filter(s => s.status === 'IN_PROGRESS' || s.status === 'DRAFT');
+    const pending = sessions.filter(s => s.status === 'PENDING_REVIEW' || s.status === 'COMPLETED' || s.status === 'APPROVED');
+    const posted = sessions.filter(s => s.status === 'POSTED');
+    return { scheduled, inProgress, pending, posted };
+  }, [sessions]);
 
   if (selectedSessionId != null) {
-    return (
-      <SessionDetail
-        sessionId={selectedSessionId}
-        onBack={() => setSelectedSessionId(null)}
-      />
-    );
+    return <SessionDetail sessionId={selectedSessionId} onBack={() => setSelectedSessionId(null)} />;
   }
 
-  return <SessionList onSelect={(id) => setSelectedSessionId(id)} />;
+  return (
+    <div className="space-y-4 p-4 md:p-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold flex items-center gap-2">
+            <ClipboardList className="h-6 w-6" /> Cycle Counts
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Blind physical inventory counts with segregation-of-duties workflow. Posted variances flow to the immutable inventory ledger.
+          </p>
+        </div>
+        <CreateSessionDialog onCreated={(id) => setSelectedSessionId(id)} />
+      </div>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="scheduled" data-testid="tab-scheduled">
+            Scheduled <Badge variant="secondary" className="ml-2">{buckets.scheduled.length}</Badge>
+          </TabsTrigger>
+          <TabsTrigger value="in_progress" data-testid="tab-in-progress">
+            In Progress <Badge variant="secondary" className="ml-2">{buckets.inProgress.length}</Badge>
+          </TabsTrigger>
+          <TabsTrigger value="pending_review" data-testid="tab-pending-review">
+            Pending Review <Badge variant="secondary" className="ml-2">{buckets.pending.length}</Badge>
+          </TabsTrigger>
+          <TabsTrigger value="posted" data-testid="tab-posted">
+            Posted <Badge variant="secondary" className="ml-2">{buckets.posted.length}</Badge>
+          </TabsTrigger>
+          <TabsTrigger value="history" data-testid="tab-variance-history">Variance History</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="scheduled">
+          {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <SessionTable sessions={buckets.scheduled} onSelect={setSelectedSessionId} />}
+        </TabsContent>
+        <TabsContent value="in_progress">
+          {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <SessionTable sessions={buckets.inProgress} onSelect={setSelectedSessionId} />}
+        </TabsContent>
+        <TabsContent value="pending_review">
+          {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <SessionTable sessions={buckets.pending} onSelect={setSelectedSessionId} />}
+        </TabsContent>
+        <TabsContent value="posted">
+          {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <SessionTable sessions={buckets.posted} onSelect={setSelectedSessionId} />}
+        </TabsContent>
+        <TabsContent value="history">
+          <VarianceHistoryTab />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
 }

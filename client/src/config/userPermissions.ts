@@ -15,6 +15,7 @@ export const CAPABILITY_GATED_ROUTES: Record<string, string> = {
   '/pto-command-center': 'timekeeping.pto.view_all',
   '/orders-list': 'orders.view_list',
   '/time-clock-admin': 'timekeeping.time_clock_admin.access',
+  '/inventory/cycle-counts': 'inventory.cycleCount.view',
 };
 
 export function getRequiredCapability(route: string): string | undefined {
@@ -193,6 +194,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/material-inventory',
   '/inventory/restock-signals',
   '/inventory/cycle-count',
+  '/inventory/cycle-counts',
   '/filtered-orders-report',
   '/urgent-orders-report',
   '/what-if-forecast',

@@ -16447,15 +16447,53 @@ export type InsertAppliedBurdenAmount = z.infer<typeof insertAppliedBurdenAmount
 // CYCLE COUNT SESSIONS — AS9100 Physical Inventory Verification Workflow
 // ============================================================================
 
+// Variance tolerance policies — used by Task #142 cycle count subsystem to
+// determine whether a line variance is auto-approved or requires reviewer sign-off.
+export const cycleCountVariancePolicies = pgTable('cycle_count_variance_policies', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: text('name').notNull().unique(),
+  description: text('description'),
+  qtyTolerance: numeric('qty_tolerance', { precision: 14, scale: 4 }).default('0').notNull(),
+  percentTolerance: numeric('percent_tolerance', { precision: 6, scale: 3 }).default('0').notNull(),
+  autoApproveWithinTolerance: boolean('auto_approve_within_tolerance').default(true).notNull(),
+  requiresDualApproval: boolean('requires_dual_approval').default(false).notNull(),
+  isDefault: boolean('is_default').default(false).notNull(),
+  createdByUserId: integer('created_by_user_id').references(() => users.id),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
+export const insertCycleCountVariancePolicySchema = createInsertSchema(cycleCountVariancePolicies).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+export type CycleCountVariancePolicy = typeof cycleCountVariancePolicies.$inferSelect;
+export type InsertCycleCountVariancePolicy = z.infer<typeof insertCycleCountVariancePolicySchema>;
+
 export const cycleCountSessions = pgTable('cycle_count_sessions', {
   id: serial('id').primaryKey(),
+  // Status: SCHEDULED | IN_PROGRESS | PENDING_REVIEW | APPROVED | POSTED | CANCELLED
+  // (Legacy COMPLETED rows are treated as PENDING_REVIEW.)
+  status: text('status').default('SCHEDULED').notNull(),
+  sessionNumber: text('session_number'),
+  countType: text('count_type').default('CYCLE').notNull(), // CYCLE | FULL | SPOT | ABC
   location: text('location').notNull(),
   partFilter: text('part_filter'),
-  status: text('status').default('DRAFT').notNull(), // DRAFT | IN_PROGRESS | COMPLETED | POSTED
-  createdBy: text('created_by').notNull(),
-  createdAt: timestamp('created_at').defaultNow(),
-  postedAt: timestamp('posted_at'),
+  scheduledFor: timestamp('scheduled_for'),
+  blindCount: boolean('blind_count').default(true).notNull(),
+  variancePolicyId: uuid('variance_policy_id').references(() => cycleCountVariancePolicies.id),
   notes: text('notes'),
+  createdBy: text('created_by').notNull(),
+  createdByUserId: integer('created_by_user_id').references(() => users.id),
+  createdAt: timestamp('created_at').defaultNow(),
+  performedByUserId: integer('performed_by_user_id').references(() => users.id),
+  performedByDisplayName: text('performed_by_display_name'),
+  performedAt: timestamp('performed_at'),
+  approvedByUserId: integer('approved_by_user_id').references(() => users.id),
+  approvedByDisplayName: text('approved_by_display_name'),
+  approvedAt: timestamp('approved_at'),
+  postedByUserId: integer('posted_by_user_id').references(() => users.id),
+  postedByDisplayName: text('posted_by_display_name'),
+  postedAt: timestamp('posted_at'),
 });
 
 export const insertCycleCountSessionSchema = createInsertSchema(cycleCountSessions).omit({ id: true, createdAt: true, postedAt: true });
@@ -16465,11 +16503,20 @@ export type InsertCycleCountSession = z.infer<typeof insertCycleCountSessionSche
 export const cycleCountLines = pgTable('cycle_count_lines', {
   id: serial('id').primaryKey(),
   sessionId: integer('session_id').references(() => cycleCountSessions.id, { onDelete: 'cascade' }).notNull(),
+  inventoryItemId: integer('inventory_item_id').references(() => inventoryItems.id),
+  lotId: uuid('lot_id'),
   agPartNumber: text('ag_part_number').notNull(),
   materialName: text('material_name'),
   expectedQty: numeric('expected_qty').notNull(),
   countedQty: numeric('counted_qty'),
   varianceQty: numeric('variance_qty'),
+  varianceWithinTolerance: boolean('variance_within_tolerance'),
+  recountRequired: boolean('recount_required').default(false).notNull(),
+  approvalStatus: text('approval_status'), // AUTO_APPROVED | PENDING | APPROVED | REJECTED
+  countedByUserId: integer('counted_by_user_id').references(() => users.id),
+  countedByDisplayName: text('counted_by_display_name'),
+  countedAt: timestamp('counted_at'),
+  ledgerEntryId: uuid('ledger_entry_id'),
   notes: text('notes'),
 });
 

@@ -141,6 +141,7 @@ import inventoryTransactionLedgerRoutes from './inventoryTransactionLedger';
 import inventoryAnomaliesRoutes from './inventoryAnomalies';
 import digitalSignaturesRoutes from './digitalSignatures';
 import traceabilityRoutes from './traceability';
+import cycleCountsRoutes from './cycleCounts';
 import { auditService } from '../services/auditService';
 import mediaRoutes from './media';
 import voiceNotesRoutes from './voiceNotes';
@@ -841,6 +842,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   app.use('/api/inventory-anomalies', inventoryAnomaliesRoutes);
   app.use('/api/digital-signatures', digitalSignaturesRoutes);
   app.use('/api/traceability', traceabilityRoutes);
+  app.use('/api/inventory/cycle-counts', cycleCountsRoutes);
 
   // Media Library routes
   app.use('/api/media', mediaRoutes);

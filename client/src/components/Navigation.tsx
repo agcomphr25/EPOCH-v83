@@ -420,6 +420,12 @@ export default function Navigation() {
       description: 'Manage capability-based role permissions and individual user overrides',
     },
     {
+      path: '/admin/operator-sessions',
+      label: 'Operator Sessions',
+      icon: Shield,
+      description: 'View and revoke active shop-floor operator badge sessions (Task #143)',
+    },
+    {
       path: '/admin/widget-catalog',
       label: 'Widget Catalog',
       icon: LayoutGrid,

@@ -10,10 +10,69 @@ import {
   validateAllocation,
   validateLotStatus,
   validateOperatorAuthorization,
+  validateOperatorSession,
   validateRoutingStep,
   validateTravelerIssueEligibility,
   validateWadApproved,
 } from '../src/services/materialIssueGates';
+
+describe('validateOperatorSession (Phase 2 — Task #143)', () => {
+  const fresh = (overrides: Partial<any> = {}) => ({
+    id: 's1',
+    revokedAt: null,
+    expiresAt: new Date(Date.now() + 60_000),
+    lastActivityAt: new Date(),
+    lastReauthAt: new Date(),
+    idleTimeoutSeconds: 900,
+    ...overrides,
+  });
+
+  it('passes for an active, recent session', () => {
+    expect(validateOperatorSession(fresh())).toBeNull();
+  });
+
+  it('blocks when no session is supplied', () => {
+    expect(validateOperatorSession(null)?.code).toBe('OPERATOR_NOT_AUTHENTICATED');
+  });
+
+  it('blocks revoked sessions', () => {
+    expect(validateOperatorSession(fresh({ revokedAt: new Date() }))?.code).toBe(
+      'OPERATOR_NOT_AUTHENTICATED',
+    );
+  });
+
+  it('blocks absolute-expired sessions', () => {
+    expect(
+      validateOperatorSession(fresh({ expiresAt: new Date(Date.now() - 1000) }))?.code,
+    ).toBe('OPERATOR_NOT_AUTHENTICATED');
+  });
+
+  it('blocks idle-timed-out sessions', () => {
+    expect(
+      validateOperatorSession(
+        fresh({ lastActivityAt: new Date(Date.now() - 60_000), idleTimeoutSeconds: 30 }),
+      )?.code,
+    ).toBe('OPERATOR_NOT_AUTHENTICATED');
+  });
+
+  it('blocks high-risk action when reauth is stale', () => {
+    expect(
+      validateOperatorSession(
+        fresh({ lastReauthAt: new Date(Date.now() - 120_000) }),
+        { requireFreshReauth: true, freshReauthMaxAgeSeconds: 60 },
+      )?.code,
+    ).toBe('STALE_OPERATOR_AUTH');
+  });
+
+  it('passes high-risk action when reauth is fresh', () => {
+    expect(
+      validateOperatorSession(fresh(), {
+        requireFreshReauth: true,
+        freshReauthMaxAgeSeconds: 60,
+      }),
+    ).toBeNull();
+  });
+});
 
 describe('validateTravelerIssueEligibility', () => {
   it('passes for RELEASED travelers', () => {

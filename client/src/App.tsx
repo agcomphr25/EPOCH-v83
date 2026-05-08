@@ -269,6 +269,7 @@ import CustomerSatisfaction from './pages/CustomerSatisfaction';
 import AdminPanelPage from './pages/AdminPanelPage';
 import AdminChecklistManagementPage from './pages/AdminChecklistManagementPage';
 import RolesPermissionsPage from './pages/admin/RolesPermissionsPage';
+import OperatorAuthSessionsPage from './pages/admin/OperatorAuthSessionsPage';
 import OrderLookupPage from './pages/admin/OrderLookupPage';
 import OrderOverridePage from './pages/admin/OrderOverridePage';
 import WidgetCatalogPage from './pages/admin/WidgetCatalogPage';
@@ -616,6 +617,7 @@ function App() {
                   {/* Admin Panel Routes */}
                   <Route path="/admin/orders" component={AdminPanelPage} />
                   <Route path="/admin/roles-permissions" component={RolesPermissionsPage} />
+                  <Route path="/admin/operator-sessions" component={OperatorAuthSessionsPage} />
                   <Route path="/admin/order-lookup" component={OrderLookupPage} />
                   <Route path="/admin/order-override" component={OrderOverridePage} />
                   <Route path="/admin/widget-catalog" component={WidgetCatalogPage} />

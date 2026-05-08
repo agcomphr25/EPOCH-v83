@@ -17747,3 +17747,48 @@ export type EscalationChainLevel = {
   slaSeconds: number;
   isBackstop?: boolean;
 };
+// ---------------------------------------------------------------------------
+// Task #143 — Operator badge authentication on material issues (Phase 2)
+//
+// Short-lived authenticated operator sessions, distinct from the web user
+// session, that prove WHO is physically scanning material at a shop-floor
+// workstation. A session is created by a badge scan or PIN entry and
+// presented as an opaque HMAC-signed token on every subsequent material
+// reserve / issue / consume / scrap / override call so the inventory
+// ledger captures the real operator (not just whoever is logged into the
+// shared tablet's web session).
+// ---------------------------------------------------------------------------
+export const operatorAuthSessions = pgTable('operator_auth_sessions', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  employeeId: integer('employee_id').notNull().references(() => employees.id),
+  // Snapshot of the employee's display name at the moment of authentication;
+  // immutable for the life of the session so the ledger stamp doesn't drift
+  // if HR later edits the employee row.
+  employeeDisplayName: text('employee_display_name').notNull(),
+  authMethod: text('auth_method').notNull(), // 'BADGE' | 'PIN' | 'SSO'
+  workstationId: text('workstation_id'),
+  deviceFingerprint: text('device_fingerprint'),
+  ipAddress: text('ip_address'),
+  issuedAt: timestamp('issued_at', { withTimezone: true }).notNull().defaultNow(),
+  // Bumped on every successful validation. Idle timeout fires when
+  // (now - lastActivityAt) > idleTimeoutSeconds.
+  lastActivityAt: timestamp('last_activity_at', { withTimezone: true }).notNull().defaultNow(),
+  // Bumped on every fresh badge/PIN entry. High-risk actions require
+  // (now - lastReauthAt) <= reauthMaxAgeSeconds.
+  lastReauthAt: timestamp('last_reauth_at', { withTimezone: true }).notNull().defaultNow(),
+  // Absolute hard expiry — even with continuous activity, the session dies
+  // here so an unattended badge can't authorize material draws indefinitely.
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  idleTimeoutSeconds: integer('idle_timeout_seconds').notNull().default(900), // 15 min
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  revokedBy: text('revoked_by'),
+  revokeReason: text('revoke_reason'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  employeeIdx: index('operator_auth_sessions_employee_idx').on(table.employeeId),
+  expiresIdx: index('operator_auth_sessions_expires_idx').on(table.expiresAt),
+  activeIdx: index('operator_auth_sessions_active_idx').on(table.revokedAt, table.expiresAt),
+}));
+
+export type OperatorAuthSession = typeof operatorAuthSessions.$inferSelect;
+export type InsertOperatorAuthSession = typeof operatorAuthSessions.$inferInsert;

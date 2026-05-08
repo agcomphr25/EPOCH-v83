@@ -23,6 +23,7 @@ import crypto from 'crypto';
 import { softAuth, authenticateToken, sessionAwareAuth, requireAdminOrOwner } from '../../middleware/auth';
 import { computeEffectivePriority, getEffectivePriorityScore } from '../../../shared/utils/computeEffectivePriority';
 import employeesRoutes from './employees';
+import operatorAuthRoutes from './operatorAuth';
 import employeeQualificationsRoutes from './employeeQualifications';
 import ordersRoutes from './orders';
 import formsRoutes from './forms';
@@ -344,6 +345,11 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // Employee management routes
   app.use('/api/employees', employeesRoutes);
+
+  // Operator badge auth (Task #143 Phase 2) — issues short-lived shop-floor
+  // session tokens distinct from web JWTs, used by MaterialIssueService to
+  // prove WHO is physically scanning material at a workstation.
+  app.use('/api/operator-auth', operatorAuthRoutes);
   app.use('/api/employees/:employeeId/qualifications', employeeQualificationsRoutes);
 
   // Punch events routes (IC-7) - Read-only mirror from Time Clock

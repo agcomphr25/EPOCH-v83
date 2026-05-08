@@ -54,6 +54,7 @@ import {
   validateAllocation,
   validateLotStatus,
   validateOperatorAuthorization,
+  validateOperatorSession,
   validateRoutingStep,
   validateTravelerIssueEligibility,
   validateWadApproved,
@@ -77,6 +78,12 @@ import {
   evaluateOverride,
   type MaterialIssueOverridePayload,
 } from './materialIssueOverridePolicy';
+import {
+  HIGH_RISK_REAUTH_MAX_AGE_SECONDS,
+  OperatorAuthError,
+  validateAndTouchSession,
+} from './operatorAuthService';
+import type { OperatorAuthSession } from '../../schema';
 
 const SOURCE_MODULE = 'material-issue-service';
 
@@ -99,6 +106,37 @@ export interface MaterialIssueOperator {
   authMethod?: 'BADGE' | 'PIN' | 'SSO' | 'API' | null;
 }
 
+/**
+ * Phase 2 (Task #143). When an `operatorAuth.sessionToken` is present the
+ * service resolves it to an `operator_auth_sessions` row and uses that row
+ * as the source of truth for operator identity (overriding any conflicting
+ * fields on `req.operator`).
+ *
+ * Whether the action requires a fresh re-auth is **policy-driven on the
+ * server**, NOT a caller flag. The service classifies the request via
+ * `req.highRiskClass` + `req.scrapValueUsd` in `isHighRiskRequest()` and
+ * forces a fresh `lastReauthAt` within `HIGH_RISK_REAUTH_MAX_AGE_SECONDS`
+ * for any of:
+ *   - OVERRIDE          (any operator-initiated override of a gate)
+ *   - EXPIRED_LOT_RELEASE
+ *   - QUARANTINE_RELEASE
+ *   - SCRAP             (when `scrapValueUsd > HIGH_RISK_SCRAP_USD_THRESHOLD`)
+ *
+ * Callers cannot opt OUT of this — they may only opt IN via additional
+ * caller-classified high-risk semantics by setting `forceFreshReauth: true`.
+ */
+export type MaterialIssueHighRiskClass =
+  | 'OVERRIDE'
+  | 'EXPIRED_LOT_RELEASE'
+  | 'QUARANTINE_RELEASE'
+  | 'SCRAP';
+
+export interface MaterialIssueOperatorAuth {
+  sessionToken?: string | null;
+  /** Caller-side opt-IN only. Cannot suppress server-derived requirements. */
+  forceFreshReauth?: boolean;
+}
+
 export interface MaterialIssueRequest {
   /** Which logical action is being performed; routes the gate chain and ledger txn type. */
   action: MaterialIssueAction;
@@ -115,6 +153,18 @@ export interface MaterialIssueRequest {
   quantity: number;
   /** Operator + device context. Required. */
   operator: MaterialIssueOperator;
+  /**
+   * Phase 2 operator session token presented by the shop-floor UI.
+   * When omitted, the operator-session gate emits OPERATOR_NOT_AUTHENTICATED.
+   */
+  operatorAuth?: MaterialIssueOperatorAuth;
+  /**
+   * Server-evaluated high-risk classification (Task #143). Setting any
+   * value here forces fresh-reauth enforcement; the caller cannot opt out.
+   */
+  highRiskClass?: MaterialIssueHighRiskClass | null;
+  /** USD value of the material being scrapped — only consulted for SCRAP. */
+  scrapValueUsd?: number | null;
   /** Traveler the work belongs to. Required for issue / consume / transferToJob / reserve. */
   travelerId?: string | null;
   /** Active routing step on that traveler. Required for issue / consume / transferToJob. */
@@ -224,15 +274,88 @@ const ACTION_TO_LOT_TXN_TYPE: Record<MaterialIssueAction, string> = {
  * loading reservation data fail CLOSED — they surface as an
  * `ALLOCATION_EXCEEDED` blocker rather than silently allowing the draw.
  */
+/**
+ * Resolve `req.operatorAuth.sessionToken` to a session row (Phase 2,
+ * Task #143). Returns the row plus a synthesized blocker on any failure
+ * (token malformed, session expired/idle/revoked, fresh-reauth required
+ * but stale). The session row, when valid, becomes the authoritative
+ * source for operator identity in `executeMaterialIssue`.
+ */
+/**
+ * Server-side, policy-driven high-risk classifier. The decision lives
+ * here — NOT in callers — so a forgotten flag at one call site cannot
+ * silently downgrade a high-risk action.
+ */
+export function isHighRiskRequest(req: MaterialIssueRequest): boolean {
+  if (req.operatorAuth?.forceFreshReauth) return true;
+  if (!req.highRiskClass) return false;
+  if (req.highRiskClass === 'SCRAP') {
+    return (req.scrapValueUsd ?? 0) > HIGH_RISK_SCRAP_USD_THRESHOLD;
+  }
+  return true; // OVERRIDE / EXPIRED_LOT_RELEASE / QUARANTINE_RELEASE always high-risk.
+}
+
+async function resolveOperatorSession(
+  req: MaterialIssueRequest,
+): Promise<{ session: OperatorAuthSession | null; blocker: MaterialIssueBlocker | null }> {
+  const requireFresh = isHighRiskRequest(req);
+  const token = req.operatorAuth?.sessionToken;
+  if (!token) {
+    return {
+      session: null,
+      blocker: validateOperatorSession(null, {
+        requireFreshReauth: requireFresh,
+        freshReauthMaxAgeSeconds: HIGH_RISK_REAUTH_MAX_AGE_SECONDS,
+      }),
+    };
+  }
+  try {
+    // touch=false here: the gate-validation path is read-only and may be
+    // called multiple times during a UI preflight. We bump lastActivityAt
+    // ONLY when execution actually proceeds.
+    const { session } = await validateAndTouchSession(token, { touch: false });
+    const blocker = validateOperatorSession(session, {
+      requireFreshReauth: requireFresh,
+      freshReauthMaxAgeSeconds: HIGH_RISK_REAUTH_MAX_AGE_SECONDS,
+    });
+    return { session, blocker };
+  } catch (err) {
+    if (err instanceof OperatorAuthError) {
+      return {
+        session: null,
+        blocker: {
+          // Map auth errors to the closest blocker code so UIs can route
+          // them to the same "re-scan badge" prompt.
+          code:
+            err.code === 'TOKEN_BAD_SIGNATURE' || err.code === 'TOKEN_MALFORMED'
+              ? 'OPERATOR_NOT_AUTHENTICATED'
+              : 'OPERATOR_NOT_AUTHENTICATED',
+          message: err.message,
+          blockingField: 'operator',
+        },
+      };
+    }
+    throw err;
+  }
+}
+
 export async function validateIssueEligibility(
   req: MaterialIssueRequest,
 ): Promise<MaterialIssueBlocker[]> {
   const blockers: MaterialIssueBlocker[] = [];
 
-  // Gate 6 (operator) runs first because it's pure and cheap; if there is
-  // no operator identity, nothing else matters.
-  const operatorBlocker = validateOperatorAuthorization(req.operator);
-  if (operatorBlocker) blockers.push(operatorBlocker);
+  // Phase 2 (Task #143) gate 7 runs first: no valid operator session →
+  // nothing else matters. We still preserve the legacy displayName/badge
+  // shape check (gate 6) so callers that haven't migrated to session
+  // tokens fail with the same well-known structured error.
+  const { session, blocker: sessionBlocker } = await resolveOperatorSession(req);
+  if (sessionBlocker) blockers.push(sessionBlocker);
+
+  const legacyOperator = session
+    ? { displayName: session.employeeDisplayName, userId: session.employeeId, badge: null }
+    : req.operator;
+  const operatorBlocker = validateOperatorAuthorization(legacyOperator);
+  if (operatorBlocker && !sessionBlocker) blockers.push(operatorBlocker);
 
   if (!req.materialLotId) {
     throw new MaterialIssueError('materialLotId is required');
@@ -679,6 +802,54 @@ export async function executeMaterialIssue(
   if (blockers.length > 0) {
     return { ok: false, blockers };
   }
+
+  // Re-resolve the session so the ledger row reflects the AUTHENTICATED
+  // operator identity (snapshot from the session row), not whatever the
+  // caller pasted into req.operator. validateIssueEligibility already
+  // proved the session is good; this re-fetch also bumps lastActivityAt
+  // exactly once per executed action so the idle timer stays alive.
+  let effectiveOperator: MaterialIssueOperator = req.operator;
+  if (req.operatorAuth?.sessionToken) {
+    try {
+      const { session } = await validateAndTouchSession(
+        req.operatorAuth.sessionToken,
+        { touch: true },
+      );
+      effectiveOperator = {
+        userId: session.employeeId,
+        displayName: session.employeeDisplayName,
+        badge: req.operator?.badge ?? null,
+        workstation: session.workstationId ?? req.operator?.workstation ?? null,
+        deviceIp: session.ipAddress ?? req.operator?.deviceIp ?? null,
+        authMethod: session.authMethod as MaterialIssueOperator['authMethod'],
+      };
+    } catch (err) {
+      // Lost the race against an expiry / revoke that fired between
+      // validation and execution. Surface as a structured blocker.
+      if (err instanceof OperatorAuthError) {
+        return {
+          ok: false,
+          blockers: [
+            {
+              code: 'OPERATOR_NOT_AUTHENTICATED',
+              message: err.message,
+              blockingField: 'operator',
+            },
+          ],
+        };
+      }
+      throw err;
+    }
+  }
+
+  const reqWithEffectiveOperator: MaterialIssueRequest = {
+    ...req,
+    operator: effectiveOperator,
+  };
+  // Replace `req` with the effective-operator copy for the rest of the
+  // function so the ledger row, lot transaction, and reservation rows all
+  // attribute the action to the authenticated operator.
+  req = reqWithEffectiveOperator;
 
   const lot = await storage.getMaterialLot(req.materialLotId);
   if (!lot) {

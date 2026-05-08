@@ -45,6 +45,7 @@ export type MaterialIssueBlockerCode =
   | 'LOT_INSUFFICIENT_QTY'
   | 'OPERATOR_NOT_AUTHENTICATED'
   | 'OPERATOR_NOT_AUTHORIZED'
+  | 'STALE_OPERATOR_AUTH'
   | 'INVALID_QUANTITY'
   | 'MISSING_SIGNATURE'
   | 'INVALID_SIGNATURE';
@@ -342,6 +343,84 @@ export function validateLotStatus(
     };
   }
 
+  return null;
+}
+
+/**
+ * Gate 7 — Operator session must be authenticated and fresh.
+ *
+ * Phase 2 (Task #143). Pure-function variant of the operator-session check
+ * so the gate chain can be unit-tested without reaching the DB. The
+ * `MaterialIssueService` resolves the token to a session row first, then
+ * passes the row in here.
+ *
+ * `requireFreshReauth` — when true (high-risk action), the session's
+ * `lastReauthAt` must be within `freshReauthMaxAgeSeconds`. Otherwise the
+ * operator must rescan their badge / re-enter PIN before the action can
+ * proceed. This is enforced even within an otherwise-active session.
+ */
+export function validateOperatorSession(
+  session:
+    | {
+        id: string;
+        revokedAt: Date | null;
+        expiresAt: Date;
+        lastActivityAt: Date;
+        lastReauthAt: Date;
+        idleTimeoutSeconds: number;
+      }
+    | null
+    | undefined,
+  options: {
+    requireFreshReauth?: boolean;
+    freshReauthMaxAgeSeconds?: number;
+    now?: Date;
+  } = {},
+): MaterialIssueBlocker | null {
+  const now = options.now ?? new Date();
+  if (!session) {
+    return {
+      code: 'OPERATOR_NOT_AUTHENTICATED',
+      message:
+        'No active operator session. Scan a badge or enter your PIN before drawing material.',
+      blockingField: 'operator',
+    };
+  }
+  if (session.revokedAt) {
+    return {
+      code: 'OPERATOR_NOT_AUTHENTICATED',
+      message: 'Operator session was revoked. Re-authenticate to continue.',
+      blockingField: 'operator',
+    };
+  }
+  if (session.expiresAt.getTime() <= now.getTime()) {
+    return {
+      code: 'OPERATOR_NOT_AUTHENTICATED',
+      message: 'Operator session has reached its absolute timeout. Re-authenticate to continue.',
+      blockingField: 'operator',
+    };
+  }
+  const idleMs = now.getTime() - session.lastActivityAt.getTime();
+  if (idleMs > session.idleTimeoutSeconds * 1000) {
+    return {
+      code: 'OPERATOR_NOT_AUTHENTICATED',
+      message: `Operator session timed out after ${session.idleTimeoutSeconds}s of inactivity. Re-scan badge.`,
+      blockingField: 'operator',
+    };
+  }
+  if (options.requireFreshReauth) {
+    const maxAge = options.freshReauthMaxAgeSeconds ?? 60;
+    const ageMs = now.getTime() - session.lastReauthAt.getTime();
+    if (ageMs > maxAge * 1000) {
+      return {
+        code: 'STALE_OPERATOR_AUTH',
+        message:
+          `This is a high-risk action — re-scan your badge or re-enter your PIN ` +
+          `(authentication must be within the last ${maxAge}s).`,
+        blockingField: 'operator',
+      };
+    }
+  }
   return null;
 }
 

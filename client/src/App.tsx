@@ -327,6 +327,8 @@ import RFQListPage from './pages/RFQListPage';
 import RFQBuilderPage from './pages/RFQBuilderPage';
 import SystemAuditsPage from './pages/SystemAuditsPage';
 import AuditLedgerPage from './pages/AuditLedgerPage';
+import InventoryAnomalyDashboard from './pages/InventoryAnomalyDashboard';
+import AnomalyDetectorConfigPage from './pages/AnomalyDetectorConfigPage';
 import CommandCenter from './pages/CommandCenter';
 import EdriDashboard from './pages/admin/EdriDashboard';
 import EdriDomainDetail from './pages/admin/EdriDomainDetail';
@@ -632,6 +634,8 @@ function App() {
                   <Route path="/admin/inventory-reconciliation" component={InventoryReconciliationPage} />
                   <Route path="/system-audits" component={SystemAuditsPage} />
                   <Route path="/admin/audit-ledger" component={AuditLedgerPage} />
+                  <Route path="/admin/inventory-anomalies" component={InventoryAnomalyDashboard} />
+                  <Route path="/admin/anomaly-config" component={AnomalyDetectorConfigPage} />
                   <Route path="/admin/locate-order" component={LocateOrder} />
                   <Route path="/qr-error" component={QRErrorPage} />
                   <Route path="/audit-settings" component={AuditSettings} />

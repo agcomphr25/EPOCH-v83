@@ -5765,6 +5765,125 @@ async function initializeBackgroundServices() {
     });
     console.log('🔒 Unified audit ledger tamper-attempt drainer scheduled (every 5 minutes)');
 
+    // ── Inventory Anomaly Detection — Task #146 ────────────────────────────────
+    // Scans `inventory_transaction_ledger` over a rolling window and persists
+    // any new anomalies into `inventory_anomalies`. HIGH/CRITICAL anomalies
+    // emit notifications. Deduped per (detector_key, dedup_key) while OPEN.
+    const anomalyCron = process.env.INVENTORY_ANOMALY_CRON ?? '*/15 * * * *';
+    cron.schedule(anomalyCron, async () => {
+      try {
+        const { runAnomalyDetectionJob } = await import(
+          './src/services/inventoryAnomalyDetectionService'
+        );
+        const result = await runAnomalyDetectionJob({});
+        if (result.anomaliesPersisted > 0) {
+          console.log(
+            `[InventoryAnomaly] persisted ${result.anomaliesPersisted} new anomalies (${result.detectorsRun}/${result.perDetector.length} detectors active, ${result.entriesScanned} entries scanned)`,
+          );
+        }
+      } catch (err) {
+        console.error('[InventoryAnomaly] scheduled scan failed:', err);
+      }
+    });
+    console.log(`🔍 Inventory anomaly detection scheduled (${anomalyCron})`);
+
+    // Wire HIGH/CRITICAL anomaly notifier into the WebSocket notification
+    // manager AND the SendGrid email pipeline. Recipients with email
+    // addresses on file receive an email; everyone in the recipient list
+    // (or all admins, as broadcast) receives an in-app notification.
+    try {
+      const { setAnomalyNotifier, setAnomalyEscalationHandler } = await import(
+        './src/services/inventoryAnomalyDetectionService'
+      );
+      const { notificationManager } = await import('./src/services/notificationManager');
+      const { sendEmailViaSendGrid } = await import('./utils/sendgrid');
+      const { db } = await import('./db');
+      const { users } = await import('./schema');
+      const { inArray } = await import('drizzle-orm');
+
+      const sendAnomalyEmail = async (
+        anomaly: { id: string; detectorKey: string; severity: string; summary: string; agPartNumber: string | null },
+        recipients: number[],
+      ) => {
+        if (!recipients || recipients.length === 0) return;
+        try {
+          const recips = await db
+            .select({ id: users.id, email: users.email })
+            .from(users)
+            .where(inArray(users.id, recipients));
+          const emails = recips.map((r) => r.email).filter((e): e is string => !!e);
+          if (emails.length === 0) return;
+          const subject = `[${anomaly.severity}] Inventory anomaly: ${anomaly.detectorKey}`;
+          const body = `An inventory anomaly was detected.\n\nDetector: ${anomaly.detectorKey}\nSeverity: ${anomaly.severity}\nSummary: ${anomaly.summary}\nPart: ${anomaly.agPartNumber ?? 'n/a'}\n\nView and triage: /admin/inventory-anomalies`;
+          await Promise.all(
+            emails.map((to) =>
+              sendEmailViaSendGrid({ to, subject, text: body, html: `<pre>${body}</pre>` }).catch(
+                (err: any) => console.error('[InventoryAnomaly] email send failed:', err?.message ?? err),
+              ),
+            ),
+          );
+        } catch (err) {
+          console.error('[InventoryAnomaly] email recipient lookup failed:', err);
+        }
+      };
+
+      setAnomalyNotifier(async (anomaly, recipients) => {
+        const payload = {
+          type: 'inventory_anomaly',
+          title: `Inventory anomaly: ${anomaly.detectorKey}`,
+          message: anomaly.summary,
+          data: {
+            anomalyId: anomaly.id,
+            detectorKey: anomaly.detectorKey,
+            severity: anomaly.severity,
+            agPartNumber: anomaly.agPartNumber,
+          },
+          timestamp: new Date().toISOString(),
+        };
+        if (recipients && recipients.length > 0) {
+          notificationManager.sendToUsers(recipients, payload);
+        } else {
+          notificationManager.broadcast(payload);
+        }
+        // Email path for HIGH/CRITICAL only.
+        if (anomaly.severity === 'HIGH' || anomaly.severity === 'CRITICAL') {
+          await sendAnomalyEmail(anomaly, recipients);
+        }
+      });
+
+      // When an anomaly is escalated by an admin, send an immediate email +
+      // broadcast to all connected clients so on-call admins are alerted
+      // even if no recipient list is configured.
+      setAnomalyEscalationHandler(async (anomaly, note) => {
+        notificationManager.broadcast({
+          type: 'inventory_anomaly_escalated',
+          title: `Inventory anomaly ESCALATED: ${anomaly.detectorKey}`,
+          message: `${anomaly.summary} — ${note}`,
+          data: {
+            anomalyId: anomaly.id,
+            detectorKey: anomaly.detectorKey,
+            severity: anomaly.severity,
+          },
+          timestamp: new Date().toISOString(),
+        });
+        // Pull recipients from the detector's notification config (best effort).
+        try {
+          const { db } = await import('./db');
+          const { anomalyDetectorConfig } = await import('./schema');
+          const { eq } = await import('drizzle-orm');
+          const [cfg] = await db
+            .select()
+            .from(anomalyDetectorConfig)
+            .where(eq(anomalyDetectorConfig.detectorKey, anomaly.detectorKey));
+          await sendAnomalyEmail(anomaly, cfg?.notificationRecipientUserIds ?? []);
+        } catch (err) {
+          console.error('[InventoryAnomaly] escalation email failed:', err);
+        }
+      });
+    } catch (err) {
+      console.error('[InventoryAnomaly] notifier wiring failed:', err);
+    }
+
     // ── Scheduled chain verifier — every 30 minutes ───────────────────────────
     // Task #85: re-walks the most recent ledger window (anchor-aware) and on
     // mismatch records an AUDIT_CHAIN_INTEGRITY_FAILED event so the

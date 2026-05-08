@@ -514,6 +514,18 @@ export default function Navigation() {
       icon: FileSearch,
       description: 'Append-only, hash-chained DCAA / CMMC audit ledger',
     },
+    {
+      path: '/admin/inventory-anomalies',
+      label: 'Inventory Anomalies',
+      icon: AlertTriangle,
+      description: 'Fraud / error pattern detection across the inventory ledger',
+    },
+    {
+      path: '/admin/anomaly-config',
+      label: 'Anomaly Detector Config',
+      icon: Settings,
+      description: 'Tune thresholds and notifications for inventory anomaly detectors',
+    },
   ];
 
   const estimatingItems: NavItemDef[] = [

@@ -17489,3 +17489,71 @@ export const auditRetentionPolicies = pgTable('audit_retention_policies', {
 export type AuditRetentionPolicy = typeof auditRetentionPolicies.$inferSelect;
 export const insertAuditRetentionPolicySchema = createInsertSchema(auditRetentionPolicies).omit({ id: true, updatedAt: true });
 export type InsertAuditRetentionPolicy = z.infer<typeof insertAuditRetentionPolicySchema>;
+
+// ─────────────────────────────────────────────────────────────────────────
+// Task #146 — Inventory Anomaly Detection (Phase 3)
+// ─────────────────────────────────────────────────────────────────────────
+
+export const inventoryAnomalies = pgTable('inventory_anomalies', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  detectorKey: text('detector_key').notNull(),
+  severity: text('severity').notNull(), // LOW | MEDIUM | HIGH | CRITICAL
+  status: text('status').notNull().default('OPEN'), // OPEN | ACKNOWLEDGED | DISMISSED | ESCALATED
+  detectedAt: timestamp('detected_at', { withTimezone: true }).notNull().defaultNow(),
+  windowStart: timestamp('window_start', { withTimezone: true }),
+  windowEnd: timestamp('window_end', { withTimezone: true }),
+  dedupKey: text('dedup_key').notNull(),
+  summary: text('summary').notNull(),
+  contextJson: jsonb('context_json').$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
+  ledgerEntryIds: uuid('ledger_entry_ids').array().notNull().default(sql`ARRAY[]::uuid[]`),
+  agPartNumber: text('ag_part_number'),
+  lotId: uuid('lot_id'),
+  performedByUserId: integer('performed_by_user_id'),
+  performedByDisplayName: text('performed_by_display_name'),
+  approvedByUserId: integer('approved_by_user_id'),
+  approvedByDisplayName: text('approved_by_display_name'),
+  assignedToUserId: integer('assigned_to_user_id').references(() => users.id),
+  assignedToDisplayName: text('assigned_to_display_name'),
+  acknowledgedAt: timestamp('acknowledged_at', { withTimezone: true }),
+  acknowledgedByUserId: integer('acknowledged_by_user_id').references(() => users.id),
+  acknowledgedByDisplayName: text('acknowledged_by_display_name'),
+  acknowledgmentNote: text('acknowledgment_note'),
+  dismissedAt: timestamp('dismissed_at', { withTimezone: true }),
+  dismissedByUserId: integer('dismissed_by_user_id').references(() => users.id),
+  dismissedByDisplayName: text('dismissed_by_display_name'),
+  dismissalReason: text('dismissal_reason'),
+  escalatedAt: timestamp('escalated_at', { withTimezone: true }),
+  escalatedByUserId: integer('escalated_by_user_id').references(() => users.id),
+  escalatedByDisplayName: text('escalated_by_display_name'),
+  escalationNote: text('escalation_note'),
+  resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+  resolutionNotes: text('resolution_notes'),
+  notificationSentAt: timestamp('notification_sent_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  detectorKeyIdx: index('inventory_anomalies_detector_key_idx').on(table.detectorKey),
+  statusIdx: index('inventory_anomalies_status_idx').on(table.status),
+  severityIdx: index('inventory_anomalies_severity_idx').on(table.severity),
+  detectedAtIdx: index('inventory_anomalies_detected_at_idx').on(table.detectedAt),
+  dedupUnique: uniqueIndex('inventory_anomalies_dedup_open_uniq')
+    .on(table.detectorKey, table.dedupKey)
+    .where(sql`status = 'OPEN'`),
+}));
+
+export type InventoryAnomaly = typeof inventoryAnomalies.$inferSelect;
+
+export const anomalyDetectorConfig = pgTable('anomaly_detector_config', {
+  id: serial('id').primaryKey(),
+  detectorKey: text('detector_key').notNull().unique(),
+  enabled: boolean('enabled').notNull().default(true),
+  config: jsonb('config').$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
+  notificationRecipientUserIds: integer('notification_recipient_user_ids').array().notNull().default(sql`ARRAY[]::int[]`),
+  notifyOnHigh: boolean('notify_on_high').notNull().default(true),
+  updatedByUserId: integer('updated_by_user_id'),
+  updatedByDisplayName: text('updated_by_display_name'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type AnomalyDetectorConfig = typeof anomalyDetectorConfig.$inferSelect;
+

@@ -43,7 +43,9 @@ export type MaterialIssueBlockerCode =
   | 'LOT_INSUFFICIENT_QTY'
   | 'OPERATOR_NOT_AUTHENTICATED'
   | 'OPERATOR_NOT_AUTHORIZED'
-  | 'INVALID_QUANTITY';
+  | 'INVALID_QUANTITY'
+  | 'MISSING_SIGNATURE'
+  | 'INVALID_SIGNATURE';
 
 export interface MaterialIssueBlocker {
   /** Stable machine code; never localized. */
@@ -58,7 +60,8 @@ export interface MaterialIssueBlocker {
     | 'allocation'
     | 'lot'
     | 'operator'
-    | 'quantity';
+    | 'quantity'
+    | 'signature';
 }
 
 const BLOCKED_LOT_STATUSES_FOR_ISSUE = new Set([

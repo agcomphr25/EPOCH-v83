@@ -961,7 +961,11 @@ export interface IStorage {
   getAllUsers(): Promise<User[]>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: number, data: Partial<InsertUser>): Promise<User>;
-  updateUserPassword(id: number, passwordHash: string): Promise<void>;
+  updateUserPassword(
+    id: number,
+    passwordHash: string,
+    options?: { plaintextPassword?: string; previousPlaintextPassword?: string },
+  ): Promise<void>;
   /**
    * AUTHORITATIVE portal token methods — HMAC-signed, stateless.
    * generatePortalToken creates a self-contained signed payload (no DB write).
@@ -3091,6 +3095,19 @@ export class DatabaseStorage implements IStorage {
     };
 
     const [user] = await db.insert(users).values(userData).returning();
+
+    // Task #145 — auto-enroll a signing keypair for the new user, wrapped
+    // under their initial password. Best-effort: failures here must not
+    // block account creation; the user can manually re-enroll later via
+    // POST /api/digital-signatures/keys/initialize.
+    if (insertUser.password) {
+      try {
+        const { ensureUserKeypair } = await import('./src/services/digitalSignatureService');
+        await ensureUserKeypair(user.id, insertUser.password);
+      } catch (err) {
+        console.error('[storage.createUser] signing-key enrollment failed (non-fatal):', err);
+      }
+    }
     return user;
   }
 
@@ -19150,7 +19167,11 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
-  async updateUserPassword(id: number, passwordHash: string): Promise<void> {
+  async updateUserPassword(
+    id: number,
+    passwordHash: string,
+    options?: { plaintextPassword?: string; previousPlaintextPassword?: string },
+  ): Promise<void> {
     await db
       .update(users)
       .set({
@@ -19159,6 +19180,43 @@ export class DatabaseStorage implements IStorage {
         updatedAt: new Date(),
       })
       .where(eq(users.id, id));
+
+    // Task #145 — keep the user's signing keypair in lockstep with their
+    // password. If the caller supplies the plaintext (callers performing a
+    // self-service password change should always do so), we either:
+    //   (a) rewrap the existing private key under the new password's KEK
+    //       when the OLD plaintext is also available, or
+    //   (b) generate a brand-new keypair if none exists yet.
+    // This is a best-effort hook: any failure here MUST NOT block the
+    // password change itself (the user can still re-enroll manually).
+    if (options?.plaintextPassword) {
+      try {
+        const { ensureUserKeypair, rewrapOnPasswordChange } = await import(
+          './src/services/digitalSignatureService'
+        );
+        if (options.previousPlaintextPassword) {
+          await rewrapOnPasswordChange(
+            id,
+            options.previousPlaintextPassword,
+            options.plaintextPassword,
+          ).catch(async (err: any) => {
+            // No existing key → enroll one under the new password.
+            if (err?.code === 'NO_ACTIVE_KEY') {
+              await ensureUserKeypair(id, options.plaintextPassword!);
+            } else {
+              throw err;
+            }
+          });
+        } else {
+          await ensureUserKeypair(id, options.plaintextPassword);
+        }
+      } catch (err) {
+        console.error(
+          '[storage.updateUserPassword] signing-key sync failed (non-fatal):',
+          err,
+        );
+      }
+    }
   }
 
   /**

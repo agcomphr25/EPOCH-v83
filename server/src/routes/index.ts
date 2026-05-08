@@ -138,6 +138,7 @@ import auditRoutes from './audit';
 import auditLedgerRoutes from './auditLedger';
 import inventoryTransactionLedgerRoutes from './inventoryTransactionLedger';
 import inventoryAnomaliesRoutes from './inventoryAnomalies';
+import digitalSignaturesRoutes from './digitalSignatures';
 import { auditService } from '../services/auditService';
 import mediaRoutes from './media';
 import voiceNotesRoutes from './voiceNotes';
@@ -826,6 +827,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   app.use('/api/audit-ledger', auditLedgerRoutes);
   app.use('/api/inventory-transaction-ledger', inventoryTransactionLedgerRoutes);
   app.use('/api/inventory-anomalies', inventoryAnomaliesRoutes);
+  app.use('/api/digital-signatures', digitalSignaturesRoutes);
 
   // Media Library routes
   app.use('/api/media', mediaRoutes);

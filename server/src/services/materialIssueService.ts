@@ -58,6 +58,13 @@ import {
   type MaterialIssueAction,
   type MaterialIssueBlocker,
 } from './materialIssueGates';
+import {
+  buildMaterialIssueSignaturePayload,
+  classifyRequiredSignature,
+  loadSignaturePolicy,
+  type SignatureTransactionClass,
+} from './digitalSignaturePayloads';
+import { verifyAgainstPayload } from './digitalSignatureService';
 
 const SOURCE_MODULE = 'material-issue-service';
 
@@ -104,6 +111,23 @@ export interface MaterialIssueRequest {
   locationId?: string | null;
   /** Required for `unreserve`: which `materialLotReservations.id` to cancel. */
   reservationId?: number | null;
+  /**
+   * Optional digital signature accompanying this request. Required when the
+   * draw is classified as high-risk (override / scrap above threshold /
+   * quarantine release / expired-lot use / large count adjustment). The
+   * signature is re-verified against the canonical payload built from THIS
+   * request — a signer who signed transaction A cannot submit it with
+   * transaction B.
+   */
+  digitalSignature?: {
+    signatureId: string;
+  } | null;
+  /**
+   * Caller can explicitly mark the request as an override (e.g. an
+   * authorized supervisor approving a draw that would otherwise be blocked).
+   * Setting this true forces a signature requirement.
+   */
+  isOverride?: boolean;
 }
 
 export type MaterialIssueResult =
@@ -181,7 +205,20 @@ export async function validateIssueEligibility(
 
   const lot = await storage.getMaterialLot(req.materialLotId);
   const lotBlocker = validateLotStatus(lot, req.action);
-  if (lotBlocker) blockers.push(lotBlocker);
+  // Phase-3 (Task #145) — LOT_QUARANTINED and LOT_EXPIRED are NOT hard
+  // blockers when accompanied by a valid digital signature of the
+  // matching transaction class. We hold the lot blocker aside and only
+  // push it if the signature gate fails to authorize the bypass.
+  let pendingLotBlocker: MaterialIssueBlocker | null = null;
+  if (lotBlocker) {
+    const isOverridableLotBlock =
+      lotBlocker.code === 'LOT_QUARANTINED' || lotBlocker.code === 'LOT_EXPIRED';
+    if (isOverridableLotBlock) {
+      pendingLotBlocker = lotBlocker;
+    } else {
+      blockers.push(lotBlocker);
+    }
+  }
 
   // For unreserve we only need lot + operator + reservationId; skip
   // traveler/WAD chain because cancelling a reservation does not roll up
@@ -255,7 +292,112 @@ export async function validateIssueEligibility(
     }
   }
 
+  // Phase-3 (Task #145) — digital signature gate. The classifier inspects
+  // the request + lot to decide whether this draw is "high-risk" and thus
+  // requires a verifiable signature. If so, the request must carry a
+  // `digitalSignature.signatureId` whose canonical bytes match a payload
+  // built deterministically from THIS request. We re-verify cryptographically
+  // here so a stale or tampered signature is rejected before any state change.
+  const requiredClass = classifyRequiredSignatureForRequest(req, lot);
+  if (requiredClass) {
+    const sigBlocker = await validateSignatureGate(req, requiredClass);
+    if (sigBlocker) {
+      blockers.push(sigBlocker);
+      // Signature failed → the held lot blocker (if any) stands.
+      if (pendingLotBlocker) blockers.push(pendingLotBlocker);
+    } else {
+      // Signature valid for QUARANTINE_RELEASE / EXPIRED_LOT_USE → the
+      // matching lot blocker is intentionally suppressed. Otherwise the
+      // held blocker still applies.
+      if (pendingLotBlocker) {
+        const overrides =
+          (pendingLotBlocker.code === 'LOT_QUARANTINED' && requiredClass === 'QUARANTINE_RELEASE') ||
+          (pendingLotBlocker.code === 'LOT_EXPIRED' && requiredClass === 'EXPIRED_LOT_USE');
+        if (!overrides) blockers.push(pendingLotBlocker);
+      }
+    }
+  } else if (pendingLotBlocker) {
+    // No signature required but lot is quarantined/expired → block as before.
+    blockers.push(pendingLotBlocker);
+  }
+
   return blockers;
+}
+
+function classifyRequiredSignatureForRequest(
+  req: MaterialIssueRequest,
+  lot: { status?: string | null; expirationDate?: Date | null } | null | undefined,
+): SignatureTransactionClass | null {
+  if (req.action === 'unreserve' || req.action === 'reserve') {
+    // Reservations and their cancellations don't draw material; no signature
+    // required even if the reason code looks override-y.
+    if (!req.isOverride) return null;
+  }
+  const expiration = lot?.expirationDate ? new Date(lot.expirationDate as any) : null;
+  const lotIsExpired = expiration ? expiration.getTime() < Date.now() : false;
+  return classifyRequiredSignature(
+    {
+      action: req.action,
+      reasonCode: req.reasonCode ?? null,
+      quantity: req.quantity,
+      lotStatus: lot?.status ?? null,
+      lotIsExpired,
+      isOverride: req.isOverride ?? false,
+    },
+    loadSignaturePolicy(),
+  );
+}
+
+async function validateSignatureGate(
+  req: MaterialIssueRequest,
+  requiredClass: SignatureTransactionClass,
+): Promise<MaterialIssueBlocker | null> {
+  if (!req.digitalSignature?.signatureId) {
+    return {
+      code: 'MISSING_SIGNATURE',
+      message: `This ${req.action} requires a digital signature (${requiredClass}). Have the authorizing party sign before submitting.`,
+      blockingField: 'signature',
+    };
+  }
+  const expected = buildMaterialIssueSignaturePayload(requiredClass, {
+    action: req.action,
+    materialLotId: req.materialLotId,
+    quantity: req.quantity,
+    unitOfMeasure: null,
+    travelerId: req.travelerId ?? null,
+    travelerStepId: req.travelerStepId ?? null,
+    productionWorkOrderId: req.productionWorkOrderId ?? null,
+    chargeCodeId: req.chargeCodeId ?? null,
+    reasonCode: req.reasonCode ?? null,
+    approverUserId: req.operator.userId ?? null,
+    approverDisplayName: req.operator.displayName,
+    signerUserId: req.operator.userId ?? 0,
+    signerDisplayName: req.operator.displayName,
+  });
+  try {
+    const result = await verifyAgainstPayload(req.digitalSignature.signatureId, expected);
+    if (!result.valid) {
+      return {
+        code: 'INVALID_SIGNATURE',
+        message: `Signature ${req.digitalSignature.signatureId} did not verify (${result.reason ?? 'unknown'}).`,
+        blockingField: 'signature',
+      };
+    }
+    if (result.transactionClass !== requiredClass) {
+      return {
+        code: 'INVALID_SIGNATURE',
+        message: `Signature is for ${result.transactionClass} but this draw requires ${requiredClass}.`,
+        blockingField: 'signature',
+      };
+    }
+    return null;
+  } catch (err: any) {
+    return {
+      code: 'INVALID_SIGNATURE',
+      message: `Could not verify signature ${req.digitalSignature.signatureId}: ${err?.message ?? 'unknown error'}.`,
+      blockingField: 'signature',
+    };
+  }
 }
 
 /**
@@ -452,12 +594,15 @@ export async function executeMaterialIssue(
         chargeCodeId: req.chargeCodeId ?? null,
         reasonCode: req.reasonCode ?? `MATERIAL_${req.action.toUpperCase()}`,
         notes: req.notes ?? null,
+        digitalSignatureId: req.digitalSignature?.signatureId ?? null,
         sourceModule: SOURCE_MODULE,
         sourceRecordId: req.materialLotId,
         metadata: {
           action: req.action,
           requestedQty: req.quantity,
           reservationId: createdReservationId,
+          digitalSignatureId: req.digitalSignature?.signatureId ?? null,
+          isOverride: req.isOverride ?? false,
           operator: {
             userId: req.operator.userId ?? null,
             displayName: req.operator.displayName,

@@ -4306,6 +4306,55 @@ export const insertInventoryTransactionLedgerSchema = createInsertSchema(invento
 export type InsertInventoryTransactionLedger = z.infer<typeof insertInventoryTransactionLedgerSchema>;
 export type InventoryTransactionLedger = typeof inventoryTransactionLedger.$inferSelect;
 
+// Task #145 — Digital signatures (Phase 3): per-user signing keypair (Ed25519,
+// private key wrapped at rest with AES-256-GCM under a scrypt(password)-derived
+// KEK) and the immutable signature ledger that ties a person + role + canonical
+// payload to a verifiable cryptographic signature. Both tables are append-only;
+// rotation = insert a new active key + stamp `revoked_at` on the old.
+export const userSigningKeys = pgTable('user_signing_keys', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: integer('user_id').notNull().references(() => users.id),
+  algorithm: text('algorithm').notNull().default('Ed25519'),
+  publicKey: text('public_key').notNull(),
+  wrappedPrivateKey: text('wrapped_private_key').notNull(),
+  wrapAlgorithm: text('wrap_algorithm').notNull().default('AES-256-GCM'),
+  wrapIv: text('wrap_iv').notNull(),
+  wrapAuthTag: text('wrap_auth_tag').notNull(),
+  kdf: text('kdf').notNull().default('scrypt'),
+  kdfSalt: text('kdf_salt').notNull(),
+  kdfParams: jsonb('kdf_params').$type<Record<string, unknown>>().notNull().default(sql`'{"N":16384,"r":8,"p":1,"keylen":32}'::jsonb`),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  revokedReason: text('revoked_reason'),
+  rotatedFromId: uuid('rotated_from_id'),
+}, (t) => ({
+  userIdx: index('user_signing_keys_user_idx').on(t.userId),
+}));
+
+export type UserSigningKey = typeof userSigningKeys.$inferSelect;
+export type InsertUserSigningKey = typeof userSigningKeys.$inferInsert;
+
+export const digitalSignatures = pgTable('digital_signatures', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  signerUserId: integer('signer_user_id').notNull().references(() => users.id),
+  signerRole: text('signer_role').notNull(),
+  certificateId: uuid('certificate_id').notNull().references(() => userSigningKeys.id),
+  algorithm: text('algorithm').notNull().default('Ed25519'),
+  transactionClass: text('transaction_class').notNull(),
+  payloadHash: text('payload_hash').notNull(),
+  payloadCanonical: jsonb('payload_canonical').$type<Record<string, unknown>>().notNull(),
+  signatureBytes: text('signature_bytes').notNull(),
+  signingDeviceFingerprint: text('signing_device_fingerprint'),
+  signedAt: timestamp('signed_at', { withTimezone: true }).defaultNow().notNull(),
+}, (t) => ({
+  signerIdx: index('digital_signatures_signer_idx').on(t.signerUserId),
+  classIdx: index('digital_signatures_class_idx').on(t.transactionClass),
+  certificateIdx: index('digital_signatures_certificate_idx').on(t.certificateId),
+}));
+
+export type DigitalSignature = typeof digitalSignatures.$inferSelect;
+export type InsertDigitalSignature = typeof digitalSignatures.$inferInsert;
+
 export const insertVendorPartSchema = createInsertSchema(vendorParts)
   .omit({
     id: true,

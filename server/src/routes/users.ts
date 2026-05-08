@@ -1,5 +1,60 @@
 import express from 'express';
 import bcrypt from 'bcrypt';
+import {
+  ensureUserKeypair,
+  rewrapOnPasswordChange,
+  rotateKey,
+  hasActiveSigningKey,
+  DigitalSignatureError,
+} from '../services/digitalSignatureService';
+
+/**
+ * Task #145 — keep the user's signing keypair in lockstep with their
+ * password. These admin routes manage `users.password_hash` directly via
+ * SQL (bypassing storage.createUser / storage.updateUserPassword), so we
+ * re-implement the same enrollment / rewrap / rotation behavior inline.
+ *
+ * Three cases:
+ *   1. No active key yet → enroll a fresh one under the new password.
+ *   2. Active key exists AND we have the old plaintext → rewrap in place.
+ *   3. Active key exists but the OLD plaintext is unavailable (admin
+ *      password reset) → rotate: revoke the old key and generate a new
+ *      one under the new password. Old signatures still verify against
+ *      the preserved old certificate; future signing uses the new key
+ *      and the new password — no manual recovery step required.
+ *
+ * Failures here are logged but never block the underlying password write.
+ */
+async function syncSigningKeyForUser(
+  userId: number,
+  newPlaintextPassword: string,
+  previousPlaintextPassword?: string,
+): Promise<void> {
+  try {
+    if (previousPlaintextPassword) {
+      try {
+        await rewrapOnPasswordChange(userId, previousPlaintextPassword, newPlaintextPassword);
+        return;
+      } catch (err: any) {
+        if (!(err instanceof DigitalSignatureError) || err.code !== 'NO_ACTIVE_KEY') {
+          throw err;
+        }
+      }
+      await ensureUserKeypair(userId, newPlaintextPassword);
+      return;
+    }
+    // No old plaintext available — admin reset path. If a key already
+    // exists, rotate so the new password actually unwraps it.
+    const hasKey = await hasActiveSigningKey(userId);
+    if (hasKey) {
+      await rotateKey(userId, newPlaintextPassword, 'admin_password_reset');
+    } else {
+      await ensureUserKeypair(userId, newPlaintextPassword);
+    }
+  } catch (err) {
+    console.error('[users-route] signing-key sync failed (non-fatal):', err);
+  }
+}
 import { z } from 'zod';
 
 import { pool } from '../../db';
@@ -194,6 +249,10 @@ router.post('/', requirePermission('admin.manage_users'), async (req, res) => {
 
     const newUser = result[0];
 
+    // Task #145 — auto-enroll a digital-signature keypair under the user's
+    // initial password.
+    await syncSigningKeyForUser(newUser.id, password);
+
     // If the user has an employeeId and isFinishTechnician was provided, update the employee record
     if (newUser.employeeId && isFinishTechnician !== undefined) {
       await pool.query(
@@ -251,6 +310,7 @@ router.put('/:id', requirePermission('admin.manage_users'), async (req, res) => 
       updates.push(`last_name = $${paramCount++}`);
       values.push(lastName);
     }
+    let passwordChangedTo: string | null = null;
     if (password !== undefined && password !== '') {
       // Using 12 salt rounds for security consistency
       // SECURITY: Only store the hashed password, never plaintext
@@ -258,6 +318,7 @@ router.put('/:id', requirePermission('admin.manage_users'), async (req, res) => 
       updates.push(`password_hash = $${paramCount++}`);
       values.push(passwordHash);
       updates.push(`password_changed_at = NOW()`);
+      passwordChangedTo = password;
     }
     if (role !== undefined) {
       updates.push(`role = $${paramCount++}`);
@@ -302,6 +363,16 @@ router.put('/:id', requirePermission('admin.manage_users'), async (req, res) => 
     }
 
     const updatedUser = result[0];
+
+    // Task #145 — re-enroll the digital-signature keypair under the new
+    // password. We don't have the OLD plaintext at this admin-managed
+    // route, so we fall back to enrolling a fresh keypair when one is
+    // missing; an existing key whose old password we can't supply will be
+    // left in place (the user can rotate it manually via the
+    // /api/digital-signatures/keys/rotate endpoint).
+    if (passwordChangedTo) {
+      await syncSigningKeyForUser(Number(id), passwordChangedTo);
+    }
 
     // If the user has an employeeId and isFinishTechnician was provided, update the employee record
     if (updatedUser.employeeId && isFinishTechnician !== undefined) {

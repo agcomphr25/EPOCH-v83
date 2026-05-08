@@ -238,6 +238,14 @@ type VendorPO = {
   rfqOutcomeNotes?: string | null;
   // Compliance review status (augmented by list endpoint)
   complianceStatus?: 'Pending Review' | 'Reviewed' | 'Blocked' | 'Requires Attention';
+  // Purchasing controls
+  requisitionId?: number | null;
+  competitionMethod?: 'competed' | 'sole-source' | 'small-purchase' | 'exception' | string | null;
+  soleSourceJustification?: string | null;
+  directPoExceptionApprovedById?: number | null;
+  directPoExceptionApprovedByName?: string | null;
+  directPoExceptionReason?: string | null;
+  directPoExceptionApprovedAt?: string | null;
 };
 
 type VendorPOItem = {

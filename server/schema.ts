@@ -4334,7 +4334,7 @@ export const insertVendorPOSchema = createInsertSchema(vendorPOs)
   .extend({
     poNumber: z.string().nullable().optional(),
     vendorId: z.number().int().positive('Vendor ID is required'),
-    status: z.enum(['Draft', 'RFQ Sent', 'Sent', 'Partially Received', 'Fully Received', 'Cancelled']).default('Draft'),
+    status: z.enum(['Draft', 'RFQ Sent', 'Quote Received', 'Declined', 'Expired', 'Sent', 'Partially Received', 'Fully Received', 'Cancelled']).default('Draft'),
     orderDate: z.string().optional().nullable(),
     expectedDeliveryDate: z.string().optional().nullable(),
     actualDeliveryDate: z.string().optional().nullable(),

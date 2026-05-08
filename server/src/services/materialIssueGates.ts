@@ -33,6 +33,8 @@ export type MaterialIssueBlockerCode =
   | 'ROUTING_STEP_NOT_ACTIVE'
   | 'ROUTING_STEP_NOT_FOUND'
   | 'ROUTING_STEP_MISMATCH'
+  | 'WRONG_ROUTING_STEP'
+  | 'NO_ACTIVE_ROUTING_STEP'
   | 'ALLOCATION_EXCEEDED'
   | 'LOT_NOT_FOUND'
   | 'LOT_NOT_AVAILABLE'
@@ -141,15 +143,48 @@ export function validateWadApproved(
 
 /**
  * Gate 3 — The routing step the operator is scanning against must be the
- * active (in-progress) step on the traveler. Drawing material against a
- * not-yet-started or already-completed step breaks the cost-attribution
- * chain and is a DCAA finding.
+ * traveler's active (in-progress) step AND, when the draw is binding a
+ * pre-built packet or an existing reservation, must match the
+ * `intendedRoutingStepId` that the packet / reservation was created for.
+ *
+ * Drawing material against a not-yet-started, already-completed, or
+ * "different than the packet was built for" step breaks the cost-
+ * attribution chain (DCAA §10.3) and is hard-rejected unless an
+ * authorized `ROUTING_STEP_BYPASS` override is supplied — see
+ * `materialIssueOverridePolicy.ts`.
+ *
+ * Inputs:
+ *  - `step`: the step the operator scanned (may be null when the
+ *    operator UI relies entirely on auto-detection of the active step).
+ *  - `expectedTravelerId`: the traveler the draw is targeting; if `step`
+ *    belongs to a different traveler we hard-reject.
+ *  - `activeStep`: the canonical "active step right now" computed via
+ *    `routingStepService.getActiveRoutingStep`. When present and the
+ *    operator-supplied `step` is not the active one, we return
+ *    `WRONG_ROUTING_STEP`. When absent, we return `NO_ACTIVE_ROUTING_STEP`.
+ *  - `intendedRoutingStepId`: the step id stamped on the packet or
+ *    existing reservation being consumed. Optional; when present must
+ *    equal the active step id, else `WRONG_ROUTING_STEP`.
  */
 export function validateRoutingStep(
   step: Pick<TravelerStep, 'id' | 'travelerId' | 'status'> | null | undefined,
   expectedTravelerId: string | null | undefined,
+  activeStep?: Pick<TravelerStep, 'id' | 'status'> | null,
+  intendedRoutingStepId?: string | null,
 ): MaterialIssueBlocker | null {
   if (!step) {
+    // When the auto-detect path explicitly resolved "no active step" we
+    // surface that as the more-specific blocker so the operator UI can
+    // prompt them to start a step (rather than the generic "scan a step"
+    // path that ROUTING_STEP_NOT_FOUND signals).
+    if (activeStep === null) {
+      return {
+        code: 'NO_ACTIVE_ROUTING_STEP',
+        message:
+          'Traveler has no active routing step. Start a step before drawing material.',
+        blockingField: 'routingStep',
+      };
+    }
     return {
       code: 'ROUTING_STEP_NOT_FOUND',
       message: 'No routing step is selected for this material draw. Scan the active step first.',
@@ -167,6 +202,33 @@ export function validateRoutingStep(
     return {
       code: 'ROUTING_STEP_NOT_ACTIVE',
       message: `Routing step is ${step.status} — start the step before drawing material.`,
+      blockingField: 'routingStep',
+    };
+  }
+  // Phase-2 strengthening: enforce single-source-of-truth active step.
+  if (activeStep === null) {
+    return {
+      code: 'NO_ACTIVE_ROUTING_STEP',
+      message:
+        'Traveler has no active routing step. Start a step before drawing material.',
+      blockingField: 'routingStep',
+    };
+  }
+  if (activeStep && activeStep.id !== step.id) {
+    return {
+      code: 'WRONG_ROUTING_STEP',
+      message:
+        `Material may only be drawn against the active routing step. ` +
+        `Active step is "${activeStep.id}", you scanned "${step.id}".`,
+      blockingField: 'routingStep',
+    };
+  }
+  if (intendedRoutingStepId && intendedRoutingStepId !== step.id) {
+    return {
+      code: 'WRONG_ROUTING_STEP',
+      message:
+        `This packet / reservation is bound to routing step ` +
+        `"${intendedRoutingStepId}", not the scanned step "${step.id}".`,
       blockingField: 'routingStep',
     };
   }

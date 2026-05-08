@@ -5530,6 +5530,12 @@ export const materialLotReservations = pgTable('material_lot_reservations', {
   // Lifecycle: active → fulfilled (on consumption) | cancelled
   status: text('status').notNull().default('active'), // active | fulfilled | cancelled
 
+  // Routing-step intent (Task #144). Pins the reservation to a specific
+  // routing step so that material reserved for "Layup" cannot be consumed
+  // during "Cutting", and vice versa. Nullable for legacy rows; new
+  // reservations created via MaterialIssueService MUST set it.
+  intendedRoutingStepId: varchar('intended_routing_step_id', { length: 255 }),
+
   notes: text('notes'),
   createdBy: text('created_by').notNull(),
   createdAt: timestamp('created_at').defaultNow(),
@@ -5539,6 +5545,43 @@ export const materialLotReservations = pgTable('material_lot_reservations', {
   statusIdx: index('material_lot_reservations_status_idx').on(table.status),
   travelerIdIdx: index('material_lot_reservations_traveler_idx').on(table.travelerId),
   receivedUnitIdIdx: index('material_lot_reservations_ru_idx').on(table.receivedUnitId),
+  intendedStepIdx: index('material_lot_reservations_intended_step_idx').on(table.intendedRoutingStepId),
+}));
+
+// ============================================================================
+// MATERIAL-ISSUE OVERRIDE APPROVALS (Task #144 Phase 2)
+// ============================================================================
+//
+// Every MaterialIssueService override must reference a row in this table.
+// Approvers create the row out-of-band (UI / API call backed by a real
+// authentication context) BEFORE the operator attempts the draw. The
+// service loads the row, verifies status='APPROVED' + reason/blocker/lot/
+// traveler context match + not expired, then transitions it to CONSUMED
+// in the same transaction as the ledger write. Single-use, immutable
+// audit artifact.
+
+export const materialIssueApprovals = pgTable('material_issue_approvals', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  reason: text('reason').notNull(),
+  bypassesBlocker: text('bypasses_blocker').notNull(),
+  materialLotId: uuid('material_lot_id').references(() => materialLots.id, { onDelete: 'set null' }),
+  travelerId: uuid('traveler_id'),
+  intendedRoutingStepId: varchar('intended_routing_step_id', { length: 255 }),
+  approverUserId: integer('approver_user_id').notNull().references(() => users.id),
+  approverRoleAtApproval: text('approver_role_at_approval').notNull(),
+  writtenReason: text('written_reason').notNull(),
+  status: text('status').notNull().default('APPROVED'),
+  approvedAt: timestamp('approved_at').notNull().defaultNow(),
+  expiresAt: timestamp('expires_at').notNull(),
+  consumedAt: timestamp('consumed_at'),
+  consumedByLedgerEntryId: uuid('consumed_by_ledger_entry_id'),
+  revokedAt: timestamp('revoked_at'),
+  revokedByUserId: integer('revoked_by_user_id').references(() => users.id),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+}, (table) => ({
+  statusIdx: index('material_issue_approvals_status_idx').on(table.status),
+  lotIdx: index('material_issue_approvals_lot_idx').on(table.materialLotId),
+  travelerIdx: index('material_issue_approvals_traveler_idx').on(table.travelerId),
 }));
 
 // ============================================================================
@@ -9272,6 +9315,10 @@ export const cuttingBuiltPackets = pgTable('cutting_built_packets', {
   consumedBy: text('consumed_by'),
   isMixedFabric: boolean('is_mixed_fabric').default(false),
   fabricSourceCount: integer('fabric_source_count').default(1),
+  // Routing-step intent (Task #144). A packet built for "Layup" is pinned
+  // to the Layup routing step on its destination traveler; consume calls
+  // against any other step are rejected as WRONG_ROUTING_STEP.
+  intendedRoutingStepId: varchar('intended_routing_step_id', { length: 255 }),
   notes: text('notes'),
   createdBy: text('created_by'),
   createdAt: timestamp('created_at').defaultNow(),
@@ -9280,6 +9327,7 @@ export const cuttingBuiltPackets = pgTable('cutting_built_packets', {
   barcodeIdx: index('cutting_built_packets_barcode_idx').on(table.barcode),
   statusIdx: index('cutting_built_packets_status_idx').on(table.status),
   sessionIdx: index('cutting_built_packets_session_idx').on(table.sessionId),
+  intendedStepIdx: index('cutting_built_packets_intended_step_idx').on(table.intendedRoutingStepId),
 }));
 
 // Cutting Table - Built Packet Fabric Sources (for mixed fabric traceability)

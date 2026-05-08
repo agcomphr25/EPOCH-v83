@@ -10,6 +10,7 @@ import { evaluateTravelerStartGates, evaluateTravelerFinishGates, evaluateStartG
 import { evaluateTravelerTrainingGate, evaluateQcTrainingGate } from '../lib/trainingEnforcement';
 import { resolveChargeCode, deriveProjectId, resolveCertificationStatus, resolveBudgetOverrunState } from '../lib/resolveChargeCode';
 import { resolvePacketBarcode } from '../lib/packetResolution';
+import { getActiveRoutingStep } from '../services/routingStepService';
 import { laborAllocationsEnabled } from '../lib/featureFlags';
 import * as allocationService from '../services/laborAllocationService';
 import { db } from '../../db';
@@ -2195,10 +2196,24 @@ router.post('/:travelerId/tasks/:taskId/complete', async (req: Request, res: Res
           if (p2Item) {
             if (!resolution.packetRecord.allocatedToOrder) {
               const allocationTarget = p2Item.barcode || p2Item.serialNumber;
+              // Phase-2 (Task #144): pin the packet to the traveler's
+              // currently active routing step so downstream material draws
+              // can hard-block out-of-order consumption against this packet.
+              // If no active step is resolvable we leave the pin null —
+              // service-layer enforcement will then require the operator
+              // to scan the active step explicitly.
+              const activeStep = await getActiveRoutingStep(travelerId);
+              const intendedRoutingStepId = activeStep?.inProgress
+                ? activeStep.step.id
+                : null;
               await db.update(cuttingBuiltPackets)
-                .set({ allocatedToOrder: allocationTarget, updatedAt: new Date() })
+                .set({
+                  allocatedToOrder: allocationTarget,
+                  intendedRoutingStepId,
+                  updatedAt: new Date(),
+                })
                 .where(eq(cuttingBuiltPackets.id, resolution.packetRecord.id));
-              console.log(`[Packet Allocation] Allocated cutting packet "${preFlightBarcode}" → "${allocationTarget}" (traveler ${travelerId})`);
+              console.log(`[Packet Allocation] Allocated cutting packet "${preFlightBarcode}" → "${allocationTarget}" (traveler ${travelerId}, intendedRoutingStepId=${intendedRoutingStepId ?? 'null'})`);
             } else {
               console.log(`[Packet Allocation] Packet "${preFlightBarcode}" already allocated to "${resolution.packetRecord.allocatedToOrder}" — skipping overwrite`);
             }

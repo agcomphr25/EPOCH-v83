@@ -40,6 +40,8 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '../../db';
 import { storage } from '../../storage';
 import {
+  cuttingBuiltPackets,
+  materialIssueApprovals,
   materialLotReservations,
   materialLotTransactions,
   materialLots,
@@ -57,6 +59,7 @@ import {
   validateWadApproved,
   type MaterialIssueAction,
   type MaterialIssueBlocker,
+  type MaterialIssueBlockerCode,
 } from './materialIssueGates';
 import {
   buildMaterialIssueSignaturePayload,
@@ -65,6 +68,15 @@ import {
   type SignatureTransactionClass,
 } from './digitalSignaturePayloads';
 import { verifyAgainstPayload } from './digitalSignatureService';
+import {
+  getActiveRoutingStep,
+  makeRoutingStepCache,
+  type ActiveRoutingStep,
+} from './routingStepService';
+import {
+  evaluateOverride,
+  type MaterialIssueOverridePayload,
+} from './materialIssueOverridePolicy';
 
 const SOURCE_MODULE = 'material-issue-service';
 
@@ -90,6 +102,13 @@ export interface MaterialIssueOperator {
 export interface MaterialIssueRequest {
   /** Which logical action is being performed; routes the gate chain and ledger txn type. */
   action: MaterialIssueAction;
+  /**
+   * Per-request cache for `getActiveRoutingStep`. Optional; when omitted a
+   * fresh cache is created internally. Pass one when batching many draws
+   * inside a single HTTP request so they share a single DB lookup per
+   * traveler.
+   */
+  _activeStepCache?: Map<string, ActiveRoutingStep | null>;
   /** Material lot the operator is drawing from. */
   materialLotId: string;
   /** Quantity in the lot's unit-of-measure. Always positive; sign is set by the action. */
@@ -128,6 +147,30 @@ export interface MaterialIssueRequest {
    * Setting this true forces a signature requirement.
    */
   isOverride?: boolean;
+  /**
+   * Optional pre-built cutting packet being consumed. When supplied, the
+   * service checks `cutting_built_packets.intended_routing_step_id` and
+   * rejects the draw if it doesn't match the active routing step on the
+   * traveler.
+   */
+  packetId?: string | null;
+  /**
+   * Optional intended routing step pin for NEW reservations. When the
+   * action is `reserve`, this is stamped onto the new
+   * `material_lot_reservations.intended_routing_step_id`. When the
+   * action is `consume` / `issue` / `transferToJob` and an existing
+   * reservation is being fulfilled, the service compares this against
+   * the stored value and rejects on mismatch.
+   */
+  intendedRoutingStepId?: string | null;
+  /**
+   * Phase-2 override payload (Task #144). Supply only when the operator
+   * has explicit approver authorization to bypass a routing-step or
+   * lot-quarantine gate. Each override stamps `wasOverride=true`,
+   * `overrideReason`, and the approver identity onto the inventory
+   * ledger row for permanent audit evidence.
+   */
+  override?: MaterialIssueOverridePayload | null;
 }
 
 export type MaterialIssueResult =
@@ -246,13 +289,222 @@ export async function validateIssueEligibility(
   const wadBlocker = validateWadApproved(workOrder);
   if (wadBlocker) blockers.push(wadBlocker);
 
+  // If the caller is fulfilling an existing reservation (consume / issue /
+  // transferToJob with a reservationId), load that reservation and pin
+  // its `intendedRoutingStepId` as the floor for the routing-step gate.
+  // This is the persisted-intent enforcement the review called out: a
+  // caller cannot bypass reservation pinning by omitting intent.
+  let reservationIntent: string | null = null;
+  if (
+    req.reservationId != null &&
+    (req.action === 'consume' || req.action === 'issue' || req.action === 'transferToJob')
+  ) {
+    try {
+      const [resv] = await db
+        .select({
+          id: materialLotReservations.id,
+          materialLotId: materialLotReservations.materialLotId,
+          travelerId: materialLotReservations.travelerId,
+          status: materialLotReservations.status,
+          intendedRoutingStepId: materialLotReservations.intendedRoutingStepId,
+        })
+        .from(materialLotReservations)
+        .where(eq(materialLotReservations.id, req.reservationId))
+        .limit(1);
+      if (!resv) {
+        blockers.push({
+          code: 'ALLOCATION_EXCEEDED',
+          message: `Reservation ${req.reservationId} not found.`,
+          blockingField: 'allocation',
+        });
+      } else {
+        if (resv.materialLotId !== req.materialLotId) {
+          blockers.push({
+            code: 'ALLOCATION_EXCEEDED',
+            message:
+              `Reservation ${req.reservationId} belongs to lot ${resv.materialLotId}, ` +
+              `not ${req.materialLotId}.`,
+            blockingField: 'allocation',
+          });
+        }
+        if (req.travelerId && resv.travelerId && resv.travelerId !== req.travelerId) {
+          blockers.push({
+            code: 'ALLOCATION_EXCEEDED',
+            message:
+              `Reservation ${req.reservationId} is pinned to traveler ${resv.travelerId}, ` +
+              `not ${req.travelerId}.`,
+            blockingField: 'allocation',
+          });
+        }
+        reservationIntent = resv.intendedRoutingStepId ?? null;
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'unknown';
+      blockers.push({
+        code: 'ALLOCATION_EXCEEDED',
+        message:
+          'Could not load reservation to verify routing-step pin — refusing the draw to fail closed. ' +
+          `(reason: ${message})`,
+        blockingField: 'allocation',
+      });
+    }
+  }
+
+  // Phase-2: reserve actions MUST pin to the traveler's currently-active
+  // routing step. Reserving for a downstream / non-active step would let
+  // a planner stockpile material outside the operator's current scope and
+  // defeat the single-source-of-truth contract; the gate is the same
+  // active-step check used for issue/consume below.
+  if (req.action === 'reserve') {
+    const active = req.travelerId
+      ? await getActiveRoutingStep(req.travelerId, req._activeStepCache)
+      : null;
+    if (!active?.inProgress) {
+      const stepBlocker: MaterialIssueBlocker = {
+        code: 'NO_ACTIVE_ROUTING_STEP',
+        message:
+          'Traveler has no active routing step. Start a step before reserving material.',
+        blockingField: 'routingStep',
+      };
+      const verified = await applyOverrideIfAuthorized(stepBlocker, req.override, {
+        materialLotId: req.materialLotId,
+        travelerId: req.travelerId ?? null,
+      });
+      if (verified) {
+        (req as MaterialIssueRequest).override = verified;
+        (req as MutableInternal)._overrideVerifiedForBlocker = true;
+        // Caller must supply an explicit pin if there is no active step
+        // (the override authorizes pinning off-step under ROUTING_STEP_BYPASS).
+        if (!req.intendedRoutingStepId) blockers.push(stepBlocker);
+      } else {
+        blockers.push(stepBlocker);
+      }
+    } else if (
+      req.intendedRoutingStepId &&
+      req.intendedRoutingStepId !== active.step.id
+    ) {
+      const stepBlocker: MaterialIssueBlocker = {
+        code: 'WRONG_ROUTING_STEP',
+        message:
+          `Reserve must target the active routing step "${active.step.id}"; ` +
+          `caller asserted "${req.intendedRoutingStepId}".`,
+        blockingField: 'routingStep',
+      };
+      const verified = await applyOverrideIfAuthorized(stepBlocker, req.override, {
+        materialLotId: req.materialLotId,
+        travelerId: req.travelerId ?? null,
+      });
+      if (verified) {
+        (req as MaterialIssueRequest).override = verified;
+        (req as MutableInternal)._overrideVerifiedForBlocker = true;
+      } else {
+        blockers.push(stepBlocker);
+      }
+    } else {
+      // Normalize: if caller omitted, pin to the active step so the
+      // reservation row carries the correct intended_routing_step_id.
+      (req as MaterialIssueRequest).intendedRoutingStepId =
+        req.intendedRoutingStepId ?? active.step.id;
+    }
+  }
+
   // Routing step is required for issue/consume/transferToJob; reserve is
-  // intentionally allowed without a step because reservations are made at
-  // production-planning time before any step is in progress.
+  // gated above by the pin requirement.
   if (req.action !== 'reserve') {
-    const step = req.travelerStepId ? await storage.getTravelerStep(req.travelerStepId) : null;
-    const stepBlocker = validateRoutingStep(step, req.travelerId ?? null);
-    if (stepBlocker) blockers.push(stepBlocker);
+    // Phase-2 strengthening: the active step on the traveler is the
+    // single source of truth. If the caller did not supply an explicit
+    // step we auto-detect from `getActiveRoutingStep`. Either way we
+    // pass `activeStep` into the gate so an operator who scans an
+    // already-completed or not-yet-started step is rejected with
+    // `WRONG_ROUTING_STEP`.
+    let active: ActiveRoutingStep | null = null;
+    if (req.travelerId) {
+      active = await getActiveRoutingStep(req.travelerId, req._activeStepCache);
+    }
+    let stepId = req.travelerStepId ?? null;
+    if (!stepId && active?.inProgress) {
+      stepId = active.step.id;
+      // Normalize the request so the auto-detected step is what the
+      // ledger writer persists — single source of truth, no traceability
+      // gap between gate and ledger.
+      (req as MaterialIssueRequest).travelerStepId = stepId;
+    }
+
+    const step = stepId ? await storage.getTravelerStep(stepId) : null;
+
+    // Resolve persisted intent. Order of precedence is strict:
+    //   1. reservation.intended_routing_step_id (loaded earlier)
+    //   2. cutting_built_packets.intended_routing_step_id (always loaded
+    //      from DB when packetId is supplied — caller-asserted intent
+    //      cannot soften or override the persisted packet pin)
+    //   3. caller-supplied req.intendedRoutingStepId (only used as a
+    //      fallback when neither of the persisted sources exists)
+    // If a caller supplies req.intendedRoutingStepId AND the packet has a
+    // persisted pin, the two are compared and a mismatch is rejected.
+    let packetIntent: string | null = reservationIntent ?? null;
+    if (req.packetId) {
+      try {
+        const [packet] = await db
+          .select({ intendedRoutingStepId: cuttingBuiltPackets.intendedRoutingStepId })
+          .from(cuttingBuiltPackets)
+          .where(eq(cuttingBuiltPackets.id, req.packetId))
+          .limit(1);
+        const persistedPacketIntent = packet?.intendedRoutingStepId ?? null;
+        if (persistedPacketIntent) {
+          if (
+            req.intendedRoutingStepId &&
+            req.intendedRoutingStepId !== persistedPacketIntent
+          ) {
+            blockers.push({
+              code: 'WRONG_ROUTING_STEP',
+              message:
+                `Caller asserted routing step ${req.intendedRoutingStepId} but ` +
+                `packet ${req.packetId} is pinned to ${persistedPacketIntent}.`,
+              blockingField: 'routingStep',
+            });
+          }
+          packetIntent = packetIntent ?? persistedPacketIntent;
+        }
+      } catch {
+        // Fail closed: any DB error here surfaces as WRONG_ROUTING_STEP.
+        blockers.push({
+          code: 'WRONG_ROUTING_STEP',
+          message: `Could not load packet ${req.packetId} to verify routing-step pin.`,
+          blockingField: 'routingStep',
+        });
+      }
+    }
+    // Caller-supplied intent only seeds the gate when no persisted
+    // source provided one.
+    if (!packetIntent && req.intendedRoutingStepId) {
+      packetIntent = req.intendedRoutingStepId;
+    }
+
+    const stepBlocker = validateRoutingStep(
+      step,
+      req.travelerId ?? null,
+      active?.inProgress ? active.step : active === null ? null : undefined,
+      packetIntent,
+    );
+    if (stepBlocker) {
+      const verified = await applyOverrideIfAuthorized(stepBlocker, req.override, {
+        materialLotId: req.materialLotId,
+        travelerId: req.travelerId ?? null,
+      });
+      if (verified) {
+        // Replace the caller-asserted override on the request with the
+        // server-verified payload so executeMaterialIssue stamps DB-resolved
+        // approver identity onto the immutable ledger metadata. Mark the
+        // override as actually used — executeMaterialIssue only consumes
+        // the approval row when this flag is set, so a request that
+        // happens to carry an override payload but didn't need it
+        // (no blocker tripped) does not burn an approval.
+        (req as MaterialIssueRequest).override = verified;
+        (req as MutableInternal)._overrideVerifiedForBlocker = true;
+      } else {
+        blockers.push(stepBlocker);
+      }
+    }
   }
 
   // Allocation gate: quantity available after subtracting OTHER travelers'
@@ -271,13 +523,14 @@ export async function validateIssueEligibility(
             r.status === 'active' && (!req.travelerId || r.travelerId !== req.travelerId),
         )
         .reduce((s, r) => s + parseFloat(String(r.quantityReserved)), 0);
-    } catch (err: any) {
+    } catch (err: unknown) {
       reservationLookupOk = false;
+      const message = err instanceof Error ? err.message : 'unknown';
       blockers.push({
         code: 'ALLOCATION_EXCEEDED',
         message:
           'Could not verify outstanding reservations on this lot — refusing the draw to fail closed. ' +
-          `(reason: ${err?.message ?? 'unknown'})`,
+          `(reason: ${message})`,
         blockingField: 'allocation',
       });
     }
@@ -536,6 +789,9 @@ export async function executeMaterialIssue(
           quantityReserved: req.quantity.toString(),
           unitOfMeasure: lot.unitOfMeasure,
           status: 'active',
+          // Phase-2 (Task #144): pin the reservation to a specific
+          // routing step so any subsequent consume call must match.
+          intendedRoutingStepId: req.intendedRoutingStepId ?? null,
           notes: req.notes ?? null,
           createdBy: req.operator.displayName,
         })
@@ -573,6 +829,38 @@ export async function executeMaterialIssue(
       createdReservationId = cancelled.id;
     }
 
+    // Phase-2: atomically claim the override approval row inside the
+    // same transaction as the ledger write. The conditional UPDATE matches
+    // only an APPROVED row with the right id — a concurrent transaction
+    // that already consumed it would lose the race here and we abort.
+    // We do the claim BEFORE the ledger insert so a race aborts cheaply,
+    // then back-fill `consumedByLedgerEntryId` AFTER the ledger row is
+    // written so the approval -> ledger linkage is one-hop in audit.
+    if (
+      req.override?.approvalId &&
+      (req as MutableInternal)._overrideVerifiedForBlocker
+    ) {
+      const [claimed] = await tx
+        .update(materialIssueApprovals)
+        .set({ status: 'CONSUMED', consumedAt: new Date() })
+        .where(
+          and(
+            eq(materialIssueApprovals.id, req.override.approvalId),
+            eq(materialIssueApprovals.status, 'APPROVED'),
+          ),
+        )
+        .returning();
+      if (!claimed) {
+        throw new MaterialIssueRaceError({
+          code: 'WRONG_ROUTING_STEP',
+          message:
+            `Override approval ${req.override.approvalId} could not be consumed ` +
+            '(already consumed, revoked, or expired between validation and execution).',
+          blockingField: 'routingStep',
+        });
+      }
+    }
+
     const ledgerEntry = await recordInventoryLedgerEntry(
       {
         transactionType: ACTION_TO_LEDGER_TYPE[req.action],
@@ -603,6 +891,20 @@ export async function executeMaterialIssue(
           reservationId: createdReservationId,
           digitalSignatureId: req.digitalSignature?.signatureId ?? null,
           isOverride: req.isOverride ?? false,
+          packetId: req.packetId ?? null,
+          intendedRoutingStepId: req.intendedRoutingStepId ?? null,
+          // Phase-2: stamp the override payload (without secrets) so
+          // audit can reconstruct WHO authorized the bypass and WHY.
+          override: req.override
+            ? {
+                reason: req.override.reason,
+                approvalId: req.override.approvalId,
+                approverUserId: req.override.approverUserId ?? null,
+                approverDisplayName: req.override.approverDisplayName,
+                approverRole: req.override.approverRole,
+                writtenReason: req.override.writtenReason,
+              }
+            : null,
           operator: {
             userId: req.operator.userId ?? null,
             displayName: req.operator.displayName,
@@ -615,6 +917,18 @@ export async function executeMaterialIssue(
       },
       tx,
     );
+
+    // Phase-2: back-fill the consumed approval row with the ledger entry
+    // id so audit can hop directly from approval -> ledger evidence.
+    if (
+      req.override?.approvalId &&
+      (req as MutableInternal)._overrideVerifiedForBlocker
+    ) {
+      await tx
+        .update(materialIssueApprovals)
+        .set({ consumedByLedgerEntryId: ledgerEntry.id })
+        .where(eq(materialIssueApprovals.id, req.override.approvalId));
+    }
 
     return {
       ok: true as const,
@@ -631,6 +945,109 @@ export async function executeMaterialIssue(
     }
     throw err;
   });
+}
+
+/**
+ * Internal: returns true when the supplied override authorizes a bypass
+ * of the supplied gate blocker. Mutates nothing — caller decides whether
+ * to swallow the blocker or surface it.
+ */
+/**
+ * Internal mutable shape we attach to the request inside the service
+ * to carry validation-time decisions through to execution time. These
+ * fields are NOT part of the public `MaterialIssueRequest` contract.
+ */
+interface MutableInternal {
+  _overrideVerifiedForBlocker?: boolean;
+}
+
+/** Subset of fields we read from the `users` row when verifying an approver. */
+interface UserApproverProjection {
+  id: number;
+  role: string;
+  firstName: string | null;
+  lastName: string | null;
+  username: string;
+}
+
+async function applyOverrideIfAuthorized(
+  blocker: MaterialIssueBlocker,
+  override: MaterialIssueOverridePayload | null | undefined,
+  context: { materialLotId?: string | null; travelerId?: string | null } = {},
+): Promise<MaterialIssueOverridePayload | null> {
+  if (!override) return null;
+  // Only routing-step gates and a small whitelist may be bypassed via
+  // ROUTING_STEP_BYPASS / EMERGENCY_PRODUCTION. Quantity / operator
+  // gates are NEVER overridable — those are integrity invariants.
+  const overridableCodes: ReadonlyArray<MaterialIssueBlockerCode> = [
+    'WRONG_ROUTING_STEP',
+    'ROUTING_STEP_NOT_ACTIVE',
+    'ROUTING_STEP_MISMATCH',
+    'NO_ACTIVE_ROUTING_STEP',
+    'WAD_NOT_RELEASED',
+    'LOT_QUARANTINED',
+  ];
+  if (!overridableCodes.includes(blocker.code)) return null;
+  // Server-side verification: do NOT trust caller-asserted approverRole /
+  // approverDisplayName. Re-resolve from `users` so a caller cannot
+  // claim a privileged role they don't actually hold. The verified
+  // payload is what we return so the ledger writer stamps DB-resolved
+  // identity, never caller-asserted strings.
+  if (override.approverUserId == null) return null;
+  if (!override.approvalId) return null;
+  const approver = await storage.getUser(override.approverUserId);
+  if (!approver) return null;
+
+  // Load the persisted approval artifact. The override is only authorized
+  // when a real `material_issue_approvals` row exists, is APPROVED (not
+  // CONSUMED / REVOKED / EXPIRED), is not past its expiry, was created by
+  // the same approverUserId, scoped to the same lot/traveler context (when
+  // the approval row carries that scope), and authorizes the SPECIFIC
+  // blocker we are about to bypass. This makes overrides un-spoofable by
+  // service callers — they need a real approver to have minted the row
+  // out-of-band first.
+  let approval: typeof materialIssueApprovals.$inferSelect | undefined;
+  try {
+    const [row] = await db
+      .select()
+      .from(materialIssueApprovals)
+      .where(eq(materialIssueApprovals.id, override.approvalId))
+      .limit(1);
+    approval = row;
+  } catch {
+    return null;
+  }
+  if (!approval) return null;
+  if (approval.status !== 'APPROVED') return null;
+  if (approval.expiresAt && approval.expiresAt.getTime() < Date.now()) return null;
+  if (approval.approverUserId !== override.approverUserId) return null;
+  if (approval.reason !== override.reason) return null;
+  if (approval.bypassesBlocker !== blocker.code) return null;
+  if (approval.materialLotId && context.materialLotId &&
+      approval.materialLotId !== context.materialLotId) return null;
+  if (approval.travelerId && context.travelerId &&
+      approval.travelerId !== context.travelerId) return null;
+
+  // `storage.getUser` returns the typed `User` row (`users.$inferSelect`).
+  // We narrow once here so the verified payload below is fully type-safe.
+  const approverRow = approver as Pick<
+    UserApproverProjection,
+    'role' | 'firstName' | 'lastName' | 'username'
+  >;
+  const fullName = [approverRow.firstName, approverRow.lastName]
+    .filter((s): s is string => Boolean(s && s.trim()))
+    .join(' ')
+    .trim();
+  const verified: MaterialIssueOverridePayload = {
+    reason: override.reason,
+    approvalId: approval.id,
+    approverUserId: override.approverUserId,
+    approverRole: approverRow.role || approval.approverRoleAtApproval || '',
+    approverDisplayName:
+      fullName || approverRow.username || String(override.approverUserId),
+    writtenReason: approval.writtenReason,
+  };
+  return evaluateOverride(verified, blocker.code).ok ? verified : null;
 }
 
 /** Internal: lets us abort a transaction with a structured blocker. */

@@ -89,6 +89,58 @@ describe('validateRoutingStep', () => {
   it('blocks missing step', () => {
     expect(validateRoutingStep(null, 't1')?.code).toBe('ROUTING_STEP_NOT_FOUND');
   });
+
+  it('blocks WRONG_ROUTING_STEP when scanned step is not the active one', () => {
+    expect(
+      validateRoutingStep(
+        { id: 's1', travelerId: 't1', status: 'IN_PROGRESS' } as any,
+        't1',
+        { id: 's2', status: 'IN_PROGRESS' } as any,
+      )?.code,
+    ).toBe('WRONG_ROUTING_STEP');
+  });
+
+  it('passes when scanned step matches the active step', () => {
+    expect(
+      validateRoutingStep(
+        { id: 's1', travelerId: 't1', status: 'IN_PROGRESS' } as any,
+        't1',
+        { id: 's1', status: 'IN_PROGRESS' } as any,
+      ),
+    ).toBeNull();
+  });
+
+  it('blocks NO_ACTIVE_ROUTING_STEP when traveler has no active step', () => {
+    expect(
+      validateRoutingStep(
+        { id: 's1', travelerId: 't1', status: 'IN_PROGRESS' } as any,
+        't1',
+        null,
+      )?.code,
+    ).toBe('NO_ACTIVE_ROUTING_STEP');
+  });
+
+  it('blocks WRONG_ROUTING_STEP when packet intent does not match', () => {
+    expect(
+      validateRoutingStep(
+        { id: 's1', travelerId: 't1', status: 'IN_PROGRESS' } as any,
+        't1',
+        { id: 's1', status: 'IN_PROGRESS' } as any,
+        'sX',
+      )?.code,
+    ).toBe('WRONG_ROUTING_STEP');
+  });
+
+  it('passes when packet intent equals the scanned active step', () => {
+    expect(
+      validateRoutingStep(
+        { id: 's1', travelerId: 't1', status: 'IN_PROGRESS' } as any,
+        't1',
+        { id: 's1', status: 'IN_PROGRESS' } as any,
+        's1',
+      ),
+    ).toBeNull();
+  });
 });
 
 describe('validateAllocation', () => {

@@ -469,6 +469,9 @@ async function initializeBackgroundServices() {
           '0109_vendor_pos_purchasing_controls_columns.sql',
           '0110_purchasing_controls_tables_and_vendor_pos_parity.sql',
           '0111_critical_schema_health_repairs.sql',
+          '0111_routing_step_enforcement.sql',
+          '0112_material_issue_approvals.sql',
+          '0113_routing_step_intent_backfill.sql',
           'investigation_308_order_duplication.sql',
         ];
         const criticalMigrations = new Set([

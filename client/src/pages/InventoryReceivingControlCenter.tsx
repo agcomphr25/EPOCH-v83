@@ -2503,7 +2503,7 @@ export function PutawayStep({ receipt, onComplete, onUpdate }: {
       }
       onComplete();
     },
-    onError: () => toast.error('Failed to complete receipt'),
+    onError: (err: any) => toast.error(err?.message ?? 'Failed to complete receipt'),
   });
 
   return (

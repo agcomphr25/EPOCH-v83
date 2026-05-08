@@ -327,6 +327,53 @@ router.patch('/:id', requireReceivingAccess, async (req: Request, res: Response)
       const [updated] = await tx.update(receipts).set({ ...updates, updatedAt: new Date() }).where(eq(receipts.id, id)).returning();
       if (!updated) return { updated: null as Receipt | null, parentPoStatus: null as string | null };
 
+      // Receiving closeout gate: receipt completion is the handoff to invoice
+      // match / closeout retention. Do not allow it while inspection or
+      // document-hold inventory is still unresolved.
+      if (updates.status === 'complete') {
+        const blockingUnits = sqlRows<{
+          id: number;
+          barcode: string;
+          disposition: string;
+          missing_putaway: boolean;
+        }>(
+          await tx.execute(sql`
+            SELECT id, barcode, disposition,
+                   (
+                     disposition = 'accepted'
+                     AND COALESCE(NULLIF(TRIM(location), ''), '') = ''
+                     AND freezer_number IS NULL
+                   ) AS missing_putaway
+            FROM ${receivedUnits}
+            WHERE receipt_id = ${id}
+              AND (
+                disposition IN ('pending_inspection', 'document_hold')
+                OR (
+                  disposition = 'accepted'
+                  AND COALESCE(NULLIF(TRIM(location), ''), '') = ''
+                  AND freezer_number IS NULL
+                )
+              )
+            ORDER BY unit_sequence ASC
+          `)
+        );
+        if (blockingUnits.length > 0) {
+          const blockers = blockingUnits.map(unit => ({
+            unitId: unit.id,
+            barcode: unit.barcode,
+            reason: unit.disposition === 'document_hold'
+              ? 'document_hold_release_required'
+              : unit.missing_putaway
+                ? 'putaway_required'
+                : 'inspection_disposition_required',
+          }));
+          const error: any = new Error('Receipt cannot be completed until all units are inspected, released from document hold, and put away.');
+          error.status = 422;
+          error.blockers = blockers;
+          throw error;
+        }
+      }
+
       // Auto-close parent vendor PO when receipt is marked complete and all
       // ordered quantities have been received across this PO's receipts.
       let parentPoStatus: string | null = null;
@@ -387,6 +434,9 @@ router.patch('/:id', requireReceivingAccess, async (req: Request, res: Response)
     res.json(result.updated);
   } catch (err: any) {
     console.error('PATCH /api/receipts/:id:', err);
+    if (err?.status === 422) {
+      return res.status(422).json({ error: err.message, blockers: err.blockers ?? [] });
+    }
     res.status(500).json({ error: 'Failed to update receipt' });
   }
 });
@@ -617,8 +667,8 @@ router.post('/:id/units/:unitId/disposition', requireReceivingAccess, async (req
       return res.status(400).json({ error: 'Invalid disposition value' });
     }
 
-    // Server-side enforcement: quarantine and rejected dispositions require notes
-    if ((disposition === 'quarantine' || disposition.startsWith('rejected')) && !notes?.trim()) {
+    // Server-side enforcement: holds, quarantine, and rejected dispositions require notes
+    if ((disposition === 'document_hold' || disposition === 'quarantine' || disposition.startsWith('rejected')) && !notes?.trim()) {
       return res.status(422).json({ error: `Notes are required when setting disposition to "${disposition}"` });
     }
 

@@ -16,7 +16,7 @@ import {
   InsertEdriRemediationItem,
   InsertEdriAdminOverride,
 } from '../../schema';
-import { eq, desc, and, sql } from 'drizzle-orm';
+import { eq, desc, and, sql, SQL } from 'drizzle-orm';
 import {
   scoreTimekeeping,
   scoreChargeCode,
@@ -409,8 +409,23 @@ export async function getSnapshotById(id: number): Promise<SnapshotWithChildren 
   return { snapshot, domainScores: domainScoresArr, redFlags: redFlagsArr, remediationItems: remItemsArr };
 }
 
-export async function getSnapshotHistory(limit = 20, offset = 0): Promise<EdriScoreSnapshot[]> {
-  return db.select().from(edriScoreSnapshots)
+export async function getSnapshotHistory(
+  limit = 20,
+  offset = 0,
+  options: { startDate?: Date; endDate?: Date } = {},
+): Promise<EdriScoreSnapshot[]> {
+  const conditions: SQL[] = [];
+  if (options.startDate) {
+    conditions.push(sql`${edriScoreSnapshots.computedAt} >= ${options.startDate}`);
+  }
+  if (options.endDate) {
+    conditions.push(sql`${edriScoreSnapshots.computedAt} <= ${options.endDate}`);
+  }
+
+  const query = db.select().from(edriScoreSnapshots);
+  const filtered = conditions.length > 0 ? query.where(and(...conditions)) : query;
+
+  return filtered
     .orderBy(desc(edriScoreSnapshots.computedAt))
     .limit(limit)
     .offset(offset);

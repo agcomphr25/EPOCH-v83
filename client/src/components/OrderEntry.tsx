@@ -45,6 +45,7 @@ import { Badge } from '@/components/ui/badge';
 import { ForecastDateModal } from '@/components/orders/ForecastDateModal';
 import { getConfidenceLabel } from '@/lib/forecastConfidence';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import {
   Accordion,
@@ -57,6 +58,7 @@ import { useToast } from '@/hooks/use-toast';
 import {
   Package,
   Users,
+  SlidersHorizontal,
   ChevronDown,
   Send,
   CheckCircle,
@@ -161,6 +163,25 @@ export default function OrderEntry() {
   console.log('OrderEntry component rendering...');
   const { toast } = useToast();
   const [location, setLocation] = useLocation();
+  const [isConsoleMode, setIsConsoleMode] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return window.localStorage.getItem('order-entry-console-mode') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        'order-entry-console-mode',
+        String(isConsoleMode)
+      );
+    } catch {
+      // Preference persistence is best-effort only.
+    }
+  }, [isConsoleMode]);
 
   // Form state
   const [customer, setCustomer] = useState<Customer | null>(null);
@@ -2950,7 +2971,22 @@ export default function OrderEntry() {
   const selectedModel = modelOptions.find((m) => m.id === modelId);
 
   return (
-    <div className="container mx-auto p-4 space-y-6">
+    <div
+      className={`order-entry-shell container mx-auto p-4 space-y-6 ${
+        isConsoleMode ? 'order-entry-console' : ''
+      }`}
+    >
+      <div className="order-console-toggle flex items-center justify-end gap-3">
+        <div className="flex items-center gap-2 text-sm font-medium">
+          <SlidersHorizontal className="h-4 w-4" />
+          <span>Console Mode</span>
+        </div>
+        <Switch
+          checked={isConsoleMode}
+          onCheckedChange={setIsConsoleMode}
+          aria-label="Toggle console mode"
+        />
+      </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column - Order Form */}
         <div className="lg:col-span-2 space-y-6">
@@ -3023,6 +3059,32 @@ export default function OrderEntry() {
                   </div>
                 )}
               </div>
+              {isConsoleMode && (
+                <div className="order-console-display mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div>
+                    <span>ORDER</span>
+                    <strong>{orderId || 'GENERATING'}</strong>
+                  </div>
+                  <div>
+                    <span>MODE</span>
+                    <strong>
+                      {isEditMode ? 'EDIT' : isDuplicateMode ? 'COPY' : 'CREATE'}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>DUE</span>
+                    <strong>
+                      {dueDate && !isNaN(dueDate.getTime())
+                        ? dueDate.toISOString().split('T')[0]
+                        : 'PENDING'}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>TOTAL</span>
+                    <strong>${(totalPrice + shipping).toFixed(2)}</strong>
+                  </div>
+                </div>
+              )}
             </CardHeader>
             <CardContent className="space-y-4">
               {showOrderDraftBanner && isNewOrderMode && (

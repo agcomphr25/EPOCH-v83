@@ -10037,35 +10037,36 @@ export class DatabaseStorage implements IStorage {
       return formatDates(flat as Record<string, unknown>, VENDOR_PO_ITEM_DATE_COLUMNS) as typeof flat;
     });
     } catch (error: any) {
-      if (error?.code !== '42703') throw error;
-
       console.warn(
-        '[VendorPO] Falling back to core vendor_po_items query because enrichment schema is missing:',
-        error.message
+        '[VendorPO] Falling back to raw core vendor_po_items query after enriched query failed:',
+        error?.message ?? error
       );
 
-      const coreItems = await db
-        .select({
-          id: vendorPOItems.id,
-          vendorPoId: vendorPOItems.vendorPoId,
-          lineNumber: vendorPOItems.lineNumber,
-          agPartNumber: vendorPOItems.agPartNumber,
-          description: vendorPOItems.description,
-          quantity: vendorPOItems.quantity,
-          unitPrice: vendorPOItems.unitPrice,
-          lineTotal: vendorPOItems.lineTotal,
-          receivedQuantity: vendorPOItems.receivedQuantity,
-          receivedDate: vendorPOItems.receivedDate,
-          notes: vendorPOItems.notes,
-          createdAt: vendorPOItems.createdAt,
-          updatedAt: vendorPOItems.updatedAt,
-        })
-        .from(vendorPOItems)
-        .where(eq(vendorPOItems.vendorPoId, vendorPoId))
-        .orderBy(vendorPOItems.lineNumber);
+      const coreItems = await pool.query(
+        `
+        SELECT
+          id,
+          vendor_po_id AS "vendorPoId",
+          line_number AS "lineNumber",
+          ag_part_number AS "agPartNumber",
+          description,
+          quantity,
+          unit_price AS "unitPrice",
+          line_total AS "lineTotal",
+          received_quantity AS "receivedQuantity",
+          received_date AS "receivedDate",
+          notes,
+          created_at AS "createdAt",
+          updated_at AS "updatedAt"
+        FROM vendor_po_items
+        WHERE vendor_po_id = $1
+        ORDER BY line_number
+        `,
+        [vendorPoId]
+      );
 
-      return coreItems.map((row) =>
-        formatDates(row as Record<string, unknown>, VENDOR_PO_ITEM_DATE_COLUMNS)
+      return coreItems.map((row: Record<string, unknown>) =>
+        formatDates(row, VENDOR_PO_ITEM_DATE_COLUMNS)
       );
     }
   }

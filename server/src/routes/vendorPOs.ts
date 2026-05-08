@@ -1701,7 +1701,10 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
         (req as any)._task83_freshDebarmentResult = fresh[0].result;
       }
 
-      if (purchasingBlockers.length > 0) {
+      // P2/customer-project purchases remain hard-blocked. P1 stock/internal purchases
+      // can be issued with the gaps left visible for the procurement backfill/ERDI
+      // remediation queue, which keeps production moving without hiding the audit debt.
+      if (purchasingBlockers.length > 0 && isP2ProductionLine(vendorPO.productionLine)) {
         return res.status(422).json({
           error: 'Purchasing controls gate failed',
           message: `Cannot issue PO. Reason(s): ${purchasingBlockers.join('; ')}.`,

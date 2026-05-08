@@ -1889,6 +1889,10 @@ type ComplianceSaveResult = ComplianceReviewData & {
   blockingReasons: string[];
 };
 
+function isP2ProductionLine(value: unknown): boolean {
+  return String(value ?? '').trim().toUpperCase() === 'P2';
+}
+
 function ComplianceReviewModal({
   vendorPoId,
   isOpen,
@@ -2731,8 +2735,17 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
     }
     // Navigate into detail view so we have full PO context
     setShowDetailView(true);
-    // Show compliance review modal first before proceeding to issue
-    openComplianceModal(id);
+    if (isP2ProductionLine(poFromList?.productionLine)) {
+      // Show compliance review modal first before proceeding to issue
+      openComplianceModal(id);
+      return;
+    }
+    setNoEmailMode(false);
+    setNoEmailReason('');
+    setNoEmailConfirmed(false);
+    setPendingStatus('Sent');
+    setShowStatusChangeDialog(true);
+    loadRecipientsForPO(id);
   };
 
   const handleViewItems = (vendorPo: VendorPO) => {
@@ -2766,8 +2779,17 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
 
   const handleStatusChange = (newStatus: string) => {
     if (newStatus === 'Sent' && selectedVendorPO) {
-      // Intercept Issue PO to show compliance review modal first
-      openComplianceModal(selectedVendorPO.id);
+      if (isP2ProductionLine(selectedVendorPO.productionLine)) {
+        // P2 work stays behind the formal compliance review gate.
+        openComplianceModal(selectedVendorPO.id);
+      } else {
+        setNoEmailMode(false);
+        setNoEmailReason('');
+        setNoEmailConfirmed(false);
+        setPendingStatus('Sent');
+        setShowStatusChangeDialog(true);
+        loadRecipientsForPO(selectedVendorPO.id);
+      }
       return;
     }
     setPendingStatus(newStatus);

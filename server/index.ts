@@ -3354,6 +3354,27 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ vendor_pos rfq_outcome_notes migration:', vpoNotesErr.message);
       }
 
+      // Ensure Task #83 purchasing-control columns exist on vendor_pos.
+      // Some Replit deployments run boot-time schema repair without replaying
+      // every migration against the selected production database; without these
+      // columns, /api/vendor-pos fails while the underlying PO rows are present.
+      try {
+        const { sql: sqlVendorPoControls } = await import('drizzle-orm');
+        await db.execute(sqlVendorPoControls`
+          ALTER TABLE vendor_pos
+            ADD COLUMN IF NOT EXISTS requisition_id INTEGER,
+            ADD COLUMN IF NOT EXISTS competition_method TEXT,
+            ADD COLUMN IF NOT EXISTS sole_source_justification TEXT,
+            ADD COLUMN IF NOT EXISTS direct_po_exception_approved_by_id INTEGER,
+            ADD COLUMN IF NOT EXISTS direct_po_exception_approved_by_name TEXT,
+            ADD COLUMN IF NOT EXISTS direct_po_exception_reason TEXT,
+            ADD COLUMN IF NOT EXISTS direct_po_exception_approved_at TIMESTAMP
+        `);
+        console.log('✅ Ensured vendor_pos purchasing-control columns exist');
+      } catch (vendorPoControlsErr: any) {
+        console.warn('⚠️ vendor_pos purchasing-control columns migration:', vendorPoControlsErr.message);
+      }
+
       // Ensure historical_backfill flag exists on vendor_po_compliance_reviews (Task #1703)
       try {
         const { sql: sqlHbf } = await import('drizzle-orm');

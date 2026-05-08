@@ -1201,13 +1201,17 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   app.get('/api/health', async (req, res) => {
     try {
       const { storage } = await import('../../storage');
-      const { testDatabaseConnection } = await import('../../db');
+      const { testDatabaseConnection, getDatabaseTargetInfo } = await import('../../db');
+      const { checkCriticalSchemaHealth } = await import('../../utils/schemaHealth');
 
       const dbConnected = await testDatabaseConnection();
+      const schemaHealth = dbConnected ? await checkCriticalSchemaHealth() : null;
       const status = {
         status: 'ok',
         timestamp: new Date().toISOString(),
         database: dbConnected ? 'connected' : 'disconnected',
+        databaseTarget: getDatabaseTargetInfo(),
+        criticalSchema: schemaHealth,
         environment: process.env.NODE_ENV || 'development',
         server: 'running',
       };

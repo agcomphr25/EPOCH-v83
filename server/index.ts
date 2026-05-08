@@ -1,5 +1,6 @@
 console.log("=== ENV DEBUG START ===");
-console.log("DATABASE_URL:", process.env.DATABASE_URL);
+console.log("DATABASE_URL:", process.env.DATABASE_URL ? "Set" : "Missing");
+console.log("FORCE_DATABASE_URL:", process.env.FORCE_DATABASE_URL ? "Set" : "Missing");
 console.log("PGHOST:", process.env.PGHOST);
 console.log("PGUSER:", process.env.PGUSER);
 console.log("PGDATABASE:", process.env.PGDATABASE);
@@ -13,7 +14,7 @@ import fs from 'fs';
 import cron from 'node-cron';
 import { createServer } from 'http';
 import { setupVite, serveStatic, log } from './vite';
-import { db, pool } from './db';
+import { db, pool, getDatabaseTargetInfo } from './db';
 import { authenticateToken } from './middleware/auth';
 import { attemptBadgeOrTokenAuth } from './middleware/badgeAuth';
 import { notificationManager } from './src/services/notificationManager';
@@ -22,22 +23,21 @@ import { notificationManager } from './src/services/notificationManager';
 const BUILD_VERSION = '2026-01-27-v2';
 console.log(`🚀 EPOCH Server Starting - Build Version: ${BUILD_VERSION}`);
 
-// Validate required environment variables
-const requiredEnvVars = ['DATABASE_URL'];
-
-const missingEnvVars = requiredEnvVars.filter((envVar) => !process.env[envVar]);
-if (missingEnvVars.length > 0) {
-  console.error('Missing required environment variables:', missingEnvVars);
+// Validate database connectivity configuration. FORCE_DATABASE_URL intentionally
+// overrides DATABASE_URL for production DB recovery scenarios.
+if (!process.env.FORCE_DATABASE_URL && !process.env.DATABASE_URL) {
+  console.error('Missing required database environment variable: FORCE_DATABASE_URL or DATABASE_URL');
 }
 
 // Log available environment variables (without values for security)
 console.log('Environment check:', {
   DATABASE_URL: process.env.DATABASE_URL ? 'Set' : 'Missing',
+  FORCE_DATABASE_URL: process.env.FORCE_DATABASE_URL ? 'Set' : 'Missing',
   NODE_ENV: process.env.NODE_ENV || 'Not set',
   PORT: process.env.PORT || 'Not set (defaulting to 5000)',
 });
 
-console.log('🧬 [BOOT] DATABASE_URL:', process.env.DATABASE_URL);
+console.log('🧬 [BOOT] Database target:', getDatabaseTargetInfo());
 console.log('🧬 [BOOT] NODE_ENV:', process.env.NODE_ENV);
 console.log('🧬 [BOOT] APP_ENV:', process.env.APP_ENV);
 
@@ -466,6 +466,9 @@ async function initializeBackgroundServices() {
           '0106_employee_payroll_item_attachments.sql',
           '0107_accounting_expense_attachments.sql',
           '0108_parts_request_project_line_budget.sql',
+          '0109_vendor_pos_purchasing_controls_columns.sql',
+          '0110_purchasing_controls_tables_and_vendor_pos_parity.sql',
+          '0111_critical_schema_health_repairs.sql',
           'investigation_308_order_duplication.sql',
         ];
         const criticalMigrations = new Set([
@@ -499,6 +502,13 @@ async function initializeBackgroundServices() {
         }
         try { await migrPool.end(); } catch (_) {}
         console.log(`✅ Pre-deploy migrations: ${appliedCount}/${safeFiles.length} applied (or already correct)`);
+
+        try {
+          const { logCriticalSchemaHealth } = await import('./utils/schemaHealth');
+          await logCriticalSchemaHealth();
+        } catch (schemaHealthErr: any) {
+          console.warn('Critical schema health check skipped:', schemaHealthErr.message);
+        }
 
         // Run vendor URL migration now that DB schema is guaranteed up-to-date
         try {

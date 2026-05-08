@@ -5,6 +5,7 @@ import * as schema from './schema';
 const connectionString =
   process.env.FORCE_DATABASE_URL ||
   process.env.DATABASE_URL;
+const connectionSource = process.env.FORCE_DATABASE_URL ? 'FORCE_DATABASE_URL' : 'DATABASE_URL';
 
 if (!connectionString) {
   throw new Error(
@@ -12,7 +13,40 @@ if (!connectionString) {
   );
 }
 
-console.log('Initializing database connection...');
+export function getDatabaseTargetInfo() {
+  if (!connectionString) {
+    return {
+      source: connectionSource,
+      host: null,
+      database: null,
+      user: null,
+      redactedUrl: null,
+    };
+  }
+
+  try {
+    const parsed = new URL(connectionString);
+    const database = parsed.pathname.replace(/^\//, '') || null;
+    const user = parsed.username ? decodeURIComponent(parsed.username) : null;
+    return {
+      source: connectionSource,
+      host: parsed.hostname || null,
+      database,
+      user,
+      redactedUrl: `${parsed.protocol}//${user ? `${user}:***@` : ''}${parsed.host}${database ? `/${database}` : ''}`,
+    };
+  } catch {
+    return {
+      source: connectionSource,
+      host: process.env.PGHOST || null,
+      database: process.env.PGDATABASE || null,
+      user: process.env.PGUSER || null,
+      redactedUrl: null,
+    };
+  }
+}
+
+console.log('Initializing database connection...', getDatabaseTargetInfo());
 
 export const pgPool = new Pool({
   connectionString,

@@ -1,6 +1,7 @@
 import { db } from '../../db';
 import { allocationRequirements, manufacturingQueue, materialLots } from '../../schema';
 import { eq, inArray } from 'drizzle-orm';
+import { computeEffectiveOutTimeMinutesSafe, isSentinelExpirationDate } from './lotUsability';
 
 export interface ReadinessResult {
   readinessStatus: 'NOT_READY' | 'PARTIAL' | 'READY' | 'BLOCKED';
@@ -117,18 +118,19 @@ export async function evaluateQueueReadiness(queueId: number): Promise<Readiness
           );
         }
 
-        // (b) Expiration check
-        if (lot.expirationDate && new Date(lot.expirationDate) < now) {
-          violations.push(`lot ${lot.internalControlNumber ?? req.materialLotId.slice(0, 8)} is EXPIRED`);
+        // (b) Expiration check — sentinel/garbage dates don't count (Task #174)
+        if (lot.expirationDate) {
+          const expDate = new Date(lot.expirationDate);
+          if (!isSentinelExpirationDate(expDate) && expDate < now) {
+            violations.push(`lot ${lot.internalControlNumber ?? req.materialLotId.slice(0, 8)} is EXPIRED`);
+          }
         }
 
-        // (c) Out-time check — accounts for in-flight accumulation while currentlyOutOfStorage
+        // (c) Out-time check — uses the defensive compute so a stale
+        // currentlyOutOfStorage flag with no matching open OUT_START
+        // transaction does not silently accumulate minutes (Task #174).
         if (lot.maxOutTimeMinutes != null && lot.maxOutTimeMinutes > 0) {
-          const base = lot.totalOutTimeMinutes ?? 0;
-          const inFlight = lot.currentlyOutOfStorage && lot.lastOutAt
-            ? Math.max(0, Math.floor((now.getTime() - new Date(lot.lastOutAt).getTime()) / 60000))
-            : 0;
-          const effective = base + inFlight;
+          const effective = await computeEffectiveOutTimeMinutesSafe(lot, now);
           if (effective >= lot.maxOutTimeMinutes) {
             violations.push(
               `out-time exceeded (${effective}/${lot.maxOutTimeMinutes} min)`

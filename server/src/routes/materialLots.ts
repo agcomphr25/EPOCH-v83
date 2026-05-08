@@ -31,7 +31,13 @@ import {
 } from '../constants/inventoryControls';
 import { openRequest as openApprovalRequest, EscalationError } from '../services/escalationService';
 import { approvalRequests } from '../../schema';
-import { checkLotUsability, enforceAndLockIfNeeded, computeEffectiveOutTimeMinutes } from '../services/lotUsability';
+import {
+  checkLotUsability,
+  enforceAndLockIfNeeded,
+  computeEffectiveOutTimeMinutes,
+  computeEffectiveOutTimeMinutesSafe,
+  isSentinelExpirationDate,
+} from '../services/lotUsability';
 
 const router = Router();
 
@@ -209,12 +215,32 @@ router.get('/by-icn/:icn', async (req: Request, res: Response) => {
 });
 
 // Validate material lot for consumption
+/**
+ * Recognises packet-style barcodes (manufacturing/cutting packet labels) so the
+ * validate endpoint can route them straight to the packet-resolution path
+ * without ever consulting `material_lots`.  Without this guard, a coincidental
+ * collision between a packet barcode and a `material_lots.internalControlNumber`
+ * would treat the scan as a lot — running the lock/usability writer against
+ * the wrong record (Task #174 root-cause #3: packet-vs-lot ICN confusion).
+ */
+function isPacketBarcode(icn: string): boolean {
+  return (
+    /^MFG-\d+-/i.test(icn) ||
+    /^PKT-/i.test(icn) ||
+    /-Q\d+-\d+$/i.test(icn)
+  );
+}
+
 router.get('/validate/:icn', async (req: Request, res: Response) => {
   try {
     const icn = req.params.icn.trim();
     const { qtyNeeded, partNumber } = req.query;
 
-    const lot = await storage.getMaterialLotByICN(icn);
+    // Packet-style barcodes (MFG-…, PKT-…, …-Q…-…) must always resolve as
+    // packets — never as material lots.  Any same-named row in material_lots
+    // would otherwise hijack the scan and run lock checks against the wrong
+    // record.  See Task #174 (packet-vs-lot ICN confusion).
+    const lot = isPacketBarcode(icn) ? null : await storage.getMaterialLotByICN(icn);
 
     if (!lot) {
       // Fallback: try looking up as a built packet barcode
@@ -573,26 +599,38 @@ router.get('/validate/:icn', async (req: Request, res: Response) => {
       }
     } catch (_) { /* non-fatal: received_units table may not exist in older deployments */ }
 
-    // Shelf-life lock check (Task #165) — auto-locks expired/over out-time lots
+    // Shelf-life check (Task #165, hardened by Task #174).
+    //
+    // The validate endpoint is a READ path — it must never persist
+    // status='LOCKED' to the lot.  Doing so was the trap behind the
+    // false-positive "Lot is locked" reports: a single transient miscalculation
+    // (stale currentlyOutOfStorage flag, sentinel expirationDate) would write
+    // LOCKED, after which the lot was permanently blocked on every subsequent
+    // scan.  Pass persist:false here so that only the write paths
+    // (consume/issue/reserve) can ever write the lock.  The safe usability
+    // check also defends against stale flags by ignoring in-flight out-time
+    // unless there is a matching open OUT_START transaction.
     {
-      const { lot: maybeLockedLot, usability } = await enforceAndLockIfNeeded(lot, 'system');
+      const { usability } = await enforceAndLockIfNeeded(lot, 'system', { persist: false });
       if (!usability.usable) {
         validationResults.valid = false;
         validationResults.status = usability.status;
-        validationResults.message = `${usability.message ?? usability.status}. Lot is locked.`;
+        validationResults.message = usability.status === 'STATUS_LOCKED'
+          ? `${usability.message ?? usability.status}. Lot is locked.`
+          : (usability.message ?? usability.status);
         validationResults.errors.push(usability.message ?? usability.status);
         validationResults.requiresOverride = true;
         return res.json(validationResults);
       }
-      // Refresh lot reference if needed (no mutation occurred when usable)
-      Object.assign(lot, maybeLockedLot);
     }
 
-    // Check expiration date
+    // Check expiration date — ignore sentinel/garbage dates (epoch, year 0001)
+    // that legacy migrations stamped onto rows.  Without this guard a single
+    // bad source value would auto-flag the lot as EXPIRED on every scan.
     if (lot.expirationDate) {
       const expDate = new Date(lot.expirationDate);
       const now = new Date();
-      if (expDate < now) {
+      if (!isSentinelExpirationDate(expDate) && expDate < now) {
         validationResults.valid = false;
         validationResults.status = 'EXPIRED';
         validationResults.message = `Material lot expired on ${expDate.toLocaleDateString()}. Override required.`;
@@ -600,11 +638,13 @@ router.get('/validate/:icn', async (req: Request, res: Response) => {
         validationResults.requiresOverride = true;
         return res.json(validationResults);
       }
-      
+
       // Warn if expiring soon (within 7 days)
-      const daysUntilExpiry = Math.floor((expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-      if (daysUntilExpiry <= 7) {
-        validationResults.warnings.push(`Material lot expires in ${daysUntilExpiry} days`);
+      if (!isSentinelExpirationDate(expDate)) {
+        const daysUntilExpiry = Math.floor((expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        if (daysUntilExpiry <= 7) {
+          validationResults.warnings.push(`Material lot expires in ${daysUntilExpiry} days`);
+        }
       }
     }
 
@@ -621,19 +661,22 @@ router.get('/validate/:icn', async (req: Request, res: Response) => {
       }
     }
 
-    // Check out-time limits for time-sensitive materials
+    // Check out-time limits for time-sensitive materials.  Use the safe
+    // computation (Task #174) so a stale currentlyOutOfStorage flag from a
+    // failed return-to-storage write does not get treated as in-flight time.
     if (lot.maxOutTimeMinutes && lot.maxOutTimeMinutes > 0) {
-      const usedPercent = (lot.totalOutTimeMinutes || 0) / lot.maxOutTimeMinutes * 100;
-      
+      const effective = await computeEffectiveOutTimeMinutesSafe(lot);
+      const usedPercent = effective / lot.maxOutTimeMinutes * 100;
+
       if (usedPercent >= 100) {
         validationResults.valid = false;
         validationResults.status = 'OUT_TIME_EXCEEDED';
-        validationResults.message = `Material has exceeded maximum out-time. ${lot.totalOutTimeMinutes} of ${lot.maxOutTimeMinutes} minutes used.`;
-        validationResults.errors.push(`Out-time exceeded: ${lot.totalOutTimeMinutes} of ${lot.maxOutTimeMinutes} minutes used`);
+        validationResults.message = `Material has exceeded maximum out-time. ${effective} of ${lot.maxOutTimeMinutes} minutes used.`;
+        validationResults.errors.push(`Out-time exceeded: ${effective} of ${lot.maxOutTimeMinutes} minutes used`);
         validationResults.requiresOverride = true;
         return res.json(validationResults);
       }
-      
+
       if (usedPercent >= 75) {
         validationResults.warnings.push(`Material is at ${usedPercent.toFixed(1)}% of maximum out-time`);
       }

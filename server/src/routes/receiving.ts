@@ -188,7 +188,7 @@ router.get('/department-actions', requireReceivingAccess, async (req: Request, r
         ru.location,
         ru.freezer_number,
         CASE
-          WHEN ru.disposition = 'pending_inspection' THEN 'disposition_required'
+          WHEN ru.disposition IN ('pending_inspection', 'document_hold') THEN 'disposition_required'
           WHEN ru.disposition = 'accepted'
             AND COALESCE(NULLIF(TRIM(ru.location), ''), '') = ''
             AND ru.freezer_number IS NULL THEN 'putaway_required'
@@ -202,7 +202,7 @@ router.get('/department-actions', requireReceivingAccess, async (req: Request, r
         AND r.department_id IS NOT NULL
         AND (${departmentId}::int IS NULL OR r.department_id = ${departmentId})
         AND (
-          ru.disposition = 'pending_inspection'
+          ru.disposition IN ('pending_inspection', 'document_hold')
           OR (
             ru.disposition = 'accepted'
             AND COALESCE(NULLIF(TRIM(ru.location), ''), '') = ''
@@ -327,6 +327,53 @@ router.patch('/:id', requireReceivingAccess, async (req: Request, res: Response)
       const [updated] = await tx.update(receipts).set({ ...updates, updatedAt: new Date() }).where(eq(receipts.id, id)).returning();
       if (!updated) return { updated: null as Receipt | null, parentPoStatus: null as string | null };
 
+      // Receiving closeout gate: receipt completion is the handoff to invoice
+      // match / closeout retention. Do not allow it while inspection or
+      // document-hold inventory is still unresolved.
+      if (updates.status === 'complete') {
+        const blockingUnits = sqlRows<{
+          id: number;
+          barcode: string;
+          disposition: string;
+          missing_putaway: boolean;
+        }>(
+          await tx.execute(sql`
+            SELECT id, barcode, disposition,
+                   (
+                     disposition = 'accepted'
+                     AND COALESCE(NULLIF(TRIM(location), ''), '') = ''
+                     AND freezer_number IS NULL
+                   ) AS missing_putaway
+            FROM ${receivedUnits}
+            WHERE receipt_id = ${id}
+              AND (
+                disposition IN ('pending_inspection', 'document_hold')
+                OR (
+                  disposition = 'accepted'
+                  AND COALESCE(NULLIF(TRIM(location), ''), '') = ''
+                  AND freezer_number IS NULL
+                )
+              )
+            ORDER BY unit_sequence ASC
+          `)
+        );
+        if (blockingUnits.length > 0) {
+          const blockers = blockingUnits.map(unit => ({
+            unitId: unit.id,
+            barcode: unit.barcode,
+            reason: unit.disposition === 'document_hold'
+              ? 'document_hold_release_required'
+              : unit.missing_putaway
+                ? 'putaway_required'
+                : 'inspection_disposition_required',
+          }));
+          const error: any = new Error('Receipt cannot be completed until all units are inspected, released from document hold, and put away.');
+          error.status = 422;
+          error.blockers = blockers;
+          throw error;
+        }
+      }
+
       // Auto-close parent vendor PO when receipt is marked complete and all
       // ordered quantities have been received across this PO's receipts.
       let parentPoStatus: string | null = null;
@@ -387,6 +434,9 @@ router.patch('/:id', requireReceivingAccess, async (req: Request, res: Response)
     res.json(result.updated);
   } catch (err: any) {
     console.error('PATCH /api/receipts/:id:', err);
+    if (err?.status === 422) {
+      return res.status(422).json({ error: err.message, blockers: err.blockers ?? [] });
+    }
     res.status(500).json({ error: 'Failed to update receipt' });
   }
 });
@@ -488,6 +538,31 @@ router.post('/:id/lines/:lineId/units', requireReceivingAccess, async (req: Requ
     });
 
     if (body.disposition === 'accepted') {
+      if (line.agPartNumber) {
+        const missingDocs = await checkRequiredDocs(line.agPartNumber, receiptId);
+        if (missingDocs.length > 0) {
+          const displayName = actorName(user);
+          await db.update(receivedUnits).set({
+            disposition: 'document_hold',
+            dispositionNotes: `Document hold: missing ${missingDocs.join(', ')}`,
+            dispositionByUserId: user?.employeeId ?? null,
+            dispositionByDisplayName: displayName,
+            dispositionAt: new Date(),
+            updatedAt: new Date(),
+          }).where(eq(receivedUnits.id, unit.id));
+          await logAudit(receiptId, 'document_hold_set', user?.employeeId, displayName, {
+            unitId: unit.id,
+            barcode,
+            agPartNumber: line.agPartNumber,
+            missingDocuments: missingDocs,
+          });
+          return res.status(422).json({
+            error: 'Unit placed on document hold because required documents are missing for this part.',
+            missingDocuments: missingDocs,
+            disposition: 'document_hold',
+          });
+        }
+      }
       try {
         await handleAcceptedUnit(unit, receipt, user);
       } catch (lotErr: any) {
@@ -580,6 +655,7 @@ router.post('/:id/units/:unitId/disposition', requireReceivingAccess, async (req
 
     const allowedDispositions = [
       'pending_inspection',
+      'document_hold',
       'accepted',
       'quarantine',
       'rejected',
@@ -591,8 +667,8 @@ router.post('/:id/units/:unitId/disposition', requireReceivingAccess, async (req
       return res.status(400).json({ error: 'Invalid disposition value' });
     }
 
-    // Server-side enforcement: quarantine and rejected dispositions require notes
-    if ((disposition === 'quarantine' || disposition.startsWith('rejected')) && !notes?.trim()) {
+    // Server-side enforcement: holds, quarantine, and rejected dispositions require notes
+    if ((disposition === 'document_hold' || disposition === 'quarantine' || disposition.startsWith('rejected')) && !notes?.trim()) {
       return res.status(422).json({ error: `Notes are required when setting disposition to "${disposition}"` });
     }
 
@@ -616,8 +692,24 @@ router.post('/:id/units/:unitId/disposition', requireReceivingAccess, async (req
       if (line?.agPartNumber) {
         const missingDocs = await checkRequiredDocs(line.agPartNumber, receiptId);
         if (missingDocs.length > 0) {
+          const displayName = actorName(user);
+          await db.update(receivedUnits).set({
+            disposition: 'document_hold',
+            dispositionNotes: `Document hold: missing ${missingDocs.join(', ')}`,
+            dispositionByUserId: user?.employeeId ?? null,
+            dispositionByDisplayName: displayName,
+            dispositionAt: new Date(),
+            updatedAt: new Date(),
+          }).where(eq(receivedUnits.id, unitId));
+          await logAudit(receiptId, 'document_hold_set', user?.employeeId, displayName, {
+            unitId,
+            barcode: unitCheck.barcode,
+            agPartNumber: line.agPartNumber,
+            missingDocuments: missingDocs,
+            disposition: 'document_hold',
+          });
           return res.status(422).json({
-            error: 'Cannot accept unit — required documents are missing for this part.',
+            error: 'Unit placed on document hold because required documents are missing for this part.',
             missingDocuments: missingDocs,
           });
         }
@@ -891,7 +983,8 @@ async function checkRequiredDocs(agPartNumber: string, receiptId: number): Promi
 
   // Fetch doc requirements for this inventory item
   const invResult = await db.execute(
-    sql`SELECT requires_sds, requires_tds, requires_coc, requires_test_report, requires_packing_slip_photo
+    sql`SELECT requires_sds, requires_tds, requires_coc, requires_test_report, requires_packing_slip_photo,
+               has_sds, sds_file_path, has_tds, tds_file_path, has_other_docs, other_docs_file_path
         FROM inventory_items WHERE ag_part_number = ${agPartNumber} LIMIT 1`
   );
   const invRows = sqlRows<{
@@ -900,33 +993,74 @@ async function checkRequiredDocs(agPartNumber: string, receiptId: number): Promi
     requires_coc: boolean;
     requires_test_report: boolean;
     requires_packing_slip_photo: boolean;
+    has_sds: boolean | null;
+    sds_file_path: string | null;
+    has_tds: boolean | null;
+    tds_file_path: string | null;
+    has_other_docs: boolean | null;
+    other_docs_file_path: string | null;
   }>(invResult);
 
   if (!invRows.length) return []; // Item not found — no requirements
 
   const req = invRows[0];
-  const requiredTypes: Array<{ flag: boolean; docType: string; label: string }> = [
-    { flag: req.requires_sds, docType: 'SDS', label: 'Safety Data Sheet (SDS)' },
-    { flag: req.requires_tds, docType: 'TDS', label: 'Technical Data Sheet (TDS)' },
-    { flag: req.requires_coc, docType: 'CoC', label: 'Certificate of Conformance (CoC)' },
-    { flag: req.requires_test_report, docType: 'test_report', label: 'Test Report' },
-    { flag: req.requires_packing_slip_photo, docType: 'packing_slip', label: 'Packing Slip Photo' },
-  ];
+  const requiredTypes: Array<{
+    flag: boolean;
+    label: string;
+    receiptDocAliases: string[];
+    itemLinked: boolean;
+  }> = [
+    {
+      flag: req.requires_sds,
+      label: 'Safety Data Sheet (SDS)',
+      receiptDocAliases: ['SDS'],
+      itemLinked: Boolean(req.has_sds || req.sds_file_path),
+    },
+    {
+      flag: req.requires_tds,
+      label: 'Technical Data Sheet (TDS)',
+      receiptDocAliases: ['TDS'],
+      itemLinked: Boolean(req.has_tds || req.tds_file_path),
+    },
+    {
+      flag: req.requires_coc,
+      label: 'Certificate of Conformance (CoC)',
+      receiptDocAliases: ['COC', 'COFC', 'CERTIFICATE_OF_CONFORMANCE'],
+      itemLinked: false,
+    },
+    {
+      flag: req.requires_test_report,
+      label: 'Certificate / Test Report',
+      receiptDocAliases: ['CERT', 'CERTIFICATE', 'TEST_REPORT', 'CALIBRATION_CERT'],
+      itemLinked: Boolean(req.has_other_docs || req.other_docs_file_path),
+    },
+    {
+      flag: req.requires_packing_slip_photo,
+      label: 'Packing Slip Photo',
+      receiptDocAliases: ['PACKING_SLIP', 'PACKING_SLIP_PHOTO'],
+      itemLinked: false,
+    },
+  ].filter(r => r.flag);
 
-  const needed = requiredTypes.filter(r => r.flag).map(r => r.docType);
-  if (!needed.length) return [];
+  if (!requiredTypes.length) return [];
 
   // Fetch uploaded docs for this receipt
   const docResult = await db.execute(
     sql`SELECT doc_type FROM receipt_documents WHERE receipt_id = ${receiptId}`
   );
   const docRows = sqlRows<{ doc_type: string }>(docResult);
-  const uploaded = new Set(docRows.map(d => d.doc_type));
+  const uploaded = new Set(docRows.map(d => normalizeReceiptDocType(d.doc_type)));
 
-  return needed.filter(dt => !uploaded.has(dt)).map(dt => {
-    const entry = requiredTypes.find(r => r.docType === dt);
-    return entry?.label ?? dt;
-  });
+  return requiredTypes
+    .filter(required => !required.itemLinked && !required.receiptDocAliases.some(alias => uploaded.has(alias)))
+    .map(required => required.label);
+}
+
+function normalizeReceiptDocType(value: string | null | undefined): string {
+  return String(value ?? '')
+    .trim()
+    .toUpperCase()
+    .replace(/[\s-]+/g, '_');
 }
 
 // ── Helper: expiration status for a received unit ────────────────────────────

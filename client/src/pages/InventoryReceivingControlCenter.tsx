@@ -234,6 +234,7 @@ interface DepartmentReceivingAction {
 
 const DISPOSITION_COLORS: Record<string, string> = {
   pending_inspection: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+  document_hold: 'bg-amber-100 text-amber-800 border-amber-200',
   accepted: 'bg-green-100 text-green-800 border-green-200',
   quarantine: 'bg-orange-100 text-orange-800 border-orange-200',
   rejected: 'bg-red-100 text-red-800 border-red-200',
@@ -244,6 +245,7 @@ const DISPOSITION_COLORS: Record<string, string> = {
 
 const DISPOSITION_LABELS: Record<string, string> = {
   pending_inspection: 'Pending Inspection',
+  document_hold: 'Document Hold',
   accepted: 'Accepted',
   quarantine: 'Quarantine',
   rejected: 'Rejected',
@@ -252,7 +254,7 @@ const DISPOSITION_LABELS: Record<string, string> = {
   rejected_reallocated: 'Rejected - Reallocate',
 };
 
-const DOC_TYPES = ['SDS', 'TDS', 'CoC', 'packing_slip', 'test_report', 'calibration_cert', 'supplier_label_photo', 'damage_photo', 'other'];
+const DOC_TYPES = ['SDS', 'TDS', 'CoC', 'cert', 'packing_slip', 'test_report', 'calibration_cert', 'supplier_label_photo', 'damage_photo', 'other'];
 
 const UNIT_TYPES = ['roll', 'box', 'bar', 'tube', 'serialized_piece', 'other'];
 
@@ -2155,6 +2157,7 @@ function DispositionStep({ receipt, onNext, onUpdate }: {
     onError: (err: any) => {
       if (err?.missingDocuments) {
         setDispositionError({ error: err.message ?? 'Missing required documents', missingDocuments: err.missingDocuments });
+        apiRequest(`/api/receipts/${receipt.id}`).then(onUpdate).catch(() => {});
       } else if (err?.expirationStatus) {
         setDispositionError({ error: err.message ?? 'Unit is expired' });
         toast.error(err.message ?? 'Unit is expired');
@@ -2227,7 +2230,7 @@ function DispositionStep({ receipt, onNext, onUpdate }: {
               <DispositionBadge disposition={unit.disposition} />
             </div>
             <div className="flex flex-wrap gap-1">
-              {(['accepted', 'quarantine', 'rejected'] as const).map(d => (
+              {(['accepted', 'document_hold', 'quarantine', 'rejected'] as const).map(d => (
                 <Button
                   key={d}
                   size="sm"
@@ -2247,9 +2250,10 @@ function DispositionStep({ receipt, onNext, onUpdate }: {
                   }}
                 >
                   {d === 'accepted' && <CheckCircle2 className="w-2.5 h-2.5 mr-1" />}
+                  {d === 'document_hold' && <AlertTriangle className="w-2.5 h-2.5 mr-1" />}
                   {d === 'quarantine' && <AlertTriangle className="w-2.5 h-2.5 mr-1" />}
                   {d === 'rejected' && <XCircle className="w-2.5 h-2.5 mr-1" />}
-                  {DISPOSITION_LABELS[d]}
+                  {d === 'accepted' && unit.disposition === 'document_hold' ? 'Release' : DISPOSITION_LABELS[d]}
                 </Button>
               ))}
             </div>
@@ -2499,7 +2503,7 @@ export function PutawayStep({ receipt, onComplete, onUpdate }: {
       }
       onComplete();
     },
-    onError: () => toast.error('Failed to complete receipt'),
+    onError: (err: any) => toast.error(err?.message ?? 'Failed to complete receipt'),
   });
 
   return (
@@ -2802,6 +2806,7 @@ function DepartmentActionQueue() {
 function DocumentsTab({ receipt, onUpdate }: { receipt: Receipt; onUpdate: (r: Receipt) => void }) {
   const documents = receipt.documents ?? [];
   const units = receipt.units ?? [];
+  const queryClient = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [docType, setDocType] = useState('other');
   const [docNotes, setDocNotes] = useState('');
@@ -2830,6 +2835,7 @@ function DocumentsTab({ receipt, onUpdate }: { receipt: Receipt; onUpdate: (r: R
       if (!resp.ok) throw new Error('Upload failed');
       const updated = await apiRequest(`/api/receipts/${receipt.id}`);
       onUpdate(updated);
+      queryClient.invalidateQueries({ queryKey: ['/api/receipts', receipt.id, 'required-docs'] });
       setDocNotes('');
       setAssignToUnit(RECEIPT_LEVEL);
       toast.success('Document uploaded');

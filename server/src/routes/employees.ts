@@ -1290,6 +1290,26 @@ router.put('/:id', async (req: Request, res: Response) => {
     if (!currentEmployee) {
       return res.status(404).json({ error: 'Employee not found' });
     }
+
+    if (updates.supervisorEmployeeId !== undefined) {
+      if (updates.supervisorEmployeeId === '' || updates.supervisorEmployeeId === 'none') {
+        updates.supervisorEmployeeId = null;
+      }
+      if (updates.supervisorEmployeeId !== null) {
+        const supervisorId = Number(updates.supervisorEmployeeId);
+        if (!Number.isInteger(supervisorId) || supervisorId <= 0) {
+          return res.status(400).json({ error: 'Supervisor must be a valid employee.' });
+        }
+        if (supervisorId === employeeId) {
+          return res.status(400).json({ error: 'An employee cannot be their own supervisor.' });
+        }
+        const supervisor = await storage.getEmployee(supervisorId);
+        if (!supervisor || supervisor.isActive === false) {
+          return res.status(400).json({ error: 'Selected supervisor was not found or is inactive.' });
+        }
+        updates.supervisorEmployeeId = supervisorId;
+      }
+    }
     
     // Validate / resolve employee code on update
     const incomingCode = updates.employeeCode;

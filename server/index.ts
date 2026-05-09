@@ -1980,7 +1980,10 @@ async function initializeBackgroundServices() {
         const b2PhaseBAltrs = [
           `ALTER TABLE timekeeping.salaried_timesheets ADD COLUMN IF NOT EXISTS certified_at TIMESTAMPTZ`,
           `ALTER TABLE timekeeping.salaried_timesheets ADD COLUMN IF NOT EXISTS certified_by INTEGER`,
+          `ALTER TABLE timekeeping.salaried_timesheets ADD COLUMN IF NOT EXISTS supervisor_employee_id INTEGER REFERENCES employees(id)`,
           `ALTER TABLE timekeeping.salaried_timesheets ADD COLUMN IF NOT EXISTS supervisor_approved_at TIMESTAMPTZ`,
+          `ALTER TABLE timekeeping.salaried_timesheets ADD COLUMN IF NOT EXISTS supervisor_approved_by INTEGER`,
+          `ALTER TABLE timekeeping.salaried_timesheets ADD COLUMN IF NOT EXISTS supervisor_approval_note TEXT`,
           `ALTER TABLE timekeeping.salaried_timesheets ADD COLUMN IF NOT EXISTS payroll_approved_at TIMESTAMPTZ`,
           `ALTER TABLE timekeeping.salaried_timesheets ADD COLUMN IF NOT EXISTS payroll_approved_by INTEGER`,
           `ALTER TABLE timekeeping.salaried_timesheets ADD COLUMN IF NOT EXISTS reopened_at TIMESTAMPTZ`,
@@ -4396,6 +4399,11 @@ async function initializeBackgroundServices() {
           { key: 'timekeeping.pto.view_all', description: 'View all PTO requests across the company', category: 'timekeeping' },
           { key: 'timekeeping.pto.cancel_request', description: 'Cancel a pending PTO request', category: 'timekeeping' },
           { key: 'timekeeping.time_clock_admin.access', description: 'Access the Time Clock Admin page', category: 'timekeeping' },
+          { key: 'timekeeping.salaried.view_review_queue', description: 'View salaried timesheets awaiting review', category: 'timekeeping' },
+          { key: 'timekeeping.salaried.approve_supervisor', description: 'Approve submitted salaried timesheets as assigned supervisor', category: 'timekeeping' },
+          { key: 'timekeeping.salaried.approve_payroll', description: 'Finalize salaried timesheets for payroll', category: 'timekeeping' },
+          { key: 'timekeeping.salaried.reopen', description: 'Reopen payroll-approved salaried timesheets with reason', category: 'timekeeping' },
+          { key: 'timekeeping.salaried.override_certification', description: 'Certify salaried timesheets on behalf of an employee with audit reason', category: 'timekeeping' },
 
           // Improvement Notes (workflow improvement capture)
           { key: 'improvement_notes.view', description: 'View the Improvement Notes Dashboard and listing of captured workflow suggestions', category: 'improvement_notes' },
@@ -4621,8 +4629,28 @@ async function initializeBackgroundServices() {
           );
         }
 
+        for (const capKey of ['timekeeping.salaried.view_review_queue', 'timekeeping.salaried.approve_supervisor']) {
+          await pool.query(
+            `INSERT INTO perm_role_capabilities (role_id, capability_id)
+             SELECT pr.id, pc.id FROM perm_roles pr, perm_capabilities pc
+             WHERE pr.name = 'SUPERVISOR' AND pc.key = $1
+             ON CONFLICT (role_id, capability_id) DO NOTHING`,
+            [capKey]
+          );
+        }
+
         // HR: approve HR stage + view all
         for (const capKey of ['timekeeping.pto.approve_hr', 'timekeeping.pto.view_all', 'timekeeping.pto.submit_on_behalf']) {
+          await pool.query(
+            `INSERT INTO perm_role_capabilities (role_id, capability_id)
+             SELECT pr.id, pc.id FROM perm_roles pr, perm_capabilities pc
+             WHERE pr.name = 'HR' AND pc.key = $1
+             ON CONFLICT (role_id, capability_id) DO NOTHING`,
+            [capKey]
+          );
+        }
+
+        for (const capKey of ['timekeeping.salaried.view_review_queue', 'timekeeping.salaried.approve_payroll', 'timekeeping.salaried.reopen', 'timekeeping.salaried.override_certification']) {
           await pool.query(
             `INSERT INTO perm_role_capabilities (role_id, capability_id)
              SELECT pr.id, pc.id FROM perm_roles pr, perm_capabilities pc
@@ -4641,7 +4669,7 @@ async function initializeBackgroundServices() {
         );
 
         // MANAGER: submit on behalf, view all
-        for (const capKey of ['timekeeping.pto.submit_on_behalf', 'timekeeping.pto.view_all']) {
+        for (const capKey of ['timekeeping.pto.submit_on_behalf', 'timekeeping.pto.view_all', 'timekeeping.salaried.view_review_queue', 'timekeeping.salaried.approve_supervisor']) {
           await pool.query(
             `INSERT INTO perm_role_capabilities (role_id, capability_id)
              SELECT pr.id, pc.id FROM perm_roles pr, perm_capabilities pc

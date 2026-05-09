@@ -73,6 +73,23 @@ interface MyTasksResponse {
   stats: TaskStats;
 }
 
+interface TimekeepingApprovalTask {
+  id: string;
+  type: 'pto_approval' | 'salaried_timesheet_approval' | 'hourly_timesheet_approval';
+  title: string;
+  description: string;
+  employeeName: string;
+  createdAt: string;
+  priority: 'normal' | 'overdue';
+  actionUrl: string;
+  sourceId: number;
+}
+
+interface TimekeepingTasksResponse {
+  tasks: TimekeepingApprovalTask[];
+  stats: TaskStats;
+}
+
 interface MyTasksControlCenterProps {
   employeeId: number;
   userName?: string;
@@ -113,6 +130,13 @@ export default function MyTasksControlCenter({
     enabled: !!employeeId,
   });
 
+  const { data: timekeepingTasksData } = useQuery<TimekeepingTasksResponse>({
+    queryKey: ['/api/timekeeping/my-tasks', employeeId],
+    queryFn: () => apiRequest(`/api/timekeeping/my-tasks/${employeeId}`),
+    enabled: !!employeeId,
+    refetchInterval: 60_000,
+  });
+
   const updateTaskMutation = useMutation({
     mutationFn: ({ taskId, data }: { taskId: string; data: any }) =>
       apiRequest(`/api/preproduction-checklists/tasks/${taskId}`, {
@@ -134,12 +158,14 @@ export default function MyTasksControlCenter({
   });
 
   const tasks = tasksData?.tasks || [];
+  const timekeepingTasks = timekeepingTasksData?.tasks || [];
   const baseStats = tasksData?.stats || { total: 0, completed: 0, pending: 0, overdue: 0 };
   const sigPending = signatureStats?.pending || 0;
+  const timekeepingPending = timekeepingTasksData?.stats?.pending || 0;
   const stats = {
-    total: baseStats.total + sigPending,
+    total: baseStats.total + sigPending + timekeepingPending,
     completed: baseStats.completed,
-    pending: baseStats.pending + sigPending,
+    pending: baseStats.pending + sigPending + timekeepingPending,
     overdue: baseStats.overdue,
   };
 
@@ -239,7 +265,9 @@ export default function MyTasksControlCenter({
                 compact={true}
               />
 
-              {stats.pending > 0 && (
+              <TimekeepingApprovalTasks tasks={timekeepingTasks} compact={true} />
+
+              {filteredTasks.some((t) => !t.isCompleted) && (
                 <div className="space-y-2">
                   <p className="text-xs text-muted-foreground font-medium">Next Tasks:</p>
                   {filteredTasks
@@ -340,6 +368,8 @@ export default function MyTasksControlCenter({
           employeeName={userName || ''}
           compact={true}
         />
+
+        <TimekeepingApprovalTasks tasks={timekeepingTasks} />
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
@@ -504,6 +534,46 @@ export default function MyTasksControlCenter({
         </Tabs>
       </CardContent>
     </Card>
+  );
+}
+
+function TimekeepingApprovalTasks({
+  tasks,
+  compact = false,
+}: {
+  tasks: TimekeepingApprovalTask[];
+  compact?: boolean;
+}) {
+  if (tasks.length === 0) return null;
+
+  const visibleTasks = compact ? tasks.slice(0, 3) : tasks;
+
+  return (
+    <div className="space-y-2" data-testid="timekeeping-approval-tasks">
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-muted-foreground font-medium">
+          Timekeeping Approvals
+        </p>
+        <Badge variant="outline">{tasks.length}</Badge>
+      </div>
+      {visibleTasks.map((task) => (
+        <div
+          key={task.id}
+          className="flex items-start gap-3 p-3 border rounded-lg bg-amber-50/70 border-amber-200"
+        >
+          <Clock className="h-4 w-4 mt-0.5 text-amber-700 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold truncate">{task.title}</p>
+            <p className="text-xs text-muted-foreground truncate">{task.description}</p>
+          </div>
+          <Link href={task.actionUrl}>
+            <Button variant="outline" size="sm">
+              <ExternalLink className="h-4 w-4" />
+            </Button>
+          </Link>
+        </div>
+      ))}
+    </div>
   );
 }
 

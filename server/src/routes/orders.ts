@@ -2060,6 +2060,19 @@ router.post('/:orderId/payments', async (req: Request, res: Response) => {
     const newPayment = await storage.createPayment(paymentData);
     console.log('Payment created successfully:', newPayment);
 
+    try {
+      await auditService.logEvent({
+        entityType: 'p1_order',
+        entityId: orderId,
+        action: 'PAYMENT_ADDED',
+        actor: { username: (req as any).user?.username || (req as any).user?.role || 'system' },
+        meta: { payment: newPayment },
+      });
+    } catch (auditError) {
+      console.error('[Audit] Failed to log payment creation:', auditError);
+      return res.status(500).json({ error: 'Payment was created but audit logging failed. Contact an administrator.' });
+    }
+
     res.status(201).json(newPayment);
   } catch (error) {
     console.error('Create payment error:', error);
@@ -2117,20 +2130,26 @@ router.put('/payments/:paymentId', async (req: Request, res: Response) => {
   }
 });
 
-// Delete a payment
+// Void a payment. The original row is preserved and a reversal row offsets it.
 router.delete('/payments/:paymentId', async (req: Request, res: Response) => {
   try {
     const paymentId = parseInt(req.params.paymentId);
+    const voidReason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+    const user = (req as any).user?.username || (req as any).user?.role || 'system';
 
     // Validate payment ID
     if (isNaN(paymentId)) {
       console.error('Invalid payment ID:', req.params.paymentId);
       return res.status(400).json({ error: 'Invalid payment ID' });
     }
+    if (!voidReason) {
+      return res.status(400).json({ error: 'A void reason is required. Payments are reversed, not deleted.' });
+    }
 
-    console.log(`🗑️ Attempting to delete payment ID: ${paymentId}`);
+    console.log(`Voiding payment ID: ${paymentId}`);
 
     // Check if payment exists by trying to get it directly
+    let existingPayment: any;
     try {
       const result = await db
         .select()
@@ -2141,6 +2160,13 @@ router.delete('/payments/:paymentId', async (req: Request, res: Response) => {
         console.error('Payment not found:', paymentId);
         return res.status(404).json({ error: 'Payment not found' });
       }
+      existingPayment = result[0];
+      if (existingPayment.status === 'voided') {
+        return res.status(409).json({ error: 'Payment is already voided' });
+      }
+      if (existingPayment.paymentType === 'payment_reversal' || existingPayment.status === 'reversal') {
+        return res.status(409).json({ error: 'Cannot void a reversal payment' });
+      }
       console.log(
         `✅ Payment found: ${paymentId}, orderId: ${result[0].orderId}`
       );
@@ -2149,30 +2175,87 @@ router.delete('/payments/:paymentId', async (req: Request, res: Response) => {
       return res.status(500).json({ error: 'Error validating payment' });
     }
 
-    // Check if an EXPORTED journal entry exists — block deletion if so
+    // Check if an EXPORTED journal entry exists. Journal reversal wiring will
+    // be added after the chart of accounts is finalized.
     try {
-      const journalCheck = await accountingService.deleteJournalEntryForPayment(paymentId);
-      if (journalCheck.blocked) {
+      const [existingJournal] = await db
+        .select({ status: journalEntries.status })
+        .from(journalEntries)
+        .where(
+          and(
+            eq(journalEntries.referenceType, 'payment'),
+            eq(journalEntries.referenceId, paymentId)
+          )
+        )
+        .limit(1);
+      if (existingJournal?.status === 'EXPORTED') {
         return res.status(409).json({
-          error: 'Cannot delete this payment — an exported accounting journal entry exists. Contact your accountant to reverse it first.',
+          error: 'Cannot void this payment because an exported accounting journal entry exists. Contact accounting to reverse it first.',
         });
       }
     } catch (journalCheckError) {
-      console.error('[Accounting] Error checking journal entry before payment delete:', journalCheckError);
+      console.error('[Accounting] Error checking journal entry before payment void:', journalCheckError);
     }
 
-    await storage.deletePayment(paymentId);
-    console.log(`✅ Successfully deleted payment ID: ${paymentId}`);
-    res.json({ success: true });
+    const result = await db.transaction(async (tx) => {
+      const [voidedPayment] = await tx
+        .update(payments)
+        .set({
+          status: 'voided',
+          voidedAt: new Date(),
+          voidedBy: user,
+          voidReason,
+          updatedAt: new Date(),
+        })
+        .where(eq(payments.id, paymentId))
+        .returning();
+
+      const [reversal] = await tx
+        .insert(payments)
+        .values({
+          orderId: existingPayment.orderId,
+          paymentType: 'payment_reversal',
+          paymentAmount: -Math.abs(Number(existingPayment.paymentAmount || 0)),
+          paymentDate: new Date(),
+          notes: `Reversal of payment ${paymentId}: ${voidReason}`,
+          processingFee: existingPayment.processingFee ? -Math.abs(Number(existingPayment.processingFee)) : null,
+          batchId: existingPayment.batchId || null,
+          status: 'reversal',
+          reversalOfPaymentId: paymentId,
+        })
+        .returning();
+
+      return { voidedPayment, reversal };
+    });
+
+    try {
+      await auditService.logEvent({
+        entityType: 'p1_order',
+        entityId: existingPayment.orderId,
+        action: 'PAYMENT_VOIDED',
+        actor: { username: user },
+        reason: voidReason,
+        meta: {
+          paymentId,
+          reversalPaymentId: result.reversal.id,
+          originalPayment: existingPayment,
+        },
+      });
+    } catch (auditError) {
+      console.error('[Audit] Failed to log payment void:', auditError);
+      return res.status(500).json({ error: 'Payment was reversed but audit logging failed. Contact an administrator.' });
+    }
+    console.log(`Successfully voided payment ID: ${paymentId} with reversal ${result.reversal.id}`);
+    res.json({ success: true, message: 'Payment voided with reversal', ...result });
   } catch (error) {
-    console.error('Delete payment error:', error);
+    console.error('Void payment error:', error);
     console.error('Error details:', {
       message: (error as Error).message,
       stack: (error as Error).stack,
       paymentId: req.params.paymentId,
     });
     res.status(500).json({
-      error: 'Failed to delete payment',
+      error: 'Failed to void payment',
       details: (error as Error).message,
     });
   }

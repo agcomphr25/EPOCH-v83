@@ -6353,23 +6353,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deletePayment(id: number): Promise<void> {
-    // Handle foreign key constraints - delete related credit card transactions first
-    try {
-      // First, delete any related credit card transactions using raw SQL
-      await db.execute(
-        sql`DELETE FROM credit_card_transactions WHERE payment_id = ${id}`
-      );
-      console.log(
-        `🗑️ Deleted related credit card transactions for payment ${id}`
-      );
-
-      // Then delete the payment
-      await db.delete(payments).where(eq(payments.id, id));
-      console.log(`✅ Successfully deleted payment ${id}`);
-    } catch (error) {
-      console.error(`❌ Error deleting payment ${id}:`, error);
-      throw error;
-    }
+    throw new Error(
+      `Hard delete is disabled for payment ${id}. Use the payment void/reversal flow instead.`
+    );
   }
 
   // Forms CRUD

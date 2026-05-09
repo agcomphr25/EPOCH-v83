@@ -19,6 +19,7 @@ const UNIVERSAL_ACCESS_ROUTES: string[] = [
   '/pdf-signature-tool',
   '/routing-document-management',
   '/tickets',
+  '/tickets-command-center',
   '/quick-notes',
   '/training',
 ];

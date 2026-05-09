@@ -65,6 +65,7 @@ import TimerProgramsPage from './pages/TimerProgramsPage';
 import FieldPage from './pages/FieldPage';
 import ExecutiveRundown from './pages/ExecutiveRundown';
 import TicketsPage from './pages/TicketsPage';
+import TicketsCommandCenter from './pages/TicketsCommandCenter';
 import PDFSignatureTool from './pages/PDFSignatureTool';
 import MaintenancePage from './pages/MaintenancePage';
 import MaintenanceEventsPage from './pages/MaintenanceEventsPage';
@@ -669,6 +670,7 @@ function App() {
 
                   {/* Ticketing System - Internal CSR Tool */}
                   <Route path="/tickets" component={TicketsPage} />
+                  <Route path="/tickets-command-center" component={TicketsCommandCenter} />
                   <Route path="/pdf-signature-tool" component={PDFSignatureTool} />
 
                   {/* Vendor Management Routes */}

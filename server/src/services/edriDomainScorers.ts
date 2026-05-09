@@ -1282,7 +1282,14 @@ export async function scorePolicy(): Promise<DomainScorerResult> {
   }
 
   // Check 4: Document version control
-  const controlledDocs = await safeCount(`SELECT COUNT(*) as count FROM controlled_documents WHERE status = 'ACTIVE'`);
+  // The Master Document Register marks active controlled docs as approved; older
+  // data may still use ACTIVE, so count both while excluding expired records.
+  const controlledDocs = await safeCount(`
+    SELECT COUNT(*) as count
+    FROM controlled_documents
+    WHERE LOWER(status) IN ('approved', 'active')
+      AND (expiration_date IS NULL OR expiration_date >= CURRENT_DATE)
+  `);
   checks['DOCUMENT_VERSION_CONTROL'] = controlledDocs === null ? 0.5 : controlledDocs > 0 ? 1 : 0.5;
   evidenceItems.push({ label: 'Active controlled documents', value: controlledDocs ?? 'SCORER_UNAVAILABLE' });
   if (controlledDocs !== null && controlledDocs === 0) {

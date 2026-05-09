@@ -5,10 +5,12 @@ import {
   p2PackingSlips,
   p2LotNumbers,
   p2PurchaseOrderItems,
+  p2Customers,
 } from '../../schema';
-import { eq, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 interface LineItem {
+  poItemId?: number;
   partNumber: string;
   partName?: string;
   quantity: number;
@@ -51,10 +53,11 @@ export async function createInvoiceFromPackingSlip(
   }
 
   // Load PO line items for pricing resolution
-  let poItems: { partNumber: string; unitPrice: number | null }[] = [];
+  let poItems: { id: number; partNumber: string; unitPrice: number | null }[] = [];
   if (lot.poId) {
     poItems = await db
       .select({
+        id: p2PurchaseOrderItems.id,
         partNumber: p2PurchaseOrderItems.partNumber,
         unitPrice: p2PurchaseOrderItems.unitPrice,
       })
@@ -63,8 +66,10 @@ export async function createInvoiceFromPackingSlip(
   }
 
   // Build a map from partNumber -> matching PO items
-  const poItemsByPart = new Map<string, { partNumber: string; unitPrice: number | null }[]>();
+  const poItemsById = new Map<number, { id: number; partNumber: string; unitPrice: number | null }>();
+  const poItemsByPart = new Map<string, { id: number; partNumber: string; unitPrice: number | null }[]>();
   for (const item of poItems) {
+    poItemsById.set(item.id, item);
     const existing = poItemsByPart.get(item.partNumber) ?? [];
     existing.push(item);
     poItemsByPart.set(item.partNumber, existing);
@@ -85,6 +90,8 @@ export async function createInvoiceFromPackingSlip(
   let subtotal = 0;
 
   const resolvedLines: Array<{
+    poItemId: number | null;
+    partNumber: string | null;
     description: string;
     qty: number;
     unitPrice: number;
@@ -92,11 +99,14 @@ export async function createInvoiceFromPackingSlip(
   }> = [];
 
   for (const line of lineItems) {
-    const matches = poItemsByPart.get(line.partNumber) ?? [];
+    const linkedPoItem = line.poItemId ? poItemsById.get(line.poItemId) : undefined;
+    const matches = linkedPoItem ? [linkedPoItem] : (poItemsByPart.get(line.partNumber) ?? []);
     let unitPrice = 0;
+    let resolvedPoItemId: number | null = linkedPoItem?.id ?? null;
 
     if (matches.length === 1) {
       unitPrice = matches[0].unitPrice ?? 0;
+      resolvedPoItemId = matches[0].id;
     } else if (matches.length === 0) {
       pricingMismatch = true;
       unitPrice = 0;
@@ -114,6 +124,8 @@ export async function createInvoiceFromPackingSlip(
     subtotal += lineTotal;
 
     resolvedLines.push({
+      poItemId: resolvedPoItemId,
+      partNumber: line.partNumber ?? null,
       description: line.partName ? `${line.partNumber} – ${line.partName}` : line.partNumber,
       qty,
       unitPrice: effectiveUnitPrice,
@@ -123,13 +135,26 @@ export async function createInvoiceFromPackingSlip(
 
   // Generate invoice number
   const { storage } = await import('../../storage');
-  const invoiceNumber = await storage.getNextInvoiceNumber(slip.customerId, slip.customerName);
+  const invoiceNumber = slip.invoiceNumber || await storage.getNextInvoiceNumber(slip.customerId, slip.customerName);
+  if (!slip.invoiceNumber) {
+    await db
+      .update(p2PackingSlips)
+      .set({ invoiceNumber })
+      .where(eq(p2PackingSlips.id, packingSlipId));
+  }
+
+  const [customer] = await db
+    .select({ paymentTerms: p2Customers.paymentTerms })
+    .from(p2Customers)
+    .where(eq(p2Customers.customerId, slip.customerId));
 
   // Dates
   const today = new Date();
   const invoiceDateStr = today.toISOString().split('T')[0];
+  const terms = customer?.paymentTerms || 'NET_30';
+  const termsDays = terms === 'NET_15' ? 15 : terms === 'NET_60' ? 60 : 30;
   const dueDate = new Date(today);
-  dueDate.setDate(dueDate.getDate() + 30);
+  dueDate.setDate(dueDate.getDate() + termsDays);
   const dueDateStr = dueDate.toISOString().split('T')[0];
 
   // Insert invoice header + lines in a transaction.
@@ -144,17 +169,24 @@ export async function createInvoiceFromPackingSlip(
           invoiceNumber,
           invoiceDate: invoiceDateStr,
           dueDate: dueDateStr,
-          terms: 'NET_30',
+          terms,
+          poId: lot.poId ? String(lot.poId) : null,
+          poOverride: slip.poNumber || null,
           packingSlipId,
           lotId,
-          status: 'DRAFT',
+          status: 'REVIEW',
           autoCreated: true,
           pricingMismatch,
           pricingAmbiguous,
           subtotal: String(subtotal),
+          discountAmount: '0',
+          freightAmount: '0',
           taxAmount: '0',
+          retainagePercent: '0',
+          retainageAmount: '0',
           totalAmount: String(subtotal),
           createdBy: 'system',
+          customerVisibleNotes: slip.notes || null,
         })
         .returning({ id: arInvoices.id });
 
@@ -162,6 +194,8 @@ export async function createInvoiceFromPackingSlip(
         await tx.insert(arInvoiceLines).values(
           resolvedLines.map((l) => ({
             invoiceId: invoice.id,
+            poItemId: l.poItemId,
+            partNumber: l.partNumber,
             description: l.description,
             qty: String(l.qty),
             unitPrice: String(l.unitPrice),

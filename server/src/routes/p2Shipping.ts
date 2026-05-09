@@ -313,11 +313,13 @@ router.post('/packing-slips', async (req: Request, res: Response) => {
 
     const byPart: Record<string, typeof serials> = {};
     for (const s of serials) {
-      if (!byPart[s.partNumber]) byPart[s.partNumber] = [];
-      byPart[s.partNumber].push(s);
+      const key = s.poItemId ? String(s.poItemId) : s.partNumber;
+      if (!byPart[key]) byPart[key] = [];
+      byPart[key].push(s);
     }
 
     const lineItems = Object.values(byPart).map((group) => ({
+      poItemId: group[0].poItemId,
       partNumber: group[0].partNumber,
       partName: group[0].partName,
       quantity: group.length,

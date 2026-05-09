@@ -53,6 +53,55 @@ const StageReviewSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
+// Logged-in employee portal — submit/read own PTO
+// ---------------------------------------------------------------------------
+router.post(
+  "/time-off/my",
+  authenticateToken,
+  h(async (req, res): Promise<void> => {
+    const user = req.user as SafeUser | undefined;
+    const employeeId = user?.employeeId ?? null;
+    if (!user || !employeeId) { res.status(403).json({ error: "Your account is not linked to an employee record" }); return; }
+
+    const parse = PortalCreateRequestSchema.safeParse(req.body);
+    if (!parse.success) { res.status(400).json({ error: parse.error.message }); return; }
+    const { startDate, endDate, requestUnit, requestedHours, partialDayDate, employeeNote } = parse.data;
+    if (startDate > endDate) { res.status(400).json({ error: "startDate must not be after endDate" }); return; }
+    if (requestUnit === "hourly" && !requestedHours) {
+      res.status(400).json({ error: "requestedHours is required when requestUnit is 'hourly'" }); return;
+    }
+
+    const request = await svc.submitPTORequest({
+      employeeId,
+      startDate,
+      endDate,
+      leaveType: "pto",
+      requestUnit,
+      requestedHours: requestedHours ?? null,
+      partialDayDate: partialDayDate ?? null,
+      employeeNote,
+      submittedByUserId: user.id,
+      submittedOnBehalf: false,
+      actorUser: user,
+      actorIp: req.ip ?? null,
+    });
+    res.status(201).json(request);
+  })
+);
+
+router.get(
+  "/time-off/my",
+  authenticateToken,
+  h(async (req, res): Promise<void> => {
+    const employeeId = req.user?.employeeId ?? null;
+    if (!employeeId) { res.status(403).json({ error: "Your account is not linked to an employee record" }); return; }
+
+    const requests = await svc.getTimeOffRequestsByEmployee(employeeId);
+    res.json(requests);
+  })
+);
+
+// ---------------------------------------------------------------------------
 // Employee portal — submit PTO
 // ---------------------------------------------------------------------------
 router.post(

@@ -60,7 +60,12 @@ router.get('/aging', async (req: Request, res: Response) => {
           inv.id,
           inv.due_date,
           inv.total_amount::numeric - COALESCE(
-            (SELECT SUM(amount_applied::numeric) FROM ar_payment_allocations WHERE invoice_id = inv.id), 0
+            (
+              SELECT SUM(a.amount_applied::numeric)
+              FROM ar_payment_allocations a
+              JOIN ar_payments p ON p.id = a.payment_id
+              WHERE a.invoice_id = inv.id AND COALESCE(p.status, 'posted') = 'posted'
+            ), 0
           ) - COALESCE(
             (SELECT SUM(amount::numeric) FROM credit_memos WHERE ar_invoice_id = inv.id AND status != 'cancelled'), 0
           ) AS balance
@@ -103,7 +108,12 @@ router.get('/aging/by-customer', async (req: Request, res: Response) => {
           inv.customer_id,
           inv.due_date,
           inv.total_amount::numeric - COALESCE(
-            (SELECT SUM(amount_applied::numeric) FROM ar_payment_allocations WHERE invoice_id = inv.id), 0
+            (
+              SELECT SUM(a.amount_applied::numeric)
+              FROM ar_payment_allocations a
+              JOIN ar_payments p ON p.id = a.payment_id
+              WHERE a.invoice_id = inv.id AND COALESCE(p.status, 'posted') = 'posted'
+            ), 0
           ) - COALESCE(
             (SELECT SUM(amount::numeric) FROM credit_memos WHERE ar_invoice_id = inv.id AND status != 'cancelled'), 0
           ) AS balance
@@ -142,7 +152,12 @@ router.get('/customer-summary/:customerId', async (req: Request, res: Response) 
         COUNT(*)::int AS open_invoices,
         COALESCE(SUM(
           inv.total_amount::numeric - COALESCE(
-            (SELECT SUM(amount_applied::numeric) FROM ar_payment_allocations WHERE invoice_id = inv.id), 0
+            (
+              SELECT SUM(a.amount_applied::numeric)
+              FROM ar_payment_allocations a
+              JOIN ar_payments p ON p.id = a.payment_id
+              WHERE a.invoice_id = inv.id AND COALESCE(p.status, 'posted') = 'posted'
+            ), 0
           ) - COALESCE(
             (SELECT SUM(amount::numeric) FROM credit_memos WHERE ar_invoice_id = inv.id AND status != 'cancelled'), 0
           )
@@ -197,7 +212,13 @@ router.get('/', async (req: Request, res: Response) => {
         autoCreated: arInvoices.autoCreated,
         packingSlipId: arInvoices.packingSlipId,
         amountPaid: sql<string>`COALESCE(
-          (SELECT SUM(amount_applied) FROM ar_payment_allocations WHERE invoice_id = ${arInvoices.id}),
+          (
+            SELECT SUM(a.amount_applied)
+            FROM ar_payment_allocations a
+            JOIN ar_payments p ON p.id = a.payment_id
+            WHERE a.invoice_id = ${arInvoices.id}
+              AND COALESCE(p.status, 'posted') = 'posted'
+          ),
           0
         ) + COALESCE(
           (SELECT SUM(amount::numeric) FROM credit_memos WHERE ar_invoice_id = ${arInvoices.id} AND status != 'cancelled'),
@@ -205,7 +226,13 @@ router.get('/', async (req: Request, res: Response) => {
         )`,
         balance: sql<string>`(
           ${arInvoices.totalAmount}::numeric - COALESCE(
-            (SELECT SUM(amount_applied) FROM ar_payment_allocations WHERE invoice_id = ${arInvoices.id}),
+            (
+              SELECT SUM(a.amount_applied)
+              FROM ar_payment_allocations a
+              JOIN ar_payments p ON p.id = a.payment_id
+              WHERE a.invoice_id = ${arInvoices.id}
+                AND COALESCE(p.status, 'posted') = 'posted'
+            ),
             0
           ) - COALESCE(
             (SELECT SUM(amount::numeric) FROM credit_memos WHERE ar_invoice_id = ${arInvoices.id} AND status != 'cancelled'),
@@ -252,7 +279,13 @@ const DASHBOARD_INVOICE_SELECT = (invoices: typeof arInvoices, customers: typeof
   poNumber: purchaseOrders ? purchaseOrders.poNumber : sql<string | null>`null`,
   balance: sql<string>`(
     ${invoices.totalAmount}::numeric - COALESCE(
-      (SELECT SUM(amount_applied) FROM ar_payment_allocations WHERE invoice_id = ${invoices.id}),
+      (
+        SELECT SUM(a.amount_applied)
+        FROM ar_payment_allocations a
+        JOIN ar_payments p ON p.id = a.payment_id
+        WHERE a.invoice_id = ${invoices.id}
+          AND COALESCE(p.status, 'posted') = 'posted'
+      ),
       0
     ) - COALESCE(
       (SELECT SUM(amount::numeric) FROM credit_memos WHERE ar_invoice_id = ${invoices.id} AND status != 'cancelled'),
@@ -382,7 +415,13 @@ router.get('/:id', async (req: Request, res: Response) => {
         createdAt: arInvoices.createdAt,
         updatedAt: arInvoices.updatedAt,
         amountPaid: sql<string>`COALESCE(
-          (SELECT SUM(amount_applied) FROM ar_payment_allocations WHERE invoice_id = ${arInvoices.id}),
+          (
+            SELECT SUM(a.amount_applied)
+            FROM ar_payment_allocations a
+            JOIN ar_payments p ON p.id = a.payment_id
+            WHERE a.invoice_id = ${arInvoices.id}
+              AND COALESCE(p.status, 'posted') = 'posted'
+          ),
           0
         ) + COALESCE(
           (SELECT SUM(amount::numeric) FROM credit_memos WHERE ar_invoice_id = ${arInvoices.id} AND status != 'cancelled'),
@@ -390,7 +429,13 @@ router.get('/:id', async (req: Request, res: Response) => {
         )`,
         balance: sql<string>`(
           ${arInvoices.totalAmount}::numeric - COALESCE(
-            (SELECT SUM(amount_applied) FROM ar_payment_allocations WHERE invoice_id = ${arInvoices.id}),
+            (
+              SELECT SUM(a.amount_applied)
+              FROM ar_payment_allocations a
+              JOIN ar_payments p ON p.id = a.payment_id
+              WHERE a.invoice_id = ${arInvoices.id}
+                AND COALESCE(p.status, 'posted') = 'posted'
+            ),
             0
           ) - COALESCE(
             (SELECT SUM(amount::numeric) FROM credit_memos WHERE ar_invoice_id = ${arInvoices.id} AND status != 'cancelled'),

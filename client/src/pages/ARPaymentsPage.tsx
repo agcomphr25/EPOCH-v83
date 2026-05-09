@@ -143,7 +143,9 @@ function groupPaymentsByCustomer(payments: any[]): CustomerPaymentGroup[] {
     }
     const group = map.get(key)!;
     group.payments.push(p);
-    group.totalPaid += parseFloat(p.amount || '0');
+    if (p.status !== 'voided') {
+      group.totalPaid += parseFloat(p.amount || '0');
+    }
   }
   return Array.from(map.values());
 }
@@ -430,10 +432,10 @@ export default function ARPaymentsPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (paymentId: string) =>
-      apiRequest(`/api/ar-payments/${paymentId}`, { method: 'DELETE' }),
+    mutationFn: ({ paymentId, reason }: { paymentId: string; reason: string }) =>
+      apiRequest(`/api/ar-payments/${paymentId}`, { method: 'DELETE', body: { reason } }),
     onSuccess: () => {
-      toast({ title: 'Payment deleted' });
+      toast({ title: 'Payment voided' });
       queryClient.invalidateQueries({
         predicate: (query) =>
           Array.isArray(query.queryKey) && (
@@ -615,8 +617,9 @@ export default function ARPaymentsPage() {
   };
 
   const handleDeletePayment = (paymentId: string) => {
-    if (confirm('Delete this payment? This will also remove all allocations and revert affected invoice statuses.')) {
-      deleteMutation.mutate(paymentId);
+    const reason = window.prompt('Enter a reason for voiding this payment. The original payment and allocations will remain visible for audit.');
+    if (reason?.trim()) {
+      deleteMutation.mutate({ paymentId, reason: reason.trim() });
     }
   };
 
@@ -761,8 +764,8 @@ export default function ARPaymentsPage() {
                                     variant="ghost"
                                     size="icon"
                                     onClick={() => handleDeletePayment(payment.id)}
-                                    disabled={deleteMutation.isPending}
-                                    title="Delete payment"
+                                    disabled={deleteMutation.isPending || payment.status === 'voided'}
+                                    title={payment.status === 'voided' ? 'Payment already voided' : 'Void payment'}
                                   >
                                     <Trash2 className="h-4 w-4 text-destructive" />
                                   </Button>

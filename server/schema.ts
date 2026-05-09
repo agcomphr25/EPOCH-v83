@@ -525,6 +525,11 @@ export const payments = pgTable('payments', {
   notes: text('notes'), // Optional notes for the payment
   processingFee: real('processing_fee'), // Optional wire/bank processing fee (nullable)
   batchId: integer('batch_id').references(() => bulkPaymentBatches.id),
+  status: text('status').default('posted').notNull(), // posted, voided, reversal
+  voidedAt: timestamp('voided_at'),
+  voidedBy: text('voided_by'),
+  voidReason: text('void_reason'),
+  reversalOfPaymentId: integer('reversal_of_payment_id'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -2327,10 +2332,10 @@ export const insertPaymentSchema = createInsertSchema(payments)
   })
   .extend({
     orderId: z.string().min(1, 'Order ID is required'),
-    paymentType: z.enum(['credit_card', 'agr', 'check', 'cash', 'ach', 'aaaa', 'wire']),
+    paymentType: z.enum(['credit_card', 'agr', 'check', 'cash', 'ach', 'aaaa', 'wire', 'payment_reversal']),
     paymentAmount: z
       .number()
-      .min(0, 'Payment amount cannot be negative'),
+      .refine((amount) => Number.isFinite(amount), 'Payment amount must be a valid number'),
     paymentDate: z.coerce.date(),
     notes: z.string().optional().nullable(),
   });
@@ -15064,6 +15069,10 @@ export const arPayments = pgTable('ar_payments', {
   amount: numeric('amount').notNull(),
   notes: text('notes'),
   createdBy: text('created_by'),
+  status: text('status').default('posted').notNull(), // posted, voided
+  voidedAt: timestamp('voided_at'),
+  voidedBy: text('voided_by'),
+  voidReason: text('void_reason'),
   createdAt: timestamp('created_at').defaultNow(),
 }, (table) => ({
   customerIdx: index('ar_payments_customer_id_idx').on(table.customerId),

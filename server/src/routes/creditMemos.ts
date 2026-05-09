@@ -318,7 +318,10 @@ router.post('/', async (req: Request, res: Response) => {
 
     const paymentsRes = await db.execute(sql`
       SELECT COALESCE(SUM(amount_applied::numeric), 0) AS total_payments
-      FROM ar_payment_allocations WHERE invoice_id = ${arInvoiceId}::uuid
+      FROM ar_payment_allocations a
+      JOIN ar_payments p ON p.id = a.payment_id
+      WHERE a.invoice_id = ${arInvoiceId}::uuid
+        AND COALESCE(p.status, 'posted') = 'posted'
     `);
     const creditsRes = await db.execute(sql`
       SELECT COALESCE(SUM(amount::numeric), 0) AS total_credits

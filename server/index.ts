@@ -478,6 +478,7 @@ async function initializeBackgroundServices() {
           '0117_vendor_po_line_project_traceability.sql',
           '0118_vendor_po_traceability_columns_safe.sql',
           '0119_inventory_item_shelf_life_columns_safe.sql',
+          '0122_payment_void_audit_controls.sql',
           'investigation_308_order_duplication.sql',
         ];
         const criticalMigrations = new Set([

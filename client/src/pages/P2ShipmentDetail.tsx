@@ -226,6 +226,33 @@ export default function P2ShipmentDetail() {
     enabled: !!packingSlipId,
   });
 
+  const createInvoiceMutation = useMutation({
+    mutationFn: async () => {
+      if (!packingSlipId) throw new Error('No packing slip is linked to this shipment.');
+      return apiRequest(`/api/ar-invoices/from-packing-slip/${packingSlipId}`, {
+        method: 'POST',
+      });
+    },
+    onSuccess: (createdInvoice: any) => {
+      toast({
+        title: 'Invoice ready for review',
+        description: createdInvoice?.invoiceNumber
+          ? `Invoice ${createdInvoice.invoiceNumber} was created from this packing slip.`
+          : 'Invoice was created from this packing slip.',
+      });
+      qc.invalidateQueries({ queryKey: ['/api/p2/shipments', lotId] });
+      qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === '/api/ar-invoices' });
+      if (createdInvoice?.id) setLocation(`/finance/invoices/${createdInvoice.id}`);
+    },
+    onError: (err: any) => {
+      toast({
+        title: 'Invoice creation failed',
+        description: err.message || 'Unable to create invoice from this packing slip.',
+        variant: 'destructive',
+      });
+    },
+  });
+
   useEffect(() => {
     if (data?.lot) {
       setTracking(data.lot.tracking_number ?? '');
@@ -761,7 +788,7 @@ export default function P2ShipmentDetail() {
                   )}
                 </div>
               </div>
-              {invoice && (
+              {invoice ? (
                 <div className="text-right text-sm flex items-center gap-2">
                   <div>
                     <p className="font-medium">${parseFloat(invoice.total_amount).toLocaleString()}</p>
@@ -773,7 +800,21 @@ export default function P2ShipmentDetail() {
                     </Link>
                   </Button>
                 </div>
-              )}
+              ) : packingSlip ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => createInvoiceMutation.mutate()}
+                  disabled={createInvoiceMutation.isPending}
+                >
+                  {createInvoiceMutation.isPending ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                  ) : (
+                    <Receipt className="h-3.5 w-3.5 mr-1" />
+                  )}
+                  Create Invoice
+                </Button>
+              ) : null}
             </div>
           </>
         </CardContent>

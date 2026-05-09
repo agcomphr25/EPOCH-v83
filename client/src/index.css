@@ -92,6 +92,49 @@
     color 180ms ease;
 }
 
+.order-entry-shell .order-console-toggle {
+  width: fit-content;
+  margin-left: auto;
+  padding: 6px;
+  border: 1px solid hsl(20, 5.9%, 90%);
+  border-radius: 8px;
+  background: hsl(0, 0%, 100%);
+  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.08);
+}
+
+.order-entry-shell .order-console-mode-control {
+  display: inline-grid;
+  grid-template-columns: repeat(3, minmax(82px, 1fr));
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid rgba(148, 163, 184, 0.38);
+  border-radius: 6px;
+  background: rgba(241, 245, 249, 0.9);
+}
+
+.order-entry-shell .order-console-mode-control button {
+  min-height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 140ms ease,
+    color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.order-entry-shell .order-console-mode-control button.is-selected {
+  background: #111827;
+  color: #f8fafc;
+  box-shadow: 0 2px 7px rgba(15, 23, 42, 0.18);
+}
+
 .order-entry-console {
   max-width: none;
   min-height: calc(100vh - 24px);
@@ -110,8 +153,6 @@
   position: sticky;
   top: 8px;
   z-index: 20;
-  margin-left: auto;
-  width: fit-content;
   padding: 7px 10px 7px 12px;
   border: 1px solid rgba(72, 68, 60, 0.38);
   border-radius: 999px;
@@ -120,6 +161,23 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.9),
     inset 0 -1px 2px rgba(43, 49, 51, 0.18),
     0 8px 18px rgba(29, 34, 36, 0.16);
+}
+
+.order-entry-console .order-console-mode-control {
+  border-color: rgba(61, 69, 69, 0.34);
+  background: rgba(18, 24, 25, 0.12);
+}
+
+.order-entry-console .order-console-mode-control button {
+  color: #384446;
+}
+
+.order-entry-console .order-console-mode-control button.is-selected {
+  background: linear-gradient(180deg, #1f3438 0%, #121819 100%);
+  color: #f3f7f6;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 2px 8px rgba(22, 27, 29, 0.18);
 }
 
 .order-entry-console .order-console-toggle button[role='switch'][data-state='checked'] {
@@ -448,6 +506,153 @@
     0 8px 16px rgba(35, 124, 141, 0.22);
 }
 
+.order-entry-console-retro {
+  background:
+    radial-gradient(circle at 18px 18px, rgba(255, 255, 255, 0.65) 0 1px, transparent 1.4px) 0 0 / 12px 12px,
+    linear-gradient(135deg, #ece8df 0%, #c7c0b4 47%, #f7f1e7 100%);
+  color: #1f1b17;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    inset 0 -3px 10px rgba(88, 69, 51, 0.24),
+    0 22px 62px rgba(39, 27, 18, 0.2);
+}
+
+.order-entry-console-retro .order-console-toggle {
+  border-color: rgba(91, 72, 54, 0.42);
+  background: linear-gradient(180deg, #f6efe4 0%, #c8bdad 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    inset 0 -1px 2px rgba(68, 48, 31, 0.2),
+    0 10px 22px rgba(49, 35, 23, 0.18);
+}
+
+.order-entry-console-retro .order-console-mode-control {
+  border-color: rgba(91, 72, 54, 0.34);
+  background: rgba(55, 39, 27, 0.12);
+}
+
+.order-entry-console-retro .order-console-mode-control button {
+  color: #514335;
+}
+
+.order-entry-console-retro .order-console-mode-control button.is-selected {
+  background: linear-gradient(180deg, #2b2118 0%, #140f0b 100%);
+  color: #fff7ee;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 0 12px rgba(229, 65, 20, 0.18);
+}
+
+.order-entry-console-retro .bg-card.text-card-foreground {
+  border-color: rgba(84, 69, 52, 0.48);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(224, 217, 204, 0.94)),
+    #ded7ca;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.84),
+    inset 0 -1px 3px rgba(73, 57, 41, 0.2),
+    0 15px 30px rgba(45, 33, 24, 0.18);
+}
+
+.order-entry-console-retro .order-console-module {
+  border-color: rgba(54, 43, 32, 0.52);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.24), rgba(100, 75, 51, 0.12)),
+    rgba(213, 204, 188, 0.82);
+}
+
+.order-entry-console-retro .order-console-display {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 42%),
+    #12120f;
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.76),
+    inset 0 2px 18px rgba(0, 0, 0, 0.74),
+    0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.order-entry-console-retro .order-console-display div::before {
+  background: #ff3b10;
+  box-shadow: 0 0 12px rgba(255, 61, 16, 0.86);
+}
+
+.order-entry-console-retro .order-console-display strong {
+  color: #fff6ea;
+  text-shadow:
+    0 0 8px rgba(255, 79, 24, 0.38),
+    0 0 1px rgba(255, 255, 255, 0.5);
+}
+
+.order-entry-console-retro .order-console-workflow-item {
+  border-color: rgba(74, 59, 43, 0.34);
+  background: linear-gradient(180deg, #eee7db 0%, #c8bdab 100%);
+}
+
+.order-entry-console-retro .order-console-workflow-item.is-active > span {
+  background: #ff4318;
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.56),
+    0 0 10px rgba(255, 67, 24, 0.72);
+}
+
+.order-entry-console-retro .order-console-workflow-item.is-warning > span {
+  background: #ffb21a;
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.62),
+    0 0 10px rgba(255, 178, 26, 0.72);
+}
+
+.order-entry-console-retro input,
+.order-entry-console-retro textarea,
+.order-entry-console-retro button[role='combobox'],
+.order-entry-console-retro .flex-1.flex.items-center.h-10 {
+  border-color: rgba(73, 58, 42, 0.38);
+  background: linear-gradient(180deg, #fbf6ec 0%, #e3dbcc 100%);
+}
+
+.order-entry-console-retro input:focus,
+.order-entry-console-retro textarea:focus,
+.order-entry-console-retro button[role='combobox']:focus {
+  border-color: #e24a19;
+  box-shadow:
+    inset 0 1px 3px rgba(255, 255, 255, 0.82),
+    0 0 0 2px rgba(226, 74, 25, 0.18),
+    0 0 16px rgba(226, 74, 25, 0.14);
+}
+
+.order-entry-console-retro button.bg-primary,
+.order-entry-console-retro button[class*='bg-primary'] {
+  border-color: #9f2c0d;
+  background: linear-gradient(180deg, #ff7030 0%, #eb3d13 58%, #ab1f08 100%);
+}
+
+.order-entry-console-retro .text-blue-600,
+.order-entry-console-retro .text-green-600 {
+  color: #e83b12;
+}
+
+.order-entry-console-retro .order-console-summary-card > div:first-child,
+.order-entry-console-retro .order-console-summary-card .order-summary-total {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.07), transparent 48%),
+    #12120f;
+}
+
+.order-entry-console-retro .order-console-summary-card .order-summary-total span {
+  text-shadow: 0 0 9px rgba(255, 65, 24, 0.28);
+}
+
+.order-entry-console-retro .order-console-summary-card .order-console-actions button:last-child {
+  border-color: #9f2c0d;
+  background:
+    radial-gradient(circle at 30% 18%, rgba(255, 255, 255, 0.38), transparent 26%),
+    linear-gradient(180deg, #ff7030 0%, #eb3d13 56%, #ab1f08 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.42),
+    inset 0 -3px 5px rgba(80, 7, 0, 0.34),
+    0 8px 16px rgba(205, 49, 14, 0.24);
+}
+
 @media (max-width: 768px) {
   .order-entry-console {
     border-radius: 0;
@@ -456,6 +661,12 @@
   .order-entry-console .order-console-toggle {
     width: 100%;
     justify-content: space-between;
+    border-radius: 8px;
+  }
+
+  .order-entry-shell .order-console-mode-control {
+    width: 100%;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .order-entry-console .order-console-workflow {

@@ -45,7 +45,6 @@ import { Badge } from '@/components/ui/badge';
 import { ForecastDateModal } from '@/components/orders/ForecastDateModal';
 import { getConfidenceLabel } from '@/lib/forecastConfidence';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import {
   Accordion,
@@ -159,29 +158,51 @@ const TIKKA_BARREL_OPTIONS = [
   'tikka_hca_heavy',
 ] as const;
 
+type ConsoleStyleMode = 'standard' | 'industrial' | 'retro';
+
+const consoleStyleOptions: { value: ConsoleStyleMode; label: string }[] = [
+  { value: 'standard', label: 'Standard' },
+  { value: 'industrial', label: 'Industrial' },
+  { value: 'retro', label: 'Retro' },
+];
+
 export default function OrderEntry() {
   console.log('OrderEntry component rendering...');
   const { toast } = useToast();
   const [location, setLocation] = useLocation();
-  const [isConsoleMode, setIsConsoleMode] = useState(() => {
-    if (typeof window === 'undefined') return false;
+  const [consoleStyleMode, setConsoleStyleMode] = useState<ConsoleStyleMode>(() => {
+    if (typeof window === 'undefined') return 'standard';
     try {
-      return window.localStorage.getItem('order-entry-console-mode') === 'true';
+      const savedStyle = window.localStorage.getItem('order-entry-console-style');
+      if (
+        savedStyle === 'standard' ||
+        savedStyle === 'industrial' ||
+        savedStyle === 'retro'
+      ) {
+        return savedStyle;
+      }
+      return window.localStorage.getItem('order-entry-console-mode') === 'true'
+        ? 'industrial'
+        : 'standard';
     } catch {
-      return false;
+      return 'standard';
     }
   });
 
   useEffect(() => {
     try {
       window.localStorage.setItem(
+        'order-entry-console-style',
+        consoleStyleMode
+      );
+      window.localStorage.setItem(
         'order-entry-console-mode',
-        String(isConsoleMode)
+        String(consoleStyleMode !== 'standard')
       );
     } catch {
       // Preference persistence is best-effort only.
     }
-  }, [isConsoleMode]);
+  }, [consoleStyleMode]);
 
   // Form state
   const [customer, setCustomer] = useState<Customer | null>(null);
@@ -2969,6 +2990,7 @@ export default function OrderEntry() {
   };
 
   const selectedModel = modelOptions.find((m) => m.id === modelId);
+  const isConsoleMode = consoleStyleMode !== 'standard';
   const consoleWorkflowItems = [
     {
       label: 'Customer',
@@ -2996,19 +3018,30 @@ export default function OrderEntry() {
   return (
     <div
       className={`order-entry-shell container mx-auto p-4 space-y-6 ${
-        isConsoleMode ? 'order-entry-console' : ''
+        isConsoleMode ? `order-entry-console order-entry-console-${consoleStyleMode}` : ''
       }`}
     >
       <div className="order-console-toggle flex items-center justify-end gap-3">
         <div className="flex items-center gap-2 text-sm font-medium">
           <SlidersHorizontal className="h-4 w-4" />
-          <span>Console Mode</span>
+          <span>Visual Mode</span>
         </div>
-        <Switch
-          checked={isConsoleMode}
-          onCheckedChange={setIsConsoleMode}
-          aria-label="Toggle console mode"
-        />
+        <div
+          className="order-console-mode-control"
+          role="group"
+          aria-label="Order entry visual mode"
+        >
+          {consoleStyleOptions.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={consoleStyleMode === option.value ? 'is-selected' : ''}
+              onClick={() => setConsoleStyleMode(option.value)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column - Order Form */}

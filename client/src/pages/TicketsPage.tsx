@@ -6,13 +6,11 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { 
   Plus, 
@@ -124,12 +122,15 @@ const CATEGORIES = [
   'Other',
 ];
 
+type TicketQuickView = 'my_open' | 'unassigned' | 'sla_risk' | 'waiting' | 'all_open' | 'closed';
+
 export default function TicketsPage() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [quickView, setQuickView] = useState<TicketQuickView>('my_open');
 
   const urlParams = new URLSearchParams(window.location.search);
   const filterOrderId = urlParams.get('orderId') || '';
@@ -335,9 +336,52 @@ export default function TicketsPage() {
   });
 
   const priorityOrder: Record<string, number> = { high: 0, normal: 1, low: 2 };
+  const waitingStatuses = new Set(['waiting_on_customer', 'waiting_on_production']);
+  const isOpenTicket = (ticket: Ticket) => ticket.status !== 'closed';
+  const isAssignedToCurrentUser = (ticket: Ticket) =>
+    currentUserId != null && (
+      ticket.ownerUserId === currentUserId ||
+      (ticket.assignedUserIds ?? []).includes(currentUserId)
+    );
+  const ticketAgeMs = (ticket: Ticket) =>
+    Date.now() - new Date(ticket.lastActivityAt ?? ticket.createdAt).getTime();
+  const formatTicketAge = (ticket: Ticket) => {
+    const sourceDate = ticket.lastActivityAt ?? ticket.createdAt;
+    return formatDistanceToNow(new Date(sourceDate), { addSuffix: true });
+  };
+
+  const ticketCounts = {
+    myOpen: tickets.filter(ticket => isOpenTicket(ticket) && isAssignedToCurrentUser(ticket)).length,
+    unassigned: tickets.filter(ticket => isOpenTicket(ticket) && (ticket.assignedUserIds?.length ?? 0) === 0).length,
+    slaRisk: tickets.filter(ticket => isOpenTicket(ticket) && ticket.slaBreached).length,
+    waiting: tickets.filter(ticket => isOpenTicket(ticket) && waitingStatuses.has(ticket.status)).length,
+    allOpen: tickets.filter(isOpenTicket).length,
+    closed: tickets.filter(ticket => ticket.status === 'closed').length,
+    highPriority: tickets.filter(ticket => isOpenTicket(ticket) && ticket.priority === 'high').length,
+  };
+
+  const handleQuickViewChange = (view: TicketQuickView) => {
+    setQuickView(view);
+    setFilters(prev => ({ ...prev, status: '', slaBreached: '' }));
+  };
+
+  const quickViews: Array<{ value: TicketQuickView; label: string; count: number }> = [
+    { value: 'my_open', label: 'My Open', count: ticketCounts.myOpen },
+    { value: 'unassigned', label: 'Unassigned', count: ticketCounts.unassigned },
+    { value: 'sla_risk', label: 'SLA Risk', count: ticketCounts.slaRisk },
+    { value: 'waiting', label: 'Waiting', count: ticketCounts.waiting },
+    { value: 'all_open', label: 'All Open', count: ticketCounts.allOpen },
+    { value: 'closed', label: 'Closed', count: ticketCounts.closed },
+  ];
 
   const filteredTickets = tickets.filter(ticket => {
-    if (!filters.status && ticket.status === 'closed') return false;
+    if (quickView === 'my_open' && (!isOpenTicket(ticket) || !isAssignedToCurrentUser(ticket))) return false;
+    if (quickView === 'unassigned' && (!isOpenTicket(ticket) || (ticket.assignedUserIds?.length ?? 0) > 0)) return false;
+    if (quickView === 'sla_risk' && (!isOpenTicket(ticket) || !ticket.slaBreached)) return false;
+    if (quickView === 'waiting' && (!isOpenTicket(ticket) || !waitingStatuses.has(ticket.status))) return false;
+    if (quickView === 'all_open' && !isOpenTicket(ticket)) return false;
+    if (quickView === 'closed' && ticket.status !== 'closed') return false;
+    if (!filters.status && quickView !== 'closed' && ticket.status === 'closed') return false;
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
     return (
@@ -345,7 +389,12 @@ export default function TicketsPage() {
       ticket.id.toLowerCase().includes(q) ||
       (ticket.description?.toLowerCase().includes(q) ?? false)
     );
-  }).sort((a, b) => (priorityOrder[a.priority] ?? 99) - (priorityOrder[b.priority] ?? 99));
+  }).sort((a, b) => {
+    if (a.slaBreached !== b.slaBreached) return a.slaBreached ? -1 : 1;
+    const priorityDiff = (priorityOrder[a.priority] ?? 99) - (priorityOrder[b.priority] ?? 99);
+    if (priorityDiff !== 0) return priorityDiff;
+    return ticketAgeMs(b) - ticketAgeMs(a);
+  });
 
   const getStatusBadge = (status: string) => {
     const s = TICKET_STATUSES.find(st => st.value === status);
@@ -603,28 +652,56 @@ export default function TicketsPage() {
       </div>
 
       {metrics && (
-        <div className="grid grid-cols-4 gap-4 px-6 py-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-          <Card className="p-3">
-            <div className="text-xs text-gray-500">Total Open</div>
-            <div className="text-2xl font-bold">{metrics.totalOpen}</div>
-          </Card>
-          <Card className="p-3">
-            <div className="text-xs text-gray-500">&lt; 24h</div>
-            <div className="text-2xl font-bold text-green-600">{metrics.openByAge.under24h}</div>
-          </Card>
-          <Card className="p-3">
-            <div className="text-xs text-gray-500">24-48h</div>
-            <div className="text-2xl font-bold text-yellow-600">{metrics.openByAge.under48h}</div>
-          </Card>
-          <Card className="p-3">
-            <div className="flex items-center gap-2">
-              <div className="text-xs text-gray-500">SLA Breached</div>
+        <div className="grid grid-cols-2 gap-3 px-6 py-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 lg:grid-cols-4">
+          <button
+            type="button"
+            onClick={() => handleQuickViewChange('sla_risk')}
+            className={cn(
+              'rounded-lg border bg-card p-3 text-left transition-colors hover:border-red-300 hover:bg-red-50 dark:hover:bg-red-950/20',
+              quickView === 'sla_risk' && 'border-red-300 bg-red-50 dark:bg-red-950/20'
+            )}
+          >
+            <div className="flex items-center gap-2 text-xs text-gray-500">
+              SLA Breached
               {metrics.slaBreached > 0 && <AlertTriangle className="h-3 w-3 text-red-500" />}
             </div>
             <div className={cn('text-2xl font-bold', metrics.slaBreached > 0 ? 'text-red-600' : 'text-gray-600')}>
               {metrics.slaBreached}
             </div>
-          </Card>
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilters({ ...filters, priority: filters.priority === 'high' ? '' : 'high' })}
+            className={cn(
+              'rounded-lg border bg-card p-3 text-left transition-colors hover:border-red-300 hover:bg-red-50 dark:hover:bg-red-950/20',
+              filters.priority === 'high' && 'border-red-300 bg-red-50 dark:bg-red-950/20'
+            )}
+          >
+            <div className="text-xs text-gray-500">High Priority</div>
+            <div className="text-2xl font-bold text-red-600">{ticketCounts.highPriority}</div>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleQuickViewChange('unassigned')}
+            className={cn(
+              'rounded-lg border bg-card p-3 text-left transition-colors hover:border-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/20',
+              quickView === 'unassigned' && 'border-blue-300 bg-blue-50 dark:bg-blue-950/20'
+            )}
+          >
+            <div className="text-xs text-gray-500">Unassigned</div>
+            <div className="text-2xl font-bold text-blue-600">{ticketCounts.unassigned}</div>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleQuickViewChange('waiting')}
+            className={cn(
+              'rounded-lg border bg-card p-3 text-left transition-colors hover:border-purple-300 hover:bg-purple-50 dark:hover:bg-purple-950/20',
+              quickView === 'waiting' && 'border-purple-300 bg-purple-50 dark:bg-purple-950/20'
+            )}
+          >
+            <div className="text-xs text-gray-500">Waiting</div>
+            <div className="text-2xl font-bold text-purple-600">{ticketCounts.waiting}</div>
+          </button>
         </div>
       )}
 
@@ -654,6 +731,24 @@ export default function TicketsPage() {
                 className="pl-9"
                 data-testid="input-search-tickets"
               />
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {quickViews.map(view => (
+                <button
+                  key={view.value}
+                  type="button"
+                  onClick={() => handleQuickViewChange(view.value)}
+                  className={cn(
+                    'rounded-full border px-2.5 py-1 text-xs font-medium transition-colors',
+                    quickView === view.value
+                      ? 'border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300'
+                      : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+                  )}
+                >
+                  {view.label}
+                  <span className="ml-1 tabular-nums text-gray-400">{view.count}</span>
+                </button>
+              ))}
             </div>
             <div className="flex gap-2 flex-wrap">
               <Select
@@ -742,6 +837,16 @@ export default function TicketsPage() {
                         <Clock className="h-3 w-3" />
                         {formatDistanceToNow(new Date(ticket.createdAt), { addSuffix: true })}
                       </span>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between text-[11px] text-gray-500">
+                      <span>
+                        {ticket.lastActivityAt ? 'Last activity' : 'Created'} {formatTicketAge(ticket)}
+                      </span>
+                      {ticket.slaDueAt && (
+                        <span className={cn('font-medium', ticket.slaBreached ? 'text-red-600' : 'text-gray-500')}>
+                          SLA {ticket.slaBreached ? 'breached' : formatDistanceToNow(new Date(ticket.slaDueAt), { addSuffix: true })}
+                        </span>
+                      )}
                     </div>
                     {ticket.assignedUserIds && ticket.assignedUserIds.length > 0 && (
                       <div className="flex items-center gap-1 mt-2 flex-wrap">
@@ -866,7 +971,14 @@ export default function TicketsPage() {
                   </Button>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+                  <div className="space-y-4 lg:order-2 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Ticket Controls</h3>
+                      {selectedTicket.slaBreached && (
+                        <Badge className="bg-red-100 text-red-700">SLA breached</Badge>
+                      )}
+                    </div>
                   <div>
                     <Label className="text-xs text-gray-500">Status</Label>
                     <Select
@@ -988,21 +1100,22 @@ export default function TicketsPage() {
                   </div>
                 </div>
 
-                {selectedTicket.description && (
-                  <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
-                    <Label className="text-xs text-gray-500">Description</Label>
-                    <p className="mt-1 text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-                      {selectedTicket.description}
-                    </p>
-                  </div>
-                )}
+                  <div className="space-y-4 lg:order-1">
+                    {selectedTicket.description && (
+                      <div className="p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                        <Label className="text-xs text-gray-500">Description</Label>
+                        <p className="mt-1 text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                          {selectedTicket.description}
+                        </p>
+                      </div>
+                    )}
 
-                <div className="mt-4">
-                  <Label className="text-xs text-gray-500 flex items-center gap-2">
-                    <Link2 className="h-3 w-3" />
-                    Linked Orders ({ticketOrders.length})
-                  </Label>
-                  <div className="mt-2 flex flex-wrap gap-2">
+                    <div>
+                      <Label className="text-xs text-gray-500 flex items-center gap-2">
+                        <Link2 className="h-3 w-3" />
+                        Linked Orders ({ticketOrders.length})
+                      </Label>
+                      <div className="mt-2 flex flex-wrap gap-2">
                     {ticketOrders.map(to => (
                       <Badge key={to.id} variant="outline" className="flex items-center gap-1">
                         <button
@@ -1041,6 +1154,8 @@ export default function TicketsPage() {
                         <Plus className="h-3 w-3" />
                       </Button>
                     </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1054,26 +1169,49 @@ export default function TicketsPage() {
                   {ticketActivity.length === 0 ? (
                     <p className="text-sm text-gray-500 italic">No notes yet. Add a note below.</p>
                   ) : (
-                    [...ticketActivity].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map(activity => (
-                      <div key={activity.id} className="flex gap-3 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
-                        <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
-                          <User className="h-4 w-4 text-gray-500" />
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                              {getUserName(activity.createdBy)}
-                            </span>
-                            <span className="text-xs text-gray-500">
-                              {formatDistanceToNow(new Date(activity.createdAt), { addSuffix: true })}
-                            </span>
+                    [...ticketActivity].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map(activity => {
+                      const isComment = activity.activityType === 'comment';
+                      return (
+                        <div
+                          key={activity.id}
+                          className={cn(
+                            'flex gap-3 rounded-lg',
+                            isComment
+                              ? 'p-3 bg-gray-50 dark:bg-gray-900'
+                              : 'px-3 py-2 border border-dashed border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900/40'
+                          )}
+                        >
+                          <div className={cn(
+                            'flex-shrink-0 rounded-full flex items-center justify-center',
+                            isComment ? 'w-8 h-8 bg-gray-200 dark:bg-gray-700' : 'w-6 h-6 bg-blue-50 dark:bg-blue-950/40'
+                          )}>
+                            {isComment ? (
+                              <User className="h-4 w-4 text-gray-500" />
+                            ) : (
+                              <Check className="h-3.5 w-3.5 text-blue-600" />
+                            )}
                           </div>
-                          <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-                            {activity.message}
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                {getUserName(activity.createdBy)}
+                              </span>
+                              {!isComment && (
+                                <Badge variant="outline" className="px-1.5 py-0 text-[10px] capitalize">
+                                  {activity.activityType.replace(/_/g, ' ')}
+                                </Badge>
+                              )}
+                              <span className="text-xs text-gray-500">
+                                {formatDistanceToNow(new Date(activity.createdAt), { addSuffix: true })}
+                              </span>
+                            </div>
+                            <div className={cn('text-sm whitespace-pre-wrap', isComment ? 'text-gray-700 dark:text-gray-300' : 'text-gray-500 dark:text-gray-400')}>
+                              {activity.message || `${activity.previousValue ?? 'None'} -> ${activity.newValue ?? 'None'}`}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               </div>

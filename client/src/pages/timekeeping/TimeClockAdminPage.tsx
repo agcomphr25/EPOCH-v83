@@ -63,6 +63,7 @@ import {
   ChevronDown,
   ChevronUp,
   History,
+  Settings,
 } from 'lucide-react';
 
 interface PolicySettings {
@@ -487,6 +488,50 @@ function StatCard({ icon: Icon, label, value, sub, color = 'text-primary' }: {
   );
 }
 
+function WorkQueueCard({
+  icon: Icon,
+  label,
+  description,
+  count,
+  tone = 'default',
+  onClick,
+}: {
+  icon: React.ElementType;
+  label: string;
+  description: string;
+  count: number | string;
+  tone?: 'default' | 'warning' | 'danger' | 'success';
+  onClick: () => void;
+}) {
+  const toneClasses = {
+    default: 'border-border hover:border-primary/40',
+    warning: 'border-amber-200 bg-amber-50/60 hover:border-amber-300 dark:border-amber-900 dark:bg-amber-950/20',
+    danger: 'border-red-200 bg-red-50/60 hover:border-red-300 dark:border-red-900 dark:bg-red-950/20',
+    success: 'border-green-200 bg-green-50/60 hover:border-green-300 dark:border-green-900 dark:bg-green-950/20',
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-lg border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${toneClasses[tone]}`}
+    >
+      <div className="flex items-start gap-3">
+        <div className="rounded-md border bg-background p-2">
+          <Icon className="h-4 w-4 text-muted-foreground" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-3">
+            <p className="font-medium text-sm">{label}</p>
+            <span className="text-2xl font-semibold tabular-nums">{count}</span>
+          </div>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>
+        </div>
+      </div>
+    </button>
+  );
+}
+
 function DevSeedPunchesPanel() {
   const { toast } = useToast();
   const [daysBack, setDaysBack] = useState(14);
@@ -603,7 +648,7 @@ function DevSeedPunchesPanel() {
 
 export default function TimeClockAdminPage() {
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState('compliance');
+  const [activeTab, setActiveTab] = useState('command');
   const [inOutBoardUpdatedAt, setInOutBoardUpdatedAt] = useState<Date | null>(null);
   const [approvalTarget, setApprovalTarget] = useState<UnapprovedGroup | null>(null);
   const [approvalReason, setApprovalReason] = useState('');
@@ -714,7 +759,7 @@ export default function TimeClockAdminPage() {
     refetch: refetchUnapproved,
   } = useQuery<UnapprovedGroup[]>({
     queryKey: ['/api/timekeeping/labor-approvals/unapproved'],
-    enabled: activeTab === 'labor-approvals',
+    enabled: activeTab === 'labor-approvals' || activeTab === 'command',
   });
 
   const createApprovalMutation = useMutation({
@@ -852,7 +897,7 @@ export default function TimeClockAdminPage() {
       if (!res.ok) throw new Error('Failed to load corrections');
       return res.json();
     },
-    enabled: activeTab === 'corrections',
+    enabled: activeTab === 'corrections' || activeTab === 'command',
   });
 
   const { data: tsTabCorrections } = useQuery<TimesheetCorrection[]>({
@@ -1399,6 +1444,74 @@ export default function TimeClockAdminPage() {
     }
   }
 
+  const pendingCorrectionCount = (allCorrections ?? []).filter(c => c.status === 'pending').length;
+  const laborApprovalCount = unapprovedGroups?.length ?? 0;
+  const missingPunchCount = summary?.missingPunchCount ?? 0;
+  const pendingTimesheetCount = summary?.pendingTimesheets ?? 0;
+  const pendingTimeOffCount = summary?.pendingTimeOffRequests ?? 0;
+
+  const navGroups = [
+    {
+      id: 'command',
+      label: 'Command Center',
+      icon: CheckCircle,
+      tabs: ['command'],
+    },
+    {
+      id: 'attendance',
+      label: 'Attendance',
+      icon: Clock,
+      tabs: ['overview', 'punches'],
+      count: missingPunchCount,
+      subItems: [
+        { value: 'overview', label: 'Overview' },
+        { value: 'punches', label: 'Punch Review', count: missingPunchCount },
+      ],
+    },
+    {
+      id: 'timesheets',
+      label: 'Timesheets',
+      icon: FileText,
+      tabs: ['timesheets', 'salaried', 'labor-approvals'],
+      count: pendingTimesheetCount + laborApprovalCount,
+      subItems: [
+        { value: 'timesheets', label: 'Hourly', count: pendingTimesheetCount },
+        { value: 'salaried', label: 'Salaried' },
+        { value: 'labor-approvals', label: 'Labor Approvals', count: laborApprovalCount },
+      ],
+    },
+    {
+      id: 'requests',
+      label: 'Requests',
+      icon: FilePen,
+      tabs: ['timeoff', 'corrections'],
+      count: pendingTimeOffCount + pendingCorrectionCount,
+      subItems: [
+        { value: 'timeoff', label: 'Time Off', count: pendingTimeOffCount },
+        { value: 'corrections', label: 'Corrections', count: pendingCorrectionCount },
+      ],
+    },
+    {
+      id: 'payroll',
+      label: 'Payroll',
+      icon: Download,
+      tabs: ['export'],
+    },
+    {
+      id: 'compliance',
+      label: 'Compliance',
+      icon: AlertTriangle,
+      tabs: ['compliance'],
+    },
+    {
+      id: 'settings',
+      label: 'Settings',
+      icon: Settings,
+      tabs: ['policy'],
+    },
+  ];
+  const activeNavGroup = navGroups.find(group => group.tabs.includes(activeTab)) ?? navGroups[0];
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -1414,42 +1527,129 @@ export default function TimeClockAdminPage() {
         </Button>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-10">
-          <TabsTrigger value="compliance">Compliance</TabsTrigger>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="timesheets">
-            Timesheets
-            {(summary?.pendingTimesheets ?? 0) > 0 && (
-              <span className="ml-2 bg-orange-500 text-white text-xs rounded-full px-1.5 py-0.5">
-                {summary!.pendingTimesheets}
-              </span>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="punches">Punch Review</TabsTrigger>
-          <TabsTrigger value="timeoff">
-            Time Off
-            {(summary?.pendingTimeOffRequests ?? 0) > 0 && (
-              <span className="ml-2 bg-blue-500 text-white text-xs rounded-full px-1.5 py-0.5">
-                {summary!.pendingTimeOffRequests}
-              </span>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="corrections">
-            Corrections
-          </TabsTrigger>
-          <TabsTrigger value="export">Gusto Export</TabsTrigger>
-          <TabsTrigger value="salaried">Salaried</TabsTrigger>
-          <TabsTrigger value="labor-approvals">
-            Labor Approvals
-            {(unapprovedGroups?.length ?? 0) > 0 && (
-              <span className="ml-2 bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5">
-                {unapprovedGroups!.length}
-              </span>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="policy">Policy</TabsTrigger>
-        </TabsList>
+      <div className="grid gap-6 xl:grid-cols-[240px_minmax(0,1fr)]">
+        <aside className="space-y-2">
+          <div className="rounded-lg border bg-card p-2">
+            {navGroups.map(group => {
+              const Icon = group.icon;
+              const isActive = group.id === activeNavGroup.id;
+              const defaultTab = group.tabs[0];
+              return (
+                <Fragment key={group.id}>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab(defaultTab)}
+                    className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                      isActive ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
+                    }`}
+                  >
+                    <Icon className="h-4 w-4 shrink-0" />
+                    <span className="min-w-0 flex-1 truncate">{group.label}</span>
+                    {(group.count ?? 0) > 0 && (
+                      <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${
+                        isActive ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-muted text-muted-foreground'
+                      }`}>
+                        {group.count}
+                      </span>
+                    )}
+                  </button>
+                  {isActive && group.subItems && (
+                    <div className="ml-6 mt-1 space-y-1 pb-1">
+                      {group.subItems.map(item => (
+                        <button
+                          key={item.value}
+                          type="button"
+                          onClick={() => setActiveTab(item.value)}
+                          className={`flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                            activeTab === item.value ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground hover:bg-muted/70 hover:text-foreground'
+                          }`}
+                        >
+                          <span className="truncate">{item.label}</span>
+                          {(item.count ?? 0) > 0 && (
+                            <span className="rounded-full bg-background px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-muted-foreground">
+                              {item.count}
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </Fragment>
+              );
+            })}
+          </div>
+        </aside>
+
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="min-w-0">
+        <TabsContent value="command" className="space-y-6">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <WorkQueueCard
+              icon={FileText}
+              label="Timesheets"
+              count={pendingTimesheetCount}
+              description="Submitted time waiting for review, certification, or lock."
+              tone={pendingTimesheetCount > 0 ? 'warning' : 'success'}
+              onClick={() => setActiveTab('timesheets')}
+            />
+            <WorkQueueCard
+              icon={AlertTriangle}
+              label="Missing Punches"
+              count={missingPunchCount}
+              description="Open sessions and incomplete punch records that need cleanup."
+              tone={missingPunchCount > 0 ? 'danger' : 'success'}
+              onClick={() => setActiveTab('punches')}
+            />
+            <WorkQueueCard
+              icon={FilePen}
+              label="Time Off"
+              count={pendingTimeOffCount}
+              description="PTO requests waiting in the approval path."
+              tone={pendingTimeOffCount > 0 ? 'warning' : 'success'}
+              onClick={() => setActiveTab('timeoff')}
+            />
+            <WorkQueueCard
+              icon={History}
+              label="Corrections"
+              count={correctionsLoading ? '...' : pendingCorrectionCount}
+              description="Locked timesheet changes that require audited review."
+              tone={pendingCorrectionCount > 0 ? 'warning' : 'success'}
+              onClick={() => setActiveTab('corrections')}
+            />
+            <WorkQueueCard
+              icon={UserCheck}
+              label="Labor Approvals"
+              count={unapprovedLoading ? '...' : laborApprovalCount}
+              description="WAD-linked labor sessions awaiting supervisor approval."
+              tone={laborApprovalCount > 0 ? 'danger' : 'success'}
+              onClick={() => setActiveTab('labor-approvals')}
+            />
+            <WorkQueueCard
+              icon={Download}
+              label="Payroll"
+              count="CSV"
+              description="Export certified payroll hours or import TimeTrakGo batches."
+              onClick={() => setActiveTab('export')}
+            />
+          </div>
+
+          {summaryLoading ? (
+            <div className="flex items-center justify-center h-32">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+              <StatCard icon={Users} label="Active Employees" value={summary?.activeEmployees ?? 0} />
+              <StatCard
+                icon={Clock}
+                label="Clocked In Now"
+                value={summary?.clockedInNow ?? 0}
+                sub={summary?.onBreakNow ? `${summary.onBreakNow} on break` : undefined}
+              />
+              <StatCard icon={FileText} label="Hours This Week" value={fmtHours(summary?.hoursThisWeek ?? 0)} />
+              <StatCard icon={AlertTriangle} label="Overtime This Week" value={fmtHours(summary?.overtimeHoursThisWeek ?? 0)} />
+            </div>
+          )}
+        </TabsContent>
 
         {/* ── COMPLIANCE TAB ── */}
         <TabsContent value="compliance" className="space-y-4">
@@ -2833,6 +3033,7 @@ export default function TimeClockAdminPage() {
           )}
         </TabsContent>
       </Tabs>
+      </div>
 
       {/* Labor Approval Dialog */}
       <Dialog

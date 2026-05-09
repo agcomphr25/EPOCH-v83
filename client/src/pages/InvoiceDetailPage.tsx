@@ -14,6 +14,8 @@ import {
   AlertTriangle,
   ExternalLink,
   RotateCcw,
+  Send,
+  Printer,
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -62,6 +64,10 @@ const PAYMENT_METHODS = [
 function statusBadge(status: string) {
   const map: Record<string, string> = {
     OPEN: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
+    DRAFT: 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-200',
+    REVIEW: 'bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-200',
+    POSTED: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-200',
+    SENT: 'bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-200',
     PAID: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
     OVERDUE: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
     VOID: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200',
@@ -161,6 +167,32 @@ export default function InvoiceDetailPage() {
     },
     onError: (error: any) => {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const postInvoiceMutation = useMutation({
+    mutationFn: () => apiRequest(`/api/ar-invoices/${id}/post`, { method: 'POST' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ predicate: (query) =>
+        Array.isArray(query.queryKey) && query.queryKey[0] === '/api/ar-invoices'
+      });
+      toast({ title: 'Invoice posted', description: 'Invoice is ready to send.' });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Post failed', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const sendInvoiceMutation = useMutation({
+    mutationFn: () => apiRequest(`/api/ar-invoices/${id}/send`, { method: 'POST', body: {} }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ predicate: (query) =>
+        Array.isArray(query.queryKey) && query.queryKey[0] === '/api/ar-invoices'
+      });
+      toast({ title: 'Invoice sent', description: 'SendGrid delivery was accepted and tracked.' });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Send failed', description: error.message, variant: 'destructive' });
     },
   });
 
@@ -346,6 +378,32 @@ export default function InvoiceDetailPage() {
           <Button variant="outline" onClick={() => setLocation(`/finance/invoices/${id}/edit`)}>
             <Edit className="mr-2 h-4 w-4" /> Edit
           </Button>
+          <Button variant="outline" asChild>
+            <a href={`/api/ar-invoices/${id}/pdf`} target="_blank" rel="noopener noreferrer">
+              <Printer className="mr-2 h-4 w-4" /> Preview PDF
+            </a>
+          </Button>
+          {['DRAFT', 'REVIEW'].includes(invoice.status) && (
+            <Button
+              variant="outline"
+              onClick={() => postInvoiceMutation.mutate()}
+              disabled={postInvoiceMutation.isPending || invoice.pricingMismatch || invoice.pricingAmbiguous}
+              title={invoice.pricingMismatch || invoice.pricingAmbiguous ? 'Resolve pricing before posting' : 'Post invoice'}
+            >
+              <CheckCircle className="mr-2 h-4 w-4" />
+              {postInvoiceMutation.isPending ? 'Posting...' : 'Post'}
+            </Button>
+          )}
+          {['REVIEW', 'POSTED'].includes(invoice.status) && (
+            <Button
+              onClick={() => sendInvoiceMutation.mutate()}
+              disabled={sendInvoiceMutation.isPending || invoice.pricingMismatch || invoice.pricingAmbiguous}
+              title={invoice.pricingMismatch || invoice.pricingAmbiguous ? 'Resolve pricing before sending' : 'Send invoice'}
+            >
+              <Send className="mr-2 h-4 w-4" />
+              {sendInvoiceMutation.isPending ? 'Sending...' : 'Send'}
+            </Button>
+          )}
           {invoice.status !== 'PAID' && invoice.status !== 'VOID' && (
             <>
               <Button variant="outline" onClick={handleOpenPaymentDialog}>

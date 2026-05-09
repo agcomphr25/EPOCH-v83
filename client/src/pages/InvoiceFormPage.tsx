@@ -69,7 +69,13 @@ interface InvoiceFormData {
   poId: string;
   poOverride: string;
   notes: string;
+  customerVisibleNotes: string;
+  internalNotes: string;
+  discountAmount: string;
+  freightAmount: string;
   taxAmount: string;
+  retainagePercent: string;
+  retainageAmount: string;
   lines: InvoiceLine[];
 }
 
@@ -89,7 +95,13 @@ const defaultForm = (): InvoiceFormData => ({
   poId: '',
   poOverride: '',
   notes: '',
+  customerVisibleNotes: '',
+  internalNotes: '',
+  discountAmount: '0',
+  freightAmount: '0',
   taxAmount: '0',
+  retainagePercent: '0',
+  retainageAmount: '0',
   lines: [emptyLine()],
 });
 
@@ -133,7 +145,13 @@ export default function InvoiceFormPage() {
         poId: existingInvoice.poId || '',
         poOverride: existingInvoice.poOverride || '',
         notes: existingInvoice.notes || '',
+        customerVisibleNotes: existingInvoice.customerVisibleNotes || '',
+        internalNotes: existingInvoice.internalNotes || '',
+        discountAmount: existingInvoice.discountAmount || '0',
+        freightAmount: existingInvoice.freightAmount || '0',
         taxAmount: existingInvoice.taxAmount || '0',
+        retainagePercent: existingInvoice.retainagePercent || '0',
+        retainageAmount: existingInvoice.retainageAmount || '0',
         lines:
           existingInvoice.lines && existingInvoice.lines.length > 0
             ? existingInvoice.lines.map((l: any) => ({
@@ -158,8 +176,11 @@ export default function InvoiceFormPage() {
     (sum, line) => sum + parseFloat(line.lineTotal || '0'),
     0
   );
+  const discountAmount = parseFloat(form.discountAmount) || 0;
+  const freightAmount = parseFloat(form.freightAmount) || 0;
   const taxAmount = parseFloat(form.taxAmount) || 0;
-  const totalAmount = subtotal + taxAmount;
+  const retainageAmount = parseFloat(form.retainageAmount) || 0;
+  const totalAmount = subtotal - discountAmount + freightAmount + taxAmount - retainageAmount;
 
   const updateField = (field: keyof InvoiceFormData, value: string) => {
     setForm((prev) => {
@@ -223,7 +244,13 @@ export default function InvoiceFormPage() {
         poId: data.poId || null,
         poOverride: data.poOverride || null,
         notes: data.notes || null,
+        customerVisibleNotes: data.customerVisibleNotes || null,
+        internalNotes: data.internalNotes || null,
+        discountAmount: data.discountAmount,
+        freightAmount: data.freightAmount,
         taxAmount: data.taxAmount,
+        retainagePercent: data.retainagePercent,
+        retainageAmount: data.retainageAmount,
         lines: data.lines.map((l) => ({
           description: l.description,
           qty: l.qty,
@@ -413,13 +440,83 @@ export default function InvoiceFormPage() {
             </div>
 
             <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="notes">Notes</Label>
+              <Label htmlFor="customerVisibleNotes">Customer Notes</Label>
+              <Textarea
+                id="customerVisibleNotes"
+                value={form.customerVisibleNotes}
+                onChange={(e) => updateField('customerVisibleNotes', e.target.value)}
+                placeholder="Visible on the invoice PDF and customer email..."
+                rows={3}
+              />
+            </div>
+
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="internalNotes">Internal Notes</Label>
+              <Textarea
+                id="internalNotes"
+                value={form.internalNotes}
+                onChange={(e) => updateField('internalNotes', e.target.value)}
+                placeholder="Internal review notes. Not visible to the customer."
+                rows={3}
+              />
+            </div>
+
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="notes">Legacy Notes</Label>
               <Textarea
                 id="notes"
                 value={form.notes}
                 onChange={(e) => updateField('notes', e.target.value)}
                 placeholder="Additional notes..."
                 rows={3}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="discountAmount">Discount</Label>
+              <Input
+                id="discountAmount"
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.discountAmount}
+                onChange={(e) => updateField('discountAmount', e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="freightAmount">Freight</Label>
+              <Input
+                id="freightAmount"
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.freightAmount}
+                onChange={(e) => updateField('freightAmount', e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="retainagePercent">Retainage %</Label>
+              <Input
+                id="retainagePercent"
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.retainagePercent}
+                onChange={(e) => updateField('retainagePercent', e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="retainageAmount">Retainage Amount</Label>
+              <Input
+                id="retainageAmount"
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.retainageAmount}
+                onChange={(e) => updateField('retainageAmount', e.target.value)}
               />
             </div>
           </CardContent>

@@ -1,0 +1,10 @@
+ALTER TABLE charge_codes
+ADD COLUMN IF NOT EXISTS cost_handling TEXT NOT NULL DEFAULT 'DIRECT_CONTRACT';
+
+UPDATE charge_codes
+SET cost_handling = CASE
+  WHEN type = 'G_AND_A' THEN 'G_AND_A'
+  WHEN type = 'OVERHEAD' THEN 'OVERHEAD'
+  ELSE 'DIRECT_CONTRACT'
+END
+WHERE cost_handling IS NULL OR cost_handling = 'DIRECT_CONTRACT';

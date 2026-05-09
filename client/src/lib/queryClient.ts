@@ -52,6 +52,7 @@ let sessionExpiryNotified = false;
 // A session expiry on these pages should silently clear tokens but NOT
 // redirect to /login — that would disrupt workers mid-task.
 const KIOSK_ROUTES = [
+  '/kiosk',
   '/p2-traveler',
   '/p2-traveler-viewer',
   '/traveler',

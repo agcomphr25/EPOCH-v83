@@ -26,6 +26,51 @@ import { createInvoiceFromPackingSlip } from '../services/invoiceFromPackingSlip
 const LOCKED_STATUSES = ['POSTED', 'SENT', 'VOID', 'PAID'];
 const objectStorageService = new ObjectStorageService();
 
+const REQUIRED_P2_INVOICE_COLUMNS = [
+  'ar_invoices.discount_amount',
+  'ar_invoices.freight_amount',
+  'ar_invoices.retainage_percent',
+  'ar_invoices.retainage_amount',
+  'ar_invoices.customer_visible_notes',
+  'ar_invoices.internal_notes',
+  'ar_invoices.wad_id',
+  'ar_invoices.sendgrid_message_id',
+  'ar_invoices.sent_to',
+  'ar_invoices.sent_cc',
+  'ar_invoice_lines.po_item_id',
+  'ar_invoice_lines.part_number',
+];
+
+async function getMissingP2InvoiceColumns(): Promise<string[]> {
+  const result = await db.execute(sql`
+    SELECT table_name, column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND (
+        (table_name = 'ar_invoices' AND column_name IN (
+          'discount_amount',
+          'freight_amount',
+          'retainage_percent',
+          'retainage_amount',
+          'customer_visible_notes',
+          'internal_notes',
+          'wad_id',
+          'sendgrid_message_id',
+          'sent_to',
+          'sent_cc'
+        ))
+        OR (table_name = 'ar_invoice_lines' AND column_name IN (
+          'po_item_id',
+          'part_number'
+        ))
+      )
+  `);
+
+  const rows = ((result as any).rows ?? result) as Array<{ table_name: string; column_name: string }>;
+  const existing = new Set(rows.map((row) => `${row.table_name}.${row.column_name}`));
+  return REQUIRED_P2_INVOICE_COLUMNS.filter((column) => !existing.has(column));
+}
+
 const router = Router();
 
 router.use(authenticateToken);
@@ -416,6 +461,14 @@ router.post('/from-packing-slip/:packingSlipId', requirePermission('finance.post
     if (!slip) return res.status(404).json({ error: 'Packing slip not found' });
     if (!slip.lotNumberId) return res.status(422).json({ error: 'Packing slip is not linked to a lot' });
 
+    const missingColumns = await getMissingP2InvoiceColumns();
+    if (missingColumns.length > 0) {
+      return res.status(500).json({
+        error: `Invoice database migration is not applied. Missing columns: ${missingColumns.join(', ')}`,
+        missingColumns,
+      });
+    }
+
     await createInvoiceFromPackingSlip(packingSlipId, slip.lotNumberId);
 
     const [invoice] = await db
@@ -426,7 +479,8 @@ router.post('/from-packing-slip/:packingSlipId', requirePermission('finance.post
     res.status(201).json(invoice);
   } catch (error) {
     console.error('Failed to create invoice from packing slip:', error);
-    res.status(500).json({ error: 'Failed to create invoice from packing slip' });
+    const message = error instanceof Error ? error.message : 'Failed to create invoice from packing slip';
+    res.status(500).json({ error: message });
   }
 });
 

@@ -178,6 +178,7 @@ import tkCorrectionsRoutes from './timekeeping/corrections';
 import tkPolicySettingsRoutes from './timekeeping/policySettings';
 import tkPtoCommandCenterRoutes from './timekeeping/ptoCommandCenter';
 import tkPayrollExportRoutes from './timekeeping/payrollExport';
+import tkMyTasksRoutes from './timekeeping/myTasks';
 import historicalDataRoutes from './historicalData';
 import fillablePdfTemplatesRoutes from './fillablePdfTemplates';
 import pdfFormsRoutes from './pdfForms';
@@ -387,6 +388,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   app.use('/api/timekeeping', tkPtoCommandCenterRoutes);
   // Tier 9 — Payroll Export (Phase 1: stored CSV batches with SHA-256 evidence)
   app.use('/api/timekeeping', tkPayrollExportRoutes);
+  app.use('/api/timekeeping', tkMyTasksRoutes);
 
   // Historical Data routes - for tracking legacy system data
   app.use('/api/historical-data', historicalDataRoutes);

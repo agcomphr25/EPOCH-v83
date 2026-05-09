@@ -577,6 +577,9 @@ export async function submitTimesheet(
     actor,
   });
 
+  const { notifyHourlyTimesheetApprovalNeeded } = await import("./approvalNotifications.service");
+  void notifyHourlyTimesheetApprovalNeeded(id);
+
   if (lateSubmissionWarning) {
     return { ...row!, lateSubmissionWarning };
   }

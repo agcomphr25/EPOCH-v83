@@ -100,6 +100,11 @@ export async function submitPTORequest(
     }
   );
 
+  if (initialStatus === "pending_supervisor") {
+    const { notifyPTOApprovalNeeded } = await import("./approvalNotifications.service");
+    void notifyPTOApprovalNeeded(row!.id);
+  }
+
   return row!;
 }
 

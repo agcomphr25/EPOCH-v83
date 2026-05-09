@@ -214,6 +214,7 @@ import estimatingRoutes from './estimating';
 import auditsRoutes from './audits';
 import commandCenterRoutes from './commandCenter';
 import edriRoutes from './edri';
+import chargeCodeUsageReportRoutes from './chargeCodeUsageReport';
 import forensicAuditRoutes from './forensicAudit';
 import cmmcRoutes from './cmmc';
 import chargeCodesRoutes from './chargeCodes';
@@ -10765,6 +10766,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // EDRI — EPOCH DCAA Readiness Index
   app.use('/api/edri', edriRoutes);
+  app.use('/api/edri', chargeCodeUsageReportRoutes);
 
   // DCAA Forensic Audit Engine
   app.use('/api/forensic-audit', forensicAuditRoutes);

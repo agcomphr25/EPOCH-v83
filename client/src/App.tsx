@@ -344,6 +344,7 @@ import EdriHistory from './pages/admin/EdriHistory';
 import EdriEvidence from './pages/admin/EdriEvidence';
 import EdriSnapshotDetail from './pages/admin/EdriSnapshotDetail';
 import DcaaFindings from './pages/admin/DcaaFindings';
+import ChargeCodeUsageReport from './pages/admin/ChargeCodeUsageReport';
 import EdriExecutiveMatrix from './pages/admin/EdriExecutiveMatrix';
 import SecureVaultPage from './pages/admin/SecureVaultPage';
 import CmmcDashboard from './pages/admin/CmmcDashboard';
@@ -1345,6 +1346,7 @@ function App() {
                   <Route path="/admin/edri/remediation" component={EdriRemediation} />
                   <Route path="/admin/edri/missing-evidence" component={EdriMissingEvidence} />
                   <Route path="/admin/edri/history" component={EdriHistory} />
+                  <Route path="/admin/edri/charge-code-usage" component={ChargeCodeUsageReport} />
                   <Route path="/admin/edri/domain/:domainKey" component={EdriDomainDetail} />
                   <Route path="/admin/edri/snapshot/:snapshotId/evidence/:domainKey" component={EdriEvidence} />
                   <Route path="/admin/edri/snapshot/:snapshotId/evidence" component={EdriEvidence} />

@@ -49,6 +49,7 @@ import {
 const chargeCodeFormSchema = insertChargeCodeSchema.extend({
   code: z.string().min(1, 'Code is required'),
   type: z.enum(['DIRECT', 'OVERHEAD', 'G_AND_A']),
+  costHandling: z.enum(['DIRECT_CONTRACT', 'IRAD', 'BID_PROPOSAL', 'FRINGE', 'OVERHEAD', 'G_AND_A', 'UNALLOWABLE', 'OTHER']),
   maxHoursPerDay: z.string().optional(),
   active: z.boolean().optional(),
 });
@@ -60,6 +61,7 @@ function defaultValues(code?: ChargeCode): ChargeCodeFormValues {
     code: code?.code ?? '',
     description: code?.description ?? '',
     type: (code?.type as 'DIRECT' | 'OVERHEAD' | 'G_AND_A') ?? 'DIRECT',
+    costHandling: (code?.costHandling as ChargeCodeFormValues['costHandling']) ?? 'DIRECT_CONTRACT',
     department: code?.department ?? '',
     contractReference: code?.contractReference ?? '',
     billable: code?.billable ?? true,
@@ -117,6 +119,7 @@ function ChargeCodeForm({
       code: values.code,
       description: values.description || null,
       type: values.type,
+      costHandling: values.costHandling,
       department: values.department || null,
       contractReference: values.contractReference || null,
       billable: values.billable,
@@ -176,6 +179,34 @@ function ChargeCodeForm({
 
         <FormField
           control={form.control}
+          name="costHandling"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>DCAA Handling *</FormLabel>
+              <Select value={field.value} onValueChange={field.onChange}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="DIRECT_CONTRACT">Direct Contract</SelectItem>
+                  <SelectItem value="IRAD">IR&amp;D</SelectItem>
+                  <SelectItem value="BID_PROPOSAL">B&amp;P</SelectItem>
+                  <SelectItem value="FRINGE">Fringe</SelectItem>
+                  <SelectItem value="OVERHEAD">Overhead</SelectItem>
+                  <SelectItem value="G_AND_A">G&amp;A</SelectItem>
+                  <SelectItem value="UNALLOWABLE">Unallowable</SelectItem>
+                  <SelectItem value="OTHER">Other</SelectItem>
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
           name="description"
           render={({ field }) => (
             <FormItem>
@@ -185,6 +216,7 @@ function ChargeCodeForm({
                   placeholder="Brief description of this charge code"
                   rows={2}
                   {...field}
+                  value={field.value ?? ''}
                 />
               </FormControl>
               <FormMessage />
@@ -200,7 +232,7 @@ function ChargeCodeForm({
               <FormItem>
                 <FormLabel>Department</FormLabel>
                 <FormControl>
-                  <Input placeholder="e.g. Engineering" {...field} />
+                  <Input placeholder="e.g. Engineering" {...field} value={field.value ?? ''} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -214,7 +246,7 @@ function ChargeCodeForm({
               <FormItem>
                 <FormLabel>Contract Reference</FormLabel>
                 <FormControl>
-                  <Input placeholder="e.g. FA8650-22-C-1234" {...field} />
+                  <Input placeholder="e.g. FA8650-22-C-1234" {...field} value={field.value ?? ''} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -299,7 +331,7 @@ function ChargeCodeForm({
   );
 }
 
-type SortColumn = 'code' | 'description' | 'type' | 'department' | 'billable' | 'active';
+type SortColumn = 'code' | 'description' | 'type' | 'costHandling' | 'department' | 'billable' | 'active';
 type SortDirection = 'asc' | 'desc';
 
 function SortIcon({ column, sortColumn, sortDirection }: { column: SortColumn; sortColumn: SortColumn | null; sortDirection: SortDirection }) {
@@ -339,6 +371,7 @@ export default function ChargeCodeManagerPage() {
         (c) =>
           c.code.toLowerCase().includes(q) ||
           (c.description ?? '').toLowerCase().includes(q) ||
+          (c.costHandling ?? '').toLowerCase().includes(q) ||
           (c.department ?? '').toLowerCase().includes(q)
       );
     }
@@ -383,6 +416,16 @@ export default function ChargeCodeManagerPage() {
     DIRECT: 'Direct',
     OVERHEAD: 'Overhead',
     G_AND_A: 'G&A',
+  };
+  const handlingLabel: Record<string, string> = {
+    DIRECT_CONTRACT: 'Direct Contract',
+    IRAD: 'IR&D',
+    BID_PROPOSAL: 'B&P',
+    FRINGE: 'Fringe',
+    OVERHEAD: 'Overhead',
+    G_AND_A: 'G&A',
+    UNALLOWABLE: 'Unallowable',
+    OTHER: 'Other',
   };
 
   return (
@@ -435,6 +478,7 @@ export default function ChargeCodeManagerPage() {
                   { key: 'code', label: 'Code' },
                   { key: 'description', label: 'Description' },
                   { key: 'type', label: 'Type' },
+                  { key: 'costHandling', label: 'DCAA Handling' },
                   { key: 'department', label: 'Department' },
                   { key: 'billable', label: 'Billable' },
                   { key: 'active', label: 'Active' },
@@ -456,7 +500,7 @@ export default function ChargeCodeManagerPage() {
             {isLoading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <TableRow key={i}>
-                  {Array.from({ length: 7 }).map((__, j) => (
+                  {Array.from({ length: 8 }).map((__, j) => (
                     <TableCell key={j}>
                       <Skeleton className="h-4 w-full" />
                     </TableCell>
@@ -465,7 +509,7 @@ export default function ChargeCodeManagerPage() {
               ))
             ) : displayed.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground py-10">
+                <TableCell colSpan={8} className="text-center text-muted-foreground py-10">
                   {chargeCodes?.length === 0
                     ? 'No charge codes found. Create one to get started.'
                     : searchQuery.trim()
@@ -488,6 +532,11 @@ export default function ChargeCodeManagerPage() {
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline">{typeLabel[code.type] ?? code.type}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="secondary">
+                      {handlingLabel[code.costHandling] ?? code.costHandling ?? 'Direct Contract'}
+                    </Badge>
                   </TableCell>
                   <TableCell className="text-sm">{code.department ?? '—'}</TableCell>
                   <TableCell>

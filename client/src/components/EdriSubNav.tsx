@@ -1,7 +1,7 @@
 import { Link, useLocation } from 'wouter';
 import {
   ShieldCheck, Crown, Bug, BarChart3,
-  AlertOctagon, Wrench, Clock, Tags, FileCheck2,
+  AlertOctagon, Wrench, Clock, Tags, FileCheck2, Percent,
 } from 'lucide-react';
 
 interface NavItem {
@@ -16,6 +16,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'DCAA Findings',    path: '/admin/dcaa-findings',           icon: Bug           },
   { label: 'Charge Codes',      path: '/admin/edri/charge-code-usage',  icon: Tags          },
   { label: 'Payroll Recon',     path: '/admin/edri/payroll-export-reconciliation', icon: FileCheck2 },
+  { label: 'Burden Rates',      path: '/admin/edri/indirect-cost-burden-rates', icon: Percent },
   { label: 'Heatmap',          path: '/admin/edri/heatmap',            icon: BarChart3     },
   { label: 'Red Flags',        path: '/admin/edri/red-flags',          icon: AlertOctagon  },
   { label: 'Remediation',      path: '/admin/edri/remediation',        icon: Wrench        },

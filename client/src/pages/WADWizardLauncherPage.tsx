@@ -47,7 +47,8 @@ const statusColors: Record<string, string> = {
 
 export default function WADWizardLauncherPage() {
   const [, navigate] = useLocation();
-  const [search, setSearch] = useState('');
+  const initialSearch = new URLSearchParams(window.location.search).get('search') ?? '';
+  const [search, setSearch] = useState(initialSearch);
 
   const { data: workOrders = [], isLoading, isError, error } = useQuery<ProductionWorkOrderRow[]>({
     queryKey: ['/api/work-orders/production'],

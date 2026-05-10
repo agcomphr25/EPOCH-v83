@@ -1491,6 +1491,10 @@ export default function ProjectDetailPage() {
             const purchaseStep = project.steps.find(s => s.stepType === 'purchase_review_checklist');
             const wadStep = project.steps.find(s => s.stepType === 'p2_order');
             const preprodStep = project.steps.find(s => s.stepType === 'preproduction_checklist');
+            const projectWorkOrder = projectWorkOrders[0];
+            const wadRoute = projectWorkOrder
+              ? `/work-orders/${projectWorkOrder.id}/wizard`
+              : `/wad-wizard?search=${encodeURIComponent(project.projectCode || project.projectName || project.id)}`;
 
             const actionCards = [
               {
@@ -1507,7 +1511,7 @@ export default function ProjectDetailPage() {
                 title: 'Work Authorization Document (WAD)',
                 description: 'Authorize charge codes, labor budgets, and departments before production begins.',
                 step: wadStep,
-                route: `/p2-control-center?tab=status&projectId=${encodeURIComponent(project.id)}${project.projectName ? `&projectName=${encodeURIComponent(project.projectName)}` : ''}${project.poId ? `&poId=${encodeURIComponent(String(project.poId))}` : ''}`,
+                route: wadRoute,
                 icon: <FileText className="h-5 w-5 text-purple-600" />,
                 gateLabel: 'Complete before Pre-Production',
               },

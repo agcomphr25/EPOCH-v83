@@ -100,6 +100,7 @@ import FinancialReviewListPage from './pages/FinancialReviewListPage';
 import FinancialReviewSlidePage from './pages/FinancialReviewSlidePage';
 import CostCenterManagement from './pages/CostCenterManagement';
 import CostAccountingPage from './pages/CostAccountingPage';
+import ChartOfAccountsPage from './pages/ChartOfAccountsPage';
 import BurdenRatesAdmin from './pages/BurdenRatesAdmin';
 import MonthlyFulfilledReport from './pages/MonthlyFulfilledReport';
 import MonthlyShippedReport from './pages/MonthlyShippedReport';
@@ -1008,6 +1009,10 @@ function App() {
                   <Route
                     path="/finance/cost-accounting"
                     component={CostAccountingPage}
+                  />
+                  <Route
+                    path="/finance/chart-of-accounts"
+                    component={ChartOfAccountsPage}
                   />
                   <Route
                     path="/finance/burden-rates"

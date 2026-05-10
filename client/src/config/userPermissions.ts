@@ -667,6 +667,7 @@ export const ROLE_ROUTE_ACCESS: Record<string, string[]> = {
   '/finance/dashboard': ['ADMIN', 'OWNER'],
   '/finance/cost-centers': ['ADMIN', 'OWNER'],
   '/finance/cost-accounting': ['ADMIN', 'OWNER'],
+  '/finance/chart-of-accounts': ['ADMIN', 'OWNER'],
   '/finance/burden-rates': ['ADMIN', 'OWNER'],
   '/finance/accounting': ['ADMIN'],
   '/finance/payroll-control': ['ADMIN', 'OWNER'],

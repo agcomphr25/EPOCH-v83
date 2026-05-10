@@ -491,6 +491,7 @@ async function initializeBackgroundServices() {
           '0121_p2_invoice_review_send_structure.sql',
           '0122_payment_void_audit_controls.sql',
           '0123_charge_code_cost_handling.sql',
+          '0124_chart_of_accounts_foundation.sql',
           'investigation_308_order_duplication.sql',
         ];
         const criticalMigrations = new Set([

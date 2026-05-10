@@ -73,7 +73,7 @@ export default function AccountingPage() {
 
   const queryParams = buildQueryString({ fromDate, toDate, status, transactionType });
 
-  const { data, isLoading, isError, refetch } = useQuery<{ entries: JournalEntry[] }>({
+  const { data, isLoading, isError } = useQuery<{ entries: JournalEntry[] }>({
     queryKey: ['/api/finance/accounting/journal-entries', fromDate, toDate, status, transactionType],
     queryFn: async () => {
       const token = localStorage.getItem('sessionToken') || localStorage.getItem('jwtToken');
@@ -114,7 +114,7 @@ export default function AccountingPage() {
         <BookOpen className="w-6 h-6 text-muted-foreground" />
         <div>
           <h1 className="text-2xl font-bold">Accounting Journal</h1>
-          <p className="text-sm text-muted-foreground">Double-entry journal entries for wire payments</p>
+          <p className="text-sm text-muted-foreground">Double-entry journal entries with COA and reporting dimensions</p>
         </div>
       </div>
 
@@ -152,6 +152,7 @@ export default function AccountingPage() {
                 <SelectContent>
                   <SelectItem value="all">All Statuses</SelectItem>
                   <SelectItem value="DRAFT">DRAFT</SelectItem>
+                  <SelectItem value="POSTED">POSTED</SelectItem>
                   <SelectItem value="EXPORTED">EXPORTED</SelectItem>
                 </SelectContent>
               </Select>
@@ -165,6 +166,7 @@ export default function AccountingPage() {
                 <SelectContent>
                   <SelectItem value="all">All Types</SelectItem>
                   <SelectItem value="WIRE_PAYMENT">WIRE_PAYMENT</SelectItem>
+                  <SelectItem value="AR_INVOICE">AR_INVOICE</SelectItem>
                 </SelectContent>
               </Select>
             </div>

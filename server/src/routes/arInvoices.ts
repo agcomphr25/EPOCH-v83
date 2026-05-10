@@ -22,6 +22,7 @@ import { generateArInvoicePdf } from '../../utils/pdf/arInvoicePdf';
 import { sendEmailViaSendGrid } from '../../utils/sendgrid';
 import { ObjectStorageService } from '../../replit_integrations/object_storage';
 import { createInvoiceFromPackingSlip } from '../services/invoiceFromPackingSlip';
+import { assertPostingAllowedForPeriod } from '../services/accountingPeriodService';
 
 const LOCKED_STATUSES = ['POSTED', 'SENT', 'VOID', 'PAID'];
 const objectStorageService = new ObjectStorageService();
@@ -679,6 +680,15 @@ router.post('/', requirePermission('finance.post_invoice'), async (req: Request,
         inventoryItemId: line.inventoryItemId || null,
         poItemId: line.poItemId || null,
         partNumber: line.partNumber || null,
+        productionLine: line.productionLine || 'MIGRATION_REVIEW',
+        projectId: line.projectId || null,
+        projectNameSnapshot: line.projectNameSnapshot || null,
+        salespersonUserId: line.salespersonUserId || null,
+        salespersonNameSnapshot: line.salespersonNameSnapshot || null,
+        csrUserId: line.csrUserId || null,
+        csrNameSnapshot: line.csrNameSnapshot || null,
+        customerType: line.customerType || null,
+        dimensionTags: line.dimensionTags || {},
         description: line.description,
         qty: line.qty,
         unitPrice: line.unitPrice,
@@ -754,6 +764,15 @@ router.put('/:id', requirePermission('finance.post_invoice'), async (req: Reques
             inventoryItemId: line.inventoryItemId || null,
             poItemId: line.poItemId || null,
             partNumber: line.partNumber || null,
+            productionLine: line.productionLine || 'MIGRATION_REVIEW',
+            projectId: line.projectId || null,
+            projectNameSnapshot: line.projectNameSnapshot || null,
+            salespersonUserId: line.salespersonUserId || null,
+            salespersonNameSnapshot: line.salespersonNameSnapshot || null,
+            csrUserId: line.csrUserId || null,
+            csrNameSnapshot: line.csrNameSnapshot || null,
+            customerType: line.customerType || null,
+            dimensionTags: line.dimensionTags || {},
             description: line.description,
             qty: qty.toString(),
             unitPrice: unitPrice.toString(),
@@ -834,19 +853,49 @@ router.post('/:id/post', requirePermission('finance.post_invoice'), async (req: 
       return res.status(409).json({ error: 'Invoice pricing must be resolved before posting' });
     }
 
+    await assertPostingAllowedForPeriod({
+      effectiveDate: invoice.invoiceDate,
+      user: (req as any).user,
+      postingMode: 'STANDARD',
+    });
+
+    const invoiceLines = await db
+      .select()
+      .from(arInvoiceLines)
+      .where(eq(arInvoiceLines.invoiceId, id));
+
     const total = parseFloat(invoice.totalAmount);
     const subtotal = parseFloat(invoice.subtotal);
-    const tax = parseFloat(invoice.taxAmount);
+    const discount = parseFloat(invoice.discountAmount ?? '0') || 0;
+    const freight = parseFloat(invoice.freightAmount ?? '0') || 0;
+    const tax = parseFloat(invoice.taxAmount ?? '0') || 0;
+    const retainage = parseFloat(invoice.retainageAmount ?? '0') || 0;
 
     const allAccounts = await db.select().from(chartOfAccounts);
     const arAccount = allAccounts.find((a) => a.accountName === 'Accounts Receivable');
+    const accountByNumber = (accountNumber: string) => allAccounts.find((a) => a.accountNumber === accountNumber);
+    const arAccountV2 = accountByNumber('11000') ?? arAccount;
+    const retainageAccount = retainage > 0 ? accountByNumber('11200') : null;
+    const shippingIncomeAccount = freight > 0 ? accountByNumber('43000') : null;
+    const discountAccount = discount > 0 ? accountByNumber('49000') : null;
     const revenueAccount = allAccounts.find((a) => a.accountName === 'Revenue — P2 Products');
     const taxAccount = tax > 0 ? allAccounts.find((a) => a.accountName === 'Sales Tax Payable') : null;
+    const revenueAccountV2 = accountByNumber('41000') ?? allAccounts.find((a) => a.accountName === 'Product Revenue') ?? revenueAccount;
+    const taxAccountV2 = tax > 0 ? (accountByNumber('20500') ?? taxAccount) : null;
 
-    if (!arAccount || !revenueAccount) {
+    if (!arAccountV2 || !revenueAccountV2) {
       return res.status(500).json({ error: 'Required chart-of-accounts entries not found' });
     }
-    if (tax > 0 && !taxAccount) {
+    if (retainage > 0 && !retainageAccount) {
+      return res.status(500).json({ error: 'Retainage Receivable account not found in chart of accounts' });
+    }
+    if (freight > 0 && !shippingIncomeAccount) {
+      return res.status(500).json({ error: 'Shipping Income account not found in chart of accounts' });
+    }
+    if (discount > 0 && !discountAccount) {
+      return res.status(500).json({ error: 'Discounts and Allowances account not found in chart of accounts' });
+    }
+    if (tax > 0 && !taxAccountV2) {
       return res.status(500).json({ error: 'Sales Tax Payable account not found in chart of accounts' });
     }
 
@@ -863,20 +912,94 @@ router.post('/:id/post', requirePermission('finance.post_invoice'), async (req: 
           transactionType: 'AR_INVOICE',
           referenceType: 'ar_invoice',
           referenceId: 0,
-          effectiveDate: new Date(),
+          referenceUuid: id,
+          effectiveDate: new Date(`${invoice.invoiceDate}T00:00:00`),
           memo: `AR Invoice ${invoice.invoiceNumber} — ID: ${id}`,
-          status: 'DRAFT',
+          status: 'POSTED',
+          sourceSystem: 'EPOCH',
+          sourceDocumentType: 'AR_INVOICE',
+          sourceDocumentNumber: invoice.invoiceNumber,
+          postingMode: 'STANDARD',
+          postedAt: new Date(),
+          postedBy: user,
           createdBy: user,
         })
         .returning();
 
-      type LineInsert = { journalEntryId: number; accountId: number; debitAmount: number; creditAmount: number };
+      const firstWith = <K extends keyof typeof invoiceLines[number]>(key: K) =>
+        invoiceLines.find((line) => line[key] !== null && line[key] !== undefined)?.[key] ?? null;
+      const commonDimensions = {
+        customerId: invoice.customerId,
+        productionLine: invoiceLines.length === 1 ? invoiceLines[0].productionLine : 'MIXED',
+        customerType: firstWith('customerType') as string | null,
+        projectId: firstWith('projectId') as string | null,
+        projectNameSnapshot: firstWith('projectNameSnapshot') as string | null,
+        salespersonUserId: firstWith('salespersonUserId') as number | null,
+        salespersonNameSnapshot: firstWith('salespersonNameSnapshot') as string | null,
+        csrUserId: firstWith('csrUserId') as number | null,
+        csrNameSnapshot: firstWith('csrNameSnapshot') as string | null,
+        allowability: 'ALLOWABLE',
+        directIndirect: 'DIRECT',
+        costPool: 'DIRECT',
+        dimensionTags: {
+          source: 'ar_invoice',
+          invoiceId: id,
+          invoiceNumber: invoice.invoiceNumber,
+        } as Record<string, unknown>,
+      };
+
+      type LineInsert = typeof commonDimensions & {
+        journalEntryId: number;
+        accountId: number;
+        debitAmount: number;
+        creditAmount: number;
+        inventoryItemId?: string | null;
+        partNumber?: string | null;
+      };
       const lines: LineInsert[] = [
-        { journalEntryId: entry.id, accountId: arAccount.id, debitAmount: total, creditAmount: 0 },
-        { journalEntryId: entry.id, accountId: revenueAccount.id, debitAmount: 0, creditAmount: subtotal },
+        { ...commonDimensions, journalEntryId: entry.id, accountId: arAccountV2.id, debitAmount: total, creditAmount: 0 },
       ];
+      if (discount > 0) {
+        lines.push({ ...commonDimensions, journalEntryId: entry.id, accountId: discountAccount!.id, debitAmount: discount, creditAmount: 0 });
+      }
+      if (retainage > 0) {
+        lines.push({ ...commonDimensions, journalEntryId: entry.id, accountId: retainageAccount!.id, debitAmount: retainage, creditAmount: 0 });
+      }
+      for (const line of invoiceLines) {
+        lines.push({
+          ...commonDimensions,
+          journalEntryId: entry.id,
+          accountId: revenueAccountV2.id,
+          debitAmount: 0,
+          creditAmount: parseFloat(String(line.lineTotal)) || 0,
+          productionLine: line.productionLine || 'MIGRATION_REVIEW',
+          projectId: line.projectId,
+          projectNameSnapshot: line.projectNameSnapshot,
+          salespersonUserId: line.salespersonUserId,
+          salespersonNameSnapshot: line.salespersonNameSnapshot,
+          csrUserId: line.csrUserId,
+          csrNameSnapshot: line.csrNameSnapshot,
+          customerType: line.customerType,
+          inventoryItemId: line.inventoryItemId,
+          partNumber: line.partNumber,
+          dimensionTags: {
+            ...commonDimensions.dimensionTags,
+            arInvoiceLineId: line.id,
+            lineDescription: line.description,
+          },
+        });
+      }
+      if (freight > 0) {
+        lines.push({ ...commonDimensions, journalEntryId: entry.id, accountId: shippingIncomeAccount!.id, debitAmount: 0, creditAmount: freight });
+      }
       if (tax > 0) {
-        lines.push({ journalEntryId: entry.id, accountId: taxAccount!.id, debitAmount: 0, creditAmount: tax });
+        lines.push({ ...commonDimensions, journalEntryId: entry.id, accountId: taxAccountV2!.id, debitAmount: 0, creditAmount: tax, directIndirect: 'UNASSIGNED', costPool: 'NONE' });
+      }
+
+      const totalDebits = Math.round(lines.reduce((sum, line) => sum + line.debitAmount, 0) * 100) / 100;
+      const totalCredits = Math.round(lines.reduce((sum, line) => sum + line.creditAmount, 0) * 100) / 100;
+      if (Math.abs(totalDebits - totalCredits) > 0.001) {
+        throw new Error(`AR invoice journal entry is imbalanced: debits=${totalDebits}, credits=${totalCredits}`);
       }
 
       await tx.insert(journalLines).values(lines);

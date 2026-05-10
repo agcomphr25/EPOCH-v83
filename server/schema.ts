@@ -14842,8 +14842,21 @@ export type InsertExecutiveRundownItem = z.infer<typeof insertExecutiveRundownIt
 // Chart of accounts — canonical account definitions
 export const chartOfAccounts = pgTable('chart_of_accounts', {
   id: serial('id').primaryKey(),
+  accountNumber: text('account_number').unique(),
   accountName: text('account_name').notNull().unique(),
   accountType: text('account_type').notNull(), // ASSET, LIABILITY, EXPENSE, REVENUE, etc.
+  parentAccountId: integer('parent_account_id').references((): AnyPgColumn => chartOfAccounts.id),
+  normalBalance: text('normal_balance').notNull().default('DEBIT'), // DEBIT | CREDIT
+  financialStatementSection: text('financial_statement_section'),
+  costPool: text('cost_pool').notNull().default('NONE'), // NONE | DIRECT | FRINGE | OVERHEAD | G_AND_A | UNALLOWABLE | OTHER
+  defaultAllowability: text('default_allowability').notNull().default('ALLOWABLE'), // ALLOWABLE | UNALLOWABLE | NEEDS_REVIEW
+  defaultDirectIndirect: text('default_direct_indirect').notNull().default('UNASSIGNED'), // DIRECT | INDIRECT | UNASSIGNED
+  billingTreatment: text('billing_treatment').notNull().default('NOT_BILLABLE'), // BILLABLE | NON_BILLABLE | PASS_THROUGH | NOT_BILLABLE
+  requiresDocumentation: boolean('requires_documentation').notNull().default(false),
+  requiresReview: boolean('requires_review').notNull().default(false),
+  systemControlled: boolean('system_controlled').notNull().default(false),
+  isActive: boolean('is_active').notNull().default(true),
+  description: text('description'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -14862,9 +14875,18 @@ export const journalEntries = pgTable('journal_entries', {
   transactionType: text('transaction_type').notNull(), // WIRE_PAYMENT
   referenceType: text('reference_type').notNull(),     // payment
   referenceId: integer('reference_id').notNull(),      // payments.id
+  referenceUuid: uuid('reference_uuid'),
   effectiveDate: timestamp('effective_date').notNull(),
-  status: text('status').notNull().default('DRAFT'),   // DRAFT | EXPORTED | VOIDED
+  status: text('status').notNull().default('DRAFT'),   // DRAFT | POSTED | EXPORTED | VOIDED
   memo: text('memo'),
+  sourceSystem: text('source_system').notNull().default('EPOCH'),
+  sourceDocumentType: text('source_document_type'),
+  sourceDocumentNumber: text('source_document_number'),
+  migrationBatchId: text('migration_batch_id'),
+  postingMode: text('posting_mode').notNull().default('STANDARD'), // STANDARD | HISTORICAL_MIGRATION | ADJUSTMENT | REVERSAL
+  postedAt: timestamp('posted_at'),
+  postedBy: text('posted_by'),
+  reversalOfJournalEntryId: integer('reversal_of_journal_entry_id').references((): AnyPgColumn => journalEntries.id),
   createdBy: text('created_by'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
@@ -14893,6 +14915,25 @@ export const journalLines = pgTable('journal_lines', {
     .notNull(),
   debitAmount: real('debit_amount').default(0),
   creditAmount: real('credit_amount').default(0),
+  customerId: text('customer_id'),
+  customerNameSnapshot: text('customer_name_snapshot'),
+  customerType: text('customer_type'),
+  projectId: text('project_id'),
+  projectNameSnapshot: text('project_name_snapshot'),
+  contractNumber: text('contract_number'),
+  productionLine: text('production_line'),
+  department: text('department'),
+  chargeCodeId: integer('charge_code_id').references(() => chargeCodes.id),
+  inventoryItemId: text('inventory_item_id'),
+  partNumber: text('part_number'),
+  salespersonUserId: integer('salesperson_user_id').references(() => users.id),
+  salespersonNameSnapshot: text('salesperson_name_snapshot'),
+  csrUserId: integer('csr_user_id').references(() => users.id),
+  csrNameSnapshot: text('csr_name_snapshot'),
+  allowability: text('allowability').notNull().default('ALLOWABLE'),
+  directIndirect: text('direct_indirect').notNull().default('UNASSIGNED'),
+  costPool: text('cost_pool'),
+  dimensionTags: jsonb('dimension_tags').notNull().default(sql`'{}'::jsonb`),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -14904,6 +14945,44 @@ export const insertJournalLineSchema = createInsertSchema(journalLines).omit({
 });
 export type JournalLine = typeof journalLines.$inferSelect;
 export type InsertJournalLine = z.infer<typeof insertJournalLineSchema>;
+
+export const accountingAdminUsers = pgTable('accounting_admin_users', {
+  id: serial('id').primaryKey(),
+  username: text('username').notNull().unique(),
+  active: boolean('active').notNull().default(true),
+  grantedBy: text('granted_by'),
+  grantedAt: timestamp('granted_at').defaultNow(),
+});
+export const insertAccountingAdminUserSchema = createInsertSchema(accountingAdminUsers).omit({
+  id: true,
+  grantedAt: true,
+});
+export type AccountingAdminUser = typeof accountingAdminUsers.$inferSelect;
+export type InsertAccountingAdminUser = z.infer<typeof insertAccountingAdminUserSchema>;
+
+export const accountingPeriods = pgTable('accounting_periods', {
+  id: serial('id').primaryKey(),
+  periodYear: integer('period_year').notNull(),
+  periodMonth: integer('period_month').notNull(),
+  status: text('status').notNull().default('MIGRATION'), // OPEN | MIGRATION | SOFT_CLOSED | HARD_CLOSED | FINAL_LOCKED
+  hardLockEnforcedAt: timestamp('hard_lock_enforced_at'),
+  closedBy: text('closed_by'),
+  closedAt: timestamp('closed_at'),
+  reopenedBy: text('reopened_by'),
+  reopenedAt: timestamp('reopened_at'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  uniquePeriod: unique('accounting_periods_year_month_unique').on(table.periodYear, table.periodMonth),
+}));
+export const insertAccountingPeriodSchema = createInsertSchema(accountingPeriods).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type AccountingPeriod = typeof accountingPeriods.$inferSelect;
+export type InsertAccountingPeriod = z.infer<typeof insertAccountingPeriodSchema>;
 
 // ─── Sign Order Page Settings (singleton) ────────────────────────────────────
 export const signOrderPageSettings = pgTable('sign_order_page_settings', {
@@ -15058,6 +15137,15 @@ export const arInvoiceLines = pgTable('ar_invoice_lines', {
   inventoryItemId: text('inventory_item_id'),
   poItemId: integer('po_item_id').references(() => p2PurchaseOrderItems.id),
   partNumber: text('part_number'),
+  productionLine: text('production_line').notNull().default('MIGRATION_REVIEW'),
+  projectId: text('project_id'),
+  projectNameSnapshot: text('project_name_snapshot'),
+  salespersonUserId: integer('salesperson_user_id').references(() => users.id),
+  salespersonNameSnapshot: text('salesperson_name_snapshot'),
+  csrUserId: integer('csr_user_id').references(() => users.id),
+  csrNameSnapshot: text('csr_name_snapshot'),
+  customerType: text('customer_type'),
+  dimensionTags: jsonb('dimension_tags').notNull().default(sql`'{}'::jsonb`),
   description: text('description').notNull(),
   qty: numeric('qty').notNull(),
   unitPrice: numeric('unit_price').notNull(),

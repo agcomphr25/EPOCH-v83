@@ -184,6 +184,7 @@ import fillablePdfTemplatesRoutes from './fillablePdfTemplates';
 import pdfFormsRoutes from './pdfForms';
 import accountingPrepRoutes from './accountingPrep';
 import accountingControlRoutes from './accountingControl';
+import chartOfAccountsRoutes from './chartOfAccounts';
 import improvementNotesRoutes from './improvementNotes';
 import { qrResolverRouter, qrAdminRouter } from './qrCodes';
 import onboardingRoutes from './onboarding';
@@ -796,6 +797,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // Cost Accounting routes
   app.use('/api/cost-accounting', costAccountingRoutes);
+  app.use('/api/accounting/coa', chartOfAccountsRoutes);
   app.use('/api/burden-rates', burdenRatesRoutes);
   app.use('/api/payroll-control', payrollControlRoutes);
 

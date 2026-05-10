@@ -61,6 +61,23 @@ interface ChargeCodeUsageReportData {
     lastUsedAt: string | null;
     exceptionCount: number;
   }>;
+  distributionRows: Array<{
+    employeeName: string | null;
+    employeeId: string;
+    indexCode: string;
+    accountCode: string | null;
+    position: string | null;
+    suffix: string;
+    positionTitle: string | null;
+    hiringOrg: string | null;
+    distributionPercent: number;
+    jobStartDate: string | null;
+    jobEndDate: string | null;
+    laborDistStartDate: string | null;
+    laborDistEndDate: string | null;
+    totalHours: number;
+    chargeCodeStatus: 'ACTIVE' | 'INACTIVE' | 'INVALID';
+  }>;
   exceptions: Array<{
     entryId: number;
     exceptionType: 'INVALID_CODE' | 'INACTIVE_CODE' | 'APPROVAL_REQUIRED';
@@ -105,6 +122,41 @@ function csvEscape(value: unknown) {
 }
 
 function downloadCsv(report: ChargeCodeUsageReportData) {
+  const distributionHeader = [
+    'Employee Name',
+    'Employee ID',
+    'Index Code',
+    'Account Code',
+    'Position',
+    'Suffix',
+    'Position Title',
+    'Hiring Org',
+    'Dist%',
+    'Job Start Date',
+    'Job End Date',
+    'Labor Dist Start Date',
+    'Labor Dist End Date',
+    'Hours',
+    'Charge Code Status',
+  ];
+  const distributionRows = report.distributionRows.map((row) => [
+    row.employeeName,
+    row.employeeId,
+    row.indexCode,
+    row.accountCode,
+    row.position,
+    row.suffix,
+    row.positionTitle,
+    row.hiringOrg,
+    row.distributionPercent,
+    row.jobStartDate,
+    row.jobEndDate,
+    row.laborDistStartDate,
+    row.laborDistEndDate,
+    row.totalHours,
+    row.chargeCodeStatus,
+  ]);
+
   const masterHeader = [
     'Code',
     'Description',
@@ -167,6 +219,11 @@ function downloadCsv(report: ChargeCodeUsageReportData) {
     ['Start Date', report.filters.startDate ?? ''],
     ['End Date', report.filters.endDate ?? ''],
     [],
+    ['Active Labor Distribution by Charge Code'],
+    distributionHeader,
+    ...distributionRows,
+    [],
+    ['Charge Code Master'],
     masterHeader,
     ...masterRows,
     [],
@@ -181,6 +238,57 @@ function downloadCsv(report: ChargeCodeUsageReportData) {
   const anchor = document.createElement('a');
   anchor.href = url;
   anchor.download = `charge-code-master-usage-${new Date().toISOString().slice(0, 10)}.csv`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function downloadDistributionCsv(report: ChargeCodeUsageReportData) {
+  const lines = [
+    ['EPOCH Active Labor Distribution by Charge Code'],
+    ['Report Period', `${report.filters.startDate ?? 'All'} through ${report.filters.endDate ?? 'All'}`],
+    [],
+    [
+      'Employee Name',
+      'Employee ID',
+      'Index Code',
+      'Account Code',
+      'Position',
+      'Suffix',
+      'Position Title',
+      'Hiring Org',
+      'Dist%',
+      'Job Start Date',
+      'Job End Date',
+      'Labor Dist Start Date',
+      'Labor Dist End Date',
+      'Hours',
+      'Charge Code Status',
+    ],
+    ...report.distributionRows.map((row) => [
+      row.employeeName,
+      row.employeeId,
+      row.indexCode,
+      row.accountCode,
+      row.position,
+      row.suffix,
+      row.positionTitle,
+      row.hiringOrg,
+      row.distributionPercent,
+      row.jobStartDate,
+      row.jobEndDate,
+      row.laborDistStartDate,
+      row.laborDistEndDate,
+      row.totalHours,
+      row.chargeCodeStatus,
+    ]),
+  ];
+
+  const csv = lines.map((line) => line.map(csvEscape).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `active-labor-distribution-${new Date().toISOString().slice(0, 10)}.csv`;
   anchor.click();
   URL.revokeObjectURL(url);
 }
@@ -242,6 +350,10 @@ export default function ChargeCodeUsageReport() {
           <Button size="sm" onClick={() => data && downloadCsv(data)} disabled={!data}>
             <Download className="mr-2 h-4 w-4" />
             Export CSV
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => data && downloadDistributionCsv(data)} disabled={!data}>
+            <Download className="mr-2 h-4 w-4" />
+            Distribution CSV
           </Button>
         </div>
       </div>
@@ -319,6 +431,68 @@ export default function ChargeCodeUsageReport() {
               </CardContent>
             </Card>
           </div>
+
+          <Card>
+            <CardHeader>
+              <div className="text-center space-y-1">
+                <div className="text-sm font-semibold tracking-wide">EPOCH</div>
+                <CardTitle>Active Labor Distribution by Charge Code</CardTitle>
+                <div className="text-sm text-muted-foreground">
+                  {data.filters.startDate ?? 'All dates'} through {data.filters.endDate ?? 'All dates'}
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-md border overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/80">
+                      <TableHead>Employee Name</TableHead>
+                      <TableHead>Employee ID</TableHead>
+                      <TableHead>Index Code</TableHead>
+                      <TableHead>Account Code</TableHead>
+                      <TableHead>Position</TableHead>
+                      <TableHead>Suffix</TableHead>
+                      <TableHead>Position Title</TableHead>
+                      <TableHead>Hiring Org</TableHead>
+                      <TableHead className="text-right">Dist%</TableHead>
+                      <TableHead>Job Start Date</TableHead>
+                      <TableHead>Job End Date</TableHead>
+                      <TableHead>Labor Dist Start Date</TableHead>
+                      <TableHead>Labor Dist End Date</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {data.distributionRows.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={13} className="text-center text-muted-foreground py-8">
+                          No labor distribution rows found for the selected period.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      data.distributionRows.map((row, index) => (
+                        <TableRow key={`${row.employeeId}-${row.indexCode}-${index}`} className={index % 2 === 0 ? 'bg-background' : 'bg-muted/35'}>
+                          <TableCell className="whitespace-nowrap">{row.employeeName ?? row.employeeId}</TableCell>
+                          <TableCell className="whitespace-nowrap">{row.employeeId}</TableCell>
+                          <TableCell className="font-mono">{row.indexCode}</TableCell>
+                          <TableCell>{handlingLabel[row.accountCode ?? ''] ?? row.accountCode ?? '-'}</TableCell>
+                          <TableCell>{row.position ?? '-'}</TableCell>
+                          <TableCell>{row.suffix}</TableCell>
+                          <TableCell className="whitespace-nowrap">{row.positionTitle ?? '-'}</TableCell>
+                          <TableCell>{row.hiringOrg ?? '-'}</TableCell>
+                          <TableCell className="text-right font-medium">{row.distributionPercent.toFixed(2)}</TableCell>
+                          <TableCell>{row.jobStartDate ?? '-'}</TableCell>
+                          <TableCell>{row.jobEndDate ?? '-'}</TableCell>
+                          <TableCell>{row.laborDistStartDate ?? '-'}</TableCell>
+                          <TableCell>{row.laborDistEndDate ?? '-'}</TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader>

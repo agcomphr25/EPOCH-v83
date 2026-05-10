@@ -40,6 +40,23 @@ export interface ChargeCodeUsageReport {
     lastUsedAt: string | null;
     exceptionCount: number;
   }>;
+  distributionRows: Array<{
+    employeeName: string | null;
+    employeeId: string;
+    indexCode: string;
+    accountCode: string | null;
+    position: string | null;
+    suffix: string;
+    positionTitle: string | null;
+    hiringOrg: string | null;
+    distributionPercent: number;
+    jobStartDate: string | null;
+    jobEndDate: string | null;
+    laborDistStartDate: string | null;
+    laborDistEndDate: string | null;
+    totalHours: number;
+    chargeCodeStatus: 'ACTIVE' | 'INACTIVE' | 'INVALID';
+  }>;
   exceptions: Array<{
     entryId: number;
     exceptionType: 'INVALID_CODE' | 'INACTIVE_CODE' | 'APPROVAL_REQUIRED';
@@ -269,10 +286,70 @@ export async function getChargeCodeUsageReport(
     WHERE le.charge_code IS NOT NULL;
   `;
 
-  const [masterResult, exceptionsResult, exceptionCountsResult] = await Promise.all([
+  const distributionSql = `
+    WITH labor_entries AS (
+      SELECT
+        t.employee_id,
+        t.date,
+        NULLIF(BTRIM(t.charge_code), '') AS charge_code,
+        CASE
+          WHEN t.clock_in IS NOT NULL AND t.clock_out IS NOT NULL
+            THEN GREATEST(EXTRACT(EPOCH FROM (t.clock_out - t.clock_in)) / 3600.0, 0)
+          ELSE 0
+        END AS hours
+      FROM time_clock_entries t
+      ${dateClause.where}
+    ),
+    employee_totals AS (
+      SELECT employee_id, COALESCE(SUM(hours), 0)::float AS employee_hours
+      FROM labor_entries
+      WHERE charge_code IS NOT NULL
+      GROUP BY employee_id
+    )
+    SELECT
+      le.employee_id,
+      emp.name AS employee_name,
+      le.charge_code AS index_code,
+      cc.code AS matched_charge_code,
+      cc.active AS charge_code_active,
+      cc.type AS charge_code_type,
+      COALESCE(cc.cost_handling, 'UNMAPPED') AS cost_handling,
+      emp.job_title AS position_title,
+      emp.department AS employee_department,
+      emp.hire_date,
+      MIN(le.date) AS labor_dist_start_date,
+      MAX(le.date) AS labor_dist_end_date,
+      COALESCE(SUM(le.hours), 0)::float AS total_hours,
+      CASE
+        WHEN et.employee_hours > 0
+          THEN ROUND(((COALESCE(SUM(le.hours), 0) / et.employee_hours) * 100)::numeric, 2)::float
+        ELSE 0
+      END AS distribution_percent
+    FROM labor_entries le
+    LEFT JOIN charge_codes cc ON cc.code = le.charge_code
+    LEFT JOIN employees emp ON emp.employee_code = le.employee_id OR emp.id::text = le.employee_id
+    LEFT JOIN employee_totals et ON et.employee_id = le.employee_id
+    WHERE le.charge_code IS NOT NULL
+    GROUP BY
+      le.employee_id,
+      emp.name,
+      le.charge_code,
+      cc.code,
+      cc.active,
+      cc.type,
+      cc.cost_handling,
+      emp.job_title,
+      emp.department,
+      emp.hire_date,
+      et.employee_hours
+    ORDER BY emp.name NULLS LAST, le.employee_id, le.charge_code;
+  `;
+
+  const [masterResult, exceptionsResult, exceptionCountsResult, distributionResult] = await Promise.all([
     pgPool.query(usageSql, dateClause.params),
     pgPool.query(exceptionsSql, dateClause.params),
     pgPool.query(exceptionCountsSql, dateClause.params),
+    pgPool.query(distributionSql, dateClause.params),
   ]);
 
   const masterRows = masterResult.rows.map((row) => ({
@@ -307,6 +384,31 @@ export async function getChargeCodeUsageReport(
     approvalStatus: row.approval_status ?? null,
     laborApprovalId: row.labor_approval_id == null ? null : Number(row.labor_approval_id),
   }));
+
+  const distributionRows = distributionResult.rows.map((row) => {
+    const chargeCodeStatus: 'ACTIVE' | 'INACTIVE' | 'INVALID' = row.matched_charge_code == null
+      ? 'INVALID'
+      : row.charge_code_active === false
+        ? 'INACTIVE'
+        : 'ACTIVE';
+    return {
+      employeeName: row.employee_name ?? null,
+      employeeId: row.employee_id,
+      indexCode: row.index_code,
+      accountCode: row.cost_handling ?? row.charge_code_type ?? null,
+      position: null,
+      suffix: '00',
+      positionTitle: row.position_title ?? null,
+      hiringOrg: row.employee_department ?? null,
+      distributionPercent: toNumber(row.distribution_percent),
+      jobStartDate: row.hire_date instanceof Date ? row.hire_date.toISOString().slice(0, 10) : row.hire_date ?? null,
+      jobEndDate: null,
+      laborDistStartDate: row.labor_dist_start_date instanceof Date ? row.labor_dist_start_date.toISOString().slice(0, 10) : row.labor_dist_start_date ?? null,
+      laborDistEndDate: row.labor_dist_end_date instanceof Date ? row.labor_dist_end_date.toISOString().slice(0, 10) : row.labor_dist_end_date ?? null,
+      totalHours: toNumber(row.total_hours),
+      chargeCodeStatus,
+    };
+  });
 
   const summary = masterRows.reduce(
     (acc, row) => {
@@ -355,6 +457,11 @@ export async function getChargeCodeUsageReport(
       indirectLaborHours: Number(summary.indirectLaborHours.toFixed(2)),
     },
     masterRows: masterRows.map((row) => ({ ...row, totalHours: Number(row.totalHours.toFixed(2)) })),
+    distributionRows: distributionRows.map((row) => ({
+      ...row,
+      distributionPercent: Number(row.distributionPercent.toFixed(2)),
+      totalHours: Number(row.totalHours.toFixed(2)),
+    })),
     exceptions: exceptions.map((row) => ({ ...row, hours: Number(row.hours.toFixed(2)) })),
   };
 }

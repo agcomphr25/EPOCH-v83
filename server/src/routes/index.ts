@@ -218,6 +218,8 @@ import chargeCodeUsageReportRoutes from './chargeCodeUsageReport';
 import payrollExportReconciliationReportRoutes from './payrollExportReconciliationReport';
 import indirectCostBurdenRateReportRoutes from './indirectCostBurdenRateReport';
 import unallowableCostReviewReportRoutes from './unallowableCostReviewReport';
+import procurementComplianceReportRoutes from './procurementComplianceReport';
+import inventoryTraceabilityReportRoutes from './inventoryTraceabilityReport';
 import forensicAuditRoutes from './forensicAudit';
 import cmmcRoutes from './cmmc';
 import chargeCodesRoutes from './chargeCodes';
@@ -10773,6 +10775,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   app.use('/api/edri', payrollExportReconciliationReportRoutes);
   app.use('/api/edri', indirectCostBurdenRateReportRoutes);
   app.use('/api/edri', unallowableCostReviewReportRoutes);
+  app.use('/api/edri', procurementComplianceReportRoutes);
+  app.use('/api/edri', inventoryTraceabilityReportRoutes);
 
   // DCAA Forensic Audit Engine
   app.use('/api/forensic-audit', forensicAuditRoutes);

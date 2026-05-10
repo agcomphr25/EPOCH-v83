@@ -1034,6 +1034,12 @@ export default function Navigation() {
       description: 'Manage chart of accounts, monthly entries, and cost allocations',
     },
     {
+      path: '/finance/chart-of-accounts',
+      label: 'Chart of Accounts',
+      icon: BookOpen,
+      description: 'View the authoritative 5-digit GAAP and DCAA account master',
+    },
+    {
       path: '/finance/burden-rates',
       label: 'Burden Rates',
       icon: Calculator,

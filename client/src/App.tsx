@@ -350,6 +350,7 @@ import IndirectCostBurdenRateReport from './pages/admin/IndirectCostBurdenRateRe
 import UnallowableCostReviewReport from './pages/admin/UnallowableCostReviewReport';
 import ProcurementComplianceReport from './pages/admin/ProcurementComplianceReport';
 import InventoryTraceabilityReport from './pages/admin/InventoryTraceabilityReport';
+import AuditLedgerIntegrityReport from './pages/admin/AuditLedgerIntegrityReport';
 import EdriExecutiveMatrix from './pages/admin/EdriExecutiveMatrix';
 import SecureVaultPage from './pages/admin/SecureVaultPage';
 import CmmcDashboard from './pages/admin/CmmcDashboard';
@@ -1357,6 +1358,7 @@ function App() {
                   <Route path="/admin/edri/unallowable-cost-review" component={UnallowableCostReviewReport} />
                   <Route path="/admin/edri/procurement-compliance" component={ProcurementComplianceReport} />
                   <Route path="/admin/edri/inventory-traceability" component={InventoryTraceabilityReport} />
+                  <Route path="/admin/edri/audit-ledger-integrity" component={AuditLedgerIntegrityReport} />
                   <Route path="/admin/edri/domain/:domainKey" component={EdriDomainDetail} />
                   <Route path="/admin/edri/snapshot/:snapshotId/evidence/:domainKey" component={EdriEvidence} />
                   <Route path="/admin/edri/snapshot/:snapshotId/evidence" component={EdriEvidence} />

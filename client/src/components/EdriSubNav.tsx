@@ -2,7 +2,7 @@ import { Link, useLocation } from 'wouter';
 import {
   ShieldCheck, Crown, Bug, BarChart3,
   AlertOctagon, Wrench, Clock, Tags, FileCheck2, Percent, ClipboardCheck,
-  ChevronDown, ShoppingCart,
+  ChevronDown, ShoppingCart, Boxes,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -33,6 +33,7 @@ const REPORT_ITEMS: NavItem[] = [
   { label: 'Burden Rates',      path: '/admin/edri/indirect-cost-burden-rates', icon: Percent },
   { label: 'Unallowables',      path: '/admin/edri/unallowable-cost-review', icon: ClipboardCheck },
   { label: 'Procurement',       path: '/admin/edri/procurement-compliance', icon: ShoppingCart },
+  { label: 'Inventory Trace',   path: '/admin/edri/inventory-traceability', icon: Boxes },
 ];
 
 export default function EdriSubNav() {

@@ -28,7 +28,7 @@ const NAV_ITEMS: NavItem[] = [
 ];
 
 const REPORT_ITEMS: NavItem[] = [
-  { label: 'Charge Codes',      path: '/admin/edri/charge-code-usage',  icon: Tags          },
+  { label: 'Charge Code Usage', path: '/admin/edri/charge-code-usage',  icon: Tags          },
   { label: 'Labor Distribution', path: '/admin/edri/labor-distribution', icon: UsersRound    },
   { label: 'Supervisor Exceptions', path: '/admin/edri/supervisor-approval-exceptions', icon: UserCheck },
   { label: 'Correction Log',    path: '/admin/edri/timesheet-correction-log', icon: ClipboardPenLine },

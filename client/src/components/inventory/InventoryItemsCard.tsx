@@ -963,7 +963,6 @@ const InventoryForm = ({
         </div>
         {formData.hasSds && (
           <div>
-            <Label htmlFor="sdsFile">Upload SDS PDF</Label>
             <Input
               id="sdsFile"
               name="sdsFile"
@@ -1012,7 +1011,6 @@ const InventoryForm = ({
         </div>
         {formData.hasTds && (
           <div>
-            <Label htmlFor="tdsFile">Upload TDS PDF</Label>
             <Input
               id="tdsFile"
               name="tdsFile"
@@ -1061,7 +1059,6 @@ const InventoryForm = ({
         </div>
         {formData.hasOtherDocs && (
           <div>
-            <Label htmlFor="otherDocsFile">Upload Other Docs PDF</Label>
             <Input
               id="otherDocsFile"
               name="otherDocsFile"
@@ -2025,6 +2022,10 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       toast.error('Please select a PDF file');
       e.target.value = '';
     }
+  }, []);
+
+  const handleOpenFilePicker = useCallback((id: string) => {
+    document.getElementById(id)?.click();
   }, []);
 
   const handleSubmit = useCallback(

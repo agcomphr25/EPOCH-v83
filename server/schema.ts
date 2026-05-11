@@ -14420,6 +14420,68 @@ export const insertOnboardingSessionCaptureSchema = createInsertSchema(onboardin
 export type OnboardingSessionCapture = typeof onboardingSessionCaptures.$inferSelect;
 export type InsertOnboardingSessionCapture = z.infer<typeof insertOnboardingSessionCaptureSchema>;
 
+// Onboarding Invitations - short-lived access grants for new-hire paperwork.
+export const onboardingInvitations = pgTable('onboarding_invitations', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  sessionId: uuid('session_id').references(() => onboardingSessions.id, { onDelete: 'cascade' }).notNull(),
+  employeeId: integer('employee_id').references(() => employees.id),
+  tokenHash: text('token_hash').notNull().unique(),
+  publicTokenHint: text('public_token_hint'),
+  deliveryMode: text('delivery_mode').notNull().default('in_person'),
+  status: text('status').notNull().default('active'),
+  expiresAt: timestamp('expires_at').notNull(),
+  email: text('email'),
+  phone: text('phone'),
+  emailVerifiedAt: timestamp('email_verified_at'),
+  phoneVerifiedAt: timestamp('phone_verified_at'),
+  noCellPhoneAvailable: boolean('no_cell_phone_available').notNull().default(false),
+  noCellPhoneReason: text('no_cell_phone_reason'),
+  noCellPhoneMarkedByUserId: integer('no_cell_phone_marked_by_user_id').references(() => users.id),
+  noCellPhoneMarkedAt: timestamp('no_cell_phone_marked_at'),
+  createdByUserId: integer('created_by_user_id').references(() => users.id),
+  createdByDisplayName: text('created_by_display_name'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  revokedAt: timestamp('revoked_at'),
+  revokedByUserId: integer('revoked_by_user_id').references(() => users.id),
+  revokedReason: text('revoked_reason'),
+}, (table) => ({
+  sessionIdx: index('onboarding_invitations_session_idx').on(table.sessionId),
+  employeeIdx: index('onboarding_invitations_employee_idx').on(table.employeeId),
+  statusIdx: index('onboarding_invitations_status_idx').on(table.status),
+}));
+
+export const onboardingVerificationCodes = pgTable('onboarding_verification_codes', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  invitationId: uuid('invitation_id').references(() => onboardingInvitations.id, { onDelete: 'cascade' }).notNull(),
+  channel: text('channel').notNull(),
+  codeHash: text('code_hash').notNull(),
+  status: text('status').notNull().default('pending'),
+  attempts: integer('attempts').notNull().default(0),
+  sentTo: text('sent_to'),
+  sentAt: timestamp('sent_at').defaultNow().notNull(),
+  expiresAt: timestamp('expires_at').notNull(),
+  verifiedAt: timestamp('verified_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  invitationIdx: index('onboarding_verification_codes_invitation_idx').on(table.invitationId),
+  channelStatusIdx: index('onboarding_verification_codes_channel_status_idx').on(table.channel, table.status),
+}));
+
+export const insertOnboardingInvitationSchema = createInsertSchema(onboardingInvitations).omit({
+  id: true,
+  createdAt: true,
+});
+export type OnboardingInvitation = typeof onboardingInvitations.$inferSelect;
+export type InsertOnboardingInvitation = z.infer<typeof insertOnboardingInvitationSchema>;
+
+export const insertOnboardingVerificationCodeSchema = createInsertSchema(onboardingVerificationCodes).omit({
+  id: true,
+  sentAt: true,
+  createdAt: true,
+});
+export type OnboardingVerificationCode = typeof onboardingVerificationCodes.$inferSelect;
+export type InsertOnboardingVerificationCode = z.infer<typeof insertOnboardingVerificationCodeSchema>;
+
 // ============================================================
 // Asset Management & Work Order System
 // ============================================================

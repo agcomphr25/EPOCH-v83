@@ -114,6 +114,7 @@ import PayrollControlPage from './pages/finance/PayrollControlPage';
 import EmployeeBadgeConfiguration from './pages/EmployeeBadgeConfiguration';
 import BadgeScanner from './pages/BadgeScanner';
 import OnboardingDashboard from './pages/OnboardingDashboard';
+import OnboardingInvitePage from './pages/OnboardingInvitePage';
 import OnboardingPathsPage from './pages/OnboardingPathsPage';
 import OnboardingSettingsPage from './pages/OnboardingSettingsPage';
 import PendingEmployerSignaturesPage from './pages/PendingEmployerSignaturesPage';
@@ -832,6 +833,7 @@ function App() {
                   {/* Employee Routes */}
                   <Route path="/employee" component={EmployeeDashboard} />
                   <Route path="/onboarding" component={OnboardingDashboard} />
+                  <Route path="/onboarding/invite/:token" component={OnboardingInvitePage} />
                   <Route path="/onboarding/paths" component={OnboardingPathsPage} />
                   <Route path="/onboarding/settings" component={OnboardingSettingsPage} />
                   <Route path="/onboarding/employer-signatures" component={PendingEmployerSignaturesPage} />

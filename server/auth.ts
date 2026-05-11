@@ -1,4 +1,4 @@
-import { randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
@@ -11,6 +11,11 @@ const SALT_ROUNDS = 12;
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCK_TIME = 15 * 60 * 1000; // 15 minutes
 const SESSION_TIMEOUT = 8 * 60 * 60 * 1000; // 8 hours
+const SESSION_IDLE_TIMEOUT = parseInt(process.env.SESSION_IDLE_TIMEOUT_MINUTES ?? '30', 10) * 60 * 1000;
+
+function buildDeviceFingerprint(ipAddress: string | null, userAgent: string | null): string {
+  return createHash('sha256').update(`${ipAddress ?? 'unknown'}|${userAgent ?? 'unknown'}`).digest('hex');
+}
 
 // SECURITY: JWT_SECRET must be set in production - fail fast if missing
 // Also checks PORTAL_JWT_SECRET as fallback for Replit deployment compatibility
@@ -111,6 +116,7 @@ export class AuthService {
   ): Promise<string> {
     const sessionToken = this.generateSessionToken();
     const expiresAt = new Date(Date.now() + SESSION_TIMEOUT);
+    const deviceFingerprint = buildDeviceFingerprint(ipAddress, userAgent);
 
     await db.insert(userSessions).values({
       userId,
@@ -120,6 +126,7 @@ export class AuthService {
       expiresAt,
       ipAddress,
       userAgent,
+      deviceFingerprint,
       isActive: true,
     });
 
@@ -144,11 +151,20 @@ export class AuthService {
       return null;
     }
 
+    const lastActivityAt = session.lastActivityAt ?? session.createdAt ?? new Date();
+    if (Date.now() - new Date(lastActivityAt).getTime() > SESSION_IDLE_TIMEOUT) {
+      await db
+        .update(userSessions)
+        .set({ isActive: false })
+        .where(eq(userSessions.id, session.id));
+      return null;
+    }
+
     // Extend session if still valid
     const newExpiresAt = new Date(Date.now() + SESSION_TIMEOUT);
     await db
       .update(userSessions)
-      .set({ expiresAt: newExpiresAt })
+      .set({ expiresAt: newExpiresAt, lastActivityAt: new Date() })
       .where(eq(userSessions.id, session.id));
 
     // Emit SESSION_EXTENDED audit event (best-effort; never block validation on failure)

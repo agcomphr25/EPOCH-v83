@@ -1673,6 +1673,9 @@ export const userSessions = pgTable('user_sessions', {
   isActive: boolean('is_active').default(true),
   ipAddress: text('ip_address'),
   userAgent: text('user_agent'),
+  deviceFingerprint: text('device_fingerprint'),
+  mfaVerifiedAt: timestamp('mfa_verified_at'),
+  securityPolicyVersion: text('security_policy_version').default('cmmc-itar-v1'),
   lastCredentialVerifiedAt: timestamp('last_credential_verified_at'),
   createdAt: timestamp('created_at').defaultNow(),
 });
@@ -5164,6 +5167,11 @@ export const p2PurchaseOrders = pgTable('p2_purchase_orders', {
   
   // Project association — free-text field for internal project name or number
   projectName: text('project_name'),
+  securityClassification: text('security_classification').notNull().default('internal'), // public | internal | cui | itar
+  cuiCategory: text('cui_category'),
+  itarCategory: text('itar_category'),
+  exportControlJurisdiction: text('export_control_jurisdiction'),
+  customerFileAccessRule: text('customer_file_access_rule').notNull().default('authenticated'),
 
   // Scrap rate tracking — incremented by nonconforming disposition workflow
   scrappedItemCount: integer('scrapped_item_count').notNull().default(0),
@@ -5205,6 +5213,10 @@ export const rfqRiskAssessments = pgTable('rfq_risk_assessments', {
   riskDetermination: text('risk_determination'),
   bidDecision: text('bid_decision'),
   status: text('status').notNull().default('draft'), // draft or submitted
+  securityClassification: text('security_classification').notNull().default('internal'), // public | internal | cui | itar
+  cuiCategory: text('cui_category'),
+  itarCategory: text('itar_category'),
+  exportControlJurisdiction: text('export_control_jurisdiction'),
   submittedBy: text('submitted_by'), // Username who submitted
   submittedAt: timestamp('submitted_at'), // When it was submitted
   attachments: text('attachments').array(), // PDF file paths
@@ -10066,6 +10078,14 @@ export const controlledDocuments = pgTable('controlled_documents', {
   filePath: text('file_path'), // Path to current version file
   // CMMC Classification: visibility level for access control enforcement
   classification: text('classification').notNull().default('internal'), // public | internal | restricted | classified
+  cuiCategory: text('cui_category'),
+  itarCategory: text('itar_category'),
+  exportControlJurisdiction: text('export_control_jurisdiction'),
+  customerId: text('customer_id'),
+  contractArtifactType: text('contract_artifact_type'),
+  accessRule: text('access_rule').notNull().default('authenticated'), // authenticated | explicit_grant | admin_only
+  mfaRequired: boolean('mfa_required').notNull().default(false),
+  downloadTrackingRequired: boolean('download_tracking_required').notNull().default(true),
   createdBy: text('created_by').notNull(),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
@@ -10114,13 +10134,19 @@ export type InsertDocumentVersionHistory = z.infer<typeof insertDocumentVersionH
 // ============================================================================
 export const objectAccessLog = pgTable('object_access_log', {
   id: serial('id').primaryKey(),
-  documentId: uuid('document_id').references(() => controlledDocuments.id).notNull(),
+  documentId: uuid('document_id').references(() => controlledDocuments.id),
+  vaultDocumentId: integer('vault_document_id'),
   userId: text('user_id').notNull(), // username of the actor
-  action: text('action').notNull(), // 'view' | 'download' | 'denied'
+  action: text('action').notNull(), // 'view' | 'download' | 'denied' | 'link_issued'
   ipAddress: text('ip_address'),
+  userAgent: text('user_agent'),
+  deviceFingerprint: text('device_fingerprint'),
+  linkExpiresAt: timestamp('link_expires_at'),
+  sessionId: integer('session_id'),
   accessedAt: timestamp('accessed_at').defaultNow().notNull(),
 }, (table) => ({
   documentIdIdx: index('object_access_log_document_id_idx').on(table.documentId),
+  vaultDocumentIdIdx: index('object_access_log_vault_document_id_idx').on(table.vaultDocumentId),
   userIdIdx: index('object_access_log_user_id_idx').on(table.userId),
   accessedAtIdx: index('object_access_log_accessed_at_idx').on(table.accessedAt),
   actionIdx: index('object_access_log_action_idx').on(table.action),
@@ -10172,6 +10198,11 @@ export const quotes = pgTable('quotes', {
   quotedBy: text('quoted_by'),
   notes: text('notes'),
   attachments: text('attachments').array(), // PDF file paths
+  securityClassification: text('security_classification').notNull().default('internal'), // public | internal | cui | itar
+  cuiCategory: text('cui_category'),
+  itarCategory: text('itar_category'),
+  exportControlJurisdiction: text('export_control_jurisdiction'),
+  customerFileAccessRule: text('customer_file_access_rule').notNull().default('authenticated'),
   // Bridge column: integer FK to customers.id for joining back to the master customers table.
   // Populated on insert from the resolved customers record matching the text customer_id,
   // or copied directly from the parent RFQ when a quote is created from an estimating RFQ.
@@ -17615,15 +17646,37 @@ export const vaultDocuments = pgTable('vault_documents', {
   description: text('description'),
   objectPath: text('object_path').notNull(),
   classification: text('classification').notNull().default('internal'), // public | internal | cui | itar
+  cuiCategory: text('cui_category'),
+  itarCategory: text('itar_category'),
+  exportControlJurisdiction: text('export_control_jurisdiction'),
+  documentCategory: text('document_category').notNull().default('controlled_document'), // cad | drawing | spec | customer_file | controlled_document | policy
+  customerId: text('customer_id'),
+  customerName: text('customer_name'),
+  contractArtifactType: text('contract_artifact_type'),
+  sourceEntityType: text('source_entity_type'),
+  sourceEntityId: text('source_entity_id'),
   scopeType: text('scope_type').notNull().default('global'), // global | project | department
   scopeValue: text('scope_value'), // projectId or department name when scoped
   contentType: text('content_type').notNull().default('application/octet-stream'),
   fileSizeBytes: integer('file_size_bytes'),
+  checksumSha256: text('checksum_sha256'),
+  encryptionAtRestPolicy: text('encryption_at_rest_policy').notNull().default('object_storage_managed'),
+  accessRule: text('access_rule').notNull().default('authenticated'), // authenticated | explicit_grant | admin_only
+  mfaRequired: boolean('mfa_required').notNull().default(false),
+  deviceTrackingRequired: boolean('device_tracking_required').notNull().default(true),
+  downloadTrackingRequired: boolean('download_tracking_required').notNull().default(true),
+  expiringLinksRequired: boolean('expiring_links_required').notNull().default(true),
+  linkExpiresInSeconds: integer('link_expires_in_seconds').notNull().default(900),
+  sessionTimeoutMinutes: integer('session_timeout_minutes').notNull().default(30),
   uploaderUserId: integer('uploader_user_id').notNull(),
   uploaderDisplayName: text('uploader_display_name').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => ({
   classificationIdx: index('vault_documents_classification_idx').on(table.classification),
+  documentCategoryIdx: index('vault_documents_document_category_idx').on(table.documentCategory),
+  customerIdIdx: index('vault_documents_customer_id_idx').on(table.customerId),
+  sourceEntityIdx: index('vault_documents_source_entity_idx').on(table.sourceEntityType, table.sourceEntityId),
   scopeTypeIdx: index('vault_documents_scope_type_idx').on(table.scopeType),
   uploaderIdx: index('vault_documents_uploader_idx').on(table.uploaderUserId),
 }));
@@ -17631,6 +17684,7 @@ export const vaultDocuments = pgTable('vault_documents', {
 export const insertVaultDocumentSchema = createInsertSchema(vaultDocuments).omit({
   id: true,
   createdAt: true,
+  updatedAt: true,
 });
 export type VaultDocument = typeof vaultDocuments.$inferSelect;
 export type InsertVaultDocument = z.infer<typeof insertVaultDocumentSchema>;
@@ -18602,6 +18656,10 @@ export const contractReviewChecklistInstances = pgTable('contract_review_checkli
   p2PurchaseOrderId: integer('p2_purchase_order_id').references(() => p2PurchaseOrders.id, { onDelete: 'set null' }),
   vendorPoId: integer('vendor_po_id').references(() => vendorPOs.id, { onDelete: 'set null' }),
   travelerId: varchar('traveler_id', { length: 255 }).references(() => travelers.id, { onDelete: 'set null' }),
+  securityClassification: text('security_classification').notNull().default('internal'), // public | internal | cui | itar
+  cuiCategory: text('cui_category'),
+  itarCategory: text('itar_category'),
+  exportControlJurisdiction: text('export_control_jurisdiction'),
   status: text('status').notNull().default('draft'),
   reviewAreaStatus: jsonb('review_area_status').$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
   responses: jsonb('responses').$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),

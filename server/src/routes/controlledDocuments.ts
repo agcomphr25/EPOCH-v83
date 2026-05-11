@@ -202,7 +202,15 @@ router.post('/', requireDocumentEditor, upload.single('file'), async (req: Reque
       category,
       description,
       retentionLength,
-      documentOwner
+      documentOwner,
+      classification,
+      cuiCategory,
+      itarCategory,
+      exportControlJurisdiction,
+      customerId,
+      contractArtifactType,
+      accessRule,
+      mfaRequired
     } = req.body;
     
     const createdBy = user.username; // Use authenticated user
@@ -226,6 +234,15 @@ router.post('/', requireDocumentEditor, upload.single('file'), async (req: Reque
       retentionLength,
       documentOwner,
       filePath,
+      classification: classification || 'internal',
+      cuiCategory: cuiCategory || null,
+      itarCategory: itarCategory || null,
+      exportControlJurisdiction: exportControlJurisdiction || null,
+      customerId: customerId || null,
+      contractArtifactType: contractArtifactType || null,
+      accessRule: accessRule || (classification === 'classified' || classification === 'restricted' ? 'explicit_grant' : 'authenticated'),
+      mfaRequired: mfaRequired === 'true' || mfaRequired === true || classification === 'classified' || classification === 'restricted',
+      downloadTrackingRequired: true,
       createdBy,
       expirationDate: expirationDate.toISOString().split('T')[0],
     }).returning();
@@ -264,7 +281,15 @@ router.put('/:id', requireDocumentEditor, upload.single('file'), async (req: Req
       category,
       description,
       retentionLength,
-      documentOwner
+      documentOwner,
+      classification,
+      cuiCategory,
+      itarCategory,
+      exportControlJurisdiction,
+      customerId,
+      contractArtifactType,
+      accessRule,
+      mfaRequired
     } = req.body;
     
     const createdBy = user.username; // Use authenticated user
@@ -331,6 +356,14 @@ router.put('/:id', requireDocumentEditor, upload.single('file'), async (req: Req
           description,
           retentionLength,
           documentOwner,
+          classification: classification || existingDoc.classification,
+          cuiCategory: cuiCategory || null,
+          itarCategory: itarCategory || null,
+          exportControlJurisdiction: exportControlJurisdiction || null,
+          customerId: customerId || null,
+          contractArtifactType: contractArtifactType || null,
+          accessRule: accessRule || existingDoc.accessRule || 'authenticated',
+          mfaRequired: mfaRequired === 'true' || mfaRequired === true || existingDoc.mfaRequired,
           expirationDate: expirationDate.toISOString().split('T')[0],
           updatedAt: new Date(),
         })
@@ -355,6 +388,14 @@ router.put('/:id', requireDocumentEditor, upload.single('file'), async (req: Req
           retentionLength,
           documentOwner,
           filePath,
+          classification: classification || existingDoc.classification,
+          cuiCategory: cuiCategory || null,
+          itarCategory: itarCategory || null,
+          exportControlJurisdiction: exportControlJurisdiction || null,
+          customerId: customerId || null,
+          contractArtifactType: contractArtifactType || null,
+          accessRule: accessRule || existingDoc.accessRule || 'authenticated',
+          mfaRequired: mfaRequired === 'true' || mfaRequired === true || existingDoc.mfaRequired,
           updatedAt: new Date(),
         })
         .where(eq(controlledDocuments.id, req.params.id))

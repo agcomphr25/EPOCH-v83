@@ -6449,6 +6449,46 @@ async function initializeBackgroundServices() {
       console.warn('⚠️ quotes tables migration skipped:', quotesErr?.message);
     }
 
+    // Ensure CMMC/ITAR classification columns exist before Drizzle full-table
+    // selects touch these tables. Production can deploy code before the SQL
+    // migration has finished, which blocks WAD authoring with
+    // "column security_classification does not exist".
+    try {
+      await pool.query(`
+        ALTER TABLE IF EXISTS rfq_risk_assessments
+          ADD COLUMN IF NOT EXISTS security_classification TEXT NOT NULL DEFAULT 'internal',
+          ADD COLUMN IF NOT EXISTS cui_category TEXT,
+          ADD COLUMN IF NOT EXISTS itar_category TEXT,
+          ADD COLUMN IF NOT EXISTS export_control_jurisdiction TEXT
+      `);
+      await pool.query(`
+        ALTER TABLE IF EXISTS quotes
+          ADD COLUMN IF NOT EXISTS security_classification TEXT NOT NULL DEFAULT 'internal',
+          ADD COLUMN IF NOT EXISTS cui_category TEXT,
+          ADD COLUMN IF NOT EXISTS itar_category TEXT,
+          ADD COLUMN IF NOT EXISTS export_control_jurisdiction TEXT,
+          ADD COLUMN IF NOT EXISTS customer_file_access_rule TEXT NOT NULL DEFAULT 'authenticated'
+      `);
+      await pool.query(`
+        ALTER TABLE IF EXISTS p2_purchase_orders
+          ADD COLUMN IF NOT EXISTS security_classification TEXT NOT NULL DEFAULT 'internal',
+          ADD COLUMN IF NOT EXISTS cui_category TEXT,
+          ADD COLUMN IF NOT EXISTS itar_category TEXT,
+          ADD COLUMN IF NOT EXISTS export_control_jurisdiction TEXT,
+          ADD COLUMN IF NOT EXISTS customer_file_access_rule TEXT NOT NULL DEFAULT 'authenticated'
+      `);
+      await pool.query(`
+        ALTER TABLE IF EXISTS contract_review_checklist_instances
+          ADD COLUMN IF NOT EXISTS security_classification TEXT NOT NULL DEFAULT 'internal',
+          ADD COLUMN IF NOT EXISTS cui_category TEXT,
+          ADD COLUMN IF NOT EXISTS itar_category TEXT,
+          ADD COLUMN IF NOT EXISTS export_control_jurisdiction TEXT
+      `);
+      console.log('✅ Ensured security classification compatibility columns exist');
+    } catch (securityClassificationErr: any) {
+      console.warn('⚠️ security classification compatibility migration skipped:', securityClassificationErr?.message);
+    }
+
     // Ensure production_work_orders (WAD) table and related columns exist — EPOCH v9 spine
     try {
       await pool.query(`

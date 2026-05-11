@@ -573,7 +573,7 @@ router.get('/validate/:icn', async (req: Request, res: Response) => {
         const ru = ruArr[0];
         // Expose receivedUnit summary so the scanner can forward receivedUnitId in the consume payload
         validationResults.receivedUnit = { id: ru.id, quantity: Number(ru.quantity), barcode: ru.barcode, disposition: ru.disposition };
-        const blockedDispositions = ['pending_inspection', 'quarantine', 'rejected'];
+        const blockedDispositions = ['pending_inspection', 'document_hold', 'quarantine', 'rejected'];
         if (blockedDispositions.includes(ru.disposition)) {
           validationResults.valid = false;
           validationResults.status = 'RECEIVING_DISPOSITION_BLOCKED';
@@ -1391,7 +1391,31 @@ router.post('/consume', async (req: Request, res: Response) => {
     }
 
     // ── Guard 1: Lot status (QUARANTINE/REJECTED/SCRAPPED/HOLD/LOCKED never consumable; EXPIRED handled below)
-    const hardBlockedStatuses: MaterialLotStatus[] = ['QUARANTINE', 'REJECTED', 'SCRAPPED', 'HOLD', 'LOCKED'];
+    if (lot.status === 'HOLD') {
+      if (!approvalRequestId) {
+        return res.status(403).json({
+          error: 'APPROVAL_REQUIRED',
+          code: 'DOCUMENT_HOLD_APPROVAL_REQUIRED',
+          message: 'Document-held material requires an approved document-hold release before consumption.',
+          status: lot.status,
+        });
+      }
+      const [appr] = await db.select().from(approvalRequests).where(eq(approvalRequests.id, approvalRequestId)).limit(1);
+      if (
+        !appr ||
+        appr.status !== 'APPROVED' ||
+        appr.subjectId !== lot.id ||
+        !['INV_DOCUMENT_HOLD_USE', 'INV_DOCUMENT_HOLD_RELEASE'].includes(appr.requestType)
+      ) {
+        return res.status(409).json({
+          error: 'APPROVAL_INVALID',
+          code: 'DOCUMENT_HOLD_APPROVAL_INVALID',
+          message: 'Approval is not valid for this document-held material lot.',
+        });
+      }
+    }
+
+    const hardBlockedStatuses: MaterialLotStatus[] = ['QUARANTINE', 'REJECTED', 'SCRAPPED', 'LOCKED'];
     if (hardBlockedStatuses.includes(lot.status as MaterialLotStatus)) {
       return res.status(400).json({
         error: 'LOT_NOT_USABLE',

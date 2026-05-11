@@ -42,6 +42,7 @@ import { requireScopedCapability, ScopedForbiddenError } from '../permissions';
 import { evaluateWorkOrderLaborStatus } from '../helpers/laborBudgetHelper';
 import { evaluateWorkOrderReadiness } from '../lib/workOrderReadiness';
 import { ensureProjectHasWADFromCanonicalSources } from '../lib/wadHelper';
+import { ensureProductionWorkflowReadSchema } from '../lib/productionWorkflowReadiness';
 import {
   getProductionControlRecommendation,
   type WadContext,
@@ -49,6 +50,16 @@ import {
 } from '../services/productionControl/productionControlAI.service';
 
 const router = Router();
+
+router.use(async (_req, res, next) => {
+  try {
+    await ensureProductionWorkflowReadSchema();
+    next();
+  } catch (error) {
+    console.error('[WorkOrders] Production workflow schema readiness failed:', error);
+    res.status(503).json({ error: 'Production workflow schema is being prepared, please retry' });
+  }
+});
 
 function requireAdmin(req: Request, res: Response, next: NextFunction) {
   const user = (req as any).user;

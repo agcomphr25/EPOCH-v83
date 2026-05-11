@@ -6,6 +6,7 @@ import { insertProjectSchema, insertProjectStepSchema, insertProjectActivityLogS
 import { createEmployeeIdentitySnapshot } from '../../identity/userIdentity';
 import { validateProjectClosing, deriveClosingStatus } from '../lib/projectClosingValidation';
 import { ensureProjectHasWAD } from '../lib/wadHelper';
+import { ensureProductionWorkflowReadSchema } from '../lib/productionWorkflowReadiness';
 import { resolveCustomersIntegerId } from '../lib/customerResolver';
 import { getQuoteContractReviewGate } from '../services/quoteContractService';
 import multer from 'multer';
@@ -35,6 +36,16 @@ const uploadProjectDoc = multer({
 });
 
 const router = Router();
+
+router.use(async (_req, res, next) => {
+  try {
+    await ensureProductionWorkflowReadSchema();
+    next();
+  } catch (error) {
+    console.error('[Projects] Production workflow schema readiness failed:', error);
+    res.status(503).json({ error: 'Production workflow schema is being prepared, please retry' });
+  }
+});
 
 const PROJECT_STEP_TYPES = [
   { type: 'rfq_risk_assessment', order: 1, label: 'RFQ Risk Assessment', route: '/rfq-risk-assessment' },

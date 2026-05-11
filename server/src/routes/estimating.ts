@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { pool, pgPool } from '../../db';
 import { storage } from '../../storage';
 import { DEFAULT_ESTIMATING_RFQS_LIMIT, MAX_ESTIMATING_RFQS_LIMIT } from '../constants/estimating';
+import { recordAuditEvent } from '../services/auditLedgerService';
 import {
   insertEstimatingRfqSchema,
   insertEstimatingRfqPartSchema,
@@ -60,6 +61,35 @@ const mitigationActionSchema = z.object({
   createdBy: z.number().int().nullable().optional(),
 });
 
+const riskAssessmentStatusSchema = z.object({
+  status: z.enum(['DRAFT', 'IN_REVIEW', 'APPROVED', 'REJECTED', 'CLOSED']),
+});
+
+const riskItemUpdateSchema = z.object({
+  status: z.string().optional(),
+  requiresApproval: z.boolean().optional(),
+  ownerUserId: z.number().int().nullable().optional(),
+  ownerDisplayName: z.string().nullable().optional(),
+});
+
+const mitigationUpdateSchema = z.object({
+  status: z.string().optional(),
+  completedAt: z.coerce.date().nullable().optional(),
+});
+
+function getActor(req: any) {
+  return {
+    id: req.user?.id ?? req.session?.user?.id ?? null,
+    username: req.user?.username ?? req.session?.user?.username ?? null,
+    role: req.user?.role ?? req.session?.user?.role ?? null,
+  };
+}
+
+function money(value: unknown): number {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function getRiskLevel(score: number): string {
   if (score >= 16) return 'CRITICAL';
   if (score >= 10) return 'HIGH';
@@ -91,6 +121,74 @@ async function refreshRiskAssessmentScore(riskAssessmentId: string) {
     [riskAssessmentId, overallScore, overallLevel, JSON.stringify(approvalRouting)]
   );
   return updated[0];
+}
+
+async function getEstimatingReleaseReadiness(rfqId: string, options: { requiresExecutiveApproval?: boolean } = {}) {
+  const [approvals, pricingRows, latestRiskRows, blockingRiskItems] = await Promise.all([
+    pool.query(`SELECT approval_role, approval_status FROM estimating_approvals WHERE rfq_id = $1`, [rfqId]),
+    pool.query(`SELECT extended_price, margin_percent FROM estimating_pricing_snapshots WHERE rfq_id = $1`, [rfqId]),
+    pool.query(
+      `SELECT * FROM risk_assessments
+       WHERE rfq_id = $1
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [rfqId]
+    ),
+    pool.query(
+      `SELECT ri.*
+       FROM risk_items ri
+       JOIN risk_assessments ra ON ra.id = ri.risk_assessment_id
+       WHERE ra.rfq_id = $1
+         AND ri.status NOT IN ('CLOSED', 'MITIGATED', 'ACCEPTED')
+         AND (ri.requires_approval = true OR ri.score >= 10)`,
+      [rfqId]
+    ),
+  ]);
+
+  const totalEstimateValue = pricingRows.reduce((sum: number, row: any) => sum + money(row.extended_price), 0);
+  const margins = pricingRows.map((row: any) => money(row.margin_percent)).filter((value: number) => Number.isFinite(value));
+  const minMarginPercent = margins.length ? Math.min(...margins) : null;
+  const latestRisk = latestRiskRows[0] ?? null;
+  const riskScore = Number(latestRisk?.overall_score ?? 0);
+  const riskLevel = latestRisk?.overall_level ?? 'UNKNOWN';
+  const riskStatus = latestRisk?.status ?? null;
+
+  const executiveTriggers = [
+    totalEstimateValue >= 50000 ? 'VALUE_50000_OR_GREATER' : null,
+    minMarginPercent !== null && minMarginPercent < 15 ? 'MARGIN_BELOW_15_PERCENT' : null,
+    riskScore >= 10 ? 'RISK_SCORE_10_OR_GREATER' : null,
+    ['HIGH', 'CRITICAL'].includes(riskLevel) ? `RISK_LEVEL_${riskLevel}` : null,
+    options.requiresExecutiveApproval ? 'REQUESTED_BY_CALLER' : null,
+  ].filter(Boolean) as string[];
+
+  const requiredRoles = ['ESTIMATOR', 'ENGINEERING', 'FINANCE'];
+  if (executiveTriggers.length > 0) requiredRoles.push('EXECUTIVE');
+
+  const approvedRoles = new Set(
+    approvals
+      .filter((row: any) => row.approval_status === 'APPROVED')
+      .map((row: any) => row.approval_role)
+  );
+  const missingRoles = requiredRoles.filter((role) => !approvedRoles.has(role));
+  const blockingRiskCount = blockingRiskItems.length;
+  const riskReady = Boolean(latestRisk) && ['APPROVED', 'CLOSED'].includes(String(riskStatus)) && blockingRiskCount === 0;
+
+  return {
+    readyForQuoteRelease: missingRoles.length === 0 && riskReady,
+    requiredRoles,
+    missingRoles,
+    executiveRequired: executiveTriggers.length > 0,
+    executiveTriggers,
+    totalEstimateValue,
+    minMarginPercent,
+    risk: {
+      assessmentId: latestRisk?.id ?? null,
+      status: riskStatus,
+      overallScore: riskScore,
+      overallLevel: riskLevel,
+      blockingRiskCount,
+    },
+  };
 }
 
 // ── RFQ List ─────────────────────────────────────────────────────────────────
@@ -491,6 +589,16 @@ router.post('/rfqs/:id/create-draft-quote', async (req, res) => {
     const rfq = await storage.getEstimatingRfqById(rfqId);
     if (!rfq) return res.status(404).json({ error: 'RFQ not found' });
 
+    const readiness = await getEstimatingReleaseReadiness(rfqId, {
+      requiresExecutiveApproval: Boolean(req.body?.requiresExecutiveApproval),
+    });
+    if (!readiness.readyForQuoteRelease) {
+      return res.status(409).json({
+        error: 'RFQ estimating controls are not complete. Resolve approvals and risk assessment before quote release.',
+        readiness,
+      });
+    }
+
     const parts = await storage.getEstimatingRfqParts(rfqId);
     const snapshots = await storage.getEstimatingPricingSnapshots(rfqId);
 
@@ -524,6 +632,27 @@ router.post('/rfqs/:id/create-draft-quote', async (req, res) => {
       notes: `Generated from RFQ ${rfq.rfqNumber}. Assumptions: ${rfq.assumptions ?? 'N/A'}.`,
       // Carry the integer FK directly from the RFQ so the customer link is explicit
       customersIntegerId: rfq.customerId ?? null,
+    });
+
+    await pool.query(
+      `UPDATE estimating_rfqs SET quote_id = $2, status = 'QUOTED', updated_at = NOW() WHERE id = $1`,
+      [rfqId, quote.id]
+    );
+
+    await recordAuditEvent({
+      eventType: 'ESTIMATING_QUOTE_RELEASED',
+      subjectType: 'estimating_rfq',
+      subjectId: rfqId,
+      sourceService: 'estimating.routes',
+      actor: getActor(req),
+      payload: {
+        quoteId: quote.id,
+        quoteNumber: quote.quoteNumber,
+        readiness: readiness as any,
+      },
+      reason: 'RFQ approval-readiness and risk controls satisfied before quote handoff',
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent') ?? null,
     });
 
     res.json({ quoteId: quote.id, quoteNumber: quote.quoteNumber });
@@ -710,6 +839,23 @@ router.post('/rfqs/:id/versions', async (req, res) => {
     }
 
     await client.query('COMMIT');
+    await recordAuditEvent({
+      eventType: 'ESTIMATE_VERSION_CREATED',
+      subjectType: 'estimate_version',
+      subjectId: version.id,
+      sourceService: 'estimating.routes',
+      actor: getActor(req),
+      payload: {
+        rfqId,
+        versionNumber,
+        lineCount: lineValues.length,
+        status: body.status,
+        marginSummary: marginSummary as any,
+      },
+      reason: body.changeSummary ?? 'Estimate version created',
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent') ?? null,
+    });
     res.status(201).json({ ...version, lineCount: lineValues.length });
   } catch (err: any) {
     await client.query('ROLLBACK');
@@ -752,6 +898,22 @@ router.post('/rfqs/:id/assumptions', async (req, res) => {
         data.createdBy ?? null,
       ]
     );
+    await recordAuditEvent({
+      eventType: 'ESTIMATE_ASSUMPTION_CREATED',
+      subjectType: 'estimate_assumption',
+      subjectId: rows[0].id,
+      sourceService: 'estimating.routes',
+      actor: getActor(req),
+      payload: {
+        rfqId: req.params.id,
+        rfqPartId: data.rfqPartId ?? null,
+        assumptionType: data.assumptionType,
+        confidenceLevel: data.confidenceLevel,
+      },
+      reason: data.assumptionText,
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent') ?? null,
+    });
     res.status(201).json(rows[0]);
   } catch (err: any) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: err.errors });
@@ -804,6 +966,28 @@ router.post('/rfqs/:id/approvals', async (req, res) => {
         signedAt,
       ]
     );
+    await recordAuditEvent({
+      eventType: data.approvalStatus === 'APPROVED'
+        ? 'ESTIMATING_APPROVAL_APPROVED'
+        : data.approvalStatus === 'REJECTED'
+          ? 'ESTIMATING_APPROVAL_REJECTED'
+          : 'ESTIMATING_APPROVAL_UPDATED',
+      subjectType: 'estimating_approval',
+      subjectId: rows[0].id,
+      sourceService: 'estimating.routes',
+      actor: getActor(req),
+      payload: {
+        rfqId: req.params.id,
+        estimateVersionId: data.estimateVersionId ?? null,
+        approvalRole: data.approvalRole,
+        approvalStatus: data.approvalStatus,
+        signerUserId: data.signerUserId ?? null,
+        signerDisplayName: data.signerDisplayName ?? null,
+      },
+      reason: data.approvalComments ?? null,
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent') ?? null,
+    });
     res.status(201).json(rows[0]);
   } catch (err: any) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: err.errors });
@@ -813,16 +997,10 @@ router.post('/rfqs/:id/approvals', async (req, res) => {
 
 router.post('/rfqs/:id/approval-readiness', async (req, res) => {
   try {
-    const approvals = await pool.query(
-      `SELECT approval_role, approval_status FROM estimating_approvals WHERE rfq_id = $1`,
-      [req.params.id]
-    );
-    const requiredRoles = ['ESTIMATOR', 'ENGINEERING', 'FINANCE'];
-    const needsExecutive = Boolean(req.body?.requiresExecutiveApproval);
-    if (needsExecutive) requiredRoles.push('EXECUTIVE');
-    const approvedRoles = new Set(approvals.filter((row: any) => row.approval_status === 'APPROVED').map((row: any) => row.approval_role));
-    const missingRoles = requiredRoles.filter((role) => !approvedRoles.has(role));
-    res.json({ readyForQuoteRelease: missingRoles.length === 0, requiredRoles, missingRoles });
+    const readiness = await getEstimatingReleaseReadiness(req.params.id, {
+      requiresExecutiveApproval: Boolean(req.body?.requiresExecutiveApproval),
+    });
+    res.json(readiness);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -855,7 +1033,52 @@ router.post('/rfqs/:id/risk-assessments', async (req, res) => {
        RETURNING *`,
       [req.params.id, data.estimateVersionId ?? null, data.status, data.createdBy ?? null]
     );
+    await recordAuditEvent({
+      eventType: 'ESTIMATING_RISK_ASSESSMENT_CREATED',
+      subjectType: 'risk_assessment',
+      subjectId: rows[0].id,
+      sourceService: 'estimating.routes',
+      actor: getActor(req),
+      payload: {
+        rfqId: req.params.id,
+        estimateVersionId: data.estimateVersionId ?? null,
+        status: data.status,
+      },
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent') ?? null,
+    });
     res.status(201).json(rows[0]);
+  } catch (err: any) {
+    if (err instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: err.errors });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.patch('/risk-assessments/:id/status', async (req, res) => {
+  try {
+    const data = riskAssessmentStatusSchema.parse(req.body);
+    const rows = await pool.query(
+      `UPDATE risk_assessments
+       SET status = $2, updated_at = NOW()
+       WHERE id = $1
+       RETURNING *`,
+      [req.params.id, data.status]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Risk assessment not found' });
+    await recordAuditEvent({
+      eventType: 'ESTIMATING_RISK_ASSESSMENT_STATUS_CHANGED',
+      subjectType: 'risk_assessment',
+      subjectId: rows[0].id,
+      sourceService: 'estimating.routes',
+      actor: getActor(req),
+      payload: {
+        rfqId: rows[0].rfq_id,
+        status: data.status,
+      },
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent') ?? null,
+    });
+    res.json(rows[0]);
   } catch (err: any) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: err.errors });
     res.status(500).json({ error: err.message });
@@ -886,7 +1109,73 @@ router.post('/risk-assessments/:id/items', async (req, res) => {
       ]
     );
     const assessment = await refreshRiskAssessmentScore(req.params.id);
+    await recordAuditEvent({
+      eventType: 'ESTIMATING_RISK_ITEM_CREATED',
+      subjectType: 'risk_item',
+      subjectId: rows[0].id,
+      sourceService: 'estimating.routes',
+      actor: getActor(req),
+      payload: {
+        riskAssessmentId: req.params.id,
+        category: data.category,
+        severity: data.severity,
+        probability: data.probability,
+        score,
+        requiresApproval: data.requiresApproval,
+        assessment: assessment as any,
+      },
+      reason: data.description,
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent') ?? null,
+    });
     res.status(201).json({ riskItem: rows[0], assessment });
+  } catch (err: any) {
+    if (err instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: err.errors });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.patch('/risk-items/:id', async (req, res) => {
+  try {
+    const data = riskItemUpdateSchema.parse(req.body);
+    const currentRows = await pool.query(`SELECT * FROM risk_items WHERE id = $1`, [req.params.id]);
+    const current = currentRows[0];
+    if (!current) return res.status(404).json({ error: 'Risk item not found' });
+
+    const rows = await pool.query(
+      `UPDATE risk_items
+       SET status = COALESCE($2, status),
+           requires_approval = COALESCE($3, requires_approval),
+           owner_user_id = COALESCE($4, owner_user_id),
+           owner_display_name = COALESCE($5, owner_display_name),
+           updated_at = NOW()
+       WHERE id = $1
+       RETURNING *`,
+      [
+        req.params.id,
+        data.status ?? null,
+        data.requiresApproval ?? null,
+        data.ownerUserId ?? null,
+        data.ownerDisplayName ?? null,
+      ]
+    );
+    const assessment = await refreshRiskAssessmentScore(current.risk_assessment_id);
+    await recordAuditEvent({
+      eventType: 'ESTIMATING_RISK_ITEM_UPDATED',
+      subjectType: 'risk_item',
+      subjectId: rows[0].id,
+      sourceService: 'estimating.routes',
+      actor: getActor(req),
+      payload: {
+        riskAssessmentId: current.risk_assessment_id,
+        before: current as any,
+        after: rows[0] as any,
+        assessment: assessment as any,
+      },
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent') ?? null,
+    });
+    res.json({ riskItem: rows[0], assessment });
   } catch (err: any) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: err.errors });
     res.status(500).json({ error: err.message });
@@ -913,7 +1202,66 @@ router.post('/risk-items/:id/mitigations', async (req, res) => {
         data.createdBy ?? null,
       ]
     );
+    await recordAuditEvent({
+      eventType: data.status === 'CLOSED' || data.completedAt
+        ? 'ESTIMATING_MITIGATION_CLOSED'
+        : 'ESTIMATING_MITIGATION_CREATED',
+      subjectType: 'mitigation_action',
+      subjectId: rows[0].id,
+      sourceService: 'estimating.routes',
+      actor: getActor(req),
+      payload: {
+        riskItemId: req.params.id,
+        status: data.status,
+        assignedToUserId: data.assignedToUserId ?? null,
+        assignedToDisplayName: data.assignedToDisplayName ?? null,
+        dueDate: data.dueDate ? data.dueDate.toISOString() : null,
+        completedAt: data.completedAt ? data.completedAt.toISOString() : null,
+      },
+      reason: data.actionDescription,
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent') ?? null,
+    });
     res.status(201).json(rows[0]);
+  } catch (err: any) {
+    if (err instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: err.errors });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.patch('/mitigations/:id', async (req, res) => {
+  try {
+    const data = mitigationUpdateSchema.parse(req.body);
+    const currentRows = await pool.query(`SELECT * FROM mitigation_actions WHERE id = $1`, [req.params.id]);
+    const current = currentRows[0];
+    if (!current) return res.status(404).json({ error: 'Mitigation action not found' });
+
+    const rows = await pool.query(
+      `UPDATE mitigation_actions
+       SET status = COALESCE($2, status),
+           completed_at = COALESCE($3, completed_at),
+           updated_at = NOW()
+       WHERE id = $1
+       RETURNING *`,
+      [req.params.id, data.status ?? null, data.completedAt ?? null]
+    );
+    await recordAuditEvent({
+      eventType: rows[0].status === 'CLOSED' || rows[0].completed_at
+        ? 'ESTIMATING_MITIGATION_CLOSED'
+        : 'ESTIMATING_MITIGATION_UPDATED',
+      subjectType: 'mitigation_action',
+      subjectId: rows[0].id,
+      sourceService: 'estimating.routes',
+      actor: getActor(req),
+      payload: {
+        riskItemId: current.risk_item_id,
+        before: current as any,
+        after: rows[0] as any,
+      },
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent') ?? null,
+    });
+    res.json(rows[0]);
   } catch (err: any) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', details: err.errors });
     res.status(500).json({ error: err.message });

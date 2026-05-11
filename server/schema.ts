@@ -16449,6 +16449,185 @@ export const insertEstimatingPricingSnapshotSchema = createInsertSchema(estimati
 export type EstimatingPricingSnapshot = typeof estimatingPricingSnapshots.$inferSelect;
 export type InsertEstimatingPricingSnapshot = z.infer<typeof insertEstimatingPricingSnapshotSchema>;
 
+export const estimateVersions = pgTable('estimate_versions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  rfqId: uuid('rfq_id').notNull().references(() => estimatingRfqs.id, { onDelete: 'cascade' }),
+  versionNumber: integer('version_number').notNull(),
+  createdBy: integer('created_by'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  supersededBy: uuid('superseded_by'),
+  changeSummary: text('change_summary'),
+  status: text('status').default('DRAFT').notNull(),
+  marginSummary: jsonb('margin_summary').default({}).notNull(),
+  pricingSnapshot: jsonb('pricing_snapshot').default({}).notNull(),
+}, (table) => ({
+  rfqVersionIdx: uniqueIndex('estimate_versions_rfq_version_idx').on(table.rfqId, table.versionNumber),
+  rfqIdx: index('estimate_versions_rfq_id_idx').on(table.rfqId),
+}));
+
+export const insertEstimateVersionSchema = createInsertSchema(estimateVersions)
+  .omit({ id: true, createdAt: true, supersededBy: true })
+  .extend({
+    versionNumber: z.number().int().positive().optional(),
+  });
+export type EstimateVersion = typeof estimateVersions.$inferSelect;
+export type InsertEstimateVersion = z.infer<typeof insertEstimateVersionSchema>;
+
+export const estimateLineVersions = pgTable('estimate_line_versions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  estimateVersionId: uuid('estimate_version_id').notNull().references(() => estimateVersions.id, { onDelete: 'cascade' }),
+  rfqPartId: uuid('rfq_part_id').references(() => estimatingRfqParts.id, { onDelete: 'set null' }),
+  sourceTable: text('source_table').notNull(),
+  sourceId: uuid('source_id'),
+  lineNumber: integer('line_number'),
+  lineCategory: text('line_category').notNull(),
+  lineSummary: text('line_summary'),
+  quantity: numeric('quantity', { precision: 12, scale: 4 }),
+  unitCost: numeric('unit_cost', { precision: 12, scale: 4 }),
+  totalCost: numeric('total_cost', { precision: 14, scale: 4 }),
+  marginPercent: numeric('margin_percent', { precision: 8, scale: 4 }),
+  sellPrice: numeric('sell_price', { precision: 14, scale: 4 }),
+  sourcePayload: jsonb('source_payload').default({}).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  versionIdx: index('estimate_line_versions_version_id_idx').on(table.estimateVersionId),
+  partIdx: index('estimate_line_versions_rfq_part_id_idx').on(table.rfqPartId),
+}));
+
+export const insertEstimateLineVersionSchema = createInsertSchema(estimateLineVersions).omit({ id: true, createdAt: true });
+export type EstimateLineVersion = typeof estimateLineVersions.$inferSelect;
+export type InsertEstimateLineVersion = z.infer<typeof insertEstimateLineVersionSchema>;
+
+export const estimateAssumptions = pgTable('estimate_assumptions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  rfqId: uuid('rfq_id').notNull().references(() => estimatingRfqs.id, { onDelete: 'cascade' }),
+  rfqPartId: uuid('rfq_part_id').references(() => estimatingRfqParts.id, { onDelete: 'cascade' }),
+  assumptionType: text('assumption_type').notNull(),
+  assumptionText: text('assumption_text').notNull(),
+  numericValue: numeric('numeric_value', { precision: 14, scale: 4 }),
+  uom: text('uom'),
+  confidenceLevel: text('confidence_level').default('MEDIUM').notNull(),
+  sourceReference: text('source_reference'),
+  createdBy: integer('created_by'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  rfqIdx: index('estimate_assumptions_rfq_id_idx').on(table.rfqId),
+  typeIdx: index('estimate_assumptions_type_idx').on(table.assumptionType),
+}));
+
+export const insertEstimateAssumptionSchema = createInsertSchema(estimateAssumptions)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    assumptionType: z.enum(['LABOR', 'SCRAP', 'MATERIAL_YIELD', 'TOOLING_LIFE', 'SETUP_TIME']),
+    confidenceLevel: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional(),
+  });
+export type EstimateAssumption = typeof estimateAssumptions.$inferSelect;
+export type InsertEstimateAssumption = z.infer<typeof insertEstimateAssumptionSchema>;
+
+export const estimatingApprovals = pgTable('estimating_approvals', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  rfqId: uuid('rfq_id').notNull().references(() => estimatingRfqs.id, { onDelete: 'cascade' }),
+  estimateVersionId: uuid('estimate_version_id').references(() => estimateVersions.id, { onDelete: 'set null' }),
+  approvalRole: text('approval_role').notNull(),
+  approvalStatus: text('approval_status').default('PENDING').notNull(),
+  approvalThreshold: numeric('approval_threshold', { precision: 14, scale: 2 }),
+  signerUserId: integer('signer_user_id'),
+  signerDisplayName: text('signer_display_name'),
+  digitalSignature: text('digital_signature'),
+  approvalComments: text('approval_comments'),
+  requestedAt: timestamp('requested_at').defaultNow().notNull(),
+  signedAt: timestamp('signed_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  rfqRoleIdx: uniqueIndex('estimating_approvals_rfq_role_idx').on(table.rfqId, table.approvalRole),
+  rfqIdx: index('estimating_approvals_rfq_id_idx').on(table.rfqId),
+}));
+
+export const insertEstimatingApprovalSchema = createInsertSchema(estimatingApprovals)
+  .omit({ id: true, requestedAt: true, createdAt: true, updatedAt: true })
+  .extend({
+    approvalRole: z.enum(['ESTIMATOR', 'ENGINEERING', 'FINANCE', 'EXECUTIVE']),
+    approvalStatus: z.enum(['PENDING', 'APPROVED', 'REJECTED', 'CHANGES_REQUESTED']).optional(),
+    signedAt: z.coerce.date().nullable().optional(),
+  });
+export type EstimatingApproval = typeof estimatingApprovals.$inferSelect;
+export type InsertEstimatingApproval = z.infer<typeof insertEstimatingApprovalSchema>;
+
+export const riskAssessments = pgTable('risk_assessments', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  rfqId: uuid('rfq_id').notNull().references(() => estimatingRfqs.id, { onDelete: 'cascade' }),
+  estimateVersionId: uuid('estimate_version_id').references(() => estimateVersions.id, { onDelete: 'set null' }),
+  status: text('status').default('DRAFT').notNull(),
+  overallScore: integer('overall_score').default(0).notNull(),
+  overallLevel: text('overall_level').default('LOW').notNull(),
+  approvalRouting: jsonb('approval_routing').default([]).notNull(),
+  createdBy: integer('created_by'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  rfqIdx: index('risk_assessments_rfq_id_idx').on(table.rfqId),
+}));
+
+export const insertRiskAssessmentSchema = createInsertSchema(riskAssessments).omit({ id: true, createdAt: true, updatedAt: true });
+export type RiskAssessment = typeof riskAssessments.$inferSelect;
+export type InsertRiskAssessment = z.infer<typeof insertRiskAssessmentSchema>;
+
+export const riskItems = pgTable('risk_items', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  riskAssessmentId: uuid('risk_assessment_id').notNull().references(() => riskAssessments.id, { onDelete: 'cascade' }),
+  category: text('category').notNull(),
+  description: text('description').notNull(),
+  severity: integer('severity').notNull(),
+  probability: integer('probability').notNull(),
+  score: integer('score').notNull(),
+  ownerUserId: integer('owner_user_id'),
+  ownerDisplayName: text('owner_display_name'),
+  status: text('status').default('OPEN').notNull(),
+  requiresApproval: boolean('requires_approval').default(false).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  assessmentIdx: index('risk_items_assessment_id_idx').on(table.riskAssessmentId),
+  categoryIdx: index('risk_items_category_idx').on(table.category),
+}));
+
+export const insertRiskItemSchema = createInsertSchema(riskItems)
+  .omit({ id: true, score: true, createdAt: true, updatedAt: true })
+  .extend({
+    category: z.enum(['TECHNICAL', 'SUPPLY_CHAIN', 'FINANCIAL', 'SCHEDULE', 'COMPLIANCE', 'QUALITY']),
+    severity: z.number().int().min(1).max(5),
+    probability: z.number().int().min(1).max(5),
+  });
+export type RiskItem = typeof riskItems.$inferSelect;
+export type InsertRiskItem = z.infer<typeof insertRiskItemSchema>;
+
+export const mitigationActions = pgTable('mitigation_actions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  riskItemId: uuid('risk_item_id').notNull().references(() => riskItems.id, { onDelete: 'cascade' }),
+  actionDescription: text('action_description').notNull(),
+  assignedToUserId: integer('assigned_to_user_id'),
+  assignedToDisplayName: text('assigned_to_display_name'),
+  dueDate: timestamp('due_date'),
+  status: text('status').default('OPEN').notNull(),
+  completedAt: timestamp('completed_at'),
+  createdBy: integer('created_by'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  riskItemIdx: index('mitigation_actions_risk_item_id_idx').on(table.riskItemId),
+}));
+
+export const insertMitigationActionSchema = createInsertSchema(mitigationActions)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    dueDate: z.coerce.date().nullable().optional(),
+    completedAt: z.coerce.date().nullable().optional(),
+  });
+export type MitigationAction = typeof mitigationActions.$inferSelect;
+export type InsertMitigationAction = z.infer<typeof insertMitigationActionSchema>;
+
 export const estimatingDefaults = pgTable('estimating_defaults', {
   id: uuid('id').defaultRandom().primaryKey(),
   defaultLaborRate: numeric('default_labor_rate', { precision: 12, scale: 2 }).default('0').notNull(),

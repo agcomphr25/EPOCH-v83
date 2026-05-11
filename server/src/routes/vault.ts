@@ -8,6 +8,7 @@ import { ObjectStorageService, ObjectNotFoundError } from '../../replit_integrat
 import { buildAclPolicyMetadata, ObjectPermission, ObjectAccessGroupType, ObjectAclPolicy } from '../../replit_integrations/object_storage/objectAcl';
 import { pool } from '../../db';
 import { auditService } from '../services/auditService';
+import crypto from 'crypto';
 import {
   DOCUMENT_DOWNLOAD,
   DOCUMENT_UPLOAD,
@@ -23,9 +24,83 @@ const objectStorage = new ObjectStorageService();
 
 const CONTROLLED_CLASSIFICATIONS = ['cui', 'itar'];
 const VALID_CLASSIFICATIONS = ['public', 'internal', 'cui', 'itar'] as const;
+const VALID_DOCUMENT_CATEGORIES = ['cad', 'drawing', 'spec', 'customer_file', 'controlled_document', 'policy'] as const;
 const META_CLASSIFICATION = 'custom:classification';
 const META_SCOPE_TYPE = 'custom:scopeType';
 const META_SCOPE_VALUE = 'custom:scopeValue';
+const META_DOCUMENT_CATEGORY = 'custom:documentCategory';
+const META_CUSTOMER_ID = 'custom:customerId';
+const META_SOURCE_ENTITY = 'custom:sourceEntity';
+
+function getRequestIp(req: Request): string {
+  return (
+    (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
+    req.socket?.remoteAddress ||
+    'unknown'
+  );
+}
+
+function getDeviceFingerprint(req: Request): string {
+  const raw = `${getRequestIp(req)}|${req.headers['user-agent'] || 'unknown'}`;
+  return crypto.createHash('sha256').update(raw).digest('hex');
+}
+
+function resolveSessionToken(req: Request): string | null {
+  return req.cookies?.sessionToken || (req.headers.authorization as string | undefined)?.replace('Bearer ', '') || null;
+}
+
+async function getActiveSessionContext(req: Request): Promise<{
+  id: number | null;
+  lastCredentialVerifiedAt: Date | null;
+  deviceFingerprint: string;
+}> {
+  const deviceFingerprint = getDeviceFingerprint(req);
+  const token = resolveSessionToken(req);
+  if (!token) return { id: null, lastCredentialVerifiedAt: null, deviceFingerprint };
+
+  const rows = await pool.query(
+    `SELECT id, last_credential_verified_at
+     FROM user_sessions
+     WHERE session_token = $1 AND is_active = true AND expires_at > NOW()
+     LIMIT 1`,
+    [token]
+  );
+  const row = rows.rows?.[0] ?? rows[0];
+  return {
+    id: row?.id ?? null,
+    lastCredentialVerifiedAt: row?.last_credential_verified_at ? new Date(row.last_credential_verified_at) : null,
+    deviceFingerprint,
+  };
+}
+
+async function requireRecentCredentialForControlled(
+  req: Request,
+  res: Response,
+  policy: { classification: string; mfaRequired?: boolean | null; sessionTimeoutMinutes?: number | null }
+): Promise<boolean> {
+  if (!CONTROLLED_CLASSIFICATIONS.includes(policy.classification)) return true;
+
+  const maxAgeMinutes = policy.sessionTimeoutMinutes || 30;
+  const session = await getActiveSessionContext(req);
+  if (!session.lastCredentialVerifiedAt) {
+    res.setHeader('WWW-Authenticate', 'StepUp');
+    res.status(401).json({ error: 'Step-up authentication required for CUI/ITAR access', requireStepUp: true });
+    return false;
+  }
+
+  const ageMs = Date.now() - session.lastCredentialVerifiedAt.getTime();
+  if (ageMs > maxAgeMinutes * 60 * 1000) {
+    res.setHeader('WWW-Authenticate', 'StepUp');
+    res.status(401).json({
+      error: 'Session step-up has expired for this CUI/ITAR document',
+      requireStepUp: true,
+      sessionTimeoutMinutes: maxAgeMinutes,
+    });
+    return false;
+  }
+
+  return true;
+}
 
 // ─── Metadata Resolution ──────────────────────────────────────────────────────
 
@@ -215,7 +290,28 @@ router.post('/documents/request-upload', authenticateToken, async (req, res) => 
 router.post('/documents', authenticateToken, async (req, res) => {
   try {
     const user = (req as any).user;
-    const { name, description, objectPath, classification, scopeType, scopeValue, contentType, fileSizeBytes } = req.body;
+    const {
+      name,
+      description,
+      objectPath,
+      classification,
+      cuiCategory,
+      itarCategory,
+      exportControlJurisdiction,
+      documentCategory,
+      customerId,
+      customerName,
+      contractArtifactType,
+      sourceEntityType,
+      sourceEntityId,
+      scopeType,
+      scopeValue,
+      contentType,
+      fileSizeBytes,
+      checksumSha256,
+      linkExpiresInSeconds,
+      sessionTimeoutMinutes,
+    } = req.body;
 
     if (!name || !objectPath || !classification) {
       return res.status(400).json({ error: 'name, objectPath, and classification are required' });
@@ -225,19 +321,45 @@ router.post('/documents', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: `Invalid classification. Must be one of: ${VALID_CLASSIFICATIONS.join(', ')}` });
     }
 
+    const effectiveDocumentCategory = documentCategory || 'controlled_document';
+    if (!VALID_DOCUMENT_CATEGORIES.includes(effectiveDocumentCategory)) {
+      return res.status(400).json({ error: `Invalid documentCategory. Must be one of: ${VALID_DOCUMENT_CATEGORIES.join(', ')}` });
+    }
+
     const snap = await resolveUserSnapshot(user.id);
     const effectiveScopeType = scopeType || 'global';
     const effectiveScopeValue = effectiveScopeType !== 'global' ? (scopeValue || null) : null;
+    const isControlledClassification = CONTROLLED_CLASSIFICATIONS.includes(classification);
+    const effectiveLinkTtl = Math.min(Math.max(parseInt(String(linkExpiresInSeconds ?? '900'), 10) || 900, 60), 900);
+    const effectiveSessionTimeout = Math.min(Math.max(parseInt(String(sessionTimeoutMinutes ?? '30'), 10) || 30, 5), 60);
 
     const [doc] = await db.insert(vaultDocuments).values({
       name,
       description: description || null,
       objectPath,
       classification,
+      cuiCategory: classification === 'cui' ? (cuiCategory || 'CUI//SP-CTI') : null,
+      itarCategory: classification === 'itar' ? (itarCategory || 'ITAR Technical Data') : null,
+      exportControlJurisdiction: classification === 'itar' ? (exportControlJurisdiction || 'ITAR') : (exportControlJurisdiction || null),
+      documentCategory: effectiveDocumentCategory,
+      customerId: customerId || null,
+      customerName: customerName || null,
+      contractArtifactType: contractArtifactType || null,
+      sourceEntityType: sourceEntityType || null,
+      sourceEntityId: sourceEntityId || null,
       scopeType: effectiveScopeType,
       scopeValue: effectiveScopeValue,
       contentType: contentType || 'application/octet-stream',
       fileSizeBytes: fileSizeBytes || null,
+      checksumSha256: checksumSha256 || null,
+      encryptionAtRestPolicy: 'object_storage_managed',
+      accessRule: isControlledClassification ? 'explicit_grant' : 'authenticated',
+      mfaRequired: isControlledClassification,
+      deviceTrackingRequired: true,
+      downloadTrackingRequired: true,
+      expiringLinksRequired: true,
+      linkExpiresInSeconds: effectiveLinkTtl,
+      sessionTimeoutMinutes: effectiveSessionTimeout,
       uploaderUserId: snap.userId,
       uploaderDisplayName: snap.displayName,
     }).returning();
@@ -261,6 +383,9 @@ router.post('/documents', authenticateToken, async (req, res) => {
           [META_CLASSIFICATION]: classification,
           [META_SCOPE_TYPE]: effectiveScopeType,
           [META_SCOPE_VALUE]: effectiveScopeValue || '',
+          [META_DOCUMENT_CATEGORY]: effectiveDocumentCategory,
+          [META_CUSTOMER_ID]: customerId || '',
+          [META_SOURCE_ENTITY]: sourceEntityType && sourceEntityId ? `${sourceEntityType}:${sourceEntityId}` : '',
         },
       });
     } catch (aclErr) {
@@ -286,6 +411,23 @@ router.post('/documents', authenticateToken, async (req, res) => {
           documentName: doc.name,
           documentKey: doc.objectPath,
           classification,
+          cuiCategory: doc.cuiCategory,
+          itarCategory: doc.itarCategory,
+          exportControlJurisdiction: doc.exportControlJurisdiction,
+          documentCategory: doc.documentCategory,
+          customerId: doc.customerId,
+          customerName: doc.customerName,
+          contractArtifactType: doc.contractArtifactType,
+          sourceEntityType: doc.sourceEntityType,
+          sourceEntityId: doc.sourceEntityId,
+          encryptionAtRestPolicy: doc.encryptionAtRestPolicy,
+          accessRule: doc.accessRule,
+          mfaRequired: doc.mfaRequired,
+          deviceTrackingRequired: doc.deviceTrackingRequired,
+          downloadTrackingRequired: doc.downloadTrackingRequired,
+          expiringLinksRequired: doc.expiringLinksRequired,
+          linkExpiresInSeconds: doc.linkExpiresInSeconds,
+          sessionTimeoutMinutes: doc.sessionTimeoutMinutes,
           scopeType: effectiveScopeType,
           scopeValue: effectiveScopeValue,
           contentType: doc.contentType,
@@ -348,11 +490,9 @@ router.get('/documents/:id/download', authenticateToken, async (req, res) => {
     const [doc] = await db.select().from(vaultDocuments).where(eq(vaultDocuments.id, docId)).limit(1);
     if (!doc) return res.status(404).json({ error: 'Document not found' });
 
-    const ipAddress = (
-      (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
-      (req as any).socket?.remoteAddress ||
-      'unknown'
-    );
+    const ipAddress = getRequestIp(req);
+    const userAgent = req.get('user-agent') || null;
+    const sessionContext = await getActiveSessionContext(req);
 
     let effectiveClassification = doc.classification;
     let effectiveScopeType = doc.scopeType;
@@ -385,6 +525,12 @@ router.get('/documents/:id/download', authenticateToken, async (req, res) => {
     });
 
     if (!allowed) {
+      await pool.query(
+        `INSERT INTO object_access_log (vault_document_id, user_id, action, ip_address, user_agent, device_fingerprint, session_id)
+         VALUES ($1, $2, 'denied', $3, $4, $5, $6)`,
+        [doc.id, user.username, ipAddress, userAgent, sessionContext.deviceFingerprint, sessionContext.id]
+      ).catch((logErr) => console.error('[vault] Failed to write denied access log:', logErr));
+
       try {
         await auditService.logEvent({
           entityType: 'vault_document',
@@ -414,10 +560,33 @@ router.get('/documents/:id/download', authenticateToken, async (req, res) => {
       });
     }
 
+    const stepUpOk = await requireRecentCredentialForControlled(req, res, {
+      classification: effectiveClassification,
+      mfaRequired: doc.mfaRequired,
+      sessionTimeoutMinutes: doc.sessionTimeoutMinutes,
+    });
+    if (!stepUpOk) {
+      await pool.query(
+        `INSERT INTO object_access_log (vault_document_id, user_id, action, ip_address, user_agent, device_fingerprint, session_id)
+         VALUES ($1, $2, 'denied', $3, $4, $5, $6)`,
+        [doc.id, user.username, ipAddress, userAgent, sessionContext.deviceFingerprint, sessionContext.id]
+      ).catch((logErr) => console.error('[vault] Failed to write step-up denied access log:', logErr));
+      return;
+    }
+
     if (!objectFile) {
       objectFile = await objectStorage.getObjectEntityFile(doc.objectPath);
     }
-    const downloadUrl = await objectStorage.getObjectEntityDownloadURL(objectFile, 900);
+    const expiresIn = doc.expiringLinksRequired ? Math.min(doc.linkExpiresInSeconds || 900, 900) : 900;
+    const downloadUrl = await objectStorage.getObjectEntityDownloadURL(objectFile, expiresIn);
+    const linkExpiresAt = new Date(Date.now() + expiresIn * 1000);
+
+    await pool.query(
+      `INSERT INTO object_access_log (
+         vault_document_id, user_id, action, ip_address, user_agent, device_fingerprint, link_expires_at, session_id
+       ) VALUES ($1, $2, 'link_issued', $3, $4, $5, $6, $7)`,
+      [doc.id, user.username, ipAddress, userAgent, sessionContext.deviceFingerprint, linkExpiresAt, sessionContext.id]
+    ).catch((logErr) => console.error('[vault] Failed to write download link access log:', logErr));
 
     // Log successful download
     try {
@@ -432,6 +601,21 @@ router.get('/documents/:id/download', authenticateToken, async (req, res) => {
           documentName: doc.name,
           documentKey: doc.objectPath,
           classification: effectiveClassification,
+          cuiCategory: doc.cuiCategory,
+          itarCategory: doc.itarCategory,
+          exportControlJurisdiction: doc.exportControlJurisdiction,
+          documentCategory: doc.documentCategory,
+          customerId: doc.customerId,
+          customerName: doc.customerName,
+          contractArtifactType: doc.contractArtifactType,
+          sourceEntityType: doc.sourceEntityType,
+          sourceEntityId: doc.sourceEntityId,
+          encryptionAtRestPolicy: doc.encryptionAtRestPolicy,
+          accessRule: doc.accessRule,
+          mfaRequired: doc.mfaRequired,
+          deviceFingerprint: sessionContext.deviceFingerprint,
+          linkExpiresAt: linkExpiresAt.toISOString(),
+          sessionId: sessionContext.id,
           scopeType: effectiveScopeType,
           scopeValue: effectiveScopeValue,
         },
@@ -442,7 +626,8 @@ router.get('/documents/:id/download', authenticateToken, async (req, res) => {
 
     res.json({
       downloadUrl,
-      expiresIn: 900,
+      expiresIn,
+      linkExpiresAt: linkExpiresAt.toISOString(),
       filename: doc.name,
       contentType: doc.contentType,
     });
@@ -573,6 +758,9 @@ router.post('/documents/:id/access', authenticateToken, requireAdminOrOwner, asy
           [META_CLASSIFICATION]: doc.classification,
           [META_SCOPE_TYPE]: doc.scopeType,
           [META_SCOPE_VALUE]: doc.scopeValue || '',
+          [META_DOCUMENT_CATEGORY]: doc.documentCategory,
+          [META_CUSTOMER_ID]: doc.customerId || '',
+          [META_SOURCE_ENTITY]: doc.sourceEntityType && doc.sourceEntityId ? `${doc.sourceEntityType}:${doc.sourceEntityId}` : '',
         },
       });
     } catch { /* storage may be unavailable — grant is already recorded in DB */ }
@@ -929,15 +1117,23 @@ router.get('/access-log', authenticateToken, requireAdminOrOwner, async (req: Re
       `SELECT
          oal.id,
          oal.document_id,
+         oal.vault_document_id,
          oal.user_id,
          oal.action,
          oal.ip_address,
+         oal.user_agent,
+         oal.device_fingerprint,
+         oal.link_expires_at,
          oal.accessed_at,
-         cd.document_name,
+         COALESCE(cd.document_name, vd.name) AS document_name,
          cd.document_number,
-         cd.classification
+         COALESCE(cd.classification, vd.classification) AS classification,
+         vd.document_category,
+         vd.customer_id,
+         vd.customer_name
        FROM object_access_log oal
        LEFT JOIN controlled_documents cd ON cd.id = oal.document_id
+       LEFT JOIN vault_documents vd ON vd.id = oal.vault_document_id
        ${where}
        ORDER BY oal.accessed_at DESC
        LIMIT $${params.length - 1} OFFSET $${params.length}`,

@@ -164,6 +164,7 @@ export default function KioskPage() {
   const [punchStatus, setPunchStatus] = useState<PunchStatus | null>(null);
   const [chargeCodes, setChargeCodes] = useState<ChargeCode[]>([]);
   const [selectedChargeCode, setSelectedChargeCode] = useState('');
+  const [dailyCertificationConfirmed, setDailyCertificationConfirmed] = useState(false);
   const [resultMsg, setResultMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [dcaaViolation, setDcaaViolation] = useState<DcaaPolicyViolation | null>(null);
@@ -188,6 +189,7 @@ export default function KioskPage() {
     setPunchStatus(null);
     setChargeCodes([]);
     setSelectedChargeCode('');
+    setDailyCertificationConfirmed(false);
     setResultMsg('');
     setErrorMsg('');
     setDcaaViolation(null);
@@ -304,6 +306,7 @@ export default function KioskPage() {
         status = await statusRes.json();
       }
       setPunchStatus(status);
+      setDailyCertificationConfirmed(false);
 
       // Load charge codes
       const codesRes = await fetch('/api/timekeeping/kiosk/charge-codes');
@@ -334,6 +337,7 @@ export default function KioskPage() {
           employeeId: employee.id,
           requestedAction: meta.action,
           timezone: tz,
+          ...(meta.action === 'clock_out' ? { dailyCertificationConfirmed } : {}),
           ...(selectedChargeCode ? { costCode: selectedChargeCode } : {}),
         }),
       });
@@ -356,7 +360,7 @@ export default function KioskPage() {
       setErrorMsg('Network error. Punch was not recorded.');
       setStep('error');
     }
-  }, [employee, punchStatus, selectedChargeCode]);
+  }, [dailyCertificationConfirmed, employee, punchStatus, selectedChargeCode]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -630,6 +634,7 @@ export default function KioskPage() {
   if (step === 'confirm' && employee && punchStatus) {
     const meta = getActionMeta(punchStatus.status);
     const isClockIn = meta.action === 'clock_in';
+    const isClockOut = meta.action === 'clock_out';
     return (
       <div className="min-h-screen bg-gray-50 text-gray-900 flex flex-col items-center justify-center px-8">
         <div className="w-full max-w-sm space-y-6 text-center">
@@ -659,9 +664,27 @@ export default function KioskPage() {
             />
           )}
 
+          {isClockOut && (
+            <label className="flex items-start gap-3 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-left shadow-sm">
+              <input
+                type="checkbox"
+                checked={dailyCertificationConfirmed}
+                onChange={(event) => {
+                  setDailyCertificationConfirmed(event.target.checked);
+                  restartIdleTimer();
+                }}
+                className="mt-1 h-5 w-5 rounded border-blue-300 text-blue-600"
+              />
+              <span className="text-sm text-blue-900">
+                I certify that today&apos;s recorded time is complete, accurate, and represents work I actually performed.
+              </span>
+            </label>
+          )}
+
           <Button
             size="lg"
             onClick={handleConfirm}
+            disabled={isClockOut && !dailyCertificationConfirmed}
             className="w-full h-16 text-xl font-bold bg-blue-600 hover:bg-blue-700 rounded-2xl text-white"
           >
             {meta.verb}

@@ -1,4 +1,4 @@
-import { pgSchema, serial, integer, text, timestamp, boolean, doublePrecision, jsonb, numeric, date, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { pgSchema, serial, integer, text, timestamp, boolean, doublePrecision, jsonb, numeric, date, index, unique, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { employees, users } from "../../schema";
@@ -71,6 +71,27 @@ export const timesheetsTable = timekeepingSchema.table("timesheets", {
 });
 
 export type Timesheet = typeof timesheetsTable.$inferSelect;
+
+export const dailyTimeCertificationsTable = timekeepingSchema.table("daily_time_certifications", {
+  id: serial("id").primaryKey(),
+  timesheetId: integer("timesheet_id").notNull().references(() => timesheetsTable.id, { onDelete: "cascade" }),
+  employeeId: integer("employee_id").notNull().references(() => employees.id, { onDelete: "cascade" }),
+  workDate: text("work_date").notNull(),
+  workHours: doublePrecision("work_hours").notNull().default(0),
+  certifiedAt: timestamp("certified_at", { withTimezone: true }).notNull().defaultNow(),
+  certifiedByUserId: integer("certified_by_user_id").references(() => users.id),
+  certificationStatement: text("certification_statement").notNull(),
+  certificationVersion: integer("certification_version").notNull().default(1),
+  source: text("source").notNull().default("employee_self"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+}, (t) => ({
+  timesheetDateUnique: unique().on(t.timesheetId, t.workDate),
+  timesheetIdx: index("idx_daily_time_certifications_timesheet").on(t.timesheetId),
+  employeeDateIdx: index("idx_daily_time_certifications_employee_date").on(t.employeeId, t.workDate),
+}));
+
+export type DailyTimeCertification = typeof dailyTimeCertificationsTable.$inferSelect;
 
 export const leaveEntriesTable = timekeepingSchema.table("leave_entries", {
   id: serial("id").primaryKey(),
@@ -376,6 +397,7 @@ export type TimesheetCorrection = typeof timesheetCorrectionsTable.$inferSelect;
 export const policySettingsTable = timekeepingSchema.table("policy_settings", {
   id: serial("id").primaryKey(),
   certificationRequired: boolean("certification_required").notNull().default(true),
+  dailyCertificationRequired: boolean("daily_certification_required").notNull().default(true),
   correctionApprovalRequired: boolean("correction_approval_required").notNull().default(true),
   minimumHoursPerWeek: doublePrecision("minimum_hours_per_week"),
   lateSubmissionGraceDays: integer("late_submission_grace_days"),

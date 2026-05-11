@@ -28,6 +28,7 @@ export interface LogActionParams {
     | "DELETE"
     | "TIME_CERTIFIED"
     | "TIME_CERTIFIED_ADMIN"
+    | "TIME_DAILY_CERTIFIED"
     | "TIME_CORRECTION_REQUESTED"
     | "TIME_CORRECTION_APPROVED"
     | "TIME_CORRECTION_REJECTED";
@@ -82,6 +83,7 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
   DELETE: "Deleted",
   TIME_CERTIFIED: "Certified (Employee)",
   TIME_CERTIFIED_ADMIN: "Certified (Admin Override)",
+  TIME_DAILY_CERTIFIED: "Daily Time Certified",
   TIME_CORRECTION_REQUESTED: "Correction Requested",
   TIME_CORRECTION_APPROVED: "Correction Approved",
   TIME_CORRECTION_REJECTED: "Correction Rejected",
@@ -173,6 +175,9 @@ export async function getTimesheetAuditTrail(timesheetId: number): Promise<Audit
     if (newValues?.reviewerNote) details.reviewerNote = newValues.reviewerNote;
     if (newValues?.certificationStatement) details.certificationStatement = newValues.certificationStatement;
     if (newValues?.certificationVersion) details.certificationVersion = newValues.certificationVersion;
+    if (newValues?.dailyCertificationId) details.dailyCertificationId = newValues.dailyCertificationId;
+    if (newValues?.workDate) details.workDate = newValues.workDate;
+    if (newValues?.workHours) details.workHours = newValues.workHours;
     if (newValues?.adminOverride) details.adminOverride = newValues.adminOverride;
     if (newValues?.overrideReason) details.overrideReason = newValues.overrideReason;
     if (newValues?.correctionMode) details.correctionMode = newValues.correctionMode;

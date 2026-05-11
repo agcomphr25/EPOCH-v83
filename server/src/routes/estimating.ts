@@ -77,6 +77,10 @@ const mitigationUpdateSchema = z.object({
   completedAt: z.coerce.date().nullable().optional(),
 });
 
+const createEstimatingRfqSchema = insertEstimatingRfqSchema.extend({
+  rfqNumber: z.string().optional(),
+});
+
 function getActor(req: any) {
   return {
     id: req.user?.id ?? req.session?.user?.id ?? null,
@@ -103,6 +107,34 @@ function getApprovalRouting(overallLevel: string, items: any[]): string[] {
   if (items.some((item) => item.category === 'FINANCIAL' || Number(item.score) >= 10)) routes.add('FINANCE');
   if (overallLevel === 'HIGH' || overallLevel === 'CRITICAL' || items.some((item) => item.requires_approval)) routes.add('EXECUTIVE');
   return Array.from(routes);
+}
+
+async function generateEstimatingRfqNumber(customerId?: number | null): Promise<string> {
+  if (customerId) {
+    const customerRows = await pool.query(
+      `SELECT customer_id FROM p2_customers WHERE id = $1 LIMIT 1`,
+      [customerId]
+    );
+
+    const customerNumber = customerRows[0]?.customer_id;
+    if (customerNumber) {
+      const result = await storage.reserveNextRFQNumber(customerNumber, new Date().getFullYear().toString());
+      return result.rfqNumber;
+    }
+  }
+
+  const yearSuffix = String(new Date().getFullYear()).slice(-2);
+  const prefix = `RFQ${yearSuffix}`;
+  const rows = await pool.query(
+    `SELECT rfq_number
+     FROM estimating_rfqs
+     WHERE rfq_number LIKE $1
+     ORDER BY rfq_number DESC
+     LIMIT 1`,
+    [`${prefix}%`]
+  );
+  const lastSequence = Number(String(rows[0]?.rfq_number ?? '').slice(prefix.length)) || 0;
+  return `${prefix}${String(lastSequence + 1).padStart(4, '0')}`;
 }
 
 async function refreshRiskAssessmentScore(riskAssessmentId: string) {
@@ -237,8 +269,9 @@ router.get('/rfqs', async (req, res) => {
 
 router.post('/rfqs', async (req, res) => {
   try {
-    const data = insertEstimatingRfqSchema.parse(req.body);
-    const rfq = await storage.createEstimatingRfq(data);
+    const data = createEstimatingRfqSchema.parse(req.body);
+    const rfqNumber = data.rfqNumber?.trim() || await generateEstimatingRfqNumber(data.customerId ?? null);
+    const rfq = await storage.createEstimatingRfq({ ...data, rfqNumber });
     res.status(201).json(rfq);
   } catch (err: any) {
     if (err instanceof z.ZodError) {

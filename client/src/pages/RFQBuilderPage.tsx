@@ -496,18 +496,28 @@ export default function RFQBuilderPage() {
       return prev.filter((_, i) => i !== index).map((r, i) => ({ ...r, lineNumber: i + 1 }));
     });
 
+  const buildHeaderPayload = () => {
+    const payload = {
+      ...header,
+      customerId: header.customerId ? Number(header.customerId) : null,
+      quoteDueDate: header.quoteDueDate || null,
+      requestedDueDate: header.requestedDueDate || null,
+    };
+    if (!payload.rfqNumber.trim()) delete (payload as Partial<RfqHeader>).rfqNumber;
+    return payload;
+  };
+
   // ── Mutations ────────────────────────────────────────────────────────────────
 
   const createRfqMutation = useMutation({
     mutationFn: async () => {
-      const payload = { ...header, customerId: header.customerId ? Number(header.customerId) : null,
-        quoteDueDate: header.quoteDueDate || null, requestedDueDate: header.requestedDueDate || null };
-      return apiRequest("/api/estimating/rfqs", { method: "POST", body: payload });
+      return apiRequest("/api/estimating/rfqs", { method: "POST", body: buildHeaderPayload() });
     },
     onSuccess: async (created) => {
+      setHeader((prev) => ({ ...prev, rfqNumber: created.rfqNumber ?? prev.rfqNumber }));
       await saveParts(created.id);
       await queryClient.invalidateQueries({ queryKey: ["/api/estimating/rfqs"] });
-      setSaveMessage("Draft RFQ saved.");
+      setSaveMessage(`Draft RFQ ${created.rfqNumber ?? ""} saved.`);
       setLocation(`/rfq-builder/${created.id}`);
     },
     onError: () => setSaveMessage("Failed to save RFQ. Please try again."),
@@ -515,9 +525,7 @@ export default function RFQBuilderPage() {
 
   const updateRfqMutation = useMutation({
     mutationFn: async () => {
-      const payload = { ...header, customerId: header.customerId ? Number(header.customerId) : null,
-        quoteDueDate: header.quoteDueDate || null, requestedDueDate: header.requestedDueDate || null };
-      return apiRequest(`/api/estimating/rfqs/${rfqId}`, { method: "PATCH", body: payload });
+      return apiRequest(`/api/estimating/rfqs/${rfqId}`, { method: "PATCH", body: buildHeaderPayload() });
     },
     onSuccess: async () => {
       await saveParts(rfqId!);
@@ -531,7 +539,6 @@ export default function RFQBuilderPage() {
 
   const onSaveDraft = () => {
     setSaveMessage("");
-    if (!header.rfqNumber.trim()) { setSaveMessage("RFQ number is required."); return; }
     if (!parts.some((p) => p.partNumber.trim())) { setSaveMessage("Add at least one part number before saving."); return; }
     if (isEditMode) updateRfqMutation.mutate(); else createRfqMutation.mutate();
   };
@@ -1179,8 +1186,16 @@ export default function RFQBuilderPage() {
           <div className="border rounded-lg p-5 space-y-4">
             <h2 className="text-lg font-semibold">Step 1 — RFQ Header</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm mb-1">RFQ Number</label>
+                <input
+                  className="w-full border rounded px-3 py-2 bg-muted text-muted-foreground"
+                  value={header.rfqNumber || "Auto-generated when saved"}
+                  readOnly
+                />
+              </div>
               {([
-                ["rfqNumber", "RFQ Number"], ["customerId", "Customer ID"],
+                ["customerId", "Customer ID"],
                 ["customerNameSnapshot", "Customer Name Snapshot"], ["revision", "Revision"],
               ] as [keyof RfqHeader, string][]).map(([field, label]) => (
                 <div key={field}>

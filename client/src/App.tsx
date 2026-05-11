@@ -347,6 +347,7 @@ import EdriEvidence from './pages/admin/EdriEvidence';
 import EdriSnapshotDetail from './pages/admin/EdriSnapshotDetail';
 import DcaaFindings from './pages/admin/DcaaFindings';
 import ChargeCodeUsageReport from './pages/admin/ChargeCodeUsageReport';
+import LaborDistributionReport from './pages/admin/LaborDistributionReport';
 import PayrollExportReconciliationReport from './pages/admin/PayrollExportReconciliationReport';
 import IndirectCostBurdenRateReport from './pages/admin/IndirectCostBurdenRateReport';
 import UnallowableCostReviewReport from './pages/admin/UnallowableCostReviewReport';
@@ -1361,6 +1362,7 @@ function App() {
                   <Route path="/admin/edri/missing-evidence" component={EdriMissingEvidence} />
                   <Route path="/admin/edri/history" component={EdriHistory} />
                   <Route path="/admin/edri/charge-code-usage" component={ChargeCodeUsageReport} />
+                  <Route path="/admin/edri/labor-distribution" component={LaborDistributionReport} />
                   <Route path="/admin/edri/payroll-export-reconciliation" component={PayrollExportReconciliationReport} />
                   <Route path="/admin/edri/indirect-cost-burden-rates" component={IndirectCostBurdenRateReport} />
                   <Route path="/admin/edri/unallowable-cost-review" component={UnallowableCostReviewReport} />

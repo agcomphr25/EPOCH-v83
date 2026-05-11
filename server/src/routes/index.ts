@@ -232,6 +232,7 @@ import chargeCodesRoutes from './chargeCodes';
 import purchaseRequisitionsRoutes from './purchaseRequisitions';
 import farFlowdownClausesRoutes from './farFlowdownClauses';
 import vendorDebarmentChecksRoutes from './vendorDebarmentChecks';
+import contractReviewRoutes from './contractReview';
 import continuityRoutes from './continuity';
 import proteusLabsRoutes from './proteusLabs';
 import devSeedPunchesRoutes from './timekeeping/devSeedPunches';
@@ -791,6 +792,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   app.use('/api/purchase-requisitions', purchaseRequisitionsRoutes);
   app.use('/api/far-flowdown-clauses', farFlowdownClausesRoutes);
   app.use('/api/vendor-debarment-checks', vendorDebarmentChecksRoutes);
+  app.use('/api/contract-review', contractReviewRoutes);
 
   // Quote management routes
   app.use(quotesRoutes);

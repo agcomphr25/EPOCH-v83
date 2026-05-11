@@ -30,6 +30,10 @@ const MAX_SESSIONS_BY_ROLE: Record<string, number> = {
 export const STEP_UP_MAX_AGE_MS =
   (parseInt(process.env.STEP_UP_MAX_AGE_MINUTES ?? '30', 10) || 30) * 60 * 1000;
 
+function buildDeviceFingerprint(ipAddress: string | null | undefined, userAgent: string | null | undefined): string {
+  return crypto.createHash('sha256').update(`${ipAddress ?? 'unknown'}|${userAgent ?? 'unknown'}`).digest('hex');
+}
+
 // ─── Session Audit Helper ─────────────────────────────────────────────────────
 async function logSessionAuditEvent(
   action: string,
@@ -562,12 +566,13 @@ router.post('/badge-login', loginRateLimiter, async (req, res) => {
     // Store session in database — badge authentication IS credential verification
     const badgeIpAddress = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket?.remoteAddress || null;
     const badgeUserAgent = req.headers['user-agent'] || null;
+    const badgeDeviceFingerprint = buildDeviceFingerprint(badgeIpAddress, badgeUserAgent);
     await pool.query(
-      `INSERT INTO user_sessions (session_token, user_id, username, expires_at, is_active, ip_address, user_agent, last_credential_verified_at)
-      VALUES ($1, $2, $3, $4, true, $5, $6, NOW())
+      `INSERT INTO user_sessions (session_token, user_id, username, expires_at, is_active, ip_address, user_agent, device_fingerprint, last_credential_verified_at, mfa_verified_at, security_policy_version)
+      VALUES ($1, $2, $3, $4, true, $5, $6, $7, NOW(), NOW(), 'cmmc-itar-v1')
       ON CONFLICT (session_token) DO UPDATE
-      SET expires_at = $4, is_active = true, ip_address = $5, user_agent = $6, last_credential_verified_at = NOW()`,
-      [sessionToken, sessionUser.id, sessionUser.username, expiresAt, badgeIpAddress, badgeUserAgent]
+      SET expires_at = $4, is_active = true, ip_address = $5, user_agent = $6, device_fingerprint = $7, last_credential_verified_at = NOW(), mfa_verified_at = NOW(), security_policy_version = 'cmmc-itar-v1'`,
+      [sessionToken, sessionUser.id, sessionUser.username, expiresAt, badgeIpAddress, badgeUserAgent, badgeDeviceFingerprint]
     );
 
     // SESSION HYDRATION INVARIANT: Validate session can be hydrated before returning success
@@ -770,11 +775,12 @@ router.post('/login', loginRateLimiter, async (req, res) => {
     }
 
     // Store session in database for persistence
+    const deviceFingerprint = buildDeviceFingerprint(ipAddress, userAgent);
     const insertResult = await pool.query(
-      `INSERT INTO user_sessions (session_token, user_id, username, expires_at, is_active, ip_address, user_agent, last_credential_verified_at) 
-       VALUES ($1, $2, $3, $4, true, $5, $6, NOW())
+      `INSERT INTO user_sessions (session_token, user_id, username, expires_at, is_active, ip_address, user_agent, device_fingerprint, last_credential_verified_at, mfa_verified_at, security_policy_version)
+       VALUES ($1, $2, $3, $4, true, $5, $6, $7, NOW(), NULL, 'cmmc-itar-v1')
        RETURNING id`,
-      [sessionToken, user.id, user.username, expiresAt, ipAddress, userAgent]
+      [sessionToken, user.id, user.username, expiresAt, ipAddress, userAgent, deviceFingerprint]
     );
     const newSessionId = String(insertResult.rows?.[0]?.id ?? insertResult[0]?.id ?? 'unknown');
 
@@ -1218,13 +1224,16 @@ router.get('/sessions', authenticateToken, async (req, res) => {
       session_token: string;
       ip_address: string | null;
       user_agent: string | null;
+      device_fingerprint: string | null;
+      mfa_verified_at: string | null;
+      security_policy_version: string | null;
       last_credential_verified_at: string | null;
       created_at: string;
       expires_at: string;
     }
 
     const result = await pool.query(
-      `SELECT id, session_token, ip_address, user_agent, last_credential_verified_at, created_at, expires_at
+      `SELECT id, session_token, ip_address, user_agent, device_fingerprint, mfa_verified_at, security_policy_version, last_credential_verified_at, created_at, expires_at
        FROM user_sessions
        WHERE user_id = $1 AND is_active = true AND expires_at > NOW()
        ORDER BY created_at DESC`,
@@ -1237,6 +1246,9 @@ router.get('/sessions', authenticateToken, async (req, res) => {
       isCurrent: s.session_token === currentToken,
       ipAddress: s.ip_address,
       userAgent: s.user_agent,
+      deviceFingerprint: s.device_fingerprint,
+      mfaVerifiedAt: s.mfa_verified_at,
+      securityPolicyVersion: s.security_policy_version,
       lastCredentialVerifiedAt: s.last_credential_verified_at,
       createdAt: s.created_at,
       expiresAt: s.expires_at,
@@ -1412,6 +1424,9 @@ router.get('/admin/sessions', authenticateToken, async (req, res) => {
       username: string;
       ip_address: string | null;
       user_agent: string | null;
+      device_fingerprint: string | null;
+      mfa_verified_at: string | null;
+      security_policy_version: string | null;
       last_credential_verified_at: string | null;
       created_at: string;
       expires_at: string;
@@ -1423,6 +1438,7 @@ router.get('/admin/sessions', authenticateToken, async (req, res) => {
     const { userId } = req.query;
     let query = `
       SELECT s.id, s.user_id, s.username, s.ip_address, s.user_agent,
+             s.device_fingerprint, s.mfa_verified_at, s.security_policy_version,
              s.last_credential_verified_at, s.created_at, s.expires_at,
              u.role, u.first_name, u.last_name
       FROM user_sessions s
@@ -1449,6 +1465,9 @@ router.get('/admin/sessions', authenticateToken, async (req, res) => {
       role: s.role,
       ipAddress: s.ip_address,
       userAgent: s.user_agent,
+      deviceFingerprint: s.device_fingerprint,
+      mfaVerifiedAt: s.mfa_verified_at,
+      securityPolicyVersion: s.security_policy_version,
       lastCredentialVerifiedAt: s.last_credential_verified_at,
       createdAt: s.created_at,
       expiresAt: s.expires_at,

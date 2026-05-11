@@ -15,6 +15,10 @@ import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { generatePackingSlipPdf } from '../../utils/pdf/packingSlipPdf';
 import type { PackingSlipData, PackingSlipItem } from '../../utils/pdf/types';
 import { COMPANY_INFO } from '../../utils/pdf/pdfConfig';
+import {
+  buildCertPackageExport,
+  evaluateShippingCertPackageGate,
+} from '../services/certPackageService';
 import multer from 'multer';
 import { ObjectStorageService } from '../../replit_integrations/object_storage/objectStorage';
 
@@ -1287,11 +1291,56 @@ router.get('/shipments/:lotId', async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/p2/shipments/:lotId/cert-package — evaluate shipment/cert-package readiness
+router.get('/shipments/:lotId/cert-package', async (req: Request, res: Response) => {
+  try {
+    const gate = await evaluateShippingCertPackageGate(req.params.lotId);
+    if (!gate) return res.status(404).json({ error: 'Lot not found' });
+    return res.json(gate);
+  } catch (err: any) {
+    console.error('Cert package gate error:', err);
+    return res.status(500).json({ error: 'Failed to evaluate cert package readiness' });
+  }
+});
+
+// GET /api/p2/shipments/:lotId/cert-package/export — deterministic package manifest + hash
+router.get('/shipments/:lotId/cert-package/export', async (req: Request, res: Response) => {
+  try {
+    const certPackage = await buildCertPackageExport(req.params.lotId);
+    if (!certPackage) return res.status(404).json({ error: 'Lot not found' });
+
+    res.set('Content-Type', 'application/json');
+    res.set(
+      'Content-Disposition',
+      `attachment; filename="cert-package-${certPackage.lotNumber}.json"`
+    );
+    return res.send(JSON.stringify(certPackage, null, 2));
+  } catch (err: any) {
+    console.error('Cert package export error:', err);
+    return res.status(500).json({ error: 'Failed to export cert package' });
+  }
+});
+
 // PATCH /api/p2/shipments/:lotId — update tracking, carrier, notes; optionally mark shipped
 router.patch('/shipments/:lotId', async (req: Request, res: Response) => {
   try {
     const { lotId } = req.params;
     const { trackingNumber, carrier, notes, markShipped, shippedBy } = req.body;
+
+    if (markShipped) {
+      const gate = await evaluateShippingCertPackageGate(lotId);
+      if (!gate) return res.status(404).json({ error: 'Lot not found' });
+      if (!gate.readyToShip) {
+        return res.status(409).json({
+          error: 'Shipment blocked by cert package gate',
+          gate: 'shipping_cert_package',
+          message: 'Shipment cannot be marked shipped until all required cert-package evidence is complete.',
+          blockers: gate.blockers,
+          evidence: gate.evidence,
+          revisionSnapshot: gate.revisionSnapshot,
+        });
+      }
+    }
 
     const setClauses: string[] = [];
     const vals: any[] = [];

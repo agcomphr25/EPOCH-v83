@@ -1673,6 +1673,9 @@ export const userSessions = pgTable('user_sessions', {
   isActive: boolean('is_active').default(true),
   ipAddress: text('ip_address'),
   userAgent: text('user_agent'),
+  deviceFingerprint: text('device_fingerprint'),
+  mfaVerifiedAt: timestamp('mfa_verified_at'),
+  securityPolicyVersion: text('security_policy_version').default('cmmc-itar-v1'),
   lastCredentialVerifiedAt: timestamp('last_credential_verified_at'),
   createdAt: timestamp('created_at').defaultNow(),
 });
@@ -4447,9 +4450,15 @@ export const digitalSignatures = pgTable('digital_signatures', {
   id: uuid('id').primaryKey().defaultRandom(),
   signerUserId: integer('signer_user_id').notNull().references(() => users.id),
   signerRole: text('signer_role').notNull(),
+  signerUsername: text('signer_username'),
   certificateId: uuid('certificate_id').notNull().references(() => userSigningKeys.id),
   algorithm: text('algorithm').notNull().default('Ed25519'),
   transactionClass: text('transaction_class').notNull(),
+  signatureMeaning: text('signature_meaning'),
+  signatureReason: text('signature_reason'),
+  linkedObjectType: text('linked_object_type'),
+  linkedObjectId: text('linked_object_id'),
+  approvalRequestId: uuid('approval_request_id'),
   payloadHash: text('payload_hash').notNull(),
   payloadCanonical: jsonb('payload_canonical').$type<Record<string, unknown>>().notNull(),
   signatureBytes: text('signature_bytes').notNull(),
@@ -4459,6 +4468,8 @@ export const digitalSignatures = pgTable('digital_signatures', {
   signerIdx: index('digital_signatures_signer_idx').on(t.signerUserId),
   classIdx: index('digital_signatures_class_idx').on(t.transactionClass),
   certificateIdx: index('digital_signatures_certificate_idx').on(t.certificateId),
+  linkedObjectIdx: index('digital_signatures_linked_object_idx').on(t.linkedObjectType, t.linkedObjectId),
+  approvalRequestIdx: index('digital_signatures_approval_request_idx').on(t.approvalRequestId),
 }));
 
 export type DigitalSignature = typeof digitalSignatures.$inferSelect;
@@ -5156,6 +5167,11 @@ export const p2PurchaseOrders = pgTable('p2_purchase_orders', {
   
   // Project association — free-text field for internal project name or number
   projectName: text('project_name'),
+  securityClassification: text('security_classification').notNull().default('internal'), // public | internal | cui | itar
+  cuiCategory: text('cui_category'),
+  itarCategory: text('itar_category'),
+  exportControlJurisdiction: text('export_control_jurisdiction'),
+  customerFileAccessRule: text('customer_file_access_rule').notNull().default('authenticated'),
 
   // Scrap rate tracking — incremented by nonconforming disposition workflow
   scrappedItemCount: integer('scrapped_item_count').notNull().default(0),
@@ -5197,6 +5213,10 @@ export const rfqRiskAssessments = pgTable('rfq_risk_assessments', {
   riskDetermination: text('risk_determination'),
   bidDecision: text('bid_decision'),
   status: text('status').notNull().default('draft'), // draft or submitted
+  securityClassification: text('security_classification').notNull().default('internal'), // public | internal | cui | itar
+  cuiCategory: text('cui_category'),
+  itarCategory: text('itar_category'),
+  exportControlJurisdiction: text('export_control_jurisdiction'),
   submittedBy: text('submitted_by'), // Username who submitted
   submittedAt: timestamp('submitted_at'), // When it was submitted
   attachments: text('attachments').array(), // PDF file paths
@@ -10058,6 +10078,14 @@ export const controlledDocuments = pgTable('controlled_documents', {
   filePath: text('file_path'), // Path to current version file
   // CMMC Classification: visibility level for access control enforcement
   classification: text('classification').notNull().default('internal'), // public | internal | restricted | classified
+  cuiCategory: text('cui_category'),
+  itarCategory: text('itar_category'),
+  exportControlJurisdiction: text('export_control_jurisdiction'),
+  customerId: text('customer_id'),
+  contractArtifactType: text('contract_artifact_type'),
+  accessRule: text('access_rule').notNull().default('authenticated'), // authenticated | explicit_grant | admin_only
+  mfaRequired: boolean('mfa_required').notNull().default(false),
+  downloadTrackingRequired: boolean('download_tracking_required').notNull().default(true),
   createdBy: text('created_by').notNull(),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
@@ -10106,13 +10134,19 @@ export type InsertDocumentVersionHistory = z.infer<typeof insertDocumentVersionH
 // ============================================================================
 export const objectAccessLog = pgTable('object_access_log', {
   id: serial('id').primaryKey(),
-  documentId: uuid('document_id').references(() => controlledDocuments.id).notNull(),
+  documentId: uuid('document_id').references(() => controlledDocuments.id),
+  vaultDocumentId: integer('vault_document_id'),
   userId: text('user_id').notNull(), // username of the actor
-  action: text('action').notNull(), // 'view' | 'download' | 'denied'
+  action: text('action').notNull(), // 'view' | 'download' | 'denied' | 'link_issued'
   ipAddress: text('ip_address'),
+  userAgent: text('user_agent'),
+  deviceFingerprint: text('device_fingerprint'),
+  linkExpiresAt: timestamp('link_expires_at'),
+  sessionId: integer('session_id'),
   accessedAt: timestamp('accessed_at').defaultNow().notNull(),
 }, (table) => ({
   documentIdIdx: index('object_access_log_document_id_idx').on(table.documentId),
+  vaultDocumentIdIdx: index('object_access_log_vault_document_id_idx').on(table.vaultDocumentId),
   userIdIdx: index('object_access_log_user_id_idx').on(table.userId),
   accessedAtIdx: index('object_access_log_accessed_at_idx').on(table.accessedAt),
   actionIdx: index('object_access_log_action_idx').on(table.action),
@@ -10164,6 +10198,11 @@ export const quotes = pgTable('quotes', {
   quotedBy: text('quoted_by'),
   notes: text('notes'),
   attachments: text('attachments').array(), // PDF file paths
+  securityClassification: text('security_classification').notNull().default('internal'), // public | internal | cui | itar
+  cuiCategory: text('cui_category'),
+  itarCategory: text('itar_category'),
+  exportControlJurisdiction: text('export_control_jurisdiction'),
+  customerFileAccessRule: text('customer_file_access_rule').notNull().default('authenticated'),
   // Bridge column: integer FK to customers.id for joining back to the master customers table.
   // Populated on insert from the resolved customers record matching the text customer_id,
   // or copied directly from the parent RFQ when a quote is created from an estimating RFQ.
@@ -17607,15 +17646,37 @@ export const vaultDocuments = pgTable('vault_documents', {
   description: text('description'),
   objectPath: text('object_path').notNull(),
   classification: text('classification').notNull().default('internal'), // public | internal | cui | itar
+  cuiCategory: text('cui_category'),
+  itarCategory: text('itar_category'),
+  exportControlJurisdiction: text('export_control_jurisdiction'),
+  documentCategory: text('document_category').notNull().default('controlled_document'), // cad | drawing | spec | customer_file | controlled_document | policy
+  customerId: text('customer_id'),
+  customerName: text('customer_name'),
+  contractArtifactType: text('contract_artifact_type'),
+  sourceEntityType: text('source_entity_type'),
+  sourceEntityId: text('source_entity_id'),
   scopeType: text('scope_type').notNull().default('global'), // global | project | department
   scopeValue: text('scope_value'), // projectId or department name when scoped
   contentType: text('content_type').notNull().default('application/octet-stream'),
   fileSizeBytes: integer('file_size_bytes'),
+  checksumSha256: text('checksum_sha256'),
+  encryptionAtRestPolicy: text('encryption_at_rest_policy').notNull().default('object_storage_managed'),
+  accessRule: text('access_rule').notNull().default('authenticated'), // authenticated | explicit_grant | admin_only
+  mfaRequired: boolean('mfa_required').notNull().default(false),
+  deviceTrackingRequired: boolean('device_tracking_required').notNull().default(true),
+  downloadTrackingRequired: boolean('download_tracking_required').notNull().default(true),
+  expiringLinksRequired: boolean('expiring_links_required').notNull().default(true),
+  linkExpiresInSeconds: integer('link_expires_in_seconds').notNull().default(900),
+  sessionTimeoutMinutes: integer('session_timeout_minutes').notNull().default(30),
   uploaderUserId: integer('uploader_user_id').notNull(),
   uploaderDisplayName: text('uploader_display_name').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => ({
   classificationIdx: index('vault_documents_classification_idx').on(table.classification),
+  documentCategoryIdx: index('vault_documents_document_category_idx').on(table.documentCategory),
+  customerIdIdx: index('vault_documents_customer_id_idx').on(table.customerId),
+  sourceEntityIdx: index('vault_documents_source_entity_idx').on(table.sourceEntityType, table.sourceEntityId),
   scopeTypeIdx: index('vault_documents_scope_type_idx').on(table.scopeType),
   uploaderIdx: index('vault_documents_uploader_idx').on(table.uploaderUserId),
 }));
@@ -17623,6 +17684,7 @@ export const vaultDocuments = pgTable('vault_documents', {
 export const insertVaultDocumentSchema = createInsertSchema(vaultDocuments).omit({
   id: true,
   createdAt: true,
+  updatedAt: true,
 });
 export type VaultDocument = typeof vaultDocuments.$inferSelect;
 export type InsertVaultDocument = z.infer<typeof insertVaultDocumentSchema>;
@@ -18594,6 +18656,10 @@ export const contractReviewChecklistInstances = pgTable('contract_review_checkli
   p2PurchaseOrderId: integer('p2_purchase_order_id').references(() => p2PurchaseOrders.id, { onDelete: 'set null' }),
   vendorPoId: integer('vendor_po_id').references(() => vendorPOs.id, { onDelete: 'set null' }),
   travelerId: varchar('traveler_id', { length: 255 }).references(() => travelers.id, { onDelete: 'set null' }),
+  securityClassification: text('security_classification').notNull().default('internal'), // public | internal | cui | itar
+  cuiCategory: text('cui_category'),
+  itarCategory: text('itar_category'),
+  exportControlJurisdiction: text('export_control_jurisdiction'),
   status: text('status').notNull().default('draft'),
   reviewAreaStatus: jsonb('review_area_status').$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
   responses: jsonb('responses').$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
@@ -18936,6 +19002,13 @@ export const approvalRequests = pgTable('approval_requests', {
   resolvedByDisplayName: text('resolved_by_display_name'),
   resolutionNotes: text('resolution_notes'),
   resolutionSignature: text('resolution_signature'),
+  signatureMeaning: text('signature_meaning'),
+  signatureReason: text('signature_reason'),
+  signerUsername: text('signer_username'),
+  signerRole: text('signer_role'),
+  signatureLinkedObjectType: text('signature_linked_object_type'),
+  signatureLinkedObjectId: text('signature_linked_object_id'),
+  digitalSignatureId: uuid('digital_signature_id').references(() => digitalSignatures.id),
   resolutionReasonCode: text('resolution_reason_code'),
   policyId: integer('policy_id').references(() => escalationPolicies.id),
   createdAt: timestamp('created_at').notNull().defaultNow(),
@@ -18946,7 +19019,59 @@ export const approvalRequests = pgTable('approval_requests', {
   statusDeadlineIdx: index('approval_requests_status_deadline_idx').on(t.status, t.currentLevelDeadline),
   typeIdx: index('approval_requests_request_type_idx').on(t.requestType),
   subjectIdx: index('approval_requests_subject_idx').on(t.subjectType, t.subjectId),
+  signatureLinkedObjectIdx: index('approval_requests_signature_linked_object_idx').on(t.signatureLinkedObjectType, t.signatureLinkedObjectId),
 }));
+
+export const approvalSignatureEvidence = pgTable('approval_signature_evidence', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  approvalRequestId: uuid('approval_request_id').notNull().references(() => approvalRequests.id, { onDelete: 'cascade' }),
+  decisionStatus: text('decision_status').notNull(),
+  signatureMeaning: text('signature_meaning').notNull(),
+  signatureReason: text('signature_reason').notNull(),
+  signerUserId: integer('signer_user_id'),
+  signerUsername: text('signer_username').notNull(),
+  signerRole: text('signer_role').notNull(),
+  linkedObjectType: text('linked_object_type').notNull(),
+  linkedObjectId: text('linked_object_id').notNull(),
+  digitalSignatureId: uuid('digital_signature_id').references(() => digitalSignatures.id),
+  recordedAt: timestamp('recorded_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  approvalRequestIdx: index('approval_signature_evidence_request_idx').on(t.approvalRequestId),
+  linkedObjectIdx: index('approval_signature_evidence_linked_object_idx').on(t.linkedObjectType, t.linkedObjectId),
+  signerIdx: index('approval_signature_evidence_signer_idx').on(t.signerUserId),
+}));
+
+export const auditRequiredEventCoverage = pgTable('audit_required_event_coverage', {
+  id: serial('id').primaryKey(),
+  domainKey: text('domain_key').notNull(),
+  objectType: text('object_type').notNull(),
+  lifecycleStage: text('lifecycle_stage').notNull(),
+  requiredEventType: text('required_event_type').notNull(),
+  requiredSourceService: text('required_source_service').notNull(),
+  evidenceRequirement: text('evidence_requirement').notNull(),
+  requiredActorRole: text('required_actor_role'),
+  signatureRequired: boolean('signature_required').notNull().default(false),
+  retentionObjectType: text('retention_object_type').notNull(),
+  complianceBasis: text('compliance_basis').notNull().default('DCAA audit evidence'),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  domainIdx: index('audit_required_event_coverage_domain_idx').on(t.domainKey),
+  objectIdx: index('audit_required_event_coverage_object_idx').on(t.objectType),
+  eventUidx: uniqueIndex('audit_required_event_coverage_event_uidx').on(t.domainKey, t.objectType, t.requiredEventType),
+}));
+
+export const auditObjectRetentionPolicies = pgTable('audit_object_retention_policies', {
+  id: serial('id').primaryKey(),
+  objectType: text('object_type').notNull().unique(),
+  minRetentionDays: integer('min_retention_days').notNull().default(2555),
+  archiveAfterDays: integer('archive_after_days'),
+  legalHoldSupported: boolean('legal_hold_supported').notNull().default(true),
+  description: text('description').notNull(),
+  updatedBy: text('updated_by'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
 
 export const approvalRequestHistory = pgTable('approval_request_history', {
   id: bigint('id', { mode: 'number' }).primaryKey().generatedByDefaultAsIdentity(),

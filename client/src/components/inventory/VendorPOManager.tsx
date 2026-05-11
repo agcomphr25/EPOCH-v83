@@ -2515,10 +2515,10 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
 
   // Send RFQ mutation - sends quote request email to vendor
   const sendRFQMutation = useMutation({
-    mutationFn: ({ id, recipients }: { id: number; recipients: string[] }) =>
+    mutationFn: ({ id, recipients, skipEmail = false, reason }: { id: number; recipients: string[]; skipEmail?: boolean; reason?: string }) =>
       apiRequest(`/api/vendor-pos/${id}/send-rfq`, {
         method: 'POST',
-        body: JSON.stringify({ recipients }),
+        body: JSON.stringify({ recipients, skipEmail, reason }),
       }),
     onSuccess: (data: any, variables) => {
       getSendRFQInvalidationKeys(variables.id).forEach((key) =>
@@ -2526,6 +2526,8 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
       );
       if (data.emailSent) {
         toast.success(`RFQ sent to ${data.emailRecipient}`);
+      } else if (data.emailSent === false) {
+        toast.success('RFQ prepared without sending email');
       } else {
         toast.error(data.message || 'Failed to send RFQ');
       }
@@ -2670,7 +2672,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
     } catch {
       setDialogRecipients([]);
       setSelectedRecipients([]);
-      toast.error('Could not load recipients — failed to load vendor contacts. Please close and try again.');
+      toast.error('Could not load recipients. You can still use Print Only.');
     } finally {
       setIsLoadingRecipients(false);
     }
@@ -2811,6 +2813,16 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
         changeStatusMutation.mutate({ id: selectedVendorPO.id, status: pendingStatus });
       }
     }
+  };
+
+  const confirmRFQSend = (skipEmail: boolean = false) => {
+    if (!selectedVendorPO) return;
+    sendRFQMutation.mutate({
+      id: selectedVendorPO.id,
+      recipients: skipEmail ? [] : selectedRecipients,
+      skipEmail,
+      reason: skipEmail ? 'Printed and sent separately' : undefined,
+    });
   };
 
   const handleDownloadPDF = async (poToView?: VendorPO) => {
@@ -3850,7 +3862,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
             <AlertDialogHeader>
               <AlertDialogTitle>Send Request for Quote</AlertDialogTitle>
               <AlertDialogDescription>
-                Select the recipients for this RFQ email. At least one recipient must be checked.
+                Select the recipients for this RFQ email, or print it without sending email.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <div className="space-y-2">
@@ -3865,12 +3877,32 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
               <Button
+                variant="outline"
                 onClick={() => {
                   if (selectedVendorPO) {
-                    sendRFQMutation.mutate({ id: selectedVendorPO.id, recipients: selectedRecipients });
+                    sendRFQMutation.mutate({
+                      id: selectedVendorPO.id,
+                      recipients: [],
+                      skipEmail: true,
+                      reason: 'Printed and sent separately',
+                    });
                   }
                 }}
-                disabled={sendRFQMutation.isPending || selectedRecipients.length === 0}
+                disabled={sendRFQMutation.isPending}
+                data-testid="button-print-only-rfq"
+              >
+                Print Only
+              </Button>
+              <Button
+                onClick={() => {
+                  if (selectedVendorPO) {
+                    sendRFQMutation.mutate({
+                      id: selectedVendorPO.id,
+                      recipients: selectedRecipients,
+                    });
+                  }
+                }}
+                disabled={sendRFQMutation.isPending || selectedRecipients.length === 0 || isLoadingRecipients}
                 data-testid="button-confirm-send-rfq"
               >
                 {sendRFQMutation.isPending ? (

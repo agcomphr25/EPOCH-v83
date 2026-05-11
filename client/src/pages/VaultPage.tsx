@@ -60,16 +60,34 @@ import { format } from 'date-fns';
 
 type Classification = 'public' | 'internal' | 'cui' | 'itar';
 type ScopeType = 'global' | 'project' | 'department';
+type DocumentCategory = 'cad' | 'drawing' | 'spec' | 'customer_file' | 'controlled_document' | 'policy';
 
 interface VaultDoc {
   id: number;
   name: string;
   description: string | null;
   classification: Classification;
+  cuiCategory: string | null;
+  itarCategory: string | null;
+  exportControlJurisdiction: string | null;
+  documentCategory: DocumentCategory;
+  customerId: string | null;
+  customerName: string | null;
+  contractArtifactType: string | null;
+  sourceEntityType: string | null;
+  sourceEntityId: string | null;
   scopeType: ScopeType;
   scopeValue: string | null;
   contentType: string;
   fileSizeBytes: number | null;
+  encryptionAtRestPolicy: string;
+  accessRule: string;
+  mfaRequired: boolean;
+  deviceTrackingRequired: boolean;
+  downloadTrackingRequired: boolean;
+  expiringLinksRequired: boolean;
+  linkExpiresInSeconds: number;
+  sessionTimeoutMinutes: number;
   uploaderUserId: number;
   uploaderDisplayName: string;
   createdAt: string;
@@ -133,6 +151,15 @@ const CLASSIFICATION_CONFIG: Record<Classification, { label: string; color: stri
     icon: <Lock className="h-3 w-3" />,
     description: 'Export Controlled — strictly restricted access',
   },
+};
+
+const DOCUMENT_CATEGORY_LABELS: Record<DocumentCategory, string> = {
+  cad: 'CAD',
+  drawing: 'Drawing',
+  spec: 'Specification',
+  customer_file: 'Customer File',
+  controlled_document: 'Controlled Document',
+  policy: 'Policy',
 };
 
 function ClassificationBadge({ classification }: { classification: Classification }) {
@@ -238,8 +265,19 @@ export default function VaultPage() {
     name: '',
     description: '',
     classification: 'internal' as Classification,
+    cuiCategory: '',
+    itarCategory: '',
+    exportControlJurisdiction: '',
+    documentCategory: 'controlled_document' as DocumentCategory,
+    customerId: '',
+    customerName: '',
+    contractArtifactType: '',
+    sourceEntityType: '',
+    sourceEntityId: '',
     scopeType: 'global' as ScopeType,
     scopeValue: '',
+    linkExpiresInSeconds: '900',
+    sessionTimeoutMinutes: '30',
   });
 
   // Grant form
@@ -296,7 +334,24 @@ export default function VaultPage() {
       queryClient.invalidateQueries({ queryKey: ['/api/vault/documents'] });
       setUploadOpen(false);
       setSelectedFile(null);
-      setUploadForm({ name: '', description: '', classification: 'internal', scopeType: 'global', scopeValue: '' });
+      setUploadForm({
+        name: '',
+        description: '',
+        classification: 'internal',
+        cuiCategory: '',
+        itarCategory: '',
+        exportControlJurisdiction: '',
+        documentCategory: 'controlled_document',
+        customerId: '',
+        customerName: '',
+        contractArtifactType: '',
+        sourceEntityType: '',
+        sourceEntityId: '',
+        scopeType: 'global',
+        scopeValue: '',
+        linkExpiresInSeconds: '900',
+        sessionTimeoutMinutes: '30',
+      });
       toast({ title: 'Document uploaded successfully' });
     },
     onError: (err: any) => {
@@ -343,10 +398,21 @@ export default function VaultPage() {
         description: uploadForm.description.trim() || undefined,
         objectPath,
         classification: uploadForm.classification,
+        cuiCategory: uploadForm.cuiCategory.trim() || undefined,
+        itarCategory: uploadForm.itarCategory.trim() || undefined,
+        exportControlJurisdiction: uploadForm.exportControlJurisdiction.trim() || undefined,
+        documentCategory: uploadForm.documentCategory,
+        customerId: uploadForm.customerId.trim() || undefined,
+        customerName: uploadForm.customerName.trim() || undefined,
+        contractArtifactType: uploadForm.contractArtifactType.trim() || undefined,
+        sourceEntityType: uploadForm.sourceEntityType.trim() || undefined,
+        sourceEntityId: uploadForm.sourceEntityId.trim() || undefined,
         scopeType: uploadForm.scopeType,
         scopeValue: uploadForm.scopeType !== 'global' ? uploadForm.scopeValue.trim() : undefined,
         contentType: selectedFile.type || 'application/octet-stream',
         fileSizeBytes: selectedFile.size,
+        linkExpiresInSeconds: uploadForm.linkExpiresInSeconds,
+        sessionTimeoutMinutes: uploadForm.sessionTimeoutMinutes,
       });
     } catch (err: any) {
       toast({ title: 'Upload failed', description: err?.message || 'Unknown error', variant: 'destructive' });
@@ -432,8 +498,10 @@ export default function VaultPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
+                  <TableHead>Category</TableHead>
                   <TableHead>Classification</TableHead>
                   <TableHead>Scope</TableHead>
+                  <TableHead>Security</TableHead>
                   <TableHead>Uploader</TableHead>
                   <TableHead>Size</TableHead>
                   <TableHead>Date</TableHead>
@@ -464,11 +532,29 @@ export default function VaultPage() {
                         </div>
                       </div>
                     </TableCell>
+                    <TableCell className="text-sm">
+                      <div>{DOCUMENT_CATEGORY_LABELS[doc.documentCategory] ?? doc.documentCategory}</div>
+                      {(doc.customerName || doc.customerId) && (
+                        <div className="text-xs text-muted-foreground">
+                          {doc.customerName || doc.customerId}
+                        </div>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <ClassificationBadge classification={doc.classification} />
+                      {(doc.cuiCategory || doc.itarCategory) && (
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          {doc.cuiCategory || doc.itarCategory}
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell>
                       <ScopeLabel scopeType={doc.scopeType} scopeValue={doc.scopeValue} />
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      <div>{doc.encryptionAtRestPolicy.replace(/_/g, ' ')}</div>
+                      <div>{doc.mfaRequired ? 'MFA/step-up required' : 'Session auth'}</div>
+                      <div>{doc.expiringLinksRequired ? `${doc.linkExpiresInSeconds}s link` : 'Standard link'}</div>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {doc.uploaderDisplayName}
@@ -598,6 +684,60 @@ export default function VaultPage() {
               />
             </div>
 
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Document Category</Label>
+                <Select
+                  value={uploadForm.documentCategory}
+                  onValueChange={v => setUploadForm(prev => ({ ...prev, documentCategory: v as DocumentCategory }))}
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(Object.entries(DOCUMENT_CATEGORY_LABELS) as [DocumentCategory, string][]).map(([key, label]) => (
+                      <SelectItem key={key} value={key}>{label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="vault-artifact-type">Artifact Type</Label>
+                <Input
+                  id="vault-artifact-type"
+                  value={uploadForm.contractArtifactType}
+                  onChange={e => setUploadForm(prev => ({ ...prev, contractArtifactType: e.target.value }))}
+                  placeholder="e.g. customer spec"
+                  className="mt-1"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="vault-customer-id">Customer ID</Label>
+                <Input
+                  id="vault-customer-id"
+                  value={uploadForm.customerId}
+                  onChange={e => setUploadForm(prev => ({ ...prev, customerId: e.target.value }))}
+                  placeholder="Optional"
+                  className="mt-1"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="vault-customer-name">Customer Name</Label>
+                <Input
+                  id="vault-customer-name"
+                  value={uploadForm.customerName}
+                  onChange={e => setUploadForm(prev => ({ ...prev, customerName: e.target.value }))}
+                  placeholder="Optional"
+                  className="mt-1"
+                />
+              </div>
+            </div>
+
             {/* Classification */}
             <div>
               <Label>Classification</Label>
@@ -620,6 +760,45 @@ export default function VaultPage() {
                 </SelectContent>
               </Select>
             </div>
+
+            {(uploadForm.classification === 'cui' || uploadForm.classification === 'itar') && (
+              <div className="grid grid-cols-2 gap-3">
+                {uploadForm.classification === 'cui' && (
+                  <div>
+                    <Label htmlFor="vault-cui-category">CUI Category</Label>
+                    <Input
+                      id="vault-cui-category"
+                      value={uploadForm.cuiCategory}
+                      onChange={e => setUploadForm(prev => ({ ...prev, cuiCategory: e.target.value }))}
+                      placeholder="e.g. CUI//SP-CTI"
+                      className="mt-1"
+                    />
+                  </div>
+                )}
+                {uploadForm.classification === 'itar' && (
+                  <div>
+                    <Label htmlFor="vault-itar-category">ITAR Category</Label>
+                    <Input
+                      id="vault-itar-category"
+                      value={uploadForm.itarCategory}
+                      onChange={e => setUploadForm(prev => ({ ...prev, itarCategory: e.target.value }))}
+                      placeholder="e.g. Technical Data"
+                      className="mt-1"
+                    />
+                  </div>
+                )}
+                <div>
+                  <Label htmlFor="vault-export-jurisdiction">Jurisdiction</Label>
+                  <Input
+                    id="vault-export-jurisdiction"
+                    value={uploadForm.exportControlJurisdiction}
+                    onChange={e => setUploadForm(prev => ({ ...prev, exportControlJurisdiction: e.target.value }))}
+                    placeholder={uploadForm.classification === 'itar' ? 'ITAR' : 'Optional'}
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+            )}
 
             {/* CUI/ITAR warning */}
             {(uploadForm.classification === 'cui' || uploadForm.classification === 'itar') && (
@@ -665,6 +844,56 @@ export default function VaultPage() {
                 />
               </div>
             )}
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="vault-source-type">Source Type</Label>
+                <Input
+                  id="vault-source-type"
+                  value={uploadForm.sourceEntityType}
+                  onChange={e => setUploadForm(prev => ({ ...prev, sourceEntityType: e.target.value }))}
+                  placeholder="quote, po, project"
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="vault-source-id">Source ID</Label>
+                <Input
+                  id="vault-source-id"
+                  value={uploadForm.sourceEntityId}
+                  onChange={e => setUploadForm(prev => ({ ...prev, sourceEntityId: e.target.value }))}
+                  placeholder="Optional"
+                  className="mt-1"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="vault-link-ttl">Link Expiration Seconds</Label>
+                <Input
+                  id="vault-link-ttl"
+                  type="number"
+                  min="60"
+                  max="900"
+                  value={uploadForm.linkExpiresInSeconds}
+                  onChange={e => setUploadForm(prev => ({ ...prev, linkExpiresInSeconds: e.target.value }))}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="vault-session-timeout">Step-up Timeout Minutes</Label>
+                <Input
+                  id="vault-session-timeout"
+                  type="number"
+                  min="5"
+                  max="60"
+                  value={uploadForm.sessionTimeoutMinutes}
+                  onChange={e => setUploadForm(prev => ({ ...prev, sessionTimeoutMinutes: e.target.value }))}
+                  className="mt-1"
+                />
+              </div>
+            </div>
           </div>
 
           <div className="flex justify-end gap-2 pt-2">

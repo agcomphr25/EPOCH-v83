@@ -20,7 +20,12 @@
 
 import crypto from 'crypto';
 import { db } from '../../db';
-import { auditEvents, auditAnchors, auditRetentionPolicies } from '../../schema';
+import {
+  auditEvents,
+  auditAnchors,
+  auditObjectRetentionPolicies,
+  auditRetentionPolicies,
+} from '../../schema';
 import { sql, eq, desc, and, gte, lte, inArray, asc } from 'drizzle-orm';
 
 /**
@@ -529,6 +534,10 @@ export async function getRetentionPolicies() {
   return db.select().from(auditRetentionPolicies);
 }
 
+export async function getObjectRetentionPolicies() {
+  return db.select().from(auditObjectRetentionPolicies);
+}
+
 /** Default DCAA-aligned floor (years 7) in days. */
 export const DCAA_RETENTION_FLOOR_DAYS = 2555;
 
@@ -544,4 +553,13 @@ export async function getRetentionFloorDays(eventType: string): Promise<number> 
     specific?.minRetentionDays ?? 0,
     def?.minRetentionDays ?? DCAA_RETENTION_FLOOR_DAYS,
   );
+}
+
+/** Resolve retention by governed object type (contract/cert/traveler/etc.). */
+export async function getObjectRetentionFloorDays(objectType: string): Promise<number> {
+  const rows = await db
+    .select()
+    .from(auditObjectRetentionPolicies)
+    .where(eq(auditObjectRetentionPolicies.objectType, objectType));
+  return Math.max(rows[0]?.minRetentionDays ?? 0, DCAA_RETENTION_FLOOR_DAYS);
 }

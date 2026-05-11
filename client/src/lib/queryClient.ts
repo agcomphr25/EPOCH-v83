@@ -267,9 +267,9 @@ export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
       }
 
       const err: any = new Error(errorMessage);
+      err.status = response.status;
       if (data) {
         err.responseData = data;
-        err.status = response.status;
       }
       throw err;
     }
@@ -407,7 +407,16 @@ export const queryClient = new QueryClient({
         if (error?.status === 401 || error?.status === 403) {
           return false;
         }
+        if (error?.status === 503) {
+          return failureCount < 6;
+        }
         return failureCount < 1;
+      },
+      retryDelay: (attemptIndex: number, error: any) => {
+        if (error?.status === 503) {
+          return Math.min(1000 * 2 ** attemptIndex, 5000);
+        }
+        return 1000;
       },
     },
     mutations: {

@@ -493,6 +493,7 @@ async function initializeBackgroundServices() {
           '0123_charge_code_cost_handling.sql',
           '0124_chart_of_accounts_foundation.sql',
           '0128_procurement_section6_supplier_controls.sql',
+          '0129_quality_section9_ncr_capa_calibration.sql',
           'investigation_308_order_duplication.sql',
         ];
         const criticalMigrations = new Set([

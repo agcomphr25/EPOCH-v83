@@ -75,7 +75,22 @@ router.get('/', async (req, res) => {
         use_order_address as "useOrderAddress", repair_address as "repairAddress",
         shipping_status as "shippingStatus", tracking_number as "trackingNumber",
         shipping_carrier as "shippingCarrier", shipped_date as "shippedDate",
-        customer_notified as "customerNotified", created_at as "createdAt", updated_at as "updatedAt"
+        customer_notified as "customerNotified",
+        containment_action as "containmentAction", containment_owner as "containmentOwner",
+        containment_due_date as "containmentDueDate", containment_completed_at as "containmentCompletedAt",
+        root_cause as "rootCause", root_cause_method as "rootCauseMethod",
+        corrective_action as "correctiveAction", preventive_action as "preventiveAction",
+        capa_required as "capaRequired", capa_id as "capaId",
+        disposition_rationale as "dispositionRationale",
+        disposition_approved_by_user_id as "dispositionApprovedByUserId",
+        disposition_approved_by_display_name as "dispositionApprovedByDisplayName",
+        disposition_approved_at as "dispositionApprovedAt",
+        effectiveness_review as "effectivenessReview", effectiveness_status as "effectivenessStatus",
+        effectiveness_reviewed_by_user_id as "effectivenessReviewedByUserId",
+        effectiveness_reviewed_by_display_name as "effectivenessReviewedByDisplayName",
+        effectiveness_reviewed_at as "effectivenessReviewedAt",
+        recurrence_detected as "recurrenceDetected",
+        created_at as "createdAt", updated_at as "updatedAt"
       FROM nonconformance_records
       ${whereClause}
       ORDER BY created_at DESC
@@ -345,6 +360,21 @@ async function generateRmaNumber(): Promise<string> {
   return `${datePrefix}-${nextNumber}`;
 }
 
+function validateNcrClosure(data: z.infer<typeof insertNonconformanceRecordSchema>): string[] {
+  if (data.status !== 'Resolved') return [];
+
+  const missing: string[] = [];
+  if (!data.containmentAction?.trim()) missing.push('containment action');
+  if (!data.rootCause?.trim()) missing.push('root cause');
+  if (!data.correctiveAction?.trim()) missing.push('corrective action');
+  if (!data.dispositionRationale?.trim()) missing.push('disposition rationale');
+  if (data.effectivenessStatus !== 'effective') missing.push('effective effectiveness review');
+  if (data.recurrenceDetected && !data.preventiveAction?.trim()) {
+    missing.push('preventive action for recurrence');
+  }
+  return missing;
+}
+
 // POST /api/nonconformance - Create new record
 router.post('/', async (req, res) => {
   try {
@@ -352,6 +382,10 @@ router.post('/', async (req, res) => {
     const sanitizedBody = { ...req.body };
     if (sanitizedBody.dateReceived === '') sanitizedBody.dateReceived = null;
     if (sanitizedBody.dispositionDate === '') sanitizedBody.dispositionDate = null;
+    if (sanitizedBody.containmentDueDate === '') sanitizedBody.containmentDueDate = null;
+    if (sanitizedBody.containmentCompletedAt === '') sanitizedBody.containmentCompletedAt = null;
+    if (sanitizedBody.dispositionApprovedAt === '') sanitizedBody.dispositionApprovedAt = null;
+    if (sanitizedBody.effectivenessReviewedAt === '') sanitizedBody.effectivenessReviewedAt = null;
     
     const validatedData = insertNonconformanceRecordSchema.parse(sanitizedBody);
 
@@ -455,8 +489,19 @@ router.put('/:id', async (req, res) => {
     const sanitizedBody = { ...req.body };
     if (sanitizedBody.dateReceived === '') sanitizedBody.dateReceived = null;
     if (sanitizedBody.dispositionDate === '') sanitizedBody.dispositionDate = null;
+    if (sanitizedBody.containmentDueDate === '') sanitizedBody.containmentDueDate = null;
+    if (sanitizedBody.containmentCompletedAt === '') sanitizedBody.containmentCompletedAt = null;
+    if (sanitizedBody.dispositionApprovedAt === '') sanitizedBody.dispositionApprovedAt = null;
+    if (sanitizedBody.effectivenessReviewedAt === '') sanitizedBody.effectivenessReviewedAt = null;
     
     const validatedData = insertNonconformanceRecordSchema.parse(sanitizedBody);
+    const closureMissing = validateNcrClosure(validatedData);
+    if (closureMissing.length > 0) {
+      return res.status(400).json({
+        error: 'NCR closure requires complete Section 9 quality evidence',
+        missing: closureMissing,
+      });
+    }
 
     // Set resolvedAt timestamp if status is changing to Resolved
     const updateData: any = {

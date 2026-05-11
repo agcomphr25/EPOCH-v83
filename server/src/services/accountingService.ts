@@ -1,6 +1,7 @@
 import { db } from '../../db';
 import { chartOfAccounts, journalEntries, journalLines } from '../../schema';
 import { eq, and } from 'drizzle-orm';
+import { assertPostingAllowedForPeriod } from './accountingPeriodService';
 
 export type PaymentRecord = {
   id: number;
@@ -56,6 +57,17 @@ export async function createOrUpdateFromPayment(
 
   let entryId: number;
   const isUpdate = !!existingEntry;
+  const effectiveDate =
+    existingEntry?.effectiveDate ??
+    (paymentRecord.paymentDate instanceof Date
+      ? paymentRecord.paymentDate
+      : new Date(paymentRecord.paymentDate));
+
+  await assertPostingAllowedForPeriod({
+    effectiveDate,
+    user,
+    postingMode: 'STANDARD',
+  });
 
   if (existingEntry) {
     if (existingEntry.status === 'EXPORTED') {
@@ -69,11 +81,6 @@ export async function createOrUpdateFromPayment(
       .where(eq(journalLines.journalEntryId, existingEntry.id));
     entryId = existingEntry.id;
   } else {
-    const effectiveDate =
-      paymentRecord.paymentDate instanceof Date
-        ? paymentRecord.paymentDate
-        : new Date(paymentRecord.paymentDate);
-
     const [newEntry] = await db
       .insert(journalEntries)
       .values({
@@ -147,6 +154,12 @@ export async function createBulkWireJournalEntry({
   user?: { id?: number; username?: string } | null;
 }): Promise<void> {
   try {
+    await assertPostingAllowedForPeriod({
+      effectiveDate: paymentDate,
+      user,
+      postingMode: 'STANDARD',
+    });
+
     const net = Math.round((totalGross - totalFee) * 100) / 100;
 
     if (net < 0) {
@@ -247,6 +260,12 @@ export async function deleteJournalEntryForPayment(paymentId: number): Promise<{
     );
     return { blocked: true };
   }
+
+  await assertPostingAllowedForPeriod({
+    effectiveDate: entry.effectiveDate,
+    user: null,
+    postingMode: 'REVERSAL',
+  });
 
   await db.delete(journalLines).where(eq(journalLines.journalEntryId, entry.id));
   await db.delete(journalEntries).where(eq(journalEntries.id, entry.id));

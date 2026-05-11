@@ -8,6 +8,7 @@ import { eq, sql } from 'drizzle-orm';
 import { pool, db } from '../../db';
 import { users, employees } from '../../schema';
 import { authenticateToken } from '../../middleware/auth';
+import { recordAuditEvent } from '../services/auditLedgerService';
 
 // ─── Session Hardening Types ──────────────────────────────────────────────────
 /** Minimal row shape returned by concurrent-session overflow queries */
@@ -90,24 +91,19 @@ async function logSessionAuditEvent(
   ipAddress?: string,
   userAgent?: string
 ): Promise<void> {
-  try {
-    await pool.query(
-      `INSERT INTO audit_events (entity_type, entity_id, action, actor_id, actor_name, actor_role, meta, ip_address, user_agent, created_at)
-       VALUES ('user_session', $1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
-      [
-        sessionId,
-        action,
-        userId,
-        username,
-        role,
-        JSON.stringify(meta),
-        ipAddress ?? null,
-        userAgent ?? null,
-      ]
-    );
-  } catch (err) {
-    console.error('[SessionAudit] Failed to write audit event:', action, err);
-  }
+  await recordAuditEvent({
+    eventType: action,
+    subjectType: 'user_session',
+    subjectId: sessionId,
+    sourceService: 'auth.route',
+    actor: { id: userId, username, role },
+    ipAddress: ipAddress ?? null,
+    userAgent: userAgent ?? null,
+    payload: meta as any,
+    meta: meta as any,
+    entityType: 'user_session',
+    entityId: sessionId,
+  });
 }
 
 const router = Router();

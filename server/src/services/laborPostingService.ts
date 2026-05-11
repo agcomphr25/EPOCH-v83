@@ -2,6 +2,7 @@ import { db } from '../../db';
 import { journalEntries, journalLines, laborAccountConfig, laborCostRecords, laborPostingRuns } from '../../schema';
 import { and, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 import { verifyPeriodBurdenComplete } from './burdenRatesService';
+import { assertPostingAllowedForPeriod } from './accountingPeriodService';
 
 // Compound grouping key for WAD-linked labor cost records.
 // Every WAD record must resolve to exactly one journal entry.
@@ -65,6 +66,13 @@ export async function postLaborToGL(year: number, month: number, postedBy: strin
   let runId = 0;
   const journalEntryIds: number[] = [];
   let skippedAlreadyPosted = 0;
+  const effectiveDate = new Date(year, month - 1, 1);
+
+  await assertPostingAllowedForPeriod({
+    effectiveDate,
+    user: { username: postedBy },
+    postingMode: 'STANDARD',
+  });
 
   // All reads and writes are performed inside a single atomic transaction.
   // The posting run row is locked with SELECT ... FOR UPDATE at the start so
@@ -235,8 +243,6 @@ export async function postLaborToGL(year: number, month: number, postedBy: strin
         wadGroups.set(mk, { key, total: Number(rec.dollarCost) });
       }
     }
-
-    const effectiveDate = new Date(year, month - 1, 1);
 
     // ── 8a. Non-WAD records — one journal entry per costType ─────────────────
     for (const [costType, totalAmount] of Object.entries(nonWadTotals)) {

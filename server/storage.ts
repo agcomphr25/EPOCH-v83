@@ -131,7 +131,6 @@ import {
   employeeDocuments,
   employeeAuditLog,
   adminAuditLog,
-  auditEvents,
   // Capability-based permission system tables
   capabilities,
   employeeCapabilities,
@@ -707,6 +706,7 @@ import {
   type InsertLocalCalendarEvent,
 } from './schema';
 import { db, pool, rawSql } from './db';
+import { recordAuditEvent } from './src/services/auditLedgerService';
 
 // Drizzle's transaction handle is API-compatible with `db` for the CRUD
 // surface our helpers use, but its TS type is a `PgTransaction` (not the
@@ -11068,13 +11068,36 @@ export class DatabaseStorage implements IStorage {
       }
 
       // Mandatory audit event — transactional with review write.
-      await tx.insert(auditEvents).values({
+      await recordAuditEvent({
+        eventType: isUpdate ? 'COMPLIANCE_REVIEW_UPDATED' : 'COMPLIANCE_REVIEW_SUBMITTED',
+        subjectType: 'vendor',
+        subjectId: String(data.vendorPoId),
+        sourceService: 'storage.vendorPoComplianceReview',
+        actor: {
+          id: data.reviewedByUserId ?? null,
+          username: data.reviewedByDisplayName ?? null,
+          role: null,
+        },
+        reason: data.reviewNotes ?? null,
         entityType: 'vendor',
         entityId: String(data.vendorPoId),
-        action: isUpdate ? 'COMPLIANCE_REVIEW_UPDATED' : 'COMPLIANCE_REVIEW_SUBMITTED',
-        actorId: data.reviewedByUserId ?? null,
-        actorName: data.reviewedByDisplayName ?? null,
-        reason: data.reviewNotes,
+        payload: {
+          vendorPoId: data.vendorPoId,
+          reviewStatus: computedStatus,
+          governmentContract: data.governmentContract,
+          farRequired: data.farRequired,
+          dpasRequired: data.dpasRequired,
+          cocRequired: data.cocRequired,
+          mtrRequired: data.mtrRequired,
+          sourceInspectionRequired: data.sourceInspectionRequired,
+          secondPartyComplete: data.secondPartyComplete,
+          vendorApproved: data.vendorApproved,
+          reviewNotes: data.reviewNotes,
+          reviewedByUserId: data.reviewedByUserId ?? null,
+          reviewedByDisplayName: data.reviewedByDisplayName ?? null,
+          reviewedAt: now.toISOString(),
+          isUpdate,
+        },
         meta: {
           // Full field snapshot for audit completeness
           vendorPoId: data.vendorPoId,
@@ -11093,7 +11116,7 @@ export class DatabaseStorage implements IStorage {
           reviewedAt: now.toISOString(),
           isUpdate,
         },
-      });
+      }, tx);
 
       return savedReview;
     });
@@ -11124,20 +11147,32 @@ export class DatabaseStorage implements IStorage {
         .set({ reviewStatus: 'requires_attention', updatedAt: now })
         .where(eq(vendorPoComplianceReviews.vendorPoId, poId));
 
-      await tx.insert(auditEvents).values({
+      await recordAuditEvent({
+        eventType: 'COMPLIANCE_REVIEW_INVALIDATED',
+        subjectType: 'vendor',
+        subjectId: String(poId),
+        sourceService: 'storage.vendorPoComplianceReview',
+        actor: {
+          id: actorId ?? null,
+          username: actorId ? String(actorId) : 'system',
+          role: null,
+        },
+        reason,
         entityType: 'vendor',
         entityId: String(poId),
-        action: 'COMPLIANCE_REVIEW_INVALIDATED',
-        actorId: actorId ?? null,
-        actorName: actorId ? String(actorId) : 'system',
-        reason,
+        payload: {
+          vendorPoId: poId,
+          previousStatus,
+          newStatus: 'requires_attention',
+          ...meta,
+        },
         meta: {
           vendorPoId: poId,
           previousStatus,
           newStatus: 'requires_attention',
           ...meta,
         },
-      });
+      }, tx);
     });
   }
 

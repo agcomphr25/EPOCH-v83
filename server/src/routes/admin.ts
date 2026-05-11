@@ -12,6 +12,7 @@ import { forecastActiveOrders, forecastOrder, simulateNewOrder } from '../servic
 import { simulateFactoryCompletion, invalidateSimulationCache } from '../services/productionSimulator';
 import { normalizeToTuesday } from '@shared/utils/dateNormalization';
 import { syncEmployeeRoles, findRoleMismatches } from '../migrations/syncEmployeeRoles';
+import { recordAuditEvent } from '../services/auditLedgerService';
 
 const router = Router();
 
@@ -1814,22 +1815,32 @@ router.post(
         ]
       );
 
-      // Write reason to audit_events for timeline
-      await pool.query(
-        `INSERT INTO audit_events
-           (entity_type, entity_id, action, actor_name, actor_role, reason, fields_changed, meta, timestamp)
-         VALUES ('order', $1, 'ADMIN_FIELD_OVERRIDE', $2, $3, $4, $5, $6, NOW())`,
-        [
-          resolvedOrderId,
-          user.username,
-          user.role ?? 'OWNER',
-          reason,
-          JSON.stringify([columnName]),
-          JSON.stringify({ column: columnName, oldValue, newValue: effectiveValue }),
-        ]
-      ).catch((err: any) => {
-        // audit_events may have schema differences — don't fail the whole request
-        console.warn('[OrderOverride] audit_events insert failed (non-fatal):', err.message);
+      await recordAuditEvent({
+        eventType: 'ADMIN_FIELD_OVERRIDE',
+        subjectType: 'order',
+        subjectId: resolvedOrderId,
+        sourceService: 'admin.orderOverride',
+        actor: {
+          id: typeof user.id === 'number' ? user.id : null,
+          username: user.username,
+          role: user.role ?? 'OWNER',
+        },
+        reason,
+        fieldsChanged: {
+          [columnName]: { before: oldValue, after: effectiveValue },
+        },
+        payload: {
+          column: columnName,
+          oldValue,
+          newValue: effectiveValue,
+        } as any,
+        meta: {
+          column: columnName,
+          oldValue,
+          newValue: effectiveValue,
+        } as any,
+        entityType: 'order',
+        entityId: resolvedOrderId,
       });
 
       res.json({

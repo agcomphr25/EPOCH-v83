@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { and, desc, eq } from 'drizzle-orm';
 import { db } from '../../db';
 import { authenticateToken } from '../../middleware/auth';
+import { requirePermission } from '../../middleware/requirePermission';
+import { recordAuditEvent } from '../services/auditLedgerService';
 import {
   engineeringControlledRevisions,
   engineeringChangeOrders,
@@ -82,6 +84,39 @@ function actorFromRequest(req: Request, override?: string): string {
   if (override) return override;
   const user = (req as any).user;
   return user?.username || user?.email || user?.displayName || 'system';
+}
+
+function auditActor(req: Request) {
+  const user = (req as any).user;
+  return {
+    id: typeof user?.id === 'number' ? user.id : null,
+    username: user?.username ?? user?.email ?? user?.displayName ?? null,
+    role: user?.role ?? null,
+  };
+}
+
+async function logEngineeringControlEvent(req: Request, input: {
+  eventType: string;
+  subjectType: 'engineering_revision' | 'engineering_eco';
+  subjectId: string;
+  reason?: string | null;
+  payload: Record<string, unknown>;
+}) {
+  await recordAuditEvent({
+    eventType: input.eventType,
+    subjectType: input.subjectType,
+    subjectId: input.subjectId,
+    sourceService: 'engineeringControl.route',
+    actor: auditActor(req),
+    reason: input.reason ?? null,
+    payload: input.payload as any,
+    entityType: input.subjectType,
+    entityId: input.subjectId,
+    meta: {
+      ...input.payload,
+      route: 'server/src/routes/engineeringControl.ts',
+    } as any,
+  });
 }
 
 function transitionAllowed(current: string, next: string): boolean {
@@ -229,7 +264,7 @@ router.patch('/revisions/:id', authenticateToken, async (req: Request, res: Resp
   }
 });
 
-router.post('/revisions/:id/transition', authenticateToken, async (req: Request, res: Response) => {
+router.post('/revisions/:id/transition', authenticateToken, requirePermission('engineering.release_revision'), async (req: Request, res: Response) => {
   try {
     const parsed = transitionRevisionSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Validation failed', details: parsed.error.issues });
@@ -298,6 +333,23 @@ router.post('/revisions/:id/transition', authenticateToken, async (req: Request,
         .onConflictDoNothing();
     }
 
+    await logEngineeringControlEvent(req, {
+      eventType: 'ENGINEERING_REVISION_TRANSITIONED',
+      subjectType: 'engineering_revision',
+      subjectId: updated.id,
+      reason: parsed.data.releaseNotes ?? null,
+      payload: {
+        revisionId: updated.id,
+        artifactType: updated.artifactType,
+        artifactId: updated.artifactId,
+        revision: updated.revision,
+        priorReleaseState: existing.releaseState,
+        nextReleaseState: parsed.data.releaseState,
+        ecoId: parsed.data.ecoId ?? null,
+        actor,
+      },
+    });
+
     return res.json(updated);
   } catch (error: any) {
     console.error('[EngineeringControl] transition revision error:', error);
@@ -359,7 +411,7 @@ router.post('/ecos', authenticateToken, async (req: Request, res: Response) => {
   }
 });
 
-router.post('/ecos/:id/impact-review', authenticateToken, async (req: Request, res: Response) => {
+router.post('/ecos/:id/impact-review', authenticateToken, requirePermission('engineering.release_revision'), async (req: Request, res: Response) => {
   try {
     const parsed = impactReviewSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Validation failed', details: parsed.error.issues });
@@ -377,6 +429,18 @@ router.post('/ecos/:id/impact-review', authenticateToken, async (req: Request, r
       .where(eq(engineeringChangeOrders.id, req.params.id))
       .returning();
     if (!updated) return res.status(404).json({ error: 'ECO not found' });
+    await logEngineeringControlEvent(req, {
+      eventType: 'ENGINEERING_ECO_IMPACT_REVIEWED',
+      subjectType: 'engineering_eco',
+      subjectId: updated.id,
+      payload: {
+        ecoId: updated.id,
+        ecoNumber: updated.ecoNumber,
+        status: updated.status,
+        impactReviewedBy: updated.impactReviewedBy,
+        impactReviewedAt: updated.impactReviewedAt,
+      },
+    });
     return res.json(updated);
   } catch (error: any) {
     console.error('[EngineeringControl] ECO impact review error:', error);
@@ -384,7 +448,7 @@ router.post('/ecos/:id/impact-review', authenticateToken, async (req: Request, r
   }
 });
 
-router.post('/ecos/:id/submit-approval', authenticateToken, async (req: Request, res: Response) => {
+router.post('/ecos/:id/submit-approval', authenticateToken, requirePermission('engineering.release_revision'), async (req: Request, res: Response) => {
   try {
     const parsed = approvalSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Validation failed', details: parsed.error.issues });
@@ -399,6 +463,17 @@ router.post('/ecos/:id/submit-approval', authenticateToken, async (req: Request,
       .where(eq(engineeringChangeOrders.id, req.params.id))
       .returning();
     if (!updated) return res.status(404).json({ error: 'ECO not found' });
+    await logEngineeringControlEvent(req, {
+      eventType: 'ENGINEERING_ECO_SUBMITTED_FOR_APPROVAL',
+      subjectType: 'engineering_eco',
+      subjectId: updated.id,
+      payload: {
+        ecoId: updated.id,
+        ecoNumber: updated.ecoNumber,
+        status: updated.status,
+        approvalPlan: updated.approvalPlan ?? null,
+      },
+    });
     return res.json(updated);
   } catch (error: any) {
     console.error('[EngineeringControl] ECO submit approval error:', error);
@@ -406,7 +481,7 @@ router.post('/ecos/:id/submit-approval', authenticateToken, async (req: Request,
   }
 });
 
-router.post('/ecos/:id/approve', authenticateToken, async (req: Request, res: Response) => {
+router.post('/ecos/:id/approve', authenticateToken, requirePermission('engineering.release_revision'), async (req: Request, res: Response) => {
   try {
     const parsed = approvalSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Validation failed', details: parsed.error.issues });
@@ -423,6 +498,18 @@ router.post('/ecos/:id/approve', authenticateToken, async (req: Request, res: Re
       .where(eq(engineeringChangeOrders.id, req.params.id))
       .returning();
     if (!updated) return res.status(404).json({ error: 'ECO not found' });
+    await logEngineeringControlEvent(req, {
+      eventType: 'ENGINEERING_ECO_APPROVED',
+      subjectType: 'engineering_eco',
+      subjectId: updated.id,
+      payload: {
+        ecoId: updated.id,
+        ecoNumber: updated.ecoNumber,
+        status: updated.status,
+        approvedBy: updated.approvedBy,
+        approvedAt: updated.approvedAt,
+      },
+    });
     return res.json(updated);
   } catch (error: any) {
     console.error('[EngineeringControl] ECO approve error:', error);
@@ -430,7 +517,7 @@ router.post('/ecos/:id/approve', authenticateToken, async (req: Request, res: Re
   }
 });
 
-router.post('/ecos/:id/reject', authenticateToken, async (req: Request, res: Response) => {
+router.post('/ecos/:id/reject', authenticateToken, requirePermission('engineering.release_revision'), async (req: Request, res: Response) => {
   try {
     const parsed = rejectionSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Validation failed', details: parsed.error.issues });
@@ -447,6 +534,19 @@ router.post('/ecos/:id/reject', authenticateToken, async (req: Request, res: Res
       .where(eq(engineeringChangeOrders.id, req.params.id))
       .returning();
     if (!updated) return res.status(404).json({ error: 'ECO not found' });
+    await logEngineeringControlEvent(req, {
+      eventType: 'ENGINEERING_ECO_REJECTED',
+      subjectType: 'engineering_eco',
+      subjectId: updated.id,
+      reason: parsed.data.rejectionReason,
+      payload: {
+        ecoId: updated.id,
+        ecoNumber: updated.ecoNumber,
+        status: updated.status,
+        rejectedBy: updated.rejectedBy,
+        rejectedAt: updated.rejectedAt,
+      },
+    });
     return res.json(updated);
   } catch (error: any) {
     console.error('[EngineeringControl] ECO reject error:', error);
@@ -454,7 +554,7 @@ router.post('/ecos/:id/reject', authenticateToken, async (req: Request, res: Res
   }
 });
 
-router.post('/ecos/:id/implement', authenticateToken, async (req: Request, res: Response) => {
+router.post('/ecos/:id/implement', authenticateToken, requirePermission('engineering.release_revision'), async (req: Request, res: Response) => {
   try {
     const parsed = implementationSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Validation failed', details: parsed.error.issues });
@@ -481,6 +581,20 @@ router.post('/ecos/:id/implement', authenticateToken, async (req: Request, res: 
       })
       .where(eq(engineeringChangeOrders.id, req.params.id))
       .returning();
+    await logEngineeringControlEvent(req, {
+      eventType: 'ENGINEERING_ECO_IMPLEMENTED',
+      subjectType: 'engineering_eco',
+      subjectId: updated.id,
+      payload: {
+        ecoId: updated.id,
+        ecoNumber: updated.ecoNumber,
+        priorStatus: existing.status,
+        status: updated.status,
+        implementationDate: updated.implementationDate,
+        implementedBy: updated.implementedBy,
+        implementedAt: updated.implementedAt,
+      },
+    });
     return res.json(updated);
   } catch (error: any) {
     console.error('[EngineeringControl] ECO implement error:', error);
@@ -488,7 +602,7 @@ router.post('/ecos/:id/implement', authenticateToken, async (req: Request, res: 
   }
 });
 
-router.post('/ecos/:id/release', authenticateToken, async (req: Request, res: Response) => {
+router.post('/ecos/:id/release', authenticateToken, requirePermission('engineering.release_revision'), async (req: Request, res: Response) => {
   try {
     const parsed = ecoReleaseSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: 'Validation failed', details: parsed.error.issues });
@@ -514,6 +628,20 @@ router.post('/ecos/:id/release', authenticateToken, async (req: Request, res: Re
       })
       .where(eq(engineeringChangeOrders.id, req.params.id))
       .returning();
+    await logEngineeringControlEvent(req, {
+      eventType: 'ENGINEERING_ECO_RELEASED',
+      subjectType: 'engineering_eco',
+      subjectId: updated.id,
+      payload: {
+        ecoId: updated.id,
+        ecoNumber: updated.ecoNumber,
+        priorStatus: existing.status,
+        status: updated.status,
+        releasedBy: updated.releasedBy,
+        releasedAt: updated.releasedAt,
+        releaseLinkage: updated.releaseLinkage ?? null,
+      },
+    });
     return res.json(updated);
   } catch (error: any) {
     console.error('[EngineeringControl] ECO release error:', error);
@@ -521,7 +649,7 @@ router.post('/ecos/:id/release', authenticateToken, async (req: Request, res: Re
   }
 });
 
-router.post('/ecos/:id/link-revision', authenticateToken, async (req: Request, res: Response) => {
+router.post('/ecos/:id/link-revision', authenticateToken, requirePermission('engineering.release_revision'), async (req: Request, res: Response) => {
   try {
     const parsed = insertEngineeringEcoRevisionLinkSchema.safeParse({
       ...req.body,
@@ -531,6 +659,17 @@ router.post('/ecos/:id/link-revision', authenticateToken, async (req: Request, r
     if (!parsed.success) return res.status(400).json({ error: 'Validation failed', details: parsed.error.issues });
 
     const [created] = await db.insert(engineeringEcoRevisionLinks).values(parsed.data).returning();
+    await logEngineeringControlEvent(req, {
+      eventType: 'ENGINEERING_ECO_REVISION_LINKED',
+      subjectType: 'engineering_eco',
+      subjectId: req.params.id,
+      payload: {
+        ecoId: req.params.id,
+        revisionId: created.revisionId,
+        linkType: created.linkType,
+        createdBy: created.createdBy,
+      },
+    });
     return res.status(201).json(created);
   } catch (error: any) {
     console.error('[EngineeringControl] ECO link revision error:', error);

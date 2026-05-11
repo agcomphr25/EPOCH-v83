@@ -11,6 +11,7 @@ import {
 } from '../../schema';
 import { eq, inArray, desc } from 'drizzle-orm';
 import { authenticateToken, requireRole } from '../../middleware/auth';
+import { requirePermission } from '../../middleware/requirePermission';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { generatePackingSlipPdf } from '../../utils/pdf/packingSlipPdf';
 import type { PackingSlipData, PackingSlipItem } from '../../utils/pdf/types';
@@ -19,6 +20,7 @@ import {
   buildCertPackageExport,
   evaluateShippingCertPackageGate,
 } from '../services/certPackageService';
+import { recordAuditEvent } from '../services/auditLedgerService';
 import multer from 'multer';
 import { ObjectStorageService } from '../../replit_integrations/object_storage/objectStorage';
 
@@ -26,6 +28,15 @@ const upload = multer({ storage: multer.memoryStorage() });
 const objectStorageService = new ObjectStorageService();
 
 const router = Router();
+
+function auditActor(req: Request) {
+  const user = (req as any).user;
+  return {
+    id: typeof user?.id === 'number' ? user.id : null,
+    username: user?.username ?? user?.email ?? user?.displayName ?? null,
+    role: user?.role ?? null,
+  };
+}
 
 // ─── Session auth helper (for PDF routes that use cookie-based sessions) ─────
 async function getUserFromSession(req: Request): Promise<{ username: string; role: string } | null> {
@@ -132,7 +143,7 @@ const createLotSchema = z.object({
   createdBy: z.string().min(1).default('system'),
 });
 
-router.post('/lots', async (req: Request, res: Response) => {
+router.post('/lots', authenticateToken, requirePermission('shipping.release_shipment'), async (req: Request, res: Response) => {
   try {
     const input = createLotSchema.parse(req.body);
 
@@ -278,7 +289,7 @@ const createPackingSlipSchema = z.object({
   isNoChargeReplacement: z.boolean().optional(),
 });
 
-router.post('/packing-slips', async (req: Request, res: Response) => {
+router.post('/packing-slips', authenticateToken, requirePermission('shipping.release_shipment'), async (req: Request, res: Response) => {
   try {
     const input = createPackingSlipSchema.parse(req.body);
 
@@ -763,7 +774,7 @@ router.get('/packing-slips/:id/pdf', async (req: Request, res: Response) => {
 // Accepts a multipart/form-data file field named "file" (PDF only).
 // Stores the file in object storage and saves the path to external_pdf_url.
 // ============================================================
-router.post('/packing-slips/:id/attach-pdf', upload.single('file'), async (req: Request, res: Response) => {
+router.post('/packing-slips/:id/attach-pdf', authenticateToken, requirePermission('shipping.release_shipment'), upload.single('file'), async (req: Request, res: Response) => {
   try {
     const [slip] = await db
       .select()
@@ -798,7 +809,7 @@ router.post('/packing-slips/:id/attach-pdf', upload.single('file'), async (req: 
 // ============================================================
 // DELETE /api/p2/packing-slips/:id/attach-pdf — Remove external PDF
 // ============================================================
-router.delete('/packing-slips/:id/attach-pdf', async (req: Request, res: Response) => {
+router.delete('/packing-slips/:id/attach-pdf', authenticateToken, requirePermission('shipping.release_shipment'), async (req: Request, res: Response) => {
   try {
     const [slip] = await db
       .select()
@@ -828,7 +839,7 @@ const createCertificateSchema = z.object({
   certificationText: z.string().optional(),
 });
 
-router.post('/certificates', async (req: Request, res: Response) => {
+router.post('/certificates', authenticateToken, requirePermission('shipping.release_shipment'), async (req: Request, res: Response) => {
   try {
     const input = createCertificateSchema.parse(req.body);
 
@@ -1322,22 +1333,23 @@ router.get('/shipments/:lotId/cert-package/export', async (req: Request, res: Re
 });
 
 // PATCH /api/p2/shipments/:lotId — update tracking, carrier, notes; optionally mark shipped
-router.patch('/shipments/:lotId', async (req: Request, res: Response) => {
+router.patch('/shipments/:lotId', authenticateToken, requirePermission('shipping.mark_shipped'), async (req: Request, res: Response) => {
   try {
     const { lotId } = req.params;
     const { trackingNumber, carrier, notes, markShipped, shippedBy } = req.body;
+    let shipmentGate: Awaited<ReturnType<typeof evaluateShippingCertPackageGate>> | null = null;
 
     if (markShipped) {
-      const gate = await evaluateShippingCertPackageGate(lotId);
-      if (!gate) return res.status(404).json({ error: 'Lot not found' });
-      if (!gate.readyToShip) {
+      shipmentGate = await evaluateShippingCertPackageGate(lotId);
+      if (!shipmentGate) return res.status(404).json({ error: 'Lot not found' });
+      if (!shipmentGate.readyToShip) {
         return res.status(409).json({
           error: 'Shipment blocked by cert package gate',
           gate: 'shipping_cert_package',
           message: 'Shipment cannot be marked shipped until all required cert-package evidence is complete.',
-          blockers: gate.blockers,
-          evidence: gate.evidence,
-          revisionSnapshot: gate.revisionSnapshot,
+          blockers: shipmentGate.blockers,
+          evidence: shipmentGate.evidence,
+          revisionSnapshot: shipmentGate.revisionSnapshot,
         });
       }
     }
@@ -1397,6 +1409,37 @@ router.patch('/shipments/:lotId', async (req: Request, res: Response) => {
       }
     }
 
+    if (markShipped && shipmentGate) {
+      await recordAuditEvent({
+        eventType: 'SHIPMENT_RELEASED',
+        subjectType: 'shipment',
+        subjectId: lotId,
+        sourceService: 'p2Shipping.route',
+        actor: auditActor(req),
+        reason: notes || 'Shipment marked shipped after cert package gate cleared',
+        payload: {
+          lotId,
+          trackingNumber: trackingNumber || null,
+          carrier: carrier || null,
+          shippedBy: shippedBy || auditActor(req).username || 'system',
+          gate: 'shipping_cert_package',
+          readyToShip: shipmentGate.readyToShip,
+          blockers: shipmentGate.blockers as any,
+          evidence: shipmentGate.evidence as any,
+          revisionSnapshot: shipmentGate.revisionSnapshot as any,
+        },
+        entityType: 'shipment',
+        entityId: lotId,
+        meta: {
+          lotId,
+          trackingNumber: trackingNumber || null,
+          carrier: carrier || null,
+          gate: 'shipping_cert_package',
+          readyToShip: shipmentGate.readyToShip,
+        },
+      });
+    }
+
     return res.json({ success: true });
   } catch (err: any) {
     console.error('Shipment update error:', err);
@@ -1405,7 +1448,7 @@ router.patch('/shipments/:lotId', async (req: Request, res: Response) => {
 });
 
 // POST /api/p2/shipments/:lotId/upload-bol — upload Bill of Lading PDF/image
-router.post('/shipments/:lotId/upload-bol', upload.single('file'), async (req: Request, res: Response) => {
+router.post('/shipments/:lotId/upload-bol', authenticateToken, requirePermission('shipping.release_shipment'), upload.single('file'), async (req: Request, res: Response) => {
   try {
     const { lotId } = req.params;
     if (!req.file) return res.status(400).json({ error: 'No file provided' });
@@ -1452,7 +1495,7 @@ router.get('/shipments/:lotId/bill-of-lading', async (req: Request, res: Respons
 });
 
 // POST /api/p2/shipments/:lotId/upload-lot-validation-report — upload Lot Validation Report PDF/image
-router.post('/shipments/:lotId/upload-lot-validation-report', upload.single('file'), async (req: Request, res: Response) => {
+router.post('/shipments/:lotId/upload-lot-validation-report', authenticateToken, requirePermission('shipping.release_shipment'), upload.single('file'), async (req: Request, res: Response) => {
   try {
     const { lotId } = req.params;
     if (!req.file) return res.status(400).json({ error: 'No file provided' });
@@ -1499,7 +1542,7 @@ router.get('/shipments/:lotId/lot-validation-report', async (req: Request, res: 
 });
 
 // POST /api/p2/shipments/:lotId/upload-packing-slip — upload external packing slip PDF
-router.post('/shipments/:lotId/upload-packing-slip', upload.single('file'), async (req: Request, res: Response) => {
+router.post('/shipments/:lotId/upload-packing-slip', authenticateToken, requirePermission('shipping.release_shipment'), upload.single('file'), async (req: Request, res: Response) => {
   try {
     const { lotId } = req.params;
     if (!req.file) return res.status(400).json({ error: 'No file provided' });
@@ -1546,7 +1589,7 @@ router.get('/shipments/:lotId/packing-slip-upload', async (req: Request, res: Re
 });
 
 // POST /api/p2/shipments/:lotId/upload-certificate — upload external certificate PDF
-router.post('/shipments/:lotId/upload-certificate', upload.single('file'), async (req: Request, res: Response) => {
+router.post('/shipments/:lotId/upload-certificate', authenticateToken, requirePermission('shipping.release_shipment'), upload.single('file'), async (req: Request, res: Response) => {
   try {
     const { lotId } = req.params;
     if (!req.file) return res.status(400).json({ error: 'No file provided' });

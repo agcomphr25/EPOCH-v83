@@ -2290,7 +2290,6 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
   const { data: allOptionalSettings = [] } = useQuery<OptionalSetting[]>({
     queryKey: ['/api/vendor-pos/optional-settings'],
     queryFn: () => apiRequest('/api/vendor-pos/optional-settings') as Promise<OptionalSetting[]>,
-    retry: false,
   });
 
   // Fetch vendor POs — archived param changes based on the selected tab

@@ -1,7 +1,18 @@
 import { Router, Request, Response } from 'express';
 import { pool } from '../../db';
+import { ensureProductionWorkflowReadSchema } from '../lib/productionWorkflowReadiness';
 
 const router = Router();
+
+router.use(async (_req, res, next) => {
+  try {
+    await ensureProductionWorkflowReadSchema();
+    next();
+  } catch (error) {
+    console.error('[PM Dashboard] Production workflow schema readiness failed:', error);
+    res.status(503).json({ error: 'Production workflow schema is being prepared, please retry' });
+  }
+});
 
 function h(fn: (req: Request, res: Response) => Promise<void>) {
   return (req: Request, res: Response) =>
@@ -254,18 +265,18 @@ router.get('/:projectId/summary', h(async (req, res) => {
     FROM material_lot_reservations mlr
     JOIN material_lots ml ON ml.id = mlr.material_lot_id
     LEFT JOIN inventory_items ii ON ii.id = ml.inventory_item_id
-    WHERE mlr.traveler_id IN (
-      SELECT id FROM travelers WHERE project_id = $1
+    WHERE mlr.traveler_id::text IN (
+      SELECT id::text FROM travelers WHERE project_id = $1
     )
   `, [projectId]);
 
   const consumedRes = await pool.query<ConsumedCostRow>(`
-    SELECT COALESCE(SUM(tmc.quantity_used * COALESCE(ii.unit_cost, 0)), 0) AS "consumedMaterialCost"
+    SELECT COALESCE(SUM(COALESCE(tmc.qty_used, tmc.quantity_used, 0) * COALESCE(ii.unit_cost, 0)), 0) AS "consumedMaterialCost"
     FROM traveler_material_consumption tmc
     JOIN material_lots ml ON ml.id = tmc.material_lot_id
     LEFT JOIN inventory_items ii ON ii.id = ml.inventory_item_id
-    WHERE tmc.traveler_id IN (
-      SELECT id FROM travelers WHERE project_id = $1
+    WHERE tmc.traveler_id::text IN (
+      SELECT id::text FROM travelers WHERE project_id = $1
     )
   `, [projectId]);
 
@@ -752,17 +763,17 @@ router.get('/:projectId/materials', h(async (req, res) => {
       FROM material_lot_reservations mlr
       JOIN material_lots ml ON ml.id = mlr.material_lot_id
       LEFT JOIN inventory_items ii ON ii.id = ml.inventory_item_id
-      WHERE mlr.traveler_id IN (
-        SELECT id FROM travelers WHERE project_id = $1
+      WHERE mlr.traveler_id::text IN (
+        SELECT id::text FROM travelers WHERE project_id = $1
       )
     ) committed_sub,
     (
-      SELECT SUM(tmc.quantity_used * COALESCE(ii.unit_cost, 0)) AS consumed
+      SELECT SUM(COALESCE(tmc.qty_used, tmc.quantity_used, 0) * COALESCE(ii.unit_cost, 0)) AS consumed
       FROM traveler_material_consumption tmc
       JOIN material_lots ml ON ml.id = tmc.material_lot_id
       LEFT JOIN inventory_items ii ON ii.id = ml.inventory_item_id
-      WHERE tmc.traveler_id IN (
-        SELECT id FROM travelers WHERE project_id = $1
+      WHERE tmc.traveler_id::text IN (
+        SELECT id::text FROM travelers WHERE project_id = $1
       )
     ) consumed_sub,
     (
@@ -802,13 +813,13 @@ router.get('/:projectId/materials', h(async (req, res) => {
     LEFT JOIN (
       SELECT material_lot_id, SUM(quantity_reserved) AS qty_reserved
       FROM material_lot_reservations
-      WHERE traveler_id IN (SELECT id FROM travelers WHERE project_id = $1)
+      WHERE traveler_id::text IN (SELECT id::text FROM travelers WHERE project_id = $1)
       GROUP BY material_lot_id
     ) mlr_agg ON mlr_agg.material_lot_id = ml.id
     LEFT JOIN (
-      SELECT material_lot_id, SUM(quantity_used) AS qty_consumed
+      SELECT material_lot_id, SUM(COALESCE(qty_used, quantity_used, 0)) AS qty_consumed
       FROM traveler_material_consumption
-      WHERE traveler_id IN (SELECT id FROM travelers WHERE project_id = $1)
+      WHERE traveler_id::text IN (SELECT id::text FROM travelers WHERE project_id = $1)
       GROUP BY material_lot_id
     ) tmc_agg ON tmc_agg.material_lot_id = ml.id
     WHERE

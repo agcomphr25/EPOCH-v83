@@ -6008,6 +6008,24 @@ export const p2WorkTasks = pgTable('p2_work_tasks', {
   employeeName: text('employee_name').notNull(), // Denormalized for display
   certificationId: integer('certification_id')
     .references(() => p2EmployeePartCertifications.id, { onDelete: 'set null' }), // Link to certification used for audit trail
+  travelerId: varchar('traveler_id', { length: 255 })
+    .references(() => travelers.id, { onDelete: 'set null' }),
+  travelerStepId: varchar('traveler_step_id', { length: 255 })
+    .references(() => travelerSteps.id, { onDelete: 'set null' }),
+  productionWorkOrderId: uuid('production_work_order_id')
+    .references(() => productionWorkOrders.id, { onDelete: 'set null' }),
+  projectId: uuid('project_id')
+    .references(() => projects.id, { onDelete: 'set null' }),
+  chargeCodeId: integer('charge_code_id')
+    .references(() => chargeCodes.id, { onDelete: 'set null' }),
+  operationName: text('operation_name'),
+  operationScanValue: text('operation_scan_value'),
+  operationScannedAt: timestamp('operation_scanned_at'),
+  operationScannedBy: integer('operation_scanned_by').references(() => employees.id, { onDelete: 'set null' }),
+  electronicSignoffRequired: boolean('electronic_signoff_required').notNull().default(true),
+  electronicSignoffStatus: text('electronic_signoff_status').notNull().default('PENDING'),
+  electronicSignoffAt: timestamp('electronic_signoff_at'),
+  electronicSignoffBy: integer('electronic_signoff_by').references(() => employees.id, { onDelete: 'set null' }),
   status: text('status').notNull().default('IN_PROGRESS'), // IN_PROGRESS, COMPLETED, PAUSED
   startedAt: timestamp('started_at').notNull().defaultNow(), // Task start timestamp
   completedAt: timestamp('completed_at'), // Task completion timestamp
@@ -6023,6 +6041,10 @@ export const p2WorkTasks = pgTable('p2_work_tasks', {
   statusIdx: index('p2_work_tasks_status_idx').on(table.status),
   departmentIdx: index('p2_work_tasks_department_idx').on(table.department),
   itemStatusIdx: index('p2_work_tasks_item_status_idx').on(table.serializedItemId, table.status),
+  travelerIdx: index('p2_work_tasks_traveler_id_idx').on(table.travelerId),
+  travelerStepIdx: index('p2_work_tasks_traveler_step_id_idx').on(table.travelerStepId),
+  wadIdx: index('p2_work_tasks_wad_id_idx').on(table.productionWorkOrderId),
+  projectIdx: index('p2_work_tasks_project_id_idx').on(table.projectId),
 }));
 
 // P2 Oven Cure Logs - Records oven cure cycles for AS9100 traceability

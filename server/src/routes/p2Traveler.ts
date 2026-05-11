@@ -53,7 +53,12 @@ async function runAutoPunchForP2Task(params: {
   user?: Express.Request['user'] | null;
   ip?: string | null;
 }): Promise<
-  | { ok: true; punch: { action: 'clockedIn' | 'switched' | 'unchanged'; chargeCode?: string | null; warning?: string } }
+  | {
+      ok: true;
+      entry: any;
+      chargeContext: any;
+      punch: { action: 'clockedIn' | 'switched' | 'unchanged'; chargeCode?: string | null; warning?: string };
+    }
   | { ok: false; status: number; body: Record<string, unknown> }
 > {
   const linkedTraveler = await db
@@ -115,6 +120,8 @@ async function runAutoPunchForP2Task(params: {
   }
   return {
     ok: true,
+    entry: autoPunch.entry,
+    chargeContext: autoPunch.chargeContext,
     punch: {
       action: autoPunch.action,
       chargeCode:
@@ -128,6 +135,65 @@ async function runAutoPunchForP2Task(params: {
 
 function getTraceValue(item: any): string {
   return typeof item?.value === 'string' ? item.value.trim() : '';
+}
+
+function normalizeScanToken(value: unknown): string {
+  return String(value ?? '').trim().toUpperCase().replace(/\s+/g, '');
+}
+
+function validateOperationScan(scanValue: unknown, context: {
+  travelerId?: string | null;
+  travelerNumber?: string | null;
+  wadNumber?: string | null;
+  department?: string | null;
+  operation?: string | null;
+  travelerStepId?: string | null;
+  priorOperationScanValue?: string | null;
+}) {
+  const scanned = normalizeScanToken(scanValue);
+  if (!scanned) {
+    return {
+      ok: false,
+      code: 'OPERATION_SCAN_REQUIRED',
+      message: 'Scan the traveler operation before starting work.',
+    };
+  }
+
+  const travelerNumber = normalizeScanToken(context.travelerNumber);
+  const travelerId = normalizeScanToken(context.travelerId);
+  const travelerStepId = normalizeScanToken(context.travelerStepId);
+  const department = normalizeScanToken(context.department);
+  const operation = normalizeScanToken(context.operation);
+  const wadNumber = normalizeScanToken(context.wadNumber);
+  const priorOperationScanValue = normalizeScanToken(context.priorOperationScanValue);
+  const accepted = new Set(
+    [
+      travelerNumber,
+      travelerId,
+      travelerStepId,
+      wadNumber,
+      priorOperationScanValue,
+      travelerNumber && department ? `${travelerNumber}:${department}` : '',
+      travelerNumber && operation ? `${travelerNumber}:${operation}` : '',
+      travelerNumber && travelerStepId ? `${travelerNumber}:${travelerStepId}` : '',
+    ].filter(Boolean),
+  );
+
+  if (!accepted.has(scanned)) {
+    return {
+      ok: false,
+      code: 'OPERATION_SCAN_MISMATCH',
+      message: 'The scanned operation does not match the active traveler, WAD, or traveler step.',
+      expected: {
+        travelerNumber: context.travelerNumber ?? null,
+        travelerStepId: context.travelerStepId ?? null,
+        department: context.department ?? null,
+        operation: context.operation ?? null,
+      },
+    };
+  }
+
+  return { ok: true };
 }
 
 function isPacketTraceItem(item: any): boolean {
@@ -785,6 +851,7 @@ router.post('/start-task', async (req: Request, res: Response) => {
       customData,
       qcResults,
       notes,
+      operationScanValue,
     } = req.body;
 
     const identitySnapshot = await createEmployeeIdentitySnapshot(parseInt(employeeId));
@@ -924,6 +991,18 @@ router.post('/start-task', async (req: Request, res: Response) => {
       return res.status(startPunch.status).json(startPunch.body);
     }
 
+    const operationGate = validateOperationScan(operationScanValue, {
+      travelerId: startPunch.chargeContext.travelerId,
+      travelerNumber: startPunch.chargeContext.travelerNumber,
+      wadNumber: startPunch.chargeContext.wadNumber,
+      department: startPunch.chargeContext.department ?? department,
+      operation: startPunch.chargeContext.operation ?? department,
+      travelerStepId: startPunch.entry?.travelerStepId ?? null,
+    });
+    if (!operationGate.ok) {
+      return res.status(403).json(operationGate);
+    }
+
     const incomingTraceabilityData = Array.isArray(traceabilityData)
       ? traceabilityData.filter((item: any) => getTraceValue(item))
       : [];
@@ -944,6 +1023,17 @@ router.post('/start-task', async (req: Request, res: Response) => {
       employeeCode,
       employeeName,
       certificationId: certification.id,
+      travelerId: startPunch.chargeContext.travelerId ?? null,
+      travelerStepId: startPunch.entry?.travelerStepId ?? null,
+      productionWorkOrderId: startPunch.entry?.productionWorkOrderId ?? null,
+      projectId: startPunch.entry?.projectId ?? null,
+      chargeCodeId: startPunch.entry?.chargeCodeId ?? null,
+      operationName: startPunch.chargeContext.operation ?? department,
+      operationScanValue: String(operationScanValue).trim(),
+      operationScannedAt: new Date(),
+      operationScannedBy: parseInt(employeeId),
+      electronicSignoffRequired: true,
+      electronicSignoffStatus: 'PENDING',
       status: 'IN_PROGRESS',
       startedAt: new Date(),
       traceabilityData: incomingTraceabilityData,
@@ -1070,6 +1160,7 @@ router.post('/complete-task', async (req: Request, res: Response) => {
       employeeCode,
       barcode,
       notes,
+      operationScanValue,
     } = req.body;
 
     let completeDisplayName = employeeCode || 'unknown';
@@ -1121,6 +1212,26 @@ router.post('/complete-task', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Barcode does not match the started task' });
     }
 
+    if (!workTask.operationScanValue && !operationScanValue) {
+      return res.status(403).json({
+        error: 'OPERATION_SCAN_REQUIRED',
+        message: 'Scan the operation before electronic signoff can complete this task.',
+      });
+    }
+
+    if (operationScanValue) {
+      const operationGate = validateOperationScan(operationScanValue, {
+        travelerId: workTask.travelerId ?? null,
+        travelerStepId: workTask.travelerStepId ?? null,
+        department: workTask.department,
+        operation: workTask.operationName ?? workTask.department,
+        priorOperationScanValue: workTask.operationScanValue ?? null,
+      });
+      if (!operationGate.ok) {
+        return res.status(403).json(operationGate);
+      }
+    }
+
     // Calculate duration in minutes
     const startTime = new Date(workTask.startedAt).getTime();
     const endTime = Date.now();
@@ -1132,6 +1243,11 @@ router.post('/complete-task', async (req: Request, res: Response) => {
         status: 'COMPLETED',
         completedAt: new Date(),
         durationMinutes,
+        operationScanValue: operationScanValue ? String(operationScanValue).trim() : workTask.operationScanValue,
+        operationScannedAt: operationScanValue ? new Date() : workTask.operationScannedAt,
+        electronicSignoffStatus: 'SIGNED',
+        electronicSignoffAt: new Date(),
+        electronicSignoffBy: workTask.employeeId,
         notes: notes || workTask.notes,
         updatedAt: new Date(),
       })

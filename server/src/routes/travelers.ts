@@ -69,6 +69,64 @@ function normalizeDept(d: string): string {
   return DEPT_ALIASES[stripped] || stripped;
 }
 
+function normalizeOperationScan(value: unknown): string {
+  return String(value ?? '').trim().toUpperCase().replace(/\s+/g, '');
+}
+
+function validateTravelerOperationScan(scanValue: unknown, traveler: any, step: any, operationName?: string | null) {
+  const scanned = normalizeOperationScan(scanValue);
+  if (!scanned) {
+    return {
+      allowed: false,
+      payload: buildGateErrorBody(
+        'operation_scan',
+        'Operation scan required',
+        'Scan the traveler operation before starting this step.',
+      ),
+    };
+  }
+
+  const travelerNumber = normalizeOperationScan(traveler.travelerNumber);
+  const travelerId = normalizeOperationScan(traveler.id);
+  const stepId = normalizeOperationScan(step.id);
+  const stepNumber = normalizeOperationScan(step.stepNumber);
+  const department = normalizeOperationScan(step.departmentName);
+  const operation = normalizeOperationScan(operationName);
+  const accepted = new Set(
+    [
+      travelerNumber,
+      travelerId,
+      stepId,
+      stepNumber ? `STEP-${stepNumber}` : '',
+      travelerNumber && stepNumber ? `${travelerNumber}:${stepNumber}` : '',
+      travelerNumber && department ? `${travelerNumber}:${department}` : '',
+      travelerNumber && operation ? `${travelerNumber}:${operation}` : '',
+    ].filter(Boolean),
+  );
+
+  if (!accepted.has(scanned)) {
+    return {
+      allowed: false,
+      payload: {
+        ...buildGateErrorBody(
+          'operation_scan',
+          'Operation scan mismatch',
+          'The scanned operation does not match the active traveler step.',
+        ),
+        expected: {
+          travelerNumber: traveler.travelerNumber ?? null,
+          stepId: step.id ?? null,
+          stepNumber: step.stepNumber ?? null,
+          department: step.departmentName ?? null,
+          operation: operationName ?? null,
+        },
+      },
+    };
+  }
+
+  return { allowed: true, payload: null };
+}
+
 function getDeptTimestampField(dept: string): string | null {
   const key = normalizeDept(dept);
   const map: Record<string, string> = {
@@ -1475,7 +1533,7 @@ router.get('/:travelerId/steps/:stepId/labor-context', async (req: Request, res:
 router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Response) => {
   try {
     const { travelerId, stepId } = req.params;
-    const { startedBy, badgeScan, employeeId: bodyEmployeeId } = req.body;
+    const { startedBy, badgeScan, employeeId: bodyEmployeeId, operationScanValue } = req.body;
 
     // Resolve badge scan code to employee name and ID if badge was scanned.
     // Normalise dashes so scanner-formatted UUIDs (xxxxxxxx-xxxx-...) match DB rows
@@ -1539,6 +1597,18 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
       });
     }
 
+    const stepTasksForOperation = await storage.getTravelerTasks(stepId);
+    const activeOperationName =
+      stepTasksForOperation.find((t: any) => t.status === 'IN_PROGRESS')?.title ||
+      stepTasksForOperation.find((t: any) => t.status === 'NOT_STARTED')?.title ||
+      stepTasksForOperation[0]?.title ||
+      step.departmentName ||
+      null;
+    const operationScanGate = validateTravelerOperationScan(operationScanValue, traveler, step, activeOperationName);
+    if (!operationScanGate.allowed) {
+      return res.status(403).json(operationScanGate.payload);
+    }
+
     // WAD release gate: the linked production work order must be RELEASED or IN_PROGRESS.
     // IN_PROGRESS is permitted because the WAD auto-transitions when the first traveler starts;
     // subsequent travelers on the same WAD would otherwise be incorrectly blocked.
@@ -1561,12 +1631,7 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
     // but the employee is NOT blocked. Identity, traveler-authorization, and P2 part-certification
     // failures remain HARD BLOCKS (these require explicit supervisor remediation, not just a flag).
     const trainingGate = await evaluateTravelerTrainingGate(travelerId, stepId, resolvedEmployeeId, resolvedName);
-    const isOperationCertFailure =
-      !trainingGate.allowed &&
-      trainingGate.requirementType === 'training_module' &&
-      (trainingGate.missingRequirement?.startsWith('operation_cert:') ?? false);
-
-    if (!trainingGate.allowed && !isOperationCertFailure) {
+    if (!trainingGate.allowed) {
       // Hard block — identity, traveler-authorization, or P2 part-cert failure
       return res.status(403).json(
         buildTrainingGateErrorBody(
@@ -1577,8 +1642,6 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
         )
       );
     }
-    // isOperationCertFailure === true → falls through (WARN: stamp status, allow start)
-
     // Sequence and material gates: previous step must be COMPLETED; lot/ICN must be allocated.
     // Training authorization is already confirmed above; evaluateTravelerStartGates is kept
     // for sequence + material checks only (it also runs a secondary training check that will
@@ -1586,9 +1649,6 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
     const startGate = await evaluateTravelerStartGates(travelerId, stepId, {
       employeeId: resolvedEmployeeId,
       employeeName: resolvedName,
-      // Phase 1 WARN: if the training gate already recorded a cert failure and allowed through,
-      // skip the duplicate cert block in evaluateTravelerStartGates so the step is not double-blocked.
-      skipOperationCertCheck: isOperationCertFailure,
     });
     if (!startGate.allowed) {
       return res.status(403).json(
@@ -1647,12 +1707,12 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
       chargeCodeResolvedFrom: 'error' in ccResult ? null : ccResult.resolvedFrom,
       certificationStatus: certResult.status,
       certificationName: certResult.certificationName,
-      certReason: certResult.reason ?? (isOperationCertFailure ? trainingGate.reason : null),
+      certReason: certResult.reason,
       isOverrun: budgetResult.isOverrun,
       nearlyExhausted: budgetResult.nearlyExhausted,
       overrunReason: budgetResult.overrunReason,
       projectId,
-      warnedOnCert: isOperationCertFailure,
+      operationScanValue: String(operationScanValue).trim(),
     };
 
     // Stamp the open punch entry for this employee with step-level traceability.
@@ -1662,6 +1722,7 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
         await storage.updatePunchLedgerEntry(openEntry.id, {
           travelerStepId: stepId,
           chargeCodeId: 'error' in ccResult ? null : ccResult.chargeCodeId,
+          operation: activeOperationName,
           certificationStatus: certResult.status,
           isOverrun: budgetResult.isOverrun,
           overrunReason: budgetResult.overrunReason,
@@ -1679,7 +1740,7 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
               productionWorkOrderId: traveler.productionWorkOrderId ?? null,
               projectId: projectId ?? null,
               department: step.departmentName ?? null,
-              operation: null,
+              operation: activeOperationName,
             }).catch((e: unknown) =>
               console.warn('[travelers/step-start] switchAllocation failed (non-fatal):', (e as Error)?.message)
             );

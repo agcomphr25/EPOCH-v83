@@ -317,6 +317,8 @@ export default function P2TravelerPage() {
     passed: boolean | null;
     referenceLink?: string;
   }>>([]);
+  const [operationScanValue, setOperationScanValue] = useState('');
+  const [completionOperationScanValue, setCompletionOperationScanValue] = useState('');
   const [notes, setNotes] = useState('');
   const [traceabilityMode, setTraceabilityMode] = useState<'scan' | 'manual'>('scan');
   const [pendingFocusMaterialIndex, setPendingFocusMaterialIndex] = useState<number | null>(null);
@@ -435,6 +437,8 @@ export default function P2TravelerPage() {
     setQcResults([]);
     setStartQcResults([]);
     setFinishQcResults([]);
+    setOperationScanValue('');
+    setCompletionOperationScanValue('');
     setNotes('');
     setTraceabilityMode('scan');
     setValidatedMaterialIndices(new Set());
@@ -740,6 +744,9 @@ export default function P2TravelerPage() {
 
       const item = verificationData.serializedItem;
       if (!item) throw new Error('No part data available. Please scan the part again.');
+      if (!operationScanValue.trim()) {
+        throw new Error('Please scan the traveler operation before starting work.');
+      }
 
       const response = await apiRequest('/api/p2-traveler/start-task', {
         method: 'POST',
@@ -755,6 +762,7 @@ export default function P2TravelerPage() {
           traceabilityData: traceabilityData.filter(item => item.value.trim()),
           customData: Object.keys(customData).length > 0 ? customData : null,
           qcResults: allQcResults.length > 0 ? allQcResults : null,
+          operationScanValue: operationScanValue.trim(),
           notes,
         }),
       }) as any;
@@ -821,6 +829,9 @@ export default function P2TravelerPage() {
         } else if (code === 'NO_TRAVELER_LINK' || code === 'NO_WAD_LINK') {
           title = 'No Traveler Linked';
           description = msg || 'No traveler is linked to this serialized item. Generate a traveler before starting work.';
+        } else if (code === 'OPERATION_SCAN_REQUIRED' || code === 'OPERATION_SCAN_MISMATCH') {
+          title = 'Operation Scan Required';
+          description = msg || 'Scan the active traveler operation before starting work.';
         } else if (msg) {
           description = msg;
         }
@@ -840,6 +851,9 @@ export default function P2TravelerPage() {
       if (!badgeInput.trim() || !partInput.trim()) {
         throw new Error('Please scan badge and part to complete task');
       }
+      if (!completionOperationScanValue.trim()) {
+        throw new Error('Please scan the operation before electronic signoff.');
+      }
 
       const response = await apiRequest('/api/p2-traveler/complete-task', {
         method: 'POST',
@@ -847,6 +861,7 @@ export default function P2TravelerPage() {
           taskId: activeTask.id,
           employeeCode: badgeInput,
           barcode: partInput,
+          operationScanValue: completionOperationScanValue.trim(),
           notes,
         }),
       });
@@ -1885,6 +1900,17 @@ export default function P2TravelerPage() {
 
                   {/* Notes */}
                   <div className="space-y-2">
+                    <Label htmlFor="operation-scan">Operation Scan</Label>
+                    <Input
+                      id="operation-scan"
+                      value={operationScanValue}
+                      onChange={(e) => setOperationScanValue(e.target.value)}
+                      placeholder="Scan traveler operation..."
+                      data-testid="input-operation-scan"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
                     <Label htmlFor="notes">Notes (Optional)</Label>
                     <Textarea
                       id="notes"
@@ -1902,7 +1928,7 @@ export default function P2TravelerPage() {
                     </Button>
                     <Button
                       onClick={() => startTaskMutation.mutate()}
-                      disabled={startTaskMutation.isPending}
+                      disabled={startTaskMutation.isPending || !operationScanValue.trim()}
                       className="flex-1"
                       data-testid="button-start-task"
                     >
@@ -2106,6 +2132,19 @@ export default function P2TravelerPage() {
                 </div>
 
                 <div className="space-y-2">
+                  <Label htmlFor="complete-operation">Scan Operation</Label>
+                  <Input
+                    id="complete-operation"
+                    type="text"
+                    value={completionOperationScanValue}
+                    onChange={(e) => setCompletionOperationScanValue(e.target.value)}
+                    placeholder="Scan operation for electronic signoff..."
+                    autoComplete="off"
+                    data-testid="input-complete-operation"
+                  />
+                </div>
+
+                <div className="space-y-2">
                   <Label htmlFor="complete-notes">Completion Notes (Optional)</Label>
                   <Textarea
                     id="complete-notes"
@@ -2118,7 +2157,7 @@ export default function P2TravelerPage() {
 
                 <Button
                   type="submit"
-                  disabled={completeTaskMutation.isPending || !badgeInput.trim() || !partInput.trim()}
+                  disabled={completeTaskMutation.isPending || !badgeInput.trim() || !partInput.trim() || !completionOperationScanValue.trim()}
                   className="w-full"
                   data-testid="button-complete-task"
                 >

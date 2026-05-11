@@ -357,6 +357,44 @@ describe('payrollExport.service - Phase 1', () => {
     expect(harness.store.batches).toHaveLength(0);
   });
 
+  it('blocks payroll export when readiness controls are unresolved', async () => {
+    await expect(
+      createBatch({
+        dataSourceOverride: source({
+          fetchPayrollReadinessBlockers: vi.fn().mockResolvedValue([
+            {
+              code: 'MISSING_EMPLOYEE_ATTESTATION',
+              employeeId: 1,
+              timesheetId: 11,
+              status: 'certified',
+              message: 'Certified/locked timesheet is missing employee attestation evidence.',
+            },
+            {
+              code: 'OPEN_TIMESHEET_CORRECTION',
+              employeeId: 2,
+              timesheetId: 12,
+              status: 'locked',
+              message: 'Timesheet has an unresolved correction request.',
+            },
+          ]),
+        }),
+      }),
+    ).rejects.toMatchObject({
+      name: 'PayrollExportReadinessError',
+      httpStatus: 422,
+      details: {
+        blockers: [
+          { code: 'MISSING_EMPLOYEE_ATTESTATION', employeeId: 1, timesheetId: 11 },
+          { code: 'OPEN_TIMESHEET_CORRECTION', employeeId: 2, timesheetId: 12 },
+        ],
+      },
+    });
+
+    expect(harness.store.batches).toHaveLength(0);
+    expect(harness.store.rows).toHaveLength(0);
+    expect(harness.store.events).toHaveLength(0);
+  });
+
   it('uses employee ids rather than names, so duplicate and compound names stay distinct', async () => {
     const ds = source({
       fetchTimesheets: vi.fn().mockResolvedValue([
@@ -482,6 +520,20 @@ describe('payrollExport routes - static guards', () => {
     expect(gustoRoute).toContain('getActiveBatchForPeriod');
     expect(gustoRoute).toContain('downloadBatchCsv');
     expect(gustoRoute).not.toContain('createRegularFullPeriodBatch');
+  });
+
+  it('batch creation checks DCAA readiness blockers before mutating payroll export tables', () => {
+    const serviceFile = readFileSync(resolve(__dirname, '../src/services/timekeeping/payrollExport.service.ts'), 'utf8');
+    const createFn = serviceFile.slice(serviceFile.indexOf('export async function createRegularFullPeriodBatch'));
+
+    expect(serviceFile).toContain('MISSING_EMPLOYEE_ATTESTATION');
+    expect(serviceFile).toContain('MISSING_SUPERVISOR_APPROVAL');
+    expect(serviceFile).toContain('OPEN_TIMESHEET_CORRECTION');
+    expect(serviceFile).toContain('timekeeping.timesheet_corrections');
+    expect(createFn.indexOf('await assertPayrollExportReady')).toBeGreaterThan(-1);
+    expect(createFn.indexOf('await assertPayrollExportReady')).toBeLessThan(
+      createFn.indexOf('.from(payrollExportBatchesTable)'),
+    );
   });
 });
 

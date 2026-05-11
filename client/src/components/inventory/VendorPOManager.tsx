@@ -1205,8 +1205,6 @@ export function ConfirmationBadgeResend({ vendorPo }: { vendorPo: VendorPO }) {
         <span
           role="button"
           tabIndex={0}
-          onPointerDown={(e) => e.stopPropagation()}
-          onTouchStart={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation();
             setOpen(true);

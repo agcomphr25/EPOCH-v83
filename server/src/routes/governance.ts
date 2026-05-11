@@ -11,6 +11,7 @@
 import { Router, Request, Response } from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { getPhase1FoundationCoverage } from '../services/phase1FoundationClosure';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -86,6 +87,21 @@ router.get('/migration-guard', async (_req: Request, res: Response) => {
     console.error('[governance/migration-guard]', err);
     res.status(500).json({ error: errorMessage(err) });
   }
+});
+
+router.get('/phase1-foundation', async (_req: Request, res: Response) => {
+  const coverage = getPhase1FoundationCoverage();
+  res.json({
+    phase: 'Phase 1: Foundation Closure',
+    domains: coverage,
+    summary: {
+      domainCount: coverage.length,
+      auditEventCount: coverage.reduce((sum, item) => sum + item.auditEvents.length, 0),
+      approvalRequestTypeCount: coverage.reduce((sum, item) => sum + item.approvalRequests.length, 0),
+      hasRevisionControlFramework: coverage.some((item) => item.revisionControl),
+      hasClauseFlowdownEngine: coverage.some((item) => item.clauseFlowdown),
+    },
+  });
 });
 
 router.get('/audit-log', async (req: Request, res: Response) => {

@@ -18206,6 +18206,110 @@ export const projectFarFlowdowns = pgTable('project_far_flowdowns', {
   checklistIdx: index('idx_project_far_flowdowns_checklist_id').on(t.purchaseReviewChecklistId),
 }));
 
+export const contractReviewChecklistTemplates = pgTable('contract_review_checklist_templates', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  description: text('description'),
+  version: integer('version').notNull().default(1),
+  reviewAreas: text('review_areas').array().notNull().default(sql`ARRAY['engineering','quality','procurement','scheduling','finance']::text[]`),
+  checklistItems: jsonb('checklist_items').$type<Array<Record<string, unknown>>>().notNull().default(sql`'[]'::jsonb`),
+  applicabilityRule: jsonb('applicability_rule').$type<Record<string, unknown> | null>(),
+  status: text('status').notNull().default('draft'),
+  isActive: boolean('is_active').notNull().default(true),
+  createdByUserId: integer('created_by_user_id'),
+  createdByDisplayName: text('created_by_display_name'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (t) => ({
+  activeIdx: index('idx_contract_review_templates_active').on(t.isActive),
+  nameVersionUnique: unique().on(t.name, t.version),
+}));
+
+export const contractClauses = pgTable('contract_clauses', {
+  id: serial('id').primaryKey(),
+  clauseNumber: text('clause_number').notNull().unique(),
+  title: text('title').notNull(),
+  description: text('description'),
+  clauseType: text('clause_type').notNull().default('CUSTOMER'), // FAR | DFARS | CUSTOMER | QUALITY | INTERNAL
+  source: text('source').notNull().default('contract_review'),
+  defaultFlowTargets: text('default_flow_targets').array().notNull().default(sql`ARRAY['po','traveler','qc','supplier_po','cert_package']::text[]`),
+  isActive: boolean('is_active').notNull().default(true),
+  effectiveDate: timestamp('effective_date'),
+  retiredAt: timestamp('retired_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (t) => ({
+  activeIdx: index('idx_contract_clauses_active').on(t.isActive),
+  typeIdx: index('idx_contract_clauses_type').on(t.clauseType),
+}));
+
+export const clauseTemplates = pgTable('clause_templates', {
+  id: serial('id').primaryKey(),
+  checklistTemplateId: integer('checklist_template_id').notNull().references(() => contractReviewChecklistTemplates.id, { onDelete: 'cascade' }),
+  contractClauseId: integer('contract_clause_id').notNull().references(() => contractClauses.id, { onDelete: 'cascade' }),
+  reviewArea: text('review_area').notNull(),
+  requirementText: text('requirement_text').notNull(),
+  requiredArtifacts: text('required_artifacts').array().notNull().default(sql`ARRAY[]::text[]`),
+  flowTargets: text('flow_targets').array().notNull().default(sql`ARRAY['po','traveler','qc','supplier_po','cert_package']::text[]`),
+  applicabilityRule: jsonb('applicability_rule').$type<Record<string, unknown> | null>(),
+  required: boolean('required').notNull().default(true),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (t) => ({
+  templateClauseUnique: unique().on(t.checklistTemplateId, t.contractClauseId, t.reviewArea),
+  templateIdx: index('idx_clause_templates_template_id').on(t.checklistTemplateId),
+  clauseIdx: index('idx_clause_templates_clause_id').on(t.contractClauseId),
+}));
+
+export const contractReviewChecklistInstances = pgTable('contract_review_checklist_instances', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  checklistTemplateId: integer('checklist_template_id').notNull().references(() => contractReviewChecklistTemplates.id, { onDelete: 'restrict' }),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'set null' }),
+  purchaseReviewChecklistId: integer('purchase_review_checklist_id').references(() => purchaseReviewChecklists.id, { onDelete: 'set null' }),
+  p2PurchaseOrderId: integer('p2_purchase_order_id').references(() => p2PurchaseOrders.id, { onDelete: 'set null' }),
+  vendorPoId: integer('vendor_po_id').references(() => vendorPOs.id, { onDelete: 'set null' }),
+  travelerId: varchar('traveler_id', { length: 255 }).references(() => travelers.id, { onDelete: 'set null' }),
+  status: text('status').notNull().default('draft'),
+  reviewAreaStatus: jsonb('review_area_status').$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
+  responses: jsonb('responses').$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
+  missingReviewAreas: text('missing_review_areas').array().notNull().default(sql`ARRAY[]::text[]`),
+  createdByUserId: integer('created_by_user_id'),
+  createdByDisplayName: text('created_by_display_name'),
+  submittedAt: timestamp('submitted_at'),
+  approvedAt: timestamp('approved_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (t) => ({
+  projectIdx: index('idx_contract_review_instances_project_id').on(t.projectId),
+  templateIdx: index('idx_contract_review_instances_template_id').on(t.checklistTemplateId),
+  vendorPoIdx: index('idx_contract_review_instances_vendor_po_id').on(t.vendorPoId),
+}));
+
+export const flowedRequirements = pgTable('flowed_requirements', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  contractReviewInstanceId: uuid('contract_review_instance_id').references(() => contractReviewChecklistInstances.id, { onDelete: 'cascade' }),
+  contractClauseId: integer('contract_clause_id').notNull().references(() => contractClauses.id, { onDelete: 'restrict' }),
+  clauseTemplateId: integer('clause_template_id').references(() => clauseTemplates.id, { onDelete: 'set null' }),
+  targetType: text('target_type').notNull(), // po | traveler | qc | supplier_po | cert_package
+  targetId: text('target_id').notNull(),
+  requirementText: text('requirement_text').notNull(),
+  requiredArtifacts: text('required_artifacts').array().notNull().default(sql`ARRAY[]::text[]`),
+  status: text('status').notNull().default('open'),
+  source: text('source').notNull().default('contract_review'),
+  flowedAt: timestamp('flowed_at').defaultNow().notNull(),
+  satisfiedAt: timestamp('satisfied_at'),
+  satisfiedByUserId: integer('satisfied_by_user_id'),
+  satisfiedByDisplayName: text('satisfied_by_display_name'),
+  evidence: jsonb('evidence').$type<Record<string, unknown> | null>(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (t) => ({
+  targetIdx: index('idx_flowed_requirements_target').on(t.targetType, t.targetId),
+  instanceIdx: index('idx_flowed_requirements_instance_id').on(t.contractReviewInstanceId),
+  clauseIdx: index('idx_flowed_requirements_clause_id').on(t.contractClauseId),
+  targetClauseUnique: unique().on(t.contractReviewInstanceId, t.contractClauseId, t.targetType, t.targetId),
+}));
+
 export const vendorDebarmentChecks = pgTable('vendor_debarment_checks', {
   id: serial('id').primaryKey(),
   vendorId: integer('vendor_id').notNull().references(() => vendors.id),
@@ -18257,6 +18361,43 @@ export const insertFarFlowdownClauseSchema = createInsertSchema(farFlowdownClaus
   title: z.string().min(1),
 });
 
+export const REQUIRED_CONTRACT_REVIEW_AREAS = ['engineering', 'quality', 'procurement', 'scheduling', 'finance'] as const;
+
+export const insertContractReviewChecklistTemplateSchema = createInsertSchema(contractReviewChecklistTemplates).omit({
+  id: true, createdAt: true, updatedAt: true,
+}).extend({
+  name: z.string().min(1),
+  reviewAreas: z.array(z.string()).default([...REQUIRED_CONTRACT_REVIEW_AREAS]),
+});
+
+export const insertContractClauseSchema = createInsertSchema(contractClauses).omit({
+  id: true, createdAt: true, updatedAt: true,
+}).extend({
+  clauseNumber: z.string().min(1),
+  title: z.string().min(1),
+});
+
+export const insertClauseTemplateSchema = createInsertSchema(clauseTemplates).omit({
+  id: true, createdAt: true, updatedAt: true,
+}).extend({
+  reviewArea: z.enum(REQUIRED_CONTRACT_REVIEW_AREAS),
+  requirementText: z.string().min(5),
+});
+
+export const insertContractReviewChecklistInstanceSchema = createInsertSchema(contractReviewChecklistInstances).omit({
+  id: true, createdAt: true, updatedAt: true, submittedAt: true, approvedAt: true,
+}).extend({
+  checklistTemplateId: z.number().int().positive(),
+});
+
+export const insertFlowedRequirementSchema = createInsertSchema(flowedRequirements).omit({
+  id: true, flowedAt: true, createdAt: true, updatedAt: true,
+}).extend({
+  targetType: z.enum(['po', 'traveler', 'qc', 'supplier_po', 'cert_package']),
+  targetId: z.string().min(1),
+  requirementText: z.string().min(5),
+});
+
 export const insertVendorDebarmentCheckSchema = createInsertSchema(vendorDebarmentChecks).omit({
   id: true, checkedAt: true,
 }).extend({
@@ -18276,6 +18417,16 @@ export type FarFlowdownClause = typeof farFlowdownClauses.$inferSelect;
 export type InsertFarFlowdownClause = z.infer<typeof insertFarFlowdownClauseSchema>;
 export type VendorPoFarFlowdown = typeof vendorPoFarFlowdowns.$inferSelect;
 export type ProjectFarFlowdown = typeof projectFarFlowdowns.$inferSelect;
+export type ContractReviewChecklistTemplate = typeof contractReviewChecklistTemplates.$inferSelect;
+export type InsertContractReviewChecklistTemplate = z.infer<typeof insertContractReviewChecklistTemplateSchema>;
+export type ContractClause = typeof contractClauses.$inferSelect;
+export type InsertContractClause = z.infer<typeof insertContractClauseSchema>;
+export type ClauseTemplate = typeof clauseTemplates.$inferSelect;
+export type InsertClauseTemplate = z.infer<typeof insertClauseTemplateSchema>;
+export type ContractReviewChecklistInstance = typeof contractReviewChecklistInstances.$inferSelect;
+export type InsertContractReviewChecklistInstance = z.infer<typeof insertContractReviewChecklistInstanceSchema>;
+export type FlowedRequirement = typeof flowedRequirements.$inferSelect;
+export type InsertFlowedRequirement = z.infer<typeof insertFlowedRequirementSchema>;
 export type VendorDebarmentCheck = typeof vendorDebarmentChecks.$inferSelect;
 export type InsertVendorDebarmentCheck = z.infer<typeof insertVendorDebarmentCheckSchema>;
 export type ProcurementSettings = typeof procurementSettings.$inferSelect;

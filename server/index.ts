@@ -5174,12 +5174,20 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ users.auth_provider migration skipped:', authProviderErr?.message);
       }
 
-      // Ensure user_sessions.last_credential_verified_at column exists (added by session hardening #981)
+      // Ensure user_sessions has the full session-hardening shape used by login.
       try {
-        await pool.query(`ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS last_credential_verified_at TIMESTAMPTZ`);
-        console.log('✅ Ensured user_sessions.last_credential_verified_at column');
+        await pool.query(`
+          ALTER TABLE user_sessions
+            ADD COLUMN IF NOT EXISTS ip_address TEXT,
+            ADD COLUMN IF NOT EXISTS user_agent TEXT,
+            ADD COLUMN IF NOT EXISTS device_fingerprint TEXT,
+            ADD COLUMN IF NOT EXISTS mfa_verified_at TIMESTAMPTZ,
+            ADD COLUMN IF NOT EXISTS security_policy_version TEXT DEFAULT 'cmmc-itar-v1',
+            ADD COLUMN IF NOT EXISTS last_credential_verified_at TIMESTAMPTZ
+        `);
+        console.log('✅ Ensured user_sessions session-hardening columns');
       } catch (sessCredErr: any) {
-        console.warn('⚠️ user_sessions.last_credential_verified_at migration skipped:', sessCredErr?.message);
+        console.warn('⚠️ user_sessions session-hardening migration skipped:', sessCredErr?.message);
       }
 
       // Ensure customer_satisfaction_audit_log table exists (response action audit trail)

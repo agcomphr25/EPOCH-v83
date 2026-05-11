@@ -19,6 +19,173 @@ import { getVendorQualificationBlockers, emitProcurementLedgerEvent } from '../s
 
 const router = Router();
 
+let vendorPOReadSchemaReady: Promise<void> | null = null;
+
+function ensureVendorPOReadSchema(): Promise<void> {
+  if (!vendorPOReadSchemaReady) {
+    vendorPOReadSchemaReady = (async () => {
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS company_settings (
+          id serial PRIMARY KEY,
+          company_name text,
+          company_address text,
+          company_phone text,
+          company_email text,
+          company_website text,
+          company_logo_url text,
+          company_logo_filename text,
+          created_at timestamp DEFAULT now() NOT NULL,
+          updated_at timestamp DEFAULT now() NOT NULL
+        )
+      `);
+
+      await db.execute(sql`
+        ALTER TABLE company_settings
+          ADD COLUMN IF NOT EXISTS company_name text,
+          ADD COLUMN IF NOT EXISTS company_address text,
+          ADD COLUMN IF NOT EXISTS company_phone text,
+          ADD COLUMN IF NOT EXISTS company_email text,
+          ADD COLUMN IF NOT EXISTS company_website text,
+          ADD COLUMN IF NOT EXISTS company_logo_url text,
+          ADD COLUMN IF NOT EXISTS company_logo_filename text,
+          ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now(),
+          ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()
+      `);
+
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS vendor_po_settings (
+          id serial PRIMARY KEY,
+          contact_name text,
+          contact_title text,
+          contact_phone text,
+          contact_email text,
+          terms_and_conditions text,
+          payment_terms text,
+          shipping_instructions text,
+          created_at timestamp DEFAULT now() NOT NULL,
+          updated_at timestamp DEFAULT now() NOT NULL
+        )
+      `);
+
+      await db.execute(sql`
+        ALTER TABLE vendor_po_settings
+          ADD COLUMN IF NOT EXISTS contact_name text,
+          ADD COLUMN IF NOT EXISTS contact_title text,
+          ADD COLUMN IF NOT EXISTS contact_phone text,
+          ADD COLUMN IF NOT EXISTS contact_email text,
+          ADD COLUMN IF NOT EXISTS terms_and_conditions text,
+          ADD COLUMN IF NOT EXISTS payment_terms text,
+          ADD COLUMN IF NOT EXISTS shipping_instructions text,
+          ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now(),
+          ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()
+      `);
+
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS optional_settings (
+          id serial PRIMARY KEY,
+          name text NOT NULL,
+          statement text NOT NULL,
+          sort_order integer DEFAULT 0,
+          is_active boolean DEFAULT true NOT NULL,
+          created_at timestamp DEFAULT now() NOT NULL,
+          updated_at timestamp DEFAULT now() NOT NULL
+        )
+      `);
+
+      await db.execute(sql`
+        ALTER TABLE optional_settings
+          ADD COLUMN IF NOT EXISTS name text,
+          ADD COLUMN IF NOT EXISTS statement text,
+          ADD COLUMN IF NOT EXISTS sort_order integer DEFAULT 0,
+          ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT true,
+          ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now(),
+          ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()
+      `);
+
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS po_optional_settings (
+          id serial PRIMARY KEY,
+          vendor_po_id integer,
+          optional_setting_id integer,
+          created_at timestamp DEFAULT now()
+        )
+      `);
+
+      await db.execute(sql`
+        ALTER TABLE po_optional_settings
+          ADD COLUMN IF NOT EXISTS vendor_po_id integer,
+          ADD COLUMN IF NOT EXISTS optional_setting_id integer,
+          ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()
+      `);
+
+      await db.execute(sql`
+        CREATE UNIQUE INDEX IF NOT EXISTS po_optional_settings_unique_idx
+          ON po_optional_settings(vendor_po_id, optional_setting_id)
+      `);
+
+      await db.execute(sql`
+        DO $$
+        BEGIN
+          IF to_regclass('public.vendor_pos') IS NOT NULL THEN
+            ALTER TABLE vendor_pos
+              ADD COLUMN IF NOT EXISTS external_po_number text,
+              ADD COLUMN IF NOT EXISTS production_line text,
+              ADD COLUMN IF NOT EXISTS revision_number integer NOT NULL DEFAULT 0,
+              ADD COLUMN IF NOT EXISTS parent_po_id integer,
+              ADD COLUMN IF NOT EXISTS change_reason text,
+              ADD COLUMN IF NOT EXISTS is_current_revision boolean NOT NULL DEFAULT true,
+              ADD COLUMN IF NOT EXISTS revised_at timestamp,
+              ADD COLUMN IF NOT EXISTS revised_by text,
+              ADD COLUMN IF NOT EXISTS issued_without_email boolean NOT NULL DEFAULT false,
+              ADD COLUMN IF NOT EXISTS issued_without_email_reason text,
+              ADD COLUMN IF NOT EXISTS issued_without_email_at timestamp,
+              ADD COLUMN IF NOT EXISTS rfq_outcome_notes text,
+              ADD COLUMN IF NOT EXISTS vendor_confirmed_at timestamp,
+              ADD COLUMN IF NOT EXISTS vendor_confirmed_action text,
+              ADD COLUMN IF NOT EXISTS archived boolean NOT NULL DEFAULT false,
+              ADD COLUMN IF NOT EXISTS requisition_id integer,
+              ADD COLUMN IF NOT EXISTS competition_method text,
+              ADD COLUMN IF NOT EXISTS sole_source_justification text,
+              ADD COLUMN IF NOT EXISTS direct_po_exception_approved_by_id integer,
+              ADD COLUMN IF NOT EXISTS direct_po_exception_approved_by_name text,
+              ADD COLUMN IF NOT EXISTS direct_po_exception_reason text,
+              ADD COLUMN IF NOT EXISTS direct_po_exception_approved_at timestamp;
+          END IF;
+
+          IF to_regclass('public.vendor_po_items') IS NOT NULL THEN
+            ALTER TABLE vendor_po_items
+              ADD COLUMN IF NOT EXISTS received_quantity real DEFAULT 0,
+              ADD COLUMN IF NOT EXISTS purchase_qty real,
+              ADD COLUMN IF NOT EXISTS purchase_unit_price real,
+              ADD COLUMN IF NOT EXISTS purchase_unit text,
+              ADD COLUMN IF NOT EXISTS pricing_unit text,
+              ADD COLUMN IF NOT EXISTS conversion_factor real,
+              ADD COLUMN IF NOT EXISTS customer_po_id text,
+              ADD COLUMN IF NOT EXISTS project_id uuid,
+              ADD COLUMN IF NOT EXISTS production_work_order_id uuid,
+              ADD COLUMN IF NOT EXISTS charge_code_id integer,
+              ADD COLUMN IF NOT EXISTS variance_flag boolean DEFAULT false;
+          END IF;
+        END $$;
+      `);
+    })().catch((err) => {
+      vendorPOReadSchemaReady = null;
+      throw err;
+    });
+  }
+  return vendorPOReadSchemaReady;
+}
+
+router.use(async (_req, res, next) => {
+  try {
+    await ensureVendorPOReadSchema();
+    next();
+  } catch (error) {
+    console.error('[VendorPO] Schema readiness check failed:', error);
+    res.status(503).json({ error: 'Vendor PO database is preparing, please retry' });
+  }
+});
+
 function isP2ProductionLine(value: unknown): boolean {
   return String(value ?? '').trim().toUpperCase() === 'P2';
 }

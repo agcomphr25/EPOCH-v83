@@ -9943,6 +9943,104 @@ export const insertQuoteLineItemSchema = createInsertSchema(quoteLineItems).omit
 export type QuoteLineItem = typeof quoteLineItems.$inferSelect;
 export type InsertQuoteLineItem = z.infer<typeof insertQuoteLineItemSchema>;
 
+// Quote Snapshots - Immutable contractual quote revisions captured when a quote is sent.
+export const quoteSnapshots = pgTable('quote_snapshots', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  quoteId: uuid('quote_id').notNull().references(() => quotes.id, { onDelete: 'restrict' }),
+  quoteNumber: text('quote_number').notNull(),
+  revisionNumber: integer('revision_number').notNull(),
+  revisionLabel: text('revision_label').notNull(),
+  statusAtSnapshot: text('status_at_snapshot').notNull().default('SENT'),
+  customerId: text('customer_id').notNull(),
+  customerName: text('customer_name').notNull(),
+  customersIntegerId: integer('customers_integer_id'),
+  description: text('description'),
+  totalAmount: real('total_amount').notNull().default(0),
+  validUntil: timestamp('valid_until'),
+  quotedBy: text('quoted_by'),
+  notes: text('notes'),
+  bomAssumptions: jsonb('bom_assumptions').$type<Record<string, unknown> | unknown[] | null>(),
+  laborAssumptions: jsonb('labor_assumptions').$type<Record<string, unknown> | unknown[] | null>(),
+  leadTimes: jsonb('lead_times').$type<Record<string, unknown> | unknown[] | null>(),
+  exclusions: jsonb('exclusions').$type<Record<string, unknown> | unknown[] | null>(),
+  certRequirements: jsonb('cert_requirements').$type<Record<string, unknown> | unknown[] | null>(),
+  sourceData: jsonb('source_data').$type<Record<string, unknown> | null>(),
+  sentAt: timestamp('sent_at').defaultNow().notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  quoteRevisionUnique: uniqueIndex('quote_snapshots_quote_revision_unique').on(table.quoteId, table.revisionNumber),
+  quoteIdIdx: index('quote_snapshots_quote_id_idx').on(table.quoteId),
+}));
+
+export const insertQuoteSnapshotSchema = createInsertSchema(quoteSnapshots).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type QuoteSnapshot = typeof quoteSnapshots.$inferSelect;
+export type InsertQuoteSnapshot = z.infer<typeof insertQuoteSnapshotSchema>;
+
+export const quoteLineSnapshots = pgTable('quote_line_snapshots', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  quoteSnapshotId: uuid('quote_snapshot_id').notNull().references(() => quoteSnapshots.id, { onDelete: 'restrict' }),
+  quoteId: uuid('quote_id').notNull().references(() => quotes.id, { onDelete: 'restrict' }),
+  quoteLineItemId: uuid('quote_line_item_id').references(() => quoteLineItems.id, { onDelete: 'set null' }),
+  lineNumber: integer('line_number').notNull(),
+  quantity: real('quantity').notNull().default(1),
+  description: text('description').notNull(),
+  unitPrice: real('unit_price').notNull().default(0),
+  totalPrice: real('total_price').notNull().default(0),
+  inventoryItemId: integer('inventory_item_id'),
+  agPartNumber: text('ag_part_number'),
+  lineRevision: text('line_revision'),
+  laborHours: real('labor_hours'),
+  department: text('department'),
+  bomAssumptions: jsonb('bom_assumptions').$type<Record<string, unknown> | unknown[] | null>(),
+  laborAssumptions: jsonb('labor_assumptions').$type<Record<string, unknown> | unknown[] | null>(),
+  leadTimeDays: integer('lead_time_days'),
+  certRequirements: jsonb('cert_requirements').$type<Record<string, unknown> | unknown[] | null>(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  snapshotIdx: index('quote_line_snapshots_snapshot_id_idx').on(table.quoteSnapshotId),
+  quoteIdIdx: index('quote_line_snapshots_quote_id_idx').on(table.quoteId),
+}));
+
+export const insertQuoteLineSnapshotSchema = createInsertSchema(quoteLineSnapshots).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type QuoteLineSnapshot = typeof quoteLineSnapshots.$inferSelect;
+export type InsertQuoteLineSnapshot = z.infer<typeof insertQuoteLineSnapshotSchema>;
+
+export const quotePoReconciliations = pgTable('quote_po_reconciliations', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  quoteId: uuid('quote_id').notNull().references(() => quotes.id, { onDelete: 'restrict' }),
+  quoteSnapshotId: uuid('quote_snapshot_id').references(() => quoteSnapshots.id, { onDelete: 'restrict' }),
+  p2PurchaseOrderId: integer('p2_purchase_order_id').notNull().references(() => p2PurchaseOrders.id, { onDelete: 'cascade' }),
+  poNumber: text('po_number').notNull(),
+  status: text('status').notNull().default('MATCH'),
+  revisionMismatch: boolean('revision_mismatch').notNull().default(false),
+  pricingMismatch: boolean('pricing_mismatch').notNull().default(false),
+  clauseMismatch: boolean('clause_mismatch').notNull().default(false),
+  scheduleMismatch: boolean('schedule_mismatch').notNull().default(false),
+  quantityMismatch: boolean('quantity_mismatch').notNull().default(false),
+  mismatchSummary: jsonb('mismatch_summary').$type<Record<string, unknown> | null>(),
+  checkedAt: timestamp('checked_at').defaultNow().notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  poIdx: index('quote_po_reconciliations_po_id_idx').on(table.p2PurchaseOrderId),
+  quoteIdx: index('quote_po_reconciliations_quote_id_idx').on(table.quoteId),
+}));
+
+export const insertQuotePoReconciliationSchema = createInsertSchema(quotePoReconciliations).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type QuotePoReconciliation = typeof quotePoReconciliations.$inferSelect;
+export type InsertQuotePoReconciliation = z.infer<typeof insertQuotePoReconciliationSchema>;
+
 // Cost Centers - Track business units, departments, and projects for expense allocation
 export const costCenters = pgTable('cost_centers', {
   id: uuid('id').defaultRandom().primaryKey(),

@@ -1190,6 +1190,27 @@ export default function PMControlCenterPage() {
             Real-time project health across production, labor, and materials
           </p>
         </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate('/wad-status')}
+            data-testid="button-wad-status-from-pmcc"
+            title="WAD authoring & backfill backlog across all P2 Release / Production projects"
+          >
+            <ShieldCheck className="h-4 w-4 mr-1.5" />
+            WAD Status
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate('/wad-wizard')}
+            data-testid="button-wad-wizard-from-pmcc"
+          >
+            <LayoutDashboard className="h-4 w-4 mr-1.5" />
+            WAD Wizard
+          </Button>
+        </div>
       </div>
 
       {/* Project Selector Row */}

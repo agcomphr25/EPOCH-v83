@@ -24,8 +24,107 @@ import {
 import { eq, and, desc, or, ilike, inArray, asc, sql } from 'drizzle-orm';
 import { storage } from '../../storage';
 import { createEmployeeIdentitySnapshot } from '../../identity/userIdentity';
+import { buildChargeContextFromTraveler } from '../helpers/travelerBarcodeResolver';
+import { executeTravelerAutoPunch, type TravelerAutoPunchResult } from './timeClock';
 
 const router = Router();
+
+/**
+ * Task #188: Auto-switch the operator's punch_ledger session to the WAD's
+ * charge code when they start a P2 Traveler task. Reuses the same gates as
+ * the kiosk traveler-scan flow (executeTravelerAutoPunch).
+ *
+ * Returns:
+ *   - { ok: true,  punch: { action, chargeCode, warning? } } on success
+ *   - { ok: false, status, body }                            to short-circuit the route
+ *
+ * Fail-closed: when no traveler is linked, or any kiosk-equivalent gate
+ * (WAD release, material readiness, certification, PTO, charge-code
+ * resolution, charge-code activeness, budget) fails, returns { ok: false }
+ * so the caller does NOT create or resume a p2_work_tasks row.
+ */
+async function runAutoPunchForP2Task(params: {
+  serialNumber: string;
+  partNumber: string;
+  employeeId: string | number;
+  laborApprovalId?: number | null;
+  adminPtoOverride?: boolean;
+  adminOverrideReason?: string | null;
+  user?: Express.Request['user'] | null;
+  ip?: string | null;
+}): Promise<
+  | { ok: true; punch: { action: 'clockedIn' | 'switched' | 'unchanged'; chargeCode?: string | null; warning?: string } }
+  | { ok: false; status: number; body: Record<string, unknown> }
+> {
+  const linkedTraveler = await db
+    .select({
+      id: travelers.id,
+      travelerNumber: travelers.travelerNumber,
+      productionWorkOrderId: travelers.productionWorkOrderId,
+    })
+    .from(travelers)
+    .where(
+      and(
+        eq(travelers.serialNumber, params.serialNumber),
+        eq(travelers.partNumber, params.partNumber),
+      ),
+    )
+    .limit(1)
+    .then((rows) => rows[0] ?? null);
+  if (!linkedTraveler) {
+    // Fail-closed: a P2 task cannot start without a traveler/WAD link, otherwise
+    // we would create a p2_work_tasks row that is not anchored to any project
+    // charge code, breaking the unified labor pipeline (Constitution §5.2).
+    return {
+      ok: false,
+      status: 409,
+      body: {
+        error: 'NO_TRAVELER_LINK',
+        message:
+          'No traveler is linked to this serialized item. Generate a traveler before starting work.',
+      },
+    };
+  }
+  const ctxResult = await buildChargeContextFromTraveler(linkedTraveler);
+  if (!ctxResult.ok) {
+    return {
+      ok: false,
+      status: 400,
+      body: {
+        error: ctxResult.error.code || 'CHARGE_CODE_UNRESOLVED',
+        message: ctxResult.error.message,
+      },
+    };
+  }
+  const autoPunch: TravelerAutoPunchResult = await executeTravelerAutoPunch({
+    context: ctxResult.context,
+    employeeIdString: String(params.employeeId),
+    parsedApprovalId: params.laborApprovalId ?? null,
+    ptoOverride:
+      params.adminPtoOverride
+        ? {
+            requested: true,
+            reason: params.adminOverrideReason ?? null,
+            user: params.user ?? null,
+            ip: params.ip ?? null,
+          }
+        : undefined,
+  });
+  if (!autoPunch.ok) {
+    return { ok: false, status: autoPunch.status, body: autoPunch.body };
+  }
+  return {
+    ok: true,
+    punch: {
+      action: autoPunch.action,
+      chargeCode:
+        autoPunch.chargeContext?.resolvedChargeCode ??
+        autoPunch.chargeContext?.chargeCode ??
+        null,
+      warning: autoPunch.warning,
+    },
+  };
+}
 
 function getTraceValue(item: any): string {
   return typeof item?.value === 'string' ? item.value.trim() : '';
@@ -758,11 +857,28 @@ router.post('/start-task', async (req: Request, res: Response) => {
     }
     
     if (existingTask && existingTask.employeeId === parseInt(employeeId)) {
-      return res.json({ 
+      // Task #188: also auto-switch the punch on resume so the operator's
+      // active punch_ledger session is on the correct WAD/charge-code.
+      const resumedPunch = await runAutoPunchForP2Task({
+        serialNumber: serializedItem.serialNumber,
+        partNumber: serializedItem.partNumber,
+        employeeId,
+        laborApprovalId: req.body?.laborApprovalId ? parseInt(req.body.laborApprovalId, 10) : null,
+        adminPtoOverride: req.body?.adminPtoOverride === true,
+        adminOverrideReason:
+          typeof req.body?.adminOverrideReason === 'string' ? req.body.adminOverrideReason.trim() : null,
+        user: req.user ?? null,
+        ip: req.ip ?? null,
+      });
+      if (!resumedPunch.ok) {
+        return res.status(resumedPunch.status).json(resumedPunch.body);
+      }
+      return res.json({
         success: true,
         workTask: existingTask,
         resumed: true,
-        message: 'Resumed existing task' 
+        message: 'Resumed existing task',
+        punch: resumedPunch.punch,
       });
     }
 
@@ -784,6 +900,28 @@ router.post('/start-task', async (req: Request, res: Response) => {
           code: 'MULTI_TASK_NOT_ALLOWED'
         });
       }
+    }
+
+    // Task #188: Auto-switch operator's punch_ledger session to the WAD's
+    // charge code. Runs the same gates as the kiosk traveler-scan flow
+    // (WAD release, material readiness, certification, PTO, budget,
+    // charge-code activeness). Per Task #77, traveler punches default to
+    // PENDING_APPROVAL. If a gate fails we return BEFORE inserting the
+    // p2_work_tasks row so the operator is not "started" against an
+    // unauthorized charge code.
+    const startPunch = await runAutoPunchForP2Task({
+      serialNumber: serializedItem.serialNumber,
+      partNumber: serializedItem.partNumber,
+      employeeId,
+      laborApprovalId: req.body?.laborApprovalId ? parseInt(req.body.laborApprovalId, 10) : null,
+      adminPtoOverride: req.body?.adminPtoOverride === true,
+      adminOverrideReason:
+        typeof req.body?.adminOverrideReason === 'string' ? req.body.adminOverrideReason.trim() : null,
+      user: req.user ?? null,
+      ip: req.ip ?? null,
+    });
+    if (!startPunch.ok) {
+      return res.status(startPunch.status).json(startPunch.body);
     }
 
     const incomingTraceabilityData = Array.isArray(traceabilityData)
@@ -915,6 +1053,7 @@ router.post('/start-task', async (req: Request, res: Response) => {
       success: true,
       workTask,
       message: 'Task started successfully',
+      punch: startPunch.punch,
     });
   } catch (error: any) {
     console.error('Error starting task:', error);

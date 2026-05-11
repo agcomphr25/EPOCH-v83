@@ -4470,6 +4470,22 @@ async function initializeBackgroundServices() {
            ON CONFLICT (name) DO NOTHING`
         );
 
+        // Ensure PROJECT_MANAGER role exists — PMs author and backfill WADs
+        // (Task #190). Granted work_orders.release so they can drive the WAD
+        // backlog from /wad-status, /wad-wizard, and the PMCC entry point.
+        await pool.query(
+          `INSERT INTO perm_roles (name, description, is_system)
+           VALUES ('PROJECT_MANAGER', 'Project Manager role — owns project execution and WAD authoring/backfill', true)
+           ON CONFLICT (name) DO NOTHING`
+        );
+        await pool.query(
+          `INSERT INTO perm_role_capabilities (role_id, capability_id)
+           SELECT pr.id, pc.id
+           FROM perm_roles pr, perm_capabilities pc
+           WHERE pr.name = 'PROJECT_MANAGER' AND pc.key = 'work_orders.release'
+           ON CONFLICT (role_id, capability_id) DO NOTHING`
+        );
+
         // Assign all EPOCH capabilities to ADMIN and OWNER roles
         for (const cap of epochCapabilities) {
           for (const roleName of ['ADMIN', 'OWNER']) {

@@ -17790,6 +17790,184 @@ export type ProductionControlTemplate = typeof productionControlTemplates.$infer
 export type InsertProductionControlTemplate = z.infer<typeof insertProductionControlTemplateSchema>;
 
 // ---------------------------------------------------------------------------
+// Engineering Control - reusable revision, effectivity, and ECO framework
+// ---------------------------------------------------------------------------
+
+export const engineeringControlledArtifactTypeEnum = pgEnum('engineering_controlled_artifact_type', [
+  'BOM',
+  'ROUTING',
+  'TRAVELER_TEMPLATE',
+  'WORK_INSTRUCTION',
+  'SPEC',
+  'QC_FORM',
+]);
+
+export const engineeringReleaseStateEnum = pgEnum('engineering_release_state', [
+  'draft',
+  'review',
+  'approved',
+  'released',
+  'obsolete',
+]);
+
+export const engineeringEcoStatusEnum = pgEnum('engineering_eco_status', [
+  'draft',
+  'impact_review',
+  'approval',
+  'approved',
+  'rejected',
+  'implemented',
+  'released',
+  'closed',
+]);
+
+export const engineeringControlledRevisions = pgTable('engineering_controlled_revisions', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  artifactType: engineeringControlledArtifactTypeEnum('artifact_type').notNull(),
+  artifactId: text('artifact_id').notNull(),
+  artifactNumber: text('artifact_number'),
+  title: text('title').notNull(),
+  revision: text('revision').notNull(),
+  releaseState: engineeringReleaseStateEnum('release_state').notNull().default('draft'),
+  description: text('description'),
+  sourceModule: text('source_module'),
+  sourceVersionId: text('source_version_id'),
+  changeSummary: text('change_summary'),
+  effectivitySerialStart: text('effectivity_serial_start'),
+  effectivitySerialEnd: text('effectivity_serial_end'),
+  effectivityStartDate: date('effectivity_start_date'),
+  effectivityEndDate: date('effectivity_end_date'),
+  effectivityCustomerId: text('effectivity_customer_id'),
+  effectivityCustomerName: text('effectivity_customer_name'),
+  effectivityProjectId: uuid('effectivity_project_id'),
+  effectivityProjectNumber: text('effectivity_project_number'),
+  createdBy: text('created_by').notNull().default('system'),
+  reviewedBy: text('reviewed_by'),
+  reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+  approvedBy: text('approved_by'),
+  approvedAt: timestamp('approved_at', { withTimezone: true }),
+  releasedBy: text('released_by'),
+  releasedAt: timestamp('released_at', { withTimezone: true }),
+  obsoleteBy: text('obsolete_by'),
+  obsoleteAt: timestamp('obsolete_at', { withTimezone: true }),
+  releaseNotes: text('release_notes'),
+  metadata: jsonb('metadata').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`),
+  createdAt: timestamp('created_at', { withTimezone: true }).default(sql`now()`),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).default(sql`now()`),
+}, (table) => ({
+  artifactIdx: index('ecr_artifact_idx').on(table.artifactType, table.artifactId),
+  releaseStateIdx: index('ecr_release_state_idx').on(table.releaseState),
+  effectivityDateIdx: index('ecr_effectivity_date_idx').on(table.effectivityStartDate, table.effectivityEndDate),
+  effectivityCustomerIdx: index('ecr_effectivity_customer_idx').on(table.effectivityCustomerId),
+  effectivityProjectIdx: index('ecr_effectivity_project_idx').on(table.effectivityProjectId),
+  revisionUniqueIdx: uniqueIndex('ecr_artifact_revision_unique').on(table.artifactType, table.artifactId, table.revision),
+}));
+
+export const engineeringChangeOrders = pgTable('engineering_change_orders', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  ecoNumber: text('eco_number').notNull().unique(),
+  title: text('title').notNull(),
+  reason: text('reason').notNull(),
+  changeDescription: text('change_description').notNull(),
+  status: engineeringEcoStatusEnum('status').notNull().default('draft'),
+  requestedBy: text('requested_by').notNull().default('system'),
+  requestedAt: timestamp('requested_at', { withTimezone: true }).default(sql`now()`),
+  impactReview: jsonb('impact_review').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`),
+  impactReviewedBy: text('impact_reviewed_by'),
+  impactReviewedAt: timestamp('impact_reviewed_at', { withTimezone: true }),
+  approvalPlan: jsonb('approval_plan').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`),
+  approvedBy: text('approved_by'),
+  approvedAt: timestamp('approved_at', { withTimezone: true }),
+  rejectedBy: text('rejected_by'),
+  rejectedAt: timestamp('rejected_at', { withTimezone: true }),
+  rejectionReason: text('rejection_reason'),
+  implementationDate: date('implementation_date'),
+  implementedBy: text('implemented_by'),
+  implementedAt: timestamp('implemented_at', { withTimezone: true }),
+  releaseLinkage: jsonb('release_linkage').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`),
+  releasedBy: text('released_by'),
+  releasedAt: timestamp('released_at', { withTimezone: true }),
+  closedBy: text('closed_by'),
+  closedAt: timestamp('closed_at', { withTimezone: true }),
+  metadata: jsonb('metadata').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`),
+  createdAt: timestamp('created_at', { withTimezone: true }).default(sql`now()`),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).default(sql`now()`),
+}, (table) => ({
+  statusIdx: index('eco_status_idx').on(table.status),
+  implementationDateIdx: index('eco_implementation_date_idx').on(table.implementationDate),
+}));
+
+export const engineeringEcoRevisionLinks = pgTable('engineering_eco_revision_links', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  ecoId: uuid('eco_id').notNull().references(() => engineeringChangeOrders.id, { onDelete: 'cascade' }),
+  revisionId: uuid('revision_id').notNull().references(() => engineeringControlledRevisions.id, { onDelete: 'cascade' }),
+  linkType: text('link_type').notNull().default('release'),
+  notes: text('notes'),
+  createdBy: text('created_by').notNull().default('system'),
+  createdAt: timestamp('created_at', { withTimezone: true }).default(sql`now()`),
+}, (table) => ({
+  ecoIdx: index('eco_revision_links_eco_idx').on(table.ecoId),
+  revisionIdx: index('eco_revision_links_revision_idx').on(table.revisionId),
+  ecoRevisionUniqueIdx: uniqueIndex('eco_revision_links_unique').on(table.ecoId, table.revisionId, table.linkType),
+}));
+
+export const insertEngineeringControlledRevisionSchema = createInsertSchema(engineeringControlledRevisions).omit({
+  id: true,
+  reviewedAt: true,
+  approvedAt: true,
+  releasedAt: true,
+  obsoleteAt: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  artifactType: z.enum(['BOM', 'ROUTING', 'TRAVELER_TEMPLATE', 'WORK_INSTRUCTION', 'SPEC', 'QC_FORM']),
+  artifactId: z.string().min(1),
+  title: z.string().min(1),
+  revision: z.string().min(1),
+  releaseState: z.enum(['draft', 'review', 'approved', 'released', 'obsolete']).default('draft'),
+  metadata: z.record(z.unknown()).optional().nullable(),
+});
+
+export const insertEngineeringChangeOrderSchema = createInsertSchema(engineeringChangeOrders).omit({
+  id: true,
+  requestedAt: true,
+  impactReviewedAt: true,
+  approvedAt: true,
+  rejectedAt: true,
+  implementedAt: true,
+  releasedAt: true,
+  closedAt: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  ecoNumber: z.string().min(1),
+  title: z.string().min(1),
+  reason: z.string().min(1),
+  changeDescription: z.string().min(1),
+  status: z.enum(['draft', 'impact_review', 'approval', 'approved', 'rejected', 'implemented', 'released', 'closed']).default('draft'),
+  impactReview: z.record(z.unknown()).optional().nullable(),
+  approvalPlan: z.record(z.unknown()).optional().nullable(),
+  releaseLinkage: z.record(z.unknown()).optional().nullable(),
+  metadata: z.record(z.unknown()).optional().nullable(),
+});
+
+export const insertEngineeringEcoRevisionLinkSchema = createInsertSchema(engineeringEcoRevisionLinks).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  ecoId: z.string().uuid(),
+  revisionId: z.string().uuid(),
+  linkType: z.string().min(1).default('release'),
+});
+
+export type EngineeringControlledRevision = typeof engineeringControlledRevisions.$inferSelect;
+export type InsertEngineeringControlledRevision = z.infer<typeof insertEngineeringControlledRevisionSchema>;
+export type EngineeringChangeOrder = typeof engineeringChangeOrders.$inferSelect;
+export type InsertEngineeringChangeOrder = z.infer<typeof insertEngineeringChangeOrderSchema>;
+export type EngineeringEcoRevisionLink = typeof engineeringEcoRevisionLinks.$inferSelect;
+export type InsertEngineeringEcoRevisionLink = z.infer<typeof insertEngineeringEcoRevisionLinkSchema>;
+
+// ---------------------------------------------------------------------------
 // WAD Production Controls — persisted controls + provision record per WAD
 // ---------------------------------------------------------------------------
 

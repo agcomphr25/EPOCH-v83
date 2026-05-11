@@ -9964,6 +9964,7 @@ export const quoteSnapshots = pgTable('quote_snapshots', {
   leadTimes: jsonb('lead_times').$type<Record<string, unknown> | unknown[] | null>(),
   exclusions: jsonb('exclusions').$type<Record<string, unknown> | unknown[] | null>(),
   certRequirements: jsonb('cert_requirements').$type<Record<string, unknown> | unknown[] | null>(),
+  contractualClauses: jsonb('contractual_clauses').$type<Record<string, unknown> | unknown[] | null>(),
   sourceData: jsonb('source_data').$type<Record<string, unknown> | null>(),
   sentAt: timestamp('sent_at').defaultNow().notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),

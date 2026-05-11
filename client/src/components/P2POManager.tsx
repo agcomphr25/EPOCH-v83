@@ -54,6 +54,9 @@ import {
   FolderOpen,
   Search,
   Eye,
+  AlertTriangle,
+  CheckCircle,
+  RefreshCw,
 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { apiRequest } from '@/lib/queryClient';
@@ -110,6 +113,19 @@ interface P2PurchaseOrder
   updatedAt: string;
 }
 
+interface QuotePoReconciliation {
+  id: string;
+  p2_purchase_order_id: number;
+  status: 'MATCH' | 'MISMATCH' | string;
+  revision_mismatch: boolean;
+  pricing_mismatch: boolean;
+  clause_mismatch: boolean;
+  schedule_mismatch: boolean;
+  quantity_mismatch: boolean;
+  mismatch_summary?: Record<string, any> | null;
+  checked_at: string;
+}
+
 interface P2POManagerProps {
   onManageItems?: (poId: number, poNumber: string) => void;
   selectedPOIds?: number[];
@@ -137,6 +153,17 @@ export function P2POManager({ onManageItems, selectedPOIds = [], initialSearch =
   const { data: allQuotes = [] } = useQuery<Quote[]>({
     queryKey: ['/api/quotes'],
   });
+
+  const { data: quoteReconciliations = [] } = useQuery<QuotePoReconciliation[]>({
+    queryKey: ['/api/p2/quote-po-reconciliations/latest'],
+  });
+
+  const reconciliationByPoId = new Map(
+    quoteReconciliations.map((reconciliation) => [
+      reconciliation.p2_purchase_order_id,
+      reconciliation,
+    ])
+  );
 
   const sentQuotes = allQuotes.filter((quote) => quote.status === 'SENT');
 
@@ -327,6 +354,29 @@ export function P2POManager({ onManageItems, selectedPOIds = [], initialSearch =
     },
   });
 
+  const reconcileQuoteMutation = useMutation({
+    mutationFn: (poId: number) =>
+      apiRequest(`/api/p2-purchase-orders/${poId}/reconcile-quote`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      }),
+    onSuccess: (_data, poId) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/quote-po-reconciliations/latest'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2-purchase-orders-bypass'] });
+      toast({
+        title: 'Quote reconciliation updated',
+        description: `PO ${poId} was checked against its source quote snapshot.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Quote reconciliation failed',
+        description: error.message || 'Failed to reconcile this PO against its source quote.',
+        variant: 'destructive',
+      });
+    },
+  });
+
   const handleGenerateProductionOrders = (po: P2PurchaseOrder) => {
     if (
       confirm(
@@ -508,6 +558,17 @@ export function P2POManager({ onManageItems, selectedPOIds = [], initialSearch =
       default:
         return 'outline';
     }
+  };
+
+  const getMismatchFlags = (reconciliation?: QuotePoReconciliation | null) => {
+    if (!reconciliation) return [];
+    return [
+      reconciliation.revision_mismatch && 'Revision',
+      reconciliation.pricing_mismatch && 'Pricing',
+      reconciliation.clause_mismatch && 'Clauses',
+      reconciliation.schedule_mismatch && 'Schedule',
+      reconciliation.quantity_mismatch && 'Quantity',
+    ].filter(Boolean) as string[];
   };
 
   const baseFilteredPOs = selectedPOIds.length > 0
@@ -911,7 +972,11 @@ export function P2POManager({ onManageItems, selectedPOIds = [], initialSearch =
             </CardContent>
           </Card>
         ) : (
-          sortedPurchaseOrders.map((po) => (
+          sortedPurchaseOrders.map((po) => {
+            const quoteReconciliation = reconciliationByPoId.get(po.id);
+            const mismatchFlags = getMismatchFlags(quoteReconciliation);
+
+            return (
             <Card key={po.id}>
               <CardHeader>
                 <div className="flex justify-between items-start">
@@ -933,6 +998,23 @@ export function P2POManager({ onManageItems, selectedPOIds = [], initialSearch =
                       <Badge variant="outline" className="border-amber-500 text-amber-600 dark:text-amber-400 flex items-center gap-1">
                         <Lock className="h-3 w-3" />
                         Locked
+                      </Badge>
+                    )}
+                    {po.sourceQuoteId && quoteReconciliation?.status === 'MATCH' && (
+                      <Badge variant="outline" className="border-green-500 text-green-700 dark:text-green-400 flex items-center gap-1">
+                        <CheckCircle className="h-3 w-3" />
+                        Quote Match
+                      </Badge>
+                    )}
+                    {po.sourceQuoteId && quoteReconciliation?.status === 'MISMATCH' && (
+                      <Badge variant="destructive" className="flex items-center gap-1">
+                        <AlertTriangle className="h-3 w-3" />
+                        Quote Mismatch
+                      </Badge>
+                    )}
+                    {po.sourceQuoteId && !quoteReconciliation && (
+                      <Badge variant="outline" className="border-yellow-500 text-yellow-700 dark:text-yellow-400">
+                        Reconcile Needed
                       </Badge>
                     )}
                   </div>
@@ -964,6 +1046,48 @@ export function P2POManager({ onManageItems, selectedPOIds = [], initialSearch =
                     <span>Project: <span className="font-medium text-foreground">{po.projectName}</span></span>
                   </div>
                 )}
+                {po.sourceQuoteId && (
+                  <div className={`mb-4 rounded-md border p-3 text-sm ${
+                    quoteReconciliation?.status === 'MISMATCH'
+                      ? 'border-red-200 bg-red-50 text-red-900 dark:border-red-900/50 dark:bg-red-950/20 dark:text-red-200'
+                      : !quoteReconciliation
+                      ? 'border-yellow-200 bg-yellow-50 text-yellow-900 dark:border-yellow-900/50 dark:bg-yellow-950/20 dark:text-yellow-200'
+                      : 'border-green-200 bg-green-50 text-green-900 dark:border-green-900/50 dark:bg-green-950/20 dark:text-green-200'
+                  }`}>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 font-medium">
+                        {quoteReconciliation?.status === 'MISMATCH' || !quoteReconciliation ? (
+                          <AlertTriangle className="h-4 w-4" />
+                        ) : (
+                          <CheckCircle className="h-4 w-4" />
+                        )}
+                        Quote Snapshot Reconciliation
+                      </div>
+                      {quoteReconciliation?.checked_at && (
+                        <span className="text-xs opacity-75">
+                          Checked {format(new Date(quoteReconciliation.checked_at), 'MMM d, yyyy h:mm a')}
+                      </span>
+                      )}
+                    </div>
+                    {!quoteReconciliation ? (
+                      <p className="mt-1 text-xs opacity-80">
+                        Run reconciliation to compare revision, pricing, clauses, schedule, and quantity against the latest sent quote snapshot.
+                      </p>
+                    ) : mismatchFlags.length > 0 ? (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {mismatchFlags.map((flag) => (
+                          <Badge key={flag} variant="destructive" className="text-xs">
+                            {flag} mismatch
+                          </Badge>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-1 text-xs opacity-80">
+                        Revision, pricing, clauses, schedule, and quantity are aligned with the latest sent quote snapshot.
+                      </p>
+                    )}
+                  </div>
+                )}
                 {po.notes && (
                   <p className="text-sm text-muted-foreground mb-4">
                     {po.notes}
@@ -988,6 +1112,19 @@ export function P2POManager({ onManageItems, selectedPOIds = [], initialSearch =
                     <Eye className="h-4 w-4 mr-2" />
                     Preview PO
                   </Button>
+                  {po.sourceQuoteId && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => reconcileQuoteMutation.mutate(po.id)}
+                      disabled={reconcileQuoteMutation.isPending}
+                      data-testid={`button-reconcile-quote-${po.id}`}
+                      title="Re-check revision, pricing, clauses, schedule, and quantity against the sent quote snapshot"
+                    >
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Reconcile Quote
+                    </Button>
+                  )}
                   {po.status === 'OPEN' && (
                     <>
                       <Button
@@ -1074,7 +1211,8 @@ export function P2POManager({ onManageItems, selectedPOIds = [], initialSearch =
                 </div>
               </CardContent>
             </Card>
-          ))
+            );
+          })
         )}
       </div>
     </div>

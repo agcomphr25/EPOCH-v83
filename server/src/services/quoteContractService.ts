@@ -19,6 +19,32 @@ function normalizeText(value: unknown): string {
   return String(value ?? '').trim().toLowerCase();
 }
 
+function hasMeaningfulValue(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(hasMeaningfulValue);
+  if (value && typeof value === 'object') return Object.values(value).some(hasMeaningfulValue);
+  const normalized = String(value ?? '').trim().toLowerCase();
+  return normalized !== '' && normalized !== 'n/a' && normalized !== 'na' && normalized !== 'none';
+}
+
+function arrayPayload(value: unknown): unknown[] {
+  if (!hasMeaningfulValue(value)) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+function uniqueText(values: unknown[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of values) {
+    const text = String(value ?? '').trim();
+    if (!text) continue;
+    const key = text.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(text);
+  }
+  return result;
+}
+
 function sameDate(a: unknown, b: unknown): boolean {
   if (!a || !b) return !a && !b;
   const ad = new Date(String(a));
@@ -34,6 +60,29 @@ function extractRevision(...values: unknown[]): string | null {
     if (match?.[1]) return match[1].toUpperCase();
   }
   return null;
+}
+
+function extractClauseNumbers(...values: unknown[]): string[] {
+  const clauses: string[] = [];
+  for (const value of values) {
+    const text = JSON.stringify(value ?? '');
+    const matches = text.match(/\b(?:FAR|DFARS)\s+\d{1,3}\.\d{3}(?:-\d+)?\b/gi) ?? [];
+    clauses.push(...matches.map((match) => match.replace(/\s+/g, ' ').toUpperCase()));
+  }
+  return uniqueText(clauses);
+}
+
+function buildSnapshotPayloadChecks(payload: Record<string, unknown>) {
+  const checks = Object.entries(payload).map(([key, value]) => ({
+    key,
+    present: hasMeaningfulValue(value),
+    count: Array.isArray(value) ? value.length : hasMeaningfulValue(value) ? 1 : 0,
+  }));
+  return {
+    complete: checks.every((check) => check.present),
+    missing: checks.filter((check) => !check.present).map((check) => check.key),
+    checks,
+  };
 }
 
 async function nextRevisionNumber(quoteId: string): Promise<number> {
@@ -113,6 +162,7 @@ export async function createQuoteSnapshot(
     revisionLabel?: string | null;
     exclusions?: unknown;
     certRequirements?: unknown;
+    contractualClauses?: unknown;
     sentAt?: Date;
   } = {},
 ) {
@@ -145,6 +195,28 @@ export async function createQuoteSnapshot(
     estimating.rfq?.revision ||
     `R${revisionNumber}`;
   const sentAt = options.sentAt ?? new Date();
+  const leadTimes = {
+    pricingSnapshots: estimating.pricingSnapshots.map((snap) => ({
+      rfqPartId: snap.rfq_part_id,
+      quantityBreakId: snap.quantity_break_id,
+      leadTimeDays: snap.lead_time_days,
+    })),
+    quantityBreaks: estimating.quantityBreaks,
+  };
+  const exclusions = arrayPayload(options.exclusions);
+  const certRequirements = arrayPayload(options.certRequirements ?? estimating.complianceFlags);
+  const contractualClauses = uniqueText([
+    ...arrayPayload(options.contractualClauses),
+    ...extractClauseNumbers(quote.notes, options.exclusions, options.certRequirements, estimating.complianceFlags, estimating.rfq),
+  ]);
+  const payloadChecks = buildSnapshotPayloadChecks({
+    bomAssumptions: estimating.bomLines,
+    laborAssumptions: estimating.processRows,
+    leadTimes,
+    exclusions,
+    certRequirements,
+    contractualClauses,
+  });
 
   const snapshot = firstRow<any>(
     await pool.query(
@@ -152,12 +224,12 @@ export async function createQuoteSnapshot(
         quote_id, quote_number, revision_number, revision_label, status_at_snapshot,
         customer_id, customer_name, customers_integer_id, description, total_amount,
         valid_until, quoted_by, notes, bom_assumptions, labor_assumptions,
-        lead_times, exclusions, cert_requirements, source_data, sent_at
+        lead_times, exclusions, cert_requirements, contractual_clauses, source_data, sent_at
        ) VALUES (
         $1, $2, $3, $4, $5,
         $6, $7, $8, $9, $10,
         $11, $12, $13, $14::jsonb, $15::jsonb,
-        $16::jsonb, $17::jsonb, $18::jsonb, $19::jsonb, $20
+        $16::jsonb, $17::jsonb, $18::jsonb, $19::jsonb, $20::jsonb, $21
        )
        RETURNING *`,
       [
@@ -176,17 +248,11 @@ export async function createQuoteSnapshot(
         quote.notes ?? null,
         JSON.stringify(estimating.bomLines),
         JSON.stringify(estimating.processRows),
-        JSON.stringify({
-          pricingSnapshots: estimating.pricingSnapshots.map((snap) => ({
-            rfqPartId: snap.rfq_part_id,
-            quantityBreakId: snap.quantity_break_id,
-            leadTimeDays: snap.lead_time_days,
-          })),
-          quantityBreaks: estimating.quantityBreaks,
-        }),
-        JSON.stringify(options.exclusions ?? []),
-        JSON.stringify(options.certRequirements ?? estimating.complianceFlags),
-        JSON.stringify({ estimatingRfq: estimating.rfq }),
+        JSON.stringify(leadTimes),
+        JSON.stringify(exclusions),
+        JSON.stringify(certRequirements),
+        JSON.stringify(contractualClauses),
+        JSON.stringify({ estimatingRfq: estimating.rfq, payloadChecks }),
         sentAt,
       ],
     ),
@@ -235,6 +301,62 @@ export async function createQuoteSnapshot(
   }
 
   return snapshot;
+}
+
+export async function getQuoteContractReviewGate(quoteId: string | null | undefined, projectId?: string | null) {
+  if (!quoteId && !projectId) {
+    return {
+      key: 'contract_review',
+      label: 'Contract Review',
+      passed: false,
+      status: 'missing_link',
+      message: 'No source quote or project link is available for contract review.',
+    };
+  }
+
+  const snapshot = quoteId ? await latestSnapshot(quoteId) : null;
+  const params: unknown[] = [];
+  const predicates: string[] = [];
+  if (quoteId) {
+    params.push(quoteId);
+    predicates.push(`form_data->>'quoteId' = $${params.length}`);
+    predicates.push(`form_data->>'quote_id' = $${params.length}`);
+  }
+  if (projectId) {
+    params.push(projectId);
+    predicates.push(`form_data->>'projectId' = $${params.length}`);
+    predicates.push(`form_data->>'project_id' = $${params.length}`);
+  }
+
+  const review = predicates.length > 0
+    ? firstRow<any>(
+        await pool.query(
+          `SELECT id, status, form_data, updated_at
+           FROM purchase_review_checklists
+           WHERE ${predicates.map((predicate) => `(${predicate})`).join(' OR ')}
+           ORDER BY updated_at DESC, created_at DESC
+           LIMIT 1`,
+          params,
+        ),
+      )
+    : null;
+  const reviewApproved = normalizeText(review?.status) === 'approved';
+
+  return {
+    key: 'contract_review',
+    label: 'Contract Review',
+    passed: Boolean(snapshot && reviewApproved),
+    status: !snapshot ? 'missing_snapshot' : reviewApproved ? 'approved' : review ? 'review_not_approved' : 'missing_review',
+    quoteSnapshotId: snapshot?.id ?? null,
+    quoteRevision: snapshot?.revision_label ?? null,
+    purchaseReviewChecklistId: review?.id ?? null,
+    purchaseReviewStatus: review?.status ?? null,
+    message: !snapshot
+      ? 'A sent quote snapshot is required before project release.'
+      : reviewApproved
+        ? 'Contract review is approved for the quote snapshot.'
+        : 'Purchase review checklist must be approved before project release.',
+  };
 }
 
 export async function reconcileCustomerPoToQuote(poId: number) {
@@ -301,14 +423,16 @@ export async function reconcileCustomerPoToQuote(poId: number) {
       : false;
 
   const snapshotCerts = JSON.stringify(snapshot.cert_requirements ?? []);
+  const snapshotClauses = JSON.stringify(snapshot.contractual_clauses ?? []);
   const poClauseText = normalizeText(`${po.notes ?? ''} ${poItems.map((item) => `${item.specifications ?? ''} ${item.notes ?? ''}`).join(' ')}`);
   const clauseMismatch =
-    snapshotCerts !== '[]' &&
-    snapshotCerts !== 'null' &&
+    ((snapshotCerts !== '[]' && snapshotCerts !== 'null') || (snapshotClauses !== '[]' && snapshotClauses !== 'null')) &&
     !poClauseText.includes('cert') &&
     !poClauseText.includes('coc') &&
     !poClauseText.includes('sds') &&
-    !poClauseText.includes('tds');
+    !poClauseText.includes('tds') &&
+    !poClauseText.includes('far') &&
+    !poClauseText.includes('dfars');
 
   const status =
     revisionMismatch || pricingMismatch || clauseMismatch || scheduleMismatch || quantityMismatch
@@ -320,7 +444,7 @@ export async function reconcileCustomerPoToQuote(poId: number) {
     pricing: { quoteTotal, poTotal, mismatch: pricingMismatch },
     revision: { quoteRevision: snapshot.revision_label, poRevisions: poRevisionCandidates, mismatch: revisionMismatch },
     schedule: { quoteValidUntil: snapshot.valid_until, poExpectedDelivery: po.expected_delivery, mismatch: scheduleMismatch },
-    clauses: { requiredCerts: snapshot.cert_requirements ?? [], mismatch: clauseMismatch },
+    clauses: { requiredCerts: snapshot.cert_requirements ?? [], contractualClauses: snapshot.contractual_clauses ?? [], mismatch: clauseMismatch },
   };
 
   return firstRow<any>(
@@ -361,6 +485,16 @@ export async function getLatestQuotePoReconciliation(poId: number) {
        ORDER BY checked_at DESC, created_at DESC
        LIMIT 1`,
       [poId],
+    ),
+  );
+}
+
+export async function getLatestQuotePoReconciliations() {
+  return rowsFrom<any>(
+    await pool.query(
+      `SELECT DISTINCT ON (p2_purchase_order_id) *
+       FROM quote_po_reconciliations
+       ORDER BY p2_purchase_order_id, checked_at DESC, created_at DESC`,
     ),
   );
 }

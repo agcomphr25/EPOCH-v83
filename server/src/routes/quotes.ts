@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { db } from '../../db';
+import { db, pool } from '../../db';
 import { quotes, quoteLineItems, projectSteps, projects, productionWorkOrders, projectStepTypeEnum, insertQuoteSchema, insertQuoteLineItemSchema, customers, type QuoteExecutionFeedback } from '../../schema';
 import { eq, desc, max } from 'drizzle-orm';
 import { resolveCustomersIntegerId } from '../lib/customerResolver';
@@ -62,6 +62,78 @@ const PROJECT_STEP_TYPES: Array<{ type: ProjectStepTypeValue; order: number }> =
 ];
 
 const router = Router();
+
+async function getEstimatingQuoteReleaseGate(quoteId: string) {
+  const rfqRows = await pool.query(
+    `SELECT id, rfq_number FROM estimating_rfqs WHERE quote_id = $1 LIMIT 1`,
+    [quoteId]
+  );
+  const rfq = rfqRows[0];
+  if (!rfq) return null;
+
+  const [approvals, pricingRows, latestRiskRows, blockingRiskItems] = await Promise.all([
+    pool.query(`SELECT approval_role, approval_status FROM estimating_approvals WHERE rfq_id = $1`, [rfq.id]),
+    pool.query(`SELECT extended_price, margin_percent FROM estimating_pricing_snapshots WHERE rfq_id = $1`, [rfq.id]),
+    pool.query(
+      `SELECT * FROM risk_assessments
+       WHERE rfq_id = $1
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [rfq.id]
+    ),
+    pool.query(
+      `SELECT ri.*
+       FROM risk_items ri
+       JOIN risk_assessments ra ON ra.id = ri.risk_assessment_id
+       WHERE ra.rfq_id = $1
+         AND ri.status NOT IN ('CLOSED', 'MITIGATED', 'ACCEPTED')
+         AND (ri.requires_approval = true OR ri.score >= 10)`,
+      [rfq.id]
+    ),
+  ]);
+
+  const totalEstimateValue = pricingRows.reduce((sum: number, row: any) => sum + Number(row.extended_price || 0), 0);
+  const margins = pricingRows.map((row: any) => Number(row.margin_percent || 0));
+  const minMarginPercent = margins.length ? Math.min(...margins) : null;
+  const latestRisk = latestRiskRows[0] ?? null;
+  const riskScore = Number(latestRisk?.overall_score ?? 0);
+  const riskLevel = latestRisk?.overall_level ?? 'UNKNOWN';
+  const executiveTriggers = [
+    totalEstimateValue >= 50000 ? 'VALUE_50000_OR_GREATER' : null,
+    minMarginPercent !== null && minMarginPercent < 15 ? 'MARGIN_BELOW_15_PERCENT' : null,
+    riskScore >= 10 ? 'RISK_SCORE_10_OR_GREATER' : null,
+    ['HIGH', 'CRITICAL'].includes(riskLevel) ? `RISK_LEVEL_${riskLevel}` : null,
+  ].filter(Boolean);
+  const requiredRoles = ['ESTIMATOR', 'ENGINEERING', 'FINANCE'];
+  if (executiveTriggers.length > 0) requiredRoles.push('EXECUTIVE');
+
+  const approvedRoles = new Set(
+    approvals
+      .filter((row: any) => row.approval_status === 'APPROVED')
+      .map((row: any) => row.approval_role)
+  );
+  const missingRoles = requiredRoles.filter((role) => !approvedRoles.has(role));
+  const riskReady = Boolean(latestRisk)
+    && ['APPROVED', 'CLOSED'].includes(String(latestRisk.status))
+    && blockingRiskItems.length === 0;
+
+  return {
+    rfqId: rfq.id,
+    rfqNumber: rfq.rfq_number,
+    readyForQuoteRelease: missingRoles.length === 0 && riskReady,
+    requiredRoles,
+    missingRoles,
+    executiveRequired: executiveTriggers.length > 0,
+    executiveTriggers,
+    risk: {
+      assessmentId: latestRisk?.id ?? null,
+      status: latestRisk?.status ?? null,
+      overallScore: riskScore,
+      overallLevel: riskLevel,
+      blockingRiskCount: blockingRiskItems.length,
+    },
+  };
+}
 
 // Generate unique quote number
 async function generateQuoteNumber(): Promise<string> {
@@ -459,6 +531,14 @@ router.post('/api/quotes/submit', async (req: Request, res: Response) => {
       });
     }
 
+    const estimatingGate = await getEstimatingQuoteReleaseGate(id);
+    if (estimatingGate && !estimatingGate.readyForQuoteRelease) {
+      return res.status(409).json({
+        error: 'Quote cannot be submitted until the source RFQ has completed estimating approvals and risk release.',
+        readiness: estimatingGate,
+      });
+    }
+
     const [submittedQuote] = await db
       .update(quotes)
       .set({
@@ -518,6 +598,15 @@ router.patch('/api/quotes/:id/status', async (req: Request, res: Response) => {
           error: 'Only draft quotes can be sent. Sent quotes are immutable; create a new revision instead.',
           currentStatus: quote.status,
         });
+      }
+      if (status === 'SENT') {
+        const estimatingGate = await getEstimatingQuoteReleaseGate(quoteId);
+        if (estimatingGate && !estimatingGate.readyForQuoteRelease) {
+          return res.status(409).json({
+            error: 'Quote cannot be sent until the source RFQ has completed estimating approvals and risk release.',
+            readiness: estimatingGate,
+          });
+        }
       }
 
       const [updated] = await db

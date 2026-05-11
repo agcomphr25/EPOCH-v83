@@ -494,6 +494,7 @@ async function initializeBackgroundServices() {
           '0124_chart_of_accounts_foundation.sql',
           '0128_procurement_section6_supplier_controls.sql',
           '0129_quality_section9_ncr_capa_calibration.sql',
+          '0130_audit_dcaa_security_section11.sql',
           'investigation_308_order_duplication.sql',
         ];
         const criticalMigrations = new Set([
@@ -4345,6 +4346,13 @@ async function initializeBackgroundServices() {
           { key: 'projects.close', description: 'Create or submit a project closing record', category: 'projects' },
           { key: 'documents.approve', description: 'Approve controlled documents (replaces the hardcoded username guard)', category: 'documents' },
           { key: 'employees.manage_qualifications', description: 'Grant or revoke machine-class and operation-type qualifications for employees', category: 'employees' },
+          { key: 'approvals.override', description: 'Perform privileged approval overrides after explicit reason capture and audit logging', category: 'approvals' },
+          { key: 'labor.override', description: 'Approve labor overrides, labor budget overruns, and charge-code override exceptions', category: 'labor' },
+          { key: 'engineering.release_revision', description: 'Release controlled engineering revisions and ECO-backed document revisions', category: 'engineering' },
+          { key: 'procurement.approve_po', description: 'Approve and release vendor purchase orders', category: 'procurement' },
+          { key: 'quality.close_ncr', description: 'Close NCR/CAPA records after disposition and effectiveness evidence is attached', category: 'quality' },
+          { key: 'vault.access', description: 'Grant or use access to controlled secure-vault evidence objects', category: 'security' },
+          { key: 'shipping.release_shipment', description: 'Release customer shipments and certify shipment evidence packages', category: 'shipping' },
 
           // Orders
           { key: 'orders.create', description: 'Create draft orders and finalize them into production', category: 'orders' },

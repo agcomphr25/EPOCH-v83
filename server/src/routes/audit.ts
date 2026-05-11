@@ -10,6 +10,12 @@
 
 import { Router, Request, Response } from 'express';
 import { auditService } from '../services/auditService';
+import {
+  getApprovalSignatureEvidence,
+  listObjectRetentionPolicies,
+  listRequiredEventCoverage,
+  type Section11AuditDomain,
+} from '../services/auditComplianceCoverageService';
 import { z } from 'zod';
 import { DEFAULT_AUDIT_EVENTS_LIMIT, MAX_AUDIT_EVENTS_LIMIT } from '../constants/audit';
 import { db } from '../../db';
@@ -18,6 +24,42 @@ import { eq, and, or, desc, sql, inArray } from 'drizzle-orm';
 import { requireAdminOrOwner, authenticateToken } from '../../middleware/auth';
 
 const router = Router();
+
+// Section 11: required-event coverage matrix for DCAA/security evidence.
+router.get('/required-event-coverage', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const domain = typeof req.query.domain === 'string'
+      ? req.query.domain as Section11AuditDomain
+      : undefined;
+    const coverage = await listRequiredEventCoverage(domain);
+    res.json(coverage);
+  } catch (error) {
+    console.error('Error fetching required audit event coverage:', error);
+    res.status(500).json({ error: 'Failed to fetch required audit event coverage' });
+  }
+});
+
+// Section 11: object-type retention/archive policy matrix.
+router.get('/retention/object-policies', authenticateToken, async (_req: Request, res: Response) => {
+  try {
+    const policies = await listObjectRetentionPolicies();
+    res.json(policies);
+  } catch (error) {
+    console.error('Error fetching object retention policies:', error);
+    res.status(500).json({ error: 'Failed to fetch object retention policies' });
+  }
+});
+
+// Section 11: electronic signature evidence for approval decisions.
+router.get('/approvals/:id/signature-evidence', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const evidence = await getApprovalSignatureEvidence(req.params.id);
+    res.json(evidence);
+  } catch (error) {
+    console.error('Error fetching approval signature evidence:', error);
+    res.status(500).json({ error: 'Failed to fetch approval signature evidence' });
+  }
+});
 
 // Get all audit settings
 router.get('/settings', async (req: Request, res: Response) => {

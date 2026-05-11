@@ -4447,9 +4447,15 @@ export const digitalSignatures = pgTable('digital_signatures', {
   id: uuid('id').primaryKey().defaultRandom(),
   signerUserId: integer('signer_user_id').notNull().references(() => users.id),
   signerRole: text('signer_role').notNull(),
+  signerUsername: text('signer_username'),
   certificateId: uuid('certificate_id').notNull().references(() => userSigningKeys.id),
   algorithm: text('algorithm').notNull().default('Ed25519'),
   transactionClass: text('transaction_class').notNull(),
+  signatureMeaning: text('signature_meaning'),
+  signatureReason: text('signature_reason'),
+  linkedObjectType: text('linked_object_type'),
+  linkedObjectId: text('linked_object_id'),
+  approvalRequestId: uuid('approval_request_id'),
   payloadHash: text('payload_hash').notNull(),
   payloadCanonical: jsonb('payload_canonical').$type<Record<string, unknown>>().notNull(),
   signatureBytes: text('signature_bytes').notNull(),
@@ -4459,6 +4465,8 @@ export const digitalSignatures = pgTable('digital_signatures', {
   signerIdx: index('digital_signatures_signer_idx').on(t.signerUserId),
   classIdx: index('digital_signatures_class_idx').on(t.transactionClass),
   certificateIdx: index('digital_signatures_certificate_idx').on(t.certificateId),
+  linkedObjectIdx: index('digital_signatures_linked_object_idx').on(t.linkedObjectType, t.linkedObjectId),
+  approvalRequestIdx: index('digital_signatures_approval_request_idx').on(t.approvalRequestId),
 }));
 
 export type DigitalSignature = typeof digitalSignatures.$inferSelect;
@@ -18936,6 +18944,13 @@ export const approvalRequests = pgTable('approval_requests', {
   resolvedByDisplayName: text('resolved_by_display_name'),
   resolutionNotes: text('resolution_notes'),
   resolutionSignature: text('resolution_signature'),
+  signatureMeaning: text('signature_meaning'),
+  signatureReason: text('signature_reason'),
+  signerUsername: text('signer_username'),
+  signerRole: text('signer_role'),
+  signatureLinkedObjectType: text('signature_linked_object_type'),
+  signatureLinkedObjectId: text('signature_linked_object_id'),
+  digitalSignatureId: uuid('digital_signature_id').references(() => digitalSignatures.id),
   resolutionReasonCode: text('resolution_reason_code'),
   policyId: integer('policy_id').references(() => escalationPolicies.id),
   createdAt: timestamp('created_at').notNull().defaultNow(),
@@ -18946,7 +18961,59 @@ export const approvalRequests = pgTable('approval_requests', {
   statusDeadlineIdx: index('approval_requests_status_deadline_idx').on(t.status, t.currentLevelDeadline),
   typeIdx: index('approval_requests_request_type_idx').on(t.requestType),
   subjectIdx: index('approval_requests_subject_idx').on(t.subjectType, t.subjectId),
+  signatureLinkedObjectIdx: index('approval_requests_signature_linked_object_idx').on(t.signatureLinkedObjectType, t.signatureLinkedObjectId),
 }));
+
+export const approvalSignatureEvidence = pgTable('approval_signature_evidence', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  approvalRequestId: uuid('approval_request_id').notNull().references(() => approvalRequests.id, { onDelete: 'cascade' }),
+  decisionStatus: text('decision_status').notNull(),
+  signatureMeaning: text('signature_meaning').notNull(),
+  signatureReason: text('signature_reason').notNull(),
+  signerUserId: integer('signer_user_id'),
+  signerUsername: text('signer_username').notNull(),
+  signerRole: text('signer_role').notNull(),
+  linkedObjectType: text('linked_object_type').notNull(),
+  linkedObjectId: text('linked_object_id').notNull(),
+  digitalSignatureId: uuid('digital_signature_id').references(() => digitalSignatures.id),
+  recordedAt: timestamp('recorded_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  approvalRequestIdx: index('approval_signature_evidence_request_idx').on(t.approvalRequestId),
+  linkedObjectIdx: index('approval_signature_evidence_linked_object_idx').on(t.linkedObjectType, t.linkedObjectId),
+  signerIdx: index('approval_signature_evidence_signer_idx').on(t.signerUserId),
+}));
+
+export const auditRequiredEventCoverage = pgTable('audit_required_event_coverage', {
+  id: serial('id').primaryKey(),
+  domainKey: text('domain_key').notNull(),
+  objectType: text('object_type').notNull(),
+  lifecycleStage: text('lifecycle_stage').notNull(),
+  requiredEventType: text('required_event_type').notNull(),
+  requiredSourceService: text('required_source_service').notNull(),
+  evidenceRequirement: text('evidence_requirement').notNull(),
+  requiredActorRole: text('required_actor_role'),
+  signatureRequired: boolean('signature_required').notNull().default(false),
+  retentionObjectType: text('retention_object_type').notNull(),
+  complianceBasis: text('compliance_basis').notNull().default('DCAA audit evidence'),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  domainIdx: index('audit_required_event_coverage_domain_idx').on(t.domainKey),
+  objectIdx: index('audit_required_event_coverage_object_idx').on(t.objectType),
+  eventUidx: uniqueIndex('audit_required_event_coverage_event_uidx').on(t.domainKey, t.objectType, t.requiredEventType),
+}));
+
+export const auditObjectRetentionPolicies = pgTable('audit_object_retention_policies', {
+  id: serial('id').primaryKey(),
+  objectType: text('object_type').notNull().unique(),
+  minRetentionDays: integer('min_retention_days').notNull().default(2555),
+  archiveAfterDays: integer('archive_after_days'),
+  legalHoldSupported: boolean('legal_hold_supported').notNull().default(true),
+  description: text('description').notNull(),
+  updatedBy: text('updated_by'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
 
 export const approvalRequestHistory = pgTable('approval_request_history', {
   id: bigint('id', { mode: 'number' }).primaryKey().generatedByDefaultAsIdentity(),

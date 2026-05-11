@@ -117,6 +117,13 @@ const decisionBodySchema = z.object({
   notes: z.string().optional().nullable(),
   reasonCode: z.string().optional().nullable(),
   signature: z.string().optional().nullable(),
+  signatureMeaning: z.string().optional().nullable(),
+  signatureReason: z.string().optional().nullable(),
+  signerUsername: z.string().optional().nullable(),
+  signerRole: z.string().optional().nullable(),
+  linkedObjectType: z.string().optional().nullable(),
+  linkedObjectId: z.string().optional().nullable(),
+  digitalSignatureId: z.string().uuid().optional().nullable(),
 });
 
 approvalsRouter.post('/:id/approve', async (req: Request, res: Response) => {
@@ -163,6 +170,13 @@ approvalsRouter.post('/:id/approve', async (req: Request, res: Response) => {
       notes: body.notes ?? null,
       reasonCode: body.reasonCode ?? null,
       signature: body.signature ?? null,
+      signatureMeaning: body.signatureMeaning ?? null,
+      signatureReason: body.signatureReason ?? null,
+      signerUsername: body.signerUsername ?? null,
+      signerRole: body.signerRole ?? null,
+      linkedObjectType: body.linkedObjectType ?? null,
+      linkedObjectId: body.linkedObjectId ?? null,
+      digitalSignatureId: body.digitalSignatureId ?? null,
     });
 
     // Run the inventory executor inline so the operator sees the outcome
@@ -207,6 +221,13 @@ approvalsRouter.post('/:id/reject', async (req: Request, res: Response) => {
       notes: body.notes ?? null,
       reasonCode: body.reasonCode ?? null,
       signature: body.signature ?? null,
+      signatureMeaning: body.signatureMeaning ?? null,
+      signatureReason: body.signatureReason ?? null,
+      signerUsername: body.signerUsername ?? null,
+      signerRole: body.signerRole ?? null,
+      linkedObjectType: body.linkedObjectType ?? null,
+      linkedObjectId: body.linkedObjectId ?? null,
+      digitalSignatureId: body.digitalSignatureId ?? null,
     });
     res.json(result);
   } catch (err: any) {

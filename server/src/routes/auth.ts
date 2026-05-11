@@ -35,6 +35,51 @@ function buildDeviceFingerprint(ipAddress: string | null | undefined, userAgent:
 }
 
 // ─── Session Audit Helper ─────────────────────────────────────────────────────
+let userSessionsLoginSchemaReady: Promise<void> | null = null;
+
+function ensureUserSessionsLoginSchema(): Promise<void> {
+  if (!userSessionsLoginSchemaReady) {
+    userSessionsLoginSchemaReady = pool.query(`
+      ALTER TABLE user_sessions
+        ADD COLUMN IF NOT EXISTS ip_address TEXT,
+        ADD COLUMN IF NOT EXISTS user_agent TEXT,
+        ADD COLUMN IF NOT EXISTS device_fingerprint TEXT,
+        ADD COLUMN IF NOT EXISTS mfa_verified_at TIMESTAMPTZ,
+        ADD COLUMN IF NOT EXISTS security_policy_version TEXT DEFAULT 'cmmc-itar-v1',
+        ADD COLUMN IF NOT EXISTS last_credential_verified_at TIMESTAMPTZ
+    `).then(() => undefined).catch((err) => {
+      userSessionsLoginSchemaReady = null;
+      throw err;
+    });
+  }
+  return userSessionsLoginSchemaReady;
+}
+
+async function ensureHardcodedLoginUser(user: {
+  username: string;
+  password: string;
+  role: string;
+}): Promise<{ id: number; username: string; role: string }> {
+  const inserted = await pool.query(
+    `INSERT INTO users (username, password_hash, role, is_active, created_at, updated_at)
+     VALUES ($1, $2, $3, true, NOW(), NOW())
+     ON CONFLICT (username) DO UPDATE
+       SET password_hash = EXCLUDED.password_hash,
+           role = EXCLUDED.role,
+           is_active = true,
+           updated_at = NOW()
+     RETURNING id, username, role`,
+    [user.username, user.password, user.role]
+  );
+
+  const row = inserted[0];
+  return {
+    id: row.id,
+    username: row.username,
+    role: row.role || user.role,
+  };
+}
+
 async function logSessionAuditEvent(
   action: string,
   sessionId: string,
@@ -732,7 +777,7 @@ router.post('/login', loginRateLimiter, async (req, res) => {
           hardcodedUser.password
         );
         if (isValidPassword) {
-          user = hardcodedUser;
+          user = await ensureHardcodedLoginUser(hardcodedUser);
         }
       }
     }
@@ -746,6 +791,8 @@ router.post('/login', loginRateLimiter, async (req, res) => {
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
     const ipAddress = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket?.remoteAddress || null;
     const userAgent = req.headers['user-agent'] || null;
+
+    await ensureUserSessionsLoginSchema();
 
     // ── Concurrent session enforcement ──────────────────────────────────────
     // Keep the newest (maxSessions - 1) existing sessions; deactivate older overflow.

@@ -5,13 +5,23 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { randomUUID } from 'crypto';
+import { desc, eq } from 'drizzle-orm';
 
 import { storage } from '../../storage';
+import { db } from '../../db';
 import { authenticateToken } from '../../middleware/auth';
 import { authorizeApiRoute } from '../../middleware/routeAuthorization';
 import { objectStorageClient } from '../../replit_integrations/object_storage/objectStorage';
 import { setObjectAclPolicy } from '../../replit_integrations/object_storage/objectAcl';
 import { auditService } from '../services/auditService';
+import {
+  insertSupplierAuditSchema,
+  insertSupplierScopeSchema,
+  insertSupplierScorecardSchema,
+  supplierAudits,
+  supplierScopes,
+  supplierScorecards,
+} from '../../schema';
 
 const router = Router();
 
@@ -388,6 +398,119 @@ router.get('/documents/all', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Get vendor documents error:', error);
     res.status(500).json({ error: 'Failed to fetch vendor documents' });
+  }
+});
+
+router.get('/:vendorId/supplier-controls', async (req: Request, res: Response) => {
+  try {
+    const vendorId = parseInt(req.params.vendorId);
+    if (isNaN(vendorId)) return res.status(400).json({ error: 'Invalid vendor ID' });
+
+    const [scopes, audits, scorecards] = await Promise.all([
+      db.select().from(supplierScopes).where(eq(supplierScopes.vendorId, vendorId)).orderBy(desc(supplierScopes.createdAt)),
+      db.select().from(supplierAudits).where(eq(supplierAudits.vendorId, vendorId)).orderBy(desc(supplierAudits.auditDate)),
+      db.select().from(supplierScorecards).where(eq(supplierScorecards.vendorId, vendorId)).orderBy(desc(supplierScorecards.periodEnd)),
+    ]);
+
+    res.json({ scopes, audits, scorecards });
+  } catch (error: any) {
+    console.error('Get supplier controls error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/:vendorId/supplier-scopes', async (req: Request, res: Response) => {
+  try {
+    const vendorId = parseInt(req.params.vendorId);
+    if (isNaN(vendorId)) return res.status(400).json({ error: 'Invalid vendor ID' });
+    const user = (req as any).user;
+    const parsed = insertSupplierScopeSchema.parse({
+      ...req.body,
+      vendorId,
+      approvedByUserId: req.body?.approvedByUserId ?? user?.id ?? null,
+      approvedByDisplayName: req.body?.approvedByDisplayName ?? user?.username ?? null,
+      approvedAt: req.body?.approvedAt ?? new Date(),
+    });
+
+    const [created] = await db.insert(supplierScopes).values(parsed).returning();
+    await auditService.logEvent({
+      entityType: 'vendor',
+      entityId: String(vendorId),
+      action: 'SUPPLIER_SCOPE_APPROVED',
+      actor: { id: user?.id, username: user?.username, role: user?.role },
+      meta: { scopeId: created.id, scopeCode: created.scopeCode, status: created.status, expiresAt: created.expiresAt },
+    });
+
+    res.status(201).json(created);
+  } catch (error: any) {
+    if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', issues: error.errors });
+    console.error('Create supplier scope error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/:vendorId/supplier-audits', async (req: Request, res: Response) => {
+  try {
+    const vendorId = parseInt(req.params.vendorId);
+    if (isNaN(vendorId)) return res.status(400).json({ error: 'Invalid vendor ID' });
+    const user = (req as any).user;
+    const parsed = insertSupplierAuditSchema.parse({
+      ...req.body,
+      vendorId,
+      performedByUserId: req.body?.performedByUserId ?? user?.id ?? null,
+      performedByDisplayName: req.body?.performedByDisplayName ?? user?.username ?? null,
+    });
+
+    const [created] = await db.insert(supplierAudits).values(parsed).returning();
+    await auditService.logEvent({
+      entityType: 'vendor',
+      entityId: String(vendorId),
+      action: 'SUPPLIER_AUDIT_RECORDED',
+      actor: { id: user?.id, username: user?.username, role: user?.role },
+      meta: { auditId: created.id, auditType: created.auditType, status: created.status, auditDate: created.auditDate },
+    });
+
+    res.status(201).json(created);
+  } catch (error: any) {
+    if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', issues: error.errors });
+    console.error('Create supplier audit error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/:vendorId/supplier-scorecards', async (req: Request, res: Response) => {
+  try {
+    const vendorId = parseInt(req.params.vendorId);
+    if (isNaN(vendorId)) return res.status(400).json({ error: 'Invalid vendor ID' });
+    const user = (req as any).user;
+    const scores = ['qualityScore', 'deliveryScore', 'costScore', 'responsivenessScore']
+      .map((key) => Number(req.body?.[key]));
+    const overallScore = Number.isFinite(Number(req.body?.overallScore))
+      ? Number(req.body.overallScore)
+      : scores.reduce((sum, value) => sum + value, 0) / scores.length;
+    const parsed = insertSupplierScorecardSchema.parse({
+      ...req.body,
+      vendorId,
+      overallScore,
+      reviewedByUserId: req.body?.reviewedByUserId ?? user?.id ?? null,
+      reviewedByDisplayName: req.body?.reviewedByDisplayName ?? user?.username ?? null,
+      reviewedAt: req.body?.reviewedAt ?? new Date(),
+    });
+
+    const [created] = await db.insert(supplierScorecards).values(parsed).returning();
+    await auditService.logEvent({
+      entityType: 'vendor',
+      entityId: String(vendorId),
+      action: 'SUPPLIER_SCORECARD_RECORDED',
+      actor: { id: user?.id, username: user?.username, role: user?.role },
+      meta: { scorecardId: created.id, periodStart: created.periodStart, periodEnd: created.periodEnd, overallScore: created.overallScore, status: created.status },
+    });
+
+    res.status(201).json(created);
+  } catch (error: any) {
+    if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', issues: error.errors });
+    console.error('Create supplier scorecard error:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 

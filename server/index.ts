@@ -492,6 +492,7 @@ async function initializeBackgroundServices() {
           '0122_payment_void_audit_controls.sql',
           '0123_charge_code_cost_handling.sql',
           '0124_chart_of_accounts_foundation.sql',
+          '0128_procurement_section6_supplier_controls.sql',
           'investigation_308_order_duplication.sql',
         ];
         const criticalMigrations = new Set([
@@ -4383,6 +4384,9 @@ async function initializeBackgroundServices() {
           { key: 'purchasing.view_requisitions', description: 'View purchase requisitions, FAR flowdown clauses, and vendor debarment checks', category: 'purchasing' },
           { key: 'purchasing.create_requisition', description: 'Create, submit, and cancel purchase requisitions', category: 'purchasing' },
           { key: 'purchasing.approve_requisition', description: 'Approve or deny purchase requisitions at the standard approval stage', category: 'purchasing' },
+          { key: 'purchasing.approve_requisition_buyer', description: 'Approve purchase requisitions under $500', category: 'purchasing' },
+          { key: 'purchasing.approve_requisition_manager', description: 'Approve purchase requisitions over $500', category: 'purchasing' },
+          { key: 'purchasing.approve_requisition_executive', description: 'Approve purchase requisitions over $5,000', category: 'purchasing' },
           { key: 'purchasing.admin_chain', description: 'Administer the purchasing approval chain, FAR flowdown clauses, and override requisition cancellations', category: 'purchasing' },
           { key: 'purchasing.record_debarment_check', description: 'Record vendor debarment / SAM exclusion checks', category: 'purchasing' },
           { key: 'purchasing.direct_po_exception', description: 'Issue a vendor purchase order without a backing approved requisition (direct-PO exception)', category: 'purchasing' },
@@ -4548,6 +4552,18 @@ async function initializeBackgroundServices() {
         );
 
         // MANAGER role: orders, finance, inventory, shipping, quality, purchasing, assets, training, scheduling, reports
+        await pool.query(
+          `INSERT INTO perm_roles (name, description, is_system)
+           VALUES ('PURCHASING_BUYER', 'Buyer role - can approve low-dollar purchase requisitions', true)
+           ON CONFLICT (name) DO NOTHING`
+        );
+
+        await pool.query(
+          `INSERT INTO perm_roles (name, description, is_system)
+           VALUES ('EXECUTIVE', 'Executive role - can approve high-dollar purchase requisitions', true)
+           ON CONFLICT (name) DO NOTHING`
+        );
+
         const managerCaps = [
           'orders.create',
           'orders.cancel',
@@ -4567,6 +4583,8 @@ async function initializeBackgroundServices() {
           'purchasing.view_requisitions',
           'purchasing.create_requisition',
           'purchasing.approve_requisition',
+          'purchasing.approve_requisition_buyer',
+          'purchasing.approve_requisition_manager',
           'purchasing.record_debarment_check',
           'assets.manage',
           'training.manage_content',
@@ -4586,6 +4604,26 @@ async function initializeBackgroundServices() {
             [capKey]
           );
         }
+
+        await pool.query(
+          `INSERT INTO perm_role_capabilities (role_id, capability_id)
+           SELECT pr.id, pc.id
+           FROM perm_roles pr, perm_capabilities pc
+           WHERE pr.name = 'PURCHASING_BUYER' AND pc.key = 'purchasing.approve_requisition_buyer'
+           ON CONFLICT (role_id, capability_id) DO NOTHING`
+        );
+
+        await pool.query(
+          `INSERT INTO perm_role_capabilities (role_id, capability_id)
+           SELECT pr.id, pc.id
+           FROM perm_roles pr, perm_capabilities pc
+           WHERE pr.name = 'EXECUTIVE' AND pc.key IN (
+             'purchasing.approve_requisition_buyer',
+             'purchasing.approve_requisition_manager',
+             'purchasing.approve_requisition_executive'
+           )
+           ON CONFLICT (role_id, capability_id) DO NOTHING`
+        );
 
         // SUPERVISOR role: inventory requests, shipping (mark shipped), quality definitions, training content, scheduling
         const supervisorCaps = [

@@ -3580,6 +3580,10 @@ export const vendors = pgTable('vendors', {
   startRenewalDate: date('start_renewal_date'), // Date when vendor approval started or was renewed
   approvalExpiration: date('approval_expiration'), // Date when vendor approval expires
   approved: boolean('approved').notNull().default(false),
+  debarmentStatus: text('debarment_status').notNull().default('unknown'),
+  debarmentCheckedAt: timestamp('debarment_checked_at'),
+  debarmentEvidenceUrl: text('debarment_evidence_url'),
+  debarmentNotes: text('debarment_notes'),
   evaluated: boolean('evaluated').notNull().default(false),
   evaluationDate: date('evaluation_date'),
   qualityScore: integer('quality_score'), // 1-5: 1=Poor, 2=Needs improvement, 3=Acceptable, 4=Good, 5=Excellent
@@ -3626,6 +3630,72 @@ export const vendorMonthlyEvaluations = pgTable('vendor_monthly_evaluations', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
+
+export const supplierScopes = pgTable('supplier_scopes', {
+  id: serial('id').primaryKey(),
+  vendorId: integer('vendor_id').notNull().references(() => vendors.id, { onDelete: 'cascade' }),
+  scopeCode: text('scope_code').notNull(),
+  description: text('description'),
+  productionLine: text('production_line'),
+  materialCategory: text('material_category'),
+  partNumberPattern: text('part_number_pattern'),
+  status: text('status').notNull().default('active'),
+  approvedByUserId: integer('approved_by_user_id'),
+  approvedByDisplayName: text('approved_by_display_name'),
+  approvedAt: timestamp('approved_at'),
+  expiresAt: date('expires_at'),
+  evidenceUrl: text('evidence_url'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  vendorIdx: index('idx_supplier_scopes_vendor_id').on(table.vendorId),
+  statusIdx: index('idx_supplier_scopes_status').on(table.status),
+  vendorScopeUnique: unique('supplier_scopes_vendor_scope_unique').on(table.vendorId, table.scopeCode),
+}));
+
+export const supplierAudits = pgTable('supplier_audits', {
+  id: serial('id').primaryKey(),
+  vendorId: integer('vendor_id').notNull().references(() => vendors.id, { onDelete: 'cascade' }),
+  auditType: text('audit_type').notNull().default('qualification'),
+  status: text('status').notNull().default('open'),
+  performedByUserId: integer('performed_by_user_id'),
+  performedByDisplayName: text('performed_by_display_name'),
+  auditDate: date('audit_date').notNull(),
+  nextAuditDue: date('next_audit_due'),
+  findings: text('findings'),
+  correctiveActions: text('corrective_actions'),
+  evidenceUrl: text('evidence_url'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  vendorIdx: index('idx_supplier_audits_vendor_id').on(table.vendorId),
+  statusIdx: index('idx_supplier_audits_status').on(table.status),
+  nextDueIdx: index('idx_supplier_audits_next_due').on(table.nextAuditDue),
+}));
+
+export const supplierScorecards = pgTable('supplier_scorecards', {
+  id: serial('id').primaryKey(),
+  vendorId: integer('vendor_id').notNull().references(() => vendors.id, { onDelete: 'cascade' }),
+  periodStart: date('period_start').notNull(),
+  periodEnd: date('period_end').notNull(),
+  qualityScore: integer('quality_score').notNull(),
+  deliveryScore: integer('delivery_score').notNull(),
+  costScore: integer('cost_score').notNull(),
+  responsivenessScore: integer('responsiveness_score').notNull(),
+  overallScore: real('overall_score').notNull(),
+  status: text('status').notNull().default('acceptable'),
+  reviewedByUserId: integer('reviewed_by_user_id'),
+  reviewedByDisplayName: text('reviewed_by_display_name'),
+  reviewedAt: timestamp('reviewed_at'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  vendorIdx: index('idx_supplier_scorecards_vendor_id').on(table.vendorId),
+  periodIdx: index('idx_supplier_scorecards_period').on(table.periodStart, table.periodEnd),
+  vendorPeriodUnique: unique('supplier_scorecards_vendor_period_unique').on(table.vendorId, table.periodStart, table.periodEnd),
+}));
 
 // Enhanced Inventory MRP Tables
 
@@ -4207,6 +4277,10 @@ export const insertVendorSchema = createInsertSchema(vendors)
     startRenewalDate: z.string().optional().nullable(),
     approvalExpiration: z.string().optional().nullable(),
     approved: z.boolean().default(false),
+    debarmentStatus: z.enum(['unknown', 'clear', 'debarred', 'suspended', 'excluded', 'blocked']).optional(),
+    debarmentCheckedAt: z.string().optional().nullable(),
+    debarmentEvidenceUrl: z.string().optional().nullable(),
+    debarmentNotes: z.string().optional().nullable(),
     evaluated: z.boolean().default(false),
     evaluationDate: z.string().optional().nullable(),
     qualityScore: z.number().int().min(1).max(5).optional().nullable(),
@@ -18229,6 +18303,34 @@ export const insertVendorDebarmentCheckSchema = createInsertSchema(vendorDebarme
   result: z.enum(['pass', 'fail', 'inconclusive']),
 });
 
+export const insertSupplierScopeSchema = createInsertSchema(supplierScopes).omit({
+  id: true, createdAt: true, updatedAt: true,
+}).extend({
+  vendorId: z.number().int().positive(),
+  scopeCode: z.string().min(1),
+  status: z.enum(['active', 'inactive', 'suspended']).default('active'),
+});
+
+export const insertSupplierAuditSchema = createInsertSchema(supplierAudits).omit({
+  id: true, createdAt: true, updatedAt: true,
+}).extend({
+  vendorId: z.number().int().positive(),
+  auditType: z.enum(['qualification', 'surveillance', 'corrective_action', 'renewal']).default('qualification'),
+  status: z.enum(['open', 'passed', 'failed', 'conditional']).default('open'),
+  auditDate: z.string().min(1),
+});
+
+export const insertSupplierScorecardSchema = createInsertSchema(supplierScorecards).omit({
+  id: true, createdAt: true, updatedAt: true,
+}).extend({
+  vendorId: z.number().int().positive(),
+  qualityScore: z.number().int().min(1).max(5),
+  deliveryScore: z.number().int().min(1).max(5),
+  costScore: z.number().int().min(1).max(5),
+  responsivenessScore: z.number().int().min(1).max(5),
+  status: z.enum(['preferred', 'acceptable', 'conditional', 'disqualified']).default('acceptable'),
+});
+
 export type PurchaseRequisition = typeof purchaseRequisitions.$inferSelect;
 export type InsertPurchaseRequisition = z.infer<typeof insertPurchaseRequisitionSchema>;
 export type PurchaseRequisitionLine = typeof purchaseRequisitionLines.$inferSelect;
@@ -18252,6 +18354,12 @@ export type InsertFlowedRequirement = z.infer<typeof insertFlowedRequirementSche
 export type VendorDebarmentCheck = typeof vendorDebarmentChecks.$inferSelect;
 export type InsertVendorDebarmentCheck = z.infer<typeof insertVendorDebarmentCheckSchema>;
 export type ProcurementSettings = typeof procurementSettings.$inferSelect;
+export type SupplierScope = typeof supplierScopes.$inferSelect;
+export type InsertSupplierScope = z.infer<typeof insertSupplierScopeSchema>;
+export type SupplierAudit = typeof supplierAudits.$inferSelect;
+export type InsertSupplierAudit = z.infer<typeof insertSupplierAuditSchema>;
+export type SupplierScorecard = typeof supplierScorecards.$inferSelect;
+export type InsertSupplierScorecard = z.infer<typeof insertSupplierScorecardSchema>;
 
 // ---------------------------------------------------------------------------
 // Task #85 — Audit Evidence Hardening

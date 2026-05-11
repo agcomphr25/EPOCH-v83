@@ -19,6 +19,7 @@ import { z } from 'zod';
 import { requirePermission } from '../../middleware/requirePermission';
 import { auditService } from '../services/auditService';
 import { getUserPermissions } from '../services/permissionService';
+import { getSection6ApprovalStages } from '../services/procurementControlsService';
 
 const router = Router();
 
@@ -53,7 +54,10 @@ async function buildApprovalStages(category: string, amount: number): Promise<Ar
     return amount >= min && amount <= max;
   });
   if (matching.length === 0) {
-    return [{ stage: 1, capability: 'purchasing.approve_requisition' }];
+    return getSection6ApprovalStages(amount).map(({ stage, capability }) => ({ stage, capability }));
+  }
+  if (matching.every((m: any) => m.category === 'default' && m.capability === 'purchasing.approve_requisition')) {
+    return getSection6ApprovalStages(amount).map(({ stage, capability }) => ({ stage, capability }));
   }
   const sorted = matching
     .filter((m: any) => m.category === category || matching.every((x: any) => x.category === 'default'))
@@ -243,7 +247,7 @@ router.post('/', requirePermission('purchasing.create_requisition'), async (req:
       action: 'REQUISITION_CREATED',
       actor: { id: user?.id, username: user?.username, role: user?.role },
       meta: { reqNumber, estimatedTotal: parsed.estimatedTotal, competitionMethod: parsed.competitionMethod },
-    }).catch(() => {});
+    });
 
     res.status(201).json(created);
   } catch (err: any) {
@@ -305,7 +309,7 @@ router.post('/:id/submit', requirePermission('purchasing.create_requisition'), a
       action: 'REQUISITION_SUBMITTED',
       actor: { id: user?.id, username: user?.username, role: user?.role },
       meta: { reqNumber: r.reqNumber, stages: stages.length },
-    }).catch(() => {});
+    });
     res.json(updated);
   } catch (err: any) {
     console.error('[requisitions] submit error', err);
@@ -404,7 +408,7 @@ router.post('/:id/decide', requirePermission('purchasing.view_requisitions'), as
       actor: { id: user?.id, username: user?.username, role: user?.role },
       reason: notes,
       meta: { reqNumber: r.reqNumber, stage: nextPending.stage, finalStage: isFinalStage, newStatus },
-    }).catch(() => {});
+    });
 
     res.json({ ok: true, status: newStatus });
   } catch (err: any) {
@@ -459,7 +463,7 @@ router.post('/:id/cancel', requirePermission('purchasing.create_requisition'), a
       actor: { id: user?.id, username: user?.username, role: user?.role },
       reason: String(reason).trim(),
       meta: { reqNumber: r.reqNumber, priorStatus: r.status },
-    }).catch(() => {});
+    });
 
     res.json({ ok: true });
   } catch (err: any) {
@@ -482,6 +486,16 @@ router.post('/:id/mark-converted', requirePermission('purchasing.approve_po'), a
       convertedAt: new Date(),
       updatedAt: new Date(),
     }).where(eq(purchaseRequisitions.id, id));
+
+    const user = (req as any).user;
+    await auditService.logEvent({
+      entityType: 'order' as any,
+      entityId: String(id),
+      action: 'REQUISITION_CONVERTED_TO_PO',
+      actor: { id: user?.id, username: user?.username, role: user?.role },
+      meta: { reqNumber: r.reqNumber, vendorPoId: Number(vendorPoId) },
+    });
+
     res.json({ ok: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

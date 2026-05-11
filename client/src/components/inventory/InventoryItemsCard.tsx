@@ -964,14 +964,17 @@ const InventoryForm = ({
         {formData.hasSds && (
           <div>
             <Label htmlFor="sdsFile">Upload SDS PDF</Label>
+            <Button type="button" variant="outline" size="sm" onClick={() => handleOpenFilePicker('sdsFile')}>
+              Choose File
+            </Button>
             <Input
               id="sdsFile"
               name="sdsFile"
               type="file"
               accept=".pdf"
-              onChange={onFileChange}
+              onChange={handleSdsFileChange}
               data-testid="input-sdsFile"
-              className="cursor-pointer"
+              className="hidden"
             />
             {currentSdsFileName && !sdsFile && (
               <p className="text-xs text-green-600 mt-1">
@@ -1013,14 +1016,17 @@ const InventoryForm = ({
         {formData.hasTds && (
           <div>
             <Label htmlFor="tdsFile">Upload TDS PDF</Label>
+            <Button type="button" variant="outline" size="sm" onClick={() => handleOpenFilePicker('tdsFile')}>
+              Choose File
+            </Button>
             <Input
               id="tdsFile"
               name="tdsFile"
               type="file"
               accept=".pdf"
-              onChange={onFileChange}
+              onChange={handleSdsFileChange}
               data-testid="input-tdsFile"
-              className="cursor-pointer"
+              className="hidden"
             />
             {currentTdsFileName && !tdsFile && (
               <p className="text-xs text-green-600 mt-1">
@@ -1062,14 +1068,17 @@ const InventoryForm = ({
         {formData.hasOtherDocs && (
           <div>
             <Label htmlFor="otherDocsFile">Upload Other Docs PDF</Label>
+            <Button type="button" variant="outline" size="sm" onClick={() => handleOpenFilePicker('otherDocsFile')}>
+              Choose File
+            </Button>
             <Input
               id="otherDocsFile"
               name="otherDocsFile"
               type="file"
               accept=".pdf"
-              onChange={onFileChange}
+              onChange={handleSdsFileChange}
               data-testid="input-otherDocsFile"
-              className="cursor-pointer"
+              className="hidden"
             />
             {currentOtherDocsFileName && !otherDocsFile && (
               <p className="text-xs text-green-600 mt-1">
@@ -2025,6 +2034,10 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       toast.error('Please select a PDF file');
       e.target.value = '';
     }
+  }, []);
+
+  const handleOpenFilePicker = useCallback((id: string) => {
+    document.getElementById(id)?.click();
   }, []);
 
   const handleSubmit = useCallback(

@@ -522,7 +522,26 @@ router.get('/:id', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid vendor ID' });
     }
 
-    const vendor = await storage.getVendor(id);
+    let vendor;
+    try {
+      vendor = await storage.getVendor(id);
+    } catch (innerError) {
+      const message = innerError instanceof Error ? innerError.message : String(innerError);
+      if (message.includes('scope_approved_for')) {
+        console.warn(`Vendor ${id} lookup hit missing scope_approved_for column; retrying without scope fields`);
+        const fallbackResult = await db.execute(
+          sql`
+            SELECT *
+            FROM vendors
+            WHERE id = ${id}
+            LIMIT 1
+          `
+        );
+        vendor = Array.isArray(fallbackResult) ? fallbackResult[0] : (fallbackResult as any)?.rows?.[0];
+      } else {
+        throw innerError;
+      }
+    }
     if (!vendor) {
       return res.status(404).json({ error: 'Vendor not found' });
     }

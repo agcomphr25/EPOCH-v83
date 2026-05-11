@@ -66,7 +66,7 @@ type VendorPOItem = {
   conversionFactor?: number;
   lineTotal: number;
   notes?: string;
-  customerPoId?: number;
+  customerPoId?: number | null;
   projectId?: string | null;
   productionWorkOrderId?: string | null;
   chargeCodeId?: number | null;

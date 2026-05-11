@@ -54,6 +54,9 @@ const criticalTables: RequiredTable[] = [
   { schema: 'public', table: 'purchase_requisition_approval_chain', columns: ['id', 'category', 'stage', 'capability'] },
   { schema: 'public', table: 'far_flowdown_clauses', columns: ['id', 'clause_number', 'title', 'is_active'] },
   { schema: 'public', table: 'vendor_po_far_flowdowns', columns: ['id', 'vendor_po_id', 'clause_id', 'applicable', 'reasoning'] },
+  { schema: 'public', table: 'optional_settings', columns: ['id', 'name', 'statement', 'sort_order', 'is_active'] },
+  { schema: 'public', table: 'po_optional_settings', columns: ['id', 'vendor_po_id', 'optional_setting_id'] },
+  { schema: 'public', table: 'vendor_po_attachments', columns: ['id', 'vendor_po_id', 'file_name', 'original_file_name', 'file_path'] },
   { schema: 'public', table: 'vendor_debarment_checks', columns: ['id', 'vendor_id', 'context', 'source', 'result', 'checked_at'] },
   { schema: 'public', table: 'procurement_settings', columns: ['id', 'debarment_check_freshness_days', 'allow_direct_po'] },
   {

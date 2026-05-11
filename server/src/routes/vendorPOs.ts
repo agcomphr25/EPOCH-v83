@@ -117,6 +117,15 @@ function filterAllowedRecipients(raw: unknown, allowed: Set<string>): string[] {
     .filter((e) => allowed.has(e));
 }
 
+function rowsFromDbResult<T>(result: unknown): T[] {
+  if (Array.isArray(result)) return result as T[];
+  if (result && typeof result === 'object' && 'rows' in result) {
+    const rows = (result as { rows?: unknown }).rows;
+    return Array.isArray(rows) ? (rows as T[]) : [];
+  }
+  return [];
+}
+
 /**
  * Derive authoritative `to` and `cc` from the validated recipient selection.
  *
@@ -212,12 +221,7 @@ router.get('/', async (req: Request, res: Response) => {
     type CountRow = { vendor_po_id: number; cnt: number };
     const countMap: Record<number, number> = {};
     if (countResult.status === 'fulfilled') {
-      const countRows = countResult.value;
-      const rows: CountRow[] = (
-        countRows && typeof countRows === 'object' && 'rows' in countRows
-          ? (countRows as { rows: CountRow[] }).rows
-          : countRows
-      ) as CountRow[];
+      const rows = rowsFromDbResult<CountRow>(countResult.value);
       for (const row of rows) {
         countMap[row.vendor_po_id] = Number(row.cnt);
       }
@@ -231,12 +235,7 @@ router.get('/', async (req: Request, res: Response) => {
     const confirmUsedAtMap: Record<number, string | null> = {};
     const confirmExpiresAtMap: Record<number, string | null> = {};
     if (confirmResult.status === 'fulfilled') {
-      const confirmRows = confirmResult.value;
-      const cRows: ConfirmRow[] = (
-        confirmRows && typeof confirmRows === 'object' && 'rows' in confirmRows
-          ? (confirmRows as { rows: ConfirmRow[] }).rows
-          : confirmRows
-      ) as ConfirmRow[];
+      const cRows = rowsFromDbResult<ConfirmRow>(confirmResult.value);
       const now = new Date();
       for (const cr of cRows) {
         if (cr.vendor_po_id == null) continue;
@@ -260,12 +259,7 @@ router.get('/', async (req: Request, res: Response) => {
     type ComplianceRow = { vendor_po_id: number; review_status: string; second_party_complete: boolean; vendor_approved: boolean; review_notes: string | null };
     const complianceMap: Record<number, ComplianceStatusBadge> = {};
     if (complianceResult.status === 'fulfilled') {
-      const complianceRows = complianceResult.value;
-      const cRows: ComplianceRow[] = (
-        complianceRows && typeof complianceRows === 'object' && 'rows' in complianceRows
-          ? (complianceRows as { rows: ComplianceRow[] }).rows
-          : complianceRows
-      ) as ComplianceRow[];
+      const cRows = rowsFromDbResult<ComplianceRow>(complianceResult.value);
       for (const cr of cRows) {
         if (cr.vendor_po_id == null) continue;
         if (cr.review_status === 'requires_attention') {

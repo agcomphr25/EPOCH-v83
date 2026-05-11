@@ -37,6 +37,7 @@ interface ShippingCertPackageRows {
   wad: any | null;
   certificate: any | null;
   packingSlip: any | null;
+  flowedRequirements: any[];
 }
 
 function normalizeStatus(value: unknown): string {
@@ -181,6 +182,20 @@ async function loadShippingCertPackageRows(
       )
     : [];
 
+  const flowedRequirements = lot.po_id
+    ? await query<any>(
+        `SELECT id, contract_review_instance_id, contract_clause_id, clause_template_id,
+                target_type, target_id, requirement_text, required_artifacts,
+                status, source, flowed_at, satisfied_at, satisfied_by_user_id,
+                satisfied_by_display_name, evidence, updated_at
+           FROM flowed_requirements
+           WHERE target_type = 'cert_package'
+             AND target_id = $1
+           ORDER BY flowed_at DESC`,
+        [String(lot.po_id)],
+      )
+    : [];
+
   return {
     lot,
     serials,
@@ -190,6 +205,7 @@ async function loadShippingCertPackageRows(
     wad: wadRows[0] ?? null,
     certificate: certRows[0] ?? null,
     packingSlip: packingSlipRows[0] ?? null,
+    flowedRequirements,
   };
 }
 
@@ -340,6 +356,45 @@ export async function evaluateShippingCertPackageGate(
     source: 'p2_certificates_of_conformance',
   });
 
+  const openFlowdownRequirements = rows.flowedRequirements.filter((requirement) => {
+    const status = normalizeStatus(requirement.status);
+    return !['SATISFIED', 'WAIVED', 'NOT_APPLICABLE'].includes(status);
+  });
+  if (openFlowdownRequirements.length > 0) {
+    blockers.push({
+      code: 'FLOWDOWN_REQUIREMENT_OPEN',
+      message: 'Contract flowed requirements for this cert package must be satisfied, waived, or marked not applicable before shipment.',
+      references: openFlowdownRequirements.map((requirement) => String(requirement.id)),
+    });
+  }
+  evidence.push({
+    type: 'contract_flowdown',
+    label: 'Contract flowed requirements',
+    status: rows.flowedRequirements.length === 0
+      ? 'not_applicable'
+      : openFlowdownRequirements.length === 0 ? 'present' : 'missing',
+    source: 'flowed_requirements',
+    reference: rows.lot.po_id ? String(rows.lot.po_id) : null,
+    details: {
+      targetType: 'cert_package',
+      targetId: rows.lot.po_id ? String(rows.lot.po_id) : null,
+      requirementCount: rows.flowedRequirements.length,
+      openCount: openFlowdownRequirements.length,
+      requirements: rows.flowedRequirements.map((requirement) => ({
+        id: requirement.id,
+        contractReviewInstanceId: requirement.contract_review_instance_id,
+        contractClauseId: requirement.contract_clause_id,
+        clauseTemplateId: requirement.clause_template_id,
+        targetType: requirement.target_type,
+        targetId: requirement.target_id,
+        status: requirement.status,
+        requiredArtifacts: jsonArray(requirement.required_artifacts),
+        satisfiedAt: requirement.satisfied_at ?? null,
+        satisfiedBy: requirement.satisfied_by_display_name ?? null,
+      })),
+    },
+  });
+
   const revisionSnapshot = {
     generatedAt: new Date().toISOString(),
     lot: {
@@ -383,6 +438,16 @@ export async function evaluateShippingCertPackageGate(
       wadStatus: rows.wad.wad_status,
       updatedAt: rows.wad.updated_at,
     } : null,
+    flowedRequirements: rows.flowedRequirements.map((requirement) => ({
+      id: requirement.id,
+      contractReviewInstanceId: requirement.contract_review_instance_id,
+      targetType: requirement.target_type,
+      targetId: requirement.target_id,
+      status: requirement.status,
+      flowedAt: requirement.flowed_at,
+      satisfiedAt: requirement.satisfied_at ?? null,
+      updatedAt: requirement.updated_at,
+    })),
   };
 
   return {

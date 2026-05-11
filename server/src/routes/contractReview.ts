@@ -14,10 +14,12 @@ import {
   insertContractReviewChecklistTemplateSchema,
 } from '../../schema';
 import { requirePermission } from '../../middleware/requirePermission';
+import { recordAuditEvent, type AuditPayload } from '../services/auditLedgerService';
 
 const router = Router();
 
 const targetTypeSchema = z.enum(['po', 'traveler', 'qc', 'supplier_po', 'cert_package']);
+type ContractReviewAuditTx = Parameters<typeof recordAuditEvent>[1];
 
 const instanceCreateSchema = z.object({
   checklistTemplateId: z.number().int().positive(),
@@ -54,6 +56,44 @@ function userId(req: Request): number | null {
   if (raw == null) return null;
   const parsed = Number.parseInt(String(raw), 10);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function auditActor(req: Request) {
+  const user = (req as any).user;
+  return {
+    id: userId(req),
+    username: displayName(req),
+    role: user?.role ?? user?.primaryRole ?? null,
+  };
+}
+
+async function logContractReviewEvent(
+  req: Request,
+  input: {
+    eventType: string;
+    subjectType: string;
+    subjectId: string | number;
+    payload?: Record<string, unknown>;
+    reason?: string | null;
+  },
+  tx?: ContractReviewAuditTx,
+) {
+  await recordAuditEvent({
+    eventType: input.eventType,
+    subjectType: input.subjectType,
+    subjectId: String(input.subjectId),
+    sourceService: 'contractReview.route',
+    actor: auditActor(req),
+    payload: (input.payload ?? {}) as AuditPayload,
+    reason: input.reason ?? null,
+    ipAddress: req.ip ?? null,
+    userAgent: req.get('user-agent') ?? null,
+    entityType: input.subjectType,
+    entityId: String(input.subjectId),
+    meta: {
+      module: 'contract_review',
+    },
+  }, tx);
 }
 
 function normalizeAreas(areas: string[]): string[] {
@@ -136,12 +176,27 @@ router.post('/templates', requirePermission('purchasing.admin_chain'), async (re
         createdByDisplayName: displayName(req),
       }).returning();
 
+      let clauseTemplateCount = 0;
       for (const clauseTemplate of body.clauseTemplates ?? []) {
         await tx.insert(clauseTemplates).values({
           ...clauseTemplate,
           checklistTemplateId: template.id,
         });
+        clauseTemplateCount += 1;
       }
+      await logContractReviewEvent(req, {
+        eventType: 'CONTRACT_REVIEW_TEMPLATE_CREATED',
+        subjectType: 'contract_review_template',
+        subjectId: template.id,
+        payload: {
+          templateId: template.id,
+          name: template.name,
+          version: template.version,
+          reviewAreas: template.reviewAreas,
+          requiredAreas: REQUIRED_CONTRACT_REVIEW_AREAS,
+          clauseTemplateCount,
+        },
+      }, tx);
       return [template];
     });
 
@@ -170,7 +225,23 @@ router.get('/clauses', requirePermission('purchasing.view_requisitions'), async 
 router.post('/clauses', requirePermission('purchasing.admin_chain'), async (req: Request, res: Response) => {
   try {
     const parsed = insertContractClauseSchema.parse(req.body);
-    const [created] = await db.insert(contractClauses).values(parsed).returning();
+    const [created] = await db.transaction(async (tx) => {
+      const [clause] = await tx.insert(contractClauses).values(parsed).returning();
+      await logContractReviewEvent(req, {
+        eventType: 'CONTRACT_CLAUSE_CREATED',
+        subjectType: 'contract_clause',
+        subjectId: clause.id,
+        payload: {
+          clauseId: clause.id,
+          clauseNumber: clause.clauseNumber,
+          title: clause.title,
+          clauseType: clause.clauseType,
+          source: clause.source,
+          defaultFlowTargets: clause.defaultFlowTargets ?? [],
+        },
+      }, tx);
+      return [clause];
+    });
     res.status(201).json(created);
   } catch (err: any) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', issues: err.errors });
@@ -187,7 +258,24 @@ router.post('/templates/:id/clause-templates', requirePermission('purchasing.adm
       ...req.body,
       checklistTemplateId: templateId,
     });
-    const [created] = await db.insert(clauseTemplates).values(parsed).returning();
+    const [created] = await db.transaction(async (tx) => {
+      const [clauseTemplate] = await tx.insert(clauseTemplates).values(parsed).returning();
+      await logContractReviewEvent(req, {
+        eventType: 'CONTRACT_CLAUSE_TEMPLATE_LINKED',
+        subjectType: 'clause_template',
+        subjectId: clauseTemplate.id,
+        payload: {
+          clauseTemplateId: clauseTemplate.id,
+          checklistTemplateId: clauseTemplate.checklistTemplateId,
+          contractClauseId: clauseTemplate.contractClauseId,
+          reviewArea: clauseTemplate.reviewArea,
+          flowTargets: clauseTemplate.flowTargets ?? [],
+          requiredArtifacts: clauseTemplate.requiredArtifacts ?? [],
+          required: clauseTemplate.required,
+        },
+      }, tx);
+      return [clauseTemplate];
+    });
     res.status(201).json(created);
   } catch (err: any) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', issues: err.errors });
@@ -285,6 +373,43 @@ router.post('/instances', requirePermission('purchasing.manage_pos'), async (req
         }
       }
 
+      await logContractReviewEvent(req, {
+        eventType: 'CONTRACT_REVIEW_ENGINE_COMPLETED',
+        subjectType: 'contract_review',
+        subjectId: instance.id,
+        payload: {
+          instanceId: instance.id,
+          checklistTemplateId: instance.checklistTemplateId,
+          status: instance.status,
+          projectId: instance.projectId ?? null,
+          purchaseReviewChecklistId: instance.purchaseReviewChecklistId ?? null,
+          p2PurchaseOrderId: instance.p2PurchaseOrderId ?? null,
+          vendorPoId: instance.vendorPoId ?? null,
+          travelerId: instance.travelerId ?? null,
+          targetSummary: Object.fromEntries(targetIds),
+          flowedRequirementCount: flowed.length,
+        },
+      }, tx);
+
+      await logContractReviewEvent(req, {
+        eventType: 'CONTRACT_FLOWDOWN_RECORDED',
+        subjectType: 'contract_review',
+        subjectId: instance.id,
+        payload: {
+          instanceId: instance.id,
+          targetSummary: Object.fromEntries(targetIds),
+          requirements: flowed.map((requirement) => ({
+            id: requirement.id,
+            contractClauseId: requirement.contractClauseId,
+            clauseTemplateId: requirement.clauseTemplateId,
+            targetType: requirement.targetType,
+            targetId: requirement.targetId,
+            status: requirement.status,
+            requiredArtifacts: requirement.requiredArtifacts ?? [],
+          })),
+        },
+      }, tx);
+
       return { instance, flowedRequirements: flowed };
     });
 
@@ -324,18 +449,54 @@ router.patch('/requirements/:id/status', requirePermission('purchasing.manage_po
     const id = req.params.id;
     const body = requirementStatusSchema.parse(req.body);
     const satisfied = body.status === 'satisfied';
-    const [updated] = await db
-      .update(flowedRequirements)
-      .set({
-        status: body.status,
-        evidence: body.evidence ?? null,
-        satisfiedAt: satisfied ? new Date() : null,
-        satisfiedByUserId: satisfied ? userId(req) : null,
-        satisfiedByDisplayName: satisfied ? displayName(req) : null,
-        updatedAt: new Date(),
-      })
-      .where(eq(flowedRequirements.id, id))
-      .returning();
+    const [updated] = await db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(flowedRequirements)
+        .where(eq(flowedRequirements.id, id))
+        .limit(1);
+
+      if (!existing) return [];
+
+      const [requirement] = await tx
+        .update(flowedRequirements)
+        .set({
+          status: body.status,
+          evidence: body.evidence ?? null,
+          satisfiedAt: satisfied ? new Date() : null,
+          satisfiedByUserId: satisfied ? userId(req) : null,
+          satisfiedByDisplayName: satisfied ? displayName(req) : null,
+          updatedAt: new Date(),
+        })
+        .where(eq(flowedRequirements.id, id))
+        .returning();
+
+      if (!requirement) return [];
+
+      await logContractReviewEvent(req, {
+        eventType: satisfied ? 'CONTRACT_FLOWDOWN_REQUIREMENT_SATISFIED' : 'CONTRACT_FLOWDOWN_REQUIREMENT_CHANGED',
+        subjectType: 'flowed_requirement',
+        subjectId: id,
+        payload: {
+          requirementId: id,
+          contractReviewInstanceId: requirement.contractReviewInstanceId,
+          contractClauseId: requirement.contractClauseId ?? null,
+          clauseTemplateId: requirement.clauseTemplateId ?? null,
+          targetType: requirement.targetType,
+          targetId: requirement.targetId,
+          previousStatus: existing.status,
+          newStatus: requirement.status,
+          evidence: body.evidence ?? null,
+          requiredArtifacts: requirement.requiredArtifacts ?? [],
+          satisfiedAt: requirement.satisfiedAt ?? null,
+          satisfiedByUserId: requirement.satisfiedByUserId ?? null,
+          satisfiedByDisplayName: requirement.satisfiedByDisplayName ?? null,
+        },
+        reason: body.status,
+      }, tx);
+
+      return [requirement];
+    });
 
     if (!updated) return res.status(404).json({ error: 'Flowed requirement not found' });
     res.json(updated);

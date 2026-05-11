@@ -1301,6 +1301,12 @@ export default function Navigation() {
       description: 'Launch the Work Authorization Document wizard for any Production Work Order',
     },
     {
+      path: '/wad-status',
+      label: 'WAD Status',
+      icon: FileCheck,
+      description: 'Backlog of projects in P2 Release / Production with WAD authoring status',
+    },
+    {
       path: '/help/p2-order-guide',
       label: 'P2 Order Guide',
       icon: BookOpen,

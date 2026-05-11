@@ -381,6 +381,17 @@ export async function validateIssueEligibility(
       lotBlocker.code === 'LOT_QUARANTINED' || lotBlocker.code === 'LOT_EXPIRED';
     if (isOverridableLotBlock) {
       pendingLotBlocker = lotBlocker;
+    } else if (lotBlocker.code === 'LOT_DOCUMENT_HELD') {
+      const verified = await applyOverrideIfAuthorized(lotBlocker, req.override, {
+        materialLotId: req.materialLotId,
+        travelerId: req.travelerId ?? null,
+      });
+      if (verified) {
+        (req as MaterialIssueRequest).override = verified;
+        (req as MutableInternal)._overrideVerifiedForBlocker = true;
+      } else {
+        blockers.push(lotBlocker);
+      }
     } else {
       blockers.push(lotBlocker);
     }
@@ -1157,6 +1168,7 @@ async function applyOverrideIfAuthorized(
     'NO_ACTIVE_ROUTING_STEP',
     'WAD_NOT_RELEASED',
     'LOT_QUARANTINED',
+    'LOT_DOCUMENT_HELD',
   ];
   if (!overridableCodes.includes(blocker.code)) return null;
   // Server-side verification: do NOT trust caller-asserted approverRole /

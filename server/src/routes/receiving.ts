@@ -7,10 +7,13 @@ import {
   receivedUnits,
   receiptDocuments,
   receiptAuditLog,
+  receivingInspectionPlans,
   insertReceiptSchema,
   insertReceiptLineSchema,
   insertReceivedUnitSchema,
   insertReceiptDocumentSchema,
+  insertReceivingInspectionPlanSchema,
+  updateReceivingInspectionPlanSchema,
   materialLots,
   materialLotTransactions,
   mediaLibrary,
@@ -86,6 +89,55 @@ function actorName(user: AuthUser): string {
   return user.username ?? 'Unknown';
 }
 
+function parseInspectionBoolean(value: unknown): boolean | null {
+  if (value == null || value === '') return null;
+  if (typeof value === 'boolean') return value;
+  const normalized = String(value).trim().toLowerCase();
+  if (['true', '1', 'yes', 'y'].includes(normalized)) return true;
+  if (['false', '0', 'no', 'n'].includes(normalized)) return false;
+  return null;
+}
+
+const inspectionPlanContextSchema = z.object({
+  inventoryItemId: z.coerce.number().int().positive().optional().nullable(),
+  agPartNumber: z.string().trim().optional().nullable(),
+  materialType: z.string().trim().optional().nullable(),
+  riskLevel: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).optional().nullable(),
+  supplierName: z.string().trim().optional().nullable(),
+  supplierStatus: z.enum(['APPROVED', 'PROBATION', 'CONDITIONAL', 'BLOCKED']).optional().nullable(),
+  flightCritical: z.boolean().optional().nullable(),
+});
+
+type InspectionPlanContext = z.infer<typeof inspectionPlanContextSchema>;
+
+async function findMatchingInspectionPlan(context: InspectionPlanContext) {
+  const result = await db.execute(sql`
+    SELECT
+      *,
+      (
+        CASE WHEN inventory_item_id IS NOT NULL THEN 1 ELSE 0 END +
+        CASE WHEN ag_part_number IS NOT NULL THEN 1 ELSE 0 END +
+        CASE WHEN material_type IS NOT NULL THEN 1 ELSE 0 END +
+        CASE WHEN risk_level IS NOT NULL THEN 1 ELSE 0 END +
+        CASE WHEN supplier_name IS NOT NULL THEN 1 ELSE 0 END +
+        CASE WHEN supplier_status IS NOT NULL THEN 1 ELSE 0 END +
+        CASE WHEN flight_critical IS NOT NULL THEN 1 ELSE 0 END
+      ) AS specificity
+    FROM receiving_inspection_plans
+    WHERE is_active = true
+      AND (inventory_item_id IS NULL OR inventory_item_id = ${context.inventoryItemId ?? null})
+      AND (ag_part_number IS NULL OR LOWER(ag_part_number) = LOWER(${context.agPartNumber ?? null}))
+      AND (material_type IS NULL OR LOWER(material_type) = LOWER(${context.materialType ?? null}))
+      AND (risk_level IS NULL OR risk_level = ${context.riskLevel ?? null})
+      AND (supplier_name IS NULL OR LOWER(supplier_name) = LOWER(${context.supplierName ?? null}))
+      AND (supplier_status IS NULL OR supplier_status = ${context.supplierStatus ?? null})
+      AND (flight_critical IS NULL OR flight_critical = ${context.flightCritical ?? null})
+    ORDER BY priority DESC, specificity DESC, created_at DESC
+    LIMIT 1
+  `);
+  return sqlRows(result)[0] ?? null;
+}
+
 async function logAudit(
   receiptId: number,
   action: string,
@@ -144,6 +196,103 @@ async function importPoLines(receiptId: number, vendorPoId: number): Promise<voi
 
 // ── GET /api/receipts/pending-by-po ───────────────────────────────────────────
 // Returns { poId → { count, latestStatus } } for all POs with in-progress receipts
+router.get('/inspection-plans', requireReceivingAccess, async (_req: Request, res: Response) => {
+  try {
+    const plans = await db
+      .select()
+      .from(receivingInspectionPlans)
+      .orderBy(desc(receivingInspectionPlans.priority), desc(receivingInspectionPlans.createdAt));
+    res.json(plans);
+  } catch (err: any) {
+    console.error('GET /api/receipts/inspection-plans:', err);
+    res.status(500).json({ error: 'Failed to fetch receiving inspection plans' });
+  }
+});
+
+router.post('/inspection-plans', requireReceivingAccess, async (req: Request, res: Response) => {
+  try {
+    const parsed = insertReceivingInspectionPlanSchema.parse({
+      ...req.body,
+      createdByUserId: req.user?.id ?? null,
+      createdByDisplayName: actorName(req.user),
+      updatedByUserId: req.user?.id ?? null,
+      updatedByDisplayName: actorName(req.user),
+    });
+    const [plan] = await db.insert(receivingInspectionPlans).values(parsed).returning();
+    res.status(201).json(plan);
+  } catch (err: any) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Validation error', details: err.errors });
+    }
+    console.error('POST /api/receipts/inspection-plans:', err);
+    res.status(500).json({ error: 'Failed to create receiving inspection plan' });
+  }
+});
+
+router.patch('/inspection-plans/:id', requireReceivingAccess, async (req: Request, res: Response) => {
+  try {
+    const parsed = updateReceivingInspectionPlanSchema.parse({
+      ...req.body,
+      updatedByUserId: req.user?.id ?? null,
+      updatedByDisplayName: actorName(req.user),
+      updatedAt: new Date(),
+    });
+    const [plan] = await db
+      .update(receivingInspectionPlans)
+      .set(parsed)
+      .where(eq(receivingInspectionPlans.id, req.params.id))
+      .returning();
+    if (!plan) return res.status(404).json({ error: 'Receiving inspection plan not found' });
+    res.json(plan);
+  } catch (err: any) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Validation error', details: err.errors });
+    }
+    console.error('PATCH /api/receipts/inspection-plans/:id:', err);
+    res.status(500).json({ error: 'Failed to update receiving inspection plan' });
+  }
+});
+
+router.get('/inspection-plans/evaluate', requireReceivingAccess, async (req: Request, res: Response) => {
+  try {
+    const context = inspectionPlanContextSchema.parse({
+      inventoryItemId: req.query.inventoryItemId,
+      agPartNumber: req.query.agPartNumber,
+      materialType: req.query.materialType,
+      riskLevel: req.query.riskLevel ? String(req.query.riskLevel).toUpperCase() : undefined,
+      supplierName: req.query.supplierName,
+      supplierStatus: req.query.supplierStatus ? String(req.query.supplierStatus).toUpperCase() : undefined,
+      flightCritical: parseInspectionBoolean(req.query.flightCritical),
+    });
+    const plan = await findMatchingInspectionPlan(context);
+    res.json({
+      context,
+      plan,
+      action: plan
+        ? {
+            disposition: plan.auto_disposition,
+            sampleSizePercent: plan.sample_size_percent,
+            requiredCheckpoints: plan.required_checkpoints ?? [],
+            requiredDocuments: plan.required_documents ?? [],
+            requiresQualitySignature: plan.requires_quality_signature,
+          }
+        : {
+            disposition: 'pending_inspection',
+            sampleSizePercent: 100,
+            requiredCheckpoints: [],
+            requiredDocuments: [],
+            requiresQualitySignature: false,
+          },
+    });
+  } catch (err: any) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Validation error', details: err.errors });
+    }
+    console.error('GET /api/receipts/inspection-plans/evaluate:', err);
+    res.status(500).json({ error: 'Failed to evaluate receiving inspection plan' });
+  }
+});
+
 router.get('/pending-by-po', requireReceivingAccess, async (req: Request, res: Response) => {
   try {
     const result = await db.execute(

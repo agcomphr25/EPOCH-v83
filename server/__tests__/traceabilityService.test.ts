@@ -16,6 +16,7 @@ import crypto from 'crypto';
 import { describe, expect, it } from 'vitest';
 import {
   buildBranchesAndEdges,
+  buildGenealogy,
   deriveSourceLink,
   exportChainCsv,
   mapTransactionToStep,
@@ -82,12 +83,14 @@ function node(overrides: Partial<TraceabilityNode>): TraceabilityNode {
 
 function chain(nodes: TraceabilityNode[]): TraceabilityChain {
   const { edges, branches } = buildBranchesAndEdges(nodes);
+  const genealogy = buildGenealogy(nodes);
   return {
     query: { key: 'lotIcn', value: 'ICN-MAT-1' },
     resolved: { label: 'Lot ICN-MAT-1', matchedEntities: [] },
     nodes,
     edges,
     branches,
+    genealogy,
     ncrs: [],
     generatedAt: '2025-01-01T00:00:00.000Z',
   };

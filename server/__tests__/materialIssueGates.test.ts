@@ -240,6 +240,14 @@ describe('validateLotStatus', () => {
       validateLotStatus({ ...baseLot, status: 'REJECTED' } as any, 'consume')?.code,
     ).toBe('LOT_REJECTED');
   });
+  it('blocks document-held lot on reserve/issue/consume', () => {
+    expect(
+      validateLotStatus({ ...baseLot, status: 'HOLD' } as any, 'consume')?.code,
+    ).toBe('LOT_DOCUMENT_HELD');
+    expect(
+      validateLotStatus({ ...baseLot, status: 'DOCUMENT_HOLD' } as any, 'reserve')?.code,
+    ).toBe('LOT_DOCUMENT_HELD');
+  });
   it('blocks fully-consumed lot', () => {
     expect(
       validateLotStatus({ ...baseLot, remainingQty: '0', status: 'ACCEPTED' } as any, 'consume')

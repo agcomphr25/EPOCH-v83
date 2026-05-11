@@ -16179,6 +16179,65 @@ export const receiptDocuments = pgTable('receipt_documents', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+export const receivingInspectionPlans = pgTable('receiving_inspection_plans', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: text('name').notNull(),
+  priority: integer('priority').notNull().default(100),
+  inventoryItemId: integer('inventory_item_id').references(() => inventoryItems.id, { onDelete: 'set null' }),
+  agPartNumber: text('ag_part_number'),
+  materialType: text('material_type'),
+  riskLevel: text('risk_level'), // LOW | MEDIUM | HIGH | CRITICAL
+  supplierName: text('supplier_name'),
+  supplierStatus: text('supplier_status'), // APPROVED | PROBATION | CONDITIONAL | BLOCKED
+  flightCritical: boolean('flight_critical'),
+  sampleSizePercent: integer('sample_size_percent').notNull().default(100),
+  requiredCheckpoints: jsonb('required_checkpoints').notNull().default([]),
+  requiredDocuments: jsonb('required_documents').notNull().default([]),
+  autoDisposition: text('auto_disposition').notNull().default('pending_inspection'),
+  requiresQualitySignature: boolean('requires_quality_signature').notNull().default(false),
+  isActive: boolean('is_active').notNull().default(true),
+  createdByUserId: integer('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdByDisplayName: text('created_by_display_name'),
+  updatedByUserId: integer('updated_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  updatedByDisplayName: text('updated_by_display_name'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  activeIdx: index('receiving_inspection_plans_active_idx').on(table.isActive),
+  itemIdx: index('receiving_inspection_plans_item_idx').on(table.inventoryItemId),
+  partIdx: index('receiving_inspection_plans_part_idx').on(table.agPartNumber),
+  supplierIdx: index('receiving_inspection_plans_supplier_idx').on(table.supplierName),
+  priorityIdx: index('receiving_inspection_plans_priority_idx').on(table.priority),
+}));
+
+export const insertReceivingInspectionPlanSchema = createInsertSchema(receivingInspectionPlans)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    name: z.string().min(1, 'Plan name is required'),
+    priority: z.number().int().min(0).max(1000).default(100),
+    inventoryItemId: z.number().int().positive().optional().nullable(),
+    agPartNumber: z.string().optional().nullable(),
+    materialType: z.string().optional().nullable(),
+    riskLevel: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).optional().nullable(),
+    supplierName: z.string().optional().nullable(),
+    supplierStatus: z.enum(['APPROVED', 'PROBATION', 'CONDITIONAL', 'BLOCKED']).optional().nullable(),
+    flightCritical: z.boolean().optional().nullable(),
+    sampleSizePercent: z.number().int().min(0).max(100).default(100),
+    requiredCheckpoints: z.array(z.string()).default([]),
+    requiredDocuments: z.array(z.string()).default([]),
+    autoDisposition: z.enum(['pending_inspection', 'document_hold', 'quarantine']).default('pending_inspection'),
+    requiresQualitySignature: z.boolean().default(false),
+    isActive: z.boolean().default(true),
+  });
+
+export const updateReceivingInspectionPlanSchema = insertReceivingInspectionPlanSchema.partial();
+export type ReceivingInspectionPlan = typeof receivingInspectionPlans.$inferSelect;
+export type InsertReceivingInspectionPlan = z.infer<typeof insertReceivingInspectionPlanSchema>;
+
 export const insertCncSetupPhotoSchema = createInsertSchema(cncSetupPhotos).omit({
   id: true,
   createdAt: true,

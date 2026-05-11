@@ -2092,7 +2092,7 @@ export default function Navigation() {
                   }
                 >
                   <FormInput className="h-4 w-4" />
-                  Forms & Reports
+                  Charge Code Usage
                   {formsReportsExpanded ? (
                     <ChevronDown className="h-4 w-4" />
                   ) : (

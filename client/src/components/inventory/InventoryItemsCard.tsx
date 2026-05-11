@@ -963,18 +963,14 @@ const InventoryForm = ({
         </div>
         {formData.hasSds && (
           <div>
-            <Label htmlFor="sdsFile">Upload SDS PDF</Label>
-            <Button type="button" variant="outline" size="sm" onClick={() => handleOpenFilePicker('sdsFile')}>
-              Choose File
-            </Button>
             <Input
               id="sdsFile"
               name="sdsFile"
               type="file"
               accept=".pdf"
-              onChange={handleSdsFileChange}
+              onChange={onFileChange}
               data-testid="input-sdsFile"
-              className="hidden"
+              className="cursor-pointer"
             />
             {currentSdsFileName && !sdsFile && (
               <p className="text-xs text-green-600 mt-1">
@@ -1015,18 +1011,14 @@ const InventoryForm = ({
         </div>
         {formData.hasTds && (
           <div>
-            <Label htmlFor="tdsFile">Upload TDS PDF</Label>
-            <Button type="button" variant="outline" size="sm" onClick={() => handleOpenFilePicker('tdsFile')}>
-              Choose File
-            </Button>
             <Input
               id="tdsFile"
               name="tdsFile"
               type="file"
               accept=".pdf"
-              onChange={handleSdsFileChange}
+              onChange={onFileChange}
               data-testid="input-tdsFile"
-              className="hidden"
+              className="cursor-pointer"
             />
             {currentTdsFileName && !tdsFile && (
               <p className="text-xs text-green-600 mt-1">
@@ -1067,18 +1059,14 @@ const InventoryForm = ({
         </div>
         {formData.hasOtherDocs && (
           <div>
-            <Label htmlFor="otherDocsFile">Upload Other Docs PDF</Label>
-            <Button type="button" variant="outline" size="sm" onClick={() => handleOpenFilePicker('otherDocsFile')}>
-              Choose File
-            </Button>
             <Input
               id="otherDocsFile"
               name="otherDocsFile"
               type="file"
               accept=".pdf"
-              onChange={handleSdsFileChange}
+              onChange={onFileChange}
               data-testid="input-otherDocsFile"
-              className="hidden"
+              className="cursor-pointer"
             />
             {currentOtherDocsFileName && !otherDocsFile && (
               <p className="text-xs text-green-600 mt-1">

@@ -218,6 +218,7 @@ import edriRoutes from './edri';
 import chargeCodeUsageReportRoutes from './chargeCodeUsageReport';
 import laborDistributionReportRoutes from './laborDistributionReport';
 import supervisorApprovalExceptionReportRoutes from './supervisorApprovalExceptionReport';
+import timesheetCorrectionLogReportRoutes from './timesheetCorrectionLogReport';
 import payrollExportReconciliationReportRoutes from './payrollExportReconciliationReport';
 import indirectCostBurdenRateReportRoutes from './indirectCostBurdenRateReport';
 import unallowableCostReviewReportRoutes from './unallowableCostReviewReport';
@@ -10780,6 +10781,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   app.use('/api/edri', chargeCodeUsageReportRoutes);
   app.use('/api/edri', laborDistributionReportRoutes);
   app.use('/api/edri', supervisorApprovalExceptionReportRoutes);
+  app.use('/api/edri', timesheetCorrectionLogReportRoutes);
   app.use('/api/edri', payrollExportReconciliationReportRoutes);
   app.use('/api/edri', indirectCostBurdenRateReportRoutes);
   app.use('/api/edri', unallowableCostReviewReportRoutes);

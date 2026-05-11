@@ -349,6 +349,7 @@ import DcaaFindings from './pages/admin/DcaaFindings';
 import ChargeCodeUsageReport from './pages/admin/ChargeCodeUsageReport';
 import LaborDistributionReport from './pages/admin/LaborDistributionReport';
 import SupervisorApprovalExceptionReport from './pages/admin/SupervisorApprovalExceptionReport';
+import TimesheetCorrectionLogReport from './pages/admin/TimesheetCorrectionLogReport';
 import PayrollExportReconciliationReport from './pages/admin/PayrollExportReconciliationReport';
 import IndirectCostBurdenRateReport from './pages/admin/IndirectCostBurdenRateReport';
 import UnallowableCostReviewReport from './pages/admin/UnallowableCostReviewReport';
@@ -1365,6 +1366,7 @@ function App() {
                   <Route path="/admin/edri/charge-code-usage" component={ChargeCodeUsageReport} />
                   <Route path="/admin/edri/labor-distribution" component={LaborDistributionReport} />
                   <Route path="/admin/edri/supervisor-approval-exceptions" component={SupervisorApprovalExceptionReport} />
+                  <Route path="/admin/edri/timesheet-correction-log" component={TimesheetCorrectionLogReport} />
                   <Route path="/admin/edri/payroll-export-reconciliation" component={PayrollExportReconciliationReport} />
                   <Route path="/admin/edri/indirect-cost-burden-rates" component={IndirectCostBurdenRateReport} />
                   <Route path="/admin/edri/unallowable-cost-review" component={UnallowableCostReviewReport} />

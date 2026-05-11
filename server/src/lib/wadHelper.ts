@@ -213,7 +213,7 @@ export async function ensureProjectHasWADFromCanonicalSources(
     let quoteId: string | null = null;
     let quoteLines: QuoteLineItem[] = [];
     const linkedQuotes = await tx
-      .select()
+      .select({ id: quotes.id })
       .from(quotes)
       .where(eq(quotes.projectId, projectId))
       .orderBy(desc(quotes.createdAt))

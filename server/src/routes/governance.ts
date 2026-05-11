@@ -13,6 +13,10 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { getPhase1FoundationCoverage } from '../services/phase1FoundationClosure';
 import { getPhase2MaterialContractChain } from '../services/phase2MaterialContractChain';
+import {
+  getPhase3DcaaQualityMaturity,
+  getPhase3DcaaQualitySummary,
+} from '../services/phase3DcaaQualityMaturity';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -120,6 +124,15 @@ router.get('/phase2-material-contract-chain', async (_req: Request, res: Respons
       hasSupplierApprovalManagement: domains.some((item) => item.domain === 'SUPPLIER_APPROVAL'),
       hasShipmentCertPackageBuilder: domains.some((item) => item.domain === 'SHIPMENT_VALIDATION'),
     },
+  });
+});
+
+router.get('/phase3-dcaa-quality-maturity', async (_req: Request, res: Response) => {
+  const domains = getPhase3DcaaQualityMaturity();
+  res.json({
+    phase: 'Phase 3: DCAA And Quality Maturity',
+    domains,
+    summary: getPhase3DcaaQualitySummary(domains),
   });
 });
 

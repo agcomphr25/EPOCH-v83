@@ -50,11 +50,10 @@ const DOCUMENT_CHECKLIST_ITEMS = [
 
 const REQUIRED_APPROVAL_ROLES = [
   { key: 'project_manager', label: 'Project Manager' },
-  { key: 'production_manager', label: 'Production Manager' },
+  { key: 'engineering', label: 'Engineering' },
   { key: 'quality', label: 'Quality' },
-  { key: 'finance', label: 'Finance / Accounting' },
-  { key: 'engineering', label: 'Engineering (optional)', optional: true },
-  { key: 'compliance', label: 'Compliance / Export Control (optional)', optional: true },
+  { key: 'operations', label: 'Operations' },
+  { key: 'executive', label: 'Executive' },
 ];
 
 const RISK_TYPES = ['Technical', 'Schedule', 'Material', 'Quality', 'Tooling', 'Supplier'];
@@ -111,6 +110,59 @@ interface ApprovalRecord {
   timestamp: string;
 }
 
+type WadExceptionType = 'overrun' | 'charge_code_override' | 'late_release_exception';
+
+interface ApprovalRequestRecord {
+  id: string;
+  type: WadExceptionType;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  reason: string;
+  requestedByName: string;
+  requestedAt: string;
+  resolvedByName?: string | null;
+  resolvedAt?: string | null;
+}
+
+interface RevisionHistoryRecord {
+  revision: number;
+  action: string;
+  role?: string;
+  actorName?: string;
+  comments?: string | null;
+  timestamp: string;
+}
+
+interface WadControlStatus {
+  labor: {
+    usedHours: number;
+    budgetHours: number | null;
+    plannedHours: number;
+    projectedHours: number;
+    percentUsed: number | null;
+    projectedPercentUsed: number | null;
+    projectedOverrun: boolean;
+    status: string;
+  };
+  material: {
+    usedSpend: number;
+    spendCap: number | null;
+    percentUsed: number | null;
+    projectedOverrun: boolean;
+  };
+  outsideProcessing: {
+    usedSpend: number;
+    spendCap: number | null;
+    percentUsed: number | null;
+    projectedOverrun: boolean;
+  };
+  exceptions: {
+    chargeCodeOverride: boolean;
+    lateRelease: boolean;
+    requiredRequests: WadExceptionType[];
+    missingRequests: WadExceptionType[];
+  };
+}
+
 interface WizardData {
   step1?: {
     projectNumber: string;
@@ -141,6 +193,10 @@ interface WizardData {
     outTimeTracking: boolean;
     customerSuppliedMaterial: boolean;
     certsRequired: boolean;
+    materialSpendCap: number;
+    outsideProcessingCap: number;
+    materialOverrunRule: 'REQUIRE_APPROVAL' | 'HARD_STOP';
+    outsideProcessingRule: 'REQUIRE_APPROVAL' | 'HARD_STOP';
     notes: string;
   };
   step6?: {
@@ -183,6 +239,10 @@ interface WizardData {
   };
   step10?: { documents: DocItem[] };
   approvals?: ApprovalRecord[];
+  approvalRequests?: ApprovalRequestRecord[];
+  currentRevision?: number;
+  revisionStatus?: 'DRAFT' | 'IN_REVIEW' | 'IN_REVISION' | 'NEEDS_REVISION' | 'APPROVED';
+  revisionHistory?: RevisionHistoryRecord[];
   __seedMeta?: {
     seededAt: string;
     sources: {
@@ -228,7 +288,7 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
   const [data, setData] = useState<WizardData>({});
   const [saving, setSaving] = useState(false);
 
-  const { data: wizardCtx, isLoading } = useQuery<{ wad: any; project: any; po: any }>({
+  const { data: wizardCtx, isLoading } = useQuery<{ wad: any; project: any; po: any; controlStatus?: WadControlStatus }>({
     queryKey: ['/api/work-orders/production', wadId, 'wizard'],
     queryFn: async () => {
       const res = await fetch(`/api/work-orders/production/${wadId}/wizard`);
@@ -276,6 +336,22 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
     },
     onError: (err: Error) => {
       toast({ title: 'Approval failed', description: err.message, variant: 'destructive' });
+    },
+  });
+
+  const exceptionRequestMutation = useMutation({
+    mutationFn: async (payload: { type: WadExceptionType; action: 'REQUEST' | 'APPROVE' | 'REJECT'; reason: string }) => {
+      return apiRequest(`/api/work-orders/production/${wadId}/approval-requests`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/work-orders/production', wadId, 'wizard'] });
+      toast({ title: 'Approval request recorded' });
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Request failed', description: err.message, variant: 'destructive' });
     },
   });
 
@@ -363,7 +439,7 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
         break;
       }
       case 11: {
-        const required = ['project_manager', 'production_manager', 'quality', 'finance'];
+        const required = REQUIRED_APPROVAL_ROLES.map((role) => role.key);
         const approved = new Set(
           (d.approvals ?? []).filter((a) => a.decision === 'APPROVED').map((a) => a.role)
         );
@@ -383,6 +459,7 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
   const wad = wizardCtx?.wad;
   const project = wizardCtx?.project;
   const po = wizardCtx?.po;
+  const controlStatus = wizardCtx?.controlStatus;
   const wadStatus = wad?.wadStatus ?? 'DRAFT';
   const approvals: ApprovalRecord[] = (data.approvals ?? []) as ApprovalRecord[];
   const isBackfill = project?.currentStage === 'production';
@@ -688,17 +765,22 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
               data={data}
               wad={wad}
               approvals={approvals}
+              controlStatus={controlStatus}
+              approvalRequests={data.approvalRequests ?? []}
+              revisionHistory={data.revisionHistory ?? []}
+              exceptionRequestMutation={exceptionRequestMutation}
               onApprove={async () => {
                 // Persist the latest wizardData. The actual APPROVED transition happens
-                // server-side in POST /wizard/approve once all four required slots are
+                // server-side in POST /wizard/approve once all required slots are
                 // signed (Step 11). PATCH is intentionally not allowed to set APPROVED.
                 await saveMutation.mutateAsync({ wizardData: data });
-                const allFour = approvals.filter((a) => a.decision === 'APPROVED').length >= 4;
+                const allRequired = REQUIRED_APPROVAL_ROLES
+                  .every((role) => approvals.some((a) => a.role === role.key && a.decision === 'APPROVED'));
                 toast({
-                  title: allFour ? 'WAD Approved' : 'Final review saved',
-                  description: allFour
+                  title: allRequired ? 'WAD approvals complete' : 'Final review saved',
+                  description: allRequired
                     ? 'All required approvals are recorded — WAD has been promoted to APPROVED on the server.'
-                    : 'Collect all four required slot approvals on Step 11 to promote this WAD to APPROVED.',
+                    : 'Collect PM, engineering, quality, operations, and executive approvals on Step 11.',
                 });
                 queryClient.invalidateQueries({ queryKey: ['/api/work-orders', wadId] });
               }}
@@ -1214,6 +1296,10 @@ function Step5MaterialAuth({ data, onChange }: {
     outTimeTracking: false,
     customerSuppliedMaterial: false,
     certsRequired: false,
+    materialSpendCap: 0,
+    outsideProcessingCap: 0,
+    materialOverrunRule: 'REQUIRE_APPROVAL',
+    outsideProcessingRule: 'REQUIRE_APPROVAL',
     notes: '',
     ...(data ?? {}),
   };
@@ -1232,6 +1318,50 @@ function Step5MaterialAuth({ data, onChange }: {
         <BoolField label="Out-Time Tracking" value={base.outTimeTracking} onChange={v => set('outTimeTracking', v)} />
         <BoolField label="Customer-Supplied Material" value={base.customerSuppliedMaterial} onChange={v => set('customerSuppliedMaterial', v)} />
         <BoolField label="Certs Required" value={base.certsRequired} onChange={v => set('certsRequired', v)} />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <Label className="text-xs">Material Spend Cap</Label>
+          <Input
+            type="number"
+            min={0}
+            step={100}
+            value={base.materialSpendCap}
+            onChange={e => set('materialSpendCap', parseFloat(e.target.value) || 0)}
+            className="h-8 text-sm"
+          />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Material Cap Rule</Label>
+          <Select value={base.materialOverrunRule} onValueChange={v => set('materialOverrunRule', v)}>
+            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="REQUIRE_APPROVAL">Require Approval</SelectItem>
+              <SelectItem value="HARD_STOP">Hard Stop</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Outside Processing Cap</Label>
+          <Input
+            type="number"
+            min={0}
+            step={100}
+            value={base.outsideProcessingCap}
+            onChange={e => set('outsideProcessingCap', parseFloat(e.target.value) || 0)}
+            className="h-8 text-sm"
+          />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Outside Processing Rule</Label>
+          <Select value={base.outsideProcessingRule} onValueChange={v => set('outsideProcessingRule', v)}>
+            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="REQUIRE_APPROVAL">Require Approval</SelectItem>
+              <SelectItem value="HARD_STOP">Hard Stop</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
       <div className="space-y-1">
         <Label>Notes</Label>
@@ -1624,7 +1754,7 @@ function Step11Approvals({ approvals, wadId, approveMutation }: {
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Collect required approvals from each role. Project Manager, Production Manager, Quality, and Finance are required. Engineering and Compliance are optional.
+        Collect the WAD approval matrix: PM, engineering, quality, operations, and executive. Rejections keep the WAD in revision until the next saved change resets the signature cycle.
       </p>
       <div className="space-y-3">
         {REQUIRED_APPROVAL_ROLES.map(role => {
@@ -1697,20 +1827,25 @@ function Step11Approvals({ approvals, wadId, approveMutation }: {
 }
 
 // ─── Step 12: Final Review ────────────────────────────────────────────────────
-function Step12FinalReview({ data, wad, approvals, onApprove, isSaving }: {
+function Step12FinalReview({ data, wad, approvals, controlStatus, approvalRequests, revisionHistory, exceptionRequestMutation, onApprove, isSaving }: {
   data: WizardData;
   wad: any;
   approvals: ApprovalRecord[];
+  controlStatus?: WadControlStatus;
+  approvalRequests: ApprovalRequestRecord[];
+  revisionHistory: RevisionHistoryRecord[];
+  exceptionRequestMutation: any;
   onApprove: () => Promise<void>;
   isSaving: boolean;
 }) {
   const { toast } = useToast();
   const [approving, setApproving] = useState(false);
 
-  const requiredRoles = ['project_manager', 'production_manager', 'quality', 'finance'];
+  const requiredRoles = REQUIRED_APPROVAL_ROLES.map((role) => role.key);
   const allRequiredApproved = requiredRoles.every(r =>
     approvals.some(a => a.role === r && a.decision === 'APPROVED')
   );
+  const missingExceptionRequests = controlStatus?.exceptions.missingRequests ?? [];
 
   const docsComplete = (data.step10?.documents ?? []).every(d => d.status !== 'PENDING');
   const poReviewGate = data.step1?.poReviewApproved ?? false;
@@ -1723,9 +1858,18 @@ function Step12FinalReview({ data, wad, approvals, onApprove, isSaving }: {
     { label: 'Charge Codes Assigned', ok: chargeCodesDefined },
     { label: 'Documents Resolved', ok: docsComplete },
     { label: 'All Required Approvals Collected', ok: allRequiredApproved },
+    { label: 'Exception Requests Resolved', ok: missingExceptionRequests.length === 0 },
   ];
 
   const allGatesPassed = gates.every(g => g.ok);
+  const exceptionLabels: Record<WadExceptionType, string> = {
+    overrun: 'Overrun',
+    charge_code_override: 'Charge-code override',
+    late_release_exception: 'Late release',
+  };
+  const formatPct = (value: number | null | undefined) => value == null ? 'N/A' : `${value}%`;
+  const formatMoney = (value: number | null | undefined) =>
+    value == null ? 'N/A' : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
 
   const handleApprove = async () => {
     if (!allGatesPassed) {
@@ -1752,6 +1896,97 @@ function Step12FinalReview({ data, wad, approvals, onApprove, isSaving }: {
           </div>
         ))}
       </div>
+      <Separator />
+      {controlStatus && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <Card className="p-3">
+            <p className="text-xs text-muted-foreground">Labor Hours</p>
+            <p className="text-sm font-medium">{controlStatus.labor.usedHours} / {controlStatus.labor.budgetHours ?? 'N/A'} used</p>
+            <p className={controlStatus.labor.projectedOverrun ? 'text-xs text-red-600' : 'text-xs text-muted-foreground'}>
+              {formatPct(controlStatus.labor.percentUsed)} used, {formatPct(controlStatus.labor.projectedPercentUsed)} projected
+            </p>
+          </Card>
+          <Card className="p-3">
+            <p className="text-xs text-muted-foreground">Material Spend</p>
+            <p className="text-sm font-medium">{formatMoney(controlStatus.material.usedSpend)} / {formatMoney(controlStatus.material.spendCap)}</p>
+            <p className={controlStatus.material.projectedOverrun ? 'text-xs text-red-600' : 'text-xs text-muted-foreground'}>
+              {formatPct(controlStatus.material.percentUsed)} used
+            </p>
+          </Card>
+          <Card className="p-3">
+            <p className="text-xs text-muted-foreground">Outside Processing</p>
+            <p className="text-sm font-medium">{formatMoney(controlStatus.outsideProcessing.usedSpend)} / {formatMoney(controlStatus.outsideProcessing.spendCap)}</p>
+            <p className={controlStatus.outsideProcessing.projectedOverrun ? 'text-xs text-red-600' : 'text-xs text-muted-foreground'}>
+              {formatPct(controlStatus.outsideProcessing.percentUsed)} used
+            </p>
+          </Card>
+        </div>
+      )}
+      {missingExceptionRequests.length > 0 && (
+        <Alert className="border-amber-300 bg-amber-50">
+          <AlertTriangle className="h-4 w-4 text-amber-700" />
+          <AlertDescription className="text-amber-900">
+            {missingExceptionRequests.map(type => exceptionLabels[type]).join(', ')} approval request required before release.
+            <div className="flex flex-wrap gap-2 mt-2">
+              {missingExceptionRequests.map(type => (
+                <Button
+                  key={type}
+                  size="sm"
+                  variant="outline"
+                  onClick={() => exceptionRequestMutation.mutate({ type, action: 'REQUEST', reason: `${exceptionLabels[type]} exception requested from WAD final review` })}
+                  disabled={exceptionRequestMutation.isPending}
+                >
+                  Request {exceptionLabels[type]}
+                </Button>
+              ))}
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+      {approvalRequests.length > 0 && (
+        <div className="space-y-2">
+          <p className="font-medium text-sm">Approval Requests</p>
+          {approvalRequests.slice(-5).map(req => (
+            <div key={req.id} className="flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-xs">
+              <span>{exceptionLabels[req.type]} - {req.reason}</span>
+              <div className="flex items-center gap-2">
+                <Badge variant={req.status === 'APPROVED' ? 'default' : 'outline'}>{req.status}</Badge>
+                {req.status === 'PENDING' && (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => exceptionRequestMutation.mutate({ type: req.type, action: 'APPROVE', reason: `Approved: ${req.reason}` })}
+                      disabled={exceptionRequestMutation.isPending}
+                    >
+                      Approve
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => exceptionRequestMutation.mutate({ type: req.type, action: 'REJECT', reason: `Rejected: ${req.reason}` })}
+                      disabled={exceptionRequestMutation.isPending}
+                    >
+                      Reject
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {revisionHistory.length > 0 && (
+        <div className="space-y-2">
+          <p className="font-medium text-sm">Revision History</p>
+          {revisionHistory.slice(-4).map((event, idx) => (
+            <div key={`${event.timestamp}-${idx}`} className="rounded-md border px-3 py-2 text-xs text-muted-foreground">
+              Rev {event.revision}: {event.action.replaceAll('_', ' ')}{event.role ? ` (${event.role})` : ''} by {event.actorName ?? 'system'}
+              {event.comments ? ` - ${event.comments}` : ''}
+            </div>
+          ))}
+        </div>
+      )}
       <Separator />
       <div className="grid grid-cols-2 gap-4 text-sm">
         <div>

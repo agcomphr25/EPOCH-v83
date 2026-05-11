@@ -49,6 +49,7 @@ import path from 'path';
 import fs from 'fs';
 import { z } from 'zod';
 import { storage } from '../../storage';
+import { createQuoteSnapshot } from '../services/quoteContractService';
 
 type ProjectStepTypeValue = typeof projectStepTypeEnum.enumValues[number];
 
@@ -225,6 +226,41 @@ router.get('/api/quotes/:id', async (req: Request, res: Response) => {
   }
 });
 
+router.get('/api/quotes/:id/snapshots', async (req: Request, res: Response) => {
+  try {
+    const quoteId = req.params.id;
+    const { pool } = await import('../../db');
+
+    const snapshotResult = await pool.query(
+      `SELECT *
+       FROM quote_snapshots
+       WHERE quote_id = $1
+       ORDER BY revision_number DESC`,
+      [quoteId],
+    );
+    const snapshots = Array.isArray(snapshotResult) ? snapshotResult : snapshotResult.rows ?? [];
+
+    const snapshotsWithLines = await Promise.all(
+      snapshots.map(async (snapshot: any) => {
+        const lineResult = await pool.query(
+          `SELECT *
+           FROM quote_line_snapshots
+           WHERE quote_snapshot_id = $1
+           ORDER BY line_number`,
+          [snapshot.id],
+        );
+        const lines = Array.isArray(lineResult) ? lineResult : lineResult.rows ?? [];
+        return { ...snapshot, lineItems: lines };
+      }),
+    );
+
+    res.json(snapshotsWithLines);
+  } catch (error) {
+    console.error('Get quote snapshots error:', error);
+    res.status(500).json({ error: 'Failed to fetch quote snapshots' });
+  }
+});
+
 // Save quote (create or update as draft)
 router.post('/api/quotes/save', async (req: Request, res: Response) => {
   try {
@@ -310,6 +346,22 @@ router.post('/api/quotes/save', async (req: Request, res: Response) => {
 
       quoteId = newQuote[0].id;
     } else {
+      const [existingQuote] = await db
+        .select({ status: quotes.status })
+        .from(quotes)
+        .where(eq(quotes.id, quoteId))
+        .limit(1);
+
+      if (!existingQuote) {
+        return res.status(404).json({ error: 'Quote not found' });
+      }
+      if (existingQuote.status !== 'DRAFT') {
+        return res.status(409).json({
+          error: 'Sent quotes are immutable. Create a new quote revision instead of editing the submitted quote.',
+          currentStatus: existingQuote.status,
+        });
+      }
+
       // Update existing quote.
       // customersIntegerId update policy:
       //   - customerId provided (non-empty): always sync bridge FK to the resolved
@@ -385,26 +437,36 @@ router.post('/api/quotes/save', async (req: Request, res: Response) => {
 // Submit quote (change status to SENT and send email)
 router.post('/api/quotes/submit', async (req: Request, res: Response) => {
   try {
-    const { id } = req.body;
+    const { id, revisionLabel, exclusions, certRequirements } = req.body;
 
     if (!id) {
       return res.status(400).json({ error: 'Quote ID is required' });
     }
 
-    // Update quote status to SENT
-    await db
+    const [currentQuote] = await db
+      .select()
+      .from(quotes)
+      .where(eq(quotes.id, id))
+      .limit(1);
+
+    if (!currentQuote) {
+      return res.status(404).json({ error: 'Quote not found' });
+    }
+    if (currentQuote.status !== 'DRAFT') {
+      return res.status(409).json({
+        error: 'Only draft quotes can be submitted. Sent quotes are immutable; create a new revision instead.',
+        currentStatus: currentQuote.status,
+      });
+    }
+
+    const [submittedQuote] = await db
       .update(quotes)
       .set({
         status: 'SENT',
         updatedAt: new Date(),
       })
-      .where(eq(quotes.id, id));
-
-    // Fetch complete quote
-    const [submittedQuote] = await db
-      .select()
-      .from(quotes)
-      .where(eq(quotes.id, id));
+      .where(eq(quotes.id, id))
+      .returning();
 
     const submittedLineItems = await db
       .select()
@@ -415,10 +477,16 @@ router.post('/api/quotes/submit', async (req: Request, res: Response) => {
     // TODO: Send email notification to customer
     // This would integrate with SendGrid or your email service
     // For now, we'll just update the status
+    const snapshot = await createQuoteSnapshot(id, {
+      revisionLabel,
+      exclusions,
+      certRequirements,
+    });
 
     res.json({
       ...submittedQuote,
       lineItems: submittedLineItems,
+      snapshot,
       message: 'Quote submitted successfully',
     });
   } catch (error) {
@@ -445,11 +513,23 @@ router.patch('/api/quotes/:id/status', async (req: Request, res: Response) => {
 
     // For non-ACCEPTED status changes, just update and return
     if (status !== 'ACCEPTED' || quote.status === 'ACCEPTED') {
+      if (status === 'SENT' && quote.status !== 'DRAFT') {
+        return res.status(409).json({
+          error: 'Only draft quotes can be sent. Sent quotes are immutable; create a new revision instead.',
+          currentStatus: quote.status,
+        });
+      }
+
       const [updated] = await db
         .update(quotes)
         .set({ status, updatedAt: new Date() })
         .where(eq(quotes.id, quoteId))
         .returning();
+
+      let snapshot = null;
+      if (status === 'SENT') {
+        snapshot = await createQuoteSnapshot(quoteId);
+      }
 
       // Recovery path for legacy ACCEPTED quotes missing projectId:
       // scan project steps for a linked quote step to backfill the projectId.
@@ -471,7 +551,7 @@ router.patch('/api/quotes/:id/status', async (req: Request, res: Response) => {
         }
       }
 
-      return res.json({ ...updated, projectId: resolvedProjectId });
+      return res.json({ ...updated, projectId: resolvedProjectId, snapshot });
     }
 
     // ── ACCEPTANCE PATH: wrap everything in a transaction ──────────────────

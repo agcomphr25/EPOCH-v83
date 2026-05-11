@@ -2499,6 +2499,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         assignedToName: assignedToName || null,
         productionLeadId: productionLeadId && productionLeadId !== 'none' ? parseInt(productionLeadId) : null,
         productionLeadName: productionLeadName || null,
+        sourceQuoteId: sourceQuoteId || null,
         projectName: projectName || null,
       };
       
@@ -2520,8 +2521,14 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           });
         }
       }
+
+      let quoteReconciliation = null;
+      if (sourceQuoteId) {
+        const { reconcileCustomerPoToQuote } = await import('../services/quoteContractService');
+        quoteReconciliation = await reconcileCustomerPoToQuote(po.id);
+      }
       
-      res.status(201).json(po);
+      res.status(201).json({ ...po, quoteReconciliation });
     } catch (_error: any) {
       console.error('🔧 P2 purchase order create bypass _error:', _error);
       console.error('🔧 Error message:', _error?.message);
@@ -3672,6 +3679,46 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     } catch (_error) {
       console.error('Get P2 Purchase Order error:', _error);
       res.status(500).json({ error: 'Failed to fetch P2 Purchase Order' });
+    }
+  });
+
+  app.post('/api/p2-purchase-orders/:id/reconcile-quote', async (req, res) => {
+    try {
+      const poId = parseInt(req.params.id, 10);
+      if (!Number.isFinite(poId)) {
+        return res.status(400).json({ error: 'Invalid PO ID' });
+      }
+
+      const { reconcileCustomerPoToQuote } = await import('../services/quoteContractService');
+      const reconciliation = await reconcileCustomerPoToQuote(poId);
+      if (!reconciliation) {
+        return res.status(404).json({ error: 'P2 PO is not linked to a source quote' });
+      }
+
+      res.json(reconciliation);
+    } catch (error) {
+      console.error('P2 quote reconciliation error:', error);
+      res.status(500).json({ error: 'Failed to reconcile P2 PO against source quote' });
+    }
+  });
+
+  app.get('/api/p2-purchase-orders/:id/quote-reconciliation', async (req, res) => {
+    try {
+      const poId = parseInt(req.params.id, 10);
+      if (!Number.isFinite(poId)) {
+        return res.status(400).json({ error: 'Invalid PO ID' });
+      }
+
+      const { getLatestQuotePoReconciliation } = await import('../services/quoteContractService');
+      const reconciliation = await getLatestQuotePoReconciliation(poId);
+      if (!reconciliation) {
+        return res.status(404).json({ error: 'No quote reconciliation found for this P2 PO' });
+      }
+
+      res.json(reconciliation);
+    } catch (error) {
+      console.error('Get P2 quote reconciliation error:', error);
+      res.status(500).json({ error: 'Failed to fetch P2 quote reconciliation' });
     }
   });
 

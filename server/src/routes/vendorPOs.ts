@@ -15,6 +15,7 @@ import { generateMagicLink, peekMagicLink, validateMagicLink, createVendorConfir
 import { sendCommunication } from '../../communication/send';
 import { db } from '../../db';
 import { sql } from 'drizzle-orm';
+import { getVendorQualificationBlockers, emitProcurementLedgerEvent } from '../services/procurementControlsService';
 
 const router = Router();
 
@@ -1613,7 +1614,7 @@ router.post('/:id/direct-po-exception', requirePermission('purchasing.direct_po_
       actor: { id: approverId, username: u?.username, role: u?.role },
       reason: trimmed,
       meta: { poNumber: existing.poNumber ?? null },
-    }).catch(() => {});
+    });
 
     res.json({ ok: true, vendorPO: updated });
   } catch (err: any) {
@@ -1650,6 +1651,33 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
 
     const performedBy = String((req as any).user?.username ?? (req as any).user?.id ?? 'unknown');
     const performedByEmail = (req as any).user?.email as string | undefined;
+    const actor = {
+      id: (req as any).user?.id,
+      username: (req as any).user?.username,
+      role: (req as any).user?.role,
+    };
+
+    const supplierQualificationBlockers = await getVendorQualificationBlockers(id, vendorPO.vendorId, vendorPO.productionLine ?? null);
+    if (supplierQualificationBlockers.length > 0) {
+      await emitProcurementLedgerEvent({
+        action: 'VENDOR_PO_ISSUE_BLOCKED_SUPPLIER_QUALIFICATION',
+        entityId: id,
+        actor,
+        reason: supplierQualificationBlockers.join('; '),
+        meta: {
+          vendorPoId: id,
+          vendorId: vendorPO.vendorId,
+          productionLine: vendorPO.productionLine ?? null,
+          blockers: supplierQualificationBlockers,
+        },
+      });
+      return res.status(422).json({
+        error: 'Supplier qualification gate failed',
+        message: `Cannot issue PO. Reason(s): ${supplierQualificationBlockers.join('; ')}.`,
+        supplierQualificationBlocked: true,
+        blockingReasons: supplierQualificationBlockers,
+      });
+    }
 
     // ── PURCHASING-CONTROLS GATE (Task #83): require approved requisition + fresh debarment check + FAR flowdowns ─
     {
@@ -1756,6 +1784,13 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
       // can be issued with the gaps left visible for the procurement backfill/ERDI
       // remediation queue, which keeps production moving without hiding the audit debt.
       if (purchasingBlockers.length > 0 && isP2ProductionLine(vendorPO.productionLine)) {
+        await emitProcurementLedgerEvent({
+          action: 'VENDOR_PO_ISSUE_BLOCKED_PURCHASING_CONTROLS',
+          entityId: id,
+          actor,
+          reason: purchasingBlockers.join('; '),
+          meta: { vendorPoId: id, vendorId: vendorPO.vendorId, productionLine: vendorPO.productionLine ?? null, blockers: purchasingBlockers },
+        });
         return res.status(422).json({
           error: 'Purchasing controls gate failed',
           message: `Cannot issue PO. Reason(s): ${purchasingBlockers.join('; ')}.`,
@@ -1783,6 +1818,13 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
       } else {
         // Explicit requires_attention check — PO changed after review
         if (complianceReview.reviewStatus === 'requires_attention') {
+          await emitProcurementLedgerEvent({
+            action: 'VENDOR_PO_ISSUE_BLOCKED_COMPLIANCE_REVIEW',
+            entityId: id,
+            actor,
+            reason: 'Compliance review requires attention because PO changed after review.',
+            meta: { vendorPoId: id, vendorId: vendorPO.vendorId, reviewStatus: complianceReview.reviewStatus },
+          });
           return res.status(422).json({
             error: 'Compliance review requires attention',
             message: 'Compliance review requires attention because PO changed after review.',
@@ -1804,6 +1846,13 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
         }
       }
       if (blockingReasons.length > 0) {
+        await emitProcurementLedgerEvent({
+          action: 'VENDOR_PO_ISSUE_BLOCKED_COMPLIANCE_REVIEW',
+          entityId: id,
+          actor,
+          reason: blockingReasons.join('; '),
+          meta: { vendorPoId: id, vendorId: vendorPO.vendorId, productionLine: vendorPO.productionLine ?? null, blockers: blockingReasons },
+        });
         return res.status(422).json({
           error: 'Compliance review gate failed',
           message: `Cannot issue PO. Reason(s): ${blockingReasons.join('; ')}.`,
@@ -1833,6 +1882,14 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
       });
 
       console.log(`[VendorPOIssuedNoEmail] PO ${poNumber} issued WITHOUT email by ${performedBy} — reason: ${trimmedReason}`);
+
+      await emitProcurementLedgerEvent({
+        action: 'VENDOR_PO_ISSUED_WITHOUT_EMAIL',
+        entityId: id,
+        actor,
+        reason: trimmedReason,
+        meta: { vendorPoId: id, vendorId: vendorPO.vendorId, poNumber, issuedWithoutEmail: true },
+      });
 
       // Task #83: NOW (post-issuance success) record po_issuance debarment evidence
       try {
@@ -1896,6 +1953,13 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
 
     // Atomic transactional issuance: lock row, generate number, update status
     const { vendorPO: issuedPO, poNumber } = await storage.issueVendorPO(id);
+
+    await emitProcurementLedgerEvent({
+      action: 'VENDOR_PO_ISSUED',
+      entityId: id,
+      actor,
+      meta: { vendorPoId: id, vendorId: vendorPO.vendorId, poNumber, issuedWithoutEmail: false },
+    });
 
     // Generate magic link for PO confirmation — produce a frontend URL, not the raw API endpoint
     const { token: confirmToken, expiresAt } = await generateMagicLink({

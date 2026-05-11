@@ -2155,7 +2155,7 @@ export default function VendorManagement() {
 
       {/* Table */}
       <div className="border rounded-lg overflow-hidden bg-white dark:bg-gray-900">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto overscroll-x-contain scroll-smooth">
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
             <thead className="bg-gray-50 dark:bg-gray-800">
               <tr>
@@ -2752,7 +2752,7 @@ function MonthlyEvaluationsTable({ vendorId }: { vendorId: number }) {
       </div>
 
       {/* Annual evaluation grid for the selected year */}
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto overscroll-x-contain scroll-smooth">
         <table className="w-full border-collapse border border-gray-300 dark:border-gray-600 text-sm">
           <thead>
             <tr className="bg-gray-100 dark:bg-gray-800">
@@ -2804,7 +2804,7 @@ function MonthlyEvaluationsTable({ vendorId }: { vendorId: number }) {
             return (
               <div key={year}>
                 <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{year}</p>
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto overscroll-x-contain scroll-smooth">
                   <table className="w-full border-collapse border border-gray-200 dark:border-gray-700 text-sm">
                     <thead>
                       <tr className="bg-gray-50 dark:bg-gray-800/50">

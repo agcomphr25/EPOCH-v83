@@ -4734,9 +4734,128 @@ export const nonconformanceRecords = pgTable('nonconformance_records', {
   lastConfirmedByUserId: integer('last_confirmed_by_user_id'), // Who confirmed the state
   confirmationNote: text('confirmation_note'), // Optional short note with confirmation
   attentionRisk: text('attention_risk').$type<'low' | 'medium' | 'high'>(), // Computed staleness risk level
+  containmentAction: text('containment_action'),
+  containmentOwner: text('containment_owner'),
+  containmentDueDate: date('containment_due_date'),
+  containmentCompletedAt: timestamp('containment_completed_at'),
+  rootCause: text('root_cause'),
+  rootCauseMethod: text('root_cause_method'),
+  correctiveAction: text('corrective_action'),
+  preventiveAction: text('preventive_action'),
+  capaRequired: boolean('capa_required').default(false),
+  capaId: uuid('capa_id'),
+  dispositionRationale: text('disposition_rationale'),
+  dispositionApprovedByUserId: integer('disposition_approved_by_user_id'),
+  dispositionApprovedByDisplayName: text('disposition_approved_by_display_name'),
+  dispositionApprovedAt: timestamp('disposition_approved_at'),
+  effectivenessReview: text('effectiveness_review'),
+  effectivenessStatus: text('effectiveness_status').default('not_started'),
+  effectivenessReviewedByUserId: integer('effectiveness_reviewed_by_user_id'),
+  effectivenessReviewedByDisplayName: text('effectiveness_reviewed_by_display_name'),
+  effectivenessReviewedAt: timestamp('effectiveness_reviewed_at'),
+  recurrenceDetected: boolean('recurrence_detected').default(false),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
+
+export const capaRecords = pgTable('capa_records', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  capaNumber: text('capa_number').notNull().unique(),
+  sourceType: text('source_type').notNull().default('NCR'),
+  sourceId: text('source_id'),
+  nonconformanceId: integer('nonconformance_id').references(() => nonconformanceRecords.id, { onDelete: 'set null' }),
+  title: text('title').notNull(),
+  problemStatement: text('problem_statement').notNull(),
+  containmentAction: text('containment_action'),
+  rootCause: text('root_cause'),
+  correctiveAction: text('corrective_action'),
+  preventiveAction: text('preventive_action'),
+  recurrenceCheckPlan: text('recurrence_check_plan'),
+  recurrenceDetected: boolean('recurrence_detected').default(false).notNull(),
+  effectivenessCriteria: text('effectiveness_criteria'),
+  effectivenessReview: text('effectiveness_review'),
+  effectivenessStatus: text('effectiveness_status').notNull().default('not_started'),
+  status: text('status').notNull().default('open'),
+  ownerUserId: integer('owner_user_id'),
+  ownerDisplayName: text('owner_display_name'),
+  dueDate: date('due_date'),
+  closedByUserId: integer('closed_by_user_id'),
+  closedByDisplayName: text('closed_by_display_name'),
+  closedAt: timestamp('closed_at'),
+  evidenceUrls: text('evidence_urls').array().notNull().default(sql`ARRAY[]::text[]`),
+  createdByUserId: integer('created_by_user_id'),
+  createdByDisplayName: text('created_by_display_name'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  sourceIdx: index('capa_records_source_idx').on(table.sourceType, table.sourceId),
+  ncrIdx: index('capa_records_ncr_idx').on(table.nonconformanceId),
+  statusIdx: index('capa_records_status_idx').on(table.status),
+  effectivenessIdx: index('capa_records_effectiveness_idx').on(table.effectivenessStatus),
+}));
+
+export const calibrationAssets = pgTable('calibration_assets', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  assetTag: text('asset_tag').notNull().unique(),
+  name: text('name').notNull(),
+  assetType: text('asset_type').notNull().default('gage'),
+  serialNumber: text('serial_number'),
+  location: text('location'),
+  ownerDepartment: text('owner_department'),
+  status: text('status').notNull().default('active'),
+  calibrationIntervalDays: integer('calibration_interval_days').notNull().default(365),
+  lastCalibrationDate: date('last_calibration_date'),
+  calibrationDueDate: date('calibration_due_date'),
+  evidenceUrl: text('evidence_url'),
+  lockoutReason: text('lockout_reason'),
+  lockedOutAt: timestamp('locked_out_at'),
+  metadata: jsonb('metadata').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  assetTagIdx: index('calibration_assets_asset_tag_idx').on(table.assetTag),
+  statusIdx: index('calibration_assets_status_idx').on(table.status),
+  dueDateIdx: index('calibration_assets_due_date_idx').on(table.calibrationDueDate),
+}));
+
+export const calibrationEvents = pgTable('calibration_events', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  assetId: uuid('asset_id').notNull().references(() => calibrationAssets.id, { onDelete: 'cascade' }),
+  eventType: text('event_type').notNull().default('calibration'),
+  eventDate: date('event_date').notNull(),
+  result: text('result').notNull().default('pass'),
+  performedBy: text('performed_by'),
+  vendorName: text('vendor_name'),
+  certificateNumber: text('certificate_number'),
+  evidenceUrl: text('evidence_url'),
+  nextDueDate: date('next_due_date'),
+  notes: text('notes'),
+  createdByUserId: integer('created_by_user_id'),
+  createdByDisplayName: text('created_by_display_name'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  assetIdx: index('calibration_events_asset_idx').on(table.assetId),
+  eventDateIdx: index('calibration_events_date_idx').on(table.eventDate),
+}));
+
+export const calibrationUseLogs = pgTable('calibration_use_logs', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  assetId: uuid('asset_id').references(() => calibrationAssets.id, { onDelete: 'set null' }),
+  assetTag: text('asset_tag').notNull(),
+  travelerId: varchar('traveler_id', { length: 255 }),
+  travelerStepId: varchar('traveler_step_id', { length: 255 }),
+  routingOperationId: integer('routing_operation_id'),
+  orderId: text('order_id'),
+  usedByUserId: integer('used_by_user_id'),
+  usedByDisplayName: text('used_by_display_name'),
+  useStatus: text('use_status').notNull().default('accepted'),
+  gateMessage: text('gate_message'),
+  usedAt: timestamp('used_at').defaultNow().notNull(),
+}, (table) => ({
+  assetTagIdx: index('calibration_use_logs_asset_tag_idx').on(table.assetTag),
+  travelerIdx: index('calibration_use_logs_traveler_idx').on(table.travelerId),
+  statusIdx: index('calibration_use_logs_status_idx').on(table.useStatus),
+}));
 
 export const insertNonconformanceRecordSchema = createInsertSchema(
   nonconformanceRecords
@@ -4779,6 +4898,26 @@ export const insertNonconformanceRecordSchema = createInsertSchema(
     shippingCarrier: z.string().optional().nullable(),
     shippedDate: z.string().optional().nullable(),
     customerNotified: z.boolean().optional().default(false),
+    containmentAction: z.string().optional().nullable(),
+    containmentOwner: z.string().optional().nullable(),
+    containmentDueDate: z.string().optional().nullable(),
+    containmentCompletedAt: z.coerce.date().optional().nullable(),
+    rootCause: z.string().optional().nullable(),
+    rootCauseMethod: z.string().optional().nullable(),
+    correctiveAction: z.string().optional().nullable(),
+    preventiveAction: z.string().optional().nullable(),
+    capaRequired: z.boolean().optional().default(false),
+    capaId: z.string().uuid().optional().nullable(),
+    dispositionRationale: z.string().optional().nullable(),
+    dispositionApprovedByUserId: z.number().int().optional().nullable(),
+    dispositionApprovedByDisplayName: z.string().optional().nullable(),
+    dispositionApprovedAt: z.coerce.date().optional().nullable(),
+    effectivenessReview: z.string().optional().nullable(),
+    effectivenessStatus: z.enum(['not_started', 'pending_review', 'effective', 'ineffective']).optional().default('not_started'),
+    effectivenessReviewedByUserId: z.number().int().optional().nullable(),
+    effectivenessReviewedByDisplayName: z.string().optional().nullable(),
+    effectivenessReviewedAt: z.coerce.date().optional().nullable(),
+    recurrenceDetected: z.boolean().optional().default(false),
   });
 
 // Types for Module 8
@@ -4802,6 +4941,36 @@ export type InsertNonconformanceRecord = z.infer<
   typeof insertNonconformanceRecordSchema
 >;
 export type NonconformanceRecord = typeof nonconformanceRecords.$inferSelect;
+export const insertCapaRecordSchema = createInsertSchema(capaRecords)
+  .omit({ id: true, capaNumber: true, createdAt: true, updatedAt: true, closedAt: true })
+  .extend({
+    title: z.string().min(1, 'CAPA title is required'),
+    problemStatement: z.string().min(1, 'Problem statement is required'),
+    status: z.enum(['open', 'in_progress', 'effectiveness_review', 'closed', 'void']).default('open'),
+    effectivenessStatus: z.enum(['not_started', 'pending_review', 'effective', 'ineffective']).default('not_started'),
+    evidenceUrls: z.array(z.string()).optional().default([]),
+  });
+export type CapaRecord = typeof capaRecords.$inferSelect;
+export type InsertCapaRecord = z.infer<typeof insertCapaRecordSchema>;
+
+export const insertCalibrationAssetSchema = createInsertSchema(calibrationAssets)
+  .omit({ id: true, createdAt: true, updatedAt: true, lockedOutAt: true })
+  .extend({
+    assetTag: z.string().min(1, 'Asset tag is required'),
+    name: z.string().min(1, 'Asset name is required'),
+    status: z.enum(['active', 'due_soon', 'expired', 'locked_out', 'retired']).default('active'),
+  });
+export const insertCalibrationEventSchema = createInsertSchema(calibrationEvents)
+  .omit({ id: true, createdAt: true })
+  .extend({
+    assetId: z.string().uuid(),
+    eventDate: z.string().min(1, 'Event date is required'),
+    result: z.enum(['pass', 'fail', 'limited_use']).default('pass'),
+  });
+export type CalibrationAsset = typeof calibrationAssets.$inferSelect;
+export type InsertCalibrationAsset = z.infer<typeof insertCalibrationAssetSchema>;
+export type CalibrationEvent = typeof calibrationEvents.$inferSelect;
+export type InsertCalibrationEvent = z.infer<typeof insertCalibrationEventSchema>;
 export type InsertPdfDocument = z.infer<typeof insertPdfDocumentSchema>;
 export type PdfDocument = typeof pdfDocuments.$inferSelect;
 
@@ -5246,6 +5415,7 @@ export const routingOperations = pgTable('routing_operations', {
   expectedLeadDays: integer('expected_lead_days'),
   certificateRequired: boolean('certificate_required').default(false),
   receivingInspectionRequired: boolean('receiving_inspection_required').default(false),
+  requiredCalibrationAssetTags: text('required_calibration_asset_tags').array().notNull().default(sql`ARRAY[]::text[]`),
 
   instructionPack: jsonb('instruction_pack').default('{}'),
 

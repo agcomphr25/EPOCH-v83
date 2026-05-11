@@ -5,11 +5,31 @@ import {
   insertMaintenanceScheduleSchema,
   insertMaintenanceLogSchema,
 } from '@shared/schema';
+import { desc, eq, sql } from 'drizzle-orm';
 
+import { db } from '../../db';
+import {
+  capaRecords,
+  calibrationAssets,
+  calibrationEvents,
+  insertCapaRecordSchema,
+  insertCalibrationAssetSchema,
+  insertCalibrationEventSchema,
+} from '../../schema';
 import { storage } from '../../storage';
 import { requirePermission } from '../../middleware/requirePermission';
 
 const router = Router();
+
+async function nextCapaNumber(): Promise<string> {
+  const prefix = `CAPA-${new Date().getFullYear()}-`;
+  const [row] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(capaRecords)
+    .where(sql`${capaRecords.capaNumber} LIKE ${`${prefix}%`}`);
+
+  return `${prefix}${String(Number(row?.count ?? 0) + 1).padStart(4, '0')}`;
+}
 
 // Quality Control Definitions
 router.get('/definitions', async (req: Request, res: Response) => {
@@ -192,6 +212,135 @@ router.post('/maintenance/logs', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Create maintenance log error:', error);
     res.status(500).json({ error: 'Failed to create maintenance log' });
+  }
+});
+
+// Section 9 CAPA records
+router.get('/capa', async (_req: Request, res: Response) => {
+  try {
+    const records = await db
+      .select()
+      .from(capaRecords)
+      .orderBy(desc(capaRecords.createdAt));
+    res.json(records);
+  } catch (error) {
+    console.error('Get CAPA records error:', error);
+    res.status(500).json({ error: 'Failed to fetch CAPA records' });
+  }
+});
+
+router.post('/capa', requirePermission('quality.manage_capa'), async (req: Request, res: Response) => {
+  try {
+    const data = insertCapaRecordSchema.parse(req.body);
+    const capaNumber = await nextCapaNumber();
+    const [record] = await db
+      .insert(capaRecords)
+      .values({ ...data, capaNumber, updatedAt: new Date() })
+      .returning();
+    res.status(201).json(record);
+  } catch (error) {
+    console.error('Create CAPA record error:', error);
+    if (error instanceof Error) return res.status(400).json({ error: error.message });
+    res.status(500).json({ error: 'Failed to create CAPA record' });
+  }
+});
+
+router.put('/capa/:id', requirePermission('quality.manage_capa'), async (req: Request, res: Response) => {
+  try {
+    const updateData = {
+      ...req.body,
+      updatedAt: new Date(),
+      closedAt: req.body.status === 'closed' ? new Date() : req.body.closedAt ?? null,
+    };
+    const [record] = await db
+      .update(capaRecords)
+      .set(updateData)
+      .where(eq(capaRecords.id, req.params.id))
+      .returning();
+    if (!record) return res.status(404).json({ error: 'CAPA record not found' });
+    res.json(record);
+  } catch (error) {
+    console.error('Update CAPA record error:', error);
+    res.status(500).json({ error: 'Failed to update CAPA record' });
+  }
+});
+
+// Section 9 calibration asset, evidence, and lockout management
+router.get('/calibration/assets', async (_req: Request, res: Response) => {
+  try {
+    const assets = await db
+      .select()
+      .from(calibrationAssets)
+      .orderBy(calibrationAssets.assetTag);
+    res.json(assets);
+  } catch (error) {
+    console.error('Get calibration assets error:', error);
+    res.status(500).json({ error: 'Failed to fetch calibration assets' });
+  }
+});
+
+router.post('/calibration/assets', requirePermission('quality.manage_calibration'), async (req: Request, res: Response) => {
+  try {
+    const data = insertCalibrationAssetSchema.parse(req.body);
+    const [asset] = await db
+      .insert(calibrationAssets)
+      .values({ ...data, updatedAt: new Date() })
+      .returning();
+    res.status(201).json(asset);
+  } catch (error) {
+    console.error('Create calibration asset error:', error);
+    if (error instanceof Error) return res.status(400).json({ error: error.message });
+    res.status(500).json({ error: 'Failed to create calibration asset' });
+  }
+});
+
+router.put('/calibration/assets/:id', requirePermission('quality.manage_calibration'), async (req: Request, res: Response) => {
+  try {
+    const status = req.body.status;
+    const updateData = {
+      ...req.body,
+      lockedOutAt: status === 'locked_out' || status === 'expired' ? new Date() : null,
+      updatedAt: new Date(),
+    };
+    const [asset] = await db
+      .update(calibrationAssets)
+      .set(updateData)
+      .where(eq(calibrationAssets.id, req.params.id))
+      .returning();
+    if (!asset) return res.status(404).json({ error: 'Calibration asset not found' });
+    res.json(asset);
+  } catch (error) {
+    console.error('Update calibration asset error:', error);
+    res.status(500).json({ error: 'Failed to update calibration asset' });
+  }
+});
+
+router.post('/calibration/assets/:id/events', requirePermission('quality.manage_calibration'), async (req: Request, res: Response) => {
+  try {
+    const data = insertCalibrationEventSchema.parse({ ...req.body, assetId: req.params.id });
+    const [event] = await db
+      .insert(calibrationEvents)
+      .values(data)
+      .returning();
+
+    await db
+      .update(calibrationAssets)
+      .set({
+        lastCalibrationDate: data.eventDate,
+        calibrationDueDate: data.nextDueDate ?? null,
+        evidenceUrl: data.evidenceUrl ?? null,
+        status: data.result === 'pass' ? 'active' : 'locked_out',
+        lockoutReason: data.result === 'pass' ? null : `Calibration ${data.result}`,
+        lockedOutAt: data.result === 'pass' ? null : new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(calibrationAssets.id, req.params.id));
+
+    res.status(201).json(event);
+  } catch (error) {
+    console.error('Create calibration event error:', error);
+    if (error instanceof Error) return res.status(400).json({ error: error.message });
+    res.status(500).json({ error: 'Failed to create calibration event' });
   }
 });
 

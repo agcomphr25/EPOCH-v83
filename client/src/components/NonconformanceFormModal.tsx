@@ -144,6 +144,20 @@ export default function NonconformanceFormModal({
       zipCode: '',
       country: 'United States',
     },
+    containmentAction: '',
+    containmentOwner: '',
+    containmentDueDate: '',
+    containmentCompletedAt: '',
+    rootCause: '',
+    rootCauseMethod: '',
+    correctiveAction: '',
+    preventiveAction: '',
+    capaRequired: false,
+    dispositionRationale: '',
+    effectivenessReview: '',
+    effectivenessStatus: 'not_started',
+    effectivenessReviewedAt: '',
+    recurrenceDetected: false,
   });
 
   const [orderAddress, setOrderAddress] = useState<any>(null);
@@ -234,6 +248,20 @@ export default function NonconformanceFormModal({
           zipCode: '',
           country: 'United States',
         },
+        containmentAction: recordToEdit.containmentAction || '',
+        containmentOwner: recordToEdit.containmentOwner || '',
+        containmentDueDate: recordToEdit.containmentDueDate?.split('T')[0] || '',
+        containmentCompletedAt: recordToEdit.containmentCompletedAt?.split('T')[0] || '',
+        rootCause: recordToEdit.rootCause || '',
+        rootCauseMethod: recordToEdit.rootCauseMethod || '',
+        correctiveAction: recordToEdit.correctiveAction || '',
+        preventiveAction: recordToEdit.preventiveAction || '',
+        capaRequired: recordToEdit.capaRequired || false,
+        dispositionRationale: recordToEdit.dispositionRationale || '',
+        effectivenessReview: recordToEdit.effectivenessReview || '',
+        effectivenessStatus: recordToEdit.effectivenessStatus || 'not_started',
+        effectivenessReviewedAt: recordToEdit.effectivenessReviewedAt?.split('T')[0] || '',
+        recurrenceDetected: recordToEdit.recurrenceDetected || false,
       });
 
       // If editing and record has useOrderAddress set, fetch the order address
@@ -390,6 +418,26 @@ export default function NonconformanceFormModal({
         toast({
           title: 'Validation Error',
           description: 'No address found for the selected order. Please provide a manual address.',
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
+    if (form.status === 'Resolved') {
+      const missing = [
+        !form.containmentAction.trim() && 'containment action',
+        !form.rootCause.trim() && 'root cause',
+        !form.correctiveAction.trim() && 'corrective action',
+        !form.dispositionRationale.trim() && 'disposition rationale',
+        form.effectivenessStatus !== 'effective' && 'effective effectiveness review',
+        form.recurrenceDetected && !form.preventiveAction.trim() && 'preventive action',
+      ].filter(Boolean);
+
+      if (missing.length > 0) {
+        toast({
+          title: 'Closure Evidence Required',
+          description: `Resolved NCRs require ${missing.join(', ')}.`,
           variant: 'destructive',
         });
         return;
@@ -734,6 +782,142 @@ export default function NonconformanceFormModal({
                 <Label htmlFor="defect-no">No</Label>
               </div>
             </RadioGroup>
+          </div>
+
+          <div className="space-y-4 rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900">
+            <div>
+              <h3 className="font-semibold text-slate-900 dark:text-slate-100">Section 9 Quality Evidence</h3>
+              <p className="text-sm text-slate-600 dark:text-slate-400">
+                Containment, cause, action, disposition approval, and effectiveness closure.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Containment Owner</Label>
+                <Input
+                  value={form.containmentOwner}
+                  onChange={(e) => setForm({ ...form, containmentOwner: e.target.value })}
+                  placeholder="Owner"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Containment Due Date</Label>
+                <Input
+                  type="date"
+                  value={form.containmentDueDate}
+                  onChange={(e) => setForm({ ...form, containmentDueDate: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Containment Action</Label>
+              <Textarea
+                value={form.containmentAction}
+                onChange={(e) => setForm({ ...form, containmentAction: e.target.value })}
+                placeholder="Immediate action to isolate, hold, segregate, notify, or protect affected product..."
+                rows={3}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Root Cause Method</Label>
+                <Select
+                  value={form.rootCauseMethod || 'unspecified'}
+                  onValueChange={(value) => setForm({ ...form, rootCauseMethod: value === 'unspecified' ? '' : value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="unspecified">Unspecified</SelectItem>
+                    <SelectItem value="5 Whys">5 Whys</SelectItem>
+                    <SelectItem value="Fishbone">Fishbone</SelectItem>
+                    <SelectItem value="Process Audit">Process Audit</SelectItem>
+                    <SelectItem value="Supplier Investigation">Supplier Investigation</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Effectiveness Status</Label>
+                <Select
+                  value={form.effectivenessStatus}
+                  onValueChange={(value) => setForm({ ...form, effectivenessStatus: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="not_started">Not Started</SelectItem>
+                    <SelectItem value="pending_review">Pending Review</SelectItem>
+                    <SelectItem value="effective">Effective</SelectItem>
+                    <SelectItem value="ineffective">Ineffective</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Root Cause</Label>
+              <Textarea
+                value={form.rootCause}
+                onChange={(e) => setForm({ ...form, rootCause: e.target.value })}
+                placeholder="Verified cause, not just symptom..."
+                rows={3}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Corrective Action</Label>
+              <Textarea
+                value={form.correctiveAction}
+                onChange={(e) => setForm({ ...form, correctiveAction: e.target.value })}
+                placeholder="Action taken to correct the specific nonconformance..."
+                rows={3}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Preventive Action</Label>
+              <Textarea
+                value={form.preventiveAction}
+                onChange={(e) => setForm({ ...form, preventiveAction: e.target.value })}
+                placeholder="Systemic action to prevent recurrence..."
+                rows={3}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Disposition Rationale</Label>
+              <Textarea
+                value={form.dispositionRationale}
+                onChange={(e) => setForm({ ...form, dispositionRationale: e.target.value })}
+                placeholder="Why this disposition is acceptable for the part, customer, and contract requirements..."
+                rows={3}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Effectiveness Review</Label>
+              <Textarea
+                value={form.effectivenessReview}
+                onChange={(e) => setForm({ ...form, effectivenessReview: e.target.value })}
+                placeholder="Evidence that the action worked, recurrence check result, and closure notes..."
+                rows={3}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="capaRequired"
+                  checked={form.capaRequired}
+                  onCheckedChange={(checked) => setForm({ ...form, capaRequired: checked === true })}
+                />
+                <Label htmlFor="capaRequired">CAPA required</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="recurrenceDetected"
+                  checked={form.recurrenceDetected}
+                  onCheckedChange={(checked) => setForm({ ...form, recurrenceDetected: checked === true })}
+                />
+                <Label htmlFor="recurrenceDetected">Recurrence detected</Label>
+              </div>
+            </div>
           </div>
 
           {/* Disposition */}

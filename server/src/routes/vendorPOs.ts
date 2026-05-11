@@ -34,6 +34,7 @@ function ensureVendorPOReadSchema(): Promise<void> {
           company_website text,
           company_logo_url text,
           company_logo_filename text,
+          company_logo_mimetype text,
           created_at timestamp DEFAULT now() NOT NULL,
           updated_at timestamp DEFAULT now() NOT NULL
         )
@@ -48,6 +49,7 @@ function ensureVendorPOReadSchema(): Promise<void> {
           ADD COLUMN IF NOT EXISTS company_website text,
           ADD COLUMN IF NOT EXISTS company_logo_url text,
           ADD COLUMN IF NOT EXISTS company_logo_filename text,
+          ADD COLUMN IF NOT EXISTS company_logo_mimetype text,
           ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now(),
           ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()
       `);
@@ -159,12 +161,45 @@ function ensureVendorPOReadSchema(): Promise<void> {
               ADD COLUMN IF NOT EXISTS purchase_unit_price real,
               ADD COLUMN IF NOT EXISTS purchase_unit text,
               ADD COLUMN IF NOT EXISTS pricing_unit text,
+              ADD COLUMN IF NOT EXISTS vendor_unit text,
               ADD COLUMN IF NOT EXISTS conversion_factor real,
-              ADD COLUMN IF NOT EXISTS customer_po_id text,
+              ADD COLUMN IF NOT EXISTS customer_po_id integer,
               ADD COLUMN IF NOT EXISTS project_id uuid,
               ADD COLUMN IF NOT EXISTS production_work_order_id uuid,
               ADD COLUMN IF NOT EXISTS charge_code_id integer,
+              ADD COLUMN IF NOT EXISTS other_identifier text,
+              ADD COLUMN IF NOT EXISTS historical_avg_price real,
+              ADD COLUMN IF NOT EXISTS price_variance_percent real,
               ADD COLUMN IF NOT EXISTS variance_flag boolean DEFAULT false;
+
+            IF EXISTS (
+              SELECT 1
+              FROM information_schema.columns
+              WHERE table_schema = 'public'
+                AND table_name = 'vendor_po_items'
+                AND column_name = 'customer_po_id'
+                AND data_type <> 'integer'
+            ) THEN
+              ALTER TABLE vendor_po_items
+                ALTER COLUMN customer_po_id TYPE integer
+                USING CASE
+                  WHEN customer_po_id::text ~ '^[0-9]+$' THEN customer_po_id::integer
+                  ELSE NULL
+                END;
+            END IF;
+
+            IF EXISTS (
+              SELECT 1
+              FROM information_schema.columns
+              WHERE table_schema = 'public'
+                AND table_name = 'vendor_po_items'
+                AND column_name = 'received_quantity'
+                AND data_type = 'integer'
+            ) THEN
+              ALTER TABLE vendor_po_items
+                ALTER COLUMN received_quantity TYPE real
+                USING received_quantity::real;
+            END IF;
           END IF;
         END $$;
       `);

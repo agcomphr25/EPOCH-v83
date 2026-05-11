@@ -1,7 +1,18 @@
 import { useMemo, useState } from 'react';
 import { useLocation } from 'wouter';
-import { useQuery } from '@tanstack/react-query';
-import { ClipboardList, ExternalLink, Loader2, Search, Wand2 } from 'lucide-react';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { apiRequest, queryClient } from '@/lib/queryClient';
+import { useToast } from '@/hooks/use-toast';
+import { Plus } from 'lucide-react';
+import {
+  AlertTriangle,
+  ClipboardList,
+  ExternalLink,
+  LayoutDashboard,
+  Loader2,
+  Search,
+  Wand2,
+} from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,19 +26,50 @@ import {
   TableRow,
 } from '@/components/ui/table';
 
+type WizardStepData = Record<string, unknown>;
+type WizardApprovalRecord = { role: string; decision: string };
+type WizardDataShape = {
+  [key: `step${number}`]: WizardStepData | undefined;
+  approvals?: WizardApprovalRecord[];
+  __meta?: { lastEditedBy?: string; lastEditedAt?: string };
+};
+
 type ProductionWorkOrderRow = {
   id: string;
   workOrderNumber: string;
   projectId: string | null;
   projectName: string | null;
   projectCode: string | null;
+  projectStage: string | null;
+  customerName: string | null;
   poNumber: string | null;
   partNumber: string | null;
   description: string | null;
   status: string;
   wadStatus: string | null;
+  wizardData: WizardDataShape | null;
   dueDate: string | null;
   updatedAt: string | null;
+};
+
+// Server payload for GET /production/wad-status — used when the user toggles the
+// "Missing WAD" filter so projects with NO Production Work Order at all (which the
+// PWO-anchored /production endpoint cannot return) still appear in the same backlog.
+type WadStatusRow = {
+  projectId: string;
+  projectCode: string | null;
+  projectName: string | null;
+  customerName: string | null;
+  currentStage: string | null;
+  poNumber: string | null;
+  pwoCount: number;
+  wadStatus: 'NONE' | 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED';
+  gateSatisfied: boolean;
+  latestPwoId: string | null;
+  latestWorkOrderNumber: string | null;
+  percentComplete: number;
+  lastEditedAt: string | null;
+  lastEditedBy: string | null;
 };
 
 const wadStatusColors: Record<string, string> = {
@@ -45,15 +87,82 @@ const statusColors: Record<string, string> = {
   CLOSED: 'bg-gray-200 text-gray-600',
 };
 
+const STEP_KEYS = ['step1','step2','step3','step4','step5','step6','step7','step8','step9','step10'] as const;
+
+function calcPercent(wd: WizardDataShape | null | undefined): number {
+  if (!wd || typeof wd !== 'object') return 0;
+  const filled = STEP_KEYS.filter((k) => {
+    const step = wd[k];
+    return step != null && Object.keys(step).length > 0;
+  }).length;
+  const approvalsCount = Array.isArray(wd.approvals) ? wd.approvals.length : 0;
+  const approvalsCard = approvalsCount > 0 ? 1 : 0;
+  const finalCard = approvalsCount >= 4 ? 1 : 0;
+  return Math.round(((filled + approvalsCard + finalCard) / 12) * 100);
+}
+
+function fmtEditedAt(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '—';
+    return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  } catch { return '—'; }
+}
+
 export default function WADWizardLauncherPage() {
   const [, navigate] = useLocation();
+  const { toast } = useToast();
   const initialSearch = new URLSearchParams(window.location.search).get('search') ?? '';
+  const initialMissing = new URLSearchParams(window.location.search).get('missingWad') === '1';
   const [search, setSearch] = useState(initialSearch);
+  const [missingOnly, setMissingOnly] = useState(initialMissing);
 
+  const params = new URLSearchParams();
+  if (search.trim()) params.set('search', search.trim());
+  if (missingOnly) params.set('missingWad', '1');
+  const qs = params.toString();
+
+  // Use the default query fn (auth headers + 401/403 recovery in queryClient.ts)
+  // by encoding query string into the URL portion of the queryKey.
+  const productionUrl = `/api/work-orders/production${qs ? `?${qs}` : ''}`;
   const { data: workOrders = [], isLoading, isError, error } = useQuery<ProductionWorkOrderRow[]>({
-    queryKey: ['/api/work-orders/production'],
+    queryKey: [productionUrl],
   });
 
+  // When missing-WAD is on, also pull the full WAD Status list so projects with
+  // NO Production Work Order yet appear as synthetic rows. The "Author WAD"
+  // action calls ensure-for-project to create the PWO and opens the wizard.
+  const { data: allWadStatus = [] } = useQuery<WadStatusRow[]>({
+    queryKey: ['/api/work-orders/production/wad-status'],
+    enabled: missingOnly,
+  });
+  // "Zero-PWO / not-yet-released" backlog: any project whose WAD gate is not
+  // satisfied (no APPROVED+RELEASED PWO). Zero-PWO projects fall in here
+  // automatically because their aggregate wadStatus is 'NONE'.
+  const zeroPwoProjects = useMemo(
+    () => allWadStatus.filter((r) => !r.gateSatisfied && r.pwoCount === 0),
+    [allWadStatus]
+  );
+
+  const ensurePwoMutation = useMutation({
+    mutationFn: async (projectId: string) => {
+      return apiRequest(`/api/work-orders/production/ensure-for-project/${projectId}`, { method: 'POST' });
+    },
+    onSuccess: (result: { workOrder: { id: string }; created: boolean }) => {
+      toast({
+        title: result.created ? 'Production Work Order created' : 'Existing PWO found',
+        description: 'Opening the WAD Wizard…',
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/work-orders/production'] });
+      navigate(`/work-orders/${result.workOrder.id}/wizard`);
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Failed to create PWO', description: err.message, variant: 'destructive' });
+    },
+  });
+
+  // Local fallback filter so users can still narrow client-side without a round trip.
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return workOrders;
@@ -62,6 +171,7 @@ export default function WADWizardLauncherPage() {
         wo.workOrderNumber?.toLowerCase().includes(q) ||
         wo.projectName?.toLowerCase().includes(q) ||
         wo.projectCode?.toLowerCase().includes(q) ||
+        wo.customerName?.toLowerCase().includes(q) ||
         wo.poNumber?.toLowerCase().includes(q) ||
         wo.partNumber?.toLowerCase().includes(q) ||
         wo.description?.toLowerCase().includes(q) ||
@@ -83,6 +193,14 @@ export default function WADWizardLauncherPage() {
             Pick a Production Work Order to author, edit, or review its Work Authorization Document.
           </p>
         </div>
+        <Button
+          variant="outline"
+          onClick={() => navigate('/wad-status')}
+          data-testid="button-open-wad-status"
+        >
+          <LayoutDashboard className="h-4 w-4 mr-2" />
+          WAD Status Dashboard
+        </Button>
       </div>
 
       <Card>
@@ -96,15 +214,37 @@ export default function WADWizardLauncherPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="relative max-w-md">
-            <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              data-testid="input-search-work-orders"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by Work Order #, project, PO #, part, or WAD status..."
-              className="pl-9"
-            />
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="relative flex-1 min-w-[260px] max-w-md">
+              <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                data-testid="input-search-work-orders"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search by WO #, project code/name, PO #, customer, or part…"
+                className="pl-9"
+              />
+            </div>
+            <Button
+              variant={missingOnly ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setMissingOnly((v) => !v)}
+              data-testid="button-filter-missing-wad"
+              className={missingOnly ? 'bg-amber-600 hover:bg-amber-700 text-white' : ''}
+            >
+              <AlertTriangle className="h-3.5 w-3.5 mr-1" />
+              {missingOnly ? 'Showing: Missing WAD (existing PWOs)' : 'Filter: Missing WAD'}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate('/wad-status')}
+              data-testid="button-jump-wad-status"
+              title="Includes projects in P2 Release / Production with no PWO yet"
+            >
+              <LayoutDashboard className="h-3.5 w-3.5 mr-1" />
+              Backlog incl. zero-PWO projects →
+            </Button>
           </div>
 
           {isLoading && (
@@ -120,38 +260,39 @@ export default function WADWizardLauncherPage() {
             </div>
           )}
 
-          {!isLoading && !isError && workOrders.length === 0 && (
+          {!isLoading && !isError && filtered.length === 0 && zeroPwoProjects.length === 0 && (
             <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
-              <p className="font-medium text-foreground mb-1">No production work orders yet</p>
+              <p className="font-medium text-foreground mb-1">No production work orders match your filters</p>
               <p>
-                A Production Work Order must exist before a WAD can be authored. Create one from a project, then return
-                here to launch the wizard.
+                {missingOnly
+                  ? 'No projects in P2 Release / Production are missing a WAD.'
+                  : 'Open the WAD Status Dashboard to find projects in production that still need a WAD authored.'}
               </p>
             </div>
           )}
 
-          {!isLoading && !isError && workOrders.length > 0 && filtered.length === 0 && (
-            <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-              No work orders match &ldquo;{search}&rdquo;.
-            </div>
-          )}
-
-          {!isLoading && !isError && filtered.length > 0 && (
+          {!isLoading && !isError && (filtered.length > 0 || zeroPwoProjects.length > 0) && (
             <div className="border rounded-md overflow-hidden">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Work Order</TableHead>
-                    <TableHead>Project / Order</TableHead>
+                    <TableHead>Project / Customer</TableHead>
                     <TableHead>Part</TableHead>
                     <TableHead>WO Status</TableHead>
                     <TableHead>WAD Status</TableHead>
+                    <TableHead className="w-24 text-center">Progress</TableHead>
+                    <TableHead className="hidden md:table-cell">Last Edited</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filtered.map((wo) => {
                     const wadStatus = wo.wadStatus ?? 'DRAFT';
+                    const pct = wadStatus === 'APPROVED' ? 100 : calcPercent(wo.wizardData);
+                    const meta = wo.wizardData?.__meta;
+                    const lastEditedAt = meta?.lastEditedAt ?? wo.updatedAt;
+                    const lastEditedBy = meta?.lastEditedBy ?? null;
                     return (
                       <TableRow key={wo.id} data-testid={`row-work-order-${wo.id}`}>
                         <TableCell className="font-medium" data-testid={`text-work-order-number-${wo.id}`}>
@@ -160,10 +301,11 @@ export default function WADWizardLauncherPage() {
                         <TableCell className="text-sm">
                           {wo.projectName || wo.projectCode ? (
                             <div className="flex flex-col">
-                              <span>{wo.projectName ?? wo.projectCode}</span>
-                              {wo.poNumber && (
-                                <span className="text-xs text-muted-foreground">PO {wo.poNumber}</span>
-                              )}
+                              <span>{wo.projectCode ? `${wo.projectCode} — ` : ''}{wo.projectName ?? ''}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {wo.customerName && <>{wo.customerName}{wo.poNumber ? ' · ' : ''}</>}
+                                {wo.poNumber && <>PO {wo.poNumber}</>}
+                              </span>
                             </div>
                           ) : (
                             <span className="text-muted-foreground">—</span>
@@ -185,6 +327,21 @@ export default function WADWizardLauncherPage() {
                             {wadStatus}
                           </Badge>
                         </TableCell>
+                        <TableCell className="text-center text-xs" data-testid={`text-wad-progress-${wo.id}`}>
+                          <div className="inline-flex flex-col items-center gap-1">
+                            <span className="font-medium">{pct}%</span>
+                            <div className="w-16 h-1.5 rounded-full bg-gray-200 overflow-hidden">
+                              <div
+                                className={`h-full ${pct === 100 ? 'bg-green-500' : 'bg-blue-500'}`}
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground hidden md:table-cell" data-testid={`text-last-edited-${wo.id}`}>
+                          {lastEditedBy ? <div className="font-medium text-foreground">{lastEditedBy}</div> : null}
+                          <div>{fmtEditedAt(lastEditedAt)}</div>
+                        </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
                             <Button
@@ -194,7 +351,7 @@ export default function WADWizardLauncherPage() {
                               data-testid={`button-view-work-order-${wo.id}`}
                             >
                               <ExternalLink className="h-3.5 w-3.5 mr-1" />
-                              View Work Order
+                              View
                             </Button>
                             <Button
                               size="sm"
@@ -202,13 +359,50 @@ export default function WADWizardLauncherPage() {
                               data-testid={`button-open-wizard-${wo.id}`}
                             >
                               <Wand2 className="h-3.5 w-3.5 mr-1" />
-                              Open Wizard
+                              {wadStatus === 'APPROVED' ? 'Review' : 'Open Wizard'}
                             </Button>
                           </div>
                         </TableCell>
                       </TableRow>
                     );
                   })}
+
+                  {/* Zero-PWO projects (only when "Missing WAD" filter is active). These
+                      projects are in P2 Release / Production but have no Production Work
+                      Order yet, so they cannot appear in the PWO-anchored list above.
+                      The "Author WAD" action calls ensure-for-project to create the PWO
+                      and jumps the user straight into the wizard. */}
+                  {missingOnly && zeroPwoProjects.map((p) => (
+                    <TableRow key={`zero-pwo-${p.projectId}`} data-testid={`row-zero-pwo-${p.projectId}`} className="bg-amber-50/40">
+                      <TableCell className="font-medium text-amber-900 italic">No PWO yet</TableCell>
+                      <TableCell className="text-sm">
+                        <div className="flex flex-col">
+                          <span>{p.projectCode ? `${p.projectCode} — ` : ''}{p.projectName ?? ''}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {p.customerName && <>{p.customerName}{p.poNumber ? ' · ' : ''}</>}
+                            {p.poNumber && <>PO {p.poNumber}</>}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">—</TableCell>
+                      <TableCell><Badge className="bg-amber-100 text-amber-800">{p.currentStage}</Badge></TableCell>
+                      <TableCell><Badge className="bg-red-100 text-red-700">NONE</Badge></TableCell>
+                      <TableCell className="text-center text-xs text-muted-foreground">0%</TableCell>
+                      <TableCell className="text-xs text-muted-foreground hidden md:table-cell">—</TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          size="sm"
+                          onClick={() => ensurePwoMutation.mutate(p.projectId)}
+                          disabled={ensurePwoMutation.isPending}
+                          data-testid={`button-author-wad-zero-pwo-${p.projectId}`}
+                          className="bg-amber-600 hover:bg-amber-700 text-white"
+                        >
+                          <Plus className="h-3.5 w-3.5 mr-1" />
+                          Author WAD
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
                 </TableBody>
               </Table>
             </div>

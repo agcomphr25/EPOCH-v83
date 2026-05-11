@@ -68,6 +68,8 @@ interface WorkBreakdownRow {
   requiredCerts: string;
   isTravelerStep: boolean;
   requiresQCSignoff: boolean;
+  seeded?: boolean;
+  seededFrom?: string;
 }
 
 interface ChargeCodeRow {
@@ -80,6 +82,8 @@ interface ChargeCodeRow {
   overtimeAllowed: boolean;
   operatorOverrideAllowed: boolean;
   overrunRule: 'WARN' | 'REQUIRE_APPROVAL' | 'HARD_STOP';
+  seeded?: boolean;
+  seededFrom?: string;
 }
 
 interface RiskEntry {
@@ -179,6 +183,14 @@ interface WizardData {
   };
   step10?: { documents: DocItem[] };
   approvals?: ApprovalRecord[];
+  __seedMeta?: {
+    seededAt: string;
+    sources: {
+      project: { id: string; code: string } | null;
+      po: { id: number; number: string } | null;
+      pwo: { id: string; totalBudgetHours: number; departmentBudgets: Record<string, number> };
+    };
+  };
 }
 
 interface WADWizardProps {
@@ -284,6 +296,184 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
   const handleNext = () => saveAndGoTo(step + 1);
   const handleBack = () => setStep(s => s - 1);
 
+  const getStepRequirements = useCallback((s: number, d: WizardData): string[] => {
+    const req: string[] = [];
+    switch (s) {
+      case 1: {
+        const v = d.step1;
+        if (!v?.partNumber?.trim()) req.push('Part number');
+        if (!v?.quantity || v.quantity <= 0) req.push('Quantity > 0');
+        if (!v?.shipDate) req.push('Ship date');
+        if (!v?.poReviewApproved) req.push('PO Review approved');
+        break;
+      }
+      case 2: {
+        const v = d.step2;
+        if (!v?.scopeDescription?.trim()) req.push('Scope description');
+        if (!v?.buildType?.trim()) req.push('Build type');
+        if (!v?.departments || v.departments.length === 0) req.push('At least one department');
+        break;
+      }
+      case 3: {
+        const rows = d.step3?.rows ?? [];
+        if (rows.length === 0) req.push('At least one work-breakdown row');
+        if (rows.some((r) => !r.operation?.trim())) req.push('Operation for every row');
+        if (rows.some((r) => !r.estimatedHours || r.estimatedHours <= 0)) req.push('Estimated hours > 0 for every row');
+        break;
+      }
+      case 4: {
+        const cc = d.step4?.chargeCodes ?? [];
+        if (cc.length === 0) req.push('Charge-code rows must match work breakdown');
+        if (cc.some((r) => !r.chargeCode?.trim())) req.push('Charge code for every operation');
+        if (cc.some((r) => !r.budgetedHours || r.budgetedHours <= 0)) req.push('Budgeted hours > 0 for every operation');
+        break;
+      }
+      case 5: {
+        const v = d.step5;
+        if (v == null) req.push('Confirm material authorization choices');
+        break;
+      }
+      case 6: {
+        const v = d.step6;
+        if (v == null) req.push('Confirm routing/traveler requirements');
+        else if (!v.travelerRequired && !v.finalQCOnly) req.push('Either traveler is required or Final-QC-only is acknowledged');
+        break;
+      }
+      case 7: {
+        const v = d.step7;
+        if (!v?.inspectionLevel?.trim()) req.push('Inspection level');
+        break;
+      }
+      case 8: {
+        const v = d.step8;
+        if (!v?.requiredCompletionDate) req.push('Required completion date');
+        if (!v?.priority?.trim()) req.push('Priority');
+        break;
+      }
+      case 9: {
+        const risks = d.step9?.risks ?? [];
+        if (risks.length === 0) req.push('At least one risk entry (or N/A row)');
+        break;
+      }
+      case 10: {
+        const docs = d.step10?.documents ?? [];
+        const pending = docs.filter((doc) => doc.status === 'PENDING');
+        if (docs.length === 0) req.push('Document checklist must be reviewed');
+        if (pending.length > 0) req.push(`Resolve ${pending.length} pending document(s) (Attached or Waived)`);
+        break;
+      }
+      case 11: {
+        const required = ['project_manager', 'production_manager', 'quality', 'finance'];
+        const approved = new Set(
+          (d.approvals ?? []).filter((a) => a.decision === 'APPROVED').map((a) => a.role)
+        );
+        const missing = required.filter((r) => !approved.has(r));
+        if (missing.length > 0) req.push(`Awaiting approvals: ${missing.join(', ')}`);
+        break;
+      }
+    }
+    return req;
+  }, []);
+
+  const currentStepRequirements = getStepRequirements(step, data);
+  const canAdvance = step >= 12 || currentStepRequirements.length === 0;
+
+  // Resolve the loaded context BEFORE any conditional return so all hooks below run on
+  // every render in a stable order (React hook ordering rule).
+  const wad = wizardCtx?.wad;
+  const project = wizardCtx?.project;
+  const po = wizardCtx?.po;
+  const wadStatus = wad?.wadStatus ?? 'DRAFT';
+  const approvals: ApprovalRecord[] = (data.approvals ?? []) as ApprovalRecord[];
+  const isBackfill = project?.currentStage === 'production';
+
+  // Prefill from canonical project/PO/PWO data when blank. Declared above the
+  // early `isLoading` return to keep hook order stable across renders.
+  useEffect(() => {
+    if (!wad) return;
+    const budgets = (wad.departmentBudgets && typeof wad.departmentBudgets === 'object'
+      ? (wad.departmentBudgets as Record<string, number>)
+      : {}) as Record<string, number>;
+    const budgetEntries = Object.entries(budgets);
+    const lineItemDescription: string | null = wad.description ?? null;
+    const totalBudget: number = wad.totalBudgetHours
+      ? Number(wad.totalBudgetHours) || 0
+      : budgetEntries.reduce((sum, [, h]) => sum + (Number(h) || 0), 0);
+    const defaultChargeCode = wad.defaultChargeCodeId ? String(wad.defaultChargeCodeId) : '';
+    setData((prev) => {
+      const next: WizardData = { ...prev };
+      if (!next.step2 || ((next.step2.scopeDescription ?? '') === '' && (next.step2.departments ?? []).length === 0)) {
+        next.step2 = {
+          scopeDescription: lineItemDescription ?? next.step2?.scopeDescription ?? '',
+          buildType: next.step2?.buildType ?? '',
+          deliverables: next.step2?.deliverables ?? '',
+          departments: budgetEntries.length > 0
+            ? budgetEntries.map(([k]) => k)
+            : (next.step2?.departments ?? []),
+        };
+      }
+      if ((!next.step3 || (next.step3.rows ?? []).length === 0) && budgetEntries.length > 0) {
+        next.step3 = {
+          rows: budgetEntries.map(([dept, hrs]) => ({
+            department: dept,
+            operation: lineItemDescription ?? '',
+            responsibleLead: '',
+            estimatedHours: typeof hrs === 'number' ? hrs : Number(hrs) || 0,
+            requiredCerts: '',
+            isTravelerStep: false,
+            requiresQCSignoff: false,
+            seeded: true,
+            seededFrom: 'PWO budget + PO line item',
+          })),
+        };
+      }
+      const wbRows = next.step3?.rows ?? [];
+      if ((!next.step4 || (next.step4.chargeCodes ?? []).length === 0) && wbRows.length > 0) {
+        next.step4 = {
+          chargeCodes: wbRows.map((r) => ({
+            department: r.department,
+            operation: r.operation,
+            chargeCode: defaultChargeCode,
+            laborCategory: '',
+            classification: 'DIRECT' as const,
+            budgetedHours: r.estimatedHours,
+            overtimeAllowed: false,
+            operatorOverrideAllowed: false,
+            overrunRule: 'WARN' as const,
+            seeded: true,
+            seededFrom: defaultChargeCode
+              ? 'Project default charge code + PWO budget'
+              : 'PWO budget',
+          })),
+        };
+      }
+      if ((!next.step8 || !next.step8.requiredCompletionDate) && (wad.dueDate || project?.targetShipDate)) {
+        next.step8 = {
+          authorizedStartDate: next.step8?.authorizedStartDate ?? '',
+          requiredCompletionDate: next.step8?.requiredCompletionDate
+            ?? (wad.dueDate ?? project?.targetShipDate ?? ''),
+          deptDueDates: next.step8?.deptDueDates ?? {},
+          priority: next.step8?.priority ?? '',
+          dailyTargetQty: next.step8?.dailyTargetQty ?? Math.max(1, Math.ceil((wad.quantity ?? 1) / 30)),
+          capacityRisk: next.step8?.capacityRisk ?? '',
+          bottleneckDepartment: next.step8?.bottleneckDepartment ?? '',
+        };
+      }
+      const meta = next.__seedMeta;
+      if (!meta && (budgetEntries.length > 0 || lineItemDescription)) {
+        next.__seedMeta = {
+          seededAt: new Date().toISOString(),
+          sources: {
+            project: project ? { id: project.id as string, code: project.projectCode as string } : null,
+            po: po ? { id: po.id as number, number: po.poNumber as string } : null,
+            pwo: { id: wad.id as string, totalBudgetHours: totalBudget, departmentBudgets: budgets },
+          },
+        };
+      }
+      return next;
+    });
+  }, [wad?.id]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -292,21 +482,39 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
     );
   }
 
-  const wad = wizardCtx?.wad;
-  const project = wizardCtx?.project;
-  const po = wizardCtx?.po;
-  const wadStatus = wad?.wadStatus ?? 'DRAFT';
-  const approvals: ApprovalRecord[] = (data.approvals ?? []) as ApprovalRecord[];
+  // Progress: 10 step cards + approvals card + final review card = 12 cards.
+  const STEP_KEYS = ['step1','step2','step3','step4','step5','step6','step7','step8','step9','step10'] as const;
+  type StepKey = typeof STEP_KEYS[number];
+  const stepBag = data as Partial<Record<StepKey, Record<string, unknown> | null | undefined>>;
+  const stepCardsFilled = STEP_KEYS.filter((k) => {
+    const v = stepBag[k];
+    return v != null && typeof v === 'object' && Object.keys(v).length > 0;
+  }).length;
+  const approvalsCard = approvals.length > 0 ? 1 : 0;
+  const finalCard = wadStatus === 'APPROVED' ? 1 : 0;
+  const percentComplete = wadStatus === 'APPROVED'
+    ? 100
+    : Math.round(((stepCardsFilled + approvalsCard + finalCard) / 12) * 100);
 
   return (
     <div className="max-w-5xl mx-auto space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h1 className="text-xl font-bold">WAD Wizard — {wad?.workOrderNumber}</h1>
-          <p className="text-sm text-muted-foreground">{project?.projectName ?? ''}</p>
+          <p className="text-sm text-muted-foreground">
+            {project?.projectName ?? ''}
+            {project?.projectCode && <span className="ml-1">· {project.projectCode}</span>}
+          </p>
         </div>
         <div className="flex items-center gap-2">
+          {isBackfill && wadStatus !== 'APPROVED' && (
+            <Badge className="bg-amber-100 text-amber-800 border border-amber-300" data-testid="badge-backfill-mode">
+              BACKFILL — already in production
+            </Badge>
+          )}
+          <Badge variant="outline" data-testid="badge-step-of-twelve">Step {step} of 12</Badge>
+          <Badge variant="outline" data-testid="badge-percent-complete">{percentComplete}%</Badge>
           <Badge className={
             wadStatus === 'APPROVED' ? 'bg-green-100 text-green-800' :
             wadStatus === 'PENDING_APPROVAL' ? 'bg-yellow-100 text-yellow-800' :
@@ -317,6 +525,16 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
           <Button variant="outline" onClick={onClose}>Close</Button>
         </div>
       </div>
+      {isBackfill && wadStatus !== 'APPROVED' && (
+        <Alert className="border-amber-300 bg-amber-50">
+          <AlertTriangle className="h-4 w-4 text-amber-700" />
+          <AlertDescription className="text-amber-900 text-sm">
+            This project is already in <strong>production</strong>. Authoring this WAD is a permitted
+            backfill — approving it will record a <code>wad_backfill</code> entry in the audit ledger and
+            flip the WAD gate without changing the project stage.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Step progress indicator */}
       <div className="overflow-x-auto">
@@ -360,6 +578,24 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
             {(() => { const Icon = STEPS[step - 1].icon; return <Icon className="h-4 w-4" />; })()}
             Step {step}: {STEPS[step - 1].title}
           </CardTitle>
+          {currentStepRequirements.length > 0 && step < 12 && (
+            <Alert className="mt-2 border-amber-300 bg-amber-50" data-testid={`alert-step-requirements-${step}`}>
+              <AlertCircle className="h-4 w-4 text-amber-600" />
+              <AlertDescription className="text-xs">
+                <span className="font-semibold text-amber-800">Required to advance:</span>
+                <ul className="list-disc list-inside mt-1 space-y-0.5 text-amber-900">
+                  {currentStepRequirements.map((r, i) => (
+                    <li key={i} data-testid={`text-step-req-${step}-${i}`}>{r}</li>
+                  ))}
+                </ul>
+              </AlertDescription>
+            </Alert>
+          )}
+          {currentStepRequirements.length === 0 && step < 12 && (
+            <p className="text-xs text-emerald-700 mt-2 flex items-center gap-1" data-testid={`text-step-ready-${step}`}>
+              <Check className="h-3 w-3" /> All requirements met — you may continue.
+            </p>
+          )}
         </CardHeader>
         <CardContent>
           {/* ── Step 1: Contract Context ─────────────────────────────── */}
@@ -453,8 +689,17 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
               wad={wad}
               approvals={approvals}
               onApprove={async () => {
-                await saveMutation.mutateAsync({ wizardData: data, wadStatus: 'APPROVED' });
-                toast({ title: 'WAD Approved', description: 'WAD status set to APPROVED.' });
+                // Persist the latest wizardData. The actual APPROVED transition happens
+                // server-side in POST /wizard/approve once all four required slots are
+                // signed (Step 11). PATCH is intentionally not allowed to set APPROVED.
+                await saveMutation.mutateAsync({ wizardData: data });
+                const allFour = approvals.filter((a) => a.decision === 'APPROVED').length >= 4;
+                toast({
+                  title: allFour ? 'WAD Approved' : 'Final review saved',
+                  description: allFour
+                    ? 'All required approvals are recorded — WAD has been promoted to APPROVED on the server.'
+                    : 'Collect all four required slot approvals on Step 11 to promote this WAD to APPROVED.',
+                });
                 queryClient.invalidateQueries({ queryKey: ['/api/work-orders', wadId] });
               }}
               isSaving={saveMutation.isPending}
@@ -482,7 +727,12 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
             Save Draft
           </Button>
           {step < 12 && (
-            <Button onClick={handleNext} disabled={saving || saveMutation.isPending}>
+            <Button
+              onClick={handleNext}
+              disabled={saving || saveMutation.isPending || !canAdvance}
+              title={!canAdvance ? `Complete: ${currentStepRequirements.join(', ')}` : undefined}
+              data-testid="button-next-step"
+            >
               {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
               Next <ChevronRight className="h-4 w-4 ml-1" />
             </Button>
@@ -710,7 +960,7 @@ function Step3WorkBreakdown({ departments, data, onChange }: {
   useEffect(() => { setRows(ensureRows()); }, [departments]);
 
   const setRow = (idx: number, patch: Partial<WorkBreakdownRow>) => {
-    const next = rows.map((r, i) => i === idx ? { ...r, ...patch } : r);
+    const next = rows.map((r, i) => i === idx ? { ...r, ...patch, seeded: false, seededFrom: undefined } : r);
     setRows(next);
     onChange({ rows: next });
   };
@@ -745,7 +995,21 @@ function Step3WorkBreakdown({ departments, data, onChange }: {
           <TableBody>
             {rows.map((row, idx) => (
               <TableRow key={row.department}>
-                <TableCell className="font-medium text-sm">{deptLabels[row.department] ?? row.department}</TableCell>
+                <TableCell className="font-medium text-sm">
+                  <div className="flex items-center gap-1.5">
+                    {deptLabels[row.department] ?? row.department}
+                    {row.seeded && (
+                      <Badge
+                        variant="outline"
+                        className="text-[9px] border-blue-400 text-blue-700 px-1 py-0"
+                        title={row.seededFrom ?? 'Seeded from project data'}
+                        data-testid={`badge-seeded-wb-${row.department}`}
+                      >
+                        Seeded
+                      </Badge>
+                    )}
+                  </div>
+                </TableCell>
                 <TableCell>
                   <Input
                     value={row.operation}
@@ -833,7 +1097,7 @@ function Step4ChargeCodes({ rows: wbRows, data, onChange }: {
   }, [wbRows]);
 
   const setRow = (idx: number, patch: Partial<ChargeCodeRow>) => {
-    const next = rows.map((r, i) => i === idx ? { ...r, ...patch } : r);
+    const next = rows.map((r, i) => i === idx ? { ...r, ...patch, seeded: false, seededFrom: undefined } : r);
     setRows(next);
     onChange({ chargeCodes: next });
   };
@@ -856,9 +1120,19 @@ function Step4ChargeCodes({ rows: wbRows, data, onChange }: {
         {rows.map((row, idx) => (
           <Card key={idx} className="p-3">
             <div className="flex items-center justify-between mb-3">
-              <div>
+              <div className="flex items-center gap-2">
                 <span className="font-medium text-sm">{deptLabels[row.department] ?? row.department}</span>
-                {row.operation && <span className="text-xs text-muted-foreground ml-2">— {row.operation}</span>}
+                {row.operation && <span className="text-xs text-muted-foreground">— {row.operation}</span>}
+                {row.seeded && (
+                  <Badge
+                    variant="outline"
+                    className="text-[9px] border-blue-400 text-blue-700 px-1 py-0"
+                    title={row.seededFrom ?? 'Seeded from project data'}
+                    data-testid={`badge-seeded-cc-${row.department}`}
+                  >
+                    Seeded
+                  </Badge>
+                )}
               </div>
               <Badge variant="outline" className="text-xs">{row.classification}</Badge>
             </div>

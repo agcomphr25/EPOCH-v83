@@ -13,6 +13,7 @@ import {
   employees,
   projects,
   p2PurchaseOrders,
+  p2PurchaseOrderItems,
   insertWorkOrderSchema,
   insertWorkOrderPartSchema,
   insertWorkOrderAttachmentSchema,
@@ -30,7 +31,8 @@ import {
   type LaborBudgetOverride,
   type ProductionControlTemplate,
 } from '../../schema';
-import { eq, desc, and, sql, inArray } from 'drizzle-orm';
+import { eq, desc, and, or, sql, inArray, ilike, type SQL } from 'drizzle-orm';
+import { recordAuditEvent } from '../services/auditLedgerService';
 import { z } from 'zod';
 import { storage } from '../../storage';
 import { authenticateToken } from '../../middleware/auth';
@@ -38,6 +40,7 @@ import { requirePermission } from '../../middleware/requirePermission';
 import { requireScopedCapability, ScopedForbiddenError } from '../permissions';
 import { evaluateWorkOrderLaborStatus } from '../helpers/laborBudgetHelper';
 import { evaluateWorkOrderReadiness } from '../lib/workOrderReadiness';
+import { ensureProjectHasWADFromCanonicalSources } from '../lib/wadHelper';
 import {
   getProductionControlRecommendation,
   type WadContext,
@@ -122,10 +125,42 @@ router.get('/', async (req: Request, res: Response) => {
 
 // ==================== PRODUCTION WORK ORDERS (WAD) — EPOCH v9 spine ====================
 
-// GET /production — list all production work orders (with project name) for WAD Wizard launcher
-router.get('/production', authenticateToken, requirePermission('work_orders.release'), async (_req: Request, res: Response) => {
+// GET /production — list all production work orders (with project + customer + PO context) for the WAD Wizard launcher.
+// Optional query params:
+//   ?search=<text>           — case-insensitive match against work order #, project code/name, customer, PO #, part #
+//   ?missingWad=true         — only return rows whose WAD has not yet reached APPROVED
+router.get('/production', authenticateToken, requirePermission('work_orders.release'), async (req: Request, res: Response) => {
   try {
-    const rows = await db
+    const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+    const missingWad = req.query.missingWad === 'true' || req.query.missingWad === '1';
+
+    const conditions: SQL[] = [];
+    if (search) {
+      const like = `%${search}%`;
+      const searchOr = or(
+        ilike(productionWorkOrders.workOrderNumber, like),
+        ilike(productionWorkOrders.partNumber, like),
+        ilike(productionWorkOrders.description, like),
+        ilike(projects.projectCode, like),
+        ilike(projects.projectName, like),
+        ilike(projects.customerNameSnapshot, like),
+        ilike(p2PurchaseOrders.poNumber, like),
+      );
+      if (searchOr) conditions.push(searchOr);
+    }
+    if (missingWad) {
+      // The WAD gate is satisfied only when wadStatus='APPROVED' AND
+      // status='RELEASED'. A row is "missing" if either condition fails
+      // (covers legacy rows that were marked APPROVED but never RELEASED,
+      // and rows still in DRAFT/PENDING_APPROVAL).
+      conditions.push(sql`(
+        ${productionWorkOrders.wadStatus} IS NULL
+        OR ${productionWorkOrders.wadStatus} <> 'APPROVED'
+        OR ${productionWorkOrders.status} <> 'RELEASED'
+      )`);
+    }
+
+    let q = db
       .select({
         id: productionWorkOrders.id,
         workOrderNumber: productionWorkOrders.workOrderNumber,
@@ -134,21 +169,201 @@ router.get('/production', authenticateToken, requirePermission('work_orders.rele
         description: productionWorkOrders.description,
         status: productionWorkOrders.status,
         wadStatus: productionWorkOrders.wadStatus,
+        wizardData: productionWorkOrders.wizardData,
         dueDate: productionWorkOrders.dueDate,
         updatedAt: productionWorkOrders.updatedAt,
         createdAt: productionWorkOrders.createdAt,
         projectName: projects.projectName,
         projectCode: projects.projectCode,
+        projectStage: projects.currentStage,
+        customerName: projects.customerNameSnapshot,
         poNumber: p2PurchaseOrders.poNumber,
       })
       .from(productionWorkOrders)
       .leftJoin(projects, eq(productionWorkOrders.projectId, projects.id))
       .leftJoin(p2PurchaseOrders, eq(projects.poId, p2PurchaseOrders.id))
-      .orderBy(desc(productionWorkOrders.createdAt));
+      .$dynamic();
+
+    if (conditions.length > 0) q = q.where(and(...conditions));
+    const rows = await q.orderBy(desc(productionWorkOrders.createdAt));
     return res.json(rows);
   } catch (err: any) {
     console.error('[ProductionWorkOrders] Error listing production work orders:', err);
     return res.status(500).json({ error: err?.message || 'Failed to list production work orders' });
+  }
+});
+
+// GET /production/wad-status — WAD backlog dashboard.
+// Returns one row per project in p2_release or production with the aggregated WAD status,
+// PWO count, latest PWO id, percent-complete (from wizardData), and last-edited info.
+router.get('/production/wad-status', authenticateToken, requirePermission('work_orders.release'), async (_req: Request, res: Response) => {
+  try {
+    const projRows = await db
+      .select({
+        id: projects.id,
+        projectCode: projects.projectCode,
+        projectName: projects.projectName,
+        customerName: projects.customerNameSnapshot,
+        currentStage: projects.currentStage,
+        poId: projects.poId,
+        poNumber: p2PurchaseOrders.poNumber,
+      })
+      .from(projects)
+      .leftJoin(p2PurchaseOrders, eq(projects.poId, p2PurchaseOrders.id))
+      .where(inArray(projects.currentStage, ['p2_release', 'production']));
+
+    const projectIds = projRows.map((p) => p.id);
+    const woRows = projectIds.length > 0
+      ? await db
+          .select({
+            id: productionWorkOrders.id,
+            projectId: productionWorkOrders.projectId,
+            workOrderNumber: productionWorkOrders.workOrderNumber,
+            wadStatus: productionWorkOrders.wadStatus,
+            status: productionWorkOrders.status,
+            wizardData: productionWorkOrders.wizardData,
+            updatedAt: productionWorkOrders.updatedAt,
+            createdAt: productionWorkOrders.createdAt,
+          })
+          .from(productionWorkOrders)
+          .where(inArray(productionWorkOrders.projectId, projectIds))
+          .orderBy(desc(productionWorkOrders.createdAt))
+      : [];
+
+    // Rank: APPROVED (3) > PENDING_APPROVAL (2) > DRAFT (1) > NONE (0)
+    type WadStatus = 'APPROVED' | 'PENDING_APPROVAL' | 'DRAFT' | null | undefined;
+    const rank = (s: WadStatus) =>
+      s === 'APPROVED' ? 3 : s === 'PENDING_APPROVAL' ? 2 : s === 'DRAFT' ? 1 : 0;
+    const STEP_KEYS = ['step1','step2','step3','step4','step5','step6','step7','step8','step9','step10'] as const;
+    type WizardData = {
+      approvals?: Array<{ role?: string; decision?: string }>;
+    } & Partial<Record<typeof STEP_KEYS[number], Record<string, unknown> | null>>;
+    const calcPercent = (wd: unknown): number => {
+      if (!wd || typeof wd !== 'object') return 0;
+      const data = wd as WizardData;
+      const filled = STEP_KEYS.filter((k) => {
+        const v = data[k];
+        return v != null && typeof v === 'object' && Object.keys(v).length > 0;
+      }).length;
+      const approvalsCount = Array.isArray(data.approvals) ? data.approvals.length : 0;
+      // 10 step-cards + 1 approvals card + 1 final review = 12
+      return Math.round(((filled + Math.min(approvalsCount, 1) + (approvalsCount >= 4 ? 1 : 0)) / 12) * 100);
+    };
+
+    const byProject = new Map<string, typeof woRows>();
+    for (const w of woRows) {
+      const arr = byProject.get(w.projectId) ?? [];
+      arr.push(w);
+      byProject.set(w.projectId, arr);
+    }
+
+    const result = projRows.map((p) => {
+      const wos = byProject.get(p.id) ?? [];
+      let aggregateStatus: 'NONE' | 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' = 'NONE';
+      let bestRank = 0;
+      let latestPwo: typeof woRows[number] | null = null;
+      let percentComplete = 0;
+      // Gate truth: APPROVED WAD + RELEASED PWO satisfies the project's WAD gate.
+      const gateSatisfied = wos.some((w) => w.wadStatus === 'APPROVED' && w.status === 'RELEASED');
+      for (const w of wos) {
+        const ws = w.wadStatus as WadStatus;
+        const r = rank(ws);
+        if (r > bestRank) {
+          bestRank = r;
+          aggregateStatus = ws === 'APPROVED' || ws === 'PENDING_APPROVAL' || ws === 'DRAFT' ? ws : 'DRAFT';
+          latestPwo = w;
+          percentComplete = ws === 'APPROVED' ? 100 : calcPercent(w.wizardData);
+        }
+      }
+      if (!latestPwo && wos.length > 0) {
+        latestPwo = wos[0]; // newest
+        percentComplete = calcPercent(latestPwo.wizardData);
+      }
+      // "Last edited" — prefer the editor identity captured in wizardData.__meta on
+      // each PATCH (see the PATCH /production/:id/wizard route). Fall back to the row's
+      // updated_at timestamp when no edit metadata exists yet.
+      const meta = (latestPwo?.wizardData as { __meta?: { lastEditedBy?: string; lastEditedAt?: string } } | null)?.__meta;
+      return {
+        projectId: p.id,
+        projectCode: p.projectCode,
+        projectName: p.projectName,
+        customerName: p.customerName,
+        currentStage: p.currentStage,
+        poNumber: p.poNumber,
+        pwoCount: wos.length,
+        wadStatus: aggregateStatus,
+        gateSatisfied,
+        latestPwoId: latestPwo?.id ?? null,
+        latestWorkOrderNumber: latestPwo?.workOrderNumber ?? null,
+        percentComplete,
+        lastEditedAt: meta?.lastEditedAt ?? (latestPwo?.updatedAt ? new Date(latestPwo.updatedAt).toISOString() : null),
+        lastEditedBy: meta?.lastEditedBy ?? null,
+      };
+    });
+
+    // Order: gate-unsatisfied first (the actual backlog), then by WAD rank,
+    // then projectCode for stable ordering.
+    const sortRank = (s: string) => (s === 'NONE' ? 0 : s === 'DRAFT' ? 1 : s === 'PENDING_APPROVAL' ? 2 : 3);
+    result.sort((a, b) =>
+      Number(a.gateSatisfied) - Number(b.gateSatisfied)
+      || sortRank(a.wadStatus) - sortRank(b.wadStatus)
+      || (a.projectCode ?? '').localeCompare(b.projectCode ?? '')
+    );
+    return res.json(result);
+  } catch (err: any) {
+    console.error('[ProductionWorkOrders] Error building WAD status dashboard:', err);
+    return res.status(500).json({ error: err?.message || 'Failed to load WAD status' });
+  }
+});
+
+// POST /production/ensure-for-project/:projectId — auto-create a PWO for a project if none exists.
+// Returns the existing or newly-created PWO so the client can route straight into the WAD Wizard.
+router.post('/production/ensure-for-project/:projectId', authenticateToken, requirePermission('work_orders.release'), async (req: Request, res: Response) => {
+  try {
+    const { projectId } = req.params;
+    if (!WAD_UUID_RE.test(projectId)) {
+      return res.status(400).json({ error: 'Invalid project ID format' });
+    }
+    const [project] = await db.select().from(projects).where(eq(projects.id, projectId)).limit(1);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    // Delegate to the canonical helper (same creation path as quote acceptance);
+    // serializes concurrent callers via a project-scoped advisory lock.
+    const { workOrder, created, seedData } = await ensureProjectHasWADFromCanonicalSources(projectId);
+
+    if (!created) {
+      return res.json({ workOrder, created: false });
+    }
+    const wo = workOrder;
+
+    const user = req.user;
+    await recordAuditEvent({
+      eventType: 'WAD_PWO_AUTO_CREATED',
+      subjectType: 'production_work_order',
+      subjectId: wo.id,
+      sourceService: 'workOrders.router',
+      actor: user
+        ? { id: user.id ?? null, username: user.username ?? user.displayName ?? null, role: user.role ?? null }
+        : undefined,
+      payload: {
+        projectId,
+        projectCode: project.projectCode,
+        currentStage: project.currentStage,
+        seededPartNumber: seedData?.partNumber ?? null,
+        seededQuantity: seedData?.quantity ?? null,
+        seededDueDate: seedData?.dueDate ?? null,
+        seededTotalBudgetHours: seedData?.totalBudgetHours ?? null,
+        seededDepartmentBudgets: seedData?.departmentBudgets ?? null,
+        sources: seedData?.sources ?? null,
+        trigger: 'wad_status_dashboard',
+      },
+    }).catch((e: Error) => console.warn('[Audit] WAD PWO auto-create log failed:', e?.message));
+
+    return res.status(201).json({ workOrder: wo, created: true });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to ensure PWO';
+    console.error('[ProductionWorkOrders] Error auto-creating PWO:', err);
+    return res.status(500).json({ error: message });
   }
 });
 
@@ -2010,117 +2225,251 @@ router.get('/production/:id/wizard', async (req: Request, res: Response) => {
   }
 });
 
-// PATCH /production/:id/wizard — save/update wizard data (draft save, any step)
-router.patch('/production/:id/wizard', async (req: Request, res: Response) => {
-  const { id } = req.params;
-  if (!WAD_UUID_RE.test(id)) return res.status(400).json({ error: 'Invalid WAD ID format' });
-  try {
-    const [wad] = await db.select().from(productionWorkOrders).where(eq(productionWorkOrders.id, id)).limit(1);
-    if (!wad) return res.status(404).json({ error: 'WAD not found' });
+// PATCH /production/:id/wizard — save/update wizard data (draft save, any step).
+// Auth: authenticated session + work_orders.release capability (same as the approve route).
+// IMPORTANT: this endpoint MUST NOT be a back-door to the APPROVED state. Transitioning a
+// WAD to APPROVED is only permitted through POST /production/:id/wizard/approve, which
+// enforces per-slot role authorization, records signed approvals in the immutable audit
+// ledger, and atomically flips PWO.status to RELEASED. Allowed PATCH transitions are
+// limited to DRAFT and PENDING_APPROVAL.
+router.patch(
+  '/production/:id/wizard',
+  authenticateToken,
+  requirePermission('work_orders.release'),
+  async (req: Request, res: Response) => {
+    const { id } = req.params;
+    if (!WAD_UUID_RE.test(id)) return res.status(400).json({ error: 'Invalid WAD ID format' });
 
-    if (wad.wadStatus === 'APPROVED') {
-      return res.status(409).json({ error: 'WAD is already approved and cannot be modified' });
+    const sessionUser = (req as Request & { user?: { id?: number | string | null; username?: string | null; displayName?: string | null; role?: string | null } }).user;
+    if (!sessionUser) return res.status(401).json({ error: 'Authentication required' });
+
+    try {
+      const [wad] = await db.select().from(productionWorkOrders).where(eq(productionWorkOrders.id, id)).limit(1);
+      if (!wad) return res.status(404).json({ error: 'WAD not found' });
+
+      if (wad.wadStatus === 'APPROVED') {
+        return res.status(409).json({ error: 'WAD is already approved and cannot be modified' });
+      }
+
+      const { wizardData, wadStatus } = req.body as { wizardData?: Record<string, unknown>; wadStatus?: string };
+
+      // Reject any attempt to flip status via PATCH — APPROVED must go through /wizard/approve.
+      if (wadStatus !== undefined && wadStatus !== 'DRAFT' && wadStatus !== 'PENDING_APPROVAL') {
+        return res.status(400).json({
+          error: 'wadStatus may only be set to DRAFT or PENDING_APPROVAL via PATCH. ' +
+            'Use POST /production/:id/wizard/approve to record approvals; APPROVED is granted server-side once all required slots are signed.',
+        });
+      }
+
+      // Capture editor identity inside wizardData.__meta so launcher/dashboard can show
+      // "last edited by … on …" without needing a separate column.
+      const sessionDisplayName = sessionUser.displayName ?? sessionUser.username ?? `user:${sessionUser.id ?? 'unknown'}`;
+      const editedAt = new Date().toISOString();
+      const existingMeta =
+        ((wad.wizardData as Record<string, unknown> | null)?.__meta as Record<string, unknown> | undefined) ?? {};
+
+      const mergedWizardData: Record<string, unknown> = {
+        ...(wad.wizardData as Record<string, unknown> ?? {}),
+        ...(wizardData ?? {}),
+        __meta: {
+          ...existingMeta,
+          lastEditedBy: sessionDisplayName,
+          lastEditedById: sessionUser.id ?? null,
+          lastEditedAt: editedAt,
+        },
+      };
+
+      const updatePayload: Partial<typeof productionWorkOrders.$inferInsert> = {
+        wizardData: mergedWizardData,
+        updatedAt: new Date(),
+      };
+      if (wadStatus === 'DRAFT' || wadStatus === 'PENDING_APPROVAL') {
+        updatePayload.wadStatus = wadStatus;
+      }
+
+      const [updated] = await db
+        .update(productionWorkOrders)
+        .set(updatePayload)
+        .where(eq(productionWorkOrders.id, id))
+        .returning();
+
+      return res.json({ wad: updated });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[WAD Wizard] PATCH error:', err);
+      return res.status(500).json({ error: 'Failed to save WAD wizard data', message: msg });
     }
+  },
+);
 
-    const { wizardData, wadStatus } = req.body as { wizardData?: Record<string, unknown>; wadStatus?: string };
+// POST /production/:id/wizard/approve — record an approval role decision.
+// Auth: an authenticated session is required, plus the work_orders.release capability
+// (the same gate used for the P2 release flow this approval implicitly satisfies).
+// Identity (userId / displayName / system role) is taken from req.user — never the body —
+// so an attacker cannot spoof the approver. The body's `role` field selects which WAD
+// approval slot is being filled (project_manager / production_manager / quality / finance);
+// the user must hold the system-level capability to fill it, enforced via the slot policy.
+const WAD_APPROVAL_SLOTS = ['project_manager', 'production_manager', 'quality', 'finance', 'engineering', 'compliance'] as const;
+type WadApprovalSlot = typeof WAD_APPROVAL_SLOTS[number];
 
-    const mergedWizardData = {
-      ...(wad.wizardData as Record<string, unknown> ?? {}),
-      ...(wizardData ?? {}),
-    };
+// Map each WAD slot to the system roles permitted to fill it. ADMIN/OWNER bypass via
+// requirePermission's superuser short-circuit, so they can always sign every slot.
+const WAD_SLOT_ALLOWED_ROLES: Record<WadApprovalSlot, ReadonlyArray<string>> = {
+  project_manager: ['PROJECT_MANAGER', 'ADMIN', 'OWNER'],
+  production_manager: ['PRODUCTION_MANAGER', 'MANAGER', 'SUPERVISOR', 'ADMIN', 'OWNER'],
+  quality: ['QUALITY', 'QC', 'MANAGER', 'ADMIN', 'OWNER'],
+  finance: ['FINANCE', 'ACCOUNTING', 'ADMIN', 'OWNER'],
+  engineering: ['ENGINEERING', 'ADMIN', 'OWNER'],
+  compliance: ['COMPLIANCE', 'ADMIN', 'OWNER'],
+};
 
-    const updatePayload: Partial<typeof productionWorkOrders.$inferSelect> = {
-      wizardData: mergedWizardData,
-      updatedAt: new Date(),
-    };
+router.post(
+  '/production/:id/wizard/approve',
+  authenticateToken,
+  requirePermission('work_orders.release'),
+  async (req: Request, res: Response) => {
+    const { id } = req.params;
+    if (!WAD_UUID_RE.test(id)) return res.status(400).json({ error: 'Invalid WAD ID format' });
 
-    if (wadStatus && ['DRAFT', 'PENDING_APPROVAL', 'APPROVED'].includes(wadStatus)) {
-      (updatePayload as any).wadStatus = wadStatus;
+    const sessionUser = (req as Request & { user?: { id?: number | string | null; username?: string | null; displayName?: string | null; role?: string | null } }).user;
+    if (!sessionUser) return res.status(401).json({ error: 'Authentication required' });
+
+    try {
+      const [wad] = await db.select().from(productionWorkOrders).where(eq(productionWorkOrders.id, id)).limit(1);
+      if (!wad) return res.status(404).json({ error: 'WAD not found' });
+
+      const body = req.body as { role?: string; decision?: 'APPROVED' | 'REJECTED'; comments?: string };
+      const role = body.role as WadApprovalSlot | undefined;
+      const decision = body.decision;
+      const comments = body.comments ?? null;
+
+      if (!role || !WAD_APPROVAL_SLOTS.includes(role)) {
+        return res.status(400).json({ error: `role must be one of: ${WAD_APPROVAL_SLOTS.join(', ')}` });
+      }
+      if (decision !== 'APPROVED' && decision !== 'REJECTED') {
+        return res.status(400).json({ error: 'decision must be APPROVED or REJECTED' });
+      }
+
+      // Slot authorization: verify the session user holds a system role permitted to fill this slot.
+      const sessionRole = (sessionUser.role ?? '').toUpperCase();
+      const allowedForSlot = WAD_SLOT_ALLOWED_ROLES[role];
+      const isSuperUser = sessionRole === 'ADMIN' || sessionRole === 'OWNER';
+      if (!isSuperUser && !allowedForSlot.includes(sessionRole)) {
+        return res.status(403).json({
+          error: `Your role (${sessionRole || 'unknown'}) is not permitted to sign the '${role}' WAD slot`,
+          allowedRoles: allowedForSlot,
+        });
+      }
+
+      // Server-derived identity — the body's userId/displayName are intentionally ignored.
+      const sessionUserIdRaw = sessionUser.id;
+      const sessionUserIdNumber = typeof sessionUserIdRaw === 'number'
+        ? sessionUserIdRaw
+        : (sessionUserIdRaw != null ? Number.parseInt(String(sessionUserIdRaw), 10) || null : null);
+      const sessionDisplayName = sessionUser.displayName ?? sessionUser.username ?? `user:${sessionUserIdRaw ?? 'unknown'}`;
+
+      const existingData = (wad.wizardData as Record<string, unknown> ?? {});
+      const existingApprovals = (existingData.approvals as unknown[] ?? []) as Array<{
+        role?: string; userId?: number | string | null; displayName?: string; decision?: string;
+        comments?: string | null; timestamp?: string;
+      }>;
+
+      const newApproval = {
+        role,
+        userId: sessionUserIdNumber,
+        displayName: sessionDisplayName,
+        decision,
+        comments,
+        timestamp: new Date().toISOString(),
+      };
+
+      const updatedApprovals = [
+        ...existingApprovals.filter((a) => a.role !== role),
+        newApproval,
+      ];
+
+      const updatedWizardData = { ...existingData, approvals: updatedApprovals };
+
+      // Determine required roles for full approval (the four required slots).
+      const requiredRoles: WadApprovalSlot[] = ['project_manager', 'production_manager', 'quality', 'finance'];
+      const allApproved = requiredRoles.every((r) =>
+        updatedApprovals.some((a) => a.role === r && a.decision === 'APPROVED')
+      );
+
+      const newWadStatus = allApproved ? 'APPROVED' : wad.wadStatus;
+
+      // Detect backfill: WAD reaching APPROVED while project is already in production.
+      let isBackfill = false;
+      let projectStage: string | null = null;
+      if (allApproved && wad.projectId) {
+        const [p] = await db.select({ currentStage: projects.currentStage })
+          .from(projects).where(eq(projects.id, wad.projectId)).limit(1);
+        projectStage = p?.currentStage ?? null;
+        isBackfill = projectStage === 'production';
+      }
+
+      // When the WAD reaches APPROVED, also flip the work order status to RELEASED
+      // so the project's WAD gate is satisfied without re-running the P2 release flow.
+      const updateSet: Partial<typeof productionWorkOrders.$inferInsert> = {
+        wizardData: updatedWizardData,
+        wadStatus: newWadStatus,
+        updatedAt: new Date(),
+      };
+      // Backfill gate contract: any non-terminal PWO must end up RELEASED on
+      // approval so the project's WAD gate flips ✓ regardless of where the PWO
+      // sat before approval (e.g. PLANNED, READY, IN_PROGRESS for backfill).
+      const TERMINAL_STATUSES = new Set(['COMPLETE', 'COMPLETED', 'CANCELLED', 'CANCELED', 'CLOSED']);
+      if (allApproved && wad.status !== 'RELEASED' && !TERMINAL_STATUSES.has(wad.status)) {
+        updateSet.status = 'RELEASED';
+      }
+
+      const [updated] = await db
+        .update(productionWorkOrders)
+        .set(updateSet)
+        .where(eq(productionWorkOrders.id, id))
+        .returning();
+
+      auditService.logEvent({
+        entityType: 'work_order',
+        entityId: id,
+        action: decision === 'APPROVED' ? 'WAD_APPROVAL_RECORDED' : 'WAD_REJECTION_RECORDED',
+        actor: { id: sessionUserIdNumber ?? 0, username: sessionDisplayName },
+        reason: comments ?? undefined,
+        meta: { role, decision, allApproved, backfill: isBackfill, sessionRole },
+      }).catch((e: Error) => console.warn('[Audit] WAD approval log failed:', e?.message));
+
+      if (allApproved) {
+        await recordAuditEvent({
+          eventType: isBackfill ? 'WAD_BACKFILL_APPROVED' : 'WAD_APPROVED',
+          subjectType: 'production_work_order',
+          subjectId: id,
+          sourceService: 'workOrders.router',
+          actor: { id: sessionUserIdNumber, username: sessionDisplayName, role: sessionRole || null },
+          reason: comments,
+          payload: {
+            projectId: wad.projectId,
+            workOrderNumber: wad.workOrderNumber,
+            projectStage,
+            backfill: isBackfill,
+            tag: isBackfill ? 'wad_backfill' : 'wad_release',
+            approvals: updatedApprovals.map((a) => ({
+              role: a.role,
+              decision: a.decision,
+              displayName: a.displayName,
+              timestamp: a.timestamp,
+            })),
+          },
+        }).catch((e: Error) => console.warn('[AuditLedger] WAD approval ledger write failed:', e?.message));
+      }
+
+      return res.json({ wad: updated, allApproved, backfill: isBackfill });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[WAD Wizard] approve error:', err);
+      return res.status(500).json({ error: 'Failed to record WAD approval', message: msg });
     }
-
-    const [updated] = await db
-      .update(productionWorkOrders)
-      .set(updatePayload as any)
-      .where(eq(productionWorkOrders.id, id))
-      .returning();
-
-    return res.json({ wad: updated });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error('[WAD Wizard] PATCH error:', err);
-    return res.status(500).json({ error: 'Failed to save WAD wizard data', message: msg });
-  }
-});
-
-// POST /production/:id/wizard/approve — record an approval role decision
-router.post('/production/:id/wizard/approve', async (req: Request, res: Response) => {
-  const { id } = req.params;
-  if (!WAD_UUID_RE.test(id)) return res.status(400).json({ error: 'Invalid WAD ID format' });
-  try {
-    const [wad] = await db.select().from(productionWorkOrders).where(eq(productionWorkOrders.id, id)).limit(1);
-    if (!wad) return res.status(404).json({ error: 'WAD not found' });
-
-    const { role, userId, displayName, decision, comments } = req.body as {
-      role: string;
-      userId?: string;
-      displayName: string;
-      decision: 'APPROVED' | 'REJECTED';
-      comments?: string;
-    };
-
-    if (!role || !displayName || !decision) {
-      return res.status(400).json({ error: 'role, displayName, and decision are required' });
-    }
-
-    const existingData = (wad.wizardData as Record<string, unknown> ?? {});
-    const existingApprovals = (existingData.approvals as unknown[] ?? []) as Record<string, unknown>[];
-
-    const newApproval = {
-      role,
-      userId: userId ?? null,
-      displayName,
-      decision,
-      comments: comments ?? null,
-      timestamp: new Date().toISOString(),
-    };
-
-    const updatedApprovals = [
-      ...existingApprovals.filter((a) => a.role !== role),
-      newApproval,
-    ];
-
-    const updatedWizardData = { ...existingData, approvals: updatedApprovals };
-
-    // Determine required roles for full approval
-    const requiredRoles = ['project_manager', 'production_manager', 'quality', 'finance'];
-    const allApproved = requiredRoles.every((r) =>
-      updatedApprovals.some((a) => a.role === r && a.decision === 'APPROVED')
-    );
-
-    const newWadStatus = allApproved ? 'APPROVED' : wad.wadStatus;
-
-    const [updated] = await db
-      .update(productionWorkOrders)
-      .set({ wizardData: updatedWizardData as any, wadStatus: newWadStatus, updatedAt: new Date() })
-      .where(eq(productionWorkOrders.id, id))
-      .returning();
-
-    auditService.logEvent({
-      entityType: 'work_order',
-      entityId: id,
-      action: decision === 'APPROVED' ? 'WAD_APPROVAL_RECORDED' : 'WAD_REJECTION_RECORDED',
-      actor: { id: userId ? parseInt(userId) || 0 : 0, username: displayName },
-      reason: comments,
-      meta: { role, decision, allApproved },
-    }).catch((e: Error) => console.warn('[Audit] WAD approval log failed:', e?.message));
-
-    return res.json({ wad: updated, allApproved });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error('[WAD Wizard] approve error:', err);
-    return res.status(500).json({ error: 'Failed to record WAD approval', message: msg });
-  }
-});
+  },
+);
 
 async function generateWorkOrderFromPM(scheduleId: number, assetId?: string, userId?: number): Promise<any> {
   try {

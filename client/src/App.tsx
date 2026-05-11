@@ -73,6 +73,7 @@ import WorkOrderDetailPage from './pages/WorkOrderDetailPage';
 import ProductionWorkOrderDetailPage from './pages/ProductionWorkOrderDetailPage';
 import WADWizardPage from './pages/WADWizardPage';
 import WADWizardLauncherPage from './pages/WADWizardLauncherPage';
+import WADStatusDashboard from './pages/WADStatusDashboard';
 import AssetsPage from './pages/AssetsPage';
 import AssetDashboardPage from './pages/AssetDashboardPage';
 import EmployeePortalPage from './pages/EmployeePortalPage';
@@ -821,6 +822,7 @@ function App() {
                     {(params) => <WorkOrderDetailPage params={params} />}
                   </Route>
                   <Route path="/wad-wizard" component={WADWizardLauncherPage} />
+                  <Route path="/wad-status" component={WADStatusDashboard} />
                   <Route path="/work-orders/:id/wizard">
                     {(params) => <WADWizardPage params={params} />}
                   </Route>

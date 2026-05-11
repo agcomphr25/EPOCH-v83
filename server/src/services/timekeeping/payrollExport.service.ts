@@ -943,6 +943,11 @@ export interface ImportTimeTrakGoGustoCsvInput {
   actor: AuditActor;
   supersedeReason?: string;
   sourceFileName?: string | null;
+  /**
+   * Test seam for readiness gating. Production import callers should not pass
+   * this; they always evaluate readiness from the transaction data source.
+   */
+  dataSourceOverride?: PayrollSnapshotDataSource;
 }
 
 function requireActorId(actor: AuditActor): number {
@@ -1178,6 +1183,9 @@ export async function importTimeTrakGoGustoCsvBatch(
   const rows = await resolveImportedRows(parsedRows);
 
   return await withSerializableRetry(async (tx) => {
+    const dataSource = input.dataSourceOverride ?? txDataSource(tx);
+    await assertPayrollExportReady(dataSource, input.periodStart, input.periodEnd);
+
     const prior = await tx
       .select()
       .from(payrollExportBatchesTable)

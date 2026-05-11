@@ -3702,6 +3702,17 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     }
   });
 
+  app.get('/api/p2/quote-po-reconciliations/latest', async (_req, res) => {
+    try {
+      const { getLatestQuotePoReconciliations } = await import('../services/quoteContractService');
+      const reconciliations = await getLatestQuotePoReconciliations();
+      res.json(reconciliations);
+    } catch (error) {
+      console.error('Get latest P2 quote reconciliations error:', error);
+      res.status(500).json({ error: 'Failed to fetch latest quote reconciliations' });
+    }
+  });
+
   app.get('/api/p2-purchase-orders/:id/quote-reconciliation', async (req, res) => {
     try {
       const poId = parseInt(req.params.id, 10);

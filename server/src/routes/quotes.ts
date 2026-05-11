@@ -509,7 +509,7 @@ router.post('/api/quotes/save', async (req: Request, res: Response) => {
 // Submit quote (change status to SENT and send email)
 router.post('/api/quotes/submit', async (req: Request, res: Response) => {
   try {
-    const { id, revisionLabel, exclusions, certRequirements } = req.body;
+    const { id, revisionLabel, exclusions, certRequirements, contractualClauses } = req.body;
 
     if (!id) {
       return res.status(400).json({ error: 'Quote ID is required' });
@@ -561,6 +561,7 @@ router.post('/api/quotes/submit', async (req: Request, res: Response) => {
       revisionLabel,
       exclusions,
       certRequirements,
+      contractualClauses,
     });
 
     res.json({

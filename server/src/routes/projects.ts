@@ -7,6 +7,7 @@ import { createEmployeeIdentitySnapshot } from '../../identity/userIdentity';
 import { validateProjectClosing, deriveClosingStatus } from '../lib/projectClosingValidation';
 import { ensureProjectHasWAD } from '../lib/wadHelper';
 import { resolveCustomersIntegerId } from '../lib/customerResolver';
+import { getQuoteContractReviewGate } from '../services/quoteContractService';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -602,6 +603,7 @@ router.post('/', async (req, res) => {
     
     const validatedData = validationResult.data;
     const { quoteId, customerNameSnapshot, ...projectFields } = validatedData;
+
     const nextCode = await storage.getNextProjectCode();
 
     // Resolve the integer FK to the master customers table from the text customerId.
@@ -1062,7 +1064,7 @@ router.patch('/:projectId/steps/:stepId/reopen', async (req, res) => {
 });
 
 // POST /api/projects/:id/release-to-p2 — P2 Release Gate endpoint
-// Three-way gate: PO Review + WAD + Preproduction must all pass
+// Release gate: PO Review + Contract Review + WAD + Preproduction must all pass
 // First call (pre-gate) → sets stage to p2_release and PO to ready_for_p2_release
 // Second call (staged) → sets stage to production and PO to in_production
 // Repeated calls once in production → 409 (idempotent-safe)
@@ -1119,8 +1121,12 @@ router.post('/:id/release-to-p2', async (req, res) => {
     const workOrders = await storage.getWorkOrdersByProject(id);
     const wadPassed = workOrders.some(wo => WAD_APPROVED_STATUSES.includes(wo.status));
 
+    const quoteStep = steps.find(s => s.stepType === 'quote');
+    const contractReviewGate = await getQuoteContractReviewGate(quoteStep?.linkedQuoteId ?? null, id);
+
     const gates = [
       { key: 'po_review', label: 'PO Review', passed: poReviewPassed },
+      contractReviewGate,
       { key: 'wad', label: 'WAD (Work Authorization Document)', passed: wadPassed },
       { key: 'preproduction', label: 'Preproduction', passed: preproductionPassed },
     ];
@@ -1217,8 +1223,12 @@ router.get('/:id/p2-gate-status', async (req, res) => {
     const workOrders = await storage.getWorkOrdersByProject(id);
     const wadPassed = workOrders.some(wo => WAD_APPROVED_STATUSES.includes(wo.status));
 
+    const quoteStep = steps.find(s => s.stepType === 'quote');
+    const contractReviewGate = await getQuoteContractReviewGate(quoteStep?.linkedQuoteId ?? null, id);
+
     const gates = [
       { key: 'po_review', label: 'PO Review', passed: poReviewPassed },
+      contractReviewGate,
       { key: 'wad', label: 'WAD (Work Authorization Document)', passed: wadPassed },
       { key: 'preproduction', label: 'Preproduction', passed: preproductionPassed },
     ];

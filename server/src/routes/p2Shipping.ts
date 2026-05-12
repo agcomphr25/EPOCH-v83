@@ -1193,9 +1193,19 @@ router.get('/shipments', async (req: Request, res: Response) => {
          l.shipped_at,
          l.created_at,
          ps.id AS packing_slip_id,
-         ps.packing_slip_number
+         ps.packing_slip_number,
+         inv.id AS invoice_id,
+         inv.invoice_number,
+         inv.status AS invoice_status
        FROM p2_lot_numbers l
        LEFT JOIN p2_packing_slips ps ON ps.lot_number_id = l.id
+       LEFT JOIN LATERAL (
+         SELECT id, invoice_number, status
+         FROM ar_invoices
+         WHERE packing_slip_id = ps.id OR lot_id = l.id
+         ORDER BY created_at DESC
+         LIMIT 1
+       ) inv ON true
        ORDER BY l.created_at DESC
        LIMIT 500`
     );

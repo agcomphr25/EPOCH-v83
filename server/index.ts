@@ -230,9 +230,12 @@ app.use((req, res, next) => {
 const port = parseInt(process.env.PORT || '5000', 10);
 const earlyServer = createServer(app);
 
-// Static SPA serving is registered after API routes are mounted. Serving the
-// React app during the early-listen route registration window lets the browser
-// fire authenticated API calls while the /api gate is still returning 503s.
+// Register production SPA static serving before API route registration.
+// registerRoutes installs route-level fallbacks; if the SPA handler is mounted
+// afterward, GET / can be swallowed by Express and return "Cannot GET /".
+if (app.get('env') !== 'development') {
+  serveStatic(app);
+}
 
 earlyServer.listen({ port, host: '0.0.0.0' }, () => {
   console.log(`Server started successfully`);
@@ -276,10 +279,6 @@ process.on('SIGINT',  () => gracefulShutdown('SIGINT'));
     console.log('✅ Routes registered — /api gate lifted');
 
     notificationManager.initialize(server);
-
-    if (app.get('env') !== 'development') {
-      serveStatic(app);
-    }
 
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
       const status = err.status || err.statusCode || 500;

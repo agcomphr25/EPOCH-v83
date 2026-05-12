@@ -27,7 +27,7 @@ import {
   laborEntryDraftsTable,
 } from "../../schema/timekeeping";
 import { employees, travelers } from "../../../schema";
-import { eq, and, gte, lte, asc, desc, isNull, inArray } from "drizzle-orm";
+import { eq, and, gte, lte, asc, desc, isNull, inArray, sql } from "drizzle-orm";
 
 /**
  * Minimal interface for a Drizzle transaction client (or the db itself).
@@ -274,6 +274,32 @@ export async function getOrCreateWeeklyTimesheet(
     .returning();
 
   return created!;
+}
+
+/**
+ * Recompute the weekly header total from the authoritative line rows.
+ * This keeps certification, review, and audit packet totals aligned with the
+ * actual daily allocation records.
+ */
+export async function recalculateTimesheetTotal(
+  timesheetId: number,
+  tx?: TxClient,
+): Promise<number> {
+  const client = tx ?? (db as unknown as TxClient);
+  const [row] = await client
+    .select({
+      total: sql<string>`COALESCE(SUM(${salariedTimesheetLinesTable.hours}), 0)`,
+    })
+    .from(salariedTimesheetLinesTable)
+    .where(eq(salariedTimesheetLinesTable.timesheetId, timesheetId));
+
+  const total = Number(row?.total ?? 0);
+  await client
+    .update(salariedTimesheetsTable)
+    .set({ totalActualHours: total })
+    .where(eq(salariedTimesheetsTable.id, timesheetId));
+
+  return total;
 }
 
 /**
@@ -546,6 +572,7 @@ export async function getSalariedTimesheetView(
   // Inject locked rows (idempotent — skips if already present)
   await injectHolidayLines(timesheet.id, weekStart, weekEnd);
   await injectApprovedPTO(timesheet.id, epochEmployeeId, weekStart, weekEnd);
+  const totalActualHours = await recalculateTimesheetTotal(timesheet.id);
 
   const lines = await db
     .select()
@@ -553,7 +580,7 @@ export async function getSalariedTimesheetView(
     .where(eq(salariedTimesheetLinesTable.timesheetId, timesheet.id))
     .orderBy(asc(salariedTimesheetLinesTable.date), asc(salariedTimesheetLinesTable.id));
 
-  return { timesheet, lines };
+  return { timesheet: { ...timesheet, totalActualHours }, lines };
 }
 
 /**
@@ -740,6 +767,8 @@ export async function addLine(
       source: "API",
     });
 
+    await recalculateTimesheetTotal(timesheetId, tx as unknown as TxClient);
+
     return line!;
   });
 }
@@ -838,6 +867,8 @@ export async function updateLine(
       source: "API",
     });
 
+    await recalculateTimesheetTotal(timesheetId, tx as unknown as TxClient);
+
     return updated!;
   });
 }
@@ -918,6 +949,8 @@ export async function deleteLine(
       },
       source: "API",
     });
+
+    await recalculateTimesheetTotal(timesheetId, tx as unknown as TxClient);
   });
 }
 

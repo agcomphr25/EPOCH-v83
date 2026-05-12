@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link } from 'wouter';
+import { useState, useEffect, useMemo } from 'react';
+import { Link, useLocation } from 'wouter';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
@@ -53,7 +53,9 @@ import {
   BookTemplate,
   GitBranch,
   AlertTriangle,
+  ScrollText,
 } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import PartRoutingWizard from '@/components/PartRoutingWizard';
 
 interface MaterialRequirement {
@@ -177,7 +179,23 @@ interface RoutingOperation {
   createdAt: string;
 }
 
+interface RoutingTravelerSummary {
+  id: string;
+  travelerNumber: string;
+  status: string;
+  partRoutingId: string | null;
+  createdAt: string;
+}
+
 const OPERATION_TYPES = ['SETUP', 'RUN', 'INSPECT', 'OSP', 'MATERIAL', 'QC'] as const;
+
+const TRAVELER_STATUS_STYLES: Record<string, string> = {
+  DRAFT: 'bg-gray-100 text-gray-700 border-gray-300',
+  IN_PROGRESS: 'bg-blue-100 text-blue-700 border-blue-300',
+  COMPLETED: 'bg-green-100 text-green-700 border-green-300',
+  BLOCKED: 'bg-red-100 text-red-700 border-red-300',
+  CANCELED: 'bg-gray-100 text-gray-500 border-gray-200',
+};
 
 const emptyNewOp = {
   stepNumber: 1,
@@ -191,10 +209,14 @@ const emptyNewOp = {
 };
 
 export default function PartRoutingManagement() {
+  const [, navigate] = useLocation();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterActive, setFilterActive] = useState<'all' | 'active' | 'inactive'>('all');
   const [showWizard, setShowWizard] = useState(false);
   const [editRouting, setEditRouting] = useState<PartRouting | null>(null);
+  const [generateTravelerRouting, setGenerateTravelerRouting] = useState<PartRouting | null>(null);
+  const [travelerWorkOrderId, setTravelerWorkOrderId] = useState('');
+  const [travelerQuantity, setTravelerQuantity] = useState(1);
   const [viewDialog, setViewDialog] = useState<{
     open: boolean;
     routing: PartRouting | null;
@@ -224,6 +246,72 @@ export default function PartRoutingManagement() {
   const { data: routings = [], isLoading } = useQuery<PartRouting[]>({
     queryKey: ['/api/part-routings'],
   });
+
+  // Fetch all travelers (used to show per-routing traveler counts/lists)
+  const { data: allTravelers = [] } = useQuery<RoutingTravelerSummary[]>({
+    queryKey: ['/api/travelers'],
+  });
+
+  const travelersByRouting = useMemo(() => {
+    const map = new Map<string, RoutingTravelerSummary[]>();
+    for (const t of allTravelers) {
+      if (!t.partRoutingId) continue;
+      const list = map.get(t.partRoutingId) || [];
+      list.push(t);
+      map.set(t.partRoutingId, list);
+    }
+    return map;
+  }, [allTravelers]);
+
+  // Auto-open the view dialog when navigated here with ?routingId=...
+  useEffect(() => {
+    if (!routings.length) return;
+    const params = new URLSearchParams(window.location.search);
+    const routingIdFromUrl = params.get('routingId');
+    if (routingIdFromUrl) {
+      const match = routings.find(r => r.id === routingIdFromUrl);
+      if (match) setViewDialog({ open: true, routing: match });
+    }
+  }, [routings]);
+
+  const generateTravelerMutation = useMutation({
+    mutationFn: async ({ routingId, workOrderId, quantity }: { routingId: string; workOrderId?: string; quantity: number }) => {
+      return apiRequest(`/api/travelers/from-routing/${routingId}`, {
+        method: 'POST',
+        body: JSON.stringify({
+          workOrderId: workOrderId || undefined,
+          quantity,
+          createdBy: 'system',
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      });
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/travelers'] });
+      const newId = data?.id || data?.traveler?.id;
+      setGenerateTravelerRouting(null);
+      setTravelerWorkOrderId('');
+      setTravelerQuantity(1);
+      toast({ title: 'Traveler created', description: 'A new traveler has been generated from this routing.' });
+      if (newId) navigate(`/travelers/${newId}/execute`);
+    },
+    onError: (error: any) => {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error.message || 'Failed to create traveler',
+      });
+    },
+  });
+
+  const handleGenerateTraveler = () => {
+    if (!generateTravelerRouting) return;
+    generateTravelerMutation.mutate({
+      routingId: generateTravelerRouting.id,
+      workOrderId: travelerWorkOrderId,
+      quantity: travelerQuantity,
+    });
+  };
 
   // Fetch all inventory items to show which parts don't have routings
   const { data: inventoryItems = [] } = useQuery<InventoryItem[]>({
@@ -638,6 +726,16 @@ export default function PartRoutingManagement() {
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
+                          <RoutingTravelerAction
+                            routing={routing}
+                            travelers={travelersByRouting.get(routing.id) || []}
+                            onGenerate={() => {
+                              setTravelerWorkOrderId('');
+                              setTravelerQuantity(1);
+                              setGenerateTravelerRouting(routing);
+                            }}
+                            onOpenTraveler={(id) => navigate(`/travelers/${id}`)}
+                          />
                           <Button
                             variant="outline"
                             size="sm"
@@ -1316,6 +1414,155 @@ export default function PartRoutingManagement() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Generate Traveler dialog (preselected to a routing) */}
+      <Dialog
+        open={!!generateTravelerRouting}
+        onOpenChange={(open) => {
+          if (!open) {
+            setGenerateTravelerRouting(null);
+            setTravelerWorkOrderId('');
+            setTravelerQuantity(1);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Generate Traveler from Routing</DialogTitle>
+            <DialogDescription>
+              {generateTravelerRouting && (
+                <>
+                  Creating a new production traveler for{' '}
+                  <span className="font-medium">{generateTravelerRouting.partNumber}</span>
+                  {generateTravelerRouting.partName && <> — {generateTravelerRouting.partName}</>}.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="routing-traveler-work-order">Work Order ID (Optional)</Label>
+              <Input
+                id="routing-traveler-work-order"
+                placeholder="e.g., WO-2024-001"
+                value={travelerWorkOrderId}
+                onChange={(e) => setTravelerWorkOrderId(e.target.value)}
+                data-testid="input-routing-traveler-work-order"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="routing-traveler-quantity">Quantity</Label>
+              <Input
+                id="routing-traveler-quantity"
+                type="number"
+                min={1}
+                value={travelerQuantity}
+                onChange={(e) => setTravelerQuantity(parseInt(e.target.value) || 1)}
+                data-testid="input-routing-traveler-quantity"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setGenerateTravelerRouting(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleGenerateTraveler}
+              disabled={generateTravelerMutation.isPending}
+              data-testid="button-confirm-generate-traveler-from-routing"
+            >
+              {generateTravelerMutation.isPending ? 'Generating...' : 'Generate Traveler'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+function RoutingTravelerAction({
+  routing,
+  travelers,
+  onGenerate,
+  onOpenTraveler,
+}: {
+  routing: PartRouting;
+  travelers: RoutingTravelerSummary[];
+  onGenerate: () => void;
+  onOpenTraveler: (id: string) => void;
+}) {
+  if (travelers.length === 0) {
+    return (
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={onGenerate}
+        title="Generate Traveler"
+        data-testid={`button-generate-traveler-from-routing-${routing.id}`}
+      >
+        <ScrollText className="h-4 w-4 mr-1" />
+        <Plus className="h-3 w-3" />
+      </Button>
+    );
+  }
+
+  const sorted = [...travelers].sort((a, b) =>
+    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          size="sm"
+          title={`${travelers.length} traveler${travelers.length === 1 ? '' : 's'}`}
+          data-testid={`button-routing-travelers-${routing.id}`}
+        >
+          <ScrollText className="h-4 w-4 mr-1" />
+          <Badge variant="secondary" className="text-xs px-1.5 py-0">
+            {travelers.length}
+          </Badge>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-80 p-2" align="end">
+        <div className="flex items-center justify-between px-2 py-1 mb-1">
+          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Travelers
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs"
+            onClick={onGenerate}
+            data-testid={`button-generate-traveler-from-routing-${routing.id}`}
+          >
+            <Plus className="h-3 w-3 mr-1" />
+            New
+          </Button>
+        </div>
+        <div className="max-h-64 overflow-y-auto divide-y">
+          {sorted.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => onOpenTraveler(t.id)}
+              className="w-full flex items-center justify-between gap-2 px-2 py-2 text-left hover:bg-muted/50 rounded-sm"
+              data-testid={`link-routing-traveler-${t.id}`}
+            >
+              <span className="font-mono text-sm truncate">{t.travelerNumber}</span>
+              <Badge
+                variant="outline"
+                className={`text-xs ${TRAVELER_STATUS_STYLES[t.status] || ''}`}
+              >
+                {t.status.replace('_', ' ')}
+              </Badge>
+            </button>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }

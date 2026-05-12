@@ -259,19 +259,24 @@ router.use(validateActionToken);
 // Get all travelers with optional filters
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const { status, partNumber, workOrderId, inventoryItemId } = req.query;
+    const { status, partNumber, workOrderId, inventoryItemId, partRoutingId, routingId } = req.query;
 
     const filters: {
       status?: string;
       partNumber?: string;
       workOrderId?: string;
       inventoryItemId?: string;
+      partRoutingId?: string;
     } = {};
 
     if (status && typeof status === 'string') filters.status = status;
     if (partNumber && typeof partNumber === 'string') filters.partNumber = partNumber;
     if (workOrderId && typeof workOrderId === 'string') filters.workOrderId = workOrderId;
     if (inventoryItemId && typeof inventoryItemId === 'string') filters.inventoryItemId = inventoryItemId;
+    const routingIdParam = (typeof partRoutingId === 'string' && partRoutingId)
+      || (typeof routingId === 'string' && routingId)
+      || null;
+    if (routingIdParam) filters.partRoutingId = routingIdParam;
 
     const travelers = await storage.getTravelers(
       Object.keys(filters).length > 0 ? filters : undefined

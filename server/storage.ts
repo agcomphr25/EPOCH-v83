@@ -2035,6 +2035,7 @@ export interface IStorage {
     partNumber?: string;
     workOrderId?: string;
     inventoryItemId?: string;
+    partRoutingId?: string;
   }): Promise<Traveler[]>;
   getTraveler(id: string): Promise<Traveler | undefined>;
   getTravelerByNumber(travelerNumber: string): Promise<Traveler | undefined>;
@@ -17839,6 +17840,7 @@ export class DatabaseStorage implements IStorage {
     partNumber?: string;
     workOrderId?: string;
     inventoryItemId?: string;
+    partRoutingId?: string;
   }): Promise<Traveler[]> {
     const conditions = [];
 
@@ -17853,6 +17855,9 @@ export class DatabaseStorage implements IStorage {
     }
     if (filters?.inventoryItemId) {
       conditions.push(eq(travelers.inventoryItemId, filters.inventoryItemId));
+    }
+    if (filters?.partRoutingId) {
+      conditions.push(eq(travelers.partRoutingId, filters.partRoutingId));
     }
 
     if (conditions.length === 0) {
@@ -18820,7 +18825,7 @@ export class DatabaseStorage implements IStorage {
       serialNumber: data.serialNumber || null,
       internalControlNumber: data.internalControlNumber || null,
       quantity: data.quantity || 1,
-      status: 'DRAFT',
+      status: data.workOrderId ? 'IN_PROGRESS' : 'DRAFT',
       partRoutingId: routing.id,
       partRoutingRevision: (routing as any).routingRevision || 1,
       createdBy: data.createdBy,

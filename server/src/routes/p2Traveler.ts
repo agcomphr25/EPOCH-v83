@@ -28,8 +28,19 @@ import { storage } from '../../storage';
 import { createEmployeeIdentitySnapshot } from '../../identity/userIdentity';
 import { buildChargeContextFromTraveler } from '../helpers/travelerBarcodeResolver';
 import { executeTravelerAutoPunch, type TravelerAutoPunchResult } from './timeClock';
+import { ensureProductionWorkflowReadSchema } from '../lib/productionWorkflowReadiness';
 
 const router = Router();
+
+router.use(async (_req, res, next) => {
+  try {
+    await ensureProductionWorkflowReadSchema();
+    next();
+  } catch (error) {
+    console.error('[P2Traveler] Schema readiness check failed:', error);
+    res.status(503).json({ error: 'Production traveler schema is not ready, please retry' });
+  }
+});
 
 /**
  * Task #188: Auto-switch the operator's punch_ledger session to the WAD's

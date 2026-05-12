@@ -535,6 +535,16 @@ describe('payrollExport routes - static guards', () => {
       createFn.indexOf('.from(payrollExportBatchesTable)'),
     );
   });
+
+  it('TimeTrakGo imports check DCAA readiness blockers before mutating payroll export tables', () => {
+    const serviceFile = readFileSync(resolve(__dirname, '../src/services/timekeeping/payrollExport.service.ts'), 'utf8');
+    const importFn = serviceFile.slice(serviceFile.indexOf('export async function importTimeTrakGoGustoCsvBatch'));
+
+    expect(importFn.indexOf('await assertPayrollExportReady')).toBeGreaterThan(-1);
+    expect(importFn.indexOf('await assertPayrollExportReady')).toBeLessThan(
+      importFn.indexOf('.from(payrollExportBatchesTable)'),
+    );
+  });
 });
 
 describe('CSV helpers', () => {

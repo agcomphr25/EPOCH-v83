@@ -334,12 +334,34 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
     }
     
     const empCodePattern = /^EMP\d+$/i;
+    const hexBadgePattern = /^[0-9a-f-]{16,}$/i;
+    const looksLikeRawIdentifier = (key: string) => {
+      if (empCodePattern.test(key)) return true;
+      if (hexBadgePattern.test(key) || hexBadgePattern.test(key.replace(/-/g, ''))) return true;
+      if (/^ADMIN_FORCE_SIGN$/i.test(key)) return true;
+      return false;
+    };
     const resolveName = (identifier: string | null): string | null => {
       if (!identifier) return null;
       const key = String(identifier);
       if (nameMap[key]) return nameMap[key];
-      if (empCodePattern.test(key)) return 'Unknown Technician';
+      // Try matching after stripping dashes for UUID-style badge scans
+      const stripped = key.replace(/-/g, '');
+      if (stripped !== key && nameMap[stripped]) return nameMap[stripped];
+      if (empCodePattern.test(key)) return null;
+      // Don't echo raw hex/UUID badge codes back to the UI — they should fall
+      // through to a friendly "Unknown signer" label.
+      if (hexBadgePattern.test(key)) return null;
       return key;
+    };
+    // Sanitize a stored signedByName: only return it if it's a real human name.
+    // Raw badge codes / EMP codes / UUIDs are treated as unresolved.
+    const sanitizeSignedByName = (storedName: string | null): string | null => {
+      if (!storedName) return null;
+      const trimmed = String(storedName).trim();
+      if (!trimmed) return null;
+      if (looksLikeRawIdentifier(trimmed)) return null;
+      return trimmed;
     };
 
     // Build department progression data using traveler step data when available
@@ -471,7 +493,7 @@ router.get('/item/:barcode', async (req: Request, res: Response) => {
           id: s.id,
           type: 'Traveler Step',
           department: step?.departmentName || 'Unknown',
-          signedBy: resolveName(s.signedBy) || s.signedByName || s.signedBy,
+          signedBy: sanitizeSignedByName(s.signedByName) || resolveName(s.signedBy) || null,
           signedByUsername: s.signedBy,
           signedAt: s.signedAt,
           signatureData: s.signatureData,

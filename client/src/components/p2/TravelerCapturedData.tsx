@@ -22,6 +22,7 @@ import {
   Layers,
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { displaySignerName } from '@/lib/signerName';
 
 interface TravelerTaskField {
   id: string;
@@ -360,7 +361,7 @@ function StepSection({ step, defaultExpanded = false }: { step: TravelerStep; de
                   <div key={sig.id} className="border rounded-lg p-3 bg-muted/20 flex items-center justify-between">
                     <div className="space-y-1">
                       <div className="text-sm font-medium">
-                        {sig.signedByName || sig.signedBy}
+                        {displaySignerName(sig.signedByName, sig.signedBy)}
                         {sig.signatureRole && (
                           <Badge variant="outline" className="ml-2 text-xs">{sig.signatureRole}</Badge>
                         )}

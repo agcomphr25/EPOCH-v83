@@ -49,6 +49,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { format, isValid } from 'date-fns';
 import { TravelerCapturedDataBySerial } from '@/components/p2/TravelerCapturedData';
+import { displaySignerName } from '@/lib/signerName';
 import AuditTimeline from '@/components/AuditTimeline';
 
 function safeFormat(dateValue: any, fmt: string): string {
@@ -1519,7 +1520,7 @@ export default function P2TravelerViewer() {
                                 </div>
                                 <div className="text-sm">
                                   <span className="text-gray-500">Signed by:</span>{' '}
-                                  <span className="font-medium">{sig.signedBy}</span>
+                                  <span className="font-medium">{displaySignerName(sig.signedBy)}</span>
                                   {sig.signedByUsername && (
                                     <span className="text-gray-400 ml-1">(@{sig.signedByUsername})</span>
                                   )}
@@ -1550,7 +1551,7 @@ export default function P2TravelerViewer() {
                                   {sig.department || sig.fromDepartment || 'N/A'}
                                 </div>
                                 <div className="text-sm">
-                                  <span className="font-medium">{sig.signedBy}</span>
+                                  <span className="font-medium">{displaySignerName(sig.signedBy)}</span>
                                 </div>
                               </div>
                               {sig.signatureData && (

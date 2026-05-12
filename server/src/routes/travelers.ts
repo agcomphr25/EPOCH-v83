@@ -1932,9 +1932,11 @@ router.post('/:travelerId/steps/:stepId/sign', requirePermission('travelers.sign
     // Normalize by stripping dashes so UUID badges match whether or not they include
     // hyphens — mirrors the REPLACE() strategy used in badgeAuth middleware.
     let signingEmployeeId: number | undefined;
+    let resolvedEmployeeName: string | null = null;
     let signingEmployeeName: string = signedByName || signedBy || 'unknown';
-    if (badgeScan) {
-      const normalizedSignBadge = badgeScan.replace(/-/g, '');
+    const lookupKey = badgeScan || signedBy;
+    if (lookupKey) {
+      const normalizedSignBadge = String(lookupKey).replace(/-/g, '');
       const signerByBadge = await db
         .select({ id: employees.id, name: employees.name })
         .from(employees)
@@ -1943,18 +1945,36 @@ router.post('/:travelerId/steps/:stepId/sign', requirePermission('travelers.sign
       if (signerByBadge.length > 0) {
         signingEmployeeId = signerByBadge[0].id;
         signingEmployeeName = signerByBadge[0].name;
+        resolvedEmployeeName = signerByBadge[0].name;
       } else {
         const signerByCode = await db
           .select({ id: employees.id, name: employees.name })
           .from(employees)
-          .where(sql`LOWER(${employees.employeeCode}) = LOWER(${badgeScan})`)
+          .where(sql`LOWER(${employees.employeeCode}) = LOWER(${lookupKey})`)
           .limit(1);
         if (signerByCode.length > 0) {
           signingEmployeeId = signerByCode[0].id;
           signingEmployeeName = signerByCode[0].name;
+          resolvedEmployeeName = signerByCode[0].name;
         }
       }
     }
+
+    // Persist the human-readable employee name on the signature so the UI never
+    // falls back to the raw badge UUID. Prefer the resolved employee name from
+    // the badge lookup; otherwise accept a non-empty client-supplied name only
+    // when it doesn't itself look like a raw badge/UUID/EMP code identifier.
+    const HEX_BADGE_RE = /^[0-9a-f-]{16,}$/i;
+    const EMP_CODE_RE = /^EMP\d+$/i;
+    const isRawIdentifier = (v: string) =>
+      HEX_BADGE_RE.test(v) || HEX_BADGE_RE.test(v.replace(/-/g, '')) || EMP_CODE_RE.test(v) || /^ADMIN_FORCE_SIGN$/i.test(v);
+    const trimmedSignedByName = typeof signedByName === 'string' ? signedByName.trim() : '';
+    const clientNameUsable =
+      trimmedSignedByName &&
+      trimmedSignedByName !== signedBy &&
+      trimmedSignedByName !== badgeScan &&
+      !isRawIdentifier(trimmedSignedByName);
+    const signedByNameToStore = resolvedEmployeeName ?? (clientNameUsable ? trimmedSignedByName : null);
 
     // QC training enforcement gate — independent of permission gate; both must pass
     const qcTrainingGate = await evaluateQcTrainingGate(travelerId, stepId, signingEmployeeId, signingEmployeeName);
@@ -2067,7 +2087,7 @@ router.post('/:travelerId/steps/:stepId/sign', requirePermission('travelers.sign
       travelerStepId: stepId,
       travelerTaskId: matchedGateTask?.id || null,
       signedBy,
-      signedByName: signedByName || null,
+      signedByName: signedByNameToStore,
       signatureRole: signatureRole || matchedGateTask?.signatureRole || null,
       badgeScan: badgeScan || null,
       meaning,
@@ -2122,7 +2142,7 @@ router.post('/:travelerId/steps/:stepId/sign', requirePermission('travelers.sign
     await storage.createTravelerEvent({
       travelerId,
       actor: signedBy,
-      actorName: signedByName,
+      actorName: signedByNameToStore ?? signedByName ?? null,
       action: 'SIGNED',
       details: {
         stepId,
@@ -2846,9 +2866,44 @@ router.post('/:travelerId/admin/force-sign-step', async (req: Request, res: Resp
     const { travelerId } = req.params;
     const { stepId, reason, signedBy, signedByName } = req.body;
 
-    if (!stepId || !reason || !signedBy || !signedByName) {
-      return res.status(400).json({ error: 'stepId, reason, signedBy, and signedByName are required' });
+    if (!stepId || !reason || !signedBy) {
+      return res.status(400).json({ error: 'stepId, reason, and signedBy are required' });
     }
+
+    // Resolve the human-readable employee name from the badge/code so the stored
+    // signature shows the operator's name instead of a raw badge UUID. Falls
+    // back to the supplied signedByName if no employee record is matched.
+    let resolvedForceSignName: string | null = null;
+    const forceSignLookup = String(signedBy);
+    if (forceSignLookup) {
+      const normalizedForceBadge = forceSignLookup.replace(/-/g, '');
+      const forceSignerByBadge = await db
+        .select({ name: employees.name })
+        .from(employees)
+        .where(sql`REPLACE(${employees.badgeScanCode}, '-', '') = ${normalizedForceBadge}`)
+        .limit(1);
+      if (forceSignerByBadge.length > 0) {
+        resolvedForceSignName = forceSignerByBadge[0].name;
+      } else {
+        const forceSignerByCode = await db
+          .select({ name: employees.name })
+          .from(employees)
+          .where(sql`LOWER(${employees.employeeCode}) = LOWER(${forceSignLookup})`)
+          .limit(1);
+        if (forceSignerByCode.length > 0) {
+          resolvedForceSignName = forceSignerByCode[0].name;
+        }
+      }
+    }
+    const FORCE_HEX_RE = /^[0-9a-f-]{16,}$/i;
+    const FORCE_EMP_RE = /^EMP\d+$/i;
+    const forceIsRawIdentifier = (v: string) =>
+      FORCE_HEX_RE.test(v) || FORCE_HEX_RE.test(v.replace(/-/g, '')) || FORCE_EMP_RE.test(v);
+    const trimmedForceName = typeof signedByName === 'string' ? signedByName.trim() : '';
+    const forceClientNameUsable =
+      trimmedForceName && trimmedForceName !== signedBy && !forceIsRawIdentifier(trimmedForceName);
+    const forceSignedByNameToStore =
+      resolvedForceSignName ?? (forceClientNameUsable ? trimmedForceName : null);
 
     const traveler = await storage.getTraveler(travelerId);
     if (!traveler) {
@@ -2888,7 +2943,7 @@ router.post('/:travelerId/admin/force-sign-step', async (req: Request, res: Resp
     const signature = await storage.createTravelerSignature({
       travelerStepId: stepId,
       signedBy,
-      signedByName,
+      signedByName: forceSignedByNameToStore,
       badgeScan: 'ADMIN_FORCE_SIGN',
       signedAt: new Date(),
       meaning: 'COMPLETED',

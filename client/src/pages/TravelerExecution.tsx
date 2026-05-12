@@ -84,6 +84,7 @@ import {
   Plus,
   Info,
 } from 'lucide-react';
+import { displaySignerName } from '@/lib/signerName';
 import MaterialScanner from '@/components/MaterialScanner';
 import StartProductionTimerModal from '@/components/StartProductionTimerModal';
 import { Timer } from 'lucide-react';
@@ -3304,14 +3305,14 @@ export default function TravelerExecution() {
                               {sig.signatureData && (
                                 <img
                                   src={sig.signatureData}
-                                  alt={`Signature by ${sig.signedByName || sig.signedBy}`}
+                                  alt={`Signature by ${displaySignerName(sig.signedByName, sig.signedBy)}`}
                                   className="h-10 w-24 object-contain border rounded bg-white"
                                 />
                               )}
                               <div className="flex-1">
 
                                 <p className="font-medium">
-                                  {sig.signedByName || sig.signedBy}
+                                  {displaySignerName(sig.signedByName, sig.signedBy)}
                                   {sig.signatureRole && (
                                     <Badge variant="outline" className="ml-2 text-[10px]">{sig.signatureRole}</Badge>
                                   )}
@@ -3325,7 +3326,7 @@ export default function TravelerExecution() {
                               <div className="border rounded bg-white p-1">
                                 <img
                                   src={sig.signatureData}
-                                  alt={`Signature by ${sig.signedByName || sig.signedBy}`}
+                                  alt={`Signature by ${displaySignerName(sig.signedByName, sig.signedBy)}`}
                                   className="h-12 object-contain mx-auto"
                                 />
                               </div>

@@ -294,13 +294,10 @@ async function syncVendorScoresFromEvaluations(vendorId: number) {
   
   // Get all evaluations for this vendor
   const allEvaluations = await storage.getVendorMonthlyEvaluations(vendorId);
-  
-  // Check if there's any evaluation record for the CURRENT calendar year
-  // A vendor is considered "evaluated" if they have any evaluation record for the current year,
-  // even if all scores are N/A (null) - the record existence is what matters
-  const currentYearEval = allEvaluations.find(ev => ev.year === currentYear);
-  
-  // Set evaluated=true if current year has ANY evaluation record (scores or N/A)
+
+  // Use the annual evaluation row as the source of truth for the evaluated flag.
+  // The annual table stores the current-year evaluation in month=1.
+  const currentYearEval = allEvaluations.find(ev => ev.year === currentYear && ev.month === 1);
   const isEvaluated = !!currentYearEval;
   
   // Get the latest evaluation for displaying scores (not necessarily current month)
@@ -314,8 +311,8 @@ async function syncVendorScoresFromEvaluations(vendorId: number) {
     return b.month - a.month;
   });
   
-  // When vendor is evaluated (current-year record exists), evaluationDate MUST
-  // reflect the current year so ERDI's 365-day lookback counts correctly.
+  // When vendor is evaluated, evaluationDate MUST reflect the current year so
+  // ERDI's 365-day lookback counts correctly.
   // Display scores may still come from the latest scored record (could be prior year).
   const evaluationDate = isEvaluated ? `${currentYear}-01-01` : null;
 

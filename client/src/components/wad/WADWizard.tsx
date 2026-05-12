@@ -1736,10 +1736,13 @@ function Step8Schedule({ departments, data, onChange }: {
         </div>
         <div className="space-y-1">
           <Label>Bottleneck Department</Label>
-          <Select value={base.bottleneckDepartment} onValueChange={v => set('bottleneckDepartment', v)}>
+          <Select
+            value={base.bottleneckDepartment ? base.bottleneckDepartment : '__NONE__'}
+            onValueChange={v => set('bottleneckDepartment', v === '__NONE__' ? '' : v)}
+          >
             <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="">None</SelectItem>
+              <SelectItem value="__NONE__">None</SelectItem>
               {departments.map(d => (
                 <SelectItem key={d} value={d}>{deptLabels[d] ?? d}</SelectItem>
               ))}

@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs/promises';
+import * as fsSync from 'fs';
 import { sql, eq, and, gte, lte, ilike, or, inArray, desc, asc, type SQL } from 'drizzle-orm';
 import { validateSameFamily } from '../utils/unitConversionService';
 import {
@@ -42,10 +43,18 @@ import { requirePermission } from '../../middleware/requirePermission';
 
 const router = Router();
 
-// Pre-create PDF upload directories to avoid async issues in multer
-const SDS_UPLOAD_DIR = path.join(process.cwd(), 'server/src/assets/sds');
-const TDS_UPLOAD_DIR = path.join(process.cwd(), 'server/src/assets/tds');
-const OTHER_DOCS_UPLOAD_DIR = path.join(process.cwd(), 'server/src/assets/other-docs');
+const INVENTORY_UPLOAD_ROOT = process.env.INVENTORY_UPLOAD_DIR
+  ? path.resolve(process.env.INVENTORY_UPLOAD_DIR)
+  : path.join(process.cwd(), 'uploads', 'inventory-documents');
+
+// Keep legacy locations readable so existing DB file paths still work.
+const LEGACY_SDS_UPLOAD_DIR = path.join(process.cwd(), 'server/src/assets/sds');
+const LEGACY_TDS_UPLOAD_DIR = path.join(process.cwd(), 'server/src/assets/tds');
+const LEGACY_OTHER_DOCS_UPLOAD_DIR = path.join(process.cwd(), 'server/src/assets/other-docs');
+
+const SDS_UPLOAD_DIR = path.join(INVENTORY_UPLOAD_ROOT, 'sds');
+const TDS_UPLOAD_DIR = path.join(INVENTORY_UPLOAD_ROOT, 'tds');
+const OTHER_DOCS_UPLOAD_DIR = path.join(INVENTORY_UPLOAD_ROOT, 'other-docs');
 
 fs.mkdir(SDS_UPLOAD_DIR, { recursive: true }).catch(err => {
   console.error('Failed to create SDS upload directory:', err);
@@ -57,17 +66,26 @@ fs.mkdir(OTHER_DOCS_UPLOAD_DIR, { recursive: true }).catch(err => {
   console.error('Failed to create Other Docs upload directory:', err);
 });
 
+function ensureUploadDir(uploadDir: string) {
+  fsSync.mkdirSync(uploadDir, { recursive: true });
+}
+
 // Configure multer storage for PDF uploads
 const pdfStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    // Determine destination based on field name
-    let uploadDir = SDS_UPLOAD_DIR;
-    if (file.fieldname === 'tdsFile') {
-      uploadDir = TDS_UPLOAD_DIR;
-    } else if (file.fieldname === 'otherDocsFile') {
-      uploadDir = OTHER_DOCS_UPLOAD_DIR;
+    try {
+      // Determine destination based on field name
+      let uploadDir = SDS_UPLOAD_DIR;
+      if (file.fieldname === 'tdsFile') {
+        uploadDir = TDS_UPLOAD_DIR;
+      } else if (file.fieldname === 'otherDocsFile') {
+        uploadDir = OTHER_DOCS_UPLOAD_DIR;
+      }
+      ensureUploadDir(uploadDir);
+      cb(null, uploadDir);
+    } catch (error) {
+      cb(error as Error, '');
     }
-    cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
@@ -88,6 +106,52 @@ const pdfUpload = multer({
     }
   }
 });
+
+const inventoryPdfUpload = pdfUpload.fields([
+  { name: 'sdsFile', maxCount: 1 },
+  { name: 'tdsFile', maxCount: 1 },
+  { name: 'otherDocsFile', maxCount: 1 },
+]);
+
+function handleInventoryPdfUpload(req: Request, res: Response, next: (err?: any) => void) {
+  inventoryPdfUpload(req, res, (error: any) => {
+    if (!error) {
+      return next();
+    }
+
+    console.error('Inventory PDF upload error:', error);
+    const message = error instanceof multer.MulterError
+      ? error.message
+      : error instanceof Error
+        ? error.message
+        : 'Failed to upload inventory document';
+    const statusCode = error instanceof multer.MulterError || message === 'Only PDF files are allowed' ? 400 : 500;
+    return res.status(statusCode).json({ error: message });
+  });
+}
+
+async function resolveInventoryDocumentPath(primaryDir: string, legacyDir: string, filename: string) {
+  const primaryPath = path.resolve(primaryDir, filename);
+  if (!primaryPath.startsWith(path.resolve(primaryDir))) {
+    return null;
+  }
+
+  try {
+    await fs.access(primaryPath);
+    return primaryPath;
+  } catch {
+    const legacyPath = path.resolve(legacyDir, filename);
+    if (!legacyPath.startsWith(path.resolve(legacyDir))) {
+      return null;
+    }
+    try {
+      await fs.access(legacyPath);
+      return legacyPath;
+    } catch {
+      return null;
+    }
+  }
+}
 
 // Enhanced Inventory API - Get all items (mounted at /api/enhanced/inventory/items)
 // Supports optional query param: ?manufacturedCategory=MACHINED_PART
@@ -226,7 +290,7 @@ router.get('/items/by-part-number/:partNumber', async (req: Request, res: Respon
 });
 
 // Enhanced Inventory API - Update item
-router.put('/inventory/items/:id', requirePermission('inventory.adjust'), pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name: 'tdsFile', maxCount: 1 }, { name: 'otherDocsFile', maxCount: 1 }]), async (req: Request, res: Response) => {
+router.put('/inventory/items/:id', requirePermission('inventory.adjust'), handleInventoryPdfUpload, async (req: Request, res: Response) => {
   try {
     const itemId = parseInt(req.params.id);
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
@@ -349,7 +413,7 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // POST route for creating inventory items at the root level (to match client expectations)
-router.post('/', requirePermission('inventory.adjust'), pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name: 'tdsFile', maxCount: 1 }, { name: 'otherDocsFile', maxCount: 1 }]), async (req: Request, res: Response) => {
+router.post('/', requirePermission('inventory.adjust'), handleInventoryPdfUpload, async (req: Request, res: Response) => {
   try {
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
     const dataString = req.body.data;
@@ -406,7 +470,7 @@ router.post('/', requirePermission('inventory.adjust'), pdfUpload.fields([{ name
 });
 
 // PUT route for updating inventory items at the root level
-router.put('/:id', requirePermission('inventory.adjust'), pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name: 'tdsFile', maxCount: 1 }, { name: 'otherDocsFile', maxCount: 1 }]), async (req: Request, res: Response) => {
+router.put('/:id', requirePermission('inventory.adjust'), handleInventoryPdfUpload, async (req: Request, res: Response) => {
   try {
     const itemId = parseInt(req.params.id);
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
@@ -533,7 +597,7 @@ router.get('/items/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/items', requirePermission('inventory.adjust'), pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name: 'tdsFile', maxCount: 1 }, { name: 'otherDocsFile', maxCount: 1 }]), async (req: Request, res: Response) => {
+router.post('/items', requirePermission('inventory.adjust'), handleInventoryPdfUpload, async (req: Request, res: Response) => {
   try {
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
     const dataString = req.body.data;
@@ -595,7 +659,7 @@ router.post('/items', requirePermission('inventory.adjust'), pdfUpload.fields([{
   }
 });
 
-router.put('/items/:id', requirePermission('inventory.adjust'), pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name: 'tdsFile', maxCount: 1 }, { name: 'otherDocsFile', maxCount: 1 }]), async (req: Request, res: Response) => {
+router.put('/items/:id', requirePermission('inventory.adjust'), handleInventoryPdfUpload, async (req: Request, res: Response) => {
   try {
     const itemId = parseInt(req.params.id);
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
@@ -3611,16 +3675,8 @@ router.get('/sds/:filename', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid filename' });
     }
     
-    // Build absolute path and ensure it's within SDS directory
-    const filePath = path.resolve(SDS_UPLOAD_DIR, filename);
-    if (!filePath.startsWith(path.resolve(SDS_UPLOAD_DIR))) {
-      return res.status(400).json({ error: 'Invalid file path' });
-    }
-    
-    // Check if file exists
-    try {
-      await fs.access(filePath);
-    } catch {
+    const filePath = await resolveInventoryDocumentPath(SDS_UPLOAD_DIR, LEGACY_SDS_UPLOAD_DIR, filename);
+    if (!filePath) {
       return res.status(404).json({ error: 'SDS file not found' });
     }
     
@@ -3648,16 +3704,8 @@ router.get('/tds/:filename', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid filename' });
     }
     
-    // Build absolute path and ensure it's within TDS directory
-    const filePath = path.resolve(TDS_UPLOAD_DIR, filename);
-    if (!filePath.startsWith(path.resolve(TDS_UPLOAD_DIR))) {
-      return res.status(400).json({ error: 'Invalid file path' });
-    }
-    
-    // Check if file exists
-    try {
-      await fs.access(filePath);
-    } catch {
+    const filePath = await resolveInventoryDocumentPath(TDS_UPLOAD_DIR, LEGACY_TDS_UPLOAD_DIR, filename);
+    if (!filePath) {
       return res.status(404).json({ error: 'TDS file not found' });
     }
     
@@ -3685,16 +3733,8 @@ router.get('/other-docs/:filename', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid filename' });
     }
     
-    // Build absolute path and ensure it's within Other Docs directory
-    const filePath = path.resolve(OTHER_DOCS_UPLOAD_DIR, filename);
-    if (!filePath.startsWith(path.resolve(OTHER_DOCS_UPLOAD_DIR))) {
-      return res.status(400).json({ error: 'Invalid file path' });
-    }
-    
-    // Check if file exists
-    try {
-      await fs.access(filePath);
-    } catch {
+    const filePath = await resolveInventoryDocumentPath(OTHER_DOCS_UPLOAD_DIR, LEGACY_OTHER_DOCS_UPLOAD_DIR, filename);
+    if (!filePath) {
       return res.status(404).json({ error: 'Other Docs file not found' });
     }
     

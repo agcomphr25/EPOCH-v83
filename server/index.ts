@@ -4200,6 +4200,13 @@ async function initializeBackgroundServices() {
         const { sql: sqlRcc1 } = await import('drizzle-orm');
         // receipts: explicit physical-receipt timestamp
         await db.execute(sqlRcc1`ALTER TABLE receipts ADD COLUMN IF NOT EXISTS received_at TIMESTAMP`);
+        // inventory_items: document attachment flags and paths used by Enhanced MRP item edits
+        await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS has_sds BOOLEAN DEFAULT FALSE`);
+        await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS sds_file_path TEXT`);
+        await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS has_tds BOOLEAN DEFAULT FALSE`);
+        await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS tds_file_path TEXT`);
+        await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS has_other_docs BOOLEAN DEFAULT FALSE`);
+        await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS other_docs_file_path TEXT`);
         // inventory_items: required-document enforcement flags
         await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS requires_sds BOOLEAN NOT NULL DEFAULT FALSE`);
         await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS requires_tds BOOLEAN NOT NULL DEFAULT FALSE`);
@@ -4210,9 +4217,11 @@ async function initializeBackgroundServices() {
         await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS serial_controlled BOOLEAN NOT NULL DEFAULT FALSE`);
         await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS shelf_life_controlled BOOLEAN NOT NULL DEFAULT FALSE`);
         await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS shelf_life_days INTEGER`);
+        await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS frozen_shelf_life_days INTEGER`);
+        await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS room_temp_shelf_life_days INTEGER`);
         await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS default_max_out_time_minutes INTEGER`);
         await db.execute(sqlRcc1`ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS out_time_enforcement_required BOOLEAN NOT NULL DEFAULT FALSE`);
-        console.log('✅ Ensured RCC Phase 1 columns (receipts.received_at + inventory_items doc-requirement flags)');
+        console.log('✅ Ensured RCC Phase 1 columns (receipts.received_at + inventory_items document flags/paths)');
       } catch (rcc1Err: any) {
         console.warn('⚠️ RCC Phase 1 column migration:', rcc1Err.message);
       }
@@ -4572,6 +4581,12 @@ async function initializeBackgroundServices() {
            ON CONFLICT (name) DO NOTHING`
         );
 
+        await pool.query(
+          `INSERT INTO perm_roles (name, description, is_system)
+           VALUES ('INVENTORY_MANAGER', 'Inventory Manager role - can manage inventory items and adjustments', true)
+           ON CONFLICT (name) DO NOTHING`
+        );
+
         // MANAGER role: orders, finance, inventory, shipping, quality, purchasing, assets, training, scheduling, reports
         await pool.query(
           `INSERT INTO perm_roles (name, description, is_system)
@@ -4621,6 +4636,26 @@ async function initializeBackgroundServices() {
              SELECT pr.id, pc.id
              FROM perm_roles pr, perm_capabilities pc
              WHERE pr.name = 'MANAGER' AND pc.key = $1
+             ON CONFLICT (role_id, capability_id) DO NOTHING`,
+            [capKey]
+          );
+        }
+
+        const inventoryManagerCaps = [
+          'inventory.adjust',
+          'inventory.manage_requests',
+          'inventory.cycleCount.view',
+          'inventory.cycleCount.create',
+          'inventory.cycleCount.approve',
+          'inventory.cycleCount.postAdjustments',
+          'inventory.traceability.view',
+        ];
+        for (const capKey of inventoryManagerCaps) {
+          await pool.query(
+            `INSERT INTO perm_role_capabilities (role_id, capability_id)
+             SELECT pr.id, pc.id
+             FROM perm_roles pr, perm_capabilities pc
+             WHERE pr.name = 'INVENTORY_MANAGER' AND pc.key = $1
              ON CONFLICT (role_id, capability_id) DO NOTHING`,
             [capKey]
           );

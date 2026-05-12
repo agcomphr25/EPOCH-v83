@@ -303,11 +303,7 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
 
   const { data: wizardCtx, isLoading } = useQuery<{ wad: any; project: any; po: any; controlStatus?: WadControlStatus; contractContextDefaults?: any }>({
     queryKey: ['/api/work-orders/production', wadId, 'wizard'],
-    queryFn: async () => {
-      const res = await fetch(`/api/work-orders/production/${wadId}/wizard`);
-      if (!res.ok) throw new Error('Failed to load WAD');
-      return res.json();
-    },
+    queryFn: () => apiRequest(`/api/work-orders/production/${wadId}/wizard`),
   });
 
   useEffect(() => {
@@ -377,6 +373,8 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
     try {
       await saveMutation.mutateAsync({ wizardData: data });
       setStep(targetStep);
+    } catch (err) {
+      console.warn('[WAD Wizard] Step navigation save failed:', err);
     } finally {
       setSaving(false);
     }

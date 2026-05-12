@@ -36,10 +36,44 @@ interface ApiRequestOptions extends Omit<RequestInit, 'body'> {
   timeout?: number;
   idempotencyKey?: string;
   _isRetry?: boolean;
+  _transientRetryCount?: number;
 }
 
 export function generateIdempotencyKey(): string {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
+
+const SERVER_STARTING_MESSAGE = 'Server starting, please retry';
+const MAX_TRANSIENT_RETRIES = 8;
+
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function retryAfterMs(res: Response, fallbackMs = 2000): number {
+  const retryAfter = res.headers.get('Retry-After');
+  if (!retryAfter) return fallbackMs;
+
+  const retryAfterSeconds = Number(retryAfter);
+  if (Number.isFinite(retryAfterSeconds)) {
+    return Math.max(0, retryAfterSeconds * 1000);
+  }
+
+  const retryAt = Date.parse(retryAfter);
+  if (Number.isFinite(retryAt)) {
+    return Math.max(0, retryAt - Date.now());
+  }
+
+  return fallbackMs;
+}
+
+function isServerStartingResponse(status: number, body: any, message: string): boolean {
+  return (
+    status === 503 &&
+    (message.includes(SERVER_STARTING_MESSAGE) ||
+      body?.error === SERVER_STARTING_MESSAGE ||
+      body?.message === SERVER_STARTING_MESSAGE)
+  );
 }
 
 // ─── Session expiry handler ───────────────────────────────────────────────────
@@ -203,7 +237,7 @@ export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
     controller.abort();
   }, timeoutDuration);
 
-  const { _isRetry, ...fetchOptions } = options;
+  const { _isRetry, _transientRetryCount = 0, ...fetchOptions } = options;
 
   const config: RequestInit = {
     ...fetchOptions,
@@ -259,6 +293,22 @@ export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
           : null) ||
         text ||
         `Request failed (${response.status})`;
+
+      if (
+        isServerStartingResponse(response.status, data, errorMessage) &&
+        _transientRetryCount < MAX_TRANSIENT_RETRIES
+      ) {
+        const retryDelayMs = retryAfterMs(response);
+        console.warn(
+          `[API] ${url} returned startup 503; retrying in ${retryDelayMs}ms ` +
+            `(${_transientRetryCount + 1}/${MAX_TRANSIENT_RETRIES})`
+        );
+        await delay(retryDelayMs);
+        return apiRequest(url, {
+          ...options,
+          _transientRetryCount: _transientRetryCount + 1,
+        });
+      }
 
       if (response.status === 408 || errorMessage.includes('timeout')) {
         throw new Error(
@@ -370,6 +420,69 @@ export const getQueryFn: <T>(options: {
         // Session gone — handleAuthError already fired the redirect
         await throwIfResNotOk(res);
         return await res.json();
+      }
+
+      if (res.status === 503) {
+        const text = await res.text();
+        let data: any = null;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          // Not JSON
+        }
+
+        const errorMessage = data?.message || data?.error || text || res.statusText;
+        if (isServerStartingResponse(res.status, data, errorMessage)) {
+          let retryDelayMs = retryAfterMs(res);
+
+          for (let attempt = 1; attempt <= MAX_TRANSIENT_RETRIES; attempt += 1) {
+            console.warn(
+              `[QUERY] ${url} returned startup 503; retrying in ${retryDelayMs}ms ` +
+                `(${attempt}/${MAX_TRANSIENT_RETRIES})`
+            );
+            await delay(retryDelayMs);
+
+            const retryRes = await fetch(url, {
+              credentials: 'include',
+              signal: controller.signal,
+              headers,
+            });
+
+            if (retryRes.status !== 503) {
+              await throwIfResNotOk(retryRes);
+              return await retryRes.json();
+            }
+
+            const retryText = await retryRes.text();
+            let retryData: any = null;
+            try {
+              retryData = JSON.parse(retryText);
+            } catch {
+              // Not JSON
+            }
+
+            const retryMessage = retryData?.message || retryData?.error || retryText || retryRes.statusText;
+            if (!isServerStartingResponse(retryRes.status, retryData, retryMessage)) {
+              const retryErr: any = new Error(retryMessage);
+              retryErr.status = retryRes.status;
+              if (retryData) {
+                retryErr.responseData = retryData;
+                Object.assign(retryErr, retryData);
+              }
+              throw retryErr;
+            }
+
+            retryDelayMs = retryAfterMs(retryRes);
+          }
+        }
+
+        const err: any = new Error(errorMessage);
+        err.status = res.status;
+        if (data) {
+          err.responseData = data;
+          Object.assign(err, data);
+        }
+        throw err;
       }
 
       await throwIfResNotOk(res);

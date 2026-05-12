@@ -1,5 +1,5 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
-import { Pool } from 'pg';
+import { Pool, type QueryResult, type QueryResultRow } from 'pg';
 import * as schema from './schema';
 
 const connectionString =
@@ -66,6 +66,33 @@ export async function rawSql(strings: TemplateStringsArray, ...values: any[]): P
   return result.rows;
 }
 
+export type CompatibleQueryResult<T extends QueryResultRow = any> =
+  T[] &
+  Pick<QueryResult<T>, 'rows' | 'rowCount' | 'command' | 'oid' | 'fields'>;
+
+function toCompatibleQueryResult<T extends QueryResultRow>(
+  result: QueryResult<T>,
+): CompatibleQueryResult<T> {
+  const rows = [...result.rows] as CompatibleQueryResult<T>;
+
+  Object.defineProperties(rows, {
+    rows: { value: rows, enumerable: false },
+    rowCount: { value: result.rowCount, enumerable: false },
+    command: { value: result.command, enumerable: false },
+    oid: { value: result.oid, enumerable: false },
+    fields: { value: result.fields, enumerable: false },
+  });
+
+  return rows;
+}
+
+export async function queryRows<T extends QueryResultRow = any>(
+  queryString: string,
+  params?: any[],
+): Promise<T[]> {
+  return pgPool.query<T>(queryString, params || []).then((result) => result.rows);
+}
+
 export async function testDatabaseConnection() {
   try {
     console.log('Testing database connection...');
@@ -86,11 +113,12 @@ export async function testDatabaseConnection() {
 }
 
 export const pool = {
-  query: async (queryString: string, params?: any[]) => {
-    const result = await pgPool.query(queryString, params || []);
-    const rows = [...result.rows] as any[];
-    (rows as any).rowCount = result.rowCount;
-    return rows;
+  query: async <T extends QueryResultRow = any>(
+    queryString: string,
+    params?: any[],
+  ): Promise<CompatibleQueryResult<T>> => {
+    const result = await pgPool.query<T>(queryString, params || []);
+    return toCompatibleQueryResult(result);
   },
   end: () => pgPool.end(),
   connect: () => pgPool.connect(),

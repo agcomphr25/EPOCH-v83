@@ -79,11 +79,12 @@ function createInventoryRequestId() {
   return `inv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-async function readInventoryMutationError(response: Response) {
+async function readInventoryMutationError(response: Response, fallbackRequestId?: string) {
   const contentType = response.headers.get('content-type') || '';
   const requestId =
     response.headers.get('x-inventory-request-id') ||
     response.headers.get('x-request-id') ||
+    fallbackRequestId ||
     response.headers.get('x-cloud-trace-context');
 
   let message = '';
@@ -1766,7 +1767,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       });
       
       if (!response.ok) {
-        throw await readInventoryMutationError(response);
+        throw await readInventoryMutationError(response, requestId);
       }
       
       return response.json();
@@ -1809,7 +1810,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       });
       
       if (!response.ok) {
-        throw await readInventoryMutationError(response);
+        throw await readInventoryMutationError(response, requestId);
       }
       
       return response.json();

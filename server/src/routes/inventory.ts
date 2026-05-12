@@ -3,6 +3,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs/promises';
 import * as fsSync from 'fs';
+import os from 'os';
 import { sql, eq, and, gte, lte, ilike, or, inArray, desc, asc, type SQL } from 'drizzle-orm';
 import { validateSameFamily } from '../utils/unitConversionService';
 import {
@@ -43,9 +44,16 @@ import { requirePermission } from '../../middleware/requirePermission';
 
 const router = Router();
 
+const isHostedProduction =
+  process.env.NODE_ENV === 'production' ||
+  process.env.REPL_DEPLOYMENT === 'true' ||
+  process.env.REPLIT_DEPLOYMENT === 'true';
+
 const INVENTORY_UPLOAD_ROOT = process.env.INVENTORY_UPLOAD_DIR
   ? path.resolve(process.env.INVENTORY_UPLOAD_DIR)
-  : path.join(process.cwd(), 'uploads', 'inventory-documents');
+  : isHostedProduction
+    ? path.join(os.tmpdir(), 'epoch-inventory-documents')
+    : path.join(process.cwd(), 'uploads', 'inventory-documents');
 
 // Keep legacy locations readable so existing DB file paths still work.
 const LEGACY_SDS_UPLOAD_DIR = path.join(process.cwd(), 'server/src/assets/sds');

@@ -121,6 +121,11 @@ export async function ensureProductionWorkflowReadSchema(): Promise<void> {
             WHERE quantity_used IS NULL AND qty_used IS NOT NULL;
           END IF;
 
+          IF to_regclass('public.routing_operations') IS NOT NULL THEN
+            ALTER TABLE public.routing_operations
+              ADD COLUMN IF NOT EXISTS required_calibration_asset_tags text[] NOT NULL DEFAULT ARRAY[]::text[];
+          END IF;
+
           IF to_regclass('public.wad_production_controls') IS NULL
              AND to_regclass('public.production_work_orders') IS NOT NULL THEN
             CREATE TABLE public.wad_production_controls (

@@ -2311,8 +2311,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     }
   });
 
-  // Push orders to Layup/Plugging department
-  app.post('/api/push-to-layup-plugging', async (req, res) => {
+  // Legacy placeholder retained off the public route so the real handler below is reachable.
+  app.post('/api/internal/legacy/push-to-layup-plugging-placeholder', async (req, res) => {
     try {
       console.log('🔧 PUSH TO LAYUP/PLUGGING CALLED', req.body);
       const { orderIds } = req.body;
@@ -5773,8 +5773,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     }
   });
 
-  // Python scheduler integration endpoint
-  app.post('/api/python-scheduler', async (req, res) => {
+  // Legacy external Python scheduler handler retained off the public route.
+  app.post('/api/internal/legacy/python-scheduler-external', async (req, res) => {
     try {
       console.log(
         '🐍 Running Python scheduler with Mesa Universal constraints...'
@@ -5890,8 +5890,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     }
   });
 
-  // Push scheduled orders to layup/plugging queue workflow
-  app.post('/api/push-to-layup-plugging', async (req, res) => {
+  // Legacy queue workflow retained off the public route so the department manager handler remains canonical.
+  app.post('/api/internal/legacy/push-to-layup-plugging-queue', async (req, res) => {
     try {
       console.log('🔄 Push to Layup/Plugging Queue workflow initiated');
       const { storage } = await import('../../storage');
@@ -10884,7 +10884,6 @@ export {
   discountsRoutes as discountsRouter,
   employeesRoutes as employeesRouter,
   qualityRoutes as qualityRouter,
-  bomsRoutes as bomsRouter,
   moldsRoutes as moldsRouter,
   kickbackRoutes as kickbacksRouter,
   orderAttachmentsRoutes as orderAttachmentsRouter,

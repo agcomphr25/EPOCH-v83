@@ -300,6 +300,7 @@ type ChargeCode = {
 type PunchMutationInput = {
   type: 'clock_in' | 'clock_out' | 'break_start' | 'break_end';
   costCode?: string;
+  dailyCertificationConfirmed?: boolean;
 };
 
 function portalFetch(url: string, init?: Parameters<typeof fetch>[1]) {
@@ -341,6 +342,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
   const [expenseForm, setExpenseForm] = useState<ExpenseForm>(() => makeExpenseForm());
   const [expenseFiles, setExpenseFiles] = useState<File[]>([]);
   const [selectedClockInChargeCode, setSelectedClockInChargeCode] = useState('none');
+  const [dailyPunchOutConfirmed, setDailyPunchOutConfirmed] = useState(false);
   const [timeOffForm, setTimeOffForm] = useState({
     startDate: '',
     endDate: '',
@@ -738,10 +740,14 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
   });
 
   const punchMutation = useMutation({
-    mutationFn: async ({ type, costCode }: PunchMutationInput) => {
+    mutationFn: async ({ type, costCode, dailyCertificationConfirmed }: PunchMutationInput) => {
       const res = await portalFetch('/api/timekeeping/punches/my', {
         method: 'POST',
-        body: JSON.stringify({ type, ...(costCode ? { costCode } : {}) }),
+        body: JSON.stringify({
+          type,
+          ...(costCode ? { costCode } : {}),
+          ...(type === 'clock_out' ? { dailyCertificationConfirmed } : {}),
+        }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -751,6 +757,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
     },
     onSuccess: () => {
       setSelectedClockInChargeCode('none');
+      setDailyPunchOutConfirmed(false);
       queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/punches/my/current'] });
       queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/timesheets', 'mine', 'running'] });
     },
@@ -2206,12 +2213,26 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
                             <Coffee className="h-5 w-5" />
                             {punchMutation.isPending ? 'Recording…' : 'Start Break'}
                           </Button>
+                          <label className="flex w-full max-w-xl items-start gap-3 rounded-md border border-blue-200 bg-blue-50 p-3 text-left">
+                            <input
+                              type="checkbox"
+                              checked={dailyPunchOutConfirmed}
+                              onChange={(event) => setDailyPunchOutConfirmed(event.target.checked)}
+                              className="mt-1 h-4 w-4 rounded border-blue-300 text-blue-600"
+                            />
+                            <span className="text-sm text-blue-900">
+                              I certify that today&apos;s recorded time is complete, accurate, and represents work I actually performed.
+                            </span>
+                          </label>
                           <Button
                             size="lg"
                             variant="outline"
                             className="border-red-400 text-red-700 hover:bg-red-50 gap-2 px-6"
-                            disabled={punchMutation.isPending}
-                            onClick={() => punchMutation.mutate({ type: 'clock_out' })}
+                            disabled={punchMutation.isPending || !dailyPunchOutConfirmed}
+                            onClick={() => punchMutation.mutate({
+                              type: 'clock_out',
+                              dailyCertificationConfirmed: dailyPunchOutConfirmed,
+                            })}
                           >
                             <LogOut className="h-5 w-5" />
                             {punchMutation.isPending ? 'Recording…' : 'Clock Out'}

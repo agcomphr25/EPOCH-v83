@@ -14,6 +14,8 @@ import { getActiveRoutingStep } from '../services/routingStepService';
 import { laborAllocationsEnabled } from '../lib/featureFlags';
 import { ensureProductionWorkflowReadSchema } from '../lib/productionWorkflowReadiness';
 import * as allocationService from '../services/laborAllocationService';
+import { buildChargeContextFromTraveler } from '../helpers/travelerBarcodeResolver';
+import { executeTravelerAutoPunch } from './timeClock';
 import { db } from '../../db';
 import {
   insertTravelerSchema,
@@ -1552,7 +1554,7 @@ router.get('/:travelerId/steps/:stepId/labor-context', async (req: Request, res:
 router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Response) => {
   try {
     const { travelerId, stepId } = req.params;
-    const { startedBy, badgeScan, employeeId: bodyEmployeeId, operationScanValue } = req.body;
+    const { startedBy, badgeScan, employeeId: bodyEmployeeId, operationScanValue, laborApprovalId } = req.body;
 
     // Resolve badge scan code to employee name and ID if badge was scanned.
     // Normalise dashes so scanner-formatted UUIDs (xxxxxxxx-xxxx-...) match DB rows
@@ -1693,6 +1695,50 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
         hint: 'Set a default charge code on the production work order or the traveler.',
       });
     }
+    let travelerAutoPunch:
+      | { action: 'clockedIn' | 'switched' | 'unchanged'; chargeCode: string | null; warning?: string }
+      | null = null;
+    if (traveler.productionWorkOrderId) {
+      if (resolvedEmployeeId == null) {
+        return res.status(400).json({
+          error: 'EMPLOYEE_NOT_RESOLVED',
+          message: 'A recognized employee badge or employee record is required before the traveler can change the active charge-code punch.',
+        });
+      }
+
+      const contextResult = await buildChargeContextFromTraveler({
+        id: traveler.id,
+        travelerNumber: traveler.travelerNumber,
+        productionWorkOrderId: traveler.productionWorkOrderId,
+      });
+      if (!contextResult.ok) {
+        return res.status(400).json({
+          error: contextResult.error.code,
+          message: contextResult.error.message,
+        });
+      }
+
+      const parsedApprovalId =
+        laborApprovalId != null && !Number.isNaN(parseInt(String(laborApprovalId), 10))
+          ? parseInt(String(laborApprovalId), 10)
+          : null;
+      const autoPunch = await executeTravelerAutoPunch({
+        context: contextResult.context,
+        employeeIdString: String(resolvedEmployeeId),
+        parsedApprovalId,
+      });
+      if (!autoPunch.ok) {
+        return res.status(autoPunch.status).json(autoPunch.body);
+      }
+      travelerAutoPunch = {
+        action: autoPunch.action,
+        chargeCode:
+          autoPunch.chargeContext?.resolvedChargeCode ??
+          autoPunch.chargeContext?.chargeCode ??
+          null,
+        warning: autoPunch.warning,
+      };
+    }
     // ──────────────────────────────────────────────────────────────────────
 
     const updatedStep = await performStepStart(
@@ -1749,7 +1795,7 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
         });
 
         // Phase D: close current allocation and open a new segment for the new traveler step.
-        if (laborAllocationsEnabled) {
+        if (laborAllocationsEnabled && travelerAutoPunch?.action !== 'clockedIn' && travelerAutoPunch?.action !== 'switched') {
           const updatedOpenEntry = await storage.getOpenPunchLedgerEntry(resolvedEmployeeId);
           if (updatedOpenEntry) {
             allocationService.switchAllocation(updatedOpenEntry, {
@@ -1769,7 +1815,7 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
     }
     // ──────────────────────────────────────────────────────────────────────
 
-    res.json({ ...updatedStep, wadLaborContext });
+    res.json({ ...updatedStep, wadLaborContext, autoPunch: travelerAutoPunch });
   } catch (error: any) {
     console.error('Error starting step:', error);
     res.status(500).json({ error: 'Failed to start step', message: error.message });

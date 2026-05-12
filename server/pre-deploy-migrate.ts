@@ -193,7 +193,7 @@ async function runGovernanceGate(migrationsDir: string, migrationFiles: string[]
 
 async function main() {
   console.log('🔧 Pre-deploy migration runner starting...');
-  console.log(`   DATABASE_URL host: ${DATABASE_URL!.replace(/:[^:@]*@/, ':***@')}`);
+  console.log(`   DATABASE_URL host: ${connectionString.replace(/:[^:@]*@/, ':***@')}`);
 
   const migrationsDir = path.resolve(__dirname, '../migrations');
 

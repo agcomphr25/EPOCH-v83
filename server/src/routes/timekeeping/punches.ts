@@ -394,8 +394,7 @@ router.get("/kiosk/charge-codes", h(async (req, res): Promise<void> => {
   res.json(codes);
 }));
 
-// POST /api/timekeeping/kiosk/punch — records kiosk clock_in/out events into punch_ledger.
-// break_start and break_end are not valid kiosk actions; on_break is treated as clock_out.
+// POST /api/timekeeping/kiosk/punch — records kiosk clock_in/out/break events into punch_ledger.
 // employeeId in body is public.employees.id.
 router.post("/kiosk/punch", optionalAuth, h(async (req, res): Promise<void> => {
   const body = KioskPunchBody.safeParse(req.body);
@@ -479,10 +478,11 @@ router.post("/kiosk/punch", optionalAuth, h(async (req, res): Promise<void> => {
   const currentStatus = ledger.deriveStatus(openSession);
 
   // Resolve action: use requestedAction if provided, otherwise infer from status.
-  // on_break is treated as clock_out (breaks are not tracked via kiosk).
   let action = requestedAction;
   if (!action) {
     if (currentStatus === "clocked_out") action = "clock_in";
+    else if (currentStatus === "on_break") action = "break_end";
+    else action = "clock_out";
     else action = "clock_out"; // covers clocked_in and on_break
   }
 
@@ -564,6 +564,10 @@ router.post("/kiosk/punch", optionalAuth, h(async (req, res): Promise<void> => {
         res.status(409).json({ error: "Employee is not clocked in." });
         return;
       }
+      if (currentStatus === "on_break") {
+        res.status(409).json({ error: "End break before clocking out for the day." });
+        return;
+      }
       entry = await ledger.closeSession(resolvedEmployeeId);
       const dailyCertification = await certifyDailyTimeOnPunchOut(
         resolvedEmployeeId,
@@ -581,8 +585,64 @@ router.post("/kiosk/punch", optionalAuth, h(async (req, res): Promise<void> => {
       message = `Goodbye, ${firstName}! You have clocked out.`;
       break;
     }
+    case "break_start": {
+      if (currentStatus !== "clocked_in" || !openSession) {
+        res.status(409).json({ error: currentStatus === "on_break" ? "Employee is already on break." : "Employee is not clocked in." });
+        return;
+      }
+      const closedWork = await ledger.closeSession(resolvedEmployeeId);
+      entry = await ledger.openSession({
+        employeeId: resolvedEmployeeId,
+        source: "KIOSK",
+        laborClass: "BREAK",
+        travelerId: closedWork?.travelerId ?? openSession.travelerId ?? null,
+        productionWorkOrderId: closedWork?.productionWorkOrderId ?? openSession.productionWorkOrderId ?? null,
+        chargeCodeId: closedWork?.chargeCodeId ?? openSession.chargeCodeId ?? null,
+        department: closedWork?.department ?? openSession.department ?? null,
+        operation: closedWork?.operation ?? openSession.operation ?? null,
+        projectId: closedWork?.projectId ?? openSession.projectId ?? null,
+        travelerStepId: closedWork?.travelerStepId ?? openSession.travelerStepId ?? null,
+        certificationStatus: closedWork?.certificationStatus ?? openSession.certificationStatus ?? null,
+        isOverrun: closedWork?.isOverrun ?? openSession.isOverrun ?? false,
+        overrunReason: closedWork?.overrunReason ?? openSession.overrunReason ?? null,
+        overrideReason: closedWork?.overrideReason ?? openSession.overrideReason ?? null,
+        approvalStatus: closedWork?.approvalStatus ?? openSession.approvalStatus ?? "AUTO",
+        laborApprovalId: closedWork?.laborApprovalId ?? openSession.laborApprovalId ?? null,
+        laborBudgetOverrideId: closedWork?.laborBudgetOverrideId ?? openSession.laborBudgetOverrideId ?? null,
+      });
+      message = `${firstName}, you are clocked out for break.`;
+      break;
+    }
+    case "break_end": {
+      if (currentStatus !== "on_break" || !openSession) {
+        res.status(409).json({ error: "Employee is not on break." });
+        return;
+      }
+      const closedBreak = await ledger.closeSession(resolvedEmployeeId);
+      entry = await ledger.openSession({
+        employeeId: resolvedEmployeeId,
+        source: "KIOSK",
+        laborClass: "REGULAR",
+        travelerId: closedBreak?.travelerId ?? openSession.travelerId ?? travellerIdResolved,
+        productionWorkOrderId: closedBreak?.productionWorkOrderId ?? openSession.productionWorkOrderId ?? productionWorkOrderId,
+        chargeCodeId: closedBreak?.chargeCodeId ?? openSession.chargeCodeId ?? chargeCodeId,
+        department: closedBreak?.department ?? openSession.department ?? department,
+        operation: closedBreak?.operation ?? openSession.operation ?? operation,
+        projectId: closedBreak?.projectId ?? openSession.projectId ?? null,
+        travelerStepId: closedBreak?.travelerStepId ?? openSession.travelerStepId ?? null,
+        certificationStatus: closedBreak?.certificationStatus ?? openSession.certificationStatus ?? null,
+        isOverrun: closedBreak?.isOverrun ?? openSession.isOverrun ?? false,
+        overrunReason: closedBreak?.overrunReason ?? openSession.overrunReason ?? null,
+        overrideReason: closedBreak?.overrideReason ?? openSession.overrideReason ?? null,
+        approvalStatus: closedBreak?.approvalStatus ?? openSession.approvalStatus ?? approvalStatus,
+        laborApprovalId: closedBreak?.laborApprovalId ?? openSession.laborApprovalId ?? laborApprovalId,
+        laborBudgetOverrideId: closedBreak?.laborBudgetOverrideId ?? openSession.laborBudgetOverrideId ?? laborBudgetOverrideId,
+      });
+      message = `Welcome back, ${firstName}! You are clocked in from break.`;
+      break;
+    }
     default: {
-      res.status(400).json({ error: `Invalid punch action for kiosk: ${action}. Only clock_in and clock_out are supported.` });
+      res.status(400).json({ error: `Invalid punch action for kiosk: ${action}.` });
       return;
     }
   }

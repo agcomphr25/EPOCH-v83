@@ -57,6 +57,7 @@ const REQUIRED_APPROVAL_ROLES = [
 ];
 
 const RISK_TYPES = ['Technical', 'Schedule', 'Material', 'Quality', 'Tooling', 'Supplier'];
+const EMPTY_SELECT_VALUE = '__none__';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface WorkBreakdownRow {
@@ -167,6 +168,7 @@ interface WadControlStatus {
 type Step1AutoSource = 'auto:project' | 'auto:po' | 'auto:po-review' | 'auto:rfq' | 'auto:wad' | 'user';
 
 interface WizardData {
+  currentStep?: number;
   step1?: {
     projectNumber: string;
     customer: string;
@@ -286,6 +288,25 @@ const STEPS = [
   { id: 12, title: 'Final Review', icon: CheckCircle, short: 'Review' },
 ];
 
+function clampWizardStep(value: unknown): number {
+  const numeric = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(numeric)) return 1;
+  return Math.min(Math.max(Math.trunc(numeric), 1), STEPS.length);
+}
+
+function inferResumeStep(wizardData: WizardData): number {
+  const explicitStep = clampWizardStep(wizardData.currentStep);
+  if (explicitStep > 1) return explicitStep;
+
+  for (let i = 10; i >= 1; i -= 1) {
+    if (wizardData[`step${i}` as keyof WizardData]) {
+      return clampWizardStep(i + 1);
+    }
+  }
+
+  return 1;
+}
+
 function BoolField({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
   return (
     <div className="flex items-center gap-2">
@@ -308,7 +329,9 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
 
   useEffect(() => {
     if (wizardCtx?.wad?.wizardData) {
-      setData(wizardCtx.wad.wizardData as WizardData);
+      const savedData = wizardCtx.wad.wizardData as WizardData;
+      setData(savedData);
+      setStep(inferResumeStep(savedData));
     }
   }, [wizardCtx]);
 
@@ -369,12 +392,11 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
   }, []);
 
   const saveAndGoTo = useCallback(async (targetStep: number) => {
+    const nextStep = clampWizardStep(targetStep);
     setSaving(true);
     try {
-      await saveMutation.mutateAsync({ wizardData: data });
-      setStep(targetStep);
-    } catch (err) {
-      console.warn('[WAD Wizard] Step navigation save failed:', err);
+      await saveMutation.mutateAsync({ wizardData: { ...data, currentStep: nextStep } });
+      setStep(nextStep);
     } finally {
       setSaving(false);
     }
@@ -855,7 +877,7 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
         <div className="flex gap-2">
           <Button
             variant="outline"
-            onClick={() => saveMutation.mutate({ wizardData: data })}
+            onClick={() => saveMutation.mutate({ wizardData: { ...data, currentStep: step } })}
             disabled={saveMutation.isPending || saving}
           >
             {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
@@ -1737,12 +1759,12 @@ function Step8Schedule({ departments, data, onChange }: {
         <div className="space-y-1">
           <Label>Bottleneck Department</Label>
           <Select
-            value={base.bottleneckDepartment ? base.bottleneckDepartment : '__NONE__'}
-            onValueChange={v => set('bottleneckDepartment', v === '__NONE__' ? '' : v)}
+            value={base.bottleneckDepartment || EMPTY_SELECT_VALUE}
+            onValueChange={v => set('bottleneckDepartment', v === EMPTY_SELECT_VALUE ? '' : v)}
           >
             <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="__NONE__">None</SelectItem>
+              <SelectItem value={EMPTY_SELECT_VALUE}>None</SelectItem>
               {departments.map(d => (
                 <SelectItem key={d} value={d}>{deptLabels[d] ?? d}</SelectItem>
               ))}

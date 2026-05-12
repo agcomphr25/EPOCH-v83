@@ -18844,39 +18844,7 @@ export class DatabaseStorage implements IStorage {
       const enabledPhases = this._getEnabledPhases(deptConfig);
       const createdTaskKeys = new Set<string>();
 
-      const hasStartChecks = (deptConfig.startChecks || []).length > 0;
-      const hasFinishChecks = (deptConfig.finishChecks || []).length > 0;
-      const hasMaterials = (deptConfig.materials || []).length > 0;
-      const metadataOnlyFields = new Set(['operator', 'timestamp']);
-      const hasTraceFields = (traceabilityConfig[deptName] || []).filter(
-        (f: string) => !metadataOnlyFields.has(f)
-      ).length > 0;
-      const hasCustomFields = (deptConfig.customDataFields || []).length > 0;
-      const hasStartCustomFields = (deptConfig.startCustomDataFields || []).length > 0;
-      const hasFinishCustomFields = (deptConfig.finishCustomDataFields || []).length > 0;
-      const hasQcStandards = (deptConfig.qcStandards || []).length > 0;
-      const hasStartQcStandards = (deptConfig.startQcStandards || []).length > 0;
-      const hasFinishQcStandards = (deptConfig.finishQcStandards || []).length > 0;
-      const hasOvenCuring = (deptConfig.ovenCuringSteps || []).length > 0;
-      const routingInstPack = deptConfig.instructionPack || null;
-      const hasInstructionPackContent = routingInstPack && (
-        (routingInstPack.workInstructionRefs?.length > 0) ||
-        (routingInstPack.aiSnippets?.length > 0) ||
-        (routingInstPack.specialNotes) ||
-        (routingInstPack.media?.length > 0)
-      );
       const hasTimerConfig = deptConfig.timerConfig?.enabled;
-      const hasStdProcesses = (deptConfig.standardProcesses || []).length > 0;
-      const hasSpecialProcess = !!deptConfig.specialProcessConfig?.processName;
-
-      const hasAnyContent = hasStartChecks || hasFinishChecks || hasMaterials || hasTraceFields ||
-        hasCustomFields || hasStartCustomFields || hasFinishCustomFields ||
-        hasQcStandards || hasStartQcStandards || hasFinishQcStandards || hasOvenCuring || hasInstructionPackContent ||
-        hasTimerConfig || hasStdProcesses || hasSpecialProcess;
-
-      if (!hasAnyContent) {
-        continue;
-      }
 
       stepCounter++;
       const stepNumber = stepCounter; // 1, 2, 3, etc.

@@ -73,6 +73,31 @@ const DownloadQuery = z.object({
 });
 
 /**
+ * GET /admin/payroll/readiness?periodStart=&periodEnd=
+ * Read-only DCAA export gate preview. Returns the same certification,
+ * supervisor approval, and correction blockers that batch creation enforces,
+ * without creating, superseding, or downloading a payroll export batch.
+ */
+router.get(
+  "/admin/payroll/readiness",
+  authenticateToken,
+  requireRole("ADMIN", "OWNER"),
+  h(async (req, res) => {
+    const q = PeriodQuery.safeParse(req.query);
+    if (!q.success) {
+      res.status(400).json({ error: q.error.errors.map((e) => e.message).join("; ") });
+      return;
+    }
+    if (q.data.periodStart > q.data.periodEnd) {
+      res.status(400).json({ error: "periodStart must not be after periodEnd" });
+      return;
+    }
+    const readiness = await svc.getPayrollExportReadiness(q.data.periodStart, q.data.periodEnd);
+    res.status(200).json(readiness);
+  }),
+);
+
+/**
  * POST /admin/payroll/batches
  * Create a new regular_full_period export batch.  If an active batch exists
  * for the same period, supersedeReason is REQUIRED and the prior batch is

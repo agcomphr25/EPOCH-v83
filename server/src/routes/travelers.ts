@@ -12,6 +12,7 @@ import { resolveChargeCode, deriveProjectId, resolveCertificationStatus, resolve
 import { resolvePacketBarcode } from '../lib/packetResolution';
 import { getActiveRoutingStep } from '../services/routingStepService';
 import { laborAllocationsEnabled } from '../lib/featureFlags';
+import { ensureProductionWorkflowReadSchema } from '../lib/productionWorkflowReadiness';
 import * as allocationService from '../services/laborAllocationService';
 import { db } from '../../db';
 import {
@@ -254,24 +255,42 @@ router.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
+router.use(async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    await ensureProductionWorkflowReadSchema();
+    next();
+  } catch (error) {
+    console.error('[Travelers] production workflow schema readiness failed:', error);
+    res.status(503).json({
+      error: 'Traveler workflow schema is not ready',
+      message: 'Traveler data is temporarily unavailable while production workflow tables are prepared.',
+    });
+  }
+});
+
 router.use(validateActionToken);
 
 // Get all travelers with optional filters
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const { status, partNumber, workOrderId, inventoryItemId } = req.query;
+    const { status, partNumber, workOrderId, inventoryItemId, partRoutingId, routingId } = req.query;
 
     const filters: {
       status?: string;
       partNumber?: string;
       workOrderId?: string;
       inventoryItemId?: string;
+      partRoutingId?: string;
     } = {};
 
     if (status && typeof status === 'string') filters.status = status;
     if (partNumber && typeof partNumber === 'string') filters.partNumber = partNumber;
     if (workOrderId && typeof workOrderId === 'string') filters.workOrderId = workOrderId;
     if (inventoryItemId && typeof inventoryItemId === 'string') filters.inventoryItemId = inventoryItemId;
+    const routingIdParam = (typeof partRoutingId === 'string' && partRoutingId)
+      || (typeof routingId === 'string' && routingId)
+      || null;
+    if (routingIdParam) filters.partRoutingId = routingIdParam;
 
     const travelers = await storage.getTravelers(
       Object.keys(filters).length > 0 ? filters : undefined

@@ -1336,6 +1336,16 @@ export default function TravelerExecution() {
                 <p className="font-medium">{traveler.partNumber}</p>
                 <p className="text-xs text-muted-foreground">{traveler.partName}</p>
               </div>
+              {traveler.partRoutingId && (
+                <div>
+                  <span className="text-muted-foreground">Routing:</span>
+                  <Link href={`/p2-control-center?tab=routing&routingId=${traveler.partRoutingId}`}>
+                    <Button variant="link" className="h-auto p-0 font-medium text-left" data-testid={`link-routing-${traveler.partRoutingId}`}>
+                      View routing
+                    </Button>
+                  </Link>
+                </div>
+              )}
               {traveler.workOrderId && (
                 <div>
                   <span className="text-muted-foreground">Work Order:</span>
@@ -1456,6 +1466,7 @@ export default function TravelerExecution() {
                       ? 'bg-red-100 text-red-800'
                       : 'bg-gray-100 text-gray-800'
                   }`}
+                  data-testid={`text-traveler-status-${traveler.status.toLowerCase()}`}
                 >
                   {traveler.status}
                 </Badge>

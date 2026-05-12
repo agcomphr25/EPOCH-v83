@@ -88,6 +88,7 @@ interface Traveler {
   quantity: number;
   routingName: string | null;
   routingRevision: string | null;
+  partRoutingId: string | null;
   createdAt: string;
   startedAt: string | null;
   completedAt: string | null;
@@ -1150,14 +1151,33 @@ function P2TravelersTab() {
                       <TableCell className="font-mono text-sm">{traveler.serialNumber || '-'}</TableCell>
                       <TableCell>
                         {traveler.routingName ? (
-                          <div>
-                            <span>{traveler.routingName}</span>
-                            {traveler.routingRevision && (
-                              <Badge variant="outline" className="ml-2 text-xs">
-                                Rev {traveler.routingRevision}
-                              </Badge>
-                            )}
-                          </div>
+                          traveler.partRoutingId ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/p2-control-center?tab=routing&routingId=${traveler.partRoutingId}`);
+                              }}
+                              className="text-left text-blue-600 hover:underline dark:text-blue-400"
+                              data-testid={`link-routing-${traveler.partRoutingId}`}
+                            >
+                              <span>{traveler.routingName}</span>
+                              {traveler.routingRevision && (
+                                <Badge variant="outline" className="ml-2 text-xs">
+                                  Rev {traveler.routingRevision}
+                                </Badge>
+                              )}
+                            </button>
+                          ) : (
+                            <div>
+                              <span>{traveler.routingName}</span>
+                              {traveler.routingRevision && (
+                                <Badge variant="outline" className="ml-2 text-xs">
+                                  Rev {traveler.routingRevision}
+                                </Badge>
+                              )}
+                            </div>
+                          )
                         ) : '-'}
                       </TableCell>
                       <TableCell>{traveler.quantity}</TableCell>

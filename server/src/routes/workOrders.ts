@@ -29,6 +29,9 @@ import {
   travelerSteps,
   travelerTasks,
   insertWadProductionControlsSchema,
+  projectSteps,
+  rfqRiskAssessments,
+  purchaseReviewChecklists,
   type LaborBudgetOverride,
   type ProductionControlTemplate,
 } from '../../schema';
@@ -2343,6 +2346,233 @@ router.post(
 
 const WAD_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// ─── Contract Context Defaults helper ─────────────────────────────────────────
+// Builds a normalized `contractContextDefaults` object from upstream docs so the
+// WAD Wizard Step 1 can be pre-populated without duplicate data entry.
+//
+// Precedence rules (first truthy value wins):
+//   projectNumber      ← project.projectCode                           (auto:project)
+//   customer           ← PO Review formData.companyName
+//                        → RFQ customerName
+//                        → project.customerNameSnapshot                (auto:po-review | auto:rfq | auto:project)
+//   poNumber           ← p2PurchaseOrders.poNumber
+//                        → PO Review formData.poNumber                 (auto:po | auto:po-review)
+//   customerPartNumber ← PO Review formData.partNumber or level1ItemNumber (auto:po-review)
+//   internalPartNumber ← productionWorkOrders.partNumber               (auto:wad)
+//   revision           ← PO Review formData.partRevision or revision   (auto:po-review)
+//   quantity           ← PO Review formData.quantityRequested
+//                        → p2PurchaseOrderItems[0].quantity             (auto:po-review | auto:po)
+//   shipDate           ← PO Review formData.firstArticleDueDate
+//                        → p2PurchaseOrders.expectedDelivery            (auto:po-review | auto:po)
+//   contractReviewStatus ← RFQ status (submitted → APPROVED, else IN_REVIEW) (auto:rfq)
+//   riskAssessmentStatus ← RFQ riskDetermination presence (COMPLETE | IN_PROGRESS) (auto:rfq)
+//   poReviewApproved   ← purchaseReviewChecklists.status === 'APPROVED' (auto:po-review)
+type AutoSource = 'auto:project' | 'auto:po' | 'auto:po-review' | 'auto:rfq' | 'auto:wad';
+
+interface ContractContextDefaults {
+  values: {
+    projectNumber: string;
+    customer: string;
+    poNumber: string;
+    customerPartNumber: string;
+    internalPartNumber: string;
+    revision: string;
+    quantity: number;
+    shipDate: string;
+    contractReviewStatus: string;
+    riskAssessmentStatus: string;
+    poReviewApproved: boolean;
+  };
+  sources: {
+    projectNumber: AutoSource | null;
+    customer: AutoSource | null;
+    poNumber: AutoSource | null;
+    customerPartNumber: AutoSource | null;
+    internalPartNumber: AutoSource | null;
+    revision: AutoSource | null;
+    quantity: AutoSource | null;
+    shipDate: AutoSource | null;
+    contractReviewStatus: AutoSource | null;
+    riskAssessmentStatus: AutoSource | null;
+    poReviewApproved: AutoSource | null;
+  };
+}
+
+async function buildContractContextDefaults(
+  wad: typeof productionWorkOrders.$inferSelect,
+  project: typeof projects.$inferSelect | null,
+  po: typeof p2PurchaseOrders.$inferSelect | null,
+): Promise<ContractContextDefaults> {
+  const v: ContractContextDefaults['values'] = {
+    projectNumber: '',
+    customer: '',
+    poNumber: '',
+    customerPartNumber: '',
+    internalPartNumber: '',
+    revision: '',
+    quantity: 1,
+    shipDate: '',
+    contractReviewStatus: '',
+    riskAssessmentStatus: '',
+    poReviewApproved: false,
+  };
+  const s: ContractContextDefaults['sources'] = {
+    projectNumber: null,
+    customer: null,
+    poNumber: null,
+    customerPartNumber: null,
+    internalPartNumber: null,
+    revision: null,
+    quantity: null,
+    shipDate: null,
+    contractReviewStatus: null,
+    riskAssessmentStatus: null,
+    poReviewApproved: null,
+  };
+
+  // Project Number — always from project
+  if (project?.projectCode) {
+    v.projectNumber = project.projectCode;
+    s.projectNumber = 'auto:project';
+  }
+
+  // Internal Part Number — from WAD's own partNumber field
+  if (wad.partNumber) {
+    v.internalPartNumber = wad.partNumber;
+    s.internalPartNumber = 'auto:wad';
+  }
+
+  // Customer (start with project snapshot; may be overridden by PO Review or RFQ below)
+  if (project?.customerNameSnapshot) {
+    v.customer = project.customerNameSnapshot;
+    s.customer = 'auto:project';
+  }
+
+  // Load RFQ and PO Review via project_steps
+  let rfq: typeof rfqRiskAssessments.$inferSelect | null = null;
+  let poReview: typeof purchaseReviewChecklists.$inferSelect | null = null;
+
+  if (project?.id) {
+    const steps = await db.select().from(projectSteps).where(eq(projectSteps.projectId, project.id));
+    const rfqStep = steps.find((st) => st.stepType === 'rfq_risk_assessment');
+    const prStep = steps.find((st) => st.stepType === 'purchase_review_checklist');
+
+    if (rfqStep?.linkedRfqId) {
+      const [row] = await db.select().from(rfqRiskAssessments).where(eq(rfqRiskAssessments.id, rfqStep.linkedRfqId)).limit(1);
+      rfq = row ?? null;
+    }
+    if (prStep?.linkedPurchaseReviewId) {
+      const [row] = await db.select().from(purchaseReviewChecklists).where(eq(purchaseReviewChecklists.id, prStep.linkedPurchaseReviewId)).limit(1);
+      poReview = row ?? null;
+    }
+  }
+
+  // ── Step A: RFQ fallbacks (lowest precedence for most fields) ─────────────
+  // Customer ← RFQ customerName (overrides project snapshot)
+  if (rfq?.customerName) {
+    v.customer = rfq.customerName;
+    s.customer = 'auto:rfq';
+  }
+
+  // Contract Review Status ← RFQ status (submitted → APPROVED, else IN_REVIEW)
+  if (rfq) {
+    v.contractReviewStatus = rfq.status === 'submitted' ? 'APPROVED' : 'IN_REVIEW';
+    s.contractReviewStatus = 'auto:rfq';
+  }
+
+  // Risk Assessment Status ← RFQ riskDetermination presence (COMPLETE | IN_PROGRESS)
+  if (rfq) {
+    v.riskAssessmentStatus = rfq.riskDetermination ? 'COMPLETE' : 'IN_PROGRESS';
+    s.riskAssessmentStatus = 'auto:rfq';
+  }
+
+  // Part Number / Revision / Quantity / Required Ship Date ← RFQ formData (lowest precedence)
+  // RFQ forms don't always have these fields; check common key names permissively
+  if (rfq) {
+    const rfd = (rfq.formData ?? {}) as Record<string, unknown>;
+    const rStr = (k: string) => typeof rfd[k] === 'string' ? (rfd[k] as string).trim() : '';
+    const rNum = (k: string) => { const n = parseFloat(String(rfd[k] ?? '')); return Number.isFinite(n) ? n : null; };
+    const rfqPartNumber = rStr('partNumber') || rStr('part_number') || rStr('itemPartNumber');
+    if (!v.customerPartNumber && rfqPartNumber) { v.customerPartNumber = rfqPartNumber; s.customerPartNumber = 'auto:rfq'; }
+    const rfqRevision = rStr('revision') || rStr('partRevision') || rStr('rev');
+    if (!v.revision && rfqRevision) { v.revision = rfqRevision; s.revision = 'auto:rfq'; }
+    const rfqQty = rNum('quantity') ?? rNum('quantityRequested');
+    if ((!v.quantity || v.quantity <= 1) && rfqQty !== null && rfqQty > 0) { v.quantity = rfqQty; s.quantity = 'auto:rfq'; }
+    const rfqShipDate = rStr('shipDate') || rStr('requiredDeliveryDate') || rStr('deliveryDate');
+    if (!v.shipDate && rfqShipDate) { v.shipDate = rfqShipDate; s.shipDate = 'auto:rfq'; }
+  }
+
+  // ── Step B: PO Review (higher precedence than RFQ for customer/part/quantity/shipDate) ──
+  if (poReview) {
+    const fd = (poReview.formData ?? {}) as Record<string, unknown>;
+    const str = (k: string) => typeof fd[k] === 'string' ? (fd[k] as string).trim() : '';
+    const num = (k: string) => { const n = parseFloat(String(fd[k] ?? '')); return Number.isFinite(n) ? n : null; };
+
+    // Customer name — PO Review takes precedence over RFQ and project
+    if (str('companyName')) { v.customer = str('companyName'); s.customer = 'auto:po-review'; }
+
+    // Customer Part Number ← PO Review formData level items (overrides RFQ)
+    const cpn = str('partNumber') || str('level1ItemNumber') || str('level1PartsKits') || str('level2ItemNumber');
+    if (cpn) { v.customerPartNumber = cpn; s.customerPartNumber = 'auto:po-review'; }
+
+    // Part Revision ← PO Review (overrides RFQ)
+    const rev = str('partRevision') || str('revision');
+    if (rev) { v.revision = rev; s.revision = 'auto:po-review'; }
+
+    // Quantity ← PO Review quantityRequested (overrides RFQ)
+    const qty = num('quantityRequested');
+    if (qty !== null && qty > 0) { v.quantity = qty; s.quantity = 'auto:po-review'; }
+
+    // Ship date ← PO Review firstArticleDueDate (overrides RFQ)
+    const sd = str('firstArticleDueDate') || str('deliverySchedule');
+    if (sd) { v.shipDate = sd; s.shipDate = 'auto:po-review'; }
+
+    // PO Review Approved ← checklist status
+    v.poReviewApproved = poReview.status === 'APPROVED';
+    s.poReviewApproved = 'auto:po-review';
+
+    // Customer PO Number from PO Review (only if linked P2 PO has no number — PO Review is fallback)
+    if (!v.poNumber && str('poNumber')) { v.poNumber = str('poNumber'); s.poNumber = 'auto:po-review'; }
+  }
+
+  // ── Step C: Linked P2 PO (highest precedence for poNumber, customer, ship date) ──
+  // Task spec: Customer PO Number ← linked P2 PO → PO Review formData
+  // Meaning P2 PO wins over PO Review for poNumber.
+  if (po) {
+    // poNumber: P2 PO takes precedence — set unconditionally (overrides PO Review)
+    if (po.poNumber) { v.poNumber = po.poNumber; s.poNumber = 'auto:po'; }
+    // customer: P2 PO fills gap only if still empty
+    if (!v.customer && po.customerName) { v.customer = po.customerName; s.customer = 'auto:po'; }
+    // ship date: P2 PO fills gap if not already set by PO Review or RFQ
+    if (!v.shipDate && po.expectedDelivery) {
+      v.shipDate = typeof po.expectedDelivery === 'string'
+        ? po.expectedDelivery
+        : (po.expectedDelivery as Date).toISOString().split('T')[0];
+      s.shipDate = 'auto:po';
+    }
+    // Load first PO item for quantity / customer part number gaps
+    if ((!v.quantity || v.quantity <= 1) || !v.customerPartNumber) {
+      const [poItem] = await db
+        .select()
+        .from(p2PurchaseOrderItems)
+        .where(eq(p2PurchaseOrderItems.poId, po.id))
+        .limit(1);
+      if (poItem) {
+        if ((!v.quantity || v.quantity <= 1) && poItem.quantity > 0) {
+          v.quantity = poItem.quantity;
+          s.quantity = 'auto:po';
+        }
+        if (!v.customerPartNumber && poItem.partNumber) {
+          v.customerPartNumber = poItem.partNumber;
+          s.customerPartNumber = 'auto:po';
+        }
+      }
+    }
+  }
+
+  return { values: v, sources: s };
+}
+
 // GET /production/:id/wizard — fetch WAD wizard data + project context for pre-population
 router.get('/production/:id/wizard', async (req: Request, res: Response) => {
   const { id } = req.params;
@@ -2364,6 +2594,9 @@ router.get('/production/:id/wizard', async (req: Request, res: Response) => {
     const wizardData = (wad.wizardData as Record<string, unknown> | null) ?? {};
     const controlStatus = await calculateWadControlStatus(wad, wizardData);
 
+    // Build contract context defaults from upstream docs (RFQ, PO Review, PO, Project)
+    const contractContextDefaults = await buildContractContextDefaults(wad, project ?? null, po);
+
     return res.json({
       wad: {
         ...wad,
@@ -2379,6 +2612,7 @@ router.get('/production/:id/wizard', async (req: Request, res: Response) => {
       po,
       controlStatus,
       approvalMatrix: WAD_APPROVAL_MATRIX.map(({ key, label }) => ({ key, label })),
+      contractContextDefaults,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

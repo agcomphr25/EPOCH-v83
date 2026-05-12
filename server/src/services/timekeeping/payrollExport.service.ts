@@ -200,6 +200,14 @@ export class PayrollExportReadinessError extends Error {
   }
 }
 
+export interface PayrollExportReadinessResult {
+  periodStart: string;
+  periodEnd: string;
+  ready: boolean;
+  blockerCount: number;
+  blockers: PayrollExportReadinessBlocker[];
+}
+
 // ---------------------------------------------------------------------------
 // CSV building
 // ---------------------------------------------------------------------------
@@ -484,12 +492,39 @@ async function assertPayrollExportReady(
   periodStart: string,
   periodEnd: string,
 ): Promise<void> {
-  const blockers = dataSource.fetchPayrollReadinessBlockers
-    ? await dataSource.fetchPayrollReadinessBlockers(periodStart, periodEnd)
-    : [];
+  const blockers = await fetchPayrollExportReadinessBlockers(dataSource, periodStart, periodEnd);
   if (blockers.length > 0) {
     throw new PayrollExportReadinessError(blockers);
   }
+}
+
+async function fetchPayrollExportReadinessBlockers(
+  dataSource: PayrollSnapshotDataSource,
+  periodStart: string,
+  periodEnd: string,
+): Promise<PayrollExportReadinessBlocker[]> {
+  return dataSource.fetchPayrollReadinessBlockers
+    ? await dataSource.fetchPayrollReadinessBlockers(periodStart, periodEnd)
+    : [];
+}
+
+export async function getPayrollExportReadiness(
+  periodStart: string,
+  periodEnd: string,
+  dataSourceOverride?: PayrollSnapshotDataSource,
+): Promise<PayrollExportReadinessResult> {
+  const blockers = await fetchPayrollExportReadinessBlockers(
+    dataSourceOverride ?? txDataSource(db),
+    periodStart,
+    periodEnd,
+  );
+  return {
+    periodStart,
+    periodEnd,
+    ready: blockers.length === 0,
+    blockerCount: blockers.length,
+    blockers,
+  };
 }
 
 /**
@@ -943,6 +978,11 @@ export interface ImportTimeTrakGoGustoCsvInput {
   actor: AuditActor;
   supersedeReason?: string;
   sourceFileName?: string | null;
+  /**
+   * Test seam for readiness gating. Production import callers should not pass
+   * this; they always evaluate readiness from the transaction data source.
+   */
+  dataSourceOverride?: PayrollSnapshotDataSource;
 }
 
 function requireActorId(actor: AuditActor): number {
@@ -1178,6 +1218,9 @@ export async function importTimeTrakGoGustoCsvBatch(
   const rows = await resolveImportedRows(parsedRows);
 
   return await withSerializableRetry(async (tx) => {
+    const dataSource = input.dataSourceOverride ?? txDataSource(tx);
+    await assertPayrollExportReady(dataSource, input.periodStart, input.periodEnd);
+
     const prior = await tx
       .select()
       .from(payrollExportBatchesTable)

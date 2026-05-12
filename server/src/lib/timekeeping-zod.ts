@@ -123,6 +123,7 @@ export const KioskPunchBody = z
       .nullish(),
     costCode: z.string().nullish(),
     travelerId: z.string().nullish(),
+    dailyCertificationConfirmed: z.boolean().optional(),
   })
   .describe("employeeId is required; clock_in, clock_out, break_start, and break_end are valid kiosk actions");
 

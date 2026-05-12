@@ -395,6 +395,35 @@ describe('payrollExport.service - Phase 1', () => {
     expect(harness.store.events).toHaveLength(0);
   });
 
+  it('reports payroll readiness blockers without mutating export evidence', async () => {
+    const readiness = await svc.getPayrollExportReadiness(
+      PERIOD_START,
+      PERIOD_END,
+      source({
+        fetchPayrollReadinessBlockers: vi.fn().mockResolvedValue([
+          {
+            code: 'MISSING_SUPERVISOR_APPROVAL',
+            employeeId: 2,
+            timesheetId: 12,
+            status: 'certified',
+            message: 'Certified/locked timesheet is missing supervisor review evidence.',
+          },
+        ]),
+      }),
+    );
+
+    expect(readiness).toMatchObject({
+      periodStart: PERIOD_START,
+      periodEnd: PERIOD_END,
+      ready: false,
+      blockerCount: 1,
+      blockers: [{ code: 'MISSING_SUPERVISOR_APPROVAL', employeeId: 2, timesheetId: 12 }],
+    });
+    expect(harness.store.batches).toHaveLength(0);
+    expect(harness.store.rows).toHaveLength(0);
+    expect(harness.store.events).toHaveLength(0);
+  });
+
   it('uses employee ids rather than names, so duplicate and compound names stay distinct', async () => {
     const ds = source({
       fetchTimesheets: vi.fn().mockResolvedValue([
@@ -522,6 +551,21 @@ describe('payrollExport routes - static guards', () => {
     expect(gustoRoute).not.toContain('createRegularFullPeriodBatch');
   });
 
+  it('exposes a read-only admin payroll readiness route', () => {
+    const routeFile = readFileSync(resolve(__dirname, '../src/routes/timekeeping/payrollExport.ts'), 'utf8');
+    const readinessStart = routeFile.indexOf('router.get(\n  "/admin/payroll/readiness"');
+    expect(readinessStart).toBeGreaterThan(-1);
+    const readinessRoute = routeFile.slice(
+      readinessStart,
+      routeFile.indexOf('/**\n * POST /admin/payroll/batches', readinessStart),
+    );
+
+    expect(readinessRoute).toContain('requireRole("ADMIN", "OWNER")');
+    expect(readinessRoute).toContain('getPayrollExportReadiness');
+    expect(readinessRoute).not.toContain('createRegularFullPeriodBatch');
+    expect(readinessRoute).not.toContain('importTimeTrakGoGustoCsvBatch');
+  });
+
   it('batch creation checks DCAA readiness blockers before mutating payroll export tables', () => {
     const serviceFile = readFileSync(resolve(__dirname, '../src/services/timekeeping/payrollExport.service.ts'), 'utf8');
     const createFn = serviceFile.slice(serviceFile.indexOf('export async function createRegularFullPeriodBatch'));
@@ -533,6 +577,16 @@ describe('payrollExport routes - static guards', () => {
     expect(createFn.indexOf('await assertPayrollExportReady')).toBeGreaterThan(-1);
     expect(createFn.indexOf('await assertPayrollExportReady')).toBeLessThan(
       createFn.indexOf('.from(payrollExportBatchesTable)'),
+    );
+  });
+
+  it('TimeTrakGo imports check DCAA readiness blockers before mutating payroll export tables', () => {
+    const serviceFile = readFileSync(resolve(__dirname, '../src/services/timekeeping/payrollExport.service.ts'), 'utf8');
+    const importFn = serviceFile.slice(serviceFile.indexOf('export async function importTimeTrakGoGustoCsvBatch'));
+
+    expect(importFn.indexOf('await assertPayrollExportReady')).toBeGreaterThan(-1);
+    expect(importFn.indexOf('await assertPayrollExportReady')).toBeLessThan(
+      importFn.indexOf('.from(payrollExportBatchesTable)'),
     );
   });
 });

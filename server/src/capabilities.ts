@@ -78,6 +78,8 @@ export const REQUIRED_CAPABILITY_KEYS: readonly string[] = [
 
   // Quality
   'quality.manage_definitions',
+  'quality.manage_capa',
+  'quality.manage_calibration',
 
   // Purchasing
   'purchasing.manage_pos',

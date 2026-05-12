@@ -15,7 +15,7 @@ import bcrypt from "bcryptjs";
 import { eq, and } from "drizzle-orm";
 import { z } from "zod";
 import { actorFromUser, logAction } from "../../services/timekeeping/audit.service";
-import { findFinalizedTimesheetForPunch, isInFinalizedTimesheetPeriod, findPayrollApprovedSalariedTimesheetForPunch } from "../../services/timekeeping/timesheets.service";
+import { certifyDailyTimeOnPunchOut, findFinalizedTimesheetForPunch, isInFinalizedTimesheetPeriod, findPayrollApprovedSalariedTimesheetForPunch } from "../../services/timekeeping/timesheets.service";
 import { checkActivePTOForEmployee } from "../../services/timekeeping/timeoff.service";
 import { authenticateToken, requireRole, optionalAuth } from "../../../middleware/auth";
 import * as ledger from "../../lib/punchLedger";
@@ -400,7 +400,7 @@ router.post("/kiosk/punch", optionalAuth, h(async (req, res): Promise<void> => {
   const body = KioskPunchBody.safeParse(req.body);
   if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
 
-  const { employeeId, timezone, requestedAction, costCode, travelerId } = body.data;
+  const { employeeId, timezone, requestedAction, costCode, travelerId, dailyCertificationConfirmed } = body.data;
 
   // Resolve employee identity — employeeId is public.employees.id (resolved at login step)
   if (employeeId == null) {
@@ -483,6 +483,20 @@ router.post("/kiosk/punch", optionalAuth, h(async (req, res): Promise<void> => {
     if (currentStatus === "clocked_out") action = "clock_in";
     else if (currentStatus === "on_break") action = "break_end";
     else action = "clock_out";
+    else action = "clock_out"; // covers clocked_in and on_break
+  }
+
+  if (action === "clock_out" && dailyCertificationConfirmed !== true) {
+    res.status(400).json({
+      error: "Daily employee certification is required when punching out for the day.",
+      certificationRequired: true,
+    });
+    return;
+  }
+
+  // Normalise on_break punches to clock_out
+  if (action === "clock_out" && currentStatus === "on_break") {
+    // fall through — closeSession handles open break sessions correctly
   }
 
   let entry;
@@ -555,6 +569,19 @@ router.post("/kiosk/punch", optionalAuth, h(async (req, res): Promise<void> => {
         return;
       }
       entry = await ledger.closeSession(resolvedEmployeeId);
+      const dailyCertification = await certifyDailyTimeOnPunchOut(
+        resolvedEmployeeId,
+        entry?.clockOut ?? new Date(),
+        actorFromUser(req.user ?? null, req.ip ?? null),
+        { certificationConfirmed: true, source: "kiosk_punch_out" },
+      );
+      if (dailyCertification && "error" in dailyCertification) {
+        res.status(dailyCertification.statusCode).json({
+          error: dailyCertification.error,
+          punchRecorded: true,
+        });
+        return;
+      }
       message = `Goodbye, ${firstName}! You have clocked out.`;
       break;
     }
@@ -633,6 +660,7 @@ router.post("/kiosk/punch", optionalAuth, h(async (req, res): Promise<void> => {
     action,
     employeeId: resolvedEmployeeId,
     message,
+    dailyCertificationRecorded: action === "clock_out",
     status: ledger.deriveStatus(action === "clock_out" ? null : entry),
   });
 }));
@@ -681,10 +709,18 @@ router.post("/punches/my", authenticateToken, h(async (req, res): Promise<void> 
     return;
   }
 
-  const { type, costCode, travelerId } = req.body ?? {};
+  const { type, costCode, travelerId, dailyCertificationConfirmed } = req.body ?? {};
   const validTypes = ["clock_in", "clock_out", "break_start", "break_end"];
   if (!type || !validTypes.includes(type)) {
     res.status(400).json({ error: `type must be one of: ${validTypes.join(", ")}` });
+    return;
+  }
+
+  if (type === "clock_out" && dailyCertificationConfirmed !== true) {
+    res.status(400).json({
+      error: "Daily employee certification is required when punching out for the day.",
+      certificationRequired: true,
+    });
     return;
   }
 
@@ -807,6 +843,19 @@ router.post("/punches/my", authenticateToken, h(async (req, res): Promise<void> 
         return;
       }
       entry = await ledger.closeSession(epochEmployeeId);
+      const dailyCertification = await certifyDailyTimeOnPunchOut(
+        epochEmployeeId,
+        entry?.clockOut ?? new Date(),
+        actorFromUser(req.user ?? null, req.ip ?? null),
+        { certificationConfirmed: true, source: "portal_punch_out" },
+      );
+      if (dailyCertification && "error" in dailyCertification) {
+        res.status(dailyCertification.statusCode).json({
+          error: dailyCertification.error,
+          punchRecorded: true,
+        });
+        return;
+      }
       break;
     }
     case "break_start": {
@@ -852,7 +901,7 @@ router.post("/punches/my", authenticateToken, h(async (req, res): Promise<void> 
     timestamp: new Date().toISOString(),
   });
 
-  res.status(201).json({ entry, type });
+  res.status(201).json({ entry, type, dailyCertificationRecorded: type === "clock_out" });
 }));
 
 // ---------------------------------------------------------------------------

@@ -37,6 +37,7 @@ type CoaAccount = {
   systemControlled: boolean;
   isActive: boolean;
   description: string | null;
+  currentBalance?: number;
 };
 
 function badgeVariant(value: string) {
@@ -55,11 +56,11 @@ export default function ChartOfAccountsPage() {
     isLoading,
     isError,
   } = useQuery<CoaAccount[]>({
-    queryKey: ['/api/accounting/coa/accounts', activeFilter],
+    queryKey: ['/api/accounting/coa/accounts-with-balances', activeFilter],
     queryFn: async () => {
       const activeOnly = activeFilter === 'active';
       const response = await fetch(
-        `/api/accounting/coa/accounts?activeOnly=${activeOnly}`,
+        `/api/accounting/coa/accounts-with-balances?activeOnly=${activeOnly}`,
         {
           credentials: 'include',
         }
@@ -181,6 +182,7 @@ export default function ChartOfAccountsPage() {
                   <TableHead>Pool</TableHead>
                   <TableHead>Allowability</TableHead>
                   <TableHead>Direct/Indirect</TableHead>
+                  <TableHead className="text-right">Current Balance</TableHead>
                   <TableHead>Controls</TableHead>
                 </TableRow>
               </TableHeader>
@@ -220,6 +222,12 @@ export default function ChartOfAccountsPage() {
                       <Badge variant="secondary">
                         {account.defaultDirectIndirect}
                       </Badge>
+                    </TableCell>
+                    <TableCell className="text-right font-mono">
+                      <span className={account.currentBalance ? (account.currentBalance < 0 ? 'text-red-600' : 'text-green-700') : ''}>
+                        ${Math.abs(account.currentBalance ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        {account.currentBalance && account.currentBalance < 0 && ' (Cr)'}
+                      </span>
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">

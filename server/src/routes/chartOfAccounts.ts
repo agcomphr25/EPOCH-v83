@@ -1,8 +1,8 @@
 import { Router, type Request, type Response, type NextFunction, type RequestHandler } from 'express';
-import { and, asc, eq, ilike, or } from 'drizzle-orm';
+import { and, asc, eq, ilike, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../../db';
-import { accountingPeriods, chartOfAccounts } from '../../schema';
+import { accountingPeriods, chartOfAccounts, journalEntries, journalLines } from '../../schema';
 import { authenticateToken } from '../../middleware/auth';
 import { requireAccountingAdmin } from '../middleware/requireAccountingAdmin';
 import { recordAuditEvent } from '../services/auditLedgerService';
@@ -74,6 +74,54 @@ router.get('/accounts', h(async (req, res) => {
     .orderBy(asc(chartOfAccounts.accountNumber), asc(chartOfAccounts.accountName));
 
   res.json(rows);
+}));
+
+router.get('/accounts-with-balances', h(async (req, res) => {
+  const activeOnly = req.query.activeOnly !== 'false';
+
+  // Get all accounts
+  const accounts = await db
+    .select()
+    .from(chartOfAccounts)
+    .where(activeOnly ? eq(chartOfAccounts.isActive, true) : undefined)
+    .orderBy(asc(chartOfAccounts.accountNumber), asc(chartOfAccounts.accountName));
+
+  // Get balance for each account by summing posted journal lines
+  const accountsWithBalances = await Promise.all(
+    accounts.map(async (account) => {
+      const balanceResult = await db
+        .select({
+          totalDebit: sql<number>`COALESCE(SUM(CAST(${journalLines.debitAmount} AS DECIMAL)), 0)`,
+          totalCredit: sql<number>`COALESCE(SUM(CAST(${journalLines.creditAmount} AS DECIMAL)), 0)`,
+        })
+        .from(journalLines)
+        .innerJoin(journalEntries, eq(journalLines.journalEntryId, journalEntries.id))
+        .where(and(
+          eq(journalLines.accountId, account.id),
+          eq(journalEntries.status, 'POSTED'),
+        ));
+
+      const [balance] = balanceResult;
+      const totalDebit = Number(balance?.totalDebit ?? 0);
+      const totalCredit = Number(balance?.totalCredit ?? 0);
+
+      // Calculate balance based on normal balance direction
+      let currentBalance = 0;
+      if (account.normalBalance === 'DEBIT') {
+        currentBalance = totalDebit - totalCredit;
+      } else {
+        // CREDIT normal balance
+        currentBalance = totalCredit - totalDebit;
+      }
+
+      return {
+        ...account,
+        currentBalance,
+      };
+    })
+  );
+
+  res.json(accountsWithBalances);
 }));
 
 router.post('/accounts', requireAccountingAdmin, h(async (req, res) => {

@@ -539,6 +539,7 @@ async function initializeBackgroundServices() {
           '0130_vendor_po_support_tables_safe.sql',
           '0130_audit_dcaa_security_section11.sql',
           '0131_user_sessions_login_compatibility.sql',
+          '0132_daily_time_certifications.sql',
           'investigation_308_order_duplication.sql',
         ];
         const criticalMigrations = new Set([
@@ -4439,6 +4440,8 @@ async function initializeBackgroundServices() {
 
           // Quality
           { key: 'quality.manage_definitions', description: 'Create, update, and delete quality check definitions', category: 'quality' },
+          { key: 'quality.manage_capa', description: 'Create and update CAPA (Corrective and Preventive Action) records', category: 'quality' },
+          { key: 'quality.manage_calibration', description: 'Create, update, and record events for calibration assets', category: 'quality' },
 
           // Purchasing
           { key: 'purchasing.manage_pos', description: 'Create, update, and delete vendor purchase orders', category: 'purchasing' },
@@ -4646,6 +4649,8 @@ async function initializeBackgroundServices() {
           'shipping.mark_shipped',
           'shipping.create_label',
           'quality.manage_definitions',
+          'quality.manage_capa',
+          'quality.manage_calibration',
           'purchasing.manage_pos',
           'purchasing.approve_po',
           'purchasing.view_requisitions',
@@ -4721,6 +4726,8 @@ async function initializeBackgroundServices() {
           'inventory.cycleCount.approve',
           'shipping.mark_shipped',
           'quality.manage_definitions',
+          'quality.manage_capa',
+          'quality.manage_calibration',
           'training.manage_content',
           'training.record_completion',
           'scheduling.manage',

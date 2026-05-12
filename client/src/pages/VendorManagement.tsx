@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { cn } from '@/lib/utils';
@@ -121,6 +121,9 @@ const vendorContactFormSchema = insertVendorContactSchema
 
 type VendorFormData = z.infer<typeof vendorFormSchema>;
 type VendorContactFormData = z.infer<typeof vendorContactFormSchema>;
+type MonthlyEvaluationsTableHandle = {
+  savePendingChanges: () => Promise<boolean>;
+};
 
 interface VendorsResponse {
   data: Vendor[];
@@ -139,6 +142,7 @@ export default function VendorManagement() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingVendor, setEditingVendor] = useState<Vendor | null>(null);
   const [deleteVendor, setDeleteVendor] = useState<Vendor | null>(null);
+  const evaluationTableRef = useRef<MonthlyEvaluationsTableHandle>(null);
 
   // Pending contacts for new vendors (before vendor is created)
   const [pendingContacts, setPendingContacts] = useState<PendingContact[]>([]);
@@ -940,7 +944,10 @@ export default function VendorManagement() {
     ...extra,
   });
 
-  const onSubmit = (data: VendorFormData) => {
+  const onSubmit = async (data: VendorFormData) => {
+    const evaluationSaved = await evaluationTableRef.current?.savePendingChanges();
+    if (evaluationSaved === false) return;
+
     const normalizedData = buildNormalizedData(data);
 
     if (editingVendor) {
@@ -1955,7 +1962,12 @@ export default function VendorManagement() {
                         Track annual performance scores for Quality, Cost, Delivery, and Response (1-5 scale). One evaluation is due per calendar year.
                       </p>
                     </div>
-                    {editingVendor && <MonthlyEvaluationsTable vendorId={editingVendor.id} />}
+                    {editingVendor && (
+                      <MonthlyEvaluationsTable
+                        ref={evaluationTableRef}
+                        vendorId={editingVendor.id}
+                      />
+                    )}
                   </>
                 ) : (
                   <div className="bg-muted/50 border border-dashed rounded-md p-4 text-sm text-muted-foreground">
@@ -2570,7 +2582,10 @@ export default function VendorManagement() {
 }
 
 // Annual Evaluations Table Component
-function MonthlyEvaluationsTable({ vendorId }: { vendorId: number }) {
+const MonthlyEvaluationsTable = forwardRef<
+  MonthlyEvaluationsTableHandle,
+  { vendorId: number }
+>(function MonthlyEvaluationsTable({ vendorId }, ref) {
   const { toast } = useToast();
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [editingField, setEditingField] = useState<string | null>(null);
@@ -2630,6 +2645,8 @@ function MonthlyEvaluationsTable({ vendorId }: { vendorId: number }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendors', vendorId, 'evaluations'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/vendors'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/vendors/evaluations/ytd-summary'] });
       setPendingChanges({});
       toast({ title: 'Success', description: 'Annual evaluation saved successfully' });
     },
@@ -2661,6 +2678,19 @@ function MonthlyEvaluationsTable({ vendorId }: { vendorId: number }) {
     await saveMutation.mutateAsync({ ...base, ...pendingChanges });
   };
 
+  useImperativeHandle(ref, () => ({
+    savePendingChanges: async () => {
+      if (!hasPendingChanges) return true;
+
+      try {
+        await handleSave();
+        return true;
+      } catch {
+        return false;
+      }
+    },
+  }));
+
   const handleDiscard = () => {
     setPendingChanges({});
     setEditingField(null);
@@ -2674,24 +2704,21 @@ function MonthlyEvaluationsTable({ vendorId }: { vendorId: number }) {
 
     if (isEditing) {
       return (
-        <Select
-          defaultValue={value !== null && value !== undefined ? value.toString() : 'na'}
-          onValueChange={(v) => handleFieldSelect(field, v)}
-          open={true}
-          onOpenChange={(open) => { if (!open) setEditingField(null); }}
+        <select
+          autoFocus
+          value={value !== null && value !== undefined ? value.toString() : 'na'}
+          onChange={(e) => handleFieldSelect(field, e.target.value)}
+          onBlur={() => setEditingField(null)}
+          className="h-8 w-20 rounded border border-input bg-background p-1 text-center text-sm"
+          data-testid={`select-annual-${field}`}
         >
-          <SelectTrigger className="w-20 h-8 text-center p-1">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="5">5</SelectItem>
-            <SelectItem value="4">4</SelectItem>
-            <SelectItem value="3">3</SelectItem>
-            <SelectItem value="2">2</SelectItem>
-            <SelectItem value="1">1</SelectItem>
-            <SelectItem value="na">N/A</SelectItem>
-          </SelectContent>
-        </Select>
+          <option value="5">5</option>
+          <option value="4">4</option>
+          <option value="3">3</option>
+          <option value="2">2</option>
+          <option value="1">1</option>
+          <option value="na">N/A</option>
+        </select>
       );
     }
 
@@ -2850,4 +2877,4 @@ function MonthlyEvaluationsTable({ vendorId }: { vendorId: number }) {
       )}
     </div>
   );
-}
+});

@@ -163,18 +163,31 @@ interface WadControlStatus {
   };
 }
 
+// Source labels for Step 1 auto-filled fields
+type Step1AutoSource = 'auto:project' | 'auto:po' | 'auto:po-review' | 'auto:rfq' | 'auto:wad' | 'user';
+
 interface WizardData {
   step1?: {
     projectNumber: string;
     customer: string;
     poNumber: string;
-    partNumber: string;
+    // Legacy single partNumber — kept for backward compat; new WADs use the two fields below
+    partNumber?: string;
+    // Dual part numbers: customer-facing (invoices, packing slips) vs internal (routing, travelers, W/I, spec sheets)
+    customerPartNumber: string;
+    internalPartNumber: string;
     revision: string;
     quantity: number;
     shipDate: string;
     contractReviewStatus: string;
     riskAssessmentStatus: string;
     poReviewApproved: boolean;
+    // Per-field provenance: tracks whether the value came from an upstream doc or was user-edited
+    __sources?: Partial<Record<
+      'projectNumber' | 'customer' | 'poNumber' | 'customerPartNumber' | 'internalPartNumber' |
+      'revision' | 'quantity' | 'shipDate' | 'contractReviewStatus' | 'riskAssessmentStatus' | 'poReviewApproved',
+      Step1AutoSource
+    >>;
   };
   step2?: {
     scopeDescription: string;
@@ -288,7 +301,7 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
   const [data, setData] = useState<WizardData>({});
   const [saving, setSaving] = useState(false);
 
-  const { data: wizardCtx, isLoading } = useQuery<{ wad: any; project: any; po: any; controlStatus?: WadControlStatus }>({
+  const { data: wizardCtx, isLoading } = useQuery<{ wad: any; project: any; po: any; controlStatus?: WadControlStatus; contractContextDefaults?: any }>({
     queryKey: ['/api/work-orders/production', wadId, 'wizard'],
     queryFn: async () => {
       const res = await fetch(`/api/work-orders/production/${wadId}/wizard`);
@@ -377,7 +390,9 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
     switch (s) {
       case 1: {
         const v = d.step1;
-        if (!v?.partNumber?.trim()) req.push('Part number');
+        // Accept either the new dual-field or legacy single partNumber for backward compat
+        const hasPartNum = !!(v?.internalPartNumber?.trim() || v?.customerPartNumber?.trim() || v?.partNumber?.trim());
+        if (!hasPartNum) req.push('Part number (internal or customer)');
         if (!v?.quantity || v.quantity <= 0) req.push('Quantity > 0');
         if (!v?.shipDate) req.push('Ship date');
         if (!v?.poReviewApproved) req.push('PO Review approved');
@@ -460,9 +475,48 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
   const project = wizardCtx?.project;
   const po = wizardCtx?.po;
   const controlStatus = wizardCtx?.controlStatus;
+  const contractContextDefaults = wizardCtx?.contractContextDefaults ?? null;
   const wadStatus = wad?.wadStatus ?? 'DRAFT';
   const approvals: ApprovalRecord[] = (data.approvals ?? []) as ApprovalRecord[];
   const isBackfill = project?.currentStage === 'production';
+
+  // Auto-fill Step 1 from upstream docs on FIRST OPEN ONLY.
+  // If step1 already exists in saved wizard data we do nothing — the user's
+  // saved state (including any manual edits) is always authoritative after
+  // first open. This is a strict first-open guard with no partial re-sync.
+  useEffect(() => {
+    if (!contractContextDefaults) return;
+    setData((prev) => {
+      // step1 already saved → skip entirely (strict first-open-only)
+      if (prev.step1) return prev;
+
+      const dv = contractContextDefaults.values as Record<string, unknown>;
+      const ds = contractContextDefaults.sources as Record<string, string | null>;
+      // Build provenance map for every field that has a source
+      const sources: Record<string, string> = {};
+      for (const k of Object.keys(dv)) { if (ds[k]) sources[k] = ds[k] as string; }
+
+      return {
+        ...prev,
+        step1: {
+          projectNumber:        String(dv.projectNumber ?? ''),
+          customer:             String(dv.customer ?? ''),
+          poNumber:             String(dv.poNumber ?? ''),
+          customerPartNumber:   String(dv.customerPartNumber ?? ''),
+          internalPartNumber:   String(dv.internalPartNumber ?? ''),
+          // Keep legacy partNumber in sync with internalPartNumber for backward compat
+          partNumber:           String(dv.internalPartNumber ?? ''),
+          revision:             String(dv.revision ?? ''),
+          quantity:             Number(dv.quantity ?? 1),
+          shipDate:             String(dv.shipDate ?? ''),
+          contractReviewStatus: String(dv.contractReviewStatus ?? ''),
+          riskAssessmentStatus: String(dv.riskAssessmentStatus ?? ''),
+          poReviewApproved:     Boolean(dv.poReviewApproved),
+          __sources:            sources,
+        } as WizardData['step1'],
+      };
+    });
+  }, [contractContextDefaults]);
 
   // Prefill from canonical project/PO/PWO data when blank. Declared above the
   // early `isLoading` return to keep hook order stable across renders.
@@ -682,6 +736,7 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
               project={project}
               po={po}
               wad={wad}
+              contractContextDefaults={contractContextDefaults}
               onChange={(v) => patch('step1', v)}
             />
           )}
@@ -826,29 +881,96 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
 }
 
 // ─── Step 1: Contract Context ─────────────────────────────────────────────────
-function Step1ContractContext({ data, project, po, wad, onChange }: {
+
+// Friendly labels for source tags shown under each field
+const SOURCE_LABELS: Record<string, string> = {
+  'auto:project': 'from Project',
+  'auto:po':      'from Customer PO',
+  'auto:po-review': 'from PO Review',
+  'auto:rfq':     'from RFQ',
+  'auto:wad':     'from WAD record',
+  'user':         'edited',
+};
+
+// Which upstream doc is expected to supply each field (used for "missing source" hint)
+const EXPECTED_SOURCE: Record<string, string> = {
+  projectNumber:         'Project',
+  customer:              'PO Review / RFQ / Project',
+  poNumber:              'Customer PO / PO Review',
+  customerPartNumber:    'PO Review / Customer PO',
+  internalPartNumber:    'WAD record',
+  revision:              'PO Review',
+  quantity:              'PO Review / Customer PO',
+  shipDate:              'PO Review / Customer PO',
+  contractReviewStatus:  'RFQ',
+  riskAssessmentStatus:  'RFQ',
+  poReviewApproved:      'PO Review',
+};
+
+function SourceHint({ fieldKey, sources, hasValue }: {
+  fieldKey: string;
+  sources: Record<string, string>;
+  hasValue: boolean;
+}) {
+  const src = sources[fieldKey];
+  if (!src && !hasValue) {
+    return (
+      <p className="text-xs text-muted-foreground mt-0.5 italic">
+        missing source — would come from {EXPECTED_SOURCE[fieldKey] ?? 'upstream docs'}
+      </p>
+    );
+  }
+  if (!src) return null;
+  const label = SOURCE_LABELS[src] ?? src;
+  const isUser = src === 'user';
+  return (
+    <p className={`text-xs mt-0.5 ${isUser ? 'text-amber-600' : 'text-emerald-700'}`}>
+      {isUser ? '✎ edited' : `↳ ${label}`}
+    </p>
+  );
+}
+
+function Step1ContractContext({ data, project, po, wad, contractContextDefaults, onChange }: {
   data?: WizardData['step1'];
   project: any;
   po: any;
   wad: any;
+  contractContextDefaults: any;
   onChange: (v: WizardData['step1']) => void;
 }) {
-  const base: WizardData['step1'] = {
+  // Build base: prefer saved data, fall back to simple local defaults
+  const base: NonNullable<WizardData['step1']> = {
     projectNumber: project?.projectCode ?? '',
     customer: project?.customerNameSnapshot ?? project?.customerId ?? '',
-    poNumber: po?.poNumber ?? po?.customerPONumber ?? '',
-    partNumber: wad?.partNumber ?? '',
+    poNumber: po?.poNumber ?? '',
+    customerPartNumber: '',
+    internalPartNumber: wad?.partNumber ?? '',
+    // Legacy compat: if existing saved data had partNumber only, mirror it
+    partNumber: undefined,
     revision: '',
     quantity: wad?.quantity ?? 1,
-    shipDate: wad?.dueDate ?? po?.dueDate ?? '',
+    shipDate: wad?.dueDate ?? po?.expectedDelivery ?? '',
     contractReviewStatus: '',
     riskAssessmentStatus: '',
     poReviewApproved: false,
+    __sources: {},
     ...(data ?? {}),
   };
 
-  const set = (k: keyof NonNullable<WizardData['step1']>, v: unknown) =>
-    onChange({ ...base, [k]: v } as WizardData['step1']);
+  // Backward compat: if only legacy partNumber exists, show it in internalPartNumber
+  if (!base.internalPartNumber && !base.customerPartNumber && base.partNumber) {
+    base.internalPartNumber = base.partNumber;
+  }
+
+  const sources: Record<string, string> = (base.__sources ?? {}) as Record<string, string>;
+
+  const set = (k: keyof NonNullable<WizardData['step1']>, v: unknown) => {
+    // When the user edits a field, mark it as 'user' so auto-fill won't overwrite on reload
+    const newSources = { ...sources, [k]: 'user' };
+    onChange({ ...base, [k]: v, __sources: newSources } as WizardData['step1']);
+  };
+
+  const hasDefaults = !!contractContextDefaults;
 
   return (
     <div className="space-y-4">
@@ -860,39 +982,106 @@ function Step1ContractContext({ data, project, po, wad, onChange }: {
           </AlertDescription>
         </Alert>
       )}
+
+      {hasDefaults && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-md text-xs text-blue-800">
+          <CheckCircle className="h-3.5 w-3.5 shrink-0 text-blue-600" />
+          Fields marked <span className="text-emerald-700 font-medium">↳ from …</span> were auto-filled from upstream documents.
+          You can edit any field — changes are labelled <span className="text-amber-600 font-medium">✎ edited</span> and preserved across saves.
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1">
           <Label>Project Number</Label>
-          <Input value={base.projectNumber} onChange={e => set('projectNumber', e.target.value)} />
+          <Input
+            value={base.projectNumber}
+            onChange={e => set('projectNumber', e.target.value)}
+            data-testid="input-step1-project-number"
+          />
+          <SourceHint fieldKey="projectNumber" sources={sources} hasValue={!!base.projectNumber} />
         </div>
         <div className="space-y-1">
           <Label>Customer</Label>
-          <Input value={base.customer} onChange={e => set('customer', e.target.value)} />
+          <Input
+            value={base.customer}
+            onChange={e => set('customer', e.target.value)}
+            data-testid="input-step1-customer"
+          />
+          <SourceHint fieldKey="customer" sources={sources} hasValue={!!base.customer} />
         </div>
         <div className="space-y-1">
           <Label>Customer PO Number</Label>
-          <Input value={base.poNumber} onChange={e => set('poNumber', e.target.value)} />
-        </div>
-        <div className="space-y-1">
-          <Label>Part Number</Label>
-          <Input value={base.partNumber} onChange={e => set('partNumber', e.target.value)} />
+          <Input
+            value={base.poNumber}
+            onChange={e => set('poNumber', e.target.value)}
+            data-testid="input-step1-po-number"
+          />
+          <SourceHint fieldKey="poNumber" sources={sources} hasValue={!!base.poNumber} />
         </div>
         <div className="space-y-1">
           <Label>Revision</Label>
-          <Input value={base.revision} onChange={e => set('revision', e.target.value)} placeholder="e.g. A" />
+          <Input
+            value={base.revision}
+            onChange={e => set('revision', e.target.value)}
+            placeholder="e.g. A"
+            data-testid="input-step1-revision"
+          />
+          <SourceHint fieldKey="revision" sources={sources} hasValue={!!base.revision} />
+        </div>
+        <div className="space-y-1">
+          <Label className="flex items-center gap-1.5">
+            Customer Part Number
+            <Badge variant="outline" className="text-[10px] h-4 px-1 font-normal text-blue-700 border-blue-300">invoices · packing slips</Badge>
+          </Label>
+          <Input
+            value={base.customerPartNumber}
+            onChange={e => set('customerPartNumber', e.target.value)}
+            placeholder="Customer-facing P/N"
+            data-testid="input-step1-customer-part-number"
+          />
+          <SourceHint fieldKey="customerPartNumber" sources={sources} hasValue={!!base.customerPartNumber} />
+        </div>
+        <div className="space-y-1">
+          <Label className="flex items-center gap-1.5">
+            Internal Part Number
+            <Badge variant="outline" className="text-[10px] h-4 px-1 font-normal text-purple-700 border-purple-300">routing · travelers · W/I · spec sheets</Badge>
+          </Label>
+          <Input
+            value={base.internalPartNumber}
+            onChange={e => set('internalPartNumber', e.target.value)}
+            placeholder="Internal P/N"
+            data-testid="input-step1-internal-part-number"
+          />
+          <SourceHint fieldKey="internalPartNumber" sources={sources} hasValue={!!base.internalPartNumber} />
         </div>
         <div className="space-y-1">
           <Label>Quantity</Label>
-          <Input type="number" min={1} value={base.quantity} onChange={e => set('quantity', parseInt(e.target.value) || 1)} />
+          <Input
+            type="number"
+            min={1}
+            value={base.quantity}
+            onChange={e => set('quantity', parseInt(e.target.value) || 1)}
+            data-testid="input-step1-quantity"
+          />
+          <SourceHint fieldKey="quantity" sources={sources} hasValue={base.quantity > 1} />
         </div>
         <div className="space-y-1">
           <Label>Required Ship Date</Label>
-          <Input type="date" value={base.shipDate} onChange={e => set('shipDate', e.target.value)} />
+          <Input
+            type="date"
+            value={base.shipDate}
+            onChange={e => set('shipDate', e.target.value)}
+            data-testid="input-step1-ship-date"
+          />
+          <SourceHint fieldKey="shipDate" sources={sources} hasValue={!!base.shipDate} />
         </div>
         <div className="space-y-1">
           <Label>Contract Review Status</Label>
           <Select value={base.contractReviewStatus} onValueChange={v => set('contractReviewStatus', v)}>
-            <SelectTrigger><SelectValue placeholder="Select status…" /></SelectTrigger>
+            <SelectTrigger data-testid="select-step1-contract-review-status">
+              <SelectValue placeholder="Select status…" />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="PENDING">Pending</SelectItem>
               <SelectItem value="IN_REVIEW">In Review</SelectItem>
@@ -900,28 +1089,38 @@ function Step1ContractContext({ data, project, po, wad, onChange }: {
               <SelectItem value="REJECTED">Rejected</SelectItem>
             </SelectContent>
           </Select>
+          <SourceHint fieldKey="contractReviewStatus" sources={sources} hasValue={!!base.contractReviewStatus} />
         </div>
         <div className="space-y-1">
           <Label>Risk Assessment Status</Label>
           <Select value={base.riskAssessmentStatus} onValueChange={v => set('riskAssessmentStatus', v)}>
-            <SelectTrigger><SelectValue placeholder="Select status…" /></SelectTrigger>
+            <SelectTrigger data-testid="select-step1-risk-assessment-status">
+              <SelectValue placeholder="Select status…" />
+            </SelectTrigger>
             <SelectContent>
               <SelectItem value="NOT_STARTED">Not Started</SelectItem>
               <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
               <SelectItem value="COMPLETE">Complete</SelectItem>
             </SelectContent>
           </Select>
+          <SourceHint fieldKey="riskAssessmentStatus" sources={sources} hasValue={!!base.riskAssessmentStatus} />
         </div>
       </div>
-      <div className="flex items-center gap-2 pt-2">
-        <Checkbox
-          checked={base.poReviewApproved}
-          onCheckedChange={c => set('poReviewApproved', !!c)}
-          id="po-review"
-        />
-        <Label htmlFor="po-review" className="font-medium cursor-pointer text-sm">
-          I confirm the PO Review has been <strong>Approved</strong> (required gate to start WAD)
-        </Label>
+      <div className="space-y-1">
+        <div className="flex items-center gap-2 pt-2">
+          <Checkbox
+            checked={base.poReviewApproved}
+            onCheckedChange={c => set('poReviewApproved', !!c)}
+            id="po-review"
+            data-testid="checkbox-step1-po-review-approved"
+          />
+          <Label htmlFor="po-review" className="font-medium cursor-pointer text-sm">
+            I confirm the PO Review has been <strong>Approved</strong> (required gate to start WAD)
+          </Label>
+        </div>
+        <div className="pl-6">
+          <SourceHint fieldKey="poReviewApproved" sources={sources} hasValue={base.poReviewApproved} />
+        </div>
       </div>
     </div>
   );

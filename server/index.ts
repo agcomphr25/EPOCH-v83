@@ -43,10 +43,92 @@ console.log('🧬 [BOOT] APP_ENV:', process.env.APP_ENV);
 
 const app = express();
 
+type BootState = {
+  buildVersion: string;
+  startedAt: string;
+  pid: number;
+  routesReady: boolean;
+  routeRegistration: {
+    status: 'pending' | 'loading' | 'ready' | 'failed';
+    startedAt?: string;
+    completedAt?: string;
+    error?: { message: string; stack?: string };
+  };
+  backgroundServices: {
+    status: 'pending' | 'running' | 'complete' | 'failed';
+    startedAt?: string;
+    completedAt?: string;
+    error?: { message: string; stack?: string };
+  };
+  fatalErrors: Array<{
+    type: string;
+    message: string;
+    stack?: string;
+    at: string;
+  }>;
+};
+
+function serializeError(error: unknown) {
+  if (error instanceof Error) {
+    return { message: error.message, stack: error.stack };
+  }
+  return { message: String(error) };
+}
+
+const bootState: BootState = {
+  buildVersion: BUILD_VERSION,
+  startedAt: new Date().toISOString(),
+  pid: process.pid,
+  routesReady: false,
+  routeRegistration: { status: 'pending' },
+  backgroundServices: { status: 'pending' },
+  fatalErrors: [],
+};
+
+function recordFatalBootError(type: string, error: unknown) {
+  const serialized = serializeError(error);
+  bootState.fatalErrors.push({
+    type,
+    message: serialized.message,
+    stack: serialized.stack,
+    at: new Date().toISOString(),
+  });
+  console.error(`[boot:${type}]`, error);
+}
+
+process.on('unhandledRejection', (reason) => {
+  recordFatalBootError('unhandledRejection', reason);
+});
+
+process.on('uncaughtException', (error) => {
+  recordFatalBootError('uncaughtException', error);
+});
+
 // CRITICAL: Health check endpoint MUST be registered FIRST, before any middleware
 // This ensures Replit deployment health probes get instant responses during initialization
 app.get('/healthz', (req, res) => {
-  res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
+  res.status(200).json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    routesReady: bootState.routesReady,
+    routeRegistration: bootState.routeRegistration.status,
+    backgroundServices: bootState.backgroundServices.status,
+    fatalErrorCount: bootState.fatalErrors.length,
+  });
+});
+
+app.get(['/readyz', '/boot-status', '/api/boot-status'], (_req, res) => {
+  const ready =
+    bootState.routesReady &&
+    bootState.routeRegistration.status === 'ready' &&
+    bootState.fatalErrors.length === 0;
+
+  res.status(ready ? 200 : 503).json({
+    status: ready ? 'ready' : 'not_ready',
+    timestamp: new Date().toISOString(),
+    uptimeSeconds: Math.round(process.uptime()),
+    ...bootState,
+  });
 });
 
 // ─── Routes-ready gate ────────────────────────────────────────────────────────
@@ -63,8 +145,16 @@ app.get('/healthz', (req, res) => {
 let routesReady = false;
 app.use((req, res, next) => {
   if (routesReady) return next();
+  if (req.path === '/api/boot-status') return next();
   if (!req.path.startsWith('/api/')) return next();
   res.set('Retry-After', '2');
+  if (bootState.routeRegistration.status === 'failed') {
+    return res.status(503).json({
+      error: 'Server failed while registering routes',
+      bootStatusUrl: '/api/boot-status',
+      details: bootState.routeRegistration.error?.message,
+    });
+  }
   return res.status(503).json({ error: 'Server starting, please retry' });
 });
 
@@ -297,6 +387,9 @@ process.on('SIGINT',  () => gracefulShutdown('SIGINT'));
 
 (async () => {
   try {
+    bootState.routeRegistration.status = 'loading';
+    bootState.routeRegistration.startedAt = new Date().toISOString();
+
     // Dynamic import defers tsx compilation of routes/index.ts (137 files, 9300 lines)
     // until AFTER the server is already listening.  Static import would block the entire
     // module from running (including earlyServer.listen) for ~13 seconds while tsx
@@ -309,6 +402,9 @@ process.on('SIGINT',  () => gracefulShutdown('SIGINT'));
 
     // Flip the routes-ready gate now that all /api/* handlers are mounted.
     routesReady = true;
+    bootState.routesReady = true;
+    bootState.routeRegistration.status = 'ready';
+    bootState.routeRegistration.completedAt = new Date().toISOString();
     console.log('✅ Routes registered — /api gate lifted');
 
     notificationManager.initialize(server);
@@ -341,13 +437,18 @@ process.on('SIGINT',  () => gracefulShutdown('SIGINT'));
     // Initialize database and cron jobs (non-blocking background work)
     initializeBackgroundServices();
   } catch (error) {
-    console.error('Failed to start server:', error);
-    process.exit(1);
+    bootState.routesReady = false;
+    bootState.routeRegistration.status = 'failed';
+    bootState.routeRegistration.completedAt = new Date().toISOString();
+    bootState.routeRegistration.error = serializeError(error);
+    recordFatalBootError('routeRegistration', error);
   }
 })();
 
 // Background initialization - runs after server is listening
 async function initializeBackgroundServices() {
+  bootState.backgroundServices.status = 'running';
+  bootState.backgroundServices.startedAt = new Date().toISOString();
   try {
     // Test database connection (non-blocking)
     console.log('Initializing database connection...');
@@ -4880,9 +4981,9 @@ async function initializeBackgroundServices() {
         const { validateCapabilityKeys } = await import('./src/validateCapabilities');
         await validateCapabilityKeys(pool);
       } catch (valErr: any) {
-        console.error('\n🚨 CAPABILITY KEY MISMATCH DETECTED — SERVER REFUSING TO START\n');
+        console.error('\n🚨 CAPABILITY KEY MISMATCH DETECTED — BACKGROUND SERVICES DEGRADED\n');
         console.error(valErr.message);
-        process.exit(1);
+        throw valErr;
       }
 
       // Ensure customers.customer_key column exists (non-unique — production has dupe normalized names)
@@ -7663,7 +7764,13 @@ async function initializeBackgroundServices() {
 
     console.log('🎓 Daily training certification expiration digest scheduled (every day at 8:00 AM)');
 
+    bootState.backgroundServices.status = 'complete';
+    bootState.backgroundServices.completedAt = new Date().toISOString();
   } catch (error) {
+    bootState.backgroundServices.status = 'failed';
+    bootState.backgroundServices.completedAt = new Date().toISOString();
+    bootState.backgroundServices.error = serializeError(error);
+    recordFatalBootError('backgroundServices', error);
     console.error('Error initializing background services:', error);
   }
 }

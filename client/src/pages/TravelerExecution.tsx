@@ -848,7 +848,27 @@ export default function TravelerExecution() {
         }
       }
 
-      toast({ title: 'Step Started', description: 'Badge verified — gate checks passed. Work on this step has begun.' });
+      const autoPunch = data?.autoPunch as
+        | { action?: 'clockedIn' | 'switched' | 'unchanged'; chargeCode?: string | null; warning?: string }
+        | null
+        | undefined;
+      let punchLine = '';
+      if (autoPunch?.action === 'clockedIn' && autoPunch.chargeCode) {
+        punchLine = ` Clocked in on ${autoPunch.chargeCode}.`;
+      } else if (autoPunch?.action === 'switched' && autoPunch.chargeCode) {
+        punchLine = ` Switched charge code to ${autoPunch.chargeCode}.`;
+      } else if (autoPunch?.action === 'unchanged' && autoPunch.chargeCode) {
+        punchLine = ` Punch already on ${autoPunch.chargeCode}.`;
+      }
+
+      toast({ title: 'Step Started', description: `Badge verified — gate checks passed. Work on this step has begun.${punchLine}` });
+      if (autoPunch?.warning) {
+        toast({
+          title: 'Labor budget warning',
+          description: autoPunch.warning,
+          variant: 'destructive',
+        });
+      }
       refetch();
     },
     onError: (error: any, variables) => {

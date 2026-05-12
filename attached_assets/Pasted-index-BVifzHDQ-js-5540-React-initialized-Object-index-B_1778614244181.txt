@@ -1,0 +1,122 @@
+index-BVifzHDQ.js:5540 React initialized: Object
+index-BVifzHDQ.js:5540 React hooks: Object
+index-BVifzHDQ.js:5540 [EPOCH SYNC] Sync engine starting
+index-BVifzHDQ.js:5540 [EPOCH SYNC] Sync engine started — interval: 30000 ms
+index-BVifzHDQ.js:5537 App component is rendering...
+index-BVifzHDQ.js:5537 Environment: production
+index-BVifzHDQ.js:5537 Base URL: /
+index-BVifzHDQ.js:1790 [EPOCH] Service Worker Registered https://agcompepoch.xyz/
+index-BVifzHDQ.js:1790 [EPOCH] Install prompt captured and ready
+/login:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+index-BVifzHDQ.js:2236 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+/api/employees/recertification-count:1  Failed to load resource: the server responded with a status of 401 ()
+index-BVifzHDQ.js:235 [AUTH] Query returned 401 for /api/employees/recertification-count
+(anonymous) @ index-BVifzHDQ.js:235
+index-BVifzHDQ.js:235 [AUTH] 401 on /api/employees/recertification-count — checking session state
+twt @ index-BVifzHDQ.js:235
+/api/vendor-pos/compliance-backfill:1  Failed to load resource: the server responded with a status of 401 ()
+index-BVifzHDQ.js:235 [AUTH] Query returned 401 for /api/vendor-pos/compliance-backfill
+(anonymous) @ index-BVifzHDQ.js:235
+index-BVifzHDQ.js:235 [AUTH] 401 on /api/vendor-pos/compliance-backfill — checking session state
+twt @ index-BVifzHDQ.js:235
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+index-BVifzHDQ.js:235 [AUTH] Session check returned 401 — session is gone
+Dcs @ index-BVifzHDQ.js:235
+index-BVifzHDQ.js:235 [AUTH] Session expired on kiosk page — tokens cleared, no redirect
+Pcs @ index-BVifzHDQ.js:235
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+index-BVifzHDQ.js:235 [AUTH] Session check returned 401 — session is gone
+Dcs @ index-BVifzHDQ.js:235
+index-BVifzHDQ.js:235 [AUTH] Session expired on kiosk page — tokens cleared, no redirect
+Pcs @ index-BVifzHDQ.js:235
+index-BVifzHDQ.js:235 🌐 API Request to /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974 (timeout: 15000ms, deployment: true)
+index-BVifzHDQ.js:235 ✅ API Response from /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974: 200
+index-BVifzHDQ.js:235 🌐 API Request to /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600067 (timeout: 15000ms, deployment: true)
+index-BVifzHDQ.js:235 ✅ API Response from /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600067: 200
+index-BVifzHDQ.js:235 🌐 API Request to /api/p2-traveler/generate-traveler (timeout: 15000ms, deployment: true)
+index-BVifzHDQ.js:235 ✅ API Response from /api/p2-traveler/generate-traveler: 200
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+execute?badge=757ed306c66446f7871fac16bd141974:1 [DOM] Password forms should have (optionally hidden) username fields for accessibility: (More info: https://goo.gl/9p2vKq) <form class=​"max-w-xs mx-auto space-y-3">​…​</form>​
+index-BVifzHDQ.js:235 🌐 API Request to /api/travelers/e2da8b23-1a29-4c7c-aa89-562ea5093acf/steps/3149a3d7-9111-49d2-aa5d-a3e32e060b3a/start (timeout: 15000ms, deployment: true)
+/api/travelers/e2da8b23-1a29-4c7c-aa89-562ea5093acf/steps/3149a3d7-9111-49d2-aa5d-a3e32e060b3a/start:1  Failed to load resource: the server responded with a status of 400 ()
+index-BVifzHDQ.js:235 ✅ API Response from /api/travelers/e2da8b23-1a29-4c7c-aa89-562ea5093acf/steps/3149a3d7-9111-49d2-aa5d-a3e32e060b3a/start: 400
+index-BVifzHDQ.js:5540 API error raw body: {"error":"Traveler must be IN_PROGRESS to start a step","currentStatus":"DRAFT"}
+console.error @ index-BVifzHDQ.js:5540
+index-BVifzHDQ.js:5540 💥 API Request failed for /api/travelers/e2da8b23-1a29-4c7c-aa89-562ea5093acf/steps/3149a3d7-9111-49d2-aa5d-a3e32e060b3a/start: Error: Traveler must be IN_PROGRESS to start a step
+    at be (index-BVifzHDQ.js:235:8799)
+console.error @ index-BVifzHDQ.js:5540
+index-BVifzHDQ.js:235 🌐 API Request to /api/travelers/e2da8b23-1a29-4c7c-aa89-562ea5093acf/steps/3149a3d7-9111-49d2-aa5d-a3e32e060b3a/start (timeout: 15000ms, deployment: true)
+index-BVifzHDQ.js:235  POST https://agcompepoch.xyz/api/travelers/e2da8b23-1a29-4c7c-aa89-562ea5093acf/steps/3149a3d7-9111-49d2-aa5d-a3e32e060b3a/start 400 (Bad Request)
+be @ index-BVifzHDQ.js:235
+mutationFn @ index-BVifzHDQ.js:5355
+fn @ index-BVifzHDQ.js:51
+x @ index-BVifzHDQ.js:51
+start @ index-BVifzHDQ.js:51
+execute @ index-BVifzHDQ.js:51
+await in execute
+mutate @ index-BVifzHDQ.js:51
+(anonymous) @ index-BVifzHDQ.js:51
+onClick @ index-BVifzHDQ.js:5355
+vns @ index-BVifzHDQ.js:37
+Ans @ index-BVifzHDQ.js:37
+bns @ index-BVifzHDQ.js:37
+lze @ index-BVifzHDQ.js:37
+eNt @ index-BVifzHDQ.js:37
+(anonymous) @ index-BVifzHDQ.js:37
+JRe @ index-BVifzHDQ.js:40
+wjt @ index-BVifzHDQ.js:37
+jbe @ index-BVifzHDQ.js:37
+SRe @ index-BVifzHDQ.js:37
+Bns @ index-BVifzHDQ.js:37
+index-BVifzHDQ.js:235 ✅ API Response from /api/travelers/e2da8b23-1a29-4c7c-aa89-562ea5093acf/steps/3149a3d7-9111-49d2-aa5d-a3e32e060b3a/start: 400
+index-BVifzHDQ.js:5540 API error raw body: {"error":"Traveler must be IN_PROGRESS to start a step","currentStatus":"DRAFT"}
+console.error @ index-BVifzHDQ.js:5540
+be @ index-BVifzHDQ.js:235
+await in be
+mutationFn @ index-BVifzHDQ.js:5355
+fn @ index-BVifzHDQ.js:51
+x @ index-BVifzHDQ.js:51
+start @ index-BVifzHDQ.js:51
+execute @ index-BVifzHDQ.js:51
+await in execute
+mutate @ index-BVifzHDQ.js:51
+(anonymous) @ index-BVifzHDQ.js:51
+onClick @ index-BVifzHDQ.js:5355
+vns @ index-BVifzHDQ.js:37
+Ans @ index-BVifzHDQ.js:37
+bns @ index-BVifzHDQ.js:37
+lze @ index-BVifzHDQ.js:37
+eNt @ index-BVifzHDQ.js:37
+(anonymous) @ index-BVifzHDQ.js:37
+JRe @ index-BVifzHDQ.js:40
+wjt @ index-BVifzHDQ.js:37
+jbe @ index-BVifzHDQ.js:37
+SRe @ index-BVifzHDQ.js:37
+Bns @ index-BVifzHDQ.js:37
+index-BVifzHDQ.js:5540 💥 API Request failed for /api/travelers/e2da8b23-1a29-4c7c-aa89-562ea5093acf/steps/3149a3d7-9111-49d2-aa5d-a3e32e060b3a/start: Error: Traveler must be IN_PROGRESS to start a step
+    at be (index-BVifzHDQ.js:235:8799)
+console.error @ index-BVifzHDQ.js:5540
+be @ index-BVifzHDQ.js:235
+await in be
+mutationFn @ index-BVifzHDQ.js:5355
+fn @ index-BVifzHDQ.js:51
+x @ index-BVifzHDQ.js:51
+start @ index-BVifzHDQ.js:51
+execute @ index-BVifzHDQ.js:51
+await in execute
+mutate @ index-BVifzHDQ.js:51
+(anonymous) @ index-BVifzHDQ.js:51
+onClick @ index-BVifzHDQ.js:5355
+vns @ index-BVifzHDQ.js:37
+Ans @ index-BVifzHDQ.js:37
+bns @ index-BVifzHDQ.js:37
+lze @ index-BVifzHDQ.js:37
+eNt @ index-BVifzHDQ.js:37
+(anonymous) @ index-BVifzHDQ.js:37
+JRe @ index-BVifzHDQ.js:40
+wjt @ index-BVifzHDQ.js:37
+jbe @ index-BVifzHDQ.js:37
+SRe @ index-BVifzHDQ.js:37
+Bns @ index-BVifzHDQ.js:37

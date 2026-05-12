@@ -1,10 +1,12 @@
 import { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Link } from 'wouter';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link, useLocation } from 'wouter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { useToast } from '@/hooks/use-toast';
+import { apiRequest } from '@/lib/queryClient';
 import {
   ArrowLeft,
   Package,
@@ -12,6 +14,7 @@ import {
   ExternalLink,
   Loader2,
   Truck,
+  Receipt,
 } from 'lucide-react';
 
 interface ShipmentRow {
@@ -30,6 +33,9 @@ interface ShipmentRow {
   created_at: string;
   packing_slip_id: string | null;
   packing_slip_number: string | null;
+  invoice_id: string | null;
+  invoice_number: string | null;
+  invoice_status: string | null;
 }
 
 function statusColor(status: string) {
@@ -48,13 +54,45 @@ function fmt(ts: string | null) {
 
 export default function P2ShipmentHistory() {
   const [search, setSearch] = useState('');
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
+  const qc = useQueryClient();
 
   const { data: rows = [], isLoading } = useQuery<ShipmentRow[]>({
     queryKey: ['/api/p2/shipments'],
     queryFn: async () => {
-      const r = await fetch('/api/p2/shipments');
+      const r = await fetch('/api/p2/shipments', { credentials: 'include' });
       if (!r.ok) throw new Error('Failed to load');
       return r.json();
+    },
+  });
+
+  const createInvoiceMutation = useMutation({
+    mutationFn: async (row: ShipmentRow) => {
+      if (!row.packing_slip_id) throw new Error('No packing slip is linked to this shipment.');
+      return apiRequest(`/api/ar-invoices/from-packing-slip/${row.packing_slip_id}`, {
+        method: 'POST',
+      });
+    },
+    onSuccess: (invoice: any) => {
+      toast({
+        title: 'Invoice ready for review',
+        description: invoice?.invoiceNumber
+          ? `Invoice ${invoice.invoiceNumber} was created from this packing slip.`
+          : 'Invoice was created from this packing slip.',
+      });
+      qc.invalidateQueries({ queryKey: ['/api/p2/shipments'] });
+      qc.invalidateQueries({ predicate: (query) =>
+        Array.isArray(query.queryKey) && query.queryKey[0] === '/api/ar-invoices'
+      });
+      if (invoice?.id) setLocation(`/finance/invoices/${invoice.id}`);
+    },
+    onError: (err: any) => {
+      toast({
+        title: 'Invoice creation failed',
+        description: err.message || 'Unable to create invoice from this packing slip.',
+        variant: 'destructive',
+      });
     },
   });
 
@@ -154,7 +192,11 @@ export default function P2ShipmentHistory() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {filtered.map(row => (
+                  {filtered.map(row => {
+                    const isCreatingInvoice =
+                      createInvoiceMutation.isPending && createInvoiceMutation.variables?.id === row.id;
+
+                    return (
                     <tr key={row.id} className="hover:bg-muted/30 transition-colors">
                       <td className="px-4 py-3 font-mono font-medium text-xs">
                         <Link
@@ -197,15 +239,41 @@ export default function P2ShipmentHistory() {
                         </Badge>
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <Button size="sm" variant="outline" className="h-7 px-2 text-xs" asChild>
-                          <Link to={`/p2/shipments/${row.id}`}>
-                            <ExternalLink className="h-3 w-3 mr-1" />
-                            View Shipment
-                          </Link>
-                        </Button>
+                        <div className="flex justify-end gap-2">
+                          {row.invoice_id ? (
+                            <Button size="sm" variant="outline" className="h-7 px-2 text-xs" asChild>
+                              <Link to={`/finance/invoices/${row.invoice_id}`}>
+                                <Receipt className="h-3 w-3 mr-1" />
+                                View Invoice
+                              </Link>
+                            </Button>
+                          ) : row.packing_slip_id ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 px-2 text-xs"
+                              onClick={() => createInvoiceMutation.mutate(row)}
+                              disabled={createInvoiceMutation.isPending}
+                            >
+                              {isCreatingInvoice ? (
+                                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                              ) : (
+                                <Receipt className="h-3 w-3 mr-1" />
+                              )}
+                              Create Invoice
+                            </Button>
+                          ) : null}
+                          <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" asChild>
+                            <Link to={`/p2/shipments/${row.id}`}>
+                              <ExternalLink className="h-3 w-3 mr-1" />
+                              Shipment
+                            </Link>
+                          </Button>
+                        </div>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

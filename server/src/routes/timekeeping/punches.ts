@@ -483,7 +483,6 @@ router.post("/kiosk/punch", optionalAuth, h(async (req, res): Promise<void> => {
     if (currentStatus === "clocked_out") action = "clock_in";
     else if (currentStatus === "on_break") action = "break_end";
     else action = "clock_out";
-    else action = "clock_out"; // covers clocked_in and on_break
   }
 
   if (action === "clock_out" && dailyCertificationConfirmed !== true) {

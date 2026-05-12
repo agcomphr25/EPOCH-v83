@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Loader2, CheckCircle, XCircle, ShieldAlert, Delete, Lock, Search } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle, ShieldAlert, Delete, Lock, Search, Coffee, LogOut, Play, LogIn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 type KioskStep = 'idle' | 'pin-entry' | 'loading' | 'confirm' | 'punching' | 'success' | 'error' | 'locked-out';
@@ -137,15 +137,20 @@ function ChargeCodePicker({ chargeCodes, value, onChange, onInteraction }: Charg
   );
 }
 
+type KioskAction = 'clock_in' | 'clock_out' | 'break_start' | 'break_end';
+
 interface ActionMeta {
   currentLabel: string;
   verb: string;
-  action: 'clock_in' | 'clock_out';
+  action: KioskAction;
 }
 
 function getActionMeta(status: string): ActionMeta {
-  if (status === 'clocked_in' || status === 'on_break') {
-    return { currentLabel: status === 'on_break' ? 'ON BREAK' : 'CLOCKED IN', verb: 'Clock Out', action: 'clock_out' };
+  if (status === 'clocked_in') {
+    return { currentLabel: 'CLOCKED IN', verb: 'Clock Out', action: 'clock_out' };
+  }
+  if (status === 'on_break') {
+    return { currentLabel: 'ON BREAK', verb: 'Clock In from Break', action: 'break_end' };
   }
   return { currentLabel: 'CLOCKED OUT', verb: 'Clock In', action: 'clock_in' };
 }
@@ -319,11 +324,12 @@ export default function KioskPage() {
     }
   }, [pin]);
 
-  const handleConfirm = useCallback(async () => {
+  const handleConfirm = useCallback(async (requestedAction?: KioskAction) => {
     if (!employee || !punchStatus) return;
     setStep('punching');
 
     const meta = getActionMeta(punchStatus.status);
+    const action = requestedAction ?? meta.action;
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
     try {
@@ -332,9 +338,9 @@ export default function KioskPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           employeeId: employee.id,
-          requestedAction: meta.action,
+          requestedAction: action,
           timezone: tz,
-          ...(selectedChargeCode ? { costCode: selectedChargeCode } : {}),
+          ...(action === 'clock_in' && selectedChargeCode ? { costCode: selectedChargeCode } : {}),
         }),
       });
       const data = await res.json();
@@ -630,6 +636,8 @@ export default function KioskPage() {
   if (step === 'confirm' && employee && punchStatus) {
     const meta = getActionMeta(punchStatus.status);
     const isClockIn = meta.action === 'clock_in';
+    const isClockedIn = punchStatus.status === 'clocked_in';
+    const isOnBreak = punchStatus.status === 'on_break';
     return (
       <div className="min-h-screen bg-gray-50 text-gray-900 flex flex-col items-center justify-center px-8">
         <div className="w-full max-w-sm space-y-6 text-center">
@@ -659,13 +667,51 @@ export default function KioskPage() {
             />
           )}
 
-          <Button
-            size="lg"
-            onClick={handleConfirm}
-            className="w-full h-16 text-xl font-bold bg-blue-600 hover:bg-blue-700 rounded-2xl text-white"
-          >
-            {meta.verb}
-          </Button>
+          <div className="space-y-3">
+            {isClockIn && (
+              <Button
+                size="lg"
+                onClick={() => handleConfirm('clock_in')}
+                className="w-full h-16 text-xl font-bold bg-blue-600 hover:bg-blue-700 rounded-2xl text-white gap-3"
+              >
+                <LogIn className="h-6 w-6" />
+                Clock In
+              </Button>
+            )}
+
+            {isClockedIn && (
+              <>
+                <Button
+                  size="lg"
+                  onClick={() => handleConfirm('break_start')}
+                  className="w-full h-16 text-xl font-bold bg-amber-600 hover:bg-amber-700 rounded-2xl text-white gap-3"
+                >
+                  <Coffee className="h-6 w-6" />
+                  Clock Out for Break
+                </Button>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  onClick={() => handleConfirm('clock_out')}
+                  className="w-full h-16 text-xl font-bold rounded-2xl border-red-300 text-red-700 hover:bg-red-50 gap-3"
+                >
+                  <LogOut className="h-6 w-6" />
+                  Clock Out
+                </Button>
+              </>
+            )}
+
+            {isOnBreak && (
+              <Button
+                size="lg"
+                onClick={() => handleConfirm('break_end')}
+                className="w-full h-16 text-xl font-bold bg-amber-600 hover:bg-amber-700 rounded-2xl text-white gap-3"
+              >
+                <Play className="h-6 w-6" />
+                Clock In from Break
+              </Button>
+            )}
+          </div>
 
           <button
             onClick={resetToIdle}

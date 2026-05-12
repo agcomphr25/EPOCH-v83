@@ -99,6 +99,39 @@ console.log('🔒 CORS Configuration:', {
 
 app.use(cors(corsOptions));
 
+// Inventory upload diagnostics must run before auth/body parsing/route mounting so
+// failures outside the inventory router still carry a searchable request id.
+app.use((req, res, next) => {
+  if (req.path !== '/api/inventory' && !req.path.startsWith('/api/inventory/')) {
+    return next();
+  }
+
+  const headerId = req.headers['x-inventory-request-id'] || req.headers['x-request-id'];
+  const requestId = Array.isArray(headerId)
+    ? headerId[0]
+    : headerId || `inv-server-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  res.locals.inventoryRequestId = requestId;
+  res.setHeader('X-Inventory-Request-Id', requestId);
+
+  console.log(`[inventory-request:${requestId}] received`, {
+    method: req.method,
+    path: req.originalUrl,
+    contentType: req.headers['content-type'],
+    contentLength: req.headers['content-length'],
+    hasCookieHeader: Boolean(req.headers.cookie),
+  });
+
+  res.on('finish', () => {
+    console.log(`[inventory-request:${requestId}] finished`, {
+      statusCode: res.statusCode,
+      contentLength: res.getHeader('content-length'),
+    });
+  });
+
+  next();
+});
+
 // Serve attached assets (PDFs, documents, etc.) - Must be before other routes
 // In production, assets are copied to dist/attached_assets via build script
 // In development, assets are in the root attached_assets folder

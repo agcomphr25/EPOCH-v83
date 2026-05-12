@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs/promises';
 import * as fsSync from 'fs';
 import os from 'os';
+import { randomUUID } from 'crypto';
 import { sql, eq, and, gte, lte, ilike, or, inArray, desc, asc, type SQL } from 'drizzle-orm';
 import { validateSameFamily } from '../utils/unitConversionService';
 import {
@@ -121,21 +122,67 @@ const inventoryPdfUpload = pdfUpload.fields([
   { name: 'otherDocsFile', maxCount: 1 },
 ]);
 
+function getInventoryRequestId(req: Request, res: Response) {
+  const existingId = req.headers['x-inventory-request-id'] || req.headers['x-request-id'];
+  const requestId = Array.isArray(existingId) ? existingId[0] : existingId || randomUUID();
+  res.locals.inventoryRequestId = requestId;
+  res.setHeader('X-Inventory-Request-Id', requestId);
+  return requestId;
+}
+
+function summarizeInventoryFiles(files: unknown) {
+  if (!files || typeof files !== 'object') {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(files as Record<string, Express.Multer.File[]>).map(([field, fieldFiles]) => [
+      field,
+      fieldFiles.map(file => ({
+        originalname: file.originalname,
+        mimetype: file.mimetype,
+        size: file.size,
+        path: file.path,
+      })),
+    ]),
+  );
+}
+
 function handleInventoryPdfUpload(req: Request, res: Response, next: (err?: any) => void) {
+  const requestId = getInventoryRequestId(req, res);
+  console.log(`[inventory-upload:${requestId}] start`, {
+    method: req.method,
+    path: req.originalUrl,
+    contentType: req.headers['content-type'],
+    contentLength: req.headers['content-length'],
+  });
+
   inventoryPdfUpload(req, res, (error: any) => {
     if (!error) {
+      console.log(`[inventory-upload:${requestId}] complete`, {
+        fields: Object.keys(req.body || {}),
+        dataBytes: typeof req.body?.data === 'string' ? Buffer.byteLength(req.body.data) : 0,
+        files: summarizeInventoryFiles(req.files),
+      });
       return next();
     }
 
-    console.error('Inventory PDF upload error:', error);
+    console.error(`[inventory-upload:${requestId}] error`, error);
     const message = error instanceof multer.MulterError
       ? error.message
       : error instanceof Error
         ? error.message
         : 'Failed to upload inventory document';
     const statusCode = error instanceof multer.MulterError || message === 'Only PDF files are allowed' ? 400 : 500;
-    return res.status(statusCode).json({ error: message });
+    return res.status(statusCode).json({ error: message, requestId, code: 'INVENTORY_UPLOAD_FAILED' });
   });
+}
+
+function sendInventoryUpdateError(res: Response, error: unknown, fallbackMessage = 'Failed to update inventory item') {
+  const requestId = res.locals.inventoryRequestId;
+  const message = error instanceof Error ? error.message : fallbackMessage;
+  const statusCode = error instanceof Error ? 400 : 500;
+  return res.status(statusCode).json({ error: message, requestId, code: 'INVENTORY_UPDATE_FAILED' });
 }
 
 async function resolveInventoryDocumentPath(primaryDir: string, legacyDir: string, filename: string) {
@@ -389,11 +436,8 @@ router.put('/inventory/items/:id', requirePermission('inventory.adjust'), handle
     
     res.json(withSupplySourceDashboard(updatedItem));
   } catch (error) {
-    console.error('Update enhanced inventory item error:', error);
-    if (error instanceof Error) {
-      return res.status(400).json({ error: error.message });
-    }
-    res.status(500).json({ error: 'Failed to update inventory item' });
+    console.error(`[inventory-update:${res.locals.inventoryRequestId || 'unknown'}] enhanced error`, error);
+    return sendInventoryUpdateError(res, error);
   }
 });
 
@@ -523,11 +567,8 @@ router.put('/:id', requirePermission('inventory.adjust'), handleInventoryPdfUplo
     const updatedItem = await storage.updateInventoryItem(itemId, updates);
     res.json(withSupplySourceDashboard(updatedItem));
   } catch (error) {
-    console.error('Update inventory item error:', error);
-    if (error instanceof Error) {
-      return res.status(400).json({ error: error.message });
-    }
-    res.status(500).json({ error: 'Failed to update inventory item' });
+    console.error(`[inventory-update:${res.locals.inventoryRequestId || 'unknown'}] root error`, error);
+    return sendInventoryUpdateError(res, error);
   }
 });
 
@@ -758,11 +799,8 @@ router.put('/items/:id', requirePermission('inventory.adjust'), handleInventoryP
     
     res.json(withSupplySourceDashboard(updatedItem));
   } catch (error) {
-    console.error('Update inventory item error:', error);
-    if (error instanceof Error) {
-      return res.status(400).json({ error: error.message });
-    }
-    res.status(500).json({ error: 'Failed to update inventory item' });
+    console.error(`[inventory-update:${res.locals.inventoryRequestId || 'unknown'}] items error`, error);
+    return sendInventoryUpdateError(res, error);
   }
 });
 

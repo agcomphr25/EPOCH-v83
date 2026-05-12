@@ -694,6 +694,144 @@ router.delete('/:id', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * Shared helper: promote a DRAFT traveler to IN_PROGRESS.
+ *
+ * Runs the kit-release and WAD-release gates exactly as `POST /:id/start` does,
+ * updates the traveler status, emits the STATUS_CHANGED traveler event, logs the
+ * TRAVELER_STARTED audit event, and auto-transitions the linked WAD from
+ * RELEASED → IN_PROGRESS.
+ *
+ * Returns either { ok: true, traveler } on success, or { ok: false, status, body }
+ * containing the exact response shape the standalone /start endpoint would have
+ * returned, so callers can forward it directly to the client.
+ */
+async function promoteTravelerToInProgress(
+  traveler: NonNullable<Awaited<ReturnType<typeof storage.getTraveler>>>,
+  actorName: string,
+  actorUser?: { employeeId?: number; id?: number; username?: string }
+): Promise<
+  | { ok: true; traveler: NonNullable<Awaited<ReturnType<typeof storage.getTraveler>>> }
+  | { ok: false; status: number; body: any }
+> {
+  const id = traveler.id;
+
+  // Kit release gate: if traveler is linked to a KIT queue item, it must be RELEASED.
+  if (traveler.inventoryItemId) {
+    const numericItemId = parseInt(traveler.inventoryItemId, 10);
+    if (!isNaN(numericItemId)) {
+      const baseConditions = and(
+        eq(manufacturingQueue.inventoryItemId, numericItemId),
+        eq(manufacturingQueue.queueType, 'KIT')
+      );
+
+      let linkedKitItem: { id: number; status: string } | undefined;
+      if (traveler.workOrderId) {
+        const [narrowRow] = await db
+          .select({ id: manufacturingQueue.id, status: manufacturingQueue.status })
+          .from(manufacturingQueue)
+          .where(
+            and(
+              baseConditions,
+              eq(manufacturingQueue.parentProductionOrderId, traveler.workOrderId)
+            )
+          )
+          .orderBy(desc(manufacturingQueue.createdAt))
+          .limit(1);
+        linkedKitItem = narrowRow;
+      }
+
+      if (!linkedKitItem) {
+        const [broadRow] = await db
+          .select({ id: manufacturingQueue.id, status: manufacturingQueue.status })
+          .from(manufacturingQueue)
+          .where(
+            and(
+              baseConditions,
+              notInArray(manufacturingQueue.status, ['CANCELLED', 'COMPLETED'])
+            )
+          )
+          .orderBy(desc(manufacturingQueue.createdAt))
+          .limit(1);
+        linkedKitItem = broadRow;
+      }
+
+      if (linkedKitItem && linkedKitItem.status !== 'RELEASED') {
+        return {
+          ok: false,
+          status: 400,
+          body: {
+            error: 'Kit not released — release the linked kit queue item before starting this traveler',
+            kitQueueItemId: linkedKitItem.id,
+            kitStatus: linkedKitItem.status,
+          },
+        };
+      }
+    }
+  }
+
+  // WAD gate: traveler's linked production work order must be RELEASED or IN_PROGRESS.
+  if (traveler.productionWorkOrderId) {
+    const wad = await storage.getWorkOrderById(traveler.productionWorkOrderId);
+    if (!wad) {
+      return {
+        ok: false,
+        status: 404,
+        body: {
+          error: 'Linked work order not found — cannot start traveler without a valid WAD',
+          workOrderId: traveler.productionWorkOrderId,
+        },
+      };
+    }
+    if (wad.status !== 'RELEASED' && wad.status !== 'IN_PROGRESS') {
+      return {
+        ok: false,
+        status: 403,
+        body: {
+          error: 'Work order not released to floor',
+          workOrderId: traveler.productionWorkOrderId,
+          workOrderStatus: wad.status,
+        },
+      };
+    }
+  }
+
+  const updatedTraveler = await storage.updateTraveler(id, { status: 'IN_PROGRESS' });
+
+  await storage.createTravelerEvent({
+    travelerId: id,
+    actor: actorName || 'system',
+    action: 'STATUS_CHANGED',
+    details: { from: 'DRAFT', to: 'IN_PROGRESS' },
+  });
+
+  auditService.logEvent({
+    entityType: 'traveler',
+    entityId: id,
+    action: 'TRAVELER_STARTED',
+    actor: {
+      id: actorUser?.employeeId ?? actorUser?.id ?? undefined,
+      username: actorName || actorUser?.username || 'system',
+    },
+    meta: {
+      workOrderId: traveler.productionWorkOrderId ?? undefined,
+      partNumber: traveler.partNumber ?? undefined,
+      travelerNumber: traveler.travelerNumber ?? undefined,
+    },
+  }).catch(err => console.warn('[Audit] TRAVELER_STARTED log failed:', err?.message));
+
+  // Auto-transition the WAD from RELEASED → IN_PROGRESS on first traveler start
+  if (traveler.productionWorkOrderId) {
+    const wad = await storage.getWorkOrderById(traveler.productionWorkOrderId);
+    if (wad && wad.status === 'RELEASED') {
+      await storage.updateWorkOrderStatus(wad.id, 'IN_PROGRESS');
+      console.log(`[Travelers] WAD ${wad.id} transitioned to IN_PROGRESS on first traveler start`);
+    }
+  }
+
+  return { ok: true, traveler: updatedTraveler };
+}
+
 // Start traveler (DRAFT -> IN_PROGRESS)
 router.post('/:id/start', requirePermission('travelers.start'), async (req: Request, res: Response) => {
   try {
@@ -712,124 +850,22 @@ router.post('/:id/start', requirePermission('travelers.start'), async (req: Requ
       });
     }
 
-    // Kit release gate: if traveler is linked to a KIT queue item, it must be RELEASED.
-    // Linkage strategy (most-to-least specific):
-    //   1. inventoryItemId + parentProductionOrderId (workOrderId on traveler)
-    //   2. inventoryItemId only — pick most recently created KIT row (desc createdAt)
-    if (traveler.inventoryItemId) {
-      const numericItemId = parseInt(traveler.inventoryItemId, 10);
-      if (!isNaN(numericItemId)) {
-        // Build base conditions
-        const baseConditions = and(
-          eq(manufacturingQueue.inventoryItemId, numericItemId),
-          eq(manufacturingQueue.queueType, 'KIT')
-        );
-
-        // Try narrow match first: also match parentProductionOrderId when workOrderId is set
-        let linkedKitItem: { id: number; status: string } | undefined;
-        if (traveler.workOrderId) {
-          const [narrowRow] = await db
-            .select({ id: manufacturingQueue.id, status: manufacturingQueue.status })
-            .from(manufacturingQueue)
-            .where(
-              and(
-                baseConditions,
-                eq(manufacturingQueue.parentProductionOrderId, traveler.workOrderId)
-              )
-            )
-            .orderBy(desc(manufacturingQueue.createdAt))
-            .limit(1);
-          linkedKitItem = narrowRow;
-        }
-
-        // Fall back to inventory-item-only match — constrained to open/relevant statuses
-        // (PENDING or RELEASED only; skip CANCELLED and COMPLETED rows to avoid false blocks)
-        if (!linkedKitItem) {
-          const [broadRow] = await db
-            .select({ id: manufacturingQueue.id, status: manufacturingQueue.status })
-            .from(manufacturingQueue)
-            .where(
-              and(
-                baseConditions,
-                notInArray(manufacturingQueue.status, ['CANCELLED', 'COMPLETED'])
-              )
-            )
-            .orderBy(desc(manufacturingQueue.createdAt))
-            .limit(1);
-          linkedKitItem = broadRow;
-        }
-
-        if (linkedKitItem && linkedKitItem.status !== 'RELEASED') {
-          return res.status(400).json({
-            error: 'Kit not released — release the linked kit queue item before starting this traveler',
-            kitQueueItemId: linkedKitItem.id,
-            kitStatus: linkedKitItem.status,
-          });
-        }
-      }
-    }
-
-    // WAD gate: traveler's linked production work order must be RELEASED.
-    // Missing WAD is treated as a hard failure — no bypass path exists.
-    if (traveler.productionWorkOrderId) {
-      const wad = await storage.getWorkOrderById(traveler.productionWorkOrderId);
-      if (!wad) {
-        return res.status(404).json({
-          error: 'Linked work order not found — cannot start traveler without a valid WAD',
-          workOrderId: traveler.productionWorkOrderId,
-        });
-      }
-      // Allow RELEASED or IN_PROGRESS: IN_PROGRESS means a prior traveler on this WAD already
-      // started (which auto-transitioned the WAD), so subsequent travelers are still authorized.
-      if (wad.status !== 'RELEASED' && wad.status !== 'IN_PROGRESS') {
-        return res.status(403).json({
-          error: 'Work order not released to floor',
-          workOrderId: traveler.productionWorkOrderId,
-          workOrderStatus: wad.status,
-        });
-      }
-    }
-
-    const updatedTraveler = await storage.updateTraveler(id, { status: 'IN_PROGRESS' });
-
-    await storage.createTravelerEvent({
-      travelerId: id,
-      actor: startedBy || 'system',
-      action: 'STATUS_CHANGED',
-      details: { from: 'DRAFT', to: 'IN_PROGRESS' },
-    });
-
     const startActorUser = (req as any).user;
-    auditService.logEvent({
-      entityType: 'traveler',
-      entityId: id,
-      action: 'TRAVELER_STARTED',
-      actor: {
-        id: startActorUser?.employeeId ?? startActorUser?.id ?? undefined,
-        username: startedBy || startActorUser?.username || 'system',
-      },
-      meta: {
-        workOrderId: traveler.productionWorkOrderId ?? undefined,
-        partNumber: traveler.partNumber ?? undefined,
-        travelerNumber: traveler.travelerNumber ?? undefined,
-      },
-    }).catch(err => console.warn('[Audit] TRAVELER_STARTED log failed:', err?.message));
-
-    // Auto-transition the WAD to IN_PROGRESS when the first traveler step starts
-    if (traveler.productionWorkOrderId) {
-      const wad = await storage.getWorkOrderById(traveler.productionWorkOrderId);
-      if (wad && wad.status === 'RELEASED') {
-        await storage.updateWorkOrderStatus(wad.id, 'IN_PROGRESS');
-        console.log(`[Travelers] WAD ${wad.id} transitioned to IN_PROGRESS on first traveler start`);
-      }
+    const result = await promoteTravelerToInProgress(
+      traveler,
+      startedBy || startActorUser?.username || 'system',
+      startActorUser
+    );
+    if (!result.ok) {
+      return res.status(result.status).json(result.body);
     }
-
-    res.json(updatedTraveler);
+    return res.json(result.traveler);
   } catch (error: any) {
     console.error('Error starting traveler:', error);
     res.status(500).json({ error: 'Failed to start traveler', message: error.message });
   }
 });
+
 
 // Complete traveler (requires all steps completed and signed)
 router.post('/:id/complete', requirePermission('travelers.finish'), async (req: Request, res: Response) => {
@@ -1350,10 +1386,22 @@ router.post('/:travelerId/steps/:stepId/start/override', requirePermission('work
     const operatorName = resolvedOperator.name;
 
     // Validate traveler and step state
-    const traveler = await storage.getTraveler(travelerId);
+    let traveler = await storage.getTraveler(travelerId);
     if (!traveler) return res.status(404).json({ error: 'Traveler not found' });
 
-    if (traveler.status !== 'IN_PROGRESS') {
+    if (traveler.status === 'DRAFT') {
+      // Auto-promote DRAFT → IN_PROGRESS using the same gates as POST /:id/start.
+      // Gate failures (kit not released / WAD not released) surface using the same
+      // response shape the standalone /start endpoint returns today.
+      const promote = await promoteTravelerToInProgress(traveler, supervisor.name, {
+        employeeId: supervisor.id,
+        username: supervisor.name,
+      });
+      if (!promote.ok) {
+        return res.status(promote.status).json(promote.body);
+      }
+      traveler = promote.traveler;
+    } else if (traveler.status !== 'IN_PROGRESS') {
       return res.status(400).json({
         error: 'Traveler must be IN_PROGRESS to start a step',
         currentStatus: traveler.status,
@@ -1594,12 +1642,26 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
       }
     }
 
-    const traveler = await storage.getTraveler(travelerId);
+    let traveler = await storage.getTraveler(travelerId);
     if (!traveler) {
       return res.status(404).json({ error: 'Traveler not found' });
     }
 
-    if (traveler.status !== 'IN_PROGRESS') {
+    if (traveler.status === 'DRAFT') {
+      // Auto-promote DRAFT → IN_PROGRESS so operators on the kiosk don't need
+      // an admin to flip the status first. Runs the same kit-release and
+      // WAD-release gates as POST /:id/start; gate failures surface using the
+      // standalone /start endpoint's response shape.
+      const promote = await promoteTravelerToInProgress(
+        traveler,
+        resolvedName,
+        { employeeId: resolvedEmployeeId, username: resolvedName }
+      );
+      if (!promote.ok) {
+        return res.status(promote.status).json(promote.body);
+      }
+      traveler = promote.traveler;
+    } else if (traveler.status !== 'IN_PROGRESS') {
       return res.status(400).json({
         error: 'Traveler must be IN_PROGRESS to start a step',
         currentStatus: traveler.status,

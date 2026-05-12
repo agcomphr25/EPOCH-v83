@@ -906,7 +906,8 @@ router.post('/upload/approval', vendorApprovalUpload.single('file'), async (req:
     });
   } catch (error) {
     console.error('Vendor approval upload error:', error);
-    res.status(500).json({ error: 'Failed to upload file' });
+    const message = error instanceof Error ? error.message : 'Failed to upload file';
+    res.status(500).json({ error: message });
   }
 });
 

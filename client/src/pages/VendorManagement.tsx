@@ -717,16 +717,20 @@ export default function VendorManagement() {
         body: formData,
       });
 
-      if (!response.ok) throw new Error('Upload failed');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Upload failed');
+      }
 
       const data = await response.json();
       form.setValue('approvalPdfUrl', data.url);
       setUploadedFile(file);
       toast({ title: 'File uploaded successfully' });
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to upload file';
       toast({
         title: 'Upload failed',
-        description: 'Failed to upload file',
+        description: message,
         variant: 'destructive',
       });
     } finally {

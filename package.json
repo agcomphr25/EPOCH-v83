@@ -14,6 +14,7 @@
     "lint:dates": "node scripts/check-format-dates.js",
     "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,css,md}\"",
     "backfill:p2-packets": "tsx server/scripts/backfillP2UsedPackets.ts",
+    "maintenance:safe-migrations": "tsx server/scripts/migrations/runSafeBootMigrations.ts",
     "predb:push": "npx tsx server/pre-deploy-migrate.ts",
     "db:push": "drizzle-kit push",
     "prepare": "husky || true",

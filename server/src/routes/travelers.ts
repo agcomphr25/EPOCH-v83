@@ -12,6 +12,7 @@ import { resolveChargeCode, deriveProjectId, resolveCertificationStatus, resolve
 import { resolvePacketBarcode } from '../lib/packetResolution';
 import { getActiveRoutingStep } from '../services/routingStepService';
 import { laborAllocationsEnabled } from '../lib/featureFlags';
+import { ensureProductionWorkflowReadSchema } from '../lib/productionWorkflowReadiness';
 import * as allocationService from '../services/laborAllocationService';
 import { db } from '../../db';
 import {
@@ -252,6 +253,19 @@ const router = Router();
 router.use((req: Request, res: Response, next: NextFunction) => {
   console.log(`[Travelers] ${req.method} ${req.path}`);
   next();
+});
+
+router.use(async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    await ensureProductionWorkflowReadSchema();
+    next();
+  } catch (error) {
+    console.error('[Travelers] production workflow schema readiness failed:', error);
+    res.status(503).json({
+      error: 'Traveler workflow schema is not ready',
+      message: 'Traveler data is temporarily unavailable while production workflow tables are prepared.',
+    });
+  }
 });
 
 router.use(validateActionToken);

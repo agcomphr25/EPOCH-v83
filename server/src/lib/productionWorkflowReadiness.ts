@@ -52,9 +52,12 @@ export async function ensureProductionWorkflowReadSchema(): Promise<void> {
 
           IF to_regclass('public.travelers') IS NOT NULL THEN
             ALTER TABLE public.travelers
+              ADD COLUMN IF NOT EXISTS traveler_revision integer NOT NULL DEFAULT 1,
               ADD COLUMN IF NOT EXISTS production_work_order_id uuid,
               ADD COLUMN IF NOT EXISTS project_id uuid,
               ADD COLUMN IF NOT EXISTS default_charge_code_id integer,
+              ADD COLUMN IF NOT EXISTS created_from_template_id uuid,
+              ADD COLUMN IF NOT EXISTS created_from_template_version integer,
               ADD COLUMN IF NOT EXISTS off_system_completion_link text;
           END IF;
 
@@ -62,6 +65,32 @@ export async function ensureProductionWorkflowReadSchema(): Promise<void> {
             ALTER TABLE public.traveler_steps
               ADD COLUMN IF NOT EXISTS blocked_reason text,
               ADD COLUMN IF NOT EXISTS blocked_at timestamp with time zone;
+          END IF;
+
+          IF to_regclass('public.traveler_tasks') IS NOT NULL THEN
+            ALTER TABLE public.traveler_tasks
+              ADD COLUMN IF NOT EXISTS task_phase text NOT NULL DEFAULT 'WORK',
+              ADD COLUMN IF NOT EXISTS time_policy varchar(50) DEFAULT 'AUTO_ON_COMPLETE',
+              ADD COLUMN IF NOT EXISTS requires_signature boolean DEFAULT false,
+              ADD COLUMN IF NOT EXISTS signature_role varchar(50),
+              ADD COLUMN IF NOT EXISTS requires_certification boolean DEFAULT false,
+              ADD COLUMN IF NOT EXISTS instruction_pack jsonb,
+              ADD COLUMN IF NOT EXISTS template_source_id uuid;
+          END IF;
+
+          IF to_regclass('public.traveler_task_fields') IS NOT NULL THEN
+            ALTER TABLE public.traveler_task_fields
+              ADD COLUMN IF NOT EXISTS validation jsonb;
+          END IF;
+
+          IF to_regclass('public.traveler_signatures') IS NOT NULL THEN
+            ALTER TABLE public.traveler_signatures
+              ADD COLUMN IF NOT EXISTS traveler_task_id varchar(255),
+              ADD COLUMN IF NOT EXISTS signed_by_name varchar(255),
+              ADD COLUMN IF NOT EXISTS signature_role varchar(50),
+              ADD COLUMN IF NOT EXISTS badge_scan varchar(255),
+              ADD COLUMN IF NOT EXISTS signature_hash text,
+              ADD COLUMN IF NOT EXISTS signature_data text;
           END IF;
 
           IF to_regclass('public.punch_ledger') IS NOT NULL THEN

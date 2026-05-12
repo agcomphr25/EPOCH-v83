@@ -2704,24 +2704,21 @@ const MonthlyEvaluationsTable = forwardRef<
 
     if (isEditing) {
       return (
-        <Select
-          defaultValue={value !== null && value !== undefined ? value.toString() : 'na'}
-          onValueChange={(v) => handleFieldSelect(field, v)}
-          open={true}
-          onOpenChange={(open) => { if (!open) setEditingField(null); }}
+        <select
+          autoFocus
+          value={value !== null && value !== undefined ? value.toString() : 'na'}
+          onChange={(e) => handleFieldSelect(field, e.target.value)}
+          onBlur={() => setEditingField(null)}
+          className="h-8 w-20 rounded border border-input bg-background p-1 text-center text-sm"
+          data-testid={`select-annual-${field}`}
         >
-          <SelectTrigger className="w-20 h-8 text-center p-1">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="5">5</SelectItem>
-            <SelectItem value="4">4</SelectItem>
-            <SelectItem value="3">3</SelectItem>
-            <SelectItem value="2">2</SelectItem>
-            <SelectItem value="1">1</SelectItem>
-            <SelectItem value="na">N/A</SelectItem>
-          </SelectContent>
-        </Select>
+          <option value="5">5</option>
+          <option value="4">4</option>
+          <option value="3">3</option>
+          <option value="2">2</option>
+          <option value="1">1</option>
+          <option value="na">N/A</option>
+        </select>
       );
     }
 

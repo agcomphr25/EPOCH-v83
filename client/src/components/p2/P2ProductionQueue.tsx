@@ -29,6 +29,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Factory, 
   Search, 
@@ -49,7 +50,8 @@ import {
   ArrowUp,
   ArrowDown,
   Check,
-  Users
+  Users,
+  FolderOpen
 } from 'lucide-react';
 import JsBarcode from 'jsbarcode';
 import { getBarcodeFormat } from '@/lib/barcodeFormat';
@@ -65,6 +67,7 @@ interface ActiveTask {
 
 interface QueueItem {
   id: string;
+  poId: number | null;
   barcode: string;
   serialNumber: string;
   partNumber: string;
@@ -74,6 +77,9 @@ interface QueueItem {
   status: string;
   currentDepartment: string;
   currentStageIndex: number;
+  projectId: string | null;
+  projectCode: string | null;
+  projectName: string | null;
   hasActiveTask: boolean;
   activeTask: ActiveTask | null;
   barcodePrintedAt?: string | null;
@@ -121,6 +127,15 @@ interface P2ProductionQueueProps {
   selectedPONumbers?: string[];
 }
 
+interface ProjectOption {
+  id: string;
+  projectCode: string;
+  projectName: string;
+  customerId: string;
+  status: string;
+  poId: number | null;
+}
+
 export default function P2ProductionQueue({ selectedPONumbers = [] }: P2ProductionQueueProps) {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -139,11 +154,22 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
   const [expandedCustomerGroups, setExpandedCustomerGroups] = useState<string[]>([]);
   const [selectedLayupItems, setSelectedLayupItems] = useState<Set<string>>(new Set());
   const [sortByPO, setSortByPO] = useState<'asc' | 'desc' | null>(null);
+  const [assignProjectItem, setAssignProjectItem] = useState<QueueItem | null>(null);
+  const [assignProjectId, setAssignProjectId] = useState('');
+  const [assignProjectReason, setAssignProjectReason] = useState('');
 
   const { data: queueDataRaw, isLoading } = useQuery<ProductionQueueData>({
     queryKey: ['/api/p2/control-center/production-queue'],
     refetchInterval: 10000,
   });
+
+  const { data: projects = [] } = useQuery<ProjectOption[]>({
+    queryKey: ['/api/projects'],
+  });
+
+  const assignableProjects = projects.filter((project) =>
+    !['completed', 'cancelled', 'inactive', 'lost'].includes(String(project.status || '').toLowerCase())
+  );
 
   const queueData: ProductionQueueData | undefined = queueDataRaw && selectedPONumbers.length > 0
     ? {
@@ -240,6 +266,38 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
     },
   });
 
+  const assignProjectMutation = useMutation({
+    mutationFn: async ({ projectId, poId, reason }: { projectId: string; poId: number; reason: string }) => {
+      return apiRequest(`/api/projects/${projectId}/link-po`, {
+        method: 'POST',
+        body: {
+          poId,
+          reason,
+          createdByDisplayName: 'Production Control',
+        },
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Project assigned',
+        description: 'The P2 PO is now linked to the project and recorded as a project revision.',
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/production-queue'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/po-statuses'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
+      setAssignProjectItem(null);
+      setAssignProjectId('');
+      setAssignProjectReason('');
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Assignment failed',
+        description: error.message || 'Could not link this P2 PO to the selected project.',
+        variant: 'destructive',
+      });
+    },
+  });
+
   const handleScan = () => {
     if (scanInput.trim()) {
       scanMutation.mutate(scanInput.trim());
@@ -260,6 +318,12 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
   const openScrapDialog = (item: QueueItem) => {
     setSelectedItem(item);
     setShowScrapDialog(true);
+  };
+
+  const openAssignProjectDialog = (item: QueueItem) => {
+    setAssignProjectItem(item);
+    setAssignProjectId(item.projectId || '');
+    setAssignProjectReason(item.projectId ? 'Confirm existing production PO to project link' : 'Assign production P2 PO to open project');
   };
 
   const openOffSystemDialog = (item: QueueItem) => {
@@ -845,6 +909,46 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                                         <TableCell>
                                           <div>{item.poNumber}</div>
                                           <div className="text-xs text-muted-foreground">{item.customerName}</div>
+                                          {item.projectId ? (
+                                            <div className="mt-1 flex flex-wrap items-center gap-2">
+                                              <button
+                                                type="button"
+                                                className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                                                title={item.projectName || undefined}
+                                                onClick={() => setLocation(`/projects/${item.projectId}`)}
+                                              >
+                                                <FolderOpen className="h-3 w-3" />
+                                                {item.projectCode || 'Linked Project'}
+                                              </button>
+                                              <button
+                                                type="button"
+                                                className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                                                onClick={() => setLocation(`/pm-control-center?project=${item.projectId}`)}
+                                              >
+                                                <Factory className="h-3 w-3" />
+                                                PM Control
+                                              </button>
+                                              <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-6 px-2 text-xs"
+                                                onClick={() => openAssignProjectDialog(item)}
+                                              >
+                                                Change
+                                              </Button>
+                                            </div>
+                                          ) : (
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              className="mt-2 h-7 px-2 text-xs"
+                                              onClick={() => openAssignProjectDialog(item)}
+                                              disabled={!item.poId}
+                                            >
+                                              <FolderOpen className="h-3 w-3 mr-1" />
+                                              Assign Project
+                                            </Button>
+                                          )}
                                         </TableCell>
                                         <TableCell>
                                           {item.hasActiveTask && item.activeTask ? (
@@ -925,6 +1029,97 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
           </Accordion>
         </CardContent>
       </Card>
+
+      {/* Assign Project Dialog */}
+      <Dialog
+        open={!!assignProjectItem}
+        onOpenChange={(open) => {
+          if (!open) {
+            setAssignProjectItem(null);
+            setAssignProjectId('');
+            setAssignProjectReason('');
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FolderOpen className="h-5 w-5" />
+              Assign P2 PO to Project
+            </DialogTitle>
+            <DialogDescription>
+              Link this production PO to an open project. The link is saved as a project revision.
+            </DialogDescription>
+          </DialogHeader>
+
+          {assignProjectItem && (
+            <div className="space-y-4">
+              <div className="rounded-lg border p-3">
+                <div className="font-mono font-semibold">{assignProjectItem.poNumber}</div>
+                <div className="text-sm text-muted-foreground">{assignProjectItem.customerName}</div>
+                <div className="text-sm text-muted-foreground">{assignProjectItem.partNumber} - {assignProjectItem.partName}</div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Open Project</label>
+                <Select value={assignProjectId} onValueChange={setAssignProjectId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select project" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {assignableProjects.map((project) => (
+                      <SelectItem key={project.id} value={project.id}>
+                        {project.projectCode} - {project.projectName}
+                        {project.poId ? ` (linked to PO ${project.poId})` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Revision Reason</label>
+                <Textarea
+                  value={assignProjectReason}
+                  onChange={(e) => setAssignProjectReason(e.target.value)}
+                  placeholder="Why this production PO belongs to the selected project"
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAssignProjectItem(null)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={
+                !assignProjectItem?.poId ||
+                !assignProjectId ||
+                assignProjectReason.trim().length < 3 ||
+                assignProjectMutation.isPending
+              }
+              onClick={() => {
+                if (!assignProjectItem?.poId || !assignProjectId) return;
+                assignProjectMutation.mutate({
+                  projectId: assignProjectId,
+                  poId: assignProjectItem.poId,
+                  reason: assignProjectReason,
+                });
+              }}
+            >
+              {assignProjectMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Assigning...
+                </>
+              ) : (
+                'Assign Project'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Scan Result Dialog */}
       <Dialog open={showScanDialog} onOpenChange={setShowScanDialog}>

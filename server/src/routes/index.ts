@@ -3261,6 +3261,19 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       // Get all active serialized items using storage method (which handles pool.query)
       const allItems = await storage.getP2SerializedItems({ status: 'ACTIVE' });
       const items = allItems || [];
+      const { pool: dbPool } = await import('../../db');
+      const poIds = [...new Set(items.map((item: any) => item.poId ?? item.po_id).filter(Boolean))];
+      const projectRows = poIds.length > 0
+        ? await dbPool.query(
+            `SELECT po_id AS "poId", id AS "projectId", project_code AS "projectCode", project_name AS "projectName"
+             FROM projects
+             WHERE po_id = ANY($1)`,
+            [poIds]
+          )
+        : [];
+      const projectByPoId = new Map<number, any>(
+        (projectRows as any[]).map((row: any) => [Number(row.poId), row])
+      );
       
       // Work tasks and routings tables may not exist yet - use empty arrays as fallback
       const activeTasks: any[] = [];
@@ -3316,9 +3329,12 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         }
         
         const activeTask = taskByItemId.get(item.id);
+        const poId = item.poId ?? item.po_id ?? null;
+        const linkedProject = poId ? projectByPoId.get(Number(poId)) : null;
         
         departmentQueues[dept].push({
           id: item.id,
+          poId,
           barcode: item.barcode,
           serialNumber: item.serialNumber,
           partNumber: item.partNumber,
@@ -3328,6 +3344,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           status: item.status,
           currentDepartment: dept,
           currentStageIndex: item.currentStageIndex || 0,
+          projectId: linkedProject?.projectId ?? null,
+          projectCode: linkedProject?.projectCode ?? null,
+          projectName: linkedProject?.projectName ?? null,
           hasActiveTask: !!activeTask,
           barcodePrintedAt: item.barcodePrintedAt || null,
           activeTask: activeTask ? {

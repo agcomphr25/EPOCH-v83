@@ -3331,6 +3331,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         const activeTask = taskByItemId.get(item.id);
         const poId = item.poId ?? item.po_id ?? null;
         const linkedProject = poId ? projectByPoId.get(Number(poId)) : null;
+        const metadata = item.metadata || {};
         
         departmentQueues[dept].push({
           id: item.id,
@@ -3347,6 +3348,10 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           projectId: linkedProject?.projectId ?? null,
           projectCode: linkedProject?.projectCode ?? null,
           projectName: linkedProject?.projectName ?? null,
+          isReplacement: metadata.isReplacement === true,
+          replacementForSerializedItemId: metadata.replacementForSerializedItemId ?? null,
+          replacementForSerialNumber: metadata.replacementForSerialNumber ?? null,
+          replacementReason: metadata.replacementReason ?? null,
           hasActiveTask: !!activeTask,
           barcodePrintedAt: item.barcodePrintedAt || null,
           activeTask: activeTask ? {
@@ -3443,6 +3448,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const { db } = await import('../../db');
       const { p2SerializedItems, p2SerializedItemEvents, travelers, auditEvents } = await import('../../schema');
       const { eq, desc } = await import('drizzle-orm');
+      const { randomUUID } = await import('crypto');
       
       const [item] = await db.select().from(p2SerializedItems).where(eq(p2SerializedItems.id, itemId)).limit(1);
       
@@ -3572,6 +3578,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
       let travelerCreated = false;
       let linkedTravelerFound = false;
+      let replacementItem: any = null;
       if (status === 'COMPLETED') {
         if (linkedTravelerId) {
           const [existingTraveler] = await db.select().from(travelers).where(eq(travelers.id, linkedTravelerId)).limit(1);
@@ -3629,12 +3636,156 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           travelerCreated = true;
         }
       }
+
+      if (status === 'SCRAPPED') {
+        const siblingItems = await db
+          .select()
+          .from(p2SerializedItems)
+          .where(eq(p2SerializedItems.poItemId, item.poItemId));
+
+        const existingReplacement = siblingItems.find((candidate: any) => {
+          const metadata = candidate.metadata || {};
+          return metadata.isReplacement === true && metadata.replacementForSerializedItemId === itemId;
+        });
+
+        if (!existingReplacement) {
+          const now = new Date();
+          const replacementNumber = siblingItems.filter((candidate: any) => {
+            const metadata = candidate.metadata || {};
+            return metadata.isReplacement === true
+              && (
+                metadata.replacementForSerializedItemId === itemId
+                || metadata.replacementForSerialNumber === item.serialNumber
+              );
+          }).length + 1;
+          const replacementSuffix = `R${replacementNumber}`;
+          const baseSerial = item.serialNumber || item.barcode || item.id;
+          const baseBarcode = item.barcode || baseSerial;
+          const replacementSerialNumber = `${baseSerial}-${replacementSuffix}`;
+          const replacementBarcode = `${baseBarcode}-${replacementSuffix}`;
+          const maxSequenceNumber = Math.max(
+            Number(item.sequenceNumber || 0),
+            ...siblingItems.map((candidate: any) => Number(candidate.sequenceNumber || 0))
+          );
+          const replacementId = randomUUID();
+          const replacementMetadata = {
+            ...((item.metadata as Record<string, unknown> | null) || {}),
+            isReplacement: true,
+            replacementForSerializedItemId: itemId,
+            replacementForSerialNumber: item.serialNumber,
+            replacementForBarcode: item.barcode,
+            replacementReason: reason,
+            replacementCreatedAt: now.toISOString(),
+            replacementCreatedBy: performedBy || 'System',
+            replacementSource: 'NCR_SCRAP',
+          };
+
+          const [createdReplacement] = await db.insert(p2SerializedItems).values({
+            id: replacementId,
+            poId: item.poId,
+            poItemId: item.poItemId,
+            poNumber: item.poNumber,
+            partNumber: item.partNumber,
+            partName: item.partName,
+            customerId: item.customerId,
+            customerName: item.customerName,
+            sequenceNumber: maxSequenceNumber + 1,
+            serialNumber: replacementSerialNumber,
+            barcode: replacementBarcode,
+            travelerBarcode: replacementBarcode,
+            buildFamilyKey: item.buildFamilyKey,
+            partRoutingId: item.partRoutingId,
+            partRoutingRevision: item.partRoutingRevision,
+            sku: item.sku,
+            drawingName: item.drawingName,
+            status: 'ACTIVE',
+            currentDepartment: item.currentDepartment || 'Pending Layup',
+            currentStageIndex: item.currentStageIndex || 0,
+            notes: `Replacement for NCR item ${item.serialNumber || item.barcode}. ${reason}`,
+            metadata: replacementMetadata,
+            createdAt: now,
+            updatedAt: now,
+          }).returning();
+
+          replacementItem = createdReplacement;
+
+          await db.update(p2SerializedItems)
+            .set({
+              metadata: {
+                ...((item.metadata as Record<string, unknown> | null) || {}),
+                ncrReplacementSerializedItemId: replacementId,
+                ncrReplacementSerialNumber: replacementSerialNumber,
+                ncrReplacementBarcode: replacementBarcode,
+                ncrReplacementCreatedAt: now.toISOString(),
+              },
+              updatedAt: now,
+            })
+            .where(eq(p2SerializedItems.id, itemId));
+
+          await db.insert(p2SerializedItemEvents).values({
+            serializedItemId: replacementId,
+            barcode: replacementBarcode,
+            eventType: 'NCR_REPLACEMENT_CREATED',
+            performedBy: performedBy || 'System',
+            notes: `Replacement created for NCR item ${item.serialNumber || item.barcode} - ${reason}`,
+            metadata: {
+              originalSerializedItemId: itemId,
+              originalSerialNumber: item.serialNumber,
+              originalBarcode: item.barcode,
+              replacementReason: reason,
+            },
+          });
+
+          await db.insert(p2SerializedItemEvents).values({
+            serializedItemId: itemId,
+            barcode: item.barcode,
+            eventType: 'NCR_REPLACEMENT_LINKED',
+            performedBy: performedBy || 'System',
+            notes: `Replacement item ${replacementSerialNumber} linked to this NCR scrap`,
+            metadata: {
+              replacementSerializedItemId: replacementId,
+              replacementSerialNumber,
+              replacementBarcode,
+              replacementReason: reason,
+            },
+          });
+
+          if (activeTraveler) {
+            await db.insert(auditEvents).values({
+              entityType: 'traveler',
+              entityId: activeTraveler.id,
+              action: 'NCR_REPLACEMENT_CREATED',
+              actorName: performedBy || 'System',
+              reason,
+              meta: {
+                travelerId: activeTraveler.id,
+                travelerNumber: activeTraveler.travelerNumber,
+                originalSerializedItemId: itemId,
+                replacementSerializedItemId: replacementId,
+                replacementSerialNumber,
+                replacementBarcode,
+                poId: item.poId,
+                poNumber: item.poNumber,
+              },
+            });
+          }
+        } else {
+          replacementItem = existingReplacement;
+        }
+      }
       
       res.json({
         success: true,
         message: `Item status updated to ${status}`,
         travelerCreated,
         linkedTravelerFound,
+        replacementCreated: Boolean(replacementItem),
+        replacementItem: replacementItem ? {
+          id: replacementItem.id,
+          serialNumber: replacementItem.serialNumber,
+          barcode: replacementItem.barcode,
+          currentDepartment: replacementItem.currentDepartment,
+        } : null,
       });
     } catch (_error) {
       console.error('P2 Update item status error:', _error);

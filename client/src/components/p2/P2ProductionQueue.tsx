@@ -79,6 +79,10 @@ interface QueueItem {
   projectId: string | null;
   projectCode: string | null;
   projectName: string | null;
+  isReplacement?: boolean;
+  replacementForSerializedItemId?: string | null;
+  replacementForSerialNumber?: string | null;
+  replacementReason?: string | null;
   hasActiveTask: boolean;
   activeTask: ActiveTask | null;
   barcodePrintedAt?: string | null;
@@ -202,10 +206,12 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
         body: JSON.stringify({ status, reason, notes, linkedTravelerId, performedBy: 'Supervisor' }),
       });
     },
-    onSuccess: (_, variables) => {
+    onSuccess: (data: any, variables) => {
       const desc = variables.status === 'COMPLETED' 
         ? 'Item marked as completed (off-system production) and added to traveler management'
-        : `Item status changed to ${variables.status}`;
+        : variables.status === 'SCRAPPED' && data?.replacementItem
+          ? `Item marked NCR/scrapped. Replacement ${data.replacementItem.serialNumber} was added to the production queue.`
+          : `Item status changed to ${variables.status}`;
       toast({
         title: 'Status Updated',
         description: desc,
@@ -832,6 +838,15 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                                         <TableCell className="font-mono font-semibold">
                                           <div className="flex items-center gap-1.5">
                                             {item.barcode || item.serialNumber}
+                                            {item.isReplacement && (
+                                              <Badge
+                                                variant="outline"
+                                                className="border-blue-300 bg-blue-50 text-blue-700 text-[10px] font-sans"
+                                                title={item.replacementReason || undefined}
+                                              >
+                                                Replacement
+                                              </Badge>
+                                            )}
                                             {item.barcodePrintedAt && (
                                               <span
                                                 className="inline-flex items-center gap-0.5 text-muted-foreground/70"
@@ -846,6 +861,11 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                                         <TableCell>
                                           <div>{item.partNumber}</div>
                                           <div className="text-xs text-muted-foreground">{item.partName}</div>
+                                          {item.isReplacement && (
+                                            <div className="text-xs text-blue-700 dark:text-blue-300">
+                                              Replaces {item.replacementForSerialNumber || item.replacementForSerializedItemId || 'NCR item'}
+                                            </div>
+                                          )}
                                         </TableCell>
                                         <TableCell>
                                           <div>{item.poNumber}</div>
@@ -1142,10 +1162,10 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-red-600">
               <XCircle className="h-5 w-5" />
-              Scrap Item
+              Mark Item NCR / Scrap
             </DialogTitle>
             <DialogDescription>
-              This action is permanent and will remove the item from production.
+              This removes the NCR item from active production and creates a linked replacement item in the P2 queue.
             </DialogDescription>
           </DialogHeader>
           
@@ -1154,7 +1174,7 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
               <div className="bg-red-50 dark:bg-red-950 p-3 rounded-lg border border-red-200">
                 <div className="flex items-center gap-2 text-red-700 dark:text-red-400">
                   <AlertTriangle className="h-4 w-4" />
-                  <span className="font-medium">Warning: This cannot be undone</span>
+                  <span className="font-medium">NCR replacement required</span>
                 </div>
                 <div className="mt-2">
                   <div className="font-medium">{selectedItem.barcode}</div>
@@ -1165,9 +1185,9 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
               </div>
               
               <div>
-                <label className="text-sm font-medium">Reason for Scrapping *</label>
+                <label className="text-sm font-medium">NCR / Scrap Reason *</label>
                 <Textarea
-                  placeholder="Enter reason for scrapping this item..."
+                  placeholder="Enter the NCR reason and replacement context..."
                   value={scrapReason}
                   onChange={(e) => setScrapReason(e.target.value)}
                   className="mt-1"
@@ -1192,7 +1212,7 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
               ) : (
                 <XCircle className="h-4 w-4 mr-2" />
               )}
-              Scrap Item
+              Mark NCR & Create Replacement
             </Button>
           </DialogFooter>
         </DialogContent>

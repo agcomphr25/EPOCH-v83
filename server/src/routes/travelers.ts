@@ -64,6 +64,34 @@ const DEPT_ALIASES: Record<string, string> = {
   'shipping': 'shipping',
 };
 
+const TRACE_FIELD_ALIASES: Record<string, string[]> = {
+  trace_internalcontrolnumber: ['internalControlNumber', 'material_internal_control_number', 'material_icn'],
+  trace_supplier: ['supplier'],
+  trace_inventorypartnumber: ['inventoryPartNumber', 'material_part_number'],
+  trace_batchlotnumber: ['batchLotNumber', 'material_batch_number', 'material_lot'],
+  trace_manufacturer: ['manufacturer', 'material_brand'],
+  trace_rollnumber: ['rollNumber'],
+  trace_expirationdate: ['expirationDate', 'material_expiration_date'],
+  trace_receiveddate: ['receivedDate'],
+};
+
+function resolveTraceFieldValue(
+  fieldKey: string,
+  fieldValues: Record<string, unknown>,
+): unknown {
+  const aliases = TRACE_FIELD_ALIASES[fieldKey];
+  if (!aliases) return undefined;
+
+  for (const alias of aliases) {
+    const value = fieldValues[alias];
+    if (value !== undefined && value !== null && value !== '') {
+      return value;
+    }
+  }
+
+  return undefined;
+}
+
 function normalizeDept(d: string): string {
   let lower = d.toLowerCase().trim();
   lower = lower.replace(/^pending\s+/i, '');
@@ -2377,6 +2405,9 @@ router.post('/:travelerId/tasks/:taskId/complete', async (req: Request, res: Res
       const resolvedFieldValidations = fieldValidations || {};
       for (const field of fields) {
         let value = resolvedFieldValues[field.fieldKey];
+        if (value === undefined && (task.taskType === 'TRACE' || task.taskType === 'TRACEABILITY')) {
+          value = resolveTraceFieldValue(field.fieldKey, resolvedFieldValues);
+        }
         if (value === undefined && field.fieldKey === 'operator') {
           value = completedBy || step.startedBy || 'unknown';
         }

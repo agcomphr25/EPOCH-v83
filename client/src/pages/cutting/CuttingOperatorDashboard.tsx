@@ -149,6 +149,8 @@ type ManufacturingQueueItem = {
   estimatedCuts: number;
   packetBomId: string | null;
   poNumbers?: GroupedPO[] | null;
+  allocatedPacketCount?: number;
+  printableBarcodeCount?: number;
 };
 
 type PacketBOM = {
@@ -215,6 +217,17 @@ function parseMfgBarcode(barcode: string): MfgBarcodeSegments {
 function buildMfgBarcode(queueId: string | null, sku: string | null, packetNumber: number): string | null {
   if (!queueId || !sku) return null;
   return `MFG-${queueId}-${sku}-${packetNumber}`;
+}
+
+function getPrintableBarcodeCount(item: ManufacturingQueueItem): number {
+  if (typeof item.printableBarcodeCount === 'number') {
+    return Math.max(0, item.printableBarcodeCount);
+  }
+  return Math.max(0, (item.quantityOrdered || 0) - (item.quantityCompleted || 0));
+}
+
+function isPacketBarcodePrintable(item: ManufacturingQueueItem): boolean {
+  return (item.status === 'PENDING' || item.status === 'IN_PROGRESS') && getPrintableBarcodeCount(item) > 0;
 }
 
 function useIsAdmin() {
@@ -704,7 +717,7 @@ export default function CuttingOperatorDashboard() {
       toast({ title: 'Barcodes Ready', description: `${data.count} packet barcode labels ready to print.` });
     },
     onError: () => {
-      toast({ title: 'Error', description: 'Failed to generate packet barcodes.', variant: 'destructive' });
+      toast({ title: 'No barcodes available', description: 'Only unallocated packet barcodes can be printed.', variant: 'destructive' });
     },
   });
 
@@ -922,10 +935,10 @@ export default function CuttingOperatorDashboard() {
 
   const selectAllPendingForPrint = () => {
     const pendingIds = mfgQueueItems
-      .filter(i => i.status === 'PENDING' || i.status === 'IN_PROGRESS')
+      .filter(isPacketBarcodePrintable)
       .map(i => i.id);
     setSelectedPrintIds(prev => 
-      prev.length === pendingIds.length ? [] : pendingIds
+      prev.filter(id => pendingIds.includes(id)).length === pendingIds.length ? [] : pendingIds
     );
   };
 
@@ -1276,6 +1289,9 @@ export default function CuttingOperatorDashboard() {
   const pendingReceiving = fabricInventory.filter(f => f.squareMeters > 0 && !f.freezerLocation).length;
   const inProgressCount = mfgQueueItems.filter(i => i.status === 'IN_PROGRESS').length;
   const pendingCount = mfgQueueItems.filter(i => i.status === 'PENDING').length;
+  const printableQueueItems = mfgQueueItems.filter(isPacketBarcodePrintable);
+  const printableQueueIds = printableQueueItems.map(i => i.id);
+  const selectedPrintableIds = selectedPrintIds.filter(id => printableQueueIds.includes(id));
 
   return (
     <div className="space-y-6">
@@ -2125,26 +2141,25 @@ export default function CuttingOperatorDashboard() {
                 size="sm"
                 className="bg-green-600 hover:bg-green-700 text-white"
                 onClick={() => {
-                  const printableItems = mfgQueueItems.filter(i => i.status === 'PENDING' || i.status === 'IN_PROGRESS');
-                  const allIds = printableItems.map(i => i.id);
+                  const allIds = printableQueueItems.map(i => i.id);
                   if (allIds.length > 0) bulkPrintBarcodesMutation.mutate({ queueIds: allIds, quantities: printQuantities });
                 }}
-                disabled={bulkPrintBarcodesMutation.isPending || mfgQueueItems.filter(i => i.status === 'PENDING' || i.status === 'IN_PROGRESS').length === 0}
+                disabled={bulkPrintBarcodesMutation.isPending || printableQueueItems.length === 0}
                 data-testid="button-print-all-barcodes"
               >
                 <Printer className="h-4 w-4 mr-1" />
                 {bulkPrintBarcodesMutation.isPending ? 'Generating...' : 'Print Barcodes'}
               </Button>
-              {selectedPrintIds.length > 0 && (
+              {selectedPrintableIds.length > 0 && (
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => bulkPrintBarcodesMutation.mutate({ queueIds: selectedPrintIds, quantities: printQuantities })}
+                  onClick={() => bulkPrintBarcodesMutation.mutate({ queueIds: selectedPrintableIds, quantities: printQuantities })}
                   disabled={bulkPrintBarcodesMutation.isPending}
                   data-testid="button-bulk-print-barcodes"
                 >
                   <Printer className="h-4 w-4 mr-1" />
-                  {`Print ${selectedPrintIds.length} Selected`}
+                  {`Print ${selectedPrintableIds.length} Selected`}
                 </Button>
               )}
             </div>
@@ -2170,10 +2185,11 @@ export default function CuttingOperatorDashboard() {
                     <TableHead className="w-10">
                       <input
                         type="checkbox"
-                        checked={selectedPrintIds.length > 0 && selectedPrintIds.length === mfgQueueItems.filter(i => i.status === 'PENDING' || i.status === 'IN_PROGRESS').length}
+                        checked={selectedPrintableIds.length > 0 && selectedPrintableIds.length === printableQueueItems.length}
                         onChange={selectAllPendingForPrint}
                         className="h-4 w-4 rounded border-gray-300"
                         title="Select all for printing"
+                        disabled={printableQueueItems.length === 0}
                       />
                     </TableHead>
                     <TableHead>Part Number</TableHead>
@@ -2199,7 +2215,7 @@ export default function CuttingOperatorDashboard() {
                       data-testid={`row-mfg-item-${item.id}`}
                     >
                       <TableCell>
-                        {(item.status === 'PENDING' || item.status === 'IN_PROGRESS') && (
+                        {isPacketBarcodePrintable(item) ? (
                           <input
                             type="checkbox"
                             checked={selectedPrintIds.includes(item.id)}
@@ -2207,6 +2223,8 @@ export default function CuttingOperatorDashboard() {
                             className="h-4 w-4 rounded border-gray-300"
                             data-testid={`checkbox-print-${item.id}`}
                           />
+                        ) : (
+                          <span className="text-xs text-muted-foreground">-</span>
                         )}
                       </TableCell>
                       <TableCell className="font-mono font-medium">{item.partNumber || '-'}</TableCell>
@@ -2235,22 +2253,25 @@ export default function CuttingOperatorDashboard() {
                         <Badge variant="outline" className="font-mono">{item.estimatedCuts}</Badge>
                       </TableCell>
                       <TableCell className="text-center">
-                        {(item.status === 'PENDING' || item.status === 'IN_PROGRESS') && (
+                        {isPacketBarcodePrintable(item) ? (
                           <Input
                             type="number"
                             min={1}
-                            max={item.quantityOrdered}
-                            value={printQuantities[item.id] ?? item.quantityOrdered}
+                            max={getPrintableBarcodeCount(item)}
+                            value={Math.min(printQuantities[item.id] ?? getPrintableBarcodeCount(item), getPrintableBarcodeCount(item))}
                             onChange={(e) => {
                               const val = parseInt(e.target.value) || 0;
+                              const maxPrintable = getPrintableBarcodeCount(item);
                               setPrintQuantities(prev => ({
                                 ...prev,
-                                [item.id]: Math.max(1, Math.min(val, item.quantityOrdered))
+                                [item.id]: Math.max(1, Math.min(val, maxPrintable))
                               }));
                             }}
                             className="w-16 h-7 text-center text-sm mx-auto"
                             data-testid={`input-print-qty-${item.id}`}
                           />
+                        ) : (
+                          <span className="text-xs text-muted-foreground">None</span>
                         )}
                       </TableCell>
                       <TableCell>{getStatusBadge(item.status)}</TableCell>

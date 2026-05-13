@@ -18774,6 +18774,46 @@ export class DatabaseStorage implements IStorage {
     return out;
   }
 
+  private _customDataFieldKey(field: any): string {
+    return String(field?.fieldKey || field?.fieldName || '')
+      .trim()
+      .replace(/\s+/g, '_')
+      .toLowerCase();
+  }
+
+  private _dedupeCustomDataFieldsByKey<T extends { fieldKey?: string; fieldName?: string }>(
+    fields: T[],
+    seen: Set<string>,
+  ): T[] {
+    const out: T[] = [];
+    for (const field of fields) {
+      const key = this._customDataFieldKey(field);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      out.push(field);
+    }
+    return out;
+  }
+
+  private _qcStandardKey(standard: any): string {
+    return [
+      standard?.standard || standard?.standardName || standard?.name || standard?.title || '',
+      standard?.tolerance || '',
+      standard?.requirement || standard?.specification || standard?.acceptanceCriteria || '',
+    ].map((value) => String(value).trim().toLowerCase()).join('|');
+  }
+
+  private _dedupeQcStandardsAcrossPhases<T>(standards: T[], seen: Set<string>): T[] {
+    const out: T[] = [];
+    for (const standard of standards) {
+      const key = this._qcStandardKey(standard);
+      if (!key.replace(/\|/g, '') || seen.has(key)) continue;
+      seen.add(key);
+      out.push(standard);
+    }
+    return out;
+  }
+
   private _taskDedupeKey(phase: string, taskType: string, title: string): string {
     return `${this._normalizePhase(phase)}|${taskType}|${title}`.toLowerCase();
   }
@@ -18848,6 +18888,8 @@ export class DatabaseStorage implements IStorage {
       const deptConfig = departmentConfig[deptName] || {};
       const enabledPhases = this._getEnabledPhases(deptConfig);
       const createdTaskKeys = new Set<string>();
+      const createdCustomFieldKeys = new Set<string>();
+      const createdQcStandardKeys = new Set<string>();
 
       const hasTimerConfig = deptConfig.timerConfig?.enabled;
 
@@ -19043,7 +19085,10 @@ export class DatabaseStorage implements IStorage {
       const finishMaterials = materials.filter((m: any) => m.traceabilityPhase === 'FINISH');
 
       // START Phase Custom Data Fields
-      const startCustomFields = deptConfig.startCustomDataFields || [];
+      const startCustomFields = this._dedupeCustomDataFieldsByKey(
+        deptConfig.startCustomDataFields || [],
+        createdCustomFieldKeys,
+      );
       if (startCustomFields.length > 0) {
         const startDataTask = await this._createTaskIfAllowed({
           travelerStepId: step.id,
@@ -19078,18 +19123,6 @@ export class DatabaseStorage implements IStorage {
       const hasPhaseQcStandards = startQcStandards.length > 0 || finishQcStandards.length > 0;
       const workQcStandards = hasPhaseQcStandards ? [] : (deptConfig.qcStandards || []);
 
-      const dedupeQcStandards = (standards: any[]): any[] => {
-        const seenFieldKeys = new Set<string>();
-        const out: any[] = [];
-        for (const qc of standards) {
-          const fieldKey = `qc_${qc.standard?.replace(/\s+/g, '_').toLowerCase() || 'check'}`;
-          if (seenFieldKeys.has(fieldKey)) continue;
-          seenFieldKeys.add(fieldKey);
-          out.push(qc);
-        }
-        return out;
-      };
-
       const qcPhaseConfigs = [
         { standards: startQcStandards, phase: 'START' as const, title: 'Incoming QC Inspection', instructions: 'Complete START phase quality control verifications' },
         { standards: workQcStandards, phase: 'WORK' as const, title: 'Quality Control Checks', instructions: 'Complete WORK phase quality control verifications' },
@@ -19098,7 +19131,7 @@ export class DatabaseStorage implements IStorage {
 
       for (const qcPhase of qcPhaseConfigs) {
         if (qcPhase.standards.length === 0) continue;
-        const uniqueStandards = dedupeQcStandards(qcPhase.standards);
+        const uniqueStandards = this._dedupeQcStandardsAcrossPhases(qcPhase.standards, createdQcStandardKeys);
         if (uniqueStandards.length === 0) continue;
 
         const qcTask = await this._createTaskIfAllowed({
@@ -19436,7 +19469,10 @@ export class DatabaseStorage implements IStorage {
       }
 
       // FINISH Phase Custom Data Fields
-      const finishCustomFields = deptConfig.finishCustomDataFields || [];
+      const finishCustomFields = this._dedupeCustomDataFieldsByKey(
+        deptConfig.finishCustomDataFields || [],
+        createdCustomFieldKeys,
+      );
       if (finishCustomFields.length > 0) {
         const finishDataTask = await this._createTaskIfAllowed({
           travelerStepId: step.id,

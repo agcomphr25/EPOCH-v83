@@ -11501,6 +11501,8 @@ export const projects = pgTable('projects', {
   actualShipDate: date('actual_ship_date'),
   currentStage: text('current_stage').default('rfq_received'),
   stageUpdatedAt: timestamp('stage_updated_at').defaultNow(),
+  currentRevisionNumber: integer('current_revision_number').notNull().default(0),
+  currentRevisionLabel: text('current_revision_label').notNull().default('Rev 0'),
   poId: integer('po_id').references(() => p2PurchaseOrders.id),
   projectManagerId: integer('project_manager_id').references(() => employees.id),
   reminderDays: integer('reminder_days').default(3), // Days before reminder is sent for stuck steps
@@ -11530,6 +11532,35 @@ export const insertProjectSchema = createInsertSchema(projects).omit({
 
 export type Project = typeof projects.$inferSelect;
 export type InsertProject = z.infer<typeof insertProjectSchema>;
+
+// Project Revisions - Controlled changes to project scope, PO linkage, and production basis
+export const projectRevisions = pgTable('project_revisions', {
+  id: serial('id').primaryKey(),
+  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  revisionNumber: integer('revision_number').notNull(),
+  revisionLabel: text('revision_label').notNull(),
+  revisionType: text('revision_type').notNull().default('PROJECT_CHANGE'),
+  summary: text('summary').notNull(),
+  reason: text('reason').notNull(),
+  previousPoId: integer('previous_po_id').references(() => p2PurchaseOrders.id),
+  newPoId: integer('new_po_id').references(() => p2PurchaseOrders.id),
+  createdBy: integer('created_by').references(() => employees.id),
+  createdByDisplayName: text('created_by_display_name'),
+  metadata: jsonb('metadata'),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  projectIdIdx: index('project_revisions_project_id_idx').on(table.projectId),
+  projectRevisionUnique: uniqueIndex('project_revisions_project_revision_unique').on(table.projectId, table.revisionNumber),
+  createdAtIdx: index('project_revisions_created_at_idx').on(table.createdAt),
+}));
+
+export const insertProjectRevisionSchema = createInsertSchema(projectRevisions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ProjectRevision = typeof projectRevisions.$inferSelect;
+export type InsertProjectRevision = z.infer<typeof insertProjectRevisionSchema>;
 
 // Project Steps - Individual workflow steps for each project
 export const projectSteps = pgTable('project_steps', {

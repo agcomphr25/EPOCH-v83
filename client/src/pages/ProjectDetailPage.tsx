@@ -63,7 +63,8 @@ import {
   BarChart2,
   XCircle,
   Rocket,
-  ShieldCheck
+  ShieldCheck,
+  History
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 
@@ -111,6 +112,8 @@ interface Project {
   actualShipDate: string | null;
   currentStage: string | null;
   stageUpdatedAt: string | null;
+  currentRevisionNumber: number;
+  currentRevisionLabel: string;
   poId: number | null;
   projectManagerId: number | null;
   reminderDays: number;
@@ -136,6 +139,22 @@ interface P2PurchaseOrder {
   customerName: string;
   status: string;
   createdAt?: string;
+}
+
+interface ProjectRevision {
+  id: number;
+  project_id: string;
+  revision_number: number;
+  revision_label: string;
+  revision_type: string;
+  summary: string;
+  reason: string;
+  previous_po_id: number | null;
+  previous_po_number: string | null;
+  new_po_id: number | null;
+  new_po_number: string | null;
+  created_by_display_name: string | null;
+  created_at: string;
 }
 
 interface StepAttachment {
@@ -387,12 +406,14 @@ export default function ProjectDetailPage() {
 
   const { data: p2PurchaseOrders = [] } = useQuery<P2PurchaseOrder[]>({
     queryKey: ['/api/p2-purchase-orders-bypass'],
-    enabled: !project?.poId,
+    enabled: !!project,
   });
 
   const [linkPoId, setLinkPoId] = useState<string>('');
   const [linkPoSearch, setLinkPoSearch] = useState('');
   const [showManualLink, setShowManualLink] = useState(false);
+  const [linkPoReason, setLinkPoReason] = useState('');
+  const [revisionForm, setRevisionForm] = useState({ summary: '', reason: '' });
 
   const suggestedPo = useMemo(() => {
     if (!project || p2PurchaseOrders.length === 0) return null;
@@ -405,19 +426,52 @@ export default function ProjectDetailPage() {
   }, [project, p2PurchaseOrders]);
 
   const linkPoMutation = useMutation({
-    mutationFn: (poId: number) =>
-      apiRequest('POST', `/api/projects/${id}/link-po`, { poId }),
+    mutationFn: ({ poId, reason }: { poId: number; reason?: string }) =>
+      apiRequest(`/api/projects/${id}/link-po`, {
+        method: 'POST',
+        body: {
+          poId,
+          reason,
+          createdByDisplayName: currentUser?.username,
+        },
+      }),
     onSuccess: () => {
-      toast({ title: 'PO linked', description: 'Purchase order successfully linked to this project.' });
+      toast({ title: 'PO linked', description: 'Purchase order link was saved as a project revision.' });
       queryClient.invalidateQueries({ queryKey: ['/api/projects', id] });
       queryClient.invalidateQueries({ queryKey: ['/api/projects', id, 'traceability'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', id, 'revisions'] });
       setLinkPoId('');
       setLinkPoSearch('');
+      setLinkPoReason('');
       setShowManualLink(false);
     },
     onError: (err: any) => {
       toast({ title: 'Link failed', description: err?.message || 'Failed to link PO.', variant: 'destructive' });
     },
+  });
+
+  const { data: projectRevisions = [] } = useQuery<ProjectRevision[]>({
+    queryKey: ['/api/projects', id, 'revisions'],
+    queryFn: () => fetch(`/api/projects/${id}/revisions`, { credentials: 'include' }).then(r => r.json()),
+    enabled: !!id,
+  });
+
+  const createRevisionMutation = useMutation({
+    mutationFn: (data: typeof revisionForm) =>
+      apiRequest(`/api/projects/${id}/revisions`, {
+        method: 'POST',
+        body: {
+          ...data,
+          createdByDisplayName: currentUser?.username,
+        },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', id] });
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', id, 'revisions'] });
+      setRevisionForm({ summary: '', reason: '' });
+      toast({ title: 'Revision created', description: 'Project revision history was updated.' });
+    },
+    onError: (err: any) => toast({ title: 'Revision failed', description: err?.message || 'Could not create revision.', variant: 'destructive' }),
   });
 
   const { data: projectWorkOrders = [] } = useQuery<ProjectWorkOrder[]>({
@@ -1466,6 +1520,10 @@ export default function ProjectDetailPage() {
         <TabsList>
           <TabsTrigger value="workflow" data-testid="tab-workflow">Workflow</TabsTrigger>
           <TabsTrigger value="activity" data-testid="tab-activity">Activity Log</TabsTrigger>
+          <TabsTrigger value="revisions" data-testid="tab-revisions">
+            <History className="h-4 w-4 mr-1.5" />
+            Revisions
+          </TabsTrigger>
           <TabsTrigger value="traceability" data-testid="tab-traceability">Traceability</TabsTrigger>
           <TabsTrigger value="closing" data-testid="tab-closing">
             <BookOpen className="h-4 w-4 mr-1.5" />
@@ -2163,6 +2221,82 @@ export default function ProjectDetailPage() {
         </TabsContent>
 
         {/* ── TRACEABILITY TAB ── */}
+        <TabsContent value="revisions" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <History className="h-5 w-5" />
+                Project Revisions
+              </CardTitle>
+              <CardDescription>
+                Current project basis: {project.currentRevisionLabel || 'Rev 0'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-[1fr_1.2fr_auto]">
+                <div className="space-y-2">
+                  <Label>Summary</Label>
+                  <Input
+                    value={revisionForm.summary}
+                    onChange={(e) => setRevisionForm((prev) => ({ ...prev, summary: e.target.value }))}
+                    placeholder="Scope, PO, routing, or schedule change"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Reason</Label>
+                  <Input
+                    value={revisionForm.reason}
+                    onChange={(e) => setRevisionForm((prev) => ({ ...prev, reason: e.target.value }))}
+                    placeholder="Why this revision is needed"
+                  />
+                </div>
+                <div className="flex items-end">
+                  <Button
+                    className="w-full md:w-auto"
+                    disabled={revisionForm.summary.trim().length < 3 || revisionForm.reason.trim().length < 3 || createRevisionMutation.isPending}
+                    onClick={() => createRevisionMutation.mutate(revisionForm)}
+                  >
+                    <Plus className="h-4 w-4 mr-1.5" />
+                    {createRevisionMutation.isPending ? 'Saving...' : 'Create Revision'}
+                  </Button>
+                </div>
+              </div>
+
+              <Separator />
+
+              {projectRevisions.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4">No revisions recorded yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {projectRevisions.map((revision) => (
+                    <div key={revision.id} className="rounded-md border p-4 space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline" className="font-mono">{revision.revision_label}</Badge>
+                        <Badge variant={revision.revision_type === 'PO_LINK_CHANGE' ? 'default' : 'secondary'}>
+                          {revision.revision_type === 'PO_LINK_CHANGE' ? 'PO Link' : 'Project Change'}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {format(new Date(revision.created_at), 'MMM d, yyyy h:mm a')}
+                        </span>
+                      </div>
+                      <p className="text-sm font-medium">{revision.summary}</p>
+                      <p className="text-sm text-muted-foreground">{revision.reason}</p>
+                      {(revision.previous_po_number || revision.new_po_number) && (
+                        <p className="text-xs text-muted-foreground font-mono">
+                          PO: {revision.previous_po_number || 'none'} -&gt; {revision.new_po_number || 'none'}
+                        </p>
+                      )}
+                      {revision.created_by_display_name && (
+                        <p className="text-xs text-muted-foreground">Recorded by {revision.created_by_display_name}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         <TabsContent value="traceability" className="space-y-4">
           {isLoadingTraceability ? (
             <Card>
@@ -2197,7 +2331,7 @@ export default function ProjectDetailPage() {
                     </div>
                     <div className="flex gap-2">
                       <Button
-                        onClick={() => linkPoMutation.mutate(suggestedPo.id)}
+                        onClick={() => linkPoMutation.mutate({ poId: suggestedPo.id })}
                         disabled={linkPoMutation.isPending}
                       >
                         {linkPoMutation.isPending ? 'Linking…' : 'Accept'}
@@ -2242,9 +2376,17 @@ export default function ProjectDetailPage() {
                         </SelectContent>
                       </Select>
                     </div>
+                    <div className="space-y-2">
+                      <Label>Revision Reason</Label>
+                      <Textarea
+                        placeholder="Initial PO link, customer PO changed, production PO superseded, etc."
+                        value={linkPoReason}
+                        onChange={(e) => setLinkPoReason(e.target.value)}
+                      />
+                    </div>
                     <Button
                       disabled={!linkPoId || linkPoMutation.isPending}
-                      onClick={() => linkPoMutation.mutate(parseInt(linkPoId))}
+                      onClick={() => linkPoMutation.mutate({ poId: parseInt(linkPoId), reason: linkPoReason })}
                     >
                       {linkPoMutation.isPending ? 'Linking…' : 'Link PO'}
                     </Button>
@@ -2255,7 +2397,7 @@ export default function ProjectDetailPage() {
           ) : (
             <>
               {/* ── SECTION 0: Linked PO ── */}
-              {traceability.po && (
+              {(traceability.po || project?.poId) && (
                 <Card>
                   <CardHeader className="pb-3">
                     <CardTitle className="flex items-center gap-2 text-base">
@@ -2270,24 +2412,88 @@ export default function ProjectDetailPage() {
                           onClick={() => setLocation(`/p2-control-center?tab=pos`)}
                           className="font-mono font-semibold text-sm text-primary hover:underline cursor-pointer"
                         >
-                          {traceability.po.po_number}
+                          {traceability.po?.po_number || `PO ID ${project.poId}`}
                         </button>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Customer</p>
-                        <p className="text-sm">{traceability.po.customer_name}</p>
+                        <p className="text-sm">{traceability.po?.customer_name || 'PO record not found'}</p>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Status</p>
-                        <Badge variant={traceability.po.status === 'COMPLETE' ? 'default' : 'secondary'} className="text-xs">
-                          {traceability.po.status}
+                        <Badge variant={traceability.po?.status === 'COMPLETE' ? 'default' : 'secondary'} className="text-xs">
+                          {traceability.po?.status || 'Missing'}
                         </Badge>
                       </div>
                       <div>
                         <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">PO Date</p>
-                        <p className="text-sm">{format(new Date(traceability.po.created_at), 'MMM d, yyyy')}</p>
+                        <p className="text-sm">
+                          {traceability.po?.created_at ? format(new Date(traceability.po.created_at), 'MMM d, yyyy') : 'Needs relink'}
+                        </p>
                       </div>
                     </div>
+                    <Separator className="my-4" />
+                    {!showManualLink ? (
+                      <Button variant="outline" size="sm" onClick={() => setShowManualLink(true)}>
+                        <LinkIcon className="h-4 w-4 mr-1.5" />
+                        Change Linked PO
+                      </Button>
+                    ) : (
+                      <div className="space-y-4 rounded-md border p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-medium">Create PO Link Revision</p>
+                            <p className="text-xs text-muted-foreground">
+                              Changing the linked PO creates a new project revision and preserves the prior link in history.
+                            </p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              setShowManualLink(false);
+                              setLinkPoId('');
+                              setLinkPoReason('');
+                            }}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <div className="space-y-2">
+                            <Label>New P2 PO</Label>
+                            <Select value={linkPoId} onValueChange={setLinkPoId}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select replacement PO" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {p2PurchaseOrders
+                                  .filter(po => po.id !== project.poId)
+                                  .map(po => (
+                                    <SelectItem key={po.id} value={po.id.toString()}>
+                                      {po.poNumber} - {po.customerName}
+                                    </SelectItem>
+                                  ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Required Reason</Label>
+                            <Textarea
+                              placeholder="Why is this project moving to a different production PO?"
+                              value={linkPoReason}
+                              onChange={(e) => setLinkPoReason(e.target.value)}
+                            />
+                          </div>
+                        </div>
+                        <Button
+                          disabled={!linkPoId || linkPoReason.trim().length < 3 || linkPoMutation.isPending}
+                          onClick={() => linkPoMutation.mutate({ poId: parseInt(linkPoId), reason: linkPoReason })}
+                        >
+                          {linkPoMutation.isPending ? 'Saving Revision...' : 'Save PO Revision'}
+                        </Button>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               )}

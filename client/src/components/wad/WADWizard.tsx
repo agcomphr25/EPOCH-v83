@@ -342,7 +342,19 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
         body: JSON.stringify(payload),
       });
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      const updatedWizardData = result?.wad?.wizardData as WizardData | undefined;
+      if (updatedWizardData) {
+        setData(updatedWizardData);
+        queryClient.setQueryData(['/api/work-orders/production', wadId, 'wizard'], (current: typeof wizardCtx | undefined) => ({
+          ...(current ?? {}),
+          wad: {
+            ...(current?.wad ?? {}),
+            ...(result.wad ?? {}),
+            wizardData: updatedWizardData,
+          },
+        }));
+      }
       queryClient.invalidateQueries({ queryKey: ['/api/work-orders/production', wadId, 'wizard'] });
       queryClient.invalidateQueries({ queryKey: ['/api/work-orders', wadId] });
     },
@@ -359,7 +371,20 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
       });
     },
     onSuccess: (result) => {
+      const updatedWizardData = result?.wad?.wizardData as WizardData | undefined;
+      if (updatedWizardData) {
+        setData(updatedWizardData);
+        queryClient.setQueryData(['/api/work-orders/production', wadId, 'wizard'], (current: typeof wizardCtx | undefined) => ({
+          ...(current ?? {}),
+          wad: {
+            ...(current?.wad ?? {}),
+            ...(result.wad ?? {}),
+            wizardData: updatedWizardData,
+          },
+        }));
+      }
       queryClient.invalidateQueries({ queryKey: ['/api/work-orders/production', wadId, 'wizard'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/work-orders', wadId] });
       if (result.allApproved) {
         toast({ title: 'WAD Approved!', description: 'All required approvals collected. WAD status set to APPROVED.' });
       } else {

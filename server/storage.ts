@@ -19664,6 +19664,69 @@ export class DatabaseStorage implements IStorage {
         default: return 'WORK';
       }
     };
+    const sanitizeFieldKey = (value: string) =>
+      String(value || '')
+        .replace(/[^a-zA-Z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .toLowerCase() || 'check';
+    const normalizeQcStandards = (raw: any): any[] => {
+      if (!Array.isArray(raw)) return [];
+      const standards = raw
+        .map((qc: any) => ({
+          standard: qc.standard || qc.standardName || qc.name || qc.title || qc.characteristic || qc.checkpoint || '',
+          tolerance: qc.tolerance || qc.acceptanceTolerance || qc.nominalTolerance || '',
+          requirement: qc.requirement || qc.specification || qc.acceptanceCriteria || qc.criteria || qc.nominal || '',
+          hardQcStop: qc.hardQcStop || qc.hardStop || false,
+          referenceLink: qc.referenceLink || qc.referenceUrl || qc.documentUrl || '',
+        }))
+        .filter((qc) => qc.standard || qc.tolerance || qc.requirement);
+
+      const seen = new Set<string>();
+      return standards.filter((qc) => {
+        const key = `${qc.standard}|${qc.tolerance}|${qc.requirement}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    };
+    const getOperationQcStandards = (op: RoutingOperation, taskPhase: string): any[] => {
+      const pack = (op.instructionPack || {}) as any;
+      const packStandards = normalizeQcStandards(
+        pack.qcStandards ||
+        pack.qcRequirements ||
+        pack.qualityChecks ||
+        pack.inspectionRequirements ||
+        pack.checkpoints
+      );
+      if (packStandards.length > 0) return packStandards;
+
+      const departmentConfig = (routing.departmentConfig || {}) as Record<string, any>;
+      const deptConfig = departmentConfig[op.departmentName] || {};
+      const phaseStandards =
+        taskPhase === 'START'
+          ? normalizeQcStandards(deptConfig.startQcStandards)
+          : taskPhase === 'FINISH'
+            ? normalizeQcStandards(deptConfig.finishQcStandards)
+            : normalizeQcStandards(deptConfig.qcStandards);
+      if (phaseStandards.length > 0) return phaseStandards;
+
+      const fallbackStandards =
+        taskPhase === 'FINISH'
+          ? normalizeQcStandards(deptConfig.qcStandards)
+          : normalizeQcStandards(deptConfig.finishQcStandards);
+      if (fallbackStandards.length > 0) return fallbackStandards;
+
+      if (pack.specialNotes) {
+        return [{
+          standard: op.operationName,
+          tolerance: '',
+          requirement: pack.specialNotes,
+          hardQcStop: false,
+          referenceLink: '',
+        }];
+      }
+      return [];
+    };
 
     // Group ops by unique (stepNumber, departmentName)
     const stepGroups: Map<string, RoutingOperation[]> = new Map();
@@ -19698,7 +19761,7 @@ export class DatabaseStorage implements IStorage {
         const instPack = op.instructionPack as any;
         const instructions = instPack?.specialNotes || op.operationName;
 
-        await this.createTravelerTask({
+        const task = await this.createTravelerTask({
           travelerStepId: step.id,
           taskType: taskType as any,
           taskPhase: taskPhase as any,
@@ -19713,6 +19776,25 @@ export class DatabaseStorage implements IStorage {
           status: 'NOT_STARTED',
           instructionPack: op.instructionPack as any,
         });
+
+        if (taskType === 'QC') {
+          const qcStandards = getOperationQcStandards(op, taskPhase);
+          for (const qc of qcStandards) {
+            await this.createTravelerTaskField({
+              travelerTaskId: task.id,
+              fieldKey: `qc_${op.id}_${sanitizeFieldKey(qc.standard || op.operationName)}`,
+              fieldLabel: qc.standard || op.operationName,
+              fieldType: 'yes_no',
+              required: true,
+              validation: {
+                tolerance: qc.tolerance || '',
+                requirement: qc.requirement || '',
+                ...(qc.hardQcStop ? { hardQcStop: true } : {}),
+                ...(qc.referenceLink ? { referenceLink: qc.referenceLink } : {}),
+              },
+            });
+          }
+        }
       }
     }
 

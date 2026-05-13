@@ -186,6 +186,121 @@ function RecipientPickerList({
   );
 }
 
+function formatReadinessDate(value: unknown): string {
+  if (!value) return 'None recorded';
+  const date = new Date(String(value));
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString();
+}
+
+function IssueReadinessCard({
+  readiness,
+  isLoading,
+  onOpenPurchasingControls,
+  onOpenComplianceReview,
+}: {
+  readiness?: IssueReadiness;
+  isLoading: boolean;
+  onOpenPurchasingControls: () => void;
+  onOpenComplianceReview: () => void;
+}) {
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="py-4">
+          <Skeleton className="h-5 w-48 mb-3" />
+          <Skeleton className="h-4 w-full" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!readiness) return null;
+
+  const failingSections = readiness.sections.filter((section) => section.status === 'fail');
+  const debarment = readiness.sections.find((section) => section.key === 'debarment');
+  const latestDebarment = debarment?.details?.latestPassingCheck as any;
+
+  return (
+    <Card className={readiness.ready ? 'border-emerald-200 bg-emerald-50/50' : 'border-amber-200 bg-amber-50/60'}>
+      <CardHeader className="pb-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <CardTitle className="text-base flex items-center gap-2">
+              {readiness.ready ? (
+                <ShieldCheck className="h-4 w-4 text-emerald-600" />
+              ) : (
+                <ShieldAlert className="h-4 w-4 text-amber-600" />
+              )}
+              PO Issue Readiness
+            </CardTitle>
+            <CardDescription>
+              Vendor approval, debarment freshness, scope, purchasing controls, and P2 review are checked separately.
+            </CardDescription>
+          </div>
+          <Badge className={readiness.ready ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800'}>
+            {readiness.ready ? 'Ready to issue' : `${failingSections.length} gate${failingSections.length === 1 ? '' : 's'} need attention`}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-5">
+          {readiness.sections.map((section) => {
+            const passed = section.status === 'pass';
+            const skipped = section.status === 'not_applicable';
+            return (
+              <div key={section.key} className="rounded-md border bg-white/80 p-3">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  {passed ? (
+                    <CheckCircle className="h-4 w-4 text-emerald-600" />
+                  ) : skipped ? (
+                    <Clock className="h-4 w-4 text-slate-400" />
+                  ) : (
+                    <XCircle className="h-4 w-4 text-red-600" />
+                  )}
+                  {section.label}
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  {passed ? 'Clear' : skipped ? 'Not required for this PO' : section.blockers[0]}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {latestDebarment && (
+          <div className="text-xs text-muted-foreground">
+            Latest passing debarment check: {formatReadinessDate(latestDebarment.checkedAt)}
+            {latestDebarment.source ? ` via ${latestDebarment.source}` : ''}
+          </div>
+        )}
+
+        {failingSections.length > 0 && (
+          <div className="rounded-md border border-amber-200 bg-white/80 p-3">
+            <div className="text-sm font-medium text-amber-900 mb-2">What to fix before issuing</div>
+            <ul className="space-y-1 text-sm text-amber-900">
+              {failingSections.flatMap((section) =>
+                section.blockers.map((blocker) => (
+                  <li key={`${section.key}-${blocker}`}>- {section.label}: {blocker}</li>
+                ))
+              )}
+            </ul>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" onClick={onOpenPurchasingControls}>
+                Open Purchasing Controls
+              </Button>
+              {readiness.isP2 && (
+                <Button size="sm" variant="outline" onClick={onOpenComplianceReview}>
+                  Open P2 Compliance Review
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // Types based on our schema
 type VendorPO = {
   id: number;
@@ -247,6 +362,24 @@ type VendorPO = {
   directPoExceptionApprovedByName?: string | null;
   directPoExceptionReason?: string | null;
   directPoExceptionApprovedAt?: string | null;
+};
+
+type IssueReadinessSection = {
+  key: string;
+  label: string;
+  status: 'pass' | 'fail' | 'not_applicable';
+  blockers: string[];
+  details?: Record<string, any>;
+};
+
+type IssueReadiness = {
+  vendorPoId: number;
+  vendorId: number | null;
+  vendorName: string | null;
+  productionLine: string | null;
+  isP2: boolean;
+  ready: boolean;
+  sections: IssueReadinessSection[];
 };
 
 type VendorPOItem = {
@@ -1955,6 +2088,7 @@ function ComplianceReviewModal({
       }) as Promise<ComplianceSaveResult>,
     onSuccess: async (saved: ComplianceSaveResult) => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', vendorPoId, 'compliance-review'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', vendorPoId, 'issue-readiness'] });
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
 
       // If the saved review is blocked, record it for audit trail but do NOT proceed to issue
@@ -2317,6 +2451,15 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
     queryKey: ['/api/vendor-pos', selectedVendorPO?.id],
     queryFn: () => apiRequest(`/api/vendor-pos/${selectedVendorPO!.id}`),
     enabled: !!selectedVendorPO,
+  });
+
+  const {
+    data: issueReadiness,
+    isLoading: issueReadinessLoading,
+  } = useQuery<IssueReadiness>({
+    queryKey: ['/api/vendor-pos', selectedVendorPO?.id, 'issue-readiness'],
+    queryFn: () => apiRequest(`/api/vendor-pos/${selectedVendorPO!.id}/issue-readiness`),
+    enabled: !!selectedVendorPO && ['Draft', 'RFQ Sent', 'Quote Received'].includes(selectedVendorPO.status),
   });
 
   const issuedStatuses = ['Sent', 'Partially Received', 'Fully Received'];
@@ -3635,6 +3778,15 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
           </div>
         )}
 
+        {['Draft', 'RFQ Sent', 'Quote Received'].includes(selectedVendorPO.status) && (
+          <IssueReadinessCard
+            readiness={issueReadiness}
+            isLoading={issueReadinessLoading}
+            onOpenPurchasingControls={() => setPurchasingControlsOpen(true)}
+            onOpenComplianceReview={() => openComplianceModal(selectedVendorPO.id)}
+          />
+        )}
+
         {/* RFQ Outcome Dialog (Declined / Expired) */}
         <Dialog
           open={showRfqOutcomeDialog}
@@ -4465,6 +4617,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
           onChanged={() => {
             queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
             queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', selectedVendorPO.id] });
+            queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', selectedVendorPO.id, 'issue-readiness'] });
           }}
         />
       )}

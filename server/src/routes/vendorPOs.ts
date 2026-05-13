@@ -244,6 +244,167 @@ async function getVendorPOComplianceBlockers(vendorPoId: number): Promise<string
   return blockers;
 }
 
+type IssueReadinessSection = {
+  key: string;
+  label: string;
+  status: 'pass' | 'fail' | 'not_applicable';
+  blockers: string[];
+  details?: Record<string, unknown>;
+};
+
+async function buildVendorPOIssueReadiness(vendorPO: any): Promise<{
+  vendorPoId: number;
+  vendorId: number | null;
+  vendorName: string | null;
+  productionLine: string | null;
+  isP2: boolean;
+  ready: boolean;
+  sections: IssueReadinessSection[];
+}> {
+  const isP2 = isP2ProductionLine(vendorPO.productionLine);
+  const { db: drizzleDb } = await import('../../db');
+  const {
+    purchaseRequisitions,
+    vendorPoFarFlowdowns,
+    vendorDebarmentChecks,
+    procurementSettings,
+    vendors,
+  } = await import('../../schema');
+  const { eq: dEq, and: dAnd, gte: dGte, desc: dDesc } = await import('drizzle-orm');
+
+  const vendorId = Number(vendorPO.vendorId);
+  const [vendor] = Number.isFinite(vendorId)
+    ? await drizzleDb.select().from(vendors).where(dEq(vendors.id, vendorId)).limit(1)
+    : [];
+
+  const [setting] = await drizzleDb.select().from(procurementSettings).limit(1);
+  const freshnessDays = setting?.debarmentCheckFreshnessDays ?? 30;
+  const cutoff = new Date(Date.now() - freshnessDays * 86_400_000);
+  const freshDebarment = Number.isFinite(vendorId)
+    ? await drizzleDb.select().from(vendorDebarmentChecks).where(dAnd(
+      dEq(vendorDebarmentChecks.vendorId, vendorId),
+      dGte(vendorDebarmentChecks.checkedAt, cutoff),
+      dEq(vendorDebarmentChecks.result, 'pass'),
+    )).orderBy(dDesc(vendorDebarmentChecks.checkedAt)).limit(1)
+    : [];
+
+  const vendorMasterBlockers: string[] = [];
+  if (!vendor) {
+    vendorMasterBlockers.push('Vendor record not found');
+  } else {
+    if (vendor.isActive === false) vendorMasterBlockers.push('Vendor is inactive');
+    if (!vendor.approved) vendorMasterBlockers.push('Vendor master record is not approved');
+    if (vendor.approvalExpiration && new Date(vendor.approvalExpiration) < new Date()) {
+      vendorMasterBlockers.push(`Vendor approval expired on ${vendor.approvalExpiration}`);
+    }
+    const status = String(vendor.debarmentStatus ?? '').trim().toLowerCase();
+    if (['debarred', 'suspended', 'excluded', 'blocked'].includes(status)) {
+      vendorMasterBlockers.push(`Vendor debarment status is ${vendor.debarmentStatus}`);
+    }
+  }
+
+  const debarmentBlockers = freshDebarment.length === 0
+    ? [`No fresh passing debarment check for vendor (within ${freshnessDays} days)`]
+    : [];
+
+  const supplierQualificationBlockers = await getVendorQualificationBlockers(
+    vendorPO.id,
+    vendorId,
+    vendorPO.productionLine ?? null,
+  );
+  const scopeBlockers = supplierQualificationBlockers.filter((reason) =>
+    reason.includes('scope') ||
+    reason.includes('line items') ||
+    reason.includes('outside the vendor')
+  );
+
+  const purchasingBlockers: string[] = [];
+  if (vendorPO.requisitionId) {
+    const [r] = await drizzleDb.select().from(purchaseRequisitions)
+      .where(dEq(purchaseRequisitions.id, vendorPO.requisitionId));
+    if (!r) purchasingBlockers.push('Linked requisition not found');
+    else if (r.status !== 'APPROVED' && r.status !== 'CONVERTED_TO_PO') {
+      purchasingBlockers.push(`Linked requisition must be APPROVED (currently ${r.status})`);
+    }
+  }
+  if (!vendorPO.competitionMethod) {
+    purchasingBlockers.push('Competition method must be recorded');
+  }
+  if (vendorPO.competitionMethod === 'sole-source' &&
+      (!vendorPO.soleSourceJustification || vendorPO.soleSourceJustification.trim().length < 10)) {
+    purchasingBlockers.push('Sole-source justification required');
+  }
+  const flowdowns = await drizzleDb.select().from(vendorPoFarFlowdowns)
+    .where(dEq(vendorPoFarFlowdowns.vendorPoId, vendorPO.id));
+  if (flowdowns.length === 0) {
+    purchasingBlockers.push('FAR flowdown checklist has not been recorded for this PO');
+  } else if (flowdowns.some((fd) => !fd.reasoning || fd.reasoning.trim().length < 3)) {
+    purchasingBlockers.push('One or more FAR flowdown entries is missing applicability reasoning');
+  }
+
+  const complianceBlockers = isP2 ? await getVendorPOComplianceBlockers(vendorPO.id) : [];
+  const sections: IssueReadinessSection[] = [
+    {
+      key: 'vendor_master',
+      label: 'Vendor Master Approval',
+      status: vendorMasterBlockers.length > 0 ? 'fail' : 'pass',
+      blockers: vendorMasterBlockers,
+      details: vendor ? {
+        vendorId: vendor.id,
+        vendorName: vendor.name,
+        approved: vendor.approved,
+        approvalExpiration: vendor.approvalExpiration ?? null,
+        debarmentStatus: vendor.debarmentStatus ?? null,
+        debarmentCheckedAt: vendor.debarmentCheckedAt ?? null,
+      } : { vendorId },
+    },
+    {
+      key: 'debarment',
+      label: 'Debarment Check',
+      status: debarmentBlockers.length > 0 ? 'fail' : 'pass',
+      blockers: debarmentBlockers,
+      details: {
+        freshnessDays,
+        latestPassingCheck: freshDebarment[0] ?? null,
+      },
+    },
+    {
+      key: 'supplier_scope',
+      label: 'Approved Supplier Scope',
+      status: scopeBlockers.length > 0 ? 'fail' : 'pass',
+      blockers: scopeBlockers,
+    },
+    {
+      key: 'purchasing_controls',
+      label: 'Purchasing Controls',
+      status: !isP2 ? 'not_applicable' : purchasingBlockers.length > 0 ? 'fail' : 'pass',
+      blockers: isP2 ? purchasingBlockers : [],
+      details: {
+        requisitionId: vendorPO.requisitionId ?? null,
+        competitionMethod: vendorPO.competitionMethod ?? null,
+        flowdownCount: flowdowns.length,
+      },
+    },
+    {
+      key: 'p2_compliance_review',
+      label: 'P2 Compliance Review',
+      status: !isP2 ? 'not_applicable' : complianceBlockers.length > 0 ? 'fail' : 'pass',
+      blockers: complianceBlockers,
+      details: { appliesToProductionLine: isP2 },
+    },
+  ];
+
+  return {
+    vendorPoId: vendorPO.id,
+    vendorId: vendor?.id ?? vendorId ?? null,
+    vendorName: vendor?.name ?? vendorPO.vendorName ?? null,
+    productionLine: vendorPO.productionLine ?? null,
+    isP2,
+    ready: sections.every((section) => section.status !== 'fail'),
+    sections,
+  };
+}
+
 function hasTraceabilityLink(data: Record<string, unknown>): boolean {
   return ['customerPoId', 'projectId', 'productionWorkOrderId', 'chargeCodeId'].some((key) => {
     const value = data[key];
@@ -849,6 +1010,27 @@ router.get('/traceability-options', async (_req: Request, res: Response) => {
   } catch (error) {
     console.error('Get vendor PO traceability options error:', error);
     res.status(500).json({ error: 'Failed to retrieve traceability options' });
+  }
+});
+
+// GET /api/vendor-pos/:id/issue-readiness - Explain all gates that affect PO issuance
+router.get('/:id/issue-readiness', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid vendor PO ID' });
+    }
+
+    const vendorPO = await storage.getVendorPO(id);
+    if (!vendorPO) {
+      return res.status(404).json({ error: 'Vendor PO not found' });
+    }
+
+    const readiness = await buildVendorPOIssueReadiness(vendorPO);
+    res.json(readiness);
+  } catch (error: any) {
+    console.error('[VendorPO] Issue readiness error:', error);
+    res.status(500).json({ error: error.message || 'Failed to build PO issue readiness' });
   }
 });
 

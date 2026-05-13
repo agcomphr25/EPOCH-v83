@@ -37,9 +37,57 @@ const uploadProjectDoc = multer({
 
 const router = Router();
 
+let projectRevisionSchemaReady = false;
+
+async function ensureProjectRevisionSchema() {
+  if (projectRevisionSchemaReady) return;
+
+  await pool.query(`
+    ALTER TABLE projects
+      ADD COLUMN IF NOT EXISTS current_revision_number INTEGER NOT NULL DEFAULT 0
+  `);
+  await pool.query(`
+    ALTER TABLE projects
+      ADD COLUMN IF NOT EXISTS current_revision_label TEXT NOT NULL DEFAULT 'Rev 0'
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS project_revisions (
+      id SERIAL PRIMARY KEY,
+      project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      revision_number INTEGER NOT NULL,
+      revision_label TEXT NOT NULL,
+      revision_type TEXT NOT NULL DEFAULT 'PROJECT_CHANGE',
+      summary TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      previous_po_id INTEGER REFERENCES p2_purchase_orders(id),
+      new_po_id INTEGER REFERENCES p2_purchase_orders(id),
+      created_by INTEGER REFERENCES employees(id),
+      created_by_display_name TEXT,
+      metadata JSONB,
+      created_at TIMESTAMP DEFAULT NOW(),
+      CONSTRAINT project_revisions_project_revision_unique UNIQUE (project_id, revision_number)
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS project_revisions_project_id_idx ON project_revisions(project_id)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS project_revisions_created_at_idx ON project_revisions(created_at)`);
+
+  projectRevisionSchemaReady = true;
+}
+
+async function getNextProjectRevisionNumber(projectId: string): Promise<number> {
+  const rows = await pool.query<{ next_revision: number }>(
+    `SELECT COALESCE(MAX(revision_number), 0) + 1 AS next_revision
+     FROM project_revisions
+     WHERE project_id = $1`,
+    [projectId]
+  );
+  return Number(rows[0]?.next_revision ?? 1);
+}
+
 router.use(async (_req, res, next) => {
   try {
     await ensureProductionWorkflowReadSchema();
+    await ensureProjectRevisionSchema();
     next();
   } catch (error) {
     console.error('[Projects] Production workflow schema readiness failed:', error);
@@ -507,21 +555,133 @@ router.post('/notifications/:recipientId/mark-all-read', async (req, res) => {
   }
 });
 
-router.post('/:id/link-po', async (req, res) => {
+router.get('/:id/revisions', async (req, res) => {
   try {
     const { id } = req.params;
-    const schema = z.object({ poId: z.number().int().positive() });
+    const project = await storage.getProject(id);
+    if (!project) return res.status(404).json({ message: 'Project not found' });
+
+    const revisions = await pool.query(
+      `SELECT
+         pr.id,
+         pr.project_id,
+         pr.revision_number,
+         pr.revision_label,
+         pr.revision_type,
+         pr.summary,
+         pr.reason,
+         pr.previous_po_id,
+         prev_po.po_number AS previous_po_number,
+         pr.new_po_id,
+         new_po.po_number AS new_po_number,
+         pr.created_by,
+         pr.created_by_display_name,
+         pr.metadata,
+         pr.created_at
+       FROM project_revisions pr
+       LEFT JOIN p2_purchase_orders prev_po ON prev_po.id = pr.previous_po_id
+       LEFT JOIN p2_purchase_orders new_po ON new_po.id = pr.new_po_id
+       WHERE pr.project_id = $1
+       ORDER BY pr.revision_number DESC`,
+      [id]
+    );
+
+    res.json(revisions);
+  } catch (error) {
+    console.error('Error fetching project revisions:', error);
+    res.status(500).json({ message: 'Failed to fetch project revisions' });
+  }
+});
+
+router.post('/:id/revisions', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const schema = z.object({
+      summary: z.string().min(3),
+      reason: z.string().min(3),
+      revisionType: z.string().min(1).default('PROJECT_CHANGE'),
+      createdBy: z.number().int().positive().optional(),
+      createdByDisplayName: z.string().optional(),
+      metadata: z.record(z.any()).optional(),
+    });
     const parsed = schema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ message: 'Invalid request: poId (number) required' });
+      return res.status(400).json({ message: 'Invalid revision request', errors: parsed.error.errors });
     }
-    const { poId } = parsed.data;
 
     const project = await storage.getProject(id);
     if (!project) return res.status(404).json({ message: 'Project not found' });
 
-    if (project.poId) {
-      return res.status(409).json({ message: 'Project already has a PO linked' });
+    const nextRevision = await getNextProjectRevisionNumber(id);
+    const revisionLabel = `Rev ${nextRevision}`;
+    const data = parsed.data;
+    const rows = await pool.query(
+      `INSERT INTO project_revisions (
+         project_id, revision_number, revision_label, revision_type, summary, reason,
+         created_by, created_by_display_name, metadata
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
+       RETURNING *`,
+      [
+        id,
+        nextRevision,
+        revisionLabel,
+        data.revisionType,
+        data.summary,
+        data.reason,
+        data.createdBy ?? null,
+        data.createdByDisplayName ?? null,
+        JSON.stringify(data.metadata ?? {}),
+      ]
+    );
+
+    await pool.query(
+      `UPDATE projects
+       SET current_revision_number = $2, current_revision_label = $3, updated_at = NOW()
+       WHERE id = $1`,
+      [id, nextRevision, revisionLabel]
+    );
+
+    await storage.createProjectActivityLog({
+      projectId: id,
+      activityType: 'project_revision_created',
+      description: `${revisionLabel}: ${data.summary}`,
+      performedBy: data.createdBy ?? undefined,
+      performedByDisplayName: data.createdByDisplayName,
+      metadata: { revisionNumber: nextRevision, revisionType: data.revisionType },
+    } as any);
+
+    res.status(201).json(rows[0]);
+  } catch (error) {
+    console.error('Error creating project revision:', error);
+    res.status(500).json({ message: 'Failed to create project revision' });
+  }
+});
+
+router.post('/:id/link-po', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const schema = z.object({
+      poId: z.number().int().positive(),
+      reason: z.string().min(3).optional(),
+      createdBy: z.number().int().positive().optional(),
+      createdByDisplayName: z.string().optional(),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: 'Invalid request: poId (number) required', errors: parsed.error.errors });
+    }
+    const { poId, reason, createdBy, createdByDisplayName } = parsed.data;
+
+    const project = await storage.getProject(id);
+    if (!project) return res.status(404).json({ message: 'Project not found' });
+
+    if (project.poId === poId) {
+      return res.status(409).json({ message: 'Project is already linked to this PO' });
+    }
+
+    if (project.poId && !reason?.trim()) {
+      return res.status(400).json({ message: 'A revision reason is required when changing the linked PO' });
     }
 
     // Validate PO exists
@@ -536,17 +696,60 @@ router.post('/:id/link-po', async (req, res) => {
       `SELECT id FROM projects WHERE po_id = $1 LIMIT 1`,
       [poId]
     );
-    if (conflictRows.length > 0) {
+    if (conflictRows.length > 0 && conflictRows[0].id !== id) {
       return res.status(409).json({ message: 'Another project is already linked to this PO' });
     }
 
-    const updated = await storage.updateProject(id, { poId } as any);
+    const previousPoId = project.poId ?? null;
+    const nextRevision = await getNextProjectRevisionNumber(id);
+    const revisionLabel = `Rev ${nextRevision}`;
+    const isRelink = previousPoId !== null;
+    const revisionReason = reason?.trim() || 'Initial production PO link';
+    const revisionSummary = isRelink
+      ? `Changed linked P2 PO to ${poRows[0].po_number}`
+      : `Linked project to P2 PO ${poRows[0].po_number}`;
+
+    const updated = await storage.updateProject(id, {
+      poId,
+      currentRevisionNumber: nextRevision,
+      currentRevisionLabel: revisionLabel,
+    } as any);
+
+    await pool.query(
+      `UPDATE project_steps
+       SET linked_p2_order_id = $2, updated_at = NOW()
+       WHERE project_id = $1 AND step_type = 'p2_order'`,
+      [id, poId]
+    );
+
+    await pool.query(
+      `INSERT INTO project_revisions (
+         project_id, revision_number, revision_label, revision_type, summary, reason,
+         previous_po_id, new_po_id, created_by, created_by_display_name, metadata
+       )
+       VALUES ($1, $2, $3, 'PO_LINK_CHANGE', $4, $5, $6, $7, $8, $9, $10::jsonb)`,
+      [
+        id,
+        nextRevision,
+        revisionLabel,
+        revisionSummary,
+        revisionReason,
+        previousPoId,
+        poId,
+        createdBy ?? null,
+        createdByDisplayName ?? null,
+        JSON.stringify({ source: 'project_po_link', previousPoId, newPoId: poId }),
+      ]
+    );
 
     await storage.createProjectActivityLog({
       projectId: id,
-      activityType: 'project_updated',
-      description: `Linked to PO ${poRows[0].po_number}`,
-    });
+      activityType: isRelink ? 'project_po_relinked' : 'project_po_linked',
+      description: `${revisionLabel}: ${revisionSummary}`,
+      performedBy: createdBy,
+      performedByDisplayName: createdByDisplayName,
+      metadata: { revisionNumber: nextRevision, previousPoId, newPoId: poId, reason: revisionReason },
+    } as any);
 
     res.json(updated);
   } catch (error) {

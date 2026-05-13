@@ -203,6 +203,39 @@ function IssueReadinessCard({
   onOpenPurchasingControls: () => void;
   onOpenComplianceReview: () => void;
 }) {
+  const [debarmentDialogOpen, setDebarmentDialogOpen] = useState(false);
+  const [debarmentSource, setDebarmentSource] = useState<'sam.gov' | 'manual_attestation' | 'document_upload'>('manual_attestation');
+  const [debarmentResult, setDebarmentResult] = useState<'pass' | 'fail' | 'inconclusive'>('pass');
+  const [debarmentNotes, setDebarmentNotes] = useState('');
+
+  const recordDebarment = useMutation({
+    mutationFn: () => {
+      if (!readiness?.vendorId) throw new Error('Vendor ID is missing for this PO');
+      return apiRequest('/api/vendor-debarment-checks', {
+        method: 'POST',
+        body: JSON.stringify({
+          vendorId: readiness.vendorId,
+          context: 'po_issuance',
+          contextRefId: readiness.vendorPoId,
+          source: debarmentSource,
+          result: debarmentResult,
+          notes: debarmentNotes,
+        }),
+      });
+    },
+    onSuccess: () => {
+      toast.success('Debarment check recorded');
+      setDebarmentNotes('');
+      setDebarmentResult('pass');
+      setDebarmentDialogOpen(false);
+      if (readiness?.vendorPoId) {
+        queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', readiness.vendorPoId, 'issue-readiness'] });
+      }
+      queryClient.invalidateQueries({ queryKey: ['/api/vendors'] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? 'Failed to record debarment check'),
+  });
+
   if (isLoading) {
     return (
       <Card>
@@ -219,8 +252,11 @@ function IssueReadinessCard({
   const failingSections = readiness.sections.filter((section) => section.status === 'fail');
   const debarment = readiness.sections.find((section) => section.key === 'debarment');
   const latestDebarment = debarment?.details?.latestPassingCheck as any;
+  const vendorMaster = readiness.sections.find((section) => section.key === 'vendor_master');
+  const vendorMasterDetails = vendorMaster?.details as any;
 
   return (
+    <>
     <Card className={readiness.ready ? 'border-emerald-200 bg-emerald-50/50' : 'border-amber-200 bg-amber-50/60'}>
       <CardHeader className="pb-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -274,6 +310,18 @@ function IssueReadinessCard({
           </div>
         )}
 
+        {vendorMasterDetails?.vendorId && (
+          <div className="text-xs text-muted-foreground">
+            This PO is linked to vendor #{vendorMasterDetails.vendorId}
+            {typeof vendorMasterDetails.approved === 'boolean'
+              ? `; master approved: ${vendorMasterDetails.approved ? 'Yes' : 'No'}`
+              : ''}
+            {Array.isArray(vendorMasterDetails.approvedSameNameVendors) && vendorMasterDetails.approvedSameNameVendors.length > 0
+              ? `. Approved same-name vendor record(s): ${vendorMasterDetails.approvedSameNameVendors.map((v: any) => `#${v.id}`).join(', ')}`
+              : ''}
+          </div>
+        )}
+
         {failingSections.length > 0 && (
           <div className="rounded-md border border-amber-200 bg-white/80 p-3">
             <div className="text-sm font-medium text-amber-900 mb-2">What to fix before issuing</div>
@@ -285,11 +333,21 @@ function IssueReadinessCard({
               )}
             </ul>
             <div className="mt-3 flex flex-wrap gap-2">
-              <Button size="sm" variant="outline" onClick={onOpenPurchasingControls}>
+              <Button type="button" size="sm" variant="outline" onClick={onOpenPurchasingControls}>
                 Open Purchasing Controls
               </Button>
+              {debarment?.status === 'fail' && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setDebarmentDialogOpen(true)}
+                >
+                  Record Debarment Check
+                </Button>
+              )}
               {readiness.isP2 && (
-                <Button size="sm" variant="outline" onClick={onOpenComplianceReview}>
+                <Button type="button" size="sm" variant="outline" onClick={onOpenComplianceReview}>
                   Open P2 Compliance Review
                 </Button>
               )}
@@ -298,6 +356,66 @@ function IssueReadinessCard({
         )}
       </CardContent>
     </Card>
+    <Dialog open={debarmentDialogOpen} onOpenChange={setDebarmentDialogOpen}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Record Debarment Check</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <p className="text-sm text-muted-foreground">
+            Record evidence that vendor #{readiness.vendorId} was checked for exclusions before PO issuance.
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Source</Label>
+              <select
+                className="w-full border rounded px-2 py-2 text-sm"
+                value={debarmentSource}
+                onChange={(e) => setDebarmentSource(e.target.value as any)}
+              >
+                <option value="manual_attestation">Manual Attestation</option>
+                <option value="sam.gov">SAM.gov</option>
+                <option value="document_upload">Document Upload</option>
+              </select>
+            </div>
+            <div>
+              <Label>Result</Label>
+              <select
+                className="w-full border rounded px-2 py-2 text-sm"
+                value={debarmentResult}
+                onChange={(e) => setDebarmentResult(e.target.value as any)}
+              >
+                <option value="pass">Pass</option>
+                <option value="fail">Fail</option>
+                <option value="inconclusive">Inconclusive</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <Label>Notes / Evidence Reference</Label>
+            <Textarea
+              rows={3}
+              value={debarmentNotes}
+              onChange={(e) => setDebarmentNotes(e.target.value)}
+              placeholder="Example: SAM.gov search completed, no exclusions found."
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => setDebarmentDialogOpen(false)}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            onClick={() => recordDebarment.mutate()}
+            disabled={recordDebarment.isPending || !readiness.vendorId}
+          >
+            {recordDebarment.isPending ? 'Recording...' : 'Record Check'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
 

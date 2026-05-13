@@ -270,7 +270,7 @@ async function buildVendorPOIssueReadiness(vendorPO: any): Promise<{
     procurementSettings,
     vendors,
   } = await import('../../schema');
-  const { eq: dEq, and: dAnd, gte: dGte, desc: dDesc } = await import('drizzle-orm');
+  const { eq: dEq, and: dAnd, gte: dGte, desc: dDesc, sql: dSql } = await import('drizzle-orm');
 
   const vendorId = Number(vendorPO.vendorId);
   const [vendor] = Number.isFinite(vendorId)
@@ -289,11 +289,25 @@ async function buildVendorPOIssueReadiness(vendorPO: any): Promise<{
     : [];
 
   const vendorMasterBlockers: string[] = [];
+  let approvedSameNameVendors: Array<{ id: number; name: string }> = [];
   if (!vendor) {
     vendorMasterBlockers.push('Vendor record not found');
   } else {
     if (vendor.isActive === false) vendorMasterBlockers.push('Vendor is inactive');
-    if (!vendor.approved) vendorMasterBlockers.push('Vendor master record is not approved');
+    if (!vendor.approved) {
+      approvedSameNameVendors = await drizzleDb
+        .select({ id: vendors.id, name: vendors.name })
+        .from(vendors)
+        .where(dSql`LOWER(${vendors.name}) = LOWER(${vendor.name}) AND ${vendors.approved} = true AND ${vendors.id} <> ${vendor.id}`)
+        .limit(5);
+      if (approvedSameNameVendors.length > 0) {
+        vendorMasterBlockers.push(
+          `This PO is linked to vendor #${vendor.id}, which is not approved. Approved vendor record(s) with the same name: ${approvedSameNameVendors.map((v) => `#${v.id}`).join(', ')}`
+        );
+      } else {
+        vendorMasterBlockers.push(`Vendor master record #${vendor.id} is not approved`);
+      }
+    }
     if (vendor.approvalExpiration && new Date(vendor.approvalExpiration) < new Date()) {
       vendorMasterBlockers.push(`Vendor approval expired on ${vendor.approvalExpiration}`);
     }
@@ -356,6 +370,7 @@ async function buildVendorPOIssueReadiness(vendorPO: any): Promise<{
         approvalExpiration: vendor.approvalExpiration ?? null,
         debarmentStatus: vendor.debarmentStatus ?? null,
         debarmentCheckedAt: vendor.debarmentCheckedAt ?? null,
+        approvedSameNameVendors,
       } : { vendorId },
     },
     {

@@ -112,6 +112,7 @@ interface WorkOrderRow {
   quantityCompletedToday: number;
   sourceType?: 'production_work_order' | 'p2_production_order';
   sourceLabel?: string;
+  wadStatus?: string | null;
   p2PoId?: number | null;
   p2PoNumber?: string | null;
   status: string;

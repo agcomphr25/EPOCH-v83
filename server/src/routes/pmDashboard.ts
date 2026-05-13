@@ -83,6 +83,7 @@ interface ProductionRow {
   quantityCompletedToday: number;
   sourceType: string;
   sourceLabel: string;
+  wadStatus: string | null;
   p2PoId: number | null;
   p2PoNumber: string | null;
   status: string;
@@ -174,7 +175,7 @@ router.get('/projects', h(async (_req, res) => {
       p.target_ship_date AS "targetShipDate",
       p.project_manager_id AS "projectManagerId",
       e.name AS "projectManagerName",
-      p.po_id AS "poId",
+      project_po_link.linked_po_id AS "poId",
       po.po_number AS "poNumber",
       COALESCE(
         (SELECT ps.status FROM project_steps ps WHERE ps.project_id = p.id AND ps.step_type = 'p2_order' LIMIT 1), 'pending'
@@ -193,7 +194,21 @@ router.get('/projects', h(async (_req, res) => {
       ) AS "rfqStepStatus"
     FROM projects p
     LEFT JOIN employees e ON e.id = p.project_manager_id
-    LEFT JOIN p2_purchase_orders po ON po.id = p.po_id
+    LEFT JOIN LATERAL (
+      SELECT COALESCE(
+        p.po_id,
+        (
+          SELECT ps.linked_p2_order_id
+          FROM project_steps ps
+          WHERE ps.project_id = p.id
+            AND ps.step_type = 'p2_order'
+            AND ps.linked_p2_order_id IS NOT NULL
+          ORDER BY ps.updated_at DESC NULLS LAST, ps.completed_at DESC NULLS LAST
+          LIMIT 1
+        )
+      ) AS linked_po_id
+    ) project_po_link ON TRUE
+    LEFT JOIN p2_purchase_orders po ON po.id = project_po_link.linked_po_id
     WHERE p.status NOT IN ('cancelled', 'completed')
     ORDER BY p.project_code ASC
   `);
@@ -221,12 +236,35 @@ router.get('/:projectId/summary', h(async (req, res) => {
   }
 
   const woRes = await pool.query<WorkOrderCountRow>(`
+    WITH project_po_link AS (
+      SELECT COALESCE(
+        p.po_id,
+        (
+          SELECT ps.linked_p2_order_id
+          FROM project_steps ps
+          WHERE ps.project_id = p.id
+            AND ps.step_type = 'p2_order'
+            AND ps.linked_p2_order_id IS NOT NULL
+          ORDER BY ps.updated_at DESC NULLS LAST, ps.completed_at DESC NULLS LAST
+          LIMIT 1
+        )
+      ) AS po_id
+      FROM projects p
+      WHERE p.id = $1
+    ),
+    rows AS (
+      SELECT status FROM production_work_orders WHERE project_id = $1
+      UNION ALL
+      SELECT p2po.status
+      FROM project_po_link ppl
+      JOIN p2_production_orders p2po ON p2po.p2_po_id = ppl.po_id
+      WHERE p2po.status NOT IN ('CANCELLED', 'CANCELED')
+    )
     SELECT
       COUNT(*) AS "totalWorkOrders",
-      COUNT(*) FILTER (WHERE status IN ('COMPLETE', 'CLOSED')) AS "completedWorkOrders",
+      COUNT(*) FILTER (WHERE status IN ('COMPLETE', 'COMPLETED', 'CLOSED')) AS "completedWorkOrders",
       COUNT(*) FILTER (WHERE status = 'BLOCKED') AS "blockedWorkOrders"
-    FROM production_work_orders
-    WHERE project_id = $1
+    FROM rows
   `, [projectId]);
 
   // Open traveler count + blocked/hold travelers
@@ -294,15 +332,44 @@ router.get('/:projectId/summary', h(async (req, res) => {
 
   // Quantity-based production percent
   const qtyProgressRes = await pool.query<{ totalRequired: string; totalCompleted: string }>(`
+    WITH project_po_link AS (
+      SELECT COALESCE(
+        p.po_id,
+        (
+          SELECT ps.linked_p2_order_id
+          FROM project_steps ps
+          WHERE ps.project_id = p.id
+            AND ps.step_type = 'p2_order'
+            AND ps.linked_p2_order_id IS NOT NULL
+          ORDER BY ps.updated_at DESC NULLS LAST, ps.completed_at DESC NULLS LAST
+          LIMIT 1
+        )
+      ) AS po_id
+      FROM projects p
+      WHERE p.id = $1
+    ),
+    qty_rows AS (
+      SELECT
+        COALESCE(wo2.quantity, 0)::numeric AS required_qty,
+        COALESCE((
+          SELECT COUNT(*) FROM travelers t2
+          WHERE t2.production_work_order_id = wo2.id
+            AND t2.status IN ('COMPLETE', 'CLOSED')
+        ), 0)::numeric AS completed_qty
+      FROM production_work_orders wo2
+      WHERE wo2.project_id = $1
+      UNION ALL
+      SELECT
+        COALESCE(p2po.quantity, 0)::numeric AS required_qty,
+        COALESCE(p2po.quantity_manufactured, 0)::numeric AS completed_qty
+      FROM project_po_link ppl
+      JOIN p2_production_orders p2po ON p2po.p2_po_id = ppl.po_id
+      WHERE p2po.status NOT IN ('CANCELLED', 'CANCELED')
+    )
     SELECT
-      COALESCE(SUM(wo2.quantity), 0) AS "totalRequired",
-      COALESCE(SUM(
-        (SELECT COUNT(*) FROM travelers t2
-         WHERE t2.production_work_order_id = wo2.id
-           AND t2.status IN ('COMPLETE', 'CLOSED'))
-      ), 0) AS "totalCompleted"
-    FROM production_work_orders wo2
-    WHERE wo2.project_id = $1
+      COALESCE(SUM(required_qty), 0) AS "totalRequired",
+      COALESCE(SUM(completed_qty), 0) AS "totalCompleted"
+    FROM qty_rows
   `, [projectId]);
 
   const wo = woRes[0];
@@ -372,6 +439,7 @@ router.get('/:projectId/production', h(async (req, res) => {
       )::int AS "quantityCompletedToday",
       'production_work_order'::text AS "sourceType",
       'WAD'::text AS "sourceLabel",
+      wo.wad_status AS "wadStatus",
       NULL::int AS "p2PoId",
       NULL::text AS "p2PoNumber",
       wo.status,
@@ -434,7 +502,23 @@ router.get('/:projectId/production', h(async (req, res) => {
         LIMIT 1
       ) AS "blockReason"
     FROM production_work_orders wo
-    WHERE wo.project_id = $2
+      WHERE wo.project_id = $2
+    ),
+    project_po_link AS (
+      SELECT COALESCE(
+        p.po_id,
+        (
+          SELECT ps.linked_p2_order_id
+          FROM project_steps ps
+          WHERE ps.project_id = p.id
+            AND ps.step_type = 'p2_order'
+            AND ps.linked_p2_order_id IS NOT NULL
+          ORDER BY ps.updated_at DESC NULLS LAST, ps.completed_at DESC NULLS LAST
+          LIMIT 1
+        )
+      ) AS po_id
+      FROM projects p
+      WHERE p.id = $2
     ),
     p2_rows AS (
       SELECT
@@ -451,6 +535,7 @@ router.get('/:projectId/production', h(async (req, res) => {
         END AS "quantityCompletedToday",
         'p2_production_order'::text AS "sourceType",
         'P2'::text AS "sourceLabel",
+        NULL::text AS "wadStatus",
         p2po.p2_po_id AS "p2PoId",
         p2po_head.po_number AS "p2PoNumber",
         p2po.status,
@@ -470,12 +555,11 @@ router.get('/:projectId/production', h(async (req, res) => {
           ELSE ($1::date - p2po.due_date::date)
         END AS "daysScheduleVariance",
         NULL::text AS "blockReason"
-      FROM projects p
-      JOIN p2_purchase_orders p2po_head ON p2po_head.id = p.po_id
+      FROM project_po_link ppl
+      JOIN p2_purchase_orders p2po_head ON p2po_head.id = ppl.po_id
       JOIN p2_production_orders p2po ON p2po.p2_po_id = p2po_head.id
       LEFT JOIN p2_purchase_order_items p2poi ON p2poi.id = p2po.p2_po_item_id
-      WHERE p.id = $2
-        AND p2po.status NOT IN ('CANCELLED', 'CANCELED')
+      WHERE p2po.status NOT IN ('CANCELLED', 'CANCELED')
     )
     SELECT * FROM wad_rows
     UNION ALL

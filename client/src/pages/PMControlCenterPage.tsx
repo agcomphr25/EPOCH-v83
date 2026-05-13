@@ -112,6 +112,7 @@ interface WorkOrderRow {
   quantityCompletedToday: number;
   sourceType?: 'production_work_order' | 'p2_production_order';
   sourceLabel?: string;
+  wadStatus?: string | null;
   p2PoId?: number | null;
   p2PoNumber?: string | null;
   status: string;
@@ -531,6 +532,11 @@ function ProductionTab({ projectId }: { projectId: string }) {
                     {row.sourceLabel === 'P2' && (
                       <Badge variant="outline" className="font-sans text-[10px] px-1.5 py-0">
                         P2
+                      </Badge>
+                    )}
+                    {row.sourceLabel === 'WAD' && row.wadStatus && (
+                      <Badge variant="outline" className="font-sans text-[10px] px-1.5 py-0">
+                        WAD {row.wadStatus.replace('_', ' ')}
                       </Badge>
                     )}
                   </div>

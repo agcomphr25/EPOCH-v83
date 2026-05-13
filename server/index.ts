@@ -26,6 +26,10 @@ import {
   runReturnToQcBootRepair,
   shouldRunHistoricalBootRepairs,
 } from './bootstrap/oneTimeRepairs';
+import {
+  getLegacyStartupDbMaintenanceSkipMessage,
+  shouldRunLegacyStartupDbMaintenance,
+} from './bootstrap/startupMaintenance';
 
 // Build version marker - change this to verify deployment updates
 const BUILD_VERSION = '2026-01-27-v2';
@@ -468,18 +472,11 @@ async function initializeBackgroundServices() {
     } else {
       console.log('✅ Database connection successful');
 
-      // Ensure required user accounts exist (e.g. brian → /brian-dashboard)
-      try {
-        const { ensureRequiredUsersExist } = await import('./src/routes/auth');
-        await ensureRequiredUsersExist();
-      } catch (userSeedErr: any) {
-        console.warn('⚠️ ensureRequiredUsersExist failed:', userSeedErr.message);
-      }
-
       // Safe boot migrations are intentionally not run during normal server startup.
       // Run them before deploy or manually with: npm run maintenance:safe-migrations
 
       const runHistoricalBootRepairs = shouldRunHistoricalBootRepairs();
+      const runLegacyStartupDbMaintenance = shouldRunLegacyStartupDbMaintenance();
       if (runHistoricalBootRepairs) {
         console.warn('RUN_BOOT_REPAIRS is enabled; historical boot repairs will run during startup.');
         const { inserted, missing } = await runLaborAllocationBackfill(pool);
@@ -501,6 +498,26 @@ async function initializeBackgroundServices() {
           console.log('✅ Phase B coverage audit: 0 sessions missing allocations');
         }
         console.log('ℹ️ Historical boot repairs are disabled during normal startup.');
+      }
+
+      if (!runLegacyStartupDbMaintenance) {
+        console.log(`ℹ️ ${getLegacyStartupDbMaintenanceSkipMessage()}`);
+        bootState.backgroundServices.status = 'complete';
+        bootState.backgroundServices.completedAt = new Date().toISOString();
+        return;
+      }
+
+      console.warn(
+        'RUN_STARTUP_DB_MAINTENANCE is enabled; legacy inline DB maintenance, seed checks, ' +
+        'scheduled jobs, and startup prewarm tasks will run from server/index.ts.'
+      );
+
+      // Ensure required user accounts exist (e.g. brian → /brian-dashboard)
+      try {
+        const { ensureRequiredUsersExist } = await import('./src/routes/auth');
+        await ensureRequiredUsersExist();
+      } catch (userSeedErr: any) {
+        console.warn('⚠️ ensureRequiredUsersExist failed:', userSeedErr.message);
       }
 
       // Ensure traveler_signatures has task-specific columns for role-based signing

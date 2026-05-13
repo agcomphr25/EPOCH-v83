@@ -1292,6 +1292,7 @@ export default function CuttingOperatorDashboard() {
   const printableQueueItems = mfgQueueItems.filter(isPacketBarcodePrintable);
   const printableQueueIds = printableQueueItems.map(i => i.id);
   const selectedPrintableIds = selectedPrintIds.filter(id => printableQueueIds.includes(id));
+  const printTargetIds = selectedPrintableIds.length > 0 ? selectedPrintableIds : printableQueueIds;
 
   return (
     <div className="space-y-6">
@@ -2141,27 +2142,20 @@ export default function CuttingOperatorDashboard() {
                 size="sm"
                 className="bg-green-600 hover:bg-green-700 text-white"
                 onClick={() => {
-                  const allIds = printableQueueItems.map(i => i.id);
-                  if (allIds.length > 0) bulkPrintBarcodesMutation.mutate({ queueIds: allIds, quantities: printQuantities });
+                  if (printTargetIds.length > 0) {
+                    bulkPrintBarcodesMutation.mutate({ queueIds: printTargetIds, quantities: printQuantities });
+                  }
                 }}
-                disabled={bulkPrintBarcodesMutation.isPending || printableQueueItems.length === 0}
+                disabled={bulkPrintBarcodesMutation.isPending || printTargetIds.length === 0}
                 data-testid="button-print-all-barcodes"
               >
                 <Printer className="h-4 w-4 mr-1" />
-                {bulkPrintBarcodesMutation.isPending ? 'Generating...' : 'Print Barcodes'}
+                {bulkPrintBarcodesMutation.isPending
+                  ? 'Generating...'
+                  : selectedPrintableIds.length > 0
+                    ? `Print ${selectedPrintableIds.length} Selected`
+                    : 'Print Barcodes'}
               </Button>
-              {selectedPrintableIds.length > 0 && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => bulkPrintBarcodesMutation.mutate({ queueIds: selectedPrintableIds, quantities: printQuantities })}
-                  disabled={bulkPrintBarcodesMutation.isPending}
-                  data-testid="button-bulk-print-barcodes"
-                >
-                  <Printer className="h-4 w-4 mr-1" />
-                  {`Print ${selectedPrintableIds.length} Selected`}
-                </Button>
-              )}
             </div>
           </div>
         </CardHeader>

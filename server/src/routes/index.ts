@@ -44,6 +44,7 @@ import shippingPdfRoute from './shippingPdf';
 import shippingRoutes from './shipping';
 import shippingTestRoutes from './shipping-test';
 import orderAttachmentsRoutes from './orderAttachments';
+import storageUploadRoutes from './storageUpload';
 import vendorPoAttachmentsRoutes from './vendorPoAttachments';
 import discountsRoutes from './discounts';
 // import bomsRoutes from './boms'; // Legacy BOM routes - replaced by Robust BOM system
@@ -934,6 +935,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   
   // Object storage routes - cloud file uploads
   registerObjectStorageRoutes(app);
+  app.use('/api/storage', storageUploadRoutes);
 
   // Codebase chat routes - AI chat with codebase context
   registerCodebaseChatRoutes(app);

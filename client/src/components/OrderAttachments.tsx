@@ -87,7 +87,7 @@ export function OrderAttachments({
         if (!urlResponse.ok) {
           const error = await urlResponse.json().catch(() => ({}));
           console.error('Request upload URL failed:', urlResponse.status, error);
-          throw new Error(error.error || 'Failed to get upload URL');
+          throw new Error(error.details || error.reason || error.error || 'Failed to get upload URL');
         }
         
         const { uploadURL, objectPath } = await urlResponse.json();
@@ -100,7 +100,8 @@ export function OrderAttachments({
         });
         
         if (!uploadResponse.ok) {
-          throw new Error(`Failed to upload ${file.name} to cloud storage`);
+          const error = await uploadResponse.json().catch(() => ({}));
+          throw new Error(error.details || error.reason || `Failed to upload ${file.name} to cloud storage`);
         }
         
         // Step 3: Complete upload - save metadata to database

@@ -487,6 +487,10 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/maintenance',
       '/maintenance-events',
       '/projects',
+      '/projects/pipeline',
+      '/projects/:id',
+      '/projects/:id/closing',
+      '/p2-control-center',
     ],
   },
 

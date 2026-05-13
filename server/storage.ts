@@ -14812,7 +14812,8 @@ export class DatabaseStorage implements IStorage {
         tolerance_authorizer_name as "toleranceAuthorizerName",
         tolerance_notes as "toleranceNotes", bom_configured as "bomConfigured",
         locked_at as "lockedAt", locked_by as "lockedBy",
-        source_quote_id as "sourceQuoteId", created_by_id as "createdById",
+        source_quote_id as "sourceQuoteId", contract_review_role as "contractReviewRole",
+        created_by_id as "createdById",
         created_by_name as "createdByName", assigned_to_id as "assignedToId",
         assigned_to_name as "assignedToName", bom_owner_id as "bomOwnerId",
         bom_owner_name as "bomOwnerName", scheduled_by_id as "scheduledById",
@@ -14855,12 +14856,12 @@ export class DatabaseStorage implements IStorage {
       INSERT INTO p2_purchase_orders (
         po_number, customer_id, customer_name, po_date, expected_delivery,
         status, notes, attachments, tolerance_authorizer_id, tolerance_authorizer_name,
-        tolerance_notes, bom_configured, source_quote_id, created_by_id, created_by_name,
-        assigned_to_id, assigned_to_name, bom_owner_id, bom_owner_name,
+        tolerance_notes, bom_configured, source_quote_id, contract_review_role,
+        created_by_id, created_by_name, assigned_to_id, assigned_to_name, bom_owner_id, bom_owner_name,
         scheduled_by_id, scheduled_by_name, production_lead_id, production_lead_name,
         project_name
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25
       )
       RETURNING id, po_number as "poNumber", customer_id as "customerId",
         customer_name as "customerName", po_date as "poDate",
@@ -14869,7 +14870,8 @@ export class DatabaseStorage implements IStorage {
         tolerance_authorizer_name as "toleranceAuthorizerName",
         tolerance_notes as "toleranceNotes", bom_configured as "bomConfigured",
         locked_at as "lockedAt", locked_by as "lockedBy",
-        source_quote_id as "sourceQuoteId", created_by_id as "createdById",
+        source_quote_id as "sourceQuoteId", contract_review_role as "contractReviewRole",
+        created_by_id as "createdById",
         created_by_name as "createdByName", assigned_to_id as "assignedToId",
         assigned_to_name as "assignedToName", bom_owner_id as "bomOwnerId",
         bom_owner_name as "bomOwnerName", scheduled_by_id as "scheduledById",
@@ -14891,6 +14893,7 @@ export class DatabaseStorage implements IStorage {
       data.toleranceNotes || null,
       data.bomConfigured || false,
       data.sourceQuoteId || null,
+      data.contractReviewRole || 'secondary',
       data.createdById || null,
       data.createdByName || null,
       data.assignedToId || null,

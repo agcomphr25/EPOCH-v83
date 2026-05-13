@@ -75,6 +75,7 @@ const p2PurchaseOrderSchema = z.object({
   status: z.enum(['OPEN', 'CLOSED', 'CANCELED']).default('OPEN'),
   notes: z.string().optional(),
   sourceQuoteId: z.string().optional().nullable(),
+  contractReviewRole: z.enum(['primary', 'secondary']).default('secondary'),
   projectName: z.string().optional().nullable(),
 });
 
@@ -106,6 +107,7 @@ interface P2PurchaseOrder
   expectedDelivery: string;
   attachments?: string[];
   sourceQuoteId?: string | null;
+  contractReviewRole?: 'primary' | 'secondary' | null;
   projectName?: string | null;
   lockedAt?: string | null;
   lockedBy?: string | null;
@@ -180,6 +182,7 @@ export function P2POManager({ onManageItems, selectedPOIds = [], initialSearch =
       status: 'OPEN',
       notes: '',
       sourceQuoteId: null,
+      contractReviewRole: 'secondary',
       projectName: null,
     },
   });
@@ -426,6 +429,7 @@ export function P2POManager({ onManageItems, selectedPOIds = [], initialSearch =
       status: po.status,
       notes: po.notes || '',
       sourceQuoteId: po.sourceQuoteId || null,
+      contractReviewRole: po.contractReviewRole || 'secondary',
       projectName: po.projectName || null,
     });
     setDialogOpen(true);
@@ -444,6 +448,7 @@ export function P2POManager({ onManageItems, selectedPOIds = [], initialSearch =
       status: 'OPEN',
       notes: '',
       sourceQuoteId: null,
+      contractReviewRole: 'secondary',
       projectName: null,
     });
     setDialogOpen(true);
@@ -800,6 +805,31 @@ export function P2POManager({ onManageItems, selectedPOIds = [], initialSearch =
                 </div>
                 <FormField
                   control={form.control}
+                  name="contractReviewRole"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Are we primary or secondary on this PO?</FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value || 'secondary'}
+                        disabled={!!selectedPO?.lockedAt}
+                      >
+                        <FormControl>
+                          <SelectTrigger data-testid="select-contract-review-role">
+                            <SelectValue placeholder="Select role" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="secondary">Secondary - contract review not required now</SelectItem>
+                          <SelectItem value="primary">Primary - contract review required for P2 release</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
                   name="notes"
                   render={({ field }) => (
                     <FormItem>
@@ -993,6 +1023,16 @@ export function P2POManager({ onManageItems, selectedPOIds = [], initialSearch =
                   <div className="flex gap-2 items-center">
                     <Badge variant={getStatusBadgeVariant(po.status)}>
                       {po.status}
+                    </Badge>
+                    <Badge
+                      variant="outline"
+                      className={
+                        po.contractReviewRole === 'primary'
+                          ? 'border-blue-500 text-blue-700 dark:text-blue-400'
+                          : 'border-slate-300 text-slate-600 dark:text-slate-300'
+                      }
+                    >
+                      {po.contractReviewRole === 'primary' ? 'Primary - review required' : 'Secondary'}
                     </Badge>
                     {po.lockedAt && (
                       <Badge variant="outline" className="border-amber-500 text-amber-600 dark:text-amber-400 flex items-center gap-1">

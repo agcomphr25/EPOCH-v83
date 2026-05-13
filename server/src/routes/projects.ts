@@ -1278,7 +1278,7 @@ router.patch('/:projectId/steps/:stepId/reopen', async (req, res) => {
 });
 
 // POST /api/projects/:id/release-to-p2 — P2 Release Gate endpoint
-// Release gate: PO Review + Contract Review + WAD + Preproduction must all pass
+// Release gate: PO Review + WAD + Preproduction must pass; Contract Review is required for primary POs.
 // First call (pre-gate) → sets stage to p2_release and PO to ready_for_p2_release
 // Second call (staged) → sets stage to production and PO to in_production
 // Repeated calls once in production → 409 (idempotent-safe)
@@ -1336,7 +1336,7 @@ router.post('/:id/release-to-p2', async (req, res) => {
     const wadPassed = workOrders.some(wo => WAD_APPROVED_STATUSES.includes(wo.status));
 
     const quoteStep = steps.find(s => s.stepType === 'quote');
-    const contractReviewGate = await getQuoteContractReviewGate(quoteStep?.linkedQuoteId ?? null, id);
+    const contractReviewGate = await getQuoteContractReviewGate(quoteStep?.linkedQuoteId ?? null, id, project.poId);
 
     const gates = [
       { key: 'po_review', label: 'PO Review', passed: poReviewPassed },
@@ -1374,7 +1374,7 @@ router.post('/:id/release-to-p2', async (req, res) => {
       await storage.createProjectActivityLog({
         projectId: id,
         activityType: 'stage_changed',
-        description: 'Released to Production — P2 Release Gate passed (all three conditions met)',
+        description: 'Released to Production — P2 Release Gate passed (all required conditions met)',
       });
 
       return res.json({
@@ -1399,7 +1399,7 @@ router.post('/:id/release-to-p2', async (req, res) => {
     await storage.createProjectActivityLog({
       projectId: id,
       activityType: 'stage_changed',
-      description: 'P2 Release Gate passed — project staged for P2 (PO Review ✓, WAD ✓, Preproduction ✓)',
+      description: 'P2 Release Gate passed — project staged for P2 (PO Review, WAD, Preproduction, and any required Contract Review cleared)',
     });
 
     return res.json({
@@ -1438,7 +1438,7 @@ router.get('/:id/p2-gate-status', async (req, res) => {
     const wadPassed = workOrders.some(wo => WAD_APPROVED_STATUSES.includes(wo.status));
 
     const quoteStep = steps.find(s => s.stepType === 'quote');
-    const contractReviewGate = await getQuoteContractReviewGate(quoteStep?.linkedQuoteId ?? null, id);
+    const contractReviewGate = await getQuoteContractReviewGate(quoteStep?.linkedQuoteId ?? null, id, project.poId);
 
     const gates = [
       { key: 'po_review', label: 'PO Review', passed: poReviewPassed },

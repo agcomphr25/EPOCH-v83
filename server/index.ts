@@ -4682,6 +4682,10 @@ async function initializeBackgroundServices() {
           ALTER TABLE p2_purchase_orders
           ADD COLUMN IF NOT EXISTS project_name TEXT
         `);
+        await pool.query(`
+          ALTER TABLE p2_purchase_orders
+          ADD COLUMN IF NOT EXISTS contract_review_role TEXT NOT NULL DEFAULT 'secondary'
+        `);
         console.log('✅ Ensured p2_nonconforming_dispositions and p2_rmas tables exist');
       } catch (ncErr: any) {
         console.warn('⚠️ p2_nonconforming_dispositions/p2_rmas migration:', ncErr?.message);

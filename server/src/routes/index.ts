@@ -3029,13 +3029,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const { pool: dbPool } = await import('../../db');
       const allPos = await storage.getAllP2PurchaseOrders();
       // Surface POs that have cleared the P2 Release Gate. Status values have
-      // existed in both legacy lowercase and current uppercase forms, and many
-      // POs that are clearly in production still carry generic statuses (OPEN,
-      // RELEASED, ACTIVE, etc.). To avoid hiding in-flight work, we also
-      // include any PO that has at least one serialized item which has moved
-      // past the pre-release stage (i.e. completed, or active and routed past
-      // "Pending Layup"). Pre-release/draft POs with no such items remain
-      // excluded so the dashboard does not fill up with un-released noise.
+      // existed in both legacy lowercase and current uppercase forms. Also
+      // include any PO with serialized units: Pending Layup units are already
+      // production work and must remain visible before their first department move.
       const normalizeP2Status = (status: unknown) =>
         String(status || '').trim().toUpperCase();
       const P2_GATED_STATUSES = new Set([
@@ -3044,21 +3040,16 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         'IN_PRODUCTION',
       ]);
       const serializedItems = await storage.getP2SerializedItems({});
-      const isItemPastPreRelease = (s: any) => {
-        if (s.status === 'COMPLETED') return true;
-        if (s.status !== 'ACTIVE') return false;
-        const dept = String(s.currentDepartment || '').trim();
-        return dept !== '' && dept !== 'Pending Layup';
-      };
-      const poIdsWithActiveWork = new Set<number>();
+      const poIdsWithSerializedUnits = new Set<number>();
       for (const s of serializedItems as any[]) {
-        if (isItemPastPreRelease(s)) {
-          poIdsWithActiveWork.add(s.poId);
+        const poId = s.poId ?? s.po_id;
+        if (poId) {
+          poIdsWithSerializedUnits.add(Number(poId));
         }
       }
       const pos = allPos.filter((po: any) =>
         P2_GATED_STATUSES.has(normalizeP2Status(po.status)) ||
-        poIdsWithActiveWork.has(po.id)
+        poIdsWithSerializedUnits.has(po.id)
       );
 
       // Look up projects linked to these POs

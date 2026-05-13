@@ -81,6 +81,10 @@ interface ProductionRow {
   quantityRequired: number;
   quantityCompleted: number;
   quantityCompletedToday: number;
+  sourceType: string;
+  sourceLabel: string;
+  p2PoId: number | null;
+  p2PoNumber: string | null;
   status: string;
   dueDate: string | null;
   currentDepartment: string | null;
@@ -349,8 +353,9 @@ router.get('/:projectId/production', h(async (req, res) => {
   const today = new Date().toISOString().slice(0, 10);
 
   const result = await pool.query<ProductionRow>(`
-    SELECT
-      wo.id AS "productionWorkOrderId",
+    WITH wad_rows AS (
+      SELECT
+      wo.id::text AS "productionWorkOrderId",
       wo.work_order_number AS "workOrderNumber",
       wo.part_number AS "partNumber",
       wo.quantity AS "quantityRequired",
@@ -365,6 +370,10 @@ router.get('/:projectId/production', h(async (req, res) => {
           AND t2.status IN ('COMPLETE', 'CLOSED')
           AND t2.updated_at::date = $1::date
       )::int AS "quantityCompletedToday",
+      'production_work_order'::text AS "sourceType",
+      'WAD'::text AS "sourceLabel",
+      NULL::int AS "p2PoId",
+      NULL::text AS "p2PoNumber",
       wo.status,
       wo.due_date AS "dueDate",
       (
@@ -391,7 +400,7 @@ router.get('/:projectId/production', h(async (req, res) => {
         LIMIT 1
       ) AS "currentTravelerStep",
       (
-        SELECT t.id FROM travelers t
+        SELECT t.id::text FROM travelers t
         WHERE t.production_work_order_id = wo.id
           AND t.status NOT IN ('COMPLETE', 'CLOSED', 'SCRAPPED', 'CANCELLED')
         ORDER BY t.created_at DESC
@@ -426,7 +435,52 @@ router.get('/:projectId/production', h(async (req, res) => {
       ) AS "blockReason"
     FROM production_work_orders wo
     WHERE wo.project_id = $2
-    ORDER BY wo.created_at ASC
+    ),
+    p2_rows AS (
+      SELECT
+        ('p2-production-order:' || p2po.id::text) AS "productionWorkOrderId",
+        p2po.order_id AS "workOrderNumber",
+        COALESCE(p2poi.part_number, p2po.sku) AS "partNumber",
+        COALESCE(p2po.quantity, 0)::int AS "quantityRequired",
+        COALESCE(p2po.quantity_manufactured, 0)::int AS "quantityCompleted",
+        CASE
+          WHEN p2po.completed_at IS NOT NULL
+            AND p2po.completed_at::date = $1::date
+          THEN COALESCE(p2po.quantity_manufactured, 0)::int
+          ELSE 0
+        END AS "quantityCompletedToday",
+        'p2_production_order'::text AS "sourceType",
+        'P2'::text AS "sourceLabel",
+        p2po.p2_po_id AS "p2PoId",
+        p2po_head.po_number AS "p2PoNumber",
+        p2po.status,
+        p2po.due_date AS "dueDate",
+        p2po.department AS "currentDepartment",
+        NULL::text AS "currentTravelerStep",
+        NULL::text AS "activeTravelerId",
+        NULL::text AS "activeTravelerNumber",
+        CASE
+          WHEN p2po.due_date IS NULL THEN NULL
+          WHEN p2po.status IN ('COMPLETED', 'CLOSED') THEN
+            CASE
+              WHEN p2po.completed_at IS NOT NULL
+              THEN (p2po.completed_at::date - p2po.due_date::date)
+              ELSE NULL
+            END
+          ELSE ($1::date - p2po.due_date::date)
+        END AS "daysScheduleVariance",
+        NULL::text AS "blockReason"
+      FROM projects p
+      JOIN p2_purchase_orders p2po_head ON p2po_head.id = p.po_id
+      JOIN p2_production_orders p2po ON p2po.p2_po_id = p2po_head.id
+      LEFT JOIN p2_purchase_order_items p2poi ON p2poi.id = p2po.p2_po_item_id
+      WHERE p.id = $2
+        AND p2po.status NOT IN ('CANCELLED', 'CANCELED')
+    )
+    SELECT * FROM wad_rows
+    UNION ALL
+    SELECT * FROM p2_rows
+    ORDER BY "sourceType" ASC, "workOrderNumber" ASC
   `, [today, projectId]);
 
   res.json(result);

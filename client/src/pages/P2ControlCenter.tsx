@@ -195,6 +195,8 @@ export default function P2ControlCenter() {
 
   const selectedPONumbers = selectedPOIds.length > 0
     ? openPOs.filter((po) => selectedPOIds.includes(po.id)).map((po) => po.poNumber)
+    : poFromUrl
+      ? [poFromUrl]
     : [];
 
   const togglePOFilter = (poId: number) => {

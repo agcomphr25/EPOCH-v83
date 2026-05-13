@@ -115,28 +115,58 @@ export async function getChargeCodeUsageReport(
   filters: ChargeCodeUsageReportFilters = {},
 ): Promise<ChargeCodeUsageReport> {
   const dateClause = buildDateClause(filters);
-
-  const usageSql = `
-    WITH labor_entries AS (
+  const laborEntriesCte = `
+    labor_entries AS (
       SELECT
         t.id,
+        t.employee_pk,
         t.employee_id,
+        t.employee_name,
         t.date,
         t.clock_in,
         t.clock_out,
         t.department,
         t.operation,
-        NULLIF(BTRIM(t.charge_code), '') AS charge_code,
+        t.charge_code,
         t.approval_status,
         t.labor_approval_id,
-        CASE
-          WHEN t.clock_in IS NOT NULL AND t.clock_out IS NOT NULL
-            THEN GREATEST(EXTRACT(EPOCH FROM (t.clock_out - t.clock_in)) / 3600.0, 0)
-          ELSE 0
-        END AS hours
-      FROM time_clock_entries t
+        t.hours,
+        t.position_title,
+        t.employee_department,
+        t.hire_date
+      FROM (
+        SELECT
+          pl.id,
+          pl.employee_id AS employee_pk,
+          COALESCE(emp.employee_code, pl.employee_id::text) AS employee_id,
+          emp.name AS employee_name,
+          pl.clock_in::date AS date,
+          pl.clock_in,
+          pl.clock_out,
+          pl.department,
+          pl.operation,
+          NULLIF(BTRIM(COALESCE(pl.charge_code, cc_snapshot.code)), '') AS charge_code,
+          pl.approval_status,
+          pl.labor_approval_id,
+          CASE
+            WHEN pl.clock_in IS NOT NULL AND pl.clock_out IS NOT NULL
+              THEN GREATEST(EXTRACT(EPOCH FROM (pl.clock_out - pl.clock_in)) / 3600.0, 0)
+            ELSE 0
+          END AS hours,
+          emp.job_title AS position_title,
+          emp.department AS employee_department,
+          emp.hire_date
+        FROM punch_ledger pl
+        LEFT JOIN charge_codes cc_snapshot ON cc_snapshot.id = pl.charge_code_id
+        LEFT JOIN employees emp ON emp.id = pl.employee_id
+        WHERE COALESCE(pl.labor_class, 'REGULAR') <> 'BREAK'
+      ) t
       ${dateClause.where}
-    ),
+    )
+  `;
+
+  const usageSql = `
+    WITH ${laborEntriesCte},
     usage_by_code AS (
       SELECT
         charge_code,
@@ -207,26 +237,7 @@ export async function getChargeCodeUsageReport(
   `;
 
   const exceptionsSql = `
-    WITH labor_entries AS (
-      SELECT
-        t.id,
-        t.employee_id,
-        t.date,
-        t.clock_in,
-        t.clock_out,
-        t.department,
-        t.operation,
-        NULLIF(BTRIM(t.charge_code), '') AS charge_code,
-        t.approval_status,
-        t.labor_approval_id,
-        CASE
-          WHEN t.clock_in IS NOT NULL AND t.clock_out IS NOT NULL
-            THEN GREATEST(EXTRACT(EPOCH FROM (t.clock_out - t.clock_in)) / 3600.0, 0)
-          ELSE 0
-        END AS hours
-      FROM time_clock_entries t
-      ${dateClause.where}
-    )
+    WITH ${laborEntriesCte}
     SELECT
       le.id AS entry_id,
       CASE
@@ -236,7 +247,7 @@ export async function getChargeCodeUsageReport(
       END AS exception_type,
       le.date AS work_date,
       le.employee_id,
-      emp.name AS employee_name,
+      le.employee_name,
       le.charge_code,
       le.hours::float AS hours,
       le.clock_in,
@@ -247,7 +258,6 @@ export async function getChargeCodeUsageReport(
       le.labor_approval_id
     FROM labor_entries le
     LEFT JOIN charge_codes cc ON cc.code = le.charge_code
-    LEFT JOIN employees emp ON emp.employee_code = le.employee_id OR emp.id::text = le.employee_id
     WHERE le.charge_code IS NOT NULL
       AND (
         cc.id IS NULL
@@ -263,14 +273,7 @@ export async function getChargeCodeUsageReport(
   `;
 
   const exceptionCountsSql = `
-    WITH labor_entries AS (
-      SELECT
-        NULLIF(BTRIM(t.charge_code), '') AS charge_code,
-        t.approval_status,
-        t.labor_approval_id
-      FROM time_clock_entries t
-      ${dateClause.where}
-    )
+    WITH ${laborEntriesCte}
     SELECT
       COUNT(*) FILTER (WHERE cc.id IS NULL)::int AS invalid_labor_entries,
       COUNT(*) FILTER (WHERE cc.id IS NOT NULL AND cc.active = false)::int AS inactive_labor_entries,
@@ -287,36 +290,24 @@ export async function getChargeCodeUsageReport(
   `;
 
   const distributionSql = `
-    WITH labor_entries AS (
-      SELECT
-        t.employee_id,
-        t.date,
-        NULLIF(BTRIM(t.charge_code), '') AS charge_code,
-        CASE
-          WHEN t.clock_in IS NOT NULL AND t.clock_out IS NOT NULL
-            THEN GREATEST(EXTRACT(EPOCH FROM (t.clock_out - t.clock_in)) / 3600.0, 0)
-          ELSE 0
-        END AS hours
-      FROM time_clock_entries t
-      ${dateClause.where}
-    ),
+    WITH ${laborEntriesCte},
     employee_totals AS (
-      SELECT employee_id, COALESCE(SUM(hours), 0)::float AS employee_hours
+      SELECT employee_pk, COALESCE(SUM(hours), 0)::float AS employee_hours
       FROM labor_entries
       WHERE charge_code IS NOT NULL
-      GROUP BY employee_id
+      GROUP BY employee_pk
     )
     SELECT
       le.employee_id,
-      emp.name AS employee_name,
+      le.employee_name,
       le.charge_code AS index_code,
       cc.code AS matched_charge_code,
       cc.active AS charge_code_active,
       cc.type AS charge_code_type,
       COALESCE(cc.cost_handling, 'UNMAPPED') AS cost_handling,
-      emp.job_title AS position_title,
-      emp.department AS employee_department,
-      emp.hire_date,
+      le.position_title,
+      le.employee_department,
+      le.hire_date,
       MIN(le.date) AS labor_dist_start_date,
       MAX(le.date) AS labor_dist_end_date,
       COALESCE(SUM(le.hours), 0)::float AS total_hours,
@@ -327,22 +318,22 @@ export async function getChargeCodeUsageReport(
       END AS distribution_percent
     FROM labor_entries le
     LEFT JOIN charge_codes cc ON cc.code = le.charge_code
-    LEFT JOIN employees emp ON emp.employee_code = le.employee_id OR emp.id::text = le.employee_id
-    LEFT JOIN employee_totals et ON et.employee_id = le.employee_id
+    LEFT JOIN employee_totals et ON et.employee_pk = le.employee_pk
     WHERE le.charge_code IS NOT NULL
     GROUP BY
+      le.employee_pk,
       le.employee_id,
-      emp.name,
+      le.employee_name,
       le.charge_code,
       cc.code,
       cc.active,
       cc.type,
       cc.cost_handling,
-      emp.job_title,
-      emp.department,
-      emp.hire_date,
+      le.position_title,
+      le.employee_department,
+      le.hire_date,
       et.employee_hours
-    ORDER BY emp.name NULLS LAST, le.employee_id, le.charge_code;
+    ORDER BY le.employee_name NULLS LAST, le.employee_id, le.charge_code;
   `;
 
   const [masterResult, exceptionsResult, exceptionCountsResult, distributionResult] = await Promise.all([

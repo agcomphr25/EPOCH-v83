@@ -1073,14 +1073,15 @@ export async function scoreProcurement(): Promise<DomainScorerResult> {
 
   // -------------------------------------------------------------------------
   // Check 5: VENDOR_EVALUATION
-  // Evidence source: vendors.evaluated boolean and vendors.evaluation_date date field.
-  // Note: the schema does not have a last_evaluated_at column — evaluation_date is the
-  //   actual field populated by the vendor evaluation workflow.
+  // Evidence source: vendors.evaluated plus scored vendor_monthly_evaluations.
+  // This intentionally matches the Vendor Management page, where historical
+  // scored evaluation records count as evaluated even if the denormalized
+  // vendor fields have not been refreshed yet.
   //   This check does NOT conflate vendor approval with performance evaluation;
   //   approved = whether the vendor is approved to be used; evaluated = whether a periodic
   //   performance evaluation has been completed.
   //
-  // Policy: Annual evaluations are only required for Approval Level A vendors
+  // Policy: evaluations are only required for Approval Level A vendors
   // (critical / high-risk suppliers). Level B and C vendors are out of scope for
   // this check, matching the policy surfaced on the Vendor Management page.
   // Vendors with no approval_level set are treated as out of scope here — they
@@ -1089,27 +1090,35 @@ export async function scoreProcurement(): Promise<DomainScorerResult> {
   // satisfied (denominator 0 → nothing to evaluate) rather than penalised.
   // -------------------------------------------------------------------------
   const totalVendors = await safeCount(`SELECT COUNT(*) AS count FROM vendors WHERE is_active = true AND approval_level = 'A'`);
-  const recentlyEvaluatedVendors = await safeCount(`
+  const evaluatedVendors = await safeCount(`
+    WITH scored_evaluations AS (
+      SELECT vendor_id
+      FROM vendor_monthly_evaluations
+      WHERE quality_score IS NOT NULL
+         OR cost_score IS NOT NULL
+         OR delivery_score IS NOT NULL
+         OR response_score IS NOT NULL
+      GROUP BY vendor_id
+    )
     SELECT COUNT(*) AS count FROM vendors
+    LEFT JOIN scored_evaluations se ON se.vendor_id = vendors.id
     WHERE is_active = true
       AND approval_level = 'A'
-      AND evaluated = true
-      AND evaluation_date IS NOT NULL
-      AND evaluation_date::timestamp > NOW() - INTERVAL '365 days'
+      AND (COALESCE(evaluated, false) = true OR se.vendor_id IS NOT NULL)
   `);
-  const evalRate = (totalVendors === null || recentlyEvaluatedVendors === null)
+  const evalRate = (totalVendors === null || evaluatedVendors === null)
     ? null
-    : (totalVendors > 0 ? recentlyEvaluatedVendors / totalVendors : 1);
+    : (totalVendors > 0 ? evaluatedVendors / totalVendors : 1);
   checks['VENDOR_EVALUATION'] = evalRate === null ? 0.5 : evalRate >= 0.75 ? 1 : (evalRate > 0 ? 0.5 : 0);
-  evidenceItems.push({ label: 'Active Level A vendors evaluated in last 365 days (evaluation_date)', value: (recentlyEvaluatedVendors === null || totalVendors === null) ? 'SCORER_UNAVAILABLE' : `${recentlyEvaluatedVendors} / ${totalVendors}` });
+  evidenceItems.push({ label: 'Active Level A vendors with performance evaluation on file', value: (evaluatedVendors === null || totalVendors === null) ? 'SCORER_UNAVAILABLE' : `${evaluatedVendors} / ${totalVendors}` });
   if (evalRate !== null && evalRate < 0.75 && totalVendors !== null && totalVendors > 0) {
     redFlags.push({
       domainKey: 'PROCUREMENT', flagKey: 'OVERDUE_VENDOR_EVALUATIONS', severity: 'MEDIUM',
-      title: 'Vendor Performance Evaluation Lapsed',
-      description: `Only ${(evalRate * 100).toFixed(0)}% of active Approval Level A vendors have a recorded performance evaluation in the last 12 months (${recentlyEvaluatedVendors} of ${totalVendors}).`,
+      title: 'Vendor Performance Evaluations Missing',
+      description: `Only ${(evalRate * 100).toFixed(0)}% of active Approval Level A vendors have a recorded performance evaluation on file (${evaluatedVendors} of ${totalVendors}).`,
       farCitation: 'FAR 44.303', potentialScoreRecovery: 3,
     });
-    remediationItems.push({ domainKey: 'PROCUREMENT', flagKey: 'OVERDUE_VENDOR_EVALUATIONS', title: 'Complete overdue vendor performance evaluations', description: 'Evaluate all active Approval Level A vendors on an annual cycle and record evaluation_date in the vendor record. Levels B and C are not subject to this requirement.', priority: 'P3_MEDIUM', potentialScoreRecovery: 3 });
+    remediationItems.push({ domainKey: 'PROCUREMENT', flagKey: 'OVERDUE_VENDOR_EVALUATIONS', title: 'Complete missing vendor performance evaluations', description: 'Evaluate active Approval Level A vendors that do not have an evaluation recorded in the vendor master or vendor monthly evaluations. Levels B and C are not subject to this requirement.', priority: 'P3_MEDIUM', potentialScoreRecovery: 3 });
   }
 
   return { rawScore: computeRawScore(checks), checks, redFlags, remediationItems, evidenceItems };

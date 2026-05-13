@@ -276,7 +276,6 @@ export default function TravelerExecution() {
   } | null>(null);
   const [activeBadge, setActiveBadge] = useState('');
   const [activeTechName, setActiveTechName] = useState('');
-  const [operationScanValue, setOperationScanValue] = useState('');
   const [badgeLookupStatus, setBadgeLookupStatus] = useState<'idle' | 'loading' | 'found' | 'not_found' | 'error'>('idle');
   const [stepNotes, setStepNotes] = useState('');
   const [resolvedEmployee, setResolvedEmployee] = useState<{ id: number; name: string; employeeCode: string; department: string | null } | null>(null);
@@ -812,16 +811,15 @@ export default function TravelerExecution() {
   }, [steps, currentStepId]);
 
   const startStepMutation = useMutation({
-    mutationFn: ({ stepId, badge, techName, employeeId, operationScanValue }: { stepId: string; badge: string; techName: string; employeeId?: number; operationScanValue: string }) =>
+    mutationFn: ({ stepId, badge, techName, employeeId }: { stepId: string; badge: string; techName: string; employeeId?: number }) =>
       apiRequest(`/api/travelers/${travelerId}/steps/${stepId}/start`, {
         method: 'POST',
-        body: JSON.stringify({ startedBy: techName || badge || 'operator', badgeScan: badge, employeeId, operationScanValue }),
+        body: JSON.stringify({ startedBy: techName || badge || 'operator', badgeScan: badge, employeeId }),
         headers: { 'Content-Type': 'application/json' },
       }),
     onSuccess: (data: any, variables) => {
       setActiveBadge(variables.badge);
       setActiveTechName(variables.techName);
-      setOperationScanValue('');
       setLaborWarnAcknowledged(false);
       setCertWarnAcknowledged(false);
 
@@ -2188,7 +2186,6 @@ export default function TravelerExecution() {
                         if (
                           startStepMutation.isPending ||
                           !(signatureData.badgeScan || activeBadge) ||
-                          !operationScanValue.trim() ||
                           (badgeLookupStatus === 'not_found' && !signatureData.signedByName) ||
                           badgeLookupStatus === 'error' ||
                           nameLookupPending ||
@@ -2202,7 +2199,6 @@ export default function TravelerExecution() {
                           badge: signatureData.badgeScan || activeBadge,
                           techName: resolvedEmployee?.name || activeTechName || signatureData.signedByName,
                           employeeId: resolvedEmployee?.id,
-                          operationScanValue: operationScanValue.trim(),
                         });
                       }}
                     >
@@ -2318,19 +2314,6 @@ export default function TravelerExecution() {
                         </div>
                       )}
 
-                      <div className="space-y-1">
-                        <Label htmlFor="step-operation-scan" className="text-sm">Scan Operation</Label>
-                        <Input
-                          id="step-operation-scan"
-                          name="step-operation-scan"
-                          placeholder="Scan traveler operation..."
-                          value={operationScanValue}
-                          onChange={(e) => setOperationScanValue(e.target.value)}
-                          autoComplete="off"
-                          data-testid="input-step-operation-scan"
-                        />
-                      </div>
-
                       <Button
                         type="button"
                         onClick={() => startStepMutation.mutate({
@@ -2338,12 +2321,10 @@ export default function TravelerExecution() {
                           badge: signatureData.badgeScan || activeBadge,
                           techName: resolvedEmployee?.name || activeTechName || signatureData.signedByName,
                           employeeId: resolvedEmployee?.id,
-                          operationScanValue: operationScanValue.trim(),
                         })}
                         disabled={
                           startStepMutation.isPending ||
                           !(signatureData.badgeScan || activeBadge) ||
-                          !operationScanValue.trim() ||
                           (badgeLookupStatus === 'not_found' && !signatureData.signedByName) ||
                           badgeLookupStatus === 'error' ||
                           nameLookupPending ||

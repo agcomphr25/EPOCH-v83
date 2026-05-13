@@ -177,7 +177,7 @@ export default function P2ControlCenter() {
     })
   );
 
-  const { data: allPOStatuses = [] } = useQuery<{ id: number; poNumber: string; customerName: string; status: string; projectId: string | null }[]>({
+  const { data: allPOStatuses = [] } = useQuery<{ id: number; poNumber: string; customerName: string; status: string; projectId: string | null; projectCode?: string | null; projectName?: string | null }[]>({
     queryKey: ['/api/p2/control-center/po-statuses'],
     refetchInterval: 30000,
   });
@@ -309,13 +309,23 @@ export default function P2ControlCenter() {
             const selectedPO = allPOStatuses.find(po => po.id === selectedPOIds[0]);
             if (!selectedPO?.projectId) return null;
             return (
-              <Button
-                variant="outline"
-                onClick={() => navigate(`/pm-control-center?project=${selectedPO.projectId}`)}
-              >
-                <BarChart3 className="h-4 w-4 mr-2" />
-                PM Dashboard
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => navigate(`/projects/${selectedPO.projectId}`)}
+                  title={selectedPO.projectName || undefined}
+                >
+                  <FolderOpen className="h-4 w-4 mr-2" />
+                  {selectedPO.projectCode || 'Project'}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => navigate(`/pm-control-center?project=${selectedPO.projectId}`)}
+                >
+                  <BarChart3 className="h-4 w-4 mr-2" />
+                  PM Control
+                </Button>
+              </div>
             );
           })()}
           <Link href="/p2-forms">

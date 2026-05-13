@@ -920,6 +920,14 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                                                 <FolderOpen className="h-3 w-3" />
                                                 {item.projectCode || 'Linked Project'}
                                               </button>
+                                              <button
+                                                type="button"
+                                                className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                                                onClick={() => setLocation(`/pm-control-center?project=${item.projectId}`)}
+                                              >
+                                                <Factory className="h-3 w-3" />
+                                                PM Control
+                                              </button>
                                               <Button
                                                 variant="ghost"
                                                 size="sm"

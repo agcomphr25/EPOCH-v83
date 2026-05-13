@@ -11,6 +11,7 @@ import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 import cron from 'node-cron';
 import { createServer } from 'http';
 import { setupVite, serveStatic, log } from './vite';
@@ -204,6 +205,25 @@ console.log('🔒 CORS Configuration:', {
 
 app.use(cors(corsOptions));
 
+// Global API request correlation. Every API response gets a searchable
+// X-Request-Id so browser errors can be matched to exactly one server log trail.
+app.use((req, res, next) => {
+  if (!req.path.startsWith('/api')) {
+    return next();
+  }
+
+  const headerId = req.headers['x-request-id'];
+  const requestId = Array.isArray(headerId)
+    ? headerId[0]
+    : headerId || `req-${crypto.randomUUID()}`;
+
+  (req as any).requestId = requestId;
+  res.locals.requestId = requestId;
+  res.setHeader('X-Request-Id', requestId);
+
+  next();
+});
+
 // Inventory upload diagnostics must run before auth/body parsing/route mounting so
 // failures outside the inventory router still carry a searchable request id.
 app.use((req, res, next) => {
@@ -214,7 +234,7 @@ app.use((req, res, next) => {
   const headerId = req.headers['x-inventory-request-id'] || req.headers['x-request-id'];
   const requestId = Array.isArray(headerId)
     ? headerId[0]
-    : headerId || `inv-server-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    : headerId || res.locals.requestId || `inv-server-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
   res.locals.inventoryRequestId = requestId;
   res.setHeader('X-Inventory-Request-Id', requestId);
@@ -332,6 +352,7 @@ app.use('/api', (req, res, next) => {
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
+  const requestId = res.locals.requestId;
   let capturedJsonResponse: Record<string, any> | undefined = undefined;
 
   const originalResJson = res.json;
@@ -343,7 +364,7 @@ app.use((req, res, next) => {
   res.on('finish', () => {
     const duration = Date.now() - start;
     if (path.startsWith('/api')) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
+      let logLine = `[${requestId || 'no-request-id'}] ${req.method} ${path} ${res.statusCode} in ${duration}ms`;
       if (capturedJsonResponse) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       }
@@ -427,8 +448,10 @@ process.on('SIGINT',  () => gracefulShutdown('SIGINT'));
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
       const status = err.status || err.statusCode || 500;
       const message = err.message || 'Internal Server Error';
+      const requestId = res.locals.requestId || (_req as any).requestId;
 
       console.error('=== SERVER ERROR ===');
+      console.error('Request ID:', requestId);
       console.error('Status:', status);
       console.error('Message:', message);
       console.error('Stack:', err.stack);
@@ -436,9 +459,10 @@ process.on('SIGINT',  () => gracefulShutdown('SIGINT'));
       console.error('Method:', _req.method);
       console.error('===================');
 
-      log(`Error ${status}: ${message}`);
+      log(`Error ${status} [${requestId || 'no-request-id'}]: ${message}`);
       res.status(status).json({
         message,
+        requestId,
         ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
       });
     });

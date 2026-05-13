@@ -1062,6 +1062,17 @@ router.post('/:vendorId/evaluations', async (req: Request, res: Response) => {
     
     const totalScore = scores.length > 0 ? scores.reduce((sum, score) => sum + score, 0) : 0;
 
+    const hasAnyAnnualScore =
+      evaluation.qualityScore !== null && evaluation.qualityScore !== undefined ||
+      evaluation.costScore !== null && evaluation.costScore !== undefined ||
+      evaluation.deliveryScore !== null && evaluation.deliveryScore !== undefined ||
+      evaluation.responseScore !== null && evaluation.responseScore !== undefined;
+
+    await storage.updateVendor(vendorId, {
+      evaluated: hasAnyAnnualScore,
+      evaluationDate: hasAnyAnnualScore ? `${year}-01-01` : null,
+    });
+
     // Update vendor record with the latest evaluation scores so they show on the vendor list
     await syncVendorScoresFromEvaluations(vendorId);
 

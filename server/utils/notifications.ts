@@ -129,21 +129,40 @@ export async function sendCustomerNotification(
   }
 
   // Determine notification methods
-  let preferredMethods = data.preferredMethods ||
-    (customer.preferredCommunicationMethod as string[]) || [];
+  let preferredMethods = (data.preferredMethods && data.preferredMethods.length)
+    ? [...data.preferredMethods]
+    : ((customer.preferredCommunicationMethod as string[]) || []);
   const email = data.customerEmail || customer.email;
   const phone = data.customerPhone || customer.phone;
 
   // 1. Detect Twilio availability using centralized config
   const allowSms = isTwilioConfigured();
 
-  // Auto-select best possible method if preferred list empty
+  // Auto-select best possible method if preferred list empty.
+  // Prefer SMS when the customer has a phone and Twilio is configured;
+  // otherwise fall back to email. (Previously this unconditionally pushed
+  // email first, which silently dropped SMS.)
   if (!preferredMethods.length) {
+    if (phone && allowSms) preferredMethods.push('sms');
     if (email) preferredMethods.push('email');
-    else if (phone && allowSms) preferredMethods.push('sms');
+    if (!preferredMethods.length && phone) preferredMethods.push('sms');
   }
   const prefersSms = preferredMethods.includes('sms');
   const prefersEmail = preferredMethods.includes('email');
+
+  // Diagnostic: surface why SMS was skipped purely due to missing Twilio config
+  if (prefersSms && !allowSms) {
+    console.warn(
+      `[NOTIFY] SMS preferred for order ${data.orderId} but Twilio is not configured ` +
+      `(missing TWILIO_SID/TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, or TWILIO_NUMBER). ` +
+      `SMS will be skipped${email ? ' and email used as fallback' : ' and no SMS will be sent'}.`
+    );
+  }
+  if (prefersSms && allowSms && !phone) {
+    console.warn(
+      `[NOTIFY] SMS preferred for order ${data.orderId} but customer has no phone number on file.`
+    );
+  }
 
   // 2. SMS → Email Fallback rule
   const needsEmailFallback = prefersSms && !allowSms;

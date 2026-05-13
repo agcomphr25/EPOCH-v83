@@ -492,7 +492,7 @@ export default function ProjectDetailPage() {
   });
 
   interface GateStatus {
-    gates: { key: string; label: string; passed: boolean }[];
+    gates: { key: string; label: string; passed: boolean; status?: string; message?: string }[];
     allPassed: boolean;
     currentStage: string;
     alreadyReleased: boolean;
@@ -1379,7 +1379,7 @@ export default function ProjectDetailPage() {
               </CardTitle>
             </div>
             <CardDescription>
-              All three conditions must be met before this project can enter the P2 Control Center.
+              Required conditions must be met before this project can enter the P2 Control Center.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -1397,7 +1397,7 @@ export default function ProjectDetailPage() {
                       {gate.label}
                     </span>
                     <Badge variant={gate.passed ? 'default' : 'secondary'} className={`ml-auto text-xs ${gate.passed ? 'bg-green-100 text-green-700 border-green-300' : 'bg-red-100 text-red-700 border-red-300'}`}>
-                      {gate.passed ? 'APPROVED' : 'PENDING'}
+                      {gate.status === 'not_required' ? 'N/A' : gate.passed ? 'APPROVED' : 'PENDING'}
                     </Badge>
                   </div>
                 ))
@@ -1420,7 +1420,7 @@ export default function ProjectDetailPage() {
                 <p className="text-xs font-medium text-red-700 dark:text-red-400 mb-1">Blocking conditions:</p>
                 <ul className="text-xs text-red-600 dark:text-red-400 space-y-0.5 list-disc list-inside">
                   {gateStatus.gates.filter(g => !g.passed).map(g => (
-                    <li key={g.key}>{g.label} must be completed</li>
+                    <li key={g.key}>{g.message || `${g.label} must be completed`}</li>
                   ))}
                 </ul>
               </div>
@@ -1441,7 +1441,7 @@ export default function ProjectDetailPage() {
                 onClick={() => releaseToP2Mutation.mutate()}
                 disabled={!project.poId || !gateStatus?.allPassed || releaseToP2Mutation.isPending}
                 className={`${project.currentStage === 'p2_release' ? 'bg-green-600 hover:bg-green-700' : ''}`}
-                title={!project.poId ? 'Link a P2 Purchase Order before releasing' : !gateStatus?.allPassed ? 'Complete all three gate conditions to enable release' : undefined}
+                title={!project.poId ? 'Link a P2 Purchase Order before releasing' : !gateStatus?.allPassed ? 'Complete all required gate conditions to enable release' : undefined}
               >
                 <Rocket className="h-4 w-4 mr-2" />
                 {releaseToP2Mutation.isPending

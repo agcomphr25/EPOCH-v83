@@ -2468,7 +2468,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         toleranceAuthorizerId, toleranceAuthorizerName, toleranceNotes, notes, lineItems,
         assignedToId, assignedToName, productionLeadId, productionLeadName,
         customerName: bodyCustomerName, poDate: bodyPoDate, status: bodyStatus,
-        sourceQuoteId, projectName,
+        sourceQuoteId, projectName, contractReviewRole,
       } = req.body;
       
       // Use the customer-provided PO number — accept either field name
@@ -2504,6 +2504,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         productionLeadId: productionLeadId && productionLeadId !== 'none' ? parseInt(productionLeadId) : null,
         productionLeadName: productionLeadName || null,
         sourceQuoteId: sourceQuoteId || null,
+        contractReviewRole: contractReviewRole === 'primary' ? 'primary' : 'secondary',
         projectName: projectName || null,
       };
       
@@ -2552,6 +2553,11 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const { storage } = await import('../../storage');
       const { id } = req.params;
       const poData = req.body;
+      if (poData.contractReviewRole && !['primary', 'secondary'].includes(poData.contractReviewRole)) {
+        return res.status(400).json({
+          error: 'contractReviewRole must be primary or secondary',
+        });
+      }
       
       const existingPO = await storage.getP2PurchaseOrder(parseInt(id));
       if (!existingPO) {

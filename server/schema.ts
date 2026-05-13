@@ -5152,6 +5152,7 @@ export const p2PurchaseOrders = pgTable('p2_purchase_orders', {
   lockedBy: integer('locked_by').references(() => employees.id), // Who locked the PO
 
   sourceQuoteId: uuid('source_quote_id').references(() => quotes.id), // Links PO to originating quote
+  contractReviewRole: text('contract_review_role').notNull().default('secondary'), // primary requires contract review before P2 release; secondary does not
   
   // Ownership fields for accountability and audit compliance
   createdById: integer('created_by_id').references(() => employees.id), // Who created the PO
@@ -6726,6 +6727,7 @@ export const insertP2PurchaseOrderSchema = createInsertSchema(p2PurchaseOrders)
     status: z.enum(['OPEN', 'CLOSED', 'CANCELED']).default('OPEN'),
     notes: z.string().optional().nullable(),
     sourceQuoteId: z.string().uuid().optional().nullable(),
+    contractReviewRole: z.enum(['primary', 'secondary']).default('secondary'),
   });
 
 export const insertP2PurchaseOrderItemSchema = createInsertSchema(

@@ -303,22 +303,51 @@ export async function createQuoteSnapshot(
   return snapshot;
 }
 
-export async function getQuoteContractReviewGate(quoteId: string | null | undefined, projectId?: string | null) {
-  if (!quoteId && !projectId) {
+export async function getQuoteContractReviewGate(
+  quoteId: string | null | undefined,
+  projectId?: string | null,
+  p2PurchaseOrderId?: number | null,
+) {
+  const poContext = p2PurchaseOrderId
+    ? firstRow<{ contract_review_role: string | null; source_quote_id: string | null }>(
+        await pool.query(
+          `SELECT contract_review_role, source_quote_id
+           FROM p2_purchase_orders
+           WHERE id = $1`,
+          [p2PurchaseOrderId],
+        ),
+      )
+    : null;
+  const poRole = poContext?.contract_review_role ?? 'secondary';
+  const effectiveQuoteId = quoteId ?? poContext?.source_quote_id ?? null;
+
+  if (normalizeText(poRole) !== 'primary') {
+    return {
+      key: 'contract_review',
+      label: 'Contract Review',
+      passed: true,
+      status: 'not_required',
+      contractReviewRole: poRole,
+      message: 'Contract review is not required for secondary POs.',
+    };
+  }
+
+  if (!effectiveQuoteId && !projectId) {
     return {
       key: 'contract_review',
       label: 'Contract Review',
       passed: false,
       status: 'missing_link',
+      contractReviewRole: poRole,
       message: 'No source quote or project link is available for contract review.',
     };
   }
 
-  const snapshot = quoteId ? await latestSnapshot(quoteId) : null;
+  const snapshot = effectiveQuoteId ? await latestSnapshot(effectiveQuoteId) : null;
   const params: unknown[] = [];
   const predicates: string[] = [];
-  if (quoteId) {
-    params.push(quoteId);
+  if (effectiveQuoteId) {
+    params.push(effectiveQuoteId);
     predicates.push(`form_data->>'quoteId' = $${params.length}`);
     predicates.push(`form_data->>'quote_id' = $${params.length}`);
   }
@@ -347,6 +376,7 @@ export async function getQuoteContractReviewGate(quoteId: string | null | undefi
     label: 'Contract Review',
     passed: Boolean(snapshot && reviewApproved),
     status: !snapshot ? 'missing_snapshot' : reviewApproved ? 'approved' : review ? 'review_not_approved' : 'missing_review',
+    contractReviewRole: poRole,
     quoteSnapshotId: snapshot?.id ?? null,
     quoteRevision: snapshot?.revision_label ?? null,
     purchaseReviewChecklistId: review?.id ?? null,

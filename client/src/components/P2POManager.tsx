@@ -13,6 +13,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -33,6 +34,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -57,10 +59,12 @@ import {
   AlertTriangle,
   CheckCircle,
   RefreshCw,
+  BarChart3,
 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { apiRequest } from '@/lib/queryClient';
 import { format } from 'date-fns';
+import { useLocation } from 'wouter';
 
 const p2PurchaseOrderSchema = z.object({
   poNumber: z.string().min(1, 'PO Number is required'),
@@ -115,6 +119,17 @@ interface P2PurchaseOrder
   updatedAt: string;
 }
 
+interface ProjectOption {
+  id: string;
+  projectCode: string;
+  projectName: string;
+  customerId: string;
+  status: string;
+  poId: number | string | null;
+}
+
+type ProjectsResponse = ProjectOption[] | { projects?: ProjectOption[] };
+
 interface QuotePoReconciliation {
   id: string;
   p2_purchase_order_id: number;
@@ -135,8 +150,12 @@ interface P2POManagerProps {
 }
 
 export function P2POManager({ onManageItems, selectedPOIds = [], initialSearch = '' }: P2POManagerProps) {
+  const [, navigate] = useLocation();
   const [selectedPO, setSelectedPO] = useState<P2PurchaseOrder | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [assignProjectPO, setAssignProjectPO] = useState<P2PurchaseOrder | null>(null);
+  const [assignProjectId, setAssignProjectId] = useState('');
+  const [assignProjectReason, setAssignProjectReason] = useState('');
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [generatingPoId, setGeneratingPoId] = useState<number | null>(null);
   const [sortBy, setSortBy] = useState<'default' | 'project_asc' | 'project_desc'>('default');
@@ -147,6 +166,27 @@ export function P2POManager({ onManageItems, selectedPOIds = [], initialSearch =
   const { data: purchaseOrders = [], isLoading } = useQuery<P2PurchaseOrder[]>({
     queryKey: ['/api/p2-purchase-orders-bypass'],
   });
+
+  const { data: projectsResponse = [] } = useQuery<ProjectsResponse>({
+    queryKey: ['/api/projects'],
+  });
+
+  const projects = Array.isArray(projectsResponse)
+    ? projectsResponse
+    : Array.isArray(projectsResponse.projects)
+    ? projectsResponse.projects
+    : [];
+
+  const projectByPoId = new Map(
+    projects
+      .filter((project) => project.poId)
+      .map((project) => [Number(project.poId), project])
+  );
+
+  const assignableProjects = projects.filter((project) =>
+    project.id &&
+    !['completed', 'cancelled', 'inactive', 'lost'].includes(String(project.status || '').toLowerCase())
+  );
 
   const { data: customers = [] } = useQuery<P2Customer[]>({
     queryKey: ['/api/p2-customers-bypass'],
@@ -262,6 +302,37 @@ export function P2POManager({ onManageItems, selectedPOIds = [], initialSearch =
       toast({
         title: 'Error',
         description: error.message || 'Failed to delete P2 purchase order',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const assignProjectMutation = useMutation({
+    mutationFn: ({ projectId, poId, reason }: { projectId: string; poId: number; reason: string }) =>
+      apiRequest(`/api/projects/${projectId}/link-po`, {
+        method: 'POST',
+        body: {
+          poId,
+          reason,
+          createdByDisplayName: 'P2 Control',
+        },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/po-statuses'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/production-queue'] });
+      toast({
+        title: 'Project assigned',
+        description: 'The P2 PO is now linked to the project and recorded as a project revision.',
+      });
+      setAssignProjectPO(null);
+      setAssignProjectId('');
+      setAssignProjectReason('');
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Assignment failed',
+        description: error.message || 'Could not link this P2 PO to the selected project.',
         variant: 'destructive',
       });
     },
@@ -454,6 +525,13 @@ export function P2POManager({ onManageItems, selectedPOIds = [], initialSearch =
     setDialogOpen(true);
   };
 
+  const openAssignProjectDialog = (po: P2PurchaseOrder) => {
+    const linkedProject = projectByPoId.get(po.id);
+    setAssignProjectPO(po);
+    setAssignProjectId(linkedProject?.id || '');
+    setAssignProjectReason(linkedProject ? 'Confirm existing P2 PO to project link' : 'Assign P2 PO to open project');
+  };
+
   const handleAttachmentUpload = async (
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
@@ -583,17 +661,25 @@ export function P2POManager({ onManageItems, selectedPOIds = [], initialSearch =
   const lowerSearch = searchTerm.trim().toLowerCase();
   const filteredPurchaseOrders = lowerSearch
     ? baseFilteredPOs.filter(
-        (po) =>
-          po.poNumber.toLowerCase().includes(lowerSearch) ||
-          po.customerName.toLowerCase().includes(lowerSearch) ||
-          (po.projectName || '').toLowerCase().includes(lowerSearch)
+        (po) => {
+          const linkedProject = projectByPoId.get(po.id);
+          return (
+            po.poNumber.toLowerCase().includes(lowerSearch) ||
+            po.customerName.toLowerCase().includes(lowerSearch) ||
+            (po.projectName || '').toLowerCase().includes(lowerSearch) ||
+            (linkedProject?.projectCode || '').toLowerCase().includes(lowerSearch) ||
+            (linkedProject?.projectName || '').toLowerCase().includes(lowerSearch)
+          );
+        }
       )
     : baseFilteredPOs;
 
   const sortedPurchaseOrders = [...filteredPurchaseOrders].sort((a, b) => {
     if (sortBy === 'default') return 0;
-    const aProject = a.projectName || '';
-    const bProject = b.projectName || '';
+    const aLinkedProject = projectByPoId.get(a.id);
+    const bLinkedProject = projectByPoId.get(b.id);
+    const aProject = aLinkedProject ? `${aLinkedProject.projectCode} ${aLinkedProject.projectName}` : a.projectName || '';
+    const bProject = bLinkedProject ? `${bLinkedProject.projectCode} ${bLinkedProject.projectName}` : b.projectName || '';
     if (!aProject && !bProject) return 0;
     if (!aProject) return 1;
     if (!bProject) return -1;
@@ -971,6 +1057,87 @@ export function P2POManager({ onManageItems, selectedPOIds = [], initialSearch =
             </Form>
           </DialogContent>
         </Dialog>
+        <Dialog
+          open={!!assignProjectPO}
+          onOpenChange={(open) => {
+            if (!open) {
+              setAssignProjectPO(null);
+              setAssignProjectId('');
+              setAssignProjectReason('');
+            }
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FolderOpen className="h-5 w-5" />
+                Assign PO to Project
+              </DialogTitle>
+              <DialogDescription>
+                Link this P2 purchase order to an open project. This creates a project revision and carries the link into PM Control.
+              </DialogDescription>
+            </DialogHeader>
+
+            {assignProjectPO && (
+              <div className="space-y-4">
+                <div className="rounded-md border p-3">
+                  <div className="font-mono font-semibold">{assignProjectPO.poNumber}</div>
+                  <div className="text-sm text-muted-foreground">{assignProjectPO.customerName}</div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Open Project</Label>
+                  <Select value={assignProjectId} onValueChange={setAssignProjectId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select project" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {assignableProjects.map((project) => (
+                        <SelectItem key={project.id} value={String(project.id)}>
+                          {project.projectCode} - {project.projectName}
+                          {project.poId ? ` (linked to PO ${project.poId})` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Revision Reason</Label>
+                  <Textarea
+                    value={assignProjectReason}
+                    onChange={(e) => setAssignProjectReason(e.target.value)}
+                    placeholder="Why this P2 PO belongs to the selected project"
+                  />
+                </div>
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setAssignProjectPO(null)}>
+                Cancel
+              </Button>
+              <Button
+                disabled={
+                  !assignProjectPO ||
+                  !assignProjectId ||
+                  assignProjectReason.trim().length < 3 ||
+                  assignProjectMutation.isPending
+                }
+                onClick={() => {
+                  if (!assignProjectPO || !assignProjectId) return;
+                  assignProjectMutation.mutate({
+                    projectId: assignProjectId,
+                    poId: assignProjectPO.id,
+                    reason: assignProjectReason,
+                  });
+                }}
+              >
+                {assignProjectMutation.isPending ? 'Assigning...' : 'Assign Project'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
         </div>
       </div>
 
@@ -1005,6 +1172,7 @@ export function P2POManager({ onManageItems, selectedPOIds = [], initialSearch =
           sortedPurchaseOrders.map((po) => {
             const quoteReconciliation = reconciliationByPoId.get(po.id);
             const mismatchFlags = getMismatchFlags(quoteReconciliation);
+            const linkedProject = projectByPoId.get(po.id);
 
             return (
             <Card key={po.id}>
@@ -1080,12 +1248,57 @@ export function P2POManager({ onManageItems, selectedPOIds = [], initialSearch =
                     <span>Customer ID: {po.customerId}</span>
                   </div>
                 </div>
-                {po.projectName && (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
-                    <FolderOpen className="h-4 w-4" />
-                    <span>Project: <span className="font-medium text-foreground">{po.projectName}</span></span>
+                <div className="mb-4 rounded-md border p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 text-sm">
+                      <FolderOpen className="h-4 w-4 text-muted-foreground" />
+                      {linkedProject ? (
+                        <span>
+                          Project:{' '}
+                          <span className="font-medium text-foreground">
+                            {linkedProject.projectCode} - {linkedProject.projectName}
+                          </span>
+                        </span>
+                      ) : po.projectName ? (
+                        <span>
+                          Project note:{' '}
+                          <span className="font-medium text-foreground">{po.projectName}</span>
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">No project assigned to this P2 PO</span>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {linkedProject && (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => navigate(`/projects/${linkedProject.id}`)}
+                          >
+                            <FolderOpen className="h-4 w-4 mr-1.5" />
+                            Project
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => navigate(`/pm-control-center?project=${linkedProject.id}`)}
+                          >
+                            <BarChart3 className="h-4 w-4 mr-1.5" />
+                            PM Control
+                          </Button>
+                        </>
+                      )}
+                      <Button
+                        variant={linkedProject ? 'ghost' : 'default'}
+                        size="sm"
+                        onClick={() => openAssignProjectDialog(po)}
+                      >
+                        {linkedProject ? 'Change Project' : 'Assign Project'}
+                      </Button>
+                    </div>
                   </div>
-                )}
+                </div>
                 {po.sourceQuoteId && (
                   <div className={`mb-4 rounded-md border p-3 text-sm ${
                     quoteReconciliation?.status === 'MISMATCH'

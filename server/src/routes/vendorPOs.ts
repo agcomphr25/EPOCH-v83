@@ -2221,18 +2221,30 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
     });
 
     if (!emailResult.success) {
-      console.error('Failed to send PO confirmation email:', emailResult.error);
-      const emailError: any = new Error(
-        emailResult.error || 'Email service unavailable. PO has been issued - you may resend the email later.',
-      );
-      emailError.status = 503;
-      return sendApiError(res, emailError, {
-        fallbackMessage: 'PO issued but confirmation email failed',
-        source: 'vendorPO.issue.email',
-        exposeMessage: true,
-        message: emailResult.error || 'Email service unavailable. PO has been issued — you may resend the email later.',
-        emailSent: false,
+      const requestId = res.locals.requestId;
+      const emailFailureMessage =
+        emailResult.error || 'Email service unavailable. PO has been issued - you may resend the email later.';
+
+      console.error('[VendorPOIssuedEmailFailed]', {
+        requestId,
         poNumber,
+        vendorPOId: id,
+        to: issueToEmail,
+        cc: issueCcList,
+        error: emailResult.error,
+      });
+
+      return res.json({
+        ...issuedPO,
+        success: true,
+        partialSuccess: true,
+        emailSent: false,
+        emailError: emailFailureMessage,
+        retryAction: 'resend',
+        poNumber,
+        requestId,
+        confirmationLinkExpires: expiresAt,
+        message: 'PO issued successfully, but the confirmation email was not sent. Use resend to notify the vendor.',
       });
     }
 

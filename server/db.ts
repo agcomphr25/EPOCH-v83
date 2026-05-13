@@ -1,6 +1,7 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool, type QueryResult, type QueryResultRow } from 'pg';
 import * as schema from './schema';
+import { buildPgPoolConfig, getDbHealthcheckTimeoutMs } from './bootstrap/dbPoolConfig';
 
 const connectionString =
   process.env.FORCE_DATABASE_URL ||
@@ -46,10 +47,29 @@ export function getDatabaseTargetInfo() {
   }
 }
 
-console.log('Initializing database connection...', getDatabaseTargetInfo());
+const poolConfig = buildPgPoolConfig(connectionString);
 
-export const pgPool = new Pool({
-  connectionString,
+console.log('Initializing database connection...', {
+  ...getDatabaseTargetInfo(),
+  pool: {
+    max: poolConfig.max,
+    idleTimeoutMillis: poolConfig.idleTimeoutMillis,
+    connectionTimeoutMillis: poolConfig.connectionTimeoutMillis,
+    queryTimeoutMillis: poolConfig.query_timeout,
+    statementTimeoutMillis: poolConfig.statement_timeout,
+    ssl: Boolean(poolConfig.ssl),
+  },
+});
+
+export const pgPool = new Pool(poolConfig);
+
+pgPool.on('error', (error) => {
+  console.error('[db:pool] Idle client error:', {
+    message: error.message,
+    code: (error as any).code,
+    detail: (error as any).detail,
+    hint: (error as any).hint,
+  });
 });
 
 export const db = drizzle({ client: pgPool, schema });
@@ -97,8 +117,9 @@ export async function testDatabaseConnection() {
   try {
     console.log('Testing database connection...');
 
+    const timeoutMs = getDbHealthcheckTimeoutMs();
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Database connection timeout')), 30000)
+      setTimeout(() => reject(new Error(`Database connection timeout after ${timeoutMs}ms`)), timeoutMs)
     );
 
     await Promise.race([pgPool.query('SELECT 1'), timeoutPromise]);

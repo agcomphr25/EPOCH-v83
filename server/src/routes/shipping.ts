@@ -2753,13 +2753,14 @@ router.post('/notify-customer/:orderId', async (req: Request, res: Response) => 
     // ===========================================
     // 🔥 MANUAL RESEND - BYPASSES DEDUPLICATION
     // ===========================================
-    const { sendCustomerNotification } = await import('../../utils/notifications');
+    const { sendCustomerNotification, normalizeNotificationMethods } = await import('../../utils/notifications');
     
-    // Use customer's actual preferred communication method, or default to email if not set
-    const customerPreference = (customer.preferredCommunicationMethod as string[]) || [];
-    const preferredMethods: string[] = customerPreference.length > 0 
-      ? customerPreference 
-      : (customer.email ? ['email'] : (customer.phone ? ['sms'] : []));
+    // Use customer's actual preferred communication method, or default to the first available contact method.
+    const preferredMethods = normalizeNotificationMethods(
+      customer.preferredCommunicationMethod,
+      { email: customer.email, phone: customer.phone }
+    );
+    const customerPreference = customer.preferredCommunicationMethod;
     
     console.log('[NOTIFY-CUSTOMER] Customer preference:', customerPreference, '→ Using:', preferredMethods);
     
@@ -2768,6 +2769,8 @@ router.post('/notify-customer/:orderId', async (req: Request, res: Response) => 
       trackingNumber: order.trackingNumber,
       carrier: order.shippingCarrier || 'UPS',
       estimatedDelivery: order.estimatedDelivery ? new Date(order.estimatedDelivery) : undefined,
+      customerEmail: customer.email || undefined,
+      customerPhone: customer.phone || undefined,
       preferredMethods,
       forceResend: true, // Manual resend bypasses deduplication
     });

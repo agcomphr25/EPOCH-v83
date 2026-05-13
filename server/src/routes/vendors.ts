@@ -1155,6 +1155,7 @@ router.post('/import-evaluations', async (req: Request, res: Response) => {
       matched: 0,
       unmatched: [] as string[],
       created: 0,
+      synced: 0,
       errors: [] as any[],
     };
 
@@ -1219,6 +1220,9 @@ router.post('/import-evaluations', async (req: Request, res: Response) => {
             });
             results.created++;
           }
+
+          await syncVendorScoresFromEvaluations(matchedVendor.id);
+          results.synced++;
         } catch (error) {
           results.errors.push({
             vendor: vendorName,

@@ -121,6 +121,28 @@ function percent(numerator: number, denominator: number | null): number | null {
   return Math.round((numerator / denominator) * 10000) / 100;
 }
 
+function normalizeWizardData(value: unknown): Record<string, unknown> {
+  if (!value) return {};
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return normalizeWizardData(parsed);
+    } catch {
+      return {};
+    }
+  }
+  if (typeof value !== 'object' || Array.isArray(value)) return {};
+
+  const data = value as Record<string, unknown>;
+  const nested = data.wizardData ?? data.wizard_data;
+  if (nested && nested !== data) {
+    const normalizedNested = normalizeWizardData(nested);
+    if (Object.keys(normalizedNested).length > 0) return normalizedNested;
+  }
+
+  return data;
+}
+
 function hasApprovedExceptionRequest(wizardData: Record<string, unknown>, type: WadExceptionType): boolean {
   const requests = Array.isArray(wizardData.approvalRequests) ? wizardData.approvalRequests : [];
   return requests.some((req) => {
@@ -333,7 +355,10 @@ router.get('/production', authenticateToken, requirePermission('work_orders.rele
 
     if (conditions.length > 0) q = q.where(and(...conditions));
     const rows = await q.orderBy(desc(productionWorkOrders.createdAt));
-    return res.json(rows);
+    return res.json(rows.map((row) => ({
+      ...row,
+      wizardData: normalizeWizardData(row.wizardData),
+    })));
   } catch (err: any) {
     console.error('[ProductionWorkOrders] Error listing production work orders:', err);
     return res.status(500).json({ error: err?.message || 'Failed to list production work orders' });
@@ -419,17 +444,18 @@ router.get('/production/wad-status', authenticateToken, requirePermission('work_
           bestRank = r;
           aggregateStatus = ws === 'APPROVED' || ws === 'PENDING_APPROVAL' || ws === 'DRAFT' ? ws : 'DRAFT';
           latestPwo = w;
-          percentComplete = ws === 'APPROVED' ? 100 : calcPercent(w.wizardData);
+          percentComplete = ws === 'APPROVED' ? 100 : calcPercent(normalizeWizardData(w.wizardData));
         }
       }
       if (!latestPwo && wos.length > 0) {
         latestPwo = wos[0]; // newest
-        percentComplete = calcPercent(latestPwo.wizardData);
+        percentComplete = calcPercent(normalizeWizardData(latestPwo.wizardData));
       }
       // "Last edited" — prefer the editor identity captured in wizardData.__meta on
       // each PATCH (see the PATCH /production/:id/wizard route). Fall back to the row's
       // updated_at timestamp when no edit metadata exists yet.
-      const meta = (latestPwo?.wizardData as { __meta?: { lastEditedBy?: string; lastEditedAt?: string } } | null)?.__meta;
+      const latestWizardData = latestPwo ? normalizeWizardData(latestPwo.wizardData) : null;
+      const meta = (latestWizardData as { __meta?: { lastEditedBy?: string; lastEditedAt?: string } } | null)?.__meta;
       return {
         projectId: p.id,
         projectCode: p.projectCode,
@@ -2591,7 +2617,7 @@ router.get('/production/:id/wizard', async (req: Request, res: Response) => {
       po = poRow ?? null;
     }
 
-    const wizardData = (wad.wizardData as Record<string, unknown> | null) ?? {};
+    const wizardData = normalizeWizardData(wad.wizardData);
     const controlStatus = await calculateWadControlStatus(wad, wizardData);
 
     // Build contract context defaults from upstream docs (RFQ, PO Review, PO, Project)
@@ -2661,7 +2687,7 @@ router.patch(
       // "last edited by … on …" without needing a separate column.
       const sessionDisplayName = sessionUser.displayName ?? sessionUser.username ?? `user:${sessionUser.id ?? 'unknown'}`;
       const editedAt = new Date().toISOString();
-      const existingWizardData = (wad.wizardData as Record<string, unknown> | null) ?? {};
+      const existingWizardData = normalizeWizardData(wad.wizardData);
       const existingMeta =
         (existingWizardData.__meta as Record<string, unknown> | undefined) ?? {};
       const existingRevisionStatus = typeof existingWizardData.revisionStatus === 'string' ? existingWizardData.revisionStatus : 'DRAFT';
@@ -2728,7 +2754,7 @@ router.get('/production/:id/control-status', authenticateToken, requirePermissio
   try {
     const [wad] = await db.select().from(productionWorkOrders).where(eq(productionWorkOrders.id, id)).limit(1);
     if (!wad) return res.status(404).json({ error: 'WAD not found' });
-    const wizardData = (wad.wizardData as Record<string, unknown> | null) ?? {};
+    const wizardData = normalizeWizardData(wad.wizardData);
     return res.json(await calculateWadControlStatus(wad, wizardData));
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -2772,7 +2798,7 @@ router.post('/production/:id/approval-requests', authenticateToken, requirePermi
     const sessionDisplayName = sessionUser.displayName ?? sessionUser.username ?? `user:${sessionUserIdRaw ?? 'unknown'}`;
     const now = new Date().toISOString();
 
-    const existingData = (wad.wizardData as Record<string, unknown> | null) ?? {};
+    const existingData = normalizeWizardData(wad.wizardData);
     const existingRequests = Array.isArray(existingData.approvalRequests) ? existingData.approvalRequests : [];
     const nextRequest = {
       id: `wad-ex-${Date.now().toString(36)}`,
@@ -2873,7 +2899,7 @@ router.post(
         : (sessionUserIdRaw != null ? Number.parseInt(String(sessionUserIdRaw), 10) || null : null);
       const sessionDisplayName = sessionUser.displayName ?? sessionUser.username ?? `user:${sessionUserIdRaw ?? 'unknown'}`;
 
-      const existingData = (wad.wizardData as Record<string, unknown> ?? {});
+      const existingData = normalizeWizardData(wad.wizardData);
       const existingApprovals = (existingData.approvals as unknown[] ?? []) as Array<{
         role?: string; userId?: number | string | null; displayName?: string; decision?: string;
         comments?: string | null; timestamp?: string;

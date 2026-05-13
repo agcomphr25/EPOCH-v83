@@ -1177,6 +1177,48 @@ export default function ProjectDetailPage() {
 
   const allEmployees = employees;
 
+  const getStepFormRoute = (step: ProjectStep, preferLinkedRecord = false) => {
+    const config = STEP_CONFIG[step.stepType];
+    if (!config?.route) return null;
+
+    const linkedId = getLinkedId(step);
+    const params = new URLSearchParams();
+
+    if (preferLinkedRecord && linkedId) {
+      switch (step.stepType) {
+        case 'rfq_risk_assessment':
+        case 'quote':
+        case 'purchase_review_checklist':
+        case 'preproduction_checklist':
+          params.set('id', String(linkedId));
+          break;
+        case 'p2_order':
+          params.set('tab', 'status');
+          params.set('poId', String(linkedId));
+          break;
+      }
+    }
+
+    switch (step.stepType) {
+      case 'purchase_review_checklist':
+        params.set('projectId', project.id);
+        if (project.customerId) params.set('customerId', project.customerId);
+        break;
+      case 'preproduction_checklist':
+        params.set('projectId', project.id);
+        if (project.projectName) params.set('projectName', project.projectName);
+        if ((project as any).poNumber) params.set('poNumber', (project as any).poNumber);
+        break;
+      case 'rfq_risk_assessment':
+      case 'quote':
+        if (!params.has('id') && project.customerId) params.set('customerId', project.customerId);
+        break;
+    }
+
+    const query = params.toString();
+    return query ? `${config.route}?${query}` : config.route;
+  };
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center gap-4">
@@ -1569,7 +1611,9 @@ export default function ProjectDetailPage() {
                 title: 'Purchase Review Checklist',
                 description: 'Verify PO terms, pricing, and contract requirements before authorizing work.',
                 step: purchaseStep,
-                route: `/purchase-review-checklist?projectId=${encodeURIComponent(project.id)}${project.customerId ? `&customerId=${encodeURIComponent(project.customerId)}` : ''}`,
+                route: purchaseStep
+                  ? getStepFormRoute(purchaseStep, true) || `/purchase-review-checklist?projectId=${encodeURIComponent(project.id)}${project.customerId ? `&customerId=${encodeURIComponent(project.customerId)}` : ''}`
+                  : `/purchase-review-checklist?projectId=${encodeURIComponent(project.id)}${project.customerId ? `&customerId=${encodeURIComponent(project.customerId)}` : ''}`,
                 icon: <ListChecks className="h-5 w-5 text-blue-600" />,
                 gateLabel: 'Complete before WAD',
               },
@@ -1587,7 +1631,9 @@ export default function ProjectDetailPage() {
                 title: 'Pre-Production Checklist',
                 description: 'Confirm drawings, materials, tooling, and task assignments are ready before production release.',
                 step: preprodStep,
-                route: `/preproduction-checklists?projectId=${encodeURIComponent(project.id)}${project.projectName ? `&projectName=${encodeURIComponent(project.projectName)}` : ''}${project.poNumber ? `&poNumber=${encodeURIComponent(project.poNumber)}` : ''}`,
+                route: preprodStep
+                  ? getStepFormRoute(preprodStep, true) || `/preproduction-checklists?projectId=${encodeURIComponent(project.id)}${project.projectName ? `&projectName=${encodeURIComponent(project.projectName)}` : ''}${(project as any).poNumber ? `&poNumber=${encodeURIComponent((project as any).poNumber)}` : ''}`
+                  : `/preproduction-checklists?projectId=${encodeURIComponent(project.id)}${project.projectName ? `&projectName=${encodeURIComponent(project.projectName)}` : ''}${(project as any).poNumber ? `&poNumber=${encodeURIComponent((project as any).poNumber)}` : ''}`,
                 icon: <ClipboardList className="h-5 w-5 text-green-600" />,
                 gateLabel: 'Gate to P2 Production',
               },
@@ -1783,14 +1829,8 @@ export default function ProjectDetailPage() {
                                   variant="outline"
                                   size="sm"
                                   onClick={() => {
-                                    if (!config?.route) return;
-                                    const CUSTOMER_ID_STEPS = ['rfq_risk_assessment', 'quote', 'purchase_review_checklist'];
-                                    const route = step.stepType === 'purchase_review_checklist'
-                                      ? `${config.route}?projectId=${encodeURIComponent(project.id)}${project.customerId ? `&customerId=${encodeURIComponent(project.customerId)}` : ''}`
-                                      : CUSTOMER_ID_STEPS.includes(step.stepType) && project?.customerId
-                                        ? `${config.route}?customerId=${encodeURIComponent(project.customerId)}`
-                                        : config.route;
-                                    setLocation(route);
+                                    const route = getStepFormRoute(step, true);
+                                    if (route) setLocation(route);
                                   }}
                                   data-testid={`button-open-${step.stepType}`}
                                 >
@@ -1852,14 +1892,8 @@ export default function ProjectDetailPage() {
                                   variant="outline"
                                   size="sm"
                                   onClick={() => {
-                                    if (!config?.route) return;
-                                    const CUSTOMER_ID_STEPS = ['rfq_risk_assessment', 'quote', 'purchase_review_checklist'];
-                                    const route = step.stepType === 'purchase_review_checklist'
-                                      ? `${config.route}?projectId=${encodeURIComponent(project.id)}${project.customerId ? `&customerId=${encodeURIComponent(project.customerId)}` : ''}`
-                                      : CUSTOMER_ID_STEPS.includes(step.stepType) && project?.customerId
-                                        ? `${config.route}?customerId=${encodeURIComponent(project.customerId)}`
-                                        : config.route;
-                                    setLocation(route);
+                                    const route = getStepFormRoute(step, true);
+                                    if (route) setLocation(route);
                                   }}
                                   data-testid={`button-view-${step.stepType}`}
                                 >
@@ -1952,15 +1986,8 @@ export default function ProjectDetailPage() {
                                   size="sm"
                                   onClick={() => {
                                     startStepMutation.mutate(step.id);
-                                    if (config?.route) {
-                                      const CUSTOMER_ID_STEPS = ['rfq_risk_assessment', 'quote', 'purchase_review_checklist'];
-                                      const route = step.stepType === 'purchase_review_checklist'
-                                        ? `${config.route}?projectId=${encodeURIComponent(project.id)}${project.customerId ? `&customerId=${encodeURIComponent(project.customerId)}` : ''}`
-                                        : CUSTOMER_ID_STEPS.includes(step.stepType) && project?.customerId
-                                          ? `${config.route}?customerId=${encodeURIComponent(project.customerId)}`
-                                          : config.route;
-                                      setLocation(route);
-                                    }
+                                    const route = getStepFormRoute(step);
+                                    if (route) setLocation(route);
                                   }}
                                   disabled={startStepMutation.isPending}
                                 >

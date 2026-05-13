@@ -102,6 +102,7 @@ export default function P2ControlCenter() {
   const urlParams = new URLSearchParams(window.location.search);
   const tabFromUrl = urlParams.get('tab');
   const poFromUrl = urlParams.get('po') || undefined;
+  const poIdFromUrl = urlParams.get('poId') ? Number(urlParams.get('poId')) : null;
   const unitsFromUrl = urlParams.get('units') || undefined;
   const searchFromUrl = urlParams.get('search') || '';
   // WAD context: passed from project workflow card
@@ -180,15 +181,22 @@ export default function P2ControlCenter() {
 
   useEffect(() => {
     if (selectedPOIds.length === 0) return;
-    const openPOIdSet = new Set(openPOs.map((po) => po.id));
-    const pruned = selectedPOIds.filter((id) => openPOIdSet.has(id));
+    const knownPOIdSet = new Set(allPOStatuses.map((po) => po.id));
+    const pruned = selectedPOIds.filter((id) => knownPOIdSet.has(id));
     if (pruned.length !== selectedPOIds.length) {
       setSelectedPOIds(pruned);
     }
-  }, [openPOs]);
+  }, [allPOStatuses]);
+
+  useEffect(() => {
+    if (!poIdFromUrl || allPOStatuses.length === 0) return;
+    if (allPOStatuses.some((po) => po.id === poIdFromUrl)) {
+      setSelectedPOIds([poIdFromUrl]);
+    }
+  }, [poIdFromUrl, allPOStatuses]);
 
   const selectedPONumbers = selectedPOIds.length > 0
-    ? openPOs.filter((po) => selectedPOIds.includes(po.id)).map((po) => po.poNumber)
+    ? allPOStatuses.filter((po) => selectedPOIds.includes(po.id)).map((po) => po.poNumber)
     : poFromUrl
       ? [poFromUrl]
     : [];

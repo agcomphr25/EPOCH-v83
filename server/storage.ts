@@ -761,6 +761,7 @@ import {
 import { DEFAULT_SESSIONS_LIMIT } from './src/constants/sessions';
 import { userHasScopedCapability as _userHasScopedCapability } from './src/services/permissionService';
 import { formatDates } from './utils/formatDates';
+import { ensureP2PurchaseOrderReadSchema } from './src/lib/p2PurchaseOrderReadiness';
 import {
   laborEntryDraftsTable,
   type LaborEntryDraftInsert,
@@ -14871,6 +14872,8 @@ export class DatabaseStorage implements IStorage {
 
   // P2 Purchase Orders CRUD
   async getAllP2PurchaseOrders(): Promise<P2PurchaseOrder[]> {
+    await ensureP2PurchaseOrderReadSchema();
+
     // Use pg pool instead of Drizzle/Neon HTTP driver for better compatibility
     const result = await pool.query(`
       SELECT 
@@ -14902,6 +14905,8 @@ export class DatabaseStorage implements IStorage {
   ): Promise<
     (P2PurchaseOrder & { items?: P2PurchaseOrderItem[] }) | undefined
   > {
+    await ensureP2PurchaseOrderReadSchema();
+
     const [po] = await db
       .select()
       .from(p2PurchaseOrders)
@@ -14921,6 +14926,8 @@ export class DatabaseStorage implements IStorage {
   async createP2PurchaseOrder(
     data: InsertP2PurchaseOrder
   ): Promise<P2PurchaseOrder> {
+    await ensureP2PurchaseOrderReadSchema();
+
     // Use pg pool instead of Drizzle/Neon HTTP driver for better compatibility
     const result = await pool.query(`
       INSERT INTO p2_purchase_orders (
@@ -14983,6 +14990,8 @@ export class DatabaseStorage implements IStorage {
     id: number,
     data: Partial<InsertP2PurchaseOrder>
   ): Promise<P2PurchaseOrder> {
+    await ensureP2PurchaseOrderReadSchema();
+
     const [po] = await db
       .update(p2PurchaseOrders)
       .set(data)

@@ -1,7 +1,7 @@
 import express from 'express';
 import { storage } from '../../storage';
 import { insertProjectStepAttachmentSchema } from '../../schema';
-import { ObjectStorageService } from '../../replit_integrations/object_storage';
+import { ObjectNotFoundError, ObjectStorageService } from '../../replit_integrations/object_storage';
 import { sessionAwareAuth } from '../../middleware/auth';
 
 const router = express.Router();
@@ -234,7 +234,10 @@ router.get('/download/:attachmentId', sessionAwareAuth, async (req, res) => {
         return res.send(buffer);
       } catch (cloudError) {
         console.error('Error downloading from cloud storage:', cloudError);
-        return res.status(500).json({ error: 'Failed to retrieve file from cloud storage' });
+        if (cloudError instanceof ObjectNotFoundError) {
+          return res.status(404).json({ error: 'Attachment file not found in storage' });
+        }
+        return res.status(502).json({ error: 'Failed to retrieve file from cloud storage' });
       }
     } else {
       return res.status(404).json({ error: 'File not found' });

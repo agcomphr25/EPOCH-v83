@@ -2792,7 +2792,7 @@ router.post('/notify-customer/:orderId', async (req: Request, res: Response) => 
 
     // Otherwise fail (email+sms both failed)
     console.log('[API RESPONSE] All notification methods failed:', notificationResult.errors);
-    return res.status(500).json({
+    return res.status(422).json({
       success: false,
       error: 'No valid notification method could be delivered',
       details: notificationResult.errors,

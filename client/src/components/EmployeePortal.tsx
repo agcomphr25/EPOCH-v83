@@ -343,6 +343,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
   const [expenseFiles, setExpenseFiles] = useState<File[]>([]);
   const [selectedClockInChargeCode, setSelectedClockInChargeCode] = useState('none');
   const [dailyPunchOutConfirmed, setDailyPunchOutConfirmed] = useState(false);
+  const [showDailyPunchOutCertification, setShowDailyPunchOutCertification] = useState(false);
   const [timeOffForm, setTimeOffForm] = useState({
     startDate: '',
     endDate: '',
@@ -458,6 +459,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
   }, [filterDateTo]);
 
   // Hourly timesheets: daily sign-off plus pay-period self-certification
+  const [certReviewId, setCertReviewId] = useState<number | null>(null);
   const [certConfirmedId, setCertConfirmedId] = useState<number | null>(null);
   const [dailySignOffDate, setDailySignOffDate] = useState(today);
 
@@ -517,6 +519,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
     },
     onSuccess: () => {
       toast({ title: 'Timesheet Certified', description: 'Your certification has been recorded.' });
+      setCertReviewId(null);
       setCertConfirmedId(null);
       refetchTimesheets();
       queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/timesheets', 'mine', 'running'] });
@@ -751,20 +754,42 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error((body as any).error ?? 'Failed to record punch');
+        throw Object.assign(
+          new Error((body as any).error ?? 'Failed to record punch'),
+          { punchRecorded: (body as any).punchRecorded === true },
+        );
       }
       return res.json();
     },
     onSuccess: () => {
       setSelectedClockInChargeCode('none');
       setDailyPunchOutConfirmed(false);
+      setShowDailyPunchOutCertification(false);
       queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/punches/my/current'] });
       queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/timesheets', 'mine', 'running'] });
     },
     onError: (err: Error) => {
+      if ((err as Error & { punchRecorded?: boolean }).punchRecorded) {
+        toast({
+          title: 'Clock out recorded',
+          description: 'Your punch was saved, but the daily certification could not be recorded. Please review your timesheet.',
+        });
+        setDailyPunchOutConfirmed(false);
+        setShowDailyPunchOutCertification(false);
+        queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/punches/my/current'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/timesheets', 'mine', 'running'] });
+        return;
+      }
       toast({ title: 'Punch failed', description: err.message, variant: 'destructive' });
     },
   });
+
+  useEffect(() => {
+    if (punchStatus?.status !== 'clocked_in') {
+      setDailyPunchOutConfirmed(false);
+      setShowDailyPunchOutCertification(false);
+    }
+  }, [punchStatus?.status]);
 
   // Derive active session from the dedicated open-session query so it remains
   // visible even when date or charge code filters exclude it from history.
@@ -834,6 +859,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
 
   const renderTimesheetCard = (ts: HourlyTimesheet) => {
     const needsCert = !ts.employeeAttested && ts.status === 'draft';
+    const isReviewingCert = certReviewId === ts.id;
     const isChecked = certConfirmedId === ts.id;
     return (
       <div key={ts.id} className={`rounded-lg border p-4 ${needsCert ? 'border-amber-300 bg-amber-50' : 'border-gray-200 bg-white'}`}>
@@ -878,41 +904,57 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
 
         {needsCert && (
           <div className="mt-3 rounded-lg border border-amber-400 bg-amber-50 p-4 space-y-3">
-            <p className="text-xs font-semibold text-amber-900 uppercase">
-              DCAA Certification Required
-            </p>
-            <p className="text-sm text-gray-700 italic leading-relaxed border-l-4 border-amber-400 pl-3">
-              "{DCAA_CERTIFICATION_STATEMENT}"
-            </p>
-            <label className="flex items-start gap-3 cursor-pointer select-none">
-              <Checkbox
-                id={`cert-${ts.id}`}
-                checked={isChecked}
-                onCheckedChange={(checked) => setCertConfirmedId(checked ? ts.id : null)}
-                className="mt-0.5 border-amber-500 data-[state=checked]:bg-amber-500"
-              />
-              <span className="text-sm text-gray-800 font-medium leading-snug">
-                I have read the above statement and certify that it is true and accurate for this pay period.
-              </span>
-            </label>
-            <Button
-              size="sm"
-              disabled={!isChecked || certifyMutation.isPending}
-              onClick={() => certifyMutation.mutate(ts.id)}
-              className="bg-amber-600 hover:bg-amber-700 text-white"
-            >
-              {certifyMutation.isPending && certConfirmedId === ts.id ? (
-                <span className="flex items-center gap-2">
-                  <span className="h-3 w-3 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                  Certifying...
-                </span>
-              ) : (
-                <span className="flex items-center gap-2">
-                  <ShieldCheck className="h-4 w-4" />
-                  Submit Certification
-                </span>
-              )}
-            </Button>
+            {!isReviewingCert ? (
+              <Button
+                size="sm"
+                onClick={() => {
+                  setCertReviewId(ts.id);
+                  setCertConfirmedId(null);
+                }}
+                className="bg-amber-600 hover:bg-amber-700 text-white"
+              >
+                <ShieldCheck className="h-4 w-4 mr-2" />
+                Review Certification
+              </Button>
+            ) : (
+              <>
+                <p className="text-xs font-semibold text-amber-900 uppercase">
+                  DCAA Certification Required
+                </p>
+                <p className="text-sm text-gray-700 italic leading-relaxed border-l-4 border-amber-400 pl-3">
+                  "{DCAA_CERTIFICATION_STATEMENT}"
+                </p>
+                <label className="flex items-start gap-3 cursor-pointer select-none">
+                  <Checkbox
+                    id={`cert-${ts.id}`}
+                    checked={isChecked}
+                    onCheckedChange={(checked) => setCertConfirmedId(checked ? ts.id : null)}
+                    className="mt-0.5 border-amber-500 data-[state=checked]:bg-amber-500"
+                  />
+                  <span className="text-sm text-gray-800 font-medium leading-snug">
+                    I have read the above statement and certify that it is true and accurate for this pay period.
+                  </span>
+                </label>
+                <Button
+                  size="sm"
+                  disabled={!isChecked || certifyMutation.isPending}
+                  onClick={() => certifyMutation.mutate(ts.id)}
+                  className="bg-amber-600 hover:bg-amber-700 text-white"
+                >
+                  {certifyMutation.isPending && certConfirmedId === ts.id ? (
+                    <span className="flex items-center gap-2">
+                      <span className="h-3 w-3 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                      Certifying...
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      <ShieldCheck className="h-4 w-4" />
+                      Submit Certification
+                    </span>
+                  )}
+                </Button>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -2213,30 +2255,46 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
                             <Coffee className="h-5 w-5" />
                             {punchMutation.isPending ? 'Recording…' : 'Start Break'}
                           </Button>
-                          <label className="flex w-full max-w-xl items-start gap-3 rounded-md border border-blue-200 bg-blue-50 p-3 text-left">
-                            <input
-                              type="checkbox"
-                              checked={dailyPunchOutConfirmed}
-                              onChange={(event) => setDailyPunchOutConfirmed(event.target.checked)}
-                              className="mt-1 h-4 w-4 rounded border-blue-300 text-blue-600"
-                            />
-                            <span className="text-sm text-blue-900">
-                              I certify that today&apos;s recorded time is complete, accurate, and represents work I actually performed.
-                            </span>
-                          </label>
-                          <Button
-                            size="lg"
-                            variant="outline"
-                            className="border-red-400 text-red-700 hover:bg-red-50 gap-2 px-6"
-                            disabled={punchMutation.isPending || !dailyPunchOutConfirmed}
-                            onClick={() => punchMutation.mutate({
-                              type: 'clock_out',
-                              dailyCertificationConfirmed: dailyPunchOutConfirmed,
-                            })}
-                          >
-                            <LogOut className="h-5 w-5" />
+                          {!showDailyPunchOutCertification ? (
+                            <Button
+                              size="lg"
+                              variant="outline"
+                              className="border-red-400 text-red-700 hover:bg-red-50 gap-2 px-6"
+                              disabled={punchMutation.isPending}
+                              onClick={() => setShowDailyPunchOutCertification(true)}
+                            >
+                              <LogOut className="h-5 w-5" />
+                              Clock Out
+                            </Button>
+                          ) : (
+                            <>
+                              <label className="flex w-full max-w-xl items-start gap-3 rounded-md border border-blue-200 bg-blue-50 p-3 text-left">
+                                <input
+                                  type="checkbox"
+                                  checked={dailyPunchOutConfirmed}
+                                  onChange={(event) => setDailyPunchOutConfirmed(event.target.checked)}
+                                  className="mt-1 h-4 w-4 rounded border-blue-300 text-blue-600"
+                                />
+                                <span className="text-sm text-blue-900">
+                                  I certify that today&apos;s recorded time is complete, accurate, and represents work I actually performed.
+                                </span>
+                              </label>
+                              <Button
+                                size="lg"
+                                variant="outline"
+                                className="border-red-400 text-red-700 hover:bg-red-50 gap-2 px-6"
+                                disabled={punchMutation.isPending || !dailyPunchOutConfirmed}
+                                onClick={() => punchMutation.mutate({
+                                  type: 'clock_out',
+                                  dailyCertificationConfirmed: dailyPunchOutConfirmed,
+                                })}
+                              >
+                                <LogOut className="h-5 w-5" />
                             {punchMutation.isPending ? 'Recording…' : 'Clock Out'}
-                          </Button>
+                              </Button>
+                            </>
+                          )}
+
                         </>
                       )}
 

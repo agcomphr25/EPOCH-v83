@@ -408,6 +408,7 @@ export default function ProjectDetailPage() {
     queryKey: ['/api/p2-purchase-orders-bypass'],
     enabled: !!project,
   });
+  const p2PurchaseOrderOptions = Array.isArray(p2PurchaseOrders) ? p2PurchaseOrders : [];
 
   const [linkPoId, setLinkPoId] = useState<string>('');
   const [linkPoSearch, setLinkPoSearch] = useState('');
@@ -416,14 +417,14 @@ export default function ProjectDetailPage() {
   const [revisionForm, setRevisionForm] = useState({ summary: '', reason: '' });
 
   const suggestedPo = useMemo(() => {
-    if (!project || p2PurchaseOrders.length === 0) return null;
-    const sameCustomer = p2PurchaseOrders.filter(po => po.customerId === project.customerId);
-    const pool = sameCustomer.length > 0 ? sameCustomer : p2PurchaseOrders;
+    if (!project || p2PurchaseOrderOptions.length === 0) return null;
+    const sameCustomer = p2PurchaseOrderOptions.filter(po => po.customerId === project.customerId);
+    const pool = sameCustomer.length > 0 ? sameCustomer : p2PurchaseOrderOptions;
     return pool.slice().sort((a, b) => {
       if (a.createdAt && b.createdAt) return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       return b.id - a.id;
     })[0] ?? null;
-  }, [project, p2PurchaseOrders]);
+  }, [project, p2PurchaseOrderOptions]);
 
   const linkPoMutation = useMutation({
     mutationFn: ({ poId, reason }: { poId: number; reason?: string }) =>
@@ -492,7 +493,7 @@ export default function ProjectDetailPage() {
   });
 
   interface GateStatus {
-    gates: { key: string; label: string; passed: boolean; status?: string; message?: string }[];
+    gates?: { key: string; label: string; passed: boolean; status?: string; message?: string }[];
     allPassed: boolean;
     currentStage: string;
     alreadyReleased: boolean;
@@ -501,9 +502,17 @@ export default function ProjectDetailPage() {
 
   const { data: gateStatus, refetch: refetchGateStatus } = useQuery<GateStatus>({
     queryKey: ['/api/projects', id, 'p2-gate-status'],
-    queryFn: () => fetch(`/api/projects/${id}/p2-gate-status`).then(r => r.json()),
+    queryFn: async () => {
+      const response = await fetch(`/api/projects/${id}/p2-gate-status`, { credentials: 'include' });
+      if (!response.ok) throw new Error('Failed to fetch P2 gate status');
+      return response.json();
+    },
     enabled: !!id && !!project && ['po_received', 'p2_release', 'purchase_review'].includes(project.currentStage || ''),
   });
+  const projectSteps = Array.isArray(project?.steps) ? project.steps : [];
+  const allProjectStepAttachments = Array.isArray(allStepAttachments) ? allStepAttachments : [];
+  const gateStatusGates = Array.isArray(gateStatus?.gates) ? gateStatus.gates : [];
+  const traceabilitySerials = Array.isArray(traceability?.serials) ? traceability.serials : [];
 
   const { data: projectFarFlowdowns = [] } = useQuery<ProjectFarFlowdown[]>({
     queryKey: ['/api/far-flowdown-clauses/project', id],
@@ -831,7 +840,7 @@ export default function ProjectDetailPage() {
   };
 
   const getAttachmentsForStep = (stepId: string) => {
-    return allStepAttachments.filter(a => a.stepId === stepId);
+    return allProjectStepAttachments.filter(a => a.stepId === stepId);
   };
 
   const toggleStepExpanded = (stepId: string) => {
@@ -1127,9 +1136,9 @@ export default function ProjectDetailPage() {
   }
 
   const getProgress = () => {
-    if (!project.steps.length) return 0;
-    const completed = project.steps.filter(s => s.status === 'completed').length;
-    return Math.round((completed / project.steps.length) * 100);
+    if (!projectSteps.length) return 0;
+    const completed = projectSteps.filter(s => s.status === 'completed').length;
+    return Math.round((completed / projectSteps.length) * 100);
   };
 
   const getLinkedId = (step: ProjectStep) => {
@@ -1302,9 +1311,9 @@ export default function ProjectDetailPage() {
           { label: 'Closed', key: 'closed' },
         ];
 
-        const rfqStep = project.steps.find(s => s.stepType === 'rfq_risk_assessment');
-        const quoteStep = project.steps.find(s => s.stepType === 'quote');
-        const preprodStep = project.steps.find(s => s.stepType === 'preproduction_checklist');
+        const rfqStep = projectSteps.find(s => s.stepType === 'rfq_risk_assessment');
+        const quoteStep = projectSteps.find(s => s.stepType === 'quote');
+        const preprodStep = projectSteps.find(s => s.stepType === 'preproduction_checklist');
 
         const STAGE_ORDER = ['rfq_received', 'quote', 'project_start', 'po_received', 'p2_release', 'production', 'closed'];
         const curStageIdx = STAGE_ORDER.indexOf(project.currentStage || 'rfq_received');
@@ -1386,7 +1395,7 @@ export default function ProjectDetailPage() {
             {/* Gate condition checklist */}
             <div className="space-y-2">
               {gateStatus?.gates ? (
-                gateStatus.gates.map((gate) => (
+                gateStatusGates.map((gate) => (
                   <div key={gate.key} className="flex items-center gap-3 py-1">
                     {gate.passed ? (
                       <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0" />
@@ -1415,11 +1424,11 @@ export default function ProjectDetailPage() {
             </div>
 
             {/* Blocked conditions list */}
-            {gateStatus && !gateStatus.allPassed && (
+            {gateStatus && gateStatusGates.length > 0 && !gateStatus.allPassed && (
               <div className="rounded-md bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 px-3 py-2">
                 <p className="text-xs font-medium text-red-700 dark:text-red-400 mb-1">Blocking conditions:</p>
                 <ul className="text-xs text-red-600 dark:text-red-400 space-y-0.5 list-disc list-inside">
-                  {gateStatus.gates.filter(g => !g.passed).map(g => (
+                  {gateStatusGates.filter(g => !g.passed).map(g => (
                     <li key={g.key}>{g.message || `${g.label} must be completed`}</li>
                   ))}
                 </ul>
@@ -1452,7 +1461,7 @@ export default function ProjectDetailPage() {
               </Button>
               {project.poId && !gateStatus?.allPassed && (
                 <p className="text-xs text-muted-foreground">
-                  {gateStatus ? `${gateStatus.gates.filter(g => !g.passed).length} of ${gateStatus.gates.length} conditions pending` : 'Loading gate status...'}
+                  {gateStatusGates.length > 0 ? `${gateStatusGates.filter(g => !g.passed).length} of ${gateStatusGates.length} conditions pending` : 'Loading gate status...'}
                 </p>
               )}
               {project.poId && gateStatus?.allPassed && project.currentStage !== 'p2_release' && (
@@ -1546,9 +1555,9 @@ export default function ProjectDetailPage() {
         <TabsContent value="workflow" className="space-y-4">
           {/* Inline Workflow Action Cards */}
           {(() => {
-            const purchaseStep = project.steps.find(s => s.stepType === 'purchase_review_checklist');
-            const wadStep = project.steps.find(s => s.stepType === 'p2_order');
-            const preprodStep = project.steps.find(s => s.stepType === 'preproduction_checklist');
+            const purchaseStep = projectSteps.find(s => s.stepType === 'purchase_review_checklist');
+            const wadStep = projectSteps.find(s => s.stepType === 'p2_order');
+            const preprodStep = projectSteps.find(s => s.stepType === 'preproduction_checklist');
             const projectWorkOrder = projectWorkOrders[0];
             const wadRoute = projectWorkOrder
               ? `/work-orders/${projectWorkOrder.id}/wizard`
@@ -1694,7 +1703,7 @@ export default function ProjectDetailPage() {
               <CardDescription>Track progress through each step of the P2 workflow</CardDescription>
             </CardHeader>
             <CardContent>
-              {project.steps.length === 0 ? (
+              {projectSteps.length === 0 ? (
                 <div className="text-center py-10 space-y-3">
                   <AlertCircle className="mx-auto h-10 w-10 text-muted-foreground/40" />
                   <p className="font-medium text-muted-foreground">Workflow steps are being initialized…</p>
@@ -1708,13 +1717,13 @@ export default function ProjectDetailPage() {
               ) : (
               <div className="relative">
                 {(() => {
-                  const sortedSteps = [...project.steps].sort((a, b) => a.stepOrder - b.stepOrder);
+                  const sortedSteps = [...projectSteps].sort((a, b) => a.stepOrder - b.stepOrder);
                   return sortedSteps;
                 })().map((step, index) => {
                   const config = STEP_CONFIG[step.stepType];
                   const StatusIcon = STEP_STATUS_ICONS[step.status];
                   const linkedId = getLinkedId(step);
-                  const sortedStepsForGate = [...project.steps].sort((a, b) => a.stepOrder - b.stepOrder);
+                  const sortedStepsForGate = [...projectSteps].sort((a, b) => a.stepOrder - b.stepOrder);
                   const isLast = index === sortedStepsForGate.length - 1;
                   const stepAttachments = getAttachmentsForStep(step.id);
                   const isExpanded = expandedSteps.has(step.id);
@@ -2107,8 +2116,8 @@ export default function ProjectDetailPage() {
                 })}
 
                 {/* ── Project Closing pseudo-step ── */}
-                {project.steps.length > 0 && (() => {
-                  const sortedSteps = [...project.steps].sort((a, b) => a.stepOrder - b.stepOrder);
+                {projectSteps.length > 0 && (() => {
+                  const sortedSteps = [...projectSteps].sort((a, b) => a.stepOrder - b.stepOrder);
                   const lastStep = sortedSteps[sortedSteps.length - 1];
                   const isLastStepDone = lastStep && ['completed', 'skipped', 'not_applicable'].includes(lastStep.status);
                   const isClosingLocked = !isLastStepDone;
@@ -2363,7 +2372,7 @@ export default function ProjectDetailPage() {
                           <SelectValue placeholder="Select a purchase order" />
                         </SelectTrigger>
                         <SelectContent>
-                          {p2PurchaseOrders
+                          {p2PurchaseOrderOptions
                             .filter(po => {
                               const q = linkPoSearch.toLowerCase();
                               return !q || po.poNumber?.toLowerCase().includes(q) || po.customerName?.toLowerCase().includes(q);
@@ -2467,7 +2476,7 @@ export default function ProjectDetailPage() {
                                 <SelectValue placeholder="Select replacement PO" />
                               </SelectTrigger>
                               <SelectContent>
-                                {p2PurchaseOrders
+                                {p2PurchaseOrderOptions
                                   .filter(po => po.id !== project.poId)
                                   .map(po => (
                                     <SelectItem key={po.id} value={po.id.toString()}>
@@ -2610,18 +2619,18 @@ export default function ProjectDetailPage() {
                       <div className="flex items-center gap-2 text-base font-semibold">
                         <Hash className="h-4 w-4" /> Serialized Items
                         <span className="text-sm font-normal text-muted-foreground">
-                          ({traceability.serials.length} serial{traceability.serials.length !== 1 ? 's' : ''})
+                          ({traceabilitySerials.length} serial{traceabilitySerials.length !== 1 ? 's' : ''})
                         </span>
                       </div>
                     </AccordionTrigger>
                   </div>
                   <AccordionContent className="px-6 pb-4 pt-0">
-                    {traceability.serials.length === 0 ? (
+                    {traceabilitySerials.length === 0 ? (
                       <p className="text-center text-muted-foreground py-4">No serialized items found.</p>
                     ) : (
                       <div className="space-y-5">
                         {Object.entries(
-                          traceability.serials.reduce<Record<string, TraceabilitySerial[]>>((acc, s) => {
+                          traceabilitySerials.reduce<Record<string, TraceabilitySerial[]>>((acc, s) => {
                             const key = `${s.part_number}||${s.part_name}`;
                             if (!acc[key]) acc[key] = [];
                             acc[key].push(s);
@@ -2678,9 +2687,9 @@ export default function ProjectDetailPage() {
                 </CardHeader>
                 <CardContent>
                   {(() => {
-                    const total = traceability.serials.length;
-                    const completed = traceability.serials.filter(s => s.completed_at).length;
-                    const finalized = traceability.serials.filter(s => s.finalized_at).length;
+                    const total = traceabilitySerials.length;
+                    const completed = traceabilitySerials.filter(s => s.completed_at).length;
+                    const finalized = traceabilitySerials.filter(s => s.finalized_at).length;
                     const completedPct = total > 0 ? Math.round((completed / total) * 100) : 0;
                     const finalizedPct = total > 0 ? Math.round((finalized / total) * 100) : 0;
                     return (

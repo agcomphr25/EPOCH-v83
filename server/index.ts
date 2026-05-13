@@ -19,9 +19,12 @@ import { authenticateToken } from './middleware/auth';
 import { attemptBadgeOrTokenAuth } from './middleware/badgeAuth';
 import { notificationManager } from './src/services/notificationManager';
 import {
+  countMissingLaborAllocations,
+  runLaborAllocationBackfill,
   runEarlyOneTimeRepairBackfills,
   runPacketAllocationBootBackfill,
   runReturnToQcBootRepair,
+  shouldRunHistoricalBootRepairs,
 } from './bootstrap/oneTimeRepairs';
 
 // Build version marker - change this to verify deployment updates
@@ -476,70 +479,29 @@ async function initializeBackgroundServices() {
       // Safe boot migrations are intentionally not run during normal server startup.
       // Run them before deploy or manually with: npm run maintenance:safe-migrations
 
-      // Phase B backfill: seed one labor_allocations row per existing punch_ledger session
-      // Hard-fail on error so startup cannot silently proceed without the table populated.
-      const backfillResult = await pool.query(`
-          INSERT INTO labor_allocations (
-            punch_ledger_id,
-            employee_id,
-            allocation_start,
-            allocation_end,
-            charge_code_id,
-            traveler_id,
-            traveler_step_id,
-            production_work_order_id,
-            project_id,
-            department,
-            operation,
-            certification_status,
-            labor_class,
-            is_overrun,
-            status,
-            source,
-            sequence_order
-          )
-          SELECT
-            pl.id                        AS punch_ledger_id,
-            pl.employee_id               AS employee_id,
-            pl.clock_in                  AS allocation_start,
-            pl.clock_out                 AS allocation_end,
-            pl.charge_code_id            AS charge_code_id,
-            pl.traveler_id               AS traveler_id,
-            pl.traveler_step_id          AS traveler_step_id,
-            pl.production_work_order_id  AS production_work_order_id,
-            pl.project_id                AS project_id,
-            pl.department                AS department,
-            pl.operation                 AS operation,
-            pl.certification_status      AS certification_status,
-            pl.labor_class               AS labor_class,
-            pl.is_overrun                AS is_overrun,
-            CASE WHEN pl.clock_out IS NULL THEN 'OPEN' ELSE 'CLOSED' END AS status,
-            'BACKFILL'                   AS source,
-            1                            AS sequence_order
-          FROM punch_ledger pl
-          WHERE NOT EXISTS (
-            SELECT 1 FROM labor_allocations la WHERE la.punch_ledger_id = pl.id
-          )
-        `);
-      const backfillCount = backfillResult.rowCount ?? 0;
-      console.log(`✅ Phase B backfill: inserted ${backfillCount} labor_allocations row(s) from punch_ledger`);
+      const runHistoricalBootRepairs = shouldRunHistoricalBootRepairs();
+      if (runHistoricalBootRepairs) {
+        console.warn('RUN_BOOT_REPAIRS is enabled; historical boot repairs will run during startup.');
+        const { inserted, missing } = await runLaborAllocationBackfill(pool);
+        console.log(`✅ Phase B labor allocation backfill: inserted ${inserted} row(s) from punch_ledger`);
+        if (missing > 0) {
+          throw new Error(`Phase B coverage gap: ${missing} punch_ledger session(s) still lack a labor_allocations row after backfill`);
+        }
+        console.log('✅ Phase B coverage audit: 0 sessions missing allocations');
 
-      // Post-backfill coverage audit: confirm zero sessions are missing allocations
-      const coverageResult = await pool.query(`
-          SELECT COUNT(*) AS missing
-          FROM punch_ledger pl
-          WHERE NOT EXISTS (
-            SELECT 1 FROM labor_allocations la WHERE la.punch_ledger_id = pl.id
-          )
-        `);
-      const missingCount = parseInt((coverageResult as any)[0]?.missing ?? '0', 10);
-      if (missingCount > 0) {
-        throw new Error(`Phase B coverage gap: ${missingCount} punch_ledger session(s) still lack a labor_allocations row after backfill`);
+        await runEarlyOneTimeRepairBackfills({ db, pool });
       } else {
-        console.log(`✅ Phase B coverage audit: 0 sessions missing allocations — all punch_ledger rows covered`);
+        const missing = await countMissingLaborAllocations(pool);
+        if (missing > 0) {
+          console.warn(
+            `⚠️ Phase B coverage audit: ${missing} punch_ledger session(s) lack labor allocations. ` +
+            'Run npm run maintenance:boot-repairs or set RUN_BOOT_REPAIRS=true for a controlled repair.'
+          );
+        } else {
+          console.log('✅ Phase B coverage audit: 0 sessions missing allocations');
+        }
+        console.log('ℹ️ Historical boot repairs are disabled during normal startup.');
       }
-
-      await runEarlyOneTimeRepairBackfills({ db, pool });
 
       // Ensure traveler_signatures has task-specific columns for role-based signing
       try {
@@ -628,7 +590,11 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ p2_packing_slips external_pdf_url migration skipped:', extPdfErr.message);
       }
 
-      await runReturnToQcBootRepair();
+      if (runHistoricalBootRepairs) {
+        await runReturnToQcBootRepair();
+      } else {
+        console.log('ℹ️ Return-to-QC shipped status repair skipped during normal startup.');
+      }
 
       // Ensure cutting table packet BOM tables exist (needed for scan-start endpoint)
       try {
@@ -996,7 +962,11 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ Cutting packet traceability migration skipped:', cpTErr.message);
       }
 
-      await runPacketAllocationBootBackfill({ db, pool });
+      if (runHistoricalBootRepairs) {
+        await runPacketAllocationBootBackfill({ db, pool });
+      } else {
+        console.log('ℹ️ Packet allocation backfill skipped during normal startup.');
+      }
 
       // Ensure p2_shipping_audit_log table exists (CMMC/DCAA compliant shipping override history)
       try {

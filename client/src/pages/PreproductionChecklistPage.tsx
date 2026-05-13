@@ -169,16 +169,17 @@ export default function PreproductionChecklistPage() {
 
   // Parse context query params passed from the project workflow card
   const searchParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+  const contextChecklistId = searchParams.get('id') || '';
   const contextProjectId = searchParams.get('projectId') || '';
   const contextProjectName = searchParams.get('projectName') || '';
   const contextPoNumber = searchParams.get('poNumber') || '';
 
   // Auto-open create dialog when navigated from a project workflow card
   useEffect(() => {
-    if (contextProjectId && !selectedChecklist) {
+    if (contextProjectId && !contextChecklistId && !selectedChecklist) {
       setIsCreateChecklistOpen(true);
     }
-  }, [contextProjectId]);
+  }, [contextProjectId, contextChecklistId, selectedChecklist]);
 
   return (
     <div className="container mx-auto p-6 space-y-6" data-testid="preproduction-checklist-page">
@@ -220,6 +221,7 @@ export default function PreproductionChecklistPage() {
               onSelectChecklist={setSelectedChecklist}
               isCreateOpen={isCreateChecklistOpen}
               setIsCreateOpen={setIsCreateChecklistOpen}
+              selectedChecklistId={contextChecklistId}
               initialProjectName={contextProjectName}
               initialPoNumber={contextPoNumber}
             />
@@ -257,6 +259,7 @@ function ChecklistsTab({
   onSelectChecklist,
   isCreateOpen,
   setIsCreateOpen,
+  selectedChecklistId = '',
   initialProjectName = '',
   initialPoNumber = '',
 }: {
@@ -267,6 +270,7 @@ function ChecklistsTab({
   onSelectChecklist: (c: Checklist) => void;
   isCreateOpen: boolean;
   setIsCreateOpen: (b: boolean) => void;
+  selectedChecklistId?: string;
   initialProjectName?: string;
   initialPoNumber?: string;
 }) {
@@ -277,6 +281,15 @@ function ChecklistsTab({
     queryKey: ['/api/preproduction-checklists', statusFilter],
     queryFn: () => apiRequest(`/api/preproduction-checklists?status=${statusFilter}`),
   });
+
+  useEffect(() => {
+    if (!selectedChecklistId || checklists.length === 0) return;
+
+    const linkedChecklist = checklists.find((checklist) => checklist.id === selectedChecklistId);
+    if (linkedChecklist) {
+      onSelectChecklist(linkedChecklist);
+    }
+  }, [selectedChecklistId, checklists, onSelectChecklist]);
 
   const { data: templates = [] } = useQuery<Template[]>({
     queryKey: ['/api/preproduction-checklists/templates'],

@@ -1660,7 +1660,7 @@ router.post('/:id/send-rfq', async (req: Request, res: Response) => {
       });
     }
 
-    const { recipients: rawRecipients } = req.body ?? {};
+    const { recipients: rawRecipients, printOnly } = req.body ?? {};
     const allowedEmails = await getAllowedVendorEmails(vendorPO.vendorId);
     const { to: rfqTo, cc: rfqCc } = deriveToAndCc(
       rawRecipients,
@@ -1668,6 +1668,24 @@ router.post('/:id/send-rfq', async (req: Request, res: Response) => {
       allowedEmails,
       ['laurie.tandy@agadvanced.com']
     );
+
+    const shouldPrintOnly =
+      printOnly === true ||
+      printOnly === 'true' ||
+      printOnly === 1 ||
+      printOnly === '1';
+
+    if (shouldPrintOnly) {
+      const updatedPO = await storage.updateVendorPO(id, { status: 'RFQ Sent' });
+      return res.json({
+        ...updatedPO,
+        emailSent: false,
+        emailRecipient: rfqTo,
+        emailCc: rfqCc,
+        printOnly: true,
+        message: `RFQ prepared for printing only.`,
+      });
+    }
 
     // Fetch line items for the RFQ
     const items = await storage.getVendorPOItems(id);

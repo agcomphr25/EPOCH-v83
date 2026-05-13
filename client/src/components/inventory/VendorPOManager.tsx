@@ -2516,7 +2516,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
     mutationFn: ({ id, recipients, skipEmail = false, reason }: { id: number; recipients: string[]; skipEmail?: boolean; reason?: string }) =>
       apiRequest(`/api/vendor-pos/${id}/send-rfq`, {
         method: 'POST',
-        body: JSON.stringify({ recipients, skipEmail, reason }),
+        body: JSON.stringify({ recipients, printOnly: skipEmail, reason }),
       }),
     onSuccess: (data: any, variables) => {
       getSendRFQInvalidationKeys(variables.id).forEach((key) =>

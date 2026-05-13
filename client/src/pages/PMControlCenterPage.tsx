@@ -110,6 +110,10 @@ interface WorkOrderRow {
   quantityRequired: number;
   quantityCompleted: number;
   quantityCompletedToday: number;
+  sourceType?: 'production_work_order' | 'p2_production_order';
+  sourceLabel?: string;
+  p2PoId?: number | null;
+  p2PoNumber?: string | null;
   status: string;
   dueDate: string | null;
   currentDepartment: string | null;
@@ -356,7 +360,7 @@ function ProductionTab({ projectId }: { projectId: string }) {
   const { data: detail, isLoading: detailLoading } = useQuery<WorkOrderDetail>({
     queryKey: ['/api/pm-dashboard', projectId, 'production', selectedWO?.productionWorkOrderId],
     queryFn: () => safeFetch<WorkOrderDetail>(`/api/pm-dashboard/${projectId}/production/${selectedWO!.productionWorkOrderId}`),
-    enabled: !!selectedWO,
+    enabled: !!selectedWO && selectedWO.sourceType !== 'p2_production_order',
   });
 
   if (isLoading) {
@@ -511,9 +515,26 @@ function ProductionTab({ projectId }: { projectId: string }) {
               <TableRow
                 key={row.productionWorkOrderId}
                 className={`cursor-pointer hover:bg-accent/50 ${row.status === 'BLOCKED' ? 'bg-red-50 dark:bg-red-950/20' : ''}`}
-                onClick={() => navTo(`/production-work-orders/${row.productionWorkOrderId}`)}
+                onClick={() => {
+                  if (row.sourceType === 'p2_production_order') {
+                    const params = new URLSearchParams({ tab: 'production' });
+                    if (row.p2PoNumber) params.set('po', row.p2PoNumber);
+                    navTo(`/p2-control-center?${params.toString()}`);
+                    return;
+                  }
+                  navTo(`/production-work-orders/${row.productionWorkOrderId}`);
+                }}
               >
-                <TableCell className="font-mono text-sm font-medium">{row.workOrderNumber}</TableCell>
+                <TableCell className="font-mono text-sm font-medium">
+                  <div className="flex items-center gap-2">
+                    <span>{row.workOrderNumber}</span>
+                    {row.sourceLabel === 'P2' && (
+                      <Badge variant="outline" className="font-sans text-[10px] px-1.5 py-0">
+                        P2
+                      </Badge>
+                    )}
+                  </div>
+                </TableCell>
                 <TableCell className="text-sm">{row.partNumber}</TableCell>
                 <TableCell className="text-right text-sm text-muted-foreground">
                   <div className="flex flex-col items-end gap-1">

@@ -1295,6 +1295,12 @@ export default function Navigation() {
       description: 'Complete P2 workflow: orders, BOMs, scheduling, routing, and certifications',
     },
     {
+      path: '/p2-customers',
+      label: 'P2 Customers',
+      icon: Users,
+      description: 'Manage customers for P2 purchase orders and RFQ tracking',
+    },
+    {
       path: '/wad-wizard',
       label: 'WAD Wizard',
       icon: FileCheck,

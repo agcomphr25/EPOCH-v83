@@ -130,6 +130,7 @@ import VendorManagement from './pages/VendorManagement';
 import ManageGroups from './pages/ManageGroups';
 import PurchaseOrders from './pages/PurchaseOrders';
 import P2ControlCenter from './pages/P2ControlCenter';
+import P2CustomersPage from './pages/P2CustomersPage';
 import P2Forms from './pages/P2Forms';
 import ManufacturingQueue from './pages/ManufacturingQueue';
 import KitsQueue from './pages/KitsQueue';
@@ -1119,6 +1120,7 @@ function App() {
 
                   {/* P2 Routes - Control Center consolidates all P2 functionality */}
                   <Route path="/p2-control-center" component={P2ControlCenter} />
+                  <Route path="/p2-customers" component={P2CustomersPage} />
                   <Route path="/p2-forms" component={P2Forms} />
                   <Route path="/p2-traveler" component={P2TravelerPage} />
                   <Route path="/p2-traveler-viewer" component={P2TravelerViewer} />

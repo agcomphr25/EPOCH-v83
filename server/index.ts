@@ -14,7 +14,7 @@ import fs from 'fs';
 import cron from 'node-cron';
 import { createServer } from 'http';
 import { setupVite, serveStatic, log } from './vite';
-import { db, pool, getDatabaseTargetInfo } from './db';
+import { checkDatabaseHealth, db, pool, getDatabaseTargetInfo } from './db';
 import { authenticateToken } from './middleware/auth';
 import { attemptBadgeOrTokenAuth } from './middleware/badgeAuth';
 import { notificationManager } from './src/services/notificationManager';
@@ -129,16 +129,19 @@ app.get('/healthz', (req, res) => {
   });
 });
 
-app.get(['/readyz', '/boot-status', '/api/boot-status'], (_req, res) => {
+app.get(['/readyz', '/boot-status', '/api/boot-status'], async (_req, res) => {
+  const database = await checkDatabaseHealth();
   const ready =
     bootState.routesReady &&
     bootState.routeRegistration.status === 'ready' &&
-    bootState.fatalErrors.length === 0;
+    bootState.fatalErrors.length === 0 &&
+    database.ok;
 
   res.status(ready ? 200 : 503).json({
     status: ready ? 'ready' : 'not_ready',
     timestamp: new Date().toISOString(),
     uptimeSeconds: Math.round(process.uptime()),
+    database,
     ...bootState,
   });
 });

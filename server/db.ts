@@ -1,6 +1,11 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool, type QueryResult, type QueryResultRow } from 'pg';
 import * as schema from './schema';
+import {
+  createInitialDatabaseHealth,
+  runDatabaseHealthCheck,
+  type DatabaseHealthSnapshot,
+} from './bootstrap/dbHealth';
 import { buildPgPoolConfig, getDbHealthcheckTimeoutMs } from './bootstrap/dbPoolConfig';
 
 const connectionString =
@@ -48,6 +53,7 @@ export function getDatabaseTargetInfo() {
 }
 
 const poolConfig = buildPgPoolConfig(connectionString);
+let databaseHealth: DatabaseHealthSnapshot = createInitialDatabaseHealth(getDatabaseTargetInfo());
 
 console.log('Initializing database connection...', {
   ...getDatabaseTargetInfo(),
@@ -64,6 +70,13 @@ console.log('Initializing database connection...', {
 export const pgPool = new Pool(poolConfig);
 
 pgPool.on('error', (error) => {
+  databaseHealth = {
+    ...databaseHealth,
+    status: 'unhealthy',
+    checkedAt: new Date().toISOString(),
+    latencyMs: null,
+    error: error.message,
+  };
   console.error('[db:pool] Idle client error:', {
     message: error.message,
     code: (error as any).code,
@@ -131,6 +144,20 @@ export async function testDatabaseConnection() {
     console.log('⚠️  Server will start anyway - database operations may fail');
     return false;
   }
+}
+
+export function getDatabaseHealthSnapshot() {
+  return databaseHealth;
+}
+
+export async function checkDatabaseHealth() {
+  const result = await runDatabaseHealthCheck(
+    () => pgPool.query('SELECT 1'),
+    getDatabaseTargetInfo(),
+    getDbHealthcheckTimeoutMs(),
+  );
+  databaseHealth = result;
+  return result;
 }
 
 export const pool = {

@@ -1,15 +1,21 @@
 import express from 'express';
-import { storage } from '../../storage';
-import {
-  insertOrderAttachmentSchema,
-  type OrderAttachment,
-} from '@shared/schema';
-import { ObjectStorageService } from '../../replit_integrations/object_storage';
 import fs from 'fs';
 import path from 'path';
+import { storage } from '../../storage';
+import { insertOrderAttachmentSchema } from '@shared/schema';
+import {
+  getFileStorageProvider,
+  getFileStorageProviderForObjectPath,
+  getStorageErrorResponse,
+  isReplitObjectPath,
+  isSupabaseObjectPath,
+} from '../services/fileStorageProvider';
 
 const router = express.Router();
-const objectStorageService = new ObjectStorageService();
+
+function normalizeObjectPath(filePath: string | null | undefined) {
+  return filePath?.startsWith('objects/') ? `/${filePath}` : filePath;
+}
 
 // GET /api/order-attachments/:orderId - Get all attachments for an order
 router.get('/:orderId', async (req, res) => {
@@ -23,7 +29,7 @@ router.get('/:orderId', async (req, res) => {
   }
 });
 
-// POST /api/order-attachments/request-upload-url - Request presigned URL for cloud upload
+// POST /api/order-attachments/request-upload-url - Request an upload target from the configured storage provider.
 router.post('/request-upload-url', async (req, res) => {
   try {
     const { name, size, contentType, orderId } = req.body;
@@ -32,21 +38,47 @@ router.post('/request-upload-url', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields: name, orderId' });
     }
 
-    console.log(`📁 Requesting upload URL for order ${orderId}: ${name}`);
+    const storageProvider = getFileStorageProvider();
+    console.log('[order-attachments/request-upload-url] Requesting upload target', {
+      provider: storageProvider.name,
+      orderId,
+      name,
+      size,
+      contentType,
+    });
 
-    const uploadURL = await objectStorageService.getObjectEntityUploadURL();
-    const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
+    const uploadTarget = await storageProvider.createUploadTarget({
+      fileName: name,
+      contentType,
+      scope: 'order-attachments',
+      entityId: orderId,
+    });
 
-    console.log(`📁 Generated upload URL for ${name}, objectPath: ${objectPath}`);
+    console.log('[order-attachments/request-upload-url] Generated upload target', {
+      provider: uploadTarget.provider,
+      orderId,
+      objectPath: uploadTarget.objectPath,
+    });
 
     res.json({
-      uploadURL,
-      objectPath,
+      uploadURL: uploadTarget.uploadURL,
+      objectPath: uploadTarget.objectPath,
+      provider: uploadTarget.provider,
       metadata: { name, size, contentType, orderId },
     });
   } catch (error) {
-    console.error('Error generating upload URL for order attachment:', error);
-    res.status(500).json({ error: 'Failed to generate upload URL' });
+    const { status, reason, message } = getStorageErrorResponse(error);
+    console.error('[order-attachments/request-upload-url] Failed to generate upload URL:', {
+      reason,
+      message,
+      status,
+      provider: process.env.FILE_STORAGE_PROVIDER || 'replit',
+    });
+    res.status(status).json({
+      error: 'Failed to generate upload URL',
+      reason,
+      details: message,
+    });
   }
 });
 
@@ -56,27 +88,23 @@ router.post('/complete-upload', async (req, res) => {
     const { objectPath, orderId, originalFileName, fileSize, mimeType, notes } = req.body;
     const user = (req as any).user;
 
-    console.log(`📁 Complete upload request received:`, { objectPath, orderId, originalFileName, hasUser: !!user });
+    console.log('[order-attachments/complete-upload] Complete upload request received', {
+      objectPath,
+      orderId,
+      originalFileName,
+      hasUser: !!user,
+    });
 
     if (!objectPath || !orderId || !originalFileName) {
-      console.error('📁 Missing required fields:', { objectPath: !!objectPath, orderId: !!orderId, originalFileName: !!originalFileName });
-      return res.status(400).json({ 
-        error: 'Missing required fields: objectPath, orderId, originalFileName' 
+      return res.status(400).json({
+        error: 'Missing required fields: objectPath, orderId, originalFileName',
       });
     }
 
-    console.log(`📁 Completing upload for order ${orderId}: ${originalFileName}`);
-
-    // Set ACL policy to make file accessible
     try {
-      await objectStorageService.trySetObjectEntityAclPolicy(objectPath, {
-        owner: user?.id?.toString() || 'system',
-        visibility: 'public',
-      });
-      console.log('📁 ACL policy set successfully for:', objectPath);
+      await getFileStorageProviderForObjectPath(objectPath).setPublicReadPolicy(objectPath, user?.id?.toString() || 'system');
     } catch (aclError) {
-      console.warn('📁 Failed to set ACL policy for order attachment:', aclError);
-      // Continue anyway - ACL errors shouldn't block the upload
+      console.warn('[order-attachments/complete-upload] Failed to apply object ACL; continuing:', aclError);
     }
 
     const attachmentData = {
@@ -85,29 +113,25 @@ router.post('/complete-upload', async (req, res) => {
       originalFileName,
       fileSize: fileSize || 0,
       mimeType: mimeType || 'application/octet-stream',
-      filePath: objectPath, // Store cloud object path
+      filePath: objectPath,
       uploadedBy: user?.username || null,
       notes: notes || null,
     };
 
-    console.log('📁 Creating database record:', attachmentData);
-    
     try {
       const validatedData = insertOrderAttachmentSchema.parse(attachmentData);
       const attachment = await storage.createOrderAttachment(validatedData);
-      
-      console.log('📁 Order attachment saved successfully:', attachment.id);
       res.json(attachment);
     } catch (dbError: any) {
-      console.error('📁 Database error creating attachment:', dbError);
-      res.status(500).json({ 
-        error: `Database error: ${dbError.message || 'Failed to save attachment record'}` 
+      console.error('[order-attachments/complete-upload] Database error creating attachment:', dbError);
+      res.status(500).json({
+        error: `Database error: ${dbError.message || 'Failed to save attachment record'}`,
       });
     }
   } catch (error: any) {
-    console.error('📁 Error completing order attachment upload:', error);
-    res.status(500).json({ 
-      error: error.message || 'Failed to complete upload' 
+    console.error('[order-attachments/complete-upload] Error completing upload:', error);
+    res.status(500).json({
+      error: error.message || 'Failed to complete upload',
     });
   }
 });
@@ -117,40 +141,31 @@ router.delete('/:attachmentId', async (req, res) => {
   try {
     const attachmentId = parseInt(req.params.attachmentId);
 
-    // Get attachment info before deleting
     const attachment = await storage.getOrderAttachment(attachmentId);
     if (!attachment) {
       return res.status(404).json({ error: 'Attachment not found' });
     }
 
-    // Try to delete from cloud storage if it's a cloud path (starts with /objects/ or objects/)
-    // Normalize objects/ prefix to /objects/
-    const normalizedPath = attachment.filePath?.startsWith('objects/') 
-      ? `/${attachment.filePath}` 
-      : attachment.filePath;
-    
-    if (normalizedPath && normalizedPath.startsWith('/objects/')) {
+    const normalizedPath = normalizeObjectPath(attachment.filePath);
+
+    if (isSupabaseObjectPath(normalizedPath) || isReplitObjectPath(normalizedPath)) {
       try {
-        const objectFile = await objectStorageService.getObjectEntityFile(normalizedPath);
-        await objectFile.delete();
-        console.log(`📁 Deleted cloud file: ${normalizedPath}`);
+        await getFileStorageProviderForObjectPath(normalizedPath!).deleteObject(normalizedPath!);
+        console.log('[order-attachments/delete] Deleted cloud file:', normalizedPath);
       } catch (deleteError) {
-        console.warn('Failed to delete file from cloud storage:', deleteError);
-        // Continue with database deletion even if cloud deletion fails
+        console.warn('[order-attachments/delete] Failed to delete file from cloud storage:', deleteError);
       }
     } else if (attachment.filePath) {
-      // Legacy local file - try to delete if it exists
       try {
         if (fs.existsSync(attachment.filePath)) {
           fs.unlinkSync(attachment.filePath);
-          console.log(`📁 Deleted local file: ${attachment.filePath}`);
+          console.log('[order-attachments/delete] Deleted local file:', attachment.filePath);
         }
       } catch (localDeleteError) {
-        console.warn('Failed to delete local file:', localDeleteError);
+        console.warn('[order-attachments/delete] Failed to delete local file:', localDeleteError);
       }
     }
 
-    // Delete from database
     await storage.deleteOrderAttachment(attachmentId);
 
     res.json({ message: 'Attachment deleted successfully' });
@@ -171,54 +186,31 @@ router.get('/download/:attachmentId', async (req, res) => {
       return res.status(404).json({ error: 'Attachment not found' });
     }
 
-    // Check if this is a cloud storage path (starts with /objects/ or objects/)
-    // Normalize objects/ prefix to /objects/
-    const normalizedDownloadPath = attachment.filePath?.startsWith('objects/') 
-      ? `/${attachment.filePath}` 
-      : attachment.filePath;
-    
-    if (normalizedDownloadPath && normalizedDownloadPath.startsWith('/objects/')) {
+    const normalizedDownloadPath = normalizeObjectPath(attachment.filePath);
+
+    if (isSupabaseObjectPath(normalizedDownloadPath) || isReplitObjectPath(normalizedDownloadPath)) {
       try {
-        const objectFile = await objectStorageService.getObjectEntityFile(normalizedDownloadPath);
-        
-        if (forceDownload) {
-          // Set download disposition header
-          res.setHeader(
-            'Content-Disposition',
-            `attachment; filename="${attachment.originalFileName}"`
-          );
-        } else {
-          res.setHeader(
-            'Content-Disposition',
-            `inline; filename="${attachment.originalFileName}"`
-          );
-        }
-        
-        // Stream the file using the built-in download method
-        await objectStorageService.downloadObject(objectFile, res);
+        res.setHeader(
+          'Content-Disposition',
+          `${forceDownload ? 'attachment' : 'inline'}; filename="${attachment.originalFileName}"`
+        );
+        await getFileStorageProviderForObjectPath(normalizedDownloadPath!).downloadObject(normalizedDownloadPath!, res);
       } catch (cloudError) {
-        console.error('Error fetching from cloud storage:', cloudError);
+        console.error('[order-attachments/download] Error fetching from cloud storage:', cloudError);
         res.status(404).json({ error: 'File not found in cloud storage' });
       }
     } else if (attachment.filePath && fs.existsSync(attachment.filePath)) {
-      // Legacy local file - serve if it exists (dev environment only)
-      console.log(`📁 Serving legacy local file: ${attachment.filePath}`);
-      
       if (forceDownload) {
         res.download(attachment.filePath, attachment.originalFileName);
       } else {
         res.setHeader('Content-Type', attachment.mimeType);
-        res.setHeader(
-          'Content-Disposition',
-          `inline; filename="${attachment.originalFileName}"`
-        );
+        res.setHeader('Content-Disposition', `inline; filename="${attachment.originalFileName}"`);
         res.sendFile(path.resolve(attachment.filePath));
       }
     } else {
-      // File not found in either location
-      console.warn('File not found:', attachment.filePath);
-      res.status(404).json({ 
-        error: 'File not available. It may have been stored locally and is not accessible in this environment.' 
+      console.warn('[order-attachments/download] File not found:', attachment.filePath);
+      res.status(404).json({
+        error: 'File not available. It may have been stored locally and is not accessible in this environment.',
       });
     }
   } catch (error) {

@@ -90,6 +90,25 @@ interface TimekeepingTasksResponse {
   stats: TaskStats;
 }
 
+interface ApprovalDashboardTask {
+  id: string;
+  type: 'approval_request';
+  title: string;
+  description: string;
+  requestType: string;
+  requestedByDisplayName: string;
+  createdAt: string;
+  dueAt: string | null;
+  priority: 'normal' | 'overdue';
+  actionUrl: string;
+  sourceId: string;
+}
+
+interface ApprovalTasksResponse {
+  tasks: ApprovalDashboardTask[];
+  stats: TaskStats;
+}
+
 interface MyTasksControlCenterProps {
   employeeId: number;
   userName?: string;
@@ -137,6 +156,13 @@ export default function MyTasksControlCenter({
     refetchInterval: 60_000,
   });
 
+  const { data: approvalTasksData } = useQuery<ApprovalTasksResponse>({
+    queryKey: ['/api/approvals/my-tasks', employeeId],
+    queryFn: () => apiRequest(`/api/approvals/my-tasks/${employeeId}`),
+    enabled: !!employeeId,
+    refetchInterval: 60_000,
+  });
+
   const updateTaskMutation = useMutation({
     mutationFn: ({ taskId, data }: { taskId: string; data: any }) =>
       apiRequest(`/api/preproduction-checklists/tasks/${taskId}`, {
@@ -159,14 +185,17 @@ export default function MyTasksControlCenter({
 
   const tasks = tasksData?.tasks || [];
   const timekeepingTasks = timekeepingTasksData?.tasks || [];
+  const approvalTasks = approvalTasksData?.tasks || [];
   const baseStats = tasksData?.stats || { total: 0, completed: 0, pending: 0, overdue: 0 };
   const sigPending = signatureStats?.pending || 0;
   const timekeepingPending = timekeepingTasksData?.stats?.pending || 0;
+  const approvalPending = approvalTasksData?.stats?.pending || 0;
+  const approvalOverdue = approvalTasksData?.stats?.overdue || 0;
   const stats = {
-    total: baseStats.total + sigPending + timekeepingPending,
+    total: baseStats.total + sigPending + timekeepingPending + approvalPending,
     completed: baseStats.completed,
-    pending: baseStats.pending + sigPending + timekeepingPending,
-    overdue: baseStats.overdue,
+    pending: baseStats.pending + sigPending + timekeepingPending + approvalPending,
+    overdue: baseStats.overdue + approvalOverdue,
   };
 
   const filteredTasks = tasks.filter((task) => {
@@ -264,6 +293,8 @@ export default function MyTasksControlCenter({
                 employeeName={userName || ''}
                 compact={true}
               />
+
+              <ApprovalRequestTasks tasks={approvalTasks} compact={true} />
 
               <TimekeepingApprovalTasks tasks={timekeepingTasks} compact={true} />
 
@@ -368,6 +399,8 @@ export default function MyTasksControlCenter({
           employeeName={userName || ''}
           compact={true}
         />
+
+        <ApprovalRequestTasks tasks={approvalTasks} />
 
         <TimekeepingApprovalTasks tasks={timekeepingTasks} />
 
@@ -534,6 +567,53 @@ export default function MyTasksControlCenter({
         </Tabs>
       </CardContent>
     </Card>
+  );
+}
+
+function ApprovalRequestTasks({
+  tasks,
+  compact = false,
+}: {
+  tasks: ApprovalDashboardTask[];
+  compact?: boolean;
+}) {
+  if (tasks.length === 0) return null;
+
+  const visibleTasks = compact ? tasks.slice(0, 3) : tasks;
+
+  return (
+    <div className="space-y-2" data-testid="approval-request-tasks">
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-muted-foreground font-medium">
+          Assigned Approvals
+        </p>
+        <Badge variant="outline">{tasks.length}</Badge>
+      </div>
+      {visibleTasks.map((task) => (
+        <div
+          key={task.id}
+          className={`flex items-start gap-3 p-3 border rounded-lg ${
+            task.priority === 'overdue'
+              ? 'bg-red-50/70 border-red-200'
+              : 'bg-blue-50/70 border-blue-200'
+          }`}
+        >
+          <ClipboardList className="h-4 w-4 mt-0.5 text-blue-700 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold truncate">{task.title}</p>
+            <p className="text-xs text-muted-foreground truncate">{task.description}</p>
+            <p className="text-xs text-muted-foreground truncate">
+              Requested by {task.requestedByDisplayName}
+            </p>
+          </div>
+          <Link href={task.actionUrl}>
+            <Button variant="outline" size="sm">
+              <ExternalLink className="h-4 w-4" />
+            </Button>
+          </Link>
+        </div>
+      ))}
+    </div>
   );
 }
 

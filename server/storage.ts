@@ -8932,37 +8932,40 @@ export class DatabaseStorage implements IStorage {
         pageSize = 10,
       } = params || {};
 
+      const evaluatedExpr = `(COALESCE(v.evaluated, false) OR COALESCE(er.has_scored_evaluation, false))`;
+      const evaluationDateExpr = `COALESCE(v.evaluation_date, er.latest_evaluation_date)`;
+
       // Build WHERE clauses for raw SQL
-      const conditions: string[] = ['is_active = true'];
+      const conditions: string[] = ['v.is_active = true'];
       
       // Search filter
       if (search && search.trim()) {
         const searchTerm = search.trim().replace(/'/g, "''"); // Escape single quotes
         conditions.push(`(
-          name ILIKE '%${searchTerm}%' OR
-          contact_person ILIKE '%${searchTerm}%' OR
-          email ILIKE '%${searchTerm}%' OR
-          phone ILIKE '%${searchTerm}%' OR
-          address ILIKE '%${searchTerm}%'
+          v.name ILIKE '%${searchTerm}%' OR
+          v.contact_person ILIKE '%${searchTerm}%' OR
+          v.email ILIKE '%${searchTerm}%' OR
+          v.phone ILIKE '%${searchTerm}%' OR
+          v.address ILIKE '%${searchTerm}%'
         )`);
       }
 
       // Approved filter
       if (approved !== 'any') {
-        conditions.push(`approved = ${approved === 'true'}`);
+        conditions.push(`v.approved = ${approved === 'true'}`);
       }
 
       // Evaluated filter
       if (evaluated !== 'any') {
-        conditions.push(`evaluated = ${evaluated === 'true'}`);
+        conditions.push(`${evaluatedExpr} = ${evaluated === 'true'}`);
       }
 
       // Evaluation date range filters
       if (evalFrom) {
-        conditions.push(`evaluation_date >= '${evalFrom}'`);
+        conditions.push(`${evaluationDateExpr} >= '${evalFrom}'`);
       }
       if (evalTo) {
-        conditions.push(`evaluation_date <= '${evalTo}'`);
+        conditions.push(`${evaluationDateExpr} <= '${evalTo}'`);
       }
 
       const whereClause = conditions.join(' AND ');
@@ -8970,15 +8973,15 @@ export class DatabaseStorage implements IStorage {
       // Parse sort
       const [sortField, sortDir] = sort.split(':');
       const sortColMap: Record<string, string> = {
-        name: 'name',
-        approved: 'approved',
-        evaluated: 'evaluated',
-        evaluationDate: 'evaluation_date',
-        updatedAt: 'updated_at',
-        createdAt: 'created_at',
-        approvalLevel: "CASE approval_level WHEN 'A' THEN 1 WHEN 'B' THEN 2 WHEN 'C' THEN 3 WHEN 'D' THEN 4 WHEN 'F' THEN 5 ELSE 6 END",
+        name: 'v.name',
+        approved: 'v.approved',
+        evaluated: evaluatedExpr,
+        evaluationDate: evaluationDateExpr,
+        updatedAt: 'v.updated_at',
+        createdAt: 'v.created_at',
+        approvalLevel: "CASE v.approval_level WHEN 'A' THEN 1 WHEN 'B' THEN 2 WHEN 'C' THEN 3 WHEN 'D' THEN 4 WHEN 'F' THEN 5 ELSE 6 END",
       };
-      const sortColumn = sortColMap[sortField] || 'created_at';
+      const sortColumn = sortColMap[sortField] || 'v.created_at';
       const sortDirection = sortDir === 'asc' ? 'ASC' : 'DESC';
 
       // Calculate offset
@@ -8986,28 +8989,95 @@ export class DatabaseStorage implements IStorage {
 
       // Execute queries using pool.query for raw SQL with dynamic parts
       const dataQuerySql = `
+        WITH scored_evaluations AS (
+          SELECT
+            vendor_id,
+            id,
+            year,
+            month,
+            quality_score,
+            cost_score,
+            delivery_score,
+            response_score,
+            make_date(year, GREATEST(LEAST(COALESCE(month, 1), 12), 1), 1) AS evaluation_date
+          FROM vendor_monthly_evaluations
+          WHERE quality_score IS NOT NULL
+             OR cost_score IS NOT NULL
+             OR delivery_score IS NOT NULL
+             OR response_score IS NOT NULL
+        ),
+        evaluation_rollup AS (
+          SELECT
+            vendor_id,
+            true AS has_scored_evaluation,
+            MAX(evaluation_date) AS latest_evaluation_date
+          FROM scored_evaluations
+          GROUP BY vendor_id
+        ),
+        latest_evaluation AS (
+          SELECT DISTINCT ON (vendor_id)
+            vendor_id,
+            quality_score,
+            cost_score,
+            delivery_score,
+            response_score,
+            (
+              COALESCE(quality_score, 0) +
+              COALESCE(cost_score, 0) +
+              COALESCE(delivery_score, 0) +
+              COALESCE(response_score, 0)
+            )::float AS latest_total_score
+          FROM scored_evaluations
+          ORDER BY vendor_id, year DESC, month DESC, id DESC
+        )
         SELECT 
-          id, name, contact_person as "contactPerson", email, additional_email as "additionalEmail",
-          phone, address, approved, evaluated,
-          evaluation_date as "evaluationDate", notes,
-          is_active as "isActive", created_at as "createdAt", updated_at as "updatedAt",
-          street, city, state, zip_code as "zipCode", country, scope_approved_for as "scopeApprovedFor",
-          scope, quality_score as "qualityScore", cost_score as "costScore", 
-          delivery_score as "deliveryScore", response_score as "responseScore",
-          approval_source as "approvalSource", approval_pdf_url as "approvalPdfUrl",
-          start_renewal_date as "startRenewalDate",
-          approval_expiration as "approvalExpiration",
-          approval_level as "approvalLevel", main_document_url as "mainDocumentUrl",
-          terms_and_conditions as "termsAndConditions", payment_terms as "paymentTerms",
-          shipping_instructions as "shippingInstructions"
-        FROM vendors
+          v.id, v.name, v.contact_person as "contactPerson", v.email, v.additional_email as "additionalEmail",
+          v.phone, v.address, v.approved, ${evaluatedExpr} as "evaluated",
+          ${evaluationDateExpr} as "evaluationDate", v.notes,
+          v.is_active as "isActive", v.created_at as "createdAt", v.updated_at as "updatedAt",
+          v.street, v.city, v.state, v.zip_code as "zipCode", v.country, v.scope_approved_for as "scopeApprovedFor",
+          v.scope, COALESCE(v.quality_score, le.quality_score) as "qualityScore", COALESCE(v.cost_score, le.cost_score) as "costScore",
+          COALESCE(v.delivery_score, le.delivery_score) as "deliveryScore", COALESCE(v.response_score, le.response_score) as "responseScore",
+          v.approval_source as "approvalSource", v.approval_pdf_url as "approvalPdfUrl",
+          v.start_renewal_date as "startRenewalDate",
+          v.approval_expiration as "approvalExpiration",
+          v.approval_level as "approvalLevel", v.main_document_url as "mainDocumentUrl",
+          v.terms_and_conditions as "termsAndConditions", v.payment_terms as "paymentTerms",
+          v.shipping_instructions as "shippingInstructions",
+          le.latest_total_score as "ytdTotalScore"
+        FROM vendors v
+        LEFT JOIN evaluation_rollup er ON er.vendor_id = v.id
+        LEFT JOIN latest_evaluation le ON le.vendor_id = v.id
         WHERE ${whereClause}
         ORDER BY ${sortColumn} ${sortDirection}
         LIMIT ${pageSize}
         OFFSET ${offset}
       `;
 
-      const countQuerySql = `SELECT COUNT(*) as count FROM vendors WHERE ${whereClause}`;
+      const countQuerySql = `
+        WITH scored_evaluations AS (
+          SELECT
+            vendor_id,
+            make_date(year, GREATEST(LEAST(COALESCE(month, 1), 12), 1), 1) AS evaluation_date
+          FROM vendor_monthly_evaluations
+          WHERE quality_score IS NOT NULL
+             OR cost_score IS NOT NULL
+             OR delivery_score IS NOT NULL
+             OR response_score IS NOT NULL
+        ),
+        evaluation_rollup AS (
+          SELECT
+            vendor_id,
+            true AS has_scored_evaluation,
+            MAX(evaluation_date) AS latest_evaluation_date
+          FROM scored_evaluations
+          GROUP BY vendor_id
+        )
+        SELECT COUNT(*) as count
+        FROM vendors v
+        LEFT JOIN evaluation_rollup er ON er.vendor_id = v.id
+        WHERE ${whereClause}
+      `;
 
       const [data, countResult] = await Promise.all([
         pool.query(dataQuerySql),
@@ -9021,7 +9091,7 @@ export class DatabaseStorage implements IStorage {
       // Enrich vendor data with YTD total scores (skip if no vendors)
       const enrichedData = vendorData.map(vendor => ({
         ...formatDates(vendor as Record<string, unknown>, VENDOR_DATE_COLUMNS),
-        ytdTotalScore: null, // Simplified - skip YTD calculation for now
+        ytdTotalScore: (vendor as any).ytdTotalScore,
       })) as Vendor[];
 
       return {

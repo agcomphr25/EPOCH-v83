@@ -16,6 +16,7 @@ import { sendCommunication } from '../../communication/send';
 import { db } from '../../db';
 import { sql } from 'drizzle-orm';
 import { getVendorQualificationBlockers, emitProcurementLedgerEvent } from '../services/procurementControlsService';
+import { sendApiError } from '../../utils/apiErrors';
 
 const router = Router();
 
@@ -909,12 +910,10 @@ router.post('/', requirePermission('purchasing.manage_pos'), async (req: Request
     res.status(201).json(vendorPO);
   } catch (error) {
     console.error('Create vendor PO error:', error);
-    if (error instanceof z.ZodError) {
-      return res
-        .status(400)
-        .json({ error: 'Invalid vendor PO data', details: error.errors });
-    }
-    res.status(500).json({ error: 'Failed to create vendor PO' });
+    return sendApiError(res, error, {
+      fallbackMessage: 'Failed to create vendor PO',
+      source: 'vendorPO.create',
+    });
   }
 });
 
@@ -991,12 +990,10 @@ router.put('/:id', requirePermission('purchasing.manage_pos'), async (req: Reque
     res.json(vendorPO);
   } catch (error) {
     console.error('Update vendor PO error:', error);
-    if (error instanceof z.ZodError) {
-      return res
-        .status(400)
-        .json({ error: 'Invalid vendor PO data', details: error.errors });
-    }
-    res.status(500).json({ error: 'Failed to update vendor PO' });
+    return sendApiError(res, error, {
+      fallbackMessage: 'Failed to update vendor PO',
+      source: 'vendorPO.update',
+    });
   }
 });
 
@@ -1130,18 +1127,16 @@ router.post('/:id/items', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Create vendor PO item error:', error);
     if ((error as any)?.status) {
-      return res.status((error as any).status).json({
-        error: (error as Error).message,
-        complianceBlocked: (error as any).status === 422,
-        blockingReasons: (error as any).blockingReasons ?? undefined,
+      return sendApiError(res, error, {
+        fallbackMessage: 'Failed to create vendor PO item',
+        source: 'vendorPO.item.create',
+        exposeMessage: true,
       });
     }
-    if (error instanceof z.ZodError) {
-      return res
-        .status(400)
-        .json({ error: 'Invalid vendor PO item data', details: error.errors });
-    }
-    res.status(500).json({ error: 'Failed to create vendor PO item' });
+    return sendApiError(res, error, {
+      fallbackMessage: 'Failed to create vendor PO item',
+      source: 'vendorPO.item.create',
+    });
   }
 });
 
@@ -1215,18 +1210,16 @@ router.put('/items/:itemId', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Update vendor PO item error:', error);
     if ((error as any)?.status) {
-      return res.status((error as any).status).json({
-        error: (error as Error).message,
-        complianceBlocked: (error as any).status === 422,
-        blockingReasons: (error as any).blockingReasons ?? undefined,
+      return sendApiError(res, error, {
+        fallbackMessage: 'Failed to update vendor PO item',
+        source: 'vendorPO.item.update',
+        exposeMessage: true,
       });
     }
-    if (error instanceof z.ZodError) {
-      return res
-        .status(400)
-        .json({ error: 'Invalid vendor PO item data', details: error.errors });
-    }
-    res.status(500).json({ error: 'Failed to update vendor PO item' });
+    return sendApiError(res, error, {
+      fallbackMessage: 'Failed to update vendor PO item',
+      source: 'vendorPO.item.update',
+    });
   }
 });
 
@@ -1294,16 +1287,11 @@ router.post('/items/:itemId/receive', async (req: Request, res: Response) => {
     res.json(result);
   } catch (error) {
     console.error('Record PO receipt error:', error);
-    if (error instanceof z.ZodError) {
-      return res
-        .status(400)
-        .json({ error: 'Invalid receipt data', details: error.errors });
-    }
-    // Pass business logic errors (like validation failures) to the client with 400
-    if (error instanceof Error) {
-      return res.status(400).json({ error: error.message });
-    }
-    res.status(500).json({ error: 'Failed to record PO receipt' });
+    return sendApiError(res, error, {
+      fallbackMessage: 'Failed to record PO receipt',
+      source: 'vendorPO.item.receive',
+      exposeMessage: true,
+    });
   }
 });
 
@@ -1742,10 +1730,12 @@ router.post('/:id/send-rfq', async (req: Request, res: Response) => {
 
     if (!emailResult.success) {
       console.error('Failed to send RFQ email:', emailResult.error);
-      return res.status(500).json({
-        error: 'Failed to send RFQ email',
-        message: emailResult.error || 'Email service unavailable. Please try again.',
-        emailSent: false,
+      const emailError: any = new Error(emailResult.error || 'Email service unavailable. Please try again.');
+      emailError.status = 503;
+      return sendApiError(res, emailError, {
+        fallbackMessage: 'Failed to send RFQ email',
+        source: 'vendorPO.rfq.email',
+        exposeMessage: true,
       });
     }
 
@@ -1763,10 +1753,11 @@ router.post('/:id/send-rfq', async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Send RFQ error:', error);
-    if (error instanceof Error) {
-      return res.status(400).json({ error: error.message });
-    }
-    res.status(500).json({ error: 'Failed to send RFQ' });
+    return sendApiError(res, error, {
+      fallbackMessage: 'Failed to send RFQ',
+      source: 'vendorPO.rfq.send',
+      exposeMessage: true,
+    });
   }
 });
 
@@ -1833,7 +1824,11 @@ router.post('/:id/direct-po-exception', requirePermission('purchasing.direct_po_
     res.json({ ok: true, vendorPO: updated });
   } catch (err: any) {
     console.error('Direct-PO exception error:', err);
-    res.status(500).json({ error: err?.message ?? 'Failed to record direct-PO exception' });
+    return sendApiError(res, err, {
+      fallbackMessage: 'Failed to record direct-PO exception',
+      source: 'vendorPO.directPoException',
+      exposeMessage: true,
+    });
   }
 });
 
@@ -2227,8 +2222,14 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
 
     if (!emailResult.success) {
       console.error('Failed to send PO confirmation email:', emailResult.error);
-      return res.status(500).json({
-        error: 'PO issued but confirmation email failed',
+      const emailError: any = new Error(
+        emailResult.error || 'Email service unavailable. PO has been issued - you may resend the email later.',
+      );
+      emailError.status = 503;
+      return sendApiError(res, emailError, {
+        fallbackMessage: 'PO issued but confirmation email failed',
+        source: 'vendorPO.issue.email',
+        exposeMessage: true,
         message: emailResult.error || 'Email service unavailable. PO has been issued — you may resend the email later.',
         emailSent: false,
         poNumber,
@@ -2283,16 +2284,11 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
     });
   } catch (error: any) {
     console.error('Issue vendor PO error:', error);
-    if (error?.code === '23505' || error?.message?.includes('duplicate key') || error?.message?.includes('vendor_pos_po_number')) {
-      return res.status(409).json({
-        error: 'PO number conflict',
-        message: 'A PO number conflict occurred. Please try again.',
-      });
-    }
-    if (error instanceof Error) {
-      return res.status(400).json({ error: error.message });
-    }
-    res.status(500).json({ error: 'Failed to issue vendor PO' });
+    return sendApiError(res, error, {
+      fallbackMessage: 'Failed to issue vendor PO',
+      source: 'vendorPO.issue',
+      exposeMessage: true,
+    });
   }
 });
 
@@ -2519,10 +2515,12 @@ router.post('/:id/resend', async (req: Request, res: Response) => {
 
     if (!emailResult.success) {
       console.error('Failed to resend PO confirmation email:', emailResult.error);
-      return res.status(500).json({
-        error: 'Failed to resend PO confirmation email',
-        message: emailResult.error || 'Email service unavailable.',
-        emailSent: false,
+      const emailError: any = new Error(emailResult.error || 'Email service unavailable.');
+      emailError.status = 503;
+      return sendApiError(res, emailError, {
+        fallbackMessage: 'Failed to resend PO confirmation email',
+        source: 'vendorPO.resend.email',
+        exposeMessage: true,
       });
     }
 
@@ -2537,10 +2535,11 @@ router.post('/:id/resend', async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Resend vendor PO error:', error);
-    if (error instanceof Error) {
-      return res.status(400).json({ error: error.message });
-    }
-    res.status(500).json({ error: 'Failed to resend vendor PO' });
+    return sendApiError(res, error, {
+      fallbackMessage: 'Failed to resend vendor PO',
+      source: 'vendorPO.resend',
+      exposeMessage: true,
+    });
   }
 });
 
@@ -2604,7 +2603,13 @@ router.get('/confirm/preview', async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('[VendorPOConfirmPreview] error:', error);
-    res.status(500).json({ valid: false, errorCode: 'TOKEN_NOT_FOUND', error: 'Failed to preview confirmation', contactInfo });
+    res.status(500).json({
+      valid: false,
+      errorCode: 'TOKEN_NOT_FOUND',
+      error: 'Failed to preview confirmation',
+      requestId: res.locals.requestId,
+      contactInfo,
+    });
   }
 });
 
@@ -2659,7 +2664,12 @@ router.post('/confirm', async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('[VendorPOConfirm] error:', error);
-    res.status(500).json({ success: false, errorCode: 'TOKEN_NOT_FOUND', error: 'Failed to process confirmation' });
+    res.status(500).json({
+      success: false,
+      errorCode: 'TOKEN_NOT_FOUND',
+      error: 'Failed to process confirmation',
+      requestId: res.locals.requestId,
+    });
   }
 });
 

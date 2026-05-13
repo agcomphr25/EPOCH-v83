@@ -11,6 +11,77 @@ import type { GateResult } from '../src/lib/travelerGates';
 vi.mock('../src/lib/travelerGates', () => ({
   evaluateTravelerStartGates: vi.fn<() => Promise<GateResult>>(),
   evaluateTravelerFinishGates: vi.fn<() => Promise<GateResult>>(),
+  evaluateStartGatesDetailed: vi.fn().mockResolvedValue({ allowed: true }),
+  evaluateWadReleaseGate: vi.fn().mockResolvedValue({ allowed: true }),
+  buildGateErrorBody: (code: string, error: string, reason: string) => ({ error, reason, code }),
+  buildTrainingGateErrorBody: (
+    error: string,
+    reason: string,
+    missingRequirement?: unknown,
+    requirementType?: unknown,
+  ) => ({ error, reason, code: 'training_gate', missingRequirement, requirementType }),
+}));
+
+vi.mock('../src/lib/trainingEnforcement', () => ({
+  evaluateTravelerTrainingGate: vi.fn().mockResolvedValue({ allowed: true }),
+  evaluateQcTrainingGate: vi.fn().mockResolvedValue({ allowed: true }),
+}));
+
+vi.mock('../src/lib/resolveChargeCode', () => ({
+  resolveChargeCode: vi.fn().mockResolvedValue({ error: 'no work order linked' }),
+  deriveProjectId: vi.fn().mockResolvedValue(null),
+  resolveCertificationStatus: vi.fn().mockResolvedValue({ status: 'OK', certificationName: null, reason: null }),
+  resolveBudgetOverrunState: vi.fn().mockResolvedValue({ isOverrun: false, nearlyExhausted: false, overrunReason: null }),
+}));
+
+vi.mock('../src/lib/featureFlags', () => ({
+  laborAllocationsEnabled: false,
+}));
+
+vi.mock('../src/lib/productionWorkflowReadiness', () => ({
+  ensureProductionWorkflowReadSchema: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('../src/lib/packetResolution', () => ({
+  resolvePacketBarcode: vi.fn().mockResolvedValue(null),
+}));
+
+vi.mock('../src/services/laborAllocationService', () => ({
+  switchAllocation: vi.fn().mockResolvedValue(undefined),
+  closeAllocation: vi.fn().mockResolvedValue(undefined),
+  openAllocation: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('../src/helpers/travelerBarcodeResolver', () => ({
+  buildChargeContextFromTraveler: vi.fn().mockResolvedValue({ ok: false, error: { code: 'NO_WO', message: 'no wo' } }),
+}));
+
+vi.mock('../src/routes/timeClock', () => ({
+  executeTravelerAutoPunch: vi.fn().mockResolvedValue({ ok: true, action: 'unchanged', chargeContext: null }),
+}));
+
+vi.mock('../src/services/auditService', () => ({
+  auditService: {
+    logEvent: vi.fn().mockResolvedValue(undefined),
+    getEventSetting: vi.fn().mockResolvedValue(null),
+  },
+}));
+
+vi.mock('../middleware/requirePermission', () => ({
+  requirePermission: () => (_req: Request, _res: Response, next: NextFunction) => next(),
+}));
+
+vi.mock('../middleware/actionToken', () => ({
+  validateActionToken: vi.fn((_req: Request, _res: Response, next: NextFunction) => next()),
+}));
+
+vi.mock('../src/permissions', () => ({
+  requireScopedCapability: () => (_req: Request, _res: Response, next: NextFunction) => next(),
+  ScopedForbiddenError: class ScopedForbiddenError extends Error {},
+}));
+
+vi.mock('../src/services/routingStepService', () => ({
+  getActiveRoutingStep: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock('../storage', () => ({
@@ -300,6 +371,129 @@ describe('POST /api/travelers/:travelerId/steps/:stepId/start', () => {
       STEP_ID,
       expect.objectContaining({ employeeName: 'operator1' })
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task #212 regression — A Badge Scan task with requiresCertification: true
+// must be auto-completed during /start (it was previously excluded by the
+// auto-complete filter because of the cert flag) so the subsequent /sign
+// call does not fail with `incomplete_tasks` for the hidden Badge Scan
+// task. Exercised end-to-end through the route handler.
+// ---------------------------------------------------------------------------
+
+describe('Task #212: Badge Scan task with requiresCertification auto-completes on /start', () => {
+  let app: express.Express;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    app = express();
+    app.use(express.json());
+    const travelersRouter = (await import('../src/routes/travelers')).default;
+    app.use('/api/travelers', travelersRouter);
+  });
+
+  afterEach(() => {
+    vi.resetModules();
+  });
+
+  it('auto-completes a Badge Scan CHECK task with requiresCertification: true and lets /sign succeed', async () => {
+    // Traveler with no production work order → skips auto-punch / WAD code paths,
+    // keeping the test focused on the badge-gate auto-completion fix.
+    const traveler = makeTraveler({ productionWorkOrderId: null, partRoutingId: null });
+    const startedStep = makeStep({
+      departmentName: 'Layup', // non-CNC → skips CNC auto-create branch
+      status: 'IN_PROGRESS',
+      startedAt: new Date(),
+      startedBy: 'operator1',
+    });
+    const badgeTask: TravelerTask = makeTask({
+      id: 'task-badge-cert-1',
+      taskType: 'CHECK',
+      taskPhase: 'START',
+      title: 'Badge Scan',
+      requiresSignature: false,
+      requiresCertification: true,
+      required: true,
+      status: 'NOT_STARTED',
+      completedAt: null,
+      completedBy: null,
+    });
+
+    vi.mocked(storage.getTraveler).mockResolvedValue(traveler);
+    vi.mocked(storage.getTravelerStep).mockResolvedValue(
+      makeStep({ departmentName: 'Layup', status: 'NOT_STARTED' }),
+    );
+    vi.mocked(storage.getTravelerTasks).mockResolvedValue([badgeTask]);
+    vi.mocked(storage.updateTravelerStep).mockResolvedValue(startedStep);
+    vi.mocked(storage.createTravelerEvent).mockResolvedValue({});
+    mockNoBadgeScan();
+    vi.mocked(evaluateTravelerStartGates).mockResolvedValue({ allowed: true });
+
+    // Capture every updateTravelerTask call so we can assert the badge task
+    // was completed AND replay the same completion shape into the /sign call.
+    const taskUpdates: Array<{ id: string; data: Partial<TravelerTask> }> = [];
+    vi.mocked(storage.updateTravelerTask).mockImplementation(
+      async (id: string, data: Partial<TravelerTask>) => {
+        taskUpdates.push({ id, data });
+        return { ...badgeTask, ...data, id };
+      },
+    );
+
+    // ---- /start ----------------------------------------------------------
+    const startRes = await request(app)
+      .post(`/api/travelers/${TRAVELER_ID}/steps/${STEP_ID}/start`)
+      .send({ startedBy: 'operator1', badgeScan: 'BADGE-001' });
+
+    expect(startRes.status).toBe(200);
+    expect(startRes.body.id).toBe(STEP_ID);
+    expect(startRes.body.status).toBe('IN_PROGRESS');
+
+    // The Badge Scan task — even with requiresCertification: true — must
+    // have been auto-completed during /start with completedAt + completedBy.
+    const badgeUpdate = taskUpdates.find((u) => u.id === 'task-badge-cert-1');
+    expect(badgeUpdate).toBeDefined();
+    expect(badgeUpdate?.data.status).toBe('COMPLETED');
+    expect(badgeUpdate?.data.completedBy).toBe('operator1');
+    expect(badgeUpdate?.data.completedAt).toBeInstanceOf(Date);
+
+    // ---- /sign -----------------------------------------------------------
+    // Replay the completed badge task into storage so the sign endpoint sees
+    // the same state the database would after the /start handler ran.
+    const completedBadgeTask: TravelerTask = {
+      ...badgeTask,
+      status: 'COMPLETED',
+      completedBy: 'operator1',
+      completedAt: new Date(),
+    };
+    vi.mocked(storage.getTravelerStep).mockResolvedValue(
+      makeStep({ departmentName: 'Layup', status: 'IN_PROGRESS' }),
+    );
+    vi.mocked(storage.getTravelerTasks).mockResolvedValue([completedBadgeTask]);
+    vi.mocked(evaluateTravelerFinishGates).mockResolvedValue({ allowed: true });
+    vi.mocked(storage.createTravelerSignature).mockResolvedValue({ id: 'sig-task212' });
+    vi.mocked(storage.updateTravelerStep).mockResolvedValue(makeStep({ status: 'COMPLETED' }));
+    vi.mocked(storage.updateTraveler).mockResolvedValue(traveler);
+
+    const signRes = await request(app)
+      .post(`/api/travelers/${TRAVELER_ID}/steps/${STEP_ID}/sign`)
+      .send({
+        signedBy: 'operator1',
+        meaning: 'OPERATOR_SIGN_OFF',
+        signatureData: 'data:image/png;base64,abc123',
+      });
+
+    // Most importantly: no `incomplete_tasks` rejection for the hidden Badge
+    // Scan task. Either we get the success path (200) or, if a downstream
+    // mock is incomplete, anything BUT the regression-specific 403 with
+    // `incomplete_tasks` for a badge-named task.
+    expect(signRes.status).toBe(200);
+    expect(signRes.body.error).toBeUndefined();
+    expect(signRes.body.signature?.id).toBe('sig-task212');
+    // Defense-in-depth: if the regression returned, this would surface here.
+    if (signRes.body.code) {
+      expect(signRes.body.code).not.toBe('incomplete_tasks');
+    }
   });
 });
 

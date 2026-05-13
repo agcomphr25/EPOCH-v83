@@ -1160,7 +1160,6 @@ async function performStepStart(
         (t.taskType === 'CHECK' || t.taskType === 'GATE_CHECK') &&
         t.status === 'NOT_STARTED' &&
         !t.requiresSignature &&
-        !t.requiresCertification &&
         badgeGatePattern.test(t.title)
     );
     for (const gateTask of gateCheckTasks) {

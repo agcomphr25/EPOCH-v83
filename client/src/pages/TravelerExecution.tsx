@@ -748,6 +748,42 @@ export default function TravelerExecution() {
     return currentPartRouting.departmentConfig[departmentName] || null;
   };
 
+  const getRoutingQcStandardsForTask = (task: TravelerTask, departmentName: string) => {
+    if (task.taskType !== 'QC') return [];
+    const deptConfig = getDeptConfig(departmentName) as any;
+    if (!deptConfig) return [];
+
+    const phaseStandards =
+      task.taskPhase === 'START'
+        ? deptConfig.startQcStandards
+        : task.taskPhase === 'FINISH'
+          ? deptConfig.finishQcStandards
+          : deptConfig.qcStandards;
+    const fallbackStandards =
+      task.taskPhase === 'FINISH'
+        ? deptConfig.qcStandards
+        : deptConfig.finishQcStandards;
+
+    const standards = Array.isArray(phaseStandards) && phaseStandards.length > 0
+      ? phaseStandards
+      : (Array.isArray(fallbackStandards) ? fallbackStandards : []);
+    const seen = new Set<string>();
+
+    return standards
+      .map((qc: any) => ({
+        standard: qc.standard || qc.standardName || qc.name || qc.title || 'QC Check',
+        tolerance: qc.tolerance || '',
+        requirement: qc.requirement || qc.specification || qc.acceptanceCriteria || '',
+        referenceLink: qc.referenceLink || '',
+      }))
+      .filter((qc: any) => {
+        const key = `${qc.standard}|${qc.tolerance}|${qc.requirement}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return qc.standard || qc.tolerance || qc.requirement;
+      });
+  };
+
   const getTimerConfigForDepartment = (departmentName: string) => {
     const deptConfig = getDeptConfig(departmentName);
     if (deptConfig?.timerConfig?.enabled) return deptConfig.timerConfig;
@@ -2890,6 +2926,39 @@ export default function TravelerExecution() {
                                           />
                                         ) : (
                                           <>
+                                            {task.taskType === 'QC' && task.fields.length === 0 && getRoutingQcStandardsForTask(task, currentStep.departmentName).length > 0 && (
+                                              <div className="space-y-2 rounded-lg border border-green-200 bg-green-50/50 p-3">
+                                                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-green-800">
+                                                  <ClipboardCheck className="h-4 w-4" />
+                                                  Routing QC Requirements
+                                                </div>
+                                                {getRoutingQcStandardsForTask(task, currentStep.departmentName).map((qc: any, index: number) => (
+                                                  <div key={`${qc.standard}-${index}`} className="rounded-md border border-green-100 bg-white p-2">
+                                                    <p className="text-sm font-medium">{qc.standard}</p>
+                                                    <div className="mt-1 flex flex-wrap gap-2 text-xs">
+                                                      {qc.tolerance && (
+                                                        <span className="inline-flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-0.5 text-blue-700">
+                                                          <Wrench className="h-3 w-3" />
+                                                          Tolerance: {qc.tolerance}
+                                                        </span>
+                                                      )}
+                                                      {qc.requirement && (
+                                                        <span className="inline-flex items-center gap-1 rounded border border-green-200 bg-green-50 px-2 py-0.5 text-green-700">
+                                                          <Shield className="h-3 w-3" />
+                                                          Requirement: {qc.requirement}
+                                                        </span>
+                                                      )}
+                                                      {qc.referenceLink && (
+                                                        <a href={qc.referenceLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded border border-purple-200 bg-purple-50 px-2 py-0.5 text-purple-700 hover:bg-purple-100 no-underline">
+                                                          <ExternalLink className="h-3 w-3" />
+                                                          Reference
+                                                        </a>
+                                                      )}
+                                                    </div>
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            )}
                                             {task.fields.length > 0 && (
                                               <div className="space-y-3">
                                                 {task.fields.filter((field) => {

@@ -121,6 +121,9 @@ interface WorkOrderRow {
   currentTravelerStep: string | null;
   activeTravelerId: string | null;
   activeTravelerNumber: string | null;
+  ncrReplacementCount?: number;
+  activeReplacementCount?: number;
+  replacementSerialNumbers?: string | null;
   daysScheduleVariance: number | null;
   blockReason: string | null;
 }
@@ -534,14 +537,25 @@ function ProductionTab({ projectId }: { projectId: string }) {
                         P2
                       </Badge>
                     )}
-                    {row.sourceLabel === 'WAD' && row.wadStatus && (
-                      <Badge variant="outline" className="font-sans text-[10px] px-1.5 py-0">
-                        WAD {row.wadStatus.replace('_', ' ')}
+                    {(row.ncrReplacementCount ?? 0) > 0 && (
+                      <Badge
+                        variant="outline"
+                        className="font-sans text-[10px] px-1.5 py-0 border-blue-300 bg-blue-50 text-blue-700"
+                        title={row.replacementSerialNumbers || undefined}
+                      >
+                        NCR replacement
                       </Badge>
                     )}
                   </div>
                 </TableCell>
-                <TableCell className="text-sm">{row.partNumber}</TableCell>
+                <TableCell className="text-sm">
+                  <div>{row.partNumber}</div>
+                  {(row.ncrReplacementCount ?? 0) > 0 && (
+                    <div className="text-xs text-blue-700 dark:text-blue-300">
+                      {row.activeReplacementCount || 0} active replacement{(row.activeReplacementCount || 0) === 1 ? '' : 's'}
+                    </div>
+                  )}
+                </TableCell>
                 <TableCell className="text-right text-sm text-muted-foreground">
                   <div className="flex flex-col items-end gap-1">
                     <span>

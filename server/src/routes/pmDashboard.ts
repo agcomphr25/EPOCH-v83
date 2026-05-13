@@ -92,6 +92,9 @@ interface ProductionRow {
   currentTravelerStep: string | null;
   activeTravelerId: string | null;
   activeTravelerNumber: string | null;
+  ncrReplacementCount: number;
+  activeReplacementCount: number;
+  replacementSerialNumbers: string | null;
   daysScheduleVariance: string | null;
   blockReason: string | null;
 }
@@ -481,6 +484,9 @@ router.get('/:projectId/production', h(async (req, res) => {
         ORDER BY t.created_at DESC
         LIMIT 1
       ) AS "activeTravelerNumber",
+      0::int AS "ncrReplacementCount",
+      0::int AS "activeReplacementCount",
+      NULL::text AS "replacementSerialNumbers",
       CASE
         WHEN wo.due_date IS NULL THEN NULL
         WHEN wo.status IN ('COMPLETE', 'CLOSED') THEN
@@ -544,6 +550,28 @@ router.get('/:projectId/production', h(async (req, res) => {
         NULL::text AS "currentTravelerStep",
         NULL::text AS "activeTravelerId",
         NULL::text AS "activeTravelerNumber",
+        (
+          SELECT COUNT(*)::int
+          FROM p2_serialized_items psi
+          WHERE psi.po_id = p2po_head.id
+            AND (p2po.p2_po_item_id IS NULL OR psi.po_item_id = p2po.p2_po_item_id)
+            AND psi.metadata->>'isReplacement' = 'true'
+        ) AS "ncrReplacementCount",
+        (
+          SELECT COUNT(*)::int
+          FROM p2_serialized_items psi
+          WHERE psi.po_id = p2po_head.id
+            AND (p2po.p2_po_item_id IS NULL OR psi.po_item_id = p2po.p2_po_item_id)
+            AND psi.status = 'ACTIVE'
+            AND psi.metadata->>'isReplacement' = 'true'
+        ) AS "activeReplacementCount",
+        (
+          SELECT string_agg(psi.serial_number, ', ' ORDER BY psi.created_at DESC)
+          FROM p2_serialized_items psi
+          WHERE psi.po_id = p2po_head.id
+            AND (p2po.p2_po_item_id IS NULL OR psi.po_item_id = p2po.p2_po_item_id)
+            AND psi.metadata->>'isReplacement' = 'true'
+        ) AS "replacementSerialNumbers",
         CASE
           WHEN p2po.due_date IS NULL THEN NULL
           WHEN p2po.status IN ('COMPLETED', 'CLOSED') THEN

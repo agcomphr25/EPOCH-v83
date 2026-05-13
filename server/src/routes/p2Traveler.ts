@@ -504,6 +504,100 @@ function customFieldToTravelerField(field: any) {
   };
 }
 
+function customFieldKey(field: any) {
+  return String(field?.fieldKey || field?.fieldName || '')
+    .trim()
+    .replace(/\s+/g, '_')
+    .toLowerCase();
+}
+
+function dedupeCustomFieldsAcrossPhases(fields: any[], seen: Set<string>) {
+  const out: any[] = [];
+  for (const field of fields) {
+    const key = customFieldKey(field);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(field);
+  }
+  return out;
+}
+
+function qcStandardKey(standard: any) {
+  return [
+    standard?.standard || standard?.standardName || standard?.name || standard?.title || '',
+    standard?.tolerance || '',
+    standard?.requirement || standard?.specification || standard?.acceptanceCriteria || '',
+  ].map((value) => String(value).trim().toLowerCase()).join('|');
+}
+
+function dedupeQcStandardsAcrossPhases(standards: any[], seen: Set<string>) {
+  const out: any[] = [];
+  for (const standard of standards) {
+    const key = qcStandardKey(standard);
+    if (!key.replace(/\|/g, '') || seen.has(key)) continue;
+    seen.add(key);
+    out.push(standard);
+  }
+  return out;
+}
+
+function travelerPhaseRank(task: { taskPhase?: string | null; sortOrder?: number | null }) {
+  const phase = normalizeTravelerTaskPhase(task.taskPhase);
+  const phaseOrder: Record<string, number> = { START: 0, WORK: 1, FINISH: 2 };
+  return [phaseOrder[phase] ?? 1, task.sortOrder ?? 0] as const;
+}
+
+function isUntouchedTravelerTask(task: any, fields: any[]) {
+  if (task.status && task.status !== 'NOT_STARTED') return false;
+  if (task.startedAt || task.completedAt || task.completedBy) return false;
+  return fields.every((field) => !field.value && !field.recordedAt && !field.recordedBy);
+}
+
+function isPhaseDataEntryTask(task: any) {
+  return task.taskType === 'PROCESS' && /^((start|finish) phase data entry|process data entry)$/i.test(task.title || '');
+}
+
+async function pruneUntouchedDuplicatePhaseTasks(stepId: string) {
+  const tasks = await storage.getTravelerTasks(stepId);
+  const sortedTasks = [...tasks].sort((a, b) => {
+    const [phaseA, orderA] = travelerPhaseRank(a);
+    const [phaseB, orderB] = travelerPhaseRank(b);
+    return phaseA - phaseB || orderA - orderB;
+  });
+
+  const seenCustomFieldKeys = new Set<string>();
+  const seenQcFieldKeys = new Set<string>();
+  let pruned = false;
+
+  for (const task of sortedTasks) {
+    const fields = await storage.getTravelerTaskFields(task.id);
+    const fieldKeys = fields.map((field) => String(field.fieldKey || '').trim().toLowerCase()).filter(Boolean);
+    const isDuplicateCustomDataTask =
+      isPhaseDataEntryTask(task) &&
+      fieldKeys.length > 0 &&
+      fieldKeys.every((key) => seenCustomFieldKeys.has(key));
+    const isDuplicateQcTask =
+      task.taskType === 'QC' &&
+      fieldKeys.length > 0 &&
+      fieldKeys.every((key) => seenQcFieldKeys.has(key));
+
+    if ((isDuplicateCustomDataTask || isDuplicateQcTask) && isUntouchedTravelerTask(task, fields)) {
+      await storage.deleteTravelerTask(task.id);
+      pruned = true;
+      continue;
+    }
+
+    if (isPhaseDataEntryTask(task)) {
+      for (const key of fieldKeys) seenCustomFieldKeys.add(key);
+    }
+    if (task.taskType === 'QC') {
+      for (const key of fieldKeys) seenQcFieldKeys.add(key);
+    }
+  }
+
+  return pruned;
+}
+
 async function createTravelerTaskWithFieldsIfMissing(params: {
   stepId: string;
   enabledPhases: Set<'START' | 'WORK' | 'FINISH'>;
@@ -551,6 +645,8 @@ async function backfillDepartmentConfiguredTravelerTasks(params: {
   const departmentConfig = departmentConfigByName[departmentName] || {};
   const traceabilityConfig = (routing.traceabilityConfig || {}) as Record<string, string[]>;
   const enabledPhases = getEnabledTravelerTaskPhases(departmentConfig);
+  const createdCustomFieldKeys = new Set<string>();
+  const createdQcStandardKeys = new Set<string>();
   let repaired = false;
   let sortOrder = tasks.reduce((max, task) => Math.max(max, task.sortOrder ?? 0), -1) + 1;
 
@@ -625,7 +721,10 @@ async function backfillDepartmentConfiguredTravelerTasks(params: {
     }, traceFields);
   }
 
-  const startCustomFields = (departmentConfig.startCustomDataFields || []).map(customFieldToTravelerField);
+  const startCustomFields = dedupeCustomFieldsAcrossPhases(
+    departmentConfig.startCustomDataFields || [],
+    createdCustomFieldKeys,
+  ).map(customFieldToTravelerField);
   if (startCustomFields.length > 0) {
     await addTask({
       taskType: 'PROCESS',
@@ -642,7 +741,10 @@ async function backfillDepartmentConfiguredTravelerTasks(params: {
     instructionPack.specialNotes ||
     instructionPack.media?.length > 0
   );
-  if (hasInstructionPack) {
+  const hasWiAckStartCheck = (departmentConfig.startChecks || []).some((check: any) =>
+    check.title?.toLowerCase().includes('work instruction') && check.title?.toLowerCase().includes('acknowledged')
+  );
+  if (hasInstructionPack && !hasWiAckStartCheck) {
     await addTask({
       taskType: 'PROCESS',
       taskPhase: 'WORK',
@@ -685,12 +787,20 @@ async function backfillDepartmentConfiguredTravelerTasks(params: {
 
   const qcTaskConfigs = [
     { standards: departmentConfig.startQcStandards || [], phase: 'START', title: 'Incoming QC Inspection' },
-    { standards: departmentConfig.qcStandards || [], phase: 'WORK', title: 'Quality Control Checks' },
+    {
+      standards: (departmentConfig.startQcStandards?.length > 0 || departmentConfig.finishQcStandards?.length > 0)
+        ? []
+        : (departmentConfig.qcStandards || []),
+      phase: 'WORK',
+      title: 'Quality Control Checks',
+    },
     { standards: departmentConfig.finishQcStandards || [], phase: 'FINISH', title: 'Final QC Inspection' },
   ];
   for (const qcTaskConfig of qcTaskConfigs) {
     if (qcTaskConfig.standards.length === 0) continue;
-    const fields = qcTaskConfig.standards.map((standard: any) => ({
+    const uniqueStandards = dedupeQcStandardsAcrossPhases(qcTaskConfig.standards, createdQcStandardKeys);
+    if (uniqueStandards.length === 0) continue;
+    const fields = uniqueStandards.map((standard: any) => ({
       fieldKey: `qc_${standard.standard?.replace(/\s+/g, '_').toLowerCase() || 'check'}`,
       fieldLabel: standard.standard || 'QC Check',
       fieldType: 'yes_no',
@@ -808,7 +918,10 @@ async function backfillDepartmentConfiguredTravelerTasks(params: {
     });
   }
 
-  const finishCustomFields = (departmentConfig.finishCustomDataFields || []).map(customFieldToTravelerField);
+  const finishCustomFields = dedupeCustomFieldsAcrossPhases(
+    departmentConfig.finishCustomDataFields || [],
+    createdCustomFieldKeys,
+  ).map(customFieldToTravelerField);
   if (finishCustomFields.length > 0) {
     await addTask({
       taskType: 'PROCESS',
@@ -930,6 +1043,9 @@ async function ensureExistingTravelerHasRoutingDetails(params: {
         });
         if (created) repaired = true;
       }
+
+      const pruned = await pruneUntouchedDuplicatePhaseTasks(step.id);
+      if (pruned) repaired = true;
     }
   } else {
     const departmentSequence = Array.isArray(routing.departmentSequence)
@@ -958,6 +1074,9 @@ async function ensureExistingTravelerHasRoutingDetails(params: {
         routing,
       });
       if (backfilled) repaired = true;
+
+      const pruned = await pruneUntouchedDuplicatePhaseTasks(step.id);
+      if (pruned) repaired = true;
     }
   }
 

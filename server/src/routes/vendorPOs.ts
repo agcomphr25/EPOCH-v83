@@ -15,7 +15,11 @@ import { generateMagicLink, peekMagicLink, validateMagicLink, createVendorConfir
 import { sendCommunication } from '../../communication/send';
 import { db } from '../../db';
 import { sql } from 'drizzle-orm';
-import { getVendorQualificationBlockers, emitProcurementLedgerEvent } from '../services/procurementControlsService';
+import {
+  getVendorQualificationBlockers,
+  emitProcurementLedgerEvent,
+  hasCurrentVendorMasterApproval,
+} from '../services/procurementControlsService';
 import { sendApiError } from '../../utils/apiErrors';
 
 const router = Router();
@@ -294,11 +298,24 @@ async function buildVendorPOIssueReadiness(vendorPO: any): Promise<{
     vendorMasterBlockers.push('Vendor record not found');
   } else {
     if (vendor.isActive === false) vendorMasterBlockers.push('Vendor is inactive');
-    if (!vendor.approved) {
+    const vendorMasterApproved = hasCurrentVendorMasterApproval(vendor);
+    if (!vendorMasterApproved) {
       approvedSameNameVendors = await drizzleDb
         .select({ id: vendors.id, name: vendors.name })
         .from(vendors)
-        .where(dSql`LOWER(${vendors.name}) = LOWER(${vendor.name}) AND ${vendors.approved} = true AND ${vendors.id} <> ${vendor.id}`)
+        .where(dSql`
+          LOWER(${vendors.name}) = LOWER(${vendor.name})
+          AND ${vendors.isActive} IS DISTINCT FROM false
+          AND (
+            ${vendors.approved} = true
+            OR (
+              NULLIF(TRIM(${vendors.approvalLevel}), '') IS NOT NULL
+              AND ${vendors.approvalExpiration} IS NOT NULL
+              AND ${vendors.approvalExpiration} >= CURRENT_DATE
+            )
+          )
+          AND ${vendors.id} <> ${vendor.id}
+        `)
         .limit(5);
       if (approvedSameNameVendors.length > 0) {
         vendorMasterBlockers.push(
@@ -366,7 +383,9 @@ async function buildVendorPOIssueReadiness(vendorPO: any): Promise<{
       details: vendor ? {
         vendorId: vendor.id,
         vendorName: vendor.name,
-        approved: vendor.approved,
+        approved: hasCurrentVendorMasterApproval(vendor),
+        rawApprovedFlag: vendor.approved,
+        approvalLevel: vendor.approvalLevel ?? null,
         approvalExpiration: vendor.approvalExpiration ?? null,
         debarmentStatus: vendor.debarmentStatus ?? null,
         debarmentCheckedAt: vendor.debarmentCheckedAt ?? null,

@@ -316,6 +316,12 @@ function IssueReadinessCard({
             {typeof vendorMasterDetails.approved === 'boolean'
               ? `; master approved: ${vendorMasterDetails.approved ? 'Yes' : 'No'}`
               : ''}
+            {vendorMasterDetails.approvalLevel
+              ? `; approval level: ${vendorMasterDetails.approvalLevel}`
+              : ''}
+            {vendorMasterDetails.approvalExpiration
+              ? `; expires: ${formatReadinessDate(vendorMasterDetails.approvalExpiration)}`
+              : ''}
             {Array.isArray(vendorMasterDetails.approvedSameNameVendors) && vendorMasterDetails.approvedSameNameVendors.length > 0
               ? `. Approved same-name vendor record(s): ${vendorMasterDetails.approvedSameNameVendors.map((v: any) => `#${v.id}`).join(', ')}`
               : ''}

@@ -63,6 +63,30 @@ function normalize(value: unknown): string {
   return String(value ?? '').trim().toLowerCase();
 }
 
+type VendorApprovalFields = {
+  approved?: boolean | null;
+  approvalLevel?: string | null;
+  approvalExpiration?: string | Date | null;
+  isActive?: boolean | null;
+};
+
+function startOfToday(): Date {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return today;
+}
+
+export function hasCurrentVendorMasterApproval(vendor: VendorApprovalFields | null | undefined): boolean {
+  if (!vendor || vendor.isActive === false) return false;
+  if (vendor.approved === true) return true;
+
+  const approvalLevel = String(vendor.approvalLevel ?? '').trim();
+  if (!approvalLevel || !vendor.approvalExpiration) return false;
+
+  const expiration = new Date(vendor.approvalExpiration);
+  return Number.isFinite(expiration.getTime()) && expiration >= startOfToday();
+}
+
 function patternMatches(value: string, pattern: string | null): boolean {
   if (!pattern) return true;
   const normalizedValue = normalize(value);
@@ -96,7 +120,7 @@ export async function getVendorQualificationBlockers(vendorPoId: number, vendorI
 
   if (!vendor) return ['Vendor record not found'];
   if (vendor.isActive === false) blockers.push('Vendor is inactive');
-  if (!vendor.approved) blockers.push('Vendor is not approved');
+  if (!hasCurrentVendorMasterApproval(vendor)) blockers.push('Vendor is not approved');
   if (vendor.approvalExpiration && new Date(vendor.approvalExpiration) < new Date()) {
     blockers.push(`Vendor approval expired on ${vendor.approvalExpiration}`);
   }

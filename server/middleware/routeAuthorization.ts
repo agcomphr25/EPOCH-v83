@@ -279,7 +279,7 @@ const API_TO_FRONTEND_ROUTE_MAPPING: Record<string, string[]> = {
   '/api/credit-memos': ['/credit-memo'],
   '/api/ar-invoices': ['/finance/invoices'],
   '/api/refunds': ['/refund-queue'],
-  '/api/vendors': ['/vendors', '/vendor-pos'],
+  '/api/vendors': ['/vendors', '/vendor-pos', '/inventory/enhanced-mrp'],
   '/api/purchase-orders': ['/purchase-orders'],
   '/api/cost-centers': ['/finance/cost-centers'],
   '/api/cost-accounting': ['/finance/cost-accounting'],

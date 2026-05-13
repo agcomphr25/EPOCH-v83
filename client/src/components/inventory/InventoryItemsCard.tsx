@@ -75,6 +75,11 @@ import { parseLeadTimeToDays } from '@/utils/leadTimeUtils';
 type TraceabilityVisibility = 'required' | 'optional' | 'hidden';
 type TraceabilityFieldConfig = Record<string, TraceabilityVisibility>;
 
+type VendorOption = {
+  id: number;
+  name: string;
+};
+
 function createInventoryRequestId() {
   return `inv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -1466,9 +1471,9 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     }
   }, [isError, error]);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: vendorsResponse } = useQuery<{ data: any[] }>({
-    queryKey: ['/api/vendors'],
+  const { data: vendorsResponse } = useQuery<{ data: VendorOption[] }>({
+    queryKey: ['/api/vendors', 'inventory-item-select'],
+    queryFn: () => apiRequest('/api/vendors?pageSize=10000&sort=name:asc'),
   });
 
   const vendors = vendorsResponse?.data || [];

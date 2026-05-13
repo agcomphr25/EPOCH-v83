@@ -193,6 +193,18 @@ interface TravelerWithDetails {
   events: TravelerEvent[];
 }
 
+const addGeneratedTraceFieldAliases = (values: Record<string, string>) => ({
+  ...values,
+  trace_internalcontrolnumber: values.internalControlNumber || values.material_internal_control_number || values.material_icn || '',
+  trace_supplier: values.supplier || '',
+  trace_inventorypartnumber: values.inventoryPartNumber || values.material_part_number || '',
+  trace_batchlotnumber: values.batchLotNumber || values.material_batch_number || values.material_lot || '',
+  trace_manufacturer: values.manufacturer || values.material_brand || '',
+  trace_rollnumber: values.rollNumber || '',
+  trace_expirationdate: values.expirationDate || values.material_expiration_date || '',
+  trace_receiveddate: values.receivedDate || '',
+});
+
 const STEP_STATUS_COLORS: Record<string, string> = {
   NOT_STARTED: 'bg-gray-100 text-gray-800 border-gray-300',
   IN_PROGRESS: 'bg-blue-100 text-blue-800 border-blue-300',
@@ -2700,7 +2712,7 @@ export default function TravelerExecution() {
                                                 const icn = result.internalControlNumber || '';
                                                 const lot = result.updatedLot;
                                                 const hasInventoryMatch = !!lot;
-                                                const allManualVals: Record<string, string> = {
+                                                const allManualVals: Record<string, string> = addGeneratedTraceFieldAliases({
                                                   material_internal_control_number: icn,
                                                   internalControlNumber: icn,
                                                   material_icn: icn,
@@ -2720,7 +2732,7 @@ export default function TravelerExecution() {
                                                   manufacturer: lot?.manufacturer || 'Manual Entry',
                                                   rollNumber: lot?.rollNumber || 'N/A',
                                                   receivedDate: lot?.receivedDate || today,
-                                                };
+                                                });
                                                 const traceFieldVals: Record<string, string> = {};
                                                 for (const [key, val] of Object.entries(allManualVals)) {
                                                   if (taskFieldKeys.has(key)) {
@@ -2769,7 +2781,7 @@ export default function TravelerExecution() {
                                                   const combinedIcns = batch.rolls.map((r) => r.icn).filter(Boolean).join(', ');
                                                   const icnOrBarcode = combinedIcns || batch.packetBarcode;
 
-                                                  const allScanVals: Record<string, string> = {
+                                                  const allScanVals: Record<string, string> = addGeneratedTraceFieldAliases({
                                                     packetBarcode: batch.packetBarcode,
                                                     packet_barcode: batch.packetBarcode,
                                                     material_internal_control_number: icnOrBarcode,
@@ -2791,7 +2803,7 @@ export default function TravelerExecution() {
                                                     manufacturer: primaryLot?.manufacturer || '',
                                                     rollNumber: primaryLot?.rollNumber || '',
                                                     receivedDate: primaryLot?.receivedDate || '',
-                                                  };
+                                                  });
                                                   batch.rolls.forEach((r, idx) => {
                                                     allScanVals[`internalControlNumber_${idx + 1}`] = r.icn;
                                                   });
@@ -2839,7 +2851,7 @@ export default function TravelerExecution() {
                                                 return;
                                               }
 
-                                              const allScanVals: Record<string, string> = {
+                                              const allScanVals: Record<string, string> = addGeneratedTraceFieldAliases({
                                                 material_internal_control_number: icnValue,
                                                 internalControlNumber: icnValue,
                                                 material_icn: icnValue,
@@ -2859,7 +2871,7 @@ export default function TravelerExecution() {
                                                 manufacturer: lot?.manufacturer || '',
                                                 rollNumber: lot?.rollNumber || '',
                                                 receivedDate: lot?.receivedDate || '',
-                                              };
+                                              });
                                               const traceFieldVals: Record<string, string> = {};
                                               for (const [key, val] of Object.entries(allScanVals)) {
                                                 if (taskFieldKeys.has(key)) {

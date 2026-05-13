@@ -32,7 +32,12 @@ import {
 import { auditService } from '../services/auditService';
 import { orderActivityEvents } from '../../schema';
 import * as accountingService from '../services/accountingService';
-import { sendOrderConfirmationNotification, OrderConfirmationOutcome } from '../../utils/notifications';
+import {
+  normalizeNotificationMethods,
+  sendCustomerNotification,
+  sendOrderConfirmationNotification,
+  OrderConfirmationOutcome,
+} from '../../utils/notifications';
 import { generateOrderPdf, PdfIntent } from '../../services/orderPdfService';
 
 const router = Router();
@@ -1688,10 +1693,49 @@ router.post('/fulfill', async (req: Request, res: Response) => {
     };
     const updatedOrder = await storage.fulfillOrder(orderId, actor);
 
+    let notificationResult = null;
+    if (updatedOrder.trackingNumber && !updatedOrder.customerNotified) {
+      try {
+        if (!updatedOrder.customerId) {
+          console.warn(`[FULFILL-NOTIFY] Order ${orderId} has tracking but no customerId; skipping customer notification`);
+        } else {
+          const customer = await storage.getCustomerById(updatedOrder.customerId);
+          if (!customer || (!customer.email && !customer.phone)) {
+            console.warn(`[FULFILL-NOTIFY] Order ${orderId} has no usable customer contact; skipping customer notification`);
+          } else {
+            const preferredMethods = normalizeNotificationMethods(
+              customer.preferredCommunicationMethod,
+              { email: customer.email, phone: customer.phone }
+            );
+
+            notificationResult = await sendCustomerNotification({
+              orderId: updatedOrder.orderId,
+              trackingNumber: updatedOrder.trackingNumber,
+              carrier: updatedOrder.shippingCarrier || 'UPS',
+              estimatedDelivery: updatedOrder.estimatedDelivery
+                ? new Date(updatedOrder.estimatedDelivery)
+                : undefined,
+              customerEmail: customer.email || undefined,
+              customerPhone: customer.phone || undefined,
+              preferredMethods,
+            });
+
+            if (!notificationResult.success) {
+              console.error(`[FULFILL-NOTIFY] Customer notification failed for order ${orderId}:`, notificationResult.errors);
+            }
+          }
+        }
+      } catch (notificationError) {
+        console.error(`[FULFILL-NOTIFY] Customer notification failed for order ${orderId}:`, notificationError);
+      }
+    }
+
     res.json({
       success: true,
       message: 'Order fulfilled successfully',
       order: updatedOrder,
+      notificationSent: notificationResult?.success || false,
+      notificationMethods: notificationResult?.methods || [],
     });
   } catch (error) {
     console.error('Fulfill order error:', error);

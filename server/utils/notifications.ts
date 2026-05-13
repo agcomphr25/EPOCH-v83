@@ -26,8 +26,35 @@ export interface NotificationData {
   estimatedDelivery?: Date;
   customerEmail?: string;
   customerPhone?: string;
-  preferredMethods?: string[];
+  preferredMethods?: string[] | string | null;
   forceResend?: boolean; // Set true to bypass deduplication (manual resend)
+}
+
+export function normalizeNotificationMethods(
+  preferredMethods: unknown,
+  contact: { email?: string | null; phone?: string | null } = {}
+): string[] {
+  const rawMethods = Array.isArray(preferredMethods)
+    ? preferredMethods
+    : typeof preferredMethods === 'string'
+      ? preferredMethods.split(/[,\s]+/)
+      : [];
+
+  const normalized = rawMethods
+    .map((method) => String(method).trim().toLowerCase())
+    .map((method) => {
+      if (method === 'text' || method === 'phone') return 'sms';
+      if (method === 'e-mail') return 'email';
+      return method;
+    })
+    .filter((method): method is 'email' | 'sms' => method === 'email' || method === 'sms');
+
+  const uniqueMethods = Array.from(new Set(normalized));
+  if (uniqueMethods.length > 0) return uniqueMethods;
+
+  if (contact.email) return ['email'];
+  if (contact.phone) return ['sms'];
+  return [];
 }
 
 export async function sendCustomerNotification(
@@ -129,11 +156,18 @@ export async function sendCustomerNotification(
   }
 
   // Determine notification methods
-  let preferredMethods = (data.preferredMethods && data.preferredMethods.length)
-    ? [...data.preferredMethods]
-    : ((customer.preferredCommunicationMethod as string[]) || []);
+  let preferredMethods = normalizeNotificationMethods(
+    data.preferredMethods,
+    { email: data.customerEmail, phone: data.customerPhone }
+  );
   const email = data.customerEmail || customer.email;
   const phone = data.customerPhone || customer.phone;
+  if (!preferredMethods.length) {
+    preferredMethods = normalizeNotificationMethods(
+      customer.preferredCommunicationMethod,
+      { email, phone }
+    );
+  }
 
   // 1. Detect Twilio availability using centralized config
   const allowSms = isTwilioConfigured();

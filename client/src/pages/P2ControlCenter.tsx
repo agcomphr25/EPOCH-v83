@@ -189,11 +189,16 @@ export default function P2ControlCenter() {
   }, [allPOStatuses]);
 
   useEffect(() => {
-    if (!poIdFromUrl || allPOStatuses.length === 0) return;
-    if (allPOStatuses.some((po) => po.id === poIdFromUrl)) {
-      setSelectedPOIds([poIdFromUrl]);
+    if (allPOStatuses.length === 0) return;
+    const selectedPO = poIdFromUrl
+      ? allPOStatuses.find((po) => po.id === poIdFromUrl)
+      : poFromUrl
+        ? allPOStatuses.find((po) => po.poNumber === poFromUrl)
+        : null;
+    if (selectedPO) {
+      setSelectedPOIds([selectedPO.id]);
     }
-  }, [poIdFromUrl, allPOStatuses]);
+  }, [poIdFromUrl, poFromUrl, allPOStatuses]);
 
   const selectedPONumbers = selectedPOIds.length > 0
     ? allPOStatuses.filter((po) => selectedPOIds.includes(po.id)).map((po) => po.poNumber)

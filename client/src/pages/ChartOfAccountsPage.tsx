@@ -161,7 +161,7 @@ export default function ChartOfAccountsPage() {
             </span>
             {!isLoading && (
               <Button size="sm" data-testid="button-success">
-                Success
+                SUCCESS
               </Button>
             )}
           </CardTitle>

@@ -187,6 +187,7 @@ interface ReceivedUnit {
   freezerNumber?: number;
   allocatedToType?: string;
   allocatedToId?: number;
+  materialLotId?: string;
 }
 
 interface ReceiptDocument {
@@ -470,12 +471,15 @@ function DepartmentDefaultsManager() {
 
 function LeftPanel({
   onStartReceipt,
+  onSelectReceipt,
   activeReceiptId,
 }: {
   onStartReceipt: (po: VendorPO | null) => void;
+  onSelectReceipt: (receipt: Receipt) => void;
   activeReceiptId: number | null;
 }) {
   const [search, setSearch] = useState('');
+  const queryClient = useQueryClient();
 
   const { data: currentUser } = useQuery<{ id: number; username: string; role: string }>({
     queryKey: ['currentUser'],
@@ -496,6 +500,33 @@ function LeftPanel({
     queryKey: ['/api/receipts/pending-by-po'],
     queryFn: () => apiRequest('/api/receipts/pending-by-po'),
     refetchInterval: 30000,
+  });
+
+  const { data: completedReceipts = [] } = useQuery<Receipt[]>({
+    queryKey: ['/api/receipts', 'complete'],
+    queryFn: () => apiRequest('/api/receipts?status=complete'),
+    refetchInterval: 60000,
+  });
+
+  const reopenReceiptMutation = useMutation({
+    mutationFn: async (receipt: Receipt) => {
+      await apiRequest(`/api/receipts/${receipt.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          status: 'in_progress',
+          reopenReason: 'Correction to receiving entry',
+        }),
+      });
+      return apiRequest(`/api/receipts/${receipt.id}`);
+    },
+    onSuccess: (receipt: Receipt) => {
+      onSelectReceipt(receipt);
+      queryClient.invalidateQueries({ queryKey: ['/api/receipts'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/receipts', 'complete'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/receipts/pending-by-po'] });
+      toast.success(`Reopened ${receipt.receiptNumber} for adjustment`);
+    },
+    onError: (err: any) => toast.error(err?.message ?? 'Failed to reopen receipt'),
   });
 
   // Merge Sent + Partially Received POs, deduplicate by id
@@ -548,6 +579,37 @@ function LeftPanel({
             Manual Receipt (no PO)
           </div>
         </button>
+
+        {completedReceipts.length > 0 && (
+          <div className="border rounded-lg overflow-hidden">
+            <div className="px-2 py-1.5 bg-gray-100 dark:bg-gray-800 text-xs font-semibold text-gray-600 dark:text-gray-400 flex items-center gap-1">
+              <History className="w-3 h-3" />
+              Recent Completed Receipts
+            </div>
+            {completedReceipts.slice(0, 8).map(receipt => (
+              <div key={receipt.id} className={`p-2 border-t text-xs hover:bg-gray-50 dark:hover:bg-gray-800/50 ${activeReceiptId === receipt.id ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="text-left min-w-0">
+                    <div className="font-medium text-gray-900 dark:text-gray-100 truncate">{receipt.receiptNumber}</div>
+                    <div className="text-gray-500 mt-0.5 truncate">
+                      {receipt.vendorName ?? 'Manual receipt'} {receipt.vendorPoNumber ? `· PO ${receipt.vendorPoNumber}` : ''}
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-6 text-xs px-2 shrink-0"
+                    onClick={() => reopenReceiptMutation.mutate(receipt)}
+                    disabled={reopenReceiptMutation.isPending}
+                    title="Reopen receipt for correction"
+                  >
+                    {reopenReceiptMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Reopen'}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         {isLoadingPOs && (
           <div className="flex items-center justify-center py-4">
@@ -753,6 +815,27 @@ function CenterPanel({
 }) {
   const [step, setStep] = useState(0);
   const queryClient = useQueryClient();
+  const reopenActiveReceiptMutation = useMutation({
+    mutationFn: async () => {
+      if (!receipt) throw new Error('No receipt selected');
+      await apiRequest(`/api/receipts/${receipt.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          status: 'in_progress',
+          reopenReason: 'Correction to receiving entry',
+        }),
+      });
+      return apiRequest(`/api/receipts/${receipt.id}`);
+    },
+    onSuccess: (updated: Receipt) => {
+      onReceiptUpdate(updated);
+      queryClient.invalidateQueries({ queryKey: ['/api/receipts'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/receipts', 'complete'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/receipts/pending-by-po'] });
+      toast.success(`Reopened ${updated.receiptNumber} for adjustment`);
+    },
+    onError: (err: any) => toast.error(err?.message ?? 'Failed to reopen receipt'),
+  });
 
   if (!receipt) {
     return (
@@ -789,7 +872,21 @@ function CenterPanel({
       </div>
 
       <div className="flex-1 overflow-y-auto p-3">
-        {step === 0 && (
+        {receipt.status === 'complete' ? (
+          <div className="h-full flex items-center justify-center">
+            <div className="border rounded-lg p-4 max-w-md text-center space-y-3 bg-gray-50 dark:bg-gray-900">
+              <CheckCircle2 className="w-8 h-8 text-green-600 mx-auto" />
+              <div>
+                <div className="text-sm font-semibold">Receipt Complete</div>
+                <div className="text-xs text-gray-500 mt-1">Reopen this receipt before correcting quantities, traceability, documents, or putaway details.</div>
+              </div>
+              <Button size="sm" onClick={() => reopenActiveReceiptMutation.mutate()} disabled={reopenActiveReceiptMutation.isPending}>
+                {reopenActiveReceiptMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <RefreshCw className="w-3 h-3 mr-1" />}
+                Reopen for Adjustment
+              </Button>
+            </div>
+          </div>
+        ) : step === 0 && (
           <ShipmentInfoStep
             receipt={receipt}
             onNext={() => setStep(1)}
@@ -828,16 +925,18 @@ function CenterPanel({
         )}
       </div>
 
-      <div className="p-3 border-t flex items-center justify-between bg-white dark:bg-gray-950">
-        <Button variant="outline" size="sm" onClick={() => setStep(s => Math.max(0, s - 1))} disabled={step === 0}>
-          Back
-        </Button>
-        {step < 4 && (
-          <Button size="sm" onClick={() => setStep(s => Math.min(4, s + 1))}>
-            Save & Continue
+      {receipt.status !== 'complete' && (
+        <div className="p-3 border-t flex items-center justify-between bg-white dark:bg-gray-950">
+          <Button variant="outline" size="sm" onClick={() => setStep(s => Math.max(0, s - 1))} disabled={step === 0}>
+            Back
           </Button>
-        )}
-      </div>
+          {step < 4 && (
+            <Button size="sm" onClick={() => setStep(s => Math.min(4, s + 1))}>
+              Save & Continue
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -1422,6 +1521,8 @@ function UnitSplittingStep({ receipt, onNext, onUpdate }: {
     certReference: '',
   });
   const [confirmDeleteUnitId, setConfirmDeleteUnitId] = useState<number | null>(null);
+  const [adjustingUnit, setAdjustingUnit] = useState<ReceivedUnit | null>(null);
+  const [adjustUnitForm, setAdjustUnitForm] = useState<Record<string, string>>({});
 
   const deleteUnitMutation = useMutation({
     mutationFn: (unitId: number) => apiRequest(`/api/receipts/${receipt.id}/units/${unitId}`, {
@@ -1504,6 +1605,57 @@ function UnitSplittingStep({ receipt, onNext, onUpdate }: {
       toast.success('Unit cloned');
     },
     onError: (err: any) => toast.error(err?.message ?? 'Failed to clone unit'),
+  });
+
+  const beginAdjustUnit = (unit: ReceivedUnit) => {
+    setAdjustingUnit(unit);
+    setAdjustUnitForm({
+      quantity: unit.quantity ?? '',
+      uom: unit.uom ?? '',
+      unitType: unit.unitType ?? 'other',
+      lotNumber: unit.lotNumber ?? '',
+      batchNumber: unit.batchNumber ?? '',
+      serialNumber: unit.serialNumber ?? '',
+      rollNumber: unit.rollNumber ?? '',
+      heatLot: unit.heatLot ?? '',
+      manufactureDate: unit.manufactureDate ? unit.manufactureDate.slice(0, 10) : '',
+      expirationDate: unit.expirationDate ? unit.expirationDate.slice(0, 10) : '',
+      certReference: unit.certReference ?? '',
+      location: unit.location ?? '',
+      freezerNumber: unit.freezerNumber != null ? String(unit.freezerNumber) : '',
+    });
+  };
+
+  const adjustUnitMutation = useMutation({
+    mutationFn: () => {
+      if (!adjustingUnit) throw new Error('No unit selected');
+      const payload: Record<string, string | number | null> = {
+        quantity: adjustUnitForm.quantity,
+        uom: adjustUnitForm.uom,
+        unitType: adjustUnitForm.unitType,
+        lotNumber: adjustUnitForm.lotNumber || null,
+        batchNumber: adjustUnitForm.batchNumber || null,
+        serialNumber: adjustUnitForm.serialNumber || null,
+        rollNumber: adjustUnitForm.rollNumber || null,
+        heatLot: adjustUnitForm.heatLot || null,
+        manufactureDate: adjustUnitForm.manufactureDate || null,
+        expirationDate: adjustUnitForm.expirationDate || null,
+        certReference: adjustUnitForm.certReference || null,
+        location: adjustUnitForm.location || null,
+        freezerNumber: adjustUnitForm.freezerNumber ? parseInt(adjustUnitForm.freezerNumber, 10) : null,
+      };
+      return apiRequest(`/api/receipts/${receipt.id}/units/${adjustingUnit.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      });
+    },
+    onSuccess: async () => {
+      const updated = await apiRequest(`/api/receipts/${receipt.id}`);
+      onUpdate(updated);
+      setAdjustingUnit(null);
+      toast.success('Unit corrected');
+    },
+    onError: (err: any) => toast.error(err?.message ?? 'Failed to adjust unit'),
   });
 
   // Fetch traceability config for every line so we can preview which lines will
@@ -1667,6 +1819,14 @@ function UnitSplittingStep({ receipt, onNext, onUpdate }: {
                   <>
                     <Button
                       variant="ghost" size="sm" className="h-5 px-1 text-xs"
+                      title="Adjust unit"
+                      onClick={() => beginAdjustUnit(unit)}
+                      disabled={adjustUnitMutation.isPending}
+                    >
+                      <Pencil className="w-2.5 h-2.5" />
+                    </Button>
+                    <Button
+                      variant="ghost" size="sm" className="h-5 px-1 text-xs"
                       title="Clone unit"
                       onClick={() => cloneUnitMutation.mutate(unit.id)}
                       disabled={cloneUnitMutation.isPending}
@@ -1695,6 +1855,84 @@ function UnitSplittingStep({ receipt, onNext, onUpdate }: {
           <ChevronDown className="w-3 h-3 mr-1" /> Split Line into Units
         </Button>
       )}
+
+      <Dialog open={!!adjustingUnit} onOpenChange={open => !open && setAdjustingUnit(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-sm">Adjust Received Unit</DialogTitle>
+            <DialogDescription className="text-xs">
+              Correct quantity, traceability, and storage details. Accepted units keep their material-lot link and record an adjustment.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            {adjustingUnit?.materialLotId && (
+              <div className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+                This unit already created inventory. Quantity changes will adjust the linked material lot when unissued quantity is available.
+              </div>
+            )}
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <Label className="text-xs">Qty</Label>
+                <Input className="h-7 text-xs mt-0.5" type="number" step="0.001" value={adjustUnitForm.quantity ?? ''} onChange={e => setAdjustUnitForm(f => ({ ...f, quantity: e.target.value }))} />
+              </div>
+              <div>
+                <Label className="text-xs">UOM</Label>
+                <Input className="h-7 text-xs mt-0.5" value={adjustUnitForm.uom ?? ''} onChange={e => setAdjustUnitForm(f => ({ ...f, uom: e.target.value }))} />
+              </div>
+              <div>
+                <Label className="text-xs">Unit Type</Label>
+                <Select value={adjustUnitForm.unitType ?? 'other'} onValueChange={v => setAdjustUnitForm(f => ({ ...f, unitType: v }))}>
+                  <SelectTrigger className="h-7 text-xs mt-0.5"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {UNIT_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                ['lotNumber', 'Lot Number'],
+                ['batchNumber', 'Batch Number'],
+                ['serialNumber', 'Serial Number'],
+                ['rollNumber', 'Roll Number'],
+                ['heatLot', 'Heat Lot'],
+                ['certReference', 'Cert Reference'],
+              ].map(([key, label]) => (
+                <div key={key}>
+                  <Label className="text-xs">{label}</Label>
+                  <Input className="h-7 text-xs mt-0.5" value={adjustUnitForm[key] ?? ''} onChange={e => setAdjustUnitForm(f => ({ ...f, [key]: e.target.value }))} />
+                </div>
+              ))}
+              <div>
+                <Label className="text-xs">Mfg Date</Label>
+                <Input className="h-7 text-xs mt-0.5" type="date" value={adjustUnitForm.manufactureDate ?? ''} onChange={e => setAdjustUnitForm(f => ({ ...f, manufactureDate: e.target.value }))} />
+              </div>
+              <div>
+                <Label className="text-xs">Exp Date</Label>
+                <Input className="h-7 text-xs mt-0.5" type="date" value={adjustUnitForm.expirationDate ?? ''} onChange={e => setAdjustUnitForm(f => ({ ...f, expirationDate: e.target.value }))} />
+              </div>
+              <div>
+                <Label className="text-xs">Location</Label>
+                <Input className="h-7 text-xs mt-0.5" value={adjustUnitForm.location ?? ''} onChange={e => setAdjustUnitForm(f => ({ ...f, location: e.target.value }))} />
+              </div>
+              <div>
+                <Label className="text-xs">Freezer #</Label>
+                <Input className="h-7 text-xs mt-0.5" type="number" min={1} value={adjustUnitForm.freezerNumber ?? ''} onChange={e => setAdjustUnitForm(f => ({ ...f, freezerNumber: e.target.value }))} />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setAdjustingUnit(null)}>Cancel</Button>
+            <Button
+              size="sm"
+              onClick={() => adjustUnitMutation.mutate()}
+              disabled={adjustUnitMutation.isPending || !adjustUnitForm.quantity || Number(adjustUnitForm.quantity) <= 0}
+            >
+              {adjustUnitMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Save Correction'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Split dialog */}
       <Dialog open={showSplitDialog} onOpenChange={open => { setShowSplitDialog(open); if (!open) { setSplitMode('equal'); setSplitCount('2'); setRollSqms(['', '']); setRollNumbers(['', '']); setSplitTemplate({ lotNumber: '', batchNumber: '', heatLot: '', manufactureDate: '', expirationDate: '', certReference: '' }); } }}>
@@ -3249,7 +3487,7 @@ export default function InventoryReceivingControlCenter() {
         {/* Desktop grid */}
         <div className="hidden md:grid h-full" style={{ gridTemplateColumns: '280px 1fr 320px' }}>
           <div className="border-r overflow-hidden">
-            <LeftPanel onStartReceipt={handleStartReceipt} activeReceiptId={activeReceipt?.id ?? null} />
+            <LeftPanel onStartReceipt={handleStartReceipt} onSelectReceipt={handleUpdate} activeReceiptId={activeReceipt?.id ?? null} />
           </div>
           <div className="overflow-hidden border-r">
             {showSupervisorQueue ? (
@@ -3272,7 +3510,7 @@ export default function InventoryReceivingControlCenter() {
         {/* Mobile single-panel */}
         <div className="md:hidden h-full overflow-hidden">
           {mobileTab === 'pos' && (
-            <LeftPanel onStartReceipt={handleStartReceipt} activeReceiptId={activeReceipt?.id ?? null} />
+            <LeftPanel onStartReceipt={handleStartReceipt} onSelectReceipt={handleUpdate} activeReceiptId={activeReceipt?.id ?? null} />
           )}
           {mobileTab === 'workflow' && (
             showSupervisorQueue ? (

@@ -1286,7 +1286,10 @@ export default function CuttingOperatorDashboard() {
       null;
   }, [selectedMfgItem, packetBOMs]);
 
-  const pendingReceiving = fabricInventory.filter(f => f.squareMeters > 0 && !f.freezerLocation).length;
+  const freezerAssignmentQueue = fabricInventory.filter(
+    f => f.squareMeters > 0 && !f.freezerLocation && f.status !== 'depleted'
+  );
+  const pendingReceiving = freezerAssignmentQueue.length;
   const inProgressCount = mfgQueueItems.filter(i => i.status === 'IN_PROGRESS').length;
   const pendingCount = mfgQueueItems.filter(i => i.status === 'PENDING').length;
   const printableQueueItems = mfgQueueItems.filter(isPacketBarcodePrintable);
@@ -1912,8 +1915,7 @@ export default function CuttingOperatorDashboard() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {fabricInventory
-                      .filter(f => f.squareMeters > 0 && !f.freezerLocation)
+                    {freezerAssignmentQueue
                       .slice(0, 20)
                       .map((fabric) => (
                       <TableRow key={fabric.id} className="hover:bg-muted/50" data-testid={`row-fabric-${fabric.id}`}>

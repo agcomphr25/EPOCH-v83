@@ -331,7 +331,15 @@ function parseSupabaseObjectPath(objectPath: string) {
 }
 
 export function getFileStorageProvider(): FileStorageProvider {
-  const provider = (process.env.FILE_STORAGE_PROVIDER || 'replit').toLowerCase();
+  const hasSupabaseStorageConfig = Boolean(
+    process.env.SUPABASE_URL &&
+      (process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY) &&
+      (process.env.SUPABASE_STORAGE_BUCKET || process.env.FILE_STORAGE_BUCKET)
+  );
+  const provider = (
+    process.env.FILE_STORAGE_PROVIDER ||
+    (hasSupabaseStorageConfig ? 'supabase' : 'replit')
+  ).toLowerCase();
   if (provider === 'supabase') return new SupabaseFileStorageProvider();
   return new ReplitFileStorageProvider();
 }

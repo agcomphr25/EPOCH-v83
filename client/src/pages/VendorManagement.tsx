@@ -666,16 +666,20 @@ export default function VendorManagement() {
         body: formData,
       });
 
-      if (!response.ok) throw new Error('Upload failed');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || errorData.details || 'Upload failed');
+      }
 
       const data = await response.json();
       form.setValue('mainDocumentUrl', data.url);
       setMainDocFile(file);
       toast({ title: 'Document uploaded successfully' });
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to upload document';
       toast({
         title: 'Upload failed',
-        description: 'Failed to upload document',
+        description: message,
         variant: 'destructive',
       });
     } finally {
@@ -719,7 +723,7 @@ export default function VendorManagement() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Upload failed');
+        throw new Error(errorData.error || errorData.details || 'Upload failed');
       }
 
       const data = await response.json();

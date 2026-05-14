@@ -21,6 +21,7 @@ export interface UploadTarget {
 export interface FileStorageProvider {
   readonly name: FileStorageProviderName;
   createUploadTarget(input: CreateUploadTargetInput): Promise<UploadTarget>;
+  uploadBuffer(input: CreateUploadTargetInput & { buffer: Buffer }): Promise<string>;
   setPublicReadPolicy(objectPath: string, owner?: string): Promise<void>;
   deleteObject(objectPath: string): Promise<void>;
   downloadObject(objectPath: string, res: Response): Promise<void>;
@@ -128,6 +129,16 @@ class ReplitFileStorageProvider implements FileStorageProvider {
     return { uploadURL, objectPath, provider: this.name };
   }
 
+  async uploadBuffer(input: CreateUploadTargetInput & { buffer: Buffer }): Promise<string> {
+    const objectPath = await this.objectStorage.uploadBuffer(
+      input.buffer,
+      input.fileName,
+      input.contentType || 'application/octet-stream',
+      input.scope || 'uploads'
+    );
+    return objectPath;
+  }
+
   async setPublicReadPolicy(objectPath: string, owner = 'system') {
     await this.objectStorage.trySetObjectEntityAclPolicy(objectPath, {
       owner,
@@ -198,6 +209,12 @@ class SupabaseFileStorageProvider implements FileStorageProvider {
     };
   }
 
+  async uploadBuffer(input: CreateUploadTargetInput & { buffer: Buffer }): Promise<string> {
+    const target = await this.createUploadTarget(input);
+    const ref = parseSupabaseObjectPath(target.objectPath);
+    return this.uploadObject(ref.bucket, ref.path, input.buffer, input.contentType || 'application/octet-stream');
+  }
+
   async setPublicReadPolicy() {
     // Supabase access is enforced through server-side download routes and bucket policy.
   }
@@ -251,11 +268,15 @@ class SupabaseFileStorageProvider implements FileStorageProvider {
       throw storageAuthError('wrong_storage_bucket', 'Upload token bucket does not match server config.');
     }
 
-    const response = await fetch(`${this.url}/storage/v1/object/${encodeURIComponent(payload.bucket)}/${payload.path}`, {
+    return this.uploadObject(payload.bucket, payload.path, body, contentType || 'application/octet-stream');
+  }
+
+  private async uploadObject(bucket: string, path: string, body: Buffer, contentType: string) {
+    const response = await fetch(`${this.url}/storage/v1/object/${encodeURIComponent(bucket)}/${path}`, {
       method: 'POST',
       headers: {
         ...this.authHeaders(),
-        'Content-Type': contentType || 'application/octet-stream',
+        'Content-Type': contentType,
         'x-upsert': 'false',
       },
       body,
@@ -275,7 +296,7 @@ class SupabaseFileStorageProvider implements FileStorageProvider {
       );
     }
 
-    return toSupabaseObjectPath(payload.bucket, payload.path);
+    return toSupabaseObjectPath(bucket, path);
   }
 
   private authHeaders() {

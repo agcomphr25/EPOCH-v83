@@ -154,6 +154,139 @@ const ORDERED_PARTS_REQUEST_STATUSES = [
   'DELIVERED_TO_DEPT',
 ];
 
+// ─── Item-level progress helper ──────────────────────────────────────────────
+// Aggregates p2_serialized_items per (po_id, po_item_id) for a project so the
+// PM Control Center reports the same numbers as the order card. "Completed"
+// uses the same status set the order card uses (status = 'COMPLETED');
+// SCRAPPED / CANCELLED units are excluded from the totals.
+interface SerializedItemGroup {
+  poId: number;
+  poItemId: number;
+  partNumber: string | null;
+  partName: string | null;
+  poNumber: string | null;
+  totalUnits: number;
+  completedUnits: number;
+  inProductionUnits: number;
+  pendingUnits: number;
+  completedTodayUnits: number;
+  currentDepartment: string | null;
+  dueDate: string | null;
+}
+
+interface SerializedItemAggregate {
+  linkedPoIds: number[];
+  groups: SerializedItemGroup[];
+  totalRequired: number;
+  totalCompleted: number;
+}
+
+async function getProjectSerializedItemAggregate(
+  projectId: string,
+  today: string,
+): Promise<SerializedItemAggregate> {
+  const linkRows = await pool.query<{ po_id: string }>(`
+    WITH project_po_link AS (
+      SELECT p.po_id AS po_id
+      FROM projects p
+      WHERE p.id = $1 AND p.po_id IS NOT NULL
+      UNION
+      SELECT ps.linked_p2_order_id AS po_id
+      FROM project_steps ps
+      WHERE ps.project_id = $1 AND ps.linked_p2_order_id IS NOT NULL
+    )
+    SELECT DISTINCT po_id::text FROM project_po_link WHERE po_id IS NOT NULL
+  `, [projectId]);
+
+  const linkedPoIds = linkRows
+    .map(r => parseInt(r.po_id, 10))
+    .filter(n => Number.isFinite(n));
+
+  if (!linkedPoIds.length) {
+    return { linkedPoIds: [], groups: [], totalRequired: 0, totalCompleted: 0 };
+  }
+
+  const groupRows = await pool.query<{
+    poId: string;
+    poItemId: string;
+    partNumber: string | null;
+    partName: string | null;
+    poNumber: string | null;
+    totalUnits: string;
+    completedUnits: string;
+    inProductionUnits: string;
+    pendingUnits: string;
+    completedTodayUnits: string;
+    currentDepartment: string | null;
+    dueDate: string | null;
+  }>(`
+    SELECT
+      psi.po_id::text AS "poId",
+      psi.po_item_id::text AS "poItemId",
+      MAX(COALESCE(poi.part_number, psi.part_number)) AS "partNumber",
+      MAX(COALESCE(poi.part_name, psi.part_name)) AS "partName",
+      MAX(psi.po_number) AS "poNumber",
+      COUNT(*) FILTER (
+        WHERE psi.status NOT IN ('SCRAPPED', 'CANCELLED', 'CANCELED')
+      )::text AS "totalUnits",
+      COUNT(*) FILTER (WHERE psi.status = 'COMPLETED')::text AS "completedUnits",
+      COUNT(*) FILTER (
+        WHERE psi.status NOT IN ('SCRAPPED', 'CANCELLED', 'CANCELED', 'COMPLETED')
+          AND psi.current_stage_index > 0
+      )::text AS "inProductionUnits",
+      COUNT(*) FILTER (
+        WHERE psi.status NOT IN ('SCRAPPED', 'CANCELLED', 'CANCELED', 'COMPLETED')
+          AND psi.current_stage_index = 0
+      )::text AS "pendingUnits",
+      COUNT(*) FILTER (
+        WHERE psi.status = 'COMPLETED'
+          AND psi.completed_at IS NOT NULL
+          AND psi.completed_at::date = $2::date
+      )::text AS "completedTodayUnits",
+      (
+        SELECT psi2.current_department
+        FROM p2_serialized_items psi2
+        WHERE psi2.po_id = psi.po_id
+          AND psi2.po_item_id = psi.po_item_id
+          AND psi2.status NOT IN ('SCRAPPED', 'CANCELLED', 'CANCELED', 'COMPLETED')
+        GROUP BY psi2.current_department
+        ORDER BY COUNT(*) DESC
+        LIMIT 1
+      ) AS "currentDepartment",
+      (
+        SELECT MIN(p2po.due_date)::text
+        FROM p2_production_orders p2po
+        WHERE p2po.p2_po_id = psi.po_id
+          AND p2po.p2_po_item_id = psi.po_item_id
+      ) AS "dueDate"
+    FROM p2_serialized_items psi
+    LEFT JOIN p2_purchase_order_items poi ON poi.id = psi.po_item_id
+    WHERE psi.po_id = ANY($1::int[])
+    GROUP BY psi.po_id, psi.po_item_id
+    ORDER BY psi.po_id, psi.po_item_id
+  `, [linkedPoIds, today]);
+
+  const groups: SerializedItemGroup[] = groupRows.map(r => ({
+    poId: parseInt(r.poId, 10),
+    poItemId: parseInt(r.poItemId, 10),
+    partNumber: r.partNumber,
+    partName: r.partName,
+    poNumber: r.poNumber,
+    totalUnits: parseInt(r.totalUnits, 10) || 0,
+    completedUnits: parseInt(r.completedUnits, 10) || 0,
+    inProductionUnits: parseInt(r.inProductionUnits, 10) || 0,
+    pendingUnits: parseInt(r.pendingUnits, 10) || 0,
+    completedTodayUnits: parseInt(r.completedTodayUnits, 10) || 0,
+    currentDepartment: r.currentDepartment,
+    dueDate: r.dueDate,
+  }));
+
+  const totalRequired = groups.reduce((s, g) => s + g.totalUnits, 0);
+  const totalCompleted = groups.reduce((s, g) => s + g.completedUnits, 0);
+
+  return { linkedPoIds, groups, totalRequired, totalCompleted };
+}
+
 // GET /api/pm-dashboard/managers — distinct PMs who own at least one active project
 router.get('/managers', h(async (_req, res) => {
   const result = await pool.query<{ id: number; name: string }>(`
@@ -387,10 +520,45 @@ router.get('/:projectId/summary', h(async (req, res) => {
   `, [projectId]);
 
   const wo = woRes[0];
-  const total = parseInt(wo.totalWorkOrders) || 0;
-  const completed = parseInt(wo.completedWorkOrders) || 0;
-  const totalRequired = parseFloat(qtyProgressRes[0].totalRequired) || 0;
-  const totalCompleted = parseFloat(qtyProgressRes[0].totalCompleted) || 0;
+  const wadTotal = parseInt(wo.totalWorkOrders) || 0;
+  const wadCompleted = parseInt(wo.completedWorkOrders) || 0;
+
+  // Item-level progress: when serialized items exist for the linked P2 PO,
+  // these become the source of truth for production counts so the PM
+  // Control Center matches the order card. Falls back to the existing
+  // WAD/quantity_manufactured values when no serialized items exist.
+  const today = new Date().toISOString().slice(0, 10);
+  const itemAgg = await getProjectSerializedItemAggregate(projectId, today);
+
+  let total = wadTotal;
+  let completed = wadCompleted;
+  let totalRequired = parseFloat(qtyProgressRes[0].totalRequired) || 0;
+  let totalCompleted = parseFloat(qtyProgressRes[0].totalCompleted) || 0;
+
+  if (itemAgg.groups.length > 0) {
+    // Replace P2 portion of WO row counts with serialized item groups so
+    // the KPI matches the rebuilt /production table.
+    const wadOnlyTotal = await pool.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM production_work_orders WHERE project_id = $1`,
+      [projectId],
+    );
+    const wadOnlyCompleted = await pool.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM production_work_orders
+       WHERE project_id = $1 AND status IN ('COMPLETE', 'COMPLETED', 'CLOSED')`,
+      [projectId],
+    );
+    const wadCount = parseInt(wadOnlyTotal[0]?.count ?? '0', 10) || 0;
+    const wadDoneCount = parseInt(wadOnlyCompleted[0]?.count ?? '0', 10) || 0;
+    const p2GroupCount = itemAgg.groups.length;
+    const p2DoneGroupCount = itemAgg.groups.filter(
+      g => g.totalUnits > 0 && g.completedUnits >= g.totalUnits,
+    ).length;
+    total = wadCount + p2GroupCount;
+    completed = wadDoneCount + p2DoneGroupCount;
+    totalRequired = itemAgg.totalRequired;
+    totalCompleted = itemAgg.totalCompleted;
+  }
+
   const productionPercent = totalRequired > 0
     ? Math.min(100, Math.round((totalCompleted / totalRequired) * 100))
     : (total > 0 ? Math.round((completed / total) * 100) : 0);
@@ -640,7 +808,96 @@ router.get('/:projectId/production', h(async (req, res) => {
 
   const linkedP2PoCount = parseInt(linkRes[0]?.count ?? '0', 10) || 0;
 
-  res.json({ rows: result, linkedP2PoCount });
+  // Item-level override: when serialized items exist for the project's linked
+  // P2 PO, drive the P2 portion of the production table from p2_serialized_items
+  // (the same source the order card uses) so the dashboard and order card agree.
+  // The WAD half of the union (production_work_orders + travelers) is preserved.
+  const itemAgg = await getProjectSerializedItemAggregate(projectId, today);
+  let finalRows: ProductionRow[] = result;
+  if (itemAgg.groups.length > 0) {
+    const wadOnly = result.filter(r => r.sourceType !== 'p2_production_order');
+
+    // Pull p2 PO numbers + replacement counts in one batch keyed by (poId, poItemId).
+    const replKey = (poId: number, poItemId: number) => `${poId}:${poItemId}`;
+    const replMap = new Map<string, { ncr: number; active: number; serials: string | null }>();
+    if (itemAgg.linkedPoIds.length) {
+      const replRows = await pool.query<{
+        poId: string; poItemId: string;
+        ncr: string; active: string; serials: string | null;
+      }>(`
+        SELECT
+          psi.po_id::text AS "poId",
+          psi.po_item_id::text AS "poItemId",
+          COUNT(*) FILTER (WHERE psi.metadata->>'isReplacement' = 'true')::text AS "ncr",
+          COUNT(*) FILTER (
+            WHERE psi.status = 'ACTIVE' AND psi.metadata->>'isReplacement' = 'true'
+          )::text AS "active",
+          string_agg(
+            CASE WHEN psi.metadata->>'isReplacement' = 'true' THEN psi.serial_number END,
+            ', ' ORDER BY psi.created_at DESC
+          ) AS "serials"
+        FROM p2_serialized_items psi
+        WHERE psi.po_id = ANY($1::int[])
+        GROUP BY psi.po_id, psi.po_item_id
+      `, [itemAgg.linkedPoIds]);
+      for (const r of replRows) {
+        replMap.set(replKey(parseInt(r.poId, 10), parseInt(r.poItemId, 10)), {
+          ncr: parseInt(r.ncr, 10) || 0,
+          active: parseInt(r.active, 10) || 0,
+          serials: r.serials,
+        });
+      }
+    }
+
+    const todayDate = new Date(today + 'T00:00:00Z');
+    const p2Rows: ProductionRow[] = itemAgg.groups.map(g => {
+      const repl = replMap.get(replKey(g.poId, g.poItemId));
+      const status: string =
+        g.totalUnits > 0 && g.completedUnits >= g.totalUnits
+          ? 'COMPLETED'
+          : (g.completedUnits > 0 || g.inProductionUnits > 0)
+            ? 'IN_PROGRESS'
+            : 'PLANNED';
+      let daysScheduleVariance: string | null = null;
+      if (g.dueDate) {
+        const due = new Date(g.dueDate.slice(0, 10) + 'T00:00:00Z');
+        const diffDays = Math.round((todayDate.getTime() - due.getTime()) / (1000 * 60 * 60 * 24));
+        daysScheduleVariance = String(diffDays);
+      }
+      return {
+        productionWorkOrderId:
+          `p2-serialized-group:${g.poId}:${g.poItemId}`,
+        workOrderNumber: g.poNumber ?? `PO-${g.poId}`,
+        partNumber: g.partNumber ?? '',
+        quantityRequired: g.totalUnits,
+        quantityCompleted: g.completedUnits,
+        quantityCompletedToday: g.completedTodayUnits,
+        sourceType: 'p2_production_order',
+        sourceLabel: 'P2',
+        wadStatus: null,
+        p2PoId: g.poId,
+        p2PoNumber: g.poNumber,
+        status,
+        dueDate: g.dueDate,
+        currentDepartment: g.currentDepartment,
+        currentTravelerStep: null,
+        activeTravelerId: null,
+        activeTravelerNumber: null,
+        ncrReplacementCount: repl?.ncr ?? 0,
+        activeReplacementCount: repl?.active ?? 0,
+        replacementSerialNumbers: repl?.serials ?? null,
+        daysScheduleVariance,
+        blockReason: null,
+      };
+    });
+
+    finalRows = [...wadOnly, ...p2Rows].sort((a, b) => {
+      if (a.sourceType !== b.sourceType) return a.sourceType < b.sourceType ? -1 : 1;
+      return (a.workOrderNumber ?? '').localeCompare(b.workOrderNumber ?? '');
+    });
+  }
+
+  res.json({ rows: finalRows, linkedP2PoCount });
 }));
 
 // GET /api/pm-dashboard/:projectId/production/:workOrderId — drawer detail

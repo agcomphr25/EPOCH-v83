@@ -359,11 +359,13 @@ function ProductionTab({ projectId }: { projectId: string }) {
   const [completionFilter, setCompletionFilter] = useState<CompletionFilter>('all');
   const [qtySort, setQtySort] = useState<QtySort>(null);
 
-  const { data: rows = [], isLoading, isError } = useQuery<WorkOrderRow[]>({
+  const { data: productionResponse, isLoading, isError } = useQuery<{ rows: WorkOrderRow[]; linkedP2PoCount: number }>({
     queryKey: ['/api/pm-dashboard', projectId, 'production'],
-    queryFn: () => safeFetch<WorkOrderRow[]>(`/api/pm-dashboard/${projectId}/production`),
+    queryFn: () => safeFetch<{ rows: WorkOrderRow[]; linkedP2PoCount: number }>(`/api/pm-dashboard/${projectId}/production`),
     enabled: !!projectId,
   });
+  const rows = productionResponse?.rows ?? [];
+  const linkedP2PoCount = productionResponse?.linkedP2PoCount ?? 0;
 
   const { data: detail, isLoading: detailLoading } = useQuery<WorkOrderDetail>({
     queryKey: ['/api/pm-dashboard', projectId, 'production', selectedWO?.productionWorkOrderId],
@@ -380,10 +382,20 @@ function ProductionTab({ projectId }: { projectId: string }) {
   }
 
   if (!rows.length) {
+    if (linkedP2PoCount === 0) {
+      return (
+        <Card className="p-10 text-center" data-testid="empty-no-p2-link">
+          <Briefcase className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
+          <p className="text-muted-foreground">
+            No P2 PO is linked to this project — link one from the P2 Order step to see production here.
+          </p>
+        </Card>
+      );
+    }
     return (
-      <Card className="p-10 text-center">
+      <Card className="p-10 text-center" data-testid="empty-no-work-orders">
         <Briefcase className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
-        <p className="text-muted-foreground">No work orders found for this project.</p>
+        <p className="text-muted-foreground">No work orders found for this project yet.</p>
       </Card>
     );
   }

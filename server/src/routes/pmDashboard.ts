@@ -511,20 +511,19 @@ router.get('/:projectId/production', h(async (req, res) => {
       WHERE wo.project_id = $2
     ),
     project_po_link AS (
-      SELECT COALESCE(
-        p.po_id,
-        (
-          SELECT ps.linked_p2_order_id
-          FROM project_steps ps
-          WHERE ps.project_id = p.id
-            AND ps.step_type = 'p2_order'
-            AND ps.linked_p2_order_id IS NOT NULL
-          ORDER BY ps.updated_at DESC NULLS LAST, ps.completed_at DESC NULLS LAST
-          LIMIT 1
-        )
-      ) AS po_id
+      -- Highest priority: the explicit projects.po_id pointer.
+      SELECT p.po_id AS po_id
       FROM projects p
       WHERE p.id = $2
+        AND p.po_id IS NOT NULL
+      UNION
+      -- Fallback: any project_steps row that links a P2 PO. We deliberately do
+      -- NOT restrict to step_type = 'p2_order' because the link can also be
+      -- attached during preproduction or other steps depending on workflow.
+      SELECT ps.linked_p2_order_id AS po_id
+      FROM project_steps ps
+      WHERE ps.project_id = $2
+        AND ps.linked_p2_order_id IS NOT NULL
     ),
     p2_rows AS (
       SELECT
@@ -587,7 +586,7 @@ router.get('/:projectId/production', h(async (req, res) => {
       JOIN p2_purchase_orders p2po_head ON p2po_head.id = ppl.po_id
       JOIN p2_production_orders p2po ON p2po.p2_po_id = p2po_head.id
       LEFT JOIN p2_purchase_order_items p2poi ON p2poi.id = p2po.p2_po_item_id
-      WHERE p2po.status NOT IN ('CANCELLED', 'CANCELED')
+      -- No status filter: match WAD branch which returns rows regardless of status.
     )
     SELECT * FROM wad_rows
     UNION ALL
@@ -595,7 +594,26 @@ router.get('/:projectId/production', h(async (req, res) => {
     ORDER BY "sourceType" ASC, "workOrderNumber" ASC
   `, [today, projectId]);
 
-  res.json(result);
+  // Count of P2 POs linked to this project (used by the frontend to render an
+  // actionable empty state when zero rows are returned).
+  const linkRes = await pool.query<{ count: string }>(`
+    WITH project_po_link AS (
+      SELECT p.po_id AS po_id
+      FROM projects p
+      WHERE p.id = $1
+        AND p.po_id IS NOT NULL
+      UNION
+      SELECT ps.linked_p2_order_id AS po_id
+      FROM project_steps ps
+      WHERE ps.project_id = $1
+        AND ps.linked_p2_order_id IS NOT NULL
+    )
+    SELECT COUNT(*)::text AS count FROM project_po_link
+  `, [projectId]);
+
+  const linkedP2PoCount = parseInt(linkRes[0]?.count ?? '0', 10) || 0;
+
+  res.json({ rows: result, linkedP2PoCount });
 }));
 
 // GET /api/pm-dashboard/:projectId/production/:workOrderId — drawer detail

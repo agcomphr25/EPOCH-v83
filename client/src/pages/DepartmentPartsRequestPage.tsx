@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
@@ -91,13 +91,35 @@ export default function DepartmentPartsRequestPage() {
     urgency: 'MEDIUM',
     reason: '',
     outOfDeptReason: '',
+    requestedBy: '',
   });
+  const requestedByEditedRef = useRef(false);
 
   const { data: user } = useQuery<User>({
     queryKey: ['/api/auth/session'],
   });
 
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'OWNER';
+
+  const defaultRequestor = (() => {
+    if (!user) return '';
+    const fullName = [user.firstName, user.lastName]
+      .filter((s) => typeof s === 'string' && s.trim().length > 0)
+      .join(' ')
+      .trim();
+    return user.username || fullName || '';
+  })();
+
+  // Seed requestedBy from session once it resolves, unless the user has
+  // typed in the field. Re-applies on dialog open via handleRequestClick.
+  useEffect(() => {
+    if (!isRequestDialogOpen) return;
+    if (requestedByEditedRef.current) return;
+    if (!defaultRequestor) return;
+    setRequestForm((prev) =>
+      prev.requestedBy ? prev : { ...prev, requestedBy: defaultRequestor }
+    );
+  }, [isRequestDialogOpen, defaultRequestor]);
 
   const { data: departments = [] } = useQuery<Department[]>({
     queryKey: ['/api/inventory/departments'],
@@ -158,7 +180,8 @@ export default function DepartmentPartsRequestPage() {
       });
       setIsRequestDialogOpen(false);
       setSelectedItem(null);
-      setRequestForm({ quantity: '', urgency: 'MEDIUM', reason: '', outOfDeptReason: '' });
+      requestedByEditedRef.current = false;
+      setRequestForm({ quantity: '', urgency: 'MEDIUM', reason: '', outOfDeptReason: '', requestedBy: defaultRequestor });
     },
     onError: () => {
       toast({
@@ -195,7 +218,14 @@ export default function DepartmentPartsRequestPage() {
 
   const handleRequestClick = (item: InventoryItem) => {
     setSelectedItem(item);
-    setRequestForm({ quantity: '', urgency: 'MEDIUM', reason: '', outOfDeptReason: '' });
+    requestedByEditedRef.current = false;
+    setRequestForm({
+      quantity: '',
+      urgency: 'MEDIUM',
+      reason: '',
+      outOfDeptReason: '',
+      requestedBy: defaultRequestor,
+    });
     setIsRequestDialogOpen(true);
   };
 
@@ -204,6 +234,15 @@ export default function DepartmentPartsRequestPage() {
       toast({
         title: 'Missing Information',
         description: 'Please fill in all required fields.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!requestForm.requestedBy.trim()) {
+      toast({
+        title: 'Missing Information',
+        description: 'Requested By is required.',
         variant: 'destructive',
       });
       return;
@@ -255,7 +294,7 @@ export default function DepartmentPartsRequestPage() {
       quantity,
       urgency: requestForm.urgency,
       reason: requestForm.reason.trim() || null,
-      requestedBy: user.username,
+      requestedBy: requestForm.requestedBy.trim(),
       department: effectiveDepartment,
       departmentId: effectiveDepartmentId,
       catalogFixNeeded: outOfDept,
@@ -712,6 +751,24 @@ export default function DepartmentPartsRequestPage() {
               )}
             </div>
 
+            {/* Requested By */}
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Requested By <span className="text-red-500">*</span>
+              </label>
+              <Input
+                type="text"
+                placeholder="Requestor name"
+                value={requestForm.requestedBy}
+                onChange={(e) => {
+                  requestedByEditedRef.current = true;
+                  setRequestForm({ ...requestForm, requestedBy: e.target.value });
+                }}
+                required
+                data-testid="input-request-requested-by"
+              />
+            </div>
+
             {/* Quantity */}
             <div>
               <label className="block text-sm font-medium mb-1">
@@ -785,7 +842,8 @@ export default function DepartmentPartsRequestPage() {
                 onClick={() => {
                   setIsRequestDialogOpen(false);
                   setSelectedItem(null);
-                  setRequestForm({ quantity: '', urgency: 'MEDIUM', reason: '', outOfDeptReason: '' });
+                  requestedByEditedRef.current = false;
+                  setRequestForm({ quantity: '', urgency: 'MEDIUM', reason: '', outOfDeptReason: '', requestedBy: '' });
                 }}
                 data-testid="button-cancel-request"
               >

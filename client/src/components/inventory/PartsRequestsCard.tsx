@@ -396,7 +396,7 @@ export default function PartsRequestsCard() {
     }
   };
 
-  const FormContent = () => (
+  const renderFormContent = () => (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
         <Label htmlFor="inventoryItem">Inventory Part *</Label>
@@ -720,7 +720,7 @@ export default function PartsRequestsCard() {
             <DialogHeader>
               <DialogTitle>Create New Parts Request</DialogTitle>
             </DialogHeader>
-            <FormContent />
+            {renderFormContent()}
           </DialogContent>
         </Dialog>
       </div>
@@ -909,7 +909,7 @@ export default function PartsRequestsCard() {
           <DialogHeader>
             <DialogTitle>Edit Parts Request</DialogTitle>
           </DialogHeader>
-          <FormContent />
+          {renderFormContent()}
         </DialogContent>
       </Dialog>
     </div>

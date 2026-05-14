@@ -1169,11 +1169,12 @@ export default function PMControlCenterPage() {
   });
 
   // Page-level production query — shares cache with ProductionTab, only used for blockers sheet + throughput
-  const { data: productionRows = [], isError: productionError } = useQuery<WorkOrderRow[]>({
+  const { data: productionData, isError: productionError } = useQuery<{ rows: WorkOrderRow[]; linkedP2PoCount: number }>({
     queryKey: ['/api/pm-dashboard', selectedProjectId, 'production'],
-    queryFn: () => safeFetch<WorkOrderRow[]>(`/api/pm-dashboard/${selectedProjectId}/production`),
+    queryFn: () => safeFetch<{ rows: WorkOrderRow[]; linkedP2PoCount: number }>(`/api/pm-dashboard/${selectedProjectId}/production`),
     enabled: !!selectedProjectId,
   });
+  const productionRows = productionData?.rows ?? [];
 
   // Project detail query — used for lifecycle stage derivation
   const { data: projectDetail } = useQuery<{ currentStage: string | null; status: string; poId: number | null; steps: { stepType: string; status: string }[] }>({

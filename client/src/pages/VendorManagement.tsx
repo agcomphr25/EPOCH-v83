@@ -668,7 +668,12 @@ export default function VendorManagement() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || errorData.details || 'Upload failed');
+        const message =
+          errorData.message ||
+          errorData.error ||
+          errorData.reason ||
+          'Upload failed';
+        throw new Error(message);
       }
 
       const data = await response.json();
@@ -723,7 +728,12 @@ export default function VendorManagement() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || errorData.details || 'Upload failed');
+        throw new Error(
+          errorData.message ||
+          errorData.error ||
+          errorData.reason ||
+          'Upload failed'
+        );
       }
 
       const data = await response.json();

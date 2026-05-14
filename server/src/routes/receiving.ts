@@ -37,6 +37,7 @@ import multer from 'multer';
 import { generateBarcodeImage, generateReceivingUnitBarcodeValue } from '../utils/barcodeGenerator';
 import { requireRole } from '../../middleware/auth';
 import { getFileStorageProvider, getStorageErrorResponse } from '../services/fileStorageProvider';
+import { createInventoryEvent } from '../services/inventoryEventService';
 
 const router = Router();
 
@@ -1423,6 +1424,10 @@ async function handleAcceptedUnit(unit: ReceivedUnit, receipt: Receipt, user: Au
       throw new Error(`No inventory_items record found for ag_part_number="${line.agPartNumber}" — create the inventory item before accepting units for this part`);
     }
     const invItem = invRows[0];
+    const receivedQty = Number(unit.quantity);
+    if (!Number.isFinite(receivedQty) || receivedQty <= 0) {
+      throw new Error(`Received unit ${unit.id} has invalid quantity "${unit.quantity}"`);
+    }
 
     // Shelf-life prefill (Task #165) — only when the part is shelf-life-controlled
     // and the receiving unit didn't already supply a value. Uses frozen days as
@@ -1486,6 +1491,27 @@ async function handleAcceptedUnit(unit: ReceivedUnit, receipt: Receipt, user: Au
       notes: `Receipt ${receipt.receiptNumber} · unit barcode ${unit.barcode}`,
     });
     await db.insert(materialLotTransactions).values(txValues);
+
+    await createInventoryEvent({
+      agPartNumber: line.agPartNumber,
+      eventType: 'receipt',
+      quantity: receivedQty,
+      lotId: lot.id,
+      unitOfMeasure: unit.uom ?? 'EA',
+      toLocation: unit.location?.trim() || 'WAREHOUSE-MAIN',
+      referenceType: 'RECEIVED_UNIT',
+      referenceId: unit.id,
+      performedBy: displayName,
+      notes: `Receipt ${receipt.receiptNumber}: accepted unit ${unit.barcode}`,
+      metadata: {
+        receiptId: receipt.id,
+        receiptNumber: receipt.receiptNumber,
+        receivedUnitId: unit.id,
+        unitBarcode: unit.barcode,
+        materialLotId: lot.id,
+        internalControlNumber: icn,
+      },
+    });
 
     const isCuttingFabric = Boolean(invItem.is_fabric && (invItem.utilized_in_pl1 || invItem.utilized_in_pl2));
     if (isCuttingFabric) {

@@ -221,6 +221,7 @@ import commandCenterRoutes from './commandCenter';
 import edriRoutes from './edri';
 import chargeCodeUsageReportRoutes from './chargeCodeUsageReport';
 import laborDistributionReportRoutes from './laborDistributionReport';
+import transactionEvidenceMapRoutes from './transactionEvidenceMap';
 import supervisorApprovalExceptionReportRoutes from './supervisorApprovalExceptionReport';
 import timesheetCorrectionLogReportRoutes from './timesheetCorrectionLogReport';
 import payrollExportReconciliationReportRoutes from './payrollExportReconciliationReport';
@@ -11069,6 +11070,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   app.use('/api/edri', edriRoutes);
   app.use('/api/edri', chargeCodeUsageReportRoutes);
   app.use('/api/edri', laborDistributionReportRoutes);
+  app.use('/api/edri', transactionEvidenceMapRoutes);
   app.use('/api/edri', supervisorApprovalExceptionReportRoutes);
   app.use('/api/edri', timesheetCorrectionLogReportRoutes);
   app.use('/api/edri', payrollExportReconciliationReportRoutes);

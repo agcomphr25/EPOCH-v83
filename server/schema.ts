@@ -16093,6 +16093,48 @@ export const insertOrderActivityEventSchema = createInsertSchema(orderActivityEv
 export type OrderActivityEvent = typeof orderActivityEvents.$inferSelect;
 export type InsertOrderActivityEvent = z.infer<typeof insertOrderActivityEventSchema>;
 
+export const p1FulfillmentAttempts = pgTable(
+  'p1_fulfillment_attempts',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    orderId: text('order_id').notNull(),
+    status: text('status').notNull().default('IN_PROGRESS'),
+    currentStep: text('current_step').notNull().default('READINESS'),
+    failedStep: text('failed_step'),
+    failureCode: text('failure_code'),
+    failureMessage: text('failure_message'),
+    remediationHint: text('remediation_hint'),
+    source: text('source').notNull().default('shipping'),
+    sourceRoute: text('source_route'),
+    trackingNumber: text('tracking_number'),
+    shipmentRecordId: uuid('shipment_record_id'),
+    journalEntryId: integer('journal_entry_id').references(() => journalEntries.id),
+    notificationStatus: text('notification_status').default('NOT_ATTEMPTED'),
+    actorUserId: integer('actor_user_id'),
+    actorDisplayName: text('actor_display_name'),
+    metadata: jsonb('metadata').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`),
+    startedAt: timestamp('started_at').notNull().defaultNow(),
+    completedAt: timestamp('completed_at'),
+    createdAt: timestamp('created_at').defaultNow(),
+    updatedAt: timestamp('updated_at').defaultNow(),
+  },
+  (table) => ({
+    orderIdIdx: index('p1_fulfillment_attempts_order_id_idx').on(table.orderId),
+    statusIdx: index('p1_fulfillment_attempts_status_idx').on(table.status),
+    failedStepIdx: index('p1_fulfillment_attempts_failed_step_idx').on(table.failedStep),
+    updatedAtIdx: index('p1_fulfillment_attempts_updated_at_idx').on(table.updatedAt),
+  })
+);
+
+export const insertP1FulfillmentAttemptSchema = createInsertSchema(p1FulfillmentAttempts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type P1FulfillmentAttempt = typeof p1FulfillmentAttempts.$inferSelect;
+export type InsertP1FulfillmentAttempt = z.infer<typeof insertP1FulfillmentAttemptSchema>;
+
 // ─── CNC Dashboard ────────────────────────────────────────────────────────────
 
 export const cncScheduleSettings = pgTable('cnc_schedule_settings', {

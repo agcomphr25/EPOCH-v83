@@ -20,6 +20,7 @@ import {
   vendorPOs,
   vendorPOItems,
   inventoryItems,
+  cuttingFabricInventory,
   insertMaterialLotSchema,
   insertMaterialLotTransactionSchema,
   insertMediaLibrarySchema,
@@ -1253,12 +1254,18 @@ async function handleAcceptedUnit(unit: ReceivedUnit, receipt: Receipt, user: Au
 
     // Find inventory item — required for material lot linkage; fail-fast if missing
     const invResult = await db.execute(
-      sql`SELECT id, name, shelf_life_controlled, frozen_shelf_life_days, room_temp_shelf_life_days, default_max_out_time_minutes
+      sql`SELECT id, name, ag_part_number, is_fabric, utilized_in_pl1, utilized_in_pl2, supplier_part_number,
+                 shelf_life_controlled, frozen_shelf_life_days, room_temp_shelf_life_days, default_max_out_time_minutes
           FROM inventory_items WHERE ag_part_number = ${line.agPartNumber} LIMIT 1`
     );
     const invRows = sqlRows<{
       id: number;
       name: string;
+      ag_part_number: string;
+      is_fabric: boolean | null;
+      utilized_in_pl1: boolean | null;
+      utilized_in_pl2: boolean | null;
+      supplier_part_number: string | null;
       shelf_life_controlled: boolean | null;
       frozen_shelf_life_days: number | null;
       room_temp_shelf_life_days: number | null;
@@ -1331,6 +1338,39 @@ async function handleAcceptedUnit(unit: ReceivedUnit, receipt: Receipt, user: Au
       notes: `Receipt ${receipt.receiptNumber} · unit barcode ${unit.barcode}`,
     });
     await db.insert(materialLotTransactions).values(txValues);
+
+    const isCuttingFabric = Boolean(invItem.is_fabric && (invItem.utilized_in_pl1 || invItem.utilized_in_pl2));
+    if (isCuttingFabric) {
+      const toDateOnly = (value: Date | string | null | undefined): string | undefined => {
+        if (!value) return undefined;
+        if (typeof value === 'string') return value.slice(0, 10);
+        return value.toISOString().slice(0, 10);
+      };
+      const qty = Number(unit.quantity);
+      const qtyForFabric = Number.isFinite(qty) && qty > 0 ? qty : 0;
+      const receivedDate = toDateOnly(receipt.receivedAt ?? receipt.receiptDate ?? new Date());
+      await db.insert(cuttingFabricInventory).values({
+        inventoryItemId: invItem.id,
+        source: receipt.vendorName ?? null,
+        fabric: invItem.name ?? line.description ?? line.agPartNumber,
+        fabricPartNumber: line.agPartNumber,
+        nickname: invItem.name ?? line.description ?? null,
+        supplierPartNumber: invItem.supplier_part_number ?? null,
+        supplierPoNumber: receipt.vendorPoNumber ?? null,
+        internalControlNumber: icn,
+        barcode: unit.barcode,
+        lotNumber: unit.lotNumber ?? null,
+        batchNumber: unit.batchNumber ?? unit.heatLot ?? null,
+        rollNumber: unit.rollNumber ?? null,
+        manufactureDate: toDateOnly(unit.manufactureDate) ?? null,
+        receivedDate,
+        expirationDate: toDateOnly(prefilledExpiration ?? unit.expirationDate) ?? null,
+        quantityInStock: qtyForFabric,
+        squareMeters: qtyForFabric > 0 ? String(qtyForFabric) : undefined,
+        notes: `Auto-created from Receiving Control Center receipt ${receipt.receiptNumber} unit ${unit.barcode}. Freezer assignment pending in Cutting Fabric Receiving.`,
+        status: 'active',
+      });
+    }
 
   } catch (err: any) {
     // Re-throw so callers can return a 422 to the client with the exact reason
@@ -1433,8 +1473,9 @@ router.post('/:id/ensure-units', requireReceivingAccess, async (req: Request, re
 // ── POST /api/receipts/:id/lines/:lineId/split ────────────────────────────────
 // Split a receipt line into N units.
 // Equal-split mode (default): Body: { count: number, templateFields?: Partial<InsertReceivedUnit> }
-// Roll-based mode (array): Body: { count: number, sqmPerRollArray: number[], templateFields?: Partial<InsertReceivedUnit> }
-//   Each unit gets the corresponding sqmPerRollArray[i] as its quantity; receivedQty is updated to the array sum.
+// Roll-based mode (array): Body: { count: number, sqmPerRollArray: number[], rollNumbers: string[], templateFields?: Partial<InsertReceivedUnit> }
+//   Each unit gets the corresponding sqmPerRollArray[i] as its quantity and rollNumbers[i] as its exact roll number;
+//   receivedQty is updated to the array sum.
 // Roll-based mode (legacy scalar): Body: { count: number, sqmPerRoll: number, templateFields?: Partial<InsertReceivedUnit> }
 //   All units share the same quantity; receivedQty updated to count × sqmPerRoll.
 router.post('/:id/lines/:lineId/split', requireReceivingAccess, async (req: Request, res: Response) => {
@@ -1442,10 +1483,11 @@ router.post('/:id/lines/:lineId/split', requireReceivingAccess, async (req: Requ
     const receiptId = parseInt(req.params.id);
     const lineId = parseInt(req.params.lineId);
     const user = req.user;
-    const { count, sqmPerRoll, sqmPerRollArray, templateFields } = req.body as {
+    const { count, sqmPerRoll, sqmPerRollArray, rollNumbers, templateFields } = req.body as {
       count: number;
       sqmPerRoll?: number;
       sqmPerRollArray?: number[];
+      rollNumbers?: string[];
       templateFields?: Record<string, unknown>;
     };
 
@@ -1453,6 +1495,7 @@ router.post('/:id/lines/:lineId/split', requireReceivingAccess, async (req: Requ
       return res.status(400).json({ error: 'count must be between 2 and 200' });
     }
 
+    let normalizedRollNumbers: string[] | undefined;
     if (sqmPerRollArray !== undefined) {
       if (!Array.isArray(sqmPerRollArray) || sqmPerRollArray.length !== count) {
         return res.status(400).json({ error: `sqmPerRollArray must have exactly ${count} entries` });
@@ -1460,6 +1503,13 @@ router.post('/:id/lines/:lineId/split', requireReceivingAccess, async (req: Requ
       if (sqmPerRollArray.some(v => typeof v !== 'number' || !Number.isFinite(v) || v <= 0)) {
         return res.status(400).json({ error: 'Every entry in sqmPerRollArray must be a finite positive number' });
       }
+      if (!Array.isArray(rollNumbers) || rollNumbers.length !== count) {
+        return res.status(400).json({ error: `rollNumbers must have exactly ${count} entries` });
+      }
+      if (rollNumbers.some(v => typeof v !== 'string' || v.trim().length === 0)) {
+        return res.status(400).json({ error: 'Every roll number must be provided for roll-based splits' });
+      }
+      normalizedRollNumbers = rollNumbers.map(v => v.trim());
     } else if (sqmPerRoll !== undefined && (typeof sqmPerRoll !== 'number' || !Number.isFinite(sqmPerRoll) || sqmPerRoll <= 0)) {
       return res.status(400).json({ error: 'sqmPerRoll must be a positive number' });
     }
@@ -1500,6 +1550,7 @@ router.post('/:id/lines/:lineId/split', requireReceivingAccess, async (req: Requ
         barcode,
         quantity: String(qtyForUnit),
         uom: line.uom ?? 'EA',
+        ...(isRollArray && normalizedRollNumbers ? { rollNumber: normalizedRollNumbers[i] } : {}),
       });
       unitBodies.push(body);
     }
@@ -1536,6 +1587,7 @@ router.post('/:id/lines/:lineId/split', requireReceivingAccess, async (req: Requ
       mode: isRollBased ? 'by_rolls' : 'equal',
       ...(isRollArray ? {
         sqmPerRollArray: sqmPerRollArray!.map(String),
+        rollNumbers: normalizedRollNumbers,
         totalQty: String(totalQtyForAudit),
       } : isRollScalar ? {
         sqmPerRoll: String(sqmPerRoll),

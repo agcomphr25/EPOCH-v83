@@ -1475,23 +1475,14 @@ function UnitSplittingStep({ receipt, onNext, onUpdate }: {
       }
       if (splitMode === 'by_rolls') {
         payload.sqmPerRollArray = rollSqms.map(v => parseFloat(v));
+        payload.rollNumbers = rollNumbers.map(v => v.trim());
       }
       return apiRequest(`/api/receipts/${receipt.id}/lines/${selectedLineId}/split`, {
         method: 'POST',
         body: JSON.stringify(payload),
       });
     },
-    onSuccess: async (createdUnits: ReceivedUnit[]) => {
-      if (splitMode === 'by_rolls') {
-        await Promise.all((createdUnits ?? []).map((unit, idx) => {
-          const rollNumber = rollNumbers[idx]?.trim();
-          if (!rollNumber) return Promise.resolve();
-          return apiRequest(`/api/receipts/${receipt.id}/units/${unit.id}`, {
-            method: 'PATCH',
-            body: JSON.stringify({ rollNumber }),
-          });
-        }));
-      }
+    onSuccess: async () => {
       const updated = await apiRequest(`/api/receipts/${receipt.id}`);
       onUpdate(updated);
       setShowSplitDialog(false);
@@ -1740,7 +1731,7 @@ function UnitSplittingStep({ receipt, onNext, onUpdate }: {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="equal">Equal split — divide total quantity evenly</SelectItem>
-                  <SelectItem value="by_rolls">By rolls — enter SQM per roll</SelectItem>
+                  <SelectItem value="by_rolls">By rolls — enter exact roll # and SQM</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1812,13 +1803,16 @@ function UnitSplittingStep({ receipt, onNext, onUpdate }: {
                     }}
                   />
                 </div>
+                <p className="text-xs text-gray-500">
+                  Enter the exact supplier/manufacturer roll number for each roll before creating the units.
+                </p>
                 <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
                   {rollSqms.map((val, idx) => (
                     <div key={idx} className="grid grid-cols-[56px_1fr_1fr_34px] items-center gap-2">
                       <Label className="text-xs w-14 shrink-0">Roll {idx + 1}</Label>
                       <Input
                         className="h-7 text-xs"
-                        placeholder="Roll #"
+                        placeholder="Exact roll #"
                         value={rollNumbers[idx] ?? ''}
                         onChange={e => setRollNumbers(prev => {
                           const next = [...prev];
@@ -1863,7 +1857,10 @@ function UnitSplittingStep({ receipt, onNext, onUpdate }: {
               disabled={
                 splitLineMutation.isPending ||
                 parseInt(splitCount, 10) < 2 ||
-                (splitMode === 'by_rolls' && rollSqms.some(v => { const n = parseFloat(v); return !Number.isFinite(n) || n <= 0; }))
+                (splitMode === 'by_rolls' && (
+                  rollNumbers.some(v => !v.trim()) ||
+                  rollSqms.some(v => { const n = parseFloat(v); return !Number.isFinite(n) || n <= 0; })
+                ))
               }
             >
               {splitLineMutation.isPending

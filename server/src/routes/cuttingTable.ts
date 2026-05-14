@@ -1031,6 +1031,14 @@ router.post('/fabric-inventory/:id/assign-freezer', async (req, res) => {
     if (!freezerNumber || isNaN(parseInt(freezerNumber))) {
       return res.status(400).json({ error: 'Valid freezer number is required' });
     }
+
+    const existing = await storage.getCuttingFabricInventory(rollId);
+    if (!existing) {
+      return res.status(404).json({ error: 'Fabric inventory roll not found' });
+    }
+    if (existing.status === 'depleted') {
+      return res.status(409).json({ error: 'Cannot assign freezer to a depleted roll' });
+    }
     
     const inventory = await storage.updateCuttingFabricInventory(rollId, {
       freezerNumber: parseInt(freezerNumber),
@@ -1056,6 +1064,14 @@ router.post('/fabric-inventory/:id/receive', async (req, res) => {
     
     if (!freezerNumber || isNaN(parseInt(freezerNumber))) {
       return res.status(400).json({ error: 'Valid freezer number is required' });
+    }
+
+    const existing = await storage.getCuttingFabricInventory(rollId);
+    if (!existing) {
+      return res.status(404).json({ error: 'Fabric inventory roll not found' });
+    }
+    if (existing.status === 'depleted') {
+      return res.status(409).json({ error: 'Cannot receive depleted fabric into a freezer' });
     }
     
     const updateData: any = {

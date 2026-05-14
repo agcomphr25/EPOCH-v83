@@ -522,6 +522,7 @@ function ProductionTab({ projectId }: { projectId: string }) {
                 onClick={() => {
                   if (row.sourceType === 'p2_production_order') {
                     const params = new URLSearchParams({ tab: 'production' });
+                    if (row.p2PoId) params.set('poId', String(row.p2PoId));
                     if (row.p2PoNumber) params.set('po', row.p2PoNumber);
                     navTo(`/p2-control-center?${params.toString()}`);
                     return;
@@ -1350,8 +1351,10 @@ export default function PMControlCenterPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    const poParam = selectedProject.poNumber ? `?po=${encodeURIComponent(selectedProject.poNumber)}` : '';
-                    navigate(`/p2-control-center${poParam}`);
+                    const params = new URLSearchParams();
+                    if (selectedProject.poId) params.set('poId', String(selectedProject.poId));
+                    if (selectedProject.poNumber) params.set('po', selectedProject.poNumber);
+                    navigate(`/p2-control-center${params.toString() ? `?${params.toString()}` : ''}`);
                   }}
                 >
                   <TrendingUp className="h-3.5 w-3.5 mr-1.5" />

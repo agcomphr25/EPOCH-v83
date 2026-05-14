@@ -3058,13 +3058,39 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         poIdsWithSerializedUnits.has(po.id)
       );
 
-      // Look up projects linked to these POs
+      // Look up projects linked to these POs. PM Control Center resolves the
+      // same relationship through either projects.po_id or the p2_order step.
       const poIds = pos.map((po: any) => po.id);
       const projectRows = poIds.length > 0
         ? await dbPool.query(
-            `SELECT po_id AS "poId", id AS "projectId", project_code AS "projectCode", project_name AS "projectName"
-             FROM projects
-             WHERE po_id = ANY($1)`,
+            `WITH project_po_link AS (
+               SELECT
+                 p.id,
+                 p.project_code,
+                 p.project_name,
+                 p.updated_at,
+                 COALESCE(
+                   p.po_id,
+                   (
+                     SELECT ps.linked_p2_order_id
+                     FROM project_steps ps
+                     WHERE ps.project_id = p.id
+                       AND ps.step_type = 'p2_order'
+                       AND ps.linked_p2_order_id IS NOT NULL
+                     ORDER BY ps.updated_at DESC NULLS LAST, ps.completed_at DESC NULLS LAST
+                     LIMIT 1
+                   )
+                 ) AS linked_po_id
+               FROM projects p
+             )
+             SELECT DISTINCT ON (linked_po_id)
+               linked_po_id AS "poId",
+               id AS "projectId",
+               project_code AS "projectCode",
+               project_name AS "projectName"
+             FROM project_po_link
+             WHERE linked_po_id = ANY($1)
+             ORDER BY linked_po_id, updated_at DESC NULLS LAST`,
             [poIds]
           )
         : [];
@@ -3271,9 +3297,34 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const poIds = [...new Set(items.map((item: any) => item.poId ?? item.po_id).filter(Boolean))];
       const projectRows = poIds.length > 0
         ? await dbPool.query(
-            `SELECT po_id AS "poId", id AS "projectId", project_code AS "projectCode", project_name AS "projectName"
-             FROM projects
-             WHERE po_id = ANY($1)`,
+            `WITH project_po_link AS (
+               SELECT
+                 p.id,
+                 p.project_code,
+                 p.project_name,
+                 p.updated_at,
+                 COALESCE(
+                   p.po_id,
+                   (
+                     SELECT ps.linked_p2_order_id
+                     FROM project_steps ps
+                     WHERE ps.project_id = p.id
+                       AND ps.step_type = 'p2_order'
+                       AND ps.linked_p2_order_id IS NOT NULL
+                     ORDER BY ps.updated_at DESC NULLS LAST, ps.completed_at DESC NULLS LAST
+                     LIMIT 1
+                   )
+                 ) AS linked_po_id
+               FROM projects p
+             )
+             SELECT DISTINCT ON (linked_po_id)
+               linked_po_id AS "poId",
+               id AS "projectId",
+               project_code AS "projectCode",
+               project_name AS "projectName"
+             FROM project_po_link
+             WHERE linked_po_id = ANY($1)
+             ORDER BY linked_po_id, updated_at DESC NULLS LAST`,
             [poIds]
           )
         : [];

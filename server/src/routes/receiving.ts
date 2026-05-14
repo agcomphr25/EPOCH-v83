@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { db } from '../../db';
 import { sql, eq, desc, and } from 'drizzle-orm';
 import {
@@ -33,17 +33,31 @@ import {
 } from '../../schema';
 import { z } from 'zod';
 import multer from 'multer';
-import { ObjectStorageService } from '../../replit_integrations/object_storage/objectStorage';
 import { generateBarcodeImage, generateReceivingUnitBarcodeValue } from '../utils/barcodeGenerator';
 import { requireRole } from '../../middleware/auth';
+import { getFileStorageProvider, getStorageErrorResponse } from '../services/fileStorageProvider';
 
 const router = Router();
-const objectStorage = new ObjectStorageService();
 
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 20 * 1024 * 1024 },
 });
+
+function uploadReceiptDocument(req: Request, res: Response, next: NextFunction) {
+  upload.single('file')(req, res, (err) => {
+    if (!err) {
+      next();
+      return;
+    }
+
+    const message = err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE'
+      ? 'Document uploads are limited to 20 MB.'
+      : err.message || 'Failed to read uploaded document.';
+    const status = err instanceof multer.MulterError ? 413 : 400;
+    res.status(status).json({ error: message });
+  });
+}
 
 // All authenticated employees (ADMIN, EMPLOYEE, OWNER) may perform receiving operations.
 // Applied to all mutating endpoints at the route level for defence-in-depth beyond global auth.
@@ -908,8 +922,8 @@ router.post('/:id/units/:unitId/disposition', requireReceivingAccess, async (req
 });
 
 // ── POST /api/receipts/:id/documents ─────────────────────────────────────────
-// Uploads to object storage, creates media_library record, links in receipt_documents
-router.post('/:id/documents', requireReceivingAccess, upload.single('file'), async (req: Request, res: Response) => {
+// Uploads to configured file storage, creates media_library record, links in receipt_documents
+router.post('/:id/documents', requireReceivingAccess, uploadReceiptDocument, async (req: Request, res: Response) => {
   try {
     const receiptId = parseInt(req.params.id);
     const user = req.user;
@@ -933,7 +947,14 @@ router.post('/:id/documents', requireReceivingAccess, upload.single('file'), asy
       mimeType = req.file.mimetype;
       fileSize = req.file.size;
 
-      storagePath = await objectStorage.uploadBuffer(req.file.buffer, filename, mimeType);
+      const storageProvider = getFileStorageProvider();
+      storagePath = await storageProvider.uploadBuffer({
+        buffer: req.file.buffer,
+        fileName: filename,
+        contentType: mimeType,
+        scope: 'receiving-documents',
+        entityId: String(receiptId),
+      });
 
       // Create media_library record for cross-system traceability
       const mediaValues: InsertMediaLibrary = {
@@ -978,6 +999,10 @@ router.post('/:id/documents', requireReceivingAccess, upload.single('file'), asy
     res.status(201).json(doc);
   } catch (err: any) {
     console.error('POST document:', err);
+    const { status, reason, message } = getStorageErrorResponse(err);
+    if (reason !== 'storage_error') {
+      return res.status(status).json({ error: message, reason });
+    }
     res.status(500).json({ error: 'Failed to upload document' });
   }
 });

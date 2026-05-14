@@ -2829,15 +2829,24 @@ function DocumentsTab({ receipt, onUpdate }: { receipt: Receipt; onUpdate: (r: R
           Authorization: `Bearer ${localStorage.getItem('sessionToken') ?? localStorage.getItem('jwtToken') ?? ''}`,
         },
       });
-      if (!resp.ok) throw new Error('Upload failed');
+      if (!resp.ok) {
+        let message = 'Upload failed';
+        try {
+          const payload = await resp.json();
+          message = payload?.error || payload?.message || message;
+        } catch {
+          // Keep the generic message when the server did not return JSON.
+        }
+        throw new Error(message);
+      }
       const updated = await apiRequest(`/api/receipts/${receipt.id}`);
       onUpdate(updated);
       queryClient.invalidateQueries({ queryKey: ['/api/receipts', receipt.id, 'required-docs'] });
       setDocNotes('');
       setAssignToUnit(RECEIPT_LEVEL);
       toast.success('Document uploaded');
-    } catch (err) {
-      toast.error('Failed to upload document');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to upload document');
     } finally {
       setUploading(false);
     }

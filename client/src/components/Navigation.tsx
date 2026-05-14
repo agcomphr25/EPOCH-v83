@@ -108,6 +108,7 @@ import OfflineIndicator from './OfflineIndicator';
 import GlobalSearch from './GlobalSearch';
 import ExecutiveRundownDropdown from './ExecutiveRundownDropdown';
 import { useQuery } from '@tanstack/react-query';
+import { apiRequest } from '@/lib/queryClient';
 import { hasFullAccess, hasRouteAccess, isUserInPermissionsList, DEFAULT_USER_ROUTES, isAdminUser, getRequiredCapability } from '@/config/userPermissions';
 import { getDashboardRoute } from '@/config/dashboardMapping';
 import {
@@ -201,9 +202,11 @@ export default function Navigation() {
 
   const trainingAlertCount = recertCountData?.count ?? 0;
 
-  // Fetch compliance backfill queue count for nav badge
+  // Fetch score-impacting compliance backfill count for nav badge.
+  // Legacy pre-policy items stay visible on the queue page, but are isolated from ERDI scoring.
   const { data: backfillRows } = useQuery<Array<{ id: number }>>({
-    queryKey: ['/api/vendor-pos/compliance-backfill'],
+    queryKey: ['/api/vendor-pos/compliance-backfill', 'enforced'],
+    queryFn: () => apiRequest('/api/vendor-pos/compliance-backfill?filter=enforced'),
     staleTime: 5 * 60 * 1000,
     retry: false,
   });

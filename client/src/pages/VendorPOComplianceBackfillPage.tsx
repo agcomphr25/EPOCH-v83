@@ -679,6 +679,14 @@ const POPULATION_FILTER_LABELS: Record<PopulationFilter, string> = {
   'audit-sensitive-legacy': 'Audit-Sensitive Legacy (exception-flagged)',
 };
 
+const POPULATION_FILTER_VALUES = new Set<PopulationFilter>(['all', 'enforced', 'legacy', 'audit-sensitive-legacy']);
+
+function getInitialPopulationFilter(): PopulationFilter {
+  if (typeof window === 'undefined') return 'all';
+  const filter = new URLSearchParams(window.location.search).get('filter');
+  return POPULATION_FILTER_VALUES.has(filter as PopulationFilter) ? (filter as PopulationFilter) : 'all';
+}
+
 export default function VendorPOComplianceBackfillPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -687,7 +695,15 @@ export default function VendorPOComplianceBackfillPage() {
   // Population filter mode — controls which server-side population is fetched.
   // 'all' fetches every failing PO and segments them into two sections client-side.
   // Other modes make a targeted server-side call for the specific population.
-  const [populationFilter, setPopulationFilter] = useState<PopulationFilter>('all');
+  const [populationFilter, setPopulationFilter] = useState<PopulationFilter>(getInitialPopulationFilter);
+
+  const updatePopulationFilter = (value: PopulationFilter) => {
+    setPopulationFilter(value);
+    setLocation(value === 'all'
+      ? '/vendor-pos/compliance-backfill'
+      : `/vendor-pos/compliance-backfill?filter=${value}`
+    );
+  };
 
   const backfillQueryUrl = populationFilter === 'all'
     ? '/api/vendor-pos/compliance-backfill'
@@ -772,7 +788,7 @@ export default function VendorPOComplianceBackfillPage() {
             Procurement Compliance Backfill Queue
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Issued POs with compliance gaps affecting the ERDI Procurement score. Enforced POs must be remediated; legacy POs are tracked separately.
+            Issued POs with compliance gaps, separated into current-score enforcement work and isolated legacy review.
           </p>
         </div>
         <Button
@@ -892,7 +908,7 @@ export default function VendorPOComplianceBackfillPage() {
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-center">
         {/* Population filter mode — server-side targeted fetch */}
-        <Select value={populationFilter} onValueChange={(v) => setPopulationFilter(v as PopulationFilter)}>
+        <Select value={populationFilter} onValueChange={(v) => updatePopulationFilter(v as PopulationFilter)}>
           <SelectTrigger className="w-64">
             <SelectValue placeholder="Population View" />
           </SelectTrigger>
@@ -934,7 +950,7 @@ export default function VendorPOComplianceBackfillPage() {
           </Select>
         )}
         {(filterCompliance !== 'all' || filterVendor !== 'all' || search || populationFilter !== 'all') && (
-          <Button variant="ghost" size="sm" onClick={() => { setFilterCompliance('all'); setFilterVendor('all'); setSearch(''); setPopulationFilter('all'); }}>
+          <Button variant="ghost" size="sm" onClick={() => { setFilterCompliance('all'); setFilterVendor('all'); setSearch(''); updatePopulationFilter('all'); }}>
             Clear filters
           </Button>
         )}

@@ -72,13 +72,22 @@ export default function EdriDomainDetail() {
     queryKey: ['/api/edri/snapshot/latest'],
   });
 
-  const { data: backfillRows } = useQuery<Array<{ id: number }>>({
-    queryKey: ['/api/vendor-pos/compliance-backfill'],
+  const { data: enforcedBackfillRows } = useQuery<Array<{ id: number }>>({
+    queryKey: ['/api/vendor-pos/compliance-backfill', 'enforced'],
+    queryFn: () => apiRequest('/api/vendor-pos/compliance-backfill?filter=enforced'),
     enabled: domainKey === 'PROCUREMENT',
     staleTime: 5 * 60 * 1000,
     retry: false,
   });
-  const backfillCount = backfillRows?.length ?? 0;
+  const { data: legacyBackfillRows } = useQuery<Array<{ id: number }>>({
+    queryKey: ['/api/vendor-pos/compliance-backfill', 'legacy'],
+    queryFn: () => apiRequest('/api/vendor-pos/compliance-backfill?filter=legacy'),
+    enabled: domainKey === 'PROCUREMENT',
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+  const enforcedBackfillCount = enforcedBackfillRows?.length ?? 0;
+  const legacyBackfillCount = legacyBackfillRows?.length ?? 0;
 
   const evidenceMutation = useMutation({
     mutationFn: (snapshotId: number) => apiRequest('POST', '/api/edri/evidence/generate', { snapshotId, domainKey }),
@@ -281,39 +290,44 @@ export default function EdriDomainDetail() {
         </CardContent>
       </Card>
 
-      {/* Procurement: FAR_FLOWDOWN backfill queue CTA */}
+      {/* Procurement: FAR_FLOWDOWN current-score queue CTA */}
       {domainKey === 'PROCUREMENT' && (
-        <Card className={backfillCount > 0 ? 'border-orange-300 dark:border-orange-700' : ''}>
+        <Card className={enforcedBackfillCount > 0 ? 'border-orange-300 dark:border-orange-700' : ''}>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
-              <ShieldAlert className={`h-5 w-5 ${backfillCount > 0 ? 'text-orange-500' : 'text-green-500'}`} />
-              FAR_FLOWDOWN — Compliance Backfill Queue
+              <ShieldAlert className={`h-5 w-5 ${enforcedBackfillCount > 0 ? 'text-orange-500' : 'text-green-500'}`} />
+              FAR_FLOWDOWN — Current-Score Queue
             </CardTitle>
             <CardDescription>
-              Issued POs with compliance gaps that are directly hurting the FAR_FLOWDOWN score.
+              Enforced POs with compliance gaps count toward FAR_FLOWDOWN. Legacy pre-policy items are isolated unless flagged for Exception Review.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="flex items-center justify-between gap-4 flex-wrap">
               <div>
-                {backfillCount === 0 ? (
+                {enforcedBackfillCount === 0 ? (
                   <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
                     <CheckCircle2 className="h-5 w-5" />
-                    <span className="text-sm font-medium">No issued POs require remediation</span>
+                    <span className="text-sm font-medium">No enforced POs are hurting FAR_FLOWDOWN</span>
                   </div>
                 ) : (
                   <div className="space-y-1">
-                    <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">{backfillCount}</p>
-                    <p className="text-sm text-muted-foreground">issued {backfillCount === 1 ? 'PO requires' : 'POs require'} remediation</p>
+                    <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">{enforcedBackfillCount}</p>
+                    <p className="text-sm text-muted-foreground">enforced {enforcedBackfillCount === 1 ? 'PO requires' : 'POs require'} remediation</p>
                   </div>
+                )}
+                {legacyBackfillCount > 0 && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    {legacyBackfillCount} legacy {legacyBackfillCount === 1 ? 'item is' : 'items are'} isolated from the current score.
+                  </p>
                 )}
               </div>
               <Button
-                variant={backfillCount > 0 ? 'default' : 'outline'}
-                onClick={() => setLocation('/vendor-pos/compliance-backfill')}
+                variant={enforcedBackfillCount > 0 ? 'default' : 'outline'}
+                onClick={() => setLocation('/vendor-pos/compliance-backfill?filter=enforced')}
               >
                 <ShieldAlert className="h-4 w-4 mr-2" />
-                Open Backfill Queue
+                Open Current-Score Queue
               </Button>
             </div>
           </CardContent>

@@ -911,7 +911,8 @@ router.delete('/optional-settings/:id', async (req: Request, res: Response) => {
 });
 
 // GET /api/vendor-pos/compliance-backfill - Procurement Compliance Backfill Queue
-// Returns all issued POs with compliance gaps, enriched with per-row failing reasons and recommended actions.
+// Returns issued POs with compliance gaps, enriched with per-row failing reasons and recommended actions.
+// Default "all" includes isolated legacy rows; "enforced" matches the current ERDI scoring population.
 // Must be defined BEFORE /:id to avoid route conflict.
 // Query param: filter = 'all' | 'enforced' | 'legacy' | 'audit-sensitive-legacy'
 const backfillFilterSchema = z.enum(['all', 'enforced', 'legacy', 'audit-sensitive-legacy']).default('all');

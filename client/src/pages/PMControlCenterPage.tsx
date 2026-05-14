@@ -400,6 +400,10 @@ function ProductionTab({ projectId }: { projectId: string }) {
     );
   }
 
+  const onlyCuttingTable = rows.length > 0 && rows.every(r => {
+    const dept = (r.currentDepartment ?? '').toLowerCase().replace(/[\s_-]/g, '');
+    return dept === 'cuttingtable' || dept === 'cutting';
+  });
   const blockedCount = rows.filter(r => r.status === 'BLOCKED').length;
   const notStartedCount = rows.filter(r => completionState(r) === 'not_started').length;
   const inProgressCount = rows.filter(r => completionState(r) === 'in_progress').length;
@@ -498,6 +502,15 @@ function ProductionTab({ projectId }: { projectId: string }) {
           <CheckCircle className="mx-auto h-10 w-10 text-green-500 mb-3" />
           <p className="text-muted-foreground">No work orders match the selected filters.</p>
         </Card>
+      )}
+
+      {onlyCuttingTable && (
+        <div
+          className="mb-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200"
+          data-testid="text-cutting-only-note"
+        >
+          Only cutting-table work orders exist for this project — downstream work orders will appear once cutting is released.
+        </div>
       )}
 
       {displayRows.length > 0 && (

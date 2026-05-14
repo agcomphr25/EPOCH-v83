@@ -258,10 +258,21 @@ router.get('/:projectId/summary', h(async (req, res) => {
     rows AS (
       SELECT status FROM production_work_orders WHERE project_id = $1
       UNION ALL
-      SELECT p2po.status
+      SELECT
+        CASE
+          WHEN SUM(COALESCE(p2po.quantity, 0)) > 0
+            AND SUM(COALESCE(p2po.quantity_manufactured, 0))
+              >= SUM(COALESCE(p2po.quantity, 0))
+            THEN 'COMPLETED'
+          WHEN SUM(COALESCE(p2po.quantity_manufactured, 0)) > 0
+            OR bool_or(p2po.status IN ('IN_PROGRESS', 'in_progress'))
+            THEN 'IN_PROGRESS'
+          ELSE 'PENDING'
+        END AS status
       FROM project_po_link ppl
       JOIN p2_production_orders p2po ON p2po.p2_po_id = ppl.po_id
       WHERE p2po.status NOT IN ('CANCELLED', 'CANCELED')
+      GROUP BY p2po.p2_po_id, p2po.p2_po_item_id, p2po.department
     )
     SELECT
       COUNT(*) AS "totalWorkOrders",
@@ -527,24 +538,40 @@ router.get('/:projectId/production', h(async (req, res) => {
     ),
     p2_rows AS (
       SELECT
-        ('p2-production-order:' || p2po.id::text) AS "productionWorkOrderId",
-        p2po.order_id AS "workOrderNumber",
-        COALESCE(p2poi.part_number, p2po.sku) AS "partNumber",
-        COALESCE(p2po.quantity, 0)::int AS "quantityRequired",
-        COALESCE(p2po.quantity_manufactured, 0)::int AS "quantityCompleted",
+        ('p2-production-order-group:' || p2po.p2_po_id::text || ':' ||
+          COALESCE(p2po.p2_po_item_id::text, 'null') || ':' ||
+          COALESCE(p2po.department, '')) AS "productionWorkOrderId",
         CASE
-          WHEN p2po.completed_at IS NOT NULL
-            AND p2po.completed_at::date = $1::date
-          THEN COALESCE(p2po.quantity_manufactured, 0)::int
-          ELSE 0
-        END AS "quantityCompletedToday",
+          WHEN COUNT(*) = 1 THEN MIN(p2po.order_id)
+          ELSE MIN(p2po.order_id) || '–' || MAX(p2po.order_id) || ' (' || COUNT(*) || ')'
+        END AS "workOrderNumber",
+        COALESCE(MAX(p2poi.part_number), MAX(p2po.sku)) AS "partNumber",
+        SUM(COALESCE(p2po.quantity, 0))::int AS "quantityRequired",
+        SUM(COALESCE(p2po.quantity_manufactured, 0))::int AS "quantityCompleted",
+        SUM(
+          CASE
+            WHEN p2po.completed_at IS NOT NULL
+              AND p2po.completed_at::date = $1::date
+            THEN COALESCE(p2po.quantity_manufactured, 0)
+            ELSE 0
+          END
+        )::int AS "quantityCompletedToday",
         'p2_production_order'::text AS "sourceType",
         'P2'::text AS "sourceLabel",
         NULL::text AS "wadStatus",
         p2po.p2_po_id AS "p2PoId",
-        p2po_head.po_number AS "p2PoNumber",
-        p2po.status,
-        p2po.due_date AS "dueDate",
+        MAX(p2po_head.po_number) AS "p2PoNumber",
+        CASE
+          WHEN SUM(COALESCE(p2po.quantity, 0)) > 0
+            AND SUM(COALESCE(p2po.quantity_manufactured, 0))
+              >= SUM(COALESCE(p2po.quantity, 0))
+            THEN 'COMPLETED'
+          WHEN SUM(COALESCE(p2po.quantity_manufactured, 0)) > 0
+            OR bool_or(p2po.status IN ('IN_PROGRESS', 'in_progress'))
+            THEN 'IN_PROGRESS'
+          ELSE 'PENDING'
+        END AS status,
+        MIN(p2po.due_date) AS "dueDate",
         p2po.department AS "currentDepartment",
         NULL::text AS "currentTravelerStep",
         NULL::text AS "activeTravelerId",
@@ -552,14 +579,14 @@ router.get('/:projectId/production', h(async (req, res) => {
         (
           SELECT COUNT(*)::int
           FROM p2_serialized_items psi
-          WHERE psi.po_id = p2po_head.id
+          WHERE psi.po_id = p2po.p2_po_id
             AND (p2po.p2_po_item_id IS NULL OR psi.po_item_id = p2po.p2_po_item_id)
             AND psi.metadata->>'isReplacement' = 'true'
         ) AS "ncrReplacementCount",
         (
           SELECT COUNT(*)::int
           FROM p2_serialized_items psi
-          WHERE psi.po_id = p2po_head.id
+          WHERE psi.po_id = p2po.p2_po_id
             AND (p2po.p2_po_item_id IS NULL OR psi.po_item_id = p2po.p2_po_item_id)
             AND psi.status = 'ACTIVE'
             AND psi.metadata->>'isReplacement' = 'true'
@@ -567,19 +594,18 @@ router.get('/:projectId/production', h(async (req, res) => {
         (
           SELECT string_agg(psi.serial_number, ', ' ORDER BY psi.created_at DESC)
           FROM p2_serialized_items psi
-          WHERE psi.po_id = p2po_head.id
+          WHERE psi.po_id = p2po.p2_po_id
             AND (p2po.p2_po_item_id IS NULL OR psi.po_item_id = p2po.p2_po_item_id)
             AND psi.metadata->>'isReplacement' = 'true'
         ) AS "replacementSerialNumbers",
         CASE
-          WHEN p2po.due_date IS NULL THEN NULL
-          WHEN p2po.status IN ('COMPLETED', 'CLOSED') THEN
-            CASE
-              WHEN p2po.completed_at IS NOT NULL
-              THEN (p2po.completed_at::date - p2po.due_date::date)
-              ELSE NULL
-            END
-          ELSE ($1::date - p2po.due_date::date)
+          WHEN MIN(p2po.due_date) IS NULL THEN NULL
+          WHEN bool_and(p2po.status IN ('COMPLETED', 'CLOSED'))
+            AND MAX(p2po.completed_at) IS NOT NULL
+            THEN (MAX(p2po.completed_at)::date - MIN(p2po.due_date)::date)
+          WHEN bool_and(p2po.status IN ('COMPLETED', 'CLOSED'))
+            THEN NULL
+          ELSE ($1::date - MIN(p2po.due_date)::date)
         END AS "daysScheduleVariance",
         NULL::text AS "blockReason"
       FROM project_po_link ppl
@@ -587,6 +613,7 @@ router.get('/:projectId/production', h(async (req, res) => {
       JOIN p2_production_orders p2po ON p2po.p2_po_id = p2po_head.id
       LEFT JOIN p2_purchase_order_items p2poi ON p2poi.id = p2po.p2_po_item_id
       -- No status filter: match WAD branch which returns rows regardless of status.
+      GROUP BY p2po.p2_po_id, p2po.p2_po_item_id, p2po.department
     )
     SELECT * FROM wad_rows
     UNION ALL

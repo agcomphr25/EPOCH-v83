@@ -366,8 +366,9 @@ router.get('/production', authenticateToken, requirePermission('work_orders.rele
 });
 
 // GET /production/wad-status — WAD backlog dashboard.
-// Returns one row per project in p2_release or production with the aggregated WAD status,
-// PWO count, latest PWO id, percent-complete (from wizardData), and last-edited info.
+// Returns one row per active project that has reached PO/WAD readiness with the
+// aggregated WAD status, PWO count, latest PWO id, percent-complete (from
+// wizardData), and last-edited info.
 router.get('/production/wad-status', authenticateToken, requirePermission('work_orders.release'), async (_req: Request, res: Response) => {
   try {
     const projRows = await db
@@ -382,7 +383,20 @@ router.get('/production/wad-status', authenticateToken, requirePermission('work_
       })
       .from(projects)
       .leftJoin(p2PurchaseOrders, eq(projects.poId, p2PurchaseOrders.id))
-      .where(inArray(projects.currentStage, ['p2_release', 'production']));
+      .where(and(
+        sql`${projects.status} NOT IN ('cancelled', 'completed', 'inactive', 'lost')`,
+        or(
+          inArray(projects.currentStage, ['po_received', 'p2_release', 'production']),
+          sql`${projects.poId} IS NOT NULL`,
+          sql`EXISTS (
+            SELECT 1
+            FROM project_steps ps
+            WHERE ps.project_id = ${projects.id}
+              AND ps.status = 'completed'
+              AND ps.step_type IN ('purchase_review_checklist', 'preproduction_checklist', 'p2_order')
+          )`,
+        ),
+      ));
 
     const projectIds = projRows.map((p) => p.id);
     const woRows = projectIds.length > 0

@@ -1251,7 +1251,7 @@ export default function PMControlCenterPage() {
             size="sm"
             onClick={() => navigate('/wad-status')}
             data-testid="button-wad-status-from-pmcc"
-            title="WAD authoring & backfill backlog across all P2 Release / Production projects"
+            title="WAD authoring & backfill backlog across active PO-ready projects"
           >
             <ShieldCheck className="h-4 w-4 mr-1.5" />
             WAD Status

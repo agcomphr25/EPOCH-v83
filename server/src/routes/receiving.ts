@@ -38,6 +38,7 @@ import { generateBarcodeImage, generateReceivingUnitBarcodeValue } from '../util
 import { requireRole } from '../../middleware/auth';
 import { getFileStorageProvider, getStorageErrorResponse } from '../services/fileStorageProvider';
 import { createInventoryEvent } from '../services/inventoryEventService';
+import { recordInventoryLedgerEntry } from '../services/inventoryTransactionLedgerService';
 
 const router = Router();
 
@@ -1388,19 +1389,6 @@ async function handleAcceptedUnit(unit: ReceivedUnit, receipt: Receipt, user: Au
       throw new Error(`Receipt line ${unit.receiptLineId} has no AG part number — cannot create material lot`);
     }
 
-    // Generate ICN
-    const today = new Date();
-    const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
-    const icnPrefix = `ICN-MAT-${dateStr}-`;
-    const icnResult = await db.execute(
-      sql`SELECT internal_control_number FROM material_lots WHERE internal_control_number LIKE ${icnPrefix + '%'} ORDER BY internal_control_number DESC LIMIT 1`
-    );
-    const icnRows = sqlRows<{ internal_control_number: string }>(icnResult);
-    const lastSeq = icnRows.length > 0
-      ? parseInt((icnRows[0].internal_control_number).split('-').pop() ?? '0', 10)
-      : 0;
-    const icn = `${icnPrefix}${String(lastSeq + 1).padStart(6, '0')}`;
-
     // Find inventory item — required for material lot linkage; fail-fast if missing
     const invResult = await db.execute(
       sql`SELECT id, name, ag_part_number, is_fabric, utilized_in_pl1, utilized_in_pl2, supplier_part_number,
@@ -1444,53 +1432,100 @@ async function handleAcceptedUnit(unit: ReceivedUnit, receipt: Receipt, user: Au
       }
     }
 
-    // Type-safe material lot insert
-    const lotValues: InsertMaterialLot = insertMaterialLotSchema.parse({
-      inventoryItemId: invItem.id,
-      materialPartNumber: line.agPartNumber,
-      materialName: invItem.name ?? line.description ?? '',
-      internalControlNumber: icn,
-      supplier: receipt.vendorName ?? 'Unknown',
-      supplierLotNumber: unit.lotNumber ?? null,
-      supplierPartNumber: null,
-      purchaseOrderNumber: receipt.vendorPoNumber ?? null,
-      receivingRecordNumber: receipt.receiptNumber,
-      receivedQty: String(unit.quantity),
-      remainingQty: String(unit.quantity),
-      unitOfMeasure: unit.uom ?? 'EA',
-      expirationDate: prefilledExpiration,
-      manufactureDate: unit.manufactureDate ?? null,
-      storageLocation: unit.location ?? null,
-      maxOutTimeMinutes: prefilledMaxOutTime,
-      status: 'ACCEPTED',
-      receivedBy: displayName,
-      notes: `Auto-created from receipt ${receipt.receiptNumber} unit ${unit.barcode}`,
+    // Atomic block: ICN reservation, material_lot insert, received_unit link,
+    // material_lot_transactions insert, and inventory_transaction_ledger write
+    // succeed or fail together. If any step throws, none of them persist.
+    const { lot, icn } = await db.transaction(async (tx) => {
+      // Generate ICN inside the transaction to reduce race-condition window
+      const today = new Date();
+      const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
+      const icnPrefix = `ICN-MAT-${dateStr}-`;
+      const icnResult = await tx.execute(
+        sql`SELECT internal_control_number FROM material_lots WHERE internal_control_number LIKE ${icnPrefix + '%'} ORDER BY internal_control_number DESC LIMIT 1`
+      );
+      const icnRows = sqlRows<{ internal_control_number: string }>(icnResult);
+      const lastSeq = icnRows.length > 0
+        ? parseInt((icnRows[0].internal_control_number).split('-').pop() ?? '0', 10)
+        : 0;
+      const icn = `${icnPrefix}${String(lastSeq + 1).padStart(6, '0')}`;
+
+      // Type-safe material lot insert
+      const lotValues: InsertMaterialLot = insertMaterialLotSchema.parse({
+        inventoryItemId: invItem.id,
+        materialPartNumber: line.agPartNumber,
+        materialName: invItem.name ?? line.description ?? '',
+        internalControlNumber: icn,
+        supplier: receipt.vendorName ?? 'Unknown',
+        supplierLotNumber: unit.lotNumber ?? null,
+        supplierPartNumber: null,
+        purchaseOrderNumber: receipt.vendorPoNumber ?? null,
+        receivingRecordNumber: receipt.receiptNumber,
+        receivedQty: String(unit.quantity),
+        remainingQty: String(unit.quantity),
+        unitOfMeasure: unit.uom ?? 'EA',
+        expirationDate: prefilledExpiration,
+        manufactureDate: unit.manufactureDate ?? null,
+        storageLocation: unit.location ?? null,
+        maxOutTimeMinutes: prefilledMaxOutTime,
+        status: 'ACCEPTED',
+        receivedBy: displayName,
+        notes: `Auto-created from receipt ${receipt.receiptNumber} unit ${unit.barcode}`,
+      });
+
+      const [lot] = await tx.insert(materialLots).values(lotValues).returning();
+      if (!lot?.id) throw new Error('material_lots insert returned no row');
+
+      // Link UUID back to received_unit
+      await tx.update(receivedUnits).set({
+        materialLotId: lot.id,
+        updatedAt: new Date(),
+      }).where(eq(receivedUnits.id, unit.id));
+
+      // Type-safe transaction insert — referenceId = received_unit.id, receiptId = receipt.id (explicit FK)
+      const txValues: InsertMaterialLotTransaction = insertMaterialLotTransactionSchema.parse({
+        materialLotId: lot.id,
+        internalControlNumber: icn,
+        transactionType: 'RECEIVE',
+        qtyBefore: '0',
+        qtyChange: String(unit.quantity),
+        qtyAfter: String(unit.quantity),
+        performedBy: displayName,
+        referenceType: 'received_unit',
+        referenceId: String(unit.id),
+        receiptId: receipt.id,
+        notes: `Receipt ${receipt.receiptNumber} · unit barcode ${unit.barcode}`,
+      });
+      await tx.insert(materialLotTransactions).values(txValues);
+
+      // Task #216 — Live ITL write so receipts show in Material Traceability Viewer.
+      // Must succeed inside the same transaction as the MLT insert.
+      await recordInventoryLedgerEntry({
+        transactionType: 'RECEIVE',
+        inventoryItemId: invItem.id,
+        agPartNumber: line.agPartNumber,
+        lotId: lot.id,
+        unitOfMeasure: unit.uom ?? 'EA',
+        quantityBefore: 0,
+        quantityDelta: receivedQty,
+        quantityAfter: receivedQty,
+        performedByUserId: user?.id ?? null,
+        performedByDisplayName: displayName,
+        reasonCode: 'RECEIPT_ACCEPTED',
+        notes: `Receipt ${receipt.receiptNumber}: accepted unit ${unit.barcode}`,
+        sourceModule: 'receiving',
+        sourceRecordId: unit.id,
+        metadata: {
+          receiptId: receipt.id,
+          receiptNumber: receipt.receiptNumber,
+          receivedUnitId: unit.id,
+          unitBarcode: unit.barcode,
+          materialLotId: lot.id,
+          internalControlNumber: icn,
+        },
+      }, tx);
+
+      return { lot, icn };
     });
-
-    const [lot] = await db.insert(materialLots).values(lotValues).returning();
-    if (!lot?.id) throw new Error('material_lots insert returned no row');
-
-    // Link UUID back to received_unit
-    await db.update(receivedUnits).set({
-      materialLotId: lot.id,
-      updatedAt: new Date(),
-    }).where(eq(receivedUnits.id, unit.id));
-
-    // Type-safe transaction insert — referenceId = received_unit.id, receiptId = receipt.id (explicit FK)
-    const txValues: InsertMaterialLotTransaction = insertMaterialLotTransactionSchema.parse({
-      materialLotId: lot.id,
-      internalControlNumber: icn,
-      transactionType: 'RECEIVE',
-      qtyBefore: '0',
-      qtyChange: String(unit.quantity),
-      qtyAfter: String(unit.quantity),
-      performedBy: displayName,
-      referenceType: 'received_unit',
-      referenceId: String(unit.id),
-      receiptId: receipt.id,
-      notes: `Receipt ${receipt.receiptNumber} · unit barcode ${unit.barcode}`,
-    });
-    await db.insert(materialLotTransactions).values(txValues);
 
     await createInventoryEvent({
       agPartNumber: line.agPartNumber,

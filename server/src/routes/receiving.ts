@@ -857,43 +857,65 @@ router.patch('/:id/units/:unitId', requireReceivingAccess, async (req: Request, 
               error.status = 422;
               throw error;
             }
-            lotUpdates.receivedQty = String(newQty);
-            lotUpdates.remainingQty = String(nextRemaining);
-            quantityAdjustment = {
-              materialLotId: String(unit.materialLotId),
-              internalControlNumber: lot.internalControlNumber,
-              before: currentRemaining,
-              delta,
-              after: nextRemaining,
-            };
+            if (delta !== 0) {
+              lotUpdates.receivedQty = String(newQty);
+              lotUpdates.remainingQty = String(nextRemaining);
+              quantityAdjustment = {
+                materialLotId: String(unit.materialLotId),
+                internalControlNumber: lot.internalControlNumber,
+                before: currentRemaining,
+                delta,
+                after: nextRemaining,
+              };
+            }
           }
+
+          // materialLots.manufactureDate / expirationDate are timestamp columns,
+          // so Drizzle expects Date | null (not the YYYY-MM-DD strings produced
+          // by the receivedUnits date columns). Convert before assigning.
+          const toTimestamp = (v: unknown): Date | null => {
+            if (v == null || v === '') return null;
+            if (v instanceof Date) return v;
+            const d = new Date(v as string);
+            return Number.isNaN(d.getTime()) ? null : d;
+          };
 
           if ('uom' in updates && updates.uom != null) lotUpdates.unitOfMeasure = updates.uom;
           if ('lotNumber' in updates) lotUpdates.supplierLotNumber = updates.lotNumber ?? null;
-          if ('manufactureDate' in updates) lotUpdates.manufactureDate = updates.manufactureDate ?? null;
-          if ('expirationDate' in updates) lotUpdates.expirationDate = updates.expirationDate ?? null;
+          if ('manufactureDate' in updates) lotUpdates.manufactureDate = toTimestamp(updates.manufactureDate);
+          if ('expirationDate' in updates) lotUpdates.expirationDate = toTimestamp(updates.expirationDate);
           if ('location' in updates) lotUpdates.storageLocation = updates.location ?? null;
 
           if (Object.keys(lotUpdates).length > 1) {
             await tx.update(materialLots).set(lotUpdates).where(eq(materialLots.id, unit.materialLotId));
           }
 
-          const cuttingUpdates: Partial<typeof cuttingFabricInventory.$inferInsert> = { updatedAt: new Date() };
-          if ('quantity' in updates && updates.quantity != null) {
-            const qty = Number(updates.quantity);
-            cuttingUpdates.quantityInStock = qty;
-            cuttingUpdates.squareMeters = String(qty);
-          }
-          if ('lotNumber' in updates) cuttingUpdates.lotNumber = updates.lotNumber ?? null;
-          if ('batchNumber' in updates || 'heatLot' in updates) cuttingUpdates.batchNumber = updates.batchNumber ?? updates.heatLot ?? null;
-          if ('rollNumber' in updates) cuttingUpdates.rollNumber = updates.rollNumber ?? null;
-          if ('manufactureDate' in updates) cuttingUpdates.manufactureDate = updates.manufactureDate ?? null;
-          if ('expirationDate' in updates) cuttingUpdates.expirationDate = updates.expirationDate ?? null;
-          if ('location' in updates) cuttingUpdates.location = updates.location ?? null;
-          if ('freezerNumber' in updates) cuttingUpdates.freezerNumber = updates.freezerNumber ?? null;
+          // Only sync cutting_fabric_inventory if a row actually exists for this
+          // unit's barcode — otherwise we waste a roundtrip on every adjustment
+          // for non-fabric units.
+          const [fabricRow] = await tx
+            .select({ id: cuttingFabricInventory.id })
+            .from(cuttingFabricInventory)
+            .where(eq(cuttingFabricInventory.barcode, unit.barcode))
+            .limit(1);
+          if (fabricRow) {
+            const cuttingUpdates: Partial<typeof cuttingFabricInventory.$inferInsert> = { updatedAt: new Date() };
+            if ('quantity' in updates && updates.quantity != null) {
+              const qty = Number(updates.quantity);
+              cuttingUpdates.quantityInStock = qty;
+              cuttingUpdates.squareMeters = String(qty);
+            }
+            if ('lotNumber' in updates) cuttingUpdates.lotNumber = updates.lotNumber ?? null;
+            if ('batchNumber' in updates || 'heatLot' in updates) cuttingUpdates.batchNumber = updates.batchNumber ?? updates.heatLot ?? null;
+            if ('rollNumber' in updates) cuttingUpdates.rollNumber = updates.rollNumber ?? null;
+            if ('manufactureDate' in updates) cuttingUpdates.manufactureDate = updates.manufactureDate ?? null;
+            if ('expirationDate' in updates) cuttingUpdates.expirationDate = updates.expirationDate ?? null;
+            if ('location' in updates) cuttingUpdates.location = updates.location ?? null;
+            if ('freezerNumber' in updates) cuttingUpdates.freezerNumber = updates.freezerNumber ?? null;
 
-          if (Object.keys(cuttingUpdates).length > 1) {
-            await tx.update(cuttingFabricInventory).set(cuttingUpdates).where(eq(cuttingFabricInventory.barcode, unit.barcode));
+            if (Object.keys(cuttingUpdates).length > 1) {
+              await tx.update(cuttingFabricInventory).set(cuttingUpdates).where(eq(cuttingFabricInventory.id, fabricRow.id));
+            }
           }
         }
       }

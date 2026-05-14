@@ -2,7 +2,7 @@ import { Link, useLocation } from 'wouter';
 import {
   ShieldCheck, Crown, Bug, BarChart3,
   AlertOctagon, Wrench, Clock, Tags, FileCheck2, Percent, ClipboardCheck,
-  ChevronDown, ShoppingCart, Boxes, Fingerprint, BookOpenCheck, UsersRound, UserCheck, ClipboardPenLine,
+  ChevronDown, ShoppingCart, Boxes, Fingerprint, BookOpenCheck, UsersRound, UserCheck, ClipboardPenLine, Network,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -30,6 +30,7 @@ const NAV_ITEMS: NavItem[] = [
 const REPORT_ITEMS: NavItem[] = [
   { label: 'Charge Code Usage', path: '/admin/edri/charge-code-usage',  icon: Tags          },
   { label: 'Labor Distribution', path: '/admin/edri/labor-distribution', icon: UsersRound    },
+  { label: 'Evidence Map',       path: '/admin/edri/transaction-evidence-map', icon: Network },
   { label: 'Supervisor Exceptions', path: '/admin/edri/supervisor-approval-exceptions', icon: UserCheck },
   { label: 'Correction Log',    path: '/admin/edri/timesheet-correction-log', icon: ClipboardPenLine },
   { label: 'Payroll Recon',     path: '/admin/edri/payroll-export-reconciliation', icon: FileCheck2 },

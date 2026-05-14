@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   AlertTriangle,
-  CheckCircle2,
   ExternalLink,
   FileText,
   Landmark,
@@ -101,12 +100,20 @@ interface ProjectOption {
   status?: string | null;
 }
 
-const columnDefs: Array<{ key: string; label: string; types: EvidenceNodeType[] }> = [
-  { key: 'scope', label: 'Scope', types: ['project', 'period'] },
-  { key: 'source', label: 'Source', types: ['work_order', 'employee'] },
-  { key: 'cost', label: 'Labor Cost', types: ['labor_cost'] },
-  { key: 'posting', label: 'Posting', types: ['payroll', 'journal'] },
-  { key: 'evidence', label: 'Evidence', types: ['audit', 'document', 'missing'] },
+const branchDefs: Array<{
+  key: string;
+  label: string;
+  subtitle: string;
+  types: EvidenceNodeType[];
+  angle: number;
+}> = [
+  { key: 'work_order', label: 'WAD / Work Orders', subtitle: 'Where the labor was charged', types: ['work_order'], angle: -155 },
+  { key: 'employee', label: 'Employees + Rates', subtitle: 'Who worked and what rate was used', types: ['employee'], angle: -105 },
+  { key: 'labor_cost', label: 'Labor Cost Lines', subtitle: 'Hours, rate source, and dollars', types: ['labor_cost'], angle: -42 },
+  { key: 'payroll', label: 'Payroll Export', subtitle: 'Evidence-only export trail', types: ['payroll'], angle: 26 },
+  { key: 'journal', label: 'GL Posting', subtitle: 'Journal entries and debit/credit lines', types: ['journal'], angle: 78 },
+  { key: 'audit', label: 'Audit Ledger', subtitle: 'Hash chained events', types: ['audit'], angle: 132 },
+  { key: 'document', label: 'Attached Evidence', subtitle: 'Project files and supporting docs', types: ['document', 'missing'], angle: 178 },
 ];
 
 function currentPeriod() {
@@ -142,6 +149,21 @@ function typeIcon(type: EvidenceNodeType) {
   return Network;
 }
 
+function polarPoint(centerX: number, centerY: number, radius: number, angleDegrees: number) {
+  const angle = (angleDegrees * Math.PI) / 180;
+  return {
+    x: centerX + radius * Math.cos(angle),
+    y: centerY + radius * Math.sin(angle),
+  };
+}
+
+function branchStatus(nodes: EvidenceNode[]): EvidenceNodeStatus {
+  if (nodes.some((node) => node.status === 'missing')) return 'missing';
+  if (nodes.some((node) => node.status === 'warning')) return 'warning';
+  if (nodes.some((node) => node.status === 'sensitive')) return 'sensitive';
+  return 'ok';
+}
+
 function StatusBadge({ status }: { status: EvidenceNodeStatus }) {
   if (status === 'ok') return <Badge className="bg-emerald-600">OK</Badge>;
   if (status === 'sensitive') return <Badge className="bg-blue-600">Sensitive</Badge>;
@@ -149,45 +171,171 @@ function StatusBadge({ status }: { status: EvidenceNodeStatus }) {
   return <Badge variant="secondary">Review</Badge>;
 }
 
-function NodeButton({
+function MindMapNode({
   node,
   selected,
+  x,
+  y,
+  width,
   onClick,
+  branch,
 }: {
   node: EvidenceNode;
   selected: boolean;
-  onClick: () => void;
+  x: number;
+  y: number;
+  width: number;
+  onClick?: () => void;
+  branch?: boolean;
 }) {
   const Icon = typeIcon(node.type);
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`w-full text-left rounded-md border p-3 shadow-sm transition hover:shadow-md ${statusClass(node.status)} ${
-        selected ? 'ring-2 ring-primary ring-offset-2' : ''
-      }`}
+      disabled={!onClick}
+      className={`absolute rounded-md border px-3 py-2 text-left shadow-sm transition ${
+        onClick ? 'hover:scale-[1.02] hover:shadow-md' : 'cursor-default'
+      } ${statusClass(node.status)} ${selected ? 'ring-2 ring-primary ring-offset-2' : ''}`}
+      style={{
+        left: x - width / 2,
+        top: y - (branch ? 42 : 34),
+        width,
+      }}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex min-w-0 items-start gap-2">
-          <Icon className="mt-0.5 h-4 w-4 flex-shrink-0" />
-          <div className="min-w-0">
-            <div className="truncate text-sm font-semibold">{node.label}</div>
-            {node.subtitle && <div className="mt-0.5 line-clamp-2 text-xs opacity-75">{node.subtitle}</div>}
-          </div>
-        </div>
-        {node.missingEvidence?.length ? <AlertTriangle className="h-4 w-4 flex-shrink-0" /> : <CheckCircle2 className="h-4 w-4 flex-shrink-0" />}
-      </div>
-      {node.metrics && (
-        <div className="mt-2 grid grid-cols-2 gap-1 text-xs">
-          {Object.entries(node.metrics).slice(0, 4).map(([key, value]) => (
-            <div key={key} className="min-w-0">
-              <span className="opacity-65">{key}: </span>
-              <span className="font-medium">{String(value ?? '-')}</span>
+      <div className="flex items-start gap-2">
+        <Icon className={`${branch ? 'h-5 w-5' : 'h-4 w-4'} mt-0.5 flex-shrink-0`} />
+        <div className="min-w-0">
+          <div className={`${branch ? 'text-sm' : 'text-xs'} truncate font-semibold`}>{node.label}</div>
+          {node.subtitle && (
+            <div className={`${branch ? 'text-xs' : 'text-[11px]'} mt-0.5 line-clamp-2 opacity-75`}>
+              {node.subtitle}
             </div>
-          ))}
+          )}
         </div>
-      )}
+      </div>
+      {node.missingEvidence?.length ? (
+        <div className="mt-1 flex items-center gap-1 text-[11px] font-medium">
+          <AlertTriangle className="h-3 w-3" />
+          {node.missingEvidence.length} gap{node.missingEvidence.length === 1 ? '' : 's'}
+        </div>
+      ) : null}
     </button>
+  );
+}
+
+function MindMapCanvas({
+  data,
+  selectedNodeId,
+  onSelectNode,
+}: {
+  data: EvidenceMapResponse;
+  selectedNodeId: string | null;
+  onSelectNode: (id: string) => void;
+}) {
+  const canvas = { width: 1280, height: 820 };
+  const center = { x: 640, y: 410 };
+
+  const centerNode: EvidenceNode = {
+    id: `mind-center:${data.project.id}:${data.period.label}`,
+    type: 'project',
+    label: `${data.project.project_code} / ${data.period.label}`,
+    subtitle: `${data.project.project_name} | ${data.summary.laborRecordCount} labor records | ${money(data.summary.totalLaborDollars)}`,
+    status: data.summary.missingEvidenceCount ? 'warning' : 'ok',
+  };
+
+  const branches = branchDefs.map((branch) => {
+    const nodes = data.nodes.filter((node) => branch.types.includes(node.type));
+    const point = polarPoint(center.x, center.y, 205, branch.angle);
+    return {
+      ...branch,
+      point,
+      status: nodes.length ? branchStatus(nodes) : 'missing',
+      nodes,
+    };
+  });
+
+  const positionedNodes = branches.flatMap((branch) => {
+    const spread = Math.min(52, 12 + branch.nodes.length * 8);
+    return branch.nodes.map((node, index) => {
+      const offset = branch.nodes.length === 1 ? 0 : -spread / 2 + (spread * index) / (branch.nodes.length - 1);
+      const radius = 360 + Math.min(index, 2) * 32;
+      const point = polarPoint(center.x, center.y, radius, branch.angle + offset);
+      return { node, point, branchKey: branch.key };
+    });
+  });
+
+  return (
+    <div className="overflow-auto rounded-md border bg-[#f8fafc] p-3">
+      <div className="relative" style={{ width: canvas.width, height: canvas.height }}>
+        <svg className="absolute inset-0 h-full w-full" viewBox={`0 0 ${canvas.width} ${canvas.height}`} aria-hidden="true">
+          <defs>
+            <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+              <feDropShadow dx="0" dy="1.5" stdDeviation="2" floodOpacity="0.16" />
+            </filter>
+          </defs>
+          {branches.map((branch) => (
+            <line
+              key={`center-line-${branch.key}`}
+              x1={center.x}
+              y1={center.y}
+              x2={branch.point.x}
+              y2={branch.point.y}
+              className={branch.status === 'missing' ? 'stroke-red-300' : branch.status === 'warning' ? 'stroke-amber-300' : 'stroke-slate-300'}
+              strokeWidth={3}
+              strokeLinecap="round"
+            />
+          ))}
+          {positionedNodes.map(({ node, point, branchKey }) => {
+            const branch = branches.find((item) => item.key === branchKey);
+            if (!branch) return null;
+            return (
+              <path
+                key={`branch-line-${node.id}`}
+                d={`M ${branch.point.x} ${branch.point.y} Q ${(branch.point.x + point.x) / 2} ${branch.point.y} ${point.x} ${point.y}`}
+                fill="none"
+                className={node.status === 'missing' ? 'stroke-red-200' : node.status === 'warning' ? 'stroke-amber-200' : node.status === 'sensitive' ? 'stroke-blue-200' : 'stroke-slate-200'}
+                strokeWidth={2}
+                strokeLinecap="round"
+              />
+            );
+          })}
+          <circle cx={center.x} cy={center.y} r={122} fill="white" filter="url(#softShadow)" />
+        </svg>
+
+        <MindMapNode node={centerNode} selected={false} x={center.x} y={center.y} width={300} branch />
+
+        {branches.map((branch) => (
+          <MindMapNode
+            key={branch.key}
+            node={{
+              id: `branch:${branch.key}`,
+              type: branch.types[0],
+              label: branch.label,
+              subtitle: `${branch.nodes.length} item${branch.nodes.length === 1 ? '' : 's'} | ${branch.subtitle}`,
+              status: branch.status,
+            }}
+            selected={false}
+            x={branch.point.x}
+            y={branch.point.y}
+            width={220}
+            branch
+          />
+        ))}
+
+        {positionedNodes.map(({ node, point }) => (
+          <MindMapNode
+            key={node.id}
+            node={node}
+            selected={selectedNodeId === node.id}
+            x={point.x}
+            y={point.y}
+            width={190}
+            onClick={() => onSelectNode(node.id)}
+          />
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -240,13 +388,6 @@ export default function TransactionEvidenceMap() {
 
   const selectedNode = data?.nodes.find((node) => node.id === selectedNodeId) ?? null;
   const nodeById = useMemo(() => new Map((data?.nodes ?? []).map((node) => [node.id, node])), [data?.nodes]);
-
-  const columns = useMemo(() => {
-    return columnDefs.map((column) => ({
-      ...column,
-      nodes: (data?.nodes ?? []).filter((node) => column.types.includes(node.type)),
-    }));
-  }, [data?.nodes]);
 
   return (
     <div className="space-y-5 p-6">
@@ -370,31 +511,7 @@ export default function TransactionEvidenceMap() {
           </div>
 
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-            <div className="overflow-x-auto rounded-md border bg-muted/30 p-4">
-              <div className="grid min-w-[1100px] grid-cols-5 gap-4">
-                {columns.map((column) => (
-                  <section key={column.key} className="space-y-3">
-                    <div className="sticky top-0 rounded-md bg-background px-3 py-2 text-sm font-semibold shadow-sm">
-                      {column.label}
-                    </div>
-                    {column.nodes.length === 0 ? (
-                      <div className="rounded-md border border-dashed bg-background p-3 text-sm text-muted-foreground">
-                        No nodes
-                      </div>
-                    ) : (
-                      column.nodes.map((node) => (
-                        <NodeButton
-                          key={node.id}
-                          node={node}
-                          selected={selectedNodeId === node.id}
-                          onClick={() => setSelectedNodeId(node.id)}
-                        />
-                      ))
-                    )}
-                  </section>
-                ))}
-              </div>
-            </div>
+            <MindMapCanvas data={data} selectedNodeId={selectedNodeId} onSelectNode={setSelectedNodeId} />
 
             <aside className="rounded-md border bg-background p-4">
               <div className="mb-3 flex items-center justify-between">

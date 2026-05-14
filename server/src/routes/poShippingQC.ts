@@ -40,6 +40,112 @@ async function autoClosePOIfFullyShipped(poId: number): Promise<void> {
   }
 }
 
+function rowsOf<T = any>(result: any): T[] {
+  return Array.isArray(result) ? result : result?.rows || [];
+}
+
+async function findReusableP1InvoiceNumber({
+  poNumber,
+  orderIds,
+}: {
+  poNumber: string;
+  orderIds: string[];
+}): Promise<string | null> {
+  try {
+    const activeShipmentRows = rowsOf<{ invoice_number: string }>(await pool.query(
+      `SELECT sr.invoice_number
+       FROM shipment_records sr
+       JOIN shipment_items si ON si.shipment_id = sr.id
+       WHERE sr.invoice_number IS NOT NULL
+         AND (
+           si.po_number = $1
+           OR si.order_id = ANY($2::text[])
+         )
+       ORDER BY sr.created_at DESC
+       LIMIT 1`,
+      [poNumber, orderIds]
+    ));
+
+    if (activeShipmentRows[0]?.invoice_number) {
+      return activeShipmentRows[0].invoice_number;
+    }
+  } catch (err: any) {
+    console.warn(`⚠️ Could not search active P1 shipment invoice history for PO ${poNumber}: ${err.message}`);
+  }
+
+  try {
+    const attemptRows = rowsOf<{ invoice_number: string }>(await pool.query(
+      `SELECT metadata->>'invoiceNumber' AS invoice_number
+       FROM p1_fulfillment_attempts
+       WHERE metadata->>'invoiceNumber' IS NOT NULL
+         AND (
+           metadata->>'poNumber' = $1
+           OR order_id = ANY($2::text[])
+         )
+       ORDER BY COALESCE(completed_at, updated_at, created_at) DESC
+       LIMIT 1`,
+      [poNumber, orderIds]
+    ));
+
+    if (attemptRows[0]?.invoice_number) {
+      return attemptRows[0].invoice_number;
+    }
+  } catch (err: any) {
+    console.warn(`⚠️ Could not search P1 fulfillment artifact history for PO ${poNumber}: ${err.message}`);
+  }
+
+  return null;
+}
+
+async function recordP1FulfillmentArtifacts({
+  orderIds,
+  poNumber,
+  invoiceNumber,
+  trackingNumber,
+  shipmentRecordId,
+}: {
+  orderIds: string[];
+  poNumber: string;
+  invoiceNumber: string;
+  trackingNumber: string;
+  shipmentRecordId: string | null;
+}): Promise<void> {
+  if (!invoiceNumber || orderIds.length === 0) return;
+
+  try {
+    for (const orderId of orderIds) {
+      await pool.query(
+        `INSERT INTO p1_fulfillment_attempts (
+           order_id,
+           status,
+           current_step,
+           source,
+           source_route,
+           tracking_number,
+           shipment_record_id,
+           metadata,
+           completed_at,
+           updated_at
+         )
+         VALUES ($1, 'COMPLETED', 'ARTIFACTS', 'shipping', '/api/po-orders/process-shipment', $2, $3, $4::jsonb, NOW(), NOW())`,
+        [
+          orderId,
+          trackingNumber,
+          shipmentRecordId,
+          JSON.stringify({
+            poNumber,
+            invoiceNumber,
+            artifactType: 'P1_PACKING_SLIP',
+            preservedForReturnToQcReuse: true,
+          }),
+        ]
+      );
+    }
+  } catch (err: any) {
+    console.warn(`⚠️ Could not record reusable P1 fulfillment artifacts for PO ${poNumber}: ${err.message}`);
+  }
+}
+
 // GET /api/po-orders/shipping-qc
 // Returns PO orders in Shipping QC department, grouped by customer → PO → items
 router.get('/shipping-qc', authenticateToken, async (req, res) => {
@@ -253,12 +359,24 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
         invoiceNumber = existingInvoiceNumber;
         console.log(`♻️ Reusing existing invoice number ${invoiceNumber} for PO ${poNumber}`);
       } else {
-        invoiceNumber = await storage.getNextInvoiceNumber(
-          String(customerId || '0'),
-          customerName
-        );
-        newlyGeneratedInvoice = true;
-        console.log(`🆕 Generated new invoice number ${invoiceNumber} for PO ${poNumber}`);
+        const reusableInvoiceNumber = await findReusableP1InvoiceNumber({
+          poNumber,
+          orderIds: items
+            .map((item) => item.order?.orderId || item.order?.order_id)
+            .filter(Boolean),
+        });
+
+        if (reusableInvoiceNumber) {
+          invoiceNumber = reusableInvoiceNumber;
+          console.log(`♻️ Reusing historical invoice number ${invoiceNumber} for PO ${poNumber}`);
+        } else {
+          invoiceNumber = await storage.getNextInvoiceNumber(
+            String(customerId || '0'),
+            customerName
+          );
+          newlyGeneratedInvoice = true;
+          console.log(`🆕 Generated new invoice number ${invoiceNumber} for PO ${poNumber}`);
+        }
       }
 
       // Map assembled order data to PackingSlipData (one row per distinct description)
@@ -1076,8 +1194,18 @@ router.get('/oem-shipments/packing-slip/:itemId', authenticateToken, async (req,
           invoiceNumber = item.shipment_invoice_number;
           console.log(`♻️ Reusing stored invoice number ${invoiceNumber} for itemId=${itemId}`);
         } else {
-          invoiceNumber = await slipStorage.getNextInvoiceNumber('0', customerName);
-          console.log(`🆕 Generated new invoice number ${invoiceNumber} for itemId=${itemId}`);
+          const reusableInvoiceNumber = await findReusableP1InvoiceNumber({
+            poNumber: poNumberForSlip,
+            orderIds: siblingRows.map((r) => r.order_id).filter(Boolean),
+          });
+
+          if (reusableInvoiceNumber) {
+            invoiceNumber = reusableInvoiceNumber;
+            console.log(`♻️ Reusing historical invoice number ${invoiceNumber} for itemId=${itemId}`);
+          } else {
+            invoiceNumber = await slipStorage.getNextInvoiceNumber('0', customerName);
+            console.log(`🆕 Generated new invoice number ${invoiceNumber} for itemId=${itemId}`);
+          }
           if (item.shipment_record_id) {
             try {
               const saveResult = await pool.query(
@@ -1344,7 +1472,14 @@ router.post('/oem-shipments/:id/return-to-qc', authenticateToken, async (req, re
 
     // Get all items in this shipment
     const itemsResult = await pool.query(
-      'SELECT order_id FROM shipment_items WHERE shipment_id = $1',
+      `SELECT
+         si.order_id,
+         si.po_number,
+         sr.invoice_number,
+         sr.master_tracking_number
+       FROM shipment_items si
+       JOIN shipment_records sr ON sr.id = si.shipment_id
+       WHERE si.shipment_id = $1`,
       [id]
     );
     const items = itemsResult.rows || itemsResult;
@@ -1355,6 +1490,29 @@ router.post('/oem-shipments/:id/return-to-qc', authenticateToken, async (req, re
 
     const orderIds = items.map((item: any) => item.order_id);
     console.log(`🔄 Regressing ${orderIds.length} orders back to Shipping QC: ${orderIds.join(', ')}`);
+
+    const artifactGroups = new Map<string, { invoiceNumber: string; trackingNumber: string; orderIds: string[] }>();
+    for (const item of items) {
+      if (!item.invoice_number || !item.po_number) continue;
+      if (!artifactGroups.has(item.po_number)) {
+        artifactGroups.set(item.po_number, {
+          invoiceNumber: item.invoice_number,
+          trackingNumber: item.master_tracking_number || '',
+          orderIds: [],
+        });
+      }
+      artifactGroups.get(item.po_number)!.orderIds.push(item.order_id);
+    }
+
+    for (const [poNumber, artifact] of artifactGroups.entries()) {
+      await recordP1FulfillmentArtifacts({
+        orderIds: artifact.orderIds,
+        poNumber,
+        invoiceNumber: artifact.invoiceNumber,
+        trackingNumber: artifact.trackingNumber,
+        shipmentRecordId: id,
+      });
+    }
 
     // Parse order IDs to extract PO item IDs
     // Format is "PO-{poItemId}-{unitNumber}" e.g., "PO-93-1"
@@ -2095,6 +2253,7 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
 
     // Generate one packing slip per PO group (runs unconditionally, regardless of test mode)
     const poSlipMap = new Map<string, string | null>();
+    const poInvoiceMap = new Map<string, string>();
     const failedPackingSlips: Array<{ poNumber: string; reason: string }> = [];
 
     for (const [groupPoNumber, groupItems] of poGroups.entries()) {
@@ -2111,10 +2270,24 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
           console.warn(`⚠️ Could not fetch customer address for PO ${groupPoNumber}: ${addrErr.message}`);
         }
 
-        const invoiceNumber = await storage.getNextInvoiceNumber(
+        const reusableInvoiceNumber = await findReusableP1InvoiceNumber({
+          poNumber: groupPoNumber,
+          orderIds: groupItems
+            .map((item) => item.order?.orderId || item.order?.order_id)
+            .filter(Boolean),
+        });
+
+        const invoiceNumber = reusableInvoiceNumber || (await storage.getNextInvoiceNumber(
           String(groupCustomerId || '0'),
           groupCustomerName
-        );
+        ));
+        poInvoiceMap.set(groupPoNumber, invoiceNumber);
+
+        if (reusableInvoiceNumber) {
+          console.log(`♻️ Reusing historical invoice number ${invoiceNumber} for PO ${groupPoNumber}`);
+        } else {
+          console.log(`🆕 Generated new invoice number ${invoiceNumber} for PO ${groupPoNumber}`);
+        }
 
         const slipItems = groupItemsByDescription(groupItems, {
           partNumber: groupPoNumber,
@@ -2181,6 +2354,7 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
           customerState: primaryAddress?.state || shipTo.state || '',
           customerZip: primaryAddress?.zipCode || shipTo.postalCode || '',
           shippingLabelBase64: labelBase64 || null,
+          invoiceNumber: poInvoiceMap.size === 1 ? Array.from(poInvoiceMap.values())[0] : null,
           shipFromSnapshot: {
             name: process.env.SHIP_FROM_NAME || 'AG Composites',
             street: process.env.SHIP_FROM_ADDRESS1 || '',
@@ -2245,6 +2419,21 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
           console.warn(`⚠️ Packing slip missing on shipment_items after persist: ids=[${missingIds}]`);
         } else {
           console.log(`✅ Verified packing_slip_base64 present on all ${verifyRows.length} shipment_item(s)`);
+        }
+
+        for (const [artifactPoNumber, invoiceNumber] of poInvoiceMap.entries()) {
+          const artifactOrderIds = shipmentItemsData
+            .filter((item) => item.poNumber === artifactPoNumber)
+            .map((item) => item.orderId)
+            .filter(Boolean);
+
+          await recordP1FulfillmentArtifacts({
+            orderIds: artifactOrderIds,
+            poNumber: artifactPoNumber,
+            invoiceNumber,
+            trackingNumber,
+            shipmentRecordId: createdShipment.id,
+          });
         }
       } catch (dbError: any) {
         console.error(`❌ Shipment persistence failed: ${dbError.message}`);

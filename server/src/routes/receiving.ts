@@ -489,14 +489,19 @@ router.patch('/:id', requireReceivingAccess, async (req: Request, res: Response)
     const id = parseInt(req.params.id);
     const user = req.user;
     const rawPatch = { ...req.body };
+    const reopenReason = typeof rawPatch.reopenReason === 'string' ? rawPatch.reopenReason.trim() : '';
+    delete rawPatch.reopenReason;
     if (rawPatch.receivedAt && typeof rawPatch.receivedAt === 'string') {
       rawPatch.receivedAt = new Date(rawPatch.receivedAt);
     }
     const updates = insertReceiptSchema.partial().parse(rawPatch);
 
     const result = await db.transaction(async (tx) => {
+      const [existing] = await tx.select().from(receipts).where(eq(receipts.id, id));
+      if (!existing) return { updated: null as Receipt | null, parentPoStatus: null as string | null, reopened: false };
+
       const [updated] = await tx.update(receipts).set({ ...updates, updatedAt: new Date() }).where(eq(receipts.id, id)).returning();
-      if (!updated) return { updated: null as Receipt | null, parentPoStatus: null as string | null };
+      if (!updated) return { updated: null as Receipt | null, parentPoStatus: null as string | null, reopened: false };
 
       // Receiving closeout gate: receipt completion is the handoff to invoice
       // match / closeout retention. Do not allow it while inspection or
@@ -548,6 +553,14 @@ router.patch('/:id', requireReceivingAccess, async (req: Request, res: Response)
       // Auto-close parent vendor PO when receipt is marked complete and all
       // ordered quantities have been received across this PO's receipts.
       let parentPoStatus: string | null = null;
+      const reopened = existing.status === 'complete' && updates.status === 'in_progress';
+      if (reopened && updated.vendorPoId) {
+        await tx.update(vendorPOs)
+          .set({ status: 'Partially Received', updatedAt: new Date() })
+          .where(eq(vendorPOs.id, updated.vendorPoId));
+        parentPoStatus = 'Partially Received';
+      }
+
       if (updates.status === 'complete' && updated.vendorPoId) {
         const vendorPoId = updated.vendorPoId;
 
@@ -590,16 +603,27 @@ router.patch('/:id', requireReceivingAccess, async (req: Request, res: Response)
         }
       }
 
-      return { updated, parentPoStatus };
+      return { updated, parentPoStatus, reopened };
     });
 
     if (!result.updated) return res.status(404).json({ error: 'Receipt not found' });
 
     await logAudit(id, 'receipt_updated', user?.employeeId, actorName(user), updates as Record<string, unknown>);
+    if (result.reopened) {
+      await logAudit(id, 'receipt_reopened_for_adjustment', user?.employeeId, actorName(user), {
+        reason: reopenReason || 'Correction needed',
+        vendorPoStatus: result.parentPoStatus,
+      });
+    }
     if (result.parentPoStatus === 'Fully Received' && result.updated.vendorPoId) {
       await logAudit(id, 'po_auto_closed', user?.employeeId, actorName(user), {
         vendorPoId: result.updated.vendorPoId,
         newStatus: 'Fully Received',
+      });
+    } else if (result.parentPoStatus === 'Partially Received' && result.updated.vendorPoId) {
+      await logAudit(id, 'po_reopened_for_receipt_adjustment', user?.employeeId, actorName(user), {
+        vendorPoId: result.updated.vendorPoId,
+        newStatus: 'Partially Received',
       });
     }
     res.json(result.updated);
@@ -797,14 +821,103 @@ router.patch('/:id/units/:unitId', requireReceivingAccess, async (req: Request, 
     const unit = await assertUnitOwnership(receiptId, unitId);
     if (!unit) return res.status(404).json({ error: 'Unit not found or does not belong to this receipt' });
     const updates = insertReceivedUnitSchema.partial().parse(req.body);
-    const [updated] = await db.update(receivedUnits).set({ ...updates, updatedAt: new Date() }).where(eq(receivedUnits.id, unitId)).returning();
 
     // Audit traceability-affecting changes (location, freezer, allocation, disposition fields)
-    const auditableKeys: (keyof typeof updates)[] = ['location', 'freezerNumber', 'allocatedToType', 'allocatedToId', 'lotNumber', 'batchNumber', 'serialNumber', 'internalControlNumber'];
+    const auditableKeys: (keyof typeof updates)[] = ['quantity', 'uom', 'unitType', 'location', 'freezerNumber', 'allocatedToType', 'allocatedToId', 'lotNumber', 'batchNumber', 'serialNumber', 'internalControlNumber', 'rollNumber', 'heatLot', 'manufactureDate', 'expirationDate', 'certReference'];
     const auditableChanges: Record<string, unknown> = {};
     for (const key of auditableKeys) {
       if (key in updates) auditableChanges[key] = updates[key];
     }
+
+    const [updated] = await db.transaction(async (tx) => {
+      let quantityAdjustment:
+        | { materialLotId: string; internalControlNumber: string; before: number; delta: number; after: number }
+        | null = null;
+
+      if (unit.materialLotId) {
+        const [lot] = await tx.select().from(materialLots).where(eq(materialLots.id, unit.materialLotId)).limit(1);
+        if (lot) {
+          const lotUpdates: Partial<typeof materialLots.$inferInsert> = { updatedAt: new Date() };
+
+          if ('quantity' in updates && updates.quantity != null) {
+            const oldQty = Number(unit.quantity);
+            const newQty = Number(updates.quantity);
+            const currentRemaining = Number(lot.remainingQty);
+            if (!Number.isFinite(newQty) || newQty <= 0) {
+              const error: any = new Error('Unit quantity must be greater than zero.');
+              error.status = 422;
+              throw error;
+            }
+            const delta = newQty - oldQty;
+            const nextRemaining = currentRemaining + delta;
+            if (nextRemaining < 0) {
+              const error: any = new Error('Cannot reduce this accepted unit below material already issued or consumed.');
+              error.status = 422;
+              throw error;
+            }
+            lotUpdates.receivedQty = String(newQty);
+            lotUpdates.remainingQty = String(nextRemaining);
+            quantityAdjustment = {
+              materialLotId: String(unit.materialLotId),
+              internalControlNumber: lot.internalControlNumber,
+              before: currentRemaining,
+              delta,
+              after: nextRemaining,
+            };
+          }
+
+          if ('uom' in updates && updates.uom != null) lotUpdates.unitOfMeasure = updates.uom;
+          if ('lotNumber' in updates) lotUpdates.supplierLotNumber = updates.lotNumber ?? null;
+          if ('manufactureDate' in updates) lotUpdates.manufactureDate = updates.manufactureDate ?? null;
+          if ('expirationDate' in updates) lotUpdates.expirationDate = updates.expirationDate ?? null;
+          if ('location' in updates) lotUpdates.storageLocation = updates.location ?? null;
+
+          if (Object.keys(lotUpdates).length > 1) {
+            await tx.update(materialLots).set(lotUpdates).where(eq(materialLots.id, unit.materialLotId));
+          }
+
+          const cuttingUpdates: Partial<typeof cuttingFabricInventory.$inferInsert> = { updatedAt: new Date() };
+          if ('quantity' in updates && updates.quantity != null) {
+            const qty = Number(updates.quantity);
+            cuttingUpdates.quantityInStock = qty;
+            cuttingUpdates.squareMeters = String(qty);
+          }
+          if ('lotNumber' in updates) cuttingUpdates.lotNumber = updates.lotNumber ?? null;
+          if ('batchNumber' in updates || 'heatLot' in updates) cuttingUpdates.batchNumber = updates.batchNumber ?? updates.heatLot ?? null;
+          if ('rollNumber' in updates) cuttingUpdates.rollNumber = updates.rollNumber ?? null;
+          if ('manufactureDate' in updates) cuttingUpdates.manufactureDate = updates.manufactureDate ?? null;
+          if ('expirationDate' in updates) cuttingUpdates.expirationDate = updates.expirationDate ?? null;
+          if ('location' in updates) cuttingUpdates.location = updates.location ?? null;
+          if ('freezerNumber' in updates) cuttingUpdates.freezerNumber = updates.freezerNumber ?? null;
+
+          if (Object.keys(cuttingUpdates).length > 1) {
+            await tx.update(cuttingFabricInventory).set(cuttingUpdates).where(eq(cuttingFabricInventory.barcode, unit.barcode));
+          }
+        }
+      }
+
+      const [saved] = await tx.update(receivedUnits).set({ ...updates, updatedAt: new Date() }).where(eq(receivedUnits.id, unitId)).returning();
+
+      if (quantityAdjustment) {
+        const txValues: InsertMaterialLotTransaction = insertMaterialLotTransactionSchema.parse({
+          materialLotId: quantityAdjustment.materialLotId,
+          internalControlNumber: quantityAdjustment.internalControlNumber,
+          transactionType: 'ADJUST',
+          qtyBefore: String(quantityAdjustment.before),
+          qtyChange: String(quantityAdjustment.delta),
+          qtyAfter: String(quantityAdjustment.after),
+          referenceType: 'received_unit_adjustment',
+          referenceId: String(unitId),
+          receiptId,
+          performedBy: actorName(user),
+          notes: `Receiving correction for unit ${saved.barcode}`,
+        });
+        await tx.insert(materialLotTransactions).values(txValues);
+      }
+
+      return [saved];
+    });
+
     if (Object.keys(auditableChanges).length > 0) {
       await logAudit(receiptId, 'unit_updated', user?.employeeId, actorName(user), { unitId, changes: auditableChanges });
     }
@@ -812,6 +925,9 @@ router.patch('/:id/units/:unitId', requireReceivingAccess, async (req: Request, 
     res.json(updated);
   } catch (err: any) {
     console.error('PATCH unit:', err);
+    if (err?.status === 422) {
+      return res.status(422).json({ error: err.message });
+    }
     res.status(500).json({ error: 'Failed to update unit' });
   }
 });

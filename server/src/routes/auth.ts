@@ -1015,6 +1015,7 @@ async function handleGetCurrentSession(req: any, res: any, endpoint: string) {
         lastName: 'User',
         role: 'ADMIN',
         employeeId: null,
+        employeeName: null,
       });
     }
 
@@ -1096,6 +1097,7 @@ async function handleGetCurrentSession(req: any, res: any, endpoint: string) {
       lastName,
       role: user.role,
       employeeId: user.employee_id,
+      employeeName: user.employee_name ?? null,
     });
   } catch (error) {
     console.error(`[AUTH] ${endpoint} error:`, error);

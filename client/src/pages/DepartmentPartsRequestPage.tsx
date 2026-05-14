@@ -71,6 +71,8 @@ type User = {
   role?: string;
   department?: string;
   departmentId?: number;
+  employeeId?: number | null;
+  employeeName?: string | null;
 };
 
 type Department = {
@@ -103,6 +105,9 @@ export default function DepartmentPartsRequestPage() {
 
   const defaultRequestor = (() => {
     if (!user) return '';
+    const employeeName =
+      typeof user.employeeName === 'string' ? user.employeeName.trim() : '';
+    if (employeeName) return employeeName;
     const fullName = [user.firstName, user.lastName]
       .filter((s) => typeof s === 'string' && s.trim().length > 0)
       .join(' ')

@@ -156,7 +156,7 @@ INSERT INTO coa_seed VALUES
   ('10000','Assets','ASSET','DEBIT','Balance Sheet','NONE','ALLOWABLE','UNASSIGNED','NOT_BILLABLE',FALSE,FALSE,TRUE,'Rollup account'),
   ('10100','Bank Checking','ASSET','DEBIT','Current Assets','NONE','ALLOWABLE','UNASSIGNED','NOT_BILLABLE',FALSE,FALSE,TRUE,'Primary operating bank account'),
   ('10200','Savings and Reserve Cash','ASSET','DEBIT','Current Assets','NONE','ALLOWABLE','UNASSIGNED','NOT_BILLABLE',FALSE,FALSE,FALSE,'Cash reserves'),
-  ('10300','Undeposited Funds','ASSET','DEBIT','Current Assets','NONE','ALLOWABLE','UNASSIGNED','NOT_BILLABLE',FALSE,FALSE,FALSE,'Payments received but not deposited'),
+  ('10300','Customer Payment Clearing','ASSET','DEBIT','Current Assets','NONE','ALLOWABLE','UNASSIGNED','NOT_BILLABLE',FALSE,FALSE,FALSE,'Individually traceable customer payments awaiting bank reconciliation or settlement matching'),
   ('11000','Accounts Receivable','ASSET','DEBIT','Current Assets','NONE','ALLOWABLE','UNASSIGNED','NOT_BILLABLE',FALSE,FALSE,TRUE,'Customer receivables'),
   ('11100','Accounts Receivable - Other','ASSET','DEBIT','Current Assets','NONE','ALLOWABLE','UNASSIGNED','NOT_BILLABLE',FALSE,FALSE,TRUE,'Legacy/other receivables'),
   ('11200','Retainage Receivable','ASSET','DEBIT','Current Assets','NONE','ALLOWABLE','UNASSIGNED','NOT_BILLABLE',TRUE,FALSE,FALSE,'Contract retainage receivable'),

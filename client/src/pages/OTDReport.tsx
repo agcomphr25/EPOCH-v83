@@ -110,7 +110,7 @@ export default function OTDReport() {
     isError: ordersError,
     error: ordersQueryError,
   } = useQuery<Order[]>({
-    queryKey: ['/api/orders/with-payment-status'],
+    queryKey: ['/api/orders/fulfilled-shipped'],
   });
 
   const { data: stockModels = [] } = useQuery({

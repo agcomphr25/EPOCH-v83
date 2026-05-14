@@ -139,9 +139,9 @@ export default function WADWizardLauncherPage() {
     queryKey: ['/api/work-orders/production/wad-status'],
     enabled: missingOnly || searchTerm.length > 0,
   });
-  // "Zero-PWO / not-yet-released" backlog: any project whose WAD gate is not
-  // satisfied (no APPROVED+RELEASED PWO). Zero-PWO projects fall in here
-  // automatically because their aggregate wadStatus is 'NONE'.
+  // "Zero-PWO" backlog: active PO-ready projects whose WAD gate is not
+  // satisfied and that have no Production Work Order yet. These projects cannot
+  // be returned by the PWO-anchored /production endpoint.
   const zeroPwoProjects = useMemo(() => {
     const q = searchTerm.toLowerCase();
     return allWadStatus.filter((r) => {
@@ -255,10 +255,10 @@ export default function WADWizardLauncherPage() {
               size="sm"
               onClick={() => navigate('/wad-status')}
               data-testid="button-jump-wad-status"
-              title="Includes projects in P2 Release / Production with no PWO yet"
+              title="Includes active PO-ready projects with no PWO yet"
             >
               <LayoutDashboard className="h-3.5 w-3.5 mr-1" />
-              Backlog incl. zero-PWO projects →
+              Backlog incl. projects without PWOs →
             </Button>
           </div>
 
@@ -287,7 +287,7 @@ export default function WADWizardLauncherPage() {
               <p className="font-medium text-foreground mb-1">No production work orders match your filters</p>
               <p>
                 {missingOnly
-                  ? 'No projects in P2 Release / Production are missing a WAD.'
+                  ? 'No active PO-ready projects are missing a WAD.'
                   : searchTerm
                     ? 'No matching Production Work Orders or project-level WAD backlog entries were found.'
                     : 'Search for a project or include missing WAD projects to author a WAD before a Production Work Order exists.'}

@@ -21,6 +21,7 @@ import {
   vendorPOItems,
   inventoryItems,
   cuttingFabricInventory,
+  cuttingFabricInventoryTransactions,
   insertMaterialLotSchema,
   insertMaterialLotTransactionSchema,
   insertMediaLibrarySchema,
@@ -71,6 +72,12 @@ function sqlRows<T = Record<string, unknown>>(result: unknown): T[] {
     return (result as { rows: T[] }).rows;
   }
   return result as T[];
+}
+
+function nonZeroInventoryDelta(quantity: number): number {
+  if (quantity === 0) return 0;
+  const magnitude = Math.max(1, Math.round(Math.abs(quantity)));
+  return quantity < 0 ? -magnitude : magnitude;
 }
 
 type AuthUser = Express.Request['user'];
@@ -1374,7 +1381,7 @@ async function handleAcceptedUnit(unit: ReceivedUnit, receipt: Receipt, user: Au
       const qty = Number(unit.quantity);
       const qtyForFabric = Number.isFinite(qty) && qty > 0 ? qty : 0;
       const receivedDate = toDateOnly(receipt.receivedAt ?? receipt.receiptDate ?? new Date());
-      await db.insert(cuttingFabricInventory).values({
+      const [fabricInventory] = await db.insert(cuttingFabricInventory).values({
         inventoryItemId: invItem.id,
         source: receipt.vendorName ?? null,
         fabric: invItem.name ?? line.description ?? line.agPartNumber,
@@ -1390,11 +1397,22 @@ async function handleAcceptedUnit(unit: ReceivedUnit, receipt: Receipt, user: Au
         manufactureDate: toDateOnly(unit.manufactureDate) ?? null,
         receivedDate,
         expirationDate: toDateOnly(prefilledExpiration ?? unit.expirationDate) ?? null,
+        location: unit.location ?? null,
         quantityInStock: qtyForFabric,
         squareMeters: qtyForFabric > 0 ? String(qtyForFabric) : undefined,
         notes: `Auto-created from Receiving Control Center receipt ${receipt.receiptNumber} unit ${unit.barcode}. Freezer assignment pending in Cutting Fabric Receiving.`,
         status: 'active',
-      });
+      }).returning();
+
+      if (fabricInventory?.id && qtyForFabric > 0) {
+        await db.insert(cuttingFabricInventoryTransactions).values({
+          fabricInventoryId: fabricInventory.id,
+          changeType: 'RECEIPT',
+          quantityDelta: nonZeroInventoryDelta(qtyForFabric),
+          performedBy: displayName,
+          notes: `Receipt ${receipt.receiptNumber}: received unit ${unit.barcode} into cutting fabric inventory`,
+        });
+      }
     }
 
   } catch (err: any) {

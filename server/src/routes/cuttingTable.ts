@@ -10,6 +10,7 @@ import {
   cuttingPacketBOMParts,
   cuttingPacketBOMCuts,
   cuttingFabricInventory,
+  cuttingFabricInventoryTransactions,
 } from '../../schema';
 import { and, gte, lte, eq, desc, ilike, or, isNull } from 'drizzle-orm';
 import {
@@ -33,6 +34,34 @@ import {
 } from '../../schema';
 
 const router = Router();
+
+function parseFabricStockQuantity(value: unknown): number {
+  if (value === null || value === undefined || value === '') return 0;
+  const parsed = typeof value === 'number' ? value : parseFloat(String(value));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function nonZeroInventoryDelta(quantity: number): number {
+  if (quantity === 0) return 0;
+  const magnitude = Math.max(1, Math.round(Math.abs(quantity)));
+  return quantity < 0 ? -magnitude : magnitude;
+}
+
+function syncFabricStockFields<T extends Record<string, any>>(data: T): T {
+  const next = { ...data };
+  const hasQuantityInStock = next.quantityInStock !== undefined && next.quantityInStock !== null && next.quantityInStock !== '';
+  const hasSquareMeters = next.squareMeters !== undefined && next.squareMeters !== null && next.squareMeters !== '';
+
+  if (hasSquareMeters) {
+    const quantity = parseFabricStockQuantity(next.squareMeters);
+    next.quantityInStock = quantity;
+  } else if (hasQuantityInStock) {
+    const quantity = parseFabricStockQuantity(next.quantityInStock);
+    next.squareMeters = String(quantity);
+  }
+
+  return next as T;
+}
 
 // Materials endpoints
 router.get('/materials', async (req, res) => {
@@ -836,30 +865,31 @@ router.get('/fabric-inventory-by-barcode/:barcode', async (req, res) => {
 router.post('/fabric-inventory', async (req, res) => {
   try {
     const validatedData = insertCuttingFabricInventorySchema.parse(req.body);
+    const fabricInventoryData = syncFabricStockFields(validatedData);
     
-    if (!validatedData.barcode) {
+    if (!fabricInventoryData.barcode) {
       const date = new Date().toISOString().split('T')[0].replace(/-/g, '');
       const random = Math.floor(Math.random() * 9999).toString().padStart(4, '0');
       
       let prefix = 'FAB';
-      if (validatedData.productionLineId) {
-        const line = await storage.getCuttingProductionLine(validatedData.productionLineId);
+      if (fabricInventoryData.productionLineId) {
+        const line = await storage.getCuttingProductionLine(fabricInventoryData.productionLineId);
         if (line && line.lineName === 'P2') {
           prefix = 'FI-P2';
         }
       }
       
-      validatedData.barcode = `${prefix}-${date}-${random}`;
+      fabricInventoryData.barcode = `${prefix}-${date}-${random}`;
     }
     
-    if (!validatedData.internalControlNumber) {
+    if (!fabricInventoryData.internalControlNumber) {
       const date = new Date().toISOString().split('T')[0].replace(/-/g, '');
       const seq = Date.now().toString().slice(-6);
       const rand = Math.floor(Math.random() * 9999).toString().padStart(4, '0');
-      validatedData.internalControlNumber = `ICN-${date}-${seq}-${rand}`;
+      fabricInventoryData.internalControlNumber = `ICN-${date}-${seq}-${rand}`;
     }
     
-    const inventory = await storage.createCuttingFabricInventory(validatedData);
+    const inventory = await storage.createCuttingFabricInventory(fabricInventoryData);
     res.json(inventory);
   } catch (error) {
     console.error('Error creating fabric inventory:', error);
@@ -870,7 +900,7 @@ router.post('/fabric-inventory', async (req, res) => {
 router.put('/fabric-inventory/:id', async (req, res) => {
   try {
     const validatedData = insertCuttingFabricInventorySchema.partial().parse(req.body);
-    const inventory = await storage.updateCuttingFabricInventory(req.params.id, validatedData);
+    const inventory = await storage.updateCuttingFabricInventory(req.params.id, syncFabricStockFields(validatedData));
     res.json(inventory);
   } catch (error) {
     console.error('Error updating fabric inventory:', error);
@@ -881,7 +911,7 @@ router.put('/fabric-inventory/:id', async (req, res) => {
 router.patch('/fabric-inventory/:id', async (req, res) => {
   try {
     const validatedData = insertCuttingFabricInventorySchema.partial().parse(req.body);
-    const inventory = await storage.updateCuttingFabricInventory(req.params.id, validatedData);
+    const inventory = await storage.updateCuttingFabricInventory(req.params.id, syncFabricStockFields(validatedData));
     res.json(inventory);
   } catch (error) {
     console.error('Error updating fabric inventory:', error);
@@ -909,6 +939,7 @@ router.post('/fabric-inventory/:id/deplete', async (req, res) => {
       depletedAt: new Date(),
       depletedBy: depletedBy,
       quantityInStock: 0,
+      squareMeters: '0',
     });
 
     await storage.createCuttingFabricInventoryTransaction({
@@ -3552,15 +3583,30 @@ router.post('/packet-boms/:id/cuts', async (req, res) => {
         
         if (currentInventory) {
           const currentSquareMeters = parseFloat(currentInventory.squareMeters?.toString() || '0');
+          const currentQuantityInStock = parseFabricStockQuantity(currentInventory.quantityInStock);
           const usedSquareMeters = parseFloat(squareMetersUsed) || 0;
           const newSquareMeters = Math.max(0, currentSquareMeters - usedSquareMeters);
+          const newQuantityInStock = Math.max(0, currentQuantityInStock - usedSquareMeters);
+          const isDepleted = newSquareMeters <= 0 && newQuantityInStock <= 0;
           
           await db.update(cuttingFabricInventory)
             .set({ 
               squareMeters: newSquareMeters.toString(),
+              quantityInStock: newQuantityInStock,
+              status: isDepleted ? 'depleted' : currentInventory.status,
+              depletedAt: isDepleted ? new Date() : currentInventory.depletedAt,
+              depletedBy: isDepleted ? (operatorName || 'unknown') : currentInventory.depletedBy,
               updatedAt: new Date(),
             })
             .where(eq(cuttingFabricInventory.id, fabricInventoryId));
+
+          await db.insert(cuttingFabricInventoryTransactions).values({
+            fabricInventoryId,
+            changeType: 'ISSUE',
+            quantityDelta: nonZeroInventoryDelta(-usedSquareMeters),
+            performedBy: operatorName || 'unknown',
+            notes: `Cut record ${newCut.id}: ${usedSquareMeters} square meters used from roll ${rollNumber}`,
+          });
           
           console.log(`[CUT RECORDED] Roll ${rollNumber}: ${usedSquareMeters}m² consumed, ${newSquareMeters}m² remaining`);
         }

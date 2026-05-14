@@ -28,7 +28,7 @@ The live API version is exposed at `GET /api/accounting/event-matrix` for users 
 | Customer invoice posted | `AR_INVOICE` / `ar_invoice` | `server/src/routes/arInvoices.ts` |
 | Customer invoice voided | `AR_INVOICE_REVERSAL` / `ar_invoice` | `server/src/routes/arInvoices.ts` |
 | Modern AR payment received | `AR_PAYMENT` / `ar_payment` | `server/src/services/arPaymentPostingService.ts`; DR `Customer Payment Clearing`, CR `Accounts Receivable` |
-| Legacy wire payment received | `WIRE_PAYMENT` / `payment` | `server/src/services/accountingService.ts` |
+| P1 customer payment received | `P1_CUSTOMER_PAYMENT` / `p1_payment` | `server/src/services/p1PaymentPostingService.ts`; DR `Customer Payment Clearing`, CR `Customer Deposits`; tagged with P1 production line and customer type |
 | Labor cost posted | `LABOR_COST` / `labor_posting_run` | `server/src/services/laborPostingService.ts` |
 
 ## Known Partial Coverage
@@ -39,4 +39,4 @@ The live API version is exposed at `GET /api/accounting/event-matrix` for users 
 
 ## Next Implementation Recommendation
 
-Next, move to bank reconciliation design or vendor bills/AP. Bank reconciliation would clear `Customer Payment Clearing` into actual bank/processor settlement accounts. Vendor bills/AP would make Balance Sheet liabilities and inventory/expense recognition useful.
+Next, define P1 deposit application or move to vendor bills/AP. Deposit application would clear `Customer Deposits` when the order is fulfilled/invoiced. Vendor bills/AP would make Balance Sheet liabilities and inventory/expense recognition useful.

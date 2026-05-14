@@ -240,6 +240,10 @@ function fmtCurrency(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(n);
 }
 
+function readProjectParam(params: URLSearchParams) {
+  return params.get('project') ?? params.get('projectId') ?? '';
+}
+
 function daysVarianceBadge(variance: number | null) {
   if (variance === null) return <span className="text-muted-foreground">—</span>;
   if (variance === 0) return <Badge className="bg-blue-100 text-blue-800">Due Today</Badge>;
@@ -1071,11 +1075,11 @@ interface PmOption {
 }
 
 export default function PMControlCenterPage() {
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
   // Read URL params immediately as initial state so they are authoritative on first render
   const [selectedProjectId, setSelectedProjectId] = useState<string>(() => {
     const params = new URLSearchParams(window.location.search);
-    return params.get('project') ?? '';
+    return readProjectParam(params);
   });
   const [pmFilter, setPmFilter] = useState<string>(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1108,6 +1112,15 @@ export default function PMControlCenterPage() {
     const qs = params.toString();
     return qs ? `?${qs}` : '';
   }
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const projectFromUrl = readProjectParam(params);
+    if (projectFromUrl && projectFromUrl !== selectedProjectId) {
+      setSelectedProjectId(projectFromUrl);
+      window.history.replaceState(null, '', `/pm-control-center${buildSearch(projectFromUrl, pmFilter)}`);
+    }
+  }, [location, selectedProjectId, pmFilter]);
 
   const handleProjectChange = (id: string) => {
     setSelectedProjectId(id);
@@ -1351,7 +1364,9 @@ export default function PMControlCenterPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    const params = new URLSearchParams();
+                    const params = new URLSearchParams({ tab: 'status' });
+                    params.set('projectId', selectedProjectId);
+                    if (selectedProject.projectName) params.set('projectName', selectedProject.projectName);
                     if (selectedProject.poId) params.set('poId', String(selectedProject.poId));
                     if (selectedProject.poNumber) params.set('po', selectedProject.poNumber);
                     navigate(`/p2-control-center${params.toString() ? `?${params.toString()}` : ''}`);

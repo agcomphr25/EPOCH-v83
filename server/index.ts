@@ -2943,7 +2943,7 @@ async function initializeBackgroundServices() {
 
             UPDATE chart_of_accounts
                SET account_number = '10300',
-                   account_name = 'Customer Payment Clearing',
+                   account_name = CASE WHEN account_number = '10300' THEN 'Customer Payment Clearing' ELSE 'Customer Payment Clearing (Duplicate - inactive)' END,
                    account_type = 'ASSET',
                    normal_balance = 'DEBIT',
                    financial_statement_section = 'Current Assets',

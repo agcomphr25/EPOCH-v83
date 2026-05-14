@@ -193,7 +193,11 @@ export default function ChartOfAccountsPage() {
                       {account.accountNumber ?? '-'}
                     </TableCell>
                     <TableCell>
-                      <div className="font-medium">{account.accountName}</div>
+                      <div className="font-medium">
+                        {account.accountNumber === '10300'
+                          ? 'Customer Payment Clearing'
+                          : account.accountName}
+                      </div>
                       {account.description && (
                         <div className="text-xs text-muted-foreground">
                           {account.description}

@@ -19,6 +19,7 @@ import {
   inventoryTransactions,
   inventoryBalances,
   inventoryItems,
+  inventoryTransactionLedger,
 } from '../../schema';
 import { db } from '../../db';
 import { eq, sql, and, like } from 'drizzle-orm';
@@ -815,20 +816,88 @@ router.post('/', async (req: Request, res: Response) => {
     }
 
     const validatedData = insertMaterialLotSchema.parse(incoming);
-    const lot = await storage.createMaterialLot(validatedData);
 
-    // Create initial transaction record
-    await storage.createMaterialLotTransaction(createTransaction({
-      materialLotId: lot.id,
-      internalControlNumber: lot.internalControlNumber,
-      transactionType: 'RECEIVE',
-      qtyBefore: '0',
-      qtyChange: lot.receivedQty,
-      qtyAfter: lot.receivedQty,
-      toLocation: lot.storageLocation || undefined,
-      performedBy: lot.receivedBy,
-      notes: `Initial receiving from ${lot.supplier}. PO: ${lot.purchaseOrderNumber || 'N/A'}`,
-    }));
+    // Task #229 — atomically insert the lot, the initial RECEIVE
+    // material_lot_transactions row, and the inventory_transaction_ledger
+    // RECEIVE row so the lot appears in the Material Traceability Viewer
+    // immediately. If any step fails, none of them persist.
+    const lot = await db.transaction(async (tx) => {
+      const [insertedLot] = await tx.insert(materialLots).values(validatedData).returning();
+      if (!insertedLot?.id) throw new Error('material_lots insert returned no row');
+
+      await tx.insert(materialLotTransactions).values(createTransaction({
+        materialLotId: insertedLot.id,
+        internalControlNumber: insertedLot.internalControlNumber,
+        transactionType: 'RECEIVE',
+        qtyBefore: '0',
+        qtyChange: insertedLot.receivedQty,
+        qtyAfter: insertedLot.receivedQty,
+        toLocation: insertedLot.storageLocation || undefined,
+        performedBy: insertedLot.receivedBy,
+        notes: `Initial receiving from ${insertedLot.supplier}. PO: ${insertedLot.purchaseOrderNumber || 'N/A'}`,
+      }));
+
+      // Look up the linked inventory_items row to satisfy the ITL FK. If the
+      // lot lacks an inventoryItemId or the row is missing, skip the ITL write
+      // with a warning (callers should always provide a valid linkage).
+      let invItemId: number | null = insertedLot.inventoryItemId ?? null;
+      if (!invItemId && insertedLot.materialPartNumber) {
+        const [lookup] = await tx
+          .select({ id: inventoryItems.id })
+          .from(inventoryItems)
+          .where(eq(inventoryItems.agPartNumber, insertedLot.materialPartNumber))
+          .limit(1);
+        invItemId = lookup?.id ?? null;
+      }
+
+      if (invItemId) {
+        const ledgerSourceModule = 'material-lots:create';
+        const ledgerSourceRecordId = String(insertedLot.id);
+        const [existingLedger] = await tx
+          .select({ id: inventoryTransactionLedger.id })
+          .from(inventoryTransactionLedger)
+          .where(
+            and(
+              eq(inventoryTransactionLedger.sourceModule, ledgerSourceModule),
+              eq(inventoryTransactionLedger.sourceRecordId, ledgerSourceRecordId),
+            ),
+          )
+          .limit(1);
+
+        if (!existingLedger) {
+          const receivedQty = Number(insertedLot.receivedQty);
+          await recordInventoryLedgerEntry({
+            transactionType: 'RECEIVE',
+            inventoryItemId: invItemId,
+            agPartNumber: insertedLot.materialPartNumber,
+            lotId: insertedLot.id,
+            locationId: insertedLot.storageLocation ?? null,
+            unitOfMeasure: insertedLot.unitOfMeasure ?? 'EA',
+            quantityBefore: 0,
+            quantityDelta: receivedQty,
+            quantityAfter: receivedQty,
+            performedByDisplayName: insertedLot.receivedBy || 'system:material-lot-create',
+            reasonCode: 'MATERIAL_LOT_RECEIVED',
+            notes: `Initial receiving from ${insertedLot.supplier}. PO: ${insertedLot.purchaseOrderNumber || 'N/A'}`,
+            sourceModule: ledgerSourceModule,
+            sourceRecordId: ledgerSourceRecordId,
+            metadata: {
+              internalControlNumber: insertedLot.internalControlNumber,
+              supplier: insertedLot.supplier,
+              supplierLotNumber: insertedLot.supplierLotNumber,
+              purchaseOrderNumber: insertedLot.purchaseOrderNumber,
+              receivingRecordNumber: insertedLot.receivingRecordNumber,
+            },
+          }, tx);
+        }
+      } else {
+        console.warn(
+          `[materialLots POST] Skipping ITL write — no inventory_items row for lot=${insertedLot.id} part=${insertedLot.materialPartNumber}`,
+        );
+      }
+
+      return insertedLot;
+    });
 
     res.status(201).json(lot);
   } catch (error: any) {
@@ -839,7 +908,20 @@ router.post('/', async (req: Request, res: Response) => {
         details: error.errors,
       });
     }
-    res.status(500).json({ error: 'Failed to create material lot', message: error.message });
+    // Map inventory-ledger invariant/FK failures to a structured 422 so the
+    // caller can distinguish ledger-write rollbacks from generic 500s.
+    const msg = String(error?.message ?? '');
+    if (
+      error?.code === 'INVENTORY_LEDGER_VALIDATION' ||
+      /inventory[_ ]?ledger|inventory_transaction_ledger|recordInventoryLedgerEntry/i.test(msg)
+    ) {
+      return res.status(422).json({
+        error: 'Inventory ledger write failed',
+        code: 'INVENTORY_LEDGER_WRITE_FAILED',
+        message: msg,
+      });
+    }
+    res.status(500).json({ error: 'Failed to create material lot', message: msg });
   }
 });
 

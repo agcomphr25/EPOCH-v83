@@ -19,6 +19,7 @@ import {
   inventoryDepartments,
   inventoryItemDepartments,
   inventoryItemCostHistory,
+  inventoryTransactionLedger,
   inventoryScans,
   itemGroups,
   inventoryItemGroups,
@@ -707,6 +708,7 @@ import {
 } from './schema';
 import { db, pool, rawSql } from './db';
 import { recordAuditEvent } from './src/services/auditLedgerService';
+import { recordInventoryLedgerEntry } from './src/services/inventoryTransactionLedgerService';
 
 // Drizzle's transaction handle is API-compatible with `db` for the CRUD
 // surface our helpers use, but its TS type is a `PgTransaction` (not the
@@ -10331,7 +10333,10 @@ export class DatabaseStorage implements IStorage {
 
     // Get the vendor PO to get vendorId
     const [vendorPO] = await db
-      .select({ vendorId: vendorPOs.vendorId })
+      .select({
+        vendorId: vendorPOs.vendorId,
+        poNumber: vendorPOs.poNumber,
+      })
       .from(vendorPOs)
       .where(eq(vendorPOs.id, poLineItem.vendorPoId));
 
@@ -10451,16 +10456,131 @@ export class DatabaseStorage implements IStorage {
     // Atomically update the line-item received quantity AND re-derive the parent
     // PO status within a single DB transaction, so they always commit or roll
     // back together — no gap where receipt is recorded but status is stale.
+    // Task #229 — also write a `RECEIVE` row to inventory_transaction_ledger so
+    // PO receipts surface in the Material Traceability Viewer / Inventory Ledger.
     let derivedPoStatus: string = 'Sent';
     await db.transaction(async (tx) => {
+      // The route/UI sends `receivedQuantity` as the PER-ACTION amount being
+      // received in this call (e.g. `expectedQuantity - alreadyReceived` in
+      // the receiving dialog). Read prior cumulative under FOR UPDATE so we
+      // compute newCumulative = prev + delta atomically; ITL delta = the
+      // per-action amount directly.
+      const [priorRow] = await tx
+        .select({ receivedQuantity: vendorPOItems.receivedQuantity })
+        .from(vendorPOItems)
+        .where(eq(vendorPOItems.id, poLineItemId))
+        .for('update');
+      const prevReceivedQty = Number(priorRow?.receivedQuantity ?? 0);
+      const newCumulative = prevReceivedQty + receivedQuantity;
+
       await tx
         .update(vendorPOItems)
         .set({
-          receivedQuantity,
+          receivedQuantity: newCumulative,
           receivedDate,
           updatedAt: new Date(),
         })
         .where(eq(vendorPOItems.id, poLineItemId));
+
+      // ── Inventory Transaction Ledger write (Task #229) ───────────────────
+      // Skip if no upstream inventory_items record exists for this AG part
+      // (orphan ad-hoc PO line) — the ITL inventory_item_id FK is NOT NULL.
+      // Idempotency: source key combines the PO line id + new cumulative qty
+      // so each partial receipt produces exactly one ledger row even on retry.
+      if (inventoryItem) {
+        const ledgerSourceModule = 'receiving:vendor-po';
+        const ledgerSourceRecordId = `${poLineItemId}:${newCumulative}`;
+        const [existingLedger] = await tx
+          .select({ id: inventoryTransactionLedger.id })
+          .from(inventoryTransactionLedger)
+          .where(
+            and(
+              eq(inventoryTransactionLedger.sourceModule, ledgerSourceModule),
+              eq(inventoryTransactionLedger.sourceRecordId, ledgerSourceRecordId),
+            ),
+          )
+          .limit(1);
+
+        if (!existingLedger) {
+          const delta = receivedQuantity;
+          // Best-effort prior on-hand: aggregate across locations. Defaults to
+          // 0 when no balance row exists (vendor-PO receipts do not directly
+          // mutate inventory_balances).
+          const balanceRows = await tx
+            .select({ quantityOnHand: inventoryBalances.quantityOnHand })
+            .from(inventoryBalances)
+            .where(eq(inventoryBalances.agPartNumber, inventoryItem.agPartNumber));
+          const quantityBefore = balanceRows.reduce(
+            (sum, b) => sum + Number(b.quantityOnHand ?? 0),
+            0,
+          );
+          const quantityAfter = quantityBefore + delta;
+
+          // Resolve receiver display name from users table (fall back to
+          // username, then a system marker) so traceability shows a human name.
+          let receiverDisplayName = 'system:vendor-po-receive';
+          if (createdBy != null) {
+            const [u] = await tx
+              .select({
+                username: users.username,
+                firstName: users.firstName,
+                lastName: users.lastName,
+              })
+              .from(users)
+              .where(eq(users.id, createdBy))
+              .limit(1);
+            if (u) {
+              const full = [u.firstName, u.lastName].filter(Boolean).join(' ').trim();
+              receiverDisplayName = full || u.username || `user:${createdBy}`;
+            } else {
+              receiverDisplayName = `user:${createdBy}`;
+            }
+          }
+
+          // Resolve vendor name for richer traceability metadata.
+          let vendorName: string | null = null;
+          if (vendorPO.vendorId != null) {
+            const [v] = await tx
+              .select({ name: vendors.name })
+              .from(vendors)
+              .where(eq(vendors.id, vendorPO.vendorId))
+              .limit(1);
+            vendorName = v?.name ?? null;
+          }
+
+          await recordInventoryLedgerEntry({
+            transactionType: 'RECEIVE',
+            inventoryItemId: inventoryItem.id,
+            agPartNumber: inventoryItem.agPartNumber,
+            unitOfMeasure: inventoryItem.purchaseUnit ?? inventoryItem.usageUnit ?? 'EA',
+            quantityBefore,
+            quantityDelta: delta,
+            quantityAfter,
+            performedByUserId: createdBy ?? null,
+            performedByDisplayName: receiverDisplayName,
+            reasonCode: 'VENDOR_PO_RECEIPT',
+            notes: notes ?? null,
+            sourceModule: ledgerSourceModule,
+            sourceRecordId: ledgerSourceRecordId,
+            metadata: {
+              vendorPoId: poLineItem.vendorPoId,
+              poNumber: vendorPO.poNumber ?? null,
+              vendorId: vendorPO.vendorId ?? null,
+              vendorName,
+              poLineItemId,
+              cumulativeReceivedQuantity: newCumulative,
+              prevReceivedQuantity: prevReceivedQty,
+              receivedQuantityThisAction: receivedQuantity,
+              receivedDate: receivedDate.toISOString(),
+              cocLink: cocLink ?? null,
+            },
+          }, tx);
+        }
+      } else {
+        console.warn(
+          `[recordVendorPOReceipt] No inventory_items record for ag_part_number="${poLineItem.agPartNumber}" — skipping ITL write for poLineItemId=${poLineItemId}`,
+        );
+      }
 
       // Re-read all line items inside the transaction so we see the updated row
       const allLineItems = await tx

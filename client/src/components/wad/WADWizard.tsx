@@ -525,6 +525,108 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
   const approvals: ApprovalRecord[] = (data.approvals ?? []) as ApprovalRecord[];
   const isBackfill = project?.currentStage === 'production';
 
+  // Step 2 onChange: when departments change, prune Step 3 / Step 4 rows for
+  // departments that are no longer selected, and re-seed rows for newly added
+  // departments (from PWO budget when available, otherwise blank).
+  const handleStep2Change = useCallback((v: WizardData['step2']) => {
+    setData(prev => {
+      const newDepts = v?.departments ?? [];
+      const newDeptSet = new Set(newDepts);
+      const prevDepts = prev.step2?.departments ?? [];
+      const sameDepts =
+        prevDepts.length === newDepts.length &&
+        prevDepts.every(d => newDeptSet.has(d));
+
+      if (sameDepts) {
+        return { ...prev, step2: v };
+      }
+
+      const budgets = (wad?.departmentBudgets && typeof wad.departmentBudgets === 'object'
+        ? (wad.departmentBudgets as Record<string, number>)
+        : {}) as Record<string, number>;
+      const lineItemDescription: string | null = wad?.description ?? null;
+      const defaultChargeCode = wad?.defaultChargeCodeId ? String(wad.defaultChargeCodeId) : '';
+
+      const prevStep3Rows = prev.step3?.rows ?? [];
+      const keptStep3 = prevStep3Rows.filter(r => newDeptSet.has(r.department));
+      const existingStep3Depts = new Set(keptStep3.map(r => r.department));
+      const addedStep3: WorkBreakdownRow[] = [];
+      for (const dept of newDepts) {
+        if (existingStep3Depts.has(dept)) continue;
+        const hrs = budgets[dept];
+        if (hrs !== undefined) {
+          addedStep3.push({
+            department: dept,
+            operation: lineItemDescription ?? '',
+            responsibleLead: '',
+            estimatedHours: typeof hrs === 'number' ? hrs : Number(hrs) || 0,
+            requiredCerts: '',
+            isTravelerStep: false,
+            requiresQCSignoff: false,
+            seeded: true,
+            seededFrom: 'PWO budget + PO line item',
+          });
+        } else {
+          addedStep3.push({
+            department: dept,
+            operation: '',
+            responsibleLead: '',
+            estimatedHours: 0,
+            requiredCerts: '',
+            isTravelerStep: false,
+            requiresQCSignoff: false,
+          });
+        }
+      }
+      const nextStep3Rows = [...keptStep3, ...addedStep3];
+
+      const prevStep4 = prev.step4?.chargeCodes ?? [];
+      const keptStep4 = prevStep4.filter(c => newDeptSet.has(c.department));
+      const existingStep4Depts = new Set(keptStep4.map(c => c.department));
+      const addedStep4: ChargeCodeRow[] = [];
+      for (const row of addedStep3) {
+        if (existingStep4Depts.has(row.department)) continue;
+        // Only mark as seeded when the row was actually auto-populated from
+        // the PWO budget and/or the project's default charge code. A blank
+        // baseline row (no budget AND no default code) is a manual entry.
+        const hasBudget = !!row.seeded;
+        const hasDefaultCode = !!defaultChargeCode;
+        const isAutoPopulated = hasBudget || hasDefaultCode;
+        let seededFrom: string | undefined;
+        if (hasBudget && hasDefaultCode) {
+          seededFrom = 'Project default charge code + PWO budget';
+        } else if (hasDefaultCode) {
+          seededFrom = 'Project default charge code';
+        } else if (hasBudget) {
+          seededFrom = 'PWO budget';
+        }
+        addedStep4.push({
+          department: row.department,
+          operation: row.operation,
+          chargeCode: defaultChargeCode,
+          laborCategory: '',
+          classification: 'DIRECT',
+          budgetedHours: row.estimatedHours,
+          overtimeAllowed: false,
+          operatorOverrideAllowed: false,
+          overrunRule: 'WARN',
+          seeded: isAutoPopulated || undefined,
+          seededFrom,
+        });
+      }
+      const nextStep4Codes = [...keptStep4, ...addedStep4];
+
+      const next: WizardData = { ...prev, step2: v };
+      if (prev.step3 || nextStep3Rows.length > 0) {
+        next.step3 = { rows: nextStep3Rows };
+      }
+      if (prev.step4 || nextStep4Codes.length > 0) {
+        next.step4 = { chargeCodes: nextStep4Codes };
+      }
+      return next;
+    });
+  }, [wad]);
+
   // Auto-fill Step 1 from upstream docs on FIRST OPEN ONLY.
   // If step1 already exists in saved wizard data we do nothing — the user's
   // saved state (including any manual edits) is always authoritative after
@@ -588,9 +690,11 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
             : (next.step2?.departments ?? []),
         };
       }
-      if ((!next.step3 || (next.step3.rows ?? []).length === 0) && budgetEntries.length > 0) {
+      const selectedDepts = new Set(next.step2?.departments ?? []);
+      const filteredBudgetEntries = budgetEntries.filter(([k]) => selectedDepts.has(k));
+      if ((!next.step3 || (next.step3.rows ?? []).length === 0) && filteredBudgetEntries.length > 0) {
         next.step3 = {
-          rows: budgetEntries.map(([dept, hrs]) => ({
+          rows: filteredBudgetEntries.map(([dept, hrs]) => ({
             department: dept,
             operation: lineItemDescription ?? '',
             responsibleLead: '',
@@ -603,7 +707,7 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
           })),
         };
       }
-      const wbRows = next.step3?.rows ?? [];
+      const wbRows = (next.step3?.rows ?? []).filter((r) => selectedDepts.has(r.department));
       if ((!next.step4 || (next.step4.chargeCodes ?? []).length === 0) && wbRows.length > 0) {
         next.step4 = {
           chargeCodes: wbRows.map((r) => ({
@@ -622,6 +726,23 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
               : 'PWO budget',
           })),
         };
+      }
+      // Load-time normalization: regardless of whether step3/step4 already
+      // existed in the persisted data, prune any rows whose department is no
+      // longer in step2.departments. This cleans up stale rows from prior
+      // wizard sessions (e.g. before this fix) and prevents them from being
+      // persisted on save from later steps without ever rendering Step 3.
+      if (next.step3?.rows?.length) {
+        const pruned = next.step3.rows.filter(r => selectedDepts.has(r.department));
+        if (pruned.length !== next.step3.rows.length) {
+          next.step3 = { rows: pruned };
+        }
+      }
+      if (next.step4?.chargeCodes?.length) {
+        const pruned = next.step4.chargeCodes.filter(c => selectedDepts.has(c.department));
+        if (pruned.length !== next.step4.chargeCodes.length) {
+          next.step4 = { chargeCodes: pruned };
+        }
       }
       if ((!next.step8 || !next.step8.requiredCompletionDate) && (wad.dueDate || project?.targetShipDate)) {
         next.step8 = {
@@ -789,7 +910,7 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
           {step === 2 && (
             <Step2ScopeOfWork
               data={data.step2}
-              onChange={(v) => patch('step2', v)}
+              onChange={handleStep2Change}
             />
           )}
           {/* ── Step 3: Work Breakdown ───────────────────────────────── */}
@@ -1283,7 +1404,19 @@ function Step3WorkBreakdown({ departments, data, onChange }: {
 
   const [rows, setRows] = useState<WorkBreakdownRow[]>(ensureRows);
 
-  useEffect(() => { setRows(ensureRows()); }, [departments]);
+  useEffect(() => {
+    const next = ensureRows();
+    setRows(next);
+    // Keep parent's persisted step3.rows in sync with the currently-selected
+    // departments, so de-selected departments don't linger in saved state and
+    // newly-selected departments appear immediately. Only push when the row
+    // set actually differs to avoid an update loop.
+    const existingKeys = existingRows.map(r => r.department).join('|');
+    const nextKeys = next.map(r => r.department).join('|');
+    if (existingKeys !== nextKeys) {
+      onChange({ rows: next });
+    }
+  }, [departments]);
 
   const setRow = (idx: number, patch: Partial<WorkBreakdownRow>) => {
     const next = rows.map((r, i) => i === idx ? { ...r, ...patch, seeded: false, seededFrom: undefined } : r);

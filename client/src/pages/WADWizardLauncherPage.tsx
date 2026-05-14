@@ -130,20 +130,35 @@ export default function WADWizardLauncherPage() {
     queryKey: [productionUrl],
   });
 
-  // When missing-WAD is on, also pull the full WAD Status list so projects with
-  // NO Production Work Order yet appear as synthetic rows. The "Author WAD"
-  // action calls ensure-for-project to create the PWO and opens the wizard.
-  const { data: allWadStatus = [] } = useQuery<WadStatusRow[]>({
+  const searchTerm = search.trim();
+
+  // Also pull the WAD Status list when users search. The production-WO endpoint
+  // cannot return a project that has no PWO yet, so project-code searches like
+  // "PRJ-002" need the project-level backlog as a fallback.
+  const { data: allWadStatus = [], isLoading: isWadStatusLoading } = useQuery<WadStatusRow[]>({
     queryKey: ['/api/work-orders/production/wad-status'],
-    enabled: missingOnly,
+    enabled: missingOnly || searchTerm.length > 0,
   });
   // "Zero-PWO / not-yet-released" backlog: any project whose WAD gate is not
   // satisfied (no APPROVED+RELEASED PWO). Zero-PWO projects fall in here
   // automatically because their aggregate wadStatus is 'NONE'.
-  const zeroPwoProjects = useMemo(
-    () => allWadStatus.filter((r) => !r.gateSatisfied && r.pwoCount === 0),
-    [allWadStatus]
-  );
+  const zeroPwoProjects = useMemo(() => {
+    const q = searchTerm.toLowerCase();
+    return allWadStatus.filter((r) => {
+      if (r.gateSatisfied || r.pwoCount !== 0) return false;
+      if (missingOnly && !q) return true;
+      if (!q) return false;
+      return Boolean(
+        r.projectCode?.toLowerCase().includes(q) ||
+        r.projectName?.toLowerCase().includes(q) ||
+        r.customerName?.toLowerCase().includes(q) ||
+        r.poNumber?.toLowerCase().includes(q) ||
+        r.latestWorkOrderNumber?.toLowerCase().includes(q) ||
+        r.wadStatus.toLowerCase().includes(q) ||
+        r.currentStage?.toLowerCase().includes(q)
+      );
+    });
+  }, [allWadStatus, missingOnly, searchTerm]);
 
   const ensurePwoMutation = useMutation({
     mutationFn: async (projectId: string) => {
@@ -233,7 +248,7 @@ export default function WADWizardLauncherPage() {
               className={missingOnly ? 'bg-amber-600 hover:bg-amber-700 text-white' : ''}
             >
               <AlertTriangle className="h-3.5 w-3.5 mr-1" />
-              {missingOnly ? 'Showing: Missing WAD (existing PWOs)' : 'Filter: Missing WAD'}
+              {missingOnly ? 'Showing: Missing WAD projects' : 'Include Missing WAD projects'}
             </Button>
             <Button
               variant="outline"
@@ -254,19 +269,28 @@ export default function WADWizardLauncherPage() {
             </div>
           )}
 
+          {!isLoading && !isError && filtered.length === 0 && isWadStatusLoading && (
+            <div className="flex items-center justify-center py-12 text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin mr-2" />
+              Checking project WAD backlog...
+            </div>
+          )}
+
           {isError && (
             <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">
               Failed to load production work orders: {(error as Error)?.message ?? 'Unknown error'}
             </div>
           )}
 
-          {!isLoading && !isError && filtered.length === 0 && zeroPwoProjects.length === 0 && (
+          {!isLoading && !isError && filtered.length === 0 && !isWadStatusLoading && zeroPwoProjects.length === 0 && (
             <div className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">
               <p className="font-medium text-foreground mb-1">No production work orders match your filters</p>
               <p>
                 {missingOnly
                   ? 'No projects in P2 Release / Production are missing a WAD.'
-                  : 'Open the WAD Status Dashboard to find projects in production that still need a WAD authored.'}
+                  : searchTerm
+                    ? 'No matching Production Work Orders or project-level WAD backlog entries were found.'
+                    : 'Search for a project or include missing WAD projects to author a WAD before a Production Work Order exists.'}
               </p>
             </div>
           )}
@@ -372,7 +396,7 @@ export default function WADWizardLauncherPage() {
                       Order yet, so they cannot appear in the PWO-anchored list above.
                       The "Author WAD" action calls ensure-for-project to create the PWO
                       and jumps the user straight into the wizard. */}
-                  {missingOnly && zeroPwoProjects.map((p) => (
+                  {zeroPwoProjects.map((p) => (
                     <TableRow key={`zero-pwo-${p.projectId}`} data-testid={`row-zero-pwo-${p.projectId}`} className="bg-amber-50/40">
                       <TableCell className="font-medium text-amber-900 italic">No PWO yet</TableCell>
                       <TableCell className="text-sm">

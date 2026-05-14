@@ -1,10 +1,22 @@
 import express, { Request, Response } from 'express';
 import { storage } from '../../storage';
 import { db } from '../../db';
-import { manufacturingQueue, inventoryItems, p2ProductionOrders, p2PurchaseOrders, cuttingPacketBOMs, cuttingPacketBOMMaterials, cuttingPacketBOMParts, cuttingFabricInventory, cuttingBuiltPackets, cuttingBuiltPacketFabricSources, cuttingProductCategories, getDashboardCategories, supplySourceDashboardToLegacyDept } from '../../schema';
+import { manufacturingQueue, inventoryItems, p2ProductionOrders, p2PurchaseOrders, cuttingPacketBOMs, cuttingPacketBOMMaterials, cuttingPacketBOMParts, cuttingFabricInventory, cuttingFabricInventoryTransactions, cuttingBuiltPackets, cuttingBuiltPacketFabricSources, cuttingProductCategories, getDashboardCategories, supplySourceDashboardToLegacyDept } from '../../schema';
 import { eq, and, or, asc, desc, inArray, like, count } from 'drizzle-orm';
 
 const router = express.Router();
+
+function parseFabricStockQuantity(value: unknown): number {
+  if (value === null || value === undefined || value === '') return 0;
+  const parsed = typeof value === 'number' ? value : parseFloat(String(value));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function nonZeroInventoryDelta(quantity: number): number {
+  if (quantity === 0) return 0;
+  const magnitude = Math.max(1, Math.round(Math.abs(quantity)));
+  return quantity < 0 ? -magnitude : magnitude;
+}
 
 function parseQueueIdFromBuiltPacketBarcode(barcode: string | null | undefined): number | null {
   if (!barcode) return null;
@@ -565,6 +577,55 @@ router.post('/:id/complete-with-traceability', async (req: Request, res: Respons
         createdPackets.push({
           ...builtPacket,
           fabricSources,
+        });
+      }
+
+      const fabricUsageByRoll = new Map<string, { quantityUsed: number; rollNumber: string | null }>();
+      for (const source of fabricSources) {
+        if (!source.fabricInventoryId) continue;
+        const perPacketQty = parseFabricStockQuantity(source.quantityUsed || 1);
+        const totalUsed = perPacketQty * quantityCompleted;
+        if (totalUsed <= 0) continue;
+        const existingUsage = fabricUsageByRoll.get(source.fabricInventoryId);
+        fabricUsageByRoll.set(source.fabricInventoryId, {
+          quantityUsed: (existingUsage?.quantityUsed ?? 0) + totalUsed,
+          rollNumber: source.rollNumber || existingUsage?.rollNumber || null,
+        });
+      }
+
+      for (const [fabricInventoryId, usage] of fabricUsageByRoll.entries()) {
+        const [roll] = await tx
+          .select()
+          .from(cuttingFabricInventory)
+          .where(eq(cuttingFabricInventory.id, fabricInventoryId))
+          .for('update');
+
+        if (!roll) continue;
+
+        const currentSquareMeters = parseFabricStockQuantity(roll.squareMeters);
+        const currentQuantityInStock = parseFabricStockQuantity(roll.quantityInStock);
+        const newSquareMeters = Math.max(0, currentSquareMeters - usage.quantityUsed);
+        const newQuantityInStock = Math.max(0, currentQuantityInStock - usage.quantityUsed);
+        const isDepleted = newSquareMeters <= 0 && newQuantityInStock <= 0;
+
+        await tx
+          .update(cuttingFabricInventory)
+          .set({
+            squareMeters: newSquareMeters.toString(),
+            quantityInStock: newQuantityInStock,
+            status: isDepleted ? 'depleted' : roll.status,
+            depletedAt: isDepleted ? new Date() : roll.depletedAt,
+            depletedBy: isDepleted ? (completedBy || 'unknown') : roll.depletedBy,
+            updatedAt: new Date(),
+          })
+          .where(eq(cuttingFabricInventory.id, fabricInventoryId));
+
+        await tx.insert(cuttingFabricInventoryTransactions).values({
+          fabricInventoryId,
+          changeType: 'ISSUE',
+          quantityDelta: nonZeroInventoryDelta(-usage.quantityUsed),
+          performedBy: completedBy || 'unknown',
+          notes: `Cutting table completion ${id}: ${usage.quantityUsed} used for ${quantityCompleted} packet(s)${usage.rollNumber ? ` from roll ${usage.rollNumber}` : ''}`,
         });
       }
 

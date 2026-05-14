@@ -20,6 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
 
 type CoaAccount = {
   id: number;
@@ -152,10 +153,17 @@ export default function ChartOfAccountsPage() {
 
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">
-            {isLoading
-              ? 'Loading accounts'
-              : `${filtered.length} account${filtered.length === 1 ? '' : 's'}`}
+          <CardTitle className="text-base flex items-center gap-3">
+            <span>
+              {isLoading
+                ? 'Loading accounts'
+                : `${filtered.length} account${filtered.length === 1 ? '' : 's'}`}
+            </span>
+            {!isLoading && (
+              <Button size="sm" data-testid="button-success">
+                Success
+              </Button>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">

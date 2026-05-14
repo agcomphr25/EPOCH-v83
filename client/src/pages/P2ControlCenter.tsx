@@ -105,7 +105,7 @@ export default function P2ControlCenter() {
   const poIdFromUrl = urlParams.get('poId') ? Number(urlParams.get('poId')) : null;
   const unitsFromUrl = urlParams.get('units') || undefined;
   const searchFromUrl = urlParams.get('search') || '';
-  // WAD context: passed from project workflow card
+  // Project context: passed from PM/WAD project workflow cards
   const wadProjectId = urlParams.get('projectId') || '';
   const wadProjectName = urlParams.get('projectName') || '';
   const wadPoId = urlParams.get('poId') || '';
@@ -294,7 +294,7 @@ export default function P2ControlCenter() {
         <div className="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950 px-4 py-3">
           <FileText className="h-4 w-4 text-blue-600 shrink-0" />
           <div className="flex-1 text-sm">
-            <span className="font-medium text-blue-800 dark:text-blue-200">WAD context:</span>
+            <span className="font-medium text-blue-800 dark:text-blue-200">Project context:</span>
             <span className="ml-2 text-blue-700 dark:text-blue-300">{wadProjectName || 'Project'}</span>
             {wadPoId && <span className="ml-2 text-blue-600 dark:text-blue-400">· PO ID {wadPoId}</span>}
           </div>

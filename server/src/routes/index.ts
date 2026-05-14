@@ -42,6 +42,7 @@ import moldsRoutes from './molds';
 import layupPdfRoute from './layupPdfRoute';
 import shippingPdfRoute from './shippingPdf';
 import shippingRoutes from './shipping';
+import p1FulfillmentRoutes from './p1Fulfillment';
 import shippingTestRoutes from './shipping-test';
 import orderAttachmentsRoutes from './orderAttachments';
 import storageUploadRoutes from './storageUpload';
@@ -980,6 +981,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // Shipping management routes
   app.use('/api/shipping', shippingRoutes);
+  app.use('/api/p1-fulfillment', p1FulfillmentRoutes);
   if (process.env.NODE_ENV !== 'production') {
     app.use('/api/shipping-test', shippingTestRoutes);
   }

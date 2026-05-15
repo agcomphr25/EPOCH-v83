@@ -709,6 +709,7 @@ import {
 import { db, pool, rawSql } from './db';
 import { recordAuditEvent } from './src/services/auditLedgerService';
 import { recordInventoryLedgerEntry } from './src/services/inventoryTransactionLedgerService';
+import { assignDashboardForWorkOrder } from './src/lib/workOrderDashboardAssignment';
 
 // Drizzle's transaction handle is API-compatible with `db` for the CRUD
 // surface our helpers use, but its TS type is a `PgTransaction` (not the
@@ -25806,7 +25807,21 @@ export class DatabaseStorage implements IStorage {
   // ── Production Work Orders (WAD) ──────────────────────────────────────────
 
   async createProductionWorkOrder(data: InsertProductionWorkOrder): Promise<ProductionWorkOrder> {
-    const [row] = await db.insert(productionWorkOrders).values(data).returning();
+    const assignment = assignDashboardForWorkOrder({
+      department: data.assignedDepartment,
+      queueType: data.queueType,
+      dashboardType: data.dashboardType,
+      assignedDashboardRoute: data.assignedDashboardRoute,
+      wizardData: data.wizardData,
+      departmentBudgets: data.departmentBudgets,
+    });
+    const [row] = await db.insert(productionWorkOrders).values({
+      ...data,
+      dashboardType: assignment.dashboardType,
+      queueType: assignment.queueType,
+      assignedDepartment: assignment.assignedDepartment,
+      assignedDashboardRoute: assignment.assignedDashboardRoute,
+    }).returning();
     return row;
   }
 

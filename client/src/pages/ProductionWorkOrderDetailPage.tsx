@@ -43,6 +43,11 @@ type ProductionWorkOrder = {
   warningThreshold: string | null;
   blockedThreshold: string | null;
   defaultChargeCodeId: number | null;
+  dashboardType: string | null;
+  queueType: string | null;
+  assignedDepartment: string | null;
+  assignedDashboardRoute: string | null;
+  manufacturingQueueId: number | null;
   wadStatus: string;
   wizardData: Record<string, unknown> | null;
   createdAt: string;
@@ -1163,6 +1168,11 @@ export default function ProductionWorkOrderDetailPage({ params }: { params: { id
         <Badge className={wadStatusColors[wo.wadStatus ?? 'DRAFT'] ?? 'bg-gray-100 text-gray-700'}>
           WAD: {wo.wadStatus ?? 'DRAFT'}
         </Badge>
+        {(wo.assignedDepartment || wo.assignedDashboardRoute) && (
+          <Badge variant="outline" className="gap-1 border-blue-200 bg-blue-50 text-blue-700">
+            {wo.assignedDepartment ?? 'Manufacturing'} / {wo.assignedDashboardRoute ?? '/manufacturing-queue'}
+          </Badge>
+        )}
         <div className="ml-auto">
           <Button
             size="sm"

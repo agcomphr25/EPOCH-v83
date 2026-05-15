@@ -6047,6 +6047,11 @@ async function initializeBackgroundServices() {
       await pool.query(`ALTER TABLE production_work_orders ADD COLUMN IF NOT EXISTS warning_threshold NUMERIC`);
       await pool.query(`ALTER TABLE production_work_orders ADD COLUMN IF NOT EXISTS blocked_threshold NUMERIC`);
       await pool.query(`ALTER TABLE production_work_orders ADD COLUMN IF NOT EXISTS default_charge_code_id INTEGER`);
+      await pool.query(`ALTER TABLE production_work_orders ADD COLUMN IF NOT EXISTS dashboard_type TEXT`);
+      await pool.query(`ALTER TABLE production_work_orders ADD COLUMN IF NOT EXISTS queue_type TEXT`);
+      await pool.query(`ALTER TABLE production_work_orders ADD COLUMN IF NOT EXISTS assigned_department TEXT`);
+      await pool.query(`ALTER TABLE production_work_orders ADD COLUMN IF NOT EXISTS assigned_dashboard_route TEXT`);
+      await pool.query(`ALTER TABLE production_work_orders ADD COLUMN IF NOT EXISTS manufacturing_queue_id INTEGER`);
       console.log('✅ Ensured production_work_orders table and WAD spine columns exist');
     } catch (wadErr: any) {
       console.warn('⚠️ production_work_orders migration skipped:', wadErr?.message);

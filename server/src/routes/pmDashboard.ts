@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { pool } from '../../db';
 import { ensureProductionWorkflowReadSchema } from '../lib/productionWorkflowReadiness';
+import { assignDashboardForWorkOrder } from '../lib/workOrderDashboardAssignment';
 
 const router = Router();
 
@@ -83,6 +84,14 @@ interface ProductionRow {
   quantityCompletedToday: number;
   sourceType: string;
   sourceLabel: string;
+  dashboardType: string | null;
+  queueType: string | null;
+  assignedDepartment: string | null;
+  assignedDashboardRoute: string | null;
+  dashboardLabel: string | null;
+  manufacturingQueueId: number | null;
+  wizardData?: unknown;
+  departmentBudgets?: unknown;
   wadStatus: string | null;
   p2PoId: number | null;
   p2PoNumber: string | null;
@@ -621,6 +630,14 @@ router.get('/:projectId/production', h(async (req, res) => {
       )::int AS "quantityCompletedToday",
       'production_work_order'::text AS "sourceType",
       'WAD'::text AS "sourceLabel",
+      wo.dashboard_type AS "dashboardType",
+      wo.queue_type AS "queueType",
+      wo.assigned_department AS "assignedDepartment",
+      wo.assigned_dashboard_route AS "assignedDashboardRoute",
+      NULL::text AS "dashboardLabel",
+      wo.manufacturing_queue_id AS "manufacturingQueueId",
+      wo.wizard_data AS "wizardData",
+      wo.department_budgets AS "departmentBudgets",
       wo.wad_status AS "wadStatus",
       NULL::int AS "p2PoId",
       NULL::text AS "p2PoNumber",
@@ -726,6 +743,14 @@ router.get('/:projectId/production', h(async (req, res) => {
         )::int AS "quantityCompletedToday",
         'p2_production_order'::text AS "sourceType",
         'P2'::text AS "sourceLabel",
+        NULL::text AS "dashboardType",
+        NULL::text AS "queueType",
+        NULL::text AS "assignedDepartment",
+        NULL::text AS "assignedDashboardRoute",
+        NULL::text AS "dashboardLabel",
+        NULL::int AS "manufacturingQueueId",
+        NULL::jsonb AS "wizardData",
+        NULL::jsonb AS "departmentBudgets",
         NULL::text AS "wadStatus",
         p2po.p2_po_id AS "p2PoId",
         MAX(p2po_head.po_number) AS "p2PoNumber",
@@ -874,6 +899,14 @@ router.get('/:projectId/production', h(async (req, res) => {
         quantityCompletedToday: g.completedTodayUnits,
         sourceType: 'p2_production_order',
         sourceLabel: 'P2',
+        dashboardType: null,
+        queueType: null,
+        assignedDepartment: null,
+        assignedDashboardRoute: null,
+        dashboardLabel: null,
+        manufacturingQueueId: null,
+        wizardData: null,
+        departmentBudgets: null,
         wadStatus: null,
         p2PoId: g.poId,
         p2PoNumber: g.poNumber,
@@ -897,7 +930,31 @@ router.get('/:projectId/production', h(async (req, res) => {
     });
   }
 
-  res.json({ rows: finalRows, linkedP2PoCount });
+  const rowsWithAssignments = finalRows.map((row) => {
+    const assignment = assignDashboardForWorkOrder({
+      department: row.currentDepartment ?? row.currentTravelerStep,
+      dashboardType: row.dashboardType,
+      queueType: row.queueType,
+      assignedDepartment: row.assignedDepartment,
+      assignedDashboardRoute: row.assignedDashboardRoute,
+      wizardData: row.wizardData,
+      departmentBudgets: row.departmentBudgets,
+    });
+
+    return {
+      ...row,
+      dashboardType: row.dashboardType ?? assignment.dashboardType,
+      queueType: row.queueType ?? assignment.queueType,
+      assignedDepartment: row.assignedDepartment ?? assignment.assignedDepartment,
+      assignedDashboardRoute: row.assignedDashboardRoute ?? assignment.assignedDashboardRoute,
+      dashboardLabel: assignment.dashboardLabel,
+      manufacturingQueueId: row.manufacturingQueueId ?? null,
+      wizardData: undefined,
+      departmentBudgets: undefined,
+    };
+  });
+
+  res.json({ rows: rowsWithAssignments, linkedP2PoCount });
 }));
 
 // GET /api/pm-dashboard/:projectId/production/:workOrderId — drawer detail

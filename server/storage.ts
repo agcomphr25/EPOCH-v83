@@ -10343,6 +10343,7 @@ export class DatabaseStorage implements IStorage {
         agPartNumber: vendorPOItems.agPartNumber,
         unitPrice: vendorPOItems.unitPrice,
         vendorPoId: vendorPOItems.vendorPoId,
+        description: vendorPOItems.description,
       })
       .from(vendorPOItems)
       .where(eq(vendorPOItems.id, poLineItemId));
@@ -10375,7 +10376,10 @@ export class DatabaseStorage implements IStorage {
     }
 
     // Get the inventory item's UOM conversion data and cutting table flags
-    const [inventoryItem] = await db
+    // (Task #248: `let` so the receiving transaction below can replace this
+    // with an auto-created placeholder when the part has no inventory_items
+    // row yet, ensuring the ITL write can proceed.)
+    let [inventoryItem] = await db
       .select({
         id: inventoryItems.id,
         agPartNumber: inventoryItems.agPartNumber,
@@ -10512,11 +10516,43 @@ export class DatabaseStorage implements IStorage {
         })
         .where(eq(vendorPOItems.id, poLineItemId));
 
-      // ── Inventory Transaction Ledger write (Task #229) ───────────────────
-      // Skip if no upstream inventory_items record exists for this AG part
-      // (orphan ad-hoc PO line) — the ITL inventory_item_id FK is NOT NULL.
-      // Idempotency: source key combines the PO line id + new cumulative qty
-      // so each partial receipt produces exactly one ledger row even on retry.
+      // ── Inventory Transaction Ledger write (Task #229 / #248) ───────────
+      // The ITL inventory_item_id FK is NOT NULL. Previously, when the AG
+      // part number on the PO line had no matching inventory_items row we
+      // silently skipped the ledger write — the bug behind Task #248 (Rock
+      // West receipt missing from the Transactions list). Now we auto-create
+      // a placeholder inventory_items row inside this transaction so the
+      // ledger write can proceed. Truly ad-hoc PO lines with no agPartNumber
+      // still bypass the ITL because there's no part identity to track.
+      if (!inventoryItem && poLineItem.agPartNumber) {
+        const { ensureInventoryItemForReceipt } = await import(
+          './src/services/ensureInventoryItemForReceipt'
+        );
+        const ensured = await ensureInventoryItemForReceipt(tx, {
+          agPartNumber: poLineItem.agPartNumber,
+          fallbackName: poLineItem.description ?? poLineItem.agPartNumber,
+          vendorId: vendorPO.vendorId ?? null,
+          createdBy: createdBy != null ? `user:${createdBy}` : null,
+        });
+        inventoryItem = {
+          id: ensured.id,
+          agPartNumber: ensured.agPartNumber,
+          name: ensured.name,
+          source: null,
+          supplierPartNumber: null,
+          vendorUnit: null,
+          purchaseUnit: ensured.purchaseUnit,
+          purchaseQuantity: null,
+          consumptionRate: null,
+          usageUnit: ensured.usageUnit,
+          utilizedInPL1: false,
+          utilizedInPL2: false,
+          isFabric: false,
+        } as typeof inventoryItem;
+        console.warn(
+          `[vendor-po/receive] Auto-created inventory_items placeholder for ag_part_number="${poLineItem.agPartNumber}" (poLineItemId=${poLineItemId}) so ledger row could be written. Edit Parts Management to fill metadata.`,
+        );
+      }
       if (inventoryItem) {
         const ledgerSourceModule = 'receiving:vendor-po';
 

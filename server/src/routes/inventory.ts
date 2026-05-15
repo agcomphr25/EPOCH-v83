@@ -1982,24 +1982,26 @@ router.post('/parts-requests/receive', requirePermission('inventory.manage_reque
           allFullyReceived = false;
         }
 
-        // ── Inventory Transaction Ledger write (Task #229) ─────────────────
-        // Lookup inventory_items row by AG part number. Skip with a clear
-        // warning when the order line is ad-hoc (no agPartNumber) or has no
-        // matching inventory_items record — the ITL inventory_item_id FK is
-        // NOT NULL so we cannot write a row in that case.
+        // ── Inventory Transaction Ledger write (Task #229 / #248) ──────────
+        // The ITL inventory_item_id FK is NOT NULL. Previously, when a part
+        // had no matching inventory_items row we silently skipped the ledger
+        // write — that's the bug behind Task #248 (Rock West receipt missing
+        // from the Transactions list). Now: when an agPartNumber is present
+        // but no inventory_items row exists, auto-create a minimal placeholder
+        // inside the same transaction, then write the ledger row. Truly
+        // ad-hoc lines (no agPartNumber) still skip with a warning because
+        // there's no part identity to track.
         if (orderLine.agPartNumber) {
-          const [invItem] = await tx
-            .select({
-              id: inventoryItemsTable.id,
-              agPartNumber: inventoryItemsTable.agPartNumber,
-              purchaseUnit: inventoryItemsTable.purchaseUnit,
-              usageUnit: inventoryItemsTable.usageUnit,
-            })
-            .from(inventoryItemsTable)
-            .where(eq(inventoryItemsTable.agPartNumber, orderLine.agPartNumber))
-            .limit(1);
+          const { ensureInventoryItemForReceipt } = await import(
+            '../services/ensureInventoryItemForReceipt'
+          );
+          const invItem = await ensureInventoryItemForReceipt(tx, {
+            agPartNumber: orderLine.agPartNumber,
+            fallbackName: orderLine.partName ?? orderLine.partNumber ?? null,
+            createdBy: receivedBy ?? null,
+          });
 
-          if (invItem) {
+          {
             const ledgerSourceModule = 'receiving:parts-request';
             // Stable composite source key: anchored to the parent receipt id +
             // the business order-line id (not the surrogate receipt-line PK).
@@ -2050,10 +2052,6 @@ router.post('/parts-requests/receive', requirePermission('inventory.manage_reque
                 },
               }, tx);
             }
-          } else {
-            console.warn(
-              `[parts-requests/receive] Skipping ITL write — no inventory_items row for ag_part_number="${orderLine.agPartNumber}" (orderLineId=${line.orderLineId})`,
-            );
           }
         } else {
           console.warn(

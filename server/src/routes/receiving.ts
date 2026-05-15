@@ -1431,7 +1431,43 @@ async function handleAcceptedUnit(unit: ReceivedUnit, receipt: Receipt, user: Au
       default_max_out_time_minutes: number | null;
     }>(invResult);
     if (!invRows.length) {
-      throw new Error(`No inventory_items record found for ag_part_number="${line.agPartNumber}" — create the inventory item before accepting units for this part`);
+      // Task #248: align with the other three receiving entry points by
+      // auto-creating a minimal inventory_items placeholder rather than
+      // hard-failing. Parts Management can fill in metadata later, but the
+      // receiving → ITL invariant is preserved either way.
+      const { ensureInventoryItemForReceipt } = await import(
+        '../services/ensureInventoryItemForReceipt'
+      );
+      await ensureInventoryItemForReceipt(db, {
+        agPartNumber: line.agPartNumber,
+        fallbackName: line.description ?? line.agPartNumber,
+        createdBy: actorName(user),
+      });
+      const reFetch = await db.execute(
+        sql`SELECT id, name, ag_part_number, is_fabric, utilized_in_pl1, utilized_in_pl2, supplier_part_number,
+                   shelf_life_controlled, frozen_shelf_life_days, room_temp_shelf_life_days, default_max_out_time_minutes
+            FROM inventory_items WHERE ag_part_number = ${line.agPartNumber} LIMIT 1`
+      );
+      const reRows = sqlRows<{
+        id: number;
+        name: string;
+        ag_part_number: string;
+        is_fabric: boolean | null;
+        utilized_in_pl1: boolean | null;
+        utilized_in_pl2: boolean | null;
+        supplier_part_number: string | null;
+        shelf_life_controlled: boolean | null;
+        frozen_shelf_life_days: number | null;
+        room_temp_shelf_life_days: number | null;
+        default_max_out_time_minutes: number | null;
+      }>(reFetch);
+      if (!reRows.length) {
+        throw new Error(`Failed to ensure inventory_items row for ag_part_number="${line.agPartNumber}"`);
+      }
+      invRows.push(reRows[0]);
+      console.warn(
+        `[receiving/handleAcceptedUnit] Auto-created inventory_items placeholder for ag_part_number="${line.agPartNumber}" — edit Parts Management to fill metadata.`
+      );
     }
     const invItem = invRows[0];
     const receivedQty = Number(unit.quantity);

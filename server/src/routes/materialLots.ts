@@ -837,17 +837,23 @@ router.post('/', async (req: Request, res: Response) => {
         notes: `Initial receiving from ${insertedLot.supplier}. PO: ${insertedLot.purchaseOrderNumber || 'N/A'}`,
       }));
 
-      // Look up the linked inventory_items row to satisfy the ITL FK. If the
-      // lot lacks an inventoryItemId or the row is missing, skip the ITL write
-      // with a warning (callers should always provide a valid linkage).
+      // Resolve the linked inventory_items row to satisfy the ITL FK
+      // (Task #248). If the lot lacks an inventoryItemId, look up by AG part
+      // number; if no row exists, auto-create a placeholder so the ledger
+      // write can proceed (no more silent skips).
       let invItemId: number | null = insertedLot.inventoryItemId ?? null;
       if (!invItemId && insertedLot.materialPartNumber) {
-        const [lookup] = await tx
-          .select({ id: inventoryItems.id })
-          .from(inventoryItems)
-          .where(eq(inventoryItems.agPartNumber, insertedLot.materialPartNumber))
-          .limit(1);
-        invItemId = lookup?.id ?? null;
+        const { ensureInventoryItemForReceipt } = await import(
+          '../services/ensureInventoryItemForReceipt'
+        );
+        const ensured = await ensureInventoryItemForReceipt(tx, {
+          agPartNumber: insertedLot.materialPartNumber,
+          fallbackName: insertedLot.materialName ?? null,
+          source: insertedLot.supplier ?? null,
+          supplierPartNumber: insertedLot.supplierPartNumber ?? null,
+          createdBy: insertedLot.receivedBy ?? null,
+        });
+        invItemId = ensured.id;
       }
 
       if (invItemId) {

@@ -172,7 +172,12 @@ export default function OEMShipmentsPage() {
 
   const shipments = data?.shipments || [];
   const pagination = data?.pagination;
-  const isGlennj = false;
+
+  const { data: session } = useQuery<{ username?: string }>({
+    queryKey: ['/api/auth/session'],
+    queryFn: () => apiRequest('/api/auth/session'),
+  });
+  const isGlennj = session?.username === 'glennj';
 
   // Fetch weekly/monthly stats
   const { data: stats } = useQuery<OEMStats>({

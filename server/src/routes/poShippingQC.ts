@@ -761,7 +761,7 @@ router.post('/progress-to-department', async (req, res) => {
 
 // GET /api/po-orders/oem-shipments
 // Get all shipments with tracking info, filters, and pagination (no base64 blobs)
-router.get('/oem-shipments', async (req, res) => {
+router.get('/oem-shipments', authenticateToken, async (req, res) => {
   try {
     const {
       customerId,
@@ -932,8 +932,8 @@ router.get('/oem-shipments', async (req, res) => {
               'poNumber', COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number),
               'hasPackingSlip', si.packing_slip_base64 IS NOT NULL,
               'itemType', COALESCE(poi.item_type, 'stock_model'),
-              'unitPrice', poi.unit_price,
-              'lineTotal', COALESCE(poi.unit_price, 0) * COALESCE(si.quantity, 1)
+              'unitPrice', CASE WHEN $${paramIndex + 2}::boolean THEN poi.unit_price ELSE NULL END,
+              'lineTotal', CASE WHEN $${paramIndex + 2}::boolean THEN COALESCE(poi.unit_price, 0) * COALESCE(si.quantity, 1) ELSE NULL END
             ) ORDER BY COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number), si.order_id
           ) as items
         FROM shipment_records sr
@@ -951,6 +951,8 @@ router.get('/oem-shipments', async (req, res) => {
 
     params.push(parseInt(limit as string, 10));
     params.push(parseInt(offset as string, 10));
+    const canSeePrices = req.user?.username === 'glennj';
+    params.push(canSeePrices);
 
     const result = await pool.query(query, params);
     const shipments = Array.isArray(result) ? result : result.rows || [];

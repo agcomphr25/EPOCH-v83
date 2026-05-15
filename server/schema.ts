@@ -8049,6 +8049,11 @@ export const p2ProductionOrders = pgTable('p2_production_orders', {
   p2PoItemId: integer('p2_po_item_id')
     .references(() => p2PurchaseOrderItems.id)
     .notNull(),
+  // Task #242: scope p2 production rows to a specific project when the
+  // PO is shared by multiple projects. Nullable: rows that cannot be
+  // deterministically attributed to a single project fall back to the
+  // PO-wide view in the PM Control Center.
+  projectId: uuid('project_id'),
   bomDefinitionId: uuid('bom_definition_id'), // Foreign key to BOM definition
   bomItemId: uuid('bom_item_id'), // Foreign key to BOM item
   sku: text('sku').notNull(), // From BOM definition

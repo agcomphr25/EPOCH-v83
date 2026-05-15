@@ -804,6 +804,12 @@ router.get('/:projectId/production', h(async (req, res) => {
       FROM project_po_link ppl
       JOIN p2_purchase_orders p2po_head ON p2po_head.id = ppl.po_id
       JOIN p2_production_orders p2po ON p2po.p2_po_id = p2po_head.id
+        -- Task #242: scope to this project's slice of the PO. Rows with a
+        -- non-null project_id are only included when they belong to this
+        -- project; rows with project_id IS NULL fall back to PO-wide so
+        -- POs that cannot be deterministically attributed to a single
+        -- project keep working as they did before.
+        AND (p2po.project_id IS NULL OR p2po.project_id = $2::uuid)
       LEFT JOIN p2_purchase_order_items p2poi ON p2poi.id = p2po.p2_po_item_id
       -- No status filter: match WAD branch which returns rows regardless of status.
       GROUP BY p2po.p2_po_id, p2po.p2_po_item_id, p2po.department

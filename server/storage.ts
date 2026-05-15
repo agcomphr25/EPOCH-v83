@@ -15399,6 +15399,28 @@ export class DatabaseStorage implements IStorage {
       notes: string;
     }
 
+    // Task #242: tag generated rows with the owning project when the PO
+    // is linked to exactly one project (via projects.po_id OR
+    // project_steps.linked_p2_order_id). When multiple projects share
+    // this PO, leave project_id NULL so the dashboard falls back to
+    // PO-wide behavior rather than mis-attributing rows.
+    const projectLinkRows = await dbClient.execute(sql`
+      SELECT DISTINCT project_id::text AS project_id
+      FROM (
+        SELECT p.id AS project_id
+        FROM ${projects} p
+        WHERE p.po_id = ${poId}
+        UNION
+        SELECT ps.project_id
+        FROM ${projectSteps} ps
+        WHERE ps.linked_p2_order_id = ${poId}
+      ) s
+      WHERE project_id IS NOT NULL
+    `);
+    const projectLinks = (projectLinkRows.rows ?? projectLinkRows) as Array<{ project_id: string }>;
+    const soleProjectId: string | null =
+      projectLinks.length === 1 ? projectLinks[0].project_id : null;
+
     const pendingOrders: PendingOrder[] = [];
 
     const collectOrderSpecs = async (
@@ -15696,6 +15718,7 @@ export class DatabaseStorage implements IStorage {
           orderId,
           p2PoId: order.p2PoId,
           p2PoItemId: order.p2PoItemId,
+          projectId: soleProjectId, // Task #242: NULL when PO is shared by multiple projects
           bomDefinitionId: order.bomDefinitionId,
           bomItemId: order.bomItemId,
           sku: order.sku,

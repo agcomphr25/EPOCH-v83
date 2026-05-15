@@ -33,6 +33,21 @@ const paymentRateLimiter = rateLimit({
 // Determine if we're in test mode (sandbox)
 const isTestMode = process.env.NODE_ENV !== 'production';
 
+async function tryPostP1PaymentJournalEntry(
+  paymentId: number,
+  user?: { username?: string | null } | null,
+  tx?: any
+) {
+  try {
+    await createOrUpdateP1PaymentJournalEntry(paymentId, user ?? null, tx);
+  } catch (postingError) {
+    console.error(
+      `[payments] Payment ${paymentId} was recorded, but accounting journal posting failed:`,
+      postingError
+    );
+  }
+}
+
 // Credit card payment schema for API validation
 const creditCardPaymentSchema = z.object({
   orderId: z.string().min(1, 'Order ID is required'),
@@ -240,7 +255,7 @@ async function processTransactionResult(data: {
       .returning();
 
     if (isApproved) {
-      await createOrUpdateP1PaymentJournalEntry(paymentRecord.id, null, tx);
+      await tryPostP1PaymentJournalEntry(paymentRecord.id, null, tx);
     }
 
     return { payment: paymentRecord, transaction: transactionRecord };
@@ -572,7 +587,7 @@ router.post('/batch', async (req, res) => {
             })
             .returning();
 
-          await createOrUpdateP1PaymentJournalEntry(record.id, (req as any).user, tx);
+          await tryPostP1PaymentJournalEntry(record.id, (req as any).user, tx);
           return record;
         });
 
@@ -809,7 +824,7 @@ router.post('/bulk-live', async (req, res) => {
               })
               .returning();
 
-            await createOrUpdateP1PaymentJournalEntry(record.id, (req as any).user, tx);
+            await tryPostP1PaymentJournalEntry(record.id, (req as any).user, tx);
             return record;
           });
 

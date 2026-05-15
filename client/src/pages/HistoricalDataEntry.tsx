@@ -143,9 +143,95 @@ export default function HistoricalDataEntry() {
     return cats.reduce((sum, cat) => sum + (parseFloat(getValue(year, month, cat)) || 0), 0);
   };
 
+  const getFiscalYearTotal = (
+    startYear: number,
+    startMonth: number,
+    cats: string[],
+  ): number => {
+    let total = 0;
+    for (let i = 0; i < 12; i++) {
+      const m = ((startMonth - 1 + i) % 12) + 1;
+      const y = startYear + Math.floor((startMonth - 1 + i) / 12);
+      total += cats.reduce(
+        (sum, cat) => sum + (parseFloat(getValue(y, m, cat)) || 0),
+        0,
+      );
+    }
+    return total;
+  };
+
   const renderCreditCardTab = () => {
+    const currentFY = getFiscalYearTotal(2025, 5, ['online', 'phone']);
+    const priorFY = getFiscalYearTotal(2024, 5, ['online', 'phone']);
+    const ratio = priorFY > 0 ? currentFY / priorFY : null;
+    const pctChange = priorFY > 0 ? ((currentFY - priorFY) / priorFY) * 100 : null;
+    const isUp = pctChange !== null && pctChange >= 0;
+
     return (
       <div className="space-y-6">
+        <Card data-testid="card-yoy-comparison">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">YoY Comparison</CardTitle>
+            <CardDescription>
+              May 2025 – Apr 2026 vs May 2024 – Apr 2025 (Total)
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="rounded-lg border p-3">
+                <div className="text-xs text-muted-foreground mb-1">
+                  May 2025 – Apr 2026
+                </div>
+                <div
+                  className="text-lg font-bold"
+                  data-testid="text-yoy-current"
+                >
+                  {formatCurrency(currentFY)}
+                </div>
+              </div>
+              <div className="rounded-lg border p-3">
+                <div className="text-xs text-muted-foreground mb-1">
+                  May 2024 – Apr 2025
+                </div>
+                <div
+                  className="text-lg font-bold"
+                  data-testid="text-yoy-prior"
+                >
+                  {formatCurrency(priorFY)}
+                </div>
+              </div>
+              <div className="rounded-lg border p-3">
+                <div className="text-xs text-muted-foreground mb-1">Ratio</div>
+                <div
+                  className="text-lg font-bold"
+                  data-testid="text-yoy-ratio"
+                >
+                  {ratio !== null ? `${ratio.toFixed(2)}x` : '—'}
+                </div>
+              </div>
+              <div className="rounded-lg border p-3">
+                <div className="text-xs text-muted-foreground mb-1">
+                  % Change
+                </div>
+                <div
+                  className={`text-lg font-bold ${
+                    pctChange === null
+                      ? ''
+                      : isUp
+                        ? 'text-green-600 dark:text-green-400'
+                        : 'text-red-600 dark:text-red-400'
+                  }`}
+                  data-testid="text-yoy-pct-change"
+                >
+                  {pctChange !== null
+                    ? `${isUp ? '+' : ''}${pctChange.toFixed(1)}%`
+                    : '—'}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>

@@ -3107,6 +3107,34 @@ async function initializeBackgroundServices() {
         console.warn('⚠️ production_program_runs linked log migration:', runLogErr.message);
       }
 
+      // Durable per-item timer audit snapshots for reconstructing station cards later
+      try {
+        const { sql: sqlItemAudit } = await import('drizzle-orm');
+        await db.execute(sqlItemAudit`
+          CREATE TABLE IF NOT EXISTS production_item_audit_records (
+            id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            item_identifier text NOT NULL,
+            serial_number text,
+            traveler_id varchar(255),
+            traveler_number varchar(255),
+            run_id uuid REFERENCES production_program_runs(id) ON DELETE SET NULL,
+            event_type text NOT NULL,
+            event_at timestamp NOT NULL DEFAULT now(),
+            actor_user_id integer REFERENCES users(id),
+            card_snapshot jsonb NOT NULL,
+            created_at timestamp NOT NULL DEFAULT now()
+          )
+        `);
+        await db.execute(sqlItemAudit`CREATE INDEX IF NOT EXISTS production_item_audit_item_identifier_idx ON production_item_audit_records(item_identifier)`);
+        await db.execute(sqlItemAudit`CREATE INDEX IF NOT EXISTS production_item_audit_serial_number_idx ON production_item_audit_records(serial_number)`);
+        await db.execute(sqlItemAudit`CREATE INDEX IF NOT EXISTS production_item_audit_traveler_id_idx ON production_item_audit_records(traveler_id)`);
+        await db.execute(sqlItemAudit`CREATE INDEX IF NOT EXISTS production_item_audit_run_id_idx ON production_item_audit_records(run_id)`);
+        await db.execute(sqlItemAudit`CREATE INDEX IF NOT EXISTS production_item_audit_event_at_idx ON production_item_audit_records(event_at)`);
+        console.log('âœ… Ensured production_item_audit_records table exists');
+      } catch (itemAuditErr: any) {
+        console.warn('âš ï¸ production_item_audit_records migration:', itemAuditErr.message);
+      }
+
       // Normalize legacy traceability field IDs in inventory_items for fabric items
       // Old field IDs ("lot", "batch", "expDate", "part") don't match TRACEABILITY_FIELD_LABELS
       // and cause the receiving form to show raw IDs instead of friendly labels

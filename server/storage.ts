@@ -10293,8 +10293,37 @@ export class DatabaseStorage implements IStorage {
     notes?: string;
     createdBy?: number;
     cocLink?: string;
+    /**
+     * Optional per-unit traceability splits (Task #240). When provided, each
+     * entry creates its own material_lots row plus its own ITL RECEIVE row
+     * (keyed by `${poLineItemId}:${newCumulative}:${unitIndex}` for idempotency).
+     * Quantities must sum to `receivedQuantity`. The PO line cumulative
+     * receivedQuantity, status auto-promotion, and COGS calculation are
+     * unchanged. When omitted, behavior is unchanged from pre-Task #240.
+     */
+    units?: Array<{
+      quantity: number;
+      traceability?: Record<string, string>;
+      notes?: string;
+    }>;
   }): Promise<any> {
-    const { poLineItemId, receivedQuantity, receivedDate, notes, createdBy, cocLink } = params;
+    const { poLineItemId, receivedQuantity, receivedDate, notes, createdBy, cocLink, units } = params;
+
+    // Validate per-unit splits if supplied
+    if (units && units.length > 0) {
+      const sum = units.reduce((s, u) => s + Number(u.quantity ?? 0), 0);
+      if (Math.abs(sum - receivedQuantity) > 0.0001) {
+        throw new Error(
+          `Per-unit quantities (sum=${sum}) must equal receivedQuantity (${receivedQuantity})`,
+        );
+      }
+      for (const u of units) {
+        const q = Number(u.quantity);
+        if (!Number.isFinite(q) || q <= 0) {
+          throw new Error(`Each per-unit split must have a positive quantity (got ${u.quantity})`);
+        }
+      }
+    }
 
     // Validate received date is valid and not in the future
     if (isNaN(receivedDate.getTime())) {
@@ -10490,92 +10519,229 @@ export class DatabaseStorage implements IStorage {
       // so each partial receipt produces exactly one ledger row even on retry.
       if (inventoryItem) {
         const ledgerSourceModule = 'receiving:vendor-po';
-        const ledgerSourceRecordId = `${poLineItemId}:${newCumulative}`;
-        const [existingLedger] = await tx
-          .select({ id: inventoryTransactionLedger.id })
-          .from(inventoryTransactionLedger)
-          .where(
-            and(
-              eq(inventoryTransactionLedger.sourceModule, ledgerSourceModule),
-              eq(inventoryTransactionLedger.sourceRecordId, ledgerSourceRecordId),
-            ),
-          )
-          .limit(1);
 
-        if (!existingLedger) {
-          const delta = receivedQuantity;
-          // Best-effort prior on-hand: aggregate across locations. Defaults to
-          // 0 when no balance row exists (vendor-PO receipts do not directly
-          // mutate inventory_balances).
-          const balanceRows = await tx
-            .select({ quantityOnHand: inventoryBalances.quantityOnHand })
-            .from(inventoryBalances)
-            .where(eq(inventoryBalances.agPartNumber, inventoryItem.agPartNumber));
-          const quantityBefore = balanceRows.reduce(
-            (sum, b) => sum + Number(b.quantityOnHand ?? 0),
-            0,
-          );
-          const quantityAfter = quantityBefore + delta;
+        // Resolve receiver display name from users table (fall back to
+        // username, then a system marker) so traceability shows a human name.
+        let receiverDisplayName = 'system:vendor-po-receive';
+        if (createdBy != null) {
+          const [u] = await tx
+            .select({
+              username: users.username,
+              firstName: users.firstName,
+              lastName: users.lastName,
+            })
+            .from(users)
+            .where(eq(users.id, createdBy))
+            .limit(1);
+          if (u) {
+            const full = [u.firstName, u.lastName].filter(Boolean).join(' ').trim();
+            receiverDisplayName = full || u.username || `user:${createdBy}`;
+          } else {
+            receiverDisplayName = `user:${createdBy}`;
+          }
+        }
 
-          // Resolve receiver display name from users table (fall back to
-          // username, then a system marker) so traceability shows a human name.
-          let receiverDisplayName = 'system:vendor-po-receive';
-          if (createdBy != null) {
-            const [u] = await tx
-              .select({
-                username: users.username,
-                firstName: users.firstName,
-                lastName: users.lastName,
-              })
-              .from(users)
-              .where(eq(users.id, createdBy))
+        // Resolve vendor name for richer traceability metadata.
+        let vendorName: string | null = null;
+        if (vendorPO.vendorId != null) {
+          const [v] = await tx
+            .select({ name: vendors.name })
+            .from(vendors)
+            .where(eq(vendors.id, vendorPO.vendorId))
+            .limit(1);
+          vendorName = v?.name ?? null;
+        }
+
+        // Best-effort prior on-hand: aggregate across locations. Defaults to
+        // 0 when no balance row exists (vendor-PO receipts do not directly
+        // mutate inventory_balances). Used for both consolidated and per-unit
+        // ledger writes; for per-unit, the running balance is chained.
+        const balanceRows = await tx
+          .select({ quantityOnHand: inventoryBalances.quantityOnHand })
+          .from(inventoryBalances)
+          .where(eq(inventoryBalances.agPartNumber, inventoryItem.agPartNumber));
+        const baselineQuantity = balanceRows.reduce(
+          (sum, b) => sum + Number(b.quantityOnHand ?? 0),
+          0,
+        );
+
+        if (units && units.length > 0) {
+          // ── Per-unit traceability path (Task #240) ─────────────────────
+          // For each split unit, create a material_lots row carrying its own
+          // lot/roll/heat traceability values, and write a dedicated ITL
+          // RECEIVE row keyed by `${poLineItemId}:${newCumulative}:${idx}`
+          // so re-runs are idempotent at the per-unit grain.
+          const uomForLot =
+            inventoryItem.purchaseUnit ?? inventoryItem.usageUnit ?? 'EA';
+          let runningBalance = baselineQuantity;
+
+          // Pre-fetch latest ICN sequence for today; we'll increment locally
+          // as we insert multiple lots so ICNs remain unique within the batch.
+          const today = new Date();
+          const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
+          const icnPrefix = `ICN-MAT-${dateStr}-`;
+          const icnRows = await tx
+            .select({ icn: materialLots.internalControlNumber })
+            .from(materialLots)
+            .where(like(materialLots.internalControlNumber, `${icnPrefix}%`))
+            .orderBy(desc(materialLots.internalControlNumber))
+            .limit(1);
+          const lastSeq = icnRows.length > 0
+            ? parseInt(String(icnRows[0].icn ?? '').split('-').pop() ?? '0', 10)
+            : 0;
+          let nextSeq = lastSeq + 1;
+
+          for (let idx = 0; idx < units.length; idx++) {
+            const unit = units[idx];
+            const unitQty = Number(unit.quantity);
+            const trace = unit.traceability ?? {};
+
+            const ledgerSourceRecordId = `${poLineItemId}:${newCumulative}:${idx}`;
+            const [existingLedger] = await tx
+              .select({ id: inventoryTransactionLedger.id })
+              .from(inventoryTransactionLedger)
+              .where(
+                and(
+                  eq(inventoryTransactionLedger.sourceModule, ledgerSourceModule),
+                  eq(inventoryTransactionLedger.sourceRecordId, ledgerSourceRecordId),
+                ),
+              )
               .limit(1);
-            if (u) {
-              const full = [u.firstName, u.lastName].filter(Boolean).join(' ').trim();
-              receiverDisplayName = full || u.username || `user:${createdBy}`;
-            } else {
-              receiverDisplayName = `user:${createdBy}`;
+            if (existingLedger) continue;
+
+            // Map traceability fields → material_lots columns.
+            const supplierLotNumber =
+              trace.batchLotNumber || trace.rollNumber || trace.supplierBatchLotC ||
+              trace.manufactureRoll || null;
+            const parseTraceDate = (v?: string): Date | null => {
+              if (!v) return null;
+              const d = new Date(v);
+              return isNaN(d.getTime()) ? null : d;
+            };
+            const manufactureDate = parseTraceDate(trace.manufactureDate);
+            const expirationDate = parseTraceDate(trace.expirationDate);
+
+            // Compose per-unit notes: traceability key:value list + free notes.
+            const traceParts: string[] = [];
+            for (const [k, v] of Object.entries(trace)) {
+              if (v && String(v).trim()) traceParts.push(`${k}: ${v}`);
             }
-          }
+            const unitNotes = [
+              `Unit ${idx + 1} of ${units.length}`,
+              traceParts.length ? traceParts.join(' | ') : null,
+              unit.notes || null,
+              notes && idx === 0 ? notes : null,
+            ].filter(Boolean).join(' · ');
 
-          // Resolve vendor name for richer traceability metadata.
-          let vendorName: string | null = null;
-          if (vendorPO.vendorId != null) {
-            const [v] = await tx
-              .select({ name: vendors.name })
-              .from(vendors)
-              .where(eq(vendors.id, vendorPO.vendorId))
-              .limit(1);
-            vendorName = v?.name ?? null;
-          }
+            const icn = `${icnPrefix}${String(nextSeq++).padStart(6, '0')}`;
 
-          await recordInventoryLedgerEntry({
-            transactionType: 'RECEIVE',
-            inventoryItemId: inventoryItem.id,
-            agPartNumber: inventoryItem.agPartNumber,
-            unitOfMeasure: inventoryItem.purchaseUnit ?? inventoryItem.usageUnit ?? 'EA',
-            quantityBefore,
-            quantityDelta: delta,
-            quantityAfter,
-            performedByUserId: createdBy ?? null,
-            performedByDisplayName: receiverDisplayName,
-            reasonCode: 'VENDOR_PO_RECEIPT',
-            notes: notes ?? null,
-            sourceModule: ledgerSourceModule,
-            sourceRecordId: ledgerSourceRecordId,
-            metadata: {
-              vendorPoId: poLineItem.vendorPoId,
-              poNumber: vendorPO.poNumber ?? null,
-              vendorId: vendorPO.vendorId ?? null,
-              vendorName,
-              poLineItemId,
-              cumulativeReceivedQuantity: newCumulative,
-              prevReceivedQuantity: prevReceivedQty,
-              receivedQuantityThisAction: receivedQuantity,
-              receivedDate: receivedDate.toISOString(),
-              cocLink: cocLink ?? null,
-            },
-          }, tx);
+            const [lot] = await tx.insert(materialLots).values({
+              inventoryItemId: inventoryItem.id,
+              materialPartNumber: inventoryItem.agPartNumber,
+              materialName: inventoryItem.name ?? poLineItem.agPartNumber,
+              internalControlNumber: icn,
+              supplier: vendorName ?? 'Unknown',
+              supplierLotNumber,
+              supplierPartNumber: inventoryItem.supplierPartNumber ?? null,
+              purchaseOrderNumber: vendorPO.poNumber ?? null,
+              receivingRecordNumber: null,
+              receivedQty: String(unitQty),
+              remainingQty: String(unitQty),
+              unitOfMeasure: uomForLot,
+              expirationDate,
+              manufactureDate,
+              status: 'ACCEPTED',
+              receivedBy: receiverDisplayName,
+              receivedAt: receivedDate,
+              notes: unitNotes,
+            }).returning();
+
+            const quantityBefore = runningBalance;
+            const quantityAfter = quantityBefore + unitQty;
+            runningBalance = quantityAfter;
+
+            await recordInventoryLedgerEntry({
+              transactionType: 'RECEIVE',
+              inventoryItemId: inventoryItem.id,
+              agPartNumber: inventoryItem.agPartNumber,
+              lotId: lot?.id ?? null,
+              unitOfMeasure: uomForLot,
+              quantityBefore,
+              quantityDelta: unitQty,
+              quantityAfter,
+              performedByUserId: createdBy ?? null,
+              performedByDisplayName: receiverDisplayName,
+              reasonCode: 'VENDOR_PO_RECEIPT',
+              notes: unitNotes,
+              sourceModule: ledgerSourceModule,
+              sourceRecordId: ledgerSourceRecordId,
+              metadata: {
+                vendorPoId: poLineItem.vendorPoId,
+                poNumber: vendorPO.poNumber ?? null,
+                vendorId: vendorPO.vendorId ?? null,
+                vendorName,
+                poLineItemId,
+                cumulativeReceivedQuantity: newCumulative,
+                prevReceivedQuantity: prevReceivedQty,
+                receivedQuantityThisAction: receivedQuantity,
+                receivedDate: receivedDate.toISOString(),
+                cocLink: cocLink ?? null,
+                unitIndex: idx,
+                unitCount: units.length,
+                unitQuantity: unitQty,
+                traceability: trace,
+                materialLotId: lot?.id ?? null,
+                internalControlNumber: icn,
+              },
+            }, tx);
+          }
+        } else {
+          // ── Consolidated single-row path (existing behavior) ───────────
+          const ledgerSourceRecordId = `${poLineItemId}:${newCumulative}`;
+          const [existingLedger] = await tx
+            .select({ id: inventoryTransactionLedger.id })
+            .from(inventoryTransactionLedger)
+            .where(
+              and(
+                eq(inventoryTransactionLedger.sourceModule, ledgerSourceModule),
+                eq(inventoryTransactionLedger.sourceRecordId, ledgerSourceRecordId),
+              ),
+            )
+            .limit(1);
+
+          if (!existingLedger) {
+            const delta = receivedQuantity;
+            const quantityBefore = baselineQuantity;
+            const quantityAfter = quantityBefore + delta;
+
+            await recordInventoryLedgerEntry({
+              transactionType: 'RECEIVE',
+              inventoryItemId: inventoryItem.id,
+              agPartNumber: inventoryItem.agPartNumber,
+              unitOfMeasure: inventoryItem.purchaseUnit ?? inventoryItem.usageUnit ?? 'EA',
+              quantityBefore,
+              quantityDelta: delta,
+              quantityAfter,
+              performedByUserId: createdBy ?? null,
+              performedByDisplayName: receiverDisplayName,
+              reasonCode: 'VENDOR_PO_RECEIPT',
+              notes: notes ?? null,
+              sourceModule: ledgerSourceModule,
+              sourceRecordId: ledgerSourceRecordId,
+              metadata: {
+                vendorPoId: poLineItem.vendorPoId,
+                poNumber: vendorPO.poNumber ?? null,
+                vendorId: vendorPO.vendorId ?? null,
+                vendorName,
+                poLineItemId,
+                cumulativeReceivedQuantity: newCumulative,
+                prevReceivedQuantity: prevReceivedQty,
+                receivedQuantityThisAction: receivedQuantity,
+                receivedDate: receivedDate.toISOString(),
+                cocLink: cocLink ?? null,
+              },
+            }, tx);
+          }
         }
       } else {
         console.warn(

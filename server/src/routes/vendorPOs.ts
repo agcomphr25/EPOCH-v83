@@ -1487,9 +1487,17 @@ router.post('/items/:itemId/receive', async (req: Request, res: Response) => {
       createdBy: z.number().int().positive().optional(), // Employee ID
       cocLink: z.string().optional(), // Certificate of Conformance link
       documentUrl: z.string().optional(), // Uploaded document URL
+      // Per-unit traceability splits (Task #240). When provided, each entry
+      // creates its own material_lots row + its own ITL RECEIVE row. Sum of
+      // unit quantities must equal `receivedQuantity`.
+      units: z.array(z.object({
+        quantity: z.number().positive('Unit quantity must be positive'),
+        traceability: z.record(z.string(), z.string()).optional(),
+        notes: z.string().optional(),
+      })).optional(),
     });
 
-    const { receivedQuantity, receivedDate, notes, createdBy, cocLink, documentUrl } = receiveSchema.parse(req.body);
+    const { receivedQuantity, receivedDate, notes, createdBy, cocLink, documentUrl, units } = receiveSchema.parse(req.body);
 
     // Record PO receipt and calculate COGS
     const result = await storage.recordVendorPOReceipt({
@@ -1499,6 +1507,7 @@ router.post('/items/:itemId/receive', async (req: Request, res: Response) => {
       notes: documentUrl ? `${notes || ''} | Document: ${documentUrl}`.trim() : notes,
       createdBy,
       cocLink,
+      units,
     });
 
     res.json(result);

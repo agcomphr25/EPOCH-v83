@@ -1,12 +1,15 @@
 import express from 'express';
 import { storage } from '../../storage';
 import { insertArPaymentAttachmentSchema } from '@shared/schema';
-import { ObjectStorageService } from '../../replit_integrations/object_storage';
 import { authenticateToken } from '../../middleware/auth';
 import { requirePermission } from '../../middleware/requirePermission';
+import {
+  getFileStorageProvider,
+  getFileStorageProviderForObjectPath,
+  getStorageErrorResponse,
+} from '../services/fileStorageProvider';
 
 const router = express.Router();
-const objectStorageService = new ObjectStorageService();
 
 router.use(authenticateToken);
 router.use(requirePermission('finance.view'));
@@ -28,10 +31,9 @@ router.get('/download/:attachmentId', async (req, res) => {
 
     if (normalizedPath && normalizedPath.startsWith('/objects/')) {
       try {
-        const objectFile = await objectStorageService.getObjectEntityFile(normalizedPath);
         res.setHeader('Content-Disposition', `inline; filename="${attachment.fileName}"`);
         res.setHeader('Content-Type', 'application/pdf');
-        await objectStorageService.downloadObject(objectFile, res);
+        await getFileStorageProviderForObjectPath(normalizedPath).downloadObject(normalizedPath, res);
       } catch (cloudError) {
         console.error('Error fetching from cloud storage:', cloudError);
         res.status(404).json({ error: 'File not found in storage' });
@@ -66,13 +68,22 @@ router.post('/request-upload-url', requirePermission('finance.manage_payments'),
       return res.status(400).json({ error: 'Missing required fields: name, paymentId' });
     }
 
-    const uploadURL = await objectStorageService.getObjectEntityUploadURL();
-    const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
+    const uploadTarget = await getFileStorageProvider().createUploadTarget({
+      fileName: name,
+      contentType: 'application/pdf',
+      scope: 'ar-payment-attachments',
+      entityId: paymentId,
+    });
 
-    res.json({ uploadURL, objectPath });
+    res.json({
+      uploadURL: uploadTarget.uploadURL,
+      objectPath: uploadTarget.objectPath,
+      provider: uploadTarget.provider,
+    });
   } catch (error) {
-    console.error('Error generating upload URL for AR payment attachment:', error);
-    res.status(500).json({ error: 'Failed to generate upload URL' });
+    const { status, reason, message } = getStorageErrorResponse(error);
+    console.error('Error generating upload URL for AR payment attachment:', { status, reason, message });
+    res.status(status).json({ error: 'Failed to generate upload URL', reason, details: message });
   }
 });
 
@@ -93,10 +104,10 @@ router.post('/complete-upload', requirePermission('finance.manage_payments'), as
     }
 
     try {
-      await objectStorageService.trySetObjectEntityAclPolicy(objectPath, {
-        owner: user?.id?.toString() || 'system',
-        visibility: 'public',
-      });
+      await getFileStorageProviderForObjectPath(objectPath).setPublicReadPolicy(
+        objectPath,
+        user?.id?.toString() || 'system',
+      );
     } catch (aclError) {
       console.warn('Failed to set ACL policy for AR payment attachment:', aclError);
     }

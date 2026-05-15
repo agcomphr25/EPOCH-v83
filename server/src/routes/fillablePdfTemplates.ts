@@ -23,6 +23,11 @@ import {
 } from '../../services/templatePdfService';
 import { FillableFieldDef } from '../../schema';
 import { getCurrentEnvironment } from '../../utils/magicLink';
+import {
+  getFileStorageProvider,
+  getFileStorageProviderForObjectPath,
+  isSupabaseObjectPath,
+} from '../services/fileStorageProvider';
 
 const router = express.Router();
 
@@ -184,13 +189,10 @@ router.get('/:id/pdf', async (req: Request, res: Response) => {
     
     const pdfPath = template.templatePdfPath;
     
-    // Check if path is object storage (starts with /objects/)
-    if (pdfPath.startsWith('/objects/')) {
+    // Check if path is cloud object storage.
+    if (pdfPath.startsWith('/objects/') || isSupabaseObjectPath(pdfPath)) {
       try {
-        const { ObjectStorageService } = await import('../../replit_integrations/object_storage');
-        const objectStorageService = new ObjectStorageService();
-        const objectFile = await objectStorageService.getObjectEntityFile(pdfPath);
-        await objectStorageService.downloadObject(objectFile, res);
+        await getFileStorageProviderForObjectPath(pdfPath).downloadObject(pdfPath, res);
         return;
       } catch (error: any) {
         console.error('[API] Object storage error:', error);
@@ -253,14 +255,13 @@ router.post('/', upload.single('templatePdf'), async (req: Request, res: Respons
     // Upload PDF to object storage for persistence across deployments
     let templatePdfPath: string;
     try {
-      const { ObjectStorageService } = await import('../../replit_integrations/object_storage');
-      const objectStorageService = new ObjectStorageService();
       const fileBuffer = fs.readFileSync(req.file.path);
-      templatePdfPath = await objectStorageService.uploadBuffer(
-        fileBuffer, 
-        req.file.originalname, 
-        'application/pdf'
-      );
+      templatePdfPath = await getFileStorageProvider().uploadBuffer({
+        buffer: fileBuffer,
+        fileName: req.file.originalname,
+        contentType: 'application/pdf',
+        scope: 'pdf-templates',
+      });
       console.log(`[API] Uploaded template PDF to object storage: ${templatePdfPath}`);
       // Clean up local file after successful upload
       fs.unlinkSync(req.file.path);
@@ -458,12 +459,10 @@ router.post('/scaffold/create', async (req: Request, res: Response) => {
     if (fs.existsSync(localPath)) {
       console.log('[Scaffold Create] Reading PDF from local path:', localPath);
       pdfBuffer = fs.readFileSync(localPath);
-    } else if (normalizedCloudPath.startsWith('/objects/')) {
+    } else if (normalizedCloudPath.startsWith('/objects/') || isSupabaseObjectPath(normalizedCloudPath)) {
       // Try object storage for cloud-stored files
       console.log('[Scaffold Create] Reading PDF from object storage:', normalizedCloudPath);
-      const { ObjectStorageService } = await import('../../replit_integrations/object_storage');
-      const objectStorage = new ObjectStorageService();
-      pdfBuffer = await objectStorage.downloadAsBuffer(normalizedCloudPath);
+      pdfBuffer = await getFileStorageProviderForObjectPath(normalizedCloudPath).downloadBuffer(normalizedCloudPath);
     } else {
       return res.status(404).json({ error: `PDF file not found: ${storagePath}` });
     }
@@ -473,7 +472,7 @@ router.post('/scaffold/create', async (req: Request, res: Response) => {
     // This ensures the template works in production where filesystem doesn't persist
     let templatePdfPath: string;
     
-    if (normalizedCloudPath.startsWith('/objects/')) {
+    if (normalizedCloudPath.startsWith('/objects/') || isSupabaseObjectPath(normalizedCloudPath)) {
       // Source is in object storage - use it directly
       console.log('[Scaffold Create] Using object storage path directly:', normalizedCloudPath);
       templatePdfPath = normalizedCloudPath;

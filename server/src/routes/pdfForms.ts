@@ -3,11 +3,13 @@ import multer from 'multer';
 import { db } from '../../db';
 import { pdfFormTemplates, pdfFormFields } from '../../schema';
 import { eq, desc, asc } from 'drizzle-orm';
-import { ObjectStorageService } from '../../replit_integrations/object_storage/objectStorage';
+import {
+  getFileStorageProvider,
+  getFileStorageProviderForObjectPath,
+} from '../services/fileStorageProvider';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
 const router = Router();
-const objectStorage = new ObjectStorageService();
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -60,7 +62,13 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 
     const buffer = req.file.buffer;
     const pageDimensions = await getPdfPageDimensions(buffer);
-    const storagePath = await objectStorage.uploadBuffer(buffer, req.file.originalname, 'application/pdf', 'pdf-forms');
+    const provider = getFileStorageProvider();
+    const storagePath = await provider.uploadBuffer({
+      buffer,
+      fileName: req.file.originalname,
+      contentType: 'application/pdf',
+      scope: 'pdf-forms',
+    });
 
     let template;
     try {
@@ -76,17 +84,11 @@ router.post('/upload', upload.single('file'), async (req, res) => {
       template = inserted;
     } catch (dbErr) {
       // Clean up the uploaded file so it does not become orphaned
-      try { await objectStorage.deleteByStoragePath(storagePath); } catch { /* best effort */ }
+      try { await getFileStorageProviderForObjectPath(storagePath).deleteObject(storagePath); } catch { /* best effort */ }
       throw dbErr;
     }
 
-    let pdfUrl: string | null = null;
-    try {
-      const file = await objectStorage.getObjectEntityFile(storagePath);
-      pdfUrl = await objectStorage.getObjectEntityDownloadURL(file, 3600);
-    } catch {
-      pdfUrl = null;
-    }
+    const pdfUrl = `/api/pdf-forms/${template.id}/pdf`;
 
     res.status(201).json({ ...template, pdfUrl });
   } catch (err) {
@@ -126,13 +128,7 @@ router.get('/:id', async (req, res) => {
       .where(eq(pdfFormFields.templateId, id))
       .orderBy(asc(pdfFormFields.pageIndex), asc(pdfFormFields.id));
 
-    let pdfUrl: string | null = null;
-    try {
-      const file = await objectStorage.getObjectEntityFile(template.storagePath);
-      pdfUrl = await objectStorage.getObjectEntityDownloadURL(file, 3600);
-    } catch (e) {
-      console.warn('[pdfForms] Could not get signed URL for template', id, e);
-    }
+    const pdfUrl = `/api/pdf-forms/${id}/pdf`;
 
     res.json({ ...template, fields, pdfUrl });
   } catch (err) {
@@ -153,10 +149,9 @@ router.get('/:id/pdf', async (req, res) => {
 
     if (!template) return res.status(404).json({ error: 'Template not found' });
 
-    const file = await objectStorage.getObjectEntityFile(template.storagePath);
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Access-Control-Allow-Origin', '*');
-    await objectStorage.downloadObject(file, res);
+    await getFileStorageProviderForObjectPath(template.storagePath).downloadObject(template.storagePath, res);
   } catch (err) {
     console.error('[pdfForms] PDF serve error:', err);
     res.status(500).json({ error: errorMessage(err) || 'Failed to serve PDF' });
@@ -246,7 +241,7 @@ router.delete('/:id', async (req, res) => {
     await db.delete(pdfFormTemplates).where(eq(pdfFormTemplates.id, id));
 
     if (template?.storagePath) {
-      await objectStorage.deleteByStoragePath(template.storagePath);
+      await getFileStorageProviderForObjectPath(template.storagePath).deleteObject(template.storagePath);
     }
 
     res.json({ success: true });
@@ -271,7 +266,7 @@ router.post('/:id/download-filled', async (req, res) => {
 
     const fields = await db.select().from(pdfFormFields).where(eq(pdfFormFields.templateId, id));
 
-    const pdfBuffer = await objectStorage.downloadAsBuffer(template.storagePath);
+    const pdfBuffer = await getFileStorageProviderForObjectPath(template.storagePath).downloadBuffer(template.storagePath);
     const pdfDoc = await PDFDocument.load(pdfBuffer);
     const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const pages = pdfDoc.getPages();

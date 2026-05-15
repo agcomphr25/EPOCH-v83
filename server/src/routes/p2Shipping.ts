@@ -22,12 +22,28 @@ import {
 } from '../services/certPackageService';
 import { recordAuditEvent } from '../services/auditLedgerService';
 import multer from 'multer';
-import { ObjectStorageService } from '../../replit_integrations/object_storage/objectStorage';
+import {
+  getFileStorageProvider,
+  getFileStorageProviderForObjectPath,
+} from '../services/fileStorageProvider';
 
 const upload = multer({ storage: multer.memoryStorage() });
-const objectStorageService = new ObjectStorageService();
 
 const router = Router();
+
+async function uploadP2EvidenceFile(file: Express.Multer.File, scope: string, entityId?: string): Promise<string> {
+  return getFileStorageProvider().uploadBuffer({
+    buffer: file.buffer,
+    fileName: file.originalname,
+    contentType: file.mimetype || 'application/octet-stream',
+    scope,
+    entityId,
+  });
+}
+
+async function downloadStoredBuffer(storagePath: string): Promise<Buffer> {
+  return getFileStorageProviderForObjectPath(storagePath).downloadBuffer(storagePath);
+}
 
 function auditActor(req: Request) {
   const user = (req as any).user;
@@ -787,11 +803,13 @@ router.post('/packing-slips/:id/attach-pdf', authenticateToken, requirePermissio
       return res.status(400).json({ error: 'Only PDF files are accepted' });
     }
 
-    const storagePath = await objectStorageService.uploadBuffer(
-      req.file.buffer,
-      `packing-slip-${slip.packingSlipNumber}-external.pdf`,
-      'application/pdf'
-    );
+    const storagePath = await getFileStorageProvider().uploadBuffer({
+      buffer: req.file.buffer,
+      fileName: `packing-slip-${slip.packingSlipNumber}-external.pdf`,
+      contentType: 'application/pdf',
+      scope: 'p2-packing-slip-external',
+      entityId: slip.id,
+    });
 
     const [updated] = await db
       .update(p2PackingSlips)
@@ -1463,11 +1481,7 @@ router.post('/shipments/:lotId/upload-bol', authenticateToken, requirePermission
     const { lotId } = req.params;
     if (!req.file) return res.status(400).json({ error: 'No file provided' });
 
-    const storagePath = await objectStorageService.uploadBuffer(
-      req.file.buffer,
-      req.file.originalname,
-      req.file.mimetype
-    );
+    const storagePath = await uploadP2EvidenceFile(req.file, 'p2-bill-of-lading', lotId);
 
     await pool.query(
       `UPDATE p2_lot_numbers SET bill_of_lading_url = $1, updated_at = NOW() WHERE id = $2`,
@@ -1491,7 +1505,7 @@ router.get('/shipments/:lotId/bill-of-lading', async (req: Request, res: Respons
     const bolUrl = rows[0]?.bill_of_lading_url;
     if (!bolUrl) return res.status(404).json({ error: 'No bill of lading attached' });
 
-    const buffer = await objectStorageService.downloadAsBuffer(bolUrl);
+    const buffer = await downloadStoredBuffer(bolUrl);
     const ext = bolUrl.split('.').pop()?.toLowerCase();
     const contentType = ext === 'pdf' ? 'application/pdf'
       : (ext === 'png' ? 'image/png' : (ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 'application/octet-stream'));
@@ -1510,11 +1524,7 @@ router.post('/shipments/:lotId/upload-lot-validation-report', authenticateToken,
     const { lotId } = req.params;
     if (!req.file) return res.status(400).json({ error: 'No file provided' });
 
-    const storagePath = await objectStorageService.uploadBuffer(
-      req.file.buffer,
-      req.file.originalname,
-      req.file.mimetype
-    );
+    const storagePath = await uploadP2EvidenceFile(req.file, 'p2-lot-validation-report', lotId);
 
     await pool.query(
       `UPDATE p2_lot_numbers SET lot_validation_report_url = $1, updated_at = NOW() WHERE id = $2`,
@@ -1538,7 +1548,7 @@ router.get('/shipments/:lotId/lot-validation-report', async (req: Request, res: 
     const fileUrl = rows[0]?.lot_validation_report_url;
     if (!fileUrl) return res.status(404).json({ error: 'No lot validation report attached' });
 
-    const buffer = await objectStorageService.downloadAsBuffer(fileUrl);
+    const buffer = await downloadStoredBuffer(fileUrl);
     const ext = fileUrl.split('.').pop()?.toLowerCase();
     const contentType = ext === 'pdf' ? 'application/pdf'
       : (ext === 'png' ? 'image/png' : (ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 'application/octet-stream'));
@@ -1557,11 +1567,7 @@ router.post('/shipments/:lotId/upload-packing-slip', authenticateToken, requireP
     const { lotId } = req.params;
     if (!req.file) return res.status(400).json({ error: 'No file provided' });
 
-    const storagePath = await objectStorageService.uploadBuffer(
-      req.file.buffer,
-      req.file.originalname,
-      req.file.mimetype
-    );
+    const storagePath = await uploadP2EvidenceFile(req.file, 'p2-packing-slip-upload', lotId);
 
     await pool.query(
       `UPDATE p2_lot_numbers SET packing_slip_upload_url = $1, updated_at = NOW() WHERE id = $2`,
@@ -1585,7 +1591,7 @@ router.get('/shipments/:lotId/packing-slip-upload', async (req: Request, res: Re
     const fileUrl = rows[0]?.packing_slip_upload_url;
     if (!fileUrl) return res.status(404).json({ error: 'No packing slip upload attached' });
 
-    const buffer = await objectStorageService.downloadAsBuffer(fileUrl);
+    const buffer = await downloadStoredBuffer(fileUrl);
     const ext = fileUrl.split('.').pop()?.toLowerCase();
     const contentType = ext === 'pdf' ? 'application/pdf'
       : (ext === 'png' ? 'image/png' : (ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 'application/octet-stream'));
@@ -1604,11 +1610,7 @@ router.post('/shipments/:lotId/upload-certificate', authenticateToken, requirePe
     const { lotId } = req.params;
     if (!req.file) return res.status(400).json({ error: 'No file provided' });
 
-    const storagePath = await objectStorageService.uploadBuffer(
-      req.file.buffer,
-      req.file.originalname,
-      req.file.mimetype
-    );
+    const storagePath = await uploadP2EvidenceFile(req.file, 'p2-certificate-upload', lotId);
 
     await pool.query(
       `UPDATE p2_lot_numbers SET certificate_upload_url = $1, updated_at = NOW() WHERE id = $2`,
@@ -1632,7 +1634,7 @@ router.get('/shipments/:lotId/certificate-upload', async (req: Request, res: Res
     const fileUrl = rows[0]?.certificate_upload_url;
     if (!fileUrl) return res.status(404).json({ error: 'No certificate upload attached' });
 
-    const buffer = await objectStorageService.downloadAsBuffer(fileUrl);
+    const buffer = await downloadStoredBuffer(fileUrl);
     const ext = fileUrl.split('.').pop()?.toLowerCase();
     const contentType = ext === 'pdf' ? 'application/pdf'
       : (ext === 'png' ? 'image/png' : (ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 'application/octet-stream'));

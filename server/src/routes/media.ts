@@ -6,10 +6,14 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { randomUUID } from 'crypto';
-import { ObjectStorageService, ObjectNotFoundError } from '../../replit_integrations/object_storage';
+import { ObjectNotFoundError } from '../../replit_integrations/object_storage';
+import {
+  getFileStorageProvider,
+  getFileStorageProviderForObjectPath,
+  getStorageErrorResponse,
+} from '../services/fileStorageProvider';
 
 const router = Router();
-const objectStorageService = new ObjectStorageService();
 
 // Configure multer for temporary file uploads (will be moved to cloud storage)
 const storage = multer.diskStorage({
@@ -62,17 +66,22 @@ router.post('/request-upload-url', async (req, res) => {
       return res.status(400).json({ error: 'Missing required field: name' });
     }
 
-    const uploadURL = await objectStorageService.getObjectEntityUploadURL();
-    const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
+    const uploadTarget = await getFileStorageProvider().createUploadTarget({
+      fileName: name,
+      contentType,
+      scope: 'media-library',
+    });
 
     res.json({
-      uploadURL,
-      objectPath,
+      uploadURL: uploadTarget.uploadURL,
+      objectPath: uploadTarget.objectPath,
+      provider: uploadTarget.provider,
       metadata: { name, size, contentType },
     });
   } catch (error) {
-    console.error('Error generating upload URL:', error);
-    res.status(500).json({ error: 'Failed to generate upload URL' });
+    const { status, reason, message } = getStorageErrorResponse(error);
+    console.error('Error generating upload URL:', { status, reason, message });
+    res.status(status).json({ error: 'Failed to generate upload URL', reason, details: message });
   }
 });
 
@@ -90,10 +99,10 @@ router.post('/complete-upload', async (req, res) => {
 
     // Set ACL policy for the uploaded object (make it publicly readable)
     try {
-      await objectStorageService.trySetObjectEntityAclPolicy(objectPath, {
-        owner: user?.id?.toString() || 'system',
-        visibility: 'public',
-      });
+      await getFileStorageProviderForObjectPath(objectPath).setPublicReadPolicy(
+        objectPath,
+        user?.id?.toString() || 'system',
+      );
     } catch (aclError) {
       console.warn('Failed to set ACL policy:', aclError);
       // Continue even if ACL fails - file is still accessible
@@ -338,14 +347,13 @@ router.get('/file/:filename', async (req, res) => {
       if (record.storage_path.startsWith('/objects/') || record.storage_path.startsWith('objects/')) {
         const objectPath = record.storage_path.startsWith('/') ? record.storage_path : `/${record.storage_path}`;
         try {
-          const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
           if (record.mime_type) {
             res.setHeader('Content-Type', record.mime_type);
           }
           if (record.filename) {
             res.setHeader('Content-Disposition', `inline; filename="${record.filename}"`);
           }
-          return await objectStorageService.downloadObject(objectFile, res);
+          return await getFileStorageProviderForObjectPath(objectPath).downloadObject(objectPath, res);
         } catch (objError) {
           console.error('Cloud storage file not found:', objError);
         }
@@ -365,8 +373,7 @@ router.get('/file/:filename', async (req, res) => {
 router.get('/cloud/:path(*)', async (req, res) => {
   try {
     const objectPath = `/objects/${req.params.path}`;
-    const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
-    await objectStorageService.downloadObject(objectFile, res);
+    await getFileStorageProviderForObjectPath(objectPath).downloadObject(objectPath, res);
   } catch (error) {
     console.error('Error serving cloud file:', error);
     if (error instanceof ObjectNotFoundError) {
@@ -522,10 +529,9 @@ router.get('/:id/download', async (req, res) => {
     if (storagePath && (storagePath.startsWith('/objects/') || storagePath.startsWith('objects/'))) {
       const objectPath = storagePath.startsWith('/') ? storagePath : `/${storagePath}`;
       try {
-        const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
         if (media.mimeType) res.setHeader('Content-Type', media.mimeType);
         res.setHeader('Content-Disposition', `inline; filename="${media.filename || 'file'}"`);
-        return await objectStorageService.downloadObject(objectFile, res);
+        return await getFileStorageProviderForObjectPath(objectPath).downloadObject(objectPath, res);
       } catch (objError) {
         console.error('Cloud storage download failed:', objError);
       }

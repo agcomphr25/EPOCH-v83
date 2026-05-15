@@ -20,12 +20,11 @@ import { authenticateToken } from '../../middleware/auth';
 import { requirePermission } from '../../middleware/requirePermission';
 import { generateArInvoicePdf } from '../../utils/pdf/arInvoicePdf';
 import { sendEmailViaSendGrid } from '../../utils/sendgrid';
-import { ObjectStorageService } from '../../replit_integrations/object_storage';
 import { createInvoiceFromPackingSlip } from '../services/invoiceFromPackingSlip';
 import { assertPostingAllowedForPeriod } from '../services/accountingPeriodService';
+import { getFileStorageProviderForObjectPath } from '../services/fileStorageProvider';
 
 const LOCKED_STATUSES = ['POSTED', 'SENT', 'VOID', 'PAID'];
-const objectStorageService = new ObjectStorageService();
 
 const REQUIRED_P2_INVOICE_COLUMNS = [
   'ar_invoices.discount_amount',
@@ -1044,7 +1043,7 @@ async function getMediaEmailAttachments(entityRefs: Array<{ entityType: string; 
 
     for (const row of rows) {
       try {
-        const buffer = await objectStorageService.downloadAsBuffer(row.media.storagePath);
+        const buffer = await getFileStorageProviderForObjectPath(row.media.storagePath).downloadBuffer(row.media.storagePath);
         attachments.push({
           content: buffer.toString('base64'),
           filename: row.media.filename,
@@ -1083,7 +1082,7 @@ async function getLotFileAttachments(lotId: string | null) {
   const attachments: Array<{ content: string; filename: string; type?: string; disposition?: string }> = [];
   for (const doc of docs) {
     try {
-      const buffer = await objectStorageService.downloadAsBuffer(doc.path!);
+      const buffer = await getFileStorageProviderForObjectPath(doc.path!).downloadBuffer(doc.path!);
       attachments.push({
         content: buffer.toString('base64'),
         filename: `${lot.lotNumber}-${doc.label}.pdf`,

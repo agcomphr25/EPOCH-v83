@@ -17,15 +17,17 @@ import * as path from 'path';
 import { PDFDocument, StandardFonts, rgb, PDFPage, PDFImage } from 'pdf-lib';
 import { pool } from '../../db';
 import { randomUUID } from 'crypto';
-import { ObjectStorageService } from '../../replit_integrations/object_storage';
+import {
+  getFileStorageProvider,
+  getFileStorageProviderForObjectPath,
+  isSupabaseObjectPath,
+} from './fileStorageProvider';
 
 const BUNDLES_DIR = path.join(process.cwd(), 'uploads', 'onboarding-bundles');
 
 if (!fs.existsSync(BUNDLES_DIR)) {
   fs.mkdirSync(BUNDLES_DIR, { recursive: true });
 }
-
-const objectStorageService = new ObjectStorageService();
 
 interface OnboardingSession {
   id: string;
@@ -223,22 +225,13 @@ export async function generateOnboardingBundle(sessionId: string): Promise<Bundl
     let downloadUrl: string;
     
     try {
-      const uploadUrl = await objectStorageService.getObjectEntityUploadURL();
-      storagePath = objectStorageService.normalizeObjectEntityPath(uploadUrl);
-      
-      // Upload the file
-      await fetch(uploadUrl, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/pdf' },
-        body: pdfBytes,
+      storagePath = await getFileStorageProvider().uploadBuffer({
+        buffer: Buffer.from(pdfBytes),
+        fileName: bundleFilename,
+        contentType: 'application/pdf',
+        scope: 'onboarding-bundles',
+        entityId: sessionId,
       });
-      
-      // Set public access
-      await objectStorageService.trySetObjectEntityAclPolicy(storagePath, {
-        owner: 'system',
-        visibility: 'public',
-      });
-      
       // Download URL will be set after media item is created
       downloadUrl = storagePath;
     } catch (uploadError) {
@@ -531,11 +524,8 @@ async function addCapturePage(
           } else {
             throw new Error('Local file not found');
           }
-        } else if (normalizedPath.startsWith('/objects/')) {
-          // Download from object storage using the file object
-          const objectFile = await objectStorageService.getObjectEntityFile(normalizedPath);
-          const [buffer] = await objectFile.download();
-          imageBytes = buffer;
+        } else if (normalizedPath.startsWith('/objects/') || isSupabaseObjectPath(normalizedPath)) {
+          imageBytes = await getFileStorageProviderForObjectPath(normalizedPath).downloadBuffer(normalizedPath);
         } else {
           // Try as local path
           const localPath = path.join(process.cwd(), capture.storagePath);

@@ -213,6 +213,11 @@ import financialReviewRoutes from './financialReview';
 import quickNotesRoutes from './quickNotes';
 import governanceRoutes from './governance';
 import { requireExecutiveAccess } from '../middleware/requireExecutiveAccess';
+import {
+  getFileStorageProvider,
+  getFileStorageProviderForObjectPath,
+  getStorageErrorResponse,
+} from '../services/fileStorageProvider';
 import cncDashboardRoutes from './cncDashboard';
 import receivingRoutes from './receiving';
 import estimatingRoutes from './estimating';
@@ -878,31 +883,19 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     app.post('/api/object-storage/upload', authenticateToken, cncUpload.single('file'), async (req: any, res: any) => {
       try {
         if (!req.file) return res.status(400).json({ error: 'No file received' });
-        const { ObjectStorageService } = await import('../../replit_integrations/object_storage');
-        const svc = new ObjectStorageService();
-        // Get a signed GCS PUT URL
-        const uploadURL = await svc.getObjectEntityUploadURL();
-        // Upload the buffer directly to GCS via the signed URL
-        const putRes = await fetch(uploadURL, {
-          method: 'PUT',
-          headers: { 'Content-Type': req.file.mimetype || 'application/octet-stream' },
-          body: req.file.buffer,
+        const provider = getFileStorageProvider();
+        const objectPath = await provider.uploadBuffer({
+          buffer: req.file.buffer,
+          fileName: req.file.originalname || req.file.filename || 'upload',
+          contentType: req.file.mimetype || 'application/octet-stream',
+          scope: 'cnc-dashboard',
         });
-        if (!putRes.ok) {
-          throw new Error(`GCS PUT failed: ${putRes.status} ${putRes.statusText}`);
-        }
-        // Normalize to /objects/... path
-        const objectPath = svc.normalizeObjectEntityPath(uploadURL);
-        // Make it publicly readable
         try {
-          await svc.trySetObjectEntityAclPolicy(objectPath, {
-            owner: String(req.user?.id ?? 'system'),
-            visibility: 'public',
-          });
+          await provider.setPublicReadPolicy(objectPath, String(req.user?.id ?? 'system'));
         } catch (aclErr) {
           console.warn('[CNC Upload] ACL set failed (non-fatal):', aclErr);
         }
-        res.json({ url: objectPath, key: objectPath });
+        res.json({ url: objectPath, key: objectPath, provider: provider.name });
       } catch (err: any) {
         console.error('[CNC Upload] Error:', err);
         res.status(500).json({ error: err.message || 'Upload failed' });
@@ -7122,22 +7115,25 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
       console.log(`📎 Requesting upload URL for PO ${id}: ${name}`);
 
-      const { ObjectStorageService } = await import('../../replit_integrations/object_storage');
-      const objectStorageService = new ObjectStorageService();
-      
-      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
-      const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
+      const uploadTarget = await getFileStorageProvider().createUploadTarget({
+        fileName: name,
+        contentType,
+        scope: 'po-attachments',
+        entityId: id,
+      });
 
-      console.log(`📎 Generated upload URL for ${name}, objectPath: ${objectPath}`);
+      console.log(`📎 Generated upload URL for ${name}, objectPath: ${uploadTarget.objectPath}`);
 
       res.json({
-        uploadURL,
-        objectPath,
+        uploadURL: uploadTarget.uploadURL,
+        objectPath: uploadTarget.objectPath,
+        provider: uploadTarget.provider,
         metadata: { name, size, contentType, poId: id },
       });
     } catch (error: any) {
-      console.error('Error generating PO attachment upload URL:', error);
-      res.status(500).json({ error: 'Failed to generate upload URL' });
+      const { status, reason, message } = getStorageErrorResponse(error);
+      console.error('Error generating PO attachment upload URL:', { status, reason, message });
+      res.status(status).json({ error: 'Failed to generate upload URL', reason, details: message });
     }
   });
 
@@ -7157,15 +7153,13 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       console.log(`📎 Completing PO attachment upload for PO ${poId}: ${originalFileName}`);
 
       const { storage } = await import('../../storage');
-      const { ObjectStorageService } = await import('../../replit_integrations/object_storage');
-      const objectStorageService = new ObjectStorageService();
 
       // Set ACL policy to make file accessible
       try {
-        await objectStorageService.trySetObjectEntityAclPolicy(objectPath, {
-          owner: user?.id?.toString() || 'system',
-          visibility: 'public',
-        });
+        await getFileStorageProviderForObjectPath(objectPath).setPublicReadPolicy(
+          objectPath,
+          user?.id?.toString() || 'system',
+        );
         console.log('📎 ACL policy set successfully for:', objectPath);
       } catch (aclError) {
         console.warn('📎 Failed to set ACL policy for PO attachment:', aclError);
@@ -7249,10 +7243,13 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       
       // Optionally delete from object storage
       try {
-        const { ObjectStorageService } = await import('../../replit_integrations/object_storage');
-        const objectStorageService = new ObjectStorageService();
-        await objectStorageService.deleteObject(attachmentToDelete.filePath);
-        console.log('📎 Deleted file from storage:', attachmentToDelete.filePath);
+        const normalizedPath = attachmentToDelete.filePath?.startsWith('objects/')
+          ? `/${attachmentToDelete.filePath}`
+          : attachmentToDelete.filePath;
+        if (normalizedPath) {
+          await getFileStorageProviderForObjectPath(normalizedPath).deleteObject(normalizedPath);
+          console.log('📎 Deleted file from storage:', attachmentToDelete.filePath);
+        }
       } catch (storageError) {
         console.warn('📎 Failed to delete file from storage (may not exist):', storageError);
       }
@@ -7287,9 +7284,6 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         return res.status(404).json({ error: 'Attachment not found' });
       }
 
-      const { ObjectStorageService } = await import('../../replit_integrations/object_storage');
-      const objectStorageService = new ObjectStorageService();
-
       const forceDownload = req.query.download === 'true';
 
       const normalizedPath = attachment.filePath?.startsWith('objects/')
@@ -7300,15 +7294,13 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         return res.status(404).json({ error: 'File not found in cloud storage' });
       }
 
-      const objectFile = await objectStorageService.getObjectEntityFile(normalizedPath);
-
       if (forceDownload) {
         res.setHeader('Content-Disposition', `attachment; filename="${attachment.originalFileName}"`);
       } else {
         res.setHeader('Content-Disposition', `inline; filename="${attachment.originalFileName}"`);
       }
 
-      await objectStorageService.downloadObject(objectFile, res);
+      await getFileStorageProviderForObjectPath(normalizedPath).downloadObject(normalizedPath, res);
     } catch (error: any) {
       console.error('Error downloading PO attachment:', error);
       res.status(500).json({ error: 'Failed to download attachment' });

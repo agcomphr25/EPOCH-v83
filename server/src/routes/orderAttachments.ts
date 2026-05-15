@@ -1,5 +1,7 @@
 import express from 'express';
+import crypto from 'crypto';
 import fs from 'fs';
+import multer from 'multer';
 import path from 'path';
 import { storage } from '../../storage';
 import { insertOrderAttachmentSchema } from '@shared/schema';
@@ -12,6 +14,47 @@ import {
 } from '../services/fileStorageProvider';
 
 const router = express.Router();
+const localOrderAttachmentsDir = path.join(process.cwd(), 'uploads', 'order-attachments');
+
+if (!fs.existsSync(localOrderAttachmentsDir)) {
+  fs.mkdirSync(localOrderAttachmentsDir, { recursive: true });
+}
+
+const localOrderAttachmentUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, localOrderAttachmentsDir),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      const safeBase = path
+        .basename(file.originalname, ext)
+        .replace(/[^a-zA-Z0-9_-]/g, '_')
+        .slice(0, 90);
+      cb(null, `${Date.now()}_${crypto.randomBytes(8).toString('hex')}_${safeBase}${ext}`);
+    },
+  }),
+  limits: { fileSize: 10 * 1024 * 1024, files: 10 },
+  fileFilter: (_req, file, cb) => {
+    const allowedTypes = new Set([
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'image/gif',
+      'text/plain',
+    ]);
+
+    if (allowedTypes.has(file.mimetype)) {
+      cb(null, true);
+      return;
+    }
+
+    cb(new Error('Unsupported file type. Upload PDF, Word, Excel, image, or text files.'));
+  },
+});
 
 function normalizeObjectPath(filePath: string | null | undefined) {
   return filePath?.startsWith('objects/') ? `/${filePath}` : filePath;
@@ -79,6 +122,57 @@ router.post('/request-upload-url', async (req, res) => {
       reason,
       details: message,
     });
+  }
+});
+
+// POST /api/order-attachments/local-upload - Fallback for environments where object URL signing is unavailable.
+router.post('/local-upload', localOrderAttachmentUpload.array('files', 10), async (req, res) => {
+  const files = (req.files ?? []) as Express.Multer.File[];
+  try {
+    const { orderId, notes } = req.body;
+    const user = (req as any).user;
+
+    if (!orderId) {
+      return res.status(400).json({ error: 'Missing required field: orderId' });
+    }
+    if (!files.length) {
+      return res.status(400).json({ error: 'No files uploaded' });
+    }
+
+    const attachments = [];
+    for (const file of files) {
+      const attachmentData = {
+        orderId,
+        fileName: file.filename,
+        originalFileName: file.originalname,
+        fileSize: file.size,
+        mimeType: file.mimetype || 'application/octet-stream',
+        filePath: file.path,
+        uploadedBy: user?.username || null,
+        notes: notes || null,
+      };
+
+      const validatedData = insertOrderAttachmentSchema.parse(attachmentData);
+      const attachment = await storage.createOrderAttachment(validatedData);
+      attachments.push(attachment);
+    }
+
+    console.warn('[order-attachments/local-upload] Used local upload fallback', {
+      orderId,
+      fileCount: attachments.length,
+      reason: 'object_storage_signing_unavailable',
+    });
+
+    res.status(201).json({ attachments, fallback: 'local' });
+  } catch (error) {
+    for (const file of files) {
+      const resolvedPath = path.resolve(file.path);
+      if (resolvedPath.startsWith(path.resolve(localOrderAttachmentsDir)) && fs.existsSync(resolvedPath)) {
+        fs.unlinkSync(resolvedPath);
+      }
+    }
+    console.error('[order-attachments/local-upload] Failed:', error);
+    res.status(500).json({ error: 'Failed to upload attachments through local fallback' });
   }
 });
 

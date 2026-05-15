@@ -3,6 +3,7 @@ import {
   ShieldCheck, Crown, Bug, BarChart3,
   AlertOctagon, Wrench, Clock, Tags, FileCheck2, Percent, ClipboardCheck,
   ChevronDown, ShoppingCart, Boxes, Fingerprint, BookOpenCheck, UsersRound, UserCheck, ClipboardPenLine, Network,
+  FolderOpen,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -40,6 +41,7 @@ const REPORT_ITEMS: NavItem[] = [
   { label: 'Inventory Trace',   path: '/admin/edri/inventory-traceability', icon: Boxes },
   { label: 'Audit Integrity',   path: '/admin/edri/audit-ledger-integrity', icon: Fingerprint },
   { label: 'Policy Training',   path: '/admin/edri/policy-training-acknowledgment', icon: BookOpenCheck },
+  { label: 'Supporting Docs',   path: '/admin/edri/supporting-docs', icon: FolderOpen },
 ];
 
 export default function EdriSubNav() {

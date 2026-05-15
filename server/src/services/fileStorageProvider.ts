@@ -25,6 +25,7 @@ export interface FileStorageProvider {
   setPublicReadPolicy(objectPath: string, owner?: string): Promise<void>;
   deleteObject(objectPath: string): Promise<void>;
   downloadObject(objectPath: string, res: Response): Promise<void>;
+  downloadBuffer(objectPath: string): Promise<Buffer>;
 }
 
 function sanitizePathSegment(value: string) {
@@ -155,6 +156,10 @@ class ReplitFileStorageProvider implements FileStorageProvider {
     const objectFile = await this.objectStorage.getObjectEntityFile(normalizeLegacyObjectPath(objectPath));
     await this.objectStorage.downloadObject(objectFile, res);
   }
+
+  async downloadBuffer(objectPath: string) {
+    return this.objectStorage.downloadAsBuffer(normalizeLegacyObjectPath(objectPath));
+  }
 }
 
 class SupabaseFileStorageProvider implements FileStorageProvider {
@@ -257,6 +262,24 @@ class SupabaseFileStorageProvider implements FileStorageProvider {
     });
 
     Readable.fromWeb(response.body as any).pipe(res);
+  }
+
+  async downloadBuffer(objectPath: string) {
+    const ref = parseSupabaseObjectPath(objectPath);
+    const response = await fetch(`${this.url}/storage/v1/object/${encodeURIComponent(ref.bucket)}/${ref.path}`, {
+      headers: this.authHeaders(),
+    });
+
+    if (!response.ok) {
+      const status = response.status === 404 ? 404 : 502;
+      throw storageProviderError(
+        response.status === 404 ? 'supabase_object_not_found' : 'supabase_download_failed',
+        `Supabase download failed with status ${response.status}`,
+        status
+      );
+    }
+
+    return Buffer.from(await response.arrayBuffer());
   }
 
   async uploadWithToken(token: string, body: Buffer, contentType?: string) {

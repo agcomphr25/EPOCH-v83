@@ -1,11 +1,15 @@
 import express from 'express';
 import { storage } from '../../storage';
 import { insertProjectStepAttachmentSchema } from '../../schema';
-import { ObjectNotFoundError, ObjectStorageService } from '../../replit_integrations/object_storage';
+import { ObjectNotFoundError } from '../../replit_integrations/object_storage';
 import { sessionAwareAuth } from '../../middleware/auth';
+import {
+  getFileStorageProvider,
+  getFileStorageProviderForObjectPath,
+  getStorageErrorResponse,
+} from '../services/fileStorageProvider';
 
 const router = express.Router();
-const objectStorageService = new ObjectStorageService();
 
 router.get('/by-project/:projectId', sessionAwareAuth, async (req, res) => {
   try {
@@ -60,19 +64,25 @@ router.post('/request-upload-url', sessionAwareAuth, async (req, res) => {
 
     console.log(`📁 Requesting upload URL for project step ${stepId}: ${name}`);
 
-    const uploadURL = await objectStorageService.getObjectEntityUploadURL();
-    const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
+    const uploadTarget = await getFileStorageProvider().createUploadTarget({
+      fileName: name,
+      contentType,
+      scope: 'project-step-attachments',
+      entityId: `${projectId}-${stepId}`,
+    });
 
-    console.log(`📁 Generated upload URL for ${name}, objectPath: ${objectPath}`);
+    console.log(`📁 Generated upload URL for ${name}, objectPath: ${uploadTarget.objectPath}`);
 
     res.json({
-      uploadURL,
-      objectPath,
+      uploadURL: uploadTarget.uploadURL,
+      objectPath: uploadTarget.objectPath,
+      provider: uploadTarget.provider,
       metadata: { name, size, contentType, projectId, stepId },
     });
   } catch (error) {
-    console.error('Error generating upload URL for project step attachment:', error);
-    res.status(500).json({ error: 'Failed to generate upload URL' });
+    const { status, reason, message } = getStorageErrorResponse(error);
+    console.error('Error generating upload URL for project step attachment:', { status, reason, message });
+    res.status(status).json({ error: 'Failed to generate upload URL', reason, details: message });
   }
 });
 
@@ -102,10 +112,10 @@ router.post('/complete-upload', sessionAwareAuth, async (req, res) => {
     console.log(`📁 Completing upload for project step ${stepId}: ${originalFileName}`);
 
     try {
-      await objectStorageService.trySetObjectEntityAclPolicy(objectPath, {
-        owner: user?.id?.toString() || 'system',
-        visibility: 'public',
-      });
+      await getFileStorageProviderForObjectPath(objectPath).setPublicReadPolicy(
+        objectPath,
+        user?.id?.toString() || 'system',
+      );
       console.log('📁 ACL policy set successfully for:', objectPath);
     } catch (aclError) {
       console.warn('📁 Failed to set ACL policy for project step attachment:', aclError);
@@ -181,8 +191,7 @@ router.delete('/:attachmentId', sessionAwareAuth, async (req, res) => {
     
     if (normalizedPath && normalizedPath.startsWith('/objects/')) {
       try {
-        const objectFile = await objectStorageService.getObjectEntityFile(normalizedPath);
-        await objectFile.delete();
+        await getFileStorageProviderForObjectPath(normalizedPath).deleteObject(normalizedPath);
         console.log(`📁 Deleted cloud file: ${normalizedPath}`);
       } catch (deleteError) {
         console.warn('Failed to delete file from cloud storage:', deleteError);
@@ -225,13 +234,10 @@ router.get('/download/:attachmentId', sessionAwareAuth, async (req, res) => {
     
     if (normalizedDownloadPath && normalizedDownloadPath.startsWith('/objects/')) {
       try {
-        const buffer = await objectStorageService.downloadAsBuffer(normalizedDownloadPath);
-
         const disposition = forceDownload ? 'attachment' : 'inline';
         res.setHeader('Content-Disposition', `${disposition}; filename="${encodeURIComponent(attachment.originalFileName)}"`);
         res.setHeader('Content-Type', attachment.mimeType || 'application/octet-stream');
-        res.setHeader('Content-Length', buffer.length);
-        return res.send(buffer);
+        return await getFileStorageProviderForObjectPath(normalizedDownloadPath).downloadObject(normalizedDownloadPath, res);
       } catch (cloudError) {
         console.error('Error downloading from cloud storage:', cloudError);
         if (cloudError instanceof ObjectNotFoundError) {

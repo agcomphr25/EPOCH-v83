@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { storage } from '../../storage';
 import { pool } from '../../db';
 import { requirePermission } from '../../middleware/requirePermission';
-import { ObjectStorageService } from '../../replit_integrations/object_storage';
+import { getFileStorageProviderForObjectPath } from '../services/fileStorageProvider';
 import {
   insertCncScheduleSettingsSchema,
   insertCncMachineSchema,
@@ -20,7 +20,6 @@ import {
 } from '../../schema';
 
 const router = Router();
-const objectStorageService = new ObjectStorageService();
 
 // ── Work order search (against authoritative all_orders / travelers) ───────────
 
@@ -523,8 +522,7 @@ router.delete('/photos/:id', async (req, res) => {
     if (storageKey) {
       const normalizedPath = storageKey.startsWith('/') ? storageKey : `/${storageKey}`;
       try {
-        const objectFile = await objectStorageService.getObjectEntityFile(normalizedPath);
-        await objectFile.delete();
+        await getFileStorageProviderForObjectPath(normalizedPath).deleteObject(normalizedPath);
       } catch (storageErr: unknown) {
         console.warn('[CNC] Failed to delete photo from object storage:', storageKey, storageErr);
       }

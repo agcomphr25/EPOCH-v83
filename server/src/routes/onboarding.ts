@@ -5,11 +5,12 @@ import crypto from 'crypto';
 import { auditService } from '../services/auditService';
 import { generateOnboardingBundle } from '../services/onboardingPdfBundleService';
 import { sendEmailViaSendGrid } from '../../utils/sendgrid';
-import { ObjectStorageService } from '../../replit_integrations/object_storage';
+import {
+  getFileStorageProviderForObjectPath,
+  isSupabaseObjectPath,
+} from '../services/fileStorageProvider';
 import * as fs from 'fs';
 import * as path from 'path';
-
-const objectStorageService = new ObjectStorageService();
 
 const router = express.Router();
 
@@ -2064,19 +2065,13 @@ router.get('/sessions/:sessionId/documents/:docId/pdf', async (req: Request, res
       return res.status(404).json({ error: 'PDF source not available' });
     }
     
-    // Check if path is object storage (starts with /objects/)
-    if (pdfPath.startsWith('/objects/')) {
+    const normalizedPdfPath = pdfPath.startsWith('objects/') ? `/${pdfPath}` : pdfPath;
+
+    // Check if path is object storage.
+    if (normalizedPdfPath.startsWith('/objects/') || isSupabaseObjectPath(normalizedPdfPath)) {
       try {
-        // DIRECT BYPASS - fetch object and serve raw bytes
-        const { ObjectStorageService } = await import('../../replit_integrations/object_storage');
-        const objectStorageService = new ObjectStorageService();
-        
-        console.log('[Onboarding PDF] DIRECT FETCH - getting object file for path:', pdfPath);
-        const objectFile = await objectStorageService.getObjectEntityFile(pdfPath);
-        console.log('[Onboarding PDF] DIRECT FETCH - objectFile obtained:', objectFile.name);
-        
-        // Download to buffer instead of streaming
-        const [buffer] = await objectFile.download();
+        console.log('[Onboarding PDF] DIRECT FETCH - downloading object path:', normalizedPdfPath);
+        const buffer = await getFileStorageProviderForObjectPath(normalizedPdfPath).downloadBuffer(normalizedPdfPath);
         
         // Log buffer details
         const first20Hex = buffer.slice(0, 20).toString('hex');
@@ -3232,11 +3227,9 @@ router.post('/sessions/:id/email-bundle', async (req: Request, res: Response) =>
         ? `/${session.storagePath}` 
         : session.storagePath;
       
-      if (normalizedBundlePath?.startsWith('/objects/')) {
+      if (normalizedBundlePath && (normalizedBundlePath.startsWith('/objects/') || isSupabaseObjectPath(normalizedBundlePath))) {
         // Download from object storage
-        const objectFile = await objectStorageService.getObjectEntityFile(normalizedBundlePath);
-        const [buffer] = await objectFile.download();
-        pdfBuffer = buffer;
+        pdfBuffer = await getFileStorageProviderForObjectPath(normalizedBundlePath).downloadBuffer(normalizedBundlePath);
       } else if (session.storagePath?.startsWith('uploads/')) {
         // Read from local filesystem
         const localPath = path.join(process.cwd(), session.storagePath);

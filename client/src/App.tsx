@@ -348,6 +348,7 @@ import EdriMissingEvidence from './pages/admin/EdriMissingEvidence';
 import EdriHistory from './pages/admin/EdriHistory';
 import EdriEvidence from './pages/admin/EdriEvidence';
 import EdriSnapshotDetail from './pages/admin/EdriSnapshotDetail';
+import EdriSupportingDocs from './pages/admin/EdriSupportingDocs';
 import DcaaFindings from './pages/admin/DcaaFindings';
 import ChargeCodeUsageReport from './pages/admin/ChargeCodeUsageReport';
 import LaborDistributionReport from './pages/admin/LaborDistributionReport';
@@ -1382,6 +1383,7 @@ function App() {
                   <Route path="/admin/edri/inventory-traceability" component={InventoryTraceabilityReport} />
                   <Route path="/admin/edri/audit-ledger-integrity" component={AuditLedgerIntegrityReport} />
                   <Route path="/admin/edri/policy-training-acknowledgment" component={PolicyTrainingAcknowledgmentReport} />
+                  <Route path="/admin/edri/supporting-docs" component={EdriSupportingDocs} />
                   <Route path="/admin/edri/domain/:domainKey" component={EdriDomainDetail} />
                   <Route path="/admin/edri/snapshot/:snapshotId/evidence/:domainKey" component={EdriEvidence} />
                   <Route path="/admin/edri/snapshot/:snapshotId/evidence" component={EdriEvidence} />

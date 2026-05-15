@@ -1,18 +1,78 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { and, desc, eq, gte, ilike, lte, or, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, ilike, lte, sql } from 'drizzle-orm';
 
 import { db, pool } from '../db';
 import {
   nonconformanceRecords,
   insertNonconformanceRecordSchema,
-  orders,
   allOrders,
   customerAddresses,
 } from '../schema';
 import { recordNcrRepairTransition } from '../src/services/orderActivityService';
 
 const router = Router();
+
+type NcrSelectColumn = {
+  column: string;
+  alias: string;
+  fallback: string;
+};
+
+const ncrSelectColumns: NcrSelectColumn[] = [
+  { column: 'rma_number', alias: 'rmaNumber', fallback: 'NULL' },
+  { column: 'date_received', alias: 'dateReceived', fallback: 'NULL' },
+  { column: 'repair_department', alias: 'repairDepartment', fallback: 'NULL' },
+  { column: 'repair_notes', alias: 'repairNotes', fallback: 'NULL' },
+  { column: 'has_customer_parts_to_return', alias: 'hasCustomerPartsToReturn', fallback: 'FALSE' },
+  { column: 'added_to_rts', alias: 'addedToRts', fallback: 'FALSE' },
+  { column: 'rts_added_at', alias: 'rtsAddedAt', fallback: 'NULL' },
+  { column: 'use_order_address', alias: 'useOrderAddress', fallback: 'FALSE' },
+  { column: 'repair_address', alias: 'repairAddress', fallback: 'NULL' },
+  { column: 'shipping_status', alias: 'shippingStatus', fallback: 'NULL' },
+  { column: 'tracking_number', alias: 'trackingNumber', fallback: 'NULL' },
+  { column: 'shipping_carrier', alias: 'shippingCarrier', fallback: 'NULL' },
+  { column: 'shipped_date', alias: 'shippedDate', fallback: 'NULL' },
+  { column: 'customer_notified', alias: 'customerNotified', fallback: 'FALSE' },
+  { column: 'containment_action', alias: 'containmentAction', fallback: 'NULL' },
+  { column: 'containment_owner', alias: 'containmentOwner', fallback: 'NULL' },
+  { column: 'containment_due_date', alias: 'containmentDueDate', fallback: 'NULL' },
+  { column: 'containment_completed_at', alias: 'containmentCompletedAt', fallback: 'NULL' },
+  { column: 'root_cause', alias: 'rootCause', fallback: 'NULL' },
+  { column: 'root_cause_method', alias: 'rootCauseMethod', fallback: 'NULL' },
+  { column: 'corrective_action', alias: 'correctiveAction', fallback: 'NULL' },
+  { column: 'preventive_action', alias: 'preventiveAction', fallback: 'NULL' },
+  { column: 'capa_required', alias: 'capaRequired', fallback: 'FALSE' },
+  { column: 'capa_id', alias: 'capaId', fallback: 'NULL' },
+  { column: 'disposition_rationale', alias: 'dispositionRationale', fallback: 'NULL' },
+  { column: 'disposition_approved_by_user_id', alias: 'dispositionApprovedByUserId', fallback: 'NULL' },
+  { column: 'disposition_approved_by_display_name', alias: 'dispositionApprovedByDisplayName', fallback: 'NULL' },
+  { column: 'disposition_approved_at', alias: 'dispositionApprovedAt', fallback: 'NULL' },
+  { column: 'effectiveness_review', alias: 'effectivenessReview', fallback: 'NULL' },
+  { column: 'effectiveness_status', alias: 'effectivenessStatus', fallback: "'not_started'" },
+  { column: 'effectiveness_reviewed_by_user_id', alias: 'effectivenessReviewedByUserId', fallback: 'NULL' },
+  { column: 'effectiveness_reviewed_by_display_name', alias: 'effectivenessReviewedByDisplayName', fallback: 'NULL' },
+  { column: 'effectiveness_reviewed_at', alias: 'effectivenessReviewedAt', fallback: 'NULL' },
+  { column: 'recurrence_detected', alias: 'recurrenceDetected', fallback: 'FALSE' },
+];
+
+async function getNonconformanceColumns() {
+  const rows = await pool.query(
+    `
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = current_schema()
+        AND table_name = 'nonconformance_records'
+    `
+  );
+
+  return new Set(rows.map((row: any) => row.column_name));
+}
+
+function ncrSelectExpression(columns: Set<string>, item: NcrSelectColumn) {
+  const expression = columns.has(item.column) ? item.column : item.fallback;
+  return `${expression} as "${item.alias}"`;
+}
 
 // GET /api/nonconformance - List records with filtering
 router.get('/', async (req, res) => {
@@ -60,36 +120,19 @@ router.get('/', async (req, res) => {
     }
 
     const whereClause = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+    const tableColumns = await getNonconformanceColumns();
+    const optionalColumns = ncrSelectColumns
+      .map((item) => ncrSelectExpression(tableColumns, item))
+      .join(',\n        ');
     
     // Use pg Pool directly to avoid Neon HTTP driver issues with non-Neon databases
     const queryText = `
       SELECT 
-        id, rma_number as "rmaNumber", order_id as "orderId", serial_number as "serialNumber",
+        id, ${optionalColumns}, order_id as "orderId", serial_number as "serialNumber",
         customer_name as "customerName", po_number as "poNumber", stock_model as "stockModel",
         quantity, issue_cause as "issueCause", manufacturer_defect as "manufacturerDefect",
         disposition, auth_person as "authorization", disposition_date as "dispositionDate",
-        date_received as "dateReceived", notes, status, resolved_at as "resolvedAt",
-        repair_department as "repairDepartment", repair_notes as "repairNotes",
-        has_customer_parts_to_return as "hasCustomerPartsToReturn",
-        added_to_rts as "addedToRts", rts_added_at as "rtsAddedAt",
-        use_order_address as "useOrderAddress", repair_address as "repairAddress",
-        shipping_status as "shippingStatus", tracking_number as "trackingNumber",
-        shipping_carrier as "shippingCarrier", shipped_date as "shippedDate",
-        customer_notified as "customerNotified",
-        containment_action as "containmentAction", containment_owner as "containmentOwner",
-        containment_due_date as "containmentDueDate", containment_completed_at as "containmentCompletedAt",
-        root_cause as "rootCause", root_cause_method as "rootCauseMethod",
-        corrective_action as "correctiveAction", preventive_action as "preventiveAction",
-        capa_required as "capaRequired", capa_id as "capaId",
-        disposition_rationale as "dispositionRationale",
-        disposition_approved_by_user_id as "dispositionApprovedByUserId",
-        disposition_approved_by_display_name as "dispositionApprovedByDisplayName",
-        disposition_approved_at as "dispositionApprovedAt",
-        effectiveness_review as "effectivenessReview", effectiveness_status as "effectivenessStatus",
-        effectiveness_reviewed_by_user_id as "effectivenessReviewedByUserId",
-        effectiveness_reviewed_by_display_name as "effectivenessReviewedByDisplayName",
-        effectiveness_reviewed_at as "effectivenessReviewedAt",
-        recurrence_detected as "recurrenceDetected",
+        notes, status, resolved_at as "resolvedAt",
         created_at as "createdAt", updated_at as "updatedAt"
       FROM nonconformance_records
       ${whereClause}

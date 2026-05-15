@@ -14622,6 +14622,27 @@ export const productionProgramRunEvents = pgTable('production_program_run_events
   occurredAtIdx: index('production_program_run_events_occurred_at_idx').on(table.occurredAt),
 }));
 
+// Production Item Audit Records - durable snapshots for reconstructing an item's timer card
+export const productionItemAuditRecords = pgTable('production_item_audit_records', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  itemIdentifier: text('item_identifier').notNull(),
+  serialNumber: text('serial_number'),
+  travelerId: varchar('traveler_id', { length: 255 }),
+  travelerNumber: varchar('traveler_number', { length: 255 }),
+  runId: uuid('run_id').references(() => productionProgramRuns.id, { onDelete: 'set null' }),
+  eventType: text('event_type').notNull(),
+  eventAt: timestamp('event_at').defaultNow().notNull(),
+  actorUserId: integer('actor_user_id').references(() => users.id),
+  cardSnapshot: jsonb('card_snapshot').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  itemIdentifierIdx: index('production_item_audit_item_identifier_idx').on(table.itemIdentifier),
+  serialNumberIdx: index('production_item_audit_serial_number_idx').on(table.serialNumber),
+  travelerIdIdx: index('production_item_audit_traveler_id_idx').on(table.travelerId),
+  runIdIdx: index('production_item_audit_run_id_idx').on(table.runId),
+  eventAtIdx: index('production_item_audit_event_at_idx').on(table.eventAt),
+}));
+
 // Insert schemas for Production Timer module
 export const insertProductionProgramSchema = createInsertSchema(productionPrograms).omit({
   id: true,
@@ -14653,6 +14674,7 @@ export type InsertProductionProgramStep = z.infer<typeof insertProductionProgram
 export type ProductionProgramRun = typeof productionProgramRuns.$inferSelect;
 export type InsertProductionProgramRun = z.infer<typeof insertProductionProgramRunSchema>;
 export type ProductionProgramRunEvent = typeof productionProgramRunEvents.$inferSelect;
+export type ProductionItemAuditRecord = typeof productionItemAuditRecords.$inferSelect;
 export type InsertProductionProgramRunEvent = z.infer<typeof insertProductionProgramRunEventSchema>;
 
 // ============================================================================

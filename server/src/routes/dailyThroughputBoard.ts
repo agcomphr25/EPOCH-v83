@@ -81,6 +81,8 @@ export async function dailyThroughputBoardHandler(req: Request, res: Response): 
 
     const allStepsMap: Map<string, any[]> = new Map();
     const eventsMap: Map<string, any[]> = new Map();
+    const activeOvenByTravelerId: Map<string, any> = new Map();
+    const activeOvenByIdentifier: Map<string, any> = new Map();
 
     if (travelerIds.length > 0) {
       const placeholders = travelerIds.map((_: any, i: number) => `$${i + 1}`).join(', ');
@@ -128,8 +130,68 @@ export async function dailyThroughputBoardHandler(req: Request, res: Response): 
       }
     }
 
+    const timerIdentifiers = Array.from(new Set(
+      travelerRows
+        .flatMap((r: any) => [r.traveler_number, r.serial_number, r.lot_number])
+        .filter(Boolean)
+        .map((value: any) => String(value))
+    ));
+
+    if (travelerIds.length > 0 || timerIdentifiers.length > 0) {
+      const conditions: string[] = [];
+      const params: any[] = [];
+
+      if (travelerIds.length > 0) {
+        const placeholders = travelerIds.map((_: any, i: number) => `$${params.length + i + 1}`).join(', ');
+        params.push(...travelerIds);
+        conditions.push(`ppr.traveler_id IN (${placeholders})`);
+      }
+
+      if (timerIdentifiers.length > 0) {
+        const placeholders = timerIdentifiers.map((_: any, i: number) => `$${params.length + i + 1}`).join(', ');
+        params.push(...timerIdentifiers);
+        conditions.push(`ppr.serial_number IN (${placeholders})`);
+      }
+
+      const activeOvenRuns = await pool.query(
+        `SELECT
+           ppr.id,
+           ppr.traveler_id,
+           ppr.serial_number,
+           ppr.oven_number,
+           ppr.oven_slot,
+           ppr.started_at,
+           ppr.status,
+           ppr.current_step_index,
+           pp.name AS program_name
+         FROM production_program_runs ppr
+         LEFT JOIN production_programs pp ON pp.id = ppr.program_id
+         WHERE ppr.status IN ('running', 'paused', 'awaiting_next')
+           AND ppr.oven_number IS NOT NULL
+           AND (${conditions.join(' OR ')})
+         ORDER BY ppr.started_at DESC`,
+        params
+      );
+
+      for (const run of activeOvenRuns) {
+        if (run.traveler_id && !activeOvenByTravelerId.has(run.traveler_id)) {
+          activeOvenByTravelerId.set(run.traveler_id, run);
+        }
+        if (run.serial_number && !activeOvenByIdentifier.has(run.serial_number)) {
+          activeOvenByIdentifier.set(run.serial_number, run);
+        }
+      }
+    }
+
     const filledSlots = travelerRows.map((row: any, index: number) => {
       const steps = allStepsMap.get(row.traveler_id) ?? [];
+      const itemIdentifier = row.traveler_number ?? row.serial_number ?? row.lot_number ?? row.traveler_id;
+      const activeOvenRun =
+        activeOvenByTravelerId.get(row.traveler_id) ??
+        activeOvenByIdentifier.get(String(row.serial_number ?? '')) ??
+        activeOvenByIdentifier.get(String(row.lot_number ?? '')) ??
+        activeOvenByIdentifier.get(String(row.traveler_number ?? '')) ??
+        null;
 
       const ovenStep = steps.find((s: any) => s.department_name === 'Oven/Cure' && s.started_at);
       const isGreen = !!ovenStep;
@@ -180,6 +242,7 @@ export async function dailyThroughputBoardHandler(req: Request, res: Response): 
         isEmpty: false,
         isOverflow: index >= SLOTS_TARGET,
         travelerId: row.traveler_id,
+        itemIdentifier,
         travelerNumber: row.traveler_number,
         partNumber: row.part_number,
         partName: row.part_name,
@@ -197,8 +260,19 @@ export async function dailyThroughputBoardHandler(req: Request, res: Response): 
         currentStepStatus,
         currentStepStartedAt,
         currentStepCompletedAt,
+        activeOvenRun: activeOvenRun ? {
+          runId: activeOvenRun.id,
+          programName: activeOvenRun.program_name,
+          serialNumber: activeOvenRun.serial_number,
+          ovenNumber: activeOvenRun.oven_number,
+          ovenSlot: activeOvenRun.oven_slot,
+          startedAt: activeOvenRun.started_at,
+          status: activeOvenRun.status,
+          currentStepIndex: activeOvenRun.current_step_index,
+        } : null,
         detail: {
           travelerId: row.traveler_id,
+          itemIdentifier,
           travelerNumber: row.traveler_number,
           partNumber: row.part_number,
           partName: row.part_name,
@@ -213,6 +287,16 @@ export async function dailyThroughputBoardHandler(req: Request, res: Response): 
           currentStepStatus,
           currentStepStartedAt,
           currentStepCompletedAt,
+          activeOvenRun: activeOvenRun ? {
+            runId: activeOvenRun.id,
+            programName: activeOvenRun.program_name,
+            serialNumber: activeOvenRun.serial_number,
+            ovenNumber: activeOvenRun.oven_number,
+            ovenSlot: activeOvenRun.oven_slot,
+            startedAt: activeOvenRun.started_at,
+            status: activeOvenRun.status,
+            currentStepIndex: activeOvenRun.current_step_index,
+          } : null,
           steps: steps.map((s: any) => ({
             id: s.id,
             departmentName: s.department_name,

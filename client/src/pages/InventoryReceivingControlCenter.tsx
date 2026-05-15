@@ -550,6 +550,26 @@ function LeftPanel({
     return acc;
   }, {});
 
+  const pendingCount = filteredPOs.length;
+  const sortedCompletedReceipts = [...completedReceipts].sort((a, b) => {
+    const aTime = new Date(a.receivedAt ?? a.receiptDate ?? 0).getTime();
+    const bTime = new Date(b.receivedAt ?? b.receiptDate ?? 0).getTime();
+    return bTime - aTime;
+  });
+  const recentCount = sortedCompletedReceipts.length;
+
+  const TAB_STORAGE_KEY = 'rcc:leftPanelTab';
+  const [leftTab, setLeftTab] = useState<'pending' | 'recent'>(() => {
+    if (typeof window === 'undefined') return 'pending';
+    const stored = window.localStorage.getItem(TAB_STORAGE_KEY);
+    return stored === 'recent' ? 'recent' : 'pending';
+  });
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(TAB_STORAGE_KEY, leftTab);
+    }
+  }, [leftTab]);
+
   return (
     <div className="h-full flex flex-col">
       <div className="p-3 border-b bg-gray-50 dark:bg-gray-900">
@@ -568,110 +588,149 @@ function LeftPanel({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-2 space-y-2">
-        {/* Manual Receipt Option */}
-        <button
-          onClick={() => onStartReceipt(null)}
-          className="w-full text-left p-2 border border-dashed border-blue-300 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-        >
-          <div className="flex items-center gap-2 text-blue-600 text-xs font-medium">
-            <Plus className="w-3.5 h-3.5" />
-            Manual Receipt (no PO)
-          </div>
-        </button>
+      <Tabs
+        value={leftTab}
+        onValueChange={(v) => setLeftTab(v as 'pending' | 'recent')}
+        className="flex-1 flex flex-col overflow-hidden"
+      >
+        <TabsList className="mx-2 mt-2 grid grid-cols-2 h-8">
+          <TabsTrigger value="pending" className="text-xs h-7" data-testid="tab-receiving-pending">
+            Pending
+            <Badge variant="secondary" className="ml-1.5 h-4 px-1.5 text-[10px]" data-testid="badge-pending-count">
+              {pendingCount}
+            </Badge>
+          </TabsTrigger>
+          <TabsTrigger value="recent" className="text-xs h-7" data-testid="tab-receiving-recent">
+            Recently Received
+            <Badge variant="secondary" className="ml-1.5 h-4 px-1.5 text-[10px]" data-testid="badge-recent-count">
+              {recentCount}
+            </Badge>
+          </TabsTrigger>
+        </TabsList>
 
-        {completedReceipts.length > 0 && (
-          <div className="border rounded-lg overflow-hidden">
-            <div className="px-2 py-1.5 bg-gray-100 dark:bg-gray-800 text-xs font-semibold text-gray-600 dark:text-gray-400 flex items-center gap-1">
-              <History className="w-3 h-3" />
-              Recent Completed Receipts
+        <TabsContent value="pending" className="flex-1 overflow-y-auto p-2 space-y-2 mt-2">
+          {/* Manual Receipt Option */}
+          <button
+            onClick={() => onStartReceipt(null)}
+            className="w-full text-left p-2 border border-dashed border-blue-300 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+            data-testid="button-manual-receipt"
+          >
+            <div className="flex items-center gap-2 text-blue-600 text-xs font-medium">
+              <Plus className="w-3.5 h-3.5" />
+              Manual Receipt (no PO)
             </div>
-            {completedReceipts.slice(0, 8).map(receipt => (
-              <div key={receipt.id} className={`p-2 border-t text-xs hover:bg-gray-50 dark:hover:bg-gray-800/50 ${activeReceiptId === receipt.id ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="text-left min-w-0">
-                    <div className="font-medium text-gray-900 dark:text-gray-100 truncate">{receipt.receiptNumber}</div>
-                    <div className="text-gray-500 mt-0.5 truncate">
-                      {receipt.vendorName ?? 'Manual receipt'} {receipt.vendorPoNumber ? `· PO ${receipt.vendorPoNumber}` : ''}
+          </button>
+
+          {isLoadingPOs && (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+            </div>
+          )}
+
+          {Object.values(grouped).map(group => (
+            <div key={group.vendor} className="border rounded-lg overflow-hidden">
+              <div className="px-2 py-1.5 bg-gray-100 dark:bg-gray-800 text-xs font-semibold text-gray-600 dark:text-gray-400 flex items-center gap-1">
+                <Building2 className="w-3 h-3" />
+                {group.vendor}
+              </div>
+              {group.pos.map(po => {
+                const pending = pendingByPo?.[po.id];
+                const isResuming = !!(pending || (po.pendingReceiptCount && po.pendingReceiptCount > 0));
+                const isPartial = partialPoIds.has(po.id);
+                return (
+                  <div key={po.id} className="p-2 border-t text-xs hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="font-medium text-gray-900 dark:text-gray-100 flex items-center gap-1 flex-wrap">
+                          {po.poNumber}
+                          {isPartial && (
+                            <span className="inline-flex items-center px-1 py-0.5 rounded text-xs bg-amber-400/20 text-amber-700 border border-amber-400 dark:bg-amber-400/10 dark:text-amber-400 dark:border-amber-500 ml-1">
+                              Partial
+                            </span>
+                          )}
+                          {isResuming && (
+                            <span className="inline-flex items-center px-1 py-0.5 rounded text-xs bg-amber-100 text-amber-700 border border-amber-200 ml-1">
+                              In Progress
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-gray-500 mt-0.5">
+                          {po.expectedDeliveryDate
+                            ? `Expected: ${new Date(po.expectedDeliveryDate).toLocaleDateString()}`
+                            : po.requestedDeliveryDate
+                            ? `Requested: ${new Date(po.requestedDeliveryDate).toLocaleDateString()}`
+                            : 'No delivery date'}
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        className={`h-6 text-xs px-2 shrink-0 ${isResuming ? 'bg-amber-500 hover:bg-amber-600' : ''}`}
+                        onClick={() => onStartReceipt(po)}
+                        data-testid={`button-start-po-${po.id}`}
+                      >
+                        {isResuming ? 'Resume' : 'Start'}
+                      </Button>
                     </div>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-6 text-xs px-2 shrink-0"
-                    onClick={() => reopenReceiptMutation.mutate(receipt)}
-                    disabled={reopenReceiptMutation.isPending}
-                    title="Reopen receipt for correction"
-                  >
-                    {reopenReceiptMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Reopen'}
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {isLoadingPOs && (
-          <div className="flex items-center justify-center py-4">
-            <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
-          </div>
-        )}
-
-        {Object.values(grouped).map(group => (
-          <div key={group.vendor} className="border rounded-lg overflow-hidden">
-            <div className="px-2 py-1.5 bg-gray-100 dark:bg-gray-800 text-xs font-semibold text-gray-600 dark:text-gray-400 flex items-center gap-1">
-              <Building2 className="w-3 h-3" />
-              {group.vendor}
+                );
+              })}
             </div>
-            {group.pos.map(po => {
-              const pending = pendingByPo?.[po.id];
-              const isResuming = !!(pending || (po.pendingReceiptCount && po.pendingReceiptCount > 0));
-              const isPartial = partialPoIds.has(po.id);
-              return (
-                <div key={po.id} className="p-2 border-t text-xs hover:bg-gray-50 dark:hover:bg-gray-800/50">
+          ))}
+
+          {filteredPOs.length === 0 && !isLoadingPOs && (
+            <div className="text-center text-xs text-gray-500 py-4">
+              No open POs found
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="recent" className="flex-1 overflow-y-auto p-2 mt-2">
+          {sortedCompletedReceipts.length === 0 ? (
+            <div className="text-center text-xs text-gray-500 py-4">
+              No recently received receipts
+            </div>
+          ) : (
+            <div className="border rounded-lg overflow-hidden">
+              <div className="px-2 py-1.5 bg-gray-100 dark:bg-gray-800 text-xs font-semibold text-gray-600 dark:text-gray-400 flex items-center gap-1">
+                <History className="w-3 h-3" />
+                Recent Completed Receipts
+              </div>
+              {sortedCompletedReceipts.map(receipt => (
+                <div
+                  key={receipt.id}
+                  className={`p-2 border-t text-xs hover:bg-gray-50 dark:hover:bg-gray-800/50 ${activeReceiptId === receipt.id ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
+                  data-testid={`row-recent-receipt-${receipt.id}`}
+                >
                   <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <div className="font-medium text-gray-900 dark:text-gray-100 flex items-center gap-1 flex-wrap">
-                        {po.poNumber}
-                        {isPartial && (
-                          <span className="inline-flex items-center px-1 py-0.5 rounded text-xs bg-amber-400/20 text-amber-700 border border-amber-400 dark:bg-amber-400/10 dark:text-amber-400 dark:border-amber-500 ml-1">
-                            Partial
-                          </span>
-                        )}
-                        {isResuming && (
-                          <span className="inline-flex items-center px-1 py-0.5 rounded text-xs bg-amber-100 text-amber-700 border border-amber-200 ml-1">
-                            In Progress
-                          </span>
-                        )}
+                    <button
+                      type="button"
+                      className="text-left min-w-0 flex-1"
+                      onClick={() => onSelectReceipt(receipt)}
+                      data-testid={`button-open-receipt-${receipt.id}`}
+                    >
+                      <div className="font-medium text-gray-900 dark:text-gray-100 truncate">{receipt.receiptNumber}</div>
+                      <div className="text-gray-500 mt-0.5 truncate">
+                        {receipt.vendorName ?? 'Manual receipt'} {receipt.vendorPoNumber ? `· PO ${receipt.vendorPoNumber}` : ''}
                       </div>
-                      <div className="text-gray-500 mt-0.5">
-                        {po.expectedDeliveryDate
-                          ? `Expected: ${new Date(po.expectedDeliveryDate).toLocaleDateString()}`
-                          : po.requestedDeliveryDate
-                          ? `Requested: ${new Date(po.requestedDeliveryDate).toLocaleDateString()}`
-                          : 'No delivery date'}
-                      </div>
-                    </div>
+                    </button>
                     <Button
                       size="sm"
-                      className={`h-6 text-xs px-2 shrink-0 ${isResuming ? 'bg-amber-500 hover:bg-amber-600' : ''}`}
-                      onClick={() => onStartReceipt(po)}
+                      variant="outline"
+                      className="h-6 text-xs px-2 shrink-0"
+                      onClick={() => reopenReceiptMutation.mutate(receipt)}
+                      disabled={reopenReceiptMutation.isPending}
+                      title="Reopen receipt for correction"
+                      data-testid={`button-reopen-receipt-${receipt.id}`}
                     >
-                      {isResuming ? 'Resume' : 'Start'}
+                      {reopenReceiptMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Reopen'}
                     </Button>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        ))}
-
-        {filteredPOs.length === 0 && !isLoadingPOs && (
-          <div className="text-center text-xs text-gray-500 py-4">
-            No open POs found
-          </div>
-        )}
-      </div>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
       {isAdminOrOwner && <DepartmentDefaultsManager />}
     </div>
   );

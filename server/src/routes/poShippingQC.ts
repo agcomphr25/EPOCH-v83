@@ -931,7 +931,9 @@ router.get('/oem-shipments', async (req, res) => {
               'description', COALESCE(NULLIF(si.description, ''), COALESCE(poi.stock_model_name, poi.item_name), prod_ord.item_name),
               'poNumber', COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number),
               'hasPackingSlip', si.packing_slip_base64 IS NOT NULL,
-              'itemType', COALESCE(poi.item_type, 'stock_model')
+              'itemType', COALESCE(poi.item_type, 'stock_model'),
+              'unitPrice', poi.unit_price,
+              'lineTotal', COALESCE(poi.unit_price, 0) * COALESCE(si.quantity, 1)
             ) ORDER BY COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number), si.order_id
           ) as items
         FROM shipment_records sr

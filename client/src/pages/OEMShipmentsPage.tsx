@@ -20,6 +20,7 @@ import {
   Layers,
   Wrench,
   Printer,
+  TrendingUp,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -64,6 +65,8 @@ interface ShipmentItem {
   poNumber: string;
   hasPackingSlip: boolean;
   itemType: 'stock_model' | 'custom_model' | string;
+  unitPrice?: number | null;
+  lineTotal?: number | null;
 }
 
 interface Shipment {
@@ -169,6 +172,7 @@ export default function OEMShipmentsPage() {
 
   const shipments = data?.shipments || [];
   const pagination = data?.pagination;
+  const isGlennj = false;
 
   // Fetch weekly/monthly stats
   const { data: stats } = useQuery<OEMStats>({
@@ -193,6 +197,16 @@ export default function OEMShipmentsPage() {
     setEndDate('');
     setPage(0);
   };
+
+  const formatCurrency = (value: number) =>
+    value.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+
+  const getShipmentValue = (shipment: Shipment) =>
+    shipment.items.reduce(
+      (sum, item) =>
+        sum + Number(item.lineTotal ?? Number(item.unitPrice || 0) * Number(item.quantity || 0)),
+      0
+    );
 
   const toggleExpanded = (shipmentId: number) => {
     const newExpanded = new Set(expandedShipments);
@@ -818,6 +832,16 @@ export default function OEMShipmentsPage() {
                                       {SERVICE_NAMES[shipment.service_code] || shipment.service_code} • {shipment.total_weight_lbs} lbs
                                     </p>
                                   </div>
+                                  {isGlennj && (
+                                    <div>
+                                      <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
+                                        Shipment Value
+                                      </p>
+                                      <p className="text-sm font-medium">
+                                        {formatCurrency(getShipmentValue(shipment))}
+                                      </p>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
 
@@ -1217,6 +1241,13 @@ export default function OEMShipmentsPage() {
                             <span className="text-gray-400"> +{shipment.items.length - 3} more</span>
                           )}
                         </div>
+                        {isGlennj && (
+                          <div className="mt-2 flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                            <TrendingUp className="h-4 w-4 text-emerald-600" />
+                            <span className="font-medium text-gray-500">Shipment Value:</span>
+                            <span>{formatCurrency(getShipmentValue(shipment))}</span>
+                          </div>
+                        )}
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3">

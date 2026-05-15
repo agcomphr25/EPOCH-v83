@@ -300,7 +300,9 @@ export default function MonthlyShippedReport() {
                       <TableCell className="font-medium">
                         {order.orderId}
                       </TableCell>
-                      <TableCell>{order.customerId || 'N/A'}</TableCell>
+                      <TableCell>
+                        {order.customerName || order.customerId || 'N/A'}
+                      </TableCell>
                       <TableCell>
                         {order.orderDate
                           ? format(new Date(order.orderDate), 'MMM d, yyyy')

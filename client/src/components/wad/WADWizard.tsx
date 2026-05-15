@@ -273,6 +273,25 @@ interface WADWizardProps {
   onClose: () => void;
 }
 
+function normalizeText(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function getScopeBreakdownOperation(scopeDescription?: string, fallbackDescription?: string | null): string {
+  return normalizeText(scopeDescription) || normalizeText(fallbackDescription);
+}
+
+function shouldRefreshGeneratedOperation(
+  currentOperation: string | undefined,
+  previousScope: string,
+  fallbackDescription?: string | null,
+  seeded?: boolean
+): boolean {
+  const current = normalizeText(currentOperation);
+  if (!current || seeded) return true;
+  return current === previousScope || current === normalizeText(fallbackDescription);
+}
+
 const STEPS = [
   { id: 1, title: 'Contract Context', icon: FileText, short: 'Context' },
   { id: 2, title: 'Scope of Work', icon: ClipboardList, short: 'Scope' },
@@ -533,22 +552,49 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
       const newDepts = v?.departments ?? [];
       const newDeptSet = new Set(newDepts);
       const prevDepts = prev.step2?.departments ?? [];
+      const previousScope = normalizeText(prev.step2?.scopeDescription);
+      const lineItemDescription: string | null = wad?.description ?? null;
+      const scopeOperation = getScopeBreakdownOperation(v?.scopeDescription, lineItemDescription);
       const sameDepts =
         prevDepts.length === newDepts.length &&
         prevDepts.every(d => newDeptSet.has(d));
 
       if (sameDepts) {
-        return { ...prev, step2: v };
+        const next: WizardData = { ...prev, step2: v };
+        if (scopeOperation && prev.step3?.rows?.length) {
+          next.step3 = {
+            rows: prev.step3.rows.map(row => (
+              shouldRefreshGeneratedOperation(row.operation, previousScope, lineItemDescription, row.seeded)
+                ? { ...row, operation: scopeOperation }
+                : row
+            )),
+          };
+        }
+        if (scopeOperation && prev.step4?.chargeCodes?.length) {
+          next.step4 = {
+            chargeCodes: prev.step4.chargeCodes.map(row => (
+              shouldRefreshGeneratedOperation(row.operation, previousScope, lineItemDescription, row.seeded)
+                ? { ...row, operation: scopeOperation }
+                : row
+            )),
+          };
+        }
+        return next;
       }
 
       const budgets = (wad?.departmentBudgets && typeof wad.departmentBudgets === 'object'
         ? (wad.departmentBudgets as Record<string, number>)
         : {}) as Record<string, number>;
-      const lineItemDescription: string | null = wad?.description ?? null;
       const defaultChargeCode = wad?.defaultChargeCodeId ? String(wad.defaultChargeCodeId) : '';
 
       const prevStep3Rows = prev.step3?.rows ?? [];
-      const keptStep3 = prevStep3Rows.filter(r => newDeptSet.has(r.department));
+      const keptStep3 = prevStep3Rows
+        .filter(r => newDeptSet.has(r.department))
+        .map(row => (
+          scopeOperation && shouldRefreshGeneratedOperation(row.operation, previousScope, lineItemDescription, row.seeded)
+            ? { ...row, operation: scopeOperation }
+            : row
+        ));
       const existingStep3Depts = new Set(keptStep3.map(r => r.department));
       const addedStep3: WorkBreakdownRow[] = [];
       for (const dept of newDepts) {
@@ -557,7 +603,7 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
         if (hrs !== undefined) {
           addedStep3.push({
             department: dept,
-            operation: lineItemDescription ?? '',
+            operation: scopeOperation,
             responsibleLead: '',
             estimatedHours: typeof hrs === 'number' ? hrs : Number(hrs) || 0,
             requiredCerts: '',
@@ -569,7 +615,7 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
         } else {
           addedStep3.push({
             department: dept,
-            operation: '',
+            operation: scopeOperation,
             responsibleLead: '',
             estimatedHours: 0,
             requiredCerts: '',
@@ -581,7 +627,13 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
       const nextStep3Rows = [...keptStep3, ...addedStep3];
 
       const prevStep4 = prev.step4?.chargeCodes ?? [];
-      const keptStep4 = prevStep4.filter(c => newDeptSet.has(c.department));
+      const keptStep4 = prevStep4
+        .filter(c => newDeptSet.has(c.department))
+        .map(row => (
+          scopeOperation && shouldRefreshGeneratedOperation(row.operation, previousScope, lineItemDescription, row.seeded)
+            ? { ...row, operation: scopeOperation }
+            : row
+        ));
       const existingStep4Depts = new Set(keptStep4.map(c => c.department));
       const addedStep4: ChargeCodeRow[] = [];
       for (const row of addedStep3) {
@@ -690,13 +742,14 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
             : (next.step2?.departments ?? []),
         };
       }
+      const scopeOperation = getScopeBreakdownOperation(next.step2?.scopeDescription, lineItemDescription);
       const selectedDepts = new Set(next.step2?.departments ?? []);
       const filteredBudgetEntries = budgetEntries.filter(([k]) => selectedDepts.has(k));
       if ((!next.step3 || (next.step3.rows ?? []).length === 0) && filteredBudgetEntries.length > 0) {
         next.step3 = {
           rows: filteredBudgetEntries.map(([dept, hrs]) => ({
             department: dept,
-            operation: lineItemDescription ?? '',
+            operation: scopeOperation,
             responsibleLead: '',
             estimatedHours: typeof hrs === 'number' ? hrs : Number(hrs) || 0,
             requiredCerts: '',
@@ -738,10 +791,32 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
           next.step3 = { rows: pruned };
         }
       }
+      if (scopeOperation && next.step3?.rows?.length) {
+        const currentRows = next.step3.rows;
+        const synced = currentRows.map(row => (
+          shouldRefreshGeneratedOperation(row.operation, '', lineItemDescription, row.seeded)
+            ? { ...row, operation: scopeOperation }
+            : row
+        ));
+        if (synced.some((row, index) => row !== currentRows[index])) {
+          next.step3 = { rows: synced };
+        }
+      }
       if (next.step4?.chargeCodes?.length) {
         const pruned = next.step4.chargeCodes.filter(c => selectedDepts.has(c.department));
         if (pruned.length !== next.step4.chargeCodes.length) {
           next.step4 = { chargeCodes: pruned };
+        }
+      }
+      if (scopeOperation && next.step4?.chargeCodes?.length) {
+        const currentRows = next.step4.chargeCodes;
+        const synced = currentRows.map(row => (
+          shouldRefreshGeneratedOperation(row.operation, '', lineItemDescription, row.seeded)
+            ? { ...row, operation: scopeOperation }
+            : row
+        ));
+        if (synced.some((row, index) => row !== currentRows[index])) {
+          next.step4 = { chargeCodes: synced };
         }
       }
       if ((!next.step8 || !next.step8.requiredCompletionDate) && (wad.dueDate || project?.targetShipDate)) {
@@ -917,6 +992,7 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
           {step === 3 && (
             <Step3WorkBreakdown
               departments={data.step2?.departments ?? []}
+              scopeDescription={data.step2?.scopeDescription ?? ''}
               data={data.step3}
               onChange={(v) => patch('step3', v)}
             />
@@ -1380,8 +1456,9 @@ function Step2ScopeOfWork({ data, onChange }: {
 }
 
 // ─── Step 3: Work Breakdown ───────────────────────────────────────────────────
-function Step3WorkBreakdown({ departments, data, onChange }: {
+function Step3WorkBreakdown({ departments, scopeDescription, data, onChange }: {
   departments: string[];
+  scopeDescription?: string;
   data?: WizardData['step3'];
   onChange: (v: WizardData['step3']) => void;
 }) {
@@ -1391,14 +1468,23 @@ function Step3WorkBreakdown({ departments, data, onChange }: {
 
   const ensureRows = (): WorkBreakdownRow[] => {
     const existingByDept = new Map(existingRows.map(r => [r.department, r]));
-    return departments.map(dept => existingByDept.get(dept) ?? {
-      department: dept,
-      operation: '',
-      responsibleLead: '',
-      estimatedHours: 0,
-      requiredCerts: '',
-      isTravelerStep: false,
-      requiresQCSignoff: false,
+    const scopeOperation = getScopeBreakdownOperation(scopeDescription);
+    return departments.map(dept => {
+      const existing = existingByDept.get(dept);
+      if (existing) {
+        return scopeOperation && shouldRefreshGeneratedOperation(existing.operation, '', undefined, existing.seeded)
+          ? { ...existing, operation: scopeOperation }
+          : existing;
+      }
+      return {
+        department: dept,
+        operation: scopeOperation,
+        responsibleLead: '',
+        estimatedHours: 0,
+        requiredCerts: '',
+        isTravelerStep: false,
+        requiresQCSignoff: false,
+      };
     });
   };
 
@@ -1411,12 +1497,12 @@ function Step3WorkBreakdown({ departments, data, onChange }: {
     // departments, so de-selected departments don't linger in saved state and
     // newly-selected departments appear immediately. Only push when the row
     // set actually differs to avoid an update loop.
-    const existingKeys = existingRows.map(r => r.department).join('|');
-    const nextKeys = next.map(r => r.department).join('|');
-    if (existingKeys !== nextKeys) {
+    const existingSignature = existingRows.map(r => `${r.department}:${r.operation}`).join('|');
+    const nextSignature = next.map(r => `${r.department}:${r.operation}`).join('|');
+    if (existingSignature !== nextSignature) {
       onChange({ rows: next });
     }
-  }, [departments]);
+  }, [departments, scopeDescription]);
 
   const setRow = (idx: number, patch: Partial<WorkBreakdownRow>) => {
     const next = rows.map((r, i) => i === idx ? { ...r, ...patch, seeded: false, seededFrom: undefined } : r);

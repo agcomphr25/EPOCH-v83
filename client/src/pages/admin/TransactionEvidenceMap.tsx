@@ -107,13 +107,13 @@ const branchDefs: Array<{
   types: EvidenceNodeType[];
   angle: number;
 }> = [
-  { key: 'work_order', label: 'WAD / Work Orders', subtitle: 'Where the labor was charged', types: ['work_order'], angle: -155 },
-  { key: 'employee', label: 'Employees + Rates', subtitle: 'Who worked and what rate was used', types: ['employee'], angle: -105 },
-  { key: 'labor_cost', label: 'Labor Cost Lines', subtitle: 'Hours, rate source, and dollars', types: ['labor_cost'], angle: -42 },
-  { key: 'payroll', label: 'Payroll Export', subtitle: 'Evidence-only export trail', types: ['payroll'], angle: 26 },
-  { key: 'journal', label: 'GL Posting', subtitle: 'Journal entries and debit/credit lines', types: ['journal'], angle: 78 },
-  { key: 'audit', label: 'Audit Ledger', subtitle: 'Hash chained events', types: ['audit'], angle: 132 },
-  { key: 'document', label: 'Attached Evidence', subtitle: 'Project files and supporting docs', types: ['document', 'missing'], angle: 178 },
+  { key: 'work_order', label: 'What job was charged?', subtitle: 'Work orders and WAD links', types: ['work_order'], angle: -160 },
+  { key: 'employee', label: 'Who worked?', subtitle: 'Employee names and rates used', types: ['employee'], angle: -108 },
+  { key: 'labor_cost', label: 'What did it cost?', subtitle: 'Hours, rate source, and dollars', types: ['labor_cost'], angle: -48 },
+  { key: 'payroll', label: 'Was it sent to payroll?', subtitle: 'Payroll export evidence', types: ['payroll'], angle: 22 },
+  { key: 'journal', label: 'Was it posted to the books?', subtitle: 'GL journal entry and debit/credit lines', types: ['journal'], angle: 78 },
+  { key: 'audit', label: 'Who touched it?', subtitle: 'Audit trail and approvals', types: ['audit'], angle: 136 },
+  { key: 'document', label: 'What proof is attached?', subtitle: 'Files, packets, and missing support', types: ['document', 'missing'], angle: 188 },
 ];
 
 function currentPeriod() {
@@ -233,8 +233,8 @@ function MindMapCanvas({
   selectedNodeId: string | null;
   onSelectNode: (id: string) => void;
 }) {
-  const canvas = { width: 1280, height: 820 };
-  const center = { x: 640, y: 410 };
+  const canvas = { width: 1580, height: 1020 };
+  const center = { x: 790, y: 510 };
 
   const centerNode: EvidenceNode = {
     id: `mind-center:${data.project.id}:${data.period.label}`,
@@ -246,7 +246,7 @@ function MindMapCanvas({
 
   const branches = branchDefs.map((branch) => {
     const nodes = data.nodes.filter((node) => branch.types.includes(node.type));
-    const point = polarPoint(center.x, center.y, 205, branch.angle);
+    const point = polarPoint(center.x, center.y, 310, branch.angle);
     return {
       ...branch,
       point,
@@ -256,10 +256,10 @@ function MindMapCanvas({
   });
 
   const positionedNodes = branches.flatMap((branch) => {
-    const spread = Math.min(52, 12 + branch.nodes.length * 8);
+    const spread = Math.min(70, 18 + branch.nodes.length * 10);
     return branch.nodes.map((node, index) => {
       const offset = branch.nodes.length === 1 ? 0 : -spread / 2 + (spread * index) / (branch.nodes.length - 1);
-      const radius = 360 + Math.min(index, 2) * 32;
+      const radius = 540 + Math.min(index, 3) * 42;
       const point = polarPoint(center.x, center.y, radius, branch.angle + offset);
       return { node, point, branchKey: branch.key };
     });
@@ -300,10 +300,10 @@ function MindMapCanvas({
               />
             );
           })}
-          <circle cx={center.x} cy={center.y} r={122} fill="white" filter="url(#softShadow)" />
+          <circle cx={center.x} cy={center.y} r={142} fill="white" filter="url(#softShadow)" />
         </svg>
 
-        <MindMapNode node={centerNode} selected={false} x={center.x} y={center.y} width={300} branch />
+        <MindMapNode node={centerNode} selected={false} x={center.x} y={center.y} width={350} branch />
 
         {branches.map((branch) => (
           <MindMapNode
@@ -318,7 +318,7 @@ function MindMapCanvas({
             selected={false}
             x={branch.point.x}
             y={branch.point.y}
-            width={220}
+            width={250}
             branch
           />
         ))}
@@ -330,7 +330,7 @@ function MindMapCanvas({
             selected={selectedNodeId === node.id}
             x={point.x}
             y={point.y}
-            width={190}
+            width={210}
             onClick={() => onSelectNode(node.id)}
           />
         ))}
@@ -397,10 +397,10 @@ export default function TransactionEvidenceMap() {
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold">
             <Network className="h-6 w-6 text-primary" />
-            Transaction Evidence Map
+            Project Labor Evidence Map
           </h1>
           <p className="text-sm text-muted-foreground">
-            Project and payroll-period trace from labor source through GL posting and supporting evidence.
+            Follow one project-period claim outward to the people, costs, payroll, books, audit trail, and proof behind it.
           </p>
         </div>
         <Button variant="outline" onClick={() => refetch()} disabled={!projectId || isFetching}>

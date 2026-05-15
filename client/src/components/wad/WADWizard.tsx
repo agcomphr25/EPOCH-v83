@@ -1389,6 +1389,10 @@ function Step2ScopeOfWork({ data, onChange }: {
     set('departments', existing.includes(key) ? existing.filter(d => d !== key) : [...existing, key]);
   };
 
+  const removeDept = (key: string) => {
+    set('departments', (base.departments ?? []).filter(d => d !== key));
+  };
+
   return (
     <div className="space-y-5">
       <div className="space-y-1">
@@ -1414,6 +1418,28 @@ function Step2ScopeOfWork({ data, onChange }: {
       </div>
       <div className="space-y-2">
         <Label>Departments Involved <span className="text-red-500">*</span></Label>
+        {(base.departments ?? []).length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {(base.departments ?? []).map(key => {
+              const dept = WAD_DEPARTMENTS.find(d => d.key === key);
+              const label = dept?.label ?? key;
+              return (
+                <Badge key={key} variant="secondary" className="gap-1 pl-2 pr-1">
+                  {label}
+                  <button
+                    type="button"
+                    aria-label={`Remove ${label}`}
+                    className="rounded-sm p-0.5 text-muted-foreground hover:bg-background hover:text-foreground"
+                    onClick={() => removeDept(key)}
+                    data-testid={`button-remove-department-${key}`}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </Badge>
+              );
+            })}
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-2">
           {WAD_DEPARTMENTS.map(dept => (
             <div

@@ -45,6 +45,11 @@ export async function ensureProductionWorkflowReadSchema(): Promise<void> {
               ADD COLUMN IF NOT EXISTS warning_threshold numeric,
               ADD COLUMN IF NOT EXISTS blocked_threshold numeric,
               ADD COLUMN IF NOT EXISTS default_charge_code_id integer,
+              ADD COLUMN IF NOT EXISTS dashboard_type text,
+              ADD COLUMN IF NOT EXISTS queue_type text,
+              ADD COLUMN IF NOT EXISTS assigned_department text,
+              ADD COLUMN IF NOT EXISTS assigned_dashboard_route text,
+              ADD COLUMN IF NOT EXISTS manufacturing_queue_id integer,
               ADD COLUMN IF NOT EXISTS wad_status text NOT NULL DEFAULT 'DRAFT',
               ADD COLUMN IF NOT EXISTS wizard_data jsonb,
               ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now();

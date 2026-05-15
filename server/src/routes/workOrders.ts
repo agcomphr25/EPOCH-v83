@@ -46,6 +46,7 @@ import { evaluateWorkOrderLaborStatus } from '../helpers/laborBudgetHelper';
 import { evaluateWorkOrderReadiness } from '../lib/workOrderReadiness';
 import { ensureProjectHasWADFromCanonicalSources } from '../lib/wadHelper';
 import { ensureProductionWorkflowReadSchema } from '../lib/productionWorkflowReadiness';
+import { assignDashboardForWorkOrder } from '../lib/workOrderDashboardAssignment';
 import {
   getProductionControlRecommendation,
   type WadContext,
@@ -2741,6 +2742,18 @@ router.patch(
         wizardData: mergedWizardData,
         updatedAt: new Date(),
       };
+      const assignment = assignDashboardForWorkOrder({
+        assignedDepartment: wad.assignedDepartment,
+        dashboardType: wad.dashboardType,
+        queueType: wad.queueType,
+        assignedDashboardRoute: wad.assignedDashboardRoute,
+        wizardData: mergedWizardData,
+        departmentBudgets: wad.departmentBudgets,
+      });
+      updatePayload.dashboardType = assignment.dashboardType;
+      updatePayload.queueType = assignment.queueType;
+      updatePayload.assignedDepartment = assignment.assignedDepartment;
+      updatePayload.assignedDashboardRoute = assignment.assignedDashboardRoute;
       if (wadStatus === 'DRAFT' || wadStatus === 'PENDING_APPROVAL') {
         updatePayload.wadStatus = wadStatus;
       } else if (existingRevisionStatus === 'NEEDS_REVISION') {
@@ -2982,6 +2995,18 @@ router.post(
         wadStatus: newWadStatus,
         updatedAt: new Date(),
       };
+      const assignment = assignDashboardForWorkOrder({
+        assignedDepartment: wad.assignedDepartment,
+        dashboardType: wad.dashboardType,
+        queueType: wad.queueType,
+        assignedDashboardRoute: wad.assignedDashboardRoute,
+        wizardData: updatedWizardData,
+        departmentBudgets: wad.departmentBudgets,
+      });
+      updateSet.dashboardType = assignment.dashboardType;
+      updateSet.queueType = assignment.queueType;
+      updateSet.assignedDepartment = assignment.assignedDepartment;
+      updateSet.assignedDashboardRoute = assignment.assignedDashboardRoute;
       // Backfill gate contract: any non-terminal PWO must end up RELEASED on
       // approval so the project's WAD gate flips ✓ regardless of where the PWO
       // sat before approval (e.g. PLANNED, READY, IN_PROGRESS for backfill).

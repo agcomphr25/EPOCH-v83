@@ -112,6 +112,12 @@ interface WorkOrderRow {
   quantityCompletedToday: number;
   sourceType?: 'production_work_order' | 'p2_production_order';
   sourceLabel?: string;
+  dashboardType?: string | null;
+  queueType?: string | null;
+  assignedDepartment?: string | null;
+  assignedDashboardRoute?: string | null;
+  dashboardLabel?: string | null;
+  manufacturingQueueId?: number | null;
   wadStatus?: string | null;
   p2PoId?: number | null;
   p2PoNumber?: string | null;
@@ -533,6 +539,7 @@ function ProductionTab({ projectId }: { projectId: string }) {
               </TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Department</TableHead>
+              <TableHead>Dashboard / Queue</TableHead>
               <TableHead>Current Step</TableHead>
               <TableHead>Active Traveler</TableHead>
               <TableHead>Due Date</TableHead>
@@ -614,6 +621,32 @@ function ProductionTab({ projectId }: { projectId: string }) {
                   </Badge>
                 </TableCell>
                 <TableCell className="text-sm">{row.currentDepartment ?? <span className="text-muted-foreground">—</span>}</TableCell>
+                <TableCell className="text-sm" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex min-w-[160px] flex-col gap-1.5">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                        {row.dashboardLabel ?? row.assignedDepartment ?? 'Manufacturing Queue'}
+                      </Badge>
+                      {row.queueType && (
+                        <span className="text-xs text-muted-foreground">{row.queueType.replace('_', ' ')}</span>
+                      )}
+                    </div>
+                    {row.assignedDashboardRoute ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-7 w-fit gap-1.5 px-2 text-xs"
+                        onClick={() => navTo(row.assignedDashboardRoute!)}
+                      >
+                        <LayoutDashboard className="h-3.5 w-3.5" />
+                        Open Dashboard
+                      </Button>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </div>
+                </TableCell>
                 <TableCell className="text-sm">{row.currentTravelerStep ?? <span className="text-muted-foreground">—</span>}</TableCell>
                 <TableCell className="text-sm" onClick={(e) => e.stopPropagation()}>
                   {row.activeTravelerNumber && row.activeTravelerId ? (

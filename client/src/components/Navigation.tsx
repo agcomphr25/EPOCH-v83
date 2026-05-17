@@ -2758,8 +2758,8 @@ export default function Navigation() {
               <Button
                 variant={location.startsWith('/admin/continuity') ? 'default' : 'ghost'}
                 className={cn(
-                  'flex items-center gap-2 text-sm',
-                  location.startsWith('/admin/continuity') && 'bg-primary text-white'
+                  'flex items-center gap-2 text-sm text-red-600 hover:text-red-700',
+                  location.startsWith('/admin/continuity') && 'bg-red-600 text-white hover:bg-red-700 hover:text-white'
                 )}
                 onClick={() => { closeAllDropdowns(); setLocation('/admin/continuity'); }}
               >

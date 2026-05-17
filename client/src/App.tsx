@@ -673,6 +673,7 @@ function App() {
                   <Route path="/signed-documents" component={SignedDocumentsLibrary} />
                   <Route path="/signature-workflow" component={SignatureWorkflowPage} />
                   <Route path="/reference-docs" component={ReferenceDocsPage} />
+                  <Route path="/knowledge-capture" component={VoiceNotesPage} />
                   <Route path="/voice-notes" component={VoiceNotesPage} />
                   <Route path="/process-runs" component={ProcessRuns} />
                   <Route path="/app/production/stations" component={ProductionStationDashboard} />

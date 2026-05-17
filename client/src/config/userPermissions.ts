@@ -260,6 +260,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/order-department-transfer',
       '/metal-accessories',
       '/training',
+      '/knowledge-capture',
       '/voice-notes',
       '/order-heat-map',
       '/urgent-orders-report',

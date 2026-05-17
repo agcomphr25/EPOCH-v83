@@ -105,6 +105,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/finance/cogs',
   '/finance/cogs-report',
   '/finance/cost-accounting',
+  '/finance/chart-of-accounts',
   '/finance/burden-rates',
   '/finance/cost-centers',
   '/finance/dashboard',

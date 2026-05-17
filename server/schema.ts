@@ -12013,10 +12013,16 @@ export type InsertMediaAttachment = z.infer<typeof insertMediaAttachmentSchema>;
 export const voiceNotes = pgTable('voice_notes', {
   id: uuid('id').defaultRandom().primaryKey(),
   transcription: text('transcription').notNull(), // The transcribed text from voice
+  title: text('title'),
+  summary: text('summary'),
   linkedOrderId: text('linked_order_id'), // Order ID extracted from speech (e.g., "EL069")
-  noteType: text('note_type').notNull().default('order'), // 'order' or 'general'
+  noteType: text('note_type').notNull().default('journal'), // 'journal', 'production_concern', etc.
   category: text('category'), // User-defined category (e.g., "metal insert", "duratec", "thickness")
   tags: text('tags').array(), // Extracted keywords/tags for searching
+  extractedTasks: jsonb('extracted_tasks').$type<string[]>(),
+  suggestedLinks: jsonb('suggested_links').$type<Array<{ type: string; id: string; label: string; confidence?: string }>>(),
+  followUpQuestions: jsonb('follow_up_questions').$type<string[]>(),
+  visibility: text('visibility').notNull().default('private'),
   recordedById: integer('recorded_by_id').references(() => employees.id),
   recordedByUsername: text('recorded_by_username').notNull(), // Username for quick reference
   recordedAt: timestamp('recorded_at').defaultNow(),

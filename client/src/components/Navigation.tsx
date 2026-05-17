@@ -1469,10 +1469,10 @@ export default function Navigation() {
       description: 'Step-based timing programs for production processes',
     },
     {
-      path: '/voice-notes',
-      label: 'Voice Notes',
+      path: '/knowledge-capture',
+      label: 'Knowledge Capture',
       icon: Mic,
-      description: 'Voice-activated notes for production issues and tracking',
+      description: 'Private voice journal for process observations and business knowledge',
     },
     {
       path: '/metric-directory',

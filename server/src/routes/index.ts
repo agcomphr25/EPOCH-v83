@@ -10016,16 +10016,27 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         return res.status(403).json({ error: 'Access denied. ADMIN role required.' });
       }
 
-      const { fromDate, toDate, status, transactionType } = req.query;
+      const { fromDate, toDate, status, transactionType, journalEntryId, journalEntryIds } = req.query;
       const { db } = await import('../../db');
       const { journalEntries, journalLines, chartOfAccounts } = await import('../../schema');
-      const { eq, and, gte, lte, desc } = await import('drizzle-orm');
+      const { eq, and, gte, lte, desc, inArray } = await import('drizzle-orm');
 
       const conditions: any[] = [];
       if (fromDate) conditions.push(gte(journalEntries.effectiveDate, new Date(fromDate as string)));
       if (toDate) conditions.push(lte(journalEntries.effectiveDate, new Date(toDate as string)));
       if (status) conditions.push(eq(journalEntries.status, status as string));
       if (transactionType) conditions.push(eq(journalEntries.transactionType, transactionType as string));
+      const requestedJournalEntryIds = [
+        journalEntryId,
+        journalEntryIds,
+      ]
+        .flatMap((value) => Array.isArray(value) ? value : [value])
+        .flatMap((value) => String(value ?? '').split(','))
+        .map((value) => Number(value.trim()))
+        .filter((value) => Number.isInteger(value) && value > 0);
+      if (requestedJournalEntryIds.length > 0) {
+        conditions.push(inArray(journalEntries.id, Array.from(new Set(requestedJournalEntryIds))));
+      }
 
       const entries = await db
         .select()

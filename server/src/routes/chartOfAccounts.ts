@@ -78,6 +78,16 @@ function sourceLabel(source: {
   return `${reference} #${source.referenceId}`;
 }
 
+function sourceContributionAmount(
+  normalBalance: string,
+  debitAmount: string | number | null,
+  creditAmount: string | number | null,
+) {
+  const debit = Number(debitAmount ?? 0);
+  const credit = Number(creditAmount ?? 0);
+  return normalBalance === 'DEBIT' ? debit - credit : credit - debit;
+}
+
 router.use(authenticateToken);
 
 router.get('/accounts', h(async (req, res) => {
@@ -165,6 +175,58 @@ router.get('/accounts-with-balances', h(async (req, res) => {
         currentBalance = totalCredit - totalDebit;
       }
 
+      const sourceGroups = new Map<string, {
+        label: string;
+        amount: number;
+        debitAmount: number;
+        creditAmount: number;
+        lineCount: number;
+        journalEntryIds: number[];
+        transactionType: string;
+        referenceType: string;
+        referenceId: number;
+        sourceDocumentNumber: string | null;
+        effectiveDate: Date | string | null;
+      }>();
+
+      for (const row of sourceRows) {
+        const label = sourceLabel(row);
+        const key = label.startsWith('Order ')
+          ? label
+          : `${label}|${row.referenceType}|${row.referenceId}`;
+        const debit = Number(row.debitAmount ?? 0);
+        const credit = Number(row.creditAmount ?? 0);
+        const amount = sourceContributionAmount(
+          account.normalBalance,
+          row.debitAmount,
+          row.creditAmount
+        );
+        const existing = sourceGroups.get(key);
+        if (existing) {
+          existing.amount += amount;
+          existing.debitAmount += debit;
+          existing.creditAmount += credit;
+          existing.lineCount += 1;
+          if (!existing.journalEntryIds.includes(row.journalEntryId)) {
+            existing.journalEntryIds.push(row.journalEntryId);
+          }
+          continue;
+        }
+        sourceGroups.set(key, {
+          label,
+          amount,
+          debitAmount: debit,
+          creditAmount: credit,
+          lineCount: 1,
+          journalEntryIds: [row.journalEntryId],
+          transactionType: row.transactionType,
+          referenceType: row.referenceType,
+          referenceId: row.referenceId,
+          sourceDocumentNumber: row.sourceDocumentNumber,
+          effectiveDate: row.effectiveDate,
+        });
+      }
+
       return {
         ...account,
         currentBalance,
@@ -178,15 +240,15 @@ router.get('/accounts-with-balances', h(async (req, res) => {
             ? 'totalDebit - totalCredit'
             : 'totalCredit - totalDebit',
           latestPostedActivity: sourceRows[0] ?? null,
-          sources: sourceRows.map((row) => ({
-            label: sourceLabel(row),
-            journalEntryId: row.journalEntryId,
-            transactionType: row.transactionType,
-            referenceType: row.referenceType,
-            referenceId: row.referenceId,
-            sourceDocumentNumber: row.sourceDocumentNumber,
-            effectiveDate: row.effectiveDate,
-          })),
+          sources: Array.from(sourceGroups.values())
+            .map((source) => ({
+              ...source,
+              amount: Math.round(source.amount * 100) / 100,
+              debitAmount: Math.round(source.debitAmount * 100) / 100,
+              creditAmount: Math.round(source.creditAmount * 100) / 100,
+              journalEntryId: source.journalEntryIds[0],
+            }))
+            .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount)),
         },
       };
     })

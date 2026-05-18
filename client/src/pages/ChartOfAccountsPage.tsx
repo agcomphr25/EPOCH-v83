@@ -59,7 +59,12 @@ type CoaAccount = {
     } | null;
     sources?: Array<{
       label: string;
+      amount: number;
+      debitAmount: number;
+      creditAmount: number;
+      lineCount: number;
       journalEntryId: number;
+      journalEntryIds?: number[];
       transactionType: string;
       referenceType: string;
       referenceId: number;
@@ -80,6 +85,12 @@ function formatCurrency(value: number | null | undefined) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
+}
+
+function formatSignedCurrency(value: number | null | undefined) {
+  const amount = value ?? 0;
+  const sign = amount < 0 ? '-' : '';
+  return `${sign}${formatCurrency(amount)}`;
 }
 
 export default function ChartOfAccountsPage() {
@@ -343,9 +354,21 @@ export default function ChartOfAccountsPage() {
                                     <Badge
                                       key={`${source.journalEntryId}-${source.referenceType}-${source.referenceId}`}
                                       variant="outline"
-                                      className="font-mono text-sm"
+                                      className="gap-2 font-mono text-sm"
+                                      title={`Debit ${formatCurrency(source.debitAmount)} / Credit ${formatCurrency(source.creditAmount)}${source.lineCount > 1 ? ` across ${source.lineCount} posted lines` : ''}`}
                                     >
-                                      {source.label}
+                                      <span>{source.label}</span>
+                                      <span
+                                        className={
+                                          source.amount < 0
+                                            ? 'text-red-600'
+                                            : source.amount > 0
+                                              ? 'text-green-700'
+                                              : 'text-muted-foreground'
+                                        }
+                                      >
+                                        {formatSignedCurrency(source.amount)}
+                                      </span>
                                     </Badge>
                                   ))}
                                 </div>

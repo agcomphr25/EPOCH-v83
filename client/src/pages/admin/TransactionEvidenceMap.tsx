@@ -2,11 +2,15 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   AlertTriangle,
+  ArrowRight,
   ExternalLink,
   FileText,
+  GitFork,
   Landmark,
+  ListTree,
   Loader2,
   Network,
+  PanelRightOpen,
   RefreshCw,
   Search,
   ShieldCheck,
@@ -28,6 +32,7 @@ import {
 } from '@/components/ui/sheet';
 
 type EvidenceNodeStatus = 'ok' | 'warning' | 'missing' | 'sensitive';
+type MapViewMode = 'radial' | 'flow';
 type EvidenceNodeType =
   | 'project'
   | 'period'
@@ -140,6 +145,45 @@ function statusClass(status: EvidenceNodeStatus) {
   return 'border-amber-300 bg-amber-50 text-amber-950';
 }
 
+function typeLabel(type: EvidenceNodeType) {
+  if (type === 'work_order') return 'Work orders';
+  if (type === 'employee') return 'Employees';
+  if (type === 'labor_cost') return 'Labor costs';
+  if (type === 'payroll') return 'Payroll exports';
+  if (type === 'journal') return 'Journal entries';
+  if (type === 'audit') return 'Audit log records';
+  if (type === 'document') return 'Documents';
+  if (type === 'missing') return 'Missing evidence';
+  if (type === 'period') return 'Periods';
+  return 'Projects';
+}
+
+function branchCountLabel(count: number) {
+  return `${count} item${count === 1 ? '' : 's'}`;
+}
+
+function summarizeBranch(nodes: EvidenceNode[], branch: (typeof branchDefs)[number]) {
+  const status = nodes.length ? branchStatus(nodes) : 'missing';
+  const missingCount = nodes.reduce((sum, node) => sum + (node.missingEvidence?.length ?? 0), 0);
+  const sensitiveCount = nodes.filter((node) => node.status === 'sensitive').length;
+  const warningCount = nodes.filter((node) => node.status === 'warning').length;
+  const subtitleParts = [
+    branchCountLabel(nodes.length),
+    missingCount ? `${missingCount} gap${missingCount === 1 ? '' : 's'}` : null,
+    warningCount ? `${warningCount} review` : null,
+    sensitiveCount ? `${sensitiveCount} sensitive` : null,
+  ].filter(Boolean);
+
+  return {
+    id: `summary:${branch.key}`,
+    type: branch.types[0],
+    label: nodes.length ? typeLabel(branch.types[0]) : 'No records found',
+    subtitle: subtitleParts.join(' | ') || branch.subtitle,
+    status,
+    missingEvidence: nodes.length ? [] : [`No ${branch.label.toLowerCase()} evidence found.`],
+  } satisfies EvidenceNode;
+}
+
 function typeIcon(type: EvidenceNodeType) {
   if (type === 'employee') return UserRound;
   if (type === 'journal') return Landmark;
@@ -195,7 +239,7 @@ function MindMapNode({
       onClick={onClick}
       disabled={!onClick}
       className={`absolute rounded-md border px-3 py-2 text-left shadow-sm transition ${
-        onClick ? 'hover:scale-[1.02] hover:shadow-md' : 'cursor-default'
+        onClick ? 'cursor-pointer hover:border-primary/60 hover:shadow-md' : 'cursor-default'
       } ${statusClass(node.status)} ${selected ? 'ring-2 ring-primary ring-offset-2' : ''}`}
       style={{
         left: x - width / 2,
@@ -226,15 +270,15 @@ function MindMapNode({
 
 function MindMapCanvas({
   data,
-  selectedNodeId,
-  onSelectNode,
+  selectedBranchKey,
+  onSelectBranch,
 }: {
   data: EvidenceMapResponse;
-  selectedNodeId: string | null;
-  onSelectNode: (id: string) => void;
+  selectedBranchKey: string | null;
+  onSelectBranch: (key: string) => void;
 }) {
-  const canvas = { width: 1580, height: 1020 };
-  const center = { x: 790, y: 510 };
+  const canvas = { width: 1900, height: 1240 };
+  const center = { x: 950, y: 620 };
 
   const centerNode: EvidenceNode = {
     id: `mind-center:${data.project.id}:${data.period.label}`,
@@ -246,24 +290,21 @@ function MindMapCanvas({
 
   const branches = branchDefs.map((branch) => {
     const nodes = data.nodes.filter((node) => branch.types.includes(node.type));
-    const point = polarPoint(center.x, center.y, 310, branch.angle);
+    const point = polarPoint(center.x, center.y, 410, branch.angle);
     return {
       ...branch,
       point,
       status: nodes.length ? branchStatus(nodes) : 'missing',
       nodes,
+      summary: summarizeBranch(nodes, branch),
     };
   });
 
-  const positionedNodes = branches.flatMap((branch) => {
-    const spread = Math.min(70, 18 + branch.nodes.length * 10);
-    return branch.nodes.map((node, index) => {
-      const offset = branch.nodes.length === 1 ? 0 : -spread / 2 + (spread * index) / (branch.nodes.length - 1);
-      const radius = 540 + Math.min(index, 3) * 42;
-      const point = polarPoint(center.x, center.y, radius, branch.angle + offset);
-      return { node, point, branchKey: branch.key };
-    });
-  });
+  const positionedSummaries = branches.map((branch) => ({
+    node: branch.summary,
+    point: polarPoint(center.x, center.y, 710, branch.angle),
+    branchKey: branch.key,
+  }));
 
   return (
     <div className="overflow-auto rounded-md border bg-[#f8fafc] p-3">
@@ -286,7 +327,7 @@ function MindMapCanvas({
               strokeLinecap="round"
             />
           ))}
-          {positionedNodes.map(({ node, point, branchKey }) => {
+          {positionedSummaries.map(({ node, point, branchKey }) => {
             const branch = branches.find((item) => item.key === branchKey);
             if (!branch) return null;
             return (
@@ -315,24 +356,95 @@ function MindMapCanvas({
               subtitle: `${branch.nodes.length} item${branch.nodes.length === 1 ? '' : 's'} | ${branch.subtitle}`,
               status: branch.status,
             }}
-            selected={false}
+            selected={selectedBranchKey === branch.key}
             x={branch.point.x}
             y={branch.point.y}
             width={250}
             branch
+            onClick={() => onSelectBranch(branch.key)}
           />
         ))}
 
-        {positionedNodes.map(({ node, point }) => (
+        {positionedSummaries.map(({ node, point, branchKey }) => (
           <MindMapNode
             key={node.id}
             node={node}
-            selected={selectedNodeId === node.id}
+            selected={selectedBranchKey === branchKey}
             x={point.x}
             y={point.y}
-            width={210}
-            onClick={() => onSelectNode(node.id)}
+            width={240}
+            onClick={() => onSelectBranch(branchKey)}
           />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function FlowMapCanvas({
+  data,
+  selectedBranchKey,
+  onSelectBranch,
+}: {
+  data: EvidenceMapResponse;
+  selectedBranchKey: string | null;
+  onSelectBranch: (key: string) => void;
+}) {
+  const branches = branchDefs.map((branch) => {
+    const nodes = data.nodes.filter((node) => branch.types.includes(node.type));
+    return {
+      ...branch,
+      nodes,
+      status: nodes.length ? branchStatus(nodes) : 'missing',
+      summary: summarizeBranch(nodes, branch),
+    };
+  });
+
+  return (
+    <div className="overflow-auto rounded-md border bg-[#f8fafc] p-4">
+      <div className="flex min-w-[1680px] items-stretch gap-4">
+        <div
+          className="w-72 flex-shrink-0 rounded-md border border-emerald-300 bg-white p-4 text-left shadow-sm"
+        >
+          <div className="flex items-center gap-2 text-sm font-semibold text-emerald-950">
+            <Network className="h-5 w-5" />
+            {data.project.project_code}
+          </div>
+          <div className="mt-2 text-xs text-muted-foreground">{data.project.project_name}</div>
+          <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+            <div className="rounded border bg-muted/40 p-2">
+              <div className="text-muted-foreground">Period</div>
+              <div className="font-mono font-semibold">{data.period.label}</div>
+            </div>
+            <div className="rounded border bg-muted/40 p-2">
+              <div className="text-muted-foreground">Labor</div>
+              <div className="font-semibold">{money(data.summary.totalLaborDollars)}</div>
+            </div>
+          </div>
+        </div>
+
+        {branches.map((branch) => (
+          <div key={branch.key} className="flex items-center gap-4">
+            <ArrowRight className="h-5 w-5 flex-shrink-0 text-slate-400" />
+            <button
+              type="button"
+              onClick={() => onSelectBranch(branch.key)}
+              className={`w-60 flex-shrink-0 rounded-md border p-3 text-left shadow-sm transition-colors hover:border-primary/60 hover:bg-white ${
+                selectedBranchKey === branch.key ? 'ring-2 ring-primary ring-offset-2' : ''
+              } ${statusClass(branch.status)}`}
+            >
+              <div className="flex items-start gap-2">
+                {(() => {
+                  const Icon = typeIcon(branch.types[0]);
+                  return <Icon className="mt-0.5 h-5 w-5 flex-shrink-0" />;
+                })()}
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold">{branch.label}</div>
+                  <div className="mt-1 text-xs opacity-75">{branch.summary.subtitle}</div>
+                </div>
+              </div>
+            </button>
+          </div>
         ))}
       </div>
     </div>
@@ -355,6 +467,9 @@ export default function TransactionEvidenceMap() {
   const [projectId, setProjectId] = useState('');
   const [period, setPeriod] = useState(currentPeriod());
   const [search, setSearch] = useState('');
+  const [mapViewMode, setMapViewMode] = useState<MapViewMode>('radial');
+  const [pathsOpen, setPathsOpen] = useState(false);
+  const [selectedBranchKey, setSelectedBranchKey] = useState<string | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 
   const { data: projects = [], isLoading: projectsLoading } = useQuery<ProjectOption[]>({
@@ -387,6 +502,10 @@ export default function TransactionEvidenceMap() {
   }, [projects, search]);
 
   const selectedNode = data?.nodes.find((node) => node.id === selectedNodeId) ?? null;
+  const selectedBranch = selectedBranchKey ? branchDefs.find((branch) => branch.key === selectedBranchKey) ?? null : null;
+  const selectedBranchNodes = selectedBranch && data
+    ? data.nodes.filter((node) => selectedBranch.types.includes(node.type))
+    : [];
   const nodeById = useMemo(() => new Map((data?.nodes ?? []).map((node) => [node.id, node])), [data?.nodes]);
 
   return (
@@ -426,6 +545,7 @@ export default function TransactionEvidenceMap() {
             <Select value={projectId || undefined} onValueChange={(value) => {
               setProjectId(value);
               setSelectedNodeId(null);
+              setSelectedBranchKey(null);
             }}>
               <SelectTrigger className="min-w-[280px]">
                 <SelectValue placeholder={projectsLoading ? 'Loading projects...' : 'Select project'} />
@@ -449,6 +569,7 @@ export default function TransactionEvidenceMap() {
             onChange={(event) => {
               setPeriod(event.target.value);
               setSelectedNodeId(null);
+              setSelectedBranchKey(null);
             }}
           />
         </div>
@@ -510,40 +631,49 @@ export default function TransactionEvidenceMap() {
             </div>
           </div>
 
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-            <MindMapCanvas data={data} selectedNodeId={selectedNodeId} onSelectNode={setSelectedNodeId} />
-
-            <aside className="rounded-md border bg-background p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <div>
-                  <h2 className="font-semibold">Evidence Paths</h2>
-                  <p className="text-xs text-muted-foreground">{data.edges.length} relationships</p>
+          <div className="rounded-md border bg-background p-3">
+            <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <h2 className="font-semibold">Evidence Map</h2>
+                <p className="text-xs text-muted-foreground">
+                  Summary-first view. Click a branch to expand the underlying records.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="inline-flex rounded-md border bg-muted/40 p-1">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={mapViewMode === 'radial' ? 'default' : 'ghost'}
+                    className="h-8 gap-1"
+                    onClick={() => setMapViewMode('radial')}
+                  >
+                    <GitFork className="h-4 w-4" />
+                    Radial
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={mapViewMode === 'flow' ? 'default' : 'ghost'}
+                    className="h-8 gap-1"
+                    onClick={() => setMapViewMode('flow')}
+                  >
+                    <ListTree className="h-4 w-4" />
+                    Left to right
+                  </Button>
                 </div>
-                <StatusBadge status={data.summary.missingEvidenceCount ? 'warning' : 'ok'} />
+                <Button type="button" variant="outline" size="sm" className="gap-2" onClick={() => setPathsOpen(true)}>
+                  <PanelRightOpen className="h-4 w-4" />
+                  Evidence Paths
+                </Button>
               </div>
-              <div className="max-h-[640px] space-y-2 overflow-auto pr-1">
-                {data.edges.map((edge) => {
-                  const from = nodeById.get(edge.from);
-                  const to = nodeById.get(edge.to);
-                  return (
-                    <button
-                      key={edge.id}
-                      type="button"
-                      onClick={() => setSelectedNodeId(edge.to)}
-                      className="w-full rounded-md border p-2 text-left text-xs hover:bg-muted"
-                    >
-                      <div className="flex items-center gap-2">
-                        <StatusBadge status={edge.status} />
-                        <span className="font-medium">{edge.label}</span>
-                      </div>
-                      <div className="mt-1 text-muted-foreground">
-                        {from?.label ?? edge.from} -&gt; {to?.label ?? edge.to}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </aside>
+            </div>
+
+            {mapViewMode === 'radial' ? (
+              <MindMapCanvas data={data} selectedBranchKey={selectedBranchKey} onSelectBranch={setSelectedBranchKey} />
+            ) : (
+              <FlowMapCanvas data={data} selectedBranchKey={selectedBranchKey} onSelectBranch={setSelectedBranchKey} />
+            )}
           </div>
 
           {data.missingEvidence.length > 0 && (
@@ -566,6 +696,119 @@ export default function TransactionEvidenceMap() {
           )}
         </>
       )}
+
+      <Sheet open={pathsOpen} onOpenChange={setPathsOpen}>
+        <SheetContent className="w-full overflow-auto sm:max-w-lg">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              Evidence Paths
+              <StatusBadge status={data?.summary.missingEvidenceCount ? 'warning' : 'ok'} />
+            </SheetTitle>
+            <SheetDescription>{data?.edges.length ?? 0} relationships in this map</SheetDescription>
+          </SheetHeader>
+          <div className="mt-5 space-y-2">
+            {(data?.edges ?? []).map((edge) => {
+              const from = nodeById.get(edge.from);
+              const to = nodeById.get(edge.to);
+              return (
+                <button
+                  key={edge.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedNodeId(edge.to);
+                    setPathsOpen(false);
+                  }}
+                  className="w-full cursor-pointer rounded-md border p-3 text-left text-xs transition-colors hover:bg-muted"
+                >
+                  <div className="flex items-center gap-2">
+                    <StatusBadge status={edge.status} />
+                    <span className="font-medium">{edge.label}</span>
+                  </div>
+                  <div className="mt-1 text-muted-foreground">
+                    {from?.label ?? edge.from} -&gt; {to?.label ?? edge.to}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      <Sheet open={!!selectedBranch} onOpenChange={(open) => !open && setSelectedBranchKey(null)}>
+        <SheetContent className="w-full overflow-auto sm:max-w-2xl">
+          {selectedBranch && (
+            <>
+              <SheetHeader>
+                <SheetTitle className="flex items-center gap-2">
+                  {selectedBranch.label}
+                  <StatusBadge status={selectedBranchNodes.length ? branchStatus(selectedBranchNodes) : 'missing'} />
+                </SheetTitle>
+                <SheetDescription>
+                  {selectedBranchNodes.length} record{selectedBranchNodes.length === 1 ? '' : 's'} | {selectedBranch.subtitle}
+                </SheetDescription>
+              </SheetHeader>
+
+              <div className="mt-5 space-y-3">
+                {selectedBranch.key === 'audit' && (
+                  <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-950">
+                    Audit log records are tucked here so the map stays readable. Open a record for hash, actor, sequence, and linked ledger details.
+                  </div>
+                )}
+
+                {selectedBranchNodes.length === 0 ? (
+                  <div className="rounded-md border border-dashed p-6 text-sm text-muted-foreground">
+                    No records found for this branch.
+                  </div>
+                ) : (
+                  selectedBranchNodes.map((node) => {
+                    const Icon = typeIcon(node.type);
+                    return (
+                      <button
+                        key={node.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedBranchKey(null);
+                          setSelectedNodeId(node.id);
+                        }}
+                        className="w-full cursor-pointer rounded-md border bg-background p-3 text-left transition-colors hover:bg-muted"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex min-w-0 items-start gap-2">
+                            <Icon className="mt-0.5 h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-semibold">{node.label}</div>
+                              {node.subtitle && (
+                                <div className="mt-1 text-xs text-muted-foreground">{node.subtitle}</div>
+                              )}
+                            </div>
+                          </div>
+                          <StatusBadge status={node.status} />
+                        </div>
+                        {node.metrics && (
+                          <div className="mt-3 grid gap-2 text-xs sm:grid-cols-3">
+                            {Object.entries(node.metrics).slice(0, 3).map(([key, value]) => (
+                              <div key={key} className="rounded border bg-muted/40 p-2">
+                                <div className="text-muted-foreground">{key}</div>
+                                <div className="truncate font-medium">{String(value ?? '-')}</div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {node.missingEvidence?.length ? (
+                          <div className="mt-2 flex items-center gap-1 text-xs font-medium text-amber-700">
+                            <AlertTriangle className="h-3 w-3" />
+                            {node.missingEvidence.length} gap{node.missingEvidence.length === 1 ? '' : 's'}
+                          </div>
+                        ) : null}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
 
       <Sheet open={!!selectedNode} onOpenChange={(open) => !open && setSelectedNodeId(null)}>
         <SheetContent className="w-full overflow-auto sm:max-w-xl">

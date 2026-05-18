@@ -424,26 +424,6 @@ export default function NonconformanceFormModal({
       }
     }
 
-    if (form.status === 'Resolved') {
-      const missing = [
-        !form.containmentAction.trim() && 'containment action',
-        !form.rootCause.trim() && 'root cause',
-        !form.correctiveAction.trim() && 'corrective action',
-        !form.dispositionRationale.trim() && 'disposition rationale',
-        form.effectivenessStatus !== 'effective' && 'effective effectiveness review',
-        form.recurrenceDetected && !form.preventiveAction.trim() && 'preventive action',
-      ].filter(Boolean);
-
-      if (missing.length > 0) {
-        toast({
-          title: 'Closure Evidence Required',
-          description: `Resolved NCRs require ${missing.join(', ')}.`,
-          variant: 'destructive',
-        });
-        return;
-      }
-    }
-
     setLoading(true);
     try {
       // Prepare the form data for submission

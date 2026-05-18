@@ -1,10 +1,9 @@
 import { Router } from 'express';
 import { storage } from '../../storage';
 import { insertCuttingDocumentSchema } from '../../schema';
-import { ObjectStorageService } from '../../replit_integrations/object_storage/objectStorage';
+import { getFileStorageProviderForObjectPath } from '../services/fileStorageProvider';
 
 const router = Router();
-const objectStorageService = new ObjectStorageService();
 
 router.get('/', async (req, res) => {
   try {
@@ -26,10 +25,10 @@ router.post('/', async (req, res) => {
     // Set ACL to public so the file can be opened via /objects/* route
     try {
       const user = (req as any).user;
-      await objectStorageService.trySetObjectEntityAclPolicy(parsed.data.fileUrl, {
-        owner: user?.id?.toString() || 'system',
-        visibility: 'public',
-      });
+      await getFileStorageProviderForObjectPath(parsed.data.fileUrl).setPublicReadPolicy(
+        parsed.data.fileUrl,
+        user?.id?.toString() || 'system',
+      );
     } catch (aclError) {
       console.warn('[CuttingDocuments] Failed to set ACL policy:', aclError);
       // Non-fatal: continue so the record is saved even if ACL fails
@@ -55,7 +54,7 @@ router.delete('/:id', async (req, res) => {
     }
     // Best-effort: remove the underlying object from storage to prevent orphans
     try {
-      await objectStorageService.deleteByStoragePath(deleted.fileUrl);
+      await getFileStorageProviderForObjectPath(deleted.fileUrl).deleteObject(deleted.fileUrl);
     } catch (storageErr) {
       console.warn('[CuttingDocuments] Failed to delete object from storage:', storageErr);
     }

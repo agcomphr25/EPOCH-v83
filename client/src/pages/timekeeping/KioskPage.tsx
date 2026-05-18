@@ -170,6 +170,7 @@ export default function KioskPage() {
   const [chargeCodes, setChargeCodes] = useState<ChargeCode[]>([]);
   const [selectedChargeCode, setSelectedChargeCode] = useState('');
   const [dailyCertificationConfirmed, setDailyCertificationConfirmed] = useState(false);
+  const [showClockOutCertification, setShowClockOutCertification] = useState(false);
   const [resultMsg, setResultMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [dcaaViolation, setDcaaViolation] = useState<DcaaPolicyViolation | null>(null);
@@ -195,6 +196,7 @@ export default function KioskPage() {
     setChargeCodes([]);
     setSelectedChargeCode('');
     setDailyCertificationConfirmed(false);
+    setShowClockOutCertification(false);
     setResultMsg('');
     setErrorMsg('');
     setDcaaViolation(null);
@@ -312,6 +314,7 @@ export default function KioskPage() {
       }
       setPunchStatus(status);
       setDailyCertificationConfirmed(false);
+      setShowClockOutCertification(false);
 
       // Load charge codes
       const codesRes = await fetch('/api/timekeeping/kiosk/charge-codes');
@@ -329,10 +332,16 @@ export default function KioskPage() {
 
   const handleConfirm = useCallback(async (requestedAction?: KioskAction) => {
     if (!employee || !punchStatus) return;
-    setStep('punching');
 
     const meta = getActionMeta(punchStatus.status);
     const action = requestedAction ?? meta.action;
+    if (action === 'clock_out' && !dailyCertificationConfirmed) {
+      setShowClockOutCertification(true);
+      restartIdleTimer();
+      return;
+    }
+
+    setStep('punching');
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
     try {
@@ -343,8 +352,7 @@ export default function KioskPage() {
           employeeId: employee.id,
           requestedAction: action,
           timezone: tz,
-          ...(action === 'clock_in' && selectedChargeCode ? { costCode: selectedChargeCode } : {}),
-          ...(meta.action === 'clock_out' ? { dailyCertificationConfirmed } : {}),
+          ...(action === 'clock_out' ? { dailyCertificationConfirmed } : {}),
           ...(selectedChargeCode ? { costCode: selectedChargeCode } : {}),
         }),
       });
@@ -367,7 +375,12 @@ export default function KioskPage() {
       setErrorMsg('Network error. Punch was not recorded.');
       setStep('error');
     }
-  }, [dailyCertificationConfirmed, employee, punchStatus, selectedChargeCode]);
+  }, [dailyCertificationConfirmed, employee, punchStatus, restartIdleTimer, selectedChargeCode]);
+
+  const handleClockOutIntent = useCallback(() => {
+    setShowClockOutCertification(true);
+    restartIdleTimer();
+  }, [restartIdleTimer]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -427,6 +440,10 @@ export default function KioskPage() {
             (active instanceof HTMLElement && active.isContentEditable);
           if (isTextInput) return;
           e.preventDefault();
+          if (punchStatus?.status === 'clocked_in' && !showClockOutCertification) {
+            handleClockOutIntent();
+            return;
+          }
           handleConfirm();
           return;
         }
@@ -435,7 +452,7 @@ export default function KioskPage() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [step, pin, handleIdleTap, handlePinKey, handlePinSubmit, handleConfirm, resetToIdle]);
+  }, [step, pin, punchStatus, showClockOutCertification, handleIdleTap, handlePinKey, handlePinSubmit, handleConfirm, handleClockOutIntent, resetToIdle]);
 
   const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const dateStr = now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
@@ -644,6 +661,7 @@ export default function KioskPage() {
     const isClockedIn = punchStatus.status === 'clocked_in';
     const isOnBreak = punchStatus.status === 'on_break';
     const isClockOut = meta.action === 'clock_out';
+    const showPrimaryActions = !showClockOutCertification;
     return (
       <div className="min-h-screen bg-gray-50 text-gray-900 flex flex-col items-center justify-center px-8">
         <div className="w-full max-w-sm space-y-6 text-center">
@@ -673,76 +691,81 @@ export default function KioskPage() {
             />
           )}
 
-          <div className="space-y-3">
-            {isClockIn && (
-              <Button
-                size="lg"
-                onClick={() => handleConfirm('clock_in')}
-                className="w-full h-16 text-xl font-bold bg-blue-600 hover:bg-blue-700 rounded-2xl text-white gap-3"
-              >
-                <LogIn className="h-6 w-6" />
-                Clock In
-              </Button>
-            )}
-
-            {isClockedIn && (
-              <>
+          {showPrimaryActions && (
+            <div className="space-y-3">
+              {isClockIn && (
                 <Button
                   size="lg"
-                  onClick={() => handleConfirm('break_start')}
+                  onClick={() => handleConfirm('clock_in')}
+                  className="w-full h-16 text-xl font-bold bg-blue-600 hover:bg-blue-700 rounded-2xl text-white gap-3"
+                >
+                  <LogIn className="h-6 w-6" />
+                  Clock In
+                </Button>
+              )}
+
+              {isClockedIn && (
+                <>
+                  <Button
+                    size="lg"
+                    onClick={() => handleConfirm('break_start')}
+                    className="w-full h-16 text-xl font-bold bg-amber-600 hover:bg-amber-700 rounded-2xl text-white gap-3"
+                  >
+                    <Coffee className="h-6 w-6" />
+                    Clock Out for Break
+                  </Button>
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    onClick={handleClockOutIntent}
+                    className="w-full h-16 text-xl font-bold rounded-2xl border-red-300 text-red-700 hover:bg-red-50 gap-3"
+                  >
+                    <LogOut className="h-6 w-6" />
+                    Clock Out
+                  </Button>
+                </>
+              )}
+
+              {isOnBreak && (
+                <Button
+                  size="lg"
+                  onClick={() => handleConfirm('break_end')}
                   className="w-full h-16 text-xl font-bold bg-amber-600 hover:bg-amber-700 rounded-2xl text-white gap-3"
                 >
-                  <Coffee className="h-6 w-6" />
-                  Clock Out for Break
+                  <Play className="h-6 w-6" />
+                  Clock In from Break
                 </Button>
-                <Button
-                  size="lg"
-                  variant="outline"
-                  onClick={() => handleConfirm('clock_out')}
-                  className="w-full h-16 text-xl font-bold rounded-2xl border-red-300 text-red-700 hover:bg-red-50 gap-3"
-                >
-                  <LogOut className="h-6 w-6" />
-                  Clock Out
-                </Button>
-              </>
-            )}
-
-            {isOnBreak && (
-              <Button
-                size="lg"
-                onClick={() => handleConfirm('break_end')}
-                className="w-full h-16 text-xl font-bold bg-amber-600 hover:bg-amber-700 rounded-2xl text-white gap-3"
-              >
-                <Play className="h-6 w-6" />
-                Clock In from Break
-              </Button>
-            )}
-          </div>
-          {isClockOut && (
-            <label className="flex items-start gap-3 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-left shadow-sm">
-              <input
-                type="checkbox"
-                checked={dailyCertificationConfirmed}
-                onChange={(event) => {
-                  setDailyCertificationConfirmed(event.target.checked);
-                  restartIdleTimer();
-                }}
-                className="mt-1 h-5 w-5 rounded border-blue-300 text-blue-600"
-              />
-              <span className="text-sm text-blue-900">
-                I certify that today&apos;s recorded time is complete, accurate, and represents work I actually performed.
-              </span>
-            </label>
+              )}
+            </div>
           )}
 
-          <Button
-            size="lg"
-            onClick={handleConfirm}
-            disabled={isClockOut && !dailyCertificationConfirmed}
-            className="w-full h-16 text-xl font-bold bg-blue-600 hover:bg-blue-700 rounded-2xl text-white"
-          >
-            {meta.verb}
-          </Button>
+          {isClockOut && showClockOutCertification && (
+            <div className="space-y-4">
+              <label className="flex items-start gap-3 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-left shadow-sm">
+                <input
+                  type="checkbox"
+                  checked={dailyCertificationConfirmed}
+                  onChange={(event) => {
+                    setDailyCertificationConfirmed(event.target.checked);
+                    restartIdleTimer();
+                  }}
+                  className="mt-1 h-5 w-5 rounded border-blue-300 text-blue-600"
+                />
+                <span className="text-sm text-blue-900">
+                  I certify that today&apos;s recorded time is complete, accurate, and represents work I actually performed.
+                </span>
+              </label>
+
+              <Button
+                size="lg"
+                onClick={() => handleConfirm('clock_out')}
+                disabled={!dailyCertificationConfirmed}
+                className="w-full h-16 text-xl font-bold bg-blue-600 hover:bg-blue-700 rounded-2xl text-white"
+              >
+                Clock Out
+              </Button>
+            </div>
+          )}
 
           <button
             onClick={resetToIdle}

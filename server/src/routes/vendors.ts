@@ -14,6 +14,7 @@ import { authorizeApiRoute } from '../../middleware/routeAuthorization';
 import { objectStorageClient } from '../../replit_integrations/object_storage/objectStorage';
 import { setObjectAclPolicy } from '../../replit_integrations/object_storage/objectAcl';
 import { auditService } from '../services/auditService';
+import { getFileStorageProvider, getStorageErrorResponse } from '../services/fileStorageProvider';
 import {
   insertSupplierAuditSchema,
   insertSupplierScopeSchema,
@@ -80,6 +81,24 @@ function parseGcsPath(fullPath: string): { bucketName: string; objectName: strin
   const normalized = fullPath.startsWith('/') ? fullPath : `/${fullPath}`;
   const parts = normalized.split('/');
   return { bucketName: parts[1], objectName: parts.slice(2).join('/') };
+}
+
+async function uploadVendorPdfToStorage(file: Express.Multer.File, scope: 'vendor-approvals' | 'vendor-documents') {
+  const provider = getFileStorageProvider();
+  const objectPath = await provider.uploadBuffer({
+    buffer: file.buffer,
+    fileName: file.originalname,
+    contentType: 'application/pdf',
+    scope,
+  });
+  await provider.setPublicReadPolicy(objectPath, 'system');
+
+  return {
+    url: objectPath,
+    filename: objectPath.split('/').pop() || file.originalname,
+    originalName: file.originalname,
+    size: file.size,
+  };
 }
 
 // One-time startup migration: upload legacy local vendor documents to object storage
@@ -294,14 +313,17 @@ async function syncVendorScoresFromEvaluations(vendorId: number) {
   
   // Get all evaluations for this vendor
   const allEvaluations = await storage.getVendorMonthlyEvaluations(vendorId);
-  
-  // Check if there's any evaluation record for the CURRENT calendar year
-  // A vendor is considered "evaluated" if they have any evaluation record for the current year,
-  // even if all scores are N/A (null) - the record existence is what matters
-  const currentYearEval = allEvaluations.find(ev => ev.year === currentYear);
-  
-  // Set evaluated=true if current year has ANY evaluation record (scores or N/A)
-  const isEvaluated = !!currentYearEval;
+
+  // Use any scored evaluation as the source of truth for the evaluated flag so
+  // historical vendors with saved scores still show as evaluated on the dashboard.
+  const scoredEvaluations = allEvaluations.filter(ev =>
+    ev.qualityScore !== null ||
+    ev.costScore !== null ||
+    ev.deliveryScore !== null ||
+    ev.responseScore !== null
+  );
+  const isEvaluated = scoredEvaluations.length > 0;
+  const currentYearEval = allEvaluations.find(ev => ev.year === currentYear && ev.month === 1);
   
   // Get the latest evaluation for displaying scores (not necessarily current month)
   const evaluationsWithScores = allEvaluations.filter(ev => 
@@ -314,10 +336,9 @@ async function syncVendorScoresFromEvaluations(vendorId: number) {
     return b.month - a.month;
   });
   
-  // When vendor is evaluated (current-year record exists), evaluationDate MUST
-  // reflect the current year so ERDI's 365-day lookback counts correctly.
-  // Display scores may still come from the latest scored record (could be prior year).
-  const evaluationDate = isEvaluated ? `${currentYear}-01-01` : null;
+  // Keep the current-year evaluation date when present; otherwise preserve the
+  // latest scored record date so historical vendors still appear evaluated.
+  const evaluationDate = currentYearEval ? `${currentYear}-01-01` : (scoredEvaluations.length > 0 ? `${scoredEvaluations[0].year}-01-01` : null);
 
   if (evaluationsWithScores.length > 0) {
     const latestEval = evaluationsWithScores[0];
@@ -869,44 +890,13 @@ router.post('/upload/approval', vendorApprovalUpload.single('file'), async (req:
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    const privateObjectDir = process.env.PRIVATE_OBJECT_DIR;
-    if (!privateObjectDir) {
-      console.error('PRIVATE_OBJECT_DIR not set — cannot upload vendor approval PDF to object storage');
-      return res.status(500).json({ error: 'Object storage not configured' });
-    }
+    const uploadResult = await uploadVendorPdfToStorage(req.file, 'vendor-approvals');
+    return res.status(200).json(uploadResult);
 
-    const objectId = randomUUID();
-    const safeFilename = req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const objectKey = `vendor-approvals/${objectId}-${safeFilename}`;
-    const fullPath = `${privateObjectDir}/${objectKey}`;
-
-    const parts = fullPath.replace(/^\//, '').split('/');
-    const bucketName = parts[0];
-    const objectName = parts.slice(1).join('/');
-
-    const bucket = objectStorageClient.bucket(bucketName);
-    const file = bucket.file(objectName);
-
-    await file.save(req.file.buffer, {
-      contentType: 'application/pdf',
-      metadata: {
-        cacheControl: 'public, max-age=86400',
-      },
-    });
-
-    await setObjectAclPolicy(file, { owner: 'system', visibility: 'public' });
-
-    const objectPath = `/objects/${objectKey}`;
-
-    res.status(200).json({
-      url: objectPath,
-      filename: `${objectId}-${safeFilename}`,
-      originalName: req.file.originalname,
-      size: req.file.size,
-    });
   } catch (error) {
     console.error('Vendor approval upload error:', error);
-    res.status(500).json({ error: 'Failed to upload file' });
+    const { status, reason, message } = getStorageErrorResponse(error);
+    res.status(status).json({ error: message, reason });
   }
 });
 
@@ -917,44 +907,13 @@ router.post('/upload/document', vendorDocumentUpload.single('file'), async (req:
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    const privateObjectDir = process.env.PRIVATE_OBJECT_DIR;
-    if (!privateObjectDir) {
-      console.error('PRIVATE_OBJECT_DIR not set — cannot upload vendor document to object storage');
-      return res.status(500).json({ error: 'Object storage not configured' });
-    }
+    const uploadResult = await uploadVendorPdfToStorage(req.file, 'vendor-documents');
+    return res.status(200).json(uploadResult);
 
-    const objectId = randomUUID();
-    const safeFilename = req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const objectKey = `vendor-documents/${objectId}-${safeFilename}`;
-    const fullPath = `${privateObjectDir}/${objectKey}`;
-
-    const parts = fullPath.replace(/^\//, '').split('/');
-    const bucketName = parts[0];
-    const objectName = parts.slice(1).join('/');
-
-    const bucket = objectStorageClient.bucket(bucketName);
-    const file = bucket.file(objectName);
-
-    await file.save(req.file.buffer, {
-      contentType: 'application/pdf',
-      metadata: {
-        cacheControl: 'public, max-age=86400',
-      },
-    });
-
-    await setObjectAclPolicy(file, { owner: 'system', visibility: 'public' });
-
-    const objectPath = `/objects/${objectKey}`;
-
-    res.status(200).json({
-      url: objectPath,
-      filename: `${objectId}-${safeFilename}`,
-      originalName: req.file.originalname,
-      size: req.file.size,
-    });
   } catch (error) {
     console.error('Vendor document upload error:', error);
-    res.status(500).json({ error: 'Failed to upload file' });
+    const { status, reason, message } = getStorageErrorResponse(error);
+    res.status(status).json({ error: message, reason });
   }
 });
 
@@ -1064,6 +1023,17 @@ router.post('/:vendorId/evaluations', async (req: Request, res: Response) => {
     
     const totalScore = scores.length > 0 ? scores.reduce((sum, score) => sum + score, 0) : 0;
 
+    const hasAnyAnnualScore =
+      evaluation.qualityScore !== null && evaluation.qualityScore !== undefined ||
+      evaluation.costScore !== null && evaluation.costScore !== undefined ||
+      evaluation.deliveryScore !== null && evaluation.deliveryScore !== undefined ||
+      evaluation.responseScore !== null && evaluation.responseScore !== undefined;
+
+    await storage.updateVendor(vendorId, {
+      evaluated: hasAnyAnnualScore,
+      evaluationDate: hasAnyAnnualScore ? `${year}-01-01` : null,
+    });
+
     // Update vendor record with the latest evaluation scores so they show on the vendor list
     await syncVendorScoresFromEvaluations(vendorId);
 
@@ -1146,6 +1116,7 @@ router.post('/import-evaluations', async (req: Request, res: Response) => {
       matched: 0,
       unmatched: [] as string[],
       created: 0,
+      synced: 0,
       errors: [] as any[],
     };
 
@@ -1210,6 +1181,9 @@ router.post('/import-evaluations', async (req: Request, res: Response) => {
             });
             results.created++;
           }
+
+          await syncVendorScoresFromEvaluations(matchedVendor.id);
+          results.synced++;
         } catch (error) {
           results.errors.push({
             vendor: vendorName,

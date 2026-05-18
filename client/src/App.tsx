@@ -130,6 +130,7 @@ import VendorManagement from './pages/VendorManagement';
 import ManageGroups from './pages/ManageGroups';
 import PurchaseOrders from './pages/PurchaseOrders';
 import P2ControlCenter from './pages/P2ControlCenter';
+import P2CustomersPage from './pages/P2CustomersPage';
 import P2Forms from './pages/P2Forms';
 import ManufacturingQueue from './pages/ManufacturingQueue';
 import KitsQueue from './pages/KitsQueue';
@@ -348,9 +349,11 @@ import EdriMissingEvidence from './pages/admin/EdriMissingEvidence';
 import EdriHistory from './pages/admin/EdriHistory';
 import EdriEvidence from './pages/admin/EdriEvidence';
 import EdriSnapshotDetail from './pages/admin/EdriSnapshotDetail';
+import EdriSupportingDocs from './pages/admin/EdriSupportingDocs';
 import DcaaFindings from './pages/admin/DcaaFindings';
 import ChargeCodeUsageReport from './pages/admin/ChargeCodeUsageReport';
 import LaborDistributionReport from './pages/admin/LaborDistributionReport';
+import TransactionEvidenceMap from './pages/admin/TransactionEvidenceMap';
 import SupervisorApprovalExceptionReport from './pages/admin/SupervisorApprovalExceptionReport';
 import TimesheetCorrectionLogReport from './pages/admin/TimesheetCorrectionLogReport';
 import PayrollExportReconciliationReport from './pages/admin/PayrollExportReconciliationReport';
@@ -671,6 +674,7 @@ function App() {
                   <Route path="/signed-documents" component={SignedDocumentsLibrary} />
                   <Route path="/signature-workflow" component={SignatureWorkflowPage} />
                   <Route path="/reference-docs" component={ReferenceDocsPage} />
+                  <Route path="/knowledge-capture" component={VoiceNotesPage} />
                   <Route path="/voice-notes" component={VoiceNotesPage} />
                   <Route path="/process-runs" component={ProcessRuns} />
                   <Route path="/app/production/stations" component={ProductionStationDashboard} />
@@ -1120,6 +1124,7 @@ function App() {
 
                   {/* P2 Routes - Control Center consolidates all P2 functionality */}
                   <Route path="/p2-control-center" component={P2ControlCenter} />
+                  <Route path="/p2-customers" component={P2CustomersPage} />
                   <Route path="/p2-forms" component={P2Forms} />
                   <Route path="/p2-traveler" component={P2TravelerPage} />
                   <Route path="/p2-traveler-viewer" component={P2TravelerViewer} />
@@ -1374,6 +1379,7 @@ function App() {
                   <Route path="/admin/edri/history" component={EdriHistory} />
                   <Route path="/admin/edri/charge-code-usage" component={ChargeCodeUsageReport} />
                   <Route path="/admin/edri/labor-distribution" component={LaborDistributionReport} />
+                  <Route path="/admin/edri/transaction-evidence-map" component={TransactionEvidenceMap} />
                   <Route path="/admin/edri/supervisor-approval-exceptions" component={SupervisorApprovalExceptionReport} />
                   <Route path="/admin/edri/timesheet-correction-log" component={TimesheetCorrectionLogReport} />
                   <Route path="/admin/edri/payroll-export-reconciliation" component={PayrollExportReconciliationReport} />
@@ -1383,6 +1389,7 @@ function App() {
                   <Route path="/admin/edri/inventory-traceability" component={InventoryTraceabilityReport} />
                   <Route path="/admin/edri/audit-ledger-integrity" component={AuditLedgerIntegrityReport} />
                   <Route path="/admin/edri/policy-training-acknowledgment" component={PolicyTrainingAcknowledgmentReport} />
+                  <Route path="/admin/edri/supporting-docs" component={EdriSupportingDocs} />
                   <Route path="/admin/edri/domain/:domainKey" component={EdriDomainDetail} />
                   <Route path="/admin/edri/snapshot/:snapshotId/evidence/:domainKey" component={EdriEvidence} />
                   <Route path="/admin/edri/snapshot/:snapshotId/evidence" component={EdriEvidence} />

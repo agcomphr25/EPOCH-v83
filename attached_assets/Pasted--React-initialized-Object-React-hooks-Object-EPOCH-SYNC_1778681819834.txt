@@ -1,0 +1,208 @@
+ React initialized: Object
+ React hooks: Object
+ [EPOCH SYNC] Sync engine starting
+ [EPOCH SYNC] Sync engine started — interval: 30000 ms
+ App component is rendering...
+ Environment: production
+ Base URL: /
+ [EPOCH] Service Worker Registered https://agcompepoch.xyz/
+ [EPOCH] Install prompt captured and ready
+/login?redirect=%2Ftravelers%2F23604510-7279-48aa-96bd-c726833aa49f%2Fexecute%3Fbadge%3D757ed306c66446f7871fac16bd141974:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+/api/employees/recertification-count:1  Failed to load resource: the server responded with a status of 401 ()
+ [AUTH] Query returned 401 for /api/employees/recertification-count
+ [AUTH] 401 on /api/employees/recertification-count — checking session state
+/api/vendor-pos/compliance-backfill:1  Failed to load resource: the server responded with a status of 401 ()
+ [AUTH] Query returned 401 for /api/vendor-pos/compliance-backfill
+ [AUTH] 401 on /api/vendor-pos/compliance-backfill — checking session state
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ [AUTH] Session check returned 401 — session is gone
+ [AUTH] Session expired on kiosk page — tokens cleared, no redirect
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ [AUTH] Session check returned 401 — session is gone
+ [AUTH] Session expired on kiosk page — tokens cleared, no redirect
+ 🌐 API Request to /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974: 200
+ 🌐 API Request to /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600068 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600068: 200
+ 🌐 API Request to /api/p2-traveler/generate-traveler (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/p2-traveler/generate-traveler: 200
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+[DOM] Password forms should have (optionally hidden) username fields for accessibility: (More info: <URL>) 
+[DOM] Password forms should have (optionally hidden) username fields for accessibility: (More info: <URL>) 
+[DOM] Password forms should have (optionally hidden) username fields for accessibility: (More info: <URL>) 
+[DOM] Password forms should have (optionally hidden) username fields for accessibility: (More info: <URL>) 
+[DOM] Password forms should have (optionally hidden) username fields for accessibility: (More info: <URL>) 
+[DOM] Password forms should have (optionally hidden) username fields for accessibility: (More info: <URL>) 
+[DOM] Password forms should have (optionally hidden) username fields for accessibility: (More info: <URL>) 
+[DOM] Password forms should have (optionally hidden) username fields for accessibility: (More info: <URL>) 
+[DOM] Password forms should have (optionally hidden) username fields for accessibility: (More info: <URL>) 
+[DOM] Password forms should have (optionally hidden) username fields for accessibility: (More info: <URL>) 
+[DOM] Password forms should have (optionally hidden) username fields for accessibility: (More info: <URL>) 
+ 🌐 API Request to /api/travelers/23604510-7279-48aa-96bd-c726833aa49f/steps/d129752a-832f-4b3b-90d5-584ed30edbea/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/23604510-7279-48aa-96bd-c726833aa49f/steps/d129752a-832f-4b3b-90d5-584ed30edbea/start: 200
+ 🌐 API Request to /api/material-lots/validate/MFG-19-712-1 (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/material-lots/validate/MFG-19-712-1: 200
+ 🌐 API Request to /api/travelers/23604510-7279-48aa-96bd-c726833aa49f/tasks/519c10e2-d69d-4e7a-813c-9e713e97062b/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/23604510-7279-48aa-96bd-c726833aa49f/tasks/519c10e2-d69d-4e7a-813c-9e713e97062b/complete: 200
+ 🌐 API Request to /api/travelers/23604510-7279-48aa-96bd-c726833aa49f/tasks/fe63ba9e-3245-45a4-b413-ed9fd2da4fd0/complete (timeout: 15000ms, deployment: true)
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+The specified value "2026-11-21 00:00:00" does not conform to the required format, "yyyy-MM-dd".
+ ✅ API Response from /api/travelers/23604510-7279-48aa-96bd-c726833aa49f/tasks/fe63ba9e-3245-45a4-b413-ed9fd2da4fd0/complete: 200
+ 🌐 API Request to /api/travelers/23604510-7279-48aa-96bd-c726833aa49f/tasks/9ef646da-25bf-4ec1-8adb-e3c30da7fdf1/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/23604510-7279-48aa-96bd-c726833aa49f/tasks/9ef646da-25bf-4ec1-8adb-e3c30da7fdf1/complete: 200
+ 🌐 API Request to /api/travelers/23604510-7279-48aa-96bd-c726833aa49f/tasks/ad79b464-edf8-42df-8353-87328dd1e8c4/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/23604510-7279-48aa-96bd-c726833aa49f/tasks/ad79b464-edf8-42df-8353-87328dd1e8c4/complete: 200
+ 🌐 API Request to /api/travelers/23604510-7279-48aa-96bd-c726833aa49f/tasks/328926ec-c2e1-405b-8457-e23d7404922b/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/23604510-7279-48aa-96bd-c726833aa49f/tasks/328926ec-c2e1-405b-8457-e23d7404922b/complete: 200
+ 🌐 API Request to /api/travelers/23604510-7279-48aa-96bd-c726833aa49f/steps/d129752a-832f-4b3b-90d5-584ed30edbea/sign (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/23604510-7279-48aa-96bd-c726833aa49f/steps/d129752a-832f-4b3b-90d5-584ed30edbea/sign: 200
+ 🌐 API Request to /api/travelers/23604510-7279-48aa-96bd-c726833aa49f/steps/8f84d0ed-10f1-46cb-8708-e6a85f2ce2c6/start (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/23604510-7279-48aa-96bd-c726833aa49f/steps/8f84d0ed-10f1-46cb-8708-e6a85f2ce2c6/start: 200
+ 🌐 API Request to /api/travelers/23604510-7279-48aa-96bd-c726833aa49f/tasks/b0f77bc7-fbbf-46d1-a321-48fc21606e7e/complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/travelers/23604510-7279-48aa-96bd-c726833aa49f/tasks/b0f77bc7-fbbf-46d1-a321-48fc21606e7e/complete: 200
+ 🌐 API Request to /api/travelers/23604510-7279-48aa-96bd-c726833aa49f/tasks/f1740e21-624e-41f3-9568-1a9714741dd9/complete (timeout: 15000ms, deployment: true)
+index-BNqRxEpH.js:235 ✅ API Response from /api/travelers/23604510-7279-48aa-96bd-c726833aa49f/tasks/f1740e21-624e-41f3-9568-1a9714741dd9/complete: 200
+index-BNqRxEpH.js:235 🌐 API Request to /api/travelers/23604510-7279-48aa-96bd-c726833aa49f/steps/8f84d0ed-10f1-46cb-8708-e6a85f2ce2c6 (timeout: 15000ms, deployment: true)
+index-BNqRxEpH.js:235 ✅ API Response from /api/travelers/23604510-7279-48aa-96bd-c726833aa49f/steps/8f84d0ed-10f1-46cb-8708-e6a85f2ce2c6: 200
+index-BNqRxEpH.js:235 🌐 API Request to /api/travelers/23604510-7279-48aa-96bd-c726833aa49f/steps/8f84d0ed-10f1-46cb-8708-e6a85f2ce2c6/sign (timeout: 15000ms, deployment: true)
+/api/travelers/23604510-7279-48aa-96bd-c726833aa49f/steps/8f84d0ed-10f1-46cb-8708-e6a85f2ce2c6/sign:1  Failed to load resource: the server responded with a status of 400 ()
+index-BNqRxEpH.js:235 ✅ API Response from /api/travelers/23604510-7279-48aa-96bd-c726833aa49f/steps/8f84d0ed-10f1-46cb-8708-e6a85f2ce2c6/sign: 400
+index-BNqRxEpH.js:5540 API error raw body: {"gate":"incomplete_finish_tasks","message":"Required FINISH tasks must be completed before signing","detail":"One or more required FINISH-phase tasks have not been completed.","error":"Required FINISH tasks must be completed before signing","reason":"One or more required FINISH-phase tasks have not been completed.","incompleteTasks":[{"id":"c1286a6e-c29c-413b-abb8-6150ef4f1484","title":"Visual Inspection: if there are inconsistent spacing, authorization is needed to continue","taskType":"CHECK","taskPhase":"FINISH","status":"NOT_STARTED"}]}
+console.error @ index-BNqRxEpH.js:5540
+index-BNqRxEpH.js:5540 💥 API Request failed for /api/travelers/23604510-7279-48aa-96bd-c726833aa49f/steps/8f84d0ed-10f1-46cb-8708-e6a85f2ce2c6/sign: Error: Required FINISH tasks must be completed before signing
+    at be (index-BNqRxEpH.js:235:8799)
+console.error @ index-BNqRxEpH.js:5540
+index-BNqRxEpH.js:235 🌐 API Request to /api/travelers/23604510-7279-48aa-96bd-c726833aa49f/tasks/c1286a6e-c29c-413b-abb8-6150ef4f1484/complete (timeout: 15000ms, deployment: true)
+index-BNqRxEpH.js:235 ✅ API Response from /api/travelers/23604510-7279-48aa-96bd-c726833aa49f/tasks/c1286a6e-c29c-413b-abb8-6150ef4f1484/complete: 200
+index-BNqRxEpH.js:235 🌐 API Request to /api/travelers/23604510-7279-48aa-96bd-c726833aa49f/steps/8f84d0ed-10f1-46cb-8708-e6a85f2ce2c6/sign (timeout: 15000ms, deployment: true)
+index-BNqRxEpH.js:235 ✅ API Response from /api/travelers/23604510-7279-48aa-96bd-c726833aa49f/steps/8f84d0ed-10f1-46cb-8708-e6a85f2ce2c6/sign: 200
+index-BNqRxEpH.js:235 🌐 API Request to /api/travelers/23604510-7279-48aa-96bd-c726833aa49f/steps/21ef57e0-f435-43ca-98a2-46bf085f78eb/start (timeout: 15000ms, deployment: true)
+index-BNqRxEpH.js:235 ✅ API Response from /api/travelers/23604510-7279-48aa-96bd-c726833aa49f/steps/21ef57e0-f435-43ca-98a2-46bf085f78eb/start: 200
+index-BNqRxEpH.js:235 🌐 API Request to /api/travelers/23604510-7279-48aa-96bd-c726833aa49f/tasks/eeed135a-86cc-4bc3-8eee-776900329d60/complete (timeout: 15000ms, deployment: true)
+index-BNqRxEpH.js:235 ✅ API Response from /api/travelers/23604510-7279-48aa-96bd-c726833aa49f/tasks/eeed135a-86cc-4bc3-8eee-776900329d60/complete: 200
+index-BNqRxEpH.js:235 🌐 API Request to /api/travelers/23604510-7279-48aa-96bd-c726833aa49f/tasks/11e2a19b-a2d1-446f-a6ed-df9ecec0946b/complete (timeout: 15000ms, deployment: true)
+index-BNqRxEpH.js:235 ✅ API Response from /api/travelers/23604510-7279-48aa-96bd-c726833aa49f/tasks/11e2a19b-a2d1-446f-a6ed-df9ecec0946b/complete: 200
+index-BNqRxEpH.js:235 🌐 API Request to /api/travelers/23604510-7279-48aa-96bd-c726833aa49f/tasks/77353195-6767-4c8a-b6cf-3af225a5cd67/complete (timeout: 15000ms, deployment: true)
+index-BNqRxEpH.js:235 ✅ API Response from /api/travelers/23604510-7279-48aa-96bd-c726833aa49f/tasks/77353195-6767-4c8a-b6cf-3af225a5cd67/complete: 200
+index-BNqRxEpH.js:235 🌐 API Request to /api/travelers/23604510-7279-48aa-96bd-c726833aa49f/tasks/4a8c08d9-870c-4fb0-9289-2826712474a5/complete (timeout: 15000ms, deployment: true)
+index-BNqRxEpH.js:235 ✅ API Response from /api/travelers/23604510-7279-48aa-96bd-c726833aa49f/tasks/4a8c08d9-870c-4fb0-9289-2826712474a5/complete: 200
+index-BNqRxEpH.js:235 🌐 API Request to /api/travelers/23604510-7279-48aa-96bd-c726833aa49f/tasks/fcfb24ec-ecde-4c5d-8e03-7ff3f0b52536/complete (timeout: 15000ms, deployment: true)
+index-BNqRxEpH.js:235 ✅ API Response from /api/travelers/23604510-7279-48aa-96bd-c726833aa49f/tasks/fcfb24ec-ecde-4c5d-8e03-7ff3f0b52536/complete: 200
+index-BNqRxEpH.js:235 🌐 API Request to /api/travelers/23604510-7279-48aa-96bd-c726833aa49f/steps/21ef57e0-f435-43ca-98a2-46bf085f78eb/sign (timeout: 15000ms, deployment: true)
+index-BNqRxEpH.js:235 ✅ API Response from /api/travelers/23604510-7279-48aa-96bd-c726833aa49f/steps/21ef57e0-f435-43ca-98a2-46bf085f78eb/sign: 200
+index-BNqRxEpH.js:2236 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+/api/employees/recertification-count:1  Failed to load resource: the server responded with a status of 401 ()
+index-BNqRxEpH.js:235 [AUTH] Query returned 401 for /api/employees/recertification-count
+(anonymous) @ index-BNqRxEpH.js:235
+index-BNqRxEpH.js:235 [AUTH] 401 on /api/employees/recertification-count — checking session state
+nwt @ index-BNqRxEpH.js:235
+/api/vendor-pos/compliance-backfill:1  Failed to load resource: the server responded with a status of 401 ()
+index-BNqRxEpH.js:235 [AUTH] Query returned 401 for /api/vendor-pos/compliance-backfill
+(anonymous) @ index-BNqRxEpH.js:235
+index-BNqRxEpH.js:235 [AUTH] 401 on /api/vendor-pos/compliance-backfill — checking session state
+nwt @ index-BNqRxEpH.js:235
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+index-BNqRxEpH.js:235 [AUTH] Session check returned 401 — session is gone
+Fcs @ index-BNqRxEpH.js:235
+index-BNqRxEpH.js:235 [AUTH] Session expired on kiosk page — tokens cleared, no redirect
+Rcs @ index-BNqRxEpH.js:235
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+index-BNqRxEpH.js:235 [AUTH] Session check returned 401 — session is gone
+Fcs @ index-BNqRxEpH.js:235
+index-BNqRxEpH.js:235 [AUTH] Session expired on kiosk page — tokens cleared, no redirect
+Rcs @ index-BNqRxEpH.js:235
+index-BNqRxEpH.js:235 🌐 API Request to /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974 (timeout: 15000ms, deployment: true)
+index-BNqRxEpH.js:235 ✅ API Response from /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974: 200
+index-BNqRxEpH.js:235 🌐 API Request to /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600067 (timeout: 15000ms, deployment: true)
+index-BNqRxEpH.js:235 ✅ API Response from /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600067: 200
+index-BNqRxEpH.js:235 🌐 API Request to /api/p2-traveler/generate-traveler (timeout: 15000ms, deployment: true)
+index-BNqRxEpH.js:235 ✅ API Response from /api/p2-traveler/generate-traveler: 200
+/api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+index-BNqRxEpH.js:235 🌐 API Request to /api/travelers/e2da8b23-1a29-4c7c-aa89-562ea5093acf/steps/3149a3d7-9111-49d2-aa5d-a3e32e060b3a/start (timeout: 15000ms, deployment: true)
+index-BNqRxEpH.js:235 ✅ API Response from /api/travelers/e2da8b23-1a29-4c7c-aa89-562ea5093acf/steps/3149a3d7-9111-49d2-aa5d-a3e32e060b3a/start: 200
+index-BNqRxEpH.js:235 🌐 API Request to /api/travelers/e2da8b23-1a29-4c7c-aa89-562ea5093acf/steps/3149a3d7-9111-49d2-aa5d-a3e32e060b3a/sign (timeout: 15000ms, deployment: true)
+/api/travelers/e2da8b23-1a29-4c7c-aa89-562ea5093acf/steps/3149a3d7-9111-49d2-aa5d-a3e32e060b3a/sign:1  Failed to load resource: the server responded with a status of 400 ()
+index-BNqRxEpH.js:235 ✅ API Response from /api/travelers/e2da8b23-1a29-4c7c-aa89-562ea5093acf/steps/3149a3d7-9111-49d2-aa5d-a3e32e060b3a/sign: 400
+index-BNqRxEpH.js:5540 API error raw body: {"gate":"incomplete_tasks","message":"All required tasks must be completed before signing","detail":"One or more required tasks have not been completed.","error":"All required tasks must be completed before signing","reason":"One or more required tasks have not been completed.","incompleteTasks":[{"id":"f91f0e0c-7ad0-46a0-a420-83278a1c6168","title":"Badge Scan","taskType":"CHECK","taskPhase":"START","status":"NOT_STARTED"}]}
+console.error @ index-BNqRxEpH.js:5540
+index-BNqRxEpH.js:5540 💥 API Request failed for /api/travelers/e2da8b23-1a29-4c7c-aa89-562ea5093acf/steps/3149a3d7-9111-49d2-aa5d-a3e32e060b3a/sign: Error: All required tasks must be completed before signing
+    at be (index-BNqRxEpH.js:235:8799)
+console.error @ index-BNqRxEpH.js:5540
+index-BNqRxEpH.js:235 🌐 API Request to /api/travelers/e2da8b23-1a29-4c7c-aa89-562ea5093acf/steps/3149a3d7-9111-49d2-aa5d-a3e32e060b3a/sign (timeout: 15000ms, deployment: true)
+/api/travelers/e2da8b23-1a29-4c7c-aa89-562ea5093acf/steps/3149a3d7-9111-49d2-aa5d-a3e32e060b3a/sign:1  Failed to load resource: the server responded with a status of 400 ()
+index-BNqRxEpH.js:235 ✅ API Response from /api/travelers/e2da8b23-1a29-4c7c-aa89-562ea5093acf/steps/3149a3d7-9111-49d2-aa5d-a3e32e060b3a/sign: 400
+index-BNqRxEpH.js:5540 API error raw body: {"gate":"incomplete_tasks","message":"All required tasks must be completed before signing","detail":"One or more required tasks have not been completed.","error":"All required tasks must be completed before signing","reason":"One or more required tasks have not been completed.","incompleteTasks":[{"id":"f91f0e0c-7ad0-46a0-a420-83278a1c6168","title":"Badge Scan","taskType":"CHECK","taskPhase":"START","status":"NOT_STARTED"}]}
+console.error @ index-BNqRxEpH.js:5540
+index-BNqRxEpH.js:5540 💥 API Request failed for /api/travelers/e2da8b23-1a29-4c7c-aa89-562ea5093acf/steps/3149a3d7-9111-49d2-aa5d-a3e32e060b3a/sign: Error: All required tasks must be completed before signing
+    at be (index-BNqRxEpH.js:235:8799)
+console.error @ index-BNqRxEpH.js:5540
+index-BNqRxEpH.js:235 🌐 API Request to /api/travelers/e2da8b23-1a29-4c7c-aa89-562ea5093acf/steps/3149a3d7-9111-49d2-aa5d-a3e32e060b3a (timeout: 15000ms, deployment: true)
+index-BNqRxEpH.js:235 ✅ API Response from /api/travelers/e2da8b23-1a29-4c7c-aa89-562ea5093acf/steps/3149a3d7-9111-49d2-aa5d-a3e32e060b3a: 200
+index-BNqRxEpH.js:235 🌐 API Request to /api/travelers/e2da8b23-1a29-4c7c-aa89-562ea5093acf/steps/3149a3d7-9111-49d2-aa5d-a3e32e060b3a/sign (timeout: 15000ms, deployment: true)
+/api/travelers/e2da8b23-1a29-4c7c-aa89-562ea5093acf/steps/3149a3d7-9111-49d2-aa5d-a3e32e060b3a/sign:1  Failed to load resource: the server responded with a status of 400 ()
+index-BNqRxEpH.js:235 ✅ API Response from /api/travelers/e2da8b23-1a29-4c7c-aa89-562ea5093acf/steps/3149a3d7-9111-49d2-aa5d-a3e32e060b3a/sign: 400
+index-BNqRxEpH.js:5540 API error raw body: {"gate":"incomplete_tasks","message":"All required tasks must be completed before signing","detail":"One or more required tasks have not been completed.","error":"All required tasks must be completed before signing","reason":"One or more required tasks have not been completed.","incompleteTasks":[{"id":"f91f0e0c-7ad0-46a0-a420-83278a1c6168","title":"Badge Scan","taskType":"CHECK","taskPhase":"START","status":"NOT_STARTED"}]}
+console.error @ index-BNqRxEpH.js:5540
+index-BNqRxEpH.js:5540 💥 API Request failed for /api/travelers/e2da8b23-1a29-4c7c-aa89-562ea5093acf/steps/3149a3d7-9111-49d2-aa5d-a3e32e060b3a/sign: Error: All required tasks must be completed before signing
+    at be (index-BNqRxEpH.js:235:8799)
+console.error @ index-BNqRxEpH.js:5540

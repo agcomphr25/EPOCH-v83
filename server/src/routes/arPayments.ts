@@ -12,6 +12,10 @@ import { eq, desc, sql, and } from 'drizzle-orm';
 import { authenticateToken } from '../../middleware/auth';
 import { requirePermission } from '../../middleware/requirePermission';
 import { auditService } from '../services/auditService';
+import {
+  createOrUpdateArPaymentJournalEntry,
+  reverseArPaymentJournalEntry,
+} from '../services/arPaymentPostingService';
 
 const postedPaymentAllocationTotalSql = (invoiceId: unknown) => sql<string>`COALESCE(
   (
@@ -144,18 +148,24 @@ router.post('/', requirePermission('finance.manage_payments'), async (req: Reque
       return res.status(400).json({ error: 'amount must be a positive number' });
     }
 
-    const [payment] = await db
-      .insert(arPayments)
-      .values({
-        customerId,
-        paymentDate,
-        paymentMethod,
-        referenceNumber: referenceNumber || null,
-        amount: parsedAmount.toFixed(2),
-        notes: notes || null,
-        createdBy: (req as any).user?.username || null,
-      })
-      .returning();
+    const payment = await db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(arPayments)
+        .values({
+          customerId,
+          paymentDate,
+          paymentMethod,
+          referenceNumber: referenceNumber || null,
+          amount: parsedAmount.toFixed(2),
+          notes: notes || null,
+          createdBy: (req as any).user?.username || null,
+        })
+        .returning();
+
+      await createOrUpdateArPaymentJournalEntry(created.id, (req as any).user, tx);
+
+      return created;
+    });
 
     try {
       await auditService.logEvent({
@@ -278,6 +288,8 @@ router.post('/:id/allocate', requirePermission('finance.manage_payments'), async
         }
       }
 
+      await createOrUpdateArPaymentJournalEntry(id, (req as any).user, tx);
+
       return insertedAllocations;
     });
 
@@ -340,17 +352,23 @@ router.put('/:id', requirePermission('finance.manage_payments'), async (req: Req
       });
     }
 
-    const [updated] = await db
-      .update(arPayments)
-      .set({
-        paymentDate,
-        paymentMethod,
-        referenceNumber: referenceNumber || null,
-        amount: amount.toFixed(2),
-        notes: notes || null,
-      })
-      .where(eq(arPayments.id, id))
-      .returning();
+    const updated = await db.transaction(async (tx) => {
+      const [saved] = await tx
+        .update(arPayments)
+        .set({
+          paymentDate,
+          paymentMethod,
+          referenceNumber: referenceNumber || null,
+          amount: amount.toFixed(2),
+          notes: notes || null,
+        })
+        .where(eq(arPayments.id, id))
+        .returning();
+
+      await createOrUpdateArPaymentJournalEntry(id, (req as any).user, tx);
+
+      return saved;
+    });
 
     res.json(updated);
   } catch (error) {
@@ -396,6 +414,8 @@ router.delete('/:id', requirePermission('finance.manage_payments'), async (req: 
           voidReason,
         })
         .where(eq(arPayments.id, id));
+
+      await reverseArPaymentJournalEntry(id, voidReason, { username: user }, tx);
 
       for (const { invoiceId } of affectedInvoiceIds) {
         const remaining = await tx

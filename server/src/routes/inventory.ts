@@ -1913,9 +1913,19 @@ router.get('/parts-requests/pending-receipts', async (req: Request, res: Respons
 // Receive parts against ORDER LINES (not requests directly)
 router.post('/parts-requests/receive', requirePermission('inventory.manage_requests'), async (req: Request, res: Response) => {
   try {
-    const { partsRequests, partsRequestBatches, partsRequestOrderLines, partsRequestOrderAllocations, partsRequestReceipts, partsRequestReceiptLines, partsRequestStatusHistory } = await import('../../schema');
-    const { db } = await import('../../db');
-    const { eq, sql: sqlTag } = await import('drizzle-orm');
+    const {
+      partsRequests,
+      partsRequestBatches,
+      partsRequestOrderLines,
+      partsRequestOrderAllocations,
+      partsRequestReceipts,
+      partsRequestReceiptLines,
+      partsRequestStatusHistory,
+      inventoryItems: inventoryItemsTable,
+      inventoryBalances: inventoryBalancesTable,
+      inventoryTransactionLedger: inventoryTransactionLedgerTable,
+    } = await import('../../schema');
+    const { recordInventoryLedgerEntry } = await import('../services/inventoryTransactionLedgerService');
 
     const { batchId, receivedBy, notes, lines } = req.body as {
       batchId: number;
@@ -1931,93 +1941,191 @@ router.post('/parts-requests/receive', requirePermission('inventory.manage_reque
       return res.status(400).json({ error: 'No receipt lines provided' });
     }
 
-    const [receipt] = await db.insert(partsRequestReceipts).values({
-      batchId: batchId || null,
-      vendorId: null,
-      receivedBy,
-      notes: notes || null,
-    }).returning();
+    // Task #229 — wrap the entire receipt (parent receipt row, line updates,
+    // allocation propagation, batch status, request status history, AND the
+    // ITL `RECEIVE` writes) in a single db.transaction so the ledger and the
+    // parts-request state cannot diverge. ITL failure rolls back everything.
+    const receipt = await db.transaction(async (tx) => {
+      const [createdReceipt] = await tx.insert(partsRequestReceipts).values({
+        batchId: batchId || null,
+        vendorId: null,
+        receivedBy,
+        notes: notes || null,
+      }).returning();
 
-    let allFullyReceived = true;
-    let anyReceived = false;
+      let allFullyReceived = true;
+      let anyReceived = false;
 
-    for (const line of lines) {
-      if (line.qtyReceived <= 0) continue;
-      anyReceived = true;
+      for (const line of lines) {
+        if (line.qtyReceived <= 0) continue;
+        anyReceived = true;
 
-      const [orderLine] = await db.select().from(partsRequestOrderLines).where(eq(partsRequestOrderLines.id, line.orderLineId));
-      if (!orderLine) continue;
+        const [orderLine] = await tx.select().from(partsRequestOrderLines).where(eq(partsRequestOrderLines.id, line.orderLineId));
+        if (!orderLine) continue;
 
-      const newOrderLineReceived = orderLine.qtyReceived + line.qtyReceived;
-      const orderLineStatus = newOrderLineReceived >= orderLine.qtyOrdered ? 'RECEIVED' : 'PARTIALLY_RECEIVED';
+        const newOrderLineReceived = orderLine.qtyReceived + line.qtyReceived;
+        const orderLineStatus = newOrderLineReceived >= orderLine.qtyOrdered ? 'RECEIVED' : 'PARTIALLY_RECEIVED';
 
-      await db.update(partsRequestOrderLines).set({
-        qtyReceived: newOrderLineReceived,
-        status: orderLineStatus,
-        updatedAt: new Date(),
-      }).where(eq(partsRequestOrderLines.id, line.orderLineId));
-
-      await db.insert(partsRequestReceiptLines).values({
-        receiptId: receipt.id,
-        orderLineId: line.orderLineId,
-        qtyReceived: line.qtyReceived,
-      });
-
-      if (newOrderLineReceived < orderLine.qtyOrdered) {
-        allFullyReceived = false;
-      }
-
-      const allocations = await db.select().from(partsRequestOrderAllocations).where(eq(partsRequestOrderAllocations.orderLineId, line.orderLineId));
-
-      let remainingToApply = line.qtyReceived;
-      for (const alloc of allocations) {
-        if (remainingToApply <= 0) break;
-        const canApply = Math.min(remainingToApply, alloc.qtyAllocated - alloc.qtyReceivedApplied);
-        if (canApply <= 0) continue;
-
-        await db.update(partsRequestOrderAllocations).set({
-          qtyReceivedApplied: alloc.qtyReceivedApplied + canApply,
-          status: (alloc.qtyReceivedApplied + canApply) >= alloc.qtyAllocated ? 'RECEIVED' : 'PARTIALLY_RECEIVED',
+        await tx.update(partsRequestOrderLines).set({
+          qtyReceived: newOrderLineReceived,
+          status: orderLineStatus,
           updatedAt: new Date(),
-        }).where(eq(partsRequestOrderAllocations.id, alloc.id));
+        }).where(eq(partsRequestOrderLines.id, line.orderLineId));
 
-        const [request] = await db.select().from(partsRequests).where(eq(partsRequests.id, alloc.partsRequestId));
-        if (request) {
-          const newTotalReceived = (request.qtyReceived || 0) + canApply;
-          const requestStatus = newTotalReceived >= (request.qtyOrdered || request.quantity) ? 'RECEIVED' : 'RECEIVED_PARTIAL';
+        const [receiptLine] = await tx.insert(partsRequestReceiptLines).values({
+          receiptId: createdReceipt.id,
+          orderLineId: line.orderLineId,
+          qtyReceived: line.qtyReceived,
+        }).returning();
 
-          await db.update(partsRequests).set({
-            qtyReceived: newTotalReceived,
-            status: requestStatus,
-            actualDelivery: new Date().toISOString().split('T')[0],
-            updatedAt: new Date(),
-          }).where(eq(partsRequests.id, alloc.partsRequestId));
-
-          await db.insert(partsRequestStatusHistory).values({
-            partsRequestId: alloc.partsRequestId,
-            fromStatus: request.status,
-            toStatus: requestStatus,
-            changedBy: receivedBy,
-            reason: `Received ${canApply} units via order line #${line.orderLineId}`,
-          });
+        if (newOrderLineReceived < orderLine.qtyOrdered) {
+          allFullyReceived = false;
         }
 
-        remainingToApply -= canApply;
-      }
-    }
+        // ── Inventory Transaction Ledger write (Task #229 / #248) ──────────
+        // The ITL inventory_item_id FK is NOT NULL. Previously, when a part
+        // had no matching inventory_items row we silently skipped the ledger
+        // write — that's the bug behind Task #248 (Rock West receipt missing
+        // from the Transactions list). Now: when an agPartNumber is present
+        // but no inventory_items row exists, auto-create a minimal placeholder
+        // inside the same transaction, then write the ledger row. Truly
+        // ad-hoc lines (no agPartNumber) still skip with a warning because
+        // there's no part identity to track.
+        if (orderLine.agPartNumber) {
+          const { ensureInventoryItemForReceipt } = await import(
+            '../services/ensureInventoryItemForReceipt'
+          );
+          const invItem = await ensureInventoryItemForReceipt(tx, {
+            agPartNumber: orderLine.agPartNumber,
+            fallbackName: orderLine.partName ?? orderLine.partNumber ?? null,
+            createdBy: receivedBy ?? null,
+          });
 
-    if (batchId && anyReceived) {
-      const batchStatus = allFullyReceived ? 'RECEIVED' : 'PARTIALLY_RECEIVED';
-      await db.update(partsRequestBatches).set({
-        status: batchStatus,
-        updatedAt: new Date(),
-      }).where(eq(partsRequestBatches.id, batchId));
-    }
+          {
+            const ledgerSourceModule = 'receiving:parts-request';
+            // Stable composite source key: anchored to the parent receipt id +
+            // the business order-line id (not the surrogate receipt-line PK).
+            // Within one receipt call, an order line can only be received once,
+            // so this collapses to exactly one ITL row per line per receipt.
+            const ledgerSourceRecordId = `${createdReceipt.id}:${line.orderLineId}`;
+            const [existingLedger] = await tx
+              .select({ id: inventoryTransactionLedgerTable.id })
+              .from(inventoryTransactionLedgerTable)
+              .where(
+                and(
+                  eq(inventoryTransactionLedgerTable.sourceModule, ledgerSourceModule),
+                  eq(inventoryTransactionLedgerTable.sourceRecordId, ledgerSourceRecordId),
+                ),
+              )
+              .limit(1);
+
+            if (!existingLedger) {
+              const balanceRows = await tx
+                .select({ quantityOnHand: inventoryBalancesTable.quantityOnHand })
+                .from(inventoryBalancesTable)
+                .where(eq(inventoryBalancesTable.agPartNumber, invItem.agPartNumber));
+              const quantityBefore = balanceRows.reduce(
+                (sum, b) => sum + Number(b.quantityOnHand ?? 0),
+                0,
+              );
+              const quantityAfter = quantityBefore + line.qtyReceived;
+
+              await recordInventoryLedgerEntry({
+                transactionType: 'RECEIVE',
+                inventoryItemId: invItem.id,
+                agPartNumber: invItem.agPartNumber,
+                unitOfMeasure: invItem.purchaseUnit ?? invItem.usageUnit ?? 'EA',
+                quantityBefore,
+                quantityDelta: line.qtyReceived,
+                quantityAfter,
+                performedByDisplayName: receivedBy || 'system:parts-request-receive',
+                reasonCode: 'PARTS_REQUEST_RECEIPT',
+                notes: notes ?? null,
+                sourceModule: ledgerSourceModule,
+                sourceRecordId: ledgerSourceRecordId,
+                metadata: {
+                  receiptId: createdReceipt.id,
+                  orderLineId: line.orderLineId,
+                  batchId: batchId ?? null,
+                  partNumber: orderLine.partNumber,
+                  partName: orderLine.partName,
+                },
+              }, tx);
+            }
+          }
+        } else {
+          console.warn(
+            `[parts-requests/receive] Skipping ITL write — order line ${line.orderLineId} has no agPartNumber (ad-hoc request)`,
+          );
+        }
+
+        const allocations = await tx.select().from(partsRequestOrderAllocations).where(eq(partsRequestOrderAllocations.orderLineId, line.orderLineId));
+
+        let remainingToApply = line.qtyReceived;
+        for (const alloc of allocations) {
+          if (remainingToApply <= 0) break;
+          const canApply = Math.min(remainingToApply, alloc.qtyAllocated - alloc.qtyReceivedApplied);
+          if (canApply <= 0) continue;
+
+          await tx.update(partsRequestOrderAllocations).set({
+            qtyReceivedApplied: alloc.qtyReceivedApplied + canApply,
+            status: (alloc.qtyReceivedApplied + canApply) >= alloc.qtyAllocated ? 'RECEIVED' : 'PARTIALLY_RECEIVED',
+            updatedAt: new Date(),
+          }).where(eq(partsRequestOrderAllocations.id, alloc.id));
+
+          const [request] = await tx.select().from(partsRequests).where(eq(partsRequests.id, alloc.partsRequestId));
+          if (request) {
+            const newTotalReceived = (request.qtyReceived || 0) + canApply;
+            const requestStatus = newTotalReceived >= (request.qtyOrdered || request.quantity) ? 'RECEIVED' : 'RECEIVED_PARTIAL';
+
+            await tx.update(partsRequests).set({
+              qtyReceived: newTotalReceived,
+              status: requestStatus,
+              actualDelivery: new Date().toISOString().split('T')[0],
+              updatedAt: new Date(),
+            }).where(eq(partsRequests.id, alloc.partsRequestId));
+
+            await tx.insert(partsRequestStatusHistory).values({
+              partsRequestId: alloc.partsRequestId,
+              fromStatus: request.status,
+              toStatus: requestStatus,
+              changedBy: receivedBy,
+              reason: `Received ${canApply} units via order line #${line.orderLineId}`,
+            });
+          }
+
+          remainingToApply -= canApply;
+        }
+      }
+
+      if (batchId && anyReceived) {
+        const batchStatus = allFullyReceived ? 'RECEIVED' : 'PARTIALLY_RECEIVED';
+        await tx.update(partsRequestBatches).set({
+          status: batchStatus,
+          updatedAt: new Date(),
+        }).where(eq(partsRequestBatches.id, batchId));
+      }
+
+      return createdReceipt;
+    });
 
     res.status(201).json(receipt);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Receive parts error:', error);
-    res.status(500).json({ error: 'Failed to receive parts' });
+    // Surface inventory-ledger validation/FK failures as a structured 422 so
+    // the caller can distinguish ledger invariant failures from generic 500s.
+    const msg = String(error?.message ?? '');
+    if (
+      error?.code === 'INVENTORY_LEDGER_VALIDATION' ||
+      /inventory[_ ]?ledger|inventory_transaction_ledger|recordInventoryLedgerEntry/i.test(msg)
+    ) {
+      return res.status(422).json({
+        error: 'Inventory ledger write failed',
+        code: 'INVENTORY_LEDGER_WRITE_FAILED',
+        message: msg,
+      });
+    }
+    res.status(500).json({ error: 'Failed to receive parts', message: msg });
   }
 });
 

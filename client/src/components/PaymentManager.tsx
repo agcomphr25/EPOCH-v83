@@ -92,7 +92,7 @@ export default function PaymentManager({
 
   // Fetch payments for this order
   const {
-    data: payments = [],
+    data: rawPayments = [],
     isLoading,
     refetch,
   } = useQuery({
@@ -100,6 +100,7 @@ export default function PaymentManager({
     queryFn: () => apiRequest(`/api/orders/${orderId}/payments`),
     enabled: !!orderId && orderId !== 'undefined',
   });
+  const payments: Payment[] = Array.isArray(rawPayments) ? rawPayments : [];
 
   // Calculate totals
   const totalPaid = payments.reduce(

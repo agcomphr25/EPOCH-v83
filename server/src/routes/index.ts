@@ -42,8 +42,10 @@ import moldsRoutes from './molds';
 import layupPdfRoute from './layupPdfRoute';
 import shippingPdfRoute from './shippingPdf';
 import shippingRoutes from './shipping';
+import p1FulfillmentRoutes from './p1Fulfillment';
 import shippingTestRoutes from './shipping-test';
 import orderAttachmentsRoutes from './orderAttachments';
+import storageUploadRoutes from './storageUpload';
 import vendorPoAttachmentsRoutes from './vendorPoAttachments';
 import discountsRoutes from './discounts';
 // import bomsRoutes from './boms'; // Legacy BOM routes - replaced by Robust BOM system
@@ -185,6 +187,7 @@ import fillablePdfTemplatesRoutes from './fillablePdfTemplates';
 import pdfFormsRoutes from './pdfForms';
 import accountingPrepRoutes from './accountingPrep';
 import accountingControlRoutes from './accountingControl';
+import accountingEventMatrixRoutes from './accountingEventMatrix';
 import chartOfAccountsRoutes from './chartOfAccounts';
 import improvementNotesRoutes from './improvementNotes';
 import { qrResolverRouter, qrAdminRouter } from './qrCodes';
@@ -210,6 +213,11 @@ import financialReviewRoutes from './financialReview';
 import quickNotesRoutes from './quickNotes';
 import governanceRoutes from './governance';
 import { requireExecutiveAccess } from '../middleware/requireExecutiveAccess';
+import {
+  getFileStorageProvider,
+  getFileStorageProviderForObjectPath,
+  getStorageErrorResponse,
+} from '../services/fileStorageProvider';
 import cncDashboardRoutes from './cncDashboard';
 import receivingRoutes from './receiving';
 import estimatingRoutes from './estimating';
@@ -219,6 +227,7 @@ import commandCenterRoutes from './commandCenter';
 import edriRoutes from './edri';
 import chargeCodeUsageReportRoutes from './chargeCodeUsageReport';
 import laborDistributionReportRoutes from './laborDistributionReport';
+import transactionEvidenceMapRoutes from './transactionEvidenceMap';
 import supervisorApprovalExceptionReportRoutes from './supervisorApprovalExceptionReport';
 import timesheetCorrectionLogReportRoutes from './timesheetCorrectionLogReport';
 import payrollExportReconciliationReportRoutes from './payrollExportReconciliationReport';
@@ -806,6 +815,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   // Cost Accounting routes
   app.use('/api/cost-accounting', costAccountingRoutes);
   app.use('/api/accounting/coa', chartOfAccountsRoutes);
+  app.use('/api/accounting/event-matrix', accountingEventMatrixRoutes);
   app.use('/api/burden-rates', burdenRatesRoutes);
   app.use('/api/payroll-control', payrollControlRoutes);
 
@@ -874,31 +884,19 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     app.post('/api/object-storage/upload', authenticateToken, cncUpload.single('file'), async (req: any, res: any) => {
       try {
         if (!req.file) return res.status(400).json({ error: 'No file received' });
-        const { ObjectStorageService } = await import('../../replit_integrations/object_storage');
-        const svc = new ObjectStorageService();
-        // Get a signed GCS PUT URL
-        const uploadURL = await svc.getObjectEntityUploadURL();
-        // Upload the buffer directly to GCS via the signed URL
-        const putRes = await fetch(uploadURL, {
-          method: 'PUT',
-          headers: { 'Content-Type': req.file.mimetype || 'application/octet-stream' },
-          body: req.file.buffer,
+        const provider = getFileStorageProvider();
+        const objectPath = await provider.uploadBuffer({
+          buffer: req.file.buffer,
+          fileName: req.file.originalname || req.file.filename || 'upload',
+          contentType: req.file.mimetype || 'application/octet-stream',
+          scope: 'cnc-dashboard',
         });
-        if (!putRes.ok) {
-          throw new Error(`GCS PUT failed: ${putRes.status} ${putRes.statusText}`);
-        }
-        // Normalize to /objects/... path
-        const objectPath = svc.normalizeObjectEntityPath(uploadURL);
-        // Make it publicly readable
         try {
-          await svc.trySetObjectEntityAclPolicy(objectPath, {
-            owner: String(req.user?.id ?? 'system'),
-            visibility: 'public',
-          });
+          await provider.setPublicReadPolicy(objectPath, String(req.user?.id ?? 'system'));
         } catch (aclErr) {
           console.warn('[CNC Upload] ACL set failed (non-fatal):', aclErr);
         }
-        res.json({ url: objectPath, key: objectPath });
+        res.json({ url: objectPath, key: objectPath, provider: provider.name });
       } catch (err: any) {
         console.error('[CNC Upload] Error:', err);
         res.status(500).json({ error: err.message || 'Upload failed' });
@@ -935,6 +933,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   
   // Object storage routes - cloud file uploads
   registerObjectStorageRoutes(app);
+  app.use('/api/storage', storageUploadRoutes);
 
   // Codebase chat routes - AI chat with codebase context
   registerCodebaseChatRoutes(app);
@@ -977,6 +976,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // Shipping management routes
   app.use('/api/shipping', shippingRoutes);
+  app.use('/api/p1-fulfillment', p1FulfillmentRoutes);
   if (process.env.NODE_ENV !== 'production') {
     app.use('/api/shipping-test', shippingTestRoutes);
   }
@@ -2312,8 +2312,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     }
   });
 
-  // Push orders to Layup/Plugging department
-  app.post('/api/push-to-layup-plugging', async (req, res) => {
+  // Legacy placeholder retained off the public route so the real handler below is reachable.
+  app.post('/api/internal/legacy/push-to-layup-plugging-placeholder', async (req, res) => {
     try {
       console.log('🔧 PUSH TO LAYUP/PLUGGING CALLED', req.body);
       const { orderIds } = req.body;
@@ -2469,7 +2469,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         toleranceAuthorizerId, toleranceAuthorizerName, toleranceNotes, notes, lineItems,
         assignedToId, assignedToName, productionLeadId, productionLeadName,
         customerName: bodyCustomerName, poDate: bodyPoDate, status: bodyStatus,
-        sourceQuoteId, projectName,
+        sourceQuoteId, projectName, contractReviewRole,
       } = req.body;
       
       // Use the customer-provided PO number — accept either field name
@@ -2505,6 +2505,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         productionLeadId: productionLeadId && productionLeadId !== 'none' ? parseInt(productionLeadId) : null,
         productionLeadName: productionLeadName || null,
         sourceQuoteId: sourceQuoteId || null,
+        contractReviewRole: contractReviewRole === 'primary' ? 'primary' : 'secondary',
         projectName: projectName || null,
       };
       
@@ -2553,6 +2554,11 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const { storage } = await import('../../storage');
       const { id } = req.params;
       const poData = req.body;
+      if (poData.contractReviewRole && !['primary', 'secondary'].includes(poData.contractReviewRole)) {
+        return res.status(400).json({
+          error: 'contractReviewRole must be primary or secondary',
+        });
+      }
       
       const existingPO = await storage.getP2PurchaseOrder(parseInt(id));
       if (!existingPO) {
@@ -3024,13 +3030,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const { pool: dbPool } = await import('../../db');
       const allPos = await storage.getAllP2PurchaseOrders();
       // Surface POs that have cleared the P2 Release Gate. Status values have
-      // existed in both legacy lowercase and current uppercase forms, and many
-      // POs that are clearly in production still carry generic statuses (OPEN,
-      // RELEASED, ACTIVE, etc.). To avoid hiding in-flight work, we also
-      // include any PO that has at least one serialized item which has moved
-      // past the pre-release stage (i.e. completed, or active and routed past
-      // "Pending Layup"). Pre-release/draft POs with no such items remain
-      // excluded so the dashboard does not fill up with un-released noise.
+      // existed in both legacy lowercase and current uppercase forms. Also
+      // include any PO with serialized units: Pending Layup units are already
+      // production work and must remain visible before their first department move.
       const normalizeP2Status = (status: unknown) =>
         String(status || '').trim().toUpperCase();
       const P2_GATED_STATUSES = new Set([
@@ -3039,33 +3041,56 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         'IN_PRODUCTION',
       ]);
       const serializedItems = await storage.getP2SerializedItems({});
-      const isItemPastPreRelease = (s: any) => {
-        if (s.status === 'COMPLETED') return true;
-        if (s.status !== 'ACTIVE') return false;
-        const dept = String(s.currentDepartment || '').trim();
-        return dept !== '' && dept !== 'Pending Layup';
-      };
-      const poIdsWithActiveWork = new Set<number>();
+      const poIdsWithSerializedUnits = new Set<number>();
       for (const s of serializedItems as any[]) {
-        if (isItemPastPreRelease(s)) {
-          poIdsWithActiveWork.add(s.poId);
+        const poId = s.poId ?? s.po_id;
+        if (poId) {
+          poIdsWithSerializedUnits.add(Number(poId));
         }
       }
       const pos = allPos.filter((po: any) =>
         P2_GATED_STATUSES.has(normalizeP2Status(po.status)) ||
-        poIdsWithActiveWork.has(po.id)
+        poIdsWithSerializedUnits.has(po.id)
       );
 
-      // Look up projects linked to these POs
+      // Look up projects linked to these POs. PM Control Center resolves the
+      // same relationship through either projects.po_id or the p2_order step.
       const poIds = pos.map((po: any) => po.id);
       const projectRows = poIds.length > 0
         ? await dbPool.query(
-            `SELECT po_id AS "poId", id AS "projectId" FROM projects WHERE po_id = ANY($1)`,
+            `WITH project_po_link AS (
+               SELECT
+                 p.id,
+                 p.project_code,
+                 p.project_name,
+                 p.updated_at,
+                 COALESCE(
+                   p.po_id,
+                   (
+                     SELECT ps.linked_p2_order_id
+                     FROM project_steps ps
+                     WHERE ps.project_id = p.id
+                       AND ps.step_type = 'p2_order'
+                       AND ps.linked_p2_order_id IS NOT NULL
+                     ORDER BY ps.updated_at DESC NULLS LAST, ps.completed_at DESC NULLS LAST
+                     LIMIT 1
+                   )
+                 ) AS linked_po_id
+               FROM projects p
+             )
+             SELECT DISTINCT ON (linked_po_id)
+               linked_po_id AS "poId",
+               id AS "projectId",
+               project_code AS "projectCode",
+               project_name AS "projectName"
+             FROM project_po_link
+             WHERE linked_po_id = ANY($1)
+             ORDER BY linked_po_id, updated_at DESC NULLS LAST`,
             [poIds]
           )
         : [];
-      const projectByPoId = new Map<number, string>(
-        (projectRows as any[]).map((r: any) => [r.poId, r.projectId])
+      const projectByPoId = new Map<number, any>(
+        (projectRows as any[]).map((r: any) => [r.poId, r])
       );
 
       // Sum ordered quantities from all PO line items, grouped by po_id.
@@ -3116,8 +3141,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           inProductionItems,
           pendingItems,
           hasBOMsNeeded: !po.bomConfigured,
-          projectName: po.projectName || null,
-          projectId: projectByPoId.get(po.id) ?? null,
+          projectId: projectByPoId.get(po.id)?.projectId ?? null,
+          projectCode: projectByPoId.get(po.id)?.projectCode ?? null,
+          projectName: projectByPoId.get(po.id)?.projectName ?? po.projectName ?? null,
           rawStatus,
           status: completedItems === totalItems && totalItems > 0 ? 'completed' : 
                   (inProductionItems > 0 || rawStatus === 'IN_PRODUCTION') ? 'in_progress' : 'pending'
@@ -3262,6 +3288,44 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       // Get all active serialized items using storage method (which handles pool.query)
       const allItems = await storage.getP2SerializedItems({ status: 'ACTIVE' });
       const items = allItems || [];
+      const { pool: dbPool } = await import('../../db');
+      const poIds = [...new Set(items.map((item: any) => item.poId ?? item.po_id).filter(Boolean))];
+      const projectRows = poIds.length > 0
+        ? await dbPool.query(
+            `WITH project_po_link AS (
+               SELECT
+                 p.id,
+                 p.project_code,
+                 p.project_name,
+                 p.updated_at,
+                 COALESCE(
+                   p.po_id,
+                   (
+                     SELECT ps.linked_p2_order_id
+                     FROM project_steps ps
+                     WHERE ps.project_id = p.id
+                       AND ps.step_type = 'p2_order'
+                       AND ps.linked_p2_order_id IS NOT NULL
+                     ORDER BY ps.updated_at DESC NULLS LAST, ps.completed_at DESC NULLS LAST
+                     LIMIT 1
+                   )
+                 ) AS linked_po_id
+               FROM projects p
+             )
+             SELECT DISTINCT ON (linked_po_id)
+               linked_po_id AS "poId",
+               id AS "projectId",
+               project_code AS "projectCode",
+               project_name AS "projectName"
+             FROM project_po_link
+             WHERE linked_po_id = ANY($1)
+             ORDER BY linked_po_id, updated_at DESC NULLS LAST`,
+            [poIds]
+          )
+        : [];
+      const projectByPoId = new Map<number, any>(
+        (projectRows as any[]).map((row: any) => [Number(row.poId), row])
+      );
       
       // Work tasks and routings tables may not exist yet - use empty arrays as fallback
       const activeTasks: any[] = [];
@@ -3317,9 +3381,13 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         }
         
         const activeTask = taskByItemId.get(item.id);
+        const poId = item.poId ?? item.po_id ?? null;
+        const linkedProject = poId ? projectByPoId.get(Number(poId)) : null;
+        const metadata = item.metadata || {};
         
         departmentQueues[dept].push({
           id: item.id,
+          poId,
           barcode: item.barcode,
           serialNumber: item.serialNumber,
           partNumber: item.partNumber,
@@ -3329,6 +3397,13 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           status: item.status,
           currentDepartment: dept,
           currentStageIndex: item.currentStageIndex || 0,
+          projectId: linkedProject?.projectId ?? null,
+          projectCode: linkedProject?.projectCode ?? null,
+          projectName: linkedProject?.projectName ?? null,
+          isReplacement: metadata.isReplacement === true,
+          replacementForSerializedItemId: metadata.replacementForSerializedItemId ?? null,
+          replacementForSerialNumber: metadata.replacementForSerialNumber ?? null,
+          replacementReason: metadata.replacementReason ?? null,
           hasActiveTask: !!activeTask,
           barcodePrintedAt: item.barcodePrintedAt || null,
           activeTask: activeTask ? {
@@ -3425,6 +3500,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const { db } = await import('../../db');
       const { p2SerializedItems, p2SerializedItemEvents, travelers, auditEvents } = await import('../../schema');
       const { eq, desc } = await import('drizzle-orm');
+      const { randomUUID } = await import('crypto');
       
       const [item] = await db.select().from(p2SerializedItems).where(eq(p2SerializedItems.id, itemId)).limit(1);
       
@@ -3554,6 +3630,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
       let travelerCreated = false;
       let linkedTravelerFound = false;
+      let replacementItem: any = null;
       if (status === 'COMPLETED') {
         if (linkedTravelerId) {
           const [existingTraveler] = await db.select().from(travelers).where(eq(travelers.id, linkedTravelerId)).limit(1);
@@ -3611,12 +3688,156 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           travelerCreated = true;
         }
       }
+
+      if (status === 'SCRAPPED') {
+        const siblingItems = await db
+          .select()
+          .from(p2SerializedItems)
+          .where(eq(p2SerializedItems.poItemId, item.poItemId));
+
+        const existingReplacement = siblingItems.find((candidate: any) => {
+          const metadata = candidate.metadata || {};
+          return metadata.isReplacement === true && metadata.replacementForSerializedItemId === itemId;
+        });
+
+        if (!existingReplacement) {
+          const now = new Date();
+          const replacementNumber = siblingItems.filter((candidate: any) => {
+            const metadata = candidate.metadata || {};
+            return metadata.isReplacement === true
+              && (
+                metadata.replacementForSerializedItemId === itemId
+                || metadata.replacementForSerialNumber === item.serialNumber
+              );
+          }).length + 1;
+          const replacementSuffix = `R${replacementNumber}`;
+          const baseSerial = item.serialNumber || item.barcode || item.id;
+          const baseBarcode = item.barcode || baseSerial;
+          const replacementSerialNumber = `${baseSerial}-${replacementSuffix}`;
+          const replacementBarcode = `${baseBarcode}-${replacementSuffix}`;
+          const maxSequenceNumber = Math.max(
+            Number(item.sequenceNumber || 0),
+            ...siblingItems.map((candidate: any) => Number(candidate.sequenceNumber || 0))
+          );
+          const replacementId = randomUUID();
+          const replacementMetadata = {
+            ...((item.metadata as Record<string, unknown> | null) || {}),
+            isReplacement: true,
+            replacementForSerializedItemId: itemId,
+            replacementForSerialNumber: item.serialNumber,
+            replacementForBarcode: item.barcode,
+            replacementReason: reason,
+            replacementCreatedAt: now.toISOString(),
+            replacementCreatedBy: performedBy || 'System',
+            replacementSource: 'NCR_SCRAP',
+          };
+
+          const [createdReplacement] = await db.insert(p2SerializedItems).values({
+            id: replacementId,
+            poId: item.poId,
+            poItemId: item.poItemId,
+            poNumber: item.poNumber,
+            partNumber: item.partNumber,
+            partName: item.partName,
+            customerId: item.customerId,
+            customerName: item.customerName,
+            sequenceNumber: maxSequenceNumber + 1,
+            serialNumber: replacementSerialNumber,
+            barcode: replacementBarcode,
+            travelerBarcode: replacementBarcode,
+            buildFamilyKey: item.buildFamilyKey,
+            partRoutingId: item.partRoutingId,
+            partRoutingRevision: item.partRoutingRevision,
+            sku: item.sku,
+            drawingName: item.drawingName,
+            status: 'ACTIVE',
+            currentDepartment: item.currentDepartment || 'Pending Layup',
+            currentStageIndex: item.currentStageIndex || 0,
+            notes: `Replacement for NCR item ${item.serialNumber || item.barcode}. ${reason}`,
+            metadata: replacementMetadata,
+            createdAt: now,
+            updatedAt: now,
+          }).returning();
+
+          replacementItem = createdReplacement;
+
+          await db.update(p2SerializedItems)
+            .set({
+              metadata: {
+                ...((item.metadata as Record<string, unknown> | null) || {}),
+                ncrReplacementSerializedItemId: replacementId,
+                ncrReplacementSerialNumber: replacementSerialNumber,
+                ncrReplacementBarcode: replacementBarcode,
+                ncrReplacementCreatedAt: now.toISOString(),
+              },
+              updatedAt: now,
+            })
+            .where(eq(p2SerializedItems.id, itemId));
+
+          await db.insert(p2SerializedItemEvents).values({
+            serializedItemId: replacementId,
+            barcode: replacementBarcode,
+            eventType: 'NCR_REPLACEMENT_CREATED',
+            performedBy: performedBy || 'System',
+            notes: `Replacement created for NCR item ${item.serialNumber || item.barcode} - ${reason}`,
+            metadata: {
+              originalSerializedItemId: itemId,
+              originalSerialNumber: item.serialNumber,
+              originalBarcode: item.barcode,
+              replacementReason: reason,
+            },
+          });
+
+          await db.insert(p2SerializedItemEvents).values({
+            serializedItemId: itemId,
+            barcode: item.barcode,
+            eventType: 'NCR_REPLACEMENT_LINKED',
+            performedBy: performedBy || 'System',
+            notes: `Replacement item ${replacementSerialNumber} linked to this NCR scrap`,
+            metadata: {
+              replacementSerializedItemId: replacementId,
+              replacementSerialNumber,
+              replacementBarcode,
+              replacementReason: reason,
+            },
+          });
+
+          if (activeTraveler) {
+            await db.insert(auditEvents).values({
+              entityType: 'traveler',
+              entityId: activeTraveler.id,
+              action: 'NCR_REPLACEMENT_CREATED',
+              actorName: performedBy || 'System',
+              reason,
+              meta: {
+                travelerId: activeTraveler.id,
+                travelerNumber: activeTraveler.travelerNumber,
+                originalSerializedItemId: itemId,
+                replacementSerializedItemId: replacementId,
+                replacementSerialNumber,
+                replacementBarcode,
+                poId: item.poId,
+                poNumber: item.poNumber,
+              },
+            });
+          }
+        } else {
+          replacementItem = existingReplacement;
+        }
+      }
       
       res.json({
         success: true,
         message: `Item status updated to ${status}`,
         travelerCreated,
         linkedTravelerFound,
+        replacementCreated: Boolean(replacementItem),
+        replacementItem: replacementItem ? {
+          id: replacementItem.id,
+          serialNumber: replacementItem.serialNumber,
+          barcode: replacementItem.barcode,
+          currentDepartment: replacementItem.currentDepartment,
+        } : null,
       });
     } catch (_error) {
       console.error('P2 Update item status error:', _error);
@@ -5774,8 +5995,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     }
   });
 
-  // Python scheduler integration endpoint
-  app.post('/api/python-scheduler', async (req, res) => {
+  // Legacy external Python scheduler handler retained off the public route.
+  app.post('/api/internal/legacy/python-scheduler-external', async (req, res) => {
     try {
       console.log(
         '🐍 Running Python scheduler with Mesa Universal constraints...'
@@ -5891,8 +6112,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     }
   });
 
-  // Push scheduled orders to layup/plugging queue workflow
-  app.post('/api/push-to-layup-plugging', async (req, res) => {
+  // Legacy queue workflow retained off the public route so the department manager handler remains canonical.
+  app.post('/api/internal/legacy/push-to-layup-plugging-queue', async (req, res) => {
     try {
       console.log('🔄 Push to Layup/Plugging Queue workflow initiated');
       const { storage } = await import('../../storage');
@@ -6895,22 +7116,25 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
       console.log(`📎 Requesting upload URL for PO ${id}: ${name}`);
 
-      const { ObjectStorageService } = await import('../../replit_integrations/object_storage');
-      const objectStorageService = new ObjectStorageService();
-      
-      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
-      const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
+      const uploadTarget = await getFileStorageProvider().createUploadTarget({
+        fileName: name,
+        contentType,
+        scope: 'po-attachments',
+        entityId: id,
+      });
 
-      console.log(`📎 Generated upload URL for ${name}, objectPath: ${objectPath}`);
+      console.log(`📎 Generated upload URL for ${name}, objectPath: ${uploadTarget.objectPath}`);
 
       res.json({
-        uploadURL,
-        objectPath,
+        uploadURL: uploadTarget.uploadURL,
+        objectPath: uploadTarget.objectPath,
+        provider: uploadTarget.provider,
         metadata: { name, size, contentType, poId: id },
       });
     } catch (error: any) {
-      console.error('Error generating PO attachment upload URL:', error);
-      res.status(500).json({ error: 'Failed to generate upload URL' });
+      const { status, reason, message } = getStorageErrorResponse(error);
+      console.error('Error generating PO attachment upload URL:', { status, reason, message });
+      res.status(status).json({ error: 'Failed to generate upload URL', reason, details: message });
     }
   });
 
@@ -6930,15 +7154,13 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       console.log(`📎 Completing PO attachment upload for PO ${poId}: ${originalFileName}`);
 
       const { storage } = await import('../../storage');
-      const { ObjectStorageService } = await import('../../replit_integrations/object_storage');
-      const objectStorageService = new ObjectStorageService();
 
       // Set ACL policy to make file accessible
       try {
-        await objectStorageService.trySetObjectEntityAclPolicy(objectPath, {
-          owner: user?.id?.toString() || 'system',
-          visibility: 'public',
-        });
+        await getFileStorageProviderForObjectPath(objectPath).setPublicReadPolicy(
+          objectPath,
+          user?.id?.toString() || 'system',
+        );
         console.log('📎 ACL policy set successfully for:', objectPath);
       } catch (aclError) {
         console.warn('📎 Failed to set ACL policy for PO attachment:', aclError);
@@ -7022,10 +7244,13 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       
       // Optionally delete from object storage
       try {
-        const { ObjectStorageService } = await import('../../replit_integrations/object_storage');
-        const objectStorageService = new ObjectStorageService();
-        await objectStorageService.deleteObject(attachmentToDelete.filePath);
-        console.log('📎 Deleted file from storage:', attachmentToDelete.filePath);
+        const normalizedPath = attachmentToDelete.filePath?.startsWith('objects/')
+          ? `/${attachmentToDelete.filePath}`
+          : attachmentToDelete.filePath;
+        if (normalizedPath) {
+          await getFileStorageProviderForObjectPath(normalizedPath).deleteObject(normalizedPath);
+          console.log('📎 Deleted file from storage:', attachmentToDelete.filePath);
+        }
       } catch (storageError) {
         console.warn('📎 Failed to delete file from storage (may not exist):', storageError);
       }
@@ -7060,9 +7285,6 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         return res.status(404).json({ error: 'Attachment not found' });
       }
 
-      const { ObjectStorageService } = await import('../../replit_integrations/object_storage');
-      const objectStorageService = new ObjectStorageService();
-
       const forceDownload = req.query.download === 'true';
 
       const normalizedPath = attachment.filePath?.startsWith('objects/')
@@ -7073,15 +7295,13 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         return res.status(404).json({ error: 'File not found in cloud storage' });
       }
 
-      const objectFile = await objectStorageService.getObjectEntityFile(normalizedPath);
-
       if (forceDownload) {
         res.setHeader('Content-Disposition', `attachment; filename="${attachment.originalFileName}"`);
       } else {
         res.setHeader('Content-Disposition', `inline; filename="${attachment.originalFileName}"`);
       }
 
-      await objectStorageService.downloadObject(objectFile, res);
+      await getFileStorageProviderForObjectPath(normalizedPath).downloadObject(normalizedPath, res);
     } catch (error: any) {
       console.error('Error downloading PO attachment:', error);
       res.status(500).json({ error: 'Failed to download attachment' });
@@ -10846,6 +11066,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   app.use('/api/edri', edriRoutes);
   app.use('/api/edri', chargeCodeUsageReportRoutes);
   app.use('/api/edri', laborDistributionReportRoutes);
+  app.use('/api/edri', transactionEvidenceMapRoutes);
   app.use('/api/edri', supervisorApprovalExceptionReportRoutes);
   app.use('/api/edri', timesheetCorrectionLogReportRoutes);
   app.use('/api/edri', payrollExportReconciliationReportRoutes);
@@ -10888,7 +11109,6 @@ export {
   discountsRoutes as discountsRouter,
   employeesRoutes as employeesRouter,
   qualityRoutes as qualityRouter,
-  bomsRoutes as bomsRouter,
   moldsRoutes as moldsRouter,
   kickbackRoutes as kickbacksRouter,
   orderAttachmentsRoutes as orderAttachmentsRouter,

@@ -64,70 +64,40 @@ const DEPT_ALIASES: Record<string, string> = {
   'shipping': 'shipping',
 };
 
+const TRACE_FIELD_ALIASES: Record<string, string[]> = {
+  trace_internalcontrolnumber: ['internalControlNumber', 'material_internal_control_number', 'material_icn'],
+  trace_supplier: ['supplier'],
+  trace_inventorypartnumber: ['inventoryPartNumber', 'material_part_number'],
+  trace_batchlotnumber: ['batchLotNumber', 'material_batch_number', 'material_lot'],
+  trace_manufacturer: ['manufacturer', 'material_brand'],
+  trace_rollnumber: ['rollNumber'],
+  trace_expirationdate: ['expirationDate', 'material_expiration_date'],
+  trace_receiveddate: ['receivedDate'],
+};
+
+function resolveTraceFieldValue(
+  fieldKey: string,
+  fieldValues: Record<string, unknown>,
+): unknown {
+  const aliases = TRACE_FIELD_ALIASES[fieldKey];
+  if (!aliases) return undefined;
+
+  for (const alias of aliases) {
+    const value = fieldValues[alias];
+    if (value !== undefined && value !== null && value !== '') {
+      return value;
+    }
+  }
+
+  return undefined;
+}
+
 function normalizeDept(d: string): string {
   let lower = d.toLowerCase().trim();
   lower = lower.replace(/^pending\s+/i, '');
   if (DEPT_ALIASES[lower]) return DEPT_ALIASES[lower];
   const stripped = lower.replace(/[^a-z0-9]/g, '');
   return DEPT_ALIASES[stripped] || stripped;
-}
-
-function normalizeOperationScan(value: unknown): string {
-  return String(value ?? '').trim().toUpperCase().replace(/\s+/g, '');
-}
-
-function validateTravelerOperationScan(scanValue: unknown, traveler: any, step: any, operationName?: string | null) {
-  const scanned = normalizeOperationScan(scanValue);
-  if (!scanned) {
-    return {
-      allowed: false,
-      payload: buildGateErrorBody(
-        'operation_scan',
-        'Operation scan required',
-        'Scan the traveler operation before starting this step.',
-      ),
-    };
-  }
-
-  const travelerNumber = normalizeOperationScan(traveler.travelerNumber);
-  const travelerId = normalizeOperationScan(traveler.id);
-  const stepId = normalizeOperationScan(step.id);
-  const stepNumber = normalizeOperationScan(step.stepNumber);
-  const department = normalizeOperationScan(step.departmentName);
-  const operation = normalizeOperationScan(operationName);
-  const accepted = new Set(
-    [
-      travelerNumber,
-      travelerId,
-      stepId,
-      stepNumber ? `STEP-${stepNumber}` : '',
-      travelerNumber && stepNumber ? `${travelerNumber}:${stepNumber}` : '',
-      travelerNumber && department ? `${travelerNumber}:${department}` : '',
-      travelerNumber && operation ? `${travelerNumber}:${operation}` : '',
-    ].filter(Boolean),
-  );
-
-  if (!accepted.has(scanned)) {
-    return {
-      allowed: false,
-      payload: {
-        ...buildGateErrorBody(
-          'operation_scan',
-          'Operation scan mismatch',
-          'The scanned operation does not match the active traveler step.',
-        ),
-        expected: {
-          travelerNumber: traveler.travelerNumber ?? null,
-          stepId: step.id ?? null,
-          stepNumber: step.stepNumber ?? null,
-          department: step.departmentName ?? null,
-          operation: operationName ?? null,
-        },
-      },
-    };
-  }
-
-  return { allowed: true, payload: null };
 }
 
 function getDeptTimestampField(dept: string): string | null {
@@ -1218,7 +1188,6 @@ async function performStepStart(
         (t.taskType === 'CHECK' || t.taskType === 'GATE_CHECK') &&
         t.status === 'NOT_STARTED' &&
         !t.requiresSignature &&
-        !t.requiresCertification &&
         badgeGatePattern.test(t.title)
     );
     for (const gateTask of gateCheckTasks) {
@@ -1602,7 +1571,7 @@ router.get('/:travelerId/steps/:stepId/labor-context', async (req: Request, res:
 router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Response) => {
   try {
     const { travelerId, stepId } = req.params;
-    const { startedBy, badgeScan, employeeId: bodyEmployeeId, operationScanValue, laborApprovalId } = req.body;
+    const { startedBy, badgeScan, employeeId: bodyEmployeeId, laborApprovalId } = req.body;
 
     // Resolve badge scan code to employee name and ID if badge was scanned.
     // Normalise dashes so scanner-formatted UUIDs (xxxxxxxx-xxxx-...) match DB rows
@@ -1687,11 +1656,6 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
       stepTasksForOperation[0]?.title ||
       step.departmentName ||
       null;
-    const operationScanGate = validateTravelerOperationScan(operationScanValue, traveler, step, activeOperationName);
-    if (!operationScanGate.allowed) {
-      return res.status(403).json(operationScanGate.payload);
-    }
-
     // WAD release gate: the linked production work order must be RELEASED or IN_PROGRESS.
     // IN_PROGRESS is permitted because the WAD auto-transitions when the first traveler starts;
     // subsequent travelers on the same WAD would otherwise be incorrectly blocked.
@@ -1839,7 +1803,6 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
       nearlyExhausted: budgetResult.nearlyExhausted,
       overrunReason: budgetResult.overrunReason,
       projectId,
-      operationScanValue: String(operationScanValue).trim(),
     };
 
     // Stamp the open punch entry for this employee with step-level traceability.
@@ -2442,6 +2405,9 @@ router.post('/:travelerId/tasks/:taskId/complete', async (req: Request, res: Res
       const resolvedFieldValidations = fieldValidations || {};
       for (const field of fields) {
         let value = resolvedFieldValues[field.fieldKey];
+        if (value === undefined && (task.taskType === 'TRACE' || task.taskType === 'TRACEABILITY')) {
+          value = resolveTraceFieldValue(field.fieldKey, resolvedFieldValues);
+        }
         if (value === undefined && field.fieldKey === 'operator') {
           value = completedBy || step.startedBy || 'unknown';
         }

@@ -45,6 +45,11 @@ export async function ensureProductionWorkflowReadSchema(): Promise<void> {
               ADD COLUMN IF NOT EXISTS warning_threshold numeric,
               ADD COLUMN IF NOT EXISTS blocked_threshold numeric,
               ADD COLUMN IF NOT EXISTS default_charge_code_id integer,
+              ADD COLUMN IF NOT EXISTS dashboard_type text,
+              ADD COLUMN IF NOT EXISTS queue_type text,
+              ADD COLUMN IF NOT EXISTS assigned_department text,
+              ADD COLUMN IF NOT EXISTS assigned_dashboard_route text,
+              ADD COLUMN IF NOT EXISTS manufacturing_queue_id integer,
               ADD COLUMN IF NOT EXISTS wad_status text NOT NULL DEFAULT 'DRAFT',
               ADD COLUMN IF NOT EXISTS wizard_data jsonb,
               ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now();
@@ -129,6 +134,11 @@ export async function ensureProductionWorkflowReadSchema(): Promise<void> {
               ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT true;
           END IF;
 
+          IF to_regclass('public.p2_production_orders') IS NOT NULL THEN
+            ALTER TABLE public.p2_production_orders
+              ADD COLUMN IF NOT EXISTS project_id uuid;
+          END IF;
+
           IF to_regclass('public.material_lot_reservations') IS NOT NULL THEN
             ALTER TABLE public.material_lot_reservations
               ADD COLUMN IF NOT EXISTS traveler_id uuid,
@@ -193,6 +203,51 @@ export async function ensureProductionWorkflowReadSchema(): Promise<void> {
               file_url text,
               linked_at timestamp with time zone DEFAULT now()
             );
+          END IF;
+        END $$;
+      `);
+
+      await pool.query(`
+        DO $$
+        BEGIN
+          IF to_regclass('public.p2_production_orders') IS NOT NULL THEN
+            CREATE INDEX IF NOT EXISTS p2_production_orders_project_id_idx
+              ON public.p2_production_orders(project_id);
+          END IF;
+
+          IF to_regclass('public.p2_production_orders') IS NOT NULL
+             AND to_regclass('public.projects') IS NOT NULL
+             AND to_regclass('public.project_steps') IS NOT NULL THEN
+            WITH project_po AS (
+              SELECT DISTINCT po_id, project_id
+              FROM (
+                SELECT p.po_id, p.id AS project_id
+                FROM public.projects p
+                WHERE p.po_id IS NOT NULL
+                UNION
+                SELECT ps.linked_p2_order_id AS po_id, ps.project_id
+                FROM public.project_steps ps
+                WHERE ps.linked_p2_order_id IS NOT NULL
+              ) s
+            ),
+            po_project_counts AS (
+              SELECT
+                po_id,
+                COUNT(DISTINCT project_id) AS project_count,
+                (array_agg(DISTINCT project_id))[1] AS sole_project_id
+              FROM project_po
+              GROUP BY po_id
+            ),
+            attributable AS (
+              SELECT po_id, sole_project_id
+              FROM po_project_counts
+              WHERE project_count = 1
+            )
+            UPDATE public.p2_production_orders p2po
+            SET project_id = a.sole_project_id
+            FROM attributable a
+            WHERE p2po.p2_po_id = a.po_id
+              AND p2po.project_id IS NULL;
           END IF;
         END $$;
       `);

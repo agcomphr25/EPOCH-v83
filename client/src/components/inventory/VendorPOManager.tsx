@@ -186,6 +186,245 @@ function RecipientPickerList({
   );
 }
 
+function formatReadinessDate(value: unknown): string {
+  if (!value) return 'None recorded';
+  const date = new Date(String(value));
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString();
+}
+
+function IssueReadinessCard({
+  readiness,
+  isLoading,
+  onOpenPurchasingControls,
+  onOpenComplianceReview,
+}: {
+  readiness?: IssueReadiness;
+  isLoading: boolean;
+  onOpenPurchasingControls: () => void;
+  onOpenComplianceReview: () => void;
+}) {
+  const [debarmentDialogOpen, setDebarmentDialogOpen] = useState(false);
+  const [debarmentSource, setDebarmentSource] = useState<'sam.gov' | 'manual_attestation' | 'document_upload'>('manual_attestation');
+  const [debarmentResult, setDebarmentResult] = useState<'pass' | 'fail' | 'inconclusive'>('pass');
+  const [debarmentNotes, setDebarmentNotes] = useState('');
+
+  const recordDebarment = useMutation({
+    mutationFn: () => {
+      if (!readiness?.vendorId) throw new Error('Vendor ID is missing for this PO');
+      return apiRequest('/api/vendor-debarment-checks', {
+        method: 'POST',
+        body: JSON.stringify({
+          vendorId: readiness.vendorId,
+          context: 'po_issuance',
+          contextRefId: readiness.vendorPoId,
+          source: debarmentSource,
+          result: debarmentResult,
+          notes: debarmentNotes,
+        }),
+      });
+    },
+    onSuccess: () => {
+      toast.success('Debarment check recorded');
+      setDebarmentNotes('');
+      setDebarmentResult('pass');
+      setDebarmentDialogOpen(false);
+      if (readiness?.vendorPoId) {
+        queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', readiness.vendorPoId, 'issue-readiness'] });
+      }
+      queryClient.invalidateQueries({ queryKey: ['/api/vendors'] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? 'Failed to record debarment check'),
+  });
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="py-4">
+          <Skeleton className="h-5 w-48 mb-3" />
+          <Skeleton className="h-4 w-full" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!readiness) return null;
+
+  const failingSections = readiness.sections.filter((section) => section.status === 'fail');
+  const debarment = readiness.sections.find((section) => section.key === 'debarment');
+  const latestDebarment = debarment?.details?.latestPassingCheck as any;
+  const vendorMaster = readiness.sections.find((section) => section.key === 'vendor_master');
+  const vendorMasterDetails = vendorMaster?.details as any;
+
+  return (
+    <>
+    <Card className={readiness.ready ? 'border-emerald-200 bg-emerald-50/50' : 'border-amber-200 bg-amber-50/60'}>
+      <CardHeader className="pb-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <CardTitle className="text-base flex items-center gap-2">
+              {readiness.ready ? (
+                <ShieldCheck className="h-4 w-4 text-emerald-600" />
+              ) : (
+                <ShieldAlert className="h-4 w-4 text-amber-600" />
+              )}
+              PO Issue Readiness
+            </CardTitle>
+            <CardDescription>
+              Vendor approval, debarment freshness, scope, purchasing controls, and P2 review are checked separately.
+            </CardDescription>
+          </div>
+          <Badge className={readiness.ready ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800'}>
+            {readiness.ready ? 'Ready to issue' : `${failingSections.length} gate${failingSections.length === 1 ? '' : 's'} need attention`}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-5">
+          {readiness.sections.map((section) => {
+            const passed = section.status === 'pass';
+            const skipped = section.status === 'not_applicable';
+            return (
+              <div key={section.key} className="rounded-md border bg-white/80 p-3">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  {passed ? (
+                    <CheckCircle className="h-4 w-4 text-emerald-600" />
+                  ) : skipped ? (
+                    <Clock className="h-4 w-4 text-slate-400" />
+                  ) : (
+                    <XCircle className="h-4 w-4 text-red-600" />
+                  )}
+                  {section.label}
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  {passed ? 'Clear' : skipped ? 'Not required for this PO' : section.blockers[0]}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {latestDebarment && (
+          <div className="text-xs text-muted-foreground">
+            Latest passing debarment check: {formatReadinessDate(latestDebarment.checkedAt)}
+            {latestDebarment.source ? ` via ${latestDebarment.source}` : ''}
+          </div>
+        )}
+
+        {vendorMasterDetails?.vendorId && (
+          <div className="text-xs text-muted-foreground">
+            This PO is linked to vendor #{vendorMasterDetails.vendorId}
+            {typeof vendorMasterDetails.approved === 'boolean'
+              ? `; master approved: ${vendorMasterDetails.approved ? 'Yes' : 'No'}`
+              : ''}
+            {vendorMasterDetails.approvalLevel
+              ? `; approval level: ${vendorMasterDetails.approvalLevel}`
+              : ''}
+            {vendorMasterDetails.approvalExpiration
+              ? `; expires: ${formatReadinessDate(vendorMasterDetails.approvalExpiration)}`
+              : ''}
+            {Array.isArray(vendorMasterDetails.approvedSameNameVendors) && vendorMasterDetails.approvedSameNameVendors.length > 0
+              ? `. Approved same-name vendor record(s): ${vendorMasterDetails.approvedSameNameVendors.map((v: any) => `#${v.id}`).join(', ')}`
+              : ''}
+          </div>
+        )}
+
+        {failingSections.length > 0 && (
+          <div className="rounded-md border border-amber-200 bg-white/80 p-3">
+            <div className="text-sm font-medium text-amber-900 mb-2">What to fix before issuing</div>
+            <ul className="space-y-1 text-sm text-amber-900">
+              {failingSections.flatMap((section) =>
+                section.blockers.map((blocker) => (
+                  <li key={`${section.key}-${blocker}`}>- {section.label}: {blocker}</li>
+                ))
+              )}
+            </ul>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button type="button" size="sm" variant="outline" onClick={onOpenPurchasingControls}>
+                Open Purchasing Controls
+              </Button>
+              {debarment?.status === 'fail' && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setDebarmentDialogOpen(true)}
+                >
+                  Record Debarment Check
+                </Button>
+              )}
+              {readiness.isP2 && (
+                <Button type="button" size="sm" variant="outline" onClick={onOpenComplianceReview}>
+                  Open P2 Compliance Review
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+    <Dialog open={debarmentDialogOpen} onOpenChange={setDebarmentDialogOpen}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Record Debarment Check</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <p className="text-sm text-muted-foreground">
+            Record evidence that vendor #{readiness.vendorId} was checked for exclusions before PO issuance.
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Source</Label>
+              <select
+                className="w-full border rounded px-2 py-2 text-sm"
+                value={debarmentSource}
+                onChange={(e) => setDebarmentSource(e.target.value as any)}
+              >
+                <option value="manual_attestation">Manual Attestation</option>
+                <option value="sam.gov">SAM.gov</option>
+                <option value="document_upload">Document Upload</option>
+              </select>
+            </div>
+            <div>
+              <Label>Result</Label>
+              <select
+                className="w-full border rounded px-2 py-2 text-sm"
+                value={debarmentResult}
+                onChange={(e) => setDebarmentResult(e.target.value as any)}
+              >
+                <option value="pass">Pass</option>
+                <option value="fail">Fail</option>
+                <option value="inconclusive">Inconclusive</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <Label>Notes / Evidence Reference</Label>
+            <Textarea
+              rows={3}
+              value={debarmentNotes}
+              onChange={(e) => setDebarmentNotes(e.target.value)}
+              placeholder="Example: SAM.gov search completed, no exclusions found."
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => setDebarmentDialogOpen(false)}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            onClick={() => recordDebarment.mutate()}
+            disabled={recordDebarment.isPending || !readiness.vendorId}
+          >
+            {recordDebarment.isPending ? 'Recording...' : 'Record Check'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
+  );
+}
+
 // Types based on our schema
 type VendorPO = {
   id: number;
@@ -247,6 +486,24 @@ type VendorPO = {
   directPoExceptionApprovedByName?: string | null;
   directPoExceptionReason?: string | null;
   directPoExceptionApprovedAt?: string | null;
+};
+
+type IssueReadinessSection = {
+  key: string;
+  label: string;
+  status: 'pass' | 'fail' | 'not_applicable';
+  blockers: string[];
+  details?: Record<string, any>;
+};
+
+type IssueReadiness = {
+  vendorPoId: number;
+  vendorId: number | null;
+  vendorName: string | null;
+  productionLine: string | null;
+  isP2: boolean;
+  ready: boolean;
+  sections: IssueReadinessSection[];
 };
 
 type VendorPOItem = {
@@ -1955,6 +2212,7 @@ function ComplianceReviewModal({
       }) as Promise<ComplianceSaveResult>,
     onSuccess: async (saved: ComplianceSaveResult) => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', vendorPoId, 'compliance-review'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', vendorPoId, 'issue-readiness'] });
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
 
       // If the saved review is blocked, record it for audit trail but do NOT proceed to issue
@@ -2319,6 +2577,15 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
     enabled: !!selectedVendorPO,
   });
 
+  const {
+    data: issueReadiness,
+    isLoading: issueReadinessLoading,
+  } = useQuery<IssueReadiness>({
+    queryKey: ['/api/vendor-pos', selectedVendorPO?.id, 'issue-readiness'],
+    queryFn: () => apiRequest(`/api/vendor-pos/${selectedVendorPO!.id}/issue-readiness`),
+    enabled: !!selectedVendorPO && ['Draft', 'RFQ Sent', 'Quote Received'].includes(selectedVendorPO.status),
+  });
+
   const issuedStatuses = ['Sent', 'Partially Received', 'Fully Received'];
   const { data: confirmationStatus, isLoading: isConfirmationLoading } = useQuery<{
     found: boolean;
@@ -2516,7 +2783,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
     mutationFn: ({ id, recipients, skipEmail = false, reason }: { id: number; recipients: string[]; skipEmail?: boolean; reason?: string }) =>
       apiRequest(`/api/vendor-pos/${id}/send-rfq`, {
         method: 'POST',
-        body: JSON.stringify({ recipients, skipEmail, reason }),
+        body: JSON.stringify({ recipients, printOnly: skipEmail, reason }),
       }),
     onSuccess: (data: any, variables) => {
       getSendRFQInvalidationKeys(variables.id).forEach((key) =>
@@ -3635,6 +3902,15 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
           </div>
         )}
 
+        {['Draft', 'RFQ Sent', 'Quote Received'].includes(selectedVendorPO.status) && (
+          <IssueReadinessCard
+            readiness={issueReadiness}
+            isLoading={issueReadinessLoading}
+            onOpenPurchasingControls={() => setPurchasingControlsOpen(true)}
+            onOpenComplianceReview={() => openComplianceModal(selectedVendorPO.id)}
+          />
+        )}
+
         {/* RFQ Outcome Dialog (Declined / Expired) */}
         <Dialog
           open={showRfqOutcomeDialog}
@@ -4465,6 +4741,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
           onChanged={() => {
             queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
             queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', selectedVendorPO.id] });
+            queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', selectedVendorPO.id, 'issue-readiness'] });
           }}
         />
       )}

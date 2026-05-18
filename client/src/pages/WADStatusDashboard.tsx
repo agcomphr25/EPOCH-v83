@@ -44,6 +44,7 @@ type WadStatusRow = {
 };
 
 const STAGE_LABELS: Record<string, string> = {
+  po_received: 'PO Received',
   p2_release: 'P2 Release',
   production: 'In Production',
 };
@@ -123,7 +124,7 @@ export default function WADStatusDashboard() {
             WAD Status Dashboard
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Every project in P2 Release or Production with the current state of its Work Authorization Document.
+            Every active PO-ready project with the current state of its Work Authorization Document.
             Backfill missing WADs without changing the project stage — full approvals are recorded as
             <strong> wad_backfill</strong> in the audit ledger.
           </p>
@@ -156,7 +157,7 @@ export default function WADStatusDashboard() {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Project WAD Backlog</CardTitle>
-          <CardDescription>One row per project in P2 Release or Production.</CardDescription>
+          <CardDescription>One row per active project that has reached PO/WAD readiness.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex items-center gap-2 flex-wrap">

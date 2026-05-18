@@ -15,7 +15,12 @@ import { generateMagicLink, peekMagicLink, validateMagicLink, createVendorConfir
 import { sendCommunication } from '../../communication/send';
 import { db } from '../../db';
 import { sql } from 'drizzle-orm';
-import { getVendorQualificationBlockers, emitProcurementLedgerEvent } from '../services/procurementControlsService';
+import {
+  getVendorQualificationBlockers,
+  emitProcurementLedgerEvent,
+  hasCurrentVendorMasterApproval,
+} from '../services/procurementControlsService';
+import { sendApiError } from '../../utils/apiErrors';
 
 const router = Router();
 
@@ -241,6 +246,197 @@ async function getVendorPOComplianceBlockers(vendorPoId: number): Promise<string
   if (!review.vendorApproved) blockers.push('Vendor is not approved');
   if (!review.reviewNotes?.trim()) blockers.push('Compliance justification is missing');
   return blockers;
+}
+
+type IssueReadinessSection = {
+  key: string;
+  label: string;
+  status: 'pass' | 'fail' | 'not_applicable';
+  blockers: string[];
+  details?: Record<string, unknown>;
+};
+
+async function buildVendorPOIssueReadiness(vendorPO: any): Promise<{
+  vendorPoId: number;
+  vendorId: number | null;
+  vendorName: string | null;
+  productionLine: string | null;
+  isP2: boolean;
+  ready: boolean;
+  sections: IssueReadinessSection[];
+}> {
+  const isP2 = isP2ProductionLine(vendorPO.productionLine);
+  const { db: drizzleDb } = await import('../../db');
+  const {
+    purchaseRequisitions,
+    vendorPoFarFlowdowns,
+    vendorDebarmentChecks,
+    procurementSettings,
+    vendors,
+  } = await import('../../schema');
+  const { eq: dEq, and: dAnd, gte: dGte, desc: dDesc, sql: dSql } = await import('drizzle-orm');
+
+  const vendorId = Number(vendorPO.vendorId);
+  const [vendor] = Number.isFinite(vendorId)
+    ? await drizzleDb.select().from(vendors).where(dEq(vendors.id, vendorId)).limit(1)
+    : [];
+
+  const [setting] = await drizzleDb.select().from(procurementSettings).limit(1);
+  const freshnessDays = setting?.debarmentCheckFreshnessDays ?? 30;
+  const cutoff = new Date(Date.now() - freshnessDays * 86_400_000);
+  const freshDebarment = Number.isFinite(vendorId)
+    ? await drizzleDb.select().from(vendorDebarmentChecks).where(dAnd(
+      dEq(vendorDebarmentChecks.vendorId, vendorId),
+      dGte(vendorDebarmentChecks.checkedAt, cutoff),
+      dEq(vendorDebarmentChecks.result, 'pass'),
+    )).orderBy(dDesc(vendorDebarmentChecks.checkedAt)).limit(1)
+    : [];
+
+  const vendorMasterBlockers: string[] = [];
+  let approvedSameNameVendors: Array<{ id: number; name: string }> = [];
+  if (!vendor) {
+    vendorMasterBlockers.push('Vendor record not found');
+  } else {
+    if (vendor.isActive === false) vendorMasterBlockers.push('Vendor is inactive');
+    const vendorMasterApproved = hasCurrentVendorMasterApproval(vendor);
+    if (!vendorMasterApproved) {
+      approvedSameNameVendors = await drizzleDb
+        .select({ id: vendors.id, name: vendors.name })
+        .from(vendors)
+        .where(dSql`
+          LOWER(${vendors.name}) = LOWER(${vendor.name})
+          AND ${vendors.isActive} IS DISTINCT FROM false
+          AND (
+            ${vendors.approved} = true
+            OR (
+              NULLIF(TRIM(${vendors.approvalLevel}), '') IS NOT NULL
+              AND ${vendors.approvalExpiration} IS NOT NULL
+              AND ${vendors.approvalExpiration} >= CURRENT_DATE
+            )
+          )
+          AND ${vendors.id} <> ${vendor.id}
+        `)
+        .limit(5);
+      if (approvedSameNameVendors.length > 0) {
+        vendorMasterBlockers.push(
+          `This PO is linked to vendor #${vendor.id}, which is not approved. Approved vendor record(s) with the same name: ${approvedSameNameVendors.map((v) => `#${v.id}`).join(', ')}`
+        );
+      } else {
+        vendorMasterBlockers.push(`Vendor master record #${vendor.id} is not approved`);
+      }
+    }
+    if (vendor.approvalExpiration && new Date(vendor.approvalExpiration) < new Date()) {
+      vendorMasterBlockers.push(`Vendor approval expired on ${vendor.approvalExpiration}`);
+    }
+    const status = String(vendor.debarmentStatus ?? '').trim().toLowerCase();
+    if (['debarred', 'suspended', 'excluded', 'blocked'].includes(status)) {
+      vendorMasterBlockers.push(`Vendor debarment status is ${vendor.debarmentStatus}`);
+    }
+  }
+
+  const debarmentBlockers = freshDebarment.length === 0
+    ? [`No fresh passing debarment check for vendor (within ${freshnessDays} days)`]
+    : [];
+
+  const supplierQualificationBlockers = await getVendorQualificationBlockers(
+    vendorPO.id,
+    vendorId,
+    vendorPO.productionLine ?? null,
+  );
+  const scopeBlockers = supplierQualificationBlockers.filter((reason) =>
+    reason.includes('scope') ||
+    reason.includes('line items') ||
+    reason.includes('outside the vendor')
+  );
+
+  const purchasingBlockers: string[] = [];
+  if (vendorPO.requisitionId) {
+    const [r] = await drizzleDb.select().from(purchaseRequisitions)
+      .where(dEq(purchaseRequisitions.id, vendorPO.requisitionId));
+    if (!r) purchasingBlockers.push('Linked requisition not found');
+    else if (r.status !== 'APPROVED' && r.status !== 'CONVERTED_TO_PO') {
+      purchasingBlockers.push(`Linked requisition must be APPROVED (currently ${r.status})`);
+    }
+  }
+  if (!vendorPO.competitionMethod) {
+    purchasingBlockers.push('Competition method must be recorded');
+  }
+  if (vendorPO.competitionMethod === 'sole-source' &&
+      (!vendorPO.soleSourceJustification || vendorPO.soleSourceJustification.trim().length < 10)) {
+    purchasingBlockers.push('Sole-source justification required');
+  }
+  const flowdowns = await drizzleDb.select().from(vendorPoFarFlowdowns)
+    .where(dEq(vendorPoFarFlowdowns.vendorPoId, vendorPO.id));
+  if (flowdowns.length === 0) {
+    purchasingBlockers.push('FAR flowdown checklist has not been recorded for this PO');
+  } else if (flowdowns.some((fd) => !fd.reasoning || fd.reasoning.trim().length < 3)) {
+    purchasingBlockers.push('One or more FAR flowdown entries is missing applicability reasoning');
+  }
+
+  const complianceBlockers = isP2 ? await getVendorPOComplianceBlockers(vendorPO.id) : [];
+  const sections: IssueReadinessSection[] = [
+    {
+      key: 'vendor_master',
+      label: 'Vendor Master Approval',
+      status: vendorMasterBlockers.length > 0 ? 'fail' : 'pass',
+      blockers: vendorMasterBlockers,
+      details: vendor ? {
+        vendorId: vendor.id,
+        vendorName: vendor.name,
+        approved: hasCurrentVendorMasterApproval(vendor),
+        rawApprovedFlag: vendor.approved,
+        approvalLevel: vendor.approvalLevel ?? null,
+        approvalExpiration: vendor.approvalExpiration ?? null,
+        debarmentStatus: vendor.debarmentStatus ?? null,
+        debarmentCheckedAt: vendor.debarmentCheckedAt ?? null,
+        approvedSameNameVendors,
+      } : { vendorId },
+    },
+    {
+      key: 'debarment',
+      label: 'Debarment Check',
+      status: debarmentBlockers.length > 0 ? 'fail' : 'pass',
+      blockers: debarmentBlockers,
+      details: {
+        freshnessDays,
+        latestPassingCheck: freshDebarment[0] ?? null,
+      },
+    },
+    {
+      key: 'supplier_scope',
+      label: 'Approved Supplier Scope',
+      status: scopeBlockers.length > 0 ? 'fail' : 'pass',
+      blockers: scopeBlockers,
+    },
+    {
+      key: 'purchasing_controls',
+      label: 'Purchasing Controls',
+      status: !isP2 ? 'not_applicable' : purchasingBlockers.length > 0 ? 'fail' : 'pass',
+      blockers: isP2 ? purchasingBlockers : [],
+      details: {
+        requisitionId: vendorPO.requisitionId ?? null,
+        competitionMethod: vendorPO.competitionMethod ?? null,
+        flowdownCount: flowdowns.length,
+      },
+    },
+    {
+      key: 'p2_compliance_review',
+      label: 'P2 Compliance Review',
+      status: !isP2 ? 'not_applicable' : complianceBlockers.length > 0 ? 'fail' : 'pass',
+      blockers: complianceBlockers,
+      details: { appliesToProductionLine: isP2 },
+    },
+  ];
+
+  return {
+    vendorPoId: vendorPO.id,
+    vendorId: vendor?.id ?? vendorId ?? null,
+    vendorName: vendor?.name ?? vendorPO.vendorName ?? null,
+    productionLine: vendorPO.productionLine ?? null,
+    isP2,
+    ready: sections.every((section) => section.status !== 'fail'),
+    sections,
+  };
 }
 
 function hasTraceabilityLink(data: Record<string, unknown>): boolean {
@@ -715,7 +911,8 @@ router.delete('/optional-settings/:id', async (req: Request, res: Response) => {
 });
 
 // GET /api/vendor-pos/compliance-backfill - Procurement Compliance Backfill Queue
-// Returns all issued POs with compliance gaps, enriched with per-row failing reasons and recommended actions.
+// Returns issued POs with compliance gaps, enriched with per-row failing reasons and recommended actions.
+// Default "all" includes isolated legacy rows; "enforced" matches the current ERDI scoring population.
 // Must be defined BEFORE /:id to avoid route conflict.
 // Query param: filter = 'all' | 'enforced' | 'legacy' | 'audit-sensitive-legacy'
 const backfillFilterSchema = z.enum(['all', 'enforced', 'legacy', 'audit-sensitive-legacy']).default('all');
@@ -851,6 +1048,27 @@ router.get('/traceability-options', async (_req: Request, res: Response) => {
   }
 });
 
+// GET /api/vendor-pos/:id/issue-readiness - Explain all gates that affect PO issuance
+router.get('/:id/issue-readiness', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid vendor PO ID' });
+    }
+
+    const vendorPO = await storage.getVendorPO(id);
+    if (!vendorPO) {
+      return res.status(404).json({ error: 'Vendor PO not found' });
+    }
+
+    const readiness = await buildVendorPOIssueReadiness(vendorPO);
+    res.json(readiness);
+  } catch (error: any) {
+    console.error('[VendorPO] Issue readiness error:', error);
+    res.status(500).json({ error: error.message || 'Failed to build PO issue readiness' });
+  }
+});
+
 // GET /api/vendor-pos/:id - Get a single vendor PO
 router.get('/:id', async (req: Request, res: Response) => {
   try {
@@ -909,12 +1127,10 @@ router.post('/', requirePermission('purchasing.manage_pos'), async (req: Request
     res.status(201).json(vendorPO);
   } catch (error) {
     console.error('Create vendor PO error:', error);
-    if (error instanceof z.ZodError) {
-      return res
-        .status(400)
-        .json({ error: 'Invalid vendor PO data', details: error.errors });
-    }
-    res.status(500).json({ error: 'Failed to create vendor PO' });
+    return sendApiError(res, error, {
+      fallbackMessage: 'Failed to create vendor PO',
+      source: 'vendorPO.create',
+    });
   }
 });
 
@@ -991,12 +1207,10 @@ router.put('/:id', requirePermission('purchasing.manage_pos'), async (req: Reque
     res.json(vendorPO);
   } catch (error) {
     console.error('Update vendor PO error:', error);
-    if (error instanceof z.ZodError) {
-      return res
-        .status(400)
-        .json({ error: 'Invalid vendor PO data', details: error.errors });
-    }
-    res.status(500).json({ error: 'Failed to update vendor PO' });
+    return sendApiError(res, error, {
+      fallbackMessage: 'Failed to update vendor PO',
+      source: 'vendorPO.update',
+    });
   }
 });
 
@@ -1130,18 +1344,16 @@ router.post('/:id/items', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Create vendor PO item error:', error);
     if ((error as any)?.status) {
-      return res.status((error as any).status).json({
-        error: (error as Error).message,
-        complianceBlocked: (error as any).status === 422,
-        blockingReasons: (error as any).blockingReasons ?? undefined,
+      return sendApiError(res, error, {
+        fallbackMessage: 'Failed to create vendor PO item',
+        source: 'vendorPO.item.create',
+        exposeMessage: true,
       });
     }
-    if (error instanceof z.ZodError) {
-      return res
-        .status(400)
-        .json({ error: 'Invalid vendor PO item data', details: error.errors });
-    }
-    res.status(500).json({ error: 'Failed to create vendor PO item' });
+    return sendApiError(res, error, {
+      fallbackMessage: 'Failed to create vendor PO item',
+      source: 'vendorPO.item.create',
+    });
   }
 });
 
@@ -1215,18 +1427,16 @@ router.put('/items/:itemId', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Update vendor PO item error:', error);
     if ((error as any)?.status) {
-      return res.status((error as any).status).json({
-        error: (error as Error).message,
-        complianceBlocked: (error as any).status === 422,
-        blockingReasons: (error as any).blockingReasons ?? undefined,
+      return sendApiError(res, error, {
+        fallbackMessage: 'Failed to update vendor PO item',
+        source: 'vendorPO.item.update',
+        exposeMessage: true,
       });
     }
-    if (error instanceof z.ZodError) {
-      return res
-        .status(400)
-        .json({ error: 'Invalid vendor PO item data', details: error.errors });
-    }
-    res.status(500).json({ error: 'Failed to update vendor PO item' });
+    return sendApiError(res, error, {
+      fallbackMessage: 'Failed to update vendor PO item',
+      source: 'vendorPO.item.update',
+    });
   }
 });
 
@@ -1277,9 +1487,17 @@ router.post('/items/:itemId/receive', async (req: Request, res: Response) => {
       createdBy: z.number().int().positive().optional(), // Employee ID
       cocLink: z.string().optional(), // Certificate of Conformance link
       documentUrl: z.string().optional(), // Uploaded document URL
+      // Per-unit traceability splits (Task #240). When provided, each entry
+      // creates its own material_lots row + its own ITL RECEIVE row. Sum of
+      // unit quantities must equal `receivedQuantity`.
+      units: z.array(z.object({
+        quantity: z.number().positive('Unit quantity must be positive'),
+        traceability: z.record(z.string(), z.string()).optional(),
+        notes: z.string().optional(),
+      })).optional(),
     });
 
-    const { receivedQuantity, receivedDate, notes, createdBy, cocLink, documentUrl } = receiveSchema.parse(req.body);
+    const { receivedQuantity, receivedDate, notes, createdBy, cocLink, documentUrl, units } = receiveSchema.parse(req.body);
 
     // Record PO receipt and calculate COGS
     const result = await storage.recordVendorPOReceipt({
@@ -1289,21 +1507,17 @@ router.post('/items/:itemId/receive', async (req: Request, res: Response) => {
       notes: documentUrl ? `${notes || ''} | Document: ${documentUrl}`.trim() : notes,
       createdBy,
       cocLink,
+      units,
     });
 
     res.json(result);
   } catch (error) {
     console.error('Record PO receipt error:', error);
-    if (error instanceof z.ZodError) {
-      return res
-        .status(400)
-        .json({ error: 'Invalid receipt data', details: error.errors });
-    }
-    // Pass business logic errors (like validation failures) to the client with 400
-    if (error instanceof Error) {
-      return res.status(400).json({ error: error.message });
-    }
-    res.status(500).json({ error: 'Failed to record PO receipt' });
+    return sendApiError(res, error, {
+      fallbackMessage: 'Failed to record PO receipt',
+      source: 'vendorPO.item.receive',
+      exposeMessage: true,
+    });
   }
 });
 
@@ -1660,7 +1874,7 @@ router.post('/:id/send-rfq', async (req: Request, res: Response) => {
       });
     }
 
-    const { recipients: rawRecipients } = req.body ?? {};
+    const { recipients: rawRecipients, printOnly } = req.body ?? {};
     const allowedEmails = await getAllowedVendorEmails(vendorPO.vendorId);
     const { to: rfqTo, cc: rfqCc } = deriveToAndCc(
       rawRecipients,
@@ -1668,6 +1882,24 @@ router.post('/:id/send-rfq', async (req: Request, res: Response) => {
       allowedEmails,
       ['laurie.tandy@agadvanced.com']
     );
+
+    const shouldPrintOnly =
+      printOnly === true ||
+      printOnly === 'true' ||
+      printOnly === 1 ||
+      printOnly === '1';
+
+    if (shouldPrintOnly) {
+      const updatedPO = await storage.updateVendorPO(id, { status: 'RFQ Sent' });
+      return res.json({
+        ...updatedPO,
+        emailSent: false,
+        emailRecipient: rfqTo,
+        emailCc: rfqCc,
+        printOnly: true,
+        message: `RFQ prepared for printing only.`,
+      });
+    }
 
     // Fetch line items for the RFQ
     const items = await storage.getVendorPOItems(id);
@@ -1724,10 +1956,12 @@ router.post('/:id/send-rfq', async (req: Request, res: Response) => {
 
     if (!emailResult.success) {
       console.error('Failed to send RFQ email:', emailResult.error);
-      return res.status(500).json({
-        error: 'Failed to send RFQ email',
-        message: emailResult.error || 'Email service unavailable. Please try again.',
-        emailSent: false,
+      const emailError: any = new Error(emailResult.error || 'Email service unavailable. Please try again.');
+      emailError.status = 503;
+      return sendApiError(res, emailError, {
+        fallbackMessage: 'Failed to send RFQ email',
+        source: 'vendorPO.rfq.email',
+        exposeMessage: true,
       });
     }
 
@@ -1745,10 +1979,11 @@ router.post('/:id/send-rfq', async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Send RFQ error:', error);
-    if (error instanceof Error) {
-      return res.status(400).json({ error: error.message });
-    }
-    res.status(500).json({ error: 'Failed to send RFQ' });
+    return sendApiError(res, error, {
+      fallbackMessage: 'Failed to send RFQ',
+      source: 'vendorPO.rfq.send',
+      exposeMessage: true,
+    });
   }
 });
 
@@ -1815,7 +2050,11 @@ router.post('/:id/direct-po-exception', requirePermission('purchasing.direct_po_
     res.json({ ok: true, vendorPO: updated });
   } catch (err: any) {
     console.error('Direct-PO exception error:', err);
-    res.status(500).json({ error: err?.message ?? 'Failed to record direct-PO exception' });
+    return sendApiError(res, err, {
+      fallbackMessage: 'Failed to record direct-PO exception',
+      source: 'vendorPO.directPoException',
+      exposeMessage: true,
+    });
   }
 });
 
@@ -2208,12 +2447,30 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
     });
 
     if (!emailResult.success) {
-      console.error('Failed to send PO confirmation email:', emailResult.error);
-      return res.status(500).json({
-        error: 'PO issued but confirmation email failed',
-        message: emailResult.error || 'Email service unavailable. PO has been issued — you may resend the email later.',
-        emailSent: false,
+      const requestId = res.locals.requestId;
+      const emailFailureMessage =
+        emailResult.error || 'Email service unavailable. PO has been issued - you may resend the email later.';
+
+      console.error('[VendorPOIssuedEmailFailed]', {
+        requestId,
         poNumber,
+        vendorPOId: id,
+        to: issueToEmail,
+        cc: issueCcList,
+        error: emailResult.error,
+      });
+
+      return res.json({
+        ...issuedPO,
+        success: true,
+        partialSuccess: true,
+        emailSent: false,
+        emailError: emailFailureMessage,
+        retryAction: 'resend',
+        poNumber,
+        requestId,
+        confirmationLinkExpires: expiresAt,
+        message: 'PO issued successfully, but the confirmation email was not sent. Use resend to notify the vendor.',
       });
     }
 
@@ -2265,16 +2522,11 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
     });
   } catch (error: any) {
     console.error('Issue vendor PO error:', error);
-    if (error?.code === '23505' || error?.message?.includes('duplicate key') || error?.message?.includes('vendor_pos_po_number')) {
-      return res.status(409).json({
-        error: 'PO number conflict',
-        message: 'A PO number conflict occurred. Please try again.',
-      });
-    }
-    if (error instanceof Error) {
-      return res.status(400).json({ error: error.message });
-    }
-    res.status(500).json({ error: 'Failed to issue vendor PO' });
+    return sendApiError(res, error, {
+      fallbackMessage: 'Failed to issue vendor PO',
+      source: 'vendorPO.issue',
+      exposeMessage: true,
+    });
   }
 });
 
@@ -2501,10 +2753,12 @@ router.post('/:id/resend', async (req: Request, res: Response) => {
 
     if (!emailResult.success) {
       console.error('Failed to resend PO confirmation email:', emailResult.error);
-      return res.status(500).json({
-        error: 'Failed to resend PO confirmation email',
-        message: emailResult.error || 'Email service unavailable.',
-        emailSent: false,
+      const emailError: any = new Error(emailResult.error || 'Email service unavailable.');
+      emailError.status = 503;
+      return sendApiError(res, emailError, {
+        fallbackMessage: 'Failed to resend PO confirmation email',
+        source: 'vendorPO.resend.email',
+        exposeMessage: true,
       });
     }
 
@@ -2519,10 +2773,11 @@ router.post('/:id/resend', async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Resend vendor PO error:', error);
-    if (error instanceof Error) {
-      return res.status(400).json({ error: error.message });
-    }
-    res.status(500).json({ error: 'Failed to resend vendor PO' });
+    return sendApiError(res, error, {
+      fallbackMessage: 'Failed to resend vendor PO',
+      source: 'vendorPO.resend',
+      exposeMessage: true,
+    });
   }
 });
 
@@ -2586,7 +2841,13 @@ router.get('/confirm/preview', async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('[VendorPOConfirmPreview] error:', error);
-    res.status(500).json({ valid: false, errorCode: 'TOKEN_NOT_FOUND', error: 'Failed to preview confirmation', contactInfo });
+    res.status(500).json({
+      valid: false,
+      errorCode: 'TOKEN_NOT_FOUND',
+      error: 'Failed to preview confirmation',
+      requestId: res.locals.requestId,
+      contactInfo,
+    });
   }
 });
 
@@ -2641,7 +2902,12 @@ router.post('/confirm', async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('[VendorPOConfirm] error:', error);
-    res.status(500).json({ success: false, errorCode: 'TOKEN_NOT_FOUND', error: 'Failed to process confirmation' });
+    res.status(500).json({
+      success: false,
+      errorCode: 'TOKEN_NOT_FOUND',
+      error: 'Failed to process confirmation',
+      requestId: res.locals.requestId,
+    });
   }
 });
 

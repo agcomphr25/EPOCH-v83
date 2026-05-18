@@ -181,7 +181,7 @@ Current foundation:
 
 Remaining work:
 
-- Add mandatory operation scans and electronic signoff completeness gates.
+- Enforce electronic signoff completeness gates. Operation context is established by the traveler barcode scan plus the existing electronic signoff (employee + timestamp) — a separate operation scan is **not** required, since each task is deterministically linked to the traveler/WAD/charge code at the time the traveler is opened. (Removed in Task #207.)
 - Validate training and certification before operation execution.
 - Tie every labor entry to employee, charge code, operation, project, traveler step, timestamp, and WAD.
 - Add daily employee time certification and supervisor approval status.

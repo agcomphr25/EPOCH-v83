@@ -18,6 +18,11 @@ import {
 } from '../constants/audit';
 import type { File } from '@google-cloud/storage';
 import { z } from 'zod';
+import {
+  getFileStorageProvider,
+  getFileStorageProviderForObjectPath,
+  isSupabaseObjectPath,
+} from '../services/fileStorageProvider';
 
 const router = Router();
 const objectStorage = new ObjectStorageService();
@@ -272,10 +277,14 @@ router.post('/documents/request-upload', authenticateToken, async (req, res) => 
     const { name, contentType, fileSizeBytes } = req.body;
     if (!name) return res.status(400).json({ error: 'name is required' });
 
-    const uploadURL = await objectStorage.getObjectEntityUploadURL();
-    const objectPath = objectStorage.normalizeObjectEntityPath(uploadURL);
+    const target = await getFileStorageProvider().createUploadTarget({
+      fileName: name,
+      contentType,
+      scope: 'vault-documents',
+      entityId: String((req as any).user?.id ?? 'unknown'),
+    });
 
-    res.json({ uploadURL, objectPath, metadata: { name, contentType, fileSizeBytes } });
+    res.json({ uploadURL: target.uploadURL, objectPath: target.objectPath, provider: target.provider, metadata: { name, contentType, fileSizeBytes } });
   } catch (err: any) {
     console.error('[vault] request-upload error:', err);
     res.status(500).json({ error: 'Failed to generate upload URL' });
@@ -368,26 +377,31 @@ router.post('/documents', authenticateToken, async (req, res) => {
     // setMetadata call so GCS does not patch-overwrite the custom:aclPolicy key.
     // If this fails, roll back the DB record — partial state is not acceptable for CUI/ITAR docs.
     try {
-      const objectFile = await objectStorage.getObjectEntityFile(doc.objectPath);
+      if (isSupabaseObjectPath(doc.objectPath)) {
+        // Supabase vault objects use DB-backed ACL enforcement through vault routes.
+        await getFileStorageProviderForObjectPath(doc.objectPath).downloadBuffer(doc.objectPath);
+      } else {
+        const objectFile = await objectStorage.getObjectEntityFile(doc.objectPath);
 
-      const [exists] = await objectFile.exists();
-      if (!exists) throw new Error(`Object not found at path: ${doc.objectPath}`);
+        const [exists] = await objectFile.exists();
+        if (!exists) throw new Error(`Object not found at path: ${doc.objectPath}`);
 
-      const visibility = classification === 'public' ? 'public' : 'private';
-      const aclRules = buildAclRules(effectiveScopeType, effectiveScopeValue, doc.id, classification);
-      const aclPolicy: ObjectAclPolicy = { owner: String(user.id), visibility, aclRules };
+        const visibility = classification === 'public' ? 'public' : 'private';
+        const aclRules = buildAclRules(effectiveScopeType, effectiveScopeValue, doc.id, classification);
+        const aclPolicy: ObjectAclPolicy = { owner: String(user.id), visibility, aclRules };
 
-      await objectFile.setMetadata({
-        metadata: {
-          ...buildAclPolicyMetadata(aclPolicy),
-          [META_CLASSIFICATION]: classification,
-          [META_SCOPE_TYPE]: effectiveScopeType,
-          [META_SCOPE_VALUE]: effectiveScopeValue || '',
-          [META_DOCUMENT_CATEGORY]: effectiveDocumentCategory,
-          [META_CUSTOMER_ID]: customerId || '',
-          [META_SOURCE_ENTITY]: sourceEntityType && sourceEntityId ? `${sourceEntityType}:${sourceEntityId}` : '',
-        },
-      });
+        await objectFile.setMetadata({
+          metadata: {
+            ...buildAclPolicyMetadata(aclPolicy),
+            [META_CLASSIFICATION]: classification,
+            [META_SCOPE_TYPE]: effectiveScopeType,
+            [META_SCOPE_VALUE]: effectiveScopeValue || '',
+            [META_DOCUMENT_CATEGORY]: effectiveDocumentCategory,
+            [META_CUSTOMER_ID]: customerId || '',
+            [META_SOURCE_ENTITY]: sourceEntityType && sourceEntityId ? `${sourceEntityType}:${sourceEntityId}` : '',
+          },
+        });
+      }
     } catch (aclErr) {
       console.error('[vault] Failed to set ACL/metadata — rolling back document record:', aclErr);
       await db.delete(vaultDocuments).where(eq(vaultDocuments.id, doc.id)).catch((rollbackErr) => {
@@ -574,6 +588,26 @@ router.get('/documents/:id/download', authenticateToken, async (req, res) => {
       return;
     }
 
+    if (isSupabaseObjectPath(doc.objectPath)) {
+      const downloadUrl = `/api/vault/documents/${doc.id}/file`;
+      const linkExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
+
+      await pool.query(
+        `INSERT INTO object_access_log (
+           vault_document_id, user_id, action, ip_address, user_agent, device_fingerprint, link_expires_at, session_id
+         ) VALUES ($1, $2, 'link_issued', $3, $4, $5, $6, $7)`,
+        [doc.id, user.username, ipAddress, userAgent, sessionContext.deviceFingerprint, linkExpiresAt, sessionContext.id]
+      ).catch((logErr) => console.error('[vault] Failed to write download link access log:', logErr));
+
+      return res.json({
+        downloadUrl,
+        expiresIn: 300,
+        linkExpiresAt: linkExpiresAt.toISOString(),
+        filename: doc.name,
+        contentType: doc.contentType,
+      });
+    }
+
     if (!objectFile) {
       objectFile = await objectStorage.getObjectEntityFile(doc.objectPath);
     }
@@ -648,6 +682,52 @@ router.get('/documents/:id/download', authenticateToken, async (req, res) => {
  * Audit log is written BEFORE deletion so the record survives even if the
  * storage delete step fails (storage objects may be cleaned up separately).
  */
+/**
+ * GET /api/vault/documents/:id/file
+ *
+ * Provider-backed streaming endpoint used when storage cannot issue native
+ * signed download URLs, such as Supabase private buckets.
+ */
+router.get('/documents/:id/file', authenticateToken, async (req, res) => {
+  try {
+    const user = (req as any).user;
+    const docId = parseInt(req.params.id);
+    if (isNaN(docId)) return res.status(400).json({ error: 'Invalid document id' });
+
+    const [doc] = await db.select().from(vaultDocuments).where(eq(vaultDocuments.id, docId)).limit(1);
+    if (!doc) return res.status(404).json({ error: 'Document not found' });
+
+    const allowed = await canUserAccessDocument(user.id, user.role, {
+      id: doc.id,
+      classification: doc.classification,
+      scopeType: doc.scopeType,
+      scopeValue: doc.scopeValue,
+      uploaderUserId: doc.uploaderUserId,
+    });
+    if (!allowed) {
+      return res.status(403).json({ error: 'Access denied', reason: 'permission_denied' });
+    }
+
+    const stepUpOk = await requireRecentCredentialForControlled(req, res, {
+      classification: doc.classification,
+      mfaRequired: doc.mfaRequired,
+      sessionTimeoutMinutes: doc.sessionTimeoutMinutes,
+    });
+    if (!stepUpOk) return;
+
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(doc.name)}"`);
+    if (doc.contentType) res.setHeader('Content-Type', doc.contentType);
+    await getFileStorageProviderForObjectPath(doc.objectPath).downloadObject(doc.objectPath, res);
+  } catch (err: any) {
+    console.error('[vault] file stream error:', err);
+    if (!res.headersSent) {
+      res.status(err?.status === 404 ? 404 : 500).json({
+        error: err?.status === 404 ? 'File not found in storage' : 'Failed to stream document',
+      });
+    }
+  }
+});
+
 router.delete('/documents/:id', authenticateToken, requireAdminOrOwner, async (req, res) => {
   try {
     const user = (req as any).user;
@@ -683,8 +763,12 @@ router.delete('/documents/:id', authenticateToken, requireAdminOrOwner, async (r
 
     // Best-effort storage deletion — failure does not roll back the DB delete
     try {
-      const objectFile = await objectStorage.getObjectEntityFile(doc.objectPath);
-      await objectFile.delete();
+      if (isSupabaseObjectPath(doc.objectPath)) {
+        await getFileStorageProviderForObjectPath(doc.objectPath).deleteObject(doc.objectPath);
+      } else {
+        const objectFile = await objectStorage.getObjectEntityFile(doc.objectPath);
+        await objectFile.delete();
+      }
     } catch (storageErr) {
       console.warn('[vault] Storage delete failed — object may be orphaned:', storageErr);
     }

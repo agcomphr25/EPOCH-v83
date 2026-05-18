@@ -25,6 +25,7 @@ export interface InventoryEventParams {
   agPartNumber: string;
   eventType: InventoryEventType;
   quantity: number;
+  lotId?: string | null;
   unitOfMeasure?: string;
   fromLocation?: string | null;
   toLocation?: string | null;
@@ -64,6 +65,7 @@ export async function createInventoryEvent(params: InventoryEventParams): Promis
     agPartNumber,
     eventType,
     quantity,
+    lotId,
     unitOfMeasure,
     fromLocation,
     toLocation,
@@ -134,6 +136,7 @@ export async function createInventoryEvent(params: InventoryEventParams): Promis
       await recordInventoryBalanceLedgerChange({
         agPartNumber,
         transactionType: 'TRANSFER',
+        lotId,
         locationId: fromLocation,
         quantityDelta: change.delta,
         quantityBefore: change.before,
@@ -151,6 +154,7 @@ export async function createInventoryEvent(params: InventoryEventParams): Promis
       await recordInventoryBalanceLedgerChange({
         agPartNumber,
         transactionType: 'TRANSFER',
+        lotId,
         locationId: toLocation,
         quantityDelta: change.delta,
         quantityBefore: change.before,
@@ -172,6 +176,7 @@ export async function createInventoryEvent(params: InventoryEventParams): Promis
     await recordInventoryBalanceLedgerChange({
       agPartNumber,
       transactionType: toLedgerTransactionType(eventType),
+      lotId,
       locationId: location,
       quantityDelta: change.delta,
       quantityBefore: change.before,
@@ -189,6 +194,7 @@ export async function createInventoryEvent(params: InventoryEventParams): Promis
       await recordInventoryBalanceLedgerChange({
         agPartNumber,
         transactionType: 'MOVE',
+        lotId,
         locationId: fromLocation,
         quantityDelta: sourceChange.delta,
         quantityBefore: sourceChange.before,
@@ -210,6 +216,7 @@ export async function createInventoryEvent(params: InventoryEventParams): Promis
     await recordInventoryBalanceLedgerChange({
       agPartNumber,
       transactionType: toLedgerTransactionType(eventType),
+      lotId,
       locationId: location,
       quantityDelta: change.delta,
       quantityBefore: change.before,
@@ -230,6 +237,7 @@ export async function createInventoryEvent(params: InventoryEventParams): Promis
     await recordInventoryBalanceLedgerChange({
       agPartNumber,
       transactionType: 'RETURN',
+      lotId,
       locationId: location,
       quantityDelta: change.delta,
       quantityBefore: change.before,

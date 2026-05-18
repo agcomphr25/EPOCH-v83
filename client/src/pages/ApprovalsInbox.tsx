@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { CheckCircle2, XCircle, Clock, AlertTriangle, ShieldAlert } from 'lucide-react';
+import { CheckCircle2, XCircle, Clock, AlertTriangle, ShieldAlert, UserPlus } from 'lucide-react';
 
 interface ApprovalRequest {
   id: string;
@@ -18,12 +18,21 @@ interface ApprovalRequest {
   subjectType: string | null;
   subjectId: string | null;
   requestedByDisplayName: string;
+  requestedByUserId: number | null;
   status: string;
   currentApproverRole: string | null;
   currentApproverUserId: number | null;
   escalationLevel: number;
   currentLevelDeadline: string | null;
   createdAt: string;
+}
+
+interface EmployeeOption {
+  id: number;
+  name: string;
+  employeeCode?: string | null;
+  department?: string | null;
+  userId?: number | null;
 }
 
 interface DecisionState {
@@ -119,6 +128,10 @@ export default function ApprovalsInbox() {
     refetchInterval: 30000,
   });
 
+  const { data: employees = [] } = useQuery<EmployeeOption[]>({
+    queryKey: ['/api/employees'],
+  });
+
   const { data: detail } = useQuery<{
     request: ApprovalRequest;
     history: any[];
@@ -132,12 +145,12 @@ export default function ApprovalsInbox() {
     mutationFn: async (vars: { id: string; action: 'approve' | 'reject'; body: DecisionState }) =>
       apiRequest(`/api/approvals/${vars.id}/${vars.action}`, {
         method: 'POST',
-        body: JSON.stringify({
+        body: {
           notes: vars.body.notes || null,
           reasonCode: vars.body.reasonCode || null,
           signature: vars.body.signature || null,
-        }),
-      }).then((r) => r.json()),
+        },
+      }),
     onSuccess: (_data, vars) => {
       toast({
         title: vars.action === 'approve' ? 'Approved' : 'Rejected',
@@ -156,9 +169,43 @@ export default function ApprovalsInbox() {
     },
   });
 
+  const assignApproval = useMutation({
+    mutationFn: async (vars: { id: string; employeeId: number | null }) =>
+      apiRequest(`/api/approvals/${vars.id}/assignment`, {
+        method: 'PATCH',
+        body: { employeeId: vars.employeeId },
+      }),
+    onSuccess: (updated: ApprovalRequest) => {
+      const assignedEmployee = employees.find((emp) => emp.userId === updated.currentApproverUserId);
+      setSelected(updated);
+      toast({
+        title: assignedEmployee ? 'Approval assigned' : 'Assignment cleared',
+        description: assignedEmployee
+          ? `${updated.requestType} now appears on ${assignedEmployee.name}'s dashboard.`
+          : `${updated.requestType} is back in the role queue.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/approvals'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/approvals', updated.id] });
+      queryClient.invalidateQueries({ queryKey: ['/api/approvals/my-tasks'] });
+    },
+    onError: (err: any) => {
+      toast({
+        title: 'Assignment failed',
+        description: err?.message ?? 'Could not assign this approval',
+        variant: 'destructive',
+      });
+    },
+  });
+
   const policy = detail?.policy;
   const requiresSignature = !!policy?.requiresSignature;
   const reasonCodes: string[] = Array.isArray(policy?.reasonCodes) ? policy.reasonCodes : [];
+  const selectedRequest = detail?.request ?? selected;
+  const assignableEmployees = employees.filter((emp) => emp.userId);
+  const assignedEmployeeId =
+    selectedRequest?.currentApproverUserId != null
+      ? assignableEmployees.find((emp) => emp.userId === selectedRequest.currentApproverUserId)?.id
+      : null;
 
   return (
     <div className="container mx-auto p-4 max-w-7xl" data-testid="page-approvals">
@@ -223,37 +270,78 @@ export default function ApprovalsInbox() {
                 Choose a pending approval from the list to review and act on it.
               </div>
             )}
-            {selected && (
+            {selectedRequest && (
               <>
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div>
                     <span className="text-muted-foreground">Status:</span>{' '}
-                    <Badge variant="outline" data-testid="text-status">{selected.status}</Badge>
+                    <Badge variant="outline" data-testid="text-status">{selectedRequest.status}</Badge>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">Level:</span> {selected.escalationLevel}
+                    <span className="text-muted-foreground">Level:</span> {selectedRequest.escalationLevel}
                   </div>
                   <div>
                     <span className="text-muted-foreground">Approver role:</span>{' '}
-                    {selected.currentApproverRole ?? '—'}
+                    {selectedRequest.currentApproverRole ?? '—'}
                   </div>
                   <div>
                     <span className="text-muted-foreground">Requested by:</span>{' '}
-                    {selected.requestedByDisplayName}
+                    {selectedRequest.requestedByDisplayName}
                   </div>
                 </div>
 
-                {INVENTORY_REQUEST_TYPES.has(selected.requestType) ? (
+                <div className="rounded border bg-muted/20 p-3 space-y-2">
+                  <div className="flex items-center gap-2 text-sm font-semibold">
+                    <UserPlus className="h-4 w-4" />
+                    Assign approval task
+                  </div>
+                  <Select
+                    value={assignedEmployeeId ? String(assignedEmployeeId) : 'none'}
+                    onValueChange={(value) =>
+                      assignApproval.mutate({
+                        id: selectedRequest.id,
+                        employeeId: value === 'none' ? null : Number(value),
+                      })
+                    }
+                    disabled={assignApproval.isPending}
+                  >
+                    <SelectTrigger data-testid="select-approval-assignee">
+                      <SelectValue placeholder="Send to employee dashboard" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Role queue only</SelectItem>
+                      {assignableEmployees.map((emp) => {
+                        const isRequester = emp.userId === selectedRequest.requestedByUserId;
+                        return (
+                          <SelectItem
+                            key={emp.id}
+                            value={String(emp.id)}
+                            disabled={isRequester}
+                          >
+                            {emp.name}
+                            {emp.employeeCode ? ` (${emp.employeeCode})` : ''}
+                            {isRequester ? ' - requester' : ''}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Assigned approvals appear as tasks on the linked employee dashboard.
+                  </p>
+                </div>
+
+                {INVENTORY_REQUEST_TYPES.has(selectedRequest.requestType) ? (
                   <InventoryApprovalSummary
-                    requestType={selected.requestType}
-                    payload={selected.requestPayload ?? {}}
+                    requestType={selectedRequest.requestType}
+                    payload={selectedRequest.requestPayload ?? {}}
                   />
                 ) : (
-                  selected.requestPayload && Object.keys(selected.requestPayload).length > 0 && (
+                  selectedRequest.requestPayload && Object.keys(selectedRequest.requestPayload).length > 0 && (
                     <div>
                       <div className="text-xs font-semibold text-muted-foreground mb-1">Payload</div>
                       <pre className="bg-muted p-2 rounded text-xs overflow-x-auto max-h-48">
-                        {JSON.stringify(selected.requestPayload, null, 2)}
+                        {JSON.stringify(selectedRequest.requestPayload, null, 2)}
                       </pre>
                     </div>
                   )
@@ -322,7 +410,7 @@ export default function ApprovalsInbox() {
                   <div className="flex gap-2 pt-2">
                     <Button
                       onClick={() =>
-                        decide.mutate({ id: selected.id, action: 'approve', body: decision })
+                        decide.mutate({ id: selectedRequest.id, action: 'approve', body: decision })
                       }
                       disabled={
                         decide.isPending || (requiresSignature && !decision.signature)
@@ -335,7 +423,7 @@ export default function ApprovalsInbox() {
                     <Button
                       variant="destructive"
                       onClick={() =>
-                        decide.mutate({ id: selected.id, action: 'reject', body: decision })
+                        decide.mutate({ id: selectedRequest.id, action: 'reject', body: decision })
                       }
                       disabled={
                         decide.isPending || (!decision.notes && !decision.reasonCode)

@@ -95,6 +95,20 @@ export default function LAURIETTestDashboard() {
             </Card>
           </Link>
 
+          <Link href="/projects">
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-slate-200">
+              <CardContent className="p-4 text-center">
+                <FolderKanban className="w-8 h-8 text-slate-600 mx-auto mb-3" />
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  Projects
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Project pipeline & tracking
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+
           <Link href="/communications/inbox">
             <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-violet-200">
               <CardContent className="p-4 text-center">

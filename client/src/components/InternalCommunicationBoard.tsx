@@ -46,7 +46,10 @@ interface MessageWithDetails extends InternalMessage {
 interface User {
   id: number;
   username: string;
-  name: string;
+  name?: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  employeeDisplayName?: string | null;
   isActive: boolean;
 }
 
@@ -217,6 +220,20 @@ export default function InternalCommunicationBoard() {
     }
   };
 
+  const getUserDisplayName = (user?: User | null) => {
+    if (!user) return 'Unknown User';
+    const fullName = [user.firstName, user.lastName]
+      .map((part) => part?.trim())
+      .filter(Boolean)
+      .join(' ');
+    return (
+      user.employeeDisplayName?.trim() ||
+      user.name?.trim() ||
+      fullName ||
+      user.username
+    );
+  };
+
   const handleSendMessage = async () => {
     if (!subject.trim() || !message.trim()) {
       toast({
@@ -261,13 +278,14 @@ export default function InternalCommunicationBoard() {
         for (const userId of trainingEmployees) {
           const user = users.find((u) => u.id === userId);
           if (!user) continue;
+          const displayName = getUserDisplayName(user);
 
           // Create training matrix entry
           await apiRequest('/api/training/matrix', {
             method: 'POST',
             body: JSON.stringify({
               employeeId: userId,
-              employeeName: user.username,
+              employeeName: displayName,
               trainingName: selectedTraining,
               status: 'PENDING',
               notes: 'Assigned via internal communication',
@@ -280,10 +298,9 @@ export default function InternalCommunicationBoard() {
             body: JSON.stringify({
               senderId: currentUserId,
               senderName:
-                users.find((u) => u.id === currentUserId)?.username ||
-                'Unknown',
+                getUserDisplayName(users.find((u) => u.id === currentUserId)),
               recipientType: 'person',
-              recipientName: user.username,
+              recipientName: displayName,
               recipientUserId: userId,
               subject: `Training Assignment: ${selectedTraining}`,
               message: `You have been assigned the training: ${selectedTraining}\n\n${message}${moduleLink}`,
@@ -332,7 +349,7 @@ export default function InternalCommunicationBoard() {
     }
 
     const senderUser = users.find((u) => u.id === currentUserId);
-    const senderName = senderUser ? senderUser.username : 'Unknown';
+    const senderName = getUserDisplayName(senderUser);
 
     if (recipientType === 'department') {
       const dept = departments.find(
@@ -356,7 +373,7 @@ export default function InternalCommunicationBoard() {
       // Send individual message to each selected person
       for (const userId of selectedPersons) {
         const user = users.find((u) => u.id === userId);
-        const recipientName = user ? user.username : '';
+        const recipientName = getUserDisplayName(user);
 
         const messageData: any = {
           senderId: currentUserId,
@@ -398,14 +415,14 @@ export default function InternalCommunicationBoard() {
       return dept ? dept.name : 'Unknown Department';
     } else if (msg.recipientType === 'person' && msg.recipientUserId) {
       const user = users.find((u) => u.id === msg.recipientUserId);
-      return user ? user.username : 'Unknown User';
+      return user ? getUserDisplayName(user) : msg.recipientName || 'Unknown User';
     }
     return 'Unknown';
   };
 
   const getSenderName = (senderId: number) => {
     const user = users.find((u) => u.id === senderId);
-    return user ? user.username : 'Unknown';
+    return getUserDisplayName(user);
   };
 
   const getUserRecipientStatus = (msg: MessageWithDetails) => {
@@ -554,7 +571,7 @@ export default function InternalCommunicationBoard() {
                         htmlFor={`user-${user.id}`}
                         className="cursor-pointer flex-1 text-foreground"
                       >
-                        {user.username}{' '}
+                        {getUserDisplayName(user)}{' '}
                         {!user.isActive && (
                           <span className="text-muted-foreground">
                             (Inactive)
@@ -750,7 +767,7 @@ export default function InternalCommunicationBoard() {
                             htmlFor={`training-user-${user.id}`}
                             className="cursor-pointer flex-1"
                           >
-                            {user.username}
+                            {getUserDisplayName(user)}
                           </Label>
                         </div>
                       ))}

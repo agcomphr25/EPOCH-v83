@@ -3,7 +3,7 @@ import { pool } from "../../../db";
 import { timesheetsTable, punchesTable, salariedTimesheetsTable, dailyTimeCertificationsTable } from "../../schema/timekeeping";
 import { eq, and, gte, lte, isNull, isNotNull, or, inArray } from "drizzle-orm";
 import type { Timesheet, SalariedTimesheet } from "../../schema/timekeeping";
-import { listResolvedEmployees, resolveByTimekeepingId } from "../../lib/timekeepingEmployeeResolver";
+import { listResolvedEmployees } from "../../lib/timekeepingEmployeeResolver";
 import {
   computeHoursFromPunches,
   toTZDateStr,
@@ -380,46 +380,43 @@ export async function computeHoursForPeriod(
     : periodStartDate;
 
   if (needsLedger) {
-    const resolved = await resolveByTimekeepingId(employeeId);
-    if (resolved != null) {
-      const ledgerSessions = await db
-        .select()
-        .from(punchLedger)
-        .where(
-          and(
-            eq(punchLedger.employeeId, resolved.epochEmployeeId),
-            lte(punchLedger.clockIn, periodEndDate),
-            or(
-              gte(punchLedger.clockOut, ledgerStartDate),
-              isNull(punchLedger.clockOut)
-            )
+    const ledgerSessions = await db
+      .select()
+      .from(punchLedger)
+      .where(
+        and(
+          eq(punchLedger.employeeId, employeeId),
+          lte(punchLedger.clockIn, periodEndDate),
+          or(
+            gte(punchLedger.clockOut, ledgerStartDate),
+            isNull(punchLedger.clockOut)
           )
-        );
+        )
+      );
 
-      const now = new Date();
-      for (const session of ledgerSessions) {
-        if (session.laborClass === "BREAK") continue;
+    const now = new Date();
+    for (const session of ledgerSessions) {
+      if (session.laborClass === "BREAK") continue;
 
-        const sessionStart = Math.max(new Date(session.clockIn).getTime(), ledgerStartDate.getTime());
-        const rawEnd = session.clockOut ? new Date(session.clockOut).getTime() : now.getTime();
-        const sessionEnd = Math.min(rawEnd, periodEndDate.getTime());
-        if (sessionEnd <= sessionStart) continue;
+      const sessionStart = Math.max(new Date(session.clockIn).getTime(), ledgerStartDate.getTime());
+      const rawEnd = session.clockOut ? new Date(session.clockOut).getTime() : now.getTime();
+      const sessionEnd = Math.min(rawEnd, periodEndDate.getTime());
+      if (sessionEnd <= sessionStart) continue;
 
-        let cursor = sessionStart;
-        while (cursor < sessionEnd) {
-          const dayKey = toTZDateStr(new Date(cursor), tz);
+      let cursor = sessionStart;
+      while (cursor < sessionEnd) {
+        const dayKey = toTZDateStr(new Date(cursor), tz);
 
-          const [y, m, d] = dayKey.split("-").map(Number);
-          const nextDayStr = new Date(Date.UTC(y, m - 1, d + 1))
-            .toISOString()
-            .slice(0, 10);
-          const dayBoundaryMs = midnightInTZ(nextDayStr, tz).getTime();
+        const [y, m, d] = dayKey.split("-").map(Number);
+        const nextDayStr = new Date(Date.UTC(y, m - 1, d + 1))
+          .toISOString()
+          .slice(0, 10);
+        const dayBoundaryMs = midnightInTZ(nextDayStr, tz).getTime();
 
-          const sliceEnd = Math.min(sessionEnd, dayBoundaryMs);
-          const hrs = (sliceEnd - cursor) / 3_600_000;
-          hoursByDay.set(dayKey, (hoursByDay.get(dayKey) ?? 0) + hrs);
-          cursor = sliceEnd;
-        }
+        const sliceEnd = Math.min(sessionEnd, dayBoundaryMs);
+        const hrs = (sliceEnd - cursor) / 3_600_000;
+        hoursByDay.set(dayKey, (hoursByDay.get(dayKey) ?? 0) + hrs);
+        cursor = sliceEnd;
       }
     }
   }
@@ -946,22 +943,19 @@ export async function attestTimesheet(
     : periodStartDate;
 
   if (snapNeedsLedger) {
-    const resolved = await resolveByTimekeepingId(existing.employeeId);
-    if (resolved != null) {
-      ledgerSessions = await db
-        .select()
-        .from(punchLedger)
-        .where(
-          and(
-            eq(punchLedger.employeeId, resolved.epochEmployeeId),
-            lte(punchLedger.clockIn, periodEndDate),
-            or(
-              gte(punchLedger.clockOut, snapLedgerStart),
-              isNull(punchLedger.clockOut)
-            )
+    ledgerSessions = await db
+      .select()
+      .from(punchLedger)
+      .where(
+        and(
+          eq(punchLedger.employeeId, existing.employeeId),
+          lte(punchLedger.clockIn, periodEndDate),
+          or(
+            gte(punchLedger.clockOut, snapLedgerStart),
+            isNull(punchLedger.clockOut)
           )
-        );
-    }
+        )
+      );
   }
 
   if (snapNeedsLegacy) {

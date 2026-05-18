@@ -273,6 +273,25 @@ interface WADWizardProps {
   onClose: () => void;
 }
 
+function normalizeText(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function getScopeBreakdownOperation(scopeDescription?: string, fallbackDescription?: string | null): string {
+  return normalizeText(scopeDescription) || normalizeText(fallbackDescription);
+}
+
+function shouldRefreshGeneratedOperation(
+  currentOperation: string | undefined,
+  previousScope: string,
+  fallbackDescription?: string | null,
+  seeded?: boolean
+): boolean {
+  const current = normalizeText(currentOperation);
+  if (!current || seeded) return true;
+  return current === previousScope || current === normalizeText(fallbackDescription);
+}
+
 const STEPS = [
   { id: 1, title: 'Contract Context', icon: FileText, short: 'Context' },
   { id: 2, title: 'Scope of Work', icon: ClipboardList, short: 'Scope' },
@@ -342,7 +361,19 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
         body: JSON.stringify(payload),
       });
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      const updatedWizardData = result?.wad?.wizardData as WizardData | undefined;
+      if (updatedWizardData) {
+        setData(updatedWizardData);
+        queryClient.setQueryData(['/api/work-orders/production', wadId, 'wizard'], (current: typeof wizardCtx | undefined) => ({
+          ...(current ?? {}),
+          wad: {
+            ...(current?.wad ?? {}),
+            ...(result.wad ?? {}),
+            wizardData: updatedWizardData,
+          },
+        }));
+      }
       queryClient.invalidateQueries({ queryKey: ['/api/work-orders/production', wadId, 'wizard'] });
       queryClient.invalidateQueries({ queryKey: ['/api/work-orders', wadId] });
     },
@@ -359,7 +390,20 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
       });
     },
     onSuccess: (result) => {
+      const updatedWizardData = result?.wad?.wizardData as WizardData | undefined;
+      if (updatedWizardData) {
+        setData(updatedWizardData);
+        queryClient.setQueryData(['/api/work-orders/production', wadId, 'wizard'], (current: typeof wizardCtx | undefined) => ({
+          ...(current ?? {}),
+          wad: {
+            ...(current?.wad ?? {}),
+            ...(result.wad ?? {}),
+            wizardData: updatedWizardData,
+          },
+        }));
+      }
       queryClient.invalidateQueries({ queryKey: ['/api/work-orders/production', wadId, 'wizard'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/work-orders', wadId] });
       if (result.allApproved) {
         toast({ title: 'WAD Approved!', description: 'All required approvals collected. WAD status set to APPROVED.' });
       } else {
@@ -500,6 +544,141 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
   const approvals: ApprovalRecord[] = (data.approvals ?? []) as ApprovalRecord[];
   const isBackfill = project?.currentStage === 'production';
 
+  // Step 2 onChange: when departments change, prune Step 3 / Step 4 rows for
+  // departments that are no longer selected, and re-seed rows for newly added
+  // departments (from PWO budget when available, otherwise blank).
+  const handleStep2Change = useCallback((v: WizardData['step2']) => {
+    setData(prev => {
+      const newDepts = v?.departments ?? [];
+      const newDeptSet = new Set(newDepts);
+      const prevDepts = prev.step2?.departments ?? [];
+      const previousScope = normalizeText(prev.step2?.scopeDescription);
+      const lineItemDescription: string | null = wad?.description ?? null;
+      const scopeOperation = getScopeBreakdownOperation(v?.scopeDescription, lineItemDescription);
+      const sameDepts =
+        prevDepts.length === newDepts.length &&
+        prevDepts.every(d => newDeptSet.has(d));
+
+      if (sameDepts) {
+        const next: WizardData = { ...prev, step2: v };
+        if (scopeOperation && prev.step3?.rows?.length) {
+          next.step3 = {
+            rows: prev.step3.rows.map(row => (
+              shouldRefreshGeneratedOperation(row.operation, previousScope, lineItemDescription, row.seeded)
+                ? { ...row, operation: scopeOperation }
+                : row
+            )),
+          };
+        }
+        if (scopeOperation && prev.step4?.chargeCodes?.length) {
+          next.step4 = {
+            chargeCodes: prev.step4.chargeCodes.map(row => (
+              shouldRefreshGeneratedOperation(row.operation, previousScope, lineItemDescription, row.seeded)
+                ? { ...row, operation: scopeOperation }
+                : row
+            )),
+          };
+        }
+        return next;
+      }
+
+      const budgets = (wad?.departmentBudgets && typeof wad.departmentBudgets === 'object'
+        ? (wad.departmentBudgets as Record<string, number>)
+        : {}) as Record<string, number>;
+      const defaultChargeCode = wad?.defaultChargeCodeId ? String(wad.defaultChargeCodeId) : '';
+
+      const prevStep3Rows = prev.step3?.rows ?? [];
+      const keptStep3 = prevStep3Rows
+        .filter(r => newDeptSet.has(r.department))
+        .map(row => (
+          scopeOperation && shouldRefreshGeneratedOperation(row.operation, previousScope, lineItemDescription, row.seeded)
+            ? { ...row, operation: scopeOperation }
+            : row
+        ));
+      const existingStep3Depts = new Set(keptStep3.map(r => r.department));
+      const addedStep3: WorkBreakdownRow[] = [];
+      for (const dept of newDepts) {
+        if (existingStep3Depts.has(dept)) continue;
+        const hrs = budgets[dept];
+        if (hrs !== undefined) {
+          addedStep3.push({
+            department: dept,
+            operation: scopeOperation,
+            responsibleLead: '',
+            estimatedHours: typeof hrs === 'number' ? hrs : Number(hrs) || 0,
+            requiredCerts: '',
+            isTravelerStep: false,
+            requiresQCSignoff: false,
+            seeded: true,
+            seededFrom: 'PWO budget + PO line item',
+          });
+        } else {
+          addedStep3.push({
+            department: dept,
+            operation: scopeOperation,
+            responsibleLead: '',
+            estimatedHours: 0,
+            requiredCerts: '',
+            isTravelerStep: false,
+            requiresQCSignoff: false,
+          });
+        }
+      }
+      const nextStep3Rows = [...keptStep3, ...addedStep3];
+
+      const prevStep4 = prev.step4?.chargeCodes ?? [];
+      const keptStep4 = prevStep4
+        .filter(c => newDeptSet.has(c.department))
+        .map(row => (
+          scopeOperation && shouldRefreshGeneratedOperation(row.operation, previousScope, lineItemDescription, row.seeded)
+            ? { ...row, operation: scopeOperation }
+            : row
+        ));
+      const existingStep4Depts = new Set(keptStep4.map(c => c.department));
+      const addedStep4: ChargeCodeRow[] = [];
+      for (const row of addedStep3) {
+        if (existingStep4Depts.has(row.department)) continue;
+        // Only mark as seeded when the row was actually auto-populated from
+        // the PWO budget and/or the project's default charge code. A blank
+        // baseline row (no budget AND no default code) is a manual entry.
+        const hasBudget = !!row.seeded;
+        const hasDefaultCode = !!defaultChargeCode;
+        const isAutoPopulated = hasBudget || hasDefaultCode;
+        let seededFrom: string | undefined;
+        if (hasBudget && hasDefaultCode) {
+          seededFrom = 'Project default charge code + PWO budget';
+        } else if (hasDefaultCode) {
+          seededFrom = 'Project default charge code';
+        } else if (hasBudget) {
+          seededFrom = 'PWO budget';
+        }
+        addedStep4.push({
+          department: row.department,
+          operation: row.operation,
+          chargeCode: defaultChargeCode,
+          laborCategory: '',
+          classification: 'DIRECT',
+          budgetedHours: row.estimatedHours,
+          overtimeAllowed: false,
+          operatorOverrideAllowed: false,
+          overrunRule: 'WARN',
+          seeded: isAutoPopulated || undefined,
+          seededFrom,
+        });
+      }
+      const nextStep4Codes = [...keptStep4, ...addedStep4];
+
+      const next: WizardData = { ...prev, step2: v };
+      if (prev.step3 || nextStep3Rows.length > 0) {
+        next.step3 = { rows: nextStep3Rows };
+      }
+      if (prev.step4 || nextStep4Codes.length > 0) {
+        next.step4 = { chargeCodes: nextStep4Codes };
+      }
+      return next;
+    });
+  }, [wad]);
+
   // Auto-fill Step 1 from upstream docs on FIRST OPEN ONLY.
   // If step1 already exists in saved wizard data we do nothing — the user's
   // saved state (including any manual edits) is always authoritative after
@@ -563,11 +742,14 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
             : (next.step2?.departments ?? []),
         };
       }
-      if ((!next.step3 || (next.step3.rows ?? []).length === 0) && budgetEntries.length > 0) {
+      const scopeOperation = getScopeBreakdownOperation(next.step2?.scopeDescription, lineItemDescription);
+      const selectedDepts = new Set(next.step2?.departments ?? []);
+      const filteredBudgetEntries = budgetEntries.filter(([k]) => selectedDepts.has(k));
+      if ((!next.step3 || (next.step3.rows ?? []).length === 0) && filteredBudgetEntries.length > 0) {
         next.step3 = {
-          rows: budgetEntries.map(([dept, hrs]) => ({
+          rows: filteredBudgetEntries.map(([dept, hrs]) => ({
             department: dept,
-            operation: lineItemDescription ?? '',
+            operation: scopeOperation,
             responsibleLead: '',
             estimatedHours: typeof hrs === 'number' ? hrs : Number(hrs) || 0,
             requiredCerts: '',
@@ -578,7 +760,7 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
           })),
         };
       }
-      const wbRows = next.step3?.rows ?? [];
+      const wbRows = (next.step3?.rows ?? []).filter((r) => selectedDepts.has(r.department));
       if ((!next.step4 || (next.step4.chargeCodes ?? []).length === 0) && wbRows.length > 0) {
         next.step4 = {
           chargeCodes: wbRows.map((r) => ({
@@ -597,6 +779,45 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
               : 'PWO budget',
           })),
         };
+      }
+      // Load-time normalization: regardless of whether step3/step4 already
+      // existed in the persisted data, prune any rows whose department is no
+      // longer in step2.departments. This cleans up stale rows from prior
+      // wizard sessions (e.g. before this fix) and prevents them from being
+      // persisted on save from later steps without ever rendering Step 3.
+      if (next.step3?.rows?.length) {
+        const pruned = next.step3.rows.filter(r => selectedDepts.has(r.department));
+        if (pruned.length !== next.step3.rows.length) {
+          next.step3 = { rows: pruned };
+        }
+      }
+      if (scopeOperation && next.step3?.rows?.length) {
+        const currentRows = next.step3.rows;
+        const synced = currentRows.map(row => (
+          shouldRefreshGeneratedOperation(row.operation, '', lineItemDescription, row.seeded)
+            ? { ...row, operation: scopeOperation }
+            : row
+        ));
+        if (synced.some((row, index) => row !== currentRows[index])) {
+          next.step3 = { rows: synced };
+        }
+      }
+      if (next.step4?.chargeCodes?.length) {
+        const pruned = next.step4.chargeCodes.filter(c => selectedDepts.has(c.department));
+        if (pruned.length !== next.step4.chargeCodes.length) {
+          next.step4 = { chargeCodes: pruned };
+        }
+      }
+      if (scopeOperation && next.step4?.chargeCodes?.length) {
+        const currentRows = next.step4.chargeCodes;
+        const synced = currentRows.map(row => (
+          shouldRefreshGeneratedOperation(row.operation, '', lineItemDescription, row.seeded)
+            ? { ...row, operation: scopeOperation }
+            : row
+        ));
+        if (synced.some((row, index) => row !== currentRows[index])) {
+          next.step4 = { chargeCodes: synced };
+        }
       }
       if ((!next.step8 || !next.step8.requiredCompletionDate) && (wad.dueDate || project?.targetShipDate)) {
         next.step8 = {
@@ -764,13 +985,14 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
           {step === 2 && (
             <Step2ScopeOfWork
               data={data.step2}
-              onChange={(v) => patch('step2', v)}
+              onChange={handleStep2Change}
             />
           )}
           {/* ── Step 3: Work Breakdown ───────────────────────────────── */}
           {step === 3 && (
             <Step3WorkBreakdown
               departments={data.step2?.departments ?? []}
+              scopeDescription={data.step2?.scopeDescription ?? ''}
               data={data.step3}
               onChange={(v) => patch('step3', v)}
             />
@@ -1167,6 +1389,10 @@ function Step2ScopeOfWork({ data, onChange }: {
     set('departments', existing.includes(key) ? existing.filter(d => d !== key) : [...existing, key]);
   };
 
+  const removeDept = (key: string) => {
+    set('departments', (base.departments ?? []).filter(d => d !== key));
+  };
+
   return (
     <div className="space-y-5">
       <div className="space-y-1">
@@ -1192,6 +1418,28 @@ function Step2ScopeOfWork({ data, onChange }: {
       </div>
       <div className="space-y-2">
         <Label>Departments Involved <span className="text-red-500">*</span></Label>
+        {(base.departments ?? []).length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {(base.departments ?? []).map(key => {
+              const dept = WAD_DEPARTMENTS.find(d => d.key === key);
+              const label = dept?.label ?? key;
+              return (
+                <Badge key={key} variant="secondary" className="gap-1 pl-2 pr-1">
+                  {label}
+                  <button
+                    type="button"
+                    aria-label={`Remove ${label}`}
+                    className="rounded-sm p-0.5 text-muted-foreground hover:bg-background hover:text-foreground"
+                    onClick={() => removeDept(key)}
+                    data-testid={`button-remove-department-${key}`}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </Badge>
+              );
+            })}
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-2">
           {WAD_DEPARTMENTS.map(dept => (
             <div
@@ -1234,8 +1482,9 @@ function Step2ScopeOfWork({ data, onChange }: {
 }
 
 // ─── Step 3: Work Breakdown ───────────────────────────────────────────────────
-function Step3WorkBreakdown({ departments, data, onChange }: {
+function Step3WorkBreakdown({ departments, scopeDescription, data, onChange }: {
   departments: string[];
+  scopeDescription?: string;
   data?: WizardData['step3'];
   onChange: (v: WizardData['step3']) => void;
 }) {
@@ -1245,20 +1494,41 @@ function Step3WorkBreakdown({ departments, data, onChange }: {
 
   const ensureRows = (): WorkBreakdownRow[] => {
     const existingByDept = new Map(existingRows.map(r => [r.department, r]));
-    return departments.map(dept => existingByDept.get(dept) ?? {
-      department: dept,
-      operation: '',
-      responsibleLead: '',
-      estimatedHours: 0,
-      requiredCerts: '',
-      isTravelerStep: false,
-      requiresQCSignoff: false,
+    const scopeOperation = getScopeBreakdownOperation(scopeDescription);
+    return departments.map(dept => {
+      const existing = existingByDept.get(dept);
+      if (existing) {
+        return scopeOperation && shouldRefreshGeneratedOperation(existing.operation, '', undefined, existing.seeded)
+          ? { ...existing, operation: scopeOperation }
+          : existing;
+      }
+      return {
+        department: dept,
+        operation: scopeOperation,
+        responsibleLead: '',
+        estimatedHours: 0,
+        requiredCerts: '',
+        isTravelerStep: false,
+        requiresQCSignoff: false,
+      };
     });
   };
 
   const [rows, setRows] = useState<WorkBreakdownRow[]>(ensureRows);
 
-  useEffect(() => { setRows(ensureRows()); }, [departments]);
+  useEffect(() => {
+    const next = ensureRows();
+    setRows(next);
+    // Keep parent's persisted step3.rows in sync with the currently-selected
+    // departments, so de-selected departments don't linger in saved state and
+    // newly-selected departments appear immediately. Only push when the row
+    // set actually differs to avoid an update loop.
+    const existingSignature = existingRows.map(r => `${r.department}:${r.operation}`).join('|');
+    const nextSignature = next.map(r => `${r.department}:${r.operation}`).join('|');
+    if (existingSignature !== nextSignature) {
+      onChange({ rows: next });
+    }
+  }, [departments, scopeDescription]);
 
   const setRow = (idx: number, patch: Partial<WorkBreakdownRow>) => {
     const next = rows.map((r, i) => i === idx ? { ...r, ...patch, seeded: false, seededFrom: undefined } : r);

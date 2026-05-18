@@ -74,6 +74,7 @@ export type InventoryLedgerEntryInput = {
 export type InventoryLedgerBalanceChangeInput = {
   agPartNumber: string;
   transactionType: InventoryLedgerTransactionType;
+  lotId?: string | null;
   locationId?: string | null;
   quantityDelta: number;
   quantityBefore: number;
@@ -228,6 +229,7 @@ export async function recordInventoryBalanceLedgerChange(
     transactionType: input.transactionType,
     inventoryItemId: item.id,
     agPartNumber: item.agPartNumber,
+    lotId: input.lotId ?? null,
     locationId: input.locationId ?? null,
     quantityDelta: input.quantityDelta,
     quantityBefore: input.quantityBefore,

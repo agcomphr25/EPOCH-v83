@@ -110,12 +110,26 @@ interface WorkOrderRow {
   quantityRequired: number;
   quantityCompleted: number;
   quantityCompletedToday: number;
+  sourceType?: 'production_work_order' | 'p2_production_order';
+  sourceLabel?: string;
+  dashboardType?: string | null;
+  queueType?: string | null;
+  assignedDepartment?: string | null;
+  assignedDashboardRoute?: string | null;
+  dashboardLabel?: string | null;
+  manufacturingQueueId?: number | null;
+  wadStatus?: string | null;
+  p2PoId?: number | null;
+  p2PoNumber?: string | null;
   status: string;
   dueDate: string | null;
   currentDepartment: string | null;
   currentTravelerStep: string | null;
   activeTravelerId: string | null;
   activeTravelerNumber: string | null;
+  ncrReplacementCount?: number;
+  activeReplacementCount?: number;
+  replacementSerialNumbers?: string | null;
   daysScheduleVariance: number | null;
   blockReason: string | null;
 }
@@ -230,6 +244,10 @@ function fmtHours(h: number) {
 
 function fmtCurrency(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(n);
+}
+
+function readProjectParam(params: URLSearchParams) {
+  return params.get('project') ?? params.get('projectId') ?? '';
 }
 
 function daysVarianceBadge(variance: number | null) {
@@ -347,16 +365,18 @@ function ProductionTab({ projectId }: { projectId: string }) {
   const [completionFilter, setCompletionFilter] = useState<CompletionFilter>('all');
   const [qtySort, setQtySort] = useState<QtySort>(null);
 
-  const { data: rows = [], isLoading, isError } = useQuery<WorkOrderRow[]>({
+  const { data: productionResponse, isLoading, isError } = useQuery<{ rows: WorkOrderRow[]; linkedP2PoCount: number }>({
     queryKey: ['/api/pm-dashboard', projectId, 'production'],
-    queryFn: () => safeFetch<WorkOrderRow[]>(`/api/pm-dashboard/${projectId}/production`),
+    queryFn: () => safeFetch<{ rows: WorkOrderRow[]; linkedP2PoCount: number }>(`/api/pm-dashboard/${projectId}/production`),
     enabled: !!projectId,
   });
+  const rows = productionResponse?.rows ?? [];
+  const linkedP2PoCount = productionResponse?.linkedP2PoCount ?? 0;
 
   const { data: detail, isLoading: detailLoading } = useQuery<WorkOrderDetail>({
     queryKey: ['/api/pm-dashboard', projectId, 'production', selectedWO?.productionWorkOrderId],
     queryFn: () => safeFetch<WorkOrderDetail>(`/api/pm-dashboard/${projectId}/production/${selectedWO!.productionWorkOrderId}`),
-    enabled: !!selectedWO,
+    enabled: !!selectedWO && selectedWO.sourceType !== 'p2_production_order',
   });
 
   if (isLoading) {
@@ -368,14 +388,28 @@ function ProductionTab({ projectId }: { projectId: string }) {
   }
 
   if (!rows.length) {
+    if (linkedP2PoCount === 0) {
+      return (
+        <Card className="p-10 text-center" data-testid="empty-no-p2-link">
+          <Briefcase className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
+          <p className="text-muted-foreground">
+            No P2 PO is linked to this project — link one from the P2 Order step to see production here.
+          </p>
+        </Card>
+      );
+    }
     return (
-      <Card className="p-10 text-center">
+      <Card className="p-10 text-center" data-testid="empty-no-work-orders">
         <Briefcase className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
-        <p className="text-muted-foreground">No work orders found for this project.</p>
+        <p className="text-muted-foreground">No work orders found for this project yet.</p>
       </Card>
     );
   }
 
+  const onlyCuttingTable = rows.length > 0 && rows.every(r => {
+    const dept = (r.currentDepartment ?? '').toLowerCase().replace(/[\s_-]/g, '');
+    return dept === 'cuttingtable' || dept === 'cutting';
+  });
   const blockedCount = rows.filter(r => r.status === 'BLOCKED').length;
   const notStartedCount = rows.filter(r => completionState(r) === 'not_started').length;
   const inProgressCount = rows.filter(r => completionState(r) === 'in_progress').length;
@@ -476,6 +510,15 @@ function ProductionTab({ projectId }: { projectId: string }) {
         </Card>
       )}
 
+      {onlyCuttingTable && (
+        <div
+          className="mb-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-200"
+          data-testid="text-cutting-only-note"
+        >
+          Only cutting-table work orders exist for this project — downstream work orders will appear once cutting is released.
+        </div>
+      )}
+
       {displayRows.length > 0 && (
       <div className="rounded-md border overflow-x-auto">
         <Table>
@@ -496,6 +539,7 @@ function ProductionTab({ projectId }: { projectId: string }) {
               </TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Department</TableHead>
+              <TableHead>Dashboard / Queue</TableHead>
               <TableHead>Current Step</TableHead>
               <TableHead>Active Traveler</TableHead>
               <TableHead>Due Date</TableHead>
@@ -511,10 +555,44 @@ function ProductionTab({ projectId }: { projectId: string }) {
               <TableRow
                 key={row.productionWorkOrderId}
                 className={`cursor-pointer hover:bg-accent/50 ${row.status === 'BLOCKED' ? 'bg-red-50 dark:bg-red-950/20' : ''}`}
-                onClick={() => navTo(`/production-work-orders/${row.productionWorkOrderId}`)}
+                onClick={() => {
+                  if (row.sourceType === 'p2_production_order') {
+                    const params = new URLSearchParams({ tab: 'production' });
+                    if (row.p2PoId) params.set('poId', String(row.p2PoId));
+                    if (row.p2PoNumber) params.set('po', row.p2PoNumber);
+                    navTo(`/p2-control-center?${params.toString()}`);
+                    return;
+                  }
+                  navTo(`/production-work-orders/${row.productionWorkOrderId}`);
+                }}
               >
-                <TableCell className="font-mono text-sm font-medium">{row.workOrderNumber}</TableCell>
-                <TableCell className="text-sm">{row.partNumber}</TableCell>
+                <TableCell className="font-mono text-sm font-medium">
+                  <div className="flex items-center gap-2">
+                    <span>{row.workOrderNumber}</span>
+                    {row.sourceLabel === 'P2' && (
+                      <Badge variant="outline" className="font-sans text-[10px] px-1.5 py-0">
+                        P2
+                      </Badge>
+                    )}
+                    {(row.ncrReplacementCount ?? 0) > 0 && (
+                      <Badge
+                        variant="outline"
+                        className="font-sans text-[10px] px-1.5 py-0 border-blue-300 bg-blue-50 text-blue-700"
+                        title={row.replacementSerialNumbers || undefined}
+                      >
+                        NCR replacement
+                      </Badge>
+                    )}
+                  </div>
+                </TableCell>
+                <TableCell className="text-sm">
+                  <div>{row.partNumber}</div>
+                  {(row.ncrReplacementCount ?? 0) > 0 && (
+                    <div className="text-xs text-blue-700 dark:text-blue-300">
+                      {row.activeReplacementCount || 0} active replacement{(row.activeReplacementCount || 0) === 1 ? '' : 's'}
+                    </div>
+                  )}
+                </TableCell>
                 <TableCell className="text-right text-sm text-muted-foreground">
                   <div className="flex flex-col items-end gap-1">
                     <span>
@@ -543,6 +621,32 @@ function ProductionTab({ projectId }: { projectId: string }) {
                   </Badge>
                 </TableCell>
                 <TableCell className="text-sm">{row.currentDepartment ?? <span className="text-muted-foreground">—</span>}</TableCell>
+                <TableCell className="text-sm" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex min-w-[160px] flex-col gap-1.5">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                        {row.dashboardLabel ?? row.assignedDepartment ?? 'Manufacturing Queue'}
+                      </Badge>
+                      {row.queueType && (
+                        <span className="text-xs text-muted-foreground">{row.queueType.replace('_', ' ')}</span>
+                      )}
+                    </div>
+                    {row.assignedDashboardRoute ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-7 w-fit gap-1.5 px-2 text-xs"
+                        onClick={() => navTo(row.assignedDashboardRoute!)}
+                      >
+                        <LayoutDashboard className="h-3.5 w-3.5" />
+                        Open Dashboard
+                      </Button>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </div>
+                </TableCell>
                 <TableCell className="text-sm">{row.currentTravelerStep ?? <span className="text-muted-foreground">—</span>}</TableCell>
                 <TableCell className="text-sm" onClick={(e) => e.stopPropagation()}>
                   {row.activeTravelerNumber && row.activeTravelerId ? (
@@ -1029,11 +1133,11 @@ interface PmOption {
 }
 
 export default function PMControlCenterPage() {
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
   // Read URL params immediately as initial state so they are authoritative on first render
   const [selectedProjectId, setSelectedProjectId] = useState<string>(() => {
     const params = new URLSearchParams(window.location.search);
-    return params.get('project') ?? '';
+    return readProjectParam(params);
   });
   const [pmFilter, setPmFilter] = useState<string>(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1067,6 +1171,15 @@ export default function PMControlCenterPage() {
     return qs ? `?${qs}` : '';
   }
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const projectFromUrl = readProjectParam(params);
+    if (projectFromUrl && projectFromUrl !== selectedProjectId) {
+      setSelectedProjectId(projectFromUrl);
+      window.history.replaceState(null, '', `/pm-control-center${buildSearch(projectFromUrl, pmFilter)}`);
+    }
+  }, [location, selectedProjectId, pmFilter]);
+
   const handleProjectChange = (id: string) => {
     setSelectedProjectId(id);
     window.history.replaceState(null, '', `/pm-control-center${buildSearch(id, pmFilter)}`);
@@ -1089,11 +1202,12 @@ export default function PMControlCenterPage() {
   });
 
   // Page-level production query — shares cache with ProductionTab, only used for blockers sheet + throughput
-  const { data: productionRows = [], isError: productionError } = useQuery<WorkOrderRow[]>({
+  const { data: productionData, isError: productionError } = useQuery<{ rows: WorkOrderRow[]; linkedP2PoCount: number }>({
     queryKey: ['/api/pm-dashboard', selectedProjectId, 'production'],
-    queryFn: () => safeFetch<WorkOrderRow[]>(`/api/pm-dashboard/${selectedProjectId}/production`),
+    queryFn: () => safeFetch<{ rows: WorkOrderRow[]; linkedP2PoCount: number }>(`/api/pm-dashboard/${selectedProjectId}/production`),
     enabled: !!selectedProjectId,
   });
+  const productionRows = productionData?.rows ?? [];
 
   // Project detail query — used for lifecycle stage derivation
   const { data: projectDetail } = useQuery<{ currentStage: string | null; status: string; poId: number | null; steps: { stepType: string; status: string }[] }>({
@@ -1196,7 +1310,7 @@ export default function PMControlCenterPage() {
             size="sm"
             onClick={() => navigate('/wad-status')}
             data-testid="button-wad-status-from-pmcc"
-            title="WAD authoring & backfill backlog across all P2 Release / Production projects"
+            title="WAD authoring & backfill backlog across active PO-ready projects"
           >
             <ShieldCheck className="h-4 w-4 mr-1.5" />
             WAD Status
@@ -1309,8 +1423,12 @@ export default function PMControlCenterPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    const poParam = selectedProject.poNumber ? `?po=${encodeURIComponent(selectedProject.poNumber)}` : '';
-                    navigate(`/p2-control-center${poParam}`);
+                    const params = new URLSearchParams({ tab: 'status' });
+                    params.set('projectId', selectedProjectId);
+                    if (selectedProject.projectName) params.set('projectName', selectedProject.projectName);
+                    if (selectedProject.poId) params.set('poId', String(selectedProject.poId));
+                    if (selectedProject.poNumber) params.set('po', selectedProject.poNumber);
+                    navigate(`/p2-control-center${params.toString() ? `?${params.toString()}` : ''}`);
                   }}
                 >
                   <TrendingUp className="h-3.5 w-3.5 mr-1.5" />

@@ -23,14 +23,19 @@
  *       [--source mlt|consumption|reservations|all]
  */
 
-import { and, eq, gte, lte, inArray } from 'drizzle-orm';
+import { and, eq, gte, lte, inArray, isNotNull, gt } from 'drizzle-orm';
 import { db } from '../db';
 import {
+  inventoryItems,
   inventoryTransactionLedger,
   materialLotReservations,
   materialLotTransactions,
   materialLots,
+  partsRequestOrderLines,
+  partsRequestReceiptLines,
+  partsRequestReceipts,
   travelerMaterialConsumption,
+  vendorPOItems,
   type InventoryTransactionLedger,
 } from '../schema';
 import {
@@ -43,8 +48,8 @@ import {
 // CLI parsing
 // ──────────────────────────────────────────────────────────────────────
 
-type SourceKey = 'mlt' | 'consumption' | 'reservations';
-const ALL_SOURCES: SourceKey[] = ['mlt', 'consumption', 'reservations'];
+type SourceKey = 'mlt' | 'consumption' | 'reservations' | 'parts-request-receipts' | 'vendor-po-items';
+const ALL_SOURCES: SourceKey[] = ['mlt', 'consumption', 'reservations', 'parts-request-receipts', 'vendor-po-items'];
 
 interface CliArgs {
   from?: Date;
@@ -92,6 +97,8 @@ export const SOURCE_MODULE = {
   mlt: 'backfill:material_lot_transactions',
   consumption: 'backfill:traveler_material_consumption',
   reservations: 'backfill:material_lot_reservations',
+  'parts-request-receipts': 'backfill:parts_request_receipt_lines',
+  'vendor-po-items': 'backfill:vendor_po_items',
 } as const;
 
 // ──────────────────────────────────────────────────────────────────────
@@ -423,6 +430,199 @@ async function backfillReservations(args: CliArgs): Promise<BackfillStats> {
 }
 
 // ──────────────────────────────────────────────────────────────────────
+// Parts-request receipt-line backfill (Task #229)
+// ──────────────────────────────────────────────────────────────────────
+
+async function backfillPartsRequestReceipts(args: CliArgs): Promise<BackfillStats> {
+  const stats: BackfillStats = {
+    source: 'parts-request-receipts',
+    scanned: 0, inserted: 0, skippedExisting: 0, skippedNoLot: 0, errors: 0,
+  };
+
+  const conds = [];
+  if (args.from) conds.push(gte(partsRequestReceipts.receivedAt, args.from));
+  if (args.to) conds.push(lte(partsRequestReceipts.receivedAt, args.to));
+
+  // Join receipt lines → receipts → order lines so each row carries the
+  // qtyReceived, the AG part number, and the receivedAt timestamp.
+  const rows = await db
+    .select({
+      receiptLineId: partsRequestReceiptLines.id,
+      receiptId: partsRequestReceiptLines.receiptId,
+      orderLineId: partsRequestReceiptLines.orderLineId,
+      qtyReceived: partsRequestReceiptLines.qtyReceived,
+      receivedBy: partsRequestReceipts.receivedBy,
+      receivedAt: partsRequestReceipts.receivedAt,
+      notes: partsRequestReceipts.notes,
+      agPartNumber: partsRequestOrderLines.agPartNumber,
+      partNumber: partsRequestOrderLines.partNumber,
+      partName: partsRequestOrderLines.partName,
+      batchId: partsRequestOrderLines.batchId,
+    })
+    .from(partsRequestReceiptLines)
+    .innerJoin(partsRequestReceipts, eq(partsRequestReceiptLines.receiptId, partsRequestReceipts.id))
+    .innerJoin(partsRequestOrderLines, eq(partsRequestReceiptLines.orderLineId, partsRequestOrderLines.id))
+    .where(conds.length ? and(...conds) : undefined);
+  stats.scanned = rows.length;
+
+  // Match the live writer's stable composite key:
+  // `receiving:parts-request` → `${receiptId}:${orderLineId}`.
+  const sourceIds = rows.map((r) => `${r.receiptId}:${r.orderLineId}`);
+  const existing = await loadExistingSourceIds(SOURCE_MODULE['parts-request-receipts'], sourceIds);
+  // Cross-source dedupe: skip rows the live writer already covered for the
+  // same logical (receipt, orderLine) pair.
+  const existingLive = await loadExistingSourceIds('receiving:parts-request', sourceIds);
+
+  // Pre-load inventory_items for all distinct AG part numbers in one query.
+  const partNumbers = Array.from(new Set(rows.map((r) => r.agPartNumber).filter((p): p is string => !!p)));
+  const invItems = partNumbers.length
+    ? await db
+        .select({
+          id: inventoryItems.id,
+          agPartNumber: inventoryItems.agPartNumber,
+          purchaseUnit: inventoryItems.purchaseUnit,
+          usageUnit: inventoryItems.usageUnit,
+        })
+        .from(inventoryItems)
+        .where(inArray(inventoryItems.agPartNumber, partNumbers))
+    : [];
+  const invByPart = new Map(invItems.map((r) => [r.agPartNumber, r]));
+
+  for (const row of rows) {
+    const sid = `${row.receiptId}:${row.orderLineId}`;
+    if (existing.has(sid) || existingLive.has(sid)) { stats.skippedExisting++; continue; }
+    if (!row.agPartNumber) { stats.skippedNoLot++; continue; }
+    const inv = invByPart.get(row.agPartNumber);
+    if (!inv) { stats.skippedNoLot++; continue; }
+    try {
+      const qty = Number(row.qtyReceived ?? 0);
+      const payload: InventoryLedgerEntryInput = {
+        transactionType: 'RECEIVE',
+        inventoryItemId: inv.id,
+        agPartNumber: inv.agPartNumber,
+        unitOfMeasure: inv.purchaseUnit ?? inv.usageUnit ?? 'EA',
+        quantityBefore: 0,
+        quantityDelta: qty,
+        quantityAfter: qty,
+        performedByDisplayName: row.receivedBy || 'system:backfill',
+        reasonCode: 'PARTS_REQUEST_RECEIPT',
+        notes: row.notes ?? null,
+        sourceModule: SOURCE_MODULE['parts-request-receipts'],
+        sourceRecordId: sid,
+        createdAtOverride: row.receivedAt ?? null,
+        metadata: {
+          backfill: { table: 'parts_request_receipt_lines', id: row.receiptLineId },
+          receiptId: row.receiptId,
+          orderLineId: row.orderLineId,
+          batchId: row.batchId,
+          partNumber: row.partNumber,
+          partName: row.partName,
+        },
+      };
+      if (!args.dryRun) await recordInventoryLedgerEntry(payload);
+      stats.inserted++;
+    } catch (e) {
+      stats.errors++;
+      console.error(`[parts-request-receipts] receiptLine=${row.receiptLineId} error:`, (e as Error).message);
+    }
+  }
+  return stats;
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Vendor PO line-item backfill (Task #229)
+//
+// Reconstructs ONE cumulative RECEIVE row per vendor_po_items row whose
+// receivedQuantity > 0. Historical partial-receipt timing is not available
+// (only the final cumulative quantity is stored on the line), so the row
+// represents the total received-to-date as a single ledger event.
+// ──────────────────────────────────────────────────────────────────────
+
+async function backfillVendorPOItems(args: CliArgs): Promise<BackfillStats> {
+  const stats: BackfillStats = {
+    source: 'vendor-po-items',
+    scanned: 0, inserted: 0, skippedExisting: 0, skippedNoLot: 0, errors: 0,
+  };
+
+  const conds = [gt(vendorPOItems.receivedQuantity, 0), isNotNull(vendorPOItems.agPartNumber)];
+  if (args.from) conds.push(gte(vendorPOItems.receivedDate, args.from));
+  if (args.to) conds.push(lte(vendorPOItems.receivedDate, args.to));
+
+  const rows = await db
+    .select({
+      id: vendorPOItems.id,
+      vendorPoId: vendorPOItems.vendorPoId,
+      agPartNumber: vendorPOItems.agPartNumber,
+      receivedQuantity: vendorPOItems.receivedQuantity,
+      receivedDate: vendorPOItems.receivedDate,
+    })
+    .from(vendorPOItems)
+    .where(and(...conds));
+  stats.scanned = rows.length;
+
+  // Each backfilled row uses sourceRecordId = `${poLineItemId}:${cumulative}`
+  // to match the live writer's idempotency key, so re-runs after a partial
+  // live receipt also coalesce.
+  const sourceIds = rows.map((r) => `${r.id}:${r.receivedQuantity}`);
+  const existing = await loadExistingSourceIds(SOURCE_MODULE['vendor-po-items'], sourceIds);
+  // Also skip rows that the live writer already covered.
+  const existingLive = await loadExistingSourceIds('receiving:vendor-po', sourceIds);
+
+  const partNumbers = Array.from(new Set(rows.map((r) => r.agPartNumber).filter((p): p is string => !!p)));
+  const invItems = partNumbers.length
+    ? await db
+        .select({
+          id: inventoryItems.id,
+          agPartNumber: inventoryItems.agPartNumber,
+          purchaseUnit: inventoryItems.purchaseUnit,
+          usageUnit: inventoryItems.usageUnit,
+        })
+        .from(inventoryItems)
+        .where(inArray(inventoryItems.agPartNumber, partNumbers))
+    : [];
+  const invByPart = new Map(invItems.map((r) => [r.agPartNumber, r]));
+
+  for (const row of rows) {
+    if (!row.agPartNumber) { stats.skippedNoLot++; continue; }
+    const sid = `${row.id}:${row.receivedQuantity}`;
+    if (existing.has(sid) || existingLive.has(sid)) { stats.skippedExisting++; continue; }
+    const inv = invByPart.get(row.agPartNumber);
+    if (!inv) { stats.skippedNoLot++; continue; }
+    try {
+      const qty = Number(row.receivedQuantity ?? 0);
+      const eventDate = row.receivedDate ? new Date(row.receivedDate) : null;
+      const payload: InventoryLedgerEntryInput = {
+        transactionType: 'RECEIVE',
+        inventoryItemId: inv.id,
+        agPartNumber: inv.agPartNumber,
+        unitOfMeasure: inv.purchaseUnit ?? inv.usageUnit ?? 'EA',
+        quantityBefore: 0,
+        quantityDelta: qty,
+        quantityAfter: qty,
+        performedByDisplayName: 'system:backfill',
+        reasonCode: 'VENDOR_PO_RECEIPT',
+        notes: null,
+        sourceModule: SOURCE_MODULE['vendor-po-items'],
+        sourceRecordId: sid,
+        createdAtOverride: eventDate,
+        metadata: {
+          backfill: { table: 'vendor_po_items', id: row.id },
+          vendorPoId: row.vendorPoId,
+          poLineItemId: row.id,
+          cumulativeReceivedQuantity: row.receivedQuantity,
+        },
+      };
+      if (!args.dryRun) await recordInventoryLedgerEntry(payload);
+      stats.inserted++;
+    } catch (e) {
+      stats.errors++;
+      console.error(`[vendor-po-items] poLineItemId=${row.id} error:`, (e as Error).message);
+    }
+  }
+  return stats;
+}
+
+// ──────────────────────────────────────────────────────────────────────
 // Entrypoint
 // ──────────────────────────────────────────────────────────────────────
 
@@ -440,7 +640,9 @@ export async function run(argv: string[] = process.argv.slice(2)): Promise<Backf
     const stats =
       src === 'mlt' ? await backfillMlt(args)
       : src === 'consumption' ? await backfillConsumption(args)
-      : await backfillReservations(args);
+      : src === 'reservations' ? await backfillReservations(args)
+      : src === 'parts-request-receipts' ? await backfillPartsRequestReceipts(args)
+      : await backfillVendorPOItems(args);
     console.log(
       `[${stats.source}] scanned=${stats.scanned} inserted=${stats.inserted} ` +
       `skippedExisting=${stats.skippedExisting} skippedNoLot=${stats.skippedNoLot} errors=${stats.errors}` +

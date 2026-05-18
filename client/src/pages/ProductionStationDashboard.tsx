@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Loader2, Pause, Play, SkipForward, Square, Clock, Timer, AlertCircle, Plus, Home, History, Settings, Volume2, VolumeX, Lock, Smartphone, Volume1 } from 'lucide-react';
+import { Loader2, Pause, Play, SkipForward, Square, Clock, Timer, AlertCircle, Plus, Home, History, Settings, Volume2, VolumeX, Lock, Smartphone, Volume1, CalendarDays, Fingerprint } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
@@ -29,6 +29,9 @@ import { initAuditSink } from '@/lib/timerAuditSink';
 interface ProductionProgramRun {
   id: string;
   programId: string;
+  itemIdentifier?: string | null;
+  travelerId?: string | null;
+  travelerNumber?: string | null;
   startedByUserId: number;
   instanceName: string | null;
   sku: string | null;
@@ -86,6 +89,13 @@ function formatTime(seconds: number): string {
     return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   }
   return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+function formatStartDay(ts: string): string {
+  const started = new Date(ts);
+  const today = new Date();
+  const isToday = started.toDateString() === today.toDateString();
+  return `${started.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}${isToday ? ' (today)' : ''}`;
 }
 
 function getStatusColor(status: string): string {
@@ -269,6 +279,7 @@ function TimerCard({ run, onTimerEvent, toast, requireAuth, getAuthHeaders }: { 
   const estimatedCompletion = totalProgramDuration > 0
     ? new Date(new Date(run.startedAt).getTime() + (totalProgramDuration + currentPauseSeconds) * 1000)
     : null;
+  const itemIdentifier = run.itemIdentifier || run.travelerNumber || run.serialNumber || null;
 
   return (
     <Card className="border shadow-sm hover:shadow-md transition-shadow">
@@ -288,10 +299,23 @@ function TimerCard({ run, onTimerEvent, toast, requireAuth, getAuthHeaders }: { 
       </CardHeader>
       <CardContent className="space-y-3 pt-0">
         <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm">
+          {itemIdentifier && (
+            <div className="flex items-center gap-1.5 col-span-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 dark:border-slate-800 dark:bg-slate-900">
+              <Fingerprint className="h-3.5 w-3.5 text-slate-500" />
+              <span className="text-xs text-muted-foreground">Item:</span>
+              <span className="font-mono text-sm font-semibold">{itemIdentifier}</span>
+            </div>
+          )}
           {run.serialNumber && (
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-muted-foreground">Serial:</span>
               <span className="font-mono text-sm">{run.serialNumber}</span>
+            </div>
+          )}
+          {run.travelerNumber && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-muted-foreground">Traveler:</span>
+              <span className="font-mono text-sm">{run.travelerNumber}</span>
             </div>
           )}
           {run.mandrelNumber && (
@@ -370,6 +394,16 @@ function TimerCard({ run, onTimerEvent, toast, requireAuth, getAuthHeaders }: { 
               </p>
             </div>
           )}
+        </div>
+
+        <div className="flex items-center justify-between rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs dark:border-slate-800 dark:bg-slate-950">
+          <span className="flex items-center gap-1.5 text-muted-foreground uppercase tracking-wide">
+            <CalendarDays className="h-3.5 w-3.5" />
+            Put in
+          </span>
+          <span className="font-semibold text-slate-700 dark:text-slate-200">
+            {formatStartDay(run.startedAt)}
+          </span>
         </div>
 
         <div className="flex gap-2 pt-1">

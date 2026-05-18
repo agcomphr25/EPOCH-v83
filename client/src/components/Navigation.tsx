@@ -108,6 +108,7 @@ import OfflineIndicator from './OfflineIndicator';
 import GlobalSearch from './GlobalSearch';
 import ExecutiveRundownDropdown from './ExecutiveRundownDropdown';
 import { useQuery } from '@tanstack/react-query';
+import { apiRequest } from '@/lib/queryClient';
 import { hasFullAccess, hasRouteAccess, isUserInPermissionsList, DEFAULT_USER_ROUTES, isAdminUser, getRequiredCapability } from '@/config/userPermissions';
 import { getDashboardRoute } from '@/config/dashboardMapping';
 import {
@@ -201,9 +202,11 @@ export default function Navigation() {
 
   const trainingAlertCount = recertCountData?.count ?? 0;
 
-  // Fetch compliance backfill queue count for nav badge
+  // Fetch score-impacting compliance backfill count for nav badge.
+  // Legacy pre-policy items stay visible on the queue page, but are isolated from ERDI scoring.
   const { data: backfillRows } = useQuery<Array<{ id: number }>>({
-    queryKey: ['/api/vendor-pos/compliance-backfill'],
+    queryKey: ['/api/vendor-pos/compliance-backfill', 'enforced'],
+    queryFn: () => apiRequest('/api/vendor-pos/compliance-backfill?filter=enforced'),
     staleTime: 5 * 60 * 1000,
     retry: false,
   });
@@ -1295,6 +1298,12 @@ export default function Navigation() {
       description: 'Complete P2 workflow: orders, BOMs, scheduling, routing, and certifications',
     },
     {
+      path: '/p2-customers',
+      label: 'P2 Customers',
+      icon: Users,
+      description: 'Manage customers for P2 purchase orders and RFQ tracking',
+    },
+    {
       path: '/wad-wizard',
       label: 'WAD Wizard',
       icon: FileCheck,
@@ -1460,10 +1469,10 @@ export default function Navigation() {
       description: 'Step-based timing programs for production processes',
     },
     {
-      path: '/voice-notes',
-      label: 'Voice Notes',
+      path: '/knowledge-capture',
+      label: 'Knowledge Capture',
       icon: Mic,
-      description: 'Voice-activated notes for production issues and tracking',
+      description: 'Private voice journal for process observations and business knowledge',
     },
     {
       path: '/metric-directory',
@@ -2749,8 +2758,8 @@ export default function Navigation() {
               <Button
                 variant={location.startsWith('/admin/continuity') ? 'default' : 'ghost'}
                 className={cn(
-                  'flex items-center gap-2 text-sm',
-                  location.startsWith('/admin/continuity') && 'bg-primary text-white'
+                  'flex items-center gap-2 text-sm text-red-600 hover:text-red-700',
+                  location.startsWith('/admin/continuity') && 'bg-red-600 text-white hover:bg-red-700 hover:text-white'
                 )}
                 onClick={() => { closeAllDropdowns(); setLocation('/admin/continuity'); }}
               >

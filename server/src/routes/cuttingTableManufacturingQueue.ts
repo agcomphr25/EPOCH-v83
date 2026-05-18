@@ -1,10 +1,30 @@
 import express, { Request, Response } from 'express';
 import { storage } from '../../storage';
 import { db } from '../../db';
-import { manufacturingQueue, inventoryItems, p2ProductionOrders, p2PurchaseOrders, cuttingPacketBOMs, cuttingPacketBOMMaterials, cuttingPacketBOMParts, cuttingFabricInventory, cuttingBuiltPackets, cuttingBuiltPacketFabricSources, cuttingProductCategories, getDashboardCategories, supplySourceDashboardToLegacyDept } from '../../schema';
+import { manufacturingQueue, inventoryItems, p2ProductionOrders, p2PurchaseOrders, cuttingPacketBOMs, cuttingPacketBOMMaterials, cuttingPacketBOMParts, cuttingFabricInventory, cuttingFabricInventoryTransactions, cuttingBuiltPackets, cuttingBuiltPacketFabricSources, cuttingProductCategories, getDashboardCategories, supplySourceDashboardToLegacyDept } from '../../schema';
 import { eq, and, or, asc, desc, inArray, like, count } from 'drizzle-orm';
 
 const router = express.Router();
+
+function parseFabricStockQuantity(value: unknown): number {
+  if (value === null || value === undefined || value === '') return 0;
+  const parsed = typeof value === 'number' ? value : parseFloat(String(value));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function nonZeroInventoryDelta(quantity: number): number {
+  if (quantity === 0) return 0;
+  const magnitude = Math.max(1, Math.round(Math.abs(quantity)));
+  return quantity < 0 ? -magnitude : magnitude;
+}
+
+function parseQueueIdFromBuiltPacketBarcode(barcode: string | null | undefined): number | null {
+  if (!barcode) return null;
+  const parts = barcode.split('-');
+  if (parts.length < 5 || parts[0] !== 'PKT') return null;
+  const queueId = Number(parts[parts.length - 3]);
+  return Number.isInteger(queueId) ? queueId : null;
+}
 
 // Get manufacturing queue items for cutting table.
 // DEMAND ROUTING: A record belongs to the Cutting Table dashboard when:
@@ -71,6 +91,17 @@ router.get('/cutting-table', async (req: Request, res: Response) => {
       .from(cuttingPacketBOMs)
       .where(eq(cuttingPacketBOMs.isActive, true));
 
+    const builtPacketCounts = new Map<number, number>();
+    const builtPacketRows = await db
+      .select({ barcode: cuttingBuiltPackets.barcode })
+      .from(cuttingBuiltPackets);
+
+    for (const packet of builtPacketRows) {
+      const queueId = parseQueueIdFromBuiltPacketBarcode(packet.barcode);
+      if (queueId === null) continue;
+      builtPacketCounts.set(queueId, (builtPacketCounts.get(queueId) || 0) + 1);
+    }
+
     const formattedItems = queueItems.map(row => {
       // Extract bomId and other data from notes JSON if present
       let packetBomId = null;
@@ -113,6 +144,10 @@ router.get('/cutting-table', async (req: Request, res: Response) => {
         null;
 
       const displayName = packetName || userNotes || row.item?.name || orderId || null;
+      const quantityRequested = row.queue.quantityRequested || 0;
+      const completedQuantity = row.queue.quantityCompleted || 0;
+      const allocatedPacketCount = Math.max(completedQuantity, builtPacketCounts.get(row.queue.id) || 0);
+      const printableBarcodeCount = Math.max(0, quantityRequested - allocatedPacketCount);
       
       return {
         ...row.queue,
@@ -128,6 +163,8 @@ router.get('/cutting-table', async (req: Request, res: Response) => {
         orderId,
         packetName,
         poNumbers,
+        allocatedPacketCount,
+        printableBarcodeCount,
       };
     });
     
@@ -543,6 +580,55 @@ router.post('/:id/complete-with-traceability', async (req: Request, res: Respons
         });
       }
 
+      const fabricUsageByRoll = new Map<string, { quantityUsed: number; rollNumber: string | null }>();
+      for (const source of fabricSources) {
+        if (!source.fabricInventoryId) continue;
+        const perPacketQty = parseFabricStockQuantity(source.quantityUsed || 1);
+        const totalUsed = perPacketQty * quantityCompleted;
+        if (totalUsed <= 0) continue;
+        const existingUsage = fabricUsageByRoll.get(source.fabricInventoryId);
+        fabricUsageByRoll.set(source.fabricInventoryId, {
+          quantityUsed: (existingUsage?.quantityUsed ?? 0) + totalUsed,
+          rollNumber: source.rollNumber || existingUsage?.rollNumber || null,
+        });
+      }
+
+      for (const [fabricInventoryId, usage] of fabricUsageByRoll.entries()) {
+        const [roll] = await tx
+          .select()
+          .from(cuttingFabricInventory)
+          .where(eq(cuttingFabricInventory.id, fabricInventoryId))
+          .for('update');
+
+        if (!roll) continue;
+
+        const currentSquareMeters = parseFabricStockQuantity(roll.squareMeters);
+        const currentQuantityInStock = parseFabricStockQuantity(roll.quantityInStock);
+        const newSquareMeters = Math.max(0, currentSquareMeters - usage.quantityUsed);
+        const newQuantityInStock = Math.max(0, currentQuantityInStock - usage.quantityUsed);
+        const isDepleted = newSquareMeters <= 0 && newQuantityInStock <= 0;
+
+        await tx
+          .update(cuttingFabricInventory)
+          .set({
+            squareMeters: newSquareMeters.toString(),
+            quantityInStock: newQuantityInStock,
+            status: isDepleted ? 'depleted' : roll.status,
+            depletedAt: isDepleted ? new Date() : roll.depletedAt,
+            depletedBy: isDepleted ? (completedBy || 'unknown') : roll.depletedBy,
+            updatedAt: new Date(),
+          })
+          .where(eq(cuttingFabricInventory.id, fabricInventoryId));
+
+        await tx.insert(cuttingFabricInventoryTransactions).values({
+          fabricInventoryId,
+          changeType: 'ISSUE',
+          quantityDelta: nonZeroInventoryDelta(-usage.quantityUsed),
+          performedBy: completedBy || 'unknown',
+          notes: `Cutting table completion ${id}: ${usage.quantityUsed} used for ${quantityCompleted} packet(s)${usage.rollNumber ? ` from roll ${usage.rollNumber}` : ''}`,
+        });
+      }
+
       // Update the manufacturing queue item inside the same transaction.
       // Use values from the locked row to prevent a lost-update when concurrent
       // submissions race on quantityCompleted.
@@ -852,6 +938,14 @@ router.post('/bulk-print-barcodes', async (req: Request, res: Response) => {
     if (!queueIds || !Array.isArray(queueIds) || queueIds.length === 0) {
       return res.status(400).json({ error: 'At least one queue ID is required' });
     }
+
+    const parsedQueueIds = queueIds
+      .map((id: unknown) => Number(id))
+      .filter((id: number) => Number.isInteger(id));
+
+    if (parsedQueueIds.length === 0) {
+      return res.status(400).json({ error: 'At least one valid queue ID is required' });
+    }
     
     const printQuantities: Record<number, number> = quantities || {};
     
@@ -862,7 +956,7 @@ router.post('/bulk-print-barcodes', async (req: Request, res: Response) => {
       })
       .from(manufacturingQueue)
       .leftJoin(inventoryItems, eq(manufacturingQueue.inventoryItemId, inventoryItems.id))
-      .where(inArray(manufacturingQueue.id, queueIds));
+      .where(inArray(manufacturingQueue.id, parsedQueueIds));
     
     if (queueItems.length === 0) {
       return res.status(404).json({ error: 'No matching queue items found' });
@@ -870,14 +964,41 @@ router.post('/bulk-print-barcodes', async (req: Request, res: Response) => {
     
     const { generateBarcodeImage } = await import('../utils/barcodeGenerator');
     
+    const builtPacketCounts = new Map<number, number>();
+    const builtPacketRows = await db
+      .select({ barcode: cuttingBuiltPackets.barcode })
+      .from(cuttingBuiltPackets);
+
+    for (const packet of builtPacketRows) {
+      const queueId = parseQueueIdFromBuiltPacketBarcode(packet.barcode);
+      if (queueId === null || !parsedQueueIds.includes(queueId)) continue;
+      builtPacketCounts.set(queueId, (builtPacketCounts.get(queueId) || 0) + 1);
+    }
+
     const allLabels: any[] = [];
+    const skippedAllocated: any[] = [];
     
     for (const row of queueItems) {
       const partNumber = row.item?.agPartNumber || 'UNK';
       const maxQty = row.queue.quantityRequested || 1;
-      const qty = printQuantities[row.queue.id] ? Math.min(printQuantities[row.queue.id], maxQty) : maxQty;
+      const completedQuantity = row.queue.quantityCompleted || 0;
+      const allocatedPacketCount = Math.max(completedQuantity, builtPacketCounts.get(row.queue.id) || 0);
+      const availableToPrint = Math.max(0, maxQty - allocatedPacketCount);
+      const requestedQty = printQuantities[row.queue.id] ? Math.max(0, printQuantities[row.queue.id]) : availableToPrint;
+      const qty = Math.min(requestedQty, availableToPrint);
+
+      if (qty <= 0) {
+        skippedAllocated.push({
+          queueId: row.queue.id,
+          partNumber,
+          quantityRequested: maxQty,
+          allocatedPacketCount,
+        });
+        continue;
+      }
       
-      for (let seq = 1; seq <= qty; seq++) {
+      for (let offset = 0; offset < qty; offset++) {
+        const seq = allocatedPacketCount + offset + 1;
         const barcodeValue = `MFG-${row.queue.id}-${partNumber}-${seq}`;
         
         let barcodeImage;
@@ -900,9 +1021,11 @@ router.post('/bulk-print-barcodes', async (req: Request, res: Response) => {
           barcodeImage,
           partNumber,
           partName: row.item?.name || 'Unknown',
-          quantityRequested: qty,
+          quantityRequested: maxQty,
           sequenceNumber: seq,
           quantityCompleted: row.queue.quantityCompleted || 0,
+          allocatedPacketCount,
+          printableBarcodeCount: availableToPrint,
           priority: row.queue.priority,
           dueDate: row.queue.dueDate,
           status: row.queue.status,
@@ -910,7 +1033,14 @@ router.post('/bulk-print-barcodes', async (req: Request, res: Response) => {
       }
     }
     
-    res.json({ labels: allLabels, count: allLabels.length });
+    if (allLabels.length === 0) {
+      return res.status(409).json({
+        error: 'No unallocated packet barcodes available to print',
+        skippedAllocated,
+      });
+    }
+
+    res.json({ labels: allLabels, count: allLabels.length, skippedAllocated });
   } catch (error) {
     console.error('Error generating bulk barcodes:', error);
     res.status(500).json({ error: 'Failed to generate bulk barcodes' });

@@ -666,16 +666,25 @@ export default function VendorManagement() {
         body: formData,
       });
 
-      if (!response.ok) throw new Error('Upload failed');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const message =
+          errorData.message ||
+          errorData.error ||
+          errorData.reason ||
+          'Upload failed';
+        throw new Error(message);
+      }
 
       const data = await response.json();
       form.setValue('mainDocumentUrl', data.url);
       setMainDocFile(file);
       toast({ title: 'Document uploaded successfully' });
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to upload document';
       toast({
         title: 'Upload failed',
-        description: 'Failed to upload document',
+        description: message,
         variant: 'destructive',
       });
     } finally {
@@ -717,16 +726,25 @@ export default function VendorManagement() {
         body: formData,
       });
 
-      if (!response.ok) throw new Error('Upload failed');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(
+          errorData.message ||
+          errorData.error ||
+          errorData.reason ||
+          'Upload failed'
+        );
+      }
 
       const data = await response.json();
       form.setValue('approvalPdfUrl', data.url);
       setUploadedFile(file);
       toast({ title: 'File uploaded successfully' });
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to upload file';
       toast({
         title: 'Upload failed',
-        description: 'Failed to upload file',
+        description: message,
         variant: 'destructive',
       });
     } finally {

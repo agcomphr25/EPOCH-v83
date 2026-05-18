@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus,
@@ -91,6 +91,23 @@ type PartsRequestWithProject = PartsRequest & {
 
 const NONE_VALUE = '__none__';
 
+interface SessionUser {
+  id: number;
+  username: string;
+  firstName?: string;
+  lastName?: string;
+  role?: string;
+}
+
+function getDefaultRequestor(user: SessionUser | null | undefined): string {
+  if (!user) return '';
+  const fullName = [user.firstName, user.lastName]
+    .filter((s) => typeof s === 'string' && s.trim().length > 0)
+    .join(' ')
+    .trim();
+  return user.username || fullName || '';
+}
+
 export default function PartsRequestsCard() {
   const queryClient = useQueryClient();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -99,6 +116,12 @@ export default function PartsRequestsCard() {
   const [editingRequest, setEditingRequest] = useState<PartsRequest | null>(
     null
   );
+  const requestedByEditedRef = useRef(false);
+
+  const { data: sessionUser } = useQuery<SessionUser | null>({
+    queryKey: ['/api/auth/session'],
+  });
+  const defaultRequestor = getDefaultRequestor(sessionUser);
 
   const [formData, setFormData] = useState<PartsRequestFormData>({
     agPartNumber: '',
@@ -237,11 +260,12 @@ export default function PartsRequestsCard() {
   });
 
   const resetForm = () => {
+    requestedByEditedRef.current = false;
     setFormData({
       agPartNumber: '',
       partNumber: '',
       partName: '',
-      requestedBy: '',
+      requestedBy: getDefaultRequestor(sessionUser),
       productionLine: '',
       projectId: '',
       department: '',
@@ -261,8 +285,24 @@ export default function PartsRequestsCard() {
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target;
+    if (name === 'requestedBy') {
+      requestedByEditedRef.current = true;
+    }
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
+
+  // When the create dialog is open and the session resolves later (or
+  // changes), seed the requestedBy field from the signed-in user as long
+  // as the user hasn't typed anything into it yet.
+  useEffect(() => {
+    if (!isCreateOpen) return;
+    if (editingRequest) return;
+    if (requestedByEditedRef.current) return;
+    if (!defaultRequestor) return;
+    setFormData((prev) =>
+      prev.requestedBy ? prev : { ...prev, requestedBy: defaultRequestor }
+    );
+  }, [isCreateOpen, editingRequest, defaultRequestor]);
 
   const handleSelectChange = (name: string, value: string) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -330,6 +370,7 @@ export default function PartsRequestsCard() {
   };
 
   const handleEdit = (request: PartsRequest) => {
+    requestedByEditedRef.current = true;
     setEditingRequest(request);
     setFormData({
       agPartNumber: request.agPartNumber || '',
@@ -396,7 +437,7 @@ export default function PartsRequestsCard() {
     }
   };
 
-  const FormContent = () => (
+  const renderFormContent = () => (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
         <Label htmlFor="inventoryItem">Inventory Part *</Label>
@@ -709,7 +750,15 @@ export default function PartsRequestsCard() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-semibold">Parts Requests</h3>
-        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+        <Dialog
+          open={isCreateOpen}
+          onOpenChange={(open) => {
+            setIsCreateOpen(open);
+            if (!open) {
+              resetForm();
+            }
+          }}
+        >
           <DialogTrigger asChild>
             <Button>
               <Plus className="h-4 w-4 mr-2" />
@@ -720,7 +769,7 @@ export default function PartsRequestsCard() {
             <DialogHeader>
               <DialogTitle>Create New Parts Request</DialogTitle>
             </DialogHeader>
-            <FormContent />
+            {renderFormContent()}
           </DialogContent>
         </Dialog>
       </div>
@@ -909,7 +958,7 @@ export default function PartsRequestsCard() {
           <DialogHeader>
             <DialogTitle>Edit Parts Request</DialogTitle>
           </DialogHeader>
-          <FormContent />
+          {renderFormContent()}
         </DialogContent>
       </Dialog>
     </div>

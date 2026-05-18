@@ -5152,6 +5152,7 @@ export const p2PurchaseOrders = pgTable('p2_purchase_orders', {
   lockedBy: integer('locked_by').references(() => employees.id), // Who locked the PO
 
   sourceQuoteId: uuid('source_quote_id').references(() => quotes.id), // Links PO to originating quote
+  contractReviewRole: text('contract_review_role').notNull().default('secondary'), // primary requires contract review before P2 release; secondary does not
   
   // Ownership fields for accountability and audit compliance
   createdById: integer('created_by_id').references(() => employees.id), // Who created the PO
@@ -6726,6 +6727,7 @@ export const insertP2PurchaseOrderSchema = createInsertSchema(p2PurchaseOrders)
     status: z.enum(['OPEN', 'CLOSED', 'CANCELED']).default('OPEN'),
     notes: z.string().optional().nullable(),
     sourceQuoteId: z.string().uuid().optional().nullable(),
+    contractReviewRole: z.enum(['primary', 'secondary']).default('secondary'),
   });
 
 export const insertP2PurchaseOrderItemSchema = createInsertSchema(
@@ -8047,6 +8049,11 @@ export const p2ProductionOrders = pgTable('p2_production_orders', {
   p2PoItemId: integer('p2_po_item_id')
     .references(() => p2PurchaseOrderItems.id)
     .notNull(),
+  // Task #242: scope p2 production rows to a specific project when the
+  // PO is shared by multiple projects. Nullable: rows that cannot be
+  // deterministically attributed to a single project fall back to the
+  // PO-wide view in the PM Control Center.
+  projectId: uuid('project_id'),
   bomDefinitionId: uuid('bom_definition_id'), // Foreign key to BOM definition
   bomItemId: uuid('bom_item_id'), // Foreign key to BOM item
   sku: text('sku').notNull(), // From BOM definition
@@ -11501,6 +11508,8 @@ export const projects = pgTable('projects', {
   actualShipDate: date('actual_ship_date'),
   currentStage: text('current_stage').default('rfq_received'),
   stageUpdatedAt: timestamp('stage_updated_at').defaultNow(),
+  currentRevisionNumber: integer('current_revision_number').notNull().default(0),
+  currentRevisionLabel: text('current_revision_label').notNull().default('Rev 0'),
   poId: integer('po_id').references(() => p2PurchaseOrders.id),
   projectManagerId: integer('project_manager_id').references(() => employees.id),
   reminderDays: integer('reminder_days').default(3), // Days before reminder is sent for stuck steps
@@ -11530,6 +11539,35 @@ export const insertProjectSchema = createInsertSchema(projects).omit({
 
 export type Project = typeof projects.$inferSelect;
 export type InsertProject = z.infer<typeof insertProjectSchema>;
+
+// Project Revisions - Controlled changes to project scope, PO linkage, and production basis
+export const projectRevisions = pgTable('project_revisions', {
+  id: serial('id').primaryKey(),
+  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  revisionNumber: integer('revision_number').notNull(),
+  revisionLabel: text('revision_label').notNull(),
+  revisionType: text('revision_type').notNull().default('PROJECT_CHANGE'),
+  summary: text('summary').notNull(),
+  reason: text('reason').notNull(),
+  previousPoId: integer('previous_po_id').references(() => p2PurchaseOrders.id),
+  newPoId: integer('new_po_id').references(() => p2PurchaseOrders.id),
+  createdBy: integer('created_by').references(() => employees.id),
+  createdByDisplayName: text('created_by_display_name'),
+  metadata: jsonb('metadata'),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  projectIdIdx: index('project_revisions_project_id_idx').on(table.projectId),
+  projectRevisionUnique: uniqueIndex('project_revisions_project_revision_unique').on(table.projectId, table.revisionNumber),
+  createdAtIdx: index('project_revisions_created_at_idx').on(table.createdAt),
+}));
+
+export const insertProjectRevisionSchema = createInsertSchema(projectRevisions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ProjectRevision = typeof projectRevisions.$inferSelect;
+export type InsertProjectRevision = z.infer<typeof insertProjectRevisionSchema>;
 
 // Project Steps - Individual workflow steps for each project
 export const projectSteps = pgTable('project_steps', {
@@ -11975,10 +12013,16 @@ export type InsertMediaAttachment = z.infer<typeof insertMediaAttachmentSchema>;
 export const voiceNotes = pgTable('voice_notes', {
   id: uuid('id').defaultRandom().primaryKey(),
   transcription: text('transcription').notNull(), // The transcribed text from voice
+  title: text('title'),
+  summary: text('summary'),
   linkedOrderId: text('linked_order_id'), // Order ID extracted from speech (e.g., "EL069")
-  noteType: text('note_type').notNull().default('order'), // 'order' or 'general'
+  noteType: text('note_type').notNull().default('journal'), // 'journal', 'production_concern', etc.
   category: text('category'), // User-defined category (e.g., "metal insert", "duratec", "thickness")
   tags: text('tags').array(), // Extracted keywords/tags for searching
+  extractedTasks: jsonb('extracted_tasks').$type<string[]>(),
+  suggestedLinks: jsonb('suggested_links').$type<Array<{ type: string; id: string; label: string; confidence?: string }>>(),
+  followUpQuestions: jsonb('follow_up_questions').$type<string[]>(),
+  visibility: text('visibility').notNull().default('private'),
   recordedById: integer('recorded_by_id').references(() => employees.id),
   recordedByUsername: text('recorded_by_username').notNull(), // Username for quick reference
   recordedAt: timestamp('recorded_at').defaultNow(),
@@ -14589,6 +14633,27 @@ export const productionProgramRunEvents = pgTable('production_program_run_events
   occurredAtIdx: index('production_program_run_events_occurred_at_idx').on(table.occurredAt),
 }));
 
+// Production Item Audit Records - durable snapshots for reconstructing an item's timer card
+export const productionItemAuditRecords = pgTable('production_item_audit_records', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  itemIdentifier: text('item_identifier').notNull(),
+  serialNumber: text('serial_number'),
+  travelerId: varchar('traveler_id', { length: 255 }),
+  travelerNumber: varchar('traveler_number', { length: 255 }),
+  runId: uuid('run_id').references(() => productionProgramRuns.id, { onDelete: 'set null' }),
+  eventType: text('event_type').notNull(),
+  eventAt: timestamp('event_at').defaultNow().notNull(),
+  actorUserId: integer('actor_user_id').references(() => users.id),
+  cardSnapshot: jsonb('card_snapshot').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  itemIdentifierIdx: index('production_item_audit_item_identifier_idx').on(table.itemIdentifier),
+  serialNumberIdx: index('production_item_audit_serial_number_idx').on(table.serialNumber),
+  travelerIdIdx: index('production_item_audit_traveler_id_idx').on(table.travelerId),
+  runIdIdx: index('production_item_audit_run_id_idx').on(table.runId),
+  eventAtIdx: index('production_item_audit_event_at_idx').on(table.eventAt),
+}));
+
 // Insert schemas for Production Timer module
 export const insertProductionProgramSchema = createInsertSchema(productionPrograms).omit({
   id: true,
@@ -14620,6 +14685,7 @@ export type InsertProductionProgramStep = z.infer<typeof insertProductionProgram
 export type ProductionProgramRun = typeof productionProgramRuns.$inferSelect;
 export type InsertProductionProgramRun = z.infer<typeof insertProductionProgramRunSchema>;
 export type ProductionProgramRunEvent = typeof productionProgramRunEvents.$inferSelect;
+export type ProductionItemAuditRecord = typeof productionItemAuditRecords.$inferSelect;
 export type InsertProductionProgramRunEvent = z.infer<typeof insertProductionProgramRunEventSchema>;
 
 // ============================================================================
@@ -16060,6 +16126,48 @@ export const insertOrderActivityEventSchema = createInsertSchema(orderActivityEv
 export type OrderActivityEvent = typeof orderActivityEvents.$inferSelect;
 export type InsertOrderActivityEvent = z.infer<typeof insertOrderActivityEventSchema>;
 
+export const p1FulfillmentAttempts = pgTable(
+  'p1_fulfillment_attempts',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    orderId: text('order_id').notNull(),
+    status: text('status').notNull().default('IN_PROGRESS'),
+    currentStep: text('current_step').notNull().default('READINESS'),
+    failedStep: text('failed_step'),
+    failureCode: text('failure_code'),
+    failureMessage: text('failure_message'),
+    remediationHint: text('remediation_hint'),
+    source: text('source').notNull().default('shipping'),
+    sourceRoute: text('source_route'),
+    trackingNumber: text('tracking_number'),
+    shipmentRecordId: uuid('shipment_record_id'),
+    journalEntryId: integer('journal_entry_id').references(() => journalEntries.id),
+    notificationStatus: text('notification_status').default('NOT_ATTEMPTED'),
+    actorUserId: integer('actor_user_id'),
+    actorDisplayName: text('actor_display_name'),
+    metadata: jsonb('metadata').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`),
+    startedAt: timestamp('started_at').notNull().defaultNow(),
+    completedAt: timestamp('completed_at'),
+    createdAt: timestamp('created_at').defaultNow(),
+    updatedAt: timestamp('updated_at').defaultNow(),
+  },
+  (table) => ({
+    orderIdIdx: index('p1_fulfillment_attempts_order_id_idx').on(table.orderId),
+    statusIdx: index('p1_fulfillment_attempts_status_idx').on(table.status),
+    failedStepIdx: index('p1_fulfillment_attempts_failed_step_idx').on(table.failedStep),
+    updatedAtIdx: index('p1_fulfillment_attempts_updated_at_idx').on(table.updatedAt),
+  })
+);
+
+export const insertP1FulfillmentAttemptSchema = createInsertSchema(p1FulfillmentAttempts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type P1FulfillmentAttempt = typeof p1FulfillmentAttempts.$inferSelect;
+export type InsertP1FulfillmentAttempt = z.infer<typeof insertP1FulfillmentAttemptSchema>;
+
 // ─── CNC Dashboard ────────────────────────────────────────────────────────────
 
 export const cncScheduleSettings = pgTable('cnc_schedule_settings', {
@@ -16654,6 +16762,11 @@ export const productionWorkOrders = pgTable('production_work_orders', {
   warningThreshold: numeric('warning_threshold'),
   blockedThreshold: numeric('blocked_threshold'),
   defaultChargeCodeId: integer('default_charge_code_id').references(() => chargeCodes.id, { onDelete: 'set null' }),
+  dashboardType: text('dashboard_type'),
+  queueType: text('queue_type'),
+  assignedDepartment: text('assigned_department'),
+  assignedDashboardRoute: text('assigned_dashboard_route'),
+  manufacturingQueueId: integer('manufacturing_queue_id').references(() => manufacturingQueue.id, { onDelete: 'set null' }),
   wadStatus: text('wad_status').notNull().default('DRAFT'),
   wizardData: jsonb('wizard_data'),
   createdAt: timestamp('created_at').defaultNow(),
@@ -16679,6 +16792,11 @@ export const insertProductionWorkOrderSchema = createInsertSchema(productionWork
     departmentBudgets: z.record(z.any()).optional(),
     warningThreshold: z.string().regex(/^\d+(\.\d+)?$/, 'Must be a positive decimal').optional().nullable(),
     blockedThreshold: z.string().regex(/^\d+(\.\d+)?$/, 'Must be a positive decimal').optional().nullable(),
+    dashboardType: z.string().optional().nullable(),
+    queueType: z.string().optional().nullable(),
+    assignedDepartment: z.string().optional().nullable(),
+    assignedDashboardRoute: z.string().optional().nullable(),
+    manufacturingQueueId: z.number().int().optional().nullable(),
     wadStatus: z.enum(['DRAFT', 'PENDING_APPROVAL', 'APPROVED']).optional().default('DRAFT'),
     wizardData: z.record(z.any()).optional().nullable(),
   })

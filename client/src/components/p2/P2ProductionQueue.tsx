@@ -902,7 +902,12 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                                           )}
                                         </TableCell>
                                         <TableCell>
-                                          {item.hasActiveTask && item.activeTask ? (
+                                          {item.status === 'COMPLETED' ? (
+                                            <Badge className="bg-green-600">
+                                              <CheckCircle className="h-3 w-3 mr-1" />
+                                              Completed
+                                            </Badge>
+                                          ) : item.hasActiveTask && item.activeTask ? (
                                             <div className="flex items-center gap-2">
                                               <Badge className="bg-green-600">
                                                 <Play className="h-3 w-3 mr-1" />
@@ -933,34 +938,38 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                                             >
                                               <Eye className="h-4 w-4" />
                                             </Button>
-                                            <Button
-                                              variant="ghost"
-                                              size="sm"
-                                              onClick={() => openHoldDialog(item)}
-                                              className="text-amber-600 hover:text-amber-700"
-                                              data-testid={`button-hold-${item.id}`}
-                                            >
-                                              <Pause className="h-4 w-4" />
-                                            </Button>
-                                            <Button
-                                              variant="ghost"
-                                              size="sm"
-                                              onClick={() => openOffSystemDialog(item)}
-                                              className="text-indigo-600 hover:text-indigo-700"
-                                              title="Off-System Production Complete"
-                                              data-testid={`button-off-system-${item.id}`}
-                                            >
-                                              <ExternalLink className="h-4 w-4" />
-                                            </Button>
-                                            <Button
-                                              variant="ghost"
-                                              size="sm"
-                                              onClick={() => openScrapDialog(item)}
-                                              className="text-red-600 hover:text-red-700"
-                                              data-testid={`button-scrap-${item.id}`}
-                                            >
-                                              <XCircle className="h-4 w-4" />
-                                            </Button>
+                                            {item.status !== 'COMPLETED' && (
+                                              <>
+                                                <Button
+                                                  variant="ghost"
+                                                  size="sm"
+                                                  onClick={() => openHoldDialog(item)}
+                                                  className="text-amber-600 hover:text-amber-700"
+                                                  data-testid={`button-hold-${item.id}`}
+                                                >
+                                                  <Pause className="h-4 w-4" />
+                                                </Button>
+                                                <Button
+                                                  variant="ghost"
+                                                  size="sm"
+                                                  onClick={() => openOffSystemDialog(item)}
+                                                  className="text-indigo-600 hover:text-indigo-700"
+                                                  title="Off-System Production Complete"
+                                                  data-testid={`button-off-system-${item.id}`}
+                                                >
+                                                  <ExternalLink className="h-4 w-4" />
+                                                </Button>
+                                                <Button
+                                                  variant="ghost"
+                                                  size="sm"
+                                                  onClick={() => openScrapDialog(item)}
+                                                  className="text-red-600 hover:text-red-700"
+                                                  data-testid={`button-scrap-${item.id}`}
+                                                >
+                                                  <XCircle className="h-4 w-4" />
+                                                </Button>
+                                              </>
+                                            )}
                                           </div>
                                         </TableCell>
                                       </TableRow>

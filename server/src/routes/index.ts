@@ -3348,11 +3348,12 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     try {
       const { storage } = await import('../../storage');
       
-      // Get all active serialized items using storage method (which handles pool.query)
+      // Keep P2 Control Center as the visible source for WIP and finished units.
       const allItems = await applyCompletedTravelerStateToP2Items(
-        await storage.getP2SerializedItems({ status: 'ACTIVE' })
+        await storage.getP2SerializedItems({})
       );
-      const items = (allItems || []).filter((item: any) => item.status === 'ACTIVE');
+      const visibleStatuses = new Set(['ACTIVE', 'COMPLETED']);
+      const items = (allItems || []).filter((item: any) => visibleStatuses.has(item.status));
       const { pool: dbPool } = await import('../../db');
       const poIds = [...new Set(items.map((item: any) => item.poId ?? item.po_id).filter(Boolean))];
       const projectRows = poIds.length > 0
@@ -3392,22 +3393,42 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         (projectRows as any[]).map((row: any) => [Number(row.poId), row])
       );
       
-      // Work tasks and routings tables may not exist yet - use empty arrays as fallback
-      const activeTasks: any[] = [];
+      const itemIds = items.map((item: any) => item.id).filter(Boolean);
+      let activeTasks: any[] = [];
+      if (itemIds.length > 0) {
+        try {
+          activeTasks = await dbPool.query(
+            `SELECT
+               id::text AS id,
+               serialized_item_id::text AS "serializedItemId",
+               employee_name AS "employeeName",
+               employee_code AS "employeeCode",
+               started_at AS "startedAt"
+             FROM p2_work_tasks
+             WHERE serialized_item_id = ANY($1::uuid[])
+               AND status = 'IN_PROGRESS'
+             ORDER BY started_at DESC`,
+            [itemIds]
+          );
+        } catch (taskError: any) {
+          console.warn('P2 production queue active task lookup skipped:', taskError?.message);
+        }
+      }
       const allRoutings: any[] = [];
       
       // Create task lookup by serialized item ID
       const taskByItemId = new Map<string, any>();
-      activeTasks.forEach((task: any) => {
+      (activeTasks as any[]).forEach((task: any) => {
         taskByItemId.set(task.serializedItemId, task);
       });
       
       // Get unique departments from all items and routings
       const departmentsSet = new Set<string>();
       items.forEach((item: any) => {
-        if (item.currentDepartment) {
-          departmentsSet.add(item.currentDepartment);
-        }
+        const displayDepartment = item.status === 'COMPLETED'
+          ? 'Completed'
+          : item.currentDepartment;
+        if (displayDepartment) departmentsSet.add(displayDepartment);
       });
       allRoutings.forEach((routing: any) => {
         const sequence = routing.departmentSequence as string[] || [];
@@ -3423,7 +3444,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         'Finish',
         'Paint',
         'Final QC',
-        'Shipping'
+        'Shipping',
+        'Completed'
       ];
       
       // Add any departments not in standard order
@@ -3440,7 +3462,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       });
       
       items.forEach((item: any) => {
-        const dept = item.currentDepartment || 'Pending Layup';
+        const dept = item.status === 'COMPLETED'
+          ? 'Completed'
+          : (item.currentDepartment || 'Pending Layup');
         if (!departmentQueues[dept]) {
           departmentQueues[dept] = [];
         }
@@ -3486,7 +3510,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         .map(dept => {
           const queueItems = departmentQueues[dept] || [];
           const inProgressCount = queueItems.filter(i => i.hasActiveTask).length;
-          const waitingCount = queueItems.length - inProgressCount;
+          const waitingCount = queueItems.filter(i => i.status === 'ACTIVE' && !i.hasActiveTask).length;
           
           return {
             name: dept,
@@ -3500,8 +3524,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       res.json({
         departments,
         summary: {
-          totalActive: items.length,
-          totalInProgress: activeTasks.length,
+          totalActive: items.filter((item: any) => item.status === 'ACTIVE').length,
+          totalInProgress: (activeTasks as any[]).length,
           departmentCount: departments.filter(d => d.totalItems > 0).length,
         },
       });

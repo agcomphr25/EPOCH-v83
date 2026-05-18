@@ -10,6 +10,7 @@ type EvidenceNodeType =
   | 'employee'
   | 'labor_cost'
   | 'payroll'
+  | 'billing'
   | 'journal'
   | 'audit'
   | 'document'
@@ -53,6 +54,38 @@ type JournalLineEvidence = {
   allowability: string | null;
   direct_indirect: string | null;
   cost_pool: string | null;
+};
+
+type InvoiceEvidence = {
+  id: string;
+  invoice_number: string;
+  invoice_date: string;
+  due_date: string | null;
+  status: string;
+  total_amount: string;
+  subtotal: string;
+  tax_amount: string;
+  customer_id: string;
+  customer_name: string | null;
+  packing_slip_id: string | null;
+  lot_id: string | null;
+  created_by: string | null;
+  created_at: string | null;
+  posted_at: string | null;
+  posted_by: string | null;
+  sent_at: string | null;
+  matched_project_ids: string[] | null;
+  invoice_po_id: string | null;
+  invoice_po_override: string | null;
+  lot_po_id: number | null;
+  packing_slip_po_id: number | null;
+  line_count: number;
+  billed_project_total: string;
+  line_descriptions: string[];
+  journal_entry_id: number | null;
+  journal_status: string | null;
+  journal_memo: string | null;
+  journal_effective_date: string | null;
 };
 
 const router = Router();
@@ -115,11 +148,12 @@ router.get('/transaction-evidence-map', authenticateToken, requireGlennj, async 
       customer_id: string;
       customer_name_snapshot: string | null;
       status: string | null;
+      po_id: number | null;
       default_charge_code_id: number | null;
       created_at: string | null;
     }>(
       `SELECT id, project_code, project_name, customer_id, customer_name_snapshot, status,
-              default_charge_code_id, created_at
+              po_id, default_charge_code_id, created_at
        FROM projects
        WHERE id = $1::uuid
        LIMIT 1`,
@@ -211,7 +245,65 @@ router.get('/transaction-evidence-map', authenticateToken, requireGlennj, async 
     const workOrderIds = Array.from(new Set(laborRows.map((r) => r.production_work_order_id).filter((id): id is string => !!id)));
     const employeeIds = Array.from(new Set(laborRows.map((r) => r.epoch_employee_id).filter((id): id is number => id != null)));
 
-    const journalLines: JournalLineEvidence[] = journalIds.length
+    const invoiceRows = await pool.query<InvoiceEvidence>(
+      `SELECT
+         inv.id::text,
+         inv.invoice_number,
+         inv.invoice_date::text,
+         inv.due_date::text,
+         inv.status,
+         inv.total_amount,
+         inv.subtotal,
+         inv.tax_amount,
+         inv.customer_id,
+         c.customer_name,
+         inv.packing_slip_id::text,
+         inv.lot_id::text,
+         inv.created_by,
+         inv.created_at::text,
+         inv.posted_at::text,
+         inv.posted_by,
+         inv.sent_at::text,
+         array_remove(array_agg(DISTINCT lines.project_id), NULL) AS matched_project_ids,
+         inv.po_id AS invoice_po_id,
+         inv.po_override AS invoice_po_override,
+         inv_lot.po_id AS lot_po_id,
+         slip_lot.po_id AS packing_slip_po_id,
+         COUNT(DISTINCT lines.id)::int AS line_count,
+         COALESCE(SUM(lines.line_total::numeric), 0)::text AS billed_project_total,
+         COALESCE(
+           ARRAY_AGG(lines.description ORDER BY lines.created_at, lines.id) FILTER (WHERE lines.description IS NOT NULL),
+           ARRAY[]::text[]
+         ) AS line_descriptions,
+         je.id AS journal_entry_id,
+         je.status AS journal_status,
+         je.memo AS journal_memo,
+         je.effective_date::text AS journal_effective_date
+       FROM ar_invoices inv
+       LEFT JOIN ar_invoice_lines lines ON lines.invoice_id = inv.id
+       LEFT JOIN p2_customers c ON c.customer_id = inv.customer_id
+       LEFT JOIN p2_lot_numbers inv_lot ON inv_lot.id = inv.lot_id
+       LEFT JOIN p2_packing_slips slip ON slip.id = inv.packing_slip_id
+       LEFT JOIN p2_lot_numbers slip_lot ON slip_lot.id = slip.lot_number_id
+       LEFT JOIN journal_entries je ON je.reference_uuid = inv.id
+       WHERE
+         lines.project_id IN ($1, $2)
+         OR inv.wad_id = ANY($4::uuid[])
+         OR ($3::int IS NOT NULL AND inv.po_id = $3::text)
+         OR ($3::int IS NOT NULL AND inv_lot.po_id = $3::int)
+         OR ($3::int IS NOT NULL AND slip_lot.po_id = $3::int)
+       GROUP BY inv.id, c.customer_name, inv_lot.po_id, slip_lot.po_id, je.id, je.status, je.memo, je.effective_date
+       ORDER BY inv.invoice_date DESC, inv.invoice_number DESC`,
+      [projectId, project.project_code, project.po_id, workOrderIds],
+    ).catch(() => []);
+
+    const invoiceIds = invoiceRows.map((row) => row.id);
+    const invoiceJournalIds = invoiceRows
+      .map((row) => row.journal_entry_id)
+      .filter((id): id is number => id != null);
+    const allJournalIds = Array.from(new Set([...journalIds, ...invoiceJournalIds]));
+
+    const journalLines: JournalLineEvidence[] = allJournalIds.length
       ? await pool.query<JournalLineEvidence>(
           `SELECT jl.journal_entry_id, coa.account_name, coa.account_number,
                   jl.debit_amount, jl.credit_amount, jl.allowability,
@@ -220,7 +312,7 @@ router.get('/transaction-evidence-map', authenticateToken, requireGlennj, async 
            LEFT JOIN chart_of_accounts coa ON coa.id = jl.account_id
            WHERE jl.journal_entry_id = ANY($1::int[])
            ORDER BY jl.journal_entry_id, jl.id`,
-          [journalIds],
+          [allJournalIds],
         )
       : [];
 
@@ -264,10 +356,12 @@ router.get('/transaction-evidence-map', authenticateToken, requireGlennj, async 
          OR (entity_type IN ('journal_entry', 'journal_entries') AND entity_id = ANY($3::text[]))
          OR (subject_type IN ('production_work_order', 'production_work_orders') AND subject_id = ANY($4::text[]))
          OR (entity_type IN ('production_work_order', 'production_work_orders') AND entity_id = ANY($4::text[]))
+         OR (subject_type IN ('ar_invoice', 'ar_invoices') AND subject_id = ANY($6::text[]))
+         OR (entity_type IN ('ar_invoice', 'ar_invoices') AND entity_id = ANY($6::text[]))
          OR (actor_id = ANY($5::int[]) AND action IN ('DAILY_CERTIFIED', 'DAILY_SUPERVISOR_APPROVED', 'TIME_CERTIFIED_ADMIN'))
        ORDER BY COALESCE(occurred_at, created_at) DESC
        LIMIT 250`,
-      [projectId, laborRecordIds, journalIds.map(String), workOrderIds, employeeIds],
+      [projectId, laborRecordIds, allJournalIds.map(String), workOrderIds, employeeIds, invoiceIds],
     );
 
     const linesByJournal = new Map<number, JournalLineEvidence[]>();
@@ -469,6 +563,105 @@ router.get('/transaction-evidence-map', authenticateToken, requireGlennj, async 
       }
     }
 
+    for (const invoice of invoiceRows) {
+      const invoiceId = `billing:${invoice.id}`;
+      const invoiceMissing = [
+        invoice.status ? null : 'Invoice status is missing.',
+      ].filter((item): item is string => !!item);
+
+      addNode(nodes, {
+        id: invoiceId,
+        type: 'billing',
+        label: `Invoice ${invoice.invoice_number}`,
+        subtitle: `${invoice.status} | ${money(invoice.billed_project_total)} billed to this project`,
+        status: invoiceMissing.length ? 'warning' : 'ok',
+        metrics: {
+          invoiceStatus: invoice.status,
+          projectBilled: money(invoice.billed_project_total),
+          invoiceTotal: money(invoice.total_amount),
+          lineCount: invoice.line_count,
+        },
+        details: {
+          invoiceId: invoice.id,
+          invoiceNumber: invoice.invoice_number,
+          invoiceDate: invoice.invoice_date,
+          dueDate: invoice.due_date,
+          status: invoice.status,
+          customerId: invoice.customer_id,
+          customerName: invoice.customer_name,
+          packingSlipId: invoice.packing_slip_id,
+          lotId: invoice.lot_id,
+          createdBy: invoice.created_by,
+          createdAt: invoice.created_at,
+          postedAt: invoice.posted_at,
+          postedBy: invoice.posted_by,
+          sentAt: invoice.sent_at,
+          matchedProjectIds: invoice.matched_project_ids,
+          invoicePoId: invoice.invoice_po_id,
+          invoicePoOverride: invoice.invoice_po_override,
+          lotPoId: invoice.lot_po_id,
+          packingSlipPoId: invoice.packing_slip_po_id,
+          lineDescriptions: invoice.line_descriptions,
+        },
+        links: [{ label: 'Open invoice', href: `/finance/invoices/${invoice.id}`, kind: 'app' }],
+        missingEvidence: invoiceMissing,
+      });
+      addEdge(edges, {
+        id: `project:${project.id}->${invoiceId}`,
+        from: `project:${project.id}`,
+        to: invoiceId,
+        label: 'customer billing',
+        status: invoiceMissing.length ? 'warning' : 'ok',
+      });
+
+      if (invoice.journal_entry_id) {
+        const journalId = `journal:${invoice.journal_entry_id}`;
+        const linkedLines = linesByJournal.get(invoice.journal_entry_id) ?? [];
+        addNode(nodes, {
+          id: journalId,
+          type: 'journal',
+          label: `Journal entry #${invoice.journal_entry_id}`,
+          subtitle: invoice.journal_status || 'Unknown status',
+          status: invoice.journal_status === 'POSTED' ? 'ok' : 'warning',
+          metrics: {
+            status: invoice.journal_status,
+            debitTotal: money(linkedLines.reduce((sum, line) => sum + Number(line.debit_amount ?? 0), 0)),
+            creditTotal: money(linkedLines.reduce((sum, line) => sum + Number(line.credit_amount ?? 0), 0)),
+          },
+          details: {
+            memo: invoice.journal_memo,
+            effectiveDate: invoice.journal_effective_date,
+            sourceInvoice: invoice.invoice_number,
+            lines: linkedLines,
+          },
+          missingEvidence: invoice.journal_status === 'POSTED' ? [] : ['Invoice journal entry is not POSTED.'],
+        });
+        addEdge(edges, {
+          id: `${invoiceId}->${journalId}`,
+          from: invoiceId,
+          to: journalId,
+          label: 'posted to AR',
+          status: invoice.journal_status === 'POSTED' ? 'ok' : 'warning',
+        });
+      } else {
+        addNode(nodes, {
+          id: `missing:invoice-journal:${invoice.id}`,
+          type: 'missing',
+          label: `Invoice ${invoice.invoice_number} not posted`,
+          subtitle: 'No AR journal entry found for this invoice',
+          status: 'missing',
+          missingEvidence: ['Invoice exists but has no linked AR journal entry.'],
+        });
+        addEdge(edges, {
+          id: `${invoiceId}->missing:invoice-journal:${invoice.id}`,
+          from: invoiceId,
+          to: `missing:invoice-journal:${invoice.id}`,
+          label: 'posting evidence missing',
+          status: 'missing',
+        });
+      }
+    }
+
     for (const audit of auditRows) {
       const auditId = `audit:${audit.id}`;
       addNode(nodes, {
@@ -488,6 +681,8 @@ router.get('/transaction-evidence-map', authenticateToken, requireGlennj, async 
       let parentId = `project:${project.id}`;
       if (audit.subject_type?.includes('journal') && audit.subject_id) parentId = `journal:${audit.subject_id}`;
       if (audit.entity_type?.includes('journal') && audit.entity_id) parentId = `journal:${audit.entity_id}`;
+      if (audit.subject_type?.includes('ar_invoice') && audit.subject_id) parentId = `billing:${audit.subject_id}`;
+      if (audit.entity_type?.includes('ar_invoice') && audit.entity_id) parentId = `billing:${audit.entity_id}`;
       if (audit.subject_type?.includes('labor') && audit.subject_id) parentId = `labor:${audit.subject_id}`;
       if (audit.entity_type?.includes('labor') && audit.entity_id) parentId = `labor:${audit.entity_id}`;
       if (audit.subject_type?.includes('production_work_order') && audit.subject_id) parentId = `work_order:${audit.subject_id}`;
@@ -537,7 +732,8 @@ router.get('/transaction-evidence-map', authenticateToken, requireGlennj, async 
         laborRecordCount: laborRows.length,
         employeeCount: employeeIds.length,
         workOrderCount: workOrderIds.length,
-        journalEntryCount: journalIds.length,
+        journalEntryCount: allJournalIds.length,
+        customerInvoiceCount: invoiceRows.length,
         documentCount: projectDocs.length,
         auditEventCount: auditRows.length,
         totalHours: Number(totalHours.toFixed(4)),

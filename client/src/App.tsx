@@ -185,6 +185,7 @@ import JESSICAPDashboard from './pages/JESSICAPDashboard';
 import BRIANDashboard from './pages/BRIANDashboard';
 import TOMASMDashboard from './pages/TOMASMDashboard';
 import JOEYBTestDashboard from './pages/JOEYBTestDashboard';
+import ANGIETTestDashboard from './pages/ANGIETTestDashboard';
 import TANDYMTestDashboard from './pages/TANDYMTestDashboard';
 import OrderDepartmentTransfer from './pages/OrderDepartmentTransfer';
 import { BOMAdministration } from './pages/BOMAdministration';
@@ -942,6 +943,10 @@ function App() {
                   <Route path="/jessicap-dashboard" component={JESSICAPDashboard} />
                   <Route path="/brian-dashboard" component={BRIANDashboard} />
                   <Route path="/tomasm-dashboard" component={TOMASMDashboard} />
+                  <Route
+                    path="/angiet-dashboard"
+                    component={ANGIETTestDashboard}
+                  />
                   <Route
                     path="/joeyb-dashboard"
                     component={JOEYBTestDashboard}

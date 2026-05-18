@@ -181,7 +181,7 @@ router.post('/lots', authenticateToken, requirePermission('shipping.release_ship
       });
     }
 
-    const poNumbers = [...new Set(serials.map((s) => s.poNumber))];
+    const poNumbers = Array.from(new Set(serials.map((s) => s.poNumber)));
     if (poNumbers.length > 1) {
       return res.status(400).json({
         error: 'All serials must belong to the same PO',
@@ -252,6 +252,13 @@ router.get('/lots/existing-shipments', async (req: Request, res: Response) => {
       slip_number: string;
       cert_id: string | null;
       cert_number: string | null;
+      invoice_id: string | null;
+      invoice_number: string | null;
+      invoice_status: string | null;
+      invoice_total_amount: string | null;
+      journal_entry_id: number | null;
+      journal_entry_status: string | null;
+      journal_line_count: number | null;
     }>(`
       SELECT
         l.po_id,
@@ -260,10 +267,37 @@ router.get('/lots/existing-shipments', async (req: Request, res: Response) => {
         ps.id          AS slip_id,
         ps.packing_slip_number AS slip_number,
         cc.id          AS cert_id,
-        cc.certificate_number  AS cert_number
+        cc.certificate_number  AS cert_number,
+        inv.id AS invoice_id,
+        inv.invoice_number,
+        inv.status AS invoice_status,
+        inv.total_amount AS invoice_total_amount,
+        je.id AS journal_entry_id,
+        je.status AS journal_entry_status,
+        COALESCE(jlc.line_count, 0)::int AS journal_line_count
       FROM p2_lot_numbers l
       JOIN p2_packing_slips ps ON ps.id = l.packing_slip_id
       LEFT JOIN p2_certificates_of_conformance cc ON cc.id = l.certificate_id
+      LEFT JOIN LATERAL (
+        SELECT id, invoice_number, status, total_amount
+        FROM ar_invoices
+        WHERE packing_slip_id = ps.id OR lot_id = l.id
+        ORDER BY created_at DESC
+        LIMIT 1
+      ) inv ON true
+      LEFT JOIN LATERAL (
+        SELECT id, status
+        FROM journal_entries
+        WHERE reference_uuid = inv.id
+          AND transaction_type = 'AR_INVOICE'
+        ORDER BY created_at DESC
+        LIMIT 1
+      ) je ON true
+      LEFT JOIN LATERAL (
+        SELECT COUNT(*)::int AS line_count
+        FROM journal_lines
+        WHERE journal_entry_id = je.id
+      ) jlc ON true
       WHERE l.po_id IS NOT NULL AND l.packing_slip_id IS NOT NULL
       ORDER BY l.created_at DESC
     `);
@@ -1315,11 +1349,37 @@ router.get('/shipments/:lotId', async (req: Request, res: Response) => {
       );
     }
 
-    // Fetch invoice if linked to this lot
+    // Fetch invoice and posting status if linked to this lot or packing slip
     const invoiceRows = await pool.query(
-      `SELECT id, invoice_number, invoice_date, due_date, total_amount, status
-       FROM ar_invoices WHERE lot_id = $1 LIMIT 1`,
-      [lotId]
+      `SELECT
+         inv.id,
+         inv.invoice_number,
+         inv.invoice_date,
+         inv.due_date,
+         inv.total_amount,
+         inv.status,
+         inv.packing_slip_id,
+         je.id AS journal_entry_id,
+         je.status AS journal_entry_status,
+         COALESCE(jlc.line_count, 0)::int AS journal_line_count
+       FROM ar_invoices inv
+       LEFT JOIN LATERAL (
+         SELECT id, status
+         FROM journal_entries
+         WHERE reference_uuid = inv.id
+           AND transaction_type = 'AR_INVOICE'
+         ORDER BY created_at DESC
+         LIMIT 1
+       ) je ON true
+       LEFT JOIN LATERAL (
+         SELECT COUNT(*)::int AS line_count
+         FROM journal_lines
+         WHERE journal_entry_id = je.id
+       ) jlc ON true
+       WHERE inv.lot_id = $1 OR ($2::uuid IS NOT NULL AND inv.packing_slip_id = $2::uuid)
+       ORDER BY inv.created_at DESC
+       LIMIT 1`,
+      [lotId, lot.packing_slip_id]
     );
     const invoice = invoiceRows.length ? invoiceRows[0] : null;
 

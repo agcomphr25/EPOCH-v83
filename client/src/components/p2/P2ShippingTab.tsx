@@ -24,6 +24,7 @@ import {
   ClipboardCheck,
   Zap,
   ExternalLink,
+  Receipt,
 } from 'lucide-react';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
@@ -71,7 +72,26 @@ type CreatedShipment = {
   slipNumber: string;
   certId?: string;
   certNumber?: string;
+  invoiceId?: string;
+  invoiceNumber?: string;
+  invoiceStatus?: string;
+  invoiceTotalAmount?: string;
+  journalEntryId?: number;
+  journalEntryStatus?: string;
+  journalLineCount?: number;
 };
+
+function invoiceStatusColor(status?: string) {
+  switch (status?.toUpperCase()) {
+    case 'DRAFT': return 'bg-blue-50 text-blue-700 border-blue-200';
+    case 'REVIEW': return 'bg-orange-50 text-orange-700 border-orange-200';
+    case 'POSTED': return 'bg-indigo-50 text-indigo-700 border-indigo-200';
+    case 'SENT': return 'bg-teal-50 text-teal-700 border-teal-200';
+    case 'PAID': return 'bg-green-50 text-green-800 border-green-200';
+    case 'VOID': return 'bg-gray-50 text-gray-600 border-gray-200';
+    default: return 'bg-gray-50 text-gray-700 border-gray-200';
+  }
+}
 
 export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds = [] }: { initialPO?: string; initialUnits?: string; selectedPOIds?: number[] } = {}) {
   const [, setLocation] = useLocation();
@@ -91,6 +111,7 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
   const [createdShipments, setCreatedShipments] = useState<Record<string, CreatedShipment[]>>({});
   const [creatingShipmentFor, setCreatingShipmentFor] = useState<string | null>(null);
   const [generatingCertFor, setGeneratingCertFor] = useState<string | null>(null);
+  const [creatingInvoiceFor, setCreatingInvoiceFor] = useState<string | null>(null);
   const [summaryModalPO, setSummaryModalPO] = useState<string | null>(null);
   const [summaryModalSerials, setSummaryModalSerials] = useState<SerializedUnit[]>([]);
 
@@ -113,6 +134,13 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
     slip_number: string;
     cert_id: string | null;
     cert_number: string | null;
+    invoice_id: string | null;
+    invoice_number: string | null;
+    invoice_status: string | null;
+    invoice_total_amount: string | null;
+    journal_entry_id: number | null;
+    journal_entry_status: string | null;
+    journal_line_count: number | null;
   };
 
   const { data: existingShipmentRows = [] } = useQuery<ExistingShipmentRow[]>({
@@ -147,6 +175,13 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
           slipNumber: row.slip_number,
           certId: row.cert_id ?? undefined,
           certNumber: row.cert_number ?? undefined,
+          invoiceId: row.invoice_id ?? undefined,
+          invoiceNumber: row.invoice_number ?? undefined,
+          invoiceStatus: row.invoice_status ?? undefined,
+          invoiceTotalAmount: row.invoice_total_amount ?? undefined,
+          journalEntryId: row.journal_entry_id ?? undefined,
+          journalEntryStatus: row.journal_entry_status ?? undefined,
+          journalLineCount: row.journal_line_count ?? undefined,
         };
         if (existingIdx === -1) {
           next[poNumber] = [...next[poNumber], serverEntry];
@@ -407,6 +442,47 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
       toast({ title: 'CoC Failed', description: err?.message || 'Failed to generate certificate', variant: 'destructive' });
     } finally {
       setGeneratingCertFor(null);
+    }
+  };
+
+  const handleCreateInvoice = async (poNumber: string, shipment: CreatedShipment) => {
+    setCreatingInvoiceFor(shipment.slipId);
+    try {
+      const invoice = await apiRequest(`/api/ar-invoices/from-packing-slip/${shipment.slipId}`, {
+        method: 'POST',
+      });
+      setCreatedShipments((prev) => {
+        const list = prev[poNumber] ?? [];
+        return {
+          ...prev,
+          [poNumber]: list.map((s) =>
+            s.slipId === shipment.slipId
+              ? {
+                  ...s,
+                  invoiceId: invoice?.id,
+                  invoiceNumber: invoice?.invoiceNumber,
+                  invoiceStatus: invoice?.status,
+                }
+              : s
+          ),
+        };
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/lots/existing-shipments'] });
+      queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === '/api/ar-invoices' });
+      toast({
+        title: 'Invoice ready for review',
+        description: invoice?.invoiceNumber
+          ? `Invoice ${invoice.invoiceNumber} was created from packing slip ${shipment.slipNumber}.`
+          : `Invoice was created from packing slip ${shipment.slipNumber}.`,
+      });
+    } catch (err: any) {
+      toast({
+        title: 'Invoice creation failed',
+        description: err?.message || 'Unable to create invoice from this packing slip.',
+        variant: 'destructive',
+      });
+    } finally {
+      setCreatingInvoiceFor(null);
     }
   };
 
@@ -909,6 +985,53 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
                                 <><ClipboardCheck className="w-3 h-3 mr-1" />Generate CoC</>
                               )}
                             </Button>
+                          )}
+                          {shipment.invoiceId ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                              onClick={() => setLocation(`/finance/invoices/${shipment.invoiceId}`)}
+                            >
+                              <Receipt className="w-3 h-3 mr-1" />Invoice {shipment.invoiceNumber}
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                              disabled={creatingInvoiceFor === shipment.slipId}
+                              onClick={() => handleCreateInvoice(group.poNumber, shipment)}
+                            >
+                              {creatingInvoiceFor === shipment.slipId ? (
+                                <><Loader2 className="w-3 h-3 mr-1 animate-spin" />Creating...</>
+                              ) : (
+                                <><Receipt className="w-3 h-3 mr-1" />Create Invoice</>
+                              )}
+                            </Button>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                          {shipment.invoiceId ? (
+                            <>
+                              <Badge variant="outline" className={invoiceStatusColor(shipment.invoiceStatus)}>
+                                Invoice {shipment.invoiceStatus || 'created'}
+                              </Badge>
+                              {shipment.journalEntryId ? (
+                                <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">
+                                  JE #{shipment.journalEntryId} {shipment.journalEntryStatus || 'POSTED'}
+                                  {shipment.journalLineCount ? ` (${shipment.journalLineCount} lines)` : ''}
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+                                  JE pending until invoice is posted
+                                </Badge>
+                              )}
+                            </>
+                          ) : (
+                            <Badge variant="outline" className="bg-gray-50 text-gray-600 border-gray-200">
+                              No invoice created
+                            </Badge>
                           )}
                         </div>
                       </div>

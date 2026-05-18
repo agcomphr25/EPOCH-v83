@@ -276,6 +276,29 @@ router.get('/', async (req: Request, res: Response) => {
         retainageAmount: arInvoices.retainageAmount,
         sentTo: arInvoices.sentTo,
         sentCc: arInvoices.sentCc,
+        journalEntryId: sql<number | null>`(
+          SELECT je.id
+          FROM journal_entries je
+          WHERE je.reference_uuid = ${arInvoices.id}
+            AND je.transaction_type = 'AR_INVOICE'
+          ORDER BY je.created_at DESC
+          LIMIT 1
+        )`,
+        journalEntryStatus: sql<string | null>`(
+          SELECT je.status
+          FROM journal_entries je
+          WHERE je.reference_uuid = ${arInvoices.id}
+            AND je.transaction_type = 'AR_INVOICE'
+          ORDER BY je.created_at DESC
+          LIMIT 1
+        )`,
+        journalLineCount: sql<number>`COALESCE((
+          SELECT COUNT(*)::int
+          FROM journal_entries je
+          JOIN journal_lines jl ON jl.journal_entry_id = je.id
+          WHERE je.reference_uuid = ${arInvoices.id}
+            AND je.transaction_type = 'AR_INVOICE'
+        ), 0)`,
         amountPaid: sql<string>`COALESCE(
           (
             SELECT SUM(a.amount_applied)
@@ -538,6 +561,29 @@ router.get('/:id', async (req: Request, res: Response) => {
         createdBy: arInvoices.createdBy,
         createdAt: arInvoices.createdAt,
         updatedAt: arInvoices.updatedAt,
+        journalEntryId: sql<number | null>`(
+          SELECT je.id
+          FROM journal_entries je
+          WHERE je.reference_uuid = ${arInvoices.id}
+            AND je.transaction_type = 'AR_INVOICE'
+          ORDER BY je.created_at DESC
+          LIMIT 1
+        )`,
+        journalEntryStatus: sql<string | null>`(
+          SELECT je.status
+          FROM journal_entries je
+          WHERE je.reference_uuid = ${arInvoices.id}
+            AND je.transaction_type = 'AR_INVOICE'
+          ORDER BY je.created_at DESC
+          LIMIT 1
+        )`,
+        journalLineCount: sql<number>`COALESCE((
+          SELECT COUNT(*)::int
+          FROM journal_entries je
+          JOIN journal_lines jl ON jl.journal_entry_id = je.id
+          WHERE je.reference_uuid = ${arInvoices.id}
+            AND je.transaction_type = 'AR_INVOICE'
+        ), 0)`,
         amountPaid: sql<string>`COALESCE(
           (
             SELECT SUM(a.amount_applied)

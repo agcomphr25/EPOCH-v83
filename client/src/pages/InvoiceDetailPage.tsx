@@ -549,6 +549,29 @@ export default function InvoiceDetailPage() {
 
               <Separator className="my-4" />
 
+              <div>
+                <p className="text-sm font-medium mb-2">Accounting Posting</p>
+                {invoice.journalEntryId ? (
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
+                    <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">
+                      JE #{invoice.journalEntryId}
+                    </Badge>
+                    <Badge variant="outline">
+                      {invoice.journalEntryStatus || 'POSTED'}
+                    </Badge>
+                    <span className="text-muted-foreground">
+                      {invoice.journalLineCount || 0} journal line{Number(invoice.journalLineCount || 0) === 1 ? '' : 's'} created from this invoice.
+                    </span>
+                  </div>
+                ) : (
+                  <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                    No journal entry has been created yet. Posting this invoice will create the AR invoice JE.
+                  </div>
+                )}
+              </div>
+
+              <Separator className="my-4" />
+
               <div className="flex flex-col items-end gap-1">
                 <div className="flex justify-between w-56">
                   <span className="text-muted-foreground">Subtotal:</span>

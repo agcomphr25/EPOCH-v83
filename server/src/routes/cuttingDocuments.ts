@@ -1,5 +1,8 @@
 import { Router } from 'express';
+import { randomUUID } from 'crypto';
+import fs from 'fs/promises';
 import multer from 'multer';
+import path from 'path';
 import { storage } from '../../storage';
 import { insertCuttingDocumentSchema } from '../../schema';
 import {
@@ -13,6 +16,32 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 100 * 1024 * 1024 },
 });
+const localUploadDir = path.join(process.cwd(), 'uploads', 'cutting-documents');
+
+function safeUploadName(fileName: string) {
+  const parsed = path.parse(fileName || 'cutting-document');
+  const base = parsed.name
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80) || 'cutting-document';
+  const ext = parsed.ext.replace(/[^a-zA-Z0-9.]/g, '').slice(0, 20);
+  return `${randomUUID()}-${base}${ext}`;
+}
+
+async function saveLocalCuttingDocument(file: Express.Multer.File) {
+  await fs.mkdir(localUploadDir, { recursive: true });
+  const fileName = safeUploadName(file.originalname);
+  const filePath = path.join(localUploadDir, fileName);
+  await fs.writeFile(filePath, file.buffer);
+  return `/uploads/cutting-documents/${fileName}`;
+}
+
+async function deleteLocalCuttingDocument(fileUrl: string) {
+  if (!fileUrl.startsWith('/uploads/cutting-documents/')) return;
+  const fileName = path.basename(fileUrl);
+  await fs.unlink(path.join(localUploadDir, fileName));
+}
 
 router.get('/', async (req, res) => {
   try {
@@ -67,22 +96,28 @@ router.post('/upload', (req, res) => {
         return res.status(400).json({ error: 'No file received' });
       }
 
-      const provider = getFileStorageProvider();
-      const fileUrl = await provider.uploadBuffer({
-        buffer: file.buffer,
-        fileName: file.originalname || 'cutting-document',
-        contentType: file.mimetype || 'application/octet-stream',
-        scope: 'cutting-documents',
-      });
-
+      let fileUrl: string;
       try {
-        const user = (req as any).user;
-        await getFileStorageProviderForObjectPath(fileUrl).setPublicReadPolicy(
-          fileUrl,
-          user?.id?.toString() || 'system',
-        );
-      } catch (aclError) {
-        console.warn('[CuttingDocuments] Failed to set ACL policy after upload:', aclError);
+        const provider = getFileStorageProvider();
+        fileUrl = await provider.uploadBuffer({
+          buffer: file.buffer,
+          fileName: file.originalname || 'cutting-document',
+          contentType: file.mimetype || 'application/octet-stream',
+          scope: 'cutting-documents',
+        });
+
+        try {
+          const user = (req as any).user;
+          await getFileStorageProviderForObjectPath(fileUrl).setPublicReadPolicy(
+            fileUrl,
+            user?.id?.toString() || 'system',
+          );
+        } catch (aclError) {
+          console.warn('[CuttingDocuments] Failed to set ACL policy after upload:', aclError);
+        }
+      } catch (storageError) {
+        console.warn('[CuttingDocuments] Object storage upload failed; falling back to local uploads:', storageError);
+        fileUrl = await saveLocalCuttingDocument(file);
       }
 
       const parsed = insertCuttingDocumentSchema.safeParse({
@@ -94,7 +129,11 @@ router.post('/upload', (req, res) => {
       });
       if (!parsed.success) {
         try {
-          await getFileStorageProviderForObjectPath(fileUrl).deleteObject(fileUrl);
+          if (fileUrl.startsWith('/uploads/cutting-documents/')) {
+            await deleteLocalCuttingDocument(fileUrl);
+          } else {
+            await getFileStorageProviderForObjectPath(fileUrl).deleteObject(fileUrl);
+          }
         } catch (cleanupError) {
           console.warn('[CuttingDocuments] Failed to clean up uploaded object after validation error:', cleanupError);
         }
@@ -127,7 +166,11 @@ router.delete('/:id', async (req, res) => {
     }
     // Best-effort: remove the underlying object from storage to prevent orphans
     try {
-      await getFileStorageProviderForObjectPath(deleted.fileUrl).deleteObject(deleted.fileUrl);
+      if (deleted.fileUrl.startsWith('/uploads/cutting-documents/')) {
+        await deleteLocalCuttingDocument(deleted.fileUrl);
+      } else {
+        await getFileStorageProviderForObjectPath(deleted.fileUrl).deleteObject(deleted.fileUrl);
+      }
     } catch (storageErr) {
       console.warn('[CuttingDocuments] Failed to delete object from storage:', storageErr);
     }

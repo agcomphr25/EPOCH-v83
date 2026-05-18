@@ -468,6 +468,7 @@ router.get('/:projectId/summary', h(async (req, res) => {
         AND status NOT IN ('CANCELLED', 'CANCELED')
         AND NOT (
           work_order_number LIKE 'WAD-%'
+          AND status NOT IN ('COMPLETE', 'COMPLETED', 'CLOSED')
           AND EXISTS (
             SELECT 1 FROM p2_superseding_parts psp
             WHERE psp.part_number = LOWER(TRIM(production_work_orders.part_number))
@@ -597,6 +598,7 @@ router.get('/:projectId/summary', h(async (req, res) => {
         AND wo2.status NOT IN ('CANCELLED', 'CANCELED')
         AND NOT (
           wo2.work_order_number LIKE 'WAD-%'
+          AND wo2.status NOT IN ('COMPLETE', 'COMPLETED', 'CLOSED')
           AND EXISTS (
             SELECT 1
             FROM (
@@ -694,6 +696,7 @@ router.get('/:projectId/summary', h(async (req, res) => {
          AND status NOT IN ('CANCELLED', 'CANCELED')
          AND NOT (
            work_order_number LIKE 'WAD-%'
+           AND status NOT IN ('COMPLETE', 'COMPLETED', 'CLOSED')
            AND EXISTS (
              SELECT 1 FROM p2_superseding_parts psp
              WHERE psp.part_number = LOWER(TRIM(production_work_orders.part_number))
@@ -739,6 +742,7 @@ router.get('/:projectId/summary', h(async (req, res) => {
          AND status IN ('COMPLETE', 'COMPLETED', 'CLOSED')
          AND NOT (
            work_order_number LIKE 'WAD-%'
+           AND status NOT IN ('COMPLETE', 'COMPLETED', 'CLOSED')
            AND EXISTS (
              SELECT 1 FROM p2_superseding_parts psp
              WHERE psp.part_number = LOWER(TRIM(production_work_orders.part_number))
@@ -937,6 +941,7 @@ router.get('/:projectId/production', h(async (req, res) => {
         AND wo.status NOT IN ('CANCELLED', 'CANCELED')
         AND NOT (
           wo.work_order_number LIKE 'WAD-%'
+          AND wo.status NOT IN ('COMPLETE', 'COMPLETED', 'CLOSED')
           AND EXISTS (
             SELECT 1 FROM p2_superseding_parts psp
             WHERE psp.part_number = LOWER(TRIM(wo.part_number))

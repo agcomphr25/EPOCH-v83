@@ -14,6 +14,7 @@ import {
   type QuoteLineItem,
 } from '../../schema';
 import { and, eq, desc, sql } from 'drizzle-orm';
+import { cancelWadWorkOrdersSupersededByP2 } from '../services/wadSupersedeService';
 
 export interface WadSeedData {
   partNumber: string | null;
@@ -342,6 +343,15 @@ export async function ensureProjectHasWADFromCanonicalSources(
       dueDate,
       totalBudgetHours: seedData.totalBudgetHours,
       ...(seedData.departmentBudgets ? { departmentBudgets: seedData.departmentBudgets } : {}),
+    });
+
+    // Task #258: if a P2 PO is already linked to this project and covers this
+    // part number, the WAD we just generated is redundant. Cancel it
+    // inside the same tx so it never appears as PLANNED on the PM Control
+    // Center. Errors propagate so the WAD insert + supersede are atomic.
+    await cancelWadWorkOrdersSupersededByP2(projectId, {
+      tx,
+      sourceService: 'wadHelper.ensureProjectHasWADFromCanonicalSources',
     });
 
     return { workOrder: wo, created: true, seedData };

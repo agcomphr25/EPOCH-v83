@@ -398,7 +398,9 @@ router.get('/:projectId/summary', h(async (req, res) => {
       WHERE p.id = $1
     ),
     rows AS (
-      SELECT status FROM production_work_orders WHERE project_id = $1
+      -- Task #258: exclude WAD WOs cancelled by the P2 supersede rule.
+      SELECT status FROM production_work_orders
+       WHERE project_id = $1 AND status NOT IN ('CANCELLED', 'CANCELED')
       UNION ALL
       SELECT
         CASE
@@ -514,6 +516,8 @@ router.get('/:projectId/summary', h(async (req, res) => {
         ), 0)::numeric AS completed_qty
       FROM production_work_orders wo2
       WHERE wo2.project_id = $1
+        -- Task #258: exclude WAD WOs cancelled by the P2 supersede rule.
+        AND wo2.status NOT IN ('CANCELLED', 'CANCELED')
       UNION ALL
       SELECT
         COALESCE(p2po.quantity, 0)::numeric AS required_qty,
@@ -547,8 +551,11 @@ router.get('/:projectId/summary', h(async (req, res) => {
   if (itemAgg.groups.length > 0) {
     // Replace P2 portion of WO row counts with serialized item groups so
     // the KPI matches the rebuilt /production table.
+    // Task #258: exclude WAD WOs cancelled by the P2 supersede rule so KPIs
+    // match the /production table.
     const wadOnlyTotal = await pool.query<{ count: string }>(
-      `SELECT COUNT(*)::text AS count FROM production_work_orders WHERE project_id = $1`,
+      `SELECT COUNT(*)::text AS count FROM production_work_orders
+       WHERE project_id = $1 AND status NOT IN ('CANCELLED', 'CANCELED')`,
       [projectId],
     );
     const wadOnlyCompleted = await pool.query<{ count: string }>(
@@ -705,6 +712,8 @@ router.get('/:projectId/production', h(async (req, res) => {
       ) AS "blockReason"
     FROM production_work_orders wo
       WHERE wo.project_id = $2
+        -- Task #258: hide WAD WOs cancelled by the P2 supersede rule.
+        AND wo.status NOT IN ('CANCELLED', 'CANCELED')
     ),
     project_po_link AS (
       -- Highest priority: the explicit projects.po_id pointer.

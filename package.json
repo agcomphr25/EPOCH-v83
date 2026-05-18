@@ -15,6 +15,7 @@
     "lint:dates": "node scripts/check-format-dates.js",
     "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,css,md}\"",
     "backfill:p2-packets": "tsx server/scripts/backfillP2UsedPackets.ts",
+    "maintenance:backfill-stuck-p2-items": "tsx server/scripts/backfillStuckP2SerializedItems.ts",
     "maintenance:boot-repairs": "tsx server/scripts/maintenance/runBootRepairs.ts",
     "maintenance:safe-migrations": "tsx server/scripts/migrations/runSafeBootMigrations.ts",
     "predb:push": "npx tsx server/pre-deploy-migrate.ts",

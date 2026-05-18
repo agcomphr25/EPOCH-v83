@@ -2897,6 +2897,46 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     }
   });
 
+  async function applyCompletedTravelerStateToP2Items(items: any[]): Promise<any[]> {
+    if (!items.length) return items;
+
+    const serials = [...new Set(
+      items
+        .map((item: any) => String(item.serialNumber ?? item.serial_number ?? '').trim())
+        .filter(Boolean)
+        .map((serial: string) => serial.toLowerCase())
+    )];
+    if (!serials.length) return items;
+
+    const { pool: dbPool } = await import('../../db');
+    const completedTravelerRows = await dbPool.query(
+      `SELECT DISTINCT
+         LOWER(TRIM(serial_number)) AS serial,
+         MAX(completed_at) AS completed_at
+       FROM travelers
+       WHERE status = 'COMPLETED'
+         AND serial_number IS NOT NULL
+         AND LOWER(TRIM(serial_number)) = ANY($1::text[])
+       GROUP BY LOWER(TRIM(serial_number))`,
+      [serials]
+    );
+    const rows = (completedTravelerRows as any).rows ?? completedTravelerRows;
+    const completedBySerial = new Map<string, any>(
+      rows.map((row: any) => [row.serial, row.completed_at])
+    );
+
+    return items.map((item: any) => {
+      const key = String(item.serialNumber ?? item.serial_number ?? '').trim().toLowerCase();
+      if (!key || !completedBySerial.has(key)) return item;
+      return {
+        ...item,
+        status: 'COMPLETED',
+        completedAt: item.completedAt ?? item.completed_at ?? completedBySerial.get(key) ?? new Date(),
+        completed_at: item.completed_at ?? item.completedAt ?? completedBySerial.get(key) ?? new Date(),
+      };
+    });
+  }
+
   // P2 Control Center API Routes
   app.get('/api/p2/control-center/stats', async (req, res) => {
     try {
@@ -2912,12 +2952,31 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           FROM p2_purchase_orders
         `),
         pool.query(`
+          WITH item_state AS (
+            SELECT
+              psi.*,
+              EXISTS (
+                SELECT 1
+                FROM travelers t
+                WHERE t.status = 'COMPLETED'
+                  AND t.serial_number IS NOT NULL
+                  AND LOWER(TRIM(t.serial_number)) = LOWER(TRIM(psi.serial_number))
+              ) AS has_completed_traveler
+            FROM p2_serialized_items psi
+          )
           SELECT
-            COUNT(*) FILTER (WHERE status = 'SCHEDULED') AS "scheduledItems",
-            COUNT(*) FILTER (WHERE status NOT IN ('PENDING','SCHEDULED','COMPLETED','SHIPPED') AND status IS NOT NULL) AS "inProduction",
-            COUNT(*) FILTER (WHERE status = 'COMPLETED' AND completed_at > $1) AS "completedThisWeek",
-            COUNT(*) FILTER (WHERE status = 'FINAL_QC') AS "pendingQC"
-          FROM p2_serialized_items
+            COUNT(*) FILTER (WHERE status = 'SCHEDULED' AND NOT has_completed_traveler) AS "scheduledItems",
+            COUNT(*) FILTER (
+              WHERE status NOT IN ('PENDING','SCHEDULED','COMPLETED','SHIPPED')
+                AND status IS NOT NULL
+                AND NOT has_completed_traveler
+            ) AS "inProduction",
+            COUNT(*) FILTER (
+              WHERE (status = 'COMPLETED' OR has_completed_traveler)
+                AND COALESCE(completed_at, updated_at) > $1
+            ) AS "completedThisWeek",
+            COUNT(*) FILTER (WHERE status = 'FINAL_QC' AND NOT has_completed_traveler) AS "pendingQC"
+          FROM item_state
         `, [oneWeekAgo]),
       ]);
 
@@ -3040,7 +3099,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         'READY_FOR_PRODUCTION',
         'IN_PRODUCTION',
       ]);
-      const serializedItems = await storage.getP2SerializedItems({});
+      const serializedItems = await applyCompletedTravelerStateToP2Items(
+        await storage.getP2SerializedItems({})
+      );
       const poIdsWithSerializedUnits = new Set<number>();
       for (const s of serializedItems as any[]) {
         const poId = s.poId ?? s.po_id;
@@ -3160,7 +3221,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   app.get('/api/p2/control-center/scheduling-list', async (req, res) => {
     try {
       const { storage } = await import('../../storage');
-      const serializedItems = await storage.getP2SerializedItems({});
+      const serializedItems = await applyCompletedTravelerStateToP2Items(
+        await storage.getP2SerializedItems({})
+      );
       const pos = await storage.getAllP2PurchaseOrders();
       
       // Filter for items that are ACTIVE and either pending layup or in early production stages
@@ -3286,8 +3349,10 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const { storage } = await import('../../storage');
       
       // Get all active serialized items using storage method (which handles pool.query)
-      const allItems = await storage.getP2SerializedItems({ status: 'ACTIVE' });
-      const items = allItems || [];
+      const allItems = await applyCompletedTravelerStateToP2Items(
+        await storage.getP2SerializedItems({ status: 'ACTIVE' })
+      );
+      const items = (allItems || []).filter((item: any) => item.status === 'ACTIVE');
       const { pool: dbPool } = await import('../../db');
       const poIds = [...new Set(items.map((item: any) => item.poId ?? item.po_id).filter(Boolean))];
       const projectRows = poIds.length > 0

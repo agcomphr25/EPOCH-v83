@@ -113,7 +113,7 @@ function getDeptTimestampField(dept: string): string | null {
   return map[key] || null;
 }
 
-async function syncP2SerializedItemOnStepComplete(
+export async function syncP2SerializedItemOnStepComplete(
   traveler: { id: string; serialNumber?: string | null; partNumber?: string | null },
   completedStep: { departmentName: string; stepNumber: number },
   performedBy: string
@@ -121,14 +121,31 @@ async function syncP2SerializedItemOnStepComplete(
   try {
     if (!traveler.serialNumber) return;
 
+    // Trim + case-insensitive lookup that normalizes BOTH sides — the
+    // DB column may itself have leading/trailing whitespace, so a bare
+    // `ilike(col, trimmedInput)` is not enough. Do NOT restrict to
+    // status='ACTIVE' here — if we find a non-ACTIVE row we want to log
+    // and skip rather than silently miss the item (Task #257).
+    const trimmedSerial = traveler.serialNumber.trim();
     const serializedItem = await db.query.p2SerializedItems.findFirst({
-      where: and(
-        ilike(p2SerializedItems.serialNumber, traveler.serialNumber),
-        eq(p2SerializedItems.status, 'ACTIVE')
-      ),
+      where: sql`LOWER(TRIM(${p2SerializedItems.serialNumber})) = LOWER(TRIM(${trimmedSerial}))`,
     });
 
-    if (!serializedItem) return;
+    if (!serializedItem) {
+      console.warn(
+        `[P2 Sync] No p2_serialized_items row found for serial "${trimmedSerial}" ` +
+        `(traveler=${traveler.id}, step=${completedStep.stepNumber})`
+      );
+      return;
+    }
+
+    if (serializedItem.status !== 'ACTIVE') {
+      console.log(
+        `[P2 Sync] Skipping "${serializedItem.barcode}" — status is "${serializedItem.status}" ` +
+        `(traveler=${traveler.id}, step=${completedStep.stepNumber})`
+      );
+      return;
+    }
 
     let routing = serializedItem.partRoutingId
       ? await db.query.partRoutings.findFirst({
@@ -158,8 +175,35 @@ async function syncP2SerializedItemOnStepComplete(
 
     const stepDeptIndex = departmentSequence.findIndex(d => normalizeDept(d) === normalizedStepDept);
 
+    // Final-step fallback (Task #257): even if the completed step's dept
+    // doesn't appear in the routing sequence (or is "behind" the item),
+    // detect "this was the traveler's last step" and force-complete the
+    // item. Otherwise the item is stranded forever in Pending Layup /
+    // its current dept.
+    const remainingSteps = await db
+      .select({ id: travelerSteps.id, status: travelerSteps.status })
+      .from(travelerSteps)
+      .where(eq(travelerSteps.travelerId, traveler.id));
+    const noOpenStepsLeft = remainingSteps.every((s) => {
+      const st = String(s.status).toUpperCase();
+      return st !== 'NOT_STARTED' && st !== 'IN_PROGRESS' && st !== 'STARTED';
+    });
+
     if (normalizedStepDept !== normalizedItemDept) {
       if (stepDeptIndex < 0 || stepDeptIndex < currentIndex) {
+        if (noOpenStepsLeft) {
+          console.log(
+            `[P2 Sync] Step dept "${stepDept}" not in routing for "${serializedItem.barcode}" ` +
+            `but no open steps remain on traveler ${traveler.id} — force-completing.`
+          );
+          await forceCompleteP2SerializedItem(
+            serializedItem,
+            departmentSequence,
+            performedBy,
+            `Traveler ${traveler.id} fully completed (step ${completedStep.stepNumber}, dept "${stepDept}" not in routing sequence)`
+          );
+          return;
+        }
         console.log(`[P2 Sync] Step dept "${stepDept}" is behind or unknown vs item dept "${itemDept}" — skipping`);
         return;
       }
@@ -184,12 +228,22 @@ async function syncP2SerializedItemOnStepComplete(
       }
     }
 
-    if (targetIndex < departmentSequence.length) {
+    // If the routing says we'd advance past the end OR the traveler has
+    // no more open steps, terminate the item.
+    const shouldComplete = targetIndex >= departmentSequence.length || noOpenStepsLeft;
+
+    if (!shouldComplete) {
       updates.currentDepartment = nextDepartment;
       updates.currentStageIndex = targetIndex;
     } else {
       updates.status = 'COMPLETED';
       updates.completedAt = new Date();
+      // Backfill any remaining per-dept completion timestamps so the
+      // history is consistent with the COMPLETED status.
+      for (let i = currentIndex; i < departmentSequence.length; i++) {
+        const f = getDeptTimestampField(departmentSequence[i]);
+        if (f && !updates[f]) updates[f] = new Date();
+      }
     }
 
     const result = await db.update(p2SerializedItems)
@@ -202,22 +256,157 @@ async function syncP2SerializedItemOnStepComplete(
       return;
     }
 
+    const toDept = shouldComplete ? 'COMPLETED' : (nextDepartment || 'COMPLETED');
     await db.insert(p2SerializedItemEvents).values({
       serializedItemId: serializedItem.id,
       barcode: serializedItem.barcode,
       eventType: 'TRANSITION',
       fromDepartment: itemDept,
-      toDepartment: nextDepartment || 'COMPLETED',
+      toDepartment: toDept,
       fromStageIndex: currentIndex,
-      toStageIndex: targetIndex < departmentSequence.length ? targetIndex : null,
+      toStageIndex: shouldComplete ? null : targetIndex,
       performedBy,
       notes: `Synced from traveler step completion (${traveler.id}, step ${completedStep.stepNumber})`,
     });
 
-    console.log(`[P2 Sync] Advanced "${serializedItem.barcode}" from "${itemDept}" to "${nextDepartment || 'COMPLETED'}"`);
+    console.log(`[P2 Sync] Advanced "${serializedItem.barcode}" from "${itemDept}" to "${toDept}"`);
   } catch (err: any) {
-    console.error('[P2 Sync] Failed to sync serialized item on step complete:', err?.message);
+    // Task #257: emit a structured error log and write an audit event so
+    // silent drift becomes visible the next time someone looks.
+    console.error('[P2 Sync] Failed to sync serialized item on step complete:', {
+      travelerId: traveler.id,
+      serialNumber: traveler.serialNumber,
+      stepNumber: completedStep.stepNumber,
+      stepDept: completedStep.departmentName,
+      error: err?.message,
+      stack: err?.stack,
+    });
+    try {
+      if (traveler.serialNumber) {
+        const trimmed = traveler.serialNumber.trim();
+        const item = await db.query.p2SerializedItems.findFirst({
+          where: sql`LOWER(TRIM(${p2SerializedItems.serialNumber})) = LOWER(TRIM(${trimmed}))`,
+        });
+        if (item) {
+          await db.insert(p2SerializedItemEvents).values({
+            serializedItemId: item.id,
+            barcode: item.barcode,
+            eventType: 'NOTE',
+            fromDepartment: item.currentDepartment,
+            toDepartment: item.currentDepartment,
+            fromStageIndex: item.currentStageIndex || 0,
+            toStageIndex: item.currentStageIndex || 0,
+            performedBy: performedBy || 'system',
+            notes: `P2 Sync error on traveler ${traveler.id} step ${completedStep.stepNumber}: ${err?.message ?? 'unknown'}`,
+          });
+        }
+      }
+    } catch (_auditErr) {
+      // best-effort; do not throw out of the catch
+    }
   }
+}
+
+/**
+ * Task #257: belt-and-suspenders for the traveler-completion path.
+ * Force-advance the matching p2_serialized_items row to COMPLETED even
+ * if the per-step sync missed it (unknown dept, lookup miss, etc.).
+ * Safe to call multiple times — no-ops when the row is already
+ * COMPLETED / SCRAPPED / HOLD or when no row matches.
+ */
+async function forceCompleteP2SerializedItemForTraveler(
+  traveler: { id: string; serialNumber?: string | null; partNumber?: string | null },
+  performedBy: string
+): Promise<void> {
+  try {
+    if (!traveler.serialNumber) return;
+    const trimmedSerial = traveler.serialNumber.trim();
+    // Normalize BOTH sides — DB column may itself have whitespace.
+    const item = await db.query.p2SerializedItems.findFirst({
+      where: sql`LOWER(TRIM(${p2SerializedItems.serialNumber})) = LOWER(TRIM(${trimmedSerial}))`,
+    });
+    if (!item) {
+      console.warn(
+        `[P2 ForceComplete] No p2_serialized_items row for serial "${trimmedSerial}" (traveler=${traveler.id})`
+      );
+      return;
+    }
+    if (item.status !== 'ACTIVE') {
+      console.log(
+        `[P2 ForceComplete] "${item.barcode}" already in terminal state "${item.status}" — no action`
+      );
+      return;
+    }
+
+    let routing = item.partRoutingId
+      ? await db.query.partRoutings.findFirst({
+          where: eq(partRoutings.id, item.partRoutingId),
+        })
+      : null;
+    if (!routing && item.partNumber) {
+      routing = await db.query.partRoutings.findFirst({
+        where: and(eq(partRoutings.partNumber, item.partNumber), eq(partRoutings.isActive, true)),
+      });
+    }
+    const departmentSequence = routing?.departmentSequence
+      ? (routing.departmentSequence as string[])
+      : [...P2_DEPARTMENT_STAGES];
+
+    await forceCompleteP2SerializedItem(
+      item,
+      departmentSequence,
+      performedBy,
+      `Traveler ${traveler.id} marked COMPLETED — belt-and-suspenders force-complete`
+    );
+  } catch (err: any) {
+    console.error('[P2 ForceComplete] Failed:', {
+      travelerId: traveler.id,
+      serialNumber: traveler.serialNumber,
+      error: err?.message,
+      stack: err?.stack,
+    });
+  }
+}
+
+async function forceCompleteP2SerializedItem(
+  item: { id: string; barcode: string; currentDepartment: string; currentStageIndex: number | null; status: string },
+  departmentSequence: string[],
+  performedBy: string,
+  reason: string
+): Promise<void> {
+  const now = new Date();
+  const currentIndex = item.currentStageIndex || 0;
+  const updates: any = {
+    status: 'COMPLETED',
+    completedAt: now,
+    updatedAt: now,
+  };
+  for (let i = currentIndex; i < departmentSequence.length; i++) {
+    const f = getDeptTimestampField(departmentSequence[i]);
+    if (f && !updates[f]) updates[f] = now;
+  }
+  const result = await db.update(p2SerializedItems)
+    .set(updates)
+    .where(and(eq(p2SerializedItems.id, item.id), eq(p2SerializedItems.status, 'ACTIVE')))
+    .returning({ id: p2SerializedItems.id });
+
+  if (!result.length) {
+    console.log(`[P2 ForceComplete] "${item.barcode}" no-op (status changed concurrently)`);
+    return;
+  }
+
+  await db.insert(p2SerializedItemEvents).values({
+    serializedItemId: item.id,
+    barcode: item.barcode,
+    eventType: 'TRANSITION',
+    fromDepartment: item.currentDepartment,
+    toDepartment: 'COMPLETED',
+    fromStageIndex: currentIndex,
+    toStageIndex: null,
+    performedBy,
+    notes: reason,
+  });
+  console.log(`[P2 ForceComplete] "${item.barcode}" -> COMPLETED (${reason})`);
 }
 
 const router = Router();
@@ -920,6 +1109,11 @@ router.post('/:id/complete', requirePermission('travelers.finish'), async (req: 
         completedBy || 'system'
       );
     }
+
+    // Task #257: belt-and-suspenders. If the per-step sync missed the
+    // matching p2_serialized_items row (unknown dept, lookup miss, etc.)
+    // force-advance it to COMPLETED now that the traveler is done.
+    await forceCompleteP2SerializedItemForTraveler(traveler, completedBy || 'system');
 
     res.json(updatedTraveler);
   } catch (error: any) {

@@ -117,6 +117,14 @@ export default function PartsRequestsCard() {
     null
   );
   const requestedByEditedRef = useRef(false);
+  const initialProjectId = useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    return new URLSearchParams(window.location.search).get('projectId') || '';
+  }, []);
+  const openCreateFromQuery = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return new URLSearchParams(window.location.search).get('create') === '1';
+  }, []);
 
   const { data: sessionUser } = useQuery<SessionUser | null>({
     queryKey: ['/api/auth/session'],
@@ -129,7 +137,7 @@ export default function PartsRequestsCard() {
     partName: '',
     requestedBy: '',
     productionLine: '',
-    projectId: '',
+    projectId: initialProjectId,
     department: '',
     quantity: '',
     urgency: 'MEDIUM',
@@ -267,7 +275,7 @@ export default function PartsRequestsCard() {
       partName: '',
       requestedBy: getDefaultRequestor(sessionUser),
       productionLine: '',
-      projectId: '',
+      projectId: initialProjectId,
       department: '',
       quantity: '',
       urgency: 'MEDIUM',
@@ -303,6 +311,14 @@ export default function PartsRequestsCard() {
       prev.requestedBy ? prev : { ...prev, requestedBy: defaultRequestor }
     );
   }, [isCreateOpen, editingRequest, defaultRequestor]);
+
+  useEffect(() => {
+    if (!initialProjectId) return;
+    setFormData((prev) => ({ ...prev, projectId: initialProjectId }));
+    if (openCreateFromQuery) {
+      setIsCreateOpen(true);
+    }
+  }, [initialProjectId, openCreateFromQuery]);
 
   const handleSelectChange = (name: string, value: string) => {
     setFormData((prev) => ({ ...prev, [name]: value }));

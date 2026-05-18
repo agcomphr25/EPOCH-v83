@@ -117,6 +117,20 @@ interface ChargeCodeAggRow {
   actualHours: string;
 }
 
+interface DailyLaborRow {
+  workDate: string;
+  employeeId: number;
+  employeeName: string;
+  department: string | null;
+  chargeCode: string | null;
+  workOrderNumber: string | null;
+  travelerNumber: string | null;
+  budgetedHours: string;
+  actualHours: string;
+  activeMinutes: string;
+  openSessionCount: string;
+}
+
 interface LiveSessionRow {
   sessionId: number;
   employeeId: number;
@@ -136,6 +150,7 @@ interface CertRow {
 }
 
 interface MaterialSummaryRow {
+  plannedCost: string;
   committedCost: string;
   consumedCost: string;
 }
@@ -461,7 +476,13 @@ router.get('/:projectId/summary', h(async (req, res) => {
   const materialRes = await pool.query<MaterialCostRow>(`
     SELECT
       COALESCE(SUM(mlr.quantity_reserved * COALESCE(ii.unit_cost, 0)), 0) AS "committedMaterialCost",
-      0 AS "plannedMaterialCost"
+      (
+        SELECT COALESCE(SUM(
+          COALESCE(NULLIF(wo.wizard_data->'step5'->>'materialSpendCap', '')::numeric, 0)
+        ), 0)
+        FROM production_work_orders wo
+        WHERE wo.project_id = $1
+      ) AS "plannedMaterialCost"
     FROM material_lot_reservations mlr
     JOIN material_lots ml ON ml.id = mlr.material_lot_id
     LEFT JOIN inventory_items ii ON ii.id = ml.inventory_item_id
@@ -1097,30 +1118,35 @@ router.get('/:projectId/labor', h(async (req, res) => {
   // This replaces timekeeping.labor_authorizations per-charge-code authorization aggregation using
   // the native labor_budget_overrides (approved overrun authorizations) as the budget authority.
   const chargeCodeRes = await pool.query<ChargeCodeAggRow>(`
-    WITH project_work_order_budgets AS (
-      -- Compute per-work-order authorized budget from base + APPROVED overrides
+    WITH wad_budget_rows AS (
+      -- Pull the authored WAD Step 4 time bank into PM even before anyone clocks time.
       SELECT
         wo.id AS work_order_id,
-        COALESCE(wo.total_budget_hours::numeric, 0)
-        + COALESCE((
-          SELECT SUM(lbo.requested_hours::numeric)
-          FROM labor_budget_overrides lbo
-          WHERE lbo.production_work_order_id = wo.id
-            AND lbo.status = 'APPROVED'
-        ), 0) AS authorized_hours
+        NULLIF(TRIM(cc_row->>'chargeCode'), '') AS charge_code,
+        NULLIF(TRIM(cc_row->>'department'), '') AS department,
+        NULLIF(TRIM(cc_row->>'operation'), '') AS task_name,
+        COALESCE(NULLIF(cc_row->>'budgetedHours', '')::numeric, 0) AS budgeted_hours
       FROM production_work_orders wo
+      CROSS JOIN LATERAL jsonb_array_elements(
+        CASE
+          WHEN jsonb_typeof(wo.wizard_data->'step4'->'chargeCodes') = 'array'
+            THEN wo.wizard_data->'step4'->'chargeCodes'
+          ELSE '[]'::jsonb
+        END
+      ) AS cc_row
       WHERE wo.project_id = $1
+        AND COALESCE(NULLIF(cc_row->>'classification', ''), 'DIRECT') = 'DIRECT'
     ),
     charge_actuals AS (
       -- Actual hours per charge code within the project scope
       SELECT
-        pl.charge_code_id,
-        pl.production_work_order_id,
+        COALESCE(pl.charge_code, lcc.code) AS charge_code,
         SUM(EXTRACT(EPOCH FROM (pl.clock_out - pl.clock_in)) / 3600.0) AS actual_hours
       FROM punch_ledger pl
+      LEFT JOIN public.charge_codes lcc ON lcc.id = pl.charge_code_id
       WHERE pl.clock_out IS NOT NULL
         AND pl.labor_class = 'REGULAR'
-        AND pl.charge_code_id IS NOT NULL
+        AND COALESCE(pl.charge_code, lcc.code) IS NOT NULL
         AND (
           pl.production_work_order_id IN (
             SELECT id FROM production_work_orders WHERE project_id = $1
@@ -1129,39 +1155,30 @@ router.get('/:projectId/labor', h(async (req, res) => {
             SELECT id::text FROM travelers WHERE project_id = $1
           )
         )
-      GROUP BY pl.charge_code_id, pl.production_work_order_id
+      GROUP BY COALESCE(pl.charge_code, lcc.code)
     ),
     charge_code_totals AS (
-      -- Roll up actual hours; budget = sum of authorized_hours for each distinct work order
-      -- that has punch_ledger sessions against this charge code.
-      -- SUM(DISTINCT value) would miscount when two WOs share equal authorized_hours, so we
-      -- aggregate by distinct work_order_id in a subquery first, then sum the results.
       SELECT
-        ca.charge_code_id,
-        SUM(ca.actual_hours) AS actual_hours,
-        COALESCE((
-          SELECT SUM(pwob.authorized_hours)
-          FROM project_work_order_budgets pwob
-          WHERE pwob.work_order_id IN (
-            SELECT DISTINCT ca2.production_work_order_id
-            FROM charge_actuals ca2
-            WHERE ca2.charge_code_id = ca.charge_code_id
-              AND ca2.production_work_order_id IS NOT NULL
-          )
-        ), 0) AS budgeted_hours
-      FROM charge_actuals ca
-      GROUP BY ca.charge_code_id
+        COALESCE(wbr.charge_code, ca.charge_code) AS charge_code,
+        MAX(wbr.department) AS department,
+        MAX(wbr.task_name) AS task_name,
+        COALESCE(SUM(wbr.budgeted_hours), 0) AS budgeted_hours,
+        COALESCE(MAX(ca.actual_hours), 0) AS actual_hours
+      FROM wad_budget_rows wbr
+      FULL OUTER JOIN charge_actuals ca ON ca.charge_code = wbr.charge_code
+      WHERE COALESCE(wbr.charge_code, ca.charge_code) IS NOT NULL
+      GROUP BY COALESCE(wbr.charge_code, ca.charge_code)
     )
     SELECT
-      lcc.id AS "chargeCodeId",
-      lcc.code AS "chargeCode",
-      lcc.department,
-      lcc.description AS "taskName",
+      COALESCE(lcc.id, ABS(HASHTEXT(cct.charge_code))) AS "chargeCodeId",
+      cct.charge_code AS "chargeCode",
+      COALESCE(cct.department, lcc.department) AS department,
+      COALESCE(cct.task_name, lcc.description) AS "taskName",
       ROUND(cct.budgeted_hours::numeric, 2) AS "budgetedHours",
       ROUND(cct.actual_hours::numeric, 4) AS "actualHours"
     FROM charge_code_totals cct
-    JOIN public.charge_codes lcc ON lcc.id = cct.charge_code_id
-    ORDER BY lcc.code ASC
+    LEFT JOIN public.charge_codes lcc ON lcc.code = cct.charge_code
+    ORDER BY cct.charge_code ASC
   `, [projectId]);
 
   const chargeCodeRows = chargeCodeRes.map((r) => {
@@ -1277,6 +1294,104 @@ router.get('/:projectId/labor', h(async (req, res) => {
     authorizedForWork: authMap[r.employeeId] ?? false,
   }));
 
+  const dailyRes = await pool.query<DailyLaborRow>(`
+    WITH wad_budget_rows AS (
+      SELECT
+        wo.id AS work_order_id,
+        NULLIF(TRIM(cc_row->>'chargeCode'), '') AS charge_code,
+        NULLIF(TRIM(cc_row->>'department'), '') AS department,
+        COALESCE(NULLIF(cc_row->>'budgetedHours', '')::numeric, 0) AS budgeted_hours
+      FROM production_work_orders wo
+      CROSS JOIN LATERAL jsonb_array_elements(
+        CASE
+          WHEN jsonb_typeof(wo.wizard_data->'step4'->'chargeCodes') = 'array'
+            THEN wo.wizard_data->'step4'->'chargeCodes'
+          ELSE '[]'::jsonb
+        END
+      ) AS cc_row
+      WHERE wo.project_id = $1
+        AND COALESCE(NULLIF(cc_row->>'classification', ''), 'DIRECT') = 'DIRECT'
+    ),
+    work_order_budget AS (
+      SELECT
+        work_order_id,
+        SUM(budgeted_hours) AS budgeted_hours
+      FROM wad_budget_rows
+      GROUP BY work_order_id
+    )
+    SELECT
+      pl.clock_in::date::text AS "workDate",
+      pl.employee_id AS "employeeId",
+      e.name AS "employeeName",
+      pl.department AS department,
+      pl.charge_code AS "chargeCode",
+      wo.work_order_number AS "workOrderNumber",
+      t.traveler_number AS "travelerNumber",
+      COALESCE(MAX(wob.budgeted_hours), 0) AS "budgetedHours",
+      COALESCE(SUM(
+        CASE
+          WHEN pl.clock_out IS NOT NULL AND pl.labor_class = 'REGULAR'
+            THEN EXTRACT(EPOCH FROM (pl.clock_out - pl.clock_in)) / 3600.0
+          ELSE 0
+        END
+      ), 0) AS "actualHours",
+      COALESCE(SUM(
+        CASE
+          WHEN pl.clock_out IS NULL
+            THEN EXTRACT(EPOCH FROM (NOW() - pl.clock_in)) / 60.0
+          ELSE 0
+        END
+      ), 0) AS "activeMinutes",
+      COUNT(*) FILTER (WHERE pl.clock_out IS NULL)::text AS "openSessionCount"
+    FROM punch_ledger pl
+    JOIN employees e ON e.id = pl.employee_id
+    LEFT JOIN production_work_orders wo ON wo.id = pl.production_work_order_id
+    LEFT JOIN travelers t ON t.id::text = pl.traveler_id
+    LEFT JOIN work_order_budget wob
+      ON wob.work_order_id = COALESCE(pl.production_work_order_id, t.production_work_order_id)
+    WHERE (
+      pl.production_work_order_id IN (
+        SELECT id FROM production_work_orders WHERE project_id = $1
+      )
+      OR pl.traveler_id IN (
+        SELECT id::text FROM travelers WHERE project_id = $1
+      )
+    )
+    GROUP BY
+      pl.clock_in::date,
+      pl.employee_id,
+      e.name,
+      pl.department,
+      pl.charge_code,
+      wo.work_order_number,
+      t.traveler_number
+    ORDER BY pl.clock_in::date DESC, e.name ASC
+    LIMIT 30
+  `, [projectId]);
+
+  const dailyLaborRows = dailyRes.map((r) => {
+    const budgetedHoursForRow = parseFloat(r.budgetedHours) || 0;
+    const actualHoursForRow = parseFloat(r.actualHours) || 0;
+    const activeHoursForRow = (parseFloat(r.activeMinutes) || 0) / 60;
+    const usedHours = actualHoursForRow + activeHoursForRow;
+    return {
+      workDate: r.workDate,
+      employeeId: r.employeeId,
+      employeeName: r.employeeName,
+      department: r.department,
+      chargeCode: r.chargeCode,
+      workOrderNumber: r.workOrderNumber,
+      travelerNumber: r.travelerNumber,
+      budgetedHours: budgetedHoursForRow,
+      actualHours: actualHoursForRow,
+      activeHours: activeHoursForRow,
+      usedHours,
+      remainingHours: budgetedHoursForRow - usedHours,
+      percentConsumed: budgetedHoursForRow > 0 ? Math.round((usedHours / budgetedHoursForRow) * 100) : 0,
+      openSessionCount: parseInt(r.openSessionCount, 10) || 0,
+    };
+  });
+
   res.json({
     summary: {
       budgetedHours,
@@ -1287,6 +1402,7 @@ router.get('/:projectId/labor', h(async (req, res) => {
     },
     chargeCodeRows,
     liveFeed,
+    dailyLaborRows,
   });
 }));
 
@@ -1296,9 +1412,15 @@ router.get('/:projectId/materials', h(async (req, res) => {
 
   const summaryRes = await pool.query<MaterialSummaryRow>(`
     SELECT
+      COALESCE(wad_budget_sub.planned, 0) AS "plannedCost",
       COALESCE(committed_sub.committed, 0) + COALESCE(parts_request_sub.committed, 0) AS "committedCost",
       COALESCE(consumed_sub.consumed, 0) AS "consumedCost"
     FROM (
+      SELECT SUM(COALESCE(NULLIF(wo.wizard_data->'step5'->>'materialSpendCap', '')::numeric, 0)) AS planned
+      FROM production_work_orders wo
+      WHERE wo.project_id = $1
+    ) wad_budget_sub,
+    (
       SELECT SUM(mlr.quantity_reserved * COALESCE(ii.unit_cost, 0)) AS committed
       FROM material_lot_reservations mlr
       JOIN material_lots ml ON ml.id = mlr.material_lot_id
@@ -1409,13 +1531,14 @@ router.get('/:projectId/materials', h(async (req, res) => {
 
   const committedCost = parseFloat(summaryRes[0]?.committedCost) || 0;
   const consumedCost = parseFloat(summaryRes[0]?.consumedCost) || 0;
+  const plannedCost = parseFloat(summaryRes[0]?.plannedCost) || 0;
 
   res.json({
     summary: {
-      plannedCost: 0,
+      plannedCost,
       committedCost,
       consumedCost,
-      remainingCost: 0 - committedCost - consumedCost,
+      remainingCost: plannedCost - committedCost - consumedCost,
     },
     rows: [...rowsRes, ...partsRequestRowsRes],
   });

@@ -24,6 +24,7 @@ import {
   CheckCircle, Clock, AlertCircle, Package, TrendingUp, Calendar,
   Briefcase, Users, ShieldCheck, ShieldAlert, ShieldOff, HelpCircle,
   ChevronUp, ChevronDown, ArrowUpDown, LayoutDashboard, XCircle, Filter,
+  Plus,
 } from 'lucide-react';
 import { format, differenceInDays, differenceInBusinessDays, parseISO } from 'date-fns';
 
@@ -198,10 +199,28 @@ interface LiveSession {
   certificationStatus: 'Valid' | 'Missing' | 'Expired' | 'Unknown';
 }
 
+interface DailyLaborRow {
+  workDate: string;
+  employeeId: number;
+  employeeName: string;
+  department: string | null;
+  chargeCode: string | null;
+  workOrderNumber: string | null;
+  travelerNumber: string | null;
+  budgetedHours: number;
+  actualHours: number;
+  activeHours: number;
+  usedHours: number;
+  remainingHours: number;
+  percentConsumed: number;
+  openSessionCount: number;
+}
+
 interface LaborData {
   summary: LaborSummary;
   chargeCodeRows: ChargeCodeRow[];
   liveFeed: LiveSession[];
+  dailyLaborRows: DailyLaborRow[];
 }
 
 interface MaterialSummary {
@@ -796,7 +815,7 @@ function DirectLaborTab({ projectId }: { projectId: string }) {
 
   if (!data) return null;
 
-  const { summary, chargeCodeRows, liveFeed } = data;
+  const { summary, chargeCodeRows, liveFeed, dailyLaborRows = [] } = data;
 
   return (
     <div className="space-y-6">
@@ -902,6 +921,62 @@ function DirectLaborTab({ projectId }: { projectId: string }) {
         </Card>
       )}
 
+      {dailyLaborRows.length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold mb-3">Daily WAD Time Bank Usage</h3>
+          <div className="rounded-md border overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Employee</TableHead>
+                  <TableHead>WAD / Traveler</TableHead>
+                  <TableHead>Department</TableHead>
+                  <TableHead className="text-right">Used Today</TableHead>
+                  <TableHead className="text-right">WAD Bank</TableHead>
+                  <TableHead className="text-right">Remaining</TableHead>
+                  <TableHead className="text-right">%</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {dailyLaborRows.map((row) => (
+                  <TableRow key={`${row.workDate}-${row.employeeId}-${row.chargeCode ?? row.department ?? 'labor'}`}>
+                    <TableCell className="text-sm">{fmtDate(row.workDate)}</TableCell>
+                    <TableCell>
+                      <div className="font-medium text-sm">{row.employeeName}</div>
+                      {row.openSessionCount > 0 && (
+                        <Badge className="bg-blue-100 text-blue-700 mt-1">Clocked in</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      <div className="font-mono">{row.workOrderNumber ?? 'WAD'}</div>
+                      <div className="text-xs text-muted-foreground">{row.travelerNumber ?? row.chargeCode ?? 'Direct labor'}</div>
+                    </TableCell>
+                    <TableCell className="text-sm">{row.department ?? '—'}</TableCell>
+                    <TableCell className="text-right text-sm">{fmtHours(row.usedHours)}</TableCell>
+                    <TableCell className="text-right text-sm">{fmtHours(row.budgetedHours)}</TableCell>
+                    <TableCell className={`text-right text-sm ${row.remainingHours < 0 ? 'text-red-600 font-medium' : ''}`}>
+                      {fmtHours(row.remainingHours)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Badge className={
+                        row.percentConsumed > 100
+                          ? 'bg-red-100 text-red-700'
+                          : row.percentConsumed >= 80
+                            ? 'bg-yellow-100 text-yellow-700'
+                            : 'bg-green-100 text-green-700'
+                      }>
+                        {row.percentConsumed}%
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      )}
+
       <div>
         <div className="flex items-center gap-2 mb-3">
           <h3 className="text-sm font-semibold">Live Labor Feed</h3>
@@ -963,6 +1038,7 @@ type SortField = 'status' | 'itemCode' | 'qtyRequired' | 'qtyAllocated' | 'qtyIs
 type SortDir = 'asc' | 'desc';
 
 function MaterialBudgetTab({ projectId }: { projectId: string }) {
+  const [, navTo] = useLocation();
   const [sortField, setSortField] = useState<SortField>('status');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
 
@@ -1012,6 +1088,16 @@ function MaterialBudgetTab({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-6">
+      <div className="flex justify-end">
+        <Button
+          size="sm"
+          onClick={() => navTo(`/inventory/parts-request?projectId=${encodeURIComponent(projectId)}&create=1`)}
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          New Parts Request
+        </Button>
+      </div>
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard
           icon={<Package className="h-4 w-4" />}

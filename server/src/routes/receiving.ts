@@ -16,6 +16,7 @@ import {
   updateReceivingInspectionPlanSchema,
   materialLots,
   materialLotTransactions,
+  inventoryTransactionLedger,
   mediaLibrary,
   vendorPOs,
   vendorPOItems,
@@ -39,6 +40,7 @@ import { requireRole } from '../../middleware/auth';
 import { getFileStorageProvider, getStorageErrorResponse } from '../services/fileStorageProvider';
 import { createInventoryEvent } from '../services/inventoryEventService';
 import { recordInventoryLedgerEntry } from '../services/inventoryTransactionLedgerService';
+import { ensureInventoryItemForReceipt } from '../services/ensureInventoryItemForReceipt';
 
 const router = Router();
 
@@ -937,6 +939,79 @@ router.patch('/:id/units/:unitId', requireReceivingAccess, async (req: Request, 
           notes: `Receiving correction for unit ${saved.barcode}`,
         });
         await tx.insert(materialLotTransactions).values(txValues);
+
+        // ── Inventory Transaction Ledger write (Task #260) ──────────────
+        // The accept path writes an ITL RECEIVE row via handleAcceptedUnit,
+        // but the post-accept quantity-correction path was silently dropping
+        // the ledger entry — so RCC putaway/edit corrections never appeared
+        // in the Material Traceability Viewer. Mirror the receive pattern
+        // and key by (receiving:rcc-adjust, ${unitId}:${newQty}) so repeated
+        // saves of the same correction are idempotent.
+        const [lotRow] = await tx
+          .select({
+            inventoryItemId: materialLots.inventoryItemId,
+            materialPartNumber: materialLots.materialPartNumber,
+            unitOfMeasure: materialLots.unitOfMeasure,
+          })
+          .from(materialLots)
+          .where(eq(materialLots.id, quantityAdjustment.materialLotId))
+          .limit(1);
+
+        if (lotRow?.materialPartNumber) {
+          let invItemId = lotRow.inventoryItemId;
+          // Defence-in-depth: if the lot's FK is somehow missing an
+          // inventory_items row, materialise a placeholder so the ITL
+          // NOT NULL FK is satisfied.
+          if (!invItemId) {
+            const ensured = await ensureInventoryItemForReceipt(tx, {
+              agPartNumber: lotRow.materialPartNumber,
+              fallbackName: lotRow.materialPartNumber,
+              createdBy: `user:${actorName(user)}`,
+            });
+            invItemId = ensured.id;
+          }
+
+          const ledgerSourceModule = 'receiving:rcc-adjust';
+          const ledgerSourceRecordId = `${unitId}:${quantityAdjustment.after}`;
+          const [existingLedger] = await tx
+            .select({ id: inventoryTransactionLedger.id })
+            .from(inventoryTransactionLedger)
+            .where(
+              and(
+                eq(inventoryTransactionLedger.sourceModule, ledgerSourceModule),
+                eq(inventoryTransactionLedger.sourceRecordId, ledgerSourceRecordId),
+              ),
+            )
+            .limit(1);
+
+          if (!existingLedger) {
+            await recordInventoryLedgerEntry({
+              transactionType: 'ADJUST',
+              inventoryItemId: invItemId,
+              agPartNumber: lotRow.materialPartNumber,
+              lotId: quantityAdjustment.materialLotId,
+              unitOfMeasure: lotRow.unitOfMeasure ?? saved.uom ?? 'EA',
+              quantityBefore: quantityAdjustment.before,
+              quantityDelta: quantityAdjustment.delta,
+              quantityAfter: quantityAdjustment.after,
+              performedByUserId: user?.id ?? null,
+              performedByDisplayName: actorName(user),
+              reasonCode: 'RECEIPT_QTY_CORRECTION',
+              notes: `Receiving correction for unit ${saved.barcode} (receipt ${receiptId})`,
+              sourceModule: ledgerSourceModule,
+              sourceRecordId: ledgerSourceRecordId,
+              metadata: {
+                receiptId,
+                receivedUnitId: unitId,
+                unitBarcode: saved.barcode,
+                materialLotId: quantityAdjustment.materialLotId,
+                internalControlNumber: quantityAdjustment.internalControlNumber,
+                quantityBefore: quantityAdjustment.before,
+                quantityAfter: quantityAdjustment.after,
+              },
+            }, tx);
+          }
+        }
       }
 
       return [saved];

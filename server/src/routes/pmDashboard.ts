@@ -181,8 +181,8 @@ const ORDERED_PARTS_REQUEST_STATUSES = [
 // ─── Item-level progress helper ──────────────────────────────────────────────
 // Aggregates p2_serialized_items per (po_id, po_item_id) for a project so the
 // PM Control Center reports the same numbers as the order card. "Completed"
-// uses the same status set the order card uses (status = 'COMPLETED');
-// SCRAPPED / CANCELLED units are excluded from the totals.
+// includes rows whose serialized-item status is stale but whose matching
+// traveler has already completed; SCRAPPED / CANCELLED units are excluded.
 interface SerializedItemGroup {
   poId: number;
   poItemId: number;
@@ -248,6 +248,28 @@ async function getProjectSerializedItemAggregate(
     currentDepartment: string | null;
     dueDate: string | null;
   }>(`
+    WITH item_state AS (
+      SELECT
+        psi.*,
+        EXISTS (
+          SELECT 1
+          FROM travelers t
+          WHERE t.status = 'COMPLETED'
+            AND t.serial_number IS NOT NULL
+            AND LOWER(TRIM(t.serial_number)) = LOWER(TRIM(psi.serial_number))
+        ) AS has_completed_traveler,
+        COALESCE(
+          psi.completed_at,
+          (
+            SELECT MAX(t.completed_at)
+            FROM travelers t
+            WHERE t.status = 'COMPLETED'
+              AND t.serial_number IS NOT NULL
+              AND LOWER(TRIM(t.serial_number)) = LOWER(TRIM(psi.serial_number))
+          )
+        ) AS effective_completed_at
+      FROM p2_serialized_items psi
+    )
     SELECT
       psi.po_id::text AS "poId",
       psi.po_item_id::text AS "poItemId",
@@ -257,26 +279,31 @@ async function getProjectSerializedItemAggregate(
       COUNT(*) FILTER (
         WHERE psi.status NOT IN ('SCRAPPED', 'CANCELLED', 'CANCELED')
       )::text AS "totalUnits",
-      COUNT(*) FILTER (WHERE psi.status = 'COMPLETED')::text AS "completedUnits",
+      COUNT(*) FILTER (
+        WHERE psi.status = 'COMPLETED' OR psi.has_completed_traveler
+      )::text AS "completedUnits",
       COUNT(*) FILTER (
         WHERE psi.status NOT IN ('SCRAPPED', 'CANCELLED', 'CANCELED', 'COMPLETED')
+          AND NOT psi.has_completed_traveler
           AND psi.current_stage_index > 0
       )::text AS "inProductionUnits",
       COUNT(*) FILTER (
         WHERE psi.status NOT IN ('SCRAPPED', 'CANCELLED', 'CANCELED', 'COMPLETED')
+          AND NOT psi.has_completed_traveler
           AND psi.current_stage_index = 0
       )::text AS "pendingUnits",
       COUNT(*) FILTER (
-        WHERE psi.status = 'COMPLETED'
-          AND psi.completed_at IS NOT NULL
-          AND psi.completed_at::date = $2::date
+        WHERE (psi.status = 'COMPLETED' OR psi.has_completed_traveler)
+          AND psi.effective_completed_at IS NOT NULL
+          AND psi.effective_completed_at::date = $2::date
       )::text AS "completedTodayUnits",
       (
         SELECT psi2.current_department
-        FROM p2_serialized_items psi2
+        FROM item_state psi2
         WHERE psi2.po_id = psi.po_id
           AND psi2.po_item_id = psi.po_item_id
           AND psi2.status NOT IN ('SCRAPPED', 'CANCELLED', 'CANCELED', 'COMPLETED')
+          AND NOT psi2.has_completed_traveler
         GROUP BY psi2.current_department
         ORDER BY COUNT(*) DESC
         LIMIT 1
@@ -287,7 +314,7 @@ async function getProjectSerializedItemAggregate(
         WHERE p2po.p2_po_id = psi.po_id
           AND p2po.p2_po_item_id = psi.po_item_id
       ) AS "dueDate"
-    FROM p2_serialized_items psi
+    FROM item_state psi
     LEFT JOIN p2_purchase_order_items poi ON poi.id = psi.po_item_id
     WHERE psi.po_id = ANY($1::int[])
     GROUP BY psi.po_id, psi.po_item_id

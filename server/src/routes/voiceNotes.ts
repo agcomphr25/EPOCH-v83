@@ -16,6 +16,7 @@ import { convertWebmToWav, speechToText, textToSpeech } from '../../replit_integ
 const router = Router();
 
 const ALLOWED_USERS = ['agrace', 'glennj', 'tasham'];
+const VIEW_ALL_USERS = ['glennj'];
 const DEFAULT_LIMIT = 100;
 
 type VoiceName = 'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer';
@@ -107,7 +108,15 @@ function extractTags(transcription: string): string[] {
 
 function getCurrentUsername(req: Request): string | null {
   const user = (req as any).user;
-  return user?.username || null;
+  return user?.username?.toLowerCase() || null;
+}
+
+function canViewAllVoiceNotes(username: string | null): boolean {
+  return !!username && VIEW_ALL_USERS.includes(username);
+}
+
+function shouldRestrictVoiceNotesToOwner(username: string | null): username is string {
+  return !!username && !canViewAllVoiceNotes(username);
 }
 
 function summarizeTranscript(transcription: string): string {
@@ -354,7 +363,7 @@ router.get('/', checkVoiceNoteAccess, async (req: Request, res: Response) => {
     const username = getCurrentUsername(req);
     
     const conditions = [];
-    if (username) {
+    if (shouldRestrictVoiceNotesToOwner(username)) {
       conditions.push(eq(voiceNotes.recordedByUsername, username));
     }
     
@@ -390,11 +399,16 @@ router.get('/by-order/:orderId', checkVoiceNoteAccess, async (req: Request, res:
   try {
     const { orderId } = req.params;
     const username = getCurrentUsername(req);
+    const orderCondition = eq(voiceNotes.linkedOrderId, orderId);
     
     const notes = await db
       .select()
       .from(voiceNotes)
-      .where(username ? and(eq(voiceNotes.linkedOrderId, orderId), eq(voiceNotes.recordedByUsername, username)) : eq(voiceNotes.linkedOrderId, orderId))
+      .where(
+        shouldRestrictVoiceNotesToOwner(username)
+          ? and(orderCondition, eq(voiceNotes.recordedByUsername, username))
+          : orderCondition
+      )
       .orderBy(desc(voiceNotes.recordedAt));
     
     res.json(notes);
@@ -407,7 +421,9 @@ router.get('/by-order/:orderId', checkVoiceNoteAccess, async (req: Request, res:
 router.get('/analytics', checkVoiceNoteAccess, async (req: Request, res: Response) => {
   try {
     const username = getCurrentUsername(req);
-    const ownerCondition = username ? eq(voiceNotes.recordedByUsername, username) : undefined;
+    const ownerCondition = shouldRestrictVoiceNotesToOwner(username)
+      ? eq(voiceNotes.recordedByUsername, username)
+      : undefined;
     const unresolvedCondition = ownerCondition
       ? and(ownerCondition, eq(voiceNotes.isResolved, false))
       : eq(voiceNotes.isResolved, false);
@@ -556,11 +572,16 @@ router.get('/:id', checkVoiceNoteAccess, async (req: Request, res: Response) => 
   try {
     const { id } = req.params;
     const username = getCurrentUsername(req);
+    const noteCondition = eq(voiceNotes.id, id);
     
     const [note] = await db
       .select()
       .from(voiceNotes)
-      .where(username ? and(eq(voiceNotes.id, id), eq(voiceNotes.recordedByUsername, username)) : eq(voiceNotes.id, id));
+      .where(
+        shouldRestrictVoiceNotesToOwner(username)
+          ? and(noteCondition, eq(voiceNotes.recordedByUsername, username))
+          : noteCondition
+      );
     
     if (!note) {
       return res.status(404).json({ error: 'Voice note not found' });

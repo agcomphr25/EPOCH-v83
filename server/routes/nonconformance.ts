@@ -403,21 +403,6 @@ async function generateRmaNumber(): Promise<string> {
   return `${datePrefix}-${nextNumber}`;
 }
 
-function validateNcrClosure(data: z.infer<typeof insertNonconformanceRecordSchema>): string[] {
-  if (data.status !== 'Resolved') return [];
-
-  const missing: string[] = [];
-  if (!data.containmentAction?.trim()) missing.push('containment action');
-  if (!data.rootCause?.trim()) missing.push('root cause');
-  if (!data.correctiveAction?.trim()) missing.push('corrective action');
-  if (!data.dispositionRationale?.trim()) missing.push('disposition rationale');
-  if (data.effectivenessStatus !== 'effective') missing.push('effective effectiveness review');
-  if (data.recurrenceDetected && !data.preventiveAction?.trim()) {
-    missing.push('preventive action for recurrence');
-  }
-  return missing;
-}
-
 // POST /api/nonconformance - Create new record
 router.post('/', async (req, res) => {
   try {
@@ -538,13 +523,6 @@ router.put('/:id', async (req, res) => {
     if (sanitizedBody.effectivenessReviewedAt === '') sanitizedBody.effectivenessReviewedAt = null;
     
     const validatedData = insertNonconformanceRecordSchema.parse(sanitizedBody);
-    const closureMissing = validateNcrClosure(validatedData);
-    if (closureMissing.length > 0) {
-      return res.status(400).json({
-        error: 'NCR closure requires complete Section 9 quality evidence',
-        missing: closureMissing,
-      });
-    }
 
     // Set resolvedAt timestamp if status is changing to Resolved
     const updateData: any = {

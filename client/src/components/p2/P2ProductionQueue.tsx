@@ -210,13 +210,18 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
       const desc = variables.status === 'COMPLETED'
         ? 'Item marked as completed (off-system production) and added to traveler management'
         : variables.status === 'SCRAPPED'
-          ? 'Item marked NCR/scrapped. A new unit was added to the PO and will appear in the production queue.'
+          ? data?.replacementItem?.serialNumber
+            ? `Item marked NCR/scrapped. Replacement ${data.replacementItem.serialNumber} was added for scheduling.`
+            : 'Item marked NCR/scrapped. A new unit was added to the PO and will appear in scheduling.'
           : `Item status changed to ${variables.status}`;
       toast({
         title: 'Status Updated',
         description: desc,
       });
       queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/production-queue'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/scheduling-list'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/po-statuses'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/serialized-items/scrapped'] });
       queryClient.invalidateQueries({ queryKey: ['/api/travelers'] });
       setShowHoldDialog(false);
       setShowScrapDialog(false);

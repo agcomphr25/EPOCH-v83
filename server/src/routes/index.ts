@@ -3553,6 +3553,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       if (isFirstScrapTransition) {
         const { storage } = await import('../../storage');
         const { and, ne } = await import('drizzle-orm');
+        let replacementItem: typeof p2SerializedItems.$inferSelect | null = null;
         try {
           await db.transaction(async (tx) => {
             // Conditional update enforces idempotency inside the transaction
@@ -3623,13 +3624,68 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
               ipAddress: req.ip,
               userAgent: req.get('user-agent') || null,
             };
-            await storage.updateP2PoItemWithQtySync(
+            const syncResult = await storage.updateP2PoItemWithQtySync(
               item.poId,
               item.poItemId,
               { quantityDelta: 1 },
               actor,
               tx,
             );
+            if (syncResult.sync?.direction === 'increase' && syncResult.sync.serializedItemsAdded > 0) {
+              const [createdReplacement] = await tx
+                .select()
+                .from(p2SerializedItems)
+                .where(and(
+                  eq(p2SerializedItems.poItemId, item.poItemId),
+                  eq(p2SerializedItems.status, 'ACTIVE'),
+                  ne(p2SerializedItems.id, itemId),
+                ))
+                .orderBy(desc(p2SerializedItems.sequenceNumber), desc(p2SerializedItems.createdAt))
+                .limit(1);
+
+              if (createdReplacement) {
+                const replacementMetadata = {
+                  ...((createdReplacement.metadata as Record<string, unknown> | null) || {}),
+                  isReplacement: true,
+                  replacementForSerializedItemId: item.id,
+                  replacementForSerialNumber: item.serialNumber,
+                  replacementForBarcode: item.barcode,
+                  replacementReason: reason,
+                  generatedFromScrapAt: new Date().toISOString(),
+                };
+
+                const [updatedReplacement] = await tx
+                  .update(p2SerializedItems)
+                  .set({
+                    metadata: replacementMetadata,
+                    notes: [
+                      createdReplacement.notes,
+                      `Replacement generated for scrapped serial ${item.serialNumber}`,
+                    ].filter(Boolean).join('\n'),
+                    updatedAt: new Date(),
+                  })
+                  .where(eq(p2SerializedItems.id, createdReplacement.id))
+                  .returning();
+
+                replacementItem = updatedReplacement ?? createdReplacement;
+
+                await tx.insert(p2SerializedItemEvents).values({
+                  serializedItemId: createdReplacement.id,
+                  barcode: createdReplacement.barcode,
+                  eventType: 'REPLACEMENT_GENERATED',
+                  toDepartment: createdReplacement.currentDepartment,
+                  toStageIndex: createdReplacement.currentStageIndex,
+                  performedBy: performedBy || 'System',
+                  notes: `Replacement generated for scrapped serial ${item.serialNumber}`,
+                  metadata: {
+                    scrappedSerializedItemId: item.id,
+                    scrappedSerialNumber: item.serialNumber,
+                    scrappedBarcode: item.barcode,
+                    scrapReason: reason,
+                  },
+                });
+              }
+            }
           });
         } catch (scrapErr: unknown) {
           const code = (scrapErr as { code?: string } | null)?.code;
@@ -3651,11 +3707,13 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
         return res.json({
           success: true,
-          message: `Item status updated to ${status}`,
+          message: replacementItem
+            ? `Item scrapped and replacement ${replacementItem.serialNumber} generated for scheduling`
+            : `Item status updated to ${status}`,
           travelerCreated: false,
           linkedTravelerFound: false,
-          replacementCreated: false,
-          replacementItem: null,
+          replacementCreated: !!replacementItem,
+          replacementItem,
         });
       }
 

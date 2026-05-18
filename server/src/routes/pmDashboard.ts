@@ -218,6 +218,10 @@ async function getProjectSerializedItemAggregate(
       SELECT ps.linked_p2_order_id AS po_id
       FROM project_steps ps
       WHERE ps.project_id = $1 AND ps.linked_p2_order_id IS NOT NULL
+      UNION
+      SELECT DISTINCT p2po.p2_po_id AS po_id
+      FROM p2_production_orders p2po
+      WHERE p2po.project_id = $1::uuid
     )
     SELECT DISTINCT po_id::text FROM project_po_link WHERE po_id IS NOT NULL
   `, [projectId]);
@@ -397,25 +401,51 @@ router.get('/:projectId/summary', h(async (req, res) => {
 
   const woRes = await pool.query<WorkOrderCountRow>(`
     WITH project_po_link AS (
-      SELECT COALESCE(
-        p.po_id,
-        (
-          SELECT ps.linked_p2_order_id
-          FROM project_steps ps
-          WHERE ps.project_id = p.id
-            AND ps.step_type = 'p2_order'
-            AND ps.linked_p2_order_id IS NOT NULL
-          ORDER BY ps.updated_at DESC NULLS LAST, ps.completed_at DESC NULLS LAST
-          LIMIT 1
-        )
-      ) AS po_id
+      SELECT p.po_id AS po_id
       FROM projects p
       WHERE p.id = $1
+        AND p.po_id IS NOT NULL
+      UNION
+      SELECT ps.linked_p2_order_id AS po_id
+      FROM project_steps ps
+      WHERE ps.project_id = $1
+        AND ps.linked_p2_order_id IS NOT NULL
+      UNION
+      SELECT DISTINCT p2po.p2_po_id AS po_id
+      FROM p2_production_orders p2po
+      WHERE p2po.project_id = $1::uuid
+    ),
+    p2_superseding_parts AS (
+      SELECT DISTINCT LOWER(TRIM(part_number)) AS part_number
+      FROM (
+        SELECT poi.part_number
+        FROM project_po_link ppl
+        JOIN p2_purchase_order_items poi ON poi.po_id = ppl.po_id
+        WHERE poi.part_number IS NOT NULL AND TRIM(poi.part_number) <> ''
+        UNION
+        SELECT p2po.sku AS part_number
+        FROM project_po_link ppl
+        JOIN p2_production_orders p2po ON p2po.p2_po_id = ppl.po_id
+        WHERE p2po.sku IS NOT NULL AND TRIM(p2po.sku) <> ''
+        UNION
+        SELECT p2po.part_name AS part_number
+        FROM project_po_link ppl
+        JOIN p2_production_orders p2po ON p2po.p2_po_id = ppl.po_id
+        WHERE p2po.part_name IS NOT NULL AND TRIM(p2po.part_name) <> ''
+      ) parts
     ),
     rows AS (
       -- Task #258: exclude WAD WOs cancelled by the P2 supersede rule.
       SELECT status FROM production_work_orders
-       WHERE project_id = $1 AND status NOT IN ('CANCELLED', 'CANCELED')
+       WHERE project_id = $1
+        AND status NOT IN ('CANCELLED', 'CANCELED')
+        AND NOT (
+          work_order_number LIKE 'WAD-%'
+          AND EXISTS (
+            SELECT 1 FROM p2_superseding_parts psp
+            WHERE psp.part_number = LOWER(TRIM(production_work_orders.part_number))
+          )
+        )
       UNION ALL
       SELECT
         CASE
@@ -512,20 +542,19 @@ router.get('/:projectId/summary', h(async (req, res) => {
   // Quantity-based production percent
   const qtyProgressRes = await pool.query<{ totalRequired: string; totalCompleted: string }>(`
     WITH project_po_link AS (
-      SELECT COALESCE(
-        p.po_id,
-        (
-          SELECT ps.linked_p2_order_id
-          FROM project_steps ps
-          WHERE ps.project_id = p.id
-            AND ps.step_type = 'p2_order'
-            AND ps.linked_p2_order_id IS NOT NULL
-          ORDER BY ps.updated_at DESC NULLS LAST, ps.completed_at DESC NULLS LAST
-          LIMIT 1
-        )
-      ) AS po_id
+      SELECT p.po_id AS po_id
       FROM projects p
       WHERE p.id = $1
+        AND p.po_id IS NOT NULL
+      UNION
+      SELECT ps.linked_p2_order_id AS po_id
+      FROM project_steps ps
+      WHERE ps.project_id = $1
+        AND ps.linked_p2_order_id IS NOT NULL
+      UNION
+      SELECT DISTINCT p2po.p2_po_id AS po_id
+      FROM p2_production_orders p2po
+      WHERE p2po.project_id = $1::uuid
     ),
     qty_rows AS (
       SELECT
@@ -539,6 +568,32 @@ router.get('/:projectId/summary', h(async (req, res) => {
       WHERE wo2.project_id = $1
         -- Task #258: exclude WAD WOs cancelled by the P2 supersede rule.
         AND wo2.status NOT IN ('CANCELLED', 'CANCELED')
+        AND NOT (
+          wo2.work_order_number LIKE 'WAD-%'
+          AND EXISTS (
+            SELECT 1
+            FROM (
+              SELECT DISTINCT LOWER(TRIM(part_number)) AS part_number
+              FROM (
+                SELECT poi.part_number
+                FROM project_po_link ppl
+                JOIN p2_purchase_order_items poi ON poi.po_id = ppl.po_id
+                WHERE poi.part_number IS NOT NULL AND TRIM(poi.part_number) <> ''
+                UNION
+                SELECT p2po2.sku AS part_number
+                FROM project_po_link ppl
+                JOIN p2_production_orders p2po2 ON p2po2.p2_po_id = ppl.po_id
+                WHERE p2po2.sku IS NOT NULL AND TRIM(p2po2.sku) <> ''
+                UNION
+                SELECT p2po2.part_name AS part_number
+                FROM project_po_link ppl
+                JOIN p2_production_orders p2po2 ON p2po2.p2_po_id = ppl.po_id
+                WHERE p2po2.part_name IS NOT NULL AND TRIM(p2po2.part_name) <> ''
+              ) parts
+            ) psp
+            WHERE psp.part_number = LOWER(TRIM(wo2.part_number))
+          )
+        )
       UNION ALL
       SELECT
         COALESCE(p2po.quantity, 0)::numeric AS required_qty,
@@ -575,13 +630,93 @@ router.get('/:projectId/summary', h(async (req, res) => {
     // Task #258: exclude WAD WOs cancelled by the P2 supersede rule so KPIs
     // match the /production table.
     const wadOnlyTotal = await pool.query<{ count: string }>(
-      `SELECT COUNT(*)::text AS count FROM production_work_orders
-       WHERE project_id = $1 AND status NOT IN ('CANCELLED', 'CANCELED')`,
+      `WITH project_po_link AS (
+         SELECT p.po_id AS po_id
+         FROM projects p
+         WHERE p.id = $1 AND p.po_id IS NOT NULL
+         UNION
+         SELECT ps.linked_p2_order_id AS po_id
+         FROM project_steps ps
+         WHERE ps.project_id = $1 AND ps.linked_p2_order_id IS NOT NULL
+         UNION
+         SELECT DISTINCT p2po.p2_po_id AS po_id
+         FROM p2_production_orders p2po
+         WHERE p2po.project_id = $1::uuid
+       ),
+       p2_superseding_parts AS (
+         SELECT DISTINCT LOWER(TRIM(part_number)) AS part_number
+         FROM (
+           SELECT poi.part_number
+           FROM project_po_link ppl
+           JOIN p2_purchase_order_items poi ON poi.po_id = ppl.po_id
+           WHERE poi.part_number IS NOT NULL AND TRIM(poi.part_number) <> ''
+           UNION
+           SELECT p2po.sku AS part_number
+           FROM project_po_link ppl
+           JOIN p2_production_orders p2po ON p2po.p2_po_id = ppl.po_id
+           WHERE p2po.sku IS NOT NULL AND TRIM(p2po.sku) <> ''
+           UNION
+           SELECT p2po.part_name AS part_number
+           FROM project_po_link ppl
+           JOIN p2_production_orders p2po ON p2po.p2_po_id = ppl.po_id
+           WHERE p2po.part_name IS NOT NULL AND TRIM(p2po.part_name) <> ''
+         ) parts
+       )
+       SELECT COUNT(*)::text AS count FROM production_work_orders
+       WHERE project_id = $1
+         AND status NOT IN ('CANCELLED', 'CANCELED')
+         AND NOT (
+           work_order_number LIKE 'WAD-%'
+           AND EXISTS (
+             SELECT 1 FROM p2_superseding_parts psp
+             WHERE psp.part_number = LOWER(TRIM(production_work_orders.part_number))
+           )
+         )`,
       [projectId],
     );
     const wadOnlyCompleted = await pool.query<{ count: string }>(
-      `SELECT COUNT(*)::text AS count FROM production_work_orders
-       WHERE project_id = $1 AND status IN ('COMPLETE', 'COMPLETED', 'CLOSED')`,
+      `WITH project_po_link AS (
+         SELECT p.po_id AS po_id
+         FROM projects p
+         WHERE p.id = $1 AND p.po_id IS NOT NULL
+         UNION
+         SELECT ps.linked_p2_order_id AS po_id
+         FROM project_steps ps
+         WHERE ps.project_id = $1 AND ps.linked_p2_order_id IS NOT NULL
+         UNION
+         SELECT DISTINCT p2po.p2_po_id AS po_id
+         FROM p2_production_orders p2po
+         WHERE p2po.project_id = $1::uuid
+       ),
+       p2_superseding_parts AS (
+         SELECT DISTINCT LOWER(TRIM(part_number)) AS part_number
+         FROM (
+           SELECT poi.part_number
+           FROM project_po_link ppl
+           JOIN p2_purchase_order_items poi ON poi.po_id = ppl.po_id
+           WHERE poi.part_number IS NOT NULL AND TRIM(poi.part_number) <> ''
+           UNION
+           SELECT p2po.sku AS part_number
+           FROM project_po_link ppl
+           JOIN p2_production_orders p2po ON p2po.p2_po_id = ppl.po_id
+           WHERE p2po.sku IS NOT NULL AND TRIM(p2po.sku) <> ''
+           UNION
+           SELECT p2po.part_name AS part_number
+           FROM project_po_link ppl
+           JOIN p2_production_orders p2po ON p2po.p2_po_id = ppl.po_id
+           WHERE p2po.part_name IS NOT NULL AND TRIM(p2po.part_name) <> ''
+         ) parts
+       )
+       SELECT COUNT(*)::text AS count FROM production_work_orders
+       WHERE project_id = $1
+         AND status IN ('COMPLETE', 'COMPLETED', 'CLOSED')
+         AND NOT (
+           work_order_number LIKE 'WAD-%'
+           AND EXISTS (
+             SELECT 1 FROM p2_superseding_parts psp
+             WHERE psp.part_number = LOWER(TRIM(production_work_orders.part_number))
+           )
+         )`,
       [projectId],
     );
     const wadCount = parseInt(wadOnlyTotal[0]?.count ?? '0', 10) || 0;
@@ -639,7 +774,45 @@ router.get('/:projectId/production', h(async (req, res) => {
   const today = new Date().toISOString().slice(0, 10);
 
   const result = await pool.query<ProductionRow>(`
-    WITH wad_rows AS (
+    WITH project_po_link AS (
+      -- Highest priority: the explicit projects.po_id pointer.
+      SELECT p.po_id AS po_id
+      FROM projects p
+      WHERE p.id = $2
+        AND p.po_id IS NOT NULL
+      UNION
+      -- Fallback: any project_steps row that links a P2 PO. We deliberately do
+      -- NOT restrict to step_type = 'p2_order' because the link can also be
+      -- attached during preproduction or other steps depending on workflow.
+      SELECT ps.linked_p2_order_id AS po_id
+      FROM project_steps ps
+      WHERE ps.project_id = $2
+        AND ps.linked_p2_order_id IS NOT NULL
+      UNION
+      SELECT DISTINCT p2po.p2_po_id AS po_id
+      FROM p2_production_orders p2po
+      WHERE p2po.project_id = $2::uuid
+    ),
+    p2_superseding_parts AS (
+      SELECT DISTINCT LOWER(TRIM(part_number)) AS part_number
+      FROM (
+        SELECT poi.part_number
+        FROM project_po_link ppl
+        JOIN p2_purchase_order_items poi ON poi.po_id = ppl.po_id
+        WHERE poi.part_number IS NOT NULL AND TRIM(poi.part_number) <> ''
+        UNION
+        SELECT p2po.sku AS part_number
+        FROM project_po_link ppl
+        JOIN p2_production_orders p2po ON p2po.p2_po_id = ppl.po_id
+        WHERE p2po.sku IS NOT NULL AND TRIM(p2po.sku) <> ''
+        UNION
+        SELECT p2po.part_name AS part_number
+        FROM project_po_link ppl
+        JOIN p2_production_orders p2po ON p2po.p2_po_id = ppl.po_id
+        WHERE p2po.part_name IS NOT NULL AND TRIM(p2po.part_name) <> ''
+      ) parts
+    ),
+    wad_rows AS (
       SELECT
       wo.id::text AS "productionWorkOrderId",
       wo.work_order_number AS "workOrderNumber",
@@ -735,21 +908,13 @@ router.get('/:projectId/production', h(async (req, res) => {
       WHERE wo.project_id = $2
         -- Task #258: hide WAD WOs cancelled by the P2 supersede rule.
         AND wo.status NOT IN ('CANCELLED', 'CANCELED')
-    ),
-    project_po_link AS (
-      -- Highest priority: the explicit projects.po_id pointer.
-      SELECT p.po_id AS po_id
-      FROM projects p
-      WHERE p.id = $2
-        AND p.po_id IS NOT NULL
-      UNION
-      -- Fallback: any project_steps row that links a P2 PO. We deliberately do
-      -- NOT restrict to step_type = 'p2_order' because the link can also be
-      -- attached during preproduction or other steps depending on workflow.
-      SELECT ps.linked_p2_order_id AS po_id
-      FROM project_steps ps
-      WHERE ps.project_id = $2
-        AND ps.linked_p2_order_id IS NOT NULL
+        AND NOT (
+          wo.work_order_number LIKE 'WAD-%'
+          AND EXISTS (
+            SELECT 1 FROM p2_superseding_parts psp
+            WHERE psp.part_number = LOWER(TRIM(wo.part_number))
+          )
+        )
     ),
     p2_rows AS (
       SELECT
@@ -863,6 +1028,10 @@ router.get('/:projectId/production', h(async (req, res) => {
       FROM project_steps ps
       WHERE ps.project_id = $1
         AND ps.linked_p2_order_id IS NOT NULL
+      UNION
+      SELECT DISTINCT p2po.p2_po_id AS po_id
+      FROM p2_production_orders p2po
+      WHERE p2po.project_id = $1::uuid
     )
     SELECT COUNT(*)::text AS count FROM project_po_link
   `, [projectId]);
@@ -967,6 +1136,24 @@ router.get('/:projectId/production', h(async (req, res) => {
   }
 
   const rowsWithAssignments = finalRows.map((row) => {
+    if (row.sourceType === 'p2_production_order') {
+      const params = new URLSearchParams({ tab: 'production' });
+      if (row.p2PoId) params.set('poId', String(row.p2PoId));
+      if (row.p2PoNumber) params.set('po', row.p2PoNumber);
+
+      return {
+        ...row,
+        dashboardType: 'P2',
+        queueType: row.currentDepartment ?? 'P2',
+        assignedDepartment: row.currentDepartment ?? 'P2 Production',
+        assignedDashboardRoute: `/p2-control-center?${params.toString()}`,
+        dashboardLabel: 'P2 Control Center',
+        manufacturingQueueId: row.manufacturingQueueId ?? null,
+        wizardData: undefined,
+        departmentBudgets: undefined,
+      };
+    }
+
     const assignment = assignDashboardForWorkOrder({
       department: row.currentDepartment ?? row.currentTravelerStep,
       dashboardType: row.dashboardType,

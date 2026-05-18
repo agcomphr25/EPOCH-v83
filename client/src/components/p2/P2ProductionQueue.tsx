@@ -83,6 +83,7 @@ interface QueueItem {
   replacementForSerializedItemId?: string | null;
   replacementForSerialNumber?: string | null;
   replacementReason?: string | null;
+  isLegacyProductionOrder?: boolean;
   hasActiveTask: boolean;
   activeTask: ActiveTask | null;
   barcodePrintedAt?: string | null;
@@ -852,6 +853,15 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                                                 Replacement
                                               </Badge>
                                             )}
+                                            {item.isLegacyProductionOrder && (
+                                              <Badge
+                                                variant="outline"
+                                                className="border-slate-300 bg-slate-50 text-slate-700 text-[10px] font-sans"
+                                                title="Legacy production order without serialized traveler records"
+                                              >
+                                                Legacy
+                                              </Badge>
+                                            )}
                                             {item.barcodePrintedAt && (
                                               <span
                                                 className="inline-flex items-center gap-0.5 text-muted-foreground/70"
@@ -918,6 +928,11 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                                                 {item.activeTask.employeeName}
                                               </span>
                                             </div>
+                                          ) : item.isLegacyProductionOrder ? (
+                                            <Badge variant="outline">
+                                              <Clock className="h-3 w-3 mr-1" />
+                                              Legacy Order
+                                            </Badge>
                                           ) : (
                                             <Badge variant="secondary">
                                               <Clock className="h-3 w-3 mr-1" />
@@ -927,18 +942,20 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                                         </TableCell>
                                         <TableCell className="text-right">
                                           <div className="flex items-center justify-end gap-1">
-                                            <Button
-                                              variant="ghost"
-                                              size="sm"
-                                              onClick={() => {
-                                                setScanInput(item.barcode);
-                                                scanMutation.mutate(item.barcode);
-                                              }}
-                                              data-testid={`button-view-${item.id}`}
-                                            >
-                                              <Eye className="h-4 w-4" />
-                                            </Button>
-                                            {item.status !== 'COMPLETED' && (
+                                            {!item.isLegacyProductionOrder && (
+                                              <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => {
+                                                  setScanInput(item.barcode);
+                                                  scanMutation.mutate(item.barcode);
+                                                }}
+                                                data-testid={`button-view-${item.id}`}
+                                              >
+                                                <Eye className="h-4 w-4" />
+                                              </Button>
+                                            )}
+                                            {item.status !== 'COMPLETED' && !item.isLegacyProductionOrder && (
                                               <>
                                                 <Button
                                                   variant="ghost"

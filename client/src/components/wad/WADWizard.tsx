@@ -12,6 +12,16 @@ import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Check, ChevronRight, ChevronLeft, AlertTriangle, FileText, Users, ClipboardList,
   DollarSign, Package, Route, ShieldCheck, Calendar, AlertCircle, FolderOpen,
   Star, Loader2, CheckCircle, XCircle, Plus, Trash2
@@ -995,6 +1005,11 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
               scopeDescription={data.step2?.scopeDescription ?? ''}
               data={data.step3}
               onChange={(v) => patch('step3', v)}
+              onRemoveDepartment={(dept) => {
+                const currentStep2 = data.step2 ?? { scopeDescription: '', departments: [] as string[] };
+                const nextDepts = (currentStep2.departments ?? []).filter(d => d !== dept);
+                handleStep2Change({ ...currentStep2, departments: nextDepts });
+              }}
             />
           )}
           {/* ── Step 4: Charge Codes ─────────────────────────────────── */}
@@ -1482,13 +1497,45 @@ function Step2ScopeOfWork({ data, onChange }: {
 }
 
 // ─── Step 3: Work Breakdown ───────────────────────────────────────────────────
-function Step3WorkBreakdown({ departments, scopeDescription, data, onChange }: {
+function Step3WorkBreakdown({ departments, scopeDescription, data, onChange, onRemoveDepartment }: {
   departments: string[];
   scopeDescription?: string;
   data?: WizardData['step3'];
   onChange: (v: WizardData['step3']) => void;
+  onRemoveDepartment?: (dept: string) => void;
 }) {
   const deptLabels = Object.fromEntries(WAD_DEPARTMENTS.map(d => [d.key, d.label]));
+  const [pendingRemove, setPendingRemove] = useState<string | null>(null);
+
+  const isRowDirty = (row: WorkBreakdownRow): boolean => {
+    if (row.seeded) return false;
+    const scopeOperation = getScopeBreakdownOperation(scopeDescription);
+    const opIsDefault = (row.operation ?? '') === (scopeOperation ?? '');
+    return (
+      !opIsDefault ||
+      !!(row.responsibleLead && row.responsibleLead.trim()) ||
+      !!(row.requiredCerts && row.requiredCerts.trim()) ||
+      (typeof row.estimatedHours === 'number' && row.estimatedHours !== 0) ||
+      !!row.isTravelerStep ||
+      !!row.requiresQCSignoff
+    );
+  };
+
+  const requestRemove = (row: WorkBreakdownRow) => {
+    if (!onRemoveDepartment) return;
+    if (isRowDirty(row)) {
+      setPendingRemove(row.department);
+    } else {
+      onRemoveDepartment(row.department);
+    }
+  };
+
+  const confirmRemove = () => {
+    if (pendingRemove && onRemoveDepartment) {
+      onRemoveDepartment(pendingRemove);
+    }
+    setPendingRemove(null);
+  };
 
   const existingRows: WorkBreakdownRow[] = data?.rows ?? [];
 
@@ -1561,6 +1608,7 @@ function Step3WorkBreakdown({ departments, scopeDescription, data, onChange }: {
               <TableHead>Req. Certs</TableHead>
               <TableHead className="w-20 text-center">Traveler</TableHead>
               <TableHead className="w-20 text-center">QC Signoff</TableHead>
+              <TableHead className="w-12" />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -1627,11 +1675,44 @@ function Step3WorkBreakdown({ departments, scopeDescription, data, onChange }: {
                     onCheckedChange={c => setRow(idx, { requiresQCSignoff: !!c })}
                   />
                 </TableCell>
+                <TableCell className="text-right">
+                  {onRemoveDepartment && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                      onClick={() => requestRemove(row)}
+                      aria-label={`Remove ${deptLabels[row.department] ?? row.department}`}
+                      data-testid={`button-remove-wb-row-${row.department}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </div>
+      <AlertDialog open={pendingRemove !== null} onOpenChange={(open) => { if (!open) setPendingRemove(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove {pendingRemove ? (deptLabels[pendingRemove] ?? pendingRemove) : ''}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This row has changes you've entered (operation, lead, hours, certs, or checkboxes).
+              Removing it will discard those entries and also unselect the department on Step 2 and
+              prune its Step 4 charge code row. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-remove-wb-row">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmRemove} data-testid="button-confirm-remove-wb-row">
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

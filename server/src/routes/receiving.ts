@@ -32,6 +32,7 @@ import multer from 'multer';
 import { ObjectStorageService } from '../../replit_integrations/object_storage/objectStorage';
 import { generateBarcodeImage, generateReceivingUnitBarcodeValue } from '../utils/barcodeGenerator';
 import { requireRole } from '../../middleware/auth';
+import { createInventoryEvent } from '../services/inventoryEventService';
 
 const router = Router();
 const objectStorage = new ObjectStorageService();
@@ -1024,6 +1025,27 @@ async function handleAcceptedUnit(unit: ReceivedUnit, receipt: Receipt, user: Au
       notes: `Receipt ${receipt.receiptNumber} · unit barcode ${unit.barcode}`,
     });
     await db.insert(materialLotTransactions).values(txValues);
+
+    await createInventoryEvent({
+      agPartNumber: line.agPartNumber,
+      eventType: 'receipt',
+      quantity: Number(unit.quantity),
+      lotId: lot.id,
+      unitOfMeasure: unit.uom ?? 'EA',
+      toLocation: unit.location?.trim() || 'WAREHOUSE-MAIN',
+      referenceType: 'RECEIVED_UNIT',
+      referenceId: unit.id,
+      performedBy: displayName,
+      notes: `Receipt ${receipt.receiptNumber}: accepted unit ${unit.barcode}`,
+      metadata: {
+        receiptId: receipt.id,
+        receiptNumber: receipt.receiptNumber,
+        receivedUnitId: unit.id,
+        unitBarcode: unit.barcode,
+        materialLotId: lot.id,
+        internalControlNumber: icn,
+      },
+    });
 
   } catch (err: any) {
     // Re-throw so callers can return a 422 to the client with the exact reason

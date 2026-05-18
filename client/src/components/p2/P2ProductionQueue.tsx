@@ -84,6 +84,7 @@ interface QueueItem {
   replacementForSerialNumber?: string | null;
   replacementReason?: string | null;
   isLegacyProductionOrder?: boolean;
+  isLegacyProjectWorkOrder?: boolean;
   hasActiveTask: boolean;
   activeTask: ActiveTask | null;
   barcodePrintedAt?: string | null;
@@ -862,6 +863,15 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                                                 Legacy
                                               </Badge>
                                             )}
+                                            {item.isLegacyProjectWorkOrder && (
+                                              <Badge
+                                                variant="outline"
+                                                className="border-blue-300 bg-blue-50 text-blue-700 text-[10px] font-sans"
+                                                title="Legacy project work order. Continue production from the linked PM Control Center."
+                                              >
+                                                Project WO
+                                              </Badge>
+                                            )}
                                             {item.barcodePrintedAt && (
                                               <span
                                                 className="inline-flex items-center gap-0.5 text-muted-foreground/70"
@@ -928,10 +938,10 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                                                 {item.activeTask.employeeName}
                                               </span>
                                             </div>
-                                          ) : item.isLegacyProductionOrder ? (
+                                          ) : item.isLegacyProductionOrder || item.isLegacyProjectWorkOrder ? (
                                             <Badge variant="outline">
                                               <Clock className="h-3 w-3 mr-1" />
-                                              Legacy Order
+                                              {item.isLegacyProjectWorkOrder ? 'Project Work Order' : 'Legacy Order'}
                                             </Badge>
                                           ) : (
                                             <Badge variant="secondary">
@@ -942,7 +952,7 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                                         </TableCell>
                                         <TableCell className="text-right">
                                           <div className="flex items-center justify-end gap-1">
-                                            {!item.isLegacyProductionOrder && (
+                                            {!item.isLegacyProductionOrder && !item.isLegacyProjectWorkOrder && (
                                               <Button
                                                 variant="ghost"
                                                 size="sm"
@@ -955,7 +965,18 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                                                 <Eye className="h-4 w-4" />
                                               </Button>
                                             )}
-                                            {item.status !== 'COMPLETED' && !item.isLegacyProductionOrder && (
+                                            {item.isLegacyProjectWorkOrder && item.projectId && (
+                                              <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => setLocation(`/pm-control-center?project=${item.projectId}`)}
+                                                title="Continue in PM Control Center"
+                                                data-testid={`button-open-pm-${item.id}`}
+                                              >
+                                                <Factory className="h-4 w-4" />
+                                              </Button>
+                                            )}
+                                            {item.status !== 'COMPLETED' && !item.isLegacyProductionOrder && !item.isLegacyProjectWorkOrder && (
                                               <>
                                                 <Button
                                                   variant="ghost"

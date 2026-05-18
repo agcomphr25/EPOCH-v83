@@ -3147,6 +3147,62 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
          WHERE COALESCE(UPPER(status), '') NOT IN ('CANCELLED', 'CANCELED')
          GROUP BY p2_po_id`
       );
+      const legacyProjectProductionRows = await dbPool.query(
+        `WITH project_po_link AS (
+           SELECT p.id AS project_id, p.po_id AS po_id
+           FROM projects p
+           WHERE p.po_id IS NOT NULL
+           UNION
+           SELECT ps.project_id, ps.linked_p2_order_id AS po_id
+           FROM project_steps ps
+           WHERE ps.linked_p2_order_id IS NOT NULL
+         ),
+         work_order_quantities AS (
+           SELECT
+             ppl.po_id AS "poId",
+             wo.id,
+             COALESCE(wo.quantity, 1)::numeric AS quantity,
+             COALESCE((
+               SELECT COUNT(*)
+               FROM travelers t
+               WHERE t.production_work_order_id = wo.id
+                 AND UPPER(t.status) IN ('COMPLETE', 'COMPLETED', 'CLOSED')
+             ), 0)::numeric AS completed_travelers,
+             UPPER(COALESCE(wo.status, '')) AS status
+           FROM project_po_link ppl
+           JOIN production_work_orders wo ON wo.project_id = ppl.project_id
+           WHERE COALESCE(UPPER(wo.status), '') NOT IN ('CANCELLED', 'CANCELED')
+             AND NOT (
+               wo.work_order_number LIKE 'WAD-%'
+               AND COALESCE(UPPER(wo.status), '') NOT IN ('COMPLETE', 'COMPLETED', 'CLOSED')
+               AND EXISTS (
+                 SELECT 1
+                 FROM p2_purchase_order_items poi
+                 WHERE poi.po_id = ppl.po_id
+                   AND poi.part_number IS NOT NULL
+                   AND LOWER(TRIM(poi.part_number)) = LOWER(TRIM(wo.part_number))
+               )
+             )
+         )
+         SELECT
+           "poId",
+           COALESCE(SUM(quantity), 0)::int AS "totalQty",
+           COALESCE(SUM(
+             CASE
+               WHEN status IN ('COMPLETE', 'COMPLETED', 'CLOSED') THEN quantity
+               ELSE LEAST(completed_travelers, quantity)
+             END
+           ), 0)::int AS "completedQty",
+           COALESCE(SUM(
+             CASE
+               WHEN status NOT IN ('', 'PLANNED', 'PLAN', 'DRAFT', 'PENDING', 'COMPLETE', 'COMPLETED', 'CLOSED')
+               THEN GREATEST(quantity - LEAST(completed_travelers, quantity), 0)
+               ELSE 0
+             END
+           ), 0)::int AS "inProductionQty"
+         FROM work_order_quantities
+         GROUP BY "poId"`
+      );
       const poIdsWithSerializedUnits = new Set<number>();
       for (const s of serializedItems as any[]) {
         const poId = s.poId ?? s.po_id;
@@ -3157,11 +3213,16 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const legacyStatsByPoId = new Map<number, any>(
         (legacyProductionRows as any[]).map((row: any) => [Number(row.poId), row])
       );
+      const legacyProjectStatsByPoId = new Map<number, any>(
+        (legacyProjectProductionRows as any[]).map((row: any) => [Number(row.poId), row])
+      );
       const poIdsWithLegacyProduction = new Set<number>(legacyStatsByPoId.keys());
+      const poIdsWithLegacyProjectProduction = new Set<number>(legacyProjectStatsByPoId.keys());
       const pos = allPos.filter((po: any) =>
         P2_GATED_STATUSES.has(normalizeP2Status(po.status)) ||
         poIdsWithSerializedUnits.has(po.id) ||
-        poIdsWithLegacyProduction.has(po.id)
+        poIdsWithLegacyProduction.has(po.id) ||
+        poIdsWithLegacyProjectProduction.has(po.id)
       );
 
       // Look up projects linked to these POs. PM Control Center resolves the
@@ -3222,7 +3283,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       
       const poStatuses = pos.map((po: any) => {
         const poItems = serializedItems.filter((s: any) => s.poId === po.id);
-        const legacyStats = legacyStatsByPoId.get(po.id);
+        const legacyStats = legacyStatsByPoId.get(po.id) ?? legacyProjectStatsByPoId.get(po.id);
         
         // Use actual column names: status (ACTIVE/COMPLETED/SCRAPPED/HOLD) and currentDepartment
         const completedItems = poItems.length > 0
@@ -3347,8 +3408,64 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           status: isScheduled ? 'scheduled' : 'pending',
         }));
       });
+
+      const legacyProjectSchedulingRows = await dbPool.query(
+        `WITH project_po_link AS (
+           SELECT p.id AS project_id, p.po_id AS po_id
+           FROM projects p
+           WHERE p.po_id IS NOT NULL
+           UNION
+           SELECT ps.project_id, ps.linked_p2_order_id AS po_id
+           FROM project_steps ps
+           WHERE ps.linked_p2_order_id IS NOT NULL
+         )
+         SELECT DISTINCT ON (wo.id)
+           wo.id,
+           wo.work_order_number AS "workOrderNumber",
+           wo.part_number AS "partNumber",
+           wo.description,
+           COALESCE(wo.quantity, 1)::int AS quantity,
+           wo.due_date AS "dueDate",
+           wo.start_date AS "startDate",
+           wo.assigned_department AS "assignedDepartment",
+           wo.assigned_dashboard_route AS "assignedDashboardRoute",
+           wo.status,
+           po.po_number AS "poNumber"
+         FROM project_po_link ppl
+         JOIN production_work_orders wo ON wo.project_id = ppl.project_id
+         JOIN p2_purchase_orders po ON po.id = ppl.po_id
+         WHERE COALESCE(UPPER(wo.status), '') NOT IN ('COMPLETE', 'COMPLETED', 'CLOSED', 'CANCELLED', 'CANCELED')
+           AND NOT (
+             wo.work_order_number LIKE 'WAD-%'
+             AND COALESCE(UPPER(wo.status), '') NOT IN ('COMPLETE', 'COMPLETED', 'CLOSED')
+             AND EXISTS (
+               SELECT 1
+               FROM p2_purchase_order_items poi
+               WHERE poi.po_id = ppl.po_id
+                 AND poi.part_number IS NOT NULL
+                 AND LOWER(TRIM(poi.part_number)) = LOWER(TRIM(wo.part_number))
+             )
+           )
+         ORDER BY wo.id, wo.due_date NULLS LAST, wo.work_order_number`
+      );
+      const legacyProjectSchedulingList = (legacyProjectSchedulingRows as any[]).flatMap((row: any) => {
+        const quantity = Math.max(1, Number(row.quantity || 1));
+        return Array.from({ length: quantity }, (_unused, index) => ({
+          id: `legacy-project-work-order-${row.id}-${index + 1}`,
+          poNumber: row.poNumber || 'Unknown',
+          partNumber: row.partNumber || row.workOrderNumber || 'Unknown',
+          description: row.description || row.workOrderNumber || 'Legacy project work order',
+          totalQuantity: 1,
+          scheduledQuantity: 1,
+          remainingQuantity: 0,
+          dueDate: row.dueDate,
+          priority: 'normal',
+          status: 'scheduled',
+          isLegacyProjectWorkOrder: true,
+        }));
+      });
       
-      res.json([...schedulingList, ...legacySchedulingList]);
+      res.json([...schedulingList, ...legacySchedulingList, ...legacyProjectSchedulingList]);
     } catch (_error) {
       console.error('P2 Control Center scheduling list error:', _error);
       res.status(500).json({ error: 'Failed to fetch scheduling list' });
@@ -3474,9 +3591,80 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
          WHERE COALESCE(UPPER(p2po.status), '') NOT IN ('CANCELLED', 'CANCELED')
          ORDER BY p2po.due_date NULLS LAST, p2po.created_at`
       );
+      const legacyProjectProductionRows = await dbPool.query(
+        `WITH project_po_link AS (
+           SELECT p.id AS project_id, p.po_id AS po_id
+           FROM projects p
+           WHERE p.po_id IS NOT NULL
+           UNION
+           SELECT ps.project_id, ps.linked_p2_order_id AS po_id
+           FROM project_steps ps
+           WHERE ps.linked_p2_order_id IS NOT NULL
+         )
+         SELECT DISTINCT ON (wo.id)
+           wo.id,
+           wo.work_order_number AS "workOrderNumber",
+           wo.part_number AS "partNumber",
+           wo.description,
+           COALESCE(wo.quantity, 1)::int AS quantity,
+           wo.status,
+           wo.due_date AS "dueDate",
+           wo.project_id AS "projectId",
+           p.project_code AS "projectCode",
+           p.project_name AS "projectName",
+           wo.assigned_department AS "assignedDepartment",
+           wo.queue_type AS "queueType",
+           wo.dashboard_type AS "dashboardType",
+           po.id AS "poId",
+           po.po_number AS "poNumber",
+           po.customer_name AS "customerName",
+           (
+             SELECT pl.department
+             FROM punch_ledger pl
+             WHERE pl.production_work_order_id = wo.id
+               AND pl.clock_out IS NULL
+             ORDER BY pl.clock_in DESC
+             LIMIT 1
+           ) AS "activeDepartment",
+           (
+             SELECT ts.department_name
+             FROM traveler_steps ts
+             JOIN travelers t ON t.id = ts.traveler_id
+             WHERE t.production_work_order_id = wo.id
+               AND UPPER(ts.status) IN ('IN_PROGRESS', 'ACTIVE', 'STARTED')
+             ORDER BY ts.step_number ASC
+             LIMIT 1
+           ) AS "currentTravelerStep",
+           (
+             SELECT t.traveler_number
+             FROM travelers t
+             WHERE t.production_work_order_id = wo.id
+               AND COALESCE(UPPER(t.status), '') NOT IN ('COMPLETE', 'COMPLETED', 'CLOSED', 'SCRAPPED', 'CANCELLED', 'CANCELED')
+             ORDER BY t.created_at DESC
+             LIMIT 1
+           ) AS "activeTravelerNumber"
+         FROM project_po_link ppl
+         JOIN production_work_orders wo ON wo.project_id = ppl.project_id
+         JOIN projects p ON p.id = wo.project_id
+         JOIN p2_purchase_orders po ON po.id = ppl.po_id
+         WHERE COALESCE(UPPER(wo.status), '') NOT IN ('CANCELLED', 'CANCELED')
+           AND NOT (
+             wo.work_order_number LIKE 'WAD-%'
+             AND COALESCE(UPPER(wo.status), '') NOT IN ('COMPLETE', 'COMPLETED', 'CLOSED')
+             AND EXISTS (
+               SELECT 1
+               FROM p2_purchase_order_items poi
+               WHERE poi.po_id = ppl.po_id
+                 AND poi.part_number IS NOT NULL
+                 AND LOWER(TRIM(poi.part_number)) = LOWER(TRIM(wo.part_number))
+             )
+           )
+         ORDER BY wo.id, wo.due_date NULLS LAST, wo.work_order_number`
+      );
       const poIds = [...new Set([
         ...items.map((item: any) => item.poId ?? item.po_id).filter(Boolean),
         ...(legacyProductionRows as any[]).map((row: any) => row.poId).filter(Boolean),
+        ...(legacyProjectProductionRows as any[]).map((row: any) => row.poId).filter(Boolean),
       ])];
       const projectRows = poIds.length > 0
         ? await dbPool.query(
@@ -3556,6 +3744,12 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         const displayDepartment = ['COMPLETED', 'CLOSED'].includes(String(row.status || '').toUpperCase())
           ? 'Completed'
           : (row.department || 'Pending Layup');
+        departmentsSet.add(displayDepartment);
+      });
+      (legacyProjectProductionRows as any[]).forEach((row: any) => {
+        const displayDepartment = ['COMPLETE', 'COMPLETED', 'CLOSED'].includes(String(row.status || '').toUpperCase())
+          ? 'Completed'
+          : (row.activeDepartment || row.currentTravelerStep || row.assignedDepartment || row.queueType || row.dashboardType || 'Pending Layup');
         departmentsSet.add(displayDepartment);
       });
       allRoutings.forEach((routing: any) => {
@@ -3645,8 +3839,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         const linkedProject = row.projectId
           ? {
               projectId: row.projectId,
-              projectCode: null,
-              projectName: null,
+              projectCode: row.projectCode,
+              projectName: row.projectName,
             }
           : (poId ? projectByPoId.get(Number(poId)) : null);
         const quantity = Math.max(1, Number(row.quantity || 1));
@@ -3682,6 +3876,56 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           } : null,
         });
       });
+
+      (legacyProjectProductionRows as any[]).forEach((row: any) => {
+        const normalizedStatus = String(row.status || '').toUpperCase();
+        const dept = ['COMPLETE', 'COMPLETED', 'CLOSED'].includes(normalizedStatus)
+          ? 'Completed'
+          : (row.activeDepartment || row.currentTravelerStep || row.assignedDepartment || row.queueType || row.dashboardType || 'Pending Layup');
+        if (!departmentQueues[dept]) {
+          departmentQueues[dept] = [];
+        }
+
+        const poId = row.poId ?? null;
+        const linkedProject = row.projectId
+          ? {
+              projectId: row.projectId,
+              projectCode: row.projectCode,
+              projectName: row.projectName,
+            }
+          : (poId ? projectByPoId.get(Number(poId)) : null);
+        const isComplete = ['COMPLETE', 'COMPLETED', 'CLOSED'].includes(normalizedStatus);
+        const hasActiveTask = !isComplete && (
+          !!row.activeDepartment ||
+          ['IN_PROGRESS', 'ACTIVE', 'STARTED', 'RELEASED'].includes(normalizedStatus)
+        );
+
+        departmentQueues[dept].push({
+          id: `legacy-project-work-order-${row.id}`,
+          poId,
+          barcode: row.activeTravelerNumber || row.workOrderNumber,
+          serialNumber: row.activeTravelerNumber || row.workOrderNumber,
+          partNumber: row.partNumber || row.workOrderNumber,
+          partName: row.description || 'Legacy project work order',
+          poNumber: row.poNumber,
+          customerName: row.customerName || 'Unknown',
+          status: isComplete ? 'COMPLETED' : 'ACTIVE',
+          currentDepartment: dept,
+          currentStageIndex: 0,
+          projectId: linkedProject?.projectId ?? null,
+          projectCode: linkedProject?.projectCode ?? null,
+          projectName: linkedProject?.projectName ?? null,
+          isLegacyProjectWorkOrder: true,
+          hasActiveTask,
+          barcodePrintedAt: null,
+          activeTask: hasActiveTask ? {
+            id: row.id,
+            employeeName: 'Project work order',
+            employeeCode: '',
+            startedAt: row.dueDate,
+          } : null,
+        });
+      });
       
       // Format response with department summaries
       const departments = departmentOrder
@@ -3706,10 +3950,17 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           totalActive: items.filter((item: any) => item.status === 'ACTIVE').length
             + (legacyProductionRows as any[]).filter((row: any) =>
               !['COMPLETED', 'CLOSED'].includes(String(row.status || '').toUpperCase())
+            ).length
+            + (legacyProjectProductionRows as any[]).filter((row: any) =>
+              !['COMPLETE', 'COMPLETED', 'CLOSED'].includes(String(row.status || '').toUpperCase())
             ).length,
           totalInProgress: (activeTasks as any[]).length
             + (legacyProductionRows as any[]).filter((row: any) =>
               String(row.status || '').toUpperCase() === 'IN_PROGRESS'
+            ).length
+            + (legacyProjectProductionRows as any[]).filter((row: any) =>
+              ['IN_PROGRESS', 'ACTIVE', 'STARTED', 'RELEASED'].includes(String(row.status || '').toUpperCase())
+              || !!row.activeDepartment
             ).length,
           departmentCount: departments.filter(d => d.totalItems > 0).length,
         },

@@ -112,17 +112,27 @@ const branchDefs: Array<{
   label: string;
   subtitle: string;
   types: EvidenceNodeType[];
-  angle: number;
 }> = [
-  { key: 'work_order', label: 'What job was charged?', subtitle: 'Work orders and WAD links', types: ['work_order'], angle: -160 },
-  { key: 'employee', label: 'Who worked?', subtitle: 'Employee names and rates used', types: ['employee'], angle: -108 },
-  { key: 'labor_cost', label: 'What did it cost?', subtitle: 'Hours, rate source, and dollars', types: ['labor_cost'], angle: -48 },
-  { key: 'payroll', label: 'Was it sent to payroll?', subtitle: 'Payroll export evidence', types: ['payroll'], angle: 6 },
-  { key: 'billing', label: 'Customer billing', subtitle: 'Invoices created against this project', types: ['billing'], angle: 58 },
-  { key: 'journal', label: 'Was it posted to the books?', subtitle: 'GL journal entry and debit/credit lines', types: ['journal'], angle: 108 },
-  { key: 'audit', label: 'Who touched it?', subtitle: 'Audit trail and approvals', types: ['audit'], angle: 154 },
-  { key: 'document', label: 'What proof is attached?', subtitle: 'Files, packets, and missing support', types: ['document', 'missing'], angle: 206 },
+  { key: 'work_order', label: 'What job was charged?', subtitle: 'Work orders and WAD links', types: ['work_order'] },
+  { key: 'employee', label: 'Who worked?', subtitle: 'Employee names and rates used', types: ['employee'] },
+  { key: 'labor_cost', label: 'What did it cost?', subtitle: 'Hours, rate source, and dollars', types: ['labor_cost'] },
+  { key: 'payroll', label: 'Was it sent to payroll?', subtitle: 'Payroll export evidence', types: ['payroll'] },
+  { key: 'billing', label: 'Customer billing', subtitle: 'Invoices created against this project', types: ['billing'] },
+  { key: 'journal', label: 'Was it posted to the books?', subtitle: 'GL journal entry and debit/credit lines', types: ['journal'] },
+  { key: 'audit', label: 'Who touched it?', subtitle: 'Audit trail and approvals', types: ['audit'] },
+  { key: 'document', label: 'What proof is attached?', subtitle: 'Files, packets, and missing support', types: ['document', 'missing'] },
 ];
+
+const branchLayout: Record<string, { x: number; y: number }> = {
+  work_order: { x: 430, y: 250 },
+  employee: { x: 360, y: 470 },
+  labor_cost: { x: 430, y: 690 },
+  payroll: { x: 720, y: 920 },
+  billing: { x: 1180, y: 250 },
+  journal: { x: 1470, y: 470 },
+  audit: { x: 1470, y: 690 },
+  document: { x: 1180, y: 920 },
+};
 
 function currentPeriod() {
   const now = new Date();
@@ -196,14 +206,6 @@ function typeIcon(type: EvidenceNodeType) {
   if (type === 'document') return FileText;
   if (type === 'missing') return AlertTriangle;
   return Network;
-}
-
-function polarPoint(centerX: number, centerY: number, radius: number, angleDegrees: number) {
-  const angle = (angleDegrees * Math.PI) / 180;
-  return {
-    x: centerX + radius * Math.cos(angle),
-    y: centerY + radius * Math.sin(angle),
-  };
 }
 
 function branchStatus(nodes: EvidenceNode[]): EvidenceNodeStatus {
@@ -295,7 +297,7 @@ function MindMapCanvas({
 
   const branches = branchDefs.map((branch) => {
     const nodes = data.nodes.filter((node) => branch.types.includes(node.type));
-    const point = polarPoint(center.x, center.y, 410, branch.angle);
+    const point = branchLayout[branch.key];
     return {
       ...branch,
       point,

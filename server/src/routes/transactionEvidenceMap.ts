@@ -74,6 +74,11 @@ type InvoiceEvidence = {
   posted_at: string | null;
   posted_by: string | null;
   sent_at: string | null;
+  matched_project_ids: string[] | null;
+  invoice_po_id: string | null;
+  invoice_po_override: string | null;
+  lot_po_id: number | null;
+  packing_slip_po_id: number | null;
   line_count: number;
   billed_project_total: string;
   line_descriptions: string[];
@@ -143,11 +148,12 @@ router.get('/transaction-evidence-map', authenticateToken, requireGlennj, async 
       customer_id: string;
       customer_name_snapshot: string | null;
       status: string | null;
+      po_id: number | null;
       default_charge_code_id: number | null;
       created_at: string | null;
     }>(
       `SELECT id, project_code, project_name, customer_id, customer_name_snapshot, status,
-              default_charge_code_id, created_at
+              po_id, default_charge_code_id, created_at
        FROM projects
        WHERE id = $1::uuid
        LIMIT 1`,
@@ -258,21 +264,37 @@ router.get('/transaction-evidence-map', authenticateToken, requireGlennj, async 
          inv.posted_at::text,
          inv.posted_by,
          inv.sent_at::text,
-         COUNT(lines.id)::int AS line_count,
+         array_remove(array_agg(DISTINCT lines.project_id), NULL) AS matched_project_ids,
+         inv.po_id AS invoice_po_id,
+         inv.po_override AS invoice_po_override,
+         inv_lot.po_id AS lot_po_id,
+         slip_lot.po_id AS packing_slip_po_id,
+         COUNT(DISTINCT lines.id)::int AS line_count,
          COALESCE(SUM(lines.line_total::numeric), 0)::text AS billed_project_total,
-         ARRAY_AGG(lines.description ORDER BY lines.created_at, lines.id) FILTER (WHERE lines.description IS NOT NULL) AS line_descriptions,
+         COALESCE(
+           ARRAY_AGG(lines.description ORDER BY lines.created_at, lines.id) FILTER (WHERE lines.description IS NOT NULL),
+           ARRAY[]::text[]
+         ) AS line_descriptions,
          je.id AS journal_entry_id,
          je.status AS journal_status,
          je.memo AS journal_memo,
          je.effective_date::text AS journal_effective_date
        FROM ar_invoices inv
-       JOIN ar_invoice_lines lines ON lines.invoice_id = inv.id
+       LEFT JOIN ar_invoice_lines lines ON lines.invoice_id = inv.id
        LEFT JOIN p2_customers c ON c.customer_id = inv.customer_id
+       LEFT JOIN p2_lot_numbers inv_lot ON inv_lot.id = inv.lot_id
+       LEFT JOIN p2_packing_slips slip ON slip.id = inv.packing_slip_id
+       LEFT JOIN p2_lot_numbers slip_lot ON slip_lot.id = slip.lot_number_id
        LEFT JOIN journal_entries je ON je.reference_uuid = inv.id
-       WHERE lines.project_id = $1
-       GROUP BY inv.id, c.customer_name, je.id, je.status, je.memo, je.effective_date
+       WHERE
+         lines.project_id IN ($1, $2)
+         OR inv.wad_id = ANY($4::uuid[])
+         OR ($3::int IS NOT NULL AND inv.po_id = $3::text)
+         OR ($3::int IS NOT NULL AND inv_lot.po_id = $3::int)
+         OR ($3::int IS NOT NULL AND slip_lot.po_id = $3::int)
+       GROUP BY inv.id, c.customer_name, inv_lot.po_id, slip_lot.po_id, je.id, je.status, je.memo, je.effective_date
        ORDER BY inv.invoice_date DESC, inv.invoice_number DESC`,
-      [projectId],
+      [projectId, project.project_code, project.po_id, workOrderIds],
     ).catch(() => []);
 
     const invoiceIds = invoiceRows.map((row) => row.id);
@@ -574,6 +596,11 @@ router.get('/transaction-evidence-map', authenticateToken, requireGlennj, async 
           postedAt: invoice.posted_at,
           postedBy: invoice.posted_by,
           sentAt: invoice.sent_at,
+          matchedProjectIds: invoice.matched_project_ids,
+          invoicePoId: invoice.invoice_po_id,
+          invoicePoOverride: invoice.invoice_po_override,
+          lotPoId: invoice.lot_po_id,
+          packingSlipPoId: invoice.packing_slip_po_id,
           lineDescriptions: invoice.line_descriptions,
         },
         links: [{ label: 'Open invoice', href: `/finance/invoices/${invoice.id}`, kind: 'app' }],

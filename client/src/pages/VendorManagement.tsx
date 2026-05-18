@@ -722,12 +722,9 @@ export default function VendorManagement() {
     const isSameOriginStoragePath =
       trimmed.startsWith('/objects/') || trimmed.startsWith('/uploads/');
 
-    const newWindow = window.open('', '_blank', 'noopener,noreferrer');
-
-    if (!isSameOriginStoragePath) {
-      if (newWindow) {
-        newWindow.location.href = trimmed;
-      } else {
+    const openDirect = () => {
+      const win = window.open(trimmed, '_blank', 'noopener,noreferrer');
+      if (!win) {
         toast({
           title: 'Pop-up blocked',
           description:
@@ -735,6 +732,10 @@ export default function VendorManagement() {
           variant: 'destructive',
         });
       }
+    };
+
+    if (!isSameOriginStoragePath) {
+      openDirect();
       return;
     }
 
@@ -744,50 +745,22 @@ export default function VendorManagement() {
     } catch {
       // Network error or HEAD unsupported — fall back to direct open so we
       // don't block a document that might actually load via GET.
-      if (newWindow) {
-        newWindow.location.href = trimmed;
-      } else {
-        toast({
-          title: 'Pop-up blocked',
-          description:
-            'Your browser blocked the PDF from opening. Please allow pop-ups for this site and try again.',
-          variant: 'destructive',
-        });
-      }
+      openDirect();
       return;
     }
 
     if (res.ok) {
-      if (newWindow) {
-        newWindow.location.href = trimmed;
-      } else {
-        toast({
-          title: 'Pop-up blocked',
-          description:
-            'Your browser blocked the PDF from opening. Please allow pop-ups for this site and try again.',
-          variant: 'destructive',
-        });
-      }
+      openDirect();
       return;
     }
 
     // HEAD may legitimately be rejected with 405 / 501 by some object stores
     // even when GET works fine. Don't block the user — try a direct open.
     if (res.status === 405 || res.status === 501) {
-      if (newWindow) {
-        newWindow.location.href = trimmed;
-      } else {
-        toast({
-          title: 'Pop-up blocked',
-          description:
-            'Your browser blocked the PDF from opening. Please allow pop-ups for this site and try again.',
-          variant: 'destructive',
-        });
-      }
+      openDirect();
       return;
     }
 
-    if (newWindow) newWindow.close();
     if (res.status === 404) {
       toast({
         title: 'Document not found',
@@ -2348,6 +2321,23 @@ export default function VendorManagement() {
                     >
                       <div className="flex items-center gap-2">
                         {vendor.name}
+                        {vendor.mainDocumentUrl?.trim() && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-6 gap-1 px-2 py-0 text-xs"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openVendorPdf(vendor.mainDocumentUrl, 'vendor document');
+                            }}
+                            data-testid={`button-view-vendor-doc-${vendor.id}`}
+                            title="View uploaded vendor document"
+                          >
+                            <FileText className="w-3 h-3" />
+                            Document
+                          </Button>
+                        )}
                         {vendor.approved && !vendor.mainDocumentUrl?.trim() && (
                           <span
                             tabIndex={0}

@@ -277,14 +277,20 @@ async function createVoiceNoteFromTranscript(req: Request, transcription: string
     }
   }
 
-  const linkSuggestions = await suggestLinks(cleanedTranscription, verifiedOrderId);
+  let linkSuggestions: SuggestedLink[] = [];
+  try {
+    linkSuggestions = await suggestLinks(cleanedTranscription, verifiedOrderId);
+  } catch (suggestionError) {
+    console.warn('Voice note link suggestions skipped:', suggestionError);
+  }
 
   let employeeId = null;
-  if (user?.username) {
+  const userEmail = typeof user?.email === 'string' ? user.email.trim() : '';
+  if (userEmail) {
     const employee = await db
       .select({ id: employees.id })
       .from(employees)
-      .where(eq(employees.email, user.email))
+      .where(eq(employees.email, userEmail))
       .limit(1);
     if (employee.length > 0) {
       employeeId = employee[0].id;
@@ -311,25 +317,29 @@ async function createVoiceNoteFromTranscript(req: Request, transcription: string
     .returning();
 
   if (verifiedOrderId) {
-    const [existingOrder] = await db
-      .select({ notes: allOrders.notes })
-      .from(allOrders)
-      .where(eq(allOrders.orderId, verifiedOrderId))
-      .limit(1);
+    try {
+      const [existingOrder] = await db
+        .select({ notes: allOrders.notes })
+        .from(allOrders)
+        .where(eq(allOrders.orderId, verifiedOrderId))
+        .limit(1);
 
-    const timestamp = new Date().toLocaleString('en-US', {
-      month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
-    });
-    const voiceNoteEntry = `[Voice Note ${timestamp} - ${user?.username || 'unknown'}]: ${cleanedTranscription}`;
+      const timestamp = new Date().toLocaleString('en-US', {
+        month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
+      });
+      const voiceNoteEntry = `[Voice Note ${timestamp} - ${user?.username || 'unknown'}]: ${cleanedTranscription}`;
 
-    const updatedNotes = existingOrder?.notes
-      ? `${existingOrder.notes}\n\n${voiceNoteEntry}`
-      : voiceNoteEntry;
+      const updatedNotes = existingOrder?.notes
+        ? `${existingOrder.notes}\n\n${voiceNoteEntry}`
+        : voiceNoteEntry;
 
-    await db
-      .update(allOrders)
-      .set({ notes: updatedNotes })
-      .where(eq(allOrders.orderId, verifiedOrderId));
+      await db
+        .update(allOrders)
+        .set({ notes: updatedNotes })
+        .where(eq(allOrders.orderId, verifiedOrderId));
+    } catch (orderNoteError) {
+      console.warn('Voice note saved, but order notes update was skipped:', orderNoteError);
+    }
   }
 
   return {
@@ -487,7 +497,8 @@ router.post('/', checkVoiceNoteAccess, async (req: Request, res: Response) => {
     res.status(201).json(newNote);
   } catch (error) {
     console.error('Error creating voice note:', error);
-    res.status(500).json({ error: 'Failed to create voice note' });
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    res.status(500).json({ error: 'Failed to create voice note', details: message });
   }
 });
 

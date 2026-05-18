@@ -243,8 +243,12 @@ export default function VoiceNotesPage() {
       
       toast({ title: 'Success', description: message });
     },
-    onError: () => {
-      toast({ title: 'Error', description: 'Failed to save voice note', variant: 'destructive' });
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error?.message || 'Failed to save voice note',
+        variant: 'destructive',
+      });
     },
   });
 

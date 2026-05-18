@@ -697,6 +697,21 @@ export default function VendorManagement() {
     form.setValue('mainDocumentUrl', '');
   };
 
+  const getVendorPdfViewUrl = (url: string) => {
+    const trimmed = url.trim();
+    const normalized = trimmed.startsWith('objects/') ? `/${trimmed}` : trimmed;
+    const isVendorStoragePath =
+      normalized.startsWith('/objects/') ||
+      normalized.startsWith('/uploads/vendor-documents/') ||
+      normalized.startsWith('/uploads/vendor-approvals/') ||
+      normalized.startsWith('vendor-documents/') ||
+      normalized.startsWith('vendor-approvals/');
+
+    return isVendorStoragePath
+      ? `/api/vendors/documents/view?path=${encodeURIComponent(normalized)}`
+      : trimmed;
+  };
+
   // Opens a vendor PDF URL after a HEAD precheck so users get a clear toast
   // instead of a blank tab when the underlying object is missing / forbidden /
   // the storage backend is unavailable.
@@ -714,16 +729,18 @@ export default function VendorManagement() {
       return;
     }
 
+    const viewUrl = getVendorPdfViewUrl(trimmed);
+
     // Only HEAD-precheck same-origin storage paths (`/objects/...`,
-    // `/uploads/...`). For full external URLs (e.g. a legacy
+    // `/uploads/...`) through the vendor document API. For full external URLs (e.g. a legacy
     // `https://storage.googleapis.com/...` value) HEAD is typically blocked
     // by CORS or unsupported, so a precheck would produce false negatives.
     // In that case we just open the URL directly and let the browser handle it.
     const isSameOriginStoragePath =
-      trimmed.startsWith('/objects/') || trimmed.startsWith('/uploads/');
+      viewUrl.startsWith('/api/vendors/documents/view');
 
     const openDirect = () => {
-      const win = window.open(trimmed, '_blank', 'noopener,noreferrer');
+      const win = window.open(viewUrl, '_blank', 'noopener,noreferrer');
       if (!win) {
         toast({
           title: 'Pop-up blocked',
@@ -741,7 +758,7 @@ export default function VendorManagement() {
 
     let res: Response;
     try {
-      res = await fetch(trimmed, { method: 'HEAD' });
+      res = await fetch(viewUrl, { method: 'HEAD' });
     } catch {
       // Network error or HEAD unsupported — fall back to direct open so we
       // don't block a document that might actually load via GET.

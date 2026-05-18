@@ -2944,7 +2944,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const oneWeekAgo = new Date();
       oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
 
-      const [poStats, itemStats] = await Promise.all([
+      const [poStats, itemStats, legacyStats] = await Promise.all([
         pool.query(`
           SELECT
             COUNT(*) FILTER (WHERE status NOT IN ('COMPLETED','CANCELED')) AS "openPOs",
@@ -2978,17 +2978,33 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
             COUNT(*) FILTER (WHERE status = 'FINAL_QC' AND NOT has_completed_traveler) AS "pendingQC"
           FROM item_state
         `, [oneWeekAgo]),
+        pool.query(`
+          SELECT
+            COALESCE(SUM(quantity) FILTER (
+              WHERE scheduled_layup_date IS NOT NULL
+                AND COALESCE(UPPER(status), '') NOT IN ('COMPLETED', 'CLOSED', 'CANCELLED', 'CANCELED')
+            ), 0)::int AS "scheduledItems",
+            COALESCE(SUM(quantity) FILTER (
+              WHERE COALESCE(UPPER(status), '') = 'IN_PROGRESS'
+            ), 0)::int AS "inProduction",
+            COALESCE(SUM(quantity) FILTER (
+              WHERE COALESCE(UPPER(status), '') IN ('COMPLETED', 'CLOSED')
+                AND COALESCE(completed_at, updated_at) > $1
+            ), 0)::int AS "completedThisWeek"
+          FROM p2_production_orders
+        `, [oneWeekAgo]),
       ]);
 
       const po = poStats[0] || poStats.rows?.[0];
       const si = itemStats[0] || itemStats.rows?.[0];
+      const legacy = legacyStats[0] || legacyStats.rows?.[0];
 
       res.json({
         openPOs:          parseInt(po.openPOs, 10)          || 0,
         pendingBOMs:      parseInt(po.pendingBOMs, 10)      || 0,
-        scheduledItems:   parseInt(si.scheduledItems, 10)   || 0,
-        inProduction:     parseInt(si.inProduction, 10)     || 0,
-        completedThisWeek:parseInt(si.completedThisWeek, 10)|| 0,
+        scheduledItems:   (parseInt(si.scheduledItems, 10)   || 0) + (parseInt(legacy.scheduledItems, 10) || 0),
+        inProduction:     (parseInt(si.inProduction, 10)     || 0) + (parseInt(legacy.inProduction, 10) || 0),
+        completedThisWeek:(parseInt(si.completedThisWeek, 10)|| 0) + (parseInt(legacy.completedThisWeek, 10) || 0),
         pendingQC:        parseInt(si.pendingQC, 10)        || 0,
       });
     } catch (_error) {
@@ -3095,6 +3111,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const normalizeP2Status = (status: unknown) =>
         String(status || '').trim().toUpperCase();
       const P2_GATED_STATUSES = new Set([
+        'OPEN',
         'READY_FOR_P2_RELEASE',
         'READY_FOR_PRODUCTION',
         'IN_PRODUCTION',
@@ -3290,6 +3307,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
            p2po.p2_po_id AS "poId",
            p2po.p2_po_item_id AS "poItemId",
            p2po.quantity,
+           GREATEST(p2po.quantity - COALESCE(p2po.quantity_manufactured, 0), 0)::int AS "openQuantity",
            p2po.department,
            p2po.scheduled_layup_date AS "scheduledLayupDate",
            p2po.due_date AS "dueDate",
@@ -3300,29 +3318,25 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
          FROM p2_production_orders p2po
          JOIN p2_purchase_orders po ON po.id = p2po.p2_po_id
          LEFT JOIN p2_purchase_order_items poi ON poi.id = p2po.p2_po_item_id
-         LEFT JOIN (
-           SELECT po_id, po_item_id, COUNT(*)::int AS serialized_count
-           FROM p2_serialized_items
-           GROUP BY po_id, po_item_id
-         ) si ON si.po_id = p2po.p2_po_id AND si.po_item_id = p2po.p2_po_item_id
          WHERE COALESCE(UPPER(p2po.status), '') NOT IN ('COMPLETED', 'CLOSED', 'CANCELLED', 'CANCELED')
-           AND COALESCE(si.serialized_count, 0) = 0
+           AND GREATEST(p2po.quantity - COALESCE(p2po.quantity_manufactured, 0), 0) > 0
          ORDER BY p2po.due_date NULLS LAST, p2po.created_at`
       );
-      const legacySchedulingList = (legacySchedulingRows as any[]).map((row: any) => {
+      const legacySchedulingList = (legacySchedulingRows as any[]).flatMap((row: any) => {
         const isScheduled = !!row.scheduledLayupDate || String(row.department || '').toLowerCase() === 'layup';
-        return {
-          id: `legacy-p2-production-order-${row.id}`,
+        const openQuantity = Math.max(1, Number(row.openQuantity || row.quantity || 1));
+        return Array.from({ length: openQuantity }, (_unused, index) => ({
+          id: `legacy-p2-production-order-${row.id}-${index + 1}`,
           poNumber: row.poNumber || `PO-${row.poId}`,
           partNumber: row.partNumber || row.orderId || 'Unknown',
           description: row.partName || row.department || '',
-          totalQuantity: row.quantity || 1,
-          scheduledQuantity: isScheduled ? row.quantity || 1 : 0,
-          remainingQuantity: isScheduled ? 0 : row.quantity || 1,
+          totalQuantity: 1,
+          scheduledQuantity: isScheduled ? 1 : 0,
+          remainingQuantity: isScheduled ? 0 : 1,
           dueDate: row.dueDate,
           priority: 'normal',
           status: isScheduled ? 'scheduled' : 'pending',
-        };
+        }));
       });
       
       res.json([...schedulingList, ...legacySchedulingList]);
@@ -3446,13 +3460,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
          FROM p2_production_orders p2po
          JOIN p2_purchase_orders po ON po.id = p2po.p2_po_id
          LEFT JOIN p2_purchase_order_items poi ON poi.id = p2po.p2_po_item_id
-         LEFT JOIN (
-           SELECT po_id, po_item_id, COUNT(*)::int AS serialized_count
-           FROM p2_serialized_items
-           GROUP BY po_id, po_item_id
-         ) si ON si.po_id = p2po.p2_po_id AND si.po_item_id = p2po.p2_po_item_id
          WHERE COALESCE(UPPER(p2po.status), '') NOT IN ('CANCELLED', 'CANCELED')
-           AND COALESCE(si.serialized_count, 0) = 0
          ORDER BY p2po.due_date NULLS LAST, p2po.created_at`
       );
       const poIds = [...new Set([

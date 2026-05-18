@@ -1235,6 +1235,12 @@ export default function Navigation() {
       description: 'CNC operations and maintenance management dashboard',
     },
     {
+      path: '/angiet-dashboard',
+      label: 'ANGIET Dashboard',
+      icon: Settings,
+      description: 'Cutting Table, CNC & Gunsmith Operations dashboard',
+    },
+    {
       path: '/bradw-dashboard',
       label: 'BRADW Dashboard',
       icon: Users,

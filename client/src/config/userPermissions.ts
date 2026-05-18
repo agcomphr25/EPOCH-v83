@@ -300,11 +300,18 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
   angiet: {
     routes: [
       '/order-entry',
+      '/department-queue/cnc',
+      '/department-queue/gunsmith',
+      '/cutting-control-center',
+      '/fabric-inventory',
+      '/all-orders',
       '/orders-list',
       '/orders-management',
       '/department-queue/production-queue',
       '/department-queue/layup-plugging',
       '/customers',
+      '/inventory/parts-request',
+      '/training',
     ],
   },
 
@@ -451,9 +458,11 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/department-queue/gunsmith',
       '/cutting-control-center',
       '/fabric-inventory',
+      '/all-orders',
       '/orders-list',
       '/orders-management',
       '/inventory/parts-request',
+      '/training',
     ],
   },
 

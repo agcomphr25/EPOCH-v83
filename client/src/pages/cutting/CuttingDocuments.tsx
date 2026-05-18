@@ -1,7 +1,6 @@
 import { useRef, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { useUpload } from "@/hooks/use-upload";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -143,11 +142,17 @@ export default function CuttingDocuments() {
     queryKey: ["/api/cutting-documents"],
   });
 
-  const { uploadFile } = useUpload();
-
   const createDocMutation = useMutation({
-    mutationFn: async (data: Omit<CuttingDocument, "id" | "uploadedAt">) =>
-      apiRequest("/api/cutting-documents", { method: "POST", body: JSON.stringify(data) }),
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("displayName", file.name);
+      return apiRequest("/api/cutting-documents/upload", {
+        method: "POST",
+        body: formData,
+        timeout: 120000,
+      });
+    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/cutting-documents"] }),
   });
 
@@ -167,23 +172,7 @@ export default function CuttingDocuments() {
     if (!file) return;
     setIsUploading(true);
     try {
-      const result = await uploadFile(file);
-      if (!result.ok) {
-        console.error("[CuttingDocuments] uploadFile failed:", result.error);
-        toast({
-          title: "Upload failed",
-          description: result.error.message || "Could not upload file.",
-          variant: "destructive",
-        });
-        return;
-      }
-      await createDocMutation.mutateAsync({
-        displayName: file.name,
-        fileUrl: result.response.objectPath,
-        originalFilename: file.name,
-        mimeType: file.type || "application/octet-stream",
-        fileSize: file.size,
-      });
+      await createDocMutation.mutateAsync(file);
       toast({ title: "Uploaded", description: `${file.name} added to documents.` });
     } catch (err) {
       const description =

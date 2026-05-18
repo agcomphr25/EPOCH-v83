@@ -1492,7 +1492,7 @@ export default function EdriDashboard() {
 
       {/* Domain Violations Dialog — shows all rules with open violations for a selected domain */}
       <Dialog open={!!drilldownDomainKey} onOpenChange={(open) => { if (!open) setDrilldownDomainKey(null); }}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           {drilldownDomainKey && (() => {
             const domainLabel = DOMAIN_LABELS[drilldownDomainKey] ?? drilldownDomainKey;
             const domainRules = (forensicSummary?.byRule ?? []).filter(

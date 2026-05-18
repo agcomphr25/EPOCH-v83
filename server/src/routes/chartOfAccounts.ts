@@ -1,5 +1,5 @@
 import { Router, type Request, type Response, type NextFunction, type RequestHandler } from 'express';
-import { and, asc, eq, ilike, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../../db';
 import { accountingPeriods, chartOfAccounts, journalEntries, journalLines } from '../../schema';
@@ -93,6 +93,8 @@ router.get('/accounts-with-balances', h(async (req, res) => {
         .select({
           totalDebit: sql<number>`COALESCE(SUM(CAST(${journalLines.debitAmount} AS DECIMAL)), 0)`,
           totalCredit: sql<number>`COALESCE(SUM(CAST(${journalLines.creditAmount} AS DECIMAL)), 0)`,
+          postedLineCount: sql<number>`COUNT(${journalLines.id})`,
+          postedEntryCount: sql<number>`COUNT(DISTINCT ${journalEntries.id})`,
         })
         .from(journalLines)
         .innerJoin(journalEntries, eq(journalLines.journalEntryId, journalEntries.id))
@@ -101,9 +103,32 @@ router.get('/accounts-with-balances', h(async (req, res) => {
           eq(journalEntries.status, 'POSTED'),
         ));
 
+      const latestPostedActivity = await db
+        .select({
+          journalEntryId: journalEntries.id,
+          transactionType: journalEntries.transactionType,
+          referenceType: journalEntries.referenceType,
+          referenceId: journalEntries.referenceId,
+          effectiveDate: journalEntries.effectiveDate,
+          postedAt: journalEntries.postedAt,
+          memo: journalEntries.memo,
+          debitAmount: journalLines.debitAmount,
+          creditAmount: journalLines.creditAmount,
+        })
+        .from(journalLines)
+        .innerJoin(journalEntries, eq(journalLines.journalEntryId, journalEntries.id))
+        .where(and(
+          eq(journalLines.accountId, account.id),
+          eq(journalEntries.status, 'POSTED'),
+        ))
+        .orderBy(desc(journalEntries.effectiveDate), desc(journalEntries.id), desc(journalLines.id))
+        .limit(1);
+
       const [balance] = balanceResult;
       const totalDebit = Number(balance?.totalDebit ?? 0);
       const totalCredit = Number(balance?.totalCredit ?? 0);
+      const postedLineCount = Number(balance?.postedLineCount ?? 0);
+      const postedEntryCount = Number(balance?.postedEntryCount ?? 0);
 
       // Calculate balance based on normal balance direction
       let currentBalance = 0;
@@ -117,6 +142,17 @@ router.get('/accounts-with-balances', h(async (req, res) => {
       return {
         ...account,
         currentBalance,
+        balanceAudit: {
+          totalDebit,
+          totalCredit,
+          postedLineCount,
+          postedEntryCount,
+          normalBalance: account.normalBalance,
+          formula: account.normalBalance === 'DEBIT'
+            ? 'totalDebit - totalCredit'
+            : 'totalCredit - totalDebit',
+          latestPostedActivity: latestPostedActivity[0] ?? null,
+        },
       };
     })
   );

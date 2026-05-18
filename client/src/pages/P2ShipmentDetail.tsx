@@ -98,6 +98,9 @@ interface Invoice {
   due_date: string | null;
   total_amount: string;
   status: string;
+  journal_entry_id: number | null;
+  journal_entry_status: string | null;
+  journal_line_count: number | null;
 }
 
 interface ShipmentDetail {
@@ -883,15 +886,27 @@ export default function P2ShipmentDetail() {
                 <div>
                   <p className="text-sm font-medium">AR Invoice</p>
                   {invoice ? (
-                    <p className="text-xs text-muted-foreground font-mono flex items-center gap-1.5">
-                      <Link
-                        href={`/finance/invoices/${invoice.id}`}
-                        className="text-blue-600 hover:underline dark:text-blue-400"
-                      >
-                        {invoice.invoice_number}
-                      </Link>
-                      <Badge className={`text-xs ${invoiceStatusColor(invoice.status)}`}>{invoice.status}</Badge>
-                    </p>
+                    <>
+                      <p className="text-xs text-muted-foreground font-mono flex items-center gap-1.5">
+                        <Link
+                          href={`/finance/invoices/${invoice.id}`}
+                          className="text-blue-600 hover:underline dark:text-blue-400"
+                        >
+                          {invoice.invoice_number}
+                        </Link>
+                        <Badge className={`text-xs ${invoiceStatusColor(invoice.status)}`}>{invoice.status}</Badge>
+                      </p>
+                      {invoice.journal_entry_id ? (
+                        <p className="text-xs text-indigo-700 mt-1">
+                          JE #{invoice.journal_entry_id} {invoice.journal_entry_status || 'POSTED'}
+                          {invoice.journal_line_count ? ` (${invoice.journal_line_count} lines)` : ''}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-amber-700 mt-1">
+                          Journal entry pending until invoice is posted.
+                        </p>
+                      )}
+                    </>
                   ) : (
                     <p className="text-xs text-muted-foreground italic">No invoice created yet</p>
                   )}

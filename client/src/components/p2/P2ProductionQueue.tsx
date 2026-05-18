@@ -83,6 +83,7 @@ interface QueueItem {
   replacementForSerializedItemId?: string | null;
   replacementForSerialNumber?: string | null;
   replacementReason?: string | null;
+  isLegacyProductionOrder?: boolean;
   hasActiveTask: boolean;
   activeTask: ActiveTask | null;
   barcodePrintedAt?: string | null;
@@ -207,16 +208,21 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
       });
     },
     onSuccess: (data: any, variables) => {
-      const desc = variables.status === 'COMPLETED' 
+      const desc = variables.status === 'COMPLETED'
         ? 'Item marked as completed (off-system production) and added to traveler management'
-        : variables.status === 'SCRAPPED' && data?.replacementItem
-          ? `Item marked NCR/scrapped. Replacement ${data.replacementItem.serialNumber} was added to the production queue.`
+        : variables.status === 'SCRAPPED'
+          ? data?.replacementItem?.serialNumber
+            ? `Item marked NCR/scrapped. Replacement ${data.replacementItem.serialNumber} was added for scheduling.`
+            : 'Item marked NCR/scrapped. A new unit was added to the PO and will appear in scheduling.'
           : `Item status changed to ${variables.status}`;
       toast({
         title: 'Status Updated',
         description: desc,
       });
       queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/production-queue'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/scheduling-list'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/po-statuses'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/serialized-items/scrapped'] });
       queryClient.invalidateQueries({ queryKey: ['/api/travelers'] });
       setShowHoldDialog(false);
       setShowScrapDialog(false);
@@ -847,6 +853,15 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                                                 Replacement
                                               </Badge>
                                             )}
+                                            {item.isLegacyProductionOrder && (
+                                              <Badge
+                                                variant="outline"
+                                                className="border-slate-300 bg-slate-50 text-slate-700 text-[10px] font-sans"
+                                                title="Legacy production order without serialized traveler records"
+                                              >
+                                                Legacy
+                                              </Badge>
+                                            )}
                                             {item.barcodePrintedAt && (
                                               <span
                                                 className="inline-flex items-center gap-0.5 text-muted-foreground/70"
@@ -897,7 +912,12 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                                           )}
                                         </TableCell>
                                         <TableCell>
-                                          {item.hasActiveTask && item.activeTask ? (
+                                          {item.status === 'COMPLETED' ? (
+                                            <Badge className="bg-green-600">
+                                              <CheckCircle className="h-3 w-3 mr-1" />
+                                              Completed
+                                            </Badge>
+                                          ) : item.hasActiveTask && item.activeTask ? (
                                             <div className="flex items-center gap-2">
                                               <Badge className="bg-green-600">
                                                 <Play className="h-3 w-3 mr-1" />
@@ -908,6 +928,11 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                                                 {item.activeTask.employeeName}
                                               </span>
                                             </div>
+                                          ) : item.isLegacyProductionOrder ? (
+                                            <Badge variant="outline">
+                                              <Clock className="h-3 w-3 mr-1" />
+                                              Legacy Order
+                                            </Badge>
                                           ) : (
                                             <Badge variant="secondary">
                                               <Clock className="h-3 w-3 mr-1" />
@@ -917,45 +942,51 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                                         </TableCell>
                                         <TableCell className="text-right">
                                           <div className="flex items-center justify-end gap-1">
-                                            <Button
-                                              variant="ghost"
-                                              size="sm"
-                                              onClick={() => {
-                                                setScanInput(item.barcode);
-                                                scanMutation.mutate(item.barcode);
-                                              }}
-                                              data-testid={`button-view-${item.id}`}
-                                            >
-                                              <Eye className="h-4 w-4" />
-                                            </Button>
-                                            <Button
-                                              variant="ghost"
-                                              size="sm"
-                                              onClick={() => openHoldDialog(item)}
-                                              className="text-amber-600 hover:text-amber-700"
-                                              data-testid={`button-hold-${item.id}`}
-                                            >
-                                              <Pause className="h-4 w-4" />
-                                            </Button>
-                                            <Button
-                                              variant="ghost"
-                                              size="sm"
-                                              onClick={() => openOffSystemDialog(item)}
-                                              className="text-indigo-600 hover:text-indigo-700"
-                                              title="Off-System Production Complete"
-                                              data-testid={`button-off-system-${item.id}`}
-                                            >
-                                              <ExternalLink className="h-4 w-4" />
-                                            </Button>
-                                            <Button
-                                              variant="ghost"
-                                              size="sm"
-                                              onClick={() => openScrapDialog(item)}
-                                              className="text-red-600 hover:text-red-700"
-                                              data-testid={`button-scrap-${item.id}`}
-                                            >
-                                              <XCircle className="h-4 w-4" />
-                                            </Button>
+                                            {!item.isLegacyProductionOrder && (
+                                              <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => {
+                                                  setScanInput(item.barcode);
+                                                  scanMutation.mutate(item.barcode);
+                                                }}
+                                                data-testid={`button-view-${item.id}`}
+                                              >
+                                                <Eye className="h-4 w-4" />
+                                              </Button>
+                                            )}
+                                            {item.status !== 'COMPLETED' && !item.isLegacyProductionOrder && (
+                                              <>
+                                                <Button
+                                                  variant="ghost"
+                                                  size="sm"
+                                                  onClick={() => openHoldDialog(item)}
+                                                  className="text-amber-600 hover:text-amber-700"
+                                                  data-testid={`button-hold-${item.id}`}
+                                                >
+                                                  <Pause className="h-4 w-4" />
+                                                </Button>
+                                                <Button
+                                                  variant="ghost"
+                                                  size="sm"
+                                                  onClick={() => openOffSystemDialog(item)}
+                                                  className="text-indigo-600 hover:text-indigo-700"
+                                                  title="Off-System Production Complete"
+                                                  data-testid={`button-off-system-${item.id}`}
+                                                >
+                                                  <ExternalLink className="h-4 w-4" />
+                                                </Button>
+                                                <Button
+                                                  variant="ghost"
+                                                  size="sm"
+                                                  onClick={() => openScrapDialog(item)}
+                                                  className="text-red-600 hover:text-red-700"
+                                                  data-testid={`button-scrap-${item.id}`}
+                                                >
+                                                  <XCircle className="h-4 w-4" />
+                                                </Button>
+                                              </>
+                                            )}
                                           </div>
                                         </TableCell>
                                       </TableRow>

@@ -697,6 +697,115 @@ export default function VendorManagement() {
     form.setValue('mainDocumentUrl', '');
   };
 
+  const getVendorPdfViewUrl = (url: string) => {
+    const trimmed = url.trim();
+    const normalized = trimmed.startsWith('objects/') ? `/${trimmed}` : trimmed;
+    const isVendorStoragePath =
+      normalized.startsWith('/objects/') ||
+      normalized.startsWith('/uploads/vendor-documents/') ||
+      normalized.startsWith('/uploads/vendor-approvals/') ||
+      normalized.startsWith('vendor-documents/') ||
+      normalized.startsWith('vendor-approvals/');
+
+    return isVendorStoragePath
+      ? `/api/vendors/documents/view?path=${encodeURIComponent(normalized)}`
+      : trimmed;
+  };
+
+  // Opens a vendor PDF URL after a HEAD precheck so users get a clear toast
+  // instead of a blank tab when the underlying object is missing / forbidden /
+  // the storage backend is unavailable.
+  const openVendorPdf = async (
+    url: string | undefined | null,
+    label: string = 'document'
+  ) => {
+    const trimmed = (url || '').trim();
+    if (!trimmed) {
+      toast({
+        title: 'No document on file',
+        description: `There is no ${label} uploaded for this vendor yet.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const viewUrl = getVendorPdfViewUrl(trimmed);
+
+    // Only HEAD-precheck same-origin storage paths (`/objects/...`,
+    // `/uploads/...`) through the vendor document API. For full external URLs (e.g. a legacy
+    // `https://storage.googleapis.com/...` value) HEAD is typically blocked
+    // by CORS or unsupported, so a precheck would produce false negatives.
+    // In that case we just open the URL directly and let the browser handle it.
+    const isSameOriginStoragePath =
+      viewUrl.startsWith('/api/vendors/documents/view');
+
+    const openDirect = () => {
+      const win = window.open(viewUrl, '_blank', 'noopener,noreferrer');
+      if (!win) {
+        toast({
+          title: 'Pop-up blocked',
+          description:
+            'Your browser blocked the PDF from opening. Please allow pop-ups for this site and try again.',
+          variant: 'destructive',
+        });
+      }
+    };
+
+    if (!isSameOriginStoragePath) {
+      openDirect();
+      return;
+    }
+
+    let res: Response;
+    try {
+      res = await fetch(viewUrl, { method: 'HEAD' });
+    } catch {
+      // Network error or HEAD unsupported — fall back to direct open so we
+      // don't block a document that might actually load via GET.
+      openDirect();
+      return;
+    }
+
+    if (res.ok) {
+      openDirect();
+      return;
+    }
+
+    // HEAD may legitimately be rejected with 405 / 501 by some object stores
+    // even when GET works fine. Don't block the user — try a direct open.
+    if (res.status === 405 || res.status === 501) {
+      openDirect();
+      return;
+    }
+
+    if (res.status === 404) {
+      toast({
+        title: 'Document not found',
+        description: `The ${label} could not be located in storage. It may have been deleted — please re-upload it.`,
+        variant: 'destructive',
+      });
+    } else if (res.status === 403) {
+      toast({
+        title: 'Access denied',
+        description: `You do not have permission to view this ${label}, or its access policy is missing. Re-uploading the document will restore access.`,
+        variant: 'destructive',
+      });
+    } else if (res.status === 503) {
+      toast({
+        title: 'Storage temporarily unavailable',
+        description:
+          'The document storage is temporarily unavailable. Please try again in a moment.',
+        variant: 'destructive',
+      });
+    } else {
+      toast({
+        title: 'Unable to open document',
+        description: `An error occurred (${res.status}) while trying to open the ${label}. Please try again.`,
+        variant: 'destructive',
+      });
+    }
+  };
+
   const handleSelectFromLibrary = (url: string, filename: string) => {
     form.setValue('mainDocumentUrl', url);
     setMainDocFile(null); // Clear file since we're using library
@@ -1304,15 +1413,19 @@ export default function VendorManagement() {
                             </Button>
                           </div>
                           {form.watch('mainDocumentUrl') && (
-                            <a
-                              href={form.watch('mainDocumentUrl')}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 mt-2 inline-block"
+                            <button
+                              type="button"
+                              className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 mt-2 inline-block underline"
                               data-testid="link-view-main-doc"
+                              onClick={() =>
+                                openVendorPdf(
+                                  form.getValues('mainDocumentUrl'),
+                                  'vendor document'
+                                )
+                              }
                             >
                               View PDF
-                            </a>
+                            </button>
                           )}
                         </div>
                       )}
@@ -1851,52 +1964,12 @@ export default function VendorManagement() {
                               type="button"
                               className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 mt-2 inline-block underline"
                               data-testid="link-view-pdf"
-                              onClick={async () => {
-                                const url = form.getValues('approvalPdfUrl');
-                                const newWindow = window.open('', '_blank', 'noopener,noreferrer');
-                                try {
-                                  const res = await fetch(url, { method: 'HEAD' });
-                                  if (res.ok) {
-                                    if (newWindow) {
-                                      newWindow.location.href = url;
-                                    } else {
-                                      toast({
-                                        title: 'Pop-up blocked',
-                                        description: 'Your browser blocked the PDF from opening. Please allow pop-ups for this site and try again.',
-                                        variant: 'destructive',
-                                      });
-                                    }
-                                  } else {
-                                    if (newWindow) newWindow.close();
-                                    if (res.status === 404) {
-                                      toast({
-                                        title: 'Document not found',
-                                        description: 'The approval PDF could not be located. It may have been deleted.',
-                                        variant: 'destructive',
-                                      });
-                                    } else if (res.status === 503) {
-                                      toast({
-                                        title: 'Storage temporarily unavailable',
-                                        description: 'The document storage is temporarily unavailable. Please try again in a moment.',
-                                        variant: 'destructive',
-                                      });
-                                    } else {
-                                      toast({
-                                        title: 'Unable to open document',
-                                        description: 'An error occurred while trying to open the approval PDF. Please try again.',
-                                        variant: 'destructive',
-                                      });
-                                    }
-                                  }
-                                } catch {
-                                  if (newWindow) newWindow.close();
-                                  toast({
-                                    title: 'Unable to reach storage',
-                                    description: 'Could not connect to document storage. Please check your connection and try again.',
-                                    variant: 'destructive',
-                                  });
-                                }
-                              }}
+                              onClick={() =>
+                                openVendorPdf(
+                                  form.getValues('approvalPdfUrl'),
+                                  'approval PDF'
+                                )
+                              }
                             >
                               View PDF
                             </button>
@@ -2265,6 +2338,23 @@ export default function VendorManagement() {
                     >
                       <div className="flex items-center gap-2">
                         {vendor.name}
+                        {vendor.mainDocumentUrl?.trim() && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-6 gap-1 px-2 py-0 text-xs"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openVendorPdf(vendor.mainDocumentUrl, 'vendor document');
+                            }}
+                            data-testid={`button-view-vendor-doc-${vendor.id}`}
+                            title="View uploaded vendor document"
+                          >
+                            <FileText className="w-3 h-3" />
+                            Document
+                          </Button>
+                        )}
                         {vendor.approved && !vendor.mainDocumentUrl?.trim() && (
                           <span
                             tabIndex={0}
@@ -2382,16 +2472,18 @@ export default function VendorManagement() {
                           </div>
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <a
-                            href={vd.mainDocumentUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-1"
+                            data-testid={`button-open-vendor-doc-${vd.id}`}
+                            onClick={() =>
+                              openVendorPdf(vd.mainDocumentUrl, 'vendor document')
+                            }
                           >
-                            <Button variant="outline" size="sm" className="gap-1">
-                              <ExternalLink className="w-4 h-4" />
-                              Open
-                            </Button>
-                          </a>
+                            <ExternalLink className="w-4 h-4" />
+                            Open
+                          </Button>
                         </td>
                       </tr>
                     );

@@ -2,10 +2,12 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { storage } from '../../storage';
 import { db, pool } from '../../db';
+import { sql } from 'drizzle-orm';
 import { insertProjectSchema, insertProjectStepSchema, insertProjectActivityLogSchema, insertProjectNotificationSchema } from '../../schema';
 import { createEmployeeIdentitySnapshot } from '../../identity/userIdentity';
 import { validateProjectClosing, deriveClosingStatus } from '../lib/projectClosingValidation';
 import { ensureProjectHasWAD } from '../lib/wadHelper';
+import { cancelWadWorkOrdersSupersededByP2 } from '../services/wadSupersedeService';
 import { ensureProductionWorkflowReadSchema } from '../lib/productionWorkflowReadiness';
 import { resolveCustomersIntegerId } from '../lib/customerResolver';
 import { getQuoteContractReviewGate } from '../services/quoteContractService';
@@ -709,39 +711,59 @@ router.post('/:id/link-po', async (req, res) => {
       ? `Changed linked P2 PO to ${poRows[0].po_number}`
       : `Linked project to P2 PO ${poRows[0].po_number}`;
 
-    const updated = await storage.updateProject(id, {
-      poId,
-      currentRevisionNumber: nextRevision,
-      currentRevisionLabel: revisionLabel,
-    } as any);
+    // Task #258: link-po writes + WAD supersede must be atomic. If any step
+    // fails (including the supersede helper), the entire link is rolled back
+    // so we cannot end up with a P2 PO linked while redundant WAD WOs remain
+    // active.
+    const { updated, supersedeResult } = await db.transaction(async (tx) => {
+      const updatedRows = await tx.execute(sql`
+        UPDATE projects
+           SET po_id = ${poId},
+               current_revision_number = ${nextRevision},
+               current_revision_label = ${revisionLabel},
+               updated_at = NOW()
+         WHERE id = ${id}::uuid
+         RETURNING *
+      `);
+      const updatedRow = (updatedRows as unknown as { rows: Array<Record<string, unknown>> }).rows?.[0]
+        ?? (Array.isArray(updatedRows) ? (updatedRows as Array<Record<string, unknown>>)[0] : undefined);
 
-    await pool.query(
-      `UPDATE project_steps
-       SET linked_p2_order_id = $2, updated_at = NOW()
-       WHERE project_id = $1 AND step_type = 'p2_order'`,
-      [id, poId]
-    );
+      await tx.execute(sql`
+        UPDATE project_steps
+           SET linked_p2_order_id = ${poId}, updated_at = NOW()
+         WHERE project_id = ${id}::uuid AND step_type = 'p2_order'
+      `);
 
-    await pool.query(
-      `INSERT INTO project_revisions (
-         project_id, revision_number, revision_label, revision_type, summary, reason,
-         previous_po_id, new_po_id, created_by, created_by_display_name, metadata
-       )
-       VALUES ($1, $2, $3, 'PO_LINK_CHANGE', $4, $5, $6, $7, $8, $9, $10::jsonb)`,
-      [
-        id,
-        nextRevision,
-        revisionLabel,
-        revisionSummary,
-        revisionReason,
-        previousPoId,
-        poId,
-        createdBy ?? null,
-        createdByDisplayName ?? null,
-        JSON.stringify({ source: 'project_po_link', previousPoId, newPoId: poId }),
-      ]
-    );
+      await tx.execute(sql`
+        INSERT INTO project_revisions (
+          project_id, revision_number, revision_label, revision_type, summary, reason,
+          previous_po_id, new_po_id, created_by, created_by_display_name, metadata
+        )
+        VALUES (
+          ${id}::uuid, ${nextRevision}, ${revisionLabel}, 'PO_LINK_CHANGE',
+          ${revisionSummary}, ${revisionReason},
+          ${previousPoId}, ${poId},
+          ${createdBy ?? null}, ${createdByDisplayName ?? null},
+          ${JSON.stringify({ source: 'project_po_link', previousPoId, newPoId: poId })}::jsonb
+        )
+      `);
 
+      // Same-tx supersede: errors propagate and roll back the link writes.
+      const supersede = await cancelWadWorkOrdersSupersededByP2(id, {
+        tx,
+        actor: { id: createdBy ?? null, username: createdByDisplayName ?? null },
+        sourceService: 'projects.linkPo',
+      });
+
+      return { updated: updatedRow, supersedeResult: supersede };
+    });
+
+    if (supersedeResult.cancelledCount > 0) {
+      console.log(`[WAD-Supersede] Cancelled ${supersedeResult.cancelledCount} redundant WAD WO(s) on project ${id} after P2 PO link`);
+    }
+
+    // Activity log is best-effort and intentionally outside the tx: a logging
+    // failure must not roll back a successful link.
     await storage.createProjectActivityLog({
       projectId: id,
       activityType: isRelink ? 'project_po_relinked' : 'project_po_linked',

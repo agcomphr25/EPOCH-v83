@@ -710,6 +710,11 @@ import { db, pool, rawSql } from './db';
 import { recordAuditEvent } from './src/services/auditLedgerService';
 import { recordInventoryLedgerEntry } from './src/services/inventoryTransactionLedgerService';
 import { assignDashboardForWorkOrder } from './src/lib/workOrderDashboardAssignment';
+import {
+  getProgramBuilds,
+  getProgramBuildStatus,
+  type ProgramBuildStatus,
+} from './src/lib/programManufacturingOrchestration';
 
 // Drizzle's transaction handle is API-compatible with `db` for the CRUD
 // surface our helpers use, but its TS type is a `PgTransaction` (not the
@@ -1780,6 +1785,10 @@ export interface IStorage {
   getRFQRiskAssessmentById(id: number): Promise<RFQRiskAssessment | undefined>;
   updateRFQRiskAssessment(id: number, data: Partial<InsertRFQRiskAssessment>): Promise<RFQRiskAssessment | undefined>;
   submitRFQRiskAssessment(id: number, username: string): Promise<RFQRiskAssessment | undefined>;
+
+  // Program Manufacturing Orchestration read methods
+  getProgramBuilds(filters?: { projectId?: string | null }): Promise<ProgramBuildStatus['build'][]>;
+  getProgramBuildStatus(buildId?: string | null, filters?: { projectId?: string | null }): Promise<ProgramBuildStatus | null>;
 
   // P2 Purchase Orders CRUD
   getAllP2PurchaseOrders(): Promise<P2PurchaseOrder[]>;
@@ -15193,6 +15202,17 @@ export class DatabaseStorage implements IStorage {
     return submitted;
   }
 
+  async getProgramBuilds(filters?: { projectId?: string | null }): Promise<ProgramBuildStatus['build'][]> {
+    return getProgramBuilds(filters);
+  }
+
+  async getProgramBuildStatus(
+    buildId?: string | null,
+    filters?: { projectId?: string | null }
+  ): Promise<ProgramBuildStatus | null> {
+    return getProgramBuildStatus(buildId, filters);
+  }
+
   // P2 Purchase Orders CRUD
   async getAllP2PurchaseOrders(): Promise<P2PurchaseOrder[]> {
     await ensureP2PurchaseOrderReadSchema();
@@ -16225,8 +16245,9 @@ export class DatabaseStorage implements IStorage {
   async updateP2PoItemWithQtySync(
     poId: number,
     itemId: number,
-    updateData: Partial<InsertP2PurchaseOrderItem>,
-    actor: { username: string; role: string; ipAddress?: string; userAgent?: string | null }
+    updateData: Partial<InsertP2PurchaseOrderItem> & { quantityDelta?: number },
+    actor: { username: string; role: string; ipAddress?: string; userAgent?: string | null },
+    existingTx?: DbOrTx,
   ): Promise<{
     item: P2PurchaseOrderItem;
     sync:
@@ -16244,7 +16265,7 @@ export class DatabaseStorage implements IStorage {
           productionOrdersRemoved: number;
         };
   }> {
-    return await db.transaction(async (tx) => {
+    const runner = async (tx: DbOrTx) => {
       // Lock the PO row first to serialize concurrent qty edits
       const [po] = await tx
         .select()
@@ -16281,8 +16302,12 @@ export class DatabaseStorage implements IStorage {
       }
 
       const oldQty = existingItem.quantity;
-      const newQty = updateData.quantity ?? oldQty;
-      const qtyChanged = updateData.quantity !== undefined && newQty !== oldQty;
+      const newQty = updateData.quantityDelta !== undefined
+        ? oldQty + updateData.quantityDelta
+        : (updateData.quantity ?? oldQty);
+      const qtyChanged =
+        (updateData.quantityDelta !== undefined && updateData.quantityDelta !== 0) ||
+        (updateData.quantity !== undefined && newQty !== oldQty);
 
       // Re-read counts inside the transaction so the in-progress guard sees a
       // consistent view of serialized units / production orders.
@@ -16312,11 +16337,16 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
-      // Build the partial update payload (recompute totalPrice if needed)
+      // Build the partial update payload (recompute totalPrice if needed).
+      // Strip the synthetic `quantityDelta` flag — it's not a column.
+      const { quantityDelta: _delta, ...rest } = updateData;
       const persistData: Partial<InsertP2PurchaseOrderItem> & { totalPrice?: number } = {
-        ...updateData,
+        ...rest,
       };
-      if (updateData.quantity !== undefined || updateData.unitPrice !== undefined) {
+      if (updateData.quantityDelta !== undefined) {
+        persistData.quantity = newQty;
+      }
+      if (qtyChanged || updateData.unitPrice !== undefined) {
         const unitPrice = updateData.unitPrice ?? existingItem.unitPrice ?? 0;
         persistData.totalPrice = newQty * unitPrice;
       }
@@ -16485,7 +16515,8 @@ export class DatabaseStorage implements IStorage {
       }
 
       return { item: updatedItem, sync };
-    });
+    };
+    return existingTx ? await runner(existingTx) : await db.transaction(runner);
   }
 
   async getP2MaterialRequirements(poId: number): Promise<any[]> {

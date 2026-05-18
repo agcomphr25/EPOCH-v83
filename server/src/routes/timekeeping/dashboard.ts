@@ -11,6 +11,11 @@ const EmployeeHoursQueryParams = z.object({
   to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
+const PayrollReviewQueryParams = z.object({
+  periodStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  periodEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
+
 /** Wraps an async route handler so uncaught errors return 500 instead of crashing the process. */
 function h(fn: (req: Request, res: Response, next: NextFunction) => Promise<void>): RequestHandler {
   return (req, res, next) => fn(req, res, next).catch((err) => {
@@ -70,6 +75,23 @@ router.get("/dashboard/employee-hours", authenticateToken, h(async (req, res): P
   const to = q.data.to ? new Date(`${q.data.to}T23:59:59.999`) : undefined;
   const result = await svc.getEmployeeHoursForPeriod(from, to);
   console.info("[timekeeping/dashboard] GET /employee-hours — completed");
+  res.json(result);
+}));
+
+router.get("/dashboard/pay-period-review", authenticateToken, requireRole("ADMIN", "OWNER", "HR"), h(async (req, res): Promise<void> => {
+  console.info("[timekeeping/dashboard] GET /pay-period-review - entered");
+  const q = PayrollReviewQueryParams.safeParse(req.query);
+  if (!q.success) { res.status(400).json({ error: q.error.errors.map((e) => e.message).join("; ") }); return; }
+  if ((q.data.periodStart && !q.data.periodEnd) || (!q.data.periodStart && q.data.periodEnd)) {
+    res.status(400).json({ error: "periodStart and periodEnd must be provided together" });
+    return;
+  }
+  if (q.data.periodStart && q.data.periodEnd && q.data.periodStart > q.data.periodEnd) {
+    res.status(400).json({ error: "periodStart must not be after periodEnd" });
+    return;
+  }
+  const result = await svc.getPayrollReviewBatch(q.data.periodStart, q.data.periodEnd);
+  console.info("[timekeeping/dashboard] GET /pay-period-review - completed");
   res.json(result);
 }));
 

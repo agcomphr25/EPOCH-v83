@@ -24,6 +24,7 @@ import {
   CheckCircle, Clock, AlertCircle, Package, TrendingUp, Calendar,
   Briefcase, Users, ShieldCheck, ShieldAlert, ShieldOff, HelpCircle,
   ChevronUp, ChevronDown, ArrowUpDown, LayoutDashboard, XCircle, Filter,
+  Plus,
 } from 'lucide-react';
 import { format, differenceInDays, differenceInBusinessDays, parseISO } from 'date-fns';
 
@@ -198,10 +199,28 @@ interface LiveSession {
   certificationStatus: 'Valid' | 'Missing' | 'Expired' | 'Unknown';
 }
 
+interface DailyLaborRow {
+  workDate: string;
+  employeeId: number;
+  employeeName: string;
+  department: string | null;
+  chargeCode: string | null;
+  workOrderNumber: string | null;
+  travelerNumber: string | null;
+  budgetedHours: number;
+  actualHours: number;
+  activeHours: number;
+  usedHours: number;
+  remainingHours: number;
+  percentConsumed: number;
+  openSessionCount: number;
+}
+
 interface LaborData {
   summary: LaborSummary;
   chargeCodeRows: ChargeCodeRow[];
   liveFeed: LiveSession[];
+  dailyLaborRows: DailyLaborRow[];
 }
 
 interface MaterialSummary {
@@ -229,6 +248,41 @@ interface MaterialRow {
 interface MaterialData {
   summary: MaterialSummary;
   rows: MaterialRow[];
+}
+
+interface ProgramAssemblyWidgetRow {
+  id: string;
+  assemblyCode: string;
+  assemblyName: string;
+  computedStatus: 'PLANNED' | 'READY' | 'IN_PROGRESS' | 'BLOCKED' | 'COMPLETE';
+  completionPercent: number;
+  blockedBy: { assemblyCode: string; assemblyName: string }[];
+}
+
+interface ProgramHealthData {
+  ready: boolean;
+  build: {
+    id: string;
+    buildName: string;
+    programName: string;
+    programCode: string;
+    targetShipDate: string | null;
+  } | null;
+  widgets: {
+    programHealth: number;
+    criticalPath: ProgramAssemblyWidgetRow[];
+    blockedAssemblies: ProgramAssemblyWidgetRow[];
+    shipReadiness: {
+      ready: boolean;
+      completeAssemblies: number;
+      totalAssemblies: number;
+    };
+    laborMaterialImpact: {
+      queueItems: number;
+      completedQueueItems: number;
+      blockedAssemblies: number;
+    };
+  } | null;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -342,6 +396,98 @@ function KpiCard({
 }
 
 // ── Production Tab ────────────────────────────────────────────────────────────
+
+function ProgramManufacturingWidgets({ projectId }: { projectId: string }) {
+  const { data, isLoading } = useQuery<ProgramHealthData>({
+    queryKey: ['/api/program-manufacturing/projects', projectId, 'health'],
+    queryFn: () => safeFetch<ProgramHealthData>(`/api/program-manufacturing/projects/${projectId}/health`),
+    enabled: !!projectId,
+    refetchInterval: 60000,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-24" />)}
+      </div>
+    );
+  }
+
+  if (!data?.build || !data.widgets) {
+    return (
+      <Card>
+        <CardContent className="p-4 flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium">No program build linked</p>
+            <p className="text-xs text-muted-foreground">
+              PM production, labor, and material tabs still use the existing project queues.
+            </p>
+          </div>
+          <Badge variant="outline">Program layer idle</Badge>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const critical = data.widgets.criticalPath[0];
+  const blocked = data.widgets.blockedAssemblies[0];
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="text-lg font-semibold">{data.build.buildName}</h2>
+          <p className="text-sm text-muted-foreground">
+            {data.build.programCode} - {data.build.programName}
+          </p>
+        </div>
+        <Link href={`/p2-control-center?tab=program&projectId=${projectId}`}>
+          <Button variant="outline" size="sm">
+            <LayoutDashboard className="h-3.5 w-3.5 mr-1.5" />
+            Open Program
+          </Button>
+        </Link>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <KpiCard
+          icon={<TrendingUp className="h-4 w-4" />}
+          label="Program Health"
+          value={`${data.widgets.programHealth}%`}
+          sub="assembly rollup"
+          colorClass={data.widgets.programHealth >= 80 ? 'text-green-600' : 'text-blue-600'}
+        />
+        <KpiCard
+          icon={<ArrowUpDown className="h-4 w-4" />}
+          label="Critical Path"
+          value={critical ? `${critical.completionPercent}%` : 'Clear'}
+          sub={critical ? `${critical.assemblyCode} ${critical.assemblyName}` : 'no open path'}
+          colorClass="text-amber-600"
+        />
+        <KpiCard
+          icon={<AlertCircle className="h-4 w-4" />}
+          label="Blocked Assemblies"
+          value={data.widgets.blockedAssemblies.length}
+          sub={blocked ? `First: ${blocked.assemblyCode}` : 'none blocked'}
+          colorClass={data.widgets.blockedAssemblies.length > 0 ? 'text-red-600' : 'text-green-600'}
+        />
+        <KpiCard
+          icon={<Calendar className="h-4 w-4" />}
+          label="Ship Readiness"
+          value={data.widgets.shipReadiness.ready ? 'Ready' : 'Not Ready'}
+          sub={`${data.widgets.shipReadiness.completeAssemblies}/${data.widgets.shipReadiness.totalAssemblies} assemblies`}
+          colorClass={data.widgets.shipReadiness.ready ? 'text-green-600' : 'text-orange-600'}
+        />
+        <KpiCard
+          icon={<Package className="h-4 w-4" />}
+          label="Labor/Material Impact"
+          value={`${data.widgets.laborMaterialImpact.completedQueueItems}/${data.widgets.laborMaterialImpact.queueItems}`}
+          sub={`${data.widgets.laborMaterialImpact.blockedAssemblies} blocked assemblies`}
+          colorClass="text-indigo-600"
+        />
+      </div>
+    </div>
+  );
+}
 
 type CompletionFilter = 'all' | 'not_started' | 'in_progress' | 'complete';
 type QtySort = null | 'asc' | 'desc';
@@ -796,7 +942,7 @@ function DirectLaborTab({ projectId }: { projectId: string }) {
 
   if (!data) return null;
 
-  const { summary, chargeCodeRows, liveFeed } = data;
+  const { summary, chargeCodeRows, liveFeed, dailyLaborRows = [] } = data;
 
   return (
     <div className="space-y-6">
@@ -902,6 +1048,62 @@ function DirectLaborTab({ projectId }: { projectId: string }) {
         </Card>
       )}
 
+      {dailyLaborRows.length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold mb-3">Daily WAD Time Bank Usage</h3>
+          <div className="rounded-md border overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Employee</TableHead>
+                  <TableHead>WAD / Traveler</TableHead>
+                  <TableHead>Department</TableHead>
+                  <TableHead className="text-right">Used Today</TableHead>
+                  <TableHead className="text-right">WAD Bank</TableHead>
+                  <TableHead className="text-right">Remaining</TableHead>
+                  <TableHead className="text-right">%</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {dailyLaborRows.map((row) => (
+                  <TableRow key={`${row.workDate}-${row.employeeId}-${row.chargeCode ?? row.department ?? 'labor'}`}>
+                    <TableCell className="text-sm">{fmtDate(row.workDate)}</TableCell>
+                    <TableCell>
+                      <div className="font-medium text-sm">{row.employeeName}</div>
+                      {row.openSessionCount > 0 && (
+                        <Badge className="bg-blue-100 text-blue-700 mt-1">Clocked in</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      <div className="font-mono">{row.workOrderNumber ?? 'WAD'}</div>
+                      <div className="text-xs text-muted-foreground">{row.travelerNumber ?? row.chargeCode ?? 'Direct labor'}</div>
+                    </TableCell>
+                    <TableCell className="text-sm">{row.department ?? '—'}</TableCell>
+                    <TableCell className="text-right text-sm">{fmtHours(row.usedHours)}</TableCell>
+                    <TableCell className="text-right text-sm">{fmtHours(row.budgetedHours)}</TableCell>
+                    <TableCell className={`text-right text-sm ${row.remainingHours < 0 ? 'text-red-600 font-medium' : ''}`}>
+                      {fmtHours(row.remainingHours)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Badge className={
+                        row.percentConsumed > 100
+                          ? 'bg-red-100 text-red-700'
+                          : row.percentConsumed >= 80
+                            ? 'bg-yellow-100 text-yellow-700'
+                            : 'bg-green-100 text-green-700'
+                      }>
+                        {row.percentConsumed}%
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      )}
+
       <div>
         <div className="flex items-center gap-2 mb-3">
           <h3 className="text-sm font-semibold">Live Labor Feed</h3>
@@ -963,6 +1165,7 @@ type SortField = 'status' | 'itemCode' | 'qtyRequired' | 'qtyAllocated' | 'qtyIs
 type SortDir = 'asc' | 'desc';
 
 function MaterialBudgetTab({ projectId }: { projectId: string }) {
+  const [, navTo] = useLocation();
   const [sortField, setSortField] = useState<SortField>('status');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
 
@@ -1012,6 +1215,16 @@ function MaterialBudgetTab({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-6">
+      <div className="flex justify-end">
+        <Button
+          size="sm"
+          onClick={() => navTo(`/inventory/parts-request?projectId=${encodeURIComponent(projectId)}&create=1`)}
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          New Parts Request
+        </Button>
+      </div>
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard
           icon={<Package className="h-4 w-4" />}
@@ -1484,6 +1697,10 @@ export default function PMControlCenterPage() {
             </p>
           </CardContent>
         </Card>
+      )}
+
+      {selectedProjectId && (
+        <ProgramManufacturingWidgets projectId={selectedProjectId} />
       )}
 
       {/* KPI Summary Cards */}

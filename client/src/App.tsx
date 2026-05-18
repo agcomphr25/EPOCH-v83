@@ -185,6 +185,7 @@ import JESSICAPDashboard from './pages/JESSICAPDashboard';
 import BRIANDashboard from './pages/BRIANDashboard';
 import TOMASMDashboard from './pages/TOMASMDashboard';
 import JOEYBTestDashboard from './pages/JOEYBTestDashboard';
+import ANGIETTestDashboard from './pages/ANGIETTestDashboard';
 import TANDYMTestDashboard from './pages/TANDYMTestDashboard';
 import OrderDepartmentTransfer from './pages/OrderDepartmentTransfer';
 import { BOMAdministration } from './pages/BOMAdministration';
@@ -249,6 +250,7 @@ import NonconformanceDashboard from './components/NonconformanceDashboard';
 import NonconformanceReport from './components/NonconformanceReport';
 import RTSPage from './pages/RTSPage';
 import RFQRiskAssessment from './pages/RFQRiskAssessment';
+import ConversationalRFQRiskAssessment from './pages/ConversationalRFQRiskAssessment';
 import ProductionQueueManager from './components/ProductionQueueManager';
 import EnhancedLayupSchedulerPage from './pages/EnhancedLayupSchedulerPage';
 import WorkDayAwareScheduler from './components/WorkDayAwareScheduler';
@@ -942,6 +944,10 @@ function App() {
                   <Route path="/brian-dashboard" component={BRIANDashboard} />
                   <Route path="/tomasm-dashboard" component={TOMASMDashboard} />
                   <Route
+                    path="/angiet-dashboard"
+                    component={ANGIETTestDashboard}
+                  />
+                  <Route
                     path="/joeyb-dashboard"
                     component={JOEYBTestDashboard}
                   />
@@ -1164,6 +1170,10 @@ function App() {
                   <Route
                     path="/waste-management-form"
                     component={WasteManagementForm}
+                  />
+                  <Route
+                    path="/rfq-risk-assessment/conversation"
+                    component={ConversationalRFQRiskAssessment}
                   />
                   <Route
                     path="/rfq-risk-assessment"

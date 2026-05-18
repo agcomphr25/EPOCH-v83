@@ -241,6 +241,17 @@ const KNOWN_DUPLICATE_PREFIXES = new Set<string>([
   '0100', // 0100_audit_ledger_privilege_hardening.sql vs 0100_burden_rates_engine.sql — parallel development (audit ledger privilege + burden rates engine)
   '0109', // 0109_inventory_transaction_ledger.sql vs 0109_vendor_pos_purchasing_controls_columns.sql — vendor_pos hotfix landed in parallel with the immutable inventory ledger task
   '0111', // 0111_critical_schema_health_repairs.sql vs 0111_inventory_anomaly_detection.sql vs 0111_routing_step_enforcement.sql — three parallel tasks (schema repairs, anomaly detection, routing-step enforcement) merged in the same window
+  '0112', // 0112_cycle_count_subsystem.sql vs 0112_inventory_traceability_capability.sql vs 0112_material_issue_approvals.sql — three parallel inventory tasks merged in the same window
+  '0114', // 0114_inventory_high_risk_approvals.sql vs 0114_shelf_life_out_time_enforcement.sql — parallel inventory governance work
+  '0117', // 0117_vendor_po_items_purchasing_unit_columns.sql vs 0117_vendor_po_line_project_traceability.sql — parallel vendor PO line enhancements
+  '0121', // 0121_p2_invoice_review_send_structure.sql vs 0121_quote_snapshots_and_po_reconciliation.sql — parallel quoting/invoicing work
+  '0127', // 0127_contract_po_review_flowdown.sql vs 0127_quote_contract_snapshot_release_gates.sql — parallel contract review/release-gate work
+  '0128', // 0128_engineering_control_revision_eco.sql vs 0128_procurement_section6_supplier_controls.sql — parallel engineering ECO + procurement controls
+  '0129', // 0129_manufacturing_section8_execution_controls.sql vs 0129_phase1_foundation_closure.sql vs 0129_quality_section9_ncr_capa_calibration.sql vs 0129_receiving_inspection_plans.sql — four parallel compliance/closure tasks merged together
+  '0130', // 0130_audit_dcaa_security_section11.sql vs 0130_cmmc_itar_security_vault.sql vs 0130_vendor_po_support_tables_safe.sql — parallel compliance + vendor PO support
+  '0131', // 0131_nonconformance_schema_alignment.sql vs 0131_user_sessions_login_compatibility.sql — parallel NCR alignment + session compatibility hotfix
+  '0134', // 0134_conversational_rfq_risk_sessions.sql vs 0134_knowledge_capture_enrichment.sql vs 0134_project_revisions.sql — three parallel feature tasks (RFQ risk, knowledge capture, project revisions) merged the same window
+  '0139', // 0139_p2_production_orders_project_id.sql vs 0139_wad_dashboard_assignment.sql — parallel P2 production-order linkage + WAD dashboard assignment
 ]);
 
 describe('Migration file structure', () => {
@@ -863,5 +874,6 @@ describe('Schema-baseline migration replay (scratch DB seeded from pg_dump)', ()
       `Unexpected migration errors on schema-baseline replay — these indicate real bugs:\n${errors.join('\n')}`,
     ).toHaveLength(0);
   // pg_dump + CREATE DATABASE + psql restore + migration replay can take 30–60 s
-  }, 90_000);
+  // initially, but grows with the migration set; allow generous headroom.
+  }, 300_000);
 });

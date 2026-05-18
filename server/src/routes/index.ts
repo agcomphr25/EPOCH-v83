@@ -3152,7 +3152,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
          GROUP BY p2_po_id`
       );
       const legacyProjectProductionRows = await dbPool.query(
-        `WITH project_po_link AS (
+         `WITH project_po_link AS (
            SELECT p.id AS project_id, p.po_id AS po_id
            FROM projects p
            WHERE p.po_id IS NOT NULL
@@ -3160,6 +3160,16 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
            SELECT ps.project_id, ps.linked_p2_order_id AS po_id
            FROM project_steps ps
            WHERE ps.linked_p2_order_id IS NOT NULL
+           UNION
+           SELECT p.id AS project_id, po.id AS po_id
+           FROM p2_purchase_orders po
+           JOIN projects p ON LOWER(TRIM(po.project_name)) IN (
+             LOWER(TRIM(p.project_code)),
+             LOWER(TRIM(p.project_name)),
+             LOWER(TRIM(CONCAT_WS(' - ', NULLIF(p.project_code, ''), NULLIF(p.project_name, ''))))
+           )
+           WHERE po.project_name IS NOT NULL
+             AND TRIM(po.project_name) <> ''
          ),
          work_order_quantities AS (
            SELECT
@@ -3250,9 +3260,24 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
                        AND ps.linked_p2_order_id IS NOT NULL
                      ORDER BY ps.updated_at DESC NULLS LAST, ps.completed_at DESC NULLS LAST
                      LIMIT 1
-                   )
-                 ) AS linked_po_id
+                 )
+               ) AS linked_po_id
                FROM projects p
+               UNION
+               SELECT
+                 p.id,
+                 p.project_code,
+                 p.project_name,
+                 p.updated_at,
+                 po.id AS linked_po_id
+               FROM p2_purchase_orders po
+               JOIN projects p ON LOWER(TRIM(po.project_name)) IN (
+                 LOWER(TRIM(p.project_code)),
+                 LOWER(TRIM(p.project_name)),
+                 LOWER(TRIM(CONCAT_WS(' - ', NULLIF(p.project_code, ''), NULLIF(p.project_name, ''))))
+               )
+               WHERE po.project_name IS NOT NULL
+                 AND TRIM(po.project_name) <> ''
              )
              SELECT DISTINCT ON (linked_po_id)
                linked_po_id AS "poId",
@@ -3414,7 +3439,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       });
 
       const legacyProjectSchedulingRows = await dbPool.query(
-        `WITH project_po_link AS (
+         `WITH project_po_link AS (
            SELECT p.id AS project_id, p.po_id AS po_id
            FROM projects p
            WHERE p.po_id IS NOT NULL
@@ -3422,6 +3447,16 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
            SELECT ps.project_id, ps.linked_p2_order_id AS po_id
            FROM project_steps ps
            WHERE ps.linked_p2_order_id IS NOT NULL
+           UNION
+           SELECT p.id AS project_id, po.id AS po_id
+           FROM p2_purchase_orders po
+           JOIN projects p ON LOWER(TRIM(po.project_name)) IN (
+             LOWER(TRIM(p.project_code)),
+             LOWER(TRIM(p.project_name)),
+             LOWER(TRIM(CONCAT_WS(' - ', NULLIF(p.project_code, ''), NULLIF(p.project_name, ''))))
+           )
+           WHERE po.project_name IS NOT NULL
+             AND TRIM(po.project_name) <> ''
          )
          SELECT DISTINCT ON (wo.id)
            wo.id,
@@ -3596,7 +3631,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
          ORDER BY p2po.due_date NULLS LAST, p2po.created_at`
       );
       const legacyProjectProductionRows = await dbPool.query(
-        `WITH project_po_link AS (
+         `WITH project_po_link AS (
            SELECT p.id AS project_id, p.po_id AS po_id
            FROM projects p
            WHERE p.po_id IS NOT NULL
@@ -3604,6 +3639,16 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
            SELECT ps.project_id, ps.linked_p2_order_id AS po_id
            FROM project_steps ps
            WHERE ps.linked_p2_order_id IS NOT NULL
+           UNION
+           SELECT p.id AS project_id, po.id AS po_id
+           FROM p2_purchase_orders po
+           JOIN projects p ON LOWER(TRIM(po.project_name)) IN (
+             LOWER(TRIM(p.project_code)),
+             LOWER(TRIM(p.project_name)),
+             LOWER(TRIM(CONCAT_WS(' - ', NULLIF(p.project_code, ''), NULLIF(p.project_name, ''))))
+           )
+           WHERE po.project_name IS NOT NULL
+             AND TRIM(po.project_name) <> ''
          )
          SELECT DISTINCT ON (wo.id)
            wo.id,
@@ -3688,9 +3733,24 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
                        AND ps.linked_p2_order_id IS NOT NULL
                      ORDER BY ps.updated_at DESC NULLS LAST, ps.completed_at DESC NULLS LAST
                      LIMIT 1
-                   )
-                 ) AS linked_po_id
+                 )
+               ) AS linked_po_id
                FROM projects p
+               UNION
+               SELECT
+                 p.id,
+                 p.project_code,
+                 p.project_name,
+                 p.updated_at,
+                 po.id AS linked_po_id
+               FROM p2_purchase_orders po
+               JOIN projects p ON LOWER(TRIM(po.project_name)) IN (
+                 LOWER(TRIM(p.project_code)),
+                 LOWER(TRIM(p.project_name)),
+                 LOWER(TRIM(CONCAT_WS(' - ', NULLIF(p.project_code, ''), NULLIF(p.project_name, ''))))
+               )
+               WHERE po.project_name IS NOT NULL
+                 AND TRIM(po.project_name) <> ''
              )
              SELECT DISTINCT ON (linked_po_id)
                linked_po_id AS "poId",

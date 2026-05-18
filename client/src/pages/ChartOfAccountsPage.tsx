@@ -93,6 +93,20 @@ function formatSignedCurrency(value: number | null | undefined) {
   return `${sign}${formatCurrency(amount)}`;
 }
 
+function accountingJournalHref(source: NonNullable<NonNullable<CoaAccount['balanceAudit']>['sources']>[number]) {
+  const ids = source.journalEntryIds?.length
+    ? Array.from(new Set(source.journalEntryIds))
+    : [source.journalEntryId];
+  const params = new URLSearchParams();
+  if (ids.length === 1) {
+    params.set('journalEntryId', String(ids[0]));
+  } else {
+    params.set('journalEntryIds', ids.join(','));
+  }
+  params.set('source', source.label);
+  return `/finance/accounting?${params.toString()}`;
+}
+
 export default function ChartOfAccountsPage() {
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
@@ -351,10 +365,10 @@ export default function ChartOfAccountsPage() {
                               {sources.length > 0 ? (
                                 <div className="mt-2 flex flex-wrap gap-2">
                                   {sources.map((source) => (
-                                    <Badge
+                                    <a
                                       key={`${source.journalEntryId}-${source.referenceType}-${source.referenceId}`}
-                                      variant="outline"
-                                      className="gap-2 font-mono text-sm"
+                                      href={accountingJournalHref(source)}
+                                      className="inline-flex items-center gap-2 rounded-full border border-input bg-background px-2.5 py-0.5 font-mono text-sm text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                       title={`Debit ${formatCurrency(source.debitAmount)} / Credit ${formatCurrency(source.creditAmount)}${source.lineCount > 1 ? ` across ${source.lineCount} posted lines` : ''}`}
                                     >
                                       <span>{source.label}</span>
@@ -369,7 +383,7 @@ export default function ChartOfAccountsPage() {
                                       >
                                         {formatSignedCurrency(source.amount)}
                                       </span>
-                                    </Badge>
+                                    </a>
                                   ))}
                                 </div>
                               ) : (

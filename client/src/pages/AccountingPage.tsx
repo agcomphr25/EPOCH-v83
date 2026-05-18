@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import {
@@ -54,6 +54,11 @@ function buildQueryString(params: Record<string, string>) {
   return qs ? `?${qs}` : '';
 }
 
+function initialQueryParam(name: string) {
+  if (typeof window === 'undefined') return '';
+  return new URLSearchParams(window.location.search).get(name) ?? '';
+}
+
 function fmt(amount: number | null) {
   if (amount === null || amount === undefined) return '—';
   return `$${amount.toFixed(2)}`;
@@ -65,16 +70,36 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export default function AccountingPage() {
-  const [fromDate, setFromDate] = useState('');
-  const [toDate, setToDate] = useState('');
-  const [status, setStatus] = useState('all');
-  const [transactionType, setTransactionType] = useState('all');
+  const [fromDate, setFromDate] = useState(() => initialQueryParam('fromDate'));
+  const [toDate, setToDate] = useState(() => initialQueryParam('toDate'));
+  const [status, setStatus] = useState(() => initialQueryParam('status') || 'all');
+  const [transactionType, setTransactionType] = useState(
+    () => initialQueryParam('transactionType') || 'all'
+  );
+  const [journalEntryId, setJournalEntryId] = useState(() => initialQueryParam('journalEntryId'));
+  const [journalEntryIds, setJournalEntryIds] = useState(() => initialQueryParam('journalEntryIds'));
+  const [sourceLabel, setSourceLabel] = useState(() => initialQueryParam('source'));
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
 
-  const queryParams = buildQueryString({ fromDate, toDate, status, transactionType });
+  const queryParams = buildQueryString({
+    fromDate,
+    toDate,
+    status,
+    transactionType,
+    journalEntryId,
+    journalEntryIds,
+  });
 
   const { data, isLoading, isError } = useQuery<{ entries: JournalEntry[] }>({
-    queryKey: ['/api/finance/accounting/journal-entries', fromDate, toDate, status, transactionType],
+    queryKey: [
+      '/api/finance/accounting/journal-entries',
+      fromDate,
+      toDate,
+      status,
+      transactionType,
+      journalEntryId,
+      journalEntryIds,
+    ],
     queryFn: async () => {
       const token = localStorage.getItem('sessionToken') || localStorage.getItem('jwtToken');
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -89,6 +114,19 @@ export default function AccountingPage() {
   });
 
   const entries = data?.entries ?? [];
+  const targetJournalEntryIds = [journalEntryId, journalEntryIds]
+    .flatMap((value) => value.split(','))
+    .map((value) => Number(value.trim()))
+    .filter((value) => Number.isInteger(value) && value > 0);
+
+  useEffect(() => {
+    if (targetJournalEntryIds.length === 0) return;
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
+      targetJournalEntryIds.forEach((id) => next.add(id));
+      return next;
+    });
+  }, [journalEntryId, journalEntryIds]);
 
   function toggleRow(id: number) {
     setExpandedRows(prev => {
@@ -104,9 +142,18 @@ export default function AccountingPage() {
     setToDate('');
     setStatus('all');
     setTransactionType('all');
+    setJournalEntryId('');
+    setJournalEntryIds('');
+    setSourceLabel('');
   }
 
-  const hasFilters = fromDate || toDate || status !== 'all' || transactionType !== 'all';
+  const hasFilters =
+    fromDate ||
+    toDate ||
+    status !== 'all' ||
+    transactionType !== 'all' ||
+    journalEntryId ||
+    journalEntryIds;
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -170,6 +217,21 @@ export default function AccountingPage() {
                 </SelectContent>
               </Select>
             </div>
+            {(journalEntryId || journalEntryIds) && (
+              <div className="space-y-1">
+                <Label className="text-xs">Source Transaction</Label>
+                <div className="min-h-10 rounded-md border px-3 py-2 text-sm">
+                  <div className="font-mono">
+                    {sourceLabel || `JE ${targetJournalEntryIds.map((id) => `#${id}`).join(', ')}`}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {targetJournalEntryIds.length === 1
+                      ? `Journal Entry #${targetJournalEntryIds[0]}`
+                      : `${targetJournalEntryIds.length} journal entries`}
+                  </div>
+                </div>
+              </div>
+            )}
             {hasFilters && (
               <Button variant="ghost" size="sm" onClick={clearFilters} className="text-muted-foreground">
                 Clear filters
@@ -215,9 +277,8 @@ export default function AccountingPage() {
                 {entries.map(entry => {
                   const expanded = expandedRows.has(entry.id);
                   return (
-                    <>
+                    <Fragment key={entry.id}>
                       <TableRow
-                        key={entry.id}
                         className="cursor-pointer hover:bg-muted/50"
                         onClick={() => toggleRow(entry.id)}
                       >
@@ -284,7 +345,7 @@ export default function AccountingPage() {
                           </TableCell>
                         </TableRow>
                       )}
-                    </>
+                    </Fragment>
                   );
                 })}
               </TableBody>

@@ -641,6 +641,7 @@ async function initializeBackgroundServices() {
           '0130_audit_dcaa_security_section11.sql',
           '0131_user_sessions_login_compatibility.sql',
           '0132_daily_time_certifications.sql',
+          '0134_conversational_rfq_risk_sessions.sql',
           'investigation_308_order_duplication.sql',
         ];
         const criticalMigrations = new Set([

@@ -40,6 +40,7 @@ type EvidenceNodeType =
   | 'employee'
   | 'labor_cost'
   | 'payroll'
+  | 'billing'
   | 'journal'
   | 'audit'
   | 'document'
@@ -83,6 +84,7 @@ interface EvidenceMapResponse {
     employeeCount: number;
     workOrderCount: number;
     journalEntryCount: number;
+    customerInvoiceCount?: number;
     documentCount: number;
     auditEventCount: number;
     totalHours: number;
@@ -115,10 +117,11 @@ const branchDefs: Array<{
   { key: 'work_order', label: 'What job was charged?', subtitle: 'Work orders and WAD links', types: ['work_order'], angle: -160 },
   { key: 'employee', label: 'Who worked?', subtitle: 'Employee names and rates used', types: ['employee'], angle: -108 },
   { key: 'labor_cost', label: 'What did it cost?', subtitle: 'Hours, rate source, and dollars', types: ['labor_cost'], angle: -48 },
-  { key: 'payroll', label: 'Was it sent to payroll?', subtitle: 'Payroll export evidence', types: ['payroll'], angle: 22 },
-  { key: 'journal', label: 'Was it posted to the books?', subtitle: 'GL journal entry and debit/credit lines', types: ['journal'], angle: 78 },
-  { key: 'audit', label: 'Who touched it?', subtitle: 'Audit trail and approvals', types: ['audit'], angle: 136 },
-  { key: 'document', label: 'What proof is attached?', subtitle: 'Files, packets, and missing support', types: ['document', 'missing'], angle: 188 },
+  { key: 'payroll', label: 'Was it sent to payroll?', subtitle: 'Payroll export evidence', types: ['payroll'], angle: 6 },
+  { key: 'billing', label: 'Customer billing', subtitle: 'Invoices created against this project', types: ['billing'], angle: 58 },
+  { key: 'journal', label: 'Was it posted to the books?', subtitle: 'GL journal entry and debit/credit lines', types: ['journal'], angle: 108 },
+  { key: 'audit', label: 'Who touched it?', subtitle: 'Audit trail and approvals', types: ['audit'], angle: 154 },
+  { key: 'document', label: 'What proof is attached?', subtitle: 'Files, packets, and missing support', types: ['document', 'missing'], angle: 206 },
 ];
 
 function currentPeriod() {
@@ -150,6 +153,7 @@ function typeLabel(type: EvidenceNodeType) {
   if (type === 'employee') return 'Employees';
   if (type === 'labor_cost') return 'Labor costs';
   if (type === 'payroll') return 'Payroll exports';
+  if (type === 'billing') return 'Customer invoices';
   if (type === 'journal') return 'Journal entries';
   if (type === 'audit') return 'Audit log records';
   if (type === 'document') return 'Documents';
@@ -187,6 +191,7 @@ function summarizeBranch(nodes: EvidenceNode[], branch: (typeof branchDefs)[numb
 function typeIcon(type: EvidenceNodeType) {
   if (type === 'employee') return UserRound;
   if (type === 'journal') return Landmark;
+  if (type === 'billing') return FileText;
   if (type === 'audit') return ShieldCheck;
   if (type === 'document') return FileText;
   if (type === 'missing') return AlertTriangle;
@@ -593,6 +598,10 @@ export default function TransactionEvidenceMap() {
             <div className="rounded-md border p-3">
               <div className="text-xs text-muted-foreground">Journal entries</div>
               <div className="text-xl font-semibold">{data.summary.journalEntryCount}</div>
+            </div>
+            <div className="rounded-md border p-3">
+              <div className="text-xs text-muted-foreground">Customer invoices</div>
+              <div className="text-xl font-semibold">{data.summary.customerInvoiceCount ?? 0}</div>
             </div>
             <div className="rounded-md border p-3">
               <div className="text-xs text-muted-foreground">Documents</div>

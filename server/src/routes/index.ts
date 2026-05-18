@@ -2940,6 +2940,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   // P2 Control Center API Routes
   app.get('/api/p2/control-center/stats', async (req, res) => {
     try {
+      const { ensureProductionWorkflowReadSchema } = await import('../lib/productionWorkflowReadiness');
+      await ensureProductionWorkflowReadSchema();
       const { pool } = await import('../../db');
       const oneWeekAgo = new Date();
       oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
@@ -2947,8 +2949,11 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const [poStats, itemStats, legacyStats] = await Promise.all([
         pool.query(`
           SELECT
-            COUNT(*) FILTER (WHERE status NOT IN ('COMPLETED','CANCELED')) AS "openPOs",
-            COUNT(*) FILTER (WHERE bom_configured = false AND status NOT IN ('COMPLETED','CANCELED')) AS "pendingBOMs"
+            COUNT(*) FILTER (WHERE COALESCE(UPPER(status), '') NOT IN ('COMPLETED','CLOSED','CANCELED','CANCELLED')) AS "openPOs",
+            COUNT(*) FILTER (
+              WHERE bom_configured = false
+                AND COALESCE(UPPER(status), '') NOT IN ('COMPLETED','CLOSED','CANCELED','CANCELLED')
+            ) AS "pendingBOMs"
           FROM p2_purchase_orders
         `),
         pool.query(`
@@ -3101,6 +3106,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   app.get('/api/p2/control-center/po-statuses', async (req, res) => {
     try {
+      const { ensureProductionWorkflowReadSchema } = await import('../lib/productionWorkflowReadiness');
+      await ensureProductionWorkflowReadSchema();
       const { storage } = await import('../../storage');
       const { pool: dbPool } = await import('../../db');
       const allPos = await storage.getAllP2PurchaseOrders();
@@ -3266,6 +3273,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   app.get('/api/p2/control-center/scheduling-list', async (req, res) => {
     try {
+      const { ensureProductionWorkflowReadSchema } = await import('../lib/productionWorkflowReadiness');
+      await ensureProductionWorkflowReadSchema();
       const { storage } = await import('../../storage');
       const { pool: dbPool } = await import('../../db');
       const serializedItems = await applyCompletedTravelerStateToP2Items(
@@ -3432,6 +3441,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   // P2 Production Queue - Get items grouped by department
   app.get('/api/p2/control-center/production-queue', async (req, res) => {
     try {
+      const { ensureProductionWorkflowReadSchema } = await import('../lib/productionWorkflowReadiness');
+      await ensureProductionWorkflowReadSchema();
       const { storage } = await import('../../storage');
       
       // Keep P2 Control Center as the visible source for WIP and finished units.

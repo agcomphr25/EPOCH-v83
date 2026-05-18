@@ -249,6 +249,7 @@ import NonconformanceDashboard from './components/NonconformanceDashboard';
 import NonconformanceReport from './components/NonconformanceReport';
 import RTSPage from './pages/RTSPage';
 import RFQRiskAssessment from './pages/RFQRiskAssessment';
+import ConversationalRFQRiskAssessment from './pages/ConversationalRFQRiskAssessment';
 import ProductionQueueManager from './components/ProductionQueueManager';
 import EnhancedLayupSchedulerPage from './pages/EnhancedLayupSchedulerPage';
 import WorkDayAwareScheduler from './components/WorkDayAwareScheduler';
@@ -1164,6 +1165,10 @@ function App() {
                   <Route
                     path="/waste-management-form"
                     component={WasteManagementForm}
+                  />
+                  <Route
+                    path="/rfq-risk-assessment/conversation"
+                    component={ConversationalRFQRiskAssessment}
                   />
                   <Route
                     path="/rfq-risk-assessment"

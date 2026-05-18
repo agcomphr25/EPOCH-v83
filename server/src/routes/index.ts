@@ -221,6 +221,7 @@ import {
 import cncDashboardRoutes from './cncDashboard';
 import receivingRoutes from './receiving';
 import estimatingRoutes from './estimating';
+import rfqRiskSessionsRoutes from './rfqRiskSessions';
 import auditsRoutes from './audits';
 import commandCenterRoutes from './commandCenter';
 import edriRoutes from './edri';
@@ -11051,6 +11052,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // Estimating / RFQ Builder routes
   app.use('/api/estimating', authenticateToken, estimatingRoutes);
+
+  // Conversational RFQ Risk Assessment routes
+  app.use('/api/rfq-risk-sessions', authenticateToken, rfqRiskSessionsRoutes);
 
   // System Audit Library routes (admin and owner only)
   app.use('/api/audits', requireAdminOrOwner, auditsRoutes);

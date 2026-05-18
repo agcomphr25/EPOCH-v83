@@ -24,6 +24,8 @@ router.post('/api/p2/schedule-items', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Item IDs array is required' });
     }
 
+    const { ensureProductionWorkflowReadSchema } = await import('../lib/productionWorkflowReadiness');
+    await ensureProductionWorkflowReadSchema();
     const { db } = await import('../../db');
     const {
       p2SerializedItems,

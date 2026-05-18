@@ -136,7 +136,13 @@ export async function ensureProductionWorkflowReadSchema(): Promise<void> {
 
           IF to_regclass('public.p2_production_orders') IS NOT NULL THEN
             ALTER TABLE public.p2_production_orders
-              ADD COLUMN IF NOT EXISTS project_id uuid;
+              ADD COLUMN IF NOT EXISTS project_id uuid,
+              ADD COLUMN IF NOT EXISTS p2_po_item_id integer,
+              ADD COLUMN IF NOT EXISTS quantity_manufactured integer DEFAULT 0,
+              ADD COLUMN IF NOT EXISTS scheduled_layup_date timestamp,
+              ADD COLUMN IF NOT EXISTS due_date timestamp,
+              ADD COLUMN IF NOT EXISTS completed_at timestamp,
+              ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now();
           END IF;
 
           IF to_regclass('public.material_lot_reservations') IS NOT NULL THEN

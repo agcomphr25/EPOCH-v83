@@ -135,6 +135,7 @@ import projectsRoutes from './projects';
 import projectStepAttachmentsRoutes from './projectStepAttachments';
 import projectClosingsRoutes from './projectClosings';
 import pmDashboardRoutes from './pmDashboard';
+import programManufacturingRoutes from './programManufacturing';
 import quoteFeedbackRoutes from './quoteFeedback';
 import modelAnalyticsRoutes from './modelAnalytics';
 import aqlSamplingRoutes from './aqlSampling';
@@ -1064,6 +1065,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // PM Control Center dashboard routes
   app.use('/api/pm-dashboard', pmDashboardRoutes);
+
+  // Program Manufacturing Orchestration routes
+  app.use('/api/program-manufacturing', programManufacturingRoutes);
 
   // P2 Projects routes
   app.use('/api/projects', projectsRoutes);

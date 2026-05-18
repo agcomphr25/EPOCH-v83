@@ -710,6 +710,11 @@ import { db, pool, rawSql } from './db';
 import { recordAuditEvent } from './src/services/auditLedgerService';
 import { recordInventoryLedgerEntry } from './src/services/inventoryTransactionLedgerService';
 import { assignDashboardForWorkOrder } from './src/lib/workOrderDashboardAssignment';
+import {
+  getProgramBuilds,
+  getProgramBuildStatus,
+  type ProgramBuildStatus,
+} from './src/lib/programManufacturingOrchestration';
 
 // Drizzle's transaction handle is API-compatible with `db` for the CRUD
 // surface our helpers use, but its TS type is a `PgTransaction` (not the
@@ -1780,6 +1785,10 @@ export interface IStorage {
   getRFQRiskAssessmentById(id: number): Promise<RFQRiskAssessment | undefined>;
   updateRFQRiskAssessment(id: number, data: Partial<InsertRFQRiskAssessment>): Promise<RFQRiskAssessment | undefined>;
   submitRFQRiskAssessment(id: number, username: string): Promise<RFQRiskAssessment | undefined>;
+
+  // Program Manufacturing Orchestration read methods
+  getProgramBuilds(filters?: { projectId?: string | null }): Promise<ProgramBuildStatus['build'][]>;
+  getProgramBuildStatus(buildId?: string | null, filters?: { projectId?: string | null }): Promise<ProgramBuildStatus | null>;
 
   // P2 Purchase Orders CRUD
   getAllP2PurchaseOrders(): Promise<P2PurchaseOrder[]>;
@@ -15191,6 +15200,17 @@ export class DatabaseStorage implements IStorage {
       .where(eq(rfqRiskAssessments.id, id))
       .returning();
     return submitted;
+  }
+
+  async getProgramBuilds(filters?: { projectId?: string | null }): Promise<ProgramBuildStatus['build'][]> {
+    return getProgramBuilds(filters);
+  }
+
+  async getProgramBuildStatus(
+    buildId?: string | null,
+    filters?: { projectId?: string | null }
+  ): Promise<ProgramBuildStatus | null> {
+    return getProgramBuildStatus(buildId, filters);
   }
 
   // P2 Purchase Orders CRUD

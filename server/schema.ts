@@ -16818,6 +16818,111 @@ export const insertProductionWorkOrderSchema = createInsertSchema(productionWork
 export type ProductionWorkOrder = typeof productionWorkOrders.$inferSelect;
 export type InsertProductionWorkOrder = z.infer<typeof insertProductionWorkOrderSchema>;
 
+// Program Manufacturing Orchestration - additive layer above P2 queues/WADs.
+export const programBuilds = pgTable('program_builds', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'set null' }),
+  p2PurchaseOrderId: integer('p2_purchase_order_id').references(() => p2PurchaseOrders.id, { onDelete: 'set null' }),
+  programCode: text('program_code').notNull().unique(),
+  programName: text('program_name').notNull(),
+  buildName: text('build_name').notNull(),
+  buildType: text('build_type').notNull().default('program'),
+  status: text('status').notNull().default('PLANNED'),
+  priority: integer('priority').notNull().default(50),
+  targetShipDate: date('target_ship_date'),
+  customerName: text('customer_name'),
+  notes: text('notes'),
+  metadata: jsonb('metadata').default({}).notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  projectIdIdx: index('program_builds_project_id_idx').on(table.projectId),
+  poIdIdx: index('program_builds_po_id_idx').on(table.p2PurchaseOrderId),
+  statusIdx: index('program_builds_status_idx').on(table.status),
+}));
+
+export const programAssemblies = pgTable('program_assemblies', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  programBuildId: uuid('program_build_id').notNull().references(() => programBuilds.id, { onDelete: 'cascade' }),
+  parentAssemblyId: uuid('parent_assembly_id').references((): AnyPgColumn => programAssemblies.id, { onDelete: 'cascade' }),
+  assemblyCode: text('assembly_code').notNull(),
+  assemblyName: text('assembly_name').notNull(),
+  level: integer('level').notNull().default(0),
+  sequence: integer('sequence').notNull().default(0),
+  assemblyType: text('assembly_type').notNull().default('assembly'),
+  partNumber: text('part_number'),
+  requiredQuantity: integer('required_quantity').notNull().default(1),
+  status: text('status').notNull().default('PLANNED'),
+  plannedStartDate: date('planned_start_date'),
+  plannedFinishDate: date('planned_finish_date'),
+  targetShipDate: date('target_ship_date'),
+  metadata: jsonb('metadata').default({}).notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  buildIdx: index('program_assemblies_build_idx').on(table.programBuildId),
+  parentIdx: index('program_assemblies_parent_idx').on(table.parentAssemblyId),
+  codeUnique: uniqueIndex('program_assemblies_build_code_unique').on(table.programBuildId, table.assemblyCode),
+}));
+
+export const programAssemblyLinks = pgTable('program_assembly_links', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  assemblyId: uuid('assembly_id').notNull().references(() => programAssemblies.id, { onDelete: 'cascade' }),
+  manufacturingQueueId: integer('manufacturing_queue_id').references(() => manufacturingQueue.id, { onDelete: 'set null' }),
+  productionWorkOrderId: uuid('production_work_order_id').references(() => productionWorkOrders.id, { onDelete: 'set null' }),
+  travelerId: varchar('traveler_id', { length: 255 }).references(() => travelers.id, { onDelete: 'set null' }),
+  p2SerializedItemId: uuid('p2_serialized_item_id').references(() => p2SerializedItems.id, { onDelete: 'set null' }),
+  linkType: text('link_type').notNull().default('queue_item'),
+  requiredQuantity: integer('required_quantity').notNull().default(1),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  assemblyIdx: index('program_assembly_links_assembly_idx').on(table.assemblyId),
+  queueIdx: index('program_assembly_links_queue_idx').on(table.manufacturingQueueId),
+  travelerIdx: index('program_assembly_links_traveler_idx').on(table.travelerId),
+}));
+
+export const programAssemblyDependencies = pgTable('program_assembly_dependencies', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  assemblyId: uuid('assembly_id').notNull().references(() => programAssemblies.id, { onDelete: 'cascade' }),
+  dependsOnAssemblyId: uuid('depends_on_assembly_id').notNull().references(() => programAssemblies.id, { onDelete: 'cascade' }),
+  dependencyType: text('dependency_type').notNull().default('finish_to_start'),
+  isBlocking: boolean('is_blocking').notNull().default(true),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  assemblyIdx: index('program_assembly_dependencies_assembly_idx').on(table.assemblyId),
+  dependsOnIdx: index('program_assembly_dependencies_depends_on_idx').on(table.dependsOnAssemblyId),
+  uniqueDependency: uniqueIndex('program_assembly_dependencies_unique').on(table.assemblyId, table.dependsOnAssemblyId),
+}));
+
+export const insertProgramBuildSchema = createInsertSchema(programBuilds).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const insertProgramAssemblySchema = createInsertSchema(programAssemblies).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const insertProgramAssemblyLinkSchema = createInsertSchema(programAssemblyLinks).omit({
+  id: true,
+  createdAt: true,
+});
+export const insertProgramAssemblyDependencySchema = createInsertSchema(programAssemblyDependencies).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ProgramBuild = typeof programBuilds.$inferSelect;
+export type ProgramAssembly = typeof programAssemblies.$inferSelect;
+export type ProgramAssemblyLink = typeof programAssemblyLinks.$inferSelect;
+export type ProgramAssemblyDependency = typeof programAssemblyDependencies.$inferSelect;
+export type InsertProgramBuild = z.infer<typeof insertProgramBuildSchema>;
+export type InsertProgramAssembly = z.infer<typeof insertProgramAssemblySchema>;
+export type InsertProgramAssemblyLink = z.infer<typeof insertProgramAssemblyLinkSchema>;
+export type InsertProgramAssemblyDependency = z.infer<typeof insertProgramAssemblyDependencySchema>;
+
 // ─── LABOR THRESHOLD SETTINGS (system-wide singleton) ─────────────────────────
 
 export const laborThresholdSettings = pgTable('labor_threshold_settings', {

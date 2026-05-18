@@ -250,6 +250,41 @@ interface MaterialData {
   rows: MaterialRow[];
 }
 
+interface ProgramAssemblyWidgetRow {
+  id: string;
+  assemblyCode: string;
+  assemblyName: string;
+  computedStatus: 'PLANNED' | 'READY' | 'IN_PROGRESS' | 'BLOCKED' | 'COMPLETE';
+  completionPercent: number;
+  blockedBy: { assemblyCode: string; assemblyName: string }[];
+}
+
+interface ProgramHealthData {
+  ready: boolean;
+  build: {
+    id: string;
+    buildName: string;
+    programName: string;
+    programCode: string;
+    targetShipDate: string | null;
+  } | null;
+  widgets: {
+    programHealth: number;
+    criticalPath: ProgramAssemblyWidgetRow[];
+    blockedAssemblies: ProgramAssemblyWidgetRow[];
+    shipReadiness: {
+      ready: boolean;
+      completeAssemblies: number;
+      totalAssemblies: number;
+    };
+    laborMaterialImpact: {
+      queueItems: number;
+      completedQueueItems: number;
+      blockedAssemblies: number;
+    };
+  } | null;
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function fmtDate(d: string | null) {
@@ -361,6 +396,98 @@ function KpiCard({
 }
 
 // ── Production Tab ────────────────────────────────────────────────────────────
+
+function ProgramManufacturingWidgets({ projectId }: { projectId: string }) {
+  const { data, isLoading } = useQuery<ProgramHealthData>({
+    queryKey: ['/api/program-manufacturing/projects', projectId, 'health'],
+    queryFn: () => safeFetch<ProgramHealthData>(`/api/program-manufacturing/projects/${projectId}/health`),
+    enabled: !!projectId,
+    refetchInterval: 60000,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-24" />)}
+      </div>
+    );
+  }
+
+  if (!data?.build || !data.widgets) {
+    return (
+      <Card>
+        <CardContent className="p-4 flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium">No program build linked</p>
+            <p className="text-xs text-muted-foreground">
+              PM production, labor, and material tabs still use the existing project queues.
+            </p>
+          </div>
+          <Badge variant="outline">Program layer idle</Badge>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const critical = data.widgets.criticalPath[0];
+  const blocked = data.widgets.blockedAssemblies[0];
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="text-lg font-semibold">{data.build.buildName}</h2>
+          <p className="text-sm text-muted-foreground">
+            {data.build.programCode} - {data.build.programName}
+          </p>
+        </div>
+        <Link href={`/p2-control-center?tab=program&projectId=${projectId}`}>
+          <Button variant="outline" size="sm">
+            <LayoutDashboard className="h-3.5 w-3.5 mr-1.5" />
+            Open Program
+          </Button>
+        </Link>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <KpiCard
+          icon={<TrendingUp className="h-4 w-4" />}
+          label="Program Health"
+          value={`${data.widgets.programHealth}%`}
+          sub="assembly rollup"
+          colorClass={data.widgets.programHealth >= 80 ? 'text-green-600' : 'text-blue-600'}
+        />
+        <KpiCard
+          icon={<ArrowUpDown className="h-4 w-4" />}
+          label="Critical Path"
+          value={critical ? `${critical.completionPercent}%` : 'Clear'}
+          sub={critical ? `${critical.assemblyCode} ${critical.assemblyName}` : 'no open path'}
+          colorClass="text-amber-600"
+        />
+        <KpiCard
+          icon={<AlertCircle className="h-4 w-4" />}
+          label="Blocked Assemblies"
+          value={data.widgets.blockedAssemblies.length}
+          sub={blocked ? `First: ${blocked.assemblyCode}` : 'none blocked'}
+          colorClass={data.widgets.blockedAssemblies.length > 0 ? 'text-red-600' : 'text-green-600'}
+        />
+        <KpiCard
+          icon={<Calendar className="h-4 w-4" />}
+          label="Ship Readiness"
+          value={data.widgets.shipReadiness.ready ? 'Ready' : 'Not Ready'}
+          sub={`${data.widgets.shipReadiness.completeAssemblies}/${data.widgets.shipReadiness.totalAssemblies} assemblies`}
+          colorClass={data.widgets.shipReadiness.ready ? 'text-green-600' : 'text-orange-600'}
+        />
+        <KpiCard
+          icon={<Package className="h-4 w-4" />}
+          label="Labor/Material Impact"
+          value={`${data.widgets.laborMaterialImpact.completedQueueItems}/${data.widgets.laborMaterialImpact.queueItems}`}
+          sub={`${data.widgets.laborMaterialImpact.blockedAssemblies} blocked assemblies`}
+          colorClass="text-indigo-600"
+        />
+      </div>
+    </div>
+  );
+}
 
 type CompletionFilter = 'all' | 'not_started' | 'in_progress' | 'complete';
 type QtySort = null | 'asc' | 'desc';
@@ -1570,6 +1697,10 @@ export default function PMControlCenterPage() {
             </p>
           </CardContent>
         </Card>
+      )}
+
+      {selectedProjectId && (
+        <ProgramManufacturingWidgets projectId={selectedProjectId} />
       )}
 
       {/* KPI Summary Cards */}

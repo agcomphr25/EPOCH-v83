@@ -98,6 +98,85 @@ interface EmployeeHours {
   regularHours: number;
 }
 
+interface PayrollReviewIssue {
+  code: string;
+  label: string;
+  severity: 'error' | 'warning' | 'info';
+  blocksPayroll: boolean;
+}
+
+interface PayrollReviewSegment {
+  id: number;
+  type: 'work' | 'break';
+  label: string;
+  clockIn: string;
+  clockOut: string | null;
+  hours: number;
+  isOpen: boolean;
+  isEdited: boolean;
+  chargeCode: string | null;
+  source: string | null;
+}
+
+interface PayrollReviewDay {
+  date: string;
+  totalHours: number;
+  breakHours: number;
+  hasIssue: boolean;
+  segments: PayrollReviewSegment[];
+}
+
+interface HourlyPayrollReviewRow {
+  employeeId: number;
+  timekeepingEmployeeId: number | null;
+  employeeName: string;
+  department: string | null;
+  timesheetId: number | null;
+  status: string;
+  totalHours: number;
+  regularHours: number;
+  overtimeHours: number;
+  leaveHours: number;
+  readyForPayroll: boolean;
+  locked: boolean;
+  issues: PayrollReviewIssue[];
+  days: PayrollReviewDay[];
+}
+
+interface SalariedPayrollReviewRow {
+  employeeId: number;
+  employeeName: string;
+  department: string | null;
+  timesheetId: number | null;
+  status: string;
+  totalHours: number;
+  leaveHours: number;
+  readyForPayroll: boolean;
+  payrollApproved: boolean;
+  issues: PayrollReviewIssue[];
+}
+
+interface PayrollReviewBatch {
+  periodStart: string;
+  periodEnd: string;
+  label: string;
+  generatedAt: string;
+  summary: {
+    employeeCount: number;
+    totalHours: number;
+    regularHours: number;
+    overtimeHours: number;
+    leaveHours: number;
+    missingPunchCount: number;
+    blockedCount: number;
+    readyCount: number;
+    lockedCount: number;
+    pendingCorrectionCount: number;
+  };
+  hourly: HourlyPayrollReviewRow[];
+  salaried: SalariedPayrollReviewRow[];
+}
+
 interface TimeOffRequest {
   id: number;
   employeeId: number;
@@ -532,6 +611,270 @@ function WorkQueueCard({
   );
 }
 
+function PayrollReviewPanel({
+  batch,
+  loading,
+  periodStart,
+  periodEnd,
+  onPeriodStartChange,
+  onPeriodEndChange,
+  onRefresh,
+  onLockHourly,
+  locking,
+}: {
+  batch: PayrollReviewBatch | undefined;
+  loading: boolean;
+  periodStart: string;
+  periodEnd: string;
+  onPeriodStartChange: (value: string) => void;
+  onPeriodEndChange: (value: string) => void;
+  onRefresh: () => void;
+  onLockHourly: (timesheetId: number) => void;
+  locking: boolean;
+}) {
+  const [selectedHourlyId, setSelectedHourlyId] = useState<number | null>(null);
+  const hourlyRows = batch?.hourly ?? [];
+  const selectedHourly = hourlyRows.find((row) => row.employeeId === selectedHourlyId) ?? hourlyRows.find((row) => row.issues.length > 0) ?? hourlyRows[0];
+  const salariedRows = batch?.salaried ?? [];
+
+  useEffect(() => {
+    if (!selectedHourly && selectedHourlyId != null) setSelectedHourlyId(null);
+  }, [selectedHourly, selectedHourlyId]);
+
+  const issueBadge = (issue: PayrollReviewIssue) => (
+    <Badge
+      key={issue.code}
+      variant="outline"
+      className={
+        issue.severity === 'error'
+          ? 'border-red-300 bg-red-50 text-red-700'
+          : issue.severity === 'warning'
+            ? 'border-amber-300 bg-amber-50 text-amber-700'
+            : 'border-slate-300 bg-slate-50 text-slate-700'
+      }
+    >
+      {issue.label}
+    </Badge>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight">Payroll Review</h2>
+          <p className="text-sm text-muted-foreground">Biweekly batch review before HR/payroll lock and export.</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Period start</Label>
+            <Input type="date" value={periodStart} onChange={(e) => onPeriodStartChange(e.target.value)} className="h-9 w-36" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Period end</Label>
+            <Input type="date" value={periodEnd} onChange={(e) => onPeriodEndChange(e.target.value)} className="h-9 w-36" />
+          </div>
+          <Button variant="outline" size="sm" onClick={onRefresh} disabled={loading} className="mt-5">
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex h-48 items-center justify-center rounded-lg border bg-card">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : !batch ? (
+        <Card>
+          <CardContent className="py-10 text-center text-sm text-muted-foreground">No payroll review data loaded.</CardContent>
+        </Card>
+      ) : (
+        <>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            <StatCard icon={Clock} label="Total Hours" value={fmtHours(batch.summary.totalHours)} sub={`${fmtHours(batch.summary.regularHours)} regular`} />
+            <StatCard icon={AlertTriangle} label="Overtime" value={fmtHours(batch.summary.overtimeHours)} color={batch.summary.overtimeHours > 0 ? 'text-orange-600' : 'text-primary'} />
+            <StatCard icon={FileText} label="Leave / PTO" value={fmtHours(batch.summary.leaveHours)} />
+            <StatCard icon={XCircle} label="Blocked" value={batch.summary.blockedCount} sub={`${batch.summary.missingPunchCount} missing punches`} color={batch.summary.blockedCount > 0 ? 'text-red-600' : 'text-green-600'} />
+            <StatCard icon={CheckCircle} label="Ready / Locked" value={`${batch.summary.readyCount}/${batch.summary.lockedCount}`} sub="Ready to lock / locked" color="text-green-600" />
+          </div>
+
+          <Tabs defaultValue="hourly" className="space-y-4">
+            <TabsList>
+              <TabsTrigger value="hourly">Hourly</TabsTrigger>
+              <TabsTrigger value="salaried">Salaried</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="hourly" className="mt-0">
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">Hourly Employee Hours</CardTitle>
+                    <CardDescription>{batch.label}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <div className="max-h-[620px] overflow-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Employee</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead className="text-right">Total</TableHead>
+                            <TableHead className="text-right">Regular</TableHead>
+                            <TableHead className="text-right">OT</TableHead>
+                            <TableHead>Issues</TableHead>
+                            <TableHead className="text-right">Payroll</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {hourlyRows.map((row) => (
+                            <TableRow
+                              key={row.employeeId}
+                              className={selectedHourly?.employeeId === row.employeeId ? 'bg-blue-50/70 dark:bg-blue-950/20' : undefined}
+                              onClick={() => setSelectedHourlyId(row.employeeId)}
+                            >
+                              <TableCell>
+                                <button type="button" className="text-left font-medium hover:underline" onClick={() => setSelectedHourlyId(row.employeeId)}>
+                                  {row.employeeName}
+                                </button>
+                                <div className="text-xs text-muted-foreground">{row.department ?? 'No department'}</div>
+                              </TableCell>
+                              <TableCell><StatusBadge status={row.status} /></TableCell>
+                              <TableCell className="text-right font-mono">{fmtHours(row.totalHours)}</TableCell>
+                              <TableCell className="text-right font-mono text-muted-foreground">{fmtHours(row.regularHours)}</TableCell>
+                              <TableCell className="text-right font-mono">{row.overtimeHours > 0 ? <span className="text-orange-600">{fmtHours(row.overtimeHours)}</span> : '—'}</TableCell>
+                              <TableCell>
+                                <div className="flex max-w-64 flex-wrap gap-1">
+                                  {row.issues.length ? row.issues.slice(0, 2).map(issueBadge) : <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Clean</Badge>}
+                                  {row.issues.length > 2 && <Badge variant="outline">+{row.issues.length - 2}</Badge>}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {row.locked ? (
+                                  <Badge variant="outline" className="border-slate-300">Locked</Badge>
+                                ) : row.readyForPayroll && row.timesheetId ? (
+                                  <Button size="sm" onClick={(e) => { e.stopPropagation(); onLockHourly(row.timesheetId!); }} disabled={locking}>
+                                    <LogOut className="h-4 w-4 mr-1" />
+                                    Lock
+                                  </Button>
+                                ) : (
+                                  <Badge variant="outline" className="border-red-200 text-red-700">Blocked</Badge>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">{selectedHourly?.employeeName ?? 'Employee Detail'}</CardTitle>
+                    <CardDescription>Source punches and blockers</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {!selectedHourly ? (
+                      <p className="text-sm text-muted-foreground">Select an employee to review source transactions.</p>
+                    ) : (
+                      <>
+                        <div className="flex flex-wrap gap-1">
+                          {selectedHourly.issues.length ? selectedHourly.issues.map(issueBadge) : <Badge className="bg-green-100 text-green-800 hover:bg-green-100">No blockers</Badge>}
+                        </div>
+                        <div className="max-h-[520px] space-y-2 overflow-auto pr-1">
+                          {selectedHourly.days.map((day) => (
+                            <div key={day.date} className={`rounded-md border p-2 ${day.hasIssue ? 'border-red-200 bg-red-50/50' : 'bg-background'}`}>
+                              <div className="mb-2 flex items-center justify-between gap-2 text-sm">
+                                <span className="font-medium">{new Date(`${day.date}T12:00:00`).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+                                <span className="font-mono text-xs text-muted-foreground">{fmtHours(day.totalHours)}</span>
+                              </div>
+                              {day.segments.length === 0 ? (
+                                <p className="text-xs text-muted-foreground">No punches</p>
+                              ) : (
+                                <div className="flex flex-wrap gap-1.5">
+                                  {day.segments.map((segment, idx) => (
+                                    <div
+                                      key={`${segment.id}-${idx}-${segment.clockIn}`}
+                                      className={`min-w-28 rounded border px-2 py-1 text-xs ${
+                                        segment.isOpen
+                                          ? 'border-red-300 bg-red-50 text-red-800'
+                                          : segment.type === 'break'
+                                            ? 'border-amber-200 bg-amber-50 text-amber-800'
+                                            : 'border-green-200 bg-green-50 text-green-800'
+                                      }`}
+                                      title={segment.chargeCode ?? segment.source ?? undefined}
+                                    >
+                                      <div className="font-medium">{segment.type === 'break' ? 'Break' : 'Work'}{segment.isEdited ? ' - edited' : ''}</div>
+                                      <div className="font-mono">
+                                        {new Date(segment.clockIn).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                                        {' - '}
+                                        {segment.clockOut ? new Date(segment.clockOut).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : 'Missing out'}
+                                      </div>
+                                      <div className="truncate text-[11px] opacity-80">{fmtHours(segment.hours)} {segment.label}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="salaried" className="mt-0">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Salaried Review</CardTitle>
+                  <CardDescription>Separate payroll review queue for salaried timesheets.</CardDescription>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Employee</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Hours</TableHead>
+                        <TableHead className="text-right">Leave</TableHead>
+                        <TableHead>Issues</TableHead>
+                        <TableHead className="text-right">Payroll</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {salariedRows.map((row) => (
+                        <TableRow key={row.employeeId}>
+                          <TableCell>
+                            <div className="font-medium">{row.employeeName}</div>
+                            <div className="text-xs text-muted-foreground">{row.department ?? 'No department'}</div>
+                          </TableCell>
+                          <TableCell><StatusBadge status={row.status} /></TableCell>
+                          <TableCell className="text-right font-mono">{fmtHours(row.totalHours)}</TableCell>
+                          <TableCell className="text-right font-mono text-muted-foreground">{fmtHours(row.leaveHours)}</TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {row.issues.length ? row.issues.map(issueBadge) : <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Clean</Badge>}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {row.payrollApproved ? <Badge variant="outline">Approved</Badge> : row.readyForPayroll ? <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Ready</Badge> : <Badge variant="outline" className="border-red-200 text-red-700">Blocked</Badge>}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </>
+      )}
+    </div>
+  );
+}
+
 function DevSeedPunchesPanel() {
   const { toast } = useToast();
   const [daysBack, setDaysBack] = useState(14);
@@ -648,7 +991,7 @@ function DevSeedPunchesPanel() {
 
 export default function TimeClockAdminPage() {
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState('command');
+  const [activeTab, setActiveTab] = useState('payroll-review');
   const [inOutBoardUpdatedAt, setInOutBoardUpdatedAt] = useState<Date | null>(null);
   const [approvalTarget, setApprovalTarget] = useState<UnapprovedGroup | null>(null);
   const [approvalReason, setApprovalReason] = useState('');
@@ -705,6 +1048,31 @@ export default function TimeClockAdminPage() {
   const [hoursTo, setHoursTo] = useState(() => {
     const { end } = getCurrentPayPeriod();
     return end;
+  });
+  const [reviewPeriodStart, setReviewPeriodStart] = useState(() => {
+    const { start } = getCurrentPayPeriod();
+    return start;
+  });
+  const [reviewPeriodEnd, setReviewPeriodEnd] = useState(() => {
+    const { end } = getCurrentPayPeriod();
+    return end;
+  });
+
+  const {
+    data: payrollReview,
+    isLoading: payrollReviewLoading,
+    refetch: refetchPayrollReview,
+  } = useQuery<PayrollReviewBatch>({
+    queryKey: ['/api/timekeeping/dashboard/pay-period-review', reviewPeriodStart, reviewPeriodEnd],
+    queryFn: async () => {
+      const qs = `?periodStart=${reviewPeriodStart}&periodEnd=${reviewPeriodEnd}`;
+      const res = await fetch(`/api/timekeeping/dashboard/pay-period-review${qs}`, { credentials: 'include' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null) as { error?: string } | null;
+        throw new Error(body?.error ?? 'Failed to load payroll review');
+      }
+      return res.json();
+    },
   });
 
   const { data: employeeHours, isLoading: employeeHoursLoading, isError: employeeHoursError } = useQuery<EmployeeHours[]>({
@@ -810,6 +1178,7 @@ export default function TimeClockAdminPage() {
     onSuccess: () => {
       toast({ title: 'Timesheet locked', description: 'The timesheet is now locked. Changes require a formal correction request.' });
       queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/timesheets'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/dashboard/pay-period-review'] });
     },
     onError: (err: unknown) => toast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to lock timesheet.', variant: 'destructive' }),
   });
@@ -1452,6 +1821,13 @@ export default function TimeClockAdminPage() {
 
   const navGroups = [
     {
+      id: 'payroll-review',
+      label: 'Payroll Review',
+      icon: FileText,
+      tabs: ['payroll-review'],
+      count: payrollReview?.summary.blockedCount ?? 0,
+    },
+    {
       id: 'command',
       label: 'Command Center',
       icon: CheckCircle,
@@ -1581,6 +1957,20 @@ export default function TimeClockAdminPage() {
         </aside>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="min-w-0">
+        <TabsContent value="payroll-review" className="space-y-6">
+          <PayrollReviewPanel
+            batch={payrollReview}
+            loading={payrollReviewLoading}
+            periodStart={reviewPeriodStart}
+            periodEnd={reviewPeriodEnd}
+            onPeriodStartChange={setReviewPeriodStart}
+            onPeriodEndChange={setReviewPeriodEnd}
+            onRefresh={() => refetchPayrollReview()}
+            onLockHourly={(timesheetId) => lockMutation.mutate(timesheetId)}
+            locking={lockMutation.isPending}
+          />
+        </TabsContent>
+
         <TabsContent value="command" className="space-y-6">
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <WorkQueueCard

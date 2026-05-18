@@ -48,6 +48,7 @@ interface AssignedTask {
   notes: string | null;
   assignedTo: string | null;
   assignedToEmployeeId: number | null;
+  link: string | null;
   createdAt: string;
   sectionId: string;
   sectionName: string;
@@ -758,6 +759,18 @@ function ProjectTaskGroup({
                 </p>
               )}
             </div>
+            {task.link && !task.isCompleted && (
+              <Link href={task.link}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={(e) => e.stopPropagation()}
+                  data-testid={`link-open-task-${task.id}`}
+                >
+                  <ExternalLink className="h-4 w-4" />
+                </Button>
+              </Link>
+            )}
           </div>
         ))}
       </CollapsibleContent>

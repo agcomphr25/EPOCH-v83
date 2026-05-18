@@ -32,6 +32,9 @@ import {
   projectSteps,
   rfqRiskAssessments,
   purchaseReviewChecklists,
+  preproductionChecklists,
+  preproductionChecklistSections,
+  preproductionChecklistTasks,
   type LaborBudgetOverride,
   type ProductionControlTemplate,
 } from '../../schema';
@@ -109,6 +112,165 @@ function normalizeWadApprovalRole(role: string | undefined | null): WadApprovalS
   const normalized = role.trim().toLowerCase();
   if ((WAD_APPROVAL_SLOTS as readonly string[]).includes(normalized)) return normalized as WadApprovalSlot;
   return WAD_LEGACY_SLOT_ALIASES[normalized] ?? null;
+}
+
+const WAD_APPROVAL_TASK_SECTION_NAME = 'WAD Approvals';
+
+/**
+ * Sync per-role WAD approval assignments to the project's preproduction
+ * checklist so the assignee sees the pending signature on their My Tasks /
+ * Pre-production Checklist dashboard.
+ *
+ * Stable lookup: tasks in the "WAD Approvals" section whose `link` matches
+ * `/work-orders/<wadId>/wizard?step=11&role=<role>`.
+ *
+ * Backfill-safe: if the project has no linked preproduction checklist, or
+ * the WAD has no assignments and no pre-existing approval tasks, this is a
+ * no-op.
+ */
+async function syncWadApprovalChecklistTasks(params: {
+  wadId: string;
+  workOrderNumber: string;
+  projectId: string | null;
+  wizardData: Record<string, unknown>;
+}): Promise<void> {
+  try {
+    if (!params.projectId) return;
+    const [project] = await db
+      .select({ checklistId: projects.linkedPreproductionChecklistId })
+      .from(projects)
+      .where(eq(projects.id, params.projectId))
+      .limit(1);
+    const checklistId = project?.checklistId ?? null;
+    if (!checklistId) return;
+
+    const rawAssignments = (params.wizardData?.approvalAssignments as Record<string, unknown>) ?? {};
+    const approvals = (Array.isArray(params.wizardData?.approvals) ? params.wizardData.approvals : []) as Array<{
+      role?: string;
+      decision?: string;
+      displayName?: string;
+      timestamp?: string;
+    }>;
+
+    // Build desired map: role → { employeeId, employeeName }
+    const desiredByRole = new Map<WadApprovalSlot, { employeeId: number; employeeName: string | null }>();
+    for (const [rawRole, raw] of Object.entries(rawAssignments)) {
+      const role = normalizeWadApprovalRole(rawRole);
+      if (!role) continue;
+      if (!raw || typeof raw !== 'object') continue;
+      const a = raw as { employeeId?: number | string | null; employeeName?: string | null };
+      const empId =
+        typeof a.employeeId === 'number'
+          ? a.employeeId
+          : (a.employeeId != null ? Number.parseInt(String(a.employeeId), 10) : NaN);
+      if (!Number.isFinite(empId) || empId <= 0) continue;
+      desiredByRole.set(role, { employeeId: empId as number, employeeName: a.employeeName ?? null });
+    }
+
+    // Find or create the "WAD Approvals" section
+    let [section] = await db
+      .select()
+      .from(preproductionChecklistSections)
+      .where(
+        and(
+          eq(preproductionChecklistSections.checklistId, checklistId),
+          eq(preproductionChecklistSections.name, WAD_APPROVAL_TASK_SECTION_NAME),
+        ),
+      )
+      .limit(1);
+
+    // Fetch existing tasks for this WAD (if section exists)
+    type TaskRow = typeof preproductionChecklistTasks.$inferSelect;
+    const existingByRole = new Map<WadApprovalSlot, TaskRow>();
+    const linkPrefix = `/work-orders/${params.wadId}/wizard`;
+
+    if (section) {
+      const tasks = await db
+        .select()
+        .from(preproductionChecklistTasks)
+        .where(eq(preproductionChecklistTasks.sectionId, section.id));
+      for (const t of tasks) {
+        if (!t.link || !t.link.startsWith(linkPrefix)) continue;
+        const m = t.link.match(/[?&]role=([^&]+)/);
+        const role = normalizeWadApprovalRole(m ? decodeURIComponent(m[1]) : null);
+        if (role) existingByRole.set(role, t);
+      }
+    }
+
+    // Nothing to do, and nothing to clean up
+    if (desiredByRole.size === 0 && existingByRole.size === 0) return;
+
+    if (!section && desiredByRole.size > 0) {
+      [section] = await db
+        .insert(preproductionChecklistSections)
+        .values({ checklistId, name: WAD_APPROVAL_TASK_SECTION_NAME, sortOrder: 999 })
+        .returning();
+    }
+    if (!section) return;
+
+    // Upsert one task per desired role
+    for (const [role, assignment] of desiredByRole) {
+      const matrixEntry = WAD_APPROVAL_MATRIX.find((s) => s.key === role);
+      const roleLabel = matrixEntry?.label ?? role;
+      const description = `Sign ${roleLabel} approval — WAD ${params.workOrderNumber}`;
+      const link = `${linkPrefix}?step=11&role=${role}`;
+      const sortOrder = WAD_APPROVAL_MATRIX.findIndex((s) => s.key === role);
+      const matchingApproval = approvals.find(
+        (a) => normalizeWadApprovalRole(a.role) === role && a.decision === 'APPROVED',
+      );
+      const isApproved = !!matchingApproval;
+      const existing = existingByRole.get(role);
+
+      if (existing) {
+        const patch: Partial<typeof preproductionChecklistTasks.$inferInsert> = {
+          description,
+          assignedToEmployeeId: assignment.employeeId,
+          assignedTo: assignment.employeeName ?? existing.assignedTo ?? null,
+          link,
+          sortOrder,
+          updatedAt: new Date(),
+        };
+        if (isApproved && !existing.isCompleted) {
+          patch.isCompleted = true;
+          patch.completedAt = matchingApproval?.timestamp ? new Date(matchingApproval.timestamp) : new Date();
+          patch.completedBy = matchingApproval?.displayName ?? assignment.employeeName ?? null;
+        } else if (!isApproved && existing.isCompleted) {
+          patch.isCompleted = false;
+          patch.completedAt = null;
+          patch.completedBy = null;
+        }
+        await db
+          .update(preproductionChecklistTasks)
+          .set(patch)
+          .where(eq(preproductionChecklistTasks.id, existing.id));
+      } else {
+        await db.insert(preproductionChecklistTasks).values({
+          sectionId: section.id,
+          description,
+          sortOrder,
+          assignedToEmployeeId: assignment.employeeId,
+          assignedTo: assignment.employeeName ?? null,
+          link,
+          isCompleted: isApproved,
+          completedAt: isApproved
+            ? (matchingApproval?.timestamp ? new Date(matchingApproval.timestamp) : new Date())
+            : null,
+          completedBy: isApproved ? (matchingApproval?.displayName ?? assignment.employeeName ?? null) : null,
+        });
+      }
+    }
+
+    // Delete tasks for roles no longer assigned
+    for (const [role, task] of existingByRole) {
+      if (!desiredByRole.has(role)) {
+        await db.delete(preproductionChecklistTasks).where(eq(preproductionChecklistTasks.id, task.id));
+      }
+    }
+  } catch (err) {
+    // Sync failures must not break wizard save/approve — log only.
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn('[WAD Wizard] syncWadApprovalChecklistTasks failed:', msg);
+  }
 }
 
 function toNumber(value: unknown): number | null {
@@ -2766,6 +2928,13 @@ router.patch(
         .where(eq(productionWorkOrders.id, id))
         .returning();
 
+      await syncWadApprovalChecklistTasks({
+        wadId: id,
+        workOrderNumber: updated.workOrderNumber ?? wad.workOrderNumber,
+        projectId: updated.projectId ?? wad.projectId ?? null,
+        wizardData: mergedWizardData,
+      });
+
       return res.json({ wad: updated });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -3020,6 +3189,13 @@ router.post(
         .set(updateSet)
         .where(eq(productionWorkOrders.id, id))
         .returning();
+
+      await syncWadApprovalChecklistTasks({
+        wadId: id,
+        workOrderNumber: updated.workOrderNumber ?? wad.workOrderNumber,
+        projectId: updated.projectId ?? wad.projectId ?? null,
+        wizardData: updatedWizardData,
+      });
 
       auditService.logEvent({
         entityType: 'work_order',

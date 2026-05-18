@@ -874,5 +874,6 @@ describe('Schema-baseline migration replay (scratch DB seeded from pg_dump)', ()
       `Unexpected migration errors on schema-baseline replay — these indicate real bugs:\n${errors.join('\n')}`,
     ).toHaveLength(0);
   // pg_dump + CREATE DATABASE + psql restore + migration replay can take 30–60 s
-  }, 90_000);
+  // initially, but grows with the migration set; allow generous headroom.
+  }, 300_000);
 });

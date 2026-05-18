@@ -50,6 +50,7 @@ import P2ChangesTab from '@/components/p2/P2ChangesTab';
 import P2ShippingTab from '@/components/p2/P2ShippingTab';
 import P2NonconformingTab from '@/components/p2/P2ScrappedItemsTab';
 import { TravelerCapturedDataById } from '@/components/p2/TravelerCapturedData';
+import ProgramManufacturingOrchestration from '@/components/p2/ProgramManufacturingOrchestration';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -720,6 +721,18 @@ export default function P2ControlCenter() {
             <Factory className="h-4 w-4" />
             Production
           </TabsTrigger>
+          <TabsTrigger value="program" className="flex items-center gap-2" data-testid="tab-program-overview">
+            <Layers className="h-4 w-4" />
+            Program
+          </TabsTrigger>
+          <TabsTrigger value="assembly-tree" className="flex items-center gap-2" data-testid="tab-assembly-tree">
+            <Route className="h-4 w-4" />
+            Assembly Tree
+          </TabsTrigger>
+          <TabsTrigger value="swimlane" className="flex items-center gap-2" data-testid="tab-swimlane">
+            <BarChart3 className="h-4 w-4" />
+            Swimlane
+          </TabsTrigger>
           <TabsTrigger value="shipping" className="flex items-center gap-2" data-testid="tab-shipping">
             <Truck className="h-4 w-4" />
             Shipping
@@ -834,6 +847,18 @@ export default function P2ControlCenter() {
 
         <TabsContent value="production">
           <P2ProductionQueue selectedPONumbers={selectedPONumbers} />
+        </TabsContent>
+
+        <TabsContent value="program">
+          <ProgramManufacturingOrchestration mode="overview" projectId={wadProjectId || undefined} />
+        </TabsContent>
+
+        <TabsContent value="assembly-tree">
+          <ProgramManufacturingOrchestration mode="tree" projectId={wadProjectId || undefined} />
+        </TabsContent>
+
+        <TabsContent value="swimlane">
+          <ProgramManufacturingOrchestration mode="swimlane" projectId={wadProjectId || undefined} />
         </TabsContent>
 
         <TabsContent value="shipping" className="space-y-4">

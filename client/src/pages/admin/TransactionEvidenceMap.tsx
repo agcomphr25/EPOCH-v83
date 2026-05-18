@@ -300,12 +300,6 @@ function MindMapCanvas({
     };
   });
 
-  const positionedSummaries = branches.map((branch) => ({
-    node: branch.summary,
-    point: polarPoint(center.x, center.y, 710, branch.angle),
-    branchKey: branch.key,
-  }));
-
   return (
     <div className="overflow-auto rounded-md border bg-[#f8fafc] p-3">
       <div className="relative" style={{ width: canvas.width, height: canvas.height }}>
@@ -327,24 +321,18 @@ function MindMapCanvas({
               strokeLinecap="round"
             />
           ))}
-          {positionedSummaries.map(({ node, point, branchKey }) => {
-            const branch = branches.find((item) => item.key === branchKey);
-            if (!branch) return null;
-            return (
-              <path
-                key={`branch-line-${node.id}`}
-                d={`M ${branch.point.x} ${branch.point.y} Q ${(branch.point.x + point.x) / 2} ${branch.point.y} ${point.x} ${point.y}`}
-                fill="none"
-                className={node.status === 'missing' ? 'stroke-red-200' : node.status === 'warning' ? 'stroke-amber-200' : node.status === 'sensitive' ? 'stroke-blue-200' : 'stroke-slate-200'}
-                strokeWidth={2}
-                strokeLinecap="round"
-              />
-            );
-          })}
-          <circle cx={center.x} cy={center.y} r={142} fill="white" filter="url(#softShadow)" />
+          <rect
+            x={center.x - 245}
+            y={center.y - 78}
+            width={490}
+            height={156}
+            rx={22}
+            fill="white"
+            filter="url(#softShadow)"
+          />
         </svg>
 
-        <MindMapNode node={centerNode} selected={false} x={center.x} y={center.y} width={350} branch />
+        <MindMapNode node={centerNode} selected={false} x={center.x} y={center.y} width={460} branch />
 
         {branches.map((branch) => (
           <MindMapNode
@@ -365,17 +353,6 @@ function MindMapCanvas({
           />
         ))}
 
-        {positionedSummaries.map(({ node, point, branchKey }) => (
-          <MindMapNode
-            key={node.id}
-            node={node}
-            selected={selectedBranchKey === branchKey}
-            x={point.x}
-            y={point.y}
-            width={240}
-            onClick={() => onSelectBranch(branchKey)}
-          />
-        ))}
       </div>
     </div>
   );

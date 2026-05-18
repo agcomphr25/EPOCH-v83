@@ -57,6 +57,15 @@ type CoaAccount = {
       debitAmount: number | null;
       creditAmount: number | null;
     } | null;
+    sources?: Array<{
+      label: string;
+      journalEntryId: number;
+      transactionType: string;
+      referenceType: string;
+      referenceId: number;
+      sourceDocumentNumber: string | null;
+      effectiveDate: string | null;
+    }>;
   };
 };
 
@@ -71,17 +80,6 @@ function formatCurrency(value: number | null | undefined) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
-}
-
-function formatDateTime(value: string | null | undefined) {
-  if (!value) return '-';
-  return new Date(value).toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
 }
 
 export default function ChartOfAccountsPage() {
@@ -239,7 +237,7 @@ export default function ChartOfAccountsPage() {
                 {filtered.map((account) => {
                   const isExpanded = expandedAccountId === account.id;
                   const audit = account.balanceAudit;
-                  const latest = audit?.latestPostedActivity;
+                  const sources = audit?.sources ?? [];
                   const currentBalance = account.currentBalance ?? 0;
 
                   return (
@@ -335,71 +333,27 @@ export default function ChartOfAccountsPage() {
                       {isExpanded && (
                         <TableRow key={`${account.id}-audit`}>
                           <TableCell colSpan={10} className="bg-muted/30 p-4">
-                            <div className="grid gap-4 md:grid-cols-4">
-                              <div>
-                                <div className="text-xs font-medium uppercase text-muted-foreground">
-                                  Formula
-                                </div>
-                                <div className="mt-1 font-mono text-sm">
-                                  {audit?.formula ?? '-'}
-                                </div>
-                                <div className="mt-1 text-xs text-muted-foreground">
-                                  Normal balance: {account.normalBalance}
-                                </div>
+                            <div>
+                              <div className="text-xs font-medium uppercase text-muted-foreground">
+                                Balance Sources
                               </div>
-                              <div>
-                                <div className="text-xs font-medium uppercase text-muted-foreground">
-                                  Posted Totals
+                              {sources.length > 0 ? (
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  {sources.map((source) => (
+                                    <Badge
+                                      key={`${source.journalEntryId}-${source.referenceType}-${source.referenceId}`}
+                                      variant="outline"
+                                      className="font-mono text-sm"
+                                    >
+                                      {source.label}
+                                    </Badge>
+                                  ))}
                                 </div>
-                                <div className="mt-1 space-y-1 font-mono text-sm">
-                                  <div>Debit: {formatCurrency(audit?.totalDebit)}</div>
-                                  <div>Credit: {formatCurrency(audit?.totalCredit)}</div>
+                              ) : (
+                                <div className="mt-1 text-sm text-muted-foreground">
+                                  No posted source documents found.
                                 </div>
-                              </div>
-                              <div>
-                                <div className="text-xs font-medium uppercase text-muted-foreground">
-                                  Included Activity
-                                </div>
-                                <div className="mt-1 space-y-1 text-sm">
-                                  <div>{audit?.postedEntryCount ?? 0} posted entries</div>
-                                  <div>{audit?.postedLineCount ?? 0} posted lines</div>
-                                </div>
-                              </div>
-                              <div>
-                                <div className="text-xs font-medium uppercase text-muted-foreground">
-                                  Latest Posted Line
-                                </div>
-                                {latest ? (
-                                  <div className="mt-1 space-y-1 text-sm">
-                                    <div className="font-mono">
-                                      JE #{latest.journalEntryId}
-                                    </div>
-                                    <div>
-                                      {latest.transactionType} | {latest.referenceType}{' '}
-                                      #{latest.referenceId}
-                                    </div>
-                                    <div className="font-mono">
-                                      Dr {formatCurrency(latest.debitAmount)} / Cr{' '}
-                                      {formatCurrency(latest.creditAmount)}
-                                    </div>
-                                    <div className="text-xs text-muted-foreground">
-                                      Effective {formatDateTime(latest.effectiveDate)}
-                                    </div>
-                                    <div className="text-xs text-muted-foreground">
-                                      Posted {formatDateTime(latest.postedAt)}
-                                    </div>
-                                    {latest.memo && (
-                                      <div className="text-xs text-muted-foreground">
-                                        {latest.memo}
-                                      </div>
-                                    )}
-                                  </div>
-                                ) : (
-                                  <div className="mt-1 text-sm text-muted-foreground">
-                                    No posted journal lines found.
-                                  </div>
-                                )}
-                              </div>
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>

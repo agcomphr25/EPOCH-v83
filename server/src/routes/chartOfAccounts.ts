@@ -53,6 +53,31 @@ const periodPatchSchema = z.object({
   reason: z.string().trim().min(1),
 });
 
+function extractOrderNumber(memo: string | null): string | null {
+  if (!memo) return null;
+  const orderMatch = memo.match(/\border\s+([A-Z]{1,4}\d{2,})\b/i);
+  if (orderMatch?.[1]) return orderMatch[1].toUpperCase();
+  const compactMatch = memo.match(/\b([A-Z]{1,4}\d{3,})\b/);
+  return compactMatch?.[1]?.toUpperCase() ?? null;
+}
+
+function sourceLabel(source: {
+  transactionType: string;
+  referenceType: string;
+  referenceId: number;
+  sourceDocumentNumber: string | null;
+  memo: string | null;
+}) {
+  const orderNumber = extractOrderNumber(source.memo);
+  if (orderNumber) return `Order ${orderNumber}`;
+  if (source.sourceDocumentNumber) {
+    const prefix = source.transactionType === 'AR_INVOICE' ? 'Invoice' : 'Document';
+    return `${prefix} ${source.sourceDocumentNumber}`;
+  }
+  const reference = source.referenceType.replace(/_/g, ' ');
+  return `${reference} #${source.referenceId}`;
+}
+
 router.use(authenticateToken);
 
 router.get('/accounts', h(async (req, res) => {
@@ -103,12 +128,13 @@ router.get('/accounts-with-balances', h(async (req, res) => {
           eq(journalEntries.status, 'POSTED'),
         ));
 
-      const latestPostedActivity = await db
+      const sourceRows = await db
         .select({
           journalEntryId: journalEntries.id,
           transactionType: journalEntries.transactionType,
           referenceType: journalEntries.referenceType,
           referenceId: journalEntries.referenceId,
+          sourceDocumentNumber: journalEntries.sourceDocumentNumber,
           effectiveDate: journalEntries.effectiveDate,
           postedAt: journalEntries.postedAt,
           memo: journalEntries.memo,
@@ -122,7 +148,7 @@ router.get('/accounts-with-balances', h(async (req, res) => {
           eq(journalEntries.status, 'POSTED'),
         ))
         .orderBy(desc(journalEntries.effectiveDate), desc(journalEntries.id), desc(journalLines.id))
-        .limit(1);
+        .limit(250);
 
       const [balance] = balanceResult;
       const totalDebit = Number(balance?.totalDebit ?? 0);
@@ -151,7 +177,16 @@ router.get('/accounts-with-balances', h(async (req, res) => {
           formula: account.normalBalance === 'DEBIT'
             ? 'totalDebit - totalCredit'
             : 'totalCredit - totalDebit',
-          latestPostedActivity: latestPostedActivity[0] ?? null,
+          latestPostedActivity: sourceRows[0] ?? null,
+          sources: sourceRows.map((row) => ({
+            label: sourceLabel(row),
+            journalEntryId: row.journalEntryId,
+            transactionType: row.transactionType,
+            referenceType: row.referenceType,
+            referenceId: row.referenceId,
+            sourceDocumentNumber: row.sourceDocumentNumber,
+            effectiveDate: row.effectiveDate,
+          })),
         },
       };
     })

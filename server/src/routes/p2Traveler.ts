@@ -23,7 +23,7 @@ import {
   insertP2SerializedItemCustomDataSchema,
   P2_DEPARTMENT_STAGES,
 } from '../../schema';
-import { eq, and, desc, or, ilike, inArray, asc, sql } from 'drizzle-orm';
+import { eq, and, desc, or, ilike, inArray, asc, sql, type SQL } from 'drizzle-orm';
 import { storage } from '../../storage';
 import { createEmployeeIdentitySnapshot } from '../../identity/userIdentity';
 import { buildChargeContextFromTraveler } from '../helpers/travelerBarcodeResolver';
@@ -60,6 +60,9 @@ async function runAutoPunchForP2Task(params: {
   serialNumber: string;
   partNumber: string;
   inventoryItemId?: string | number | null;
+  partRoutingId?: string | null;
+  internalPartNumber?: string | null;
+  serializedItemPartNumber?: string | null;
   employeeId: string | number;
   laborApprovalId?: number | null;
   adminPtoOverride?: boolean;
@@ -75,30 +78,71 @@ async function runAutoPunchForP2Task(params: {
     }
   | { ok: false; status: number; body: Record<string, unknown> }
 > {
-  const travelerPartMatches = [eq(travelers.partNumber, params.partNumber)];
+  // Mirror the identity match that `generate-traveler` uses when checking
+  // for an existing traveler row (see same file, ~line 1425). The OR-set
+  // must accept any of: partRoutingId, partNumber (cert vs raw serialized
+  // item), internal part number, or inventoryItemId (compared as strings).
+  // serialNumber stays a hard AND so we never accept a different serial's
+  // traveler.
+  const partNumberCandidates = new Set<string>();
+  const addPart = (val?: string | null) => {
+    if (val == null) return;
+    const trimmed = String(val).trim();
+    if (trimmed.length > 0) partNumberCandidates.add(trimmed);
+  };
+  addPart(params.partNumber);
+  addPart(params.internalPartNumber);
+  addPart(params.serializedItemPartNumber);
+
+  const travelerPartMatches: SQL<unknown>[] = [];
+  for (const pn of Array.from(partNumberCandidates)) {
+    travelerPartMatches.push(eq(travelers.partNumber, pn));
+    travelerPartMatches.push(sql`lower(trim(${travelers.partNumber})) = lower(trim(${pn}))`);
+  }
   if (params.inventoryItemId != null) {
-    travelerPartMatches.push(eq(travelers.inventoryItemId, String(params.inventoryItemId)));
+    travelerPartMatches.push(
+      sql`${travelers.inventoryItemId} IS NOT NULL AND ${travelers.inventoryItemId}::text = ${String(params.inventoryItemId)}`,
+    );
+  }
+  if (params.partRoutingId) {
+    travelerPartMatches.push(eq(travelers.partRoutingId, params.partRoutingId));
   }
 
-  const linkedTraveler = await db
-    .select({
-      id: travelers.id,
-      travelerNumber: travelers.travelerNumber,
-      productionWorkOrderId: travelers.productionWorkOrderId,
-    })
-    .from(travelers)
-    .where(
-      and(
-        eq(travelers.serialNumber, params.serialNumber),
-        or(...travelerPartMatches),
-      ),
-    )
-    .limit(1)
-    .then((rows) => rows[0] ?? null);
+  const linkedTraveler = travelerPartMatches.length === 0
+    ? null
+    : await db
+        .select({
+          id: travelers.id,
+          travelerNumber: travelers.travelerNumber,
+          productionWorkOrderId: travelers.productionWorkOrderId,
+        })
+        .from(travelers)
+        .where(
+          and(
+            eq(travelers.serialNumber, params.serialNumber),
+            or(...travelerPartMatches),
+          ),
+        )
+        .limit(1)
+        .then((rows) => rows[0] ?? null);
   if (!linkedTraveler) {
     // Fail-closed: a P2 task cannot start without a traveler/WAD link, otherwise
     // we would create a p2_work_tasks row that is not anchored to any project
     // charge code, breaking the unified labor pipeline (Constitution §5.2).
+    // Diagnostic line: surface the resolved identity inputs and the candidate
+    // match keys we tried so a future floor report is debuggable from logs.
+    console.warn(
+      '[p2Traveler.runAutoPunchForP2Task] NO_TRAVELER_LINK',
+      JSON.stringify({
+        serialNumber: params.serialNumber,
+        certificationPartNumber: params.partNumber,
+        serializedItemPartNumber: params.serializedItemPartNumber ?? null,
+        internalPartNumber: params.internalPartNumber ?? null,
+        inventoryItemId: params.inventoryItemId ?? null,
+        partRoutingId: params.partRoutingId ?? null,
+        candidatePartNumbers: Array.from(partNumberCandidates.values()),
+      }),
+    );
     return {
       ok: false,
       status: 409,
@@ -1626,6 +1670,9 @@ router.post('/start-task', async (req: Request, res: Response) => {
         serialNumber: serializedItem.serialNumber,
         partNumber: certificationPartNumber,
         inventoryItemId: inventoryIdentity.inventoryItemId,
+        partRoutingId: routing?.id ?? serializedItem.partRoutingId ?? null,
+        internalPartNumber: inventoryIdentity.internalPartNumber,
+        serializedItemPartNumber: serializedItem.partNumber,
         employeeId,
         laborApprovalId: req.body?.laborApprovalId ? parseInt(req.body.laborApprovalId, 10) : null,
         adminPtoOverride: req.body?.adminPtoOverride === true,
@@ -1677,6 +1724,9 @@ router.post('/start-task', async (req: Request, res: Response) => {
       serialNumber: serializedItem.serialNumber,
       partNumber: certificationPartNumber,
       inventoryItemId: inventoryIdentity.inventoryItemId,
+      partRoutingId: routing?.id ?? serializedItem.partRoutingId ?? null,
+      internalPartNumber: inventoryIdentity.internalPartNumber,
+      serializedItemPartNumber: serializedItem.partNumber,
       employeeId,
       laborApprovalId: req.body?.laborApprovalId ? parseInt(req.body.laborApprovalId, 10) : null,
       adminPtoOverride: req.body?.adminPtoOverride === true,

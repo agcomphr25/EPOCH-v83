@@ -1,0 +1,39 @@
+index-ePRS3ccR.js:5555 React initialized: Object
+index-ePRS3ccR.js:5555 React hooks: Object
+index-ePRS3ccR.js:5555 [EPOCH SYNC] Sync engine starting
+index-ePRS3ccR.js:5555 [EPOCH SYNC] Sync engine started — interval: 30000 ms
+index-ePRS3ccR.js:5552 App component is rendering...
+index-ePRS3ccR.js:5552 Environment: production
+index-ePRS3ccR.js:5552 Base URL: /
+index-ePRS3ccR.js:1805 [EPOCH] Service Worker Registered https://agcompepoch.xyz/
+index-ePRS3ccR.js:235 🌐 API Request to /api/vendor-pos/compliance-backfill?filter=enforced (timeout: 15000ms, deployment: true)
+index-ePRS3ccR.js:1805 [EPOCH] Install prompt captured and ready
+cutting-control-center/bom:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+index-ePRS3ccR.js:235 ✅ API Response from /api/vendor-pos/compliance-backfill?filter=enforced: 200
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+index-ePRS3ccR.js:2251 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-ePRS3ccR.js:235 🌐 API Request to /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974 (timeout: 15000ms, deployment: true)
+index-ePRS3ccR.js:235 ✅ API Response from /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974: 200
+index-ePRS3ccR.js:235 🌐 API Request to /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/STR2600092 (timeout: 15000ms, deployment: true)
+index-ePRS3ccR.js:235 ✅ API Response from /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/STR2600092: 200
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+index-ePRS3ccR.js:235 🌐 API Request to /api/p2-traveler/start-task (timeout: 15000ms, deployment: true)
+api/p2-traveler/start-task:1  Failed to load resource: the server responded with a status of 409 ()
+index-ePRS3ccR.js:235 ✅ API Response from /api/p2-traveler/start-task: 409
+index-ePRS3ccR.js:5555 API error raw body: {"error":"NO_TRAVELER_LINK","message":"No traveler is linked to this serialized item. Generate a traveler before starting work."}
+console.error @ index-ePRS3ccR.js:5555
+index-ePRS3ccR.js:5555 💥 API Request failed for /api/p2-traveler/start-task: Error: No traveler is linked to this serialized item. Generate a traveler before starting work.
+    at Ne (index-ePRS3ccR.js:235:8799)
+    at async Object.mutationFn (index-ePRS3ccR.js:3710:254229)
+console.error @ index-ePRS3ccR.js:5555
+index-ePRS3ccR.js:235 🌐 API Request to /api/p2-traveler/start-task (timeout: 15000ms, deployment: true)
+api/p2-traveler/start-task:1  Failed to load resource: the server responded with a status of 409 ()
+index-ePRS3ccR.js:235 ✅ API Response from /api/p2-traveler/start-task: 409
+index-ePRS3ccR.js:5555 API error raw body: {"error":"NO_TRAVELER_LINK","message":"No traveler is linked to this serialized item. Generate a traveler before starting work."}
+console.error @ index-ePRS3ccR.js:5555
+index-ePRS3ccR.js:5555 💥 API Request failed for /api/p2-traveler/start-task: Error: No traveler is linked to this serialized item. Generate a traveler before starting work.
+    at Ne (index-ePRS3ccR.js:235:8799)
+    at async Object.mutationFn (index-ePRS3ccR.js:3710:254229)
+console.error @ index-ePRS3ccR.js:5555

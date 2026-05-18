@@ -89,6 +89,20 @@ declare global {
   }
 }
 
+function getVoicePermissionMessage(errorCode?: string) {
+  switch (errorCode) {
+    case 'not-allowed':
+    case 'service-not-allowed':
+      return 'Microphone access is blocked. Click the site settings icon in the address bar, allow microphone access for EPOCH, then try again.';
+    case 'audio-capture':
+      return 'No microphone was detected. Check that a microphone is connected and available to the browser.';
+    case 'network':
+      return 'Speech recognition could not reach the browser speech service. Check the connection and try again.';
+    default:
+      return errorCode ? `Speech recognition error: ${errorCode}.` : 'Speech recognition could not start.';
+  }
+}
+
 export default function VoiceNotesPage() {
   const [isRecording, setIsRecording] = useState(false);
   const [transcription, setTranscription] = useState('');
@@ -153,8 +167,10 @@ export default function VoiceNotesPage() {
           setIsRecording(false);
           isRecordingRef.current = false;
           toast({
-            title: 'Recording Error',
-            description: `Error: ${event.error}. Please try again.`,
+            title: event.error === 'not-allowed' || event.error === 'service-not-allowed'
+              ? 'Microphone Blocked'
+              : 'Recording Error',
+            description: getVoicePermissionMessage(event.error),
             variant: 'destructive',
           });
         }
@@ -300,16 +316,35 @@ export default function VoiceNotesPage() {
     },
   });
 
-  const startRecording = () => {
+  const startRecording = async () => {
     if (recognitionRef.current) {
       setTranscription('');
       setInterimTranscription('');
-      isRecordingRef.current = true;
-      setIsRecording(true);
       try {
+        const stream = await navigator.mediaDevices?.getUserMedia?.({ audio: true });
+        stream?.getTracks().forEach(track => track.stop());
+        isRecordingRef.current = true;
+        setIsRecording(true);
         recognitionRef.current.start();
       } catch (e) {
-        console.log('Recognition already started');
+        setIsRecording(false);
+        isRecordingRef.current = false;
+        const error = e as { name?: string; message?: string };
+        if (error?.name === 'InvalidStateError') {
+          isRecordingRef.current = true;
+          setIsRecording(true);
+          console.log('Recognition already started');
+          return;
+        }
+
+        const permissionDenied = error?.name === 'NotAllowedError' || error?.name === 'SecurityError';
+        toast({
+          title: permissionDenied ? 'Microphone Blocked' : 'Recording Error',
+          description: permissionDenied
+            ? getVoicePermissionMessage('not-allowed')
+            : error?.message || getVoicePermissionMessage(),
+          variant: 'destructive',
+        });
       }
     } else {
       toast({

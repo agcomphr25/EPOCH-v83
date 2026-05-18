@@ -207,10 +207,10 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
       });
     },
     onSuccess: (data: any, variables) => {
-      const desc = variables.status === 'COMPLETED' 
+      const desc = variables.status === 'COMPLETED'
         ? 'Item marked as completed (off-system production) and added to traveler management'
-        : variables.status === 'SCRAPPED' && data?.replacementItem
-          ? `Item marked NCR/scrapped. Replacement ${data.replacementItem.serialNumber} was added to the production queue.`
+        : variables.status === 'SCRAPPED'
+          ? 'Item marked NCR/scrapped. A new unit was added to the PO and will appear in the production queue.'
           : `Item status changed to ${variables.status}`;
       toast({
         title: 'Status Updated',

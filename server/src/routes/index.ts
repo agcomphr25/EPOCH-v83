@@ -3500,7 +3500,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const { db } = await import('../../db');
       const { p2SerializedItems, p2SerializedItemEvents, travelers, auditEvents } = await import('../../schema');
       const { eq, desc } = await import('drizzle-orm');
-      const { randomUUID } = await import('crypto');
+
       
       const [item] = await db.select().from(p2SerializedItems).where(eq(p2SerializedItems.id, itemId)).limit(1);
       
@@ -3543,10 +3543,126 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         updateFields.holdAt = null;
       }
 
+      // SCRAPPED transitions are atomic: the status update, scrap/cycle events,
+      // and the parent PO line qty bump (which generates the new replacement
+      // unit via the qty-sync flow) all commit or roll back together. Any
+      // failure in the qty bump rolls back the scrap state so the system
+      // never ends up with a SCRAPPED item that has no replacement, or vice
+      // versa.
+      const isFirstScrapTransition = status === 'SCRAPPED' && item.status !== 'SCRAPPED';
+      if (isFirstScrapTransition) {
+        const { storage } = await import('../../storage');
+        const { and, ne } = await import('drizzle-orm');
+        try {
+          await db.transaction(async (tx) => {
+            // Conditional update enforces idempotency inside the transaction
+            // so simultaneous duplicate scrap requests cannot both pass the
+            // pre-transaction `item.status` guard and double-bump qty.
+            const claimed = await tx.update(p2SerializedItems)
+              .set(updateFields)
+              .where(and(
+                eq(p2SerializedItems.id, itemId),
+                ne(p2SerializedItems.status, 'SCRAPPED'),
+              ))
+              .returning({ id: p2SerializedItems.id });
+            if (claimed.length === 0) {
+              // Lost the race: another request already scrapped this item.
+              return;
+            }
+
+            await tx.insert(p2SerializedItemEvents).values({
+              serializedItemId: itemId,
+              barcode: item.barcode,
+              eventType: 'SCRAP',
+              performedBy: performedBy || 'System',
+              notes: [reason, notes].filter(Boolean).join(' — ') || `Status changed to ${status}`,
+              metadata: { previousStatus: item.status, newStatus: status, linkedTravelerId: linkedTravelerId || null },
+            });
+
+            await tx.insert(p2SerializedItemEvents).values({
+              serializedItemId: itemId,
+              barcode: item.barcode,
+              eventType: 'CYCLE_SCRAPPED',
+              performedBy: performedBy || 'System',
+              notes: `Production cycle scrapped — ${reason}`,
+              metadata: {
+                reason,
+                travelerId: activeTraveler?.id ?? null,
+                travelerNumber: activeTraveler?.travelerNumber ?? null,
+                serialNumber: item.serialNumber,
+              },
+            });
+
+            if (activeTraveler) {
+              await tx.insert(auditEvents).values({
+                entityType: 'traveler',
+                entityId: activeTraveler.id,
+                action: 'CYCLE_SCRAPPED',
+                actorName: performedBy || 'System',
+                reason,
+                meta: {
+                  travelerId: activeTraveler.id,
+                  travelerNumber: activeTraveler.travelerNumber,
+                  serialNumber: item.serialNumber,
+                  serializedItemId: itemId,
+                  barcode: item.barcode,
+                },
+              });
+            }
+
+            // Use a relative qty bump (+1) so locking happens entirely
+            // inside updateP2PoItemWithQtySync (PO row first, then PO item
+            // row). Pre-locking the PO item here would invert that order
+            // and risk a deadlock against concurrent normal PO qty edits.
+            const reqUser = (req as Express.Request & {
+              user?: { username?: string; email?: string; role?: string };
+            }).user;
+            const actor = {
+              username: reqUser?.username || reqUser?.email || performedBy || 'system',
+              role: reqUser?.role || 'SYSTEM',
+              ipAddress: req.ip,
+              userAgent: req.get('user-agent') || null,
+            };
+            await storage.updateP2PoItemWithQtySync(
+              item.poId,
+              item.poItemId,
+              { quantityDelta: 1 },
+              actor,
+              tx,
+            );
+          });
+        } catch (scrapErr: unknown) {
+          const code = (scrapErr as { code?: string } | null)?.code;
+          const message = (scrapErr as Error)?.message || 'Failed to scrap item';
+          console.error('P2 Scrap atomic transaction failed:', scrapErr);
+          if (code === 'PO_ITEM_NOT_FOUND' || code === 'PO_NOT_FOUND' || code === 'ITEM_NOT_FOUND') {
+            return res.status(404).json({ error: message });
+          }
+          if (code === 'PO_LOCKED' || code === 'IN_PROGRESS_BLOCKS_DECREASE') {
+            return res.status(409).json({ error: message });
+          }
+          // Postgres deadlock_detected (40P01) and serialization_failure (40001)
+          // are retryable by the caller — surface as 409 instead of 500.
+          if (code === '40P01' || code === '40001') {
+            return res.status(409).json({ error: `Scrap conflicted with a concurrent update — please retry: ${message}` });
+          }
+          return res.status(500).json({ error: `Failed to scrap item: ${message}` });
+        }
+
+        return res.json({
+          success: true,
+          message: `Item status updated to ${status}`,
+          travelerCreated: false,
+          linkedTravelerFound: false,
+          replacementCreated: false,
+          replacementItem: null,
+        });
+      }
+
       await db.update(p2SerializedItems)
         .set(updateFields)
         .where(eq(p2SerializedItems.id, itemId));
-      
+
       let eventType = 'NOTE';
       if (status === 'HOLD') eventType = 'HOLD';
       else if (status === 'SCRAPPED') eventType = 'SCRAP';
@@ -3562,39 +3678,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       });
 
       // Write cycle sentinel events to mark manufacturing cycle boundaries
-      if (status === 'SCRAPPED') {
-        // CYCLE_SCRAPPED: marks the end of this production cycle
-        await db.insert(p2SerializedItemEvents).values({
-          serializedItemId: itemId,
-          barcode: item.barcode,
-          eventType: 'CYCLE_SCRAPPED',
-          performedBy: performedBy || 'System',
-          notes: `Production cycle scrapped — ${reason}`,
-          metadata: {
-            reason,
-            travelerId: activeTraveler?.id ?? null,
-            travelerNumber: activeTraveler?.travelerNumber ?? null,
-            serialNumber: item.serialNumber,
-          },
-        });
-        // Also write to the main audit events table so it appears in AuditTimeline
-        if (activeTraveler) {
-          await db.insert(auditEvents).values({
-            entityType: 'traveler',
-            entityId: activeTraveler.id,
-            action: 'CYCLE_SCRAPPED',
-            actorName: performedBy || 'System',
-            reason,
-            meta: {
-              travelerId: activeTraveler.id,
-              travelerNumber: activeTraveler.travelerNumber,
-              serialNumber: item.serialNumber,
-              serializedItemId: itemId,
-              barcode: item.barcode,
-            },
-          });
-        }
-      } else if (status === 'ACTIVE' && item.status === 'SCRAPPED') {
+      if (status === 'ACTIVE' && item.status === 'SCRAPPED') {
         // CYCLE_RESTARTED: marks the beginning of a new production cycle for this serial number
         await db.insert(p2SerializedItemEvents).values({
           serializedItemId: itemId,
@@ -3630,7 +3714,6 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
       let travelerCreated = false;
       let linkedTravelerFound = false;
-      let replacementItem: any = null;
       if (status === 'COMPLETED') {
         if (linkedTravelerId) {
           const [existingTraveler] = await db.select().from(travelers).where(eq(travelers.id, linkedTravelerId)).limit(1);
@@ -3689,155 +3772,18 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         }
       }
 
-      if (status === 'SCRAPPED') {
-        const siblingItems = await db
-          .select()
-          .from(p2SerializedItems)
-          .where(eq(p2SerializedItems.poItemId, item.poItemId));
+      // Note: the SCRAPPED-first-transition path is handled atomically above
+      // and short-circuits with its own response. A repeat scrap on an
+      // already-SCRAPPED item falls through to the legacy status update path
+      // and is intentionally a no-op for the qty bump.
 
-        const existingReplacement = siblingItems.find((candidate: any) => {
-          const metadata = candidate.metadata || {};
-          return metadata.isReplacement === true && metadata.replacementForSerializedItemId === itemId;
-        });
-
-        if (!existingReplacement) {
-          const now = new Date();
-          const replacementNumber = siblingItems.filter((candidate: any) => {
-            const metadata = candidate.metadata || {};
-            return metadata.isReplacement === true
-              && (
-                metadata.replacementForSerializedItemId === itemId
-                || metadata.replacementForSerialNumber === item.serialNumber
-              );
-          }).length + 1;
-          const replacementSuffix = `R${replacementNumber}`;
-          const baseSerial = item.serialNumber || item.barcode || item.id;
-          const baseBarcode = item.barcode || baseSerial;
-          const replacementSerialNumber = `${baseSerial}-${replacementSuffix}`;
-          const replacementBarcode = `${baseBarcode}-${replacementSuffix}`;
-          const maxSequenceNumber = Math.max(
-            Number(item.sequenceNumber || 0),
-            ...siblingItems.map((candidate: any) => Number(candidate.sequenceNumber || 0))
-          );
-          const replacementId = randomUUID();
-          const replacementMetadata = {
-            ...((item.metadata as Record<string, unknown> | null) || {}),
-            isReplacement: true,
-            replacementForSerializedItemId: itemId,
-            replacementForSerialNumber: item.serialNumber,
-            replacementForBarcode: item.barcode,
-            replacementReason: reason,
-            replacementCreatedAt: now.toISOString(),
-            replacementCreatedBy: performedBy || 'System',
-            replacementSource: 'NCR_SCRAP',
-          };
-
-          const [createdReplacement] = await db.insert(p2SerializedItems).values({
-            id: replacementId,
-            poId: item.poId,
-            poItemId: item.poItemId,
-            poNumber: item.poNumber,
-            partNumber: item.partNumber,
-            partName: item.partName,
-            customerId: item.customerId,
-            customerName: item.customerName,
-            sequenceNumber: maxSequenceNumber + 1,
-            serialNumber: replacementSerialNumber,
-            barcode: replacementBarcode,
-            travelerBarcode: replacementBarcode,
-            buildFamilyKey: item.buildFamilyKey,
-            partRoutingId: item.partRoutingId,
-            partRoutingRevision: item.partRoutingRevision,
-            sku: item.sku,
-            drawingName: item.drawingName,
-            status: 'ACTIVE',
-            currentDepartment: item.currentDepartment || 'Pending Layup',
-            currentStageIndex: item.currentStageIndex || 0,
-            notes: `Replacement for NCR item ${item.serialNumber || item.barcode}. ${reason}`,
-            metadata: replacementMetadata,
-            createdAt: now,
-            updatedAt: now,
-          }).returning();
-
-          replacementItem = createdReplacement;
-
-          await db.update(p2SerializedItems)
-            .set({
-              metadata: {
-                ...((item.metadata as Record<string, unknown> | null) || {}),
-                ncrReplacementSerializedItemId: replacementId,
-                ncrReplacementSerialNumber: replacementSerialNumber,
-                ncrReplacementBarcode: replacementBarcode,
-                ncrReplacementCreatedAt: now.toISOString(),
-              },
-              updatedAt: now,
-            })
-            .where(eq(p2SerializedItems.id, itemId));
-
-          await db.insert(p2SerializedItemEvents).values({
-            serializedItemId: replacementId,
-            barcode: replacementBarcode,
-            eventType: 'NCR_REPLACEMENT_CREATED',
-            performedBy: performedBy || 'System',
-            notes: `Replacement created for NCR item ${item.serialNumber || item.barcode} - ${reason}`,
-            metadata: {
-              originalSerializedItemId: itemId,
-              originalSerialNumber: item.serialNumber,
-              originalBarcode: item.barcode,
-              replacementReason: reason,
-            },
-          });
-
-          await db.insert(p2SerializedItemEvents).values({
-            serializedItemId: itemId,
-            barcode: item.barcode,
-            eventType: 'NCR_REPLACEMENT_LINKED',
-            performedBy: performedBy || 'System',
-            notes: `Replacement item ${replacementSerialNumber} linked to this NCR scrap`,
-            metadata: {
-              replacementSerializedItemId: replacementId,
-              replacementSerialNumber,
-              replacementBarcode,
-              replacementReason: reason,
-            },
-          });
-
-          if (activeTraveler) {
-            await db.insert(auditEvents).values({
-              entityType: 'traveler',
-              entityId: activeTraveler.id,
-              action: 'NCR_REPLACEMENT_CREATED',
-              actorName: performedBy || 'System',
-              reason,
-              meta: {
-                travelerId: activeTraveler.id,
-                travelerNumber: activeTraveler.travelerNumber,
-                originalSerializedItemId: itemId,
-                replacementSerializedItemId: replacementId,
-                replacementSerialNumber,
-                replacementBarcode,
-                poId: item.poId,
-                poNumber: item.poNumber,
-              },
-            });
-          }
-        } else {
-          replacementItem = existingReplacement;
-        }
-      }
-      
       res.json({
         success: true,
         message: `Item status updated to ${status}`,
         travelerCreated,
         linkedTravelerFound,
-        replacementCreated: Boolean(replacementItem),
-        replacementItem: replacementItem ? {
-          id: replacementItem.id,
-          serialNumber: replacementItem.serialNumber,
-          barcode: replacementItem.barcode,
-          currentDepartment: replacementItem.currentDepartment,
-        } : null,
+        replacementCreated: false,
+        replacementItem: null,
       });
     } catch (_error) {
       console.error('P2 Update item status error:', _error);

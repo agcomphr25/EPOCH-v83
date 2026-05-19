@@ -1344,7 +1344,7 @@ export default function VendorManagement() {
                             <span>This approved vendor's document was cleared and needs to be re-uploaded.</span>
                             <Label
                               htmlFor="main-doc-upload"
-                              className="mt-2 inline-flex cursor-pointer items-center gap-1 rounded-md border border-amber-500 bg-white px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-50 dark:bg-amber-900 dark:text-amber-200 dark:border-amber-500 dark:hover:bg-amber-800"
+                              className="mt-2 inline-flex cursor-pointer items-center gap-1 rounded-md border border-amber-500 bg-white px-3 py-1.5 text-xs font-medium text-black hover:bg-amber-50 dark:bg-amber-900 dark:text-white dark:border-amber-500 dark:hover:bg-amber-800"
                             >
                               <Upload className="h-3 w-3" />
                               Upload replacement
@@ -1359,7 +1359,7 @@ export default function VendorManagement() {
                               <Upload className="w-6 h-6 mb-1 text-gray-400" />
                               <Label
                                 htmlFor="main-doc-upload"
-                                className="cursor-pointer text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                                className="cursor-pointer text-sm text-black hover:text-black dark:text-white dark:hover:text-white"
                               >
                                 Upload from Computer
                               </Label>
@@ -1390,7 +1390,7 @@ export default function VendorManagement() {
                         <div className="border border-gray-300 dark:border-gray-600 rounded-lg p-4 bg-gray-50 dark:bg-gray-800">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              <FileText className="w-5 h-5 text-blue-600" />
+                              <FileText className="w-5 h-5 text-black dark:text-white" />
                               <span className="text-sm font-medium truncate max-w-[200px]">
                                 {mainDocFile?.name || (
                                   form.watch('mainDocumentUrl')
@@ -1412,7 +1412,7 @@ export default function VendorManagement() {
                           {form.watch('mainDocumentUrl') && (
                             <button
                               type="button"
-                              className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 mt-2 inline-block underline"
+                              className="text-xs text-black hover:text-black dark:text-white dark:hover:text-white mt-2 inline-block underline"
                               data-testid="link-view-main-doc"
                               onClick={() =>
                                 openVendorPdf(
@@ -1916,7 +1916,7 @@ export default function VendorManagement() {
                           <Upload className="w-8 h-8 mx-auto mb-2 text-gray-400" />
                           <Label
                             htmlFor="file-upload"
-                            className="cursor-pointer text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                            className="cursor-pointer text-sm text-black hover:text-black dark:text-white dark:hover:text-white"
                           >
                             Click to upload PDF
                           </Label>
@@ -1937,7 +1937,7 @@ export default function VendorManagement() {
                         <div className="border border-gray-300 dark:border-gray-600 rounded-lg p-4 bg-gray-50 dark:bg-gray-800">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              <FileText className="w-5 h-5 text-blue-600" />
+                              <FileText className="w-5 h-5 text-black dark:text-white" />
                               <span className="text-sm font-medium">
                                 {uploadedFile?.name || (
                                   form.watch('approvalPdfUrl')
@@ -1959,7 +1959,7 @@ export default function VendorManagement() {
                           {form.watch('approvalPdfUrl') && (
                             <button
                               type="button"
-                              className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 mt-2 inline-block underline"
+                              className="text-xs text-black hover:text-black dark:text-white dark:hover:text-white mt-2 inline-block underline"
                               data-testid="link-view-pdf"
                               onClick={() =>
                                 openVendorPdf(
@@ -2610,7 +2610,7 @@ export default function VendorManagement() {
                 <Upload className="w-10 h-10 mx-auto mb-2 text-gray-400" />
                 <Label
                   htmlFor="csv-upload"
-                  className="cursor-pointer text-blue-600 hover:text-blue-700 dark:text-blue-400 font-medium"
+                  className="cursor-pointer text-black hover:text-black dark:text-white dark:hover:text-white font-medium"
                 >
                   Upload Vendors CSV
                 </Label>
@@ -2624,7 +2624,7 @@ export default function VendorManagement() {
                   disabled={importingCsv}
                 />
                 {importingCsv && (
-                  <p className="text-sm text-blue-600 mt-2">
+                  <p className="text-sm text-black dark:text-white mt-2">
                     Importing...
                   </p>
                 )}
@@ -2638,10 +2638,10 @@ export default function VendorManagement() {
                 CSV should include vendor names and annual scores (Annual- Quality, Annual- Cost, Annual- Delivery, Annual- Response). Vendor names must match existing vendors.
               </p>
               <div className="border-2 border-dashed border-blue-300 dark:border-blue-600 rounded-lg p-6 text-center bg-white dark:bg-gray-900">
-                <Upload className="w-10 h-10 mx-auto mb-2 text-blue-400" />
+                <Upload className="w-10 h-10 mx-auto mb-2 text-black dark:text-white" />
                 <Label
                   htmlFor="evaluations-csv-upload"
-                  className="cursor-pointer text-blue-600 hover:text-blue-700 dark:text-blue-400 font-medium"
+                  className="cursor-pointer text-black hover:text-black dark:text-white dark:hover:text-white font-medium"
                 >
                   Upload Evaluations CSV
                 </Label>
@@ -2655,7 +2655,7 @@ export default function VendorManagement() {
                   disabled={importingCsv}
                 />
                 {importingCsv && (
-                  <p className="text-sm text-blue-600 mt-2">
+                  <p className="text-sm text-black dark:text-white mt-2">
                     Importing evaluations...
                   </p>
                 )}

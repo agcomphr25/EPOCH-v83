@@ -328,15 +328,7 @@ async function buildVendorPOIssueReadiness(vendorPO: any): Promise<{
     if (vendor.approvalExpiration && new Date(vendor.approvalExpiration) < new Date()) {
       vendorMasterBlockers.push(`Vendor approval expired on ${vendor.approvalExpiration}`);
     }
-    const status = String(vendor.debarmentStatus ?? '').trim().toLowerCase();
-    if (['debarred', 'suspended', 'excluded', 'blocked'].includes(status)) {
-      vendorMasterBlockers.push(`Vendor debarment status is ${vendor.debarmentStatus}`);
-    }
   }
-
-  const debarmentBlockers = freshDebarment.length === 0
-    ? [`No fresh passing debarment check for vendor (within ${freshnessDays} days)`]
-    : [];
 
   const supplierQualificationBlockers = await getVendorQualificationBlockers(
     vendorPO.id,
@@ -394,10 +386,12 @@ async function buildVendorPOIssueReadiness(vendorPO: any): Promise<{
     },
     {
       key: 'debarment',
-      label: 'Debarment Check',
-      status: debarmentBlockers.length > 0 ? 'fail' : 'pass',
-      blockers: debarmentBlockers,
+      label: 'Debarment Check (deactivated)',
+      status: 'not_applicable',
+      blockers: [],
       details: {
+        deactivated: true,
+        deactivatedReason: 'Debarment check is temporarily not enforced on vendor PO issuance.',
         freshnessDays,
         latestPassingCheck: freshDebarment[0] ?? null,
       },
@@ -2114,21 +2108,19 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
       });
     }
 
-    // ── PURCHASING-CONTROLS GATE (Task #83): require approved requisition + fresh debarment check + FAR flowdowns ─
+    // ── PURCHASING-CONTROLS GATE (Task #83): require approved requisition + FAR flowdowns ─
     {
       const { db: drizzleDb } = await import('../../db');
       const {
         purchaseRequisitions,
         vendorPoFarFlowdowns,
-        vendorDebarmentChecks,
         procurementSettings,
       } = await import('../../schema');
-      const { eq: dEq, and: dAnd, gte: dGte, desc: dDesc } = await import('drizzle-orm');
+      const { eq: dEq } = await import('drizzle-orm');
 
       const [setting] = await drizzleDb.select().from(procurementSettings).limit(1);
       const allowDirectPo = setting?.allowDirectPo ?? false;
       const directPoCap = setting?.directPoExceptionCapability ?? 'purchasing.direct_po_exception';
-      const freshnessDays = setting?.debarmentCheckFreshnessDays ?? 30;
 
       const purchasingBlockers: string[] = [];
 
@@ -2196,23 +2188,6 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
             break;
           }
         }
-      }
-
-      // (4) Vendor debarment check freshness
-      const cutoff = new Date(Date.now() - freshnessDays * 86_400_000);
-      const fresh = await drizzleDb.select().from(vendorDebarmentChecks).where(dAnd(
-        dEq(vendorDebarmentChecks.vendorId, vendorPO.vendorId),
-        dGte(vendorDebarmentChecks.checkedAt, cutoff),
-        dEq(vendorDebarmentChecks.result, 'pass'),
-      )).orderBy(dDesc(vendorDebarmentChecks.checkedAt)).limit(1);
-      if (fresh.length === 0) {
-        purchasingBlockers.push(`No fresh passing debarment check for vendor (within ${freshnessDays} days)`);
-      } else {
-        // Defer po_issuance evidence creation until AFTER issuance succeeds —
-        // a failed issuance attempt must not leave behind issuance evidence.
-        (req as any)._task83_freshDebarmentCheckId = fresh[0].id;
-        (req as any)._task83_freshDebarmentSource = fresh[0].source;
-        (req as any)._task83_freshDebarmentResult = fresh[0].result;
       }
 
       // P2/customer-project purchases remain hard-blocked. P1 stock/internal purchases

@@ -270,7 +270,7 @@ function IssueReadinessCard({
               PO Issue Readiness
             </CardTitle>
             <CardDescription>
-              Vendor approval, debarment freshness, scope, purchasing controls, and P2 review are checked separately.
+              Vendor approval, supplier scope, purchasing controls, and P2 review are checked separately.
             </CardDescription>
           </div>
           <Badge className={readiness.ready ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800'}>
@@ -342,16 +342,6 @@ function IssueReadinessCard({
               <Button type="button" size="sm" variant="outline" onClick={onOpenPurchasingControls}>
                 Open Purchasing Controls
               </Button>
-              {debarment?.status === 'fail' && (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setDebarmentDialogOpen(true)}
-                >
-                  Record Debarment Check
-                </Button>
-              )}
               {readiness.isP2 && (
                 <Button type="button" size="sm" variant="outline" onClick={onOpenComplianceReview}>
                   Open P2 Compliance Review
@@ -3712,7 +3702,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
               size="sm"
               onClick={() => setPurchasingControlsOpen(true)}
               data-testid="button-purchasing-controls"
-              title="Requisition link, competition method, FAR flowdowns, debarment evidence, direct-PO exception"
+              title="Requisition link, competition method, FAR flowdowns, direct-PO exception"
             >
               Purchasing Controls
             </Button>
@@ -4732,7 +4722,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
 
       {/* Task #83: Purchasing Controls Modal — captures requisition link,
           competition method, sole-source justification, FAR flowdown
-          checklist, debarment-check evidence, and direct-PO exception. */}
+          checklist, and direct-PO exception. */}
       {selectedVendorPO && (
         <PurchasingControlsDialog
           open={purchasingControlsOpen}
@@ -4789,6 +4779,15 @@ function PurchasingControlsDialog({
     onError: (e: any) => toast.error(e?.message ?? 'Save failed'),
   });
 
+  const recordException = useMutation({
+    mutationFn: () => apiRequest(`/api/vendor-pos/${vendorPo.id}/direct-po-exception`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: exceptionReason }),
+    }),
+    onSuccess: () => { toast.success('Direct-PO exception approved'); setExceptionReason(''); onChanged(); },
+    onError: (e: any) => toast.error(e?.message ?? 'Exception failed'),
+  });
+
   const recordDebarment = useMutation({
     mutationFn: () => apiRequest('/api/vendor-debarment-checks', {
       method: 'POST',
@@ -4803,15 +4802,6 @@ function PurchasingControlsDialog({
     }),
     onSuccess: () => { toast.success('Debarment check recorded'); setDebarmentNotes(''); onChanged(); },
     onError: (e: any) => toast.error(e?.message ?? 'Record failed'),
-  });
-
-  const recordException = useMutation({
-    mutationFn: () => apiRequest(`/api/vendor-pos/${vendorPo.id}/direct-po-exception`, {
-      method: 'POST',
-      body: JSON.stringify({ reason: exceptionReason }),
-    }),
-    onSuccess: () => { toast.success('Direct-PO exception approved'); setExceptionReason(''); onChanged(); },
-    onError: (e: any) => toast.error(e?.message ?? 'Exception failed'),
   });
 
   // The backend uses PUT /api/far-flowdown-clauses/po/:poId with the FULL list
@@ -4906,7 +4896,7 @@ function PurchasingControlsDialog({
             </div>
           </section>
 
-          <section className="space-y-2">
+          <section className="hidden">
             <h3 className="font-semibold">Debarment Check Evidence</h3>
             <div className="grid grid-cols-2 gap-3">
               <div>

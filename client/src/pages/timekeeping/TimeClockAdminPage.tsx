@@ -989,9 +989,18 @@ function DevSeedPunchesPanel() {
   );
 }
 
+function initialTimeClockQueryParam(name: string) {
+  if (typeof window === 'undefined') return '';
+  return new URLSearchParams(window.location.search).get(name) ?? '';
+}
+
 export default function TimeClockAdminPage() {
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState('payroll-review');
+  const [activeTab, setActiveTab] = useState(() => initialTimeClockQueryParam('tab') || 'payroll-review');
+  const [highlightedPunchId] = useState(() => {
+    const value = Number(initialTimeClockQueryParam('punchId'));
+    return Number.isInteger(value) && value > 0 ? value : null;
+  });
   const [inOutBoardUpdatedAt, setInOutBoardUpdatedAt] = useState<Date | null>(null);
   const [approvalTarget, setApprovalTarget] = useState<UnapprovedGroup | null>(null);
   const [approvalReason, setApprovalReason] = useState('');
@@ -1450,11 +1459,16 @@ export default function TimeClockAdminPage() {
   }, [timesheets]);
 
   const [punchFrom, setPunchFrom] = useState(() => {
+    const queryFrom = initialTimeClockQueryParam('from');
+    if (/^\d{4}-\d{2}-\d{2}$/.test(queryFrom)) return queryFrom;
     const d = new Date();
     d.setDate(d.getDate() - 7);
     return d.toISOString().slice(0, 10);
   });
-  const [punchTo, setPunchTo] = useState(() => new Date().toISOString().slice(0, 10));
+  const [punchTo, setPunchTo] = useState(() => {
+    const queryTo = initialTimeClockQueryParam('to');
+    return /^\d{4}-\d{2}-\d{2}$/.test(queryTo) ? queryTo : new Date().toISOString().slice(0, 10);
+  });
 
   const { data: punches, isLoading: punchesLoading, refetch: refetchPunches } = useQuery<Punch[]>({
     queryKey: ['/api/timekeeping/punches', punchFrom, punchTo],
@@ -1468,6 +1482,12 @@ export default function TimeClockAdminPage() {
     },
     enabled: activeTab === 'punches',
   });
+
+  useEffect(() => {
+    if (activeTab !== 'punches' || !highlightedPunchId || !punches?.length) return;
+    const row = document.querySelector(`[data-punch-session-id="${highlightedPunchId}"]`);
+    row?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [activeTab, highlightedPunchId, punches]);
 
   const [addPunchOpen, setAddPunchOpen] = useState(false);
   const [addPunchEmployeeId, setAddPunchEmployeeId] = useState('');
@@ -2789,8 +2809,16 @@ export default function TimeClockAdminPage() {
                   <TableBody>
                     {punches.map(p => {
                       const empName = employeeNameFromEpochId(p.employeeId);
+                      const isHighlightedPunch = highlightedPunchId === p.sessionId;
                       return (
-                        <TableRow key={`${p.sessionId}-${p.type}`} className={p.hasMissingClockOut ? 'bg-amber-50/60 dark:bg-amber-900/10' : p.isEdited ? 'bg-yellow-50/40 dark:bg-yellow-900/10' : undefined}>
+                        <TableRow
+                          data-punch-session-id={p.sessionId}
+                          key={`${p.sessionId}-${p.type}`}
+                          className={[
+                            p.hasMissingClockOut ? 'bg-amber-50/60 dark:bg-amber-900/10' : p.isEdited ? 'bg-yellow-50/40 dark:bg-yellow-900/10' : '',
+                            isHighlightedPunch ? 'ring-2 ring-amber-400 ring-inset' : '',
+                          ].filter(Boolean).join(' ') || undefined}
+                        >
                           <TableCell className="font-medium">{empName}</TableCell>
                           <TableCell>
                             <div className="flex items-center gap-1.5">

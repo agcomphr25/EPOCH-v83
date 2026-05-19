@@ -155,7 +155,13 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
   const [selectedLayupItems, setSelectedLayupItems] = useState<Set<string>>(new Set());
   const [sortByPO, setSortByPO] = useState<'asc' | 'desc' | null>(null);
 
-  const { data: queueDataRaw, isLoading } = useQuery<ProductionQueueData>({
+  const {
+    data: queueDataRaw,
+    error: queueError,
+    isError: isQueueError,
+    isLoading,
+    refetch: refetchQueue,
+  } = useQuery<ProductionQueueData>({
     queryKey: ['/api/p2/control-center/production-queue'],
     refetchInterval: 10000,
   });
@@ -598,6 +604,30 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
         <CardContent className="py-12 text-center">
           <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
           <p className="mt-4 text-muted-foreground">Loading production queue...</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (isQueueError) {
+    const message = queueError instanceof Error
+      ? queueError.message
+      : 'Failed to fetch production queue';
+
+    return (
+      <Card className="border-destructive/40">
+        <CardContent className="py-12 text-center">
+          <AlertTriangle className="h-12 w-12 mx-auto text-destructive mb-4" />
+          <p className="font-medium text-destructive">P2 production queue could not be loaded</p>
+          <p className="text-sm text-muted-foreground mt-2">{message}</p>
+          <Button
+            variant="outline"
+            className="mt-4"
+            onClick={() => refetchQueue()}
+            data-testid="button-retry-p2-production-queue"
+          >
+            Retry
+          </Button>
         </CardContent>
       </Card>
     );

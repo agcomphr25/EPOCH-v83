@@ -364,7 +364,16 @@ export default function TravelerExecution() {
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { data: session } = useQuery<any>({ queryKey: ['/api/auth/session'] });
+  const { data: session } = useQuery<any | null>({
+    queryKey: ['/api/auth/session', 'traveler-execution-admin'],
+    queryFn: async () => {
+      const res = await fetch('/api/auth/session', { credentials: 'include' });
+      if (res.status === 401) return null;
+      if (!res.ok) throw new Error('Failed to fetch admin session');
+      return res.json();
+    },
+    retry: false,
+  });
   const isAdmin = session?.role === 'ADMIN' || session?.role === 'OWNER';
 
   // Labor context query — fetched per-step for NOT_STARTED steps (Task #1235)

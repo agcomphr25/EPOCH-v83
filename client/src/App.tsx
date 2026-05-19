@@ -383,6 +383,14 @@ function useIsEmbedMode() {
   return typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('embed') === '1';
 }
 
+function isFloorOperatorRoute(location: string) {
+  return (
+    location.startsWith('/kiosk') ||
+    location.startsWith('/p2-traveler') ||
+    location.startsWith('/travelers/')
+  );
+}
+
 function ConditionalOfflineIndicator() {
   const isEmbed = useIsEmbedMode();
   return isEmbed ? null : <OfflineIndicator />;
@@ -391,7 +399,7 @@ function ConditionalOfflineIndicator() {
 function ConditionalMainWrapper({ children }: { children: React.ReactNode }) {
   const isEmbed = useIsEmbedMode();
   const [location] = useLocation();
-  if (isEmbed || location.startsWith('/kiosk') || location.startsWith('/vendor-confirm')) {
+  if (isEmbed || isFloorOperatorRoute(location) || location.startsWith('/vendor-confirm')) {
     return <div className="w-full min-h-screen overflow-auto">{children}</div>;
   }
   return <main className="container mx-auto px-4 py-8">{children}</main>;
@@ -412,7 +420,7 @@ function ConditionalNavigation() {
     location.startsWith('/vendor-confirm') || // Hide navigation on vendor PO confirmation page
     location.startsWith('/tv-display') || // Hide navigation on TV display page
     location.startsWith('/tv-timer-board') || // Hide navigation on timer board page
-    location.startsWith('/kiosk'); // Hide navigation on time-clock kiosk (PIN-based, no EPOCH nav)
+    isFloorOperatorRoute(location); // Hide navigation on badge/PIN based production floor pages
 
   return hideNavigation ? null : <Navigation />;
 }

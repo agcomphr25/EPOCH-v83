@@ -12587,7 +12587,7 @@ export class DatabaseStorage implements IStorage {
         
         po.itemsMap.set(row.poItemId, {
           poItemId: row.poItemId,
-          description: row.customerProductNumber || row.itemName || row.stockModelName || row.stockModelId || 'Unknown Item',
+          description: row.itemName || row.stockModelName || row.stockModelId || row.customerProductNumber || 'Unknown Item',
           quantity: row.quantity,
           actionLength: specs.actionLength || null,
           material: specs.material || null,

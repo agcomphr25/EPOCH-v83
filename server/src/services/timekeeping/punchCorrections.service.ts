@@ -7,10 +7,6 @@ import { dualWriteUpdateAllocation } from "../../lib/laborAllocationDualWrite";
 import * as ledger from "../../lib/punchLedger";
 import { actorFromUser, logAction } from "./audit.service";
 import type { SafeUser } from "./audit.service";
-import {
-  findFinalizedTimesheetForPunch,
-  findPayrollApprovedSalariedTimesheetForPunch,
-} from "./timesheets.service";
 
 export type PunchCorrectionRequestType = "edit_session" | "add_session" | "delete_session";
 export type PunchCorrectionDecision = "approved" | "denied";
@@ -77,29 +73,6 @@ async function resolveSupervisor(employeeId: number): Promise<{ supervisorId: nu
   };
 }
 
-async function assertEmployeeCanRequestForDate(employeeId: number, targetDate: Date, actorUser: SafeUser | null): Promise<{ error: string; statusCode: number } | null> {
-  const isAdmin = actorUser?.role === "ADMIN" || actorUser?.role === "OWNER";
-  if (isAdmin) return null;
-
-  const locked = await findFinalizedTimesheetForPunch(employeeId, targetDate);
-  if (locked) {
-    return {
-      statusCode: 409,
-      error: `This punch falls inside ${locked.status} timesheet #${locked.id}. Only an admin can initiate corrections after period close.`,
-    };
-  }
-
-  const payrollApproved = await findPayrollApprovedSalariedTimesheetForPunch(employeeId, targetDate);
-  if (payrollApproved) {
-    return {
-      statusCode: 409,
-      error: `This punch falls inside payroll-approved salaried timesheet #${payrollApproved.id}. Only an admin can initiate corrections after payroll approval.`,
-    };
-  }
-
-  return null;
-}
-
 export async function submitPunchCorrectionRequest(input: SubmitPunchCorrectionInput) {
   if (!input.reason || input.reason.trim().length < 5) {
     return { error: "A correction reason of at least 5 characters is required.", statusCode: 400 };
@@ -147,8 +120,9 @@ export async function submitPunchCorrectionRequest(input: SubmitPunchCorrectionI
     return { error: "Clock-out must be after clock-in.", statusCode: 422 };
   }
 
-  const lockedGuard = await assertEmployeeCanRequestForDate(input.employeeId, targetDate, input.actorUser ?? null);
-  if (lockedGuard) return lockedGuard;
+  // Employees may request corrections for locked/submitted/approved periods; the
+  // supervisor and HR/Admin approval path is the control that decides whether
+  // the change is allowed and applied.
 
   const { supervisorId, status } = await resolveSupervisor(input.employeeId);
   const [row] = await db
@@ -298,6 +272,7 @@ async function applyPunchCorrection(existing: any, actorUser: SafeUser, note: st
     ...(changes.clockOut !== undefined ? { clockOut: changes.clockOut ? new Date(changes.clockOut) : null } : {}),
     ...(changes.chargeCodeId !== undefined ? { chargeCodeId: changes.chargeCodeId } : {}),
     ...(changes.travelerId !== undefined ? { travelerId: changes.travelerId } : {}),
+    ...(changes.laborClass !== undefined ? { laborClass: changes.laborClass } : {}),
     isEdited: true,
     editNote,
     updatedBy: actorId,

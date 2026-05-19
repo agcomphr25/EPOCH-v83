@@ -49,7 +49,13 @@ interface POStatus {
 export default function P2StatusDashboard({ onStartBOM, onViewPO, selectedPOIds = [] }: P2StatusDashboardProps) {
   const [activeSortBy, setActiveSortBy] = useState<'default' | 'project_asc' | 'project_desc'>('default');
 
-  const { data: poStatuses = [], isLoading } = useQuery<POStatus[]>({
+  const {
+    data: poStatuses = [],
+    error: poStatusesError,
+    isError: isPOStatusesError,
+    isLoading,
+    refetch: refetchPOStatuses,
+  } = useQuery<POStatus[]>({
     queryKey: ['/api/p2/control-center/po-statuses'],
   });
 
@@ -119,6 +125,30 @@ export default function P2StatusDashboard({ onStartBOM, onViewPO, selectedPOIds 
       <Card>
         <CardContent className="py-12 text-center text-muted-foreground">
           Loading status dashboard...
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (isPOStatusesError) {
+    const message = poStatusesError instanceof Error
+      ? poStatusesError.message
+      : 'Failed to fetch PO statuses';
+
+    return (
+      <Card className="border-destructive/40">
+        <CardContent className="py-12 text-center">
+          <AlertCircle className="h-12 w-12 mx-auto text-destructive mb-4" />
+          <p className="font-medium text-destructive">P2 order status could not be loaded</p>
+          <p className="text-sm text-muted-foreground mt-2">{message}</p>
+          <Button
+            variant="outline"
+            className="mt-4"
+            onClick={() => refetchPOStatuses()}
+            data-testid="button-retry-p2-statuses"
+          >
+            Retry
+          </Button>
         </CardContent>
       </Card>
     );

@@ -16779,6 +16779,8 @@ export class DatabaseStorage implements IStorage {
     department?: string;
     status?: string;
   }): Promise<P2SerializedItem[]> {
+    await ensureP2PurchaseOrderReadSchema();
+
     // Use pg pool instead of Drizzle/Neon HTTP driver for better compatibility
     let whereClause = '';
     const params: any[] = [];

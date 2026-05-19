@@ -56,6 +56,16 @@ export interface ChargeCodeUsageReport {
     laborDistEndDate: string | null;
     totalHours: number;
     chargeCodeStatus: 'ACTIVE' | 'INACTIVE' | 'INVALID';
+    punchCount: number;
+    editedPunchCount: number;
+    editedPunches: Array<{
+      id: number;
+      clockIn: string | null;
+      clockOut: string | null;
+      editNote: string | null;
+      updatedAt: string | null;
+      link: string;
+    }>;
   }>;
   exceptions: Array<{
     entryId: number;
@@ -71,6 +81,9 @@ export interface ChargeCodeUsageReport {
     operation: string | null;
     approvalStatus: string | null;
     laborApprovalId: number | null;
+    isEdited: boolean;
+    editNote: string | null;
+    punchLink: string;
   }>;
 }
 
@@ -111,6 +124,49 @@ function toNumber(value: unknown): number {
   return Number.isFinite(num) ? num : 0;
 }
 
+function toIsoDateTime(value: unknown): string | null {
+  return value ? new Date(value as string | Date).toISOString() : null;
+}
+
+function toDateOnly(value: unknown): string | null {
+  if (!value) return null;
+  return value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10);
+}
+
+function buildPunchLink(punchId: number, fromDate?: unknown, toDate?: unknown) {
+  const params = new URLSearchParams({
+    tab: 'punches',
+    punchId: String(punchId),
+  });
+  const from = toDateOnly(fromDate);
+  const to = toDateOnly(toDate);
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
+  return `/time-clock-admin?${params.toString()}`;
+}
+
+function parseEditedPunches(value: unknown): Array<{
+  id: number;
+  clockIn: string | null;
+  clockOut: string | null;
+  editNote: string | null;
+  updatedAt: string | null;
+  link: string;
+}> {
+  const raw = typeof value === 'string' ? JSON.parse(value) : value;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item) => ({
+      id: Number(item?.id),
+      clockIn: toIsoDateTime(item?.clockIn),
+      clockOut: toIsoDateTime(item?.clockOut),
+      editNote: item?.editNote ?? null,
+      updatedAt: toIsoDateTime(item?.updatedAt),
+      link: buildPunchLink(Number(item?.id), item?.clockIn, item?.clockOut ?? item?.clockIn),
+    }))
+    .filter((item) => Number.isInteger(item.id) && item.id > 0);
+}
+
 export async function getChargeCodeUsageReport(
   filters: ChargeCodeUsageReportFilters = {},
 ): Promise<ChargeCodeUsageReport> {
@@ -130,6 +186,9 @@ export async function getChargeCodeUsageReport(
         t.charge_code,
         t.approval_status,
         t.labor_approval_id,
+        t.is_edited,
+        t.edit_note,
+        t.updated_at,
         t.hours,
         t.position_title,
         t.employee_department,
@@ -148,6 +207,9 @@ export async function getChargeCodeUsageReport(
           NULLIF(BTRIM(COALESCE(pl.charge_code, cc_snapshot.code)), '') AS charge_code,
           pl.approval_status,
           pl.labor_approval_id,
+          pl.is_edited,
+          pl.edit_note,
+          pl.updated_at,
           CASE
             WHEN pl.clock_in IS NOT NULL AND pl.clock_out IS NOT NULL
               THEN GREATEST(EXTRACT(EPOCH FROM (pl.clock_out - pl.clock_in)) / 3600.0, 0)
@@ -255,7 +317,9 @@ export async function getChargeCodeUsageReport(
       le.department,
       le.operation,
       le.approval_status,
-      le.labor_approval_id
+      le.labor_approval_id,
+      le.is_edited,
+      le.edit_note
     FROM labor_entries le
     LEFT JOIN charge_codes cc ON cc.code = le.charge_code
     WHERE le.charge_code IS NOT NULL
@@ -310,6 +374,21 @@ export async function getChargeCodeUsageReport(
       le.hire_date,
       MIN(le.date) AS labor_dist_start_date,
       MAX(le.date) AS labor_dist_end_date,
+      COUNT(*)::int AS punch_count,
+      COUNT(*) FILTER (WHERE le.is_edited = true)::int AS edited_punch_count,
+      COALESCE(
+        JSON_AGG(
+          JSON_BUILD_OBJECT(
+            'id', le.id,
+            'clockIn', le.clock_in,
+            'clockOut', le.clock_out,
+            'editNote', le.edit_note,
+            'updatedAt', le.updated_at
+          )
+          ORDER BY le.updated_at DESC NULLS LAST, le.clock_in DESC
+        ) FILTER (WHERE le.is_edited = true),
+        '[]'::json
+      ) AS edited_punches,
       COALESCE(SUM(le.hours), 0)::float AS total_hours,
       CASE
         WHEN et.employee_hours > 0
@@ -374,6 +453,9 @@ export async function getChargeCodeUsageReport(
     operation: row.operation ?? null,
     approvalStatus: row.approval_status ?? null,
     laborApprovalId: row.labor_approval_id == null ? null : Number(row.labor_approval_id),
+    isEdited: Boolean(row.is_edited),
+    editNote: row.edit_note ?? null,
+    punchLink: buildPunchLink(Number(row.entry_id), row.work_date, row.work_date),
   }));
 
   const distributionRows = distributionResult.rows.map((row) => {
@@ -398,6 +480,9 @@ export async function getChargeCodeUsageReport(
       laborDistEndDate: row.labor_dist_end_date instanceof Date ? row.labor_dist_end_date.toISOString().slice(0, 10) : row.labor_dist_end_date ?? null,
       totalHours: toNumber(row.total_hours),
       chargeCodeStatus,
+      punchCount: toNumber(row.punch_count),
+      editedPunchCount: toNumber(row.edited_punch_count),
+      editedPunches: parseEditedPunches(row.edited_punches),
     };
   });
 

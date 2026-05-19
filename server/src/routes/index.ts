@@ -3119,6 +3119,17 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const { storage } = await import('../../storage');
       const { pool: dbPool } = await import('../../db');
       const allPos = await storage.getAllP2PurchaseOrders();
+      const optionalP2Rows = async <T = any>(
+        label: string,
+        query: Promise<any>,
+      ): Promise<T[]> => {
+        try {
+          return p2ControlRows<T>(await query);
+        } catch (error) {
+          console.warn(`P2 Control Center optional ${label} lookup skipped:`, error);
+          return [];
+        }
+      };
       // Surface POs that have cleared the P2 Release Gate. Status values have
       // existed in both legacy lowercase and current uppercase forms. Also
       // include any PO with serialized units: Pending Layup units are already
@@ -3131,10 +3142,17 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         'READY_FOR_PRODUCTION',
         'IN_PRODUCTION',
       ]);
-      const serializedItems = await applyCompletedTravelerStateToP2Items(
-        await storage.getP2SerializedItems({})
-      );
-      const legacyProductionRows = await dbPool.query(
+      let serializedItems: any[] = [];
+      try {
+        serializedItems = await applyCompletedTravelerStateToP2Items(
+          await storage.getP2SerializedItems({})
+        );
+      } catch (error) {
+        console.warn('P2 Control Center optional serialized item lookup skipped:', error);
+      }
+      const legacyProductionRows = await optionalP2Rows(
+        'legacy production',
+        dbPool.query(
         `SELECT
            p2_po_id AS "poId",
            COALESCE(SUM(quantity), 0)::int AS "totalQty",
@@ -3154,8 +3172,11 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
          FROM p2_production_orders
          WHERE COALESCE(UPPER(status), '') NOT IN ('CANCELLED', 'CANCELED')
          GROUP BY p2_po_id`
+        )
       );
-      const legacyProjectProductionRows = await dbPool.query(
+      const legacyProjectProductionRows = await optionalP2Rows(
+        'legacy project production',
+        dbPool.query(
          `WITH project_po_link AS (
            SELECT p.id AS project_id, p.po_id AS po_id
            FROM projects p
@@ -3220,6 +3241,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
            ), 0)::int AS "inProductionQty"
          FROM work_order_quantities
          GROUP BY "poId"`
+        )
       );
       const poIdsWithSerializedUnits = new Set<number>();
       for (const s of serializedItems as any[]) {
@@ -3229,10 +3251,10 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         }
       }
       const legacyStatsByPoId = new Map<number, any>(
-        p2ControlRows(legacyProductionRows).map((row: any) => [Number(row.poId), row])
+        legacyProductionRows.map((row: any) => [Number(row.poId), row])
       );
       const legacyProjectStatsByPoId = new Map<number, any>(
-        p2ControlRows(legacyProjectProductionRows).map((row: any) => [Number(row.poId), row])
+        legacyProjectProductionRows.map((row: any) => [Number(row.poId), row])
       );
       const poIdsWithLegacyProduction = new Set<number>(legacyStatsByPoId.keys());
       const poIdsWithLegacyProjectProduction = new Set<number>(legacyProjectStatsByPoId.keys());
@@ -3247,7 +3269,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       // same relationship through either projects.po_id or the p2_order step.
       const poIds = pos.map((po: any) => po.id);
       const projectRows = poIds.length > 0
-        ? await dbPool.query(
+        ? await optionalP2Rows(
+            'project link',
+            dbPool.query(
             `WITH project_po_link AS (
                SELECT
                  p.id,
@@ -3293,25 +3317,29 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
              ORDER BY linked_po_id, updated_at DESC NULLS LAST`,
             [poIds]
           )
+          )
         : [];
       const projectByPoId = new Map<number, any>(
-        p2ControlRows(projectRows).map((r: any) => [r.poId, r])
+        projectRows.map((r: any) => [r.poId, r])
       );
 
       // Sum ordered quantities from all PO line items, grouped by po_id.
       // This ensures PO lines that haven't had serialized items generated yet
       // are still counted in totalItems rather than being invisible on the dashboard.
       const orderedQtyRows = poIds.length > 0
-        ? await dbPool.query(
+        ? await optionalP2Rows(
+            'ordered quantity',
+            dbPool.query(
             `SELECT po_id AS "poId", COALESCE(SUM(quantity), 0)::int AS "orderedQty"
              FROM p2_purchase_order_items
              WHERE po_id = ANY($1)
              GROUP BY po_id`,
             [poIds]
           )
+          )
         : [];
       const orderedQtyByPoId = new Map<number, number>(
-        p2ControlRows(orderedQtyRows).map((r: any) => [r.poId, r.orderedQty])
+        orderedQtyRows.map((r: any) => [r.poId, r.orderedQty])
       );
       
       const poStatuses = pos.map((po: any) => {

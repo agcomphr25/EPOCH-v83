@@ -393,6 +393,13 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
     requestedHours: '',
     employeeNote: '',
   });
+  const [punchCorrectionForm, setPunchCorrectionForm] = useState({
+    requestType: 'edit_session',
+    punchLedgerId: '',
+    clockIn: '',
+    clockOut: '',
+    reason: '',
+  });
   const [, setTick] = useState(0);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -846,6 +853,36 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
         return;
       }
       toast({ title: 'Punch failed', description: err.message, variant: 'destructive' });
+    },
+  });
+
+  const punchCorrectionMutation = useMutation({
+    mutationFn: async () => {
+      const res = await portalFetch('/api/timekeeping/punch-corrections/my', {
+        method: 'POST',
+        body: JSON.stringify({
+          requestType: punchCorrectionForm.requestType,
+          punchLedgerId: punchCorrectionForm.punchLedgerId ? Number(punchCorrectionForm.punchLedgerId) : null,
+          reason: punchCorrectionForm.reason.trim(),
+          proposedChanges: {
+            ...(punchCorrectionForm.clockIn ? { clockIn: new Date(punchCorrectionForm.clockIn).toISOString() } : {}),
+            ...(punchCorrectionForm.clockOut ? { clockOut: new Date(punchCorrectionForm.clockOut).toISOString() } : {}),
+          },
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as any).error ?? 'Failed to submit punch correction');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: 'Correction submitted', description: 'Your request was sent for supervisor review.' });
+      setPunchCorrectionForm({ requestType: 'edit_session', punchLedgerId: '', clockIn: '', clockOut: '', reason: '' });
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/punch-corrections', 'mine'] });
+    },
+    onError: (err: any) => {
+      toast({ title: 'Correction failed', description: err?.message ?? 'Unable to submit correction.', variant: 'destructive' });
     },
   });
 
@@ -2399,6 +2436,74 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
                         })}
                       </div>
                     )}
+
+                    <div className="mt-6 rounded-lg border bg-muted/20 p-4 text-left space-y-3">
+                      <div>
+                        <h3 className="text-sm font-semibold text-gray-900">Request Punch Correction</h3>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Submit missed or incorrect punch changes for supervisor review.
+                        </p>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="space-y-1">
+                          <Label>Correction Type</Label>
+                          <Select
+                            value={punchCorrectionForm.requestType}
+                            onValueChange={(value) => setPunchCorrectionForm((prev) => ({ ...prev, requestType: value }))}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="edit_session">Edit existing punch</SelectItem>
+                              <SelectItem value="add_session">Add missing punch</SelectItem>
+                              <SelectItem value="delete_session">Remove incorrect punch</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1">
+                          <Label>Session ID</Label>
+                          <Input
+                            value={punchCorrectionForm.punchLedgerId}
+                            onChange={(event) => setPunchCorrectionForm((prev) => ({ ...prev, punchLedgerId: event.target.value }))}
+                            placeholder="Blank for missing punch"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label>Correct Clock In</Label>
+                          <Input
+                            type="datetime-local"
+                            value={punchCorrectionForm.clockIn}
+                            onChange={(event) => setPunchCorrectionForm((prev) => ({ ...prev, clockIn: event.target.value }))}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label>Correct Clock Out</Label>
+                          <Input
+                            type="datetime-local"
+                            value={punchCorrectionForm.clockOut}
+                            onChange={(event) => setPunchCorrectionForm((prev) => ({ ...prev, clockOut: event.target.value }))}
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Reason</Label>
+                        <Textarea
+                          rows={3}
+                          value={punchCorrectionForm.reason}
+                          onChange={(event) => setPunchCorrectionForm((prev) => ({ ...prev, reason: event.target.value }))}
+                          placeholder="Explain what needs to be fixed..."
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => punchCorrectionMutation.mutate()}
+                        disabled={punchCorrectionMutation.isPending || punchCorrectionForm.reason.trim().length < 5}
+                      >
+                        {punchCorrectionMutation.isPending ? 'Submitting...' : 'Submit Correction Request'}
+                      </Button>
+                    </div>
                   </div>
                 )}
               </CardContent>

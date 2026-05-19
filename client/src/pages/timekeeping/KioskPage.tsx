@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Loader2, CheckCircle, XCircle, ShieldAlert, Delete, Lock, Search, Coffee, LogOut, Play, LogIn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-type KioskStep = 'idle' | 'pin-entry' | 'loading' | 'confirm' | 'punching' | 'success' | 'error' | 'locked-out';
+type KioskStep = 'idle' | 'pin-entry' | 'loading' | 'confirm' | 'punching' | 'correction' | 'success' | 'error' | 'locked-out';
 
 interface DcaaPolicyViolation {
   ruleId: string;
@@ -22,6 +22,7 @@ interface PunchStatus {
   status: string;
   clockedInAt: string | null;
   hoursToday: number;
+  openEntry?: { id?: number; clockIn?: string; clockOut?: string | null } | null;
 }
 
 interface ChargeCode {
@@ -176,6 +177,13 @@ export default function KioskPage() {
   const [dcaaViolation, setDcaaViolation] = useState<DcaaPolicyViolation | null>(null);
   const [countdown, setCountdown] = useState(RESULT_DISPLAY_SEC);
   const [lockoutSecondsRemaining, setLockoutSecondsRemaining] = useState(0);
+  const [correctionForm, setCorrectionForm] = useState({
+    requestType: 'edit_session',
+    punchLedgerId: '',
+    clockIn: '',
+    clockOut: '',
+    reason: '',
+  });
 
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -202,6 +210,7 @@ export default function KioskPage() {
     setDcaaViolation(null);
     setCountdown(RESULT_DISPLAY_SEC);
     setLockoutSecondsRemaining(0);
+    setCorrectionForm({ requestType: 'edit_session', punchLedgerId: '', clockIn: '', clockOut: '', reason: '' });
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     if (countdownRef.current) clearInterval(countdownRef.current);
     if (lockoutRef.current) clearInterval(lockoutRef.current);
@@ -381,6 +390,58 @@ export default function KioskPage() {
     setShowClockOutCertification(true);
     restartIdleTimer();
   }, [restartIdleTimer]);
+
+  const openCorrectionForm = useCallback(() => {
+    const openEntry = punchStatus?.openEntry;
+    setCorrectionForm({
+      requestType: openEntry?.id ? 'edit_session' : 'add_session',
+      punchLedgerId: openEntry?.id ? String(openEntry.id) : '',
+      clockIn: openEntry?.clockIn ? new Date(openEntry.clockIn).toISOString().slice(0, 16) : '',
+      clockOut: '',
+      reason: '',
+    });
+    setStep('correction');
+    restartIdleTimer();
+  }, [punchStatus, restartIdleTimer]);
+
+  const submitCorrectionRequest = useCallback(async () => {
+    if (!employee || pin.length !== PIN_LENGTH) return;
+    if (correctionForm.reason.trim().length < 5) {
+      setErrorMsg('Please enter a correction reason.');
+      setStep('error');
+      return;
+    }
+
+    setStep('punching');
+    try {
+      const res = await fetch('/api/timekeeping/kiosk/punch-corrections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          employeeId: employee.id,
+          pin,
+          requestType: correctionForm.requestType,
+          punchLedgerId: correctionForm.punchLedgerId ? Number(correctionForm.punchLedgerId) : null,
+          reason: correctionForm.reason.trim(),
+          proposedChanges: {
+            ...(correctionForm.clockIn ? { clockIn: new Date(correctionForm.clockIn).toISOString() } : {}),
+            ...(correctionForm.clockOut ? { clockOut: new Date(correctionForm.clockOut).toISOString() } : {}),
+          },
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErrorMsg(data.error ?? 'Correction request failed. Please see an administrator.');
+        setStep('error');
+        return;
+      }
+      setResultMsg('Correction request submitted for supervisor review.');
+      setStep('success');
+    } catch {
+      setErrorMsg('Network error. Correction request was not submitted.');
+      setStep('error');
+    }
+  }, [correctionForm, employee, pin]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -767,11 +828,101 @@ export default function KioskPage() {
             </div>
           )}
 
+          <Button
+            type="button"
+            variant="outline"
+            onClick={openCorrectionForm}
+            className="w-full rounded-2xl border-blue-200 text-blue-700 hover:bg-blue-50"
+          >
+            Request punch correction
+          </Button>
+
           <button
             onClick={resetToIdle}
             className="text-gray-400 hover:text-gray-600 text-sm"
           >
             ← Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (step === 'correction' && employee) {
+    return (
+      <div className="min-h-screen bg-gray-50 text-gray-900 flex flex-col items-center justify-center px-8">
+        <div className="w-full max-w-sm space-y-4">
+          <div className="text-center">
+            <p className="text-2xl font-bold">Request Punch Correction</p>
+            <p className="text-sm text-gray-500">{employee.firstName} {employee.lastName}</p>
+          </div>
+
+          <div className="rounded-2xl border bg-white p-4 space-y-3 shadow-sm">
+            <label className="block text-xs uppercase tracking-widest text-gray-400">Correction Type</label>
+            <select
+              value={correctionForm.requestType}
+              onChange={(event) => {
+                setCorrectionForm((prev) => ({ ...prev, requestType: event.target.value }));
+                restartIdleTimer();
+              }}
+              className="w-full rounded-xl border border-gray-200 p-3"
+            >
+              <option value="edit_session">Edit existing punch</option>
+              <option value="add_session">Add missing punch</option>
+              <option value="delete_session">Remove incorrect punch</option>
+            </select>
+
+            <label className="block text-xs uppercase tracking-widest text-gray-400">Session ID</label>
+            <input
+              value={correctionForm.punchLedgerId}
+              onChange={(event) => {
+                setCorrectionForm((prev) => ({ ...prev, punchLedgerId: event.target.value }));
+                restartIdleTimer();
+              }}
+              placeholder="Leave blank for missing punch"
+              className="w-full rounded-xl border border-gray-200 p-3"
+            />
+
+            <label className="block text-xs uppercase tracking-widest text-gray-400">Correct Clock In</label>
+            <input
+              type="datetime-local"
+              value={correctionForm.clockIn}
+              onChange={(event) => {
+                setCorrectionForm((prev) => ({ ...prev, clockIn: event.target.value }));
+                restartIdleTimer();
+              }}
+              className="w-full rounded-xl border border-gray-200 p-3"
+            />
+
+            <label className="block text-xs uppercase tracking-widest text-gray-400">Correct Clock Out</label>
+            <input
+              type="datetime-local"
+              value={correctionForm.clockOut}
+              onChange={(event) => {
+                setCorrectionForm((prev) => ({ ...prev, clockOut: event.target.value }));
+                restartIdleTimer();
+              }}
+              className="w-full rounded-xl border border-gray-200 p-3"
+            />
+
+            <label className="block text-xs uppercase tracking-widest text-gray-400">Reason</label>
+            <textarea
+              value={correctionForm.reason}
+              onChange={(event) => {
+                setCorrectionForm((prev) => ({ ...prev, reason: event.target.value }));
+                restartIdleTimer();
+              }}
+              rows={3}
+              placeholder="Explain what needs to be fixed..."
+              className="w-full rounded-xl border border-gray-200 p-3"
+            />
+          </div>
+
+          <Button onClick={submitCorrectionRequest} className="w-full h-14 rounded-2xl">
+            Submit for Approval
+          </Button>
+          <button onClick={() => setStep('confirm')} className="w-full text-center text-gray-400 hover:text-gray-600 text-sm">
+            Back
           </button>
         </div>
       </div>

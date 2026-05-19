@@ -15,6 +15,7 @@ import bcrypt from "bcryptjs";
 import { eq, and } from "drizzle-orm";
 import { z } from "zod";
 import { actorFromUser, logAction } from "../../services/timekeeping/audit.service";
+import type { SafeUser } from "../../services/timekeeping/audit.service";
 import { certifyDailyTimeOnPunchOut, findFinalizedTimesheetForPunch, isInFinalizedTimesheetPeriod, findPayrollApprovedSalariedTimesheetForPunch } from "../../services/timekeeping/timesheets.service";
 import { checkActivePTOForEmployee } from "../../services/timekeeping/timeoff.service";
 import { authenticateToken, requireRole, optionalAuth } from "../../../middleware/auth";
@@ -23,8 +24,35 @@ import { dualWriteUpdateAllocation } from "../../lib/laborAllocationDualWrite";
 import { resolveTravelerBarcode } from "../../helpers/travelerBarcodeResolver";
 import { storage } from "../../../storage";
 import { notificationManager } from "../../services/notificationManager";
+import * as punchCorrections from "../../services/timekeeping/punchCorrections.service";
 
 const router: IRouter = Router();
+
+const PunchCorrectionChangesSchema = z.object({
+  clockIn: z.string().datetime().nullable().optional(),
+  clockOut: z.string().datetime().nullable().optional(),
+  chargeCodeId: z.number().int().positive().nullable().optional(),
+  travelerId: z.string().nullable().optional(),
+  laborClass: z.enum(["REGULAR", "BREAK"]).optional(),
+  note: z.string().max(1000).nullable().optional(),
+});
+
+const PunchCorrectionSubmitSchema = z.object({
+  punchLedgerId: z.number().int().positive().nullable().optional(),
+  requestType: z.enum(["edit_session", "add_session", "delete_session"]),
+  reason: z.string().min(5),
+  proposedChanges: PunchCorrectionChangesSchema,
+});
+
+const KioskPunchCorrectionSubmitSchema = PunchCorrectionSubmitSchema.extend({
+  employeeId: z.number().int().positive(),
+  pin: z.string().regex(/^\d{4}$/),
+});
+
+const PunchCorrectionReviewSchema = z.object({
+  decision: z.enum(["approved", "denied"]),
+  note: z.string().min(3),
+});
 
 // ---------------------------------------------------------------------------
 // PIN brute-force protection — DB-backed rate limiter for /kiosk/identify
@@ -376,6 +404,51 @@ router.post("/kiosk/identify", h(async (req, res): Promise<void> => {
   }
 
   res.status(401).json({ error: "PIN not recognised. Please try again." });
+}));
+
+router.post("/kiosk/punch-corrections", h(async (req, res): Promise<void> => {
+  const body = KioskPunchCorrectionSubmitSchema.safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+
+  const { employeeId, pin, requestType, punchLedgerId, reason, proposedChanges } = body.data;
+  const [emp] = await nativeDb
+    .select({
+      id: employees.id,
+      isActive: employees.isActive,
+      timekeeperPin: employees.timekeeperPin,
+    })
+    .from(employees)
+    .where(eq(employees.id, employeeId))
+    .limit(1);
+
+  if (!emp || !emp.isActive || !emp.timekeeperPin) {
+    res.status(401).json({ error: "Invalid PIN" });
+    return;
+  }
+
+  const pinValid = await bcrypt.compare(pin, emp.timekeeperPin);
+  if (!pinValid) {
+    res.status(401).json({ error: "Invalid PIN" });
+    return;
+  }
+
+  const result = await punchCorrections.submitPunchCorrectionRequest({
+    employeeId,
+    punchLedgerId: punchLedgerId ?? null,
+    requestType,
+    reason,
+    proposedChanges,
+    source: "kiosk",
+    actorUser: null,
+    actorIp: req.ip ?? null,
+  });
+
+  if ("error" in result) {
+    res.status(result.statusCode).json({ error: result.error });
+    return;
+  }
+
+  res.status(201).json(result);
 }));
 
 // GET /api/timekeeping/kiosk/charge-codes — returns active charge codes for kiosk dropdown.
@@ -1119,6 +1192,102 @@ router.get("/punches/:id", authenticateToken, h(async (req, res): Promise<void> 
   const row = await storage.getPunchLedgerEntryById(p.data.id);
   if (!row) { res.status(404).json({ error: "Punch not found" }); return; }
   res.json(row);
+}));
+
+router.post("/punch-corrections/my", authenticateToken, h(async (req, res): Promise<void> => {
+  const body = PunchCorrectionSubmitSchema.safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+
+  const user = req.user as SafeUser | undefined;
+  if (!user || !user.employeeId) {
+    res.status(403).json({ error: "Your account is not linked to an employee record" });
+    return;
+  }
+
+  const result = await punchCorrections.submitPunchCorrectionRequest({
+    employeeId: user.employeeId,
+    punchLedgerId: body.data.punchLedgerId ?? null,
+    requestType: body.data.requestType,
+    reason: body.data.reason,
+    proposedChanges: body.data.proposedChanges,
+    source: "employee_portal",
+    submittedByUserId: user.id,
+    actorUser: user,
+    actorIp: req.ip ?? null,
+  });
+
+  if ("error" in result) {
+    res.status(result.statusCode).json({ error: result.error });
+    return;
+  }
+
+  res.status(201).json(result);
+}));
+
+router.get("/punch-corrections/my", authenticateToken, h(async (req, res): Promise<void> => {
+  const employeeId = req.user?.employeeId ?? null;
+  if (!employeeId) { res.json([]); return; }
+  const rows = await punchCorrections.listPunchCorrections({ employeeId });
+  res.json(rows);
+}));
+
+router.get("/punch-corrections", authenticateToken, h(async (req, res): Promise<void> => {
+  const user = req.user as SafeUser | undefined;
+  if (!user) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const status = typeof req.query.status === "string" ? req.query.status : undefined;
+  const isAdmin = ["ADMIN", "OWNER", "HR"].includes(user.role);
+  const rows = await punchCorrections.listPunchCorrections({
+    status,
+    supervisorId: isAdmin ? undefined : user.employeeId ?? -1,
+  });
+  res.json(rows);
+}));
+
+router.post("/punch-corrections/:id/supervisor-review", authenticateToken, h(async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid correction id" }); return; }
+  const body = PunchCorrectionReviewSchema.safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+  const user = req.user as SafeUser | undefined;
+  if (!user) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const result = await punchCorrections.reviewPunchCorrectionSupervisor(
+    id,
+    body.data.decision,
+    body.data.note,
+    user,
+    req.ip ?? null,
+  );
+
+  if ("error" in result) {
+    res.status(result.statusCode).json({ error: result.error });
+    return;
+  }
+  res.json(result);
+}));
+
+router.post("/punch-corrections/:id/hr-review", authenticateToken, h(async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid correction id" }); return; }
+  const body = PunchCorrectionReviewSchema.safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+  const user = req.user as SafeUser | undefined;
+  if (!user) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const result = await punchCorrections.reviewPunchCorrectionHr(
+    id,
+    body.data.decision,
+    body.data.note,
+    user,
+    req.ip ?? null,
+  );
+
+  if ("error" in result) {
+    res.status(result.statusCode).json({ error: result.error });
+    return;
+  }
+  res.json(result);
 }));
 
 // PATCH/PUT /punches/:id — admin edit of punch_ledger entry (DCAA-audited, FK-enforced)

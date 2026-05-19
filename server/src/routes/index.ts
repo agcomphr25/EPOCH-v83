@@ -10656,6 +10656,31 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // Admin Journal Entries — read-only, ADMIN only
   // Note: /api/* routes already pass through authenticateToken globally (server/index.ts)
+  app.get('/api/finance/accounting/journal-entries/:id/source-trace', async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (user?.role !== 'ADMIN') {
+        return res.status(403).json({ error: 'Access denied. ADMIN role required.' });
+      }
+
+      const journalEntryId = Number(req.params.id);
+      if (!Number.isInteger(journalEntryId) || journalEntryId <= 0) {
+        return res.status(400).json({ error: 'Invalid journal entry ID' });
+      }
+
+      const { getJournalEntrySourceTrace } = await import('../services/accountingSourceTraceService');
+      const trace = await getJournalEntrySourceTrace(journalEntryId);
+      if (!trace) {
+        return res.status(404).json({ error: 'Journal entry not found' });
+      }
+
+      res.json(trace);
+    } catch (error: any) {
+      console.error('Error fetching journal entry source trace:', error);
+      res.status(500).json({ error: 'Failed to fetch journal entry source trace' });
+    }
+  });
+
   app.get('/api/finance/accounting/journal-entries', async (req, res) => {
     try {
       const user = (req as any).user;

@@ -355,6 +355,11 @@ function getDepartmentVariants(department: string): string[] {
   return DEPARTMENT_ALIASES[department] || [department];
 }
 
+function getBasePartNumberWithoutRevision(partNumber?: string | null): string | null {
+  const match = partNumber?.match(/^(.+?)\s*Rev\s*\w+$/i);
+  return match ? match[1].trim() : null;
+}
+
 async function getSerializedItemInventoryIdentity(serializedItem: any) {
   let poItem: typeof p2PurchaseOrderItems.$inferSelect | null = null;
   let inventoryItem: typeof inventoryItems.$inferSelect | null = null;
@@ -427,6 +432,29 @@ async function findActiveRoutingForSerializedItem(serializedItem: any) {
     if (byInternalPartNumberCase) return byInternalPartNumberCase;
   }
 
+  const basePartCandidates = [
+    getBasePartNumberWithoutRevision(identity.internalPartNumber),
+    getBasePartNumberWithoutRevision(serializedItem.partNumber),
+  ].filter((partNumber): partNumber is string => Boolean(partNumber));
+
+  for (const basePartNumber of Array.from(new Set(basePartCandidates))) {
+    const byBasePartNumber = await db.query.partRoutings.findFirst({
+      where: and(
+        eq(partRoutings.partNumber, basePartNumber),
+        eq(partRoutings.isActive, true)
+      ),
+    });
+    if (byBasePartNumber) return byBasePartNumber;
+
+    const byBasePartNumberCase = await db.query.partRoutings.findFirst({
+      where: and(
+        ilike(partRoutings.partNumber, basePartNumber),
+        eq(partRoutings.isActive, true)
+      ),
+    });
+    if (byBasePartNumberCase) return byBasePartNumberCase;
+  }
+
   let routing = await db.query.partRoutings.findFirst({
     where: and(
       eq(partRoutings.partNumber, serializedItem.partNumber),
@@ -444,9 +472,8 @@ async function findActiveRoutingForSerializedItem(serializedItem: any) {
   }
 
   if (!routing) {
-    const basePartMatch = serializedItem.partNumber?.match(/^(.+?)\s*Rev\s*\w+$/i);
-    if (basePartMatch) {
-      const basePartNumber = basePartMatch[1].trim();
+    const basePartNumber = getBasePartNumberWithoutRevision(serializedItem.partNumber);
+    if (basePartNumber) {
       const allRoutings = await db
         .select()
         .from(partRoutings)

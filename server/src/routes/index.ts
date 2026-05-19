@@ -3632,15 +3632,33 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const { ensureProductionWorkflowReadSchema } = await import('../lib/productionWorkflowReadiness');
       await ensureProductionWorkflowReadSchema();
       const { storage } = await import('../../storage');
+      const { pool: dbPool } = await import('../../db');
+      const optionalP2Rows = async <T = any>(
+        label: string,
+        query: Promise<any>,
+      ): Promise<T[]> => {
+        try {
+          return p2ControlRows<T>(await query);
+        } catch (error) {
+          console.warn(`P2 Production Queue optional ${label} lookup skipped:`, error);
+          return [];
+        }
+      };
       
       // Keep P2 Control Center as the visible source for WIP and finished units.
-      const allItems = await applyCompletedTravelerStateToP2Items(
-        await storage.getP2SerializedItems({})
-      );
+      let allItems: any[] = [];
+      try {
+        allItems = await applyCompletedTravelerStateToP2Items(
+          await storage.getP2SerializedItems({})
+        );
+      } catch (error) {
+        console.warn('P2 Production Queue optional serialized item lookup skipped:', error);
+      }
       const visibleStatuses = new Set(['ACTIVE', 'COMPLETED']);
       const items = (allItems || []).filter((item: any) => visibleStatuses.has(item.status));
-      const { pool: dbPool } = await import('../../db');
-      const legacyProductionRows = await dbPool.query(
+      const legacyProductionRows = await optionalP2Rows(
+        'legacy production',
+        dbPool.query(
         `SELECT
            p2po.id,
            p2po.order_id AS "orderId",
@@ -3661,8 +3679,11 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
          LEFT JOIN p2_purchase_order_items poi ON poi.id = p2po.p2_po_item_id
          WHERE COALESCE(UPPER(p2po.status), '') NOT IN ('CANCELLED', 'CANCELED')
          ORDER BY p2po.due_date NULLS LAST, p2po.created_at`
+        )
       );
-      const legacyProjectProductionRows = await dbPool.query(
+      const legacyProjectProductionRows = await optionalP2Rows(
+        'legacy project production',
+        dbPool.query(
          `WITH project_po_link AS (
            SELECT p.id AS project_id, p.po_id AS po_id
            FROM projects p
@@ -3749,14 +3770,17 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
              )
            )
          ORDER BY wo.id, wo.due_date NULLS LAST, wo.work_order_number`
+        )
       );
       const poIds = [...new Set([
         ...items.map((item: any) => item.poId ?? item.po_id).filter(Boolean),
-        ...p2ControlRows(legacyProductionRows).map((row: any) => row.poId).filter(Boolean),
-        ...p2ControlRows(legacyProjectProductionRows).map((row: any) => row.poId).filter(Boolean),
+        ...legacyProductionRows.map((row: any) => row.poId).filter(Boolean),
+        ...legacyProjectProductionRows.map((row: any) => row.poId).filter(Boolean),
       ])];
       const projectRows = poIds.length > 0
-        ? await dbPool.query(
+        ? await optionalP2Rows(
+            'project link',
+            dbPool.query(
             `WITH project_po_link AS (
                SELECT
                  p.id,
@@ -3802,9 +3826,10 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
              ORDER BY linked_po_id, updated_at DESC NULLS LAST`,
             [poIds]
           )
+          )
         : [];
       const projectByPoId = new Map<number, any>(
-        p2ControlRows(projectRows).map((row: any) => [Number(row.poId), row])
+        projectRows.map((row: any) => [Number(row.poId), row])
       );
       
       const itemIds = items.map((item: any) => item.id).filter(Boolean);
@@ -3844,13 +3869,13 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           : item.currentDepartment;
         if (displayDepartment) departmentsSet.add(displayDepartment);
       });
-      p2ControlRows(legacyProductionRows).forEach((row: any) => {
+      legacyProductionRows.forEach((row: any) => {
         const displayDepartment = ['COMPLETED', 'CLOSED'].includes(String(row.status || '').toUpperCase())
           ? 'Completed'
           : (row.department || 'Pending Layup');
         departmentsSet.add(displayDepartment);
       });
-      p2ControlRows(legacyProjectProductionRows).forEach((row: any) => {
+      legacyProjectProductionRows.forEach((row: any) => {
         const displayDepartment = ['COMPLETE', 'COMPLETED', 'CLOSED'].includes(String(row.status || '').toUpperCase())
           ? 'Completed'
           : (row.activeDepartment || row.currentTravelerStep || row.assignedDepartment || row.queueType || row.dashboardType || 'Pending Layup');
@@ -3930,7 +3955,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         });
       });
 
-      p2ControlRows(legacyProductionRows).forEach((row: any) => {
+      legacyProductionRows.forEach((row: any) => {
         const normalizedStatus = String(row.status || '').toUpperCase();
         const dept = ['COMPLETED', 'CLOSED'].includes(normalizedStatus)
           ? 'Completed'
@@ -3981,7 +4006,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         });
       });
 
-      p2ControlRows(legacyProjectProductionRows).forEach((row: any) => {
+      legacyProjectProductionRows.forEach((row: any) => {
         const normalizedStatus = String(row.status || '').toUpperCase();
         const dept = ['COMPLETE', 'COMPLETED', 'CLOSED'].includes(normalizedStatus)
           ? 'Completed'
@@ -4056,17 +4081,17 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         departments,
         summary: {
           totalActive: items.filter((item: any) => item.status === 'ACTIVE').length
-            + p2ControlRows(legacyProductionRows).filter((row: any) =>
+            + legacyProductionRows.filter((row: any) =>
               !['COMPLETED', 'CLOSED'].includes(String(row.status || '').toUpperCase())
             ).length
-            + p2ControlRows(legacyProjectProductionRows).filter((row: any) =>
+            + legacyProjectProductionRows.filter((row: any) =>
               !['COMPLETE', 'COMPLETED', 'CLOSED'].includes(String(row.status || '').toUpperCase())
             ).length,
           totalInProgress: p2ControlRows(activeTasks).length
-            + p2ControlRows(legacyProductionRows).filter((row: any) =>
+            + legacyProductionRows.filter((row: any) =>
               String(row.status || '').toUpperCase() === 'IN_PROGRESS'
             ).length
-            + p2ControlRows(legacyProjectProductionRows).filter((row: any) =>
+            + legacyProjectProductionRows.filter((row: any) =>
               ['IN_PROGRESS', 'ACTIVE', 'STARTED', 'RELEASED'].includes(String(row.status || '').toUpperCase())
               || !!row.activeDepartment
             ).length,

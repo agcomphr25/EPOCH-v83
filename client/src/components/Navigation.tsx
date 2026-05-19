@@ -2734,8 +2734,8 @@ export default function Navigation() {
               <Button
                 variant={location.startsWith('/admin/edri') ? 'default' : 'ghost'}
                 className={cn(
-                  'flex items-center gap-2 text-sm text-sky-500 hover:bg-sky-50 hover:text-sky-600',
-                  location.startsWith('/admin/edri') && 'bg-sky-400 text-white hover:bg-sky-500 hover:text-white'
+                  'flex items-center gap-2 text-sm text-foreground hover:bg-gray-100 hover:text-foreground',
+                  location.startsWith('/admin/edri') && 'bg-primary text-white hover:bg-primary hover:text-white'
                 )}
                 onClick={() => { closeAllDropdowns(); setLocation('/admin/edri'); }}
               >
@@ -2764,8 +2764,8 @@ export default function Navigation() {
               <Button
                 variant={location.startsWith('/admin/continuity') ? 'default' : 'ghost'}
                 className={cn(
-                  'flex items-center gap-2 text-sm text-red-600 hover:text-red-700',
-                  location.startsWith('/admin/continuity') && 'bg-red-600 text-white hover:bg-red-700 hover:text-white'
+                  'flex items-center gap-2 text-sm text-foreground hover:bg-gray-100 hover:text-foreground',
+                  location.startsWith('/admin/continuity') && 'bg-primary text-white hover:bg-primary hover:text-white'
                 )}
                 onClick={() => { closeAllDropdowns(); setLocation('/admin/continuity'); }}
               >

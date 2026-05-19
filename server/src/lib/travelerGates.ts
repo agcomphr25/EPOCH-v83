@@ -78,6 +78,16 @@ export async function evaluateWadReleaseGate(wadId: string): Promise<GateResult>
   if (!wad) {
     return { allowed: false, reason: 'The linked production work order could not be found.' };
   }
+  const terminalStatuses = new Set(['COMPLETE', 'COMPLETED', 'CANCELLED', 'CANCELED', 'CLOSED']);
+  if (
+    wad.wadStatus === 'APPROVED' &&
+    wad.status !== 'RELEASED' &&
+    wad.status !== 'IN_PROGRESS' &&
+    !terminalStatuses.has(String(wad.status).toUpperCase())
+  ) {
+    await storage.updateWorkOrderStatus(wad.id, 'RELEASED');
+    return { allowed: true };
+  }
   if (wad.status !== 'RELEASED' && wad.status !== 'IN_PROGRESS') {
     return {
       allowed: false,

@@ -17,6 +17,8 @@ vi.mock('../storage', () => ({
     checkEmployeeHasValidTrainingCertificationForCert: vi.fn<(employeeId: number, certificationId: number) => Promise<{ id: number; status: string; expiresAt: Date | null } | undefined>>(),
     getActiveEmployeeMachineQualificationsForEmployee: vi.fn<(employeeId: number) => Promise<Array<{ id: number; machineClass: string | null; operationType: string | null; department: string | null; expiresAt: Date | null }>>>(),
     getRoutingCncOperationForRoutingOp: vi.fn<(routingOperationId: number) => Promise<RoutingCncOperation | undefined>>(),
+    getWorkOrderById: vi.fn(),
+    updateWorkOrderStatus: vi.fn(),
   },
 }));
 
@@ -39,6 +41,7 @@ vi.mock('../schema', () => ({
 import { storage } from '../storage';
 import { db } from '../db';
 import {
+  evaluateWadReleaseGate,
   evaluateTravelerStartGates,
   evaluateTravelerFinishGates,
 } from '../src/lib/travelerGates';
@@ -151,6 +154,48 @@ function mockDbSelectReturning(rows: Record<string, unknown>[]): void {
   const fromFn = vi.fn<() => SelectFromChain>().mockReturnValue({ where: whereFn });
   vi.mocked(db.select).mockReturnValue({ from: fromFn });
 }
+
+// ---------------------------------------------------------------------------
+// evaluateWadReleaseGate — unit tests
+// ---------------------------------------------------------------------------
+
+describe('evaluateWadReleaseGate', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('self-heals an approved WAD whose production status has not been released yet', async () => {
+    vi.mocked(storage.getWorkOrderById).mockResolvedValue({
+      id: 'wad-1',
+      status: 'READY',
+      wadStatus: 'APPROVED',
+    } as any);
+    vi.mocked(storage.updateWorkOrderStatus).mockResolvedValue({
+      id: 'wad-1',
+      status: 'RELEASED',
+      wadStatus: 'APPROVED',
+    } as any);
+
+    const result = await evaluateWadReleaseGate('wad-1');
+
+    expect(result.allowed).toBe(true);
+    expect(storage.updateWorkOrderStatus).toHaveBeenCalledWith('wad-1', 'RELEASED');
+  });
+
+  it('continues to block WADs that have not been approved for release', async () => {
+    vi.mocked(storage.getWorkOrderById).mockResolvedValue({
+      id: 'wad-1',
+      status: 'READY',
+      wadStatus: 'PENDING_APPROVAL',
+    } as any);
+
+    const result = await evaluateWadReleaseGate('wad-1');
+
+    expect(result.allowed).toBe(false);
+    expect(result.reason).toMatch(/RELEASED or IN_PROGRESS/);
+    expect(storage.updateWorkOrderStatus).not.toHaveBeenCalled();
+  });
+});
 
 // ---------------------------------------------------------------------------
 // evaluateTravelerStartGates — unit tests

@@ -193,18 +193,63 @@ function parseGcsPath(fullPath: string): { bucketName: string; objectName: strin
 }
 
 async function uploadVendorPdfToStorage(file: Express.Multer.File, scope: 'vendor-approvals' | 'vendor-documents') {
-  const provider = getFileStorageProvider();
-  const objectPath = await provider.uploadBuffer({
-    buffer: file.buffer,
-    fileName: file.originalname,
-    contentType: 'application/pdf',
-    scope,
-  });
-  await provider.setPublicReadPolicy(objectPath, 'system');
+  try {
+    const provider = getFileStorageProvider();
+    const objectPath = await provider.uploadBuffer({
+      buffer: file.buffer,
+      fileName: file.originalname,
+      contentType: 'application/pdf',
+      scope,
+    });
+    await provider.setPublicReadPolicy(objectPath, 'system');
+
+    return {
+      url: objectPath,
+      filename: objectPath.split('/').pop() || file.originalname,
+      originalName: file.originalname,
+      size: file.size,
+    };
+  } catch (error) {
+    if (!shouldUseLocalVendorUploadFallback(error)) {
+      throw error;
+    }
+
+    const result = await saveVendorPdfLocally(file, scope);
+    const { reason, message, status } = getStorageErrorResponse(error);
+    console.warn('[vendor-upload] Used local upload fallback', {
+      scope,
+      originalName: file.originalname,
+      reason,
+      message,
+      status,
+      localUrl: result.url,
+    });
+
+    return result;
+  }
+}
+
+function shouldUseLocalVendorUploadFallback(error: unknown): boolean {
+  const { status, reason } = getStorageErrorResponse(error);
+  if ([401, 403, 502, 503].includes(status)) return true;
+  return /storage|signing|supabase|missing|unavailable|unauthorized/i.test(reason);
+}
+
+async function saveVendorPdfLocally(file: Express.Multer.File, scope: 'vendor-approvals' | 'vendor-documents') {
+  const targetDir = scope === 'vendor-approvals' ? vendorApprovalsDir : vendorDocumentsDir;
+  const ext = path.extname(file.originalname).toLowerCase() || '.pdf';
+  const safeBase = path
+    .basename(file.originalname, ext)
+    .replace(/[^a-zA-Z0-9_-]/g, '_')
+    .slice(0, 90) || 'vendor-document';
+  const filename = `${Date.now()}_${randomUUID()}_${safeBase}${ext}`;
+  const absolutePath = path.join(targetDir, filename);
+
+  await fs.promises.writeFile(absolutePath, file.buffer);
 
   return {
-    url: objectPath,
-    filename: objectPath.split('/').pop() || file.originalname,
+    url: `/uploads/${scope}/${filename}`,
+    filename,
     originalName: file.originalname,
     size: file.size,
   };

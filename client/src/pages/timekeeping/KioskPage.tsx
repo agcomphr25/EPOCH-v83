@@ -32,6 +32,17 @@ interface ChargeCode {
   type: string;
 }
 
+type PunchEventType = 'clock_in' | 'clock_out' | 'break_start' | 'break_end';
+
+interface PunchEvent {
+  id: number;
+  sessionId: number;
+  type: PunchEventType;
+  punchedAt: string;
+  costCode: string | null;
+  hasMissingClockOut?: boolean;
+}
+
 const TYPE_LABELS: Record<string, string> = {
   DIRECT: 'Direct Labor',
   OVERHEAD: 'Overhead',
@@ -180,10 +191,13 @@ export default function KioskPage() {
   const [correctionForm, setCorrectionForm] = useState({
     requestType: 'edit_session',
     punchLedgerId: '',
+    selectedPunchType: 'clock_in' as PunchEventType,
     clockIn: '',
     clockOut: '',
     reason: '',
   });
+  const [activeShiftPunches, setActiveShiftPunches] = useState<PunchEvent[]>([]);
+  const [correctionLoading, setCorrectionLoading] = useState(false);
 
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -210,7 +224,9 @@ export default function KioskPage() {
     setDcaaViolation(null);
     setCountdown(RESULT_DISPLAY_SEC);
     setLockoutSecondsRemaining(0);
-    setCorrectionForm({ requestType: 'edit_session', punchLedgerId: '', clockIn: '', clockOut: '', reason: '' });
+    setCorrectionForm({ requestType: 'edit_session', punchLedgerId: '', selectedPunchType: 'clock_in', clockIn: '', clockOut: '', reason: '' });
+    setActiveShiftPunches([]);
+    setCorrectionLoading(false);
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     if (countdownRef.current) clearInterval(countdownRef.current);
     if (lockoutRef.current) clearInterval(lockoutRef.current);
@@ -391,18 +407,59 @@ export default function KioskPage() {
     restartIdleTimer();
   }, [restartIdleTimer]);
 
-  const openCorrectionForm = useCallback(() => {
+  const openCorrectionForm = useCallback(async () => {
     const openEntry = punchStatus?.openEntry;
     setCorrectionForm({
       requestType: openEntry?.id ? 'edit_session' : 'add_session',
       punchLedgerId: openEntry?.id ? String(openEntry.id) : '',
+      selectedPunchType: 'clock_in',
       clockIn: openEntry?.clockIn ? new Date(openEntry.clockIn).toISOString().slice(0, 16) : '',
       clockOut: '',
       reason: '',
     });
     setStep('correction');
     restartIdleTimer();
-  }, [punchStatus, restartIdleTimer]);
+    if (!employee) return;
+    setCorrectionLoading(true);
+    try {
+      const res = await fetch(`/api/timekeeping/kiosk/punches/employee/${employee.id}/active-shift`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setActiveShiftPunches(Array.isArray(data.punches) ? data.punches : []);
+      }
+    } finally {
+      setCorrectionLoading(false);
+    }
+  }, [employee, pin, punchStatus, restartIdleTimer]);
+
+  const selectCorrectionPunch = useCallback((punch: PunchEvent) => {
+    const local = new Date(punch.punchedAt).toISOString().slice(0, 16);
+    setCorrectionForm((prev) => ({
+      ...prev,
+      requestType: 'edit_session',
+      punchLedgerId: String(punch.sessionId),
+      selectedPunchType: punch.type,
+      clockIn: punch.type === 'clock_in' || punch.type === 'break_start' ? local : '',
+      clockOut: punch.type === 'clock_out' || punch.type === 'break_end' ? local : '',
+    }));
+    restartIdleTimer();
+  }, [restartIdleTimer]);
+
+  const startMissingPunchCorrection = useCallback(() => {
+    setCorrectionForm((prev) => ({
+      ...prev,
+      requestType: 'add_session',
+      punchLedgerId: '',
+      selectedPunchType: 'clock_in',
+      clockIn: '',
+      clockOut: '',
+    }));
+    restartIdleTimer();
+  }, [restartIdleTimer]);
 
   const submitCorrectionRequest = useCallback(async () => {
     if (!employee || pin.length !== PIN_LENGTH) return;
@@ -424,6 +481,8 @@ export default function KioskPage() {
           punchLedgerId: correctionForm.punchLedgerId ? Number(correctionForm.punchLedgerId) : null,
           reason: correctionForm.reason.trim(),
           proposedChanges: {
+            punchType: correctionForm.selectedPunchType,
+            laborClass: correctionForm.selectedPunchType === 'break_start' || correctionForm.selectedPunchType === 'break_end' ? 'BREAK' : 'REGULAR',
             ...(correctionForm.clockIn ? { clockIn: new Date(correctionForm.clockIn).toISOString() } : {}),
             ...(correctionForm.clockOut ? { clockOut: new Date(correctionForm.clockOut).toISOString() } : {}),
           },
@@ -858,30 +917,64 @@ export default function KioskPage() {
           </div>
 
           <div className="rounded-2xl border bg-white p-4 space-y-3 shadow-sm">
-            <label className="block text-xs uppercase tracking-widest text-gray-400">Correction Type</label>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <label className="block text-xs uppercase tracking-widest text-gray-400">Active Shift Punches</label>
+                <p className="text-xs text-gray-500">Tap a punch to edit it.</p>
+              </div>
+              <Button type="button" variant="outline" size="sm" onClick={startMissingPunchCorrection}>
+                Add
+              </Button>
+            </div>
+
+            <div className="space-y-2 max-h-44 overflow-y-auto">
+              {correctionLoading ? (
+                <div className="rounded-xl border border-gray-200 p-3 text-sm text-gray-500">Loading punches...</div>
+              ) : activeShiftPunches.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-gray-200 p-3 text-sm text-gray-500">No punches found for this active shift.</div>
+              ) : (
+                activeShiftPunches.map((punch) => {
+                  const selected = correctionForm.requestType === 'edit_session' && correctionForm.punchLedgerId === String(punch.sessionId) && correctionForm.selectedPunchType === punch.type;
+                  return (
+                    <button
+                      key={`${punch.sessionId}-${punch.type}-${punch.punchedAt}`}
+                      type="button"
+                      onClick={() => selectCorrectionPunch(punch)}
+                      className={`w-full rounded-xl border p-3 text-left transition-colors ${selected ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-semibold capitalize">{punch.type.replace(/_/g, ' ')}</span>
+                        <span className="text-sm font-medium text-gray-700">
+                          {new Date(punch.punchedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      {punch.costCode && <p className="text-xs text-gray-500 mt-1">CC {punch.costCode}</p>}
+                    </button>
+                  );
+                })
+              )}
+            </div>
+
+            <label className="block text-xs uppercase tracking-widest text-gray-400">
+              {correctionForm.requestType === 'add_session' ? 'Missing Punch Type' : 'Correct Punch Type'}
+            </label>
             <select
-              value={correctionForm.requestType}
+              value={correctionForm.selectedPunchType}
               onChange={(event) => {
-                setCorrectionForm((prev) => ({ ...prev, requestType: event.target.value }));
+                setCorrectionForm((prev) => ({ ...prev, selectedPunchType: event.target.value as PunchEventType }));
                 restartIdleTimer();
               }}
               className="w-full rounded-xl border border-gray-200 p-3"
             >
-              <option value="edit_session">Edit existing punch</option>
-              <option value="add_session">Add missing punch</option>
-              <option value="delete_session">Remove incorrect punch</option>
+              <option value="clock_in">Clock in</option>
+              <option value="break_start">Meal out</option>
+              {correctionForm.requestType === 'edit_session' && (
+                <>
+                  <option value="clock_out">Clock out</option>
+                  <option value="break_end">Meal in</option>
+                </>
+              )}
             </select>
-
-            <label className="block text-xs uppercase tracking-widest text-gray-400">Session ID</label>
-            <input
-              value={correctionForm.punchLedgerId}
-              onChange={(event) => {
-                setCorrectionForm((prev) => ({ ...prev, punchLedgerId: event.target.value }));
-                restartIdleTimer();
-              }}
-              placeholder="Leave blank for missing punch"
-              className="w-full rounded-xl border border-gray-200 p-3"
-            />
 
             <label className="block text-xs uppercase tracking-widest text-gray-400">Correct Clock In</label>
             <input
@@ -894,16 +987,20 @@ export default function KioskPage() {
               className="w-full rounded-xl border border-gray-200 p-3"
             />
 
-            <label className="block text-xs uppercase tracking-widest text-gray-400">Correct Clock Out</label>
-            <input
-              type="datetime-local"
-              value={correctionForm.clockOut}
-              onChange={(event) => {
-                setCorrectionForm((prev) => ({ ...prev, clockOut: event.target.value }));
-                restartIdleTimer();
-              }}
-              className="w-full rounded-xl border border-gray-200 p-3"
-            />
+            {correctionForm.requestType === 'edit_session' && (
+              <>
+                <label className="block text-xs uppercase tracking-widest text-gray-400">Correct Clock Out</label>
+                <input
+                  type="datetime-local"
+                  value={correctionForm.clockOut}
+                  onChange={(event) => {
+                    setCorrectionForm((prev) => ({ ...prev, clockOut: event.target.value }));
+                    restartIdleTimer();
+                  }}
+                  className="w-full rounded-xl border border-gray-200 p-3"
+                />
+              </>
+            )}
 
             <label className="block text-xs uppercase tracking-widest text-gray-400">Reason</label>
             <textarea
@@ -918,7 +1015,11 @@ export default function KioskPage() {
             />
           </div>
 
-          <Button onClick={submitCorrectionRequest} className="w-full h-14 rounded-2xl">
+          <Button
+            onClick={submitCorrectionRequest}
+            disabled={correctionForm.reason.trim().length < 5 || (correctionForm.requestType === 'add_session' && !correctionForm.clockIn) || (correctionForm.requestType === 'edit_session' && !correctionForm.punchLedgerId)}
+            className="w-full h-14 rounded-2xl"
+          >
             Submit for Approval
           </Button>
           <button onClick={() => setStep('confirm')} className="w-full text-center text-gray-400 hover:text-gray-600 text-sm">

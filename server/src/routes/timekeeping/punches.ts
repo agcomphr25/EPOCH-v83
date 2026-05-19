@@ -34,6 +34,7 @@ const PunchCorrectionChangesSchema = z.object({
   chargeCodeId: z.number().int().positive().nullable().optional(),
   travelerId: z.string().nullable().optional(),
   laborClass: z.enum(["REGULAR", "BREAK"]).optional(),
+  punchType: z.enum(["clock_in", "clock_out", "break_start", "break_end"]).optional(),
   note: z.string().max(1000).nullable().optional(),
 });
 
@@ -165,6 +166,81 @@ function h(fn: (req: Request, res: Response, next: NextFunction) => Promise<void
   });
 }
 
+type PunchSessionEvent = {
+  id: number;
+  sessionId: number;
+  employeeId: number;
+  type: 'clock_in' | 'clock_out' | 'break_start' | 'break_end';
+  punchedAt: string;
+  source: string;
+  isEdited: boolean;
+  editNote: string | null;
+  costCode: string | null;
+  note: string | null;
+  hasMissingClockOut: boolean;
+};
+
+function sessionsToPunchEvents(sessions: any[]): PunchSessionEvent[] {
+  const events: PunchSessionEvent[] = [];
+  for (const s of sessions) {
+    const inType: PunchSessionEvent['type'] = s.laborClass === 'BREAK' ? 'break_start' : 'clock_in';
+    const outType: PunchSessionEvent['type'] = s.laborClass === 'BREAK' ? 'break_end' : 'clock_out';
+    const missingOut = s.clockOut == null;
+
+    const rawNote = s.editNote ?? null;
+    let inNote: string | null = null;
+    let outNote: string | null = null;
+    let inEdited = false;
+    let outEdited = false;
+
+    if (rawNote && s.isEdited) {
+      const inMatch = rawNote.match(/\[clockIn\]\s([^|]+?)(?:\s*\|\||$)/);
+      const outMatch = rawNote.match(/\[clockOut\]\s([^|]+?)(?:\s*\|\||$)/);
+      if (inMatch || outMatch) {
+        if (inMatch) { inEdited = true; inNote = inMatch[1].trim(); }
+        if (outMatch) { outEdited = true; outNote = outMatch[1].trim(); }
+      } else {
+        inEdited = true;
+        outEdited = true;
+        inNote = rawNote;
+        outNote = rawNote;
+      }
+    }
+
+    events.push({
+      id: s.id,
+      sessionId: s.id,
+      employeeId: s.employeeId,
+      type: inType,
+      punchedAt: (s.clockIn instanceof Date ? s.clockIn : new Date(s.clockIn)).toISOString(),
+      source: s.source,
+      isEdited: inEdited,
+      editNote: inNote,
+      costCode: s.chargeCode ?? null,
+      note: null,
+      hasMissingClockOut: missingOut,
+    });
+
+    if (!missingOut && s.clockOut != null) {
+      events.push({
+        id: s.id,
+        sessionId: s.id,
+        employeeId: s.employeeId,
+        type: outType,
+        punchedAt: (s.clockOut instanceof Date ? s.clockOut : new Date(s.clockOut)).toISOString(),
+        source: s.source,
+        isEdited: outEdited,
+        editNote: outNote,
+        costCode: s.chargeCode ?? null,
+        note: null,
+        hasMissingClockOut: false,
+      });
+    }
+  }
+  events.sort((a, b) => a.punchedAt.localeCompare(b.punchedAt));
+  return events;
+}
+
 // ---------------------------------------------------------------------------
 // Kiosk endpoints — intentionally public (PIN auth handled in business logic)
 // Rewired to punch_ledger — employeeId is now public.employees.id
@@ -190,6 +266,45 @@ router.get("/kiosk/punches/employee/:employeeId/current", h(async (req, res): Pr
     clockedInAt: openSession?.clockIn?.toISOString() ?? null,
     hoursToday,
     openEntry: openSession ?? null,
+  });
+}));
+
+router.post("/kiosk/punches/employee/:employeeId/active-shift", h(async (req, res): Promise<void> => {
+  const employeeId = parseInt(req.params.employeeId, 10);
+  if (isNaN(employeeId)) { res.status(400).json({ error: "Invalid employee id" }); return; }
+
+  const { pin } = req.body ?? {};
+  if (!pin || typeof pin !== "string" || !/^\d{4}$/.test(pin)) {
+    res.status(400).json({ error: "A 4-digit PIN is required" });
+    return;
+  }
+
+  const [emp] = await nativeDb
+    .select({
+      id: employees.id,
+      isActive: employees.isActive,
+      timekeeperPin: employees.timekeeperPin,
+    })
+    .from(employees)
+    .where(eq(employees.id, employeeId))
+    .limit(1);
+
+  if (!emp || !emp.isActive || !emp.timekeeperPin || !(await bcrypt.compare(pin, emp.timekeeperPin))) {
+    res.status(401).json({ error: "Invalid PIN" });
+    return;
+  }
+
+  const openSession = await ledger.getOpenSession(employeeId);
+  const to = new Date();
+  const from = openSession?.clockIn
+    ? new Date(new Date(openSession.clockIn).getTime() - 2 * 60 * 60 * 1000)
+    : new Date(to.getTime() - 18 * 60 * 60 * 1000);
+  const sessions = await ledger.listSessions({ employeeId, from, to });
+  res.json({
+    employeeId,
+    from: from.toISOString(),
+    to: to.toISOString(),
+    punches: sessionsToPunchEvents(sessions),
   });
 }));
 
@@ -1016,82 +1131,22 @@ router.get("/punches", authenticateToken, h(async (req, res): Promise<void> => {
     to: q.data.to ? new Date(q.data.to) : undefined,
   });
 
-  // Expand each session into 1 or 2 event rows that the Punch Review UI expects.
-  type PunchEvent = {
-    id: number;
-    sessionId: number;
-    employeeId: number;
-    type: 'clock_in' | 'clock_out' | 'break_start' | 'break_end';
-    punchedAt: string;
-    source: string;
-    isEdited: boolean;
-    editNote: string | null;
-    costCode: string | null;
-    note: string | null;
-    hasMissingClockOut: boolean;
-  };
+  res.json(sessionsToPunchEvents(sessions));
+}));
 
-  const events: PunchEvent[] = [];
-  for (const s of sessions) {
-    const inType: PunchEvent['type'] = s.laborClass === 'BREAK' ? 'break_start' : 'clock_in';
-    const outType: PunchEvent['type'] = s.laborClass === 'BREAK' ? 'break_end' : 'clock_out';
-    const missingOut = s.clockOut == null;
+router.get("/punches/my", authenticateToken, h(async (req, res): Promise<void> => {
+  const employeeId = req.user?.employeeId ?? null;
+  if (!employeeId) { res.status(403).json({ error: "Your account is not linked to an employee record" }); return; }
 
-    const rawNote = s.editNote ?? null;
-    let inNote: string | null = null;
-    let outNote: string | null = null;
-    let inEdited = false;
-    let outEdited = false;
-
-    if (rawNote && s.isEdited) {
-      const inMatch = rawNote.match(/\[clockIn\]\s([^|]+?)(?:\s*\|\||$)/);
-      const outMatch = rawNote.match(/\[clockOut\]\s([^|]+?)(?:\s*\|\||$)/);
-      if (inMatch || outMatch) {
-        if (inMatch) { inEdited = true; inNote = inMatch[1].trim(); }
-        if (outMatch) { outEdited = true; outNote = outMatch[1].trim(); }
-      } else {
-        inEdited = true;
-        outEdited = true;
-        inNote = rawNote;
-        outNote = rawNote;
-      }
-    }
-
-    events.push({
-      id: s.id,
-      sessionId: s.id,
-      employeeId: s.employeeId,
-      type: inType,
-      punchedAt: (s.clockIn instanceof Date ? s.clockIn : new Date(s.clockIn)).toISOString(),
-      source: s.source,
-      isEdited: inEdited,
-      editNote: inNote,
-      costCode: s.chargeCode ?? null,
-      note: null,
-      hasMissingClockOut: missingOut,
-    });
-
-    if (!missingOut && s.clockOut != null) {
-      events.push({
-        id: s.id,
-        sessionId: s.id,
-        employeeId: s.employeeId,
-        type: outType,
-        punchedAt: (s.clockOut instanceof Date ? s.clockOut : new Date(s.clockOut)).toISOString(),
-        source: s.source,
-        isEdited: outEdited,
-        editNote: outNote,
-        costCode: s.chargeCode ?? null,
-        note: null,
-        hasMissingClockOut: false,
-      });
-    }
+  const from = typeof req.query.from === "string" ? new Date(req.query.from) : undefined;
+  const to = typeof req.query.to === "string" ? new Date(req.query.to) : undefined;
+  if ((from && Number.isNaN(from.getTime())) || (to && Number.isNaN(to.getTime()))) {
+    res.status(400).json({ error: "from/to must be valid ISO date strings" });
+    return;
   }
 
-  // Sort ascending by punchedAt so the table reads chronologically
-  events.sort((a, b) => a.punchedAt.localeCompare(b.punchedAt));
-
-  res.json(events);
+  const sessions = await ledger.listSessions({ employeeId, from, to });
+  res.json(sessionsToPunchEvents(sessions));
 }));
 
 // POST /punches — admin creates a punch_ledger entry (admin correction / manual punch)

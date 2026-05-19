@@ -345,6 +345,21 @@ type PunchMutationInput = {
   dailyCertificationConfirmed?: boolean;
 };
 
+type PunchEventType = 'clock_in' | 'clock_out' | 'break_start' | 'break_end';
+
+interface PunchEvent {
+  id: number;
+  sessionId: number;
+  employeeId: number;
+  type: PunchEventType;
+  punchedAt: string;
+  source: string;
+  isEdited: boolean;
+  editNote: string | null;
+  costCode: string | null;
+  hasMissingClockOut?: boolean;
+}
+
 function portalFetch(url: string, init?: Parameters<typeof fetch>[1]) {
   const token =
     localStorage.getItem('sessionToken') ||
@@ -396,6 +411,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
   const [punchCorrectionForm, setPunchCorrectionForm] = useState({
     requestType: 'edit_session',
     punchLedgerId: '',
+    selectedPunchType: 'clock_in' as PunchEventType,
     clockIn: '',
     clockOut: '',
     reason: '',
@@ -814,6 +830,19 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
     staleTime: 5 * 60 * 1000,
   });
 
+  const currentPayPeriodFromIso = `${currentPayPeriod.start}T00:00:00.000Z`;
+  const currentPayPeriodToIso = `${currentPayPeriod.end}T23:59:59.999Z`;
+  const { data: currentPayPeriodPunches = [], isLoading: currentPayPeriodPunchesLoading } = useQuery<PunchEvent[]>({
+    queryKey: ['/api/timekeeping/punches/my', currentPayPeriod.start, currentPayPeriod.end],
+    queryFn: async () => {
+      const res = await portalFetch(`/api/timekeeping/punches/my?from=${encodeURIComponent(currentPayPeriodFromIso)}&to=${encodeURIComponent(currentPayPeriodToIso)}`);
+      if (!res.ok) throw new Error('Failed to fetch current pay period punches');
+      return res.json();
+    },
+    enabled: activeTab === 'time-clock',
+    staleTime: 30_000,
+  });
+
   const punchMutation = useMutation({
     mutationFn: async ({ type, costCode, dailyCertificationConfirmed }: PunchMutationInput) => {
       const res = await portalFetch('/api/timekeeping/punches/my', {
@@ -865,6 +894,8 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
           punchLedgerId: punchCorrectionForm.punchLedgerId ? Number(punchCorrectionForm.punchLedgerId) : null,
           reason: punchCorrectionForm.reason.trim(),
           proposedChanges: {
+            punchType: punchCorrectionForm.selectedPunchType,
+            laborClass: punchCorrectionForm.selectedPunchType === 'break_start' || punchCorrectionForm.selectedPunchType === 'break_end' ? 'BREAK' : 'REGULAR',
             ...(punchCorrectionForm.clockIn ? { clockIn: new Date(punchCorrectionForm.clockIn).toISOString() } : {}),
             ...(punchCorrectionForm.clockOut ? { clockOut: new Date(punchCorrectionForm.clockOut).toISOString() } : {}),
           },
@@ -878,13 +909,36 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
     },
     onSuccess: () => {
       toast({ title: 'Correction submitted', description: 'Your request was sent for supervisor review.' });
-      setPunchCorrectionForm({ requestType: 'edit_session', punchLedgerId: '', clockIn: '', clockOut: '', reason: '' });
+      setPunchCorrectionForm({ requestType: 'edit_session', punchLedgerId: '', selectedPunchType: 'clock_in', clockIn: '', clockOut: '', reason: '' });
       queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/punch-corrections', 'mine'] });
     },
     onError: (err: any) => {
       toast({ title: 'Correction failed', description: err?.message ?? 'Unable to submit correction.', variant: 'destructive' });
     },
   });
+
+  const selectPunchForCorrection = (punch: PunchEvent) => {
+    const local = new Date(punch.punchedAt).toISOString().slice(0, 16);
+    setPunchCorrectionForm((prev) => ({
+      ...prev,
+      requestType: 'edit_session',
+      punchLedgerId: String(punch.sessionId),
+      selectedPunchType: punch.type,
+      clockIn: punch.type === 'clock_in' || punch.type === 'break_start' ? local : '',
+      clockOut: punch.type === 'clock_out' || punch.type === 'break_end' ? local : '',
+    }));
+  };
+
+  const startMissingPunchCorrection = () => {
+    setPunchCorrectionForm((prev) => ({
+      ...prev,
+      requestType: 'add_session',
+      punchLedgerId: '',
+      selectedPunchType: 'clock_in',
+      clockIn: '',
+      clockOut: '',
+    }));
+  };
 
   useEffect(() => {
     if (punchStatus?.status !== 'clocked_in') {
@@ -2445,29 +2499,68 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
                         </p>
                       </div>
                       <div className="grid gap-3 sm:grid-cols-2">
-                        <div className="space-y-1">
-                          <Label>Correction Type</Label>
+                        <div className="sm:col-span-2 space-y-2">
+                          <div className="flex items-center justify-between gap-3">
+                            <Label>Current Pay Period Punches</Label>
+                            <Button type="button" variant="outline" size="sm" onClick={startMissingPunchCorrection}>
+                              Add Missing Punch
+                            </Button>
+                          </div>
+                          <div className="rounded-md border bg-white max-h-52 overflow-y-auto">
+                            {currentPayPeriodPunchesLoading ? (
+                              <div className="p-3 text-sm text-muted-foreground">Loading punches...</div>
+                            ) : currentPayPeriodPunches.length === 0 ? (
+                              <div className="p-3 text-sm text-muted-foreground">No punches recorded in the current pay period.</div>
+                            ) : (
+                              currentPayPeriodPunches.map((punch) => {
+                                const selected = punchCorrectionForm.requestType === 'edit_session' && punchCorrectionForm.punchLedgerId === String(punch.sessionId) && punchCorrectionForm.selectedPunchType === punch.type;
+                                return (
+                                  <button
+                                    key={`${punch.sessionId}-${punch.type}-${punch.punchedAt}`}
+                                    type="button"
+                                    onClick={() => selectPunchForCorrection(punch)}
+                                    className={`w-full px-3 py-2 text-left border-b last:border-b-0 hover:bg-muted/40 ${selected ? 'bg-blue-50' : 'bg-white'}`}
+                                  >
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                      <div className="flex items-center gap-2">
+                                        <Badge variant="outline" className={punch.type.includes('break') ? 'text-amber-700 border-amber-200' : 'text-blue-700 border-blue-200'}>
+                                          {punch.type.replace(/_/g, ' ')}
+                                        </Badge>
+                                        <span className="text-sm font-medium">
+                                          {new Date(punch.punchedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                        </span>
+                                      </div>
+                                      <span className="text-sm text-gray-700">
+                                        {new Date(punch.punchedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                                      </span>
+                                    </div>
+                                    {punch.costCode && <div className="text-xs text-muted-foreground mt-1">CC {punch.costCode}</div>}
+                                  </button>
+                                );
+                              })
+                            )}
+                          </div>
+                        </div>
+                        <div className="space-y-1 sm:col-span-2">
+                          <Label>{punchCorrectionForm.requestType === 'add_session' ? 'Missing Punch Type' : 'Correct Punch Type'}</Label>
                           <Select
-                            value={punchCorrectionForm.requestType}
-                            onValueChange={(value) => setPunchCorrectionForm((prev) => ({ ...prev, requestType: value }))}
+                            value={punchCorrectionForm.selectedPunchType}
+                            onValueChange={(value) => setPunchCorrectionForm((prev) => ({ ...prev, selectedPunchType: value as PunchEventType }))}
                           >
                             <SelectTrigger>
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="edit_session">Edit existing punch</SelectItem>
-                              <SelectItem value="add_session">Add missing punch</SelectItem>
-                              <SelectItem value="delete_session">Remove incorrect punch</SelectItem>
+                              <SelectItem value="clock_in">Clock in</SelectItem>
+                              <SelectItem value="break_start">Meal out</SelectItem>
+                              {punchCorrectionForm.requestType === 'edit_session' && (
+                                <>
+                                  <SelectItem value="clock_out">Clock out</SelectItem>
+                                  <SelectItem value="break_end">Meal in</SelectItem>
+                                </>
+                              )}
                             </SelectContent>
                           </Select>
-                        </div>
-                        <div className="space-y-1">
-                          <Label>Session ID</Label>
-                          <Input
-                            value={punchCorrectionForm.punchLedgerId}
-                            onChange={(event) => setPunchCorrectionForm((prev) => ({ ...prev, punchLedgerId: event.target.value }))}
-                            placeholder="Blank for missing punch"
-                          />
                         </div>
                         <div className="space-y-1">
                           <Label>Correct Clock In</Label>
@@ -2477,14 +2570,16 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
                             onChange={(event) => setPunchCorrectionForm((prev) => ({ ...prev, clockIn: event.target.value }))}
                           />
                         </div>
-                        <div className="space-y-1">
-                          <Label>Correct Clock Out</Label>
-                          <Input
-                            type="datetime-local"
-                            value={punchCorrectionForm.clockOut}
-                            onChange={(event) => setPunchCorrectionForm((prev) => ({ ...prev, clockOut: event.target.value }))}
-                          />
-                        </div>
+                        {punchCorrectionForm.requestType === 'edit_session' && (
+                          <div className="space-y-1">
+                            <Label>Correct Clock Out</Label>
+                            <Input
+                              type="datetime-local"
+                              value={punchCorrectionForm.clockOut}
+                              onChange={(event) => setPunchCorrectionForm((prev) => ({ ...prev, clockOut: event.target.value }))}
+                            />
+                          </div>
+                        )}
                       </div>
                       <div className="space-y-1">
                         <Label>Reason</Label>
@@ -2499,7 +2594,12 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
                         type="button"
                         size="sm"
                         onClick={() => punchCorrectionMutation.mutate()}
-                        disabled={punchCorrectionMutation.isPending || punchCorrectionForm.reason.trim().length < 5}
+                        disabled={
+                          punchCorrectionMutation.isPending ||
+                          punchCorrectionForm.reason.trim().length < 5 ||
+                          (punchCorrectionForm.requestType === 'add_session' && !punchCorrectionForm.clockIn) ||
+                          (punchCorrectionForm.requestType === 'edit_session' && !punchCorrectionForm.punchLedgerId)
+                        }
                       >
                         {punchCorrectionMutation.isPending ? 'Submitting...' : 'Submit Correction Request'}
                       </Button>

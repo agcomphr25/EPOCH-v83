@@ -942,7 +942,8 @@ async function promoteTravelerToInProgress(
         },
       };
     }
-    if (wad.status !== 'RELEASED' && wad.status !== 'IN_PROGRESS') {
+    const wadGate = await evaluateWadReleaseGate(traveler.productionWorkOrderId);
+    if (!wadGate.allowed) {
       return {
         ok: false,
         status: 403,
@@ -950,6 +951,7 @@ async function promoteTravelerToInProgress(
           error: 'Work order not released to floor',
           workOrderId: traveler.productionWorkOrderId,
           workOrderStatus: wad.status,
+          reason: wadGate.reason,
         },
       };
     }

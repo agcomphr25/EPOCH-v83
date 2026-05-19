@@ -78,23 +78,24 @@ export async function evaluateWadReleaseGate(wadId: string): Promise<GateResult>
   if (!wad) {
     return { allowed: false, reason: 'The linked production work order could not be found.' };
   }
-  const terminalStatuses = new Set(['COMPLETE', 'COMPLETED', 'CANCELLED', 'CANCELED', 'CLOSED']);
-  if (
-    wad.wadStatus === 'APPROVED' &&
-    wad.status !== 'RELEASED' &&
-    wad.status !== 'IN_PROGRESS' &&
-    !terminalStatuses.has(String(wad.status).toUpperCase())
-  ) {
-    await storage.updateWorkOrderStatus(wad.id, 'RELEASED');
+
+  const status = String(wad.status || '').trim().toUpperCase();
+  const wadStatus = String((wad as any).wadStatus || '').trim().toUpperCase();
+
+  if (status === 'RELEASED' || status === 'IN_PROGRESS') {
     return { allowed: true };
   }
-  if (wad.status !== 'RELEASED' && wad.status !== 'IN_PROGRESS') {
-    return {
-      allowed: false,
-      reason: `Work order must be RELEASED or IN_PROGRESS before work can begin. Current status: ${wad.status}.`,
-    };
+
+  if (wadStatus === 'APPROVED') {
+    await storage.updateWorkOrderStatus(wad.id, 'IN_PROGRESS');
+    console.log(`[TravelerGate] Promoted approved WAD ${wad.id} from ${wad.status} to IN_PROGRESS at traveler start`);
+    return { allowed: true };
   }
-  return { allowed: true };
+
+  return {
+    allowed: false,
+    reason: `Work order must be RELEASED or IN_PROGRESS before work can begin. Current status: ${wad.status || 'UNKNOWN'}.`,
+  };
 }
 
 /**

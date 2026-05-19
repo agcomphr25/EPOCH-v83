@@ -19,6 +19,7 @@ vi.mock('../storage', () => ({
     getRoutingCncOperationForRoutingOp: vi.fn<(routingOperationId: number) => Promise<RoutingCncOperation | undefined>>(),
     getWorkOrderById: vi.fn<(id: string) => Promise<any>>(),
     updateWorkOrderStatus: vi.fn<(id: string, status: string) => Promise<any>>(),
+
   },
 }));
 
@@ -41,6 +42,7 @@ vi.mock('../schema', () => ({
 import { storage } from '../storage';
 import { db } from '../db';
 import {
+  evaluateWadReleaseGate,
   evaluateTravelerStartGates,
   evaluateTravelerFinishGates,
   evaluateWadReleaseGate,

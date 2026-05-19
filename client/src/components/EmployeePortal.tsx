@@ -51,6 +51,8 @@ import {
   Upload,
   Send,
   Loader2,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -227,6 +229,46 @@ function fileSizeLabel(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+const PAY_PERIOD_ANCHOR_UTC = Date.UTC(2024, 0, 1);
+const DAY_MS = 24 * 60 * 60 * 1000;
+const PAY_PERIOD_DAYS = 14;
+
+function ymdFromUtc(utcMs: number): string {
+  const date = new Date(utcMs);
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
+}
+
+function isDateString(value: string | null): value is string {
+  return Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value));
+}
+
+function getPayPeriodForDate(value: string | Date = new Date()): { start: string; end: string } {
+  const date = typeof value === 'string' ? new Date(`${value}T12:00:00`) : value;
+  const inputUTC = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+  const daysSinceAnchor = Math.round((inputUTC - PAY_PERIOD_ANCHOR_UTC) / DAY_MS);
+  const periodIndex = Math.floor(daysSinceAnchor / PAY_PERIOD_DAYS);
+  const startUTC = PAY_PERIOD_ANCHOR_UTC + periodIndex * PAY_PERIOD_DAYS * DAY_MS;
+  return {
+    start: ymdFromUtc(startUTC),
+    end: ymdFromUtc(startUTC + (PAY_PERIOD_DAYS - 1) * DAY_MS),
+  };
+}
+
+function shiftPayPeriod(periodStart: string, offset: number): { start: string; end: string } {
+  const [year, month, day] = periodStart.split('-').map(Number);
+  const startUTC = Date.UTC(year, month - 1, day) + offset * PAY_PERIOD_DAYS * DAY_MS;
+  return {
+    start: ymdFromUtc(startUTC),
+    end: ymdFromUtc(startUTC + (PAY_PERIOD_DAYS - 1) * DAY_MS),
+  };
+}
+
+function formatPayPeriodLabel(start: string, end: string): string {
+  const startDate = new Date(`${start}T12:00:00`);
+  const endDate = new Date(`${end}T12:00:00`);
+  return `${startDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - ${endDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`;
 }
 
 function SessionStatusBadge({ status }: { status: string }) {
@@ -462,6 +504,20 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
   const [certReviewId, setCertReviewId] = useState<number | null>(null);
   const [certConfirmedId, setCertConfirmedId] = useState<number | null>(null);
   const [dailySignOffDate, setDailySignOffDate] = useState(today);
+  const currentPayPeriod = getPayPeriodForDate();
+  const [selectedPayPeriodStart, setSelectedPayPeriodStart] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlPeriod = params.get('period');
+    return getPayPeriodForDate(isDateString(urlPeriod) ? urlPeriod : new Date()).start;
+  });
+  const selectedPayPeriod = getPayPeriodForDate(selectedPayPeriodStart);
+  const selectedPayPeriodLabel = formatPayPeriodLabel(selectedPayPeriod.start, selectedPayPeriod.end);
+  const isCurrentPayPeriod = selectedPayPeriod.start === currentPayPeriod.start;
+
+  const goToPayPeriod = (period: { start: string; end: string }) => {
+    setSelectedPayPeriodStart(period.start);
+    setDailySignOffDate(period.start);
+  };
 
   const {
     data: myTimesheets = [],
@@ -481,9 +537,13 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
     data: runningTimesheet,
     isLoading: runningTimesheetLoading,
   } = useQuery<RunningTimesheet>({
-    queryKey: ['/api/timekeeping/timesheets', 'mine', 'running'],
+    queryKey: ['/api/timekeeping/timesheets', 'mine', 'running', selectedPayPeriod.start, selectedPayPeriod.end],
     queryFn: async () => {
-      const res = await portalFetch('/api/timekeeping/timesheets/my/running');
+      const params = new URLSearchParams({
+        periodStart: selectedPayPeriod.start,
+        periodEnd: selectedPayPeriod.end,
+      });
+      const res = await portalFetch(`/api/timekeeping/timesheets/my/running?${params.toString()}`);
       if (!res.ok) throw new Error('Failed to fetch running timesheet');
       return res.json();
     },
@@ -531,7 +591,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
 
   const prepareTimesheetMutation = useMutation({
     mutationFn: async () => {
-      if (!runningTimesheet) throw new Error('Current pay period is not loaded yet.');
+      if (!runningTimesheet) throw new Error('Selected pay period is not loaded yet.');
       const res = await portalFetch('/api/timekeeping/timesheets/my/prepare', {
         method: 'POST',
         body: JSON.stringify({
@@ -710,10 +770,15 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
     } else {
       params.delete('sort');
     }
+    if (activeTab === 'my-timesheets') {
+      params.set('period', selectedPayPeriod.start);
+    } else {
+      params.delete('period');
+    }
     const newSearch = params.toString();
     const newUrl = `${window.location.pathname}${newSearch ? `?${newSearch}` : ''}`;
     window.history.replaceState(null, '', newUrl);
-  }, [activeTab, filterChargeCode, filterDateFrom, filterDateTo, sortOrder]);
+  }, [activeTab, filterChargeCode, filterDateFrom, filterDateTo, sortOrder, selectedPayPeriod.start]);
 
   // Punch status — attendance clock (NOT WAD labor attribution)
   const {
@@ -853,8 +918,12 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
   });
 
   const hasActiveFilters = filterChargeCode !== 'all' || filterDateFrom || filterDateTo;
-  const needsCertificationTimesheets = myTimesheets.filter((t) => !t.employeeAttested && t.status === 'draft');
-  const historicalTimesheets = myTimesheets.filter((t) => t.employeeAttested || t.status !== 'draft');
+  const allNeedsCertificationTimesheets = myTimesheets.filter((t) => !t.employeeAttested && t.status === 'draft');
+  const selectedPeriodTimesheets = myTimesheets.filter(
+    (t) => t.periodStart === selectedPayPeriod.start && t.periodEnd === selectedPayPeriod.end
+  );
+  const needsCertificationTimesheets = selectedPeriodTimesheets.filter((t) => !t.employeeAttested && t.status === 'draft');
+  const historicalTimesheets = selectedPeriodTimesheets.filter((t) => t.employeeAttested || t.status !== 'draft');
   const pendingTimeOffCount = timeOffRequests.filter((r) => r.status.startsWith('pending')).length;
 
   const renderTimesheetCard = (ts: HourlyTimesheet) => {
@@ -1183,9 +1252,9 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
           <TabsTrigger value="my-timesheets" className="flex items-center gap-2">
             <FileCheck className="h-4 w-4" />
             Timesheets
-            {needsCertificationTimesheets.length > 0 && (
+            {allNeedsCertificationTimesheets.length > 0 && (
               <span className="ml-1 inline-flex items-center justify-center rounded-full bg-amber-500 text-white text-xs w-4 h-4">
-                {needsCertificationTimesheets.length}
+                {allNeedsCertificationTimesheets.length}
               </span>
             )}
           </TabsTrigger>
@@ -2354,33 +2423,68 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-4">
                   <div>
                     <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-sm text-gray-900">Current Period</h3>
+                      <h3 className="font-semibold text-sm text-gray-900">
+                        {isCurrentPayPeriod ? 'Current Period' : 'Selected Period'}
+                      </h3>
                       {runningTimesheet?.hasOpenSession && (
                         <Badge className="bg-green-100 text-green-800 border-green-200">Live</Badge>
                       )}
+                      {!isCurrentPayPeriod && (
+                        <Badge variant="outline">Viewing another period</Badge>
+                      )}
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
-                      {runningTimesheet
-                        ? `${runningTimesheet.periodStart} - ${runningTimesheet.periodEnd}`
-                        : 'Current pay period'}
+                      {selectedPayPeriodLabel}
                     </p>
                   </div>
-                  {runningTimesheet && (
-                    <div className="grid grid-cols-3 gap-2 text-center">
-                      <div className="rounded-md bg-white border px-3 py-2">
-                        <div className="text-base font-bold text-gray-900">{runningTimesheet.totalHours.toFixed(2)}</div>
-                        <div className="text-[11px] text-muted-foreground">Total</div>
-                      </div>
-                      <div className="rounded-md bg-white border px-3 py-2">
-                        <div className="text-base font-bold text-gray-900">{runningTimesheet.regularHours.toFixed(2)}</div>
-                        <div className="text-[11px] text-muted-foreground">Regular</div>
-                      </div>
-                      <div className="rounded-md bg-white border px-3 py-2">
-                        <div className="text-base font-bold text-gray-900">{runningTimesheet.overtimeHours.toFixed(2)}</div>
-                        <div className="text-[11px] text-muted-foreground">OT</div>
-                      </div>
+                  <div className="flex flex-col items-stretch sm:items-end gap-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => goToPayPeriod(shiftPayPeriod(selectedPayPeriod.start, -1))}
+                        className="gap-1"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                        Previous
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={isCurrentPayPeriod ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => goToPayPeriod(currentPayPeriod)}
+                      >
+                        Current
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => goToPayPeriod(shiftPayPeriod(selectedPayPeriod.start, 1))}
+                        className="gap-1"
+                      >
+                        Next
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
                     </div>
-                  )}
+                    {runningTimesheet && (
+                      <div className="grid grid-cols-3 gap-2 text-center">
+                        <div className="rounded-md bg-white border px-3 py-2">
+                          <div className="text-base font-bold text-gray-900">{runningTimesheet.totalHours.toFixed(2)}</div>
+                          <div className="text-[11px] text-muted-foreground">Total</div>
+                        </div>
+                        <div className="rounded-md bg-white border px-3 py-2">
+                          <div className="text-base font-bold text-gray-900">{runningTimesheet.regularHours.toFixed(2)}</div>
+                          <div className="text-[11px] text-muted-foreground">Regular</div>
+                        </div>
+                        <div className="rounded-md bg-white border px-3 py-2">
+                          <div className="text-base font-bold text-gray-900">{runningTimesheet.overtimeHours.toFixed(2)}</div>
+                          <div className="text-[11px] text-muted-foreground">OT</div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {runningTimesheetLoading ? (

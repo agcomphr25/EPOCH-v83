@@ -352,6 +352,62 @@ router.post('/modules', requirePermission('training.manage_content'), async (req
   }
 });
 
+// Add quiz questions to a module (called by the Create Module dialog after the module is saved)
+router.post('/modules/:id/questions', requirePermission('training.manage_content'), async (req, res) => {
+  try {
+    const moduleId = parseInt(req.params.id);
+    if (isNaN(moduleId)) {
+      return res.status(400).json({ error: 'Invalid module id' });
+    }
+
+    const { question, questionType, options, correctAnswer, points } = req.body;
+
+    if (!question || typeof question !== 'string' || !question.trim()) {
+      return res.status(400).json({ error: 'question is required' });
+    }
+
+    const result = await db.transaction(async (tx) => {
+      const [newQuestion] = await tx
+        .insert(trainingQuestions)
+        .values({
+          moduleId,
+          questionText: question.trim(),
+          questionType: (questionType || 'multiple_choice').toUpperCase(),
+          points: typeof points === 'number' ? points : 1,
+          sortOrder: 0,
+          isActive: true,
+        } as InsertTrainingQuestion)
+        .returning();
+
+      const filteredOptions: string[] = Array.isArray(options)
+        ? options.filter((o: unknown) => typeof o === 'string' && (o as string).trim())
+        : [];
+
+      let insertedOptions: typeof trainingQuestionOptions.$inferSelect[] = [];
+      if (filteredOptions.length > 0) {
+        insertedOptions = await tx
+          .insert(trainingQuestionOptions)
+          .values(
+            filteredOptions.map((optText, idx) => ({
+              questionId: newQuestion.id,
+              optionText: (optText as string).trim(),
+              isCorrect: idx === correctAnswer,
+              sortOrder: idx,
+            } as InsertTrainingQuestionOption))
+          )
+          .returning();
+      }
+
+      return { ...newQuestion, options: insertedOptions };
+    });
+
+    res.status(201).json(result);
+  } catch (error: any) {
+    console.error('Error creating module question:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Update training module
 router.patch('/modules/:id', requirePermission('training.manage_content'), async (req, res) => {
   try {

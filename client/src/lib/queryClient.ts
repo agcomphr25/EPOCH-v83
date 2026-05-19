@@ -99,6 +99,10 @@ function isKioskRoute(): boolean {
   return KIOSK_ROUTES.some(r => path === r || path.startsWith(r + '/'));
 }
 
+function isLoginRoute(): boolean {
+  return window.location.pathname === '/login';
+}
+
 function isLocalDevelopmentHost(): boolean {
   const hostname = window.location.hostname;
   return hostname.includes('localhost') || hostname.includes('127.0.0.1');
@@ -111,6 +115,15 @@ function handleSessionExpiry(reason: 'expired' | 'unauthorized' = 'expired') {
   // Clear stored tokens regardless of page type
   localStorage.removeItem('sessionToken');
   localStorage.removeItem('jwtToken');
+
+  // If a background request discovers stale auth while the user is already on
+  // the login screen, clean up quietly instead of showing an access-denied
+  // toast and reloading the page they are trying to use.
+  if (isLoginRoute()) {
+    console.warn(`[AUTH] Session ${reason} on login page - tokens cleared, no toast`);
+    sessionExpiryNotified = false;
+    return;
+  }
 
   // On kiosk/floor pages: silently drop the expired session without
   // redirecting — the badge scan flow still works without a session.
@@ -130,9 +143,10 @@ function handleSessionExpiry(reason: 'expired' | 'unauthorized' = 'expired') {
   // Redirect after a brief pause so the toast is visible
   setTimeout(() => {
     sessionExpiryNotified = false;
-    const current = window.location.pathname + window.location.search;
+    const currentPath = window.location.pathname;
+    const current = currentPath + window.location.search;
     const loginUrl =
-      current && current !== '/' && current !== '/login'
+      currentPath !== '/' && currentPath !== '/login'
         ? `/login?redirect=${encodeURIComponent(current)}`
         : '/login';
     window.location.href = loginUrl;

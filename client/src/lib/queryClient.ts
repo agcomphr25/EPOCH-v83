@@ -76,6 +76,14 @@ function isServerStartingResponse(status: number, body: any, message: string): b
   );
 }
 
+function normalizeApiErrorMessage(message: string): string {
+  if (message.toLowerCase().includes('error code undefined')) {
+    return 'File storage is not available. Check the storage provider configuration and try again.';
+  }
+
+  return message;
+}
+
 // ─── Session expiry handler ───────────────────────────────────────────────────
 // Called when a 401/403 is confirmed to be a genuine session expiry.
 // Shows a toast and redirects to /login after a brief delay.
@@ -296,9 +304,11 @@ export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
         // Not JSON
       }
       
-      const errorMessage =
+      const errorMessage = normalizeApiErrorMessage(
         data?.message ||
         data?.error ||
+        (typeof data?.details === 'string' ? data.details : null) ||
+        (typeof data?.reason === 'string' ? data.reason : null) ||
         (Array.isArray(data?.details)
           ? data.details.map((i: any) => `${(i.path || []).join(".")}: ${i.message}`).join(", ")
           : null) ||
@@ -306,7 +316,8 @@ export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
           ? data.issues.map((i: any) => `${(i.path || []).join(".")}: ${i.message}`).join(", ")
           : null) ||
         text ||
-        `Request failed (${response.status})`;
+        `Request failed (${response.status})`
+      );
 
       if (
         isServerStartingResponse(response.status, data, errorMessage) &&

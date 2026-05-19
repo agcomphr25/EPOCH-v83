@@ -11,7 +11,17 @@ export function cn(...inputs: ClassValue[]) {
  * the server's error message rather than a fully generic fallback.
  */
 export function getErrorMessage(error: unknown, fallback = 'An unexpected error occurred'): string {
-  if (error instanceof Error && error.message) return error.message;
-  if (typeof error === 'string' && error) return error;
+  const normalize = (message: string) =>
+    message.toLowerCase().includes('error code undefined')
+      ? 'File storage is not available. Check the storage provider configuration and try again.'
+      : message;
+
+  if (error instanceof Error && error.message) return normalize(error.message);
+  if (typeof error === 'string' && error) return normalize(error);
+  if (error && typeof error === 'object') {
+    const data = error as Record<string, unknown>;
+    const message = data.message || data.error || data.details || data.reason;
+    if (typeof message === 'string' && message.trim()) return normalize(message);
+  }
   return fallback;
 }

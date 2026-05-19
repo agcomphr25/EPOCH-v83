@@ -53,14 +53,8 @@ export function registerObjectStorageRoutes(app: Express): void {
         err?.message ?? error,
         err?.status ? `(sidecar status ${err.status})` : ""
       );
-      const reason = err?.reason ?? "unknown";
-      const message = err?.message ?? "Failed to generate upload URL";
-      const httpStatus =
-        err?.status === 401 || err?.status === 403
-          ? 503
-          : isStorageUnavailableError(error)
-            ? 503
-            : 500;
+      const { status, reason, message } = getStorageErrorResponse(error);
+      const httpStatus = status === 401 || status === 403 ? 503 : status;
       res.status(httpStatus).json({
         error: "Failed to generate upload URL",
         reason,

@@ -8018,10 +8018,19 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         res.setHeader('Content-Disposition', `inline; filename="${attachment.originalFileName}"`);
       }
 
+      res.setHeader('Content-Type', attachment.mimeType || 'application/pdf');
       await getFileStorageProviderForObjectPath(normalizedPath).downloadObject(normalizedPath, res);
     } catch (error: any) {
-      console.error('Error downloading PO attachment:', error);
-      res.status(500).json({ error: 'Failed to download attachment' });
+      const { status, reason, message } = getStorageErrorResponse(error);
+      console.error('Error downloading PO attachment:', { status, reason, message });
+      if (res.headersSent) {
+        return res.end();
+      }
+      res.status(status).json({
+        error: status === 404 ? 'File not found in storage' : 'Failed to download attachment',
+        reason,
+        details: message,
+      });
     }
   });
 

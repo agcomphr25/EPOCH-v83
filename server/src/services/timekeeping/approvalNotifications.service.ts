@@ -11,6 +11,42 @@ type SupervisorRecipient = {
   email: string | null;
 };
 
+type InboxRecipient = {
+  userId: number;
+  username: string;
+  firstName: string | null;
+  lastName: string | null;
+  email: string | null;
+};
+
+type PTORequestNotificationRow = {
+  id: number;
+  employee_id: number;
+  employee_name: string | null;
+  employee_user_id: number | null;
+  employee_username: string | null;
+  start_date: string;
+  end_date: string;
+  request_unit: string | null;
+  requested_hours: number | null;
+  employee_note: string | null;
+  supervisor_id: number | null;
+  status: string;
+};
+
+type PunchCorrectionNotificationRow = {
+  id: number;
+  employee_id: number;
+  employee_name: string | null;
+  punch_ledger_id: number | null;
+  request_type: string;
+  source: string;
+  status: string;
+  reason: string;
+  proposed_changes: unknown;
+  supervisor_id: number | null;
+};
+
 async function findSupervisorRecipient(supervisorEmployeeId: number): Promise<SupervisorRecipient | null> {
   const { rows } = await pool.query<SupervisorRecipient>(
     `
@@ -81,6 +117,179 @@ async function insertCommunicationBoardNotification(params: {
   );
 }
 
+function displayName(recipient: InboxRecipient): string {
+  const fullName = [recipient.firstName, recipient.lastName].filter(Boolean).join(" ").trim();
+  return fullName || recipient.username;
+}
+
+async function insertInternalInboxMessage(params: {
+  recipient: InboxRecipient;
+  subject: string;
+  message: string;
+  isUrgent?: boolean;
+}): Promise<void> {
+  const { rows } = await pool.query<{ id: number }>(
+    `
+      INSERT INTO internal_messages (
+        subject,
+        message,
+        sender_id,
+        sender_name,
+        recipient_type,
+        recipient_user_id,
+        recipient_name,
+        is_urgent
+      )
+      VALUES ($1, $2, 0, 'EPOCH Timekeeping', 'person', $3, $4, $5)
+      RETURNING id
+    `,
+    [
+      params.subject,
+      params.message,
+      params.recipient.userId,
+      displayName(params.recipient),
+      params.isUrgent ?? false,
+    ],
+  );
+
+  const messageId = rows[0]?.id;
+  if (!messageId) return;
+
+  await pool.query(
+    `
+      INSERT INTO message_recipients (
+        message_id,
+        user_id,
+        is_read,
+        is_accomplished
+      )
+      VALUES ($1, $2, false, false)
+    `,
+    [messageId, params.recipient.userId],
+  );
+}
+
+async function findUserByEmployeeId(employeeId: number | null | undefined): Promise<InboxRecipient | null> {
+  if (!employeeId) return null;
+
+  const { rows } = await pool.query<InboxRecipient>(
+    `
+      SELECT id AS "userId",
+             username,
+             first_name AS "firstName",
+             last_name AS "lastName",
+             email
+      FROM users
+      WHERE employee_id = $1
+        AND is_active = true
+      ORDER BY id ASC
+      LIMIT 1
+    `,
+    [employeeId],
+  );
+
+  return rows[0] ?? null;
+}
+
+async function findHrAdminRecipients(): Promise<InboxRecipient[]> {
+  const { rows } = await pool.query<InboxRecipient>(
+    `
+      SELECT id AS "userId",
+             username,
+             first_name AS "firstName",
+             last_name AS "lastName",
+             email
+      FROM users
+      WHERE is_active = true
+        AND upper(role) IN ('HR', 'ADMIN', 'OWNER')
+      ORDER BY
+        CASE upper(role)
+          WHEN 'HR' THEN 0
+          WHEN 'ADMIN' THEN 1
+          WHEN 'OWNER' THEN 2
+          ELSE 3
+        END,
+        id ASC
+      LIMIT 10
+    `,
+  );
+
+  return rows;
+}
+
+async function getPTORequestNotificationRow(requestId: number): Promise<PTORequestNotificationRow | null> {
+  const { rows } = await pool.query<PTORequestNotificationRow>(
+    `
+      SELECT r.id,
+             r.employee_id,
+             e.name AS employee_name,
+             eu.id AS employee_user_id,
+             eu.username AS employee_username,
+             r.start_date,
+             r.end_date,
+             r.request_unit,
+             r.requested_hours,
+             r.employee_note,
+             r.supervisor_id,
+             r.status
+      FROM timekeeping.time_off_requests r
+      LEFT JOIN employees e ON e.id = r.employee_id
+      LEFT JOIN users eu ON eu.employee_id = r.employee_id AND eu.is_active = true
+      WHERE r.id = $1
+      LIMIT 1
+    `,
+    [requestId],
+  );
+
+  return rows[0] ?? null;
+}
+
+function formatPTORequestSummary(row: PTORequestNotificationRow): string {
+  const hours = row.requested_hours ? `\nRequested hours: ${row.requested_hours}` : "";
+  const note = row.employee_note ? `\nEmployee note: ${row.employee_note}` : "";
+  return [
+    `Employee: ${row.employee_name || `Employee #${row.employee_id}`}`,
+    `Dates: ${row.start_date} to ${row.end_date}`,
+    `Request unit: ${row.request_unit || "full_day"}${hours}`,
+    note.trim(),
+  ].filter(Boolean).join("\n");
+}
+
+async function getPunchCorrectionNotificationRow(requestId: number): Promise<PunchCorrectionNotificationRow | null> {
+  const { rows } = await pool.query<PunchCorrectionNotificationRow>(
+    `
+      SELECT r.id,
+             r.employee_id,
+             e.name AS employee_name,
+             r.punch_ledger_id,
+             r.request_type,
+             r.source,
+             r.status,
+             r.reason,
+             r.proposed_changes,
+             r.supervisor_id
+      FROM timekeeping.punch_correction_requests r
+      LEFT JOIN employees e ON e.id = r.employee_id
+      WHERE r.id = $1
+      LIMIT 1
+    `,
+    [requestId],
+  );
+
+  return rows[0] ?? null;
+}
+
+function formatPunchCorrectionSummary(row: PunchCorrectionNotificationRow): string {
+  return [
+    `Employee: ${row.employee_name || `Employee #${row.employee_id}`}`,
+    `Request type: ${row.request_type.replace(/_/g, " ")}`,
+    row.punch_ledger_id ? `Punch/session: #${row.punch_ledger_id}` : "Punch/session: new or missing punch",
+    `Source: ${row.source.replace(/_/g, " ")}`,
+    `Reason: ${row.reason}`,
+    `Requested changes: ${JSON.stringify(row.proposed_changes, null, 2)}`,
+  ].join("\n");
+}
+
 async function notifySupervisor(params: {
   supervisorEmployeeId: number | null | undefined;
   kind: ApprovalKind;
@@ -122,24 +331,12 @@ async function notifySupervisor(params: {
 }
 
 export async function notifyPTOApprovalNeeded(requestId: number): Promise<void> {
-  const { rows } = await pool.query<{
-    id: number;
-    employee_name: string | null;
-    start_date: string;
-    end_date: string;
-    supervisor_id: number | null;
-  }>(
-    `
-      SELECT r.id, e.name AS employee_name, r.start_date, r.end_date, r.supervisor_id
-      FROM timekeeping.time_off_requests r
-      LEFT JOIN employees e ON e.id = r.employee_id
-      WHERE r.id = $1 AND r.status IN ('pending_supervisor', 'pending')
-      LIMIT 1
-    `,
-    [requestId],
-  );
-  const row = rows[0];
+  const row = await getPTORequestNotificationRow(requestId);
   if (!row) return;
+
+  if (!["pending_supervisor", "pending"].includes(row.status)) {
+    return;
+  }
 
   await notifySupervisor({
     supervisorEmployeeId: row.supervisor_id,
@@ -148,6 +345,107 @@ export async function notifyPTOApprovalNeeded(requestId: number): Promise<void> 
     subject: "PTO request needs supervisor review",
     message: `${row.employee_name || "An employee"} requested PTO from ${row.start_date} to ${row.end_date}.`,
     url: "/pto-command-center",
+  });
+
+  const supervisorUser = await findUserByEmployeeId(row.supervisor_id);
+  if (supervisorUser) {
+    await insertInternalInboxMessage({
+      recipient: supervisorUser,
+      subject: `PTO request #${row.id} needs supervisor approval`,
+      message: `${formatPTORequestSummary(row)}\n\nStatus: pending supervisor approval\nReview: /pto-command-center?requestId=${row.id}`,
+      isUrgent: false,
+    });
+    return;
+  }
+
+  await notifyPTOHrAdminNeeded(requestId, "No active user account is linked to the assigned supervisor.");
+}
+
+export async function notifyPTOHrAdminNeeded(requestId: number, reason?: string): Promise<void> {
+  const row = await getPTORequestNotificationRow(requestId);
+  if (!row) return;
+
+  const recipients = await findHrAdminRecipients();
+  if (recipients.length === 0) return;
+
+  const suffix = reason ? `\nRouting note: ${reason}` : "";
+  await Promise.all(
+    recipients.map((recipient) =>
+      insertInternalInboxMessage({
+        recipient,
+        subject: `PTO request #${row.id} needs HR/Admin review`,
+        message: `${formatPTORequestSummary(row)}\n\nStatus: ${row.status}${suffix}\nReview: /pto-command-center?requestId=${row.id}`,
+        isUrgent: !row.supervisor_id,
+      }),
+    ),
+  );
+}
+
+export async function notifyPTOEmployeeStatus(requestId: number, subject: string, statusMessage: string): Promise<void> {
+  const row = await getPTORequestNotificationRow(requestId);
+  if (!row) return;
+
+  const employeeUser = await findUserByEmployeeId(row.employee_id);
+  if (!employeeUser) return;
+
+  await insertInternalInboxMessage({
+    recipient: employeeUser,
+    subject,
+    message: `${statusMessage}\n\n${formatPTORequestSummary(row)}\n\nCurrent status: ${row.status}`,
+    isUrgent: false,
+  });
+}
+
+export async function notifyPunchCorrectionApprovalNeeded(requestId: number): Promise<void> {
+  const row = await getPunchCorrectionNotificationRow(requestId);
+  if (!row || row.status !== "pending_supervisor") return;
+
+  const supervisorUser = await findUserByEmployeeId(row.supervisor_id);
+  if (supervisorUser) {
+    await insertInternalInboxMessage({
+      recipient: supervisorUser,
+      subject: `Time punch correction #${row.id} needs supervisor approval`,
+      message: `${formatPunchCorrectionSummary(row)}\n\nStatus: pending supervisor approval\nReview: /time-clock-admin?tab=corrections`,
+      isUrgent: false,
+    });
+    return;
+  }
+
+  await notifyPunchCorrectionHrAdminNeeded(requestId, "No active user account is linked to the assigned supervisor.");
+}
+
+export async function notifyPunchCorrectionHrAdminNeeded(requestId: number, reason?: string): Promise<void> {
+  const row = await getPunchCorrectionNotificationRow(requestId);
+  if (!row) return;
+
+  const recipients = await findHrAdminRecipients();
+  if (recipients.length === 0) return;
+
+  const suffix = reason ? `\nRouting note: ${reason}` : "";
+  await Promise.all(
+    recipients.map((recipient) =>
+      insertInternalInboxMessage({
+        recipient,
+        subject: `Time punch correction #${row.id} needs HR/Admin approval`,
+        message: `${formatPunchCorrectionSummary(row)}\n\nStatus: ${row.status}${suffix}\nReview: /time-clock-admin?tab=corrections`,
+        isUrgent: !row.supervisor_id,
+      }),
+    ),
+  );
+}
+
+export async function notifyPunchCorrectionEmployeeStatus(requestId: number, subject: string, statusMessage: string): Promise<void> {
+  const row = await getPunchCorrectionNotificationRow(requestId);
+  if (!row) return;
+
+  const employeeUser = await findUserByEmployeeId(row.employee_id);
+  if (!employeeUser) return;
+
+  await insertInternalInboxMessage({
+    recipient: employeeUser,
+    subject,
+    message: `${statusMessage}\n\n${formatPunchCorrectionSummary(row)}\n\nCurrent status: ${row.status}`,
+    isUrgent: false,
   });
 }
 

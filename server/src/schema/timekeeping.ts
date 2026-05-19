@@ -386,6 +386,36 @@ export const insertTimesheetCorrectionSchema = createInsertSchema(timesheetCorre
 export type InsertTimesheetCorrection = z.infer<typeof insertTimesheetCorrectionSchema>;
 export type TimesheetCorrection = typeof timesheetCorrectionsTable.$inferSelect;
 
+export const punchCorrectionRequestsTable = timekeepingSchema.table("punch_correction_requests", {
+  id: serial("id").primaryKey(),
+  employeeId: integer("employee_id").notNull().references(() => employees.id, { onDelete: "cascade" }),
+  punchLedgerId: integer("punch_ledger_id"),
+  requestType: text("request_type").notNull(),
+  source: text("source").notNull().default("employee_portal"),
+  status: text("status").notNull().default("pending_supervisor"),
+  reason: text("reason").notNull(),
+  originalSnapshot: jsonb("original_snapshot"),
+  proposedChanges: jsonb("proposed_changes").notNull(),
+  supervisorId: integer("supervisor_id"),
+  supervisorDecision: text("supervisor_decision"),
+  supervisorNote: text("supervisor_note"),
+  supervisorReviewedAt: timestamp("supervisor_reviewed_at", { withTimezone: true }),
+  supervisorReviewedBy: integer("supervisor_reviewed_by"),
+  hrDecision: text("hr_decision"),
+  hrNote: text("hr_note"),
+  hrReviewedAt: timestamp("hr_reviewed_at", { withTimezone: true }),
+  hrReviewedBy: integer("hr_reviewed_by"),
+  appliedAt: timestamp("applied_at", { withTimezone: true }),
+  appliedBy: integer("applied_by"),
+  afterSnapshot: jsonb("after_snapshot"),
+  submittedByUserId: integer("submitted_by_user_id"),
+  submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+
+export type PunchCorrectionRequest = typeof punchCorrectionRequestsTable.$inferSelect;
+
 // ---------------------------------------------------------------------------
 // TIMEKEEPING POLICY SETTINGS
 // Centralizes all compliance rules that were previously hardcoded in service

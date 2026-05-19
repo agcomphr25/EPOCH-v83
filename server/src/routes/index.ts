@@ -3688,11 +3688,19 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
              ORDER BY ts.step_number ASC
              LIMIT 1
            ) AS "currentTravelerStep",
-           (
-             SELECT t.traveler_number
-             FROM travelers t
-             WHERE t.production_work_order_id = wo.id
-               AND COALESCE(UPPER(t.status), '') NOT IN ('COMPLETE', 'COMPLETED', 'CLOSED', 'SCRAPPED', 'CANCELLED', 'CANCELED')
+            (
+              SELECT t.id
+              FROM travelers t
+              WHERE t.production_work_order_id = wo.id
+                AND COALESCE(UPPER(t.status), '') NOT IN ('COMPLETE', 'COMPLETED', 'CLOSED', 'SCRAPPED', 'CANCELLED', 'CANCELED')
+              ORDER BY t.created_at DESC
+              LIMIT 1
+            ) AS "activeTravelerId",
+            (
+              SELECT t.traveler_number
+              FROM travelers t
+              WHERE t.production_work_order_id = wo.id
+                AND COALESCE(UPPER(t.status), '') NOT IN ('COMPLETE', 'COMPLETED', 'CLOSED', 'SCRAPPED', 'CANCELLED', 'CANCELED')
              ORDER BY t.created_at DESC
              LIMIT 1
            ) AS "activeTravelerNumber"
@@ -3971,6 +3979,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         departmentQueues[dept].push({
           id: `legacy-project-work-order-${row.id}`,
           poId,
+          productionWorkOrderId: row.id,
+          workOrderNumber: row.workOrderNumber,
           barcode: row.activeTravelerNumber || row.workOrderNumber,
           serialNumber: row.activeTravelerNumber || row.workOrderNumber,
           partNumber: row.partNumber || row.workOrderNumber,
@@ -3984,6 +3994,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           projectCode: linkedProject?.projectCode ?? null,
           projectName: linkedProject?.projectName ?? null,
           isLegacyProjectWorkOrder: true,
+          activeTravelerId: row.activeTravelerId || null,
+          activeTravelerNumber: row.activeTravelerNumber || null,
           hasActiveTask,
           barcodePrintedAt: null,
           activeTask: hasActiveTask ? {

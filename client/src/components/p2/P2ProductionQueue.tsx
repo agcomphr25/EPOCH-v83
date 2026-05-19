@@ -85,6 +85,10 @@ interface QueueItem {
   replacementReason?: string | null;
   isLegacyProductionOrder?: boolean;
   isLegacyProjectWorkOrder?: boolean;
+  productionWorkOrderId?: string | null;
+  workOrderNumber?: string | null;
+  activeTravelerId?: string | null;
+  activeTravelerNumber?: string | null;
   hasActiveTask: boolean;
   activeTask: ActiveTask | null;
   barcodePrintedAt?: string | null;
@@ -255,6 +259,67 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
     },
     onError: () => {
       toast({ title: 'Warning', description: 'Labels printed but print history could not be saved. The "previously printed" indicator may not appear until the next refresh.', variant: 'destructive' });
+    },
+  });
+
+  const openLegacyTravelerMutation = useMutation({
+    mutationFn: async (item: QueueItem) => {
+      if (item.activeTravelerId) {
+        return {
+          travelerId: item.activeTravelerId,
+          travelerNumber: item.activeTravelerNumber,
+          created: false,
+        };
+      }
+
+      if (!item.productionWorkOrderId) {
+        throw new Error('This project work order is missing its production work order link.');
+      }
+
+      const traveler = await apiRequest(`/api/travelers/from-part-number/${encodeURIComponent(item.partNumber)}`, {
+        method: 'POST',
+        body: {
+          productionWorkOrderId: item.productionWorkOrderId,
+          workOrderId: item.workOrderNumber || item.productionWorkOrderId,
+          lotNumber: item.poNumber,
+          serialNumber: item.workOrderNumber || undefined,
+          quantity: 1,
+          createdBy: 'P2 Control Center',
+        },
+      });
+
+      if (traveler?.id && traveler?.status === 'DRAFT') {
+        try {
+          await apiRequest(`/api/travelers/${traveler.id}/start`, { method: 'POST' });
+        } catch (startError: any) {
+          if (!String(startError?.message || '').includes('not in DRAFT status')) {
+            throw startError;
+          }
+        }
+      }
+
+      return traveler;
+    },
+    onSuccess: (traveler: any) => {
+      const travelerId = traveler?.travelerId || traveler?.id;
+      if (!travelerId) {
+        toast({
+          title: 'Traveler Error',
+          description: 'Traveler was created, but the response did not include an ID.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/production-queue'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/travelers'] });
+      setLocation(`/travelers/${travelerId}/execute`);
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Traveler Error',
+        description: error.message || 'Failed to open the linked traveler',
+        variant: 'destructive',
+      });
     },
   });
 
@@ -974,6 +1039,22 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                                                 data-testid={`button-open-pm-${item.id}`}
                                               >
                                                 <Factory className="h-4 w-4" />
+                                              </Button>
+                                            )}
+                                            {item.isLegacyProjectWorkOrder && item.status !== 'COMPLETED' && (
+                                              <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => openLegacyTravelerMutation.mutate(item)}
+                                                disabled={openLegacyTravelerMutation.isPending}
+                                                title={item.activeTravelerId ? 'Open active traveler' : 'Create linked traveler'}
+                                                data-testid={`button-open-legacy-traveler-${item.id}`}
+                                              >
+                                                {openLegacyTravelerMutation.isPending ? (
+                                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                                ) : (
+                                                  <Play className="h-4 w-4" />
+                                                )}
                                               </Button>
                                             )}
                                             {item.status !== 'COMPLETED' && !item.isLegacyProductionOrder && !item.isLegacyProjectWorkOrder && (

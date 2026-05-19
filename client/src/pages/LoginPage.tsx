@@ -26,6 +26,15 @@ const LOGIN_MODES: { key: LoginMode; label: string; icon: typeof LogIn; descript
   { key: 'time-clock', label: 'Time Clock', icon: Clock, description: 'Employee clock in and clock out', color: 'text-gray-600 bg-gray-100 dark:bg-gray-800 dark:text-gray-400' },
 ];
 
+function isPublicFloorRedirect(path: string) {
+  return (
+    path.startsWith('/travelers/') ||
+    path.startsWith('/p2-traveler') ||
+    path.startsWith('/kiosk') ||
+    path.startsWith('/app/production/stations')
+  );
+}
+
 export default function LoginPage() {
   const [activeMode, setActiveMode] = useState<LoginMode | null>(null);
 
@@ -37,6 +46,20 @@ export default function LoginPage() {
   const [isBadgeLoading, setIsBadgeLoading] = useState(false);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+
+  useEffect(() => {
+    const redirect = new URLSearchParams(window.location.search).get('redirect');
+    if (!redirect) return;
+
+    try {
+      const decodedRedirect = decodeURIComponent(redirect);
+      if (isPublicFloorRedirect(decodedRedirect)) {
+        setLocation(decodedRedirect, { replace: true });
+      }
+    } catch {
+      // Ignore malformed redirect parameters and leave the login page available.
+    }
+  }, [setLocation]);
 
   useEffect(() => {
     if (activeMode === 'time-clock') {

@@ -98,6 +98,7 @@ const KIOSK_ROUTES = [
   '/p2-traveler',
   '/p2-traveler-viewer',
   '/traveler',
+  '/travelers',
   '/production/timers',
   '/badge-scan',
 ];

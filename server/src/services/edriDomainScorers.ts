@@ -683,6 +683,7 @@ interface ProcurementComplianceStats {
   withSecondPartyComplete: number;
   withVendorApprovedTrue: number;
   withVendorApprovedFalse: number;
+  withDebarmentEvidence: number;
   withAttentionOrBlocked: number;
   farRequiredCount: number;
   farRequiredWithStatement: number;
@@ -707,6 +708,16 @@ async function procurementComplianceStats(dateFilterClause = '', params: unknown
                                                                             AS with_vendor_approved_true,
         COUNT(cr.id) FILTER (WHERE cr.vendor_approved = false AND cr.review_status = 'reviewed')::text
                                                                             AS with_vendor_approved_false,
+        COUNT(vp.id) FILTER (
+          WHERE EXISTS (
+            SELECT 1
+            FROM vendor_debarment_checks vdc
+            WHERE vdc.vendor_id = vp.vendor_id
+              AND vdc.context = 'po_issuance'
+              AND vdc.context_ref_id = vp.id
+              AND vdc.result = 'pass'
+          )
+        )::text                                                             AS with_debarment_evidence,
         COUNT(cr.id) FILTER (WHERE cr.review_status IN ('requires_attention','blocked'))::text
                                                                             AS with_attention_or_blocked,
         COUNT(cr.id) FILTER (WHERE cr.far_required = true)::text           AS far_required_count,
@@ -781,6 +792,7 @@ async function procurementComplianceStats(dateFilterClause = '', params: unknown
       withSecondPartyComplete: parseInt(r.with_second_party_complete, 10) || 0,
       withVendorApprovedTrue: parseInt(r.with_vendor_approved_true, 10) || 0,
       withVendorApprovedFalse: parseInt(r.with_vendor_approved_false, 10) || 0,
+      withDebarmentEvidence: parseInt(r.with_debarment_evidence, 10) || 0,
       withAttentionOrBlocked: parseInt(r.with_attention_or_blocked, 10) || 0,
       farRequiredCount: parseInt(r.far_required_count, 10) || 0,
       farRequiredWithStatement: parseInt(r.far_required_with_statement, 10) || 0,
@@ -1072,7 +1084,40 @@ export async function scoreProcurement(): Promise<DomainScorerResult> {
   }
 
   // -------------------------------------------------------------------------
-  // Check 5: VENDOR_EVALUATION
+  // Check 5: DEBARMENT_CHECK
+  // Evidence source: vendor_debarment_checks context='po_issuance'.
+  // The vendor PO workflow currently does not enforce this gate, so missing
+  // evidence remains visible in EDRI instead of blocking PO issuance.
+  // -------------------------------------------------------------------------
+  if (stats === null) {
+    checks['DEBARMENT_CHECK'] = 0.5;
+    evidenceItems.push({ label: 'PO issuance debarment checks', value: 'SCORER_UNAVAILABLE' });
+  } else if (totalIssuedPos === 0) {
+    checks['DEBARMENT_CHECK'] = 0.5;
+    evidenceItems.push({ label: 'PO issuance debarment checks', value: 'N/A — no issued vendor POs' });
+  } else {
+    const debarmentEvidenceCount = stats.withDebarmentEvidence;
+    const debarmentRate = debarmentEvidenceCount / totalIssuedPos;
+    checks['DEBARMENT_CHECK'] = debarmentRate >= 0.95 ? 1 : (debarmentRate > 0 ? 0.5 : 0);
+    evidenceItems.push({ label: 'Issued POs with passing debarment evidence at issuance', value: `${debarmentEvidenceCount} / ${totalIssuedPos}` });
+    if (debarmentRate < 0.95) {
+      redFlags.push({
+        domainKey: 'PROCUREMENT', flagKey: 'DEBARMENT_CHECK_NOT_CONFIGURED', severity: 'MEDIUM',
+        title: 'Debarment Check Not Fully Configured',
+        description: `${totalIssuedPos - debarmentEvidenceCount} of ${totalIssuedPos} issued vendor POs do not have passing debarment-check evidence recorded at PO issuance. This gate is currently deactivated in the vendor PO workflow.`,
+        farCitation: 'FAR 9.405', potentialScoreRecovery: 3,
+      });
+      remediationItems.push({
+        domainKey: 'PROCUREMENT', flagKey: 'DEBARMENT_CHECK_NOT_CONFIGURED',
+        title: 'Decide and configure vendor debarment-check policy',
+        description: 'If the debarment check applies, re-enable PO issuance evidence capture and require passing vendor_debarment_checks records for issued POs.',
+        priority: 'P3_MEDIUM', potentialScoreRecovery: 3,
+      });
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Check 6: VENDOR_EVALUATION
   // Evidence source: vendors.evaluated plus scored vendor_monthly_evaluations.
   // This intentionally matches the Vendor Management page, where historical
   // scored evaluation records count as evaluated even if the denormalized

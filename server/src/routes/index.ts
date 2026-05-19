@@ -2901,7 +2901,32 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     }
   });
 
-  async function applyCompletedTravelerStateToP2Items(items: any[]): Promise<any[]> {
+  function normalizeP2ControlDepartment(department: unknown): string {
+    const raw = String(department || '').trim();
+    if (!raw) return '';
+
+    const key = raw.toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ');
+    const canonical: Record<string, string> = {
+      'pending layup': 'Pending Layup',
+      layup: 'Layup',
+      'assemble disassembly': 'Assemble/Disassembly',
+      'assembly disassembly': 'Assemble/Disassembly',
+      assembly: 'Assemble/Disassembly',
+      cnc: 'CNC',
+      finish: 'Finish',
+      paint: 'Paint',
+      'final qc': 'Final QC',
+      qc: 'Final QC',
+      shipping: 'Shipping',
+      completed: 'Completed',
+      complete: 'Completed',
+      'cutting table': 'Cutting Table',
+    };
+
+    return canonical[key] || raw;
+  }
+
+  async function applyTravelerStateToP2Items(items: any[]): Promise<any[]> {
     if (!items.length) return items;
 
     const serials = [...new Set(
@@ -2913,30 +2938,60 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     if (!serials.length) return items;
 
     const { pool: dbPool } = await import('../../db');
-    const completedTravelerRows = await dbPool.query(
-      `SELECT DISTINCT
-         LOWER(TRIM(serial_number)) AS serial,
-         MAX(completed_at) AS completed_at
-       FROM travelers
-       WHERE status = 'COMPLETED'
-         AND serial_number IS NOT NULL
-         AND LOWER(TRIM(serial_number)) = ANY($1::text[])
-       GROUP BY LOWER(TRIM(serial_number))`,
+    const travelerStateRows = await dbPool.query(
+      `SELECT DISTINCT ON (LOWER(TRIM(t.serial_number)))
+         LOWER(TRIM(t.serial_number)) AS serial,
+         t.status,
+         t.traveler_number AS "travelerNumber",
+         t.updated_at AS "updatedAt",
+         active_step.department_name AS "activeDepartment",
+         active_step.started_at AS "startedAt"
+       FROM travelers t
+       LEFT JOIN LATERAL (
+         SELECT ts.department_name, ts.started_at
+         FROM traveler_steps ts
+         WHERE ts.traveler_id = t.id
+           AND UPPER(ts.status) IN ('IN_PROGRESS', 'ACTIVE', 'STARTED')
+         ORDER BY ts.step_number ASC
+         LIMIT 1
+       ) active_step ON true
+       WHERE t.serial_number IS NOT NULL
+         AND LOWER(TRIM(t.serial_number)) = ANY($1::text[])
+         AND UPPER(t.status) IN ('IN_PROGRESS', 'COMPLETED')
+       ORDER BY LOWER(TRIM(t.serial_number)),
+         CASE WHEN UPPER(t.status) = 'IN_PROGRESS' THEN 0 ELSE 1 END,
+         t.updated_at DESC NULLS LAST`,
       [serials]
     );
-    const rows = (completedTravelerRows as any).rows ?? completedTravelerRows;
-    const completedBySerial = new Map<string, any>(
-      rows.map((row: any) => [row.serial, row.completed_at])
+    const rows = (travelerStateRows as any).rows ?? travelerStateRows;
+    const travelerBySerial = new Map<string, any>(
+      rows.map((row: any) => [row.serial, row])
     );
 
     return items.map((item: any) => {
       const key = String(item.serialNumber ?? item.serial_number ?? '').trim().toLowerCase();
-      if (!key || !completedBySerial.has(key)) return item;
+      const travelerState = key ? travelerBySerial.get(key) : null;
+      if (!travelerState) return item;
+
+      const travelerStatus = String(travelerState.status || '').toUpperCase();
+      if (travelerStatus === 'COMPLETED') {
+        return {
+          ...item,
+          status: 'COMPLETED',
+          completedAt: item.completedAt ?? item.completed_at ?? travelerState.updatedAt ?? new Date(),
+          completed_at: item.completed_at ?? item.completedAt ?? travelerState.updatedAt ?? new Date(),
+          activeTravelerNumber: travelerState.travelerNumber ?? item.activeTravelerNumber ?? null,
+        };
+      }
+
+      const activeDepartment = normalizeP2ControlDepartment(travelerState.activeDepartment);
       return {
         ...item,
-        status: 'COMPLETED',
-        completedAt: item.completedAt ?? item.completed_at ?? completedBySerial.get(key) ?? new Date(),
-        completed_at: item.completed_at ?? item.completedAt ?? completedBySerial.get(key) ?? new Date(),
+        status: 'ACTIVE',
+        currentDepartment: activeDepartment || normalizeP2ControlDepartment(item.currentDepartment) || item.currentDepartment,
+        current_department: activeDepartment || normalizeP2ControlDepartment(item.current_department) || item.current_department,
+        activeTravelerNumber: travelerState.travelerNumber ?? item.activeTravelerNumber ?? null,
+        activeTravelerStartedAt: travelerState.startedAt ?? item.activeTravelerStartedAt ?? null,
       };
     });
   }
@@ -3144,36 +3199,13 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       ]);
       let serializedItems: any[] = [];
       try {
-        serializedItems = await applyCompletedTravelerStateToP2Items(
+        serializedItems = await applyTravelerStateToP2Items(
           await storage.getP2SerializedItems({})
         );
       } catch (error) {
         console.warn('P2 Control Center optional serialized item lookup skipped:', error);
       }
-      const legacyProductionRows = await optionalP2Rows(
-        'legacy production',
-        dbPool.query(
-        `SELECT
-           p2_po_id AS "poId",
-           COALESCE(SUM(quantity), 0)::int AS "totalQty",
-           COALESCE(SUM(
-             CASE
-               WHEN UPPER(status) IN ('COMPLETED', 'CLOSED') THEN quantity
-               ELSE quantity_manufactured
-             END
-           ), 0)::int AS "completedQty",
-           COALESCE(SUM(
-             CASE
-               WHEN UPPER(status) = 'IN_PROGRESS'
-                 THEN GREATEST(quantity - quantity_manufactured, 0)
-               ELSE 0
-             END
-           ), 0)::int AS "inProductionQty"
-         FROM p2_production_orders
-         WHERE COALESCE(UPPER(status), '') NOT IN ('CANCELLED', 'CANCELED')
-         GROUP BY p2_po_id`
-        )
-      );
+      const legacyProductionRows: any[] = [];
       const legacyProjectProductionRows = await optionalP2Rows(
         'legacy project production',
         dbPool.query(
@@ -3207,6 +3239,12 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
                WHERE t.production_work_order_id = wo.id
                  AND UPPER(t.status) IN ('COMPLETE', 'COMPLETED', 'CLOSED')
              ), 0)::numeric AS completed_travelers,
+             EXISTS (
+               SELECT 1
+               FROM travelers t
+               WHERE t.production_work_order_id = wo.id
+                 AND UPPER(t.status) IN ('IN_PROGRESS', 'ACTIVE', 'STARTED')
+             ) AS has_active_traveler,
              UPPER(COALESCE(wo.status, '')) AS status
            FROM project_po_link ppl
            JOIN production_work_orders wo ON wo.project_id = ppl.project_id
@@ -3235,6 +3273,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
            COALESCE(SUM(
              CASE
                WHEN status NOT IN ('', 'PLANNED', 'PLAN', 'DRAFT', 'PENDING', 'COMPLETE', 'COMPLETED', 'CLOSED')
+                 OR has_active_traveler
                THEN GREATEST(quantity - LEAST(completed_travelers, quantity), 0)
                ELSE 0
              END
@@ -3256,12 +3295,10 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const legacyProjectStatsByPoId = new Map<number, any>(
         legacyProjectProductionRows.map((row: any) => [Number(row.poId), row])
       );
-      const poIdsWithLegacyProduction = new Set<number>(legacyStatsByPoId.keys());
       const poIdsWithLegacyProjectProduction = new Set<number>(legacyProjectStatsByPoId.keys());
       const pos = allPos.filter((po: any) =>
         P2_GATED_STATUSES.has(normalizeP2Status(po.status)) ||
         poIdsWithSerializedUnits.has(po.id) ||
-        poIdsWithLegacyProduction.has(po.id) ||
         poIdsWithLegacyProjectProduction.has(po.id)
       );
 
@@ -3344,7 +3381,15 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       
       const poStatuses = pos.map((po: any) => {
         const poItems = serializedItems.filter((s: any) => s.poId === po.id);
-        const legacyStats = legacyStatsByPoId.get(po.id) ?? legacyProjectStatsByPoId.get(po.id);
+        const legacyP2Stats = legacyStatsByPoId.get(po.id);
+        const legacyProjectStats = legacyProjectStatsByPoId.get(po.id);
+        const legacyStats = legacyP2Stats || legacyProjectStats
+          ? {
+              totalQty: Number(legacyP2Stats?.totalQty ?? 0) + Number(legacyProjectStats?.totalQty ?? 0),
+              completedQty: Number(legacyP2Stats?.completedQty ?? 0) + Number(legacyProjectStats?.completedQty ?? 0),
+              inProductionQty: Number(legacyP2Stats?.inProductionQty ?? 0) + Number(legacyProjectStats?.inProductionQty ?? 0),
+            }
+          : null;
         
         // Use actual column names: status (ACTIVE/COMPLETED/SCRAPPED/HOLD) and currentDepartment
         const completedItems = poItems.length > 0
@@ -3352,7 +3397,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           : Number(legacyStats?.completedQty ?? 0);
         const inProductionItems = poItems.filter((s: any) => {
           if (s.status !== 'ACTIVE') return false;
-          const dept = s.currentDepartment || '';
+          const dept = normalizeP2ControlDepartment(s.currentDepartment || '');
           // In production if past Pending Layup stage
           return dept !== 'Pending Layup' && dept !== '';
         }).length || (poItems.length > 0 ? 0 : Number(legacyStats?.inProductionQty ?? 0));
@@ -3399,7 +3444,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       await ensureProductionWorkflowReadSchema();
       const { storage } = await import('../../storage');
       const { pool: dbPool } = await import('../../db');
-      const serializedItems = await applyCompletedTravelerStateToP2Items(
+      const serializedItems = await applyTravelerStateToP2Items(
         await storage.getP2SerializedItems({})
       );
       const pos = await storage.getAllP2PurchaseOrders();
@@ -3648,7 +3693,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       // Keep P2 Control Center as the visible source for WIP and finished units.
       let allItems: any[] = [];
       try {
-        allItems = await applyCompletedTravelerStateToP2Items(
+        allItems = await applyTravelerStateToP2Items(
           await storage.getP2SerializedItems({})
         );
       } catch (error) {
@@ -3656,31 +3701,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       }
       const visibleStatuses = new Set(['ACTIVE', 'COMPLETED']);
       const items = (allItems || []).filter((item: any) => visibleStatuses.has(item.status));
-      const legacyProductionRows = await optionalP2Rows(
-        'legacy production',
-        dbPool.query(
-        `SELECT
-           p2po.id,
-           p2po.order_id AS "orderId",
-           p2po.p2_po_id AS "poId",
-           p2po.p2_po_item_id AS "poItemId",
-           p2po.quantity,
-           p2po.quantity_manufactured AS "quantityManufactured",
-           p2po.department,
-           p2po.status,
-           p2po.due_date AS "dueDate",
-           p2po.project_id AS "projectId",
-           po.po_number AS "poNumber",
-           po.customer_name AS "customerName",
-           COALESCE(poi.part_number, p2po.sku) AS "partNumber",
-           COALESCE(poi.part_name, p2po.part_name) AS "partName"
-         FROM p2_production_orders p2po
-         JOIN p2_purchase_orders po ON po.id = p2po.p2_po_id
-         LEFT JOIN p2_purchase_order_items poi ON poi.id = p2po.p2_po_item_id
-         WHERE COALESCE(UPPER(p2po.status), '') NOT IN ('CANCELLED', 'CANCELED')
-         ORDER BY p2po.due_date NULLS LAST, p2po.created_at`
-        )
-      );
+      const legacyProductionRows: any[] = [];
       const legacyProjectProductionRows = await optionalP2Rows(
         'legacy project production',
         dbPool.query(
@@ -3752,7 +3773,15 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
                 AND COALESCE(UPPER(t.status), '') NOT IN ('COMPLETE', 'COMPLETED', 'CLOSED', 'SCRAPPED', 'CANCELLED', 'CANCELED')
              ORDER BY t.created_at DESC
              LIMIT 1
-           ) AS "activeTravelerNumber"
+           ) AS "activeTravelerNumber",
+           (
+             SELECT UPPER(t.status)
+             FROM travelers t
+             WHERE t.production_work_order_id = wo.id
+               AND COALESCE(UPPER(t.status), '') NOT IN ('COMPLETE', 'COMPLETED', 'CLOSED', 'SCRAPPED', 'CANCELLED', 'CANCELED')
+             ORDER BY t.created_at DESC
+             LIMIT 1
+           ) AS "activeTravelerStatus"
          FROM project_po_link ppl
          JOIN production_work_orders wo ON wo.project_id = ppl.project_id
          JOIN projects p ON p.id = wo.project_id
@@ -3832,6 +3861,20 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         projectRows.map((row: any) => [Number(row.poId), row])
       );
       
+      const serializedPoItemKeys = new Set(
+        items
+          .map((item: any) => {
+            const poId = item.poId ?? item.po_id;
+            const poItemId = item.poItemId ?? item.po_item_id;
+            return poId && poItemId ? `${poId}:${poItemId}` : null;
+          })
+          .filter(Boolean)
+      );
+      const legacyProductionControlRows = p2ControlRows(legacyProductionRows).filter((row: any) => {
+        const key = row.poId && row.poItemId ? `${row.poId}:${row.poItemId}` : null;
+        return !key || !serializedPoItemKeys.has(key);
+      });
+
       const itemIds = items.map((item: any) => item.id).filter(Boolean);
       let activeTasks: any[] = [];
       if (itemIds.length > 0) {
@@ -3866,19 +3909,19 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       items.forEach((item: any) => {
         const displayDepartment = item.status === 'COMPLETED'
           ? 'Completed'
-          : item.currentDepartment;
+          : normalizeP2ControlDepartment(item.currentDepartment);
         if (displayDepartment) departmentsSet.add(displayDepartment);
       });
-      legacyProductionRows.forEach((row: any) => {
+      legacyProductionControlRows.forEach((row: any) => {
         const displayDepartment = ['COMPLETED', 'CLOSED'].includes(String(row.status || '').toUpperCase())
           ? 'Completed'
-          : (row.department || 'Pending Layup');
+          : (normalizeP2ControlDepartment(row.department) || 'Pending Layup');
         departmentsSet.add(displayDepartment);
       });
       legacyProjectProductionRows.forEach((row: any) => {
         const displayDepartment = ['COMPLETE', 'COMPLETED', 'CLOSED'].includes(String(row.status || '').toUpperCase())
           ? 'Completed'
-          : (row.activeDepartment || row.currentTravelerStep || row.assignedDepartment || row.queueType || row.dashboardType || 'Pending Layup');
+          : (normalizeP2ControlDepartment(row.activeDepartment || row.currentTravelerStep || row.assignedDepartment || row.queueType || row.dashboardType) || 'Pending Layup');
         departmentsSet.add(displayDepartment);
       });
       allRoutings.forEach((routing: any) => {
@@ -3889,6 +3932,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       // Standard department order for display
       const departmentOrder = [
         'Pending Layup',
+        'Cutting Table',
         'Layup',
         'Assemble/Disassembly',
         'CNC',
@@ -3915,12 +3959,14 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       items.forEach((item: any) => {
         const dept = item.status === 'COMPLETED'
           ? 'Completed'
-          : (item.currentDepartment || 'Pending Layup');
+          : (normalizeP2ControlDepartment(item.currentDepartment) || 'Pending Layup');
         if (!departmentQueues[dept]) {
           departmentQueues[dept] = [];
         }
         
         const activeTask = taskByItemId.get(item.id);
+        const activeTravelerNumber = item.activeTravelerNumber ?? item.active_traveler_number ?? null;
+        const activeTravelerStartedAt = item.activeTravelerStartedAt ?? item.active_traveler_started_at ?? null;
         const poId = item.poId ?? item.po_id ?? null;
         const linkedProject = poId ? projectByPoId.get(Number(poId)) : null;
         const metadata = item.metadata || {};
@@ -3944,22 +3990,27 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           replacementForSerializedItemId: metadata.replacementForSerializedItemId ?? null,
           replacementForSerialNumber: metadata.replacementForSerialNumber ?? null,
           replacementReason: metadata.replacementReason ?? null,
-          hasActiveTask: !!activeTask,
+          hasActiveTask: !!activeTask || !!activeTravelerNumber,
           barcodePrintedAt: item.barcodePrintedAt || null,
           activeTask: activeTask ? {
             id: activeTask.id,
             employeeName: activeTask.employeeName,
             employeeCode: activeTask.employeeCode,
             startedAt: activeTask.startedAt,
+          } : activeTravelerNumber ? {
+            id: activeTravelerNumber,
+            employeeName: activeTravelerNumber,
+            employeeCode: '',
+            startedAt: activeTravelerStartedAt,
           } : null,
         });
       });
 
-      legacyProductionRows.forEach((row: any) => {
+      legacyProductionControlRows.forEach((row: any) => {
         const normalizedStatus = String(row.status || '').toUpperCase();
         const dept = ['COMPLETED', 'CLOSED'].includes(normalizedStatus)
           ? 'Completed'
-          : (row.department || 'Pending Layup');
+          : (normalizeP2ControlDepartment(row.department) || 'Pending Layup');
         if (!departmentQueues[dept]) {
           departmentQueues[dept] = [];
         }
@@ -4010,7 +4061,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         const normalizedStatus = String(row.status || '').toUpperCase();
         const dept = ['COMPLETE', 'COMPLETED', 'CLOSED'].includes(normalizedStatus)
           ? 'Completed'
-          : (row.activeDepartment || row.currentTravelerStep || row.assignedDepartment || row.queueType || row.dashboardType || 'Pending Layup');
+          : (normalizeP2ControlDepartment(row.activeDepartment || row.currentTravelerStep || row.assignedDepartment || row.queueType || row.dashboardType) || 'Pending Layup');
         if (!departmentQueues[dept]) {
           departmentQueues[dept] = [];
         }
@@ -4026,6 +4077,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         const isComplete = ['COMPLETE', 'COMPLETED', 'CLOSED'].includes(normalizedStatus);
         const hasActiveTask = !isComplete && (
           !!row.activeDepartment ||
+          ['IN_PROGRESS', 'ACTIVE', 'STARTED'].includes(String(row.activeTravelerStatus || '').toUpperCase()) ||
           ['IN_PROGRESS', 'ACTIVE', 'STARTED', 'RELEASED'].includes(normalizedStatus)
         );
 
@@ -4081,14 +4133,17 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         departments,
         summary: {
           totalActive: items.filter((item: any) => item.status === 'ACTIVE').length
-            + legacyProductionRows.filter((row: any) =>
+            + legacyProductionControlRows.filter((row: any) =>
               !['COMPLETED', 'CLOSED'].includes(String(row.status || '').toUpperCase())
             ).length
             + legacyProjectProductionRows.filter((row: any) =>
               !['COMPLETE', 'COMPLETED', 'CLOSED'].includes(String(row.status || '').toUpperCase())
             ).length,
           totalInProgress: p2ControlRows(activeTasks).length
-            + legacyProductionRows.filter((row: any) =>
+            + items.filter((item: any) =>
+              (item.activeTravelerNumber || item.active_traveler_number) && !taskByItemId.has(item.id)
+            ).length
+            + legacyProductionControlRows.filter((row: any) =>
               String(row.status || '').toUpperCase() === 'IN_PROGRESS'
             ).length
             + legacyProjectProductionRows.filter((row: any) =>

@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { ChevronDown, ChevronRight, BookOpen, Loader2 } from 'lucide-react';
+import { AlertCircle, ChevronDown, ChevronRight, BookOpen, ExternalLink, GitBranch, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface JournalLine {
@@ -46,6 +46,24 @@ interface JournalEntry {
   lines: JournalLine[];
 }
 
+interface SourceTraceNode {
+  type: string;
+  id: string | number;
+  label: string;
+  relationship: string;
+  subtitle?: string | null;
+  url?: string | null;
+  status?: string | null;
+  amount?: number | string | null;
+}
+
+interface SourceTraceResponse {
+  journalEntryId: number;
+  displaySource: string | null;
+  sources: SourceTraceNode[];
+  unresolvedHints: string[];
+}
+
 function buildQueryString(params: Record<string, string>) {
   const qs = Object.entries(params)
     .filter(([, v]) => v && v !== 'all')
@@ -67,6 +85,109 @@ function fmt(amount: number | null) {
 function StatusBadge({ status }: { status: string }) {
   if (status === 'EXPORTED') return <Badge className="bg-green-600 text-white">{status}</Badge>;
   return <Badge variant="secondary">{status}</Badge>;
+}
+
+function SourceTracePanel({
+  journalEntryId,
+  fallbackSourceLabel,
+}: {
+  journalEntryId: number;
+  fallbackSourceLabel?: string;
+}) {
+  const { data, isLoading, isError } = useQuery<SourceTraceResponse>({
+    queryKey: ['/api/finance/accounting/journal-entries', journalEntryId, 'source-trace'],
+    queryFn: async () => {
+      const token = localStorage.getItem('sessionToken') || localStorage.getItem('jwtToken');
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const res = await fetch(`/api/finance/accounting/journal-entries/${journalEntryId}/source-trace`, {
+        credentials: 'include',
+        headers,
+      });
+      if (!res.ok) throw new Error('Failed to fetch source trace');
+      return res.json();
+    },
+  });
+
+  if (isLoading) {
+    return (
+      <div className="mb-3 flex items-center gap-2 rounded-md border bg-background px-3 py-2 text-xs text-muted-foreground">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        Loading source trace...
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="mb-3 flex items-center gap-2 rounded-md border border-destructive/30 bg-background px-3 py-2 text-xs text-destructive">
+        <AlertCircle className="h-3.5 w-3.5" />
+        Source trace unavailable.
+      </div>
+    );
+  }
+
+  const sources = data?.sources ?? [];
+  const displaySource = data?.displaySource || fallbackSourceLabel;
+
+  return (
+    <div className="mb-3 rounded-md border bg-background p-3">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-xs font-semibold uppercase text-muted-foreground">
+          <GitBranch className="h-3.5 w-3.5" />
+          Source Trace
+        </div>
+        {displaySource && (
+          <div className="font-mono text-xs text-muted-foreground">{displaySource}</div>
+        )}
+      </div>
+
+      {sources.length > 0 ? (
+        <div className="flex flex-wrap gap-2">
+          {sources.map((source) => {
+            const content = (
+              <>
+                <span className="font-medium text-foreground">{source.label}</span>
+                {source.subtitle && (
+                  <span className="text-xs text-muted-foreground">{source.subtitle}</span>
+                )}
+                {source.status && (
+                  <Badge variant="outline" className="w-fit text-[10px] uppercase">
+                    {source.status}
+                  </Badge>
+                )}
+              </>
+            );
+
+            return source.url ? (
+              <a
+                key={`${source.type}-${source.id}`}
+                href={source.url}
+                className="flex min-w-52 max-w-full items-start justify-between gap-3 rounded-md border px-3 py-2 text-sm text-foreground hover:bg-muted"
+              >
+                <span className="flex min-w-0 flex-col gap-0.5">{content}</span>
+                <ExternalLink className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              </a>
+            ) : (
+              <div
+                key={`${source.type}-${source.id}`}
+                className="flex min-w-52 max-w-full flex-col gap-0.5 rounded-md border px-3 py-2 text-sm"
+              >
+                {content}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="space-y-1 text-xs text-muted-foreground">
+          <div>No operational source is linked yet.</div>
+          {(data?.unresolvedHints ?? []).slice(0, 3).map((hint) => (
+            <div key={hint} className="font-mono">{hint}</div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function AccountingPage() {
@@ -314,6 +435,10 @@ export default function AccountingPage() {
                         <TableRow key={`${entry.id}-lines`} className="bg-muted/30 hover:bg-muted/30">
                           <TableCell colSpan={7} className="py-0">
                             <div className="px-8 py-3">
+                              <SourceTracePanel
+                                journalEntryId={entry.id}
+                                fallbackSourceLabel={sourceLabel}
+                              />
                               {entry.memo && (
                                 <p className="text-xs text-muted-foreground mb-2 italic">{entry.memo}</p>
                               )}

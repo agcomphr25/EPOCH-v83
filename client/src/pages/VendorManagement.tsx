@@ -89,6 +89,23 @@ import { FolderOpen } from 'lucide-react';
 import { useFormDraft } from '@/hooks/useFormDraft';
 import { useUnsavedChangesWarning } from '@/hooks/useUnsavedChangesWarning';
 
+function getUploadErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message?.trim()) {
+    return error.message;
+  }
+
+  if (error && typeof error === 'object') {
+    const data = error as Record<string, unknown>;
+    const message = data.message || data.error || data.reason || data.details;
+
+    if (typeof message === 'string' && message.trim()) {
+      return message;
+    }
+  }
+
+  return fallback;
+}
+
 const vendorFormSchema = insertVendorSchema.extend({
   email: z.string().email('Invalid email').optional().or(z.literal('')),
   additionalEmail: z
@@ -661,34 +678,24 @@ export default function VendorManagement() {
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch('/api/vendors/upload/document', {
+      const data = await apiRequest('/api/vendors/upload/document', {
         method: 'POST',
         body: formData,
-      });
+        timeout: 60000,
+      }) as { url: string };
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const message =
-          errorData.message ||
-          errorData.error ||
-          errorData.reason ||
-          'Upload failed';
-        throw new Error(message);
-      }
-
-      const data = await response.json();
       form.setValue('mainDocumentUrl', data.url);
       setMainDocFile(file);
       toast({ title: 'Document uploaded successfully' });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to upload document';
       toast({
         title: 'Upload failed',
-        description: message,
+        description: getUploadErrorMessage(error, 'Failed to upload document'),
         variant: 'destructive',
       });
     } finally {
       setUploadingMainDoc(false);
+      e.target.value = '';
     }
   };
 
@@ -830,34 +837,24 @@ export default function VendorManagement() {
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch('/api/vendors/upload/approval', {
+      const data = await apiRequest('/api/vendors/upload/approval', {
         method: 'POST',
         body: formData,
-      });
+        timeout: 60000,
+      }) as { url: string };
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(
-          errorData.message ||
-          errorData.error ||
-          errorData.reason ||
-          'Upload failed'
-        );
-      }
-
-      const data = await response.json();
       form.setValue('approvalPdfUrl', data.url);
       setUploadedFile(file);
       toast({ title: 'File uploaded successfully' });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to upload file';
       toast({
         title: 'Upload failed',
-        description: message,
+        description: getUploadErrorMessage(error, 'Failed to upload file'),
         variant: 'destructive',
       });
     } finally {
       setUploadingFile(false);
+      e.target.value = '';
     }
   };
 

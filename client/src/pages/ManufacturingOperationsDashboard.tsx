@@ -21,6 +21,8 @@ import { isOrderInDepartment } from '@/lib/departmentUtils';
 
 interface ManufacturingOperationsDashboardProps {
   ownerName: string;
+  hiddenNavHrefs?: string[];
+  subtitle?: string;
 }
 
 interface DashboardNavCard {
@@ -36,6 +38,8 @@ interface DashboardNavCard {
 
 export default function ManufacturingOperationsDashboard({
   ownerName,
+  hiddenNavHrefs = [],
+  subtitle = 'Cutting Table, CNC & Gunsmith Operations',
 }: ManufacturingOperationsDashboardProps) {
   const { data: currentUser } = useQuery<{
     id: number;
@@ -127,7 +131,7 @@ export default function ManufacturingOperationsDashboard({
       subtitle: 'Complete training courses',
       badge: null,
     },
-  ];
+  ].filter((card) => !hiddenNavHrefs.includes(card.href));
 
   return (
     <div className="p-6 space-y-6 max-w-full mx-auto">
@@ -137,7 +141,7 @@ export default function ManufacturingOperationsDashboard({
             {ownerName}'s Dashboard
           </h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">
-            Cutting Table, CNC & Gunsmith Operations
+            {subtitle}
           </p>
         </div>
         <div className="text-sm text-gray-500 dark:text-gray-400">

@@ -2941,6 +2941,10 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     });
   }
 
+  function p2ControlRows<T = any>(result: any): T[] {
+    return Array.isArray(result) ? result : (result?.rows ?? []);
+  }
+
   // P2 Control Center API Routes
   app.get('/api/p2/control-center/stats', async (req, res) => {
     try {
@@ -3225,10 +3229,10 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         }
       }
       const legacyStatsByPoId = new Map<number, any>(
-        (legacyProductionRows as any[]).map((row: any) => [Number(row.poId), row])
+        p2ControlRows(legacyProductionRows).map((row: any) => [Number(row.poId), row])
       );
       const legacyProjectStatsByPoId = new Map<number, any>(
-        (legacyProjectProductionRows as any[]).map((row: any) => [Number(row.poId), row])
+        p2ControlRows(legacyProjectProductionRows).map((row: any) => [Number(row.poId), row])
       );
       const poIdsWithLegacyProduction = new Set<number>(legacyStatsByPoId.keys());
       const poIdsWithLegacyProjectProduction = new Set<number>(legacyProjectStatsByPoId.keys());
@@ -3291,7 +3295,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           )
         : [];
       const projectByPoId = new Map<number, any>(
-        (projectRows as any[]).map((r: any) => [r.poId, r])
+        p2ControlRows(projectRows).map((r: any) => [r.poId, r])
       );
 
       // Sum ordered quantities from all PO line items, grouped by po_id.
@@ -3307,7 +3311,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           )
         : [];
       const orderedQtyByPoId = new Map<number, number>(
-        (orderedQtyRows as any[]).map((r: any) => [r.poId, r.orderedQty])
+        p2ControlRows(orderedQtyRows).map((r: any) => [r.poId, r.orderedQty])
       );
       
       const poStatuses = pos.map((po: any) => {
@@ -3421,7 +3425,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
            AND GREATEST(p2po.quantity - COALESCE(p2po.quantity_manufactured, 0), 0) > 0
          ORDER BY p2po.due_date NULLS LAST, p2po.created_at`
       );
-      const legacySchedulingList = (legacySchedulingRows as any[]).flatMap((row: any) => {
+      const legacySchedulingList = p2ControlRows(legacySchedulingRows).flatMap((row: any) => {
         const isScheduled = !!row.scheduledLayupDate || String(row.department || '').toLowerCase() === 'layup';
         const openQuantity = Math.max(1, Number(row.openQuantity || row.quantity || 1));
         return Array.from({ length: openQuantity }, (_unused, index) => ({
@@ -3487,7 +3491,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
            )
          ORDER BY wo.id, wo.due_date NULLS LAST, wo.work_order_number`
       );
-      const legacyProjectSchedulingList = (legacyProjectSchedulingRows as any[]).flatMap((row: any) => {
+      const legacyProjectSchedulingList = p2ControlRows(legacyProjectSchedulingRows).flatMap((row: any) => {
         const quantity = Math.max(1, Number(row.quantity || 1));
         return Array.from({ length: quantity }, (_unused, index) => ({
           id: `legacy-project-work-order-${row.id}-${index + 1}`,
@@ -3712,8 +3716,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       );
       const poIds = [...new Set([
         ...items.map((item: any) => item.poId ?? item.po_id).filter(Boolean),
-        ...(legacyProductionRows as any[]).map((row: any) => row.poId).filter(Boolean),
-        ...(legacyProjectProductionRows as any[]).map((row: any) => row.poId).filter(Boolean),
+        ...p2ControlRows(legacyProductionRows).map((row: any) => row.poId).filter(Boolean),
+        ...p2ControlRows(legacyProjectProductionRows).map((row: any) => row.poId).filter(Boolean),
       ])];
       const projectRows = poIds.length > 0
         ? await dbPool.query(
@@ -3764,7 +3768,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           )
         : [];
       const projectByPoId = new Map<number, any>(
-        (projectRows as any[]).map((row: any) => [Number(row.poId), row])
+        p2ControlRows(projectRows).map((row: any) => [Number(row.poId), row])
       );
       
       const itemIds = items.map((item: any) => item.id).filter(Boolean);
@@ -3792,7 +3796,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       
       // Create task lookup by serialized item ID
       const taskByItemId = new Map<string, any>();
-      (activeTasks as any[]).forEach((task: any) => {
+      p2ControlRows(activeTasks).forEach((task: any) => {
         taskByItemId.set(task.serializedItemId, task);
       });
       
@@ -3804,13 +3808,13 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           : item.currentDepartment;
         if (displayDepartment) departmentsSet.add(displayDepartment);
       });
-      (legacyProductionRows as any[]).forEach((row: any) => {
+      p2ControlRows(legacyProductionRows).forEach((row: any) => {
         const displayDepartment = ['COMPLETED', 'CLOSED'].includes(String(row.status || '').toUpperCase())
           ? 'Completed'
           : (row.department || 'Pending Layup');
         departmentsSet.add(displayDepartment);
       });
-      (legacyProjectProductionRows as any[]).forEach((row: any) => {
+      p2ControlRows(legacyProjectProductionRows).forEach((row: any) => {
         const displayDepartment = ['COMPLETE', 'COMPLETED', 'CLOSED'].includes(String(row.status || '').toUpperCase())
           ? 'Completed'
           : (row.activeDepartment || row.currentTravelerStep || row.assignedDepartment || row.queueType || row.dashboardType || 'Pending Layup');
@@ -3890,7 +3894,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         });
       });
 
-      (legacyProductionRows as any[]).forEach((row: any) => {
+      p2ControlRows(legacyProductionRows).forEach((row: any) => {
         const normalizedStatus = String(row.status || '').toUpperCase();
         const dept = ['COMPLETED', 'CLOSED'].includes(normalizedStatus)
           ? 'Completed'
@@ -3941,7 +3945,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         });
       });
 
-      (legacyProjectProductionRows as any[]).forEach((row: any) => {
+      p2ControlRows(legacyProjectProductionRows).forEach((row: any) => {
         const normalizedStatus = String(row.status || '').toUpperCase();
         const dept = ['COMPLETE', 'COMPLETED', 'CLOSED'].includes(normalizedStatus)
           ? 'Completed'
@@ -4012,17 +4016,17 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         departments,
         summary: {
           totalActive: items.filter((item: any) => item.status === 'ACTIVE').length
-            + (legacyProductionRows as any[]).filter((row: any) =>
+            + p2ControlRows(legacyProductionRows).filter((row: any) =>
               !['COMPLETED', 'CLOSED'].includes(String(row.status || '').toUpperCase())
             ).length
-            + (legacyProjectProductionRows as any[]).filter((row: any) =>
+            + p2ControlRows(legacyProjectProductionRows).filter((row: any) =>
               !['COMPLETE', 'COMPLETED', 'CLOSED'].includes(String(row.status || '').toUpperCase())
             ).length,
-          totalInProgress: (activeTasks as any[]).length
-            + (legacyProductionRows as any[]).filter((row: any) =>
+          totalInProgress: p2ControlRows(activeTasks).length
+            + p2ControlRows(legacyProductionRows).filter((row: any) =>
               String(row.status || '').toUpperCase() === 'IN_PROGRESS'
             ).length
-            + (legacyProjectProductionRows as any[]).filter((row: any) =>
+            + p2ControlRows(legacyProjectProductionRows).filter((row: any) =>
               ['IN_PROGRESS', 'ACTIVE', 'STARTED', 'RELEASED'].includes(String(row.status || '').toUpperCase())
               || !!row.activeDepartment
             ).length,

@@ -145,6 +145,15 @@ export async function ensureProductionWorkflowReadSchema(): Promise<void> {
               ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now();
           END IF;
 
+          IF to_regclass('public.p2_serialized_items') IS NOT NULL THEN
+            ALTER TABLE public.p2_serialized_items
+              ADD COLUMN IF NOT EXISTS current_department text DEFAULT 'Layup',
+              ADD COLUMN IF NOT EXISTS current_stage_index integer DEFAULT 0,
+              ADD COLUMN IF NOT EXISTS metadata jsonb,
+              ADD COLUMN IF NOT EXISTS completed_at timestamp,
+              ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now();
+          END IF;
+
           IF to_regclass('public.material_lot_reservations') IS NOT NULL THEN
             ALTER TABLE public.material_lot_reservations
               ADD COLUMN IF NOT EXISTS traveler_id uuid,

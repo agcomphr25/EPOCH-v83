@@ -37,10 +37,29 @@ async function resolveCallerEmployeeId(req: Request): Promise<number | null> {
   return rows[0]?.id ?? null;
 }
 
-function getVisibleStages(isAdmin: boolean, caps: Set<string>): string[] {
+async function hasAssignedSupervisorPTO(req: Request): Promise<boolean> {
+  const employeeId = await resolveCallerEmployeeId(req);
+  if (!employeeId) return false;
+
+  const { rows } = await pool.query<{ id: number }>(
+    `
+      SELECT r.id
+      FROM timekeeping.time_off_requests r
+      LEFT JOIN employees e ON e.id = r.employee_id
+      WHERE r.status IN ('pending_supervisor', 'pending')
+        AND COALESCE(r.supervisor_id, e.supervisor_employee_id) = $1
+      LIMIT 1
+    `,
+    [employeeId],
+  );
+
+  return rows.length > 0;
+}
+
+function getVisibleStages(isAdmin: boolean, caps: Set<string>, hasAssignedSupervisorTasks = false): string[] {
   if (isAdmin) return ["pending_supervisor", "pending_hr", "pending_vp", "pending"];
   const stages: string[] = [];
-  if (caps.has("timekeeping.pto.approve_supervisor")) { stages.push("pending_supervisor", "pending"); }
+  if (hasAssignedSupervisorTasks || caps.has("timekeeping.pto.approve_supervisor")) { stages.push("pending_supervisor", "pending"); }
   if (caps.has("timekeeping.pto.approve_hr")) { stages.push("pending_hr"); }
   if (caps.has("timekeeping.pto.approve_vp")) { stages.push("pending_vp"); }
   if (caps.has("timekeeping.pto.view_all")) {
@@ -61,6 +80,10 @@ const requirePTOCommandCenterAccess: RequestHandler = async (req, res, next) => 
       caps.has("timekeeping.pto.approve_hr") ||
       caps.has("timekeeping.pto.approve_vp")
     ) {
+      next();
+      return;
+    }
+    if (await hasAssignedSupervisorPTO(req)) {
       next();
       return;
     }
@@ -132,9 +155,19 @@ router.get(
   requirePTOCommandCenterAccess,
   h(async (req, res): Promise<void> => {
     const { isAdmin, caps } = await getCallerCapabilities(req);
+    const callerEmployeeId = await resolveCallerEmployeeId(req);
+    const assignedSupervisorMode =
+      !isAdmin &&
+      callerEmployeeId != null &&
+      !caps.has("timekeeping.pto.view_all") &&
+      !caps.has("timekeeping.pto.approve_supervisor") &&
+      !caps.has("timekeeping.pto.approve_hr") &&
+      !caps.has("timekeeping.pto.approve_vp");
     const callerCaps = isAdmin
       ? ["timekeeping.pto.approve_supervisor", "timekeeping.pto.approve_hr", "timekeeping.pto.approve_vp", "timekeeping.pto.view_all"]
-      : Array.from(caps).filter((c: string) => c.startsWith("timekeeping.pto."));
+      : assignedSupervisorMode
+        ? ["timekeeping.pto.approve_supervisor"]
+        : Array.from(caps).filter((c: string) => c.startsWith("timekeeping.pto."));
 
     const today = new Date().toISOString().slice(0, 10);
     const in7Days = new Date();
@@ -156,10 +189,18 @@ router.get(
           COUNT(*) FILTER (WHERE status = 'approved' AND start_date <= $1 AND end_date >= $1) AS on_pto_today,
           COUNT(*) FILTER (WHERE status = 'approved' AND start_date <= $2 AND end_date >= $1 AND start_date > $1) AS upcoming_7_days,
           COUNT(*) FILTER (WHERE status = 'approved' AND start_date <= $3 AND end_date >= $1 AND start_date > $1) AS upcoming_14_days
-        FROM timekeeping.time_off_requests
+        FROM timekeeping.time_off_requests r
+        LEFT JOIN employees e ON e.id = r.employee_id
+        WHERE (
+          $4::integer IS NULL
+          OR (
+            r.status IN ('pending_supervisor','pending')
+            AND COALESCE(r.supervisor_id, e.supervisor_employee_id) = $4::integer
+          )
+        )
       )
       SELECT * FROM status_counts
-    `, [today, in7DaysStr, in14DaysStr]);
+    `, [today, in7DaysStr, in14DaysStr, assignedSupervisorMode ? callerEmployeeId : null]);
 
     const summary = rows[0] || {};
     res.json({
@@ -184,7 +225,15 @@ router.get(
   requirePTOCommandCenterAccess,
   h(async (req, res): Promise<void> => {
     const { isAdmin, caps } = await getCallerCapabilities(req);
-    const visibleStages = getVisibleStages(isAdmin, caps);
+    const callerEmployeeId = await resolveCallerEmployeeId(req);
+    const assignedSupervisorMode =
+      !isAdmin &&
+      callerEmployeeId != null &&
+      !caps.has("timekeeping.pto.view_all") &&
+      !caps.has("timekeeping.pto.approve_supervisor") &&
+      !caps.has("timekeeping.pto.approve_hr") &&
+      !caps.has("timekeeping.pto.approve_vp");
+    const visibleStages = getVisibleStages(isAdmin, caps, assignedSupervisorMode);
 
     const { rows } = await pool.query(`
       SELECT
@@ -196,7 +245,7 @@ router.get(
         r.requested_hours,
         r.status,
         r.employee_note,
-        r.supervisor_id,
+        COALESCE(r.supervisor_id, e.supervisor_employee_id) AS supervisor_id,
         r.supervisor_decision,
         r.supervisor_note,
         r.supervisor_reviewed_at,
@@ -224,7 +273,7 @@ router.get(
         END AS stage_age_hours
       FROM timekeeping.time_off_requests r
       LEFT JOIN employees e ON e.id = r.employee_id
-      LEFT JOIN employees sup ON sup.id = r.supervisor_id
+      LEFT JOIN employees sup ON sup.id = COALESCE(r.supervisor_id, e.supervisor_employee_id)
       WHERE r.status IN ('pending_supervisor', 'pending_hr', 'pending_vp', 'pending')
       ORDER BY r.created_at ASC
     `);
@@ -237,8 +286,9 @@ router.get(
     const daysToFreeze = Math.ceil((periodEnd.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
     const nearPayrollFreeze = daysToFreeze >= 0 && daysToFreeze <= 3;
 
-    const callerEmployeeId = await resolveCallerEmployeeId(req);
-    const isSupervisorOnly = !isAdmin && caps.has("timekeeping.pto.approve_supervisor") && !caps.has("timekeeping.pto.approve_hr") && !caps.has("timekeeping.pto.approve_vp");
+    const isSupervisorOnly =
+      assignedSupervisorMode ||
+      (!isAdmin && caps.has("timekeeping.pto.approve_supervisor") && !caps.has("timekeeping.pto.approve_hr") && !caps.has("timekeeping.pto.approve_vp"));
 
     const pipeline: Record<string, any[]> = {
       pending_supervisor: [],
@@ -310,7 +360,9 @@ router.get(
 
     const callerCaps = isAdmin
       ? ["timekeeping.pto.approve_supervisor", "timekeeping.pto.approve_hr", "timekeeping.pto.approve_vp", "timekeeping.pto.view_all"]
-      : Array.from(caps).filter((c: string) => c.startsWith("timekeeping.pto."));
+      : assignedSupervisorMode
+        ? ["timekeeping.pto.approve_supervisor"]
+        : Array.from(caps).filter((c: string) => c.startsWith("timekeeping.pto."));
 
     const stuckCount = Object.values(pipeline).flat().filter((r: any) => r.isStuck).length;
 
@@ -1338,10 +1390,11 @@ router.get(
         e.department AS employee_department,
         e.pay_type AS employee_pay_type,
         sup.name AS supervisor_name,
+        COALESCE(r.supervisor_id, e.supervisor_employee_id) AS effective_supervisor_id,
         sub_u.username AS submitted_by_username
       FROM timekeeping.time_off_requests r
       LEFT JOIN employees e ON e.id = r.employee_id
-      LEFT JOIN employees sup ON sup.id = r.supervisor_id
+      LEFT JOIN employees sup ON sup.id = COALESCE(r.supervisor_id, e.supervisor_employee_id)
       LEFT JOIN users sub_u ON sub_u.id = r.submitted_by_user_id
       WHERE r.id = $1
     `, [requestId]);
@@ -1355,9 +1408,9 @@ router.get(
     if (!isAdmin && !caps.has("timekeeping.pto.view_all")) {
       const callerEmployeeId = await resolveCallerEmployeeId(req);
       const isAssignedSupervisor =
-        caps.has("timekeeping.pto.approve_supervisor") &&
         callerEmployeeId != null &&
-        request.supervisor_id === callerEmployeeId;
+        request.effective_supervisor_id === callerEmployeeId &&
+        (request.status === "pending_supervisor" || request.status === "pending");
       const canSeeStage =
         (request.status === "pending_hr" && caps.has("timekeeping.pto.approve_hr")) ||
         (request.status === "pending_vp" && caps.has("timekeeping.pto.approve_vp"));

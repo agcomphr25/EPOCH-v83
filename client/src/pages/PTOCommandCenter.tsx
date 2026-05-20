@@ -935,6 +935,10 @@ function ApprovalPipelineTab({
   if (!data?.pipeline) return null;
 
   const canAdminCancel = isAdminUser;
+  const effectiveCapSet = new Set<string>([
+    ...Array.from(capSet),
+    ...(data.callerCapabilities ?? []),
+  ]);
 
   return (
     <div className="space-y-4" data-testid="approval-pipeline">
@@ -947,9 +951,9 @@ function ApprovalPipelineTab({
         </div>
       )}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <PipelineStageCard stage="pending_supervisor" label="Pending Supervisor" requests={data.pipeline.pending_supervisor || []} onReview={onReview} onCancel={onCancel} onViewDetail={onViewDetail} canApproveStage={isAdminUser || capSet.has("timekeeping.pto.approve_supervisor")} canAdminCancel={canAdminCancel} />
-        <PipelineStageCard stage="pending_hr" label="Pending HR" requests={data.pipeline.pending_hr || []} onReview={onReview} onCancel={onCancel} onViewDetail={onViewDetail} canApproveStage={isAdminUser || capSet.has("timekeeping.pto.approve_hr")} canAdminCancel={canAdminCancel} />
-        <PipelineStageCard stage="pending_vp" label="Pending VP" requests={data.pipeline.pending_vp || []} onReview={onReview} onCancel={onCancel} onViewDetail={onViewDetail} canApproveStage={isAdminUser || capSet.has("timekeeping.pto.approve_vp")} canAdminCancel={canAdminCancel} />
+        <PipelineStageCard stage="pending_supervisor" label="Pending Supervisor" requests={data.pipeline.pending_supervisor || []} onReview={onReview} onCancel={onCancel} onViewDetail={onViewDetail} canApproveStage={isAdminUser || effectiveCapSet.has("timekeeping.pto.approve_supervisor")} canAdminCancel={canAdminCancel} />
+        <PipelineStageCard stage="pending_hr" label="Pending HR" requests={data.pipeline.pending_hr || []} onReview={onReview} onCancel={onCancel} onViewDetail={onViewDetail} canApproveStage={isAdminUser || effectiveCapSet.has("timekeeping.pto.approve_hr")} canAdminCancel={canAdminCancel} />
+        <PipelineStageCard stage="pending_vp" label="Pending VP" requests={data.pipeline.pending_vp || []} onReview={onReview} onCancel={onCancel} onViewDetail={onViewDetail} canApproveStage={isAdminUser || effectiveCapSet.has("timekeeping.pto.approve_vp")} canAdminCancel={canAdminCancel} />
       </div>
     </div>
   );
@@ -1807,7 +1811,7 @@ export default function PTOCommandCenter() {
     capSet.has("timekeeping.pto.approve_supervisor") ||
     capSet.has("timekeeping.pto.approve_hr") ||
     capSet.has("timekeeping.pto.approve_vp");
-  const authorized = isRoleAdmin || hasCapability;
+  const authorized = Boolean(currentUser?.id) || isRoleAdmin || hasCapability;
 
   const { data: summaryData, isLoading: summaryLoading } = useQuery<any>({
     queryKey: ["/api/timekeeping/pto-command-center/summary"],

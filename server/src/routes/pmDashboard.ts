@@ -112,6 +112,24 @@ interface ProductionRow {
   replacementSerialNumbers: string | null;
   daysScheduleVariance: string | null;
   blockReason: string | null;
+  linkedWadId?: string | null;
+  linkedWadNumber?: string | null;
+  linkedWadStatus?: string | null;
+  linkedWadWorkOrderStatus?: string | null;
+  productionConnectionStatus?: string | null;
+  productionConnectionLabel?: string | null;
+  productionConnectionDetail?: string | null;
+}
+
+interface WadBridgeRow {
+  id: string;
+  workOrderNumber: string;
+  partNumber: string | null;
+  status: string | null;
+  wadStatus: string | null;
+  activeTravelerId: string | null;
+  activeTravelerNumber: string | null;
+  currentTravelerStep: string | null;
 }
 
 interface ChargeCodeAggRow {
@@ -209,6 +227,127 @@ interface SerializedItemAggregate {
   groups: SerializedItemGroup[];
   totalRequired: number;
   totalCompleted: number;
+}
+
+function normalizePartKey(value: string | null | undefined): string {
+  return String(value ?? '').trim().toLowerCase();
+}
+
+function isWadReleasedForExecution(wad: WadBridgeRow): boolean {
+  const wadStatus = String(wad.wadStatus ?? '').trim().toUpperCase();
+  const workOrderStatus = String(wad.status ?? '').trim().toUpperCase();
+  return (
+    wadStatus === 'APPROVED' &&
+    ['RELEASED', 'IN_PROGRESS', 'COMPLETE', 'COMPLETED', 'CLOSED'].includes(workOrderStatus)
+  );
+}
+
+async function getProjectWadBridgeRows(projectId: string): Promise<WadBridgeRow[]> {
+  return pool.query<WadBridgeRow>(`
+    SELECT
+      wo.id::text AS id,
+      wo.work_order_number AS "workOrderNumber",
+      wo.part_number AS "partNumber",
+      wo.status,
+      wo.wad_status AS "wadStatus",
+      (
+        SELECT t.id::text
+        FROM travelers t
+        WHERE t.production_work_order_id = wo.id
+          AND UPPER(COALESCE(t.status, '')) NOT IN ('COMPLETE', 'COMPLETED', 'CLOSED', 'SCRAPPED', 'CANCELLED', 'CANCELED')
+        ORDER BY t.updated_at DESC NULLS LAST, t.created_at DESC NULLS LAST
+        LIMIT 1
+      ) AS "activeTravelerId",
+      (
+        SELECT t.traveler_number
+        FROM travelers t
+        WHERE t.production_work_order_id = wo.id
+          AND UPPER(COALESCE(t.status, '')) NOT IN ('COMPLETE', 'COMPLETED', 'CLOSED', 'SCRAPPED', 'CANCELLED', 'CANCELED')
+        ORDER BY t.updated_at DESC NULLS LAST, t.created_at DESC NULLS LAST
+        LIMIT 1
+      ) AS "activeTravelerNumber",
+      (
+        SELECT ts.department_name
+        FROM traveler_steps ts
+        JOIN travelers t ON t.id = ts.traveler_id
+        WHERE t.production_work_order_id = wo.id
+          AND UPPER(COALESCE(ts.status, '')) IN ('IN_PROGRESS', 'ACTIVE', 'STARTED')
+        ORDER BY ts.step_number ASC
+        LIMIT 1
+      ) AS "currentTravelerStep"
+    FROM production_work_orders wo
+    WHERE wo.project_id = $1
+      AND UPPER(COALESCE(wo.status, '')) NOT IN ('CANCELLED', 'CANCELED')
+    ORDER BY wo.created_at DESC
+  `, [projectId]);
+}
+
+async function enrichP2RowsWithWadBridge(projectId: string, rows: ProductionRow[]): Promise<ProductionRow[]> {
+  const hasP2Rows = rows.some((row) => row.sourceType === 'p2_production_order');
+  if (!hasP2Rows) return rows;
+
+  const wads = await getProjectWadBridgeRows(projectId);
+  const wadByPart = new Map<string, WadBridgeRow>();
+  for (const wad of wads) {
+    const key = normalizePartKey(wad.partNumber);
+    if (key && !wadByPart.has(key)) {
+      wadByPart.set(key, wad);
+    }
+  }
+
+  return rows.map((row) => {
+    if (row.sourceType !== 'p2_production_order') return row;
+
+    const matchedWad = wadByPart.get(normalizePartKey(row.partNumber)) ?? null;
+    if (!matchedWad) {
+      const hasAnyWad = wads.length > 0;
+      return {
+        ...row,
+        productionConnectionStatus: hasAnyWad ? 'WAD_NOT_MATCHED' : 'WAD_MISSING',
+        productionConnectionLabel: hasAnyWad ? 'WAD not matched' : 'WAD missing',
+        productionConnectionDetail: hasAnyWad
+          ? 'Project has WAD records, but none match this P2 part. Production flow is unchanged.'
+          : 'P2 production demand exists, but no project WAD has been created yet. Production flow is unchanged.',
+      };
+    }
+
+    const linkedBase = {
+      ...row,
+      linkedWadId: matchedWad.id,
+      linkedWadNumber: matchedWad.workOrderNumber,
+      linkedWadStatus: matchedWad.wadStatus,
+      linkedWadWorkOrderStatus: matchedWad.status,
+      wadStatus: row.wadStatus ?? matchedWad.wadStatus,
+      activeTravelerId: row.activeTravelerId ?? matchedWad.activeTravelerId,
+      activeTravelerNumber: row.activeTravelerNumber ?? matchedWad.activeTravelerNumber,
+      currentTravelerStep: row.currentTravelerStep ?? matchedWad.currentTravelerStep,
+    };
+
+    if (!isWadReleasedForExecution(matchedWad)) {
+      return {
+        ...linkedBase,
+        productionConnectionStatus: 'WAD_INCOMPLETE',
+        productionConnectionLabel: 'WAD incomplete',
+        productionConnectionDetail: `${matchedWad.workOrderNumber} is ${matchedWad.wadStatus ?? 'not approved'} / ${matchedWad.status ?? 'not released'}. Production flow is unchanged.`,
+      };
+    }
+
+    if (!matchedWad.activeTravelerId && !matchedWad.currentTravelerStep) {
+      return {
+        ...linkedBase,
+        productionConnectionStatus: 'TRAVELER_NOT_ACTIVE',
+        productionConnectionLabel: 'No active traveler',
+        productionConnectionDetail: `${matchedWad.workOrderNumber} is approved/released, but no active traveler is currently started.`,
+      };
+    }
+
+    return {
+      ...linkedBase,
+      productionConnectionStatus: 'CONNECTED',
+      productionConnectionLabel: 'Linked',
+      productionConnectionDetail: `${matchedWad.workOrderNumber} is connected to the active traveler state.`,
+    };
+  });
 }
 
 async function getProjectSerializedItemAggregate(
@@ -1189,6 +1328,8 @@ router.get('/:projectId/production', h(async (req, res) => {
       return (a.workOrderNumber ?? '').localeCompare(b.workOrderNumber ?? '');
     });
   }
+
+  finalRows = await enrichP2RowsWithWadBridge(projectId, finalRows);
 
   const rowsWithAssignments = finalRows.map((row) => {
     if (row.sourceType === 'p2_production_order') {

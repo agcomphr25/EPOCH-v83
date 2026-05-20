@@ -1657,14 +1657,16 @@ export default function Navigation() {
     if (!isUserInPermissionsList(username)) {
       return items.filter((item) => {
         const cap = getRequiredCapability(item.path);
-        if (cap && navCapSet.has(cap)) return true;
+        const caps = Array.isArray(cap) ? cap : cap ? [cap] : [];
+        if (caps.some((requiredCap) => navCapSet.has(requiredCap))) return true;
         return DEFAULT_USER_ROUTES.some(route => item.path === route || item.path.startsWith(route + '/'));
       });
     }
 
     return items.filter((item) => {
       const cap = getRequiredCapability(item.path);
-      if (cap && navCapSet.has(cap)) return true;
+      const caps = Array.isArray(cap) ? cap : cap ? [cap] : [];
+      if (caps.some((requiredCap) => navCapSet.has(requiredCap))) return true;
       return hasRouteAccess(username, item.path, userRole);
     });
   };

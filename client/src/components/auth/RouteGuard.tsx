@@ -103,7 +103,8 @@ function computeAccess(currentUser: UserData | null | undefined, location: strin
   if (requiredCap) {
     const roleUpper = userRole.toUpperCase();
     if (roleUpper === 'ADMIN' || roleUpper === 'OWNER') return true;
-    if (capabilitySet && capabilitySet.has(requiredCap)) return true;
+    const requiredCaps = Array.isArray(requiredCap) ? requiredCap : [requiredCap];
+    if (capabilitySet && requiredCaps.some((cap) => capabilitySet.has(cap))) return true;
     return hasRouteAccess(username, location, userRole);
   }
 

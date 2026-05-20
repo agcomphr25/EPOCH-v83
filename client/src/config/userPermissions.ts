@@ -11,14 +11,19 @@ export interface UserPermissions {
   deniedRoutes?: string[]; // Routes to explicitly block (used with fullAccess: true)
 }
 
-export const CAPABILITY_GATED_ROUTES: Record<string, string> = {
-  '/pto-command-center': 'timekeeping.pto.view_all',
+export const CAPABILITY_GATED_ROUTES: Record<string, string | string[]> = {
+  '/pto-command-center': [
+    'timekeeping.pto.view_all',
+    'timekeeping.pto.approve_supervisor',
+    'timekeeping.pto.approve_hr',
+    'timekeeping.pto.approve_vp',
+  ],
   '/orders-list': 'orders.view_list',
   '/time-clock-admin': 'timekeeping.time_clock_admin.access',
   '/inventory/cycle-counts': 'inventory.cycleCount.view',
 };
 
-export function getRequiredCapability(route: string): string | undefined {
+export function getRequiredCapability(route: string): string | string[] | undefined {
   for (const [pattern, cap] of Object.entries(CAPABILITY_GATED_ROUTES)) {
     if (route === pattern || route.startsWith(pattern + '/')) {
       return cap;

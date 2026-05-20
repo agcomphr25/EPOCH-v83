@@ -25,6 +25,13 @@ router.get('/', async (req, res) => {
       );
       res.json(messages);
     } else if (currentUserId) {
+      try {
+        const { ensurePendingPTOApprovalNotificationsForUser } = await import('../services/timekeeping/approvalNotifications.service');
+        await ensurePendingPTOApprovalNotificationsForUser(currentUserId);
+      } catch (err: any) {
+        console.warn('[internal-messages] PTO notification catch-up skipped:', err?.message ?? err);
+      }
+
       // Return only messages the current user sent or is a recipient of
       const sentMessages = await storage.getMessagesBySender(currentUserId);
       const receivedMessages = await storage.getMessagesForUser(currentUserId);

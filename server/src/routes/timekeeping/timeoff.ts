@@ -342,34 +342,39 @@ router.post(
 
     // ADMIN/OWNER bypass capability check
     if (!isAdminOrOwner) {
-      const requiredCap = stageCapMap[stage];
-      if (requiredCap) {
-        const { getUserPermissions } = await import("../../services/permissionService");
-        const { permissionSet } = await getUserPermissions(user.id, user.role);
-        if (!permissionSet.has(requiredCap)) {
-          res.status(403).json({ error: `Missing capability: ${requiredCap}` }); return;
-        }
-      }
+      let isAssignedSupervisorReviewer = false;
 
-      // Supervisor stage: enforce reviewer-to-request supervisor assignment.
-      // user.employeeId is the epoch employee ID from AuthUser (number | null).
-      // Fail closed: if the reviewer has no linked epoch employee, deny access.
+      // Supervisor stage: assigned supervisors can review their own direct reports
+      // even if they do not carry the broader PTO supervisor capability.
       if (stage === "supervisor") {
         const reviewerEpochEmployeeId: number | null = await resolveUserEmployeeId(user);
         if (reviewerEpochEmployeeId === null) {
           res.status(403).json({ error: "Your account is not linked to an employee record and cannot perform supervisor reviews." }); return;
         }
-        const { db } = await import("../../../db");
-        const { timeOffRequestsTable } = await import("../../schema/timekeeping");
-        const { eq } = await import("drizzle-orm");
-        const rows = await db
-          .select({ supervisorId: timeOffRequestsTable.supervisorId })
-          .from(timeOffRequestsTable)
-          .where(eq(timeOffRequestsTable.id, id))
-          .limit(1);
-        const assignedSupervisorId: number | null = rows[0]?.supervisorId ?? null;
+        const { pool } = await import("../../../db");
+        const { rows } = await pool.query<{ supervisor_id: number | null }>(
+          `
+            SELECT COALESCE(r.supervisor_id, e.supervisor_employee_id) AS supervisor_id
+            FROM timekeeping.time_off_requests r
+            LEFT JOIN employees e ON e.id = r.employee_id
+            WHERE r.id = $1
+            LIMIT 1
+          `,
+          [id],
+        );
+        const assignedSupervisorId = rows[0]?.supervisor_id ?? null;
         if (assignedSupervisorId !== null && assignedSupervisorId !== reviewerEpochEmployeeId) {
           res.status(403).json({ error: "You are not the assigned supervisor for this request." }); return;
+        }
+        isAssignedSupervisorReviewer = assignedSupervisorId === reviewerEpochEmployeeId;
+      }
+
+      const requiredCap = stageCapMap[stage];
+      if (requiredCap) {
+        const { getUserPermissions } = await import("../../services/permissionService");
+        const { permissionSet } = await getUserPermissions(user.id, user.role);
+        if (!permissionSet.has(requiredCap) && !isAssignedSupervisorReviewer) {
+          res.status(403).json({ error: `Missing capability: ${requiredCap}` }); return;
         }
       }
     }

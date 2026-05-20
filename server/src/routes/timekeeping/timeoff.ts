@@ -18,6 +18,26 @@ function h(fn: (req: Request, res: Response, next: NextFunction) => Promise<void
 
 const router: IRouter = Router();
 
+async function resolveUserEmployeeId(user: SafeUser | undefined | null): Promise<number | null> {
+  if (!user) return null;
+  if (user.employeeId != null) return user.employeeId;
+
+  const username = String(user.username ?? "").trim();
+  if (!username) return null;
+
+  const { pool } = await import("../../../db");
+  const { rows } = await pool.query<{ id: number }>(
+    `
+      SELECT e.id
+      FROM employees e
+      WHERE LOWER(e.employee_code) = LOWER($1)
+      LIMIT 1
+    `,
+    [username]
+  );
+  return rows[0]?.id ?? null;
+}
+
 // ---------------------------------------------------------------------------
 // Validation schemas
 // ---------------------------------------------------------------------------
@@ -335,7 +355,7 @@ router.post(
       // user.employeeId is the epoch employee ID from AuthUser (number | null).
       // Fail closed: if the reviewer has no linked epoch employee, deny access.
       if (stage === "supervisor") {
-        const reviewerEpochEmployeeId: number | null = user.employeeId ?? null;
+        const reviewerEpochEmployeeId: number | null = await resolveUserEmployeeId(user);
         if (reviewerEpochEmployeeId === null) {
           res.status(403).json({ error: "Your account is not linked to an employee record and cannot perform supervisor reviews." }); return;
         }

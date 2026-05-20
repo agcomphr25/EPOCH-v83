@@ -56,8 +56,21 @@ async function findSupervisorRecipient(supervisorEmployeeId: number): Promise<Su
              u.username,
              COALESCE(u.email, e.email) AS email
       FROM employees e
-      LEFT JOIN users u ON u.employee_id = e.id AND u.is_active = true
+      LEFT JOIN users u ON u.is_active = true
+        AND (
+          u.employee_id = e.id
+          OR LOWER(u.username) = LOWER(e.employee_code)
+          OR (u.email IS NOT NULL AND e.email IS NOT NULL AND LOWER(u.email) = LOWER(e.email))
+        )
       WHERE e.id = $1
+      ORDER BY
+        CASE
+          WHEN u.employee_id = e.id THEN 0
+          WHEN LOWER(u.username) = LOWER(e.employee_code) THEN 1
+          WHEN u.email IS NOT NULL AND e.email IS NOT NULL AND LOWER(u.email) = LOWER(e.email) THEN 2
+          ELSE 3
+        END,
+        u.id ASC
       LIMIT 1
     `,
     [supervisorEmployeeId],
@@ -128,6 +141,19 @@ async function insertInternalInboxMessage(params: {
   message: string;
   isUrgent?: boolean;
 }): Promise<void> {
+  const existing = await pool.query<{ id: number }>(
+    `
+      SELECT im.id
+      FROM internal_messages im
+      JOIN message_recipients mr ON mr.message_id = im.id
+      WHERE mr.user_id = $1
+        AND im.subject = $2
+      LIMIT 1
+    `,
+    [params.recipient.userId, params.subject],
+  );
+  if (existing.rows[0]) return;
+
   const { rows } = await pool.query<{ id: number }>(
     `
       INSERT INTO internal_messages (
@@ -169,20 +195,80 @@ async function insertInternalInboxMessage(params: {
   );
 }
 
+async function resolveEmployeeIdForUser(userId: number): Promise<number | null> {
+  const { rows } = await pool.query<{ employee_id: number | null }>(
+    `
+      SELECT COALESCE(u.employee_id, e.id) AS employee_id
+      FROM users u
+      LEFT JOIN employees e ON (
+        LOWER(e.employee_code) = LOWER(u.username)
+        OR (u.email IS NOT NULL AND e.email IS NOT NULL AND LOWER(e.email) = LOWER(u.email))
+      )
+      WHERE u.id = $1
+        AND u.is_active = true
+      ORDER BY
+        CASE
+          WHEN u.employee_id IS NOT NULL THEN 0
+          WHEN LOWER(e.employee_code) = LOWER(u.username) THEN 1
+          WHEN u.email IS NOT NULL AND e.email IS NOT NULL AND LOWER(e.email) = LOWER(u.email) THEN 2
+          ELSE 3
+        END,
+        e.id ASC
+      LIMIT 1
+    `,
+    [userId],
+  );
+
+  return rows[0]?.employee_id ?? null;
+}
+
+export async function ensurePendingPTOApprovalNotificationsForUser(userId: number): Promise<void> {
+  const supervisorEmployeeId = await resolveEmployeeIdForUser(userId);
+  if (!supervisorEmployeeId) return;
+
+  const { rows } = await pool.query<{ id: number }>(
+    `
+      SELECT id
+      FROM timekeeping.time_off_requests
+      WHERE status IN ('pending_supervisor', 'pending')
+        AND supervisor_id = $1
+      ORDER BY created_at ASC
+      LIMIT 50
+    `,
+    [supervisorEmployeeId],
+  );
+
+  for (const row of rows) {
+    await notifyPTOApprovalNeeded(row.id);
+  }
+}
+
 async function findUserByEmployeeId(employeeId: number | null | undefined): Promise<InboxRecipient | null> {
   if (!employeeId) return null;
 
   const { rows } = await pool.query<InboxRecipient>(
     `
-      SELECT id AS "userId",
-             username,
-             first_name AS "firstName",
-             last_name AS "lastName",
-             email
-      FROM users
-      WHERE employee_id = $1
-        AND is_active = true
-      ORDER BY id ASC
+      SELECT u.id AS "userId",
+             u.username,
+             u.first_name AS "firstName",
+             u.last_name AS "lastName",
+             u.email
+      FROM employees e
+      JOIN users u ON u.is_active = true
+        AND (
+          u.employee_id = e.id
+          OR LOWER(u.username) = LOWER(e.employee_code)
+          OR (u.email IS NOT NULL AND e.email IS NOT NULL AND LOWER(u.email) = LOWER(e.email))
+        )
+      WHERE e.id = $1
+      ORDER BY
+        CASE
+          WHEN u.employee_id = e.id THEN 0
+          WHEN LOWER(u.username) = LOWER(e.employee_code) THEN 1
+          WHEN u.email IS NOT NULL AND e.email IS NOT NULL AND LOWER(u.email) = LOWER(e.email) THEN 2
+          ELSE 3
+        END,
+        u.id ASC
       LIMIT 1
     `,
     [employeeId],

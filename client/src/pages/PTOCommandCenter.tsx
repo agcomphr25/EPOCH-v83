@@ -1802,7 +1802,11 @@ export default function PTOCommandCenter() {
 
   const userRole = (currentUser?.role ?? "").toUpperCase();
   const isRoleAdmin = userRole === "ADMIN" || userRole === "OWNER";
-  const hasCapability = capSet.has("timekeeping.pto.view_all");
+  const hasCapability =
+    capSet.has("timekeeping.pto.view_all") ||
+    capSet.has("timekeeping.pto.approve_supervisor") ||
+    capSet.has("timekeeping.pto.approve_hr") ||
+    capSet.has("timekeeping.pto.approve_vp");
   const authorized = isRoleAdmin || hasCapability;
 
   const { data: summaryData, isLoading: summaryLoading } = useQuery<any>({

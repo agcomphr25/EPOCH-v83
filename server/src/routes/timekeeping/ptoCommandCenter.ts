@@ -17,6 +17,26 @@ async function getCallerCapabilities(req: Request): Promise<{ isAdmin: boolean; 
   return { isAdmin: false, caps: permissionSet };
 }
 
+async function resolveCallerEmployeeId(req: Request): Promise<number | null> {
+  const user = req.user as any;
+  if (!user) return null;
+  if (user.employeeId != null) return user.employeeId;
+
+  const username = String(user.username ?? "").trim();
+  if (!username) return null;
+
+  const { rows } = await pool.query<{ id: number }>(
+    `
+      SELECT e.id
+      FROM employees e
+      WHERE LOWER(e.employee_code) = LOWER($1)
+      LIMIT 1
+    `,
+    [username]
+  );
+  return rows[0]?.id ?? null;
+}
+
 function getVisibleStages(isAdmin: boolean, caps: Set<string>): string[] {
   if (isAdmin) return ["pending_supervisor", "pending_hr", "pending_vp", "pending"];
   const stages: string[] = [];
@@ -30,6 +50,25 @@ function getVisibleStages(isAdmin: boolean, caps: Set<string>): string[] {
   }
   return stages;
 }
+
+const requirePTOCommandCenterAccess: RequestHandler = async (req, res, next) => {
+  try {
+    const { isAdmin, caps } = await getCallerCapabilities(req);
+    if (
+      isAdmin ||
+      caps.has("timekeeping.pto.view_all") ||
+      caps.has("timekeeping.pto.approve_supervisor") ||
+      caps.has("timekeeping.pto.approve_hr") ||
+      caps.has("timekeeping.pto.approve_vp")
+    ) {
+      next();
+      return;
+    }
+    res.status(403).json({ error: "Missing PTO command center access capability" });
+  } catch (err) {
+    next(err);
+  }
+};
 
 function isSchemaNotFound(err: any): boolean {
   const msg = err?.message ?? "";
@@ -90,7 +129,7 @@ const router: IRouter = Router();
 router.get(
   "/pto-command-center/summary",
   authenticateToken,
-  requirePermission("timekeeping.pto.view_all"),
+  requirePTOCommandCenterAccess,
   h(async (req, res): Promise<void> => {
     const { isAdmin, caps } = await getCallerCapabilities(req);
     const callerCaps = isAdmin
@@ -142,7 +181,7 @@ router.get(
 router.get(
   "/pto-command-center/pipeline",
   authenticateToken,
-  requirePermission("timekeeping.pto.view_all"),
+  requirePTOCommandCenterAccess,
   h(async (req, res): Promise<void> => {
     const { isAdmin, caps } = await getCallerCapabilities(req);
     const visibleStages = getVisibleStages(isAdmin, caps);
@@ -198,7 +237,7 @@ router.get(
     const daysToFreeze = Math.ceil((periodEnd.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
     const nearPayrollFreeze = daysToFreeze >= 0 && daysToFreeze <= 3;
 
-    const callerEmployeeId = (req.user as any)?.employeeId ?? null;
+    const callerEmployeeId = await resolveCallerEmployeeId(req);
     const isSupervisorOnly = !isAdmin && caps.has("timekeeping.pto.approve_supervisor") && !caps.has("timekeeping.pto.approve_hr") && !caps.has("timekeeping.pto.approve_vp");
 
     const pipeline: Record<string, any[]> = {
@@ -1287,7 +1326,7 @@ router.get(
 router.get(
   "/pto-command-center/:requestId",
   authenticateToken,
-  requirePermission("timekeeping.pto.view_all"),
+  requirePTOCommandCenterAccess,
   h(async (req, res): Promise<void> => {
     const requestId = parseInt(req.params.requestId, 10);
     if (isNaN(requestId)) { res.status(400).json({ error: "Invalid request ID" }); return; }
@@ -1312,6 +1351,21 @@ router.get(
     }
 
     const request = reqRows[0];
+    const { isAdmin, caps } = await getCallerCapabilities(req);
+    if (!isAdmin && !caps.has("timekeeping.pto.view_all")) {
+      const callerEmployeeId = await resolveCallerEmployeeId(req);
+      const isAssignedSupervisor =
+        caps.has("timekeeping.pto.approve_supervisor") &&
+        callerEmployeeId != null &&
+        request.supervisor_id === callerEmployeeId;
+      const canSeeStage =
+        (request.status === "pending_hr" && caps.has("timekeeping.pto.approve_hr")) ||
+        (request.status === "pending_vp" && caps.has("timekeeping.pto.approve_vp"));
+      if (!isAssignedSupervisor && !canSeeStage) {
+        res.status(403).json({ error: "You are not assigned to this PTO request." });
+        return;
+      }
+    }
 
     const [leaveResult, auditResult] = await Promise.all([
       pool.query(`

@@ -43,6 +43,11 @@ export default function AGTestDashboard() {
   const { data: currentUser } = useQuery<{ id: number; username: string; role: string; employeeId?: number }>({
     queryKey: ['currentUser'],
   });
+  const { data: resolvedEmployee } = useQuery<{ employeeId: number | null }>({
+    queryKey: ['/api/timekeeping/my-employee-id'],
+    enabled: !!currentUser && !currentUser.employeeId,
+  });
+  const dashboardEmployeeId = currentUser?.employeeId ?? resolvedEmployee?.employeeId ?? null;
 
   const toggleExpand = (section: string) => {
     setExpandedSection(expandedSection === section ? null : section);
@@ -436,9 +441,9 @@ export default function AGTestDashboard() {
       </div>
 
       {/* My Tasks Control Center */}
-      {currentUser?.employeeId && (
+      {dashboardEmployeeId && (
         <MyTasksControlCenter
-          employeeId={currentUser.employeeId}
+          employeeId={dashboardEmployeeId}
           userName={currentUser.username}
           compact={false}
         />

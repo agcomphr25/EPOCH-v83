@@ -166,7 +166,7 @@ export default function MyTasksControlCenter({
     enabled: !!employeeId,
   });
 
-  const { data: timekeepingTasksData } = useQuery<TimekeepingTasksResponse>({
+  const { data: timekeepingTasksData, isError: timekeepingTasksError } = useQuery<TimekeepingTasksResponse>({
     queryKey: ['/api/timekeeping/my-tasks', employeeId],
     queryFn: () => apiRequest(`/api/timekeeping/my-tasks/${employeeId}`),
     enabled: !!employeeId,
@@ -201,11 +201,11 @@ export default function MyTasksControlCenter({
   });
 
   const tasks = tasksData?.tasks || [];
-  const timekeepingTasks = timekeepingTasksData?.tasks || [];
+  const timekeepingTasks = timekeepingTasksError ? [] : timekeepingTasksData?.tasks || [];
   const approvalTasks = approvalTasksData?.tasks || [];
   const baseStats = tasksData?.stats || { total: 0, completed: 0, pending: 0, overdue: 0 };
   const sigPending = signatureStats?.pending || 0;
-  const timekeepingPending = timekeepingTasksData?.stats?.pending || 0;
+  const timekeepingPending = timekeepingTasksError ? 0 : timekeepingTasksData?.stats?.pending || 0;
   const approvalPending = approvalTasksData?.stats?.pending || 0;
   const approvalOverdue = approvalTasksData?.stats?.overdue || 0;
   const stats = {

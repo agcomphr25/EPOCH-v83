@@ -27,6 +27,7 @@ import {
   Receipt,
   ShieldAlert,
   History,
+  AlertTriangle,
 } from 'lucide-react';
 import OverrideShippingDataModal from '@/components/p2/OverrideShippingDataModal';
 
@@ -97,6 +98,9 @@ interface Invoice {
   due_date: string | null;
   total_amount: string;
   status: string;
+  journal_entry_id: number | null;
+  journal_entry_status: string | null;
+  journal_line_count: number | null;
 }
 
 interface ShipmentDetail {
@@ -105,6 +109,29 @@ interface ShipmentDetail {
   certificate: Certificate | null;
   serializedItems: SerializedItem[];
   invoice: Invoice | null;
+}
+
+interface CertPackageBlocker {
+  code: string;
+  message: string;
+  references?: string[];
+}
+
+interface CertPackageEvidence {
+  type: string;
+  label: string;
+  status: 'present' | 'missing' | 'not_applicable';
+  source: string;
+  reference?: string | null;
+}
+
+interface CertPackageGate {
+  lotId: string;
+  lotNumber: string;
+  readyToShip: boolean;
+  blockers: CertPackageBlocker[];
+  evidence: CertPackageEvidence[];
+  revisionSnapshot: Record<string, unknown>;
 }
 
 interface AuditLogEntry {
@@ -214,6 +241,16 @@ export default function P2ShipmentDetail() {
     enabled: !!lotId && canOverride,
   });
 
+  const { data: certPackage, refetch: refetchCertPackage } = useQuery<CertPackageGate>({
+    queryKey: ['/api/p2/shipments', lotId, 'cert-package'],
+    queryFn: async () => {
+      const r = await fetch(`/api/p2/shipments/${lotId}/cert-package`);
+      if (!r.ok) throw new Error('Failed to evaluate cert package');
+      return r.json();
+    },
+    enabled: !!lotId,
+  });
+
   const packingSlipId = data?.packingSlip?.id;
   const { data: linkedRmas = [] } = useQuery<any[]>({
     queryKey: ['/api/p2/rmas', { packingSlipId }],
@@ -224,6 +261,33 @@ export default function P2ShipmentDetail() {
       return r.json();
     },
     enabled: !!packingSlipId,
+  });
+
+  const createInvoiceMutation = useMutation({
+    mutationFn: async () => {
+      if (!packingSlipId) throw new Error('No packing slip is linked to this shipment.');
+      return apiRequest(`/api/ar-invoices/from-packing-slip/${packingSlipId}`, {
+        method: 'POST',
+      });
+    },
+    onSuccess: (createdInvoice: any) => {
+      toast({
+        title: 'Invoice ready for review',
+        description: createdInvoice?.invoiceNumber
+          ? `Invoice ${createdInvoice.invoiceNumber} was created from this packing slip.`
+          : 'Invoice was created from this packing slip.',
+      });
+      qc.invalidateQueries({ queryKey: ['/api/p2/shipments', lotId] });
+      qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === '/api/ar-invoices' });
+      if (createdInvoice?.id) setLocation(`/finance/invoices/${createdInvoice.id}`);
+    },
+    onError: (err: any) => {
+      toast({
+        title: 'Invoice creation failed',
+        description: err.message || 'Unable to create invoice from this packing slip.',
+        variant: 'destructive',
+      });
+    },
   });
 
   useEffect(() => {
@@ -241,6 +305,7 @@ export default function P2ShipmentDetail() {
       toast({ title: 'Shipment updated', description: 'Changes saved successfully.' });
       setEditMode(false);
       qc.invalidateQueries({ queryKey: ['/api/p2/shipments', lotId] });
+      qc.invalidateQueries({ queryKey: ['/api/p2/shipments', lotId, 'cert-package'] });
     },
     onError: () => toast({ title: 'Save failed', variant: 'destructive' }),
   });
@@ -260,10 +325,15 @@ export default function P2ShipmentDetail() {
     onSuccess: () => {
       toast({ title: 'Marked as Shipped', description: 'Lot shipped and invoice auto-created.' });
       qc.invalidateQueries({ queryKey: ['/api/p2/shipments', lotId] });
+      qc.invalidateQueries({ queryKey: ['/api/p2/shipments', lotId, 'cert-package'] });
       qc.invalidateQueries({ queryKey: ['/api/p2/lots/existing-shipments'] });
       qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === '/api/ar-invoices' });
     },
-    onError: () => toast({ title: 'Mark shipped failed', variant: 'destructive' }),
+    onError: (err: any) => toast({
+      title: 'Mark shipped failed',
+      description: err?.message || 'Shipment is blocked until the cert package gate is clear.',
+      variant: 'destructive',
+    }),
   });
 
   async function handleBolUpload(file: File) {
@@ -291,6 +361,7 @@ export default function P2ShipmentDetail() {
       if (!r.ok) throw new Error('Upload failed');
       toast({ title: 'Packing Slip uploaded' });
       qc.invalidateQueries({ queryKey: ['/api/p2/shipments', lotId] });
+      qc.invalidateQueries({ queryKey: ['/api/p2/shipments', lotId, 'cert-package'] });
     } catch {
       toast({ title: 'Upload failed', variant: 'destructive' });
     } finally {
@@ -307,6 +378,7 @@ export default function P2ShipmentDetail() {
       if (!r.ok) throw new Error('Upload failed');
       toast({ title: 'Certificate of Conformance uploaded' });
       qc.invalidateQueries({ queryKey: ['/api/p2/shipments', lotId] });
+      qc.invalidateQueries({ queryKey: ['/api/p2/shipments', lotId, 'cert-package'] });
     } catch {
       toast({ title: 'Upload failed', variant: 'destructive' });
     } finally {
@@ -323,6 +395,7 @@ export default function P2ShipmentDetail() {
       if (!r.ok) throw new Error('Upload failed');
       toast({ title: 'Lot Validation Report uploaded' });
       qc.invalidateQueries({ queryKey: ['/api/p2/shipments', lotId] });
+      qc.invalidateQueries({ queryKey: ['/api/p2/shipments', lotId, 'cert-package'] });
     } catch {
       toast({ title: 'Upload failed', variant: 'destructive' });
     } finally {
@@ -405,7 +478,7 @@ export default function P2ShipmentDetail() {
                   size="sm"
                   className="bg-green-600 hover:bg-green-700 text-white"
                   onClick={() => markShippedMutation.mutate()}
-                  disabled={markShippedMutation.isPending}
+                  disabled={markShippedMutation.isPending || certPackage?.readyToShip === false}
                 >
                   {markShippedMutation.isPending ? (
                     <Loader2 className="h-4 w-4 animate-spin mr-1" />
@@ -427,6 +500,72 @@ export default function P2ShipmentDetail() {
                 </Button>
               )}
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Cert package gate */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              {certPackage?.readyToShip ? (
+                <Shield className="h-4 w-4 text-green-600" />
+              ) : (
+                <AlertTriangle className="h-4 w-4 text-amber-600" />
+              )}
+              Cert Package Gate
+              {certPackage && (
+                <Badge className={certPackage.readyToShip ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}>
+                  {certPackage.readyToShip ? 'Ready' : `${certPackage.blockers.length} blocker${certPackage.blockers.length === 1 ? '' : 's'}`}
+                </Badge>
+              )}
+            </CardTitle>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => refetchCertPackage()}>
+                <RefreshCw className="h-4 w-4 mr-1" /> Refresh Gate
+              </Button>
+              <a href={`/api/p2/shipments/${lotId}/cert-package/export`} target="_blank" rel="noopener noreferrer">
+                <Button variant="outline" size="sm">
+                  <Download className="h-4 w-4 mr-1" /> Export Manifest
+                </Button>
+              </a>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {certPackage?.blockers?.length ? (
+            <div className="space-y-2">
+              {certPackage.blockers.map((blocker) => (
+                <div key={blocker.code} className="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                  <p className="font-medium">{blocker.message}</p>
+                  {blocker.references?.length ? (
+                    <p className="mt-1 text-xs font-mono text-amber-800">{blocker.references.join(', ')}</p>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Traveler, NCR, inspection, WAD, and required certificate evidence are clear for shipment.</p>
+          )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+            {(certPackage?.evidence ?? []).map((item) => (
+              <div key={`${item.type}-${item.source}`} className="rounded border p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-sm font-medium">{item.label}</p>
+                  <Badge className={
+                    item.status === 'present'
+                      ? 'bg-green-100 text-green-800'
+                      : item.status === 'missing'
+                        ? 'bg-red-100 text-red-800'
+                        : 'bg-gray-100 text-gray-700'
+                  }>
+                    {item.status === 'not_applicable' ? 'N/A' : item.status}
+                  </Badge>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground truncate">{item.reference || item.source}</p>
+              </div>
+            ))}
           </div>
         </CardContent>
       </Card>
@@ -747,21 +886,33 @@ export default function P2ShipmentDetail() {
                 <div>
                   <p className="text-sm font-medium">AR Invoice</p>
                   {invoice ? (
-                    <p className="text-xs text-muted-foreground font-mono flex items-center gap-1.5">
-                      <Link
-                        href={`/finance/invoices/${invoice.id}`}
-                        className="text-blue-600 hover:underline dark:text-blue-400"
-                      >
-                        {invoice.invoice_number}
-                      </Link>
-                      <Badge className={`text-xs ${invoiceStatusColor(invoice.status)}`}>{invoice.status}</Badge>
-                    </p>
+                    <>
+                      <p className="text-xs text-muted-foreground font-mono flex items-center gap-1.5">
+                        <Link
+                          href={`/finance/invoices/${invoice.id}`}
+                          className="text-blue-600 hover:underline dark:text-blue-400"
+                        >
+                          {invoice.invoice_number}
+                        </Link>
+                        <Badge className={`text-xs ${invoiceStatusColor(invoice.status)}`}>{invoice.status}</Badge>
+                      </p>
+                      {invoice.journal_entry_id ? (
+                        <p className="text-xs text-indigo-700 mt-1">
+                          JE #{invoice.journal_entry_id} {invoice.journal_entry_status || 'POSTED'}
+                          {invoice.journal_line_count ? ` (${invoice.journal_line_count} lines)` : ''}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-amber-700 mt-1">
+                          Journal entry pending until invoice is posted.
+                        </p>
+                      )}
+                    </>
                   ) : (
                     <p className="text-xs text-muted-foreground italic">No invoice created yet</p>
                   )}
                 </div>
               </div>
-              {invoice && (
+              {invoice ? (
                 <div className="text-right text-sm flex items-center gap-2">
                   <div>
                     <p className="font-medium">${parseFloat(invoice.total_amount).toLocaleString()}</p>
@@ -773,7 +924,21 @@ export default function P2ShipmentDetail() {
                     </Link>
                   </Button>
                 </div>
-              )}
+              ) : packingSlip ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => createInvoiceMutation.mutate()}
+                  disabled={createInvoiceMutation.isPending}
+                >
+                  {createInvoiceMutation.isPending ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                  ) : (
+                    <Receipt className="h-3.5 w-3.5 mr-1" />
+                  )}
+                  Create Invoice
+                </Button>
+              ) : null}
             </div>
           </>
         </CardContent>

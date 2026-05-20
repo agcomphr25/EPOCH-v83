@@ -1,9 +1,9 @@
 import { db } from "../../../db";
 import { pool } from "../../../db";
-import { timesheetsTable, punchesTable, salariedTimesheetsTable } from "../../schema/timekeeping";
-import { eq, and, gte, lte, isNull, isNotNull, or } from "drizzle-orm";
+import { timesheetsTable, punchesTable, salariedTimesheetsTable, dailyTimeCertificationsTable } from "../../schema/timekeeping";
+import { eq, and, gte, lte, isNull, isNotNull, or, inArray } from "drizzle-orm";
 import type { Timesheet, SalariedTimesheet } from "../../schema/timekeeping";
-import { listResolvedEmployees, resolveByTimekeepingId } from "../../lib/timekeepingEmployeeResolver";
+import { listResolvedEmployees } from "../../lib/timekeepingEmployeeResolver";
 import {
   computeHoursFromPunches,
   toTZDateStr,
@@ -11,12 +11,13 @@ import {
   startOfWeekInTZ,
   type TimesheetHours,
 } from "../../lib/timekeeping";
-import { punchLedger, type PunchLedgerEntry } from "../../../schema";
+import { auditEvents, punchLedger, type PunchLedgerEntry } from "../../../schema";
 import { getOrCreateSettings } from "./settings.service";
 import { getOrCreatePolicySettings } from "./policySettings.service";
 import { logAction, type AuditActor } from "./audit.service";
 import { assertTransition, isEditable, InvalidTransitionError } from "./timesheetStateMachine";
 import { punchLedgerCutoverDate } from "../../lib/featureFlags";
+import { recordAuditEvent, type AuditPayload } from "../auditLedgerService";
 
 export type { Timesheet };
 
@@ -82,6 +83,33 @@ export interface RunningTimesheetView {
   hasOpenSession: boolean;
   persistedTimesheet: Timesheet | null;
   days: RunningTimesheetDay[];
+}
+
+export interface DailyCertificationRequiredDay {
+  date: string;
+  workHours: number;
+  regularHours: number;
+  overtimeHours: number;
+}
+
+export interface DailyCertificationStatus {
+  timesheetId: number;
+  employeeId: number;
+  periodStart: string;
+  periodEnd: string;
+  dailyCertificationRequired: boolean;
+  complete: boolean;
+  requiredDays: DailyCertificationRequiredDay[];
+  certifiedDays: Array<{
+    id: number;
+    workDate: string;
+    workHours: number;
+    certifiedAt: Date;
+    certifiedByUserId: number | null;
+    certificationVersion: number;
+    source: string;
+  }>;
+  missingDates: string[];
 }
 
 function addDays(dateStr: string, days: number): string {
@@ -352,46 +380,43 @@ export async function computeHoursForPeriod(
     : periodStartDate;
 
   if (needsLedger) {
-    const resolved = await resolveByTimekeepingId(employeeId);
-    if (resolved != null) {
-      const ledgerSessions = await db
-        .select()
-        .from(punchLedger)
-        .where(
-          and(
-            eq(punchLedger.employeeId, resolved.epochEmployeeId),
-            lte(punchLedger.clockIn, periodEndDate),
-            or(
-              gte(punchLedger.clockOut, ledgerStartDate),
-              isNull(punchLedger.clockOut)
-            )
+    const ledgerSessions = await db
+      .select()
+      .from(punchLedger)
+      .where(
+        and(
+          eq(punchLedger.employeeId, employeeId),
+          lte(punchLedger.clockIn, periodEndDate),
+          or(
+            gte(punchLedger.clockOut, ledgerStartDate),
+            isNull(punchLedger.clockOut)
           )
-        );
+        )
+      );
 
-      const now = new Date();
-      for (const session of ledgerSessions) {
-        if (session.laborClass === "BREAK") continue;
+    const now = new Date();
+    for (const session of ledgerSessions) {
+      if (session.laborClass === "BREAK") continue;
 
-        const sessionStart = Math.max(new Date(session.clockIn).getTime(), ledgerStartDate.getTime());
-        const rawEnd = session.clockOut ? new Date(session.clockOut).getTime() : now.getTime();
-        const sessionEnd = Math.min(rawEnd, periodEndDate.getTime());
-        if (sessionEnd <= sessionStart) continue;
+      const sessionStart = Math.max(new Date(session.clockIn).getTime(), ledgerStartDate.getTime());
+      const rawEnd = session.clockOut ? new Date(session.clockOut).getTime() : now.getTime();
+      const sessionEnd = Math.min(rawEnd, periodEndDate.getTime());
+      if (sessionEnd <= sessionStart) continue;
 
-        let cursor = sessionStart;
-        while (cursor < sessionEnd) {
-          const dayKey = toTZDateStr(new Date(cursor), tz);
+      let cursor = sessionStart;
+      while (cursor < sessionEnd) {
+        const dayKey = toTZDateStr(new Date(cursor), tz);
 
-          const [y, m, d] = dayKey.split("-").map(Number);
-          const nextDayStr = new Date(Date.UTC(y, m - 1, d + 1))
-            .toISOString()
-            .slice(0, 10);
-          const dayBoundaryMs = midnightInTZ(nextDayStr, tz).getTime();
+        const [y, m, d] = dayKey.split("-").map(Number);
+        const nextDayStr = new Date(Date.UTC(y, m - 1, d + 1))
+          .toISOString()
+          .slice(0, 10);
+        const dayBoundaryMs = midnightInTZ(nextDayStr, tz).getTime();
 
-          const sliceEnd = Math.min(sessionEnd, dayBoundaryMs);
-          const hrs = (sliceEnd - cursor) / 3_600_000;
-          hoursByDay.set(dayKey, (hoursByDay.get(dayKey) ?? 0) + hrs);
-          cursor = sliceEnd;
-        }
+        const sliceEnd = Math.min(sessionEnd, dayBoundaryMs);
+        const hrs = (sliceEnd - cursor) / 3_600_000;
+        hoursByDay.set(dayKey, (hoursByDay.get(dayKey) ?? 0) + hrs);
+        cursor = sliceEnd;
       }
     }
   }
@@ -436,6 +461,254 @@ export async function computeHoursForPeriod(
     regularHours: Math.round(regularHours * 100) / 100,
     overtimeHours: Math.round(overtimeHours * 100) / 100,
   };
+}
+
+function isDateInPeriod(date: string, periodStart: string, periodEnd: string): boolean {
+  return date >= periodStart && date <= periodEnd;
+}
+
+async function requiredDailyCertificationDays(timesheet: Timesheet): Promise<DailyCertificationRequiredDay[]> {
+  const running = await getRunningTimesheetForEmployee(
+    timesheet.employeeId,
+    timesheet.periodStart,
+    timesheet.periodEnd,
+  );
+
+  return running.days
+    .filter((day) => day.workHours > 0)
+    .map((day) => ({
+      date: day.date,
+      workHours: day.workHours,
+      regularHours: day.regularHours,
+      overtimeHours: day.overtimeHours,
+    }));
+}
+
+export async function getDailyCertificationStatus(
+  timesheetId: number,
+  existingTimesheet?: Timesheet,
+): Promise<DailyCertificationStatus | { error: string; statusCode: number }> {
+  const timesheet = existingTimesheet ?? await getTimesheet(timesheetId);
+  if (!timesheet) return { error: "Timesheet not found", statusCode: 404 };
+
+  const policy = await getOrCreatePolicySettings();
+  const requiredDays = policy.dailyCertificationRequired
+    ? await requiredDailyCertificationDays(timesheet)
+    : [];
+
+  const certifications = await db
+    .select()
+    .from(dailyTimeCertificationsTable)
+    .where(eq(dailyTimeCertificationsTable.timesheetId, timesheet.id));
+
+  const legacyEntityIds = requiredDays.map((day) => `daily-cert-${timesheet.employeeId}-${day.date}`);
+  const legacyCertifications = legacyEntityIds.length > 0
+    ? await db
+        .select({ entityId: auditEvents.entityId })
+        .from(auditEvents)
+        .where(
+          and(
+            eq(auditEvents.entityType, "time_entry"),
+            eq(auditEvents.action, "DAILY_CERTIFIED"),
+            inArray(auditEvents.entityId, legacyEntityIds),
+          ),
+        )
+    : [];
+
+  const certifiedDateSet = new Set(certifications.map((row) => row.workDate));
+  legacyCertifications.forEach((row) => {
+    const date = row.entityId?.split("-").slice(-3).join("-");
+    if (date) certifiedDateSet.add(date);
+  });
+  const missingDates = requiredDays
+    .map((day) => day.date)
+    .filter((date) => !certifiedDateSet.has(date));
+
+  return {
+    timesheetId: timesheet.id,
+    employeeId: timesheet.employeeId,
+    periodStart: timesheet.periodStart,
+    periodEnd: timesheet.periodEnd,
+    dailyCertificationRequired: policy.dailyCertificationRequired,
+    complete: missingDates.length === 0,
+    requiredDays,
+    certifiedDays: certifications.map((row) => ({
+      id: row.id,
+      workDate: row.workDate,
+      workHours: row.workHours,
+      certifiedAt: row.certifiedAt,
+      certifiedByUserId: row.certifiedByUserId ?? null,
+      certificationVersion: row.certificationVersion,
+      source: row.source,
+    })),
+    missingDates,
+  };
+}
+
+export async function certifyTimesheetDay(
+  timesheetId: number,
+  workDate: string,
+  actor: AuditActor,
+  options: { certificationConfirmed?: boolean; source?: string } = {},
+) {
+  const timesheet = await getTimesheet(timesheetId);
+  if (!timesheet) return { error: "Timesheet not found", statusCode: 404 };
+
+  if (!isEditable(timesheet.status)) {
+    return {
+      error: `Only draft timesheets can receive daily certifications (current status: ${timesheet.status})`,
+      statusCode: 409,
+    };
+  }
+
+  if (options.certificationConfirmed !== true) {
+    return {
+      error: "Daily certification checkbox must be explicitly confirmed.",
+      statusCode: 400,
+    };
+  }
+
+  if (!isDateInPeriod(workDate, timesheet.periodStart, timesheet.periodEnd)) {
+    return {
+      error: `Daily certification date ${workDate} is outside timesheet period ${timesheet.periodStart}..${timesheet.periodEnd}`,
+      statusCode: 422,
+    };
+  }
+
+  const requiredDays = await requiredDailyCertificationDays(timesheet);
+  const requiredDay = requiredDays.find((day) => day.date === workDate);
+  if (!requiredDay) {
+    return {
+      error: `No recorded work hours require certification for ${workDate}.`,
+      statusCode: 422,
+    };
+  }
+
+  const policy = await getOrCreatePolicySettings();
+  const now = new Date();
+
+  const [certification] = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .insert(dailyTimeCertificationsTable)
+      .values({
+        timesheetId: timesheet.id,
+        employeeId: timesheet.employeeId,
+        workDate,
+        workHours: requiredDay.workHours,
+        certifiedAt: now,
+        certifiedByUserId: actor.id,
+        certificationStatement: policy.certificationStatement,
+        certificationVersion: policy.certificationVersion,
+        source: options.source ?? "employee_self",
+      })
+      .onConflictDoUpdate({
+        target: [dailyTimeCertificationsTable.timesheetId, dailyTimeCertificationsTable.workDate],
+        set: {
+          workHours: requiredDay.workHours,
+          certifiedAt: now,
+          certifiedByUserId: actor.id,
+          certificationStatement: policy.certificationStatement,
+          certificationVersion: policy.certificationVersion,
+          source: options.source ?? "employee_self",
+          updatedAt: now,
+        },
+      })
+      .returning();
+
+    await logAction({
+      tableName: "timesheets",
+      recordId: timesheet.id,
+      action: "TIME_DAILY_CERTIFIED",
+      newValues: {
+        dailyCertificationId: row!.id,
+        workDate,
+        workHours: requiredDay.workHours,
+        certificationStatement: policy.certificationStatement,
+        certificationVersion: policy.certificationVersion,
+      },
+      actor,
+    }, tx);
+
+    const dailyCertEntityId = `daily-cert-${timesheet.employeeId}-${workDate}`;
+    const [existingDailyAudit] = await tx
+      .select({ id: auditEvents.id })
+      .from(auditEvents)
+      .where(
+        and(
+          eq(auditEvents.entityType, "time_entry"),
+          eq(auditEvents.entityId, dailyCertEntityId),
+          eq(auditEvents.action, "DAILY_CERTIFIED"),
+        ),
+      )
+      .limit(1);
+
+    if (!existingDailyAudit) {
+      await recordAuditEvent({
+        eventType: "DAILY_CERTIFIED",
+        subjectType: "time_entry",
+        subjectId: dailyCertEntityId,
+        sourceService: "timekeeping.timesheets.service",
+        actor: {
+          id: timesheet.employeeId,
+          username: actor.email,
+          role: actor.role,
+        },
+        payload: {
+          dailyCertificationId: row!.id,
+          timesheetId: timesheet.id,
+          employeeId: timesheet.employeeId,
+          workDate,
+          workHours: requiredDay.workHours,
+          certificationVersion: policy.certificationVersion,
+        } as AuditPayload,
+        entityType: "time_entry",
+        entityId: dailyCertEntityId,
+        reason: `Employee daily time certification for ${workDate}`,
+        ipAddress: actor.ip,
+      }, tx);
+    }
+
+    return [row!];
+  });
+
+  return certification!;
+}
+
+export async function certifyDailyTimeOnPunchOut(
+  employeeId: number,
+  punchOutAt: Date,
+  actor: AuditActor,
+  options: { certificationConfirmed?: boolean; source?: string } = {},
+) {
+  const policy = await getOrCreatePolicySettings();
+  if (!policy.dailyCertificationRequired) {
+    return null;
+  }
+
+  if (options.certificationConfirmed !== true) {
+    return {
+      error: "Daily employee certification is required when punching out for the day.",
+      statusCode: 400,
+    };
+  }
+
+  const settings = await getOrCreateSettings();
+  const periodStart = toTZDateStr(startOfWeekInTZ(settings.timezone, settings.workweekStartDay, punchOutAt), settings.timezone);
+  const periodEnd = addDays(periodStart, 6);
+  const workDate = toTZDateStr(punchOutAt, settings.timezone);
+
+  const timesheet = await getOrAutoCreateTimesheet(employeeId, periodStart, periodEnd, actor);
+  if (!timesheet) {
+    return {
+      error: "No recorded work hours were available to certify for this punch-out.",
+      statusCode: 422,
+    };
+  }
+
+  return certifyTimesheetDay(timesheet.id, workDate, actor, {
+    certificationConfirmed: true,
+    source: options.source ?? "punch_out",
+  });
 }
 
 export async function createTimesheet(
@@ -528,6 +801,17 @@ export async function submitTimesheet(
     };
   }
 
+  if (policy.dailyCertificationRequired) {
+    const dailyStatus = await getDailyCertificationStatus(id, existing);
+    if ("error" in dailyStatus) return dailyStatus;
+    if (!dailyStatus.complete) {
+      return {
+        error: `Daily employee certification is required before submitting. Missing dates: ${dailyStatus.missingDates.join(", ")}`,
+        statusCode: 422,
+      };
+    }
+  }
+
   if (policy.minimumHoursPerWeek != null && existing.totalHours < policy.minimumHoursPerWeek) {
     return {
       error: `This timesheet has ${existing.totalHours.toFixed(2)} hours but the minimum required is ${policy.minimumHoursPerWeek} hours per week. Please record all hours before submitting.`,
@@ -576,6 +860,9 @@ export async function submitTimesheet(
     },
     actor,
   });
+
+  const { notifyHourlyTimesheetApprovalNeeded } = await import("./approvalNotifications.service");
+  void notifyHourlyTimesheetApprovalNeeded(id);
 
   if (lateSubmissionWarning) {
     return { ...row!, lateSubmissionWarning };
@@ -656,22 +943,19 @@ export async function attestTimesheet(
     : periodStartDate;
 
   if (snapNeedsLedger) {
-    const resolved = await resolveByTimekeepingId(existing.employeeId);
-    if (resolved != null) {
-      ledgerSessions = await db
-        .select()
-        .from(punchLedger)
-        .where(
-          and(
-            eq(punchLedger.employeeId, resolved.epochEmployeeId),
-            lte(punchLedger.clockIn, periodEndDate),
-            or(
-              gte(punchLedger.clockOut, snapLedgerStart),
-              isNull(punchLedger.clockOut)
-            )
+    ledgerSessions = await db
+      .select()
+      .from(punchLedger)
+      .where(
+        and(
+          eq(punchLedger.employeeId, existing.employeeId),
+          lte(punchLedger.clockIn, periodEndDate),
+          or(
+            gte(punchLedger.clockOut, snapLedgerStart),
+            isNull(punchLedger.clockOut)
           )
-        );
-    }
+        )
+      );
   }
 
   if (snapNeedsLegacy) {

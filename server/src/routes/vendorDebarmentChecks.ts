@@ -12,6 +12,7 @@ import {
   vendorDebarmentChecks,
   procurementSettings,
   insertVendorDebarmentCheckSchema,
+  vendors,
 } from '../../schema';
 import { requirePermission } from '../../middleware/requirePermission';
 import { auditService } from '../services/auditService';
@@ -54,13 +55,20 @@ router.post('/', requirePermission('purchasing.record_debarment_check'), async (
       checkedByUserId: user?.id ?? parsed.checkedByUserId ?? null,
       checkedByDisplayName: user?.username ?? parsed.checkedByDisplayName ?? null,
     }).returning();
+    await db.update(vendors).set({
+      debarmentStatus: parsed.result === 'pass' ? 'clear' : parsed.result === 'fail' ? 'debarred' : 'unknown',
+      debarmentCheckedAt: row.checkedAt,
+      debarmentEvidenceUrl: parsed.evidenceUrl ?? null,
+      debarmentNotes: parsed.notes ?? null,
+      updatedAt: new Date(),
+    }).where(eq(vendors.id, parsed.vendorId));
     await auditService.logEvent({
       entityType: 'vendor',
       entityId: String(parsed.vendorId),
       action: 'DEBARMENT_CHECK_RECORDED',
       actor: { id: user?.id, username: user?.username, role: user?.role },
       meta: { result: parsed.result, source: parsed.source, context: parsed.context },
-    }).catch(() => {});
+    });
     res.status(201).json(row);
   } catch (err: any) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', issues: err.errors });

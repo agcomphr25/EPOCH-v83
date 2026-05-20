@@ -408,7 +408,7 @@ export default function BusinessContinuityDashboard() {
                 <Shield className="h-4 w-4" />
                 <span>Governance</span>
                 <ChevronRight className="h-3 w-3" />
-                <span className="text-gray-900 dark:text-gray-100 font-medium">Business Continuity</span>
+                <span className="font-medium text-red-600 dark:text-red-400">Business Continuity</span>
               </div>
               <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Business Continuity Dashboard</h1>
               <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">

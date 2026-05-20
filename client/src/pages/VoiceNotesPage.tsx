@@ -44,17 +44,24 @@ import {
   ExternalLink,
   CheckCircle2,
   XCircle,
+  Volume2,
+  Loader2,
 } from 'lucide-react';
-import { format } from 'date-fns';
 import { Link } from 'wouter';
 
 interface VoiceNote {
   id: string;
   transcription: string;
+  title: string | null;
+  summary: string | null;
   linkedOrderId: string | null;
   noteType: string;
   category: string | null;
   tags: string[] | null;
+  extractedTasks: string[] | null;
+  suggestedLinks: Array<{ type: string; id: string; label: string; confidence?: string }> | null;
+  followUpQuestions: string[] | null;
+  visibility: string;
   recordedById: number | null;
   recordedByUsername: string;
   recordedAt: string;
@@ -82,6 +89,20 @@ declare global {
   }
 }
 
+function getVoicePermissionMessage(errorCode?: string) {
+  switch (errorCode) {
+    case 'not-allowed':
+    case 'service-not-allowed':
+      return 'Microphone access is blocked. Click the site settings icon in the address bar, allow microphone access for EPOCH, then try again.';
+    case 'audio-capture':
+      return 'No microphone was detected. Check that a microphone is connected and available to the browser.';
+    case 'network':
+      return 'Speech recognition could not reach the browser speech service. Check the connection and try again.';
+    default:
+      return errorCode ? `Speech recognition error: ${errorCode}.` : 'Speech recognition could not start.';
+  }
+}
+
 export default function VoiceNotesPage() {
   const [isRecording, setIsRecording] = useState(false);
   const [transcription, setTranscription] = useState('');
@@ -90,13 +111,18 @@ export default function VoiceNotesPage() {
   const [filterCategory, setFilterCategory] = useState('all');
   const [filterResolved, setFilterResolved] = useState('all');
   const [selectedNote, setSelectedNote] = useState<VoiceNote | null>(null);
+  const [latestCapture, setLatestCapture] = useState<VoiceNote | null>(null);
   const [resolveDialogOpen, setResolveDialogOpen] = useState(false);
   const [resolveNotes, setResolveNotes] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState<VoiceNote | null>(null);
   const [hasAccess, setHasAccess] = useState<boolean | null>(null);
+  const [isAssistantRecording, setIsAssistantRecording] = useState(false);
+  const [assistantStatus, setAssistantStatus] = useState('');
   
   const recognitionRef = useRef<any>(null);
   const isRecordingRef = useRef(false);
+  const assistantRecorderRef = useRef<MediaRecorder | null>(null);
+  const assistantAudioChunksRef = useRef<Blob[]>([]);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -141,8 +167,10 @@ export default function VoiceNotesPage() {
           setIsRecording(false);
           isRecordingRef.current = false;
           toast({
-            title: 'Recording Error',
-            description: `Error: ${event.error}. Please try again.`,
+            title: event.error === 'not-allowed' || event.error === 'service-not-allowed'
+              ? 'Microphone Blocked'
+              : 'Recording Error',
+            description: getVoicePermissionMessage(event.error),
             variant: 'destructive',
           });
         }
@@ -201,6 +229,8 @@ export default function VoiceNotesPage() {
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/voice-notes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/voice-notes/analytics'] });
+      setLatestCapture(data);
       setTranscription('');
       setInterimTranscription('');
       
@@ -213,8 +243,50 @@ export default function VoiceNotesPage() {
       
       toast({ title: 'Success', description: message });
     },
-    onError: () => {
-      toast({ title: 'Error', description: 'Failed to save voice note', variant: 'destructive' });
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error?.message || 'Failed to save voice note',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const assistantCaptureMutation = useMutation({
+    mutationFn: async (data: { audio: string; inputFormat: 'webm'; voice: 'nova'; speakResponse: boolean }) => {
+      return apiRequest('/api/voice-notes/assistant-capture', {
+        method: 'POST',
+        body: data,
+        timeout: 120000,
+      });
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/voice-notes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/voice-notes/analytics'] });
+      setLatestCapture(data);
+      setTranscription(data.userTranscript || data.transcription || '');
+      setInterimTranscription('');
+      setAssistantStatus(data.assistantTranscript || 'EPOCH captured the note.');
+
+      if (data.audioResponse && data.audioFormat) {
+        const audio = new Audio(`data:audio/${data.audioFormat};base64,${data.audioResponse}`);
+        audio.play().catch(() => {
+          toast({
+            title: 'Captured',
+            description: data.assistantTranscript || 'EPOCH saved the note, but audio playback was blocked by the browser.',
+          });
+        });
+      } else {
+        toast({ title: 'Captured', description: data.assistantTranscript || 'EPOCH saved the note.' });
+      }
+    },
+    onError: (error: any) => {
+      setAssistantStatus('');
+      toast({
+        title: 'Voice Capture Failed',
+        description: error?.message || 'Failed to process the voice note',
+        variant: 'destructive',
+      });
     },
   });
 
@@ -248,16 +320,35 @@ export default function VoiceNotesPage() {
     },
   });
 
-  const startRecording = () => {
+  const startRecording = async () => {
     if (recognitionRef.current) {
       setTranscription('');
       setInterimTranscription('');
-      isRecordingRef.current = true;
-      setIsRecording(true);
       try {
+        const stream = await navigator.mediaDevices?.getUserMedia?.({ audio: true });
+        stream?.getTracks().forEach(track => track.stop());
+        isRecordingRef.current = true;
+        setIsRecording(true);
         recognitionRef.current.start();
       } catch (e) {
-        console.log('Recognition already started');
+        setIsRecording(false);
+        isRecordingRef.current = false;
+        const error = e as { name?: string; message?: string };
+        if (error?.name === 'InvalidStateError') {
+          isRecordingRef.current = true;
+          setIsRecording(true);
+          console.log('Recognition already started');
+          return;
+        }
+
+        const permissionDenied = error?.name === 'NotAllowedError' || error?.name === 'SecurityError';
+        toast({
+          title: permissionDenied ? 'Microphone Blocked' : 'Recording Error',
+          description: permissionDenied
+            ? getVoicePermissionMessage('not-allowed')
+            : error?.message || getVoicePermissionMessage(),
+          variant: 'destructive',
+        });
       }
     } else {
       toast({
@@ -289,13 +380,106 @@ export default function VoiceNotesPage() {
     createNoteMutation.mutate({ transcription: finalText });
   };
 
+  const blobToBase64 = (blob: Blob) => new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = reader.result;
+      if (typeof result !== 'string') {
+        reject(new Error('Could not read audio recording'));
+        return;
+      }
+      resolve(result.split(',')[1] || '');
+    };
+    reader.onerror = () => reject(reader.error || new Error('Could not read audio recording'));
+    reader.readAsDataURL(blob);
+  });
+
+  const startAssistantRecording = async () => {
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+      toast({
+        title: 'Not Supported',
+        description: 'EPOCH voice capture needs microphone recording support in this browser.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorderOptions = MediaRecorder.isTypeSupported('audio/webm')
+        ? { mimeType: 'audio/webm' }
+        : undefined;
+      const recorder = new MediaRecorder(stream, recorderOptions);
+      assistantAudioChunksRef.current = [];
+      assistantRecorderRef.current = recorder;
+      setAssistantStatus('EPOCH is listening...');
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          assistantAudioChunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(track => track.stop());
+        setIsAssistantRecording(false);
+
+        const audioBlob = new Blob(assistantAudioChunksRef.current, { type: 'audio/webm' });
+        if (audioBlob.size === 0) {
+          setAssistantStatus('');
+          toast({ title: 'No Audio', description: 'EPOCH did not receive any audio.', variant: 'destructive' });
+          return;
+        }
+
+        try {
+          setAssistantStatus('EPOCH is transcribing and filing this...');
+          const audio = await blobToBase64(audioBlob);
+          assistantCaptureMutation.mutate({
+            audio,
+            inputFormat: 'webm',
+            voice: 'nova',
+            speakResponse: true,
+          });
+        } catch (error: any) {
+          setAssistantStatus('');
+          toast({
+            title: 'Recording Error',
+            description: error?.message || 'Could not read the recording.',
+            variant: 'destructive',
+          });
+        }
+      };
+
+      recorder.start();
+      setIsAssistantRecording(true);
+    } catch (error: any) {
+      setAssistantStatus('');
+      toast({
+        title: 'Microphone Blocked',
+        description: error?.message || 'Please allow microphone access to use EPOCH voice capture.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const stopAssistantRecording = () => {
+    if (assistantRecorderRef.current && assistantRecorderRef.current.state !== 'inactive') {
+      setAssistantStatus('EPOCH is finishing the recording...');
+      assistantRecorderRef.current.stop();
+    }
+  };
+
   const filteredNotes = notes.filter(note => {
     if (search) {
       const searchLower = search.toLowerCase();
       return (
         note.transcription.toLowerCase().includes(searchLower) ||
+        (note.title?.toLowerCase().includes(searchLower)) ||
+        (note.summary?.toLowerCase().includes(searchLower)) ||
         (note.linkedOrderId?.toLowerCase().includes(searchLower)) ||
-        (note.category?.toLowerCase().includes(searchLower))
+        (note.category?.toLowerCase().includes(searchLower)) ||
+        (note.tags?.some(tag => tag.toLowerCase().includes(searchLower))) ||
+        (note.extractedTasks?.some(task => task.toLowerCase().includes(searchLower)))
       );
     }
     return true;
@@ -323,22 +507,74 @@ export default function VoiceNotesPage() {
 
   return (
     <div className="container mx-auto py-6 space-y-6" data-testid="voice-notes-page">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Voice Notes</h1>
-          <p className="text-muted-foreground">Record and track issues using your voice</p>
+          <h1 className="text-3xl font-bold tracking-tight">Knowledge Capture</h1>
+          <p className="text-muted-foreground">
+            EPOCH voice journal for business observations, production concerns, and process knowledge.
+          </p>
         </div>
+        <Badge variant="outline" className="w-fit">
+          Private to {hasAccess ? 'you' : 'current user'}
+        </Badge>
       </div>
+
+      {latestCapture && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <CheckCircle2 className="h-4 w-4 text-primary" />
+              Captured: {latestCapture.title || 'Knowledge note'}
+            </CardTitle>
+            {latestCapture.summary && (
+              <CardDescription>{latestCapture.summary}</CardDescription>
+            )}
+          </CardHeader>
+          <CardContent className="grid gap-4 lg:grid-cols-3">
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase text-muted-foreground">Classification</p>
+              <Badge variant="secondary">{latestCapture.noteType.replace(/_/g, ' ')}</Badge>
+              <div className="flex flex-wrap gap-1">
+                {latestCapture.tags?.slice(0, 6).map(tag => (
+                  <Badge key={tag} variant="outline">{tag}</Badge>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase text-muted-foreground">Suggested Links</p>
+              {latestCapture.suggestedLinks?.length ? (
+                <div className="space-y-1">
+                  {latestCapture.suggestedLinks.slice(0, 4).map(link => (
+                    <div key={`${link.type}-${link.id}`} className="text-sm">
+                      <span className="font-medium capitalize">{link.type}:</span> {link.label}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No links suggested yet.</p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase text-muted-foreground">Follow-Up Prompts</p>
+              <ul className="space-y-1 text-sm">
+                {latestCapture.followUpQuestions?.slice(0, 3).map(question => (
+                  <li key={question}>{question}</li>
+                ))}
+              </ul>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Tabs defaultValue="record" className="space-y-4">
         <TabsList>
           <TabsTrigger value="record" data-testid="tab-record">
             <Mic className="w-4 h-4 mr-2" />
-            Record
+            Capture
           </TabsTrigger>
           <TabsTrigger value="notes" data-testid="tab-notes">
             <Clock className="w-4 h-4 mr-2" />
-            Notes ({notes.length})
+            Journal ({notes.length})
           </TabsTrigger>
           <TabsTrigger value="analytics" data-testid="tab-analytics">
             <BarChart3 className="w-4 h-4 mr-2" />
@@ -351,15 +587,49 @@ export default function VoiceNotesPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Mic className="w-5 h-5" />
-                Record Voice Note
+                Capture a Private Knowledge Note
               </CardTitle>
               <CardDescription>
-                Press the button and speak clearly. Say "order" followed by the order number to auto-link.
-                <br />
-                Example: "Hey Epoch, there was a problem with the metal insert on order EL069"
+                Talk naturally. Kentro keeps the transcript, classifies the note, suggests links, and asks follow-up questions.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="rounded-lg border bg-muted/30 p-4">
+                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 font-medium">
+                      <Volume2 className="h-4 w-4" />
+                      EPOCH Voice Capture
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Records audio, transcribes it server-side, files it privately, and plays a short confirmation.
+                    </p>
+                    {assistantStatus && (
+                      <p className="text-sm font-medium text-primary">{assistantStatus}</p>
+                    )}
+                  </div>
+                  <Button
+                    variant={isAssistantRecording ? 'destructive' : 'default'}
+                    onClick={isAssistantRecording ? stopAssistantRecording : startAssistantRecording}
+                    disabled={assistantCaptureMutation.isPending}
+                    data-testid="button-assistant-voice-capture"
+                  >
+                    {assistantCaptureMutation.isPending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : isAssistantRecording ? (
+                      <MicOff className="mr-2 h-4 w-4" />
+                    ) : (
+                      <Mic className="mr-2 h-4 w-4" />
+                    )}
+                    {assistantCaptureMutation.isPending
+                      ? 'Filing...'
+                      : isAssistantRecording
+                        ? 'Stop'
+                        : 'Talk to EPOCH'}
+                  </Button>
+                </div>
+              </div>
+
               {!isSpeechSupported ? (
                 <div className="p-4 bg-destructive/10 text-destructive rounded-lg flex items-center gap-2">
                   <AlertCircle className="w-5 h-5" />
@@ -448,7 +718,7 @@ export default function VoiceNotesPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Clock className="w-5 h-5" />
-                Voice Notes History
+                Business Manager Journal
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -457,7 +727,7 @@ export default function VoiceNotesPage() {
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input
-                      placeholder="Search notes..."
+                      placeholder="Search notes, tags, tasks, or topics..."
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
                       className="pl-9"
@@ -472,6 +742,14 @@ export default function VoiceNotesPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Categories</SelectItem>
+                    <SelectItem value="production concern">Production Concern</SelectItem>
+                    <SelectItem value="process observation">Process Observation</SelectItem>
+                    <SelectItem value="employee process observation">Employee Observation</SelectItem>
+                    <SelectItem value="customer order context">Customer / Order Context</SelectItem>
+                    <SelectItem value="meeting recap">Meeting Recap</SelectItem>
+                    <SelectItem value="training insight">Training Insight</SelectItem>
+                    <SelectItem value="engineering knowledge">Engineering Knowledge</SelectItem>
+                    <SelectItem value="journal">Journal</SelectItem>
                     <SelectItem value="metal insert">Metal Insert</SelectItem>
                     <SelectItem value="duratec">Duratec</SelectItem>
                     <SelectItem value="thickness">Thickness</SelectItem>
@@ -512,8 +790,16 @@ export default function VoiceNotesPage() {
                       <CardContent className="p-4">
                         <div className="flex justify-between items-start gap-4">
                           <div className="flex-1 space-y-2">
-                            <p className="text-sm">{note.transcription}</p>
+                            <div>
+                              <h3 className="font-semibold leading-tight">{note.title || 'Knowledge capture note'}</h3>
+                              {note.summary && (
+                                <p className="mt-1 text-sm text-muted-foreground">{note.summary}</p>
+                              )}
+                            </div>
                             <div className="flex flex-wrap gap-2">
+                              <Badge variant="outline">
+                                {note.noteType.replace(/_/g, ' ')}
+                              </Badge>
                               {note.linkedOrderId && (
                                 <Link href={`/orders/${note.linkedOrderId}`}>
                                   <Badge variant="outline" className="cursor-pointer hover:bg-primary/10">
@@ -528,6 +814,9 @@ export default function VoiceNotesPage() {
                                   <Tag className="w-3 h-3 mr-1" />
                                   {note.category}
                                 </Badge>
+                              )}
+                              {note.visibility === 'private' && (
+                                <Badge variant="outline">Private</Badge>
                               )}
                               {note.isResolved ? (
                                 <Badge variant="default" className="bg-green-600">
@@ -556,6 +845,39 @@ export default function VoiceNotesPage() {
                                 <strong>Resolution:</strong> {note.resolvedNotes}
                               </p>
                             )}
+                            {note.extractedTasks?.length ? (
+                              <div className="rounded-md border border-border bg-muted/30 p-3">
+                                <p className="mb-1 text-xs font-semibold uppercase text-muted-foreground">Possible Tasks</p>
+                                <ul className="space-y-1 text-sm">
+                                  {note.extractedTasks.slice(0, 3).map(task => (
+                                    <li key={task}>{task}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            ) : null}
+                            {note.suggestedLinks?.length ? (
+                              <div className="flex flex-wrap gap-2">
+                                {note.suggestedLinks.slice(0, 5).map(link => (
+                                  <Badge key={`${link.type}-${link.id}`} variant="outline">
+                                    <span className="capitalize">{link.type}</span>: {link.label}
+                                  </Badge>
+                                ))}
+                              </div>
+                            ) : null}
+                            {note.followUpQuestions?.length ? (
+                              <details className="rounded-md border border-border bg-background p-3">
+                                <summary className="cursor-pointer text-sm font-medium">Follow-up questions</summary>
+                                <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
+                                  {note.followUpQuestions.map(question => (
+                                    <li key={question}>{question}</li>
+                                  ))}
+                                </ul>
+                              </details>
+                            ) : null}
+                            <details className="text-sm">
+                              <summary className="cursor-pointer text-muted-foreground">Transcript</summary>
+                              <p className="mt-2 whitespace-pre-wrap rounded-md bg-muted p-3">{note.transcription}</p>
+                            </details>
                           </div>
                           <div className="flex gap-2">
                             {!note.isResolved && (

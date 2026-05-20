@@ -65,6 +65,7 @@ import TimerProgramsPage from './pages/TimerProgramsPage';
 import FieldPage from './pages/FieldPage';
 import ExecutiveRundown from './pages/ExecutiveRundown';
 import TicketsPage from './pages/TicketsPage';
+import TicketsCommandCenter from './pages/TicketsCommandCenter';
 import PDFSignatureTool from './pages/PDFSignatureTool';
 import MaintenancePage from './pages/MaintenancePage';
 import MaintenanceEventsPage from './pages/MaintenanceEventsPage';
@@ -72,6 +73,7 @@ import WorkOrderDetailPage from './pages/WorkOrderDetailPage';
 import ProductionWorkOrderDetailPage from './pages/ProductionWorkOrderDetailPage';
 import WADWizardPage from './pages/WADWizardPage';
 import WADWizardLauncherPage from './pages/WADWizardLauncherPage';
+import WADStatusDashboard from './pages/WADStatusDashboard';
 import AssetsPage from './pages/AssetsPage';
 import AssetDashboardPage from './pages/AssetDashboardPage';
 import EmployeePortalPage from './pages/EmployeePortalPage';
@@ -99,6 +101,7 @@ import FinancialReviewListPage from './pages/FinancialReviewListPage';
 import FinancialReviewSlidePage from './pages/FinancialReviewSlidePage';
 import CostCenterManagement from './pages/CostCenterManagement';
 import CostAccountingPage from './pages/CostAccountingPage';
+import ChartOfAccountsPage from './pages/ChartOfAccountsPage';
 import BurdenRatesAdmin from './pages/BurdenRatesAdmin';
 import MonthlyFulfilledReport from './pages/MonthlyFulfilledReport';
 import MonthlyShippedReport from './pages/MonthlyShippedReport';
@@ -112,6 +115,7 @@ import PayrollControlPage from './pages/finance/PayrollControlPage';
 import EmployeeBadgeConfiguration from './pages/EmployeeBadgeConfiguration';
 import BadgeScanner from './pages/BadgeScanner';
 import OnboardingDashboard from './pages/OnboardingDashboard';
+import OnboardingInvitePage from './pages/OnboardingInvitePage';
 import OnboardingPathsPage from './pages/OnboardingPathsPage';
 import OnboardingSettingsPage from './pages/OnboardingSettingsPage';
 import PendingEmployerSignaturesPage from './pages/PendingEmployerSignaturesPage';
@@ -126,6 +130,7 @@ import VendorManagement from './pages/VendorManagement';
 import ManageGroups from './pages/ManageGroups';
 import PurchaseOrders from './pages/PurchaseOrders';
 import P2ControlCenter from './pages/P2ControlCenter';
+import P2CustomersPage from './pages/P2CustomersPage';
 import P2Forms from './pages/P2Forms';
 import ManufacturingQueue from './pages/ManufacturingQueue';
 import KitsQueue from './pages/KitsQueue';
@@ -180,6 +185,7 @@ import JESSICAPDashboard from './pages/JESSICAPDashboard';
 import BRIANDashboard from './pages/BRIANDashboard';
 import TOMASMDashboard from './pages/TOMASMDashboard';
 import JOEYBTestDashboard from './pages/JOEYBTestDashboard';
+import ANGIETTestDashboard from './pages/ANGIETTestDashboard';
 import TANDYMTestDashboard from './pages/TANDYMTestDashboard';
 import OrderDepartmentTransfer from './pages/OrderDepartmentTransfer';
 import { BOMAdministration } from './pages/BOMAdministration';
@@ -244,6 +250,7 @@ import NonconformanceDashboard from './components/NonconformanceDashboard';
 import NonconformanceReport from './components/NonconformanceReport';
 import RTSPage from './pages/RTSPage';
 import RFQRiskAssessment from './pages/RFQRiskAssessment';
+import ConversationalRFQRiskAssessment from './pages/ConversationalRFQRiskAssessment';
 import ProductionQueueManager from './components/ProductionQueueManager';
 import EnhancedLayupSchedulerPage from './pages/EnhancedLayupSchedulerPage';
 import WorkDayAwareScheduler from './components/WorkDayAwareScheduler';
@@ -343,7 +350,21 @@ import EdriMissingEvidence from './pages/admin/EdriMissingEvidence';
 import EdriHistory from './pages/admin/EdriHistory';
 import EdriEvidence from './pages/admin/EdriEvidence';
 import EdriSnapshotDetail from './pages/admin/EdriSnapshotDetail';
+import EdriSupportingDocs from './pages/admin/EdriSupportingDocs';
 import DcaaFindings from './pages/admin/DcaaFindings';
+import SecurityCenter from './pages/admin/SecurityCenter';
+import ChargeCodeUsageReport from './pages/admin/ChargeCodeUsageReport';
+import LaborDistributionReport from './pages/admin/LaborDistributionReport';
+import TransactionEvidenceMap from './pages/admin/TransactionEvidenceMap';
+import SupervisorApprovalExceptionReport from './pages/admin/SupervisorApprovalExceptionReport';
+import TimesheetCorrectionLogReport from './pages/admin/TimesheetCorrectionLogReport';
+import PayrollExportReconciliationReport from './pages/admin/PayrollExportReconciliationReport';
+import IndirectCostBurdenRateReport from './pages/admin/IndirectCostBurdenRateReport';
+import UnallowableCostReviewReport from './pages/admin/UnallowableCostReviewReport';
+import ProcurementComplianceReport from './pages/admin/ProcurementComplianceReport';
+import InventoryTraceabilityReport from './pages/admin/InventoryTraceabilityReport';
+import AuditLedgerIntegrityReport from './pages/admin/AuditLedgerIntegrityReport';
+import PolicyTrainingAcknowledgmentReport from './pages/admin/PolicyTrainingAcknowledgmentReport';
 import EdriExecutiveMatrix from './pages/admin/EdriExecutiveMatrix';
 import SecureVaultPage from './pages/admin/SecureVaultPage';
 import CmmcDashboard from './pages/admin/CmmcDashboard';
@@ -363,6 +384,14 @@ function useIsEmbedMode() {
   return typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('embed') === '1';
 }
 
+function isFloorOperatorRoute(location: string) {
+  return (
+    location.startsWith('/kiosk') ||
+    location.startsWith('/p2-traveler') ||
+    location.startsWith('/travelers/')
+  );
+}
+
 function ConditionalOfflineIndicator() {
   const isEmbed = useIsEmbedMode();
   return isEmbed ? null : <OfflineIndicator />;
@@ -371,7 +400,7 @@ function ConditionalOfflineIndicator() {
 function ConditionalMainWrapper({ children }: { children: React.ReactNode }) {
   const isEmbed = useIsEmbedMode();
   const [location] = useLocation();
-  if (isEmbed || location.startsWith('/kiosk') || location.startsWith('/vendor-confirm')) {
+  if (isEmbed || isFloorOperatorRoute(location) || location.startsWith('/vendor-confirm')) {
     return <div className="w-full min-h-screen overflow-auto">{children}</div>;
   }
   return <main className="container mx-auto px-4 py-8">{children}</main>;
@@ -392,7 +421,7 @@ function ConditionalNavigation() {
     location.startsWith('/vendor-confirm') || // Hide navigation on vendor PO confirmation page
     location.startsWith('/tv-display') || // Hide navigation on TV display page
     location.startsWith('/tv-timer-board') || // Hide navigation on timer board page
-    location.startsWith('/kiosk'); // Hide navigation on time-clock kiosk (PIN-based, no EPOCH nav)
+    isFloorOperatorRoute(location); // Hide navigation on badge/PIN based production floor pages
 
   return hideNavigation ? null : <Navigation />;
 }
@@ -655,6 +684,7 @@ function App() {
                   <Route path="/signed-documents" component={SignedDocumentsLibrary} />
                   <Route path="/signature-workflow" component={SignatureWorkflowPage} />
                   <Route path="/reference-docs" component={ReferenceDocsPage} />
+                  <Route path="/knowledge-capture" component={VoiceNotesPage} />
                   <Route path="/voice-notes" component={VoiceNotesPage} />
                   <Route path="/process-runs" component={ProcessRuns} />
                   <Route path="/app/production/stations" component={ProductionStationDashboard} />
@@ -669,6 +699,7 @@ function App() {
 
                   {/* Ticketing System - Internal CSR Tool */}
                   <Route path="/tickets" component={TicketsPage} />
+                  <Route path="/tickets-command-center" component={TicketsCommandCenter} />
                   <Route path="/pdf-signature-tool" component={PDFSignatureTool} />
 
                   {/* Vendor Management Routes */}
@@ -806,6 +837,7 @@ function App() {
                     {(params) => <WorkOrderDetailPage params={params} />}
                   </Route>
                   <Route path="/wad-wizard" component={WADWizardLauncherPage} />
+                  <Route path="/wad-status" component={WADStatusDashboard} />
                   <Route path="/work-orders/:id/wizard">
                     {(params) => <WADWizardPage params={params} />}
                   </Route>
@@ -818,6 +850,7 @@ function App() {
                   {/* Employee Routes */}
                   <Route path="/employee" component={EmployeeDashboard} />
                   <Route path="/onboarding" component={OnboardingDashboard} />
+                  <Route path="/onboarding/invite/:token" component={OnboardingInvitePage} />
                   <Route path="/onboarding/paths" component={OnboardingPathsPage} />
                   <Route path="/onboarding/settings" component={OnboardingSettingsPage} />
                   <Route path="/onboarding/employer-signatures" component={PendingEmployerSignaturesPage} />
@@ -920,6 +953,10 @@ function App() {
                   <Route path="/brian-dashboard" component={BRIANDashboard} />
                   <Route path="/tomasm-dashboard" component={TOMASMDashboard} />
                   <Route
+                    path="/angiet-dashboard"
+                    component={ANGIETTestDashboard}
+                  />
+                  <Route
                     path="/joeyb-dashboard"
                     component={JOEYBTestDashboard}
                   />
@@ -998,6 +1035,10 @@ function App() {
                   <Route
                     path="/finance/cost-accounting"
                     component={CostAccountingPage}
+                  />
+                  <Route
+                    path="/finance/chart-of-accounts"
+                    component={ChartOfAccountsPage}
                   />
                   <Route
                     path="/finance/burden-rates"
@@ -1097,6 +1138,7 @@ function App() {
 
                   {/* P2 Routes - Control Center consolidates all P2 functionality */}
                   <Route path="/p2-control-center" component={P2ControlCenter} />
+                  <Route path="/p2-customers" component={P2CustomersPage} />
                   <Route path="/p2-forms" component={P2Forms} />
                   <Route path="/p2-traveler" component={P2TravelerPage} />
                   <Route path="/p2-traveler-viewer" component={P2TravelerViewer} />
@@ -1137,6 +1179,10 @@ function App() {
                   <Route
                     path="/waste-management-form"
                     component={WasteManagementForm}
+                  />
+                  <Route
+                    path="/rfq-risk-assessment/conversation"
+                    component={ConversationalRFQRiskAssessment}
                   />
                   <Route
                     path="/rfq-risk-assessment"
@@ -1345,12 +1391,26 @@ function App() {
                   <Route path="/admin/edri/remediation" component={EdriRemediation} />
                   <Route path="/admin/edri/missing-evidence" component={EdriMissingEvidence} />
                   <Route path="/admin/edri/history" component={EdriHistory} />
+                  <Route path="/admin/edri/charge-code-usage" component={ChargeCodeUsageReport} />
+                  <Route path="/admin/edri/labor-distribution" component={LaborDistributionReport} />
+                  <Route path="/admin/edri/transaction-evidence-map" component={TransactionEvidenceMap} />
+                  <Route path="/admin/edri/supervisor-approval-exceptions" component={SupervisorApprovalExceptionReport} />
+                  <Route path="/admin/edri/timesheet-correction-log" component={TimesheetCorrectionLogReport} />
+                  <Route path="/admin/edri/payroll-export-reconciliation" component={PayrollExportReconciliationReport} />
+                  <Route path="/admin/edri/indirect-cost-burden-rates" component={IndirectCostBurdenRateReport} />
+                  <Route path="/admin/edri/unallowable-cost-review" component={UnallowableCostReviewReport} />
+                  <Route path="/admin/edri/procurement-compliance" component={ProcurementComplianceReport} />
+                  <Route path="/admin/edri/inventory-traceability" component={InventoryTraceabilityReport} />
+                  <Route path="/admin/edri/audit-ledger-integrity" component={AuditLedgerIntegrityReport} />
+                  <Route path="/admin/edri/policy-training-acknowledgment" component={PolicyTrainingAcknowledgmentReport} />
+                  <Route path="/admin/edri/supporting-docs" component={EdriSupportingDocs} />
                   <Route path="/admin/edri/domain/:domainKey" component={EdriDomainDetail} />
                   <Route path="/admin/edri/snapshot/:snapshotId/evidence/:domainKey" component={EdriEvidence} />
                   <Route path="/admin/edri/snapshot/:snapshotId/evidence" component={EdriEvidence} />
                   <Route path="/admin/edri/executive-matrix" component={EdriExecutiveMatrix} />
                   <Route path="/admin/edri/snapshot/:snapshotId" component={EdriSnapshotDetail} />
                   <Route path="/admin/dcaa-findings" component={DcaaFindings} />
+                  <Route path="/admin/security-center" component={SecurityCenter} />
 
                   {/* CMMC 2.0 Level 2 Readiness Dashboard */}
                   <Route path="/admin/cmmc" component={CmmcDashboard} />

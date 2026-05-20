@@ -1,7 +1,7 @@
 import { storage } from '../../storage';
 import { db } from '../../db';
-import { travelerAuthorizations, travelerMaterialConsumption } from '../../schema';
-import { eq, and } from 'drizzle-orm';
+import { calibrationAssets, calibrationUseLogs, travelerAuthorizations, travelerMaterialConsumption } from '../../schema';
+import { eq, and, inArray } from 'drizzle-orm';
 
 export interface GateResult {
   allowed: boolean;
@@ -78,13 +78,24 @@ export async function evaluateWadReleaseGate(wadId: string): Promise<GateResult>
   if (!wad) {
     return { allowed: false, reason: 'The linked production work order could not be found.' };
   }
-  if (wad.status !== 'RELEASED' && wad.status !== 'IN_PROGRESS') {
-    return {
-      allowed: false,
-      reason: `Work order must be RELEASED or IN_PROGRESS before work can begin. Current status: ${wad.status}.`,
-    };
+
+  const status = String(wad.status || '').trim().toUpperCase();
+  const wadStatus = String((wad as any).wadStatus || '').trim().toUpperCase();
+
+  if (status === 'RELEASED' || status === 'IN_PROGRESS') {
+    return { allowed: true };
   }
-  return { allowed: true };
+
+  if (wadStatus === 'APPROVED') {
+    await storage.updateWorkOrderStatus(wad.id, 'IN_PROGRESS');
+    console.log(`[TravelerGate] Promoted approved WAD ${wad.id} from ${wad.status} to IN_PROGRESS at traveler start`);
+    return { allowed: true };
+  }
+
+  return {
+    allowed: false,
+    reason: `Work order must be RELEASED or IN_PROGRESS before work can begin. Current status: ${wad.status || 'UNKNOWN'}.`,
+  };
 }
 
 /**
@@ -120,6 +131,94 @@ export interface GateCheckResult {
   label: string;
   passed: boolean;
   reason?: string;
+}
+
+function isCalibrationAssetUsable(asset: { status: string; calibrationDueDate: Date | string | null }): boolean {
+  if (asset.status === 'locked_out' || asset.status === 'expired' || asset.status === 'retired') {
+    return false;
+  }
+  if (!asset.calibrationDueDate) return false;
+  const due = new Date(asset.calibrationDueDate);
+  due.setHours(23, 59, 59, 999);
+  return due >= new Date();
+}
+
+async function evaluateRequiredCalibrationAssets(
+  requiredAssetTags: string[],
+  context: {
+    travelerId?: string;
+    travelerStepId?: string;
+    routingOperationId?: number;
+    orderId?: string | null;
+    employeeId?: number;
+    employeeName?: string;
+    logAccepted?: boolean;
+    logBlocked?: boolean;
+  } = {}
+): Promise<GateResult> {
+  const tags = Array.from(new Set(requiredAssetTags.map((tag) => tag.trim()).filter(Boolean)));
+  if (tags.length === 0) return { allowed: true };
+
+  const assets = await db
+    .select()
+    .from(calibrationAssets)
+    .where(inArray(calibrationAssets.assetTag, tags));
+
+  const byTag = new Map(assets.map((asset) => [asset.assetTag, asset]));
+  const missing = tags.filter((tag) => !byTag.has(tag));
+  const blocked = assets.filter((asset) => !isCalibrationAssetUsable(asset));
+
+  if (missing.length > 0 || blocked.length > 0) {
+    const blockedDetails = blocked.map((asset) => {
+      const due = asset.calibrationDueDate ? ` due ${asset.calibrationDueDate}` : ' with no due date';
+      return `${asset.assetTag} (${asset.status}${due})`;
+    });
+    const reason = [
+      missing.length > 0 ? `Missing calibration asset(s): ${missing.join(', ')}` : null,
+      blockedDetails.length > 0 ? `Unavailable calibration asset(s): ${blockedDetails.join(', ')}` : null,
+    ].filter(Boolean).join('. ');
+
+    if (context.logBlocked) {
+      await db.insert(calibrationUseLogs).values(
+        tags.map((tag) => ({
+          assetId: byTag.get(tag)?.id ?? null,
+          assetTag: tag,
+          travelerId: context.travelerId ?? null,
+          travelerStepId: context.travelerStepId ?? null,
+          routingOperationId: context.routingOperationId ?? null,
+          orderId: context.orderId ?? null,
+          usedByUserId: context.employeeId ?? null,
+          usedByDisplayName: context.employeeName ?? null,
+          useStatus: 'blocked',
+          gateMessage: reason,
+        }))
+      );
+    }
+
+    return {
+      allowed: false,
+      reason: `${reason}. Calibration evidence must be current before this operation can start.`,
+    };
+  }
+
+  if (context.logAccepted) {
+    await db.insert(calibrationUseLogs).values(
+      tags.map((tag) => ({
+        assetId: byTag.get(tag)?.id ?? null,
+        assetTag: tag,
+        travelerId: context.travelerId ?? null,
+        travelerStepId: context.travelerStepId ?? null,
+        routingOperationId: context.routingOperationId ?? null,
+        orderId: context.orderId ?? null,
+        usedByUserId: context.employeeId ?? null,
+        usedByDisplayName: context.employeeName ?? null,
+        useStatus: 'accepted',
+        gateMessage: 'Calibration asset current at traveler start gate.',
+      }))
+    );
+  }
+
+  return { allowed: true };
 }
 
 /**
@@ -285,6 +384,21 @@ export async function evaluateTravelerStartGates(
           };
         }
       }
+
+      const calibrationGate = await evaluateRequiredCalibrationAssets(
+        routingOp.requiredCalibrationAssetTags ?? [],
+        {
+          travelerId,
+          travelerStepId: stepId,
+          routingOperationId: routingOp.id,
+          orderId: traveler.workOrderId,
+          employeeId: options.employeeId,
+          employeeName: options.employeeName,
+          logAccepted: true,
+          logBlocked: true,
+        }
+      );
+      if (!calibrationGate.allowed) return calibrationGate;
     }
   }
 
@@ -487,6 +601,27 @@ export async function evaluateStartGatesDetailed(
             });
           }
         }
+      }
+
+      const calibrationTags = routingOp.requiredCalibrationAssetTags ?? [];
+      if (calibrationTags.length > 0) {
+        const calibrationGate = await evaluateRequiredCalibrationAssets(
+          calibrationTags,
+          {
+            travelerId,
+            travelerStepId: stepId,
+            routingOperationId: routingOp.id,
+            orderId: traveler.workOrderId,
+            employeeId: options.employeeId,
+            employeeName: options.employeeName,
+          }
+        );
+        results.push({
+          key: 'calibration_assets',
+          label: `Calibration current: ${calibrationTags.join(', ')}`,
+          passed: calibrationGate.allowed,
+          reason: calibrationGate.reason,
+        });
       }
     }
   }

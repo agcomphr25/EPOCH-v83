@@ -32,6 +32,12 @@ vi.mock('../replit_integrations/openai_ai_integrations/openaiClient', () => ({
 import { storage } from '../storage';
 import { db } from '../db';
 
+// Spy hook so tests can assert the lock writer never fires on read paths.
+const dbUpdateSpy = vi.fn();
+const dbInsertSpy = vi.fn();
+(db as any).update = dbUpdateSpy;
+(db as any).insert = dbInsertSpy;
+
 // ---------------------------------------------------------------------------
 // Helper: stub `db.transaction` so backfillPacketFromQueue can run end-to-end
 // without throwing (it normally calls `await db.transaction(cb)`).  By default
@@ -148,6 +154,8 @@ describe('GET /api/material-lots/validate/:icn — MFG barcode ICN lookup', () =
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    dbUpdateSpy.mockReset();
+    dbInsertSpy.mockReset();
     // Default: no lot found via storage
     vi.mocked(storage.getMaterialLotByICN).mockResolvedValue(undefined);
 
@@ -454,5 +462,73 @@ describe('GET /api/material-lots/validate/:icn — MFG barcode ICN lookup', () =
 
     expect(res.status).toBe(200);
     expect(res.body.fabricRolls[0].internalControlNumber).toBe('ICN-FROM-SOURCE');
+  });
+
+  // -------------------------------------------------------------------------
+  // Task #174 regression: a packet-style barcode (MFG-…, PKT-…, …-Q…-…) must
+  // resolve as a packet even when a same-named row exists in material_lots.
+  // The validate route must NOT consult storage.getMaterialLotByICN for these
+  // barcodes, and must NEVER write status='LOCKED' on the read path.
+  // -------------------------------------------------------------------------
+
+  it('does NOT call getMaterialLotByICN for MFG-style packet barcodes (no lot/packet collision)', async () => {
+    // Plant a colliding lot — if the route asks storage, it would return this.
+    vi.mocked(storage.getMaterialLotByICN).mockResolvedValue({
+      id: 'lot-collision',
+      internalControlNumber: 'MFG-42-PART-1',
+      status: 'LOCKED',
+      lockedReason: 'OUT_TIME_EXCEEDED',
+      remainingQty: '5',
+      maxOutTimeMinutes: 480,
+      totalOutTimeMinutes: 1000,
+      currentlyOutOfStorage: false,
+      lastOutAt: null,
+      expirationDate: null,
+    } as any);
+
+    const queueItem = { ...QUEUE_ITEM, materialDetails: null };
+    sequenceDbSelects(
+      [],              // outer exact: no built packet at this barcode
+      [queueItem],     // queue item lookup
+      [],              // inner exact (attempt 1)
+      [BUILT_PACKET],  // seq match (attempt 2)
+      [FABRIC_SOURCE], // fabric sources
+    );
+
+    const res = await request(app).get('/api/material-lots/validate/MFG-42-PART-1');
+
+    expect(res.status).toBe(200);
+    // The packet path was taken — validate did NOT honor the colliding lot.
+    expect(res.body.valid).toBe(true);
+    expect(res.body.status).toBe('PACKET');
+    expect(res.body.fabricRolls[0].internalControlNumber).toBe('ICN-FROM-SOURCE');
+
+    // Critical: storage.getMaterialLotByICN must not be called for packet barcodes
+    expect(vi.mocked(storage.getMaterialLotByICN)).not.toHaveBeenCalled();
+
+    // Critical: the lock writer must never fire on the validate read path.
+    expect(dbUpdateSpy).not.toHaveBeenCalled();
+    expect(dbInsertSpy).not.toHaveBeenCalled();
+  });
+
+  it('packet path never invokes the LOCK writer (db.update on materialLots) on /validate', async () => {
+    // Standard packet flow — should never write LOCKED to material_lots.
+    vi.mocked(storage.getMaterialLotByICN).mockResolvedValue(undefined);
+    const queueItem = { ...QUEUE_ITEM, materialDetails: null };
+    sequenceDbSelects(
+      [],
+      [queueItem],
+      [],
+      [BUILT_PACKET],
+      [FABRIC_SOURCE],
+    );
+
+    const res = await request(app).get('/api/material-lots/validate/MFG-42-PART-1');
+    expect(res.status).toBe(200);
+    expect(res.body.icnSource).toBe('built_packet');
+    // The lock writer (db.update + db.insert on materialLotTransactions) is
+    // never invoked on a read-path packet validation.
+    expect(dbUpdateSpy).not.toHaveBeenCalled();
+    expect(dbInsertSpy).not.toHaveBeenCalled();
   });
 });

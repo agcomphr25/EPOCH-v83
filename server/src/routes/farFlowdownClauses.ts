@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { db } from '../../db';
 import {
   farFlowdownClauses,
+  projectFarFlowdowns,
   vendorPoFarFlowdowns,
   insertFarFlowdownClauseSchema,
 } from '../../schema';
@@ -54,6 +55,33 @@ router.delete('/:id', requirePermission('purchasing.admin_chain'), async (req, r
     .set({ isActive: false, updatedAt: new Date() })
     .where(eq(farFlowdownClauses.id, parseInt(req.params.id)));
   res.json({ ok: true });
+});
+
+// PER-PROJECT flowdown continuity from purchase review checklist
+router.get('/project/:projectId', requirePermission('purchasing.view_requisitions'), async (req, res) => {
+  const projectId = req.params.projectId;
+  const rows = await db
+    .select({
+      id: projectFarFlowdowns.id,
+      projectId: projectFarFlowdowns.projectId,
+      purchaseReviewChecklistId: projectFarFlowdowns.purchaseReviewChecklistId,
+      clauseId: projectFarFlowdowns.clauseId,
+      applicable: projectFarFlowdowns.applicable,
+      reasoning: projectFarFlowdowns.reasoning,
+      source: projectFarFlowdowns.source,
+      status: projectFarFlowdowns.status,
+      recordedByDisplayName: projectFarFlowdowns.recordedByDisplayName,
+      createdAt: projectFarFlowdowns.createdAt,
+      updatedAt: projectFarFlowdowns.updatedAt,
+      clauseNumber: farFlowdownClauses.clauseNumber,
+      title: farFlowdownClauses.title,
+      description: farFlowdownClauses.description,
+    })
+    .from(projectFarFlowdowns)
+    .innerJoin(farFlowdownClauses, eq(projectFarFlowdowns.clauseId, farFlowdownClauses.id))
+    .where(eq(projectFarFlowdowns.projectId, projectId))
+    .orderBy(farFlowdownClauses.clauseNumber);
+  res.json(rows);
 });
 
 // PER-PO flowdown selections (read + bulk upsert)

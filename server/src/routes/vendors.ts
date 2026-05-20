@@ -5,13 +5,31 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { randomUUID } from 'crypto';
+import { desc, eq } from 'drizzle-orm';
 
 import { storage } from '../../storage';
+import { db } from '../../db';
 import { authenticateToken } from '../../middleware/auth';
 import { authorizeApiRoute } from '../../middleware/routeAuthorization';
-import { objectStorageClient } from '../../replit_integrations/object_storage/objectStorage';
+import {
+  ObjectNotFoundError,
+  objectStorageClient,
+} from '../../replit_integrations/object_storage/objectStorage';
 import { setObjectAclPolicy } from '../../replit_integrations/object_storage/objectAcl';
 import { auditService } from '../services/auditService';
+import {
+  getFileStorageProvider,
+  getFileStorageProviderForObjectPath,
+  getStorageErrorResponse,
+} from '../services/fileStorageProvider';
+import {
+  insertSupplierAuditSchema,
+  insertSupplierScopeSchema,
+  insertSupplierScorecardSchema,
+  supplierAudits,
+  supplierScopes,
+  supplierScorecards,
+} from '../../schema';
 
 const router = Router();
 
@@ -33,6 +51,108 @@ if (!fs.existsSync(vendorApprovalsDir)) {
 
 if (!fs.existsSync(vendorDocumentsDir)) {
   fs.mkdirSync(vendorDocumentsDir, { recursive: true });
+}
+
+type VendorDocumentPath =
+  | { type: 'object'; path: string }
+  | { type: 'upload'; path: string }
+  | { type: 'external'; url: string };
+
+function isVendorDocumentScope(pathValue: string): boolean {
+  return (
+    pathValue.includes('/vendor-documents/') ||
+    pathValue.includes('/vendor-approvals/') ||
+    pathValue.startsWith('vendor-documents/') ||
+    pathValue.startsWith('vendor-approvals/')
+  );
+}
+
+function normalizeVendorDocumentPath(rawValue: unknown): VendorDocumentPath | null {
+  const value = String(rawValue || '').trim();
+  if (!value) return null;
+
+  if (value.startsWith('https://storage.googleapis.com/')) {
+    try {
+      const privateObjectDir = process.env.PRIVATE_OBJECT_DIR;
+      const rawPath = new URL(value).pathname;
+      const entityDir = privateObjectDir
+        ? privateObjectDir.endsWith('/')
+          ? privateObjectDir
+          : `${privateObjectDir}/`
+        : null;
+
+      if (entityDir && rawPath.startsWith(entityDir)) {
+        const entityId = rawPath.slice(entityDir.length);
+        if (isVendorDocumentScope(entityId)) {
+          return { type: 'object', path: `/objects/${entityId}` };
+        }
+      }
+    } catch {
+      // Fall through to the direct external redirect below.
+    }
+
+    return { type: 'external', url: value };
+  }
+
+  const normalized = value.startsWith('objects/') ? `/${value}` : value;
+  if (normalized.startsWith('/objects/')) {
+    return isVendorDocumentScope(normalized)
+      ? { type: 'object', path: normalized }
+      : null;
+  }
+
+  if (normalized.startsWith('vendor-documents/') || normalized.startsWith('vendor-approvals/')) {
+    return { type: 'object', path: `/objects/${normalized}` };
+  }
+
+  const uploadPath = normalized.startsWith('uploads/') ? `/${normalized}` : normalized;
+  if (
+    uploadPath.startsWith('/uploads/vendor-documents/') ||
+    uploadPath.startsWith('/uploads/vendor-approvals/')
+  ) {
+    return { type: 'upload', path: uploadPath };
+  }
+
+  return null;
+}
+
+async function serveVendorDocumentPath(rawPath: unknown, res: Response): Promise<void> {
+  const docPath = normalizeVendorDocumentPath(rawPath);
+  if (!docPath) {
+    res.status(404).json({ error: 'Vendor document not found' });
+    return;
+  }
+
+  if (docPath.type === 'external') {
+    res.redirect(docPath.url);
+    return;
+  }
+
+  if (docPath.type === 'upload') {
+    const relativePath = docPath.path.replace(/^\/uploads\//, '');
+    const absolutePath = path.resolve(uploadsDir, relativePath);
+    const uploadsRoot = path.resolve(uploadsDir);
+    if (!absolutePath.startsWith(uploadsRoot + path.sep)) {
+      res.status(400).json({ error: 'Invalid vendor document path' });
+      return;
+    }
+    res.sendFile(absolutePath, (err) => {
+      if (err && !res.headersSent) {
+        res.status((err as any).status || 404).json({ error: 'Vendor document not found' });
+      }
+    });
+    return;
+  }
+
+  try {
+    await getFileStorageProviderForObjectPath(docPath.path).downloadObject(docPath.path, res);
+  } catch (error) {
+    if (error instanceof ObjectNotFoundError && !res.headersSent) {
+      res.status(404).json({ error: 'Vendor document not found' });
+      return;
+    }
+    throw error;
+  }
 }
 
 // Configure multer for vendor approval PDFs (memory storage for object storage upload)
@@ -70,6 +190,69 @@ function parseGcsPath(fullPath: string): { bucketName: string; objectName: strin
   const normalized = fullPath.startsWith('/') ? fullPath : `/${fullPath}`;
   const parts = normalized.split('/');
   return { bucketName: parts[1], objectName: parts.slice(2).join('/') };
+}
+
+async function uploadVendorPdfToStorage(file: Express.Multer.File, scope: 'vendor-approvals' | 'vendor-documents') {
+  try {
+    const provider = getFileStorageProvider();
+    const objectPath = await provider.uploadBuffer({
+      buffer: file.buffer,
+      fileName: file.originalname,
+      contentType: 'application/pdf',
+      scope,
+    });
+    await provider.setPublicReadPolicy(objectPath, 'system');
+
+    return {
+      url: objectPath,
+      filename: objectPath.split('/').pop() || file.originalname,
+      originalName: file.originalname,
+      size: file.size,
+    };
+  } catch (error) {
+    if (!shouldUseLocalVendorUploadFallback(error)) {
+      throw error;
+    }
+
+    const result = await saveVendorPdfLocally(file, scope);
+    const { reason, message, status } = getStorageErrorResponse(error);
+    console.warn('[vendor-upload] Used local upload fallback', {
+      scope,
+      originalName: file.originalname,
+      reason,
+      message,
+      status,
+      localUrl: result.url,
+    });
+
+    return result;
+  }
+}
+
+function shouldUseLocalVendorUploadFallback(error: unknown): boolean {
+  const { status, reason } = getStorageErrorResponse(error);
+  if ([401, 403, 502, 503].includes(status)) return true;
+  return /storage|signing|supabase|missing|unavailable|unauthorized/i.test(reason);
+}
+
+async function saveVendorPdfLocally(file: Express.Multer.File, scope: 'vendor-approvals' | 'vendor-documents') {
+  const targetDir = scope === 'vendor-approvals' ? vendorApprovalsDir : vendorDocumentsDir;
+  const ext = path.extname(file.originalname).toLowerCase() || '.pdf';
+  const safeBase = path
+    .basename(file.originalname, ext)
+    .replace(/[^a-zA-Z0-9_-]/g, '_')
+    .slice(0, 90) || 'vendor-document';
+  const filename = `${Date.now()}_${randomUUID()}_${safeBase}${ext}`;
+  const absolutePath = path.join(targetDir, filename);
+
+  await fs.promises.writeFile(absolutePath, file.buffer);
+
+  return {
+    url: `/uploads/${scope}/${filename}`,
+    filename,
+    originalName: file.originalname,
+    size: file.size,
+  };
 }
 
 // One-time startup migration: upload legacy local vendor documents to object storage
@@ -284,14 +467,17 @@ async function syncVendorScoresFromEvaluations(vendorId: number) {
   
   // Get all evaluations for this vendor
   const allEvaluations = await storage.getVendorMonthlyEvaluations(vendorId);
-  
-  // Check if there's any evaluation record for the CURRENT calendar year
-  // A vendor is considered "evaluated" if they have any evaluation record for the current year,
-  // even if all scores are N/A (null) - the record existence is what matters
-  const currentYearEval = allEvaluations.find(ev => ev.year === currentYear);
-  
-  // Set evaluated=true if current year has ANY evaluation record (scores or N/A)
-  const isEvaluated = !!currentYearEval;
+
+  // Use any scored evaluation as the source of truth for the evaluated flag so
+  // historical vendors with saved scores still show as evaluated on the dashboard.
+  const scoredEvaluations = allEvaluations.filter(ev =>
+    ev.qualityScore !== null ||
+    ev.costScore !== null ||
+    ev.deliveryScore !== null ||
+    ev.responseScore !== null
+  );
+  const isEvaluated = scoredEvaluations.length > 0;
+  const currentYearEval = allEvaluations.find(ev => ev.year === currentYear && ev.month === 1);
   
   // Get the latest evaluation for displaying scores (not necessarily current month)
   const evaluationsWithScores = allEvaluations.filter(ev => 
@@ -304,10 +490,9 @@ async function syncVendorScoresFromEvaluations(vendorId: number) {
     return b.month - a.month;
   });
   
-  // When vendor is evaluated (current-year record exists), evaluationDate MUST
-  // reflect the current year so ERDI's 365-day lookback counts correctly.
-  // Display scores may still come from the latest scored record (could be prior year).
-  const evaluationDate = isEvaluated ? `${currentYear}-01-01` : null;
+  // Keep the current-year evaluation date when present; otherwise preserve the
+  // latest scored record date so historical vendors still appear evaluated.
+  const evaluationDate = currentYearEval ? `${currentYear}-01-01` : (scoredEvaluations.length > 0 ? `${scoredEvaluations[0].year}-01-01` : null);
 
   if (evaluationsWithScores.length > 0) {
     const latestEval = evaluationsWithScores[0];
@@ -373,6 +558,17 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/vendors/documents/view - Stream a vendor document through the API
+router.get('/documents/view', async (req: Request, res: Response) => {
+  try {
+    await serveVendorDocumentPath(req.query.path, res);
+  } catch (error) {
+    console.error('View vendor document error:', error);
+    const { status, reason, message } = getStorageErrorResponse(error);
+    res.status(status).json({ error: message, reason });
+  }
+});
+
 // GET /api/vendors/documents/all - Get all vendors that have an uploaded document
 router.get('/documents/all', async (req: Request, res: Response) => {
   try {
@@ -391,6 +587,119 @@ router.get('/documents/all', async (req: Request, res: Response) => {
   }
 });
 
+router.get('/:vendorId/supplier-controls', async (req: Request, res: Response) => {
+  try {
+    const vendorId = parseInt(req.params.vendorId);
+    if (isNaN(vendorId)) return res.status(400).json({ error: 'Invalid vendor ID' });
+
+    const [scopes, audits, scorecards] = await Promise.all([
+      db.select().from(supplierScopes).where(eq(supplierScopes.vendorId, vendorId)).orderBy(desc(supplierScopes.createdAt)),
+      db.select().from(supplierAudits).where(eq(supplierAudits.vendorId, vendorId)).orderBy(desc(supplierAudits.auditDate)),
+      db.select().from(supplierScorecards).where(eq(supplierScorecards.vendorId, vendorId)).orderBy(desc(supplierScorecards.periodEnd)),
+    ]);
+
+    res.json({ scopes, audits, scorecards });
+  } catch (error: any) {
+    console.error('Get supplier controls error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/:vendorId/supplier-scopes', async (req: Request, res: Response) => {
+  try {
+    const vendorId = parseInt(req.params.vendorId);
+    if (isNaN(vendorId)) return res.status(400).json({ error: 'Invalid vendor ID' });
+    const user = (req as any).user;
+    const parsed = insertSupplierScopeSchema.parse({
+      ...req.body,
+      vendorId,
+      approvedByUserId: req.body?.approvedByUserId ?? user?.id ?? null,
+      approvedByDisplayName: req.body?.approvedByDisplayName ?? user?.username ?? null,
+      approvedAt: req.body?.approvedAt ?? new Date(),
+    });
+
+    const [created] = await db.insert(supplierScopes).values(parsed).returning();
+    await auditService.logEvent({
+      entityType: 'vendor',
+      entityId: String(vendorId),
+      action: 'SUPPLIER_SCOPE_APPROVED',
+      actor: { id: user?.id, username: user?.username, role: user?.role },
+      meta: { scopeId: created.id, scopeCode: created.scopeCode, status: created.status, expiresAt: created.expiresAt },
+    });
+
+    res.status(201).json(created);
+  } catch (error: any) {
+    if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', issues: error.errors });
+    console.error('Create supplier scope error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/:vendorId/supplier-audits', async (req: Request, res: Response) => {
+  try {
+    const vendorId = parseInt(req.params.vendorId);
+    if (isNaN(vendorId)) return res.status(400).json({ error: 'Invalid vendor ID' });
+    const user = (req as any).user;
+    const parsed = insertSupplierAuditSchema.parse({
+      ...req.body,
+      vendorId,
+      performedByUserId: req.body?.performedByUserId ?? user?.id ?? null,
+      performedByDisplayName: req.body?.performedByDisplayName ?? user?.username ?? null,
+    });
+
+    const [created] = await db.insert(supplierAudits).values(parsed).returning();
+    await auditService.logEvent({
+      entityType: 'vendor',
+      entityId: String(vendorId),
+      action: 'SUPPLIER_AUDIT_RECORDED',
+      actor: { id: user?.id, username: user?.username, role: user?.role },
+      meta: { auditId: created.id, auditType: created.auditType, status: created.status, auditDate: created.auditDate },
+    });
+
+    res.status(201).json(created);
+  } catch (error: any) {
+    if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', issues: error.errors });
+    console.error('Create supplier audit error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/:vendorId/supplier-scorecards', async (req: Request, res: Response) => {
+  try {
+    const vendorId = parseInt(req.params.vendorId);
+    if (isNaN(vendorId)) return res.status(400).json({ error: 'Invalid vendor ID' });
+    const user = (req as any).user;
+    const scores = ['qualityScore', 'deliveryScore', 'costScore', 'responsivenessScore']
+      .map((key) => Number(req.body?.[key]));
+    const overallScore = Number.isFinite(Number(req.body?.overallScore))
+      ? Number(req.body.overallScore)
+      : scores.reduce((sum, value) => sum + value, 0) / scores.length;
+    const parsed = insertSupplierScorecardSchema.parse({
+      ...req.body,
+      vendorId,
+      overallScore,
+      reviewedByUserId: req.body?.reviewedByUserId ?? user?.id ?? null,
+      reviewedByDisplayName: req.body?.reviewedByDisplayName ?? user?.username ?? null,
+      reviewedAt: req.body?.reviewedAt ?? new Date(),
+    });
+
+    const [created] = await db.insert(supplierScorecards).values(parsed).returning();
+    await auditService.logEvent({
+      entityType: 'vendor',
+      entityId: String(vendorId),
+      action: 'SUPPLIER_SCORECARD_RECORDED',
+      actor: { id: user?.id, username: user?.username, role: user?.role },
+      meta: { scorecardId: created.id, periodStart: created.periodStart, periodEnd: created.periodEnd, overallScore: created.overallScore, status: created.status },
+    });
+
+    res.status(201).json(created);
+  } catch (error: any) {
+    if (error instanceof z.ZodError) return res.status(400).json({ error: 'Validation failed', issues: error.errors });
+    console.error('Create supplier scorecard error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // GET /api/vendors/:id - Get a single vendor by ID
 router.get('/:id', async (req: Request, res: Response) => {
   try {
@@ -399,7 +708,26 @@ router.get('/:id', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid vendor ID' });
     }
 
-    const vendor = await storage.getVendor(id);
+    let vendor;
+    try {
+      vendor = await storage.getVendor(id);
+    } catch (innerError) {
+      const message = innerError instanceof Error ? innerError.message : String(innerError);
+      if (message.includes('scope_approved_for')) {
+        console.warn(`Vendor ${id} lookup hit missing scope_approved_for column; retrying without scope fields`);
+        const fallbackResult = await db.execute(
+          sql`
+            SELECT *
+            FROM vendors
+            WHERE id = ${id}
+            LIMIT 1
+          `
+        );
+        vendor = Array.isArray(fallbackResult) ? fallbackResult[0] : (fallbackResult as any)?.rows?.[0];
+      } else {
+        throw innerError;
+      }
+    }
     if (!vendor) {
       return res.status(404).json({ error: 'Vendor not found' });
     }
@@ -727,44 +1055,13 @@ router.post('/upload/approval', vendorApprovalUpload.single('file'), async (req:
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    const privateObjectDir = process.env.PRIVATE_OBJECT_DIR;
-    if (!privateObjectDir) {
-      console.error('PRIVATE_OBJECT_DIR not set — cannot upload vendor approval PDF to object storage');
-      return res.status(500).json({ error: 'Object storage not configured' });
-    }
+    const uploadResult = await uploadVendorPdfToStorage(req.file, 'vendor-approvals');
+    return res.status(200).json(uploadResult);
 
-    const objectId = randomUUID();
-    const safeFilename = req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const objectKey = `vendor-approvals/${objectId}-${safeFilename}`;
-    const fullPath = `${privateObjectDir}/${objectKey}`;
-
-    const parts = fullPath.replace(/^\//, '').split('/');
-    const bucketName = parts[0];
-    const objectName = parts.slice(1).join('/');
-
-    const bucket = objectStorageClient.bucket(bucketName);
-    const file = bucket.file(objectName);
-
-    await file.save(req.file.buffer, {
-      contentType: 'application/pdf',
-      metadata: {
-        cacheControl: 'public, max-age=86400',
-      },
-    });
-
-    await setObjectAclPolicy(file, { owner: 'system', visibility: 'public' });
-
-    const objectPath = `/objects/${objectKey}`;
-
-    res.status(200).json({
-      url: objectPath,
-      filename: `${objectId}-${safeFilename}`,
-      originalName: req.file.originalname,
-      size: req.file.size,
-    });
   } catch (error) {
     console.error('Vendor approval upload error:', error);
-    res.status(500).json({ error: 'Failed to upload file' });
+    const { status, reason, message } = getStorageErrorResponse(error);
+    res.status(status).json({ error: message, reason });
   }
 });
 
@@ -775,44 +1072,13 @@ router.post('/upload/document', vendorDocumentUpload.single('file'), async (req:
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    const privateObjectDir = process.env.PRIVATE_OBJECT_DIR;
-    if (!privateObjectDir) {
-      console.error('PRIVATE_OBJECT_DIR not set — cannot upload vendor document to object storage');
-      return res.status(500).json({ error: 'Object storage not configured' });
-    }
+    const uploadResult = await uploadVendorPdfToStorage(req.file, 'vendor-documents');
+    return res.status(200).json(uploadResult);
 
-    const objectId = randomUUID();
-    const safeFilename = req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
-    const objectKey = `vendor-documents/${objectId}-${safeFilename}`;
-    const fullPath = `${privateObjectDir}/${objectKey}`;
-
-    const parts = fullPath.replace(/^\//, '').split('/');
-    const bucketName = parts[0];
-    const objectName = parts.slice(1).join('/');
-
-    const bucket = objectStorageClient.bucket(bucketName);
-    const file = bucket.file(objectName);
-
-    await file.save(req.file.buffer, {
-      contentType: 'application/pdf',
-      metadata: {
-        cacheControl: 'public, max-age=86400',
-      },
-    });
-
-    await setObjectAclPolicy(file, { owner: 'system', visibility: 'public' });
-
-    const objectPath = `/objects/${objectKey}`;
-
-    res.status(200).json({
-      url: objectPath,
-      filename: `${objectId}-${safeFilename}`,
-      originalName: req.file.originalname,
-      size: req.file.size,
-    });
   } catch (error) {
     console.error('Vendor document upload error:', error);
-    res.status(500).json({ error: 'Failed to upload file' });
+    const { status, reason, message } = getStorageErrorResponse(error);
+    res.status(status).json({ error: message, reason });
   }
 });
 
@@ -922,6 +1188,17 @@ router.post('/:vendorId/evaluations', async (req: Request, res: Response) => {
     
     const totalScore = scores.length > 0 ? scores.reduce((sum, score) => sum + score, 0) : 0;
 
+    const hasAnyAnnualScore =
+      evaluation.qualityScore !== null && evaluation.qualityScore !== undefined ||
+      evaluation.costScore !== null && evaluation.costScore !== undefined ||
+      evaluation.deliveryScore !== null && evaluation.deliveryScore !== undefined ||
+      evaluation.responseScore !== null && evaluation.responseScore !== undefined;
+
+    await storage.updateVendor(vendorId, {
+      evaluated: hasAnyAnnualScore,
+      evaluationDate: hasAnyAnnualScore ? `${year}-01-01` : null,
+    });
+
     // Update vendor record with the latest evaluation scores so they show on the vendor list
     await syncVendorScoresFromEvaluations(vendorId);
 
@@ -1004,6 +1281,7 @@ router.post('/import-evaluations', async (req: Request, res: Response) => {
       matched: 0,
       unmatched: [] as string[],
       created: 0,
+      synced: 0,
       errors: [] as any[],
     };
 
@@ -1068,6 +1346,9 @@ router.post('/import-evaluations', async (req: Request, res: Response) => {
             });
             results.created++;
           }
+
+          await syncVendorScoresFromEvaluations(matchedVendor.id);
+          results.synced++;
         } catch (error) {
           results.errors.push({
             vendor: vendorName,

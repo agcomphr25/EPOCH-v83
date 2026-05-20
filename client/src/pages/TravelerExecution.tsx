@@ -84,6 +84,7 @@ import {
   Plus,
   Info,
 } from 'lucide-react';
+import { displaySignerName } from '@/lib/signerName';
 import MaterialScanner from '@/components/MaterialScanner';
 import StartProductionTimerModal from '@/components/StartProductionTimerModal';
 import { Timer } from 'lucide-react';
@@ -191,6 +192,18 @@ interface TravelerWithDetails {
   steps: TravelerStep[];
   events: TravelerEvent[];
 }
+
+const addGeneratedTraceFieldAliases = (values: Record<string, string>) => ({
+  ...values,
+  trace_internalcontrolnumber: values.internalControlNumber || values.material_internal_control_number || values.material_icn || '',
+  trace_supplier: values.supplier || '',
+  trace_inventorypartnumber: values.inventoryPartNumber || values.material_part_number || '',
+  trace_batchlotnumber: values.batchLotNumber || values.material_batch_number || values.material_lot || '',
+  trace_manufacturer: values.manufacturer || values.material_brand || '',
+  trace_rollnumber: values.rollNumber || '',
+  trace_expirationdate: values.expirationDate || values.material_expiration_date || '',
+  trace_receiveddate: values.receivedDate || '',
+});
 
 const STEP_STATUS_COLORS: Record<string, string> = {
   NOT_STARTED: 'bg-gray-100 text-gray-800 border-gray-300',
@@ -351,13 +364,22 @@ export default function TravelerExecution() {
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { data: session } = useQuery<any>({ queryKey: ['/api/auth/session'] });
+  const { data: session } = useQuery<any | null>({
+    queryKey: ['/api/auth/session', 'traveler-execution-admin'],
+    queryFn: async () => {
+      const res = await fetch('/api/auth/session', { credentials: 'include' });
+      if (res.status === 401) return null;
+      if (!res.ok) throw new Error('Failed to fetch admin session');
+      return res.json();
+    },
+    retry: false,
+  });
   const isAdmin = session?.role === 'ADMIN' || session?.role === 'OWNER';
 
   // Labor context query — fetched per-step for NOT_STARTED steps (Task #1235)
   interface LaborContext {
     chargeCode: string | null;
-    chargeCodeResolvedFrom: 'wad_default' | 'traveler_default' | 'department_match' | null;
+    chargeCodeResolvedFrom: 'wad_default' | 'traveler_default' | 'wad_department' | 'department_match' | null;
     chargeCodeError: string | null;
     isOverrun: boolean;
     nearlyExhausted: boolean;
@@ -747,6 +769,42 @@ export default function TravelerExecution() {
     return currentPartRouting.departmentConfig[departmentName] || null;
   };
 
+  const getRoutingQcStandardsForTask = (task: TravelerTask, departmentName: string) => {
+    if (task.taskType !== 'QC') return [];
+    const deptConfig = getDeptConfig(departmentName) as any;
+    if (!deptConfig) return [];
+
+    const phaseStandards =
+      task.taskPhase === 'START'
+        ? deptConfig.startQcStandards
+        : task.taskPhase === 'FINISH'
+          ? deptConfig.finishQcStandards
+          : deptConfig.qcStandards;
+    const fallbackStandards =
+      task.taskPhase === 'FINISH'
+        ? deptConfig.qcStandards
+        : deptConfig.finishQcStandards;
+
+    const standards = Array.isArray(phaseStandards) && phaseStandards.length > 0
+      ? phaseStandards
+      : (Array.isArray(fallbackStandards) ? fallbackStandards : []);
+    const seen = new Set<string>();
+
+    return standards
+      .map((qc: any) => ({
+        standard: qc.standard || qc.standardName || qc.name || qc.title || 'QC Check',
+        tolerance: qc.tolerance || '',
+        requirement: qc.requirement || qc.specification || qc.acceptanceCriteria || '',
+        referenceLink: qc.referenceLink || '',
+      }))
+      .filter((qc: any) => {
+        const key = `${qc.standard}|${qc.tolerance}|${qc.requirement}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return qc.standard || qc.tolerance || qc.requirement;
+      });
+  };
+
   const getTimerConfigForDepartment = (departmentName: string) => {
     const deptConfig = getDeptConfig(departmentName);
     if (deptConfig?.timerConfig?.enabled) return deptConfig.timerConfig;
@@ -846,7 +904,27 @@ export default function TravelerExecution() {
         }
       }
 
-      toast({ title: 'Step Started', description: 'Badge verified — gate checks passed. Work on this step has begun.' });
+      const autoPunch = data?.autoPunch as
+        | { action?: 'clockedIn' | 'switched' | 'unchanged'; chargeCode?: string | null; warning?: string }
+        | null
+        | undefined;
+      let punchLine = '';
+      if (autoPunch?.action === 'clockedIn' && autoPunch.chargeCode) {
+        punchLine = ` Clocked in on ${autoPunch.chargeCode}.`;
+      } else if (autoPunch?.action === 'switched' && autoPunch.chargeCode) {
+        punchLine = ` Switched charge code to ${autoPunch.chargeCode}.`;
+      } else if (autoPunch?.action === 'unchanged' && autoPunch.chargeCode) {
+        punchLine = ` Punch already on ${autoPunch.chargeCode}.`;
+      }
+
+      toast({ title: 'Step Started', description: `Badge verified — gate checks passed. Work on this step has begun.${punchLine}` });
+      if (autoPunch?.warning) {
+        toast({
+          title: 'Labor budget warning',
+          description: autoPunch.warning,
+          variant: 'destructive',
+        });
+      }
       refetch();
     },
     onError: (error: any, variables) => {
@@ -1334,6 +1412,16 @@ export default function TravelerExecution() {
                 <p className="font-medium">{traveler.partNumber}</p>
                 <p className="text-xs text-muted-foreground">{traveler.partName}</p>
               </div>
+              {traveler.partRoutingId && (
+                <div>
+                  <span className="text-muted-foreground">Routing:</span>
+                  <Link href={`/p2-control-center?tab=routing&routingId=${traveler.partRoutingId}`}>
+                    <Button variant="link" className="h-auto p-0 font-medium text-left" data-testid={`link-routing-${traveler.partRoutingId}`}>
+                      View routing
+                    </Button>
+                  </Link>
+                </div>
+              )}
               {traveler.workOrderId && (
                 <div>
                   <span className="text-muted-foreground">Work Order:</span>
@@ -1454,6 +1542,7 @@ export default function TravelerExecution() {
                       ? 'bg-red-100 text-red-800'
                       : 'bg-gray-100 text-gray-800'
                   }`}
+                  data-testid={`text-traveler-status-${traveler.status.toLowerCase()}`}
                 >
                   {traveler.status}
                 </Badge>
@@ -1996,7 +2085,7 @@ export default function TravelerExecution() {
                               Charge code:{' '}
                               <span className="font-mono font-semibold text-foreground">{laborContext.chargeCode}</span>
                               <span className="ml-1 text-[10px] text-muted-foreground">
-                                ({laborContext.chargeCodeResolvedFrom === 'wad_default' ? 'WAD default' : laborContext.chargeCodeResolvedFrom === 'traveler_default' ? 'traveler default' : 'dept match'})
+                                ({laborContext.chargeCodeResolvedFrom === 'wad_default' ? 'WAD default' : laborContext.chargeCodeResolvedFrom === 'traveler_default' ? 'traveler default' : laborContext.chargeCodeResolvedFrom === 'wad_department' ? 'WAD dept' : 'dept match'})
                               </span>
                             </span>
                           ) : (
@@ -2668,7 +2757,7 @@ export default function TravelerExecution() {
                                                 const icn = result.internalControlNumber || '';
                                                 const lot = result.updatedLot;
                                                 const hasInventoryMatch = !!lot;
-                                                const allManualVals: Record<string, string> = {
+                                                const allManualVals: Record<string, string> = addGeneratedTraceFieldAliases({
                                                   material_internal_control_number: icn,
                                                   internalControlNumber: icn,
                                                   material_icn: icn,
@@ -2688,7 +2777,7 @@ export default function TravelerExecution() {
                                                   manufacturer: lot?.manufacturer || 'Manual Entry',
                                                   rollNumber: lot?.rollNumber || 'N/A',
                                                   receivedDate: lot?.receivedDate || today,
-                                                };
+                                                });
                                                 const traceFieldVals: Record<string, string> = {};
                                                 for (const [key, val] of Object.entries(allManualVals)) {
                                                   if (taskFieldKeys.has(key)) {
@@ -2737,7 +2826,7 @@ export default function TravelerExecution() {
                                                   const combinedIcns = batch.rolls.map((r) => r.icn).filter(Boolean).join(', ');
                                                   const icnOrBarcode = combinedIcns || batch.packetBarcode;
 
-                                                  const allScanVals: Record<string, string> = {
+                                                  const allScanVals: Record<string, string> = addGeneratedTraceFieldAliases({
                                                     packetBarcode: batch.packetBarcode,
                                                     packet_barcode: batch.packetBarcode,
                                                     material_internal_control_number: icnOrBarcode,
@@ -2759,7 +2848,7 @@ export default function TravelerExecution() {
                                                     manufacturer: primaryLot?.manufacturer || '',
                                                     rollNumber: primaryLot?.rollNumber || '',
                                                     receivedDate: primaryLot?.receivedDate || '',
-                                                  };
+                                                  });
                                                   batch.rolls.forEach((r, idx) => {
                                                     allScanVals[`internalControlNumber_${idx + 1}`] = r.icn;
                                                   });
@@ -2807,7 +2896,7 @@ export default function TravelerExecution() {
                                                 return;
                                               }
 
-                                              const allScanVals: Record<string, string> = {
+                                              const allScanVals: Record<string, string> = addGeneratedTraceFieldAliases({
                                                 material_internal_control_number: icnValue,
                                                 internalControlNumber: icnValue,
                                                 material_icn: icnValue,
@@ -2827,7 +2916,7 @@ export default function TravelerExecution() {
                                                 manufacturer: lot?.manufacturer || '',
                                                 rollNumber: lot?.rollNumber || '',
                                                 receivedDate: lot?.receivedDate || '',
-                                              };
+                                              });
                                               const traceFieldVals: Record<string, string> = {};
                                               for (const [key, val] of Object.entries(allScanVals)) {
                                                 if (taskFieldKeys.has(key)) {
@@ -2858,6 +2947,39 @@ export default function TravelerExecution() {
                                           />
                                         ) : (
                                           <>
+                                            {task.taskType === 'QC' && task.fields.length === 0 && getRoutingQcStandardsForTask(task, currentStep.departmentName).length > 0 && (
+                                              <div className="space-y-2 rounded-lg border border-green-200 bg-green-50/50 p-3">
+                                                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-green-800">
+                                                  <ClipboardCheck className="h-4 w-4" />
+                                                  Routing QC Requirements
+                                                </div>
+                                                {getRoutingQcStandardsForTask(task, currentStep.departmentName).map((qc: any, index: number) => (
+                                                  <div key={`${qc.standard}-${index}`} className="rounded-md border border-green-100 bg-white p-2">
+                                                    <p className="text-sm font-medium">{qc.standard}</p>
+                                                    <div className="mt-1 flex flex-wrap gap-2 text-xs">
+                                                      {qc.tolerance && (
+                                                        <span className="inline-flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-0.5 text-blue-700">
+                                                          <Wrench className="h-3 w-3" />
+                                                          Tolerance: {qc.tolerance}
+                                                        </span>
+                                                      )}
+                                                      {qc.requirement && (
+                                                        <span className="inline-flex items-center gap-1 rounded border border-green-200 bg-green-50 px-2 py-0.5 text-green-700">
+                                                          <Shield className="h-3 w-3" />
+                                                          Requirement: {qc.requirement}
+                                                        </span>
+                                                      )}
+                                                      {qc.referenceLink && (
+                                                        <a href={qc.referenceLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 rounded border border-purple-200 bg-purple-50 px-2 py-0.5 text-purple-700 hover:bg-purple-100 no-underline">
+                                                          <ExternalLink className="h-3 w-3" />
+                                                          Reference
+                                                        </a>
+                                                      )}
+                                                    </div>
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            )}
                                             {task.fields.length > 0 && (
                                               <div className="space-y-3">
                                                 {task.fields.filter((field) => {
@@ -3254,14 +3376,14 @@ export default function TravelerExecution() {
                               {sig.signatureData && (
                                 <img
                                   src={sig.signatureData}
-                                  alt={`Signature by ${sig.signedByName || sig.signedBy}`}
+                                  alt={`Signature by ${displaySignerName(sig.signedByName, sig.signedBy)}`}
                                   className="h-10 w-24 object-contain border rounded bg-white"
                                 />
                               )}
                               <div className="flex-1">
 
                                 <p className="font-medium">
-                                  {sig.signedByName || sig.signedBy}
+                                  {displaySignerName(sig.signedByName, sig.signedBy)}
                                   {sig.signatureRole && (
                                     <Badge variant="outline" className="ml-2 text-[10px]">{sig.signatureRole}</Badge>
                                   )}
@@ -3275,7 +3397,7 @@ export default function TravelerExecution() {
                               <div className="border rounded bg-white p-1">
                                 <img
                                   src={sig.signatureData}
-                                  alt={`Signature by ${sig.signedByName || sig.signedBy}`}
+                                  alt={`Signature by ${displaySignerName(sig.signedByName, sig.signedBy)}`}
                                   className="h-12 object-contain mx-auto"
                                 />
                               </div>

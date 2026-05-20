@@ -9,10 +9,8 @@ import {
 } from '../../schema';
 import { eq, and } from 'drizzle-orm';
 import JSZip from 'jszip';
-import { ObjectStorageService } from '../../replit_integrations/object_storage';
 import { recordAuditEvent } from './auditLedgerService';
-
-const objectStorage = new ObjectStorageService();
+import { getFileStorageProvider, getFileStorageProviderForObjectPath } from './fileStorageProvider';
 
 export async function requestEvidencePacket(
   snapshotId: number,
@@ -173,7 +171,13 @@ export async function generateEvidencePacket(
 
     // Upload to object storage
     const filename = `${folder}-${Date.now()}.zip`;
-    const storagePath = await objectStorage.uploadBuffer(zipBuffer, filename, 'application/zip');
+    const storagePath = await getFileStorageProvider().uploadBuffer({
+      buffer: zipBuffer,
+      fileName: filename,
+      contentType: 'application/zip',
+      scope: 'edri-evidence-packets',
+      entityId: String(packetId),
+    });
 
     await db.update(edriEvidencePackets)
       .set({
@@ -201,7 +205,7 @@ export async function streamEvidencePacket(packetId: number, res: import('expres
   const packet = await getEvidencePacketStatus(packetId);
   if (!packet || packet.status !== 'READY' || !packet.storagePath) return false;
 
-  const zipBuffer = await objectStorage.downloadAsBuffer(packet.storagePath);
+  const zipBuffer = await getFileStorageProviderForObjectPath(packet.storagePath).downloadBuffer(packet.storagePath);
   res.setHeader('Content-Type', 'application/zip');
   res.setHeader('Content-Disposition', `attachment; filename="edri-evidence-packet-${packetId}.zip"`);
   res.send(zipBuffer);

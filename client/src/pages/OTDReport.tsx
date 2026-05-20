@@ -104,8 +104,13 @@ export default function OTDReport() {
   const [sortColumn, setSortColumn] = useState<SortColumn>('completionDate');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
-  const { data: orders = [], isLoading: ordersLoading } = useQuery<Order[]>({
-    queryKey: ['/api/orders/with-payment-status'],
+  const {
+    data: orders = [],
+    isLoading: ordersLoading,
+    isError: ordersError,
+    error: ordersQueryError,
+  } = useQuery<Order[]>({
+    queryKey: ['/api/orders/fulfilled-shipped'],
   });
 
   const { data: stockModels = [] } = useQuery({
@@ -299,6 +304,12 @@ export default function OTDReport() {
     return 'bg-red-50 border-red-200';
   };
 
+  const ordersErrorMessage =
+    (ordersQueryError as any)?.responseData?.details ||
+    (ordersQueryError as any)?.responseData?.error ||
+    (ordersQueryError as any)?.message ||
+    'Failed to load OTD data';
+
   return (
     <div className="container mx-auto p-6">
       <div className="mb-6">
@@ -397,6 +408,10 @@ export default function OTDReport() {
         <CardContent>
           {ordersLoading ? (
             <div className="text-center py-8 text-muted-foreground">Loading orders...</div>
+          ) : ordersError ? (
+            <div className="text-center py-8 text-red-600">
+              Error loading OTD report: {ordersErrorMessage}
+            </div>
           ) : otdData.totalCount === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               No shipped or fulfilled orders found in the selected date range.

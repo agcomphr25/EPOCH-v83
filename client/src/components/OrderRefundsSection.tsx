@@ -49,17 +49,21 @@ function formatDate(dateStr: string): string {
 export default function OrderRefundsSection({ orderId }: OrderRefundsSectionProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
-  const { data: refunds = [], isLoading: refundsLoading } = useQuery<RefundRequest[]>({
+  const { data: rawRefunds = [], isLoading: refundsLoading } = useQuery<RefundRequest[]>({
     queryKey: ['/api/refund-requests/order', orderId],
     queryFn: () => apiRequest(`/api/refund-requests/order/${orderId}`),
     enabled: !!orderId && orderId !== 'Loading...',
   });
 
-  const { data: creditApplications = [], isLoading: creditsLoading } = useQuery<CreditApplication[]>({
+  const { data: rawCreditApplications = [], isLoading: creditsLoading } = useQuery<CreditApplication[]>({
     queryKey: ['/api/credit-memos/order', orderId, 'applications'],
     queryFn: () => apiRequest(`/api/credit-memos/order/${orderId}/applications`),
     enabled: !!orderId && orderId !== 'Loading...',
   });
+  const refunds: RefundRequest[] = Array.isArray(rawRefunds) ? rawRefunds : [];
+  const creditApplications: CreditApplication[] = Array.isArray(rawCreditApplications)
+    ? rawCreditApplications
+    : [];
 
   const hasData = refunds.length > 0 || creditApplications.length > 0;
 

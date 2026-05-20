@@ -38,7 +38,14 @@ export const CRITICAL_COLUMNS: Record<string, Set<string>> = {
     'id', 'timestamp', 'actor', 'action_type', 'table_name', 'column_name',
   ]),
   nonconformance_records: new Set([
-    'id', 'order_id', 'status', 'created_at',
+    'id', 'order_id', 'status', 'created_at', 'containment_action', 'root_cause',
+    'corrective_action', 'effectiveness_status',
+  ]),
+  capa_records: new Set([
+    'id', 'capa_number', 'problem_statement', 'corrective_action', 'effectiveness_status', 'status',
+  ]),
+  calibration_assets: new Set([
+    'id', 'asset_tag', 'status', 'calibration_due_date', 'evidence_url',
   ]),
 };
 
@@ -50,6 +57,10 @@ export const CRITICAL_TABLES: Set<string> = new Set([
   'followup_orders',
   'schema_change_log',
   'nonconformance_records',
+  'capa_records',
+  'calibration_assets',
+  'calibration_events',
+  'calibration_use_logs',
   'p2_customers',
   'p2_lot_numbers',
   'p2_final_inspection_results',

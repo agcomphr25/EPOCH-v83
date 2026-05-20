@@ -14,7 +14,9 @@ import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
@@ -34,6 +36,7 @@ import {
   AlertCircle,
   Award,
   Calendar,
+  CalendarOff,
   Download,
   Clock,
   Timer,
@@ -46,6 +49,10 @@ import {
   ShieldCheck,
   Receipt,
   Upload,
+  Send,
+  Loader2,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -116,6 +123,23 @@ type DailySignOffStatus = {
   isCertified: boolean;
   timesheetStatus: string | null;
   certifiedAt: string | null;
+};
+
+type TimeOffRequest = {
+  id: number;
+  employeeId: number;
+  startDate: string;
+  endDate: string;
+  leaveType: string;
+  status: string;
+  requestUnit?: string | null;
+  requestedHours?: number | null;
+  employeeNote?: string | null;
+  adminNote?: string | null;
+  supervisorNote?: string | null;
+  hrNote?: string | null;
+  vpNote?: string | null;
+  createdAt?: string | Date | null;
 };
 
 type WorkSession = {
@@ -207,6 +231,46 @@ function fileSizeLabel(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
+const PAY_PERIOD_ANCHOR_UTC = Date.UTC(2024, 0, 1);
+const DAY_MS = 24 * 60 * 60 * 1000;
+const PAY_PERIOD_DAYS = 14;
+
+function ymdFromUtc(utcMs: number): string {
+  const date = new Date(utcMs);
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
+}
+
+function isDateString(value: string | null): value is string {
+  return Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value));
+}
+
+function getPayPeriodForDate(value: string | Date = new Date()): { start: string; end: string } {
+  const date = typeof value === 'string' ? new Date(`${value}T12:00:00`) : value;
+  const inputUTC = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+  const daysSinceAnchor = Math.round((inputUTC - PAY_PERIOD_ANCHOR_UTC) / DAY_MS);
+  const periodIndex = Math.floor(daysSinceAnchor / PAY_PERIOD_DAYS);
+  const startUTC = PAY_PERIOD_ANCHOR_UTC + periodIndex * PAY_PERIOD_DAYS * DAY_MS;
+  return {
+    start: ymdFromUtc(startUTC),
+    end: ymdFromUtc(startUTC + (PAY_PERIOD_DAYS - 1) * DAY_MS),
+  };
+}
+
+function shiftPayPeriod(periodStart: string, offset: number): { start: string; end: string } {
+  const [year, month, day] = periodStart.split('-').map(Number);
+  const startUTC = Date.UTC(year, month - 1, day) + offset * PAY_PERIOD_DAYS * DAY_MS;
+  return {
+    start: ymdFromUtc(startUTC),
+    end: ymdFromUtc(startUTC + (PAY_PERIOD_DAYS - 1) * DAY_MS),
+  };
+}
+
+function formatPayPeriodLabel(start: string, end: string): string {
+  const startDate = new Date(`${start}T12:00:00`);
+  const endDate = new Date(`${end}T12:00:00`);
+  return `${startDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - ${endDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`;
+}
+
 function SessionStatusBadge({ status }: { status: string }) {
   if (status === 'open')
     return (
@@ -227,6 +291,32 @@ function SessionStatusBadge({ status }: { status: string }) {
   );
 }
 
+const TIME_OFF_STATUS_LABELS: Record<string, string> = {
+  pending: 'Pending Supervisor',
+  pending_supervisor: 'Pending Supervisor',
+  pending_hr: 'Pending HR',
+  pending_vp: 'Pending VP',
+  approved: 'Approved',
+  rejected: 'Rejected',
+  denied: 'Denied',
+  cancelled: 'Cancelled',
+};
+
+function TimeOffStatusBadge({ status }: { status: string }) {
+  const label = TIME_OFF_STATUS_LABELS[status] ?? status.replace(/_/g, ' ');
+  const className =
+    status.startsWith('pending')
+      ? 'bg-yellow-100 text-yellow-800 border-yellow-200'
+      : status === 'approved'
+      ? 'bg-green-100 text-green-800 border-green-200'
+      : status === 'rejected' || status === 'denied'
+      ? 'bg-red-100 text-red-800 border-red-200'
+      : status === 'cancelled'
+      ? 'bg-gray-100 text-gray-700 border-gray-200'
+      : 'bg-gray-100 text-gray-700 border-gray-200';
+  return <Badge variant="outline" className={`capitalize ${className}`}>{label}</Badge>;
+}
+
 interface EmployeePortalProps {
   employeeId: string;
 }
@@ -240,6 +330,34 @@ interface MyPunchStatus {
   clockedInAt: string | null;
   hoursToday: number;
   openEntry?: Record<string, unknown> | null;
+}
+
+type ChargeCode = {
+  id: number;
+  code: string;
+  description: string | null;
+  type: string;
+};
+
+type PunchMutationInput = {
+  type: 'clock_in' | 'clock_out' | 'break_start' | 'break_end';
+  costCode?: string;
+  dailyCertificationConfirmed?: boolean;
+};
+
+type PunchEventType = 'clock_in' | 'clock_out' | 'break_start' | 'break_end';
+
+interface PunchEvent {
+  id: number;
+  sessionId: number;
+  employeeId: number;
+  type: PunchEventType;
+  punchedAt: string;
+  source: string;
+  isEdited: boolean;
+  editNote: string | null;
+  costCode: string | null;
+  hasMissingClockOut?: boolean;
 }
 
 function portalFetch(url: string, init?: Parameters<typeof fetch>[1]) {
@@ -275,11 +393,29 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
   const [activeTab, setActiveTab] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     const tab = params.get('tab');
-    const validTabs = ['checklist', 'certifications', 'onboarding', 'work-sessions', 'time-clock', 'my-timesheets', 'expenses'];
+    const validTabs = ['checklist', 'certifications', 'onboarding', 'work-sessions', 'time-clock', 'my-timesheets', 'time-off', 'expenses'];
     return validTabs.includes(tab ?? '') ? (tab as string) : 'checklist';
   });
   const [expenseForm, setExpenseForm] = useState<ExpenseForm>(() => makeExpenseForm());
   const [expenseFiles, setExpenseFiles] = useState<File[]>([]);
+  const [selectedClockInChargeCode, setSelectedClockInChargeCode] = useState('none');
+  const [dailyPunchOutConfirmed, setDailyPunchOutConfirmed] = useState(false);
+  const [showDailyPunchOutCertification, setShowDailyPunchOutCertification] = useState(false);
+  const [timeOffForm, setTimeOffForm] = useState({
+    startDate: '',
+    endDate: '',
+    requestUnit: 'full_day',
+    requestedHours: '',
+    employeeNote: '',
+  });
+  const [punchCorrectionForm, setPunchCorrectionForm] = useState({
+    requestType: 'edit_session',
+    punchLedgerId: '',
+    selectedPunchType: 'clock_in' as PunchEventType,
+    clockIn: '',
+    clockOut: '',
+    reason: '',
+  });
   const [, setTick] = useState(0);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -388,8 +524,23 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
   }, [filterDateTo]);
 
   // Hourly timesheets: daily sign-off plus pay-period self-certification
+  const [certReviewId, setCertReviewId] = useState<number | null>(null);
   const [certConfirmedId, setCertConfirmedId] = useState<number | null>(null);
   const [dailySignOffDate, setDailySignOffDate] = useState(today);
+  const currentPayPeriod = getPayPeriodForDate();
+  const [selectedPayPeriodStart, setSelectedPayPeriodStart] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlPeriod = params.get('period');
+    return getPayPeriodForDate(isDateString(urlPeriod) ? urlPeriod : new Date()).start;
+  });
+  const selectedPayPeriod = getPayPeriodForDate(selectedPayPeriodStart);
+  const selectedPayPeriodLabel = formatPayPeriodLabel(selectedPayPeriod.start, selectedPayPeriod.end);
+  const isCurrentPayPeriod = selectedPayPeriod.start === currentPayPeriod.start;
+
+  const goToPayPeriod = (period: { start: string; end: string }) => {
+    setSelectedPayPeriodStart(period.start);
+    setDailySignOffDate(period.start);
+  };
 
   const {
     data: myTimesheets = [],
@@ -409,9 +560,13 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
     data: runningTimesheet,
     isLoading: runningTimesheetLoading,
   } = useQuery<RunningTimesheet>({
-    queryKey: ['/api/timekeeping/timesheets', 'mine', 'running'],
+    queryKey: ['/api/timekeeping/timesheets', 'mine', 'running', selectedPayPeriod.start, selectedPayPeriod.end],
     queryFn: async () => {
-      const res = await portalFetch('/api/timekeeping/timesheets/my/running');
+      const params = new URLSearchParams({
+        periodStart: selectedPayPeriod.start,
+        periodEnd: selectedPayPeriod.end,
+      });
+      const res = await portalFetch(`/api/timekeeping/timesheets/my/running?${params.toString()}`);
       if (!res.ok) throw new Error('Failed to fetch running timesheet');
       return res.json();
     },
@@ -447,6 +602,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
     },
     onSuccess: () => {
       toast({ title: 'Timesheet Certified', description: 'Your certification has been recorded.' });
+      setCertReviewId(null);
       setCertConfirmedId(null);
       refetchTimesheets();
       queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/timesheets', 'mine', 'running'] });
@@ -458,7 +614,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
 
   const prepareTimesheetMutation = useMutation({
     mutationFn: async () => {
-      if (!runningTimesheet) throw new Error('Current pay period is not loaded yet.');
+      if (!runningTimesheet) throw new Error('Selected pay period is not loaded yet.');
       const res = await portalFetch('/api/timekeeping/timesheets/my/prepare', {
         method: 'POST',
         body: JSON.stringify({
@@ -503,6 +659,99 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
     },
   });
 
+  const {
+    data: timeOffRequests = [],
+    isLoading: timeOffLoading,
+  } = useQuery<TimeOffRequest[]>({
+    queryKey: ['/api/timekeeping/time-off/my'],
+    queryFn: async () => {
+      const res = await portalFetch('/api/timekeeping/time-off/my');
+      if (!res.ok) throw new Error('Failed to fetch time-off requests');
+      return res.json();
+    },
+    enabled: !!currentUser?.employeeId,
+  });
+
+  const submitTimeOffMutation = useMutation({
+    mutationFn: async () => {
+      if (!timeOffForm.startDate || !timeOffForm.endDate) {
+        throw new Error('Start and end dates are required.');
+      }
+      if (timeOffForm.startDate > timeOffForm.endDate) {
+        throw new Error('Start date must not be after end date.');
+      }
+      if (
+        timeOffForm.requestUnit === 'hourly' &&
+        (!timeOffForm.requestedHours || Number(timeOffForm.requestedHours) <= 0)
+      ) {
+        throw new Error('Hours requested is required for hourly PTO.');
+      }
+
+      const payload = {
+        startDate: timeOffForm.startDate,
+        endDate: timeOffForm.endDate,
+        leaveType: 'pto',
+        requestUnit: timeOffForm.requestUnit,
+        requestedHours:
+          timeOffForm.requestUnit === 'hourly'
+            ? Number(timeOffForm.requestedHours)
+            : undefined,
+        employeeNote: timeOffForm.employeeNote.trim() || undefined,
+      };
+
+      const res = await portalFetch('/api/timekeeping/time-off/my', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((json as any).error ?? 'Failed to submit time-off request');
+      return json;
+    },
+    onSuccess: () => {
+      toast({ title: 'PTO submitted', description: 'Your request is now in the PTO approval queue.' });
+      setTimeOffForm({
+        startDate: '',
+        endDate: '',
+        requestUnit: 'full_day',
+        requestedHours: '',
+        employeeNote: '',
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/time-off/my'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/time-off'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/pto-command-center/summary'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/pto-command-center/pipeline'] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'PTO submission failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const cancelTimeOffMutation = useMutation({
+    mutationFn: async (requestId: number) => {
+      const res = await portalFetch(`/api/timekeeping/time-off/${requestId}/cancel`, {
+        method: 'POST',
+        body: JSON.stringify({ reason: 'Cancelled by employee from portal' }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((json as any).error ?? 'Failed to cancel request');
+      return json;
+    },
+    onSuccess: () => {
+      toast({ title: 'PTO cancelled', description: 'Your pending request has been cancelled.' });
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/time-off/my'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/time-off'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/pto-command-center/summary'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/pto-command-center/pipeline'] });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Cancel failed', description: error.message, variant: 'destructive' });
+    },
+  });
+
   // Always fetch the open session independently of any filter state so the
   // Active Session card remains visible even when filters would exclude it.
   const { data: openSessions = [] } = useQuery<WorkSession[]>({
@@ -544,10 +793,15 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
     } else {
       params.delete('sort');
     }
+    if (activeTab === 'my-timesheets') {
+      params.set('period', selectedPayPeriod.start);
+    } else {
+      params.delete('period');
+    }
     const newSearch = params.toString();
     const newUrl = `${window.location.pathname}${newSearch ? `?${newSearch}` : ''}`;
     window.history.replaceState(null, '', newUrl);
-  }, [activeTab, filterChargeCode, filterDateFrom, filterDateTo, sortOrder]);
+  }, [activeTab, filterChargeCode, filterDateFrom, filterDateTo, sortOrder, selectedPayPeriod.start]);
 
   // Punch status — attendance clock (NOT WAD labor attribution)
   const {
@@ -565,26 +819,133 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
     refetchInterval: 30000,
   });
 
+  const { data: clockInChargeCodes = [], isLoading: chargeCodesLoading } = useQuery<ChargeCode[]>({
+    queryKey: ['/api/timekeeping/kiosk/charge-codes'],
+    queryFn: async () => {
+      const res = await portalFetch('/api/timekeeping/kiosk/charge-codes');
+      if (!res.ok) throw new Error('Failed to fetch charge codes');
+      return res.json();
+    },
+    enabled: activeTab === 'time-clock',
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const currentPayPeriodFromIso = `${currentPayPeriod.start}T00:00:00.000Z`;
+  const currentPayPeriodToIso = `${currentPayPeriod.end}T23:59:59.999Z`;
+  const { data: currentPayPeriodPunches = [], isLoading: currentPayPeriodPunchesLoading } = useQuery<PunchEvent[]>({
+    queryKey: ['/api/timekeeping/punches/my', currentPayPeriod.start, currentPayPeriod.end],
+    queryFn: async () => {
+      const res = await portalFetch(`/api/timekeeping/punches/my?from=${encodeURIComponent(currentPayPeriodFromIso)}&to=${encodeURIComponent(currentPayPeriodToIso)}`);
+      if (!res.ok) throw new Error('Failed to fetch current pay period punches');
+      return res.json();
+    },
+    enabled: activeTab === 'time-clock',
+    staleTime: 30_000,
+  });
+
   const punchMutation = useMutation({
-    mutationFn: async (type: string) => {
+    mutationFn: async ({ type, costCode, dailyCertificationConfirmed }: PunchMutationInput) => {
       const res = await portalFetch('/api/timekeeping/punches/my', {
         method: 'POST',
-        body: JSON.stringify({ type }),
+        body: JSON.stringify({
+          type,
+          ...(costCode ? { costCode } : {}),
+          ...(type === 'clock_out' ? { dailyCertificationConfirmed } : {}),
+        }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error((body as any).error ?? 'Failed to record punch');
+        throw Object.assign(
+          new Error((body as any).error ?? 'Failed to record punch'),
+          { punchRecorded: (body as any).punchRecorded === true },
+        );
       }
       return res.json();
     },
     onSuccess: () => {
+      setSelectedClockInChargeCode('none');
+      setDailyPunchOutConfirmed(false);
+      setShowDailyPunchOutCertification(false);
       queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/punches/my/current'] });
       queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/timesheets', 'mine', 'running'] });
     },
     onError: (err: Error) => {
+      if ((err as Error & { punchRecorded?: boolean }).punchRecorded) {
+        toast({
+          title: 'Clock out recorded',
+          description: 'Your punch was saved, but the daily certification could not be recorded. Please review your timesheet.',
+        });
+        setDailyPunchOutConfirmed(false);
+        setShowDailyPunchOutCertification(false);
+        queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/punches/my/current'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/timesheets', 'mine', 'running'] });
+        return;
+      }
       toast({ title: 'Punch failed', description: err.message, variant: 'destructive' });
     },
   });
+
+  const punchCorrectionMutation = useMutation({
+    mutationFn: async () => {
+      const res = await portalFetch('/api/timekeeping/punch-corrections/my', {
+        method: 'POST',
+        body: JSON.stringify({
+          requestType: punchCorrectionForm.requestType,
+          punchLedgerId: punchCorrectionForm.punchLedgerId ? Number(punchCorrectionForm.punchLedgerId) : null,
+          reason: punchCorrectionForm.reason.trim(),
+          proposedChanges: {
+            punchType: punchCorrectionForm.selectedPunchType,
+            laborClass: punchCorrectionForm.selectedPunchType === 'break_start' || punchCorrectionForm.selectedPunchType === 'break_end' ? 'BREAK' : 'REGULAR',
+            ...(punchCorrectionForm.clockIn ? { clockIn: new Date(punchCorrectionForm.clockIn).toISOString() } : {}),
+            ...(punchCorrectionForm.clockOut ? { clockOut: new Date(punchCorrectionForm.clockOut).toISOString() } : {}),
+          },
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as any).error ?? 'Failed to submit punch correction');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: 'Correction submitted', description: 'Your request was sent for supervisor review.' });
+      setPunchCorrectionForm({ requestType: 'edit_session', punchLedgerId: '', selectedPunchType: 'clock_in', clockIn: '', clockOut: '', reason: '' });
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/punch-corrections', 'mine'] });
+    },
+    onError: (err: any) => {
+      toast({ title: 'Correction failed', description: err?.message ?? 'Unable to submit correction.', variant: 'destructive' });
+    },
+  });
+
+  const selectPunchForCorrection = (punch: PunchEvent) => {
+    const local = new Date(punch.punchedAt).toISOString().slice(0, 16);
+    setPunchCorrectionForm((prev) => ({
+      ...prev,
+      requestType: 'edit_session',
+      punchLedgerId: String(punch.sessionId),
+      selectedPunchType: punch.type,
+      clockIn: punch.type === 'clock_in' || punch.type === 'break_start' ? local : '',
+      clockOut: punch.type === 'clock_out' || punch.type === 'break_end' ? local : '',
+    }));
+  };
+
+  const startMissingPunchCorrection = () => {
+    setPunchCorrectionForm((prev) => ({
+      ...prev,
+      requestType: 'add_session',
+      punchLedgerId: '',
+      selectedPunchType: 'clock_in',
+      clockIn: '',
+      clockOut: '',
+    }));
+  };
+
+  useEffect(() => {
+    if (punchStatus?.status !== 'clocked_in') {
+      setDailyPunchOutConfirmed(false);
+      setShowDailyPunchOutCertification(false);
+    }
+  }, [punchStatus?.status]);
 
   // Derive active session from the dedicated open-session query so it remains
   // visible even when date or charge code filters exclude it from history.
@@ -648,11 +1009,17 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
   });
 
   const hasActiveFilters = filterChargeCode !== 'all' || filterDateFrom || filterDateTo;
-  const needsCertificationTimesheets = myTimesheets.filter((t) => !t.employeeAttested && t.status === 'draft');
-  const historicalTimesheets = myTimesheets.filter((t) => t.employeeAttested || t.status !== 'draft');
+  const allNeedsCertificationTimesheets = myTimesheets.filter((t) => !t.employeeAttested && t.status === 'draft');
+  const selectedPeriodTimesheets = myTimesheets.filter(
+    (t) => t.periodStart === selectedPayPeriod.start && t.periodEnd === selectedPayPeriod.end
+  );
+  const needsCertificationTimesheets = selectedPeriodTimesheets.filter((t) => !t.employeeAttested && t.status === 'draft');
+  const historicalTimesheets = selectedPeriodTimesheets.filter((t) => t.employeeAttested || t.status !== 'draft');
+  const pendingTimeOffCount = timeOffRequests.filter((r) => r.status.startsWith('pending')).length;
 
   const renderTimesheetCard = (ts: HourlyTimesheet) => {
     const needsCert = !ts.employeeAttested && ts.status === 'draft';
+    const isReviewingCert = certReviewId === ts.id;
     const isChecked = certConfirmedId === ts.id;
     return (
       <div key={ts.id} className={`rounded-lg border p-4 ${needsCert ? 'border-amber-300 bg-amber-50' : 'border-gray-200 bg-white'}`}>
@@ -697,41 +1064,57 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
 
         {needsCert && (
           <div className="mt-3 rounded-lg border border-amber-400 bg-amber-50 p-4 space-y-3">
-            <p className="text-xs font-semibold text-amber-900 uppercase">
-              DCAA Certification Required
-            </p>
-            <p className="text-sm text-gray-700 italic leading-relaxed border-l-4 border-amber-400 pl-3">
-              "{DCAA_CERTIFICATION_STATEMENT}"
-            </p>
-            <label className="flex items-start gap-3 cursor-pointer select-none">
-              <Checkbox
-                id={`cert-${ts.id}`}
-                checked={isChecked}
-                onCheckedChange={(checked) => setCertConfirmedId(checked ? ts.id : null)}
-                className="mt-0.5 border-amber-500 data-[state=checked]:bg-amber-500"
-              />
-              <span className="text-sm text-gray-800 font-medium leading-snug">
-                I have read the above statement and certify that it is true and accurate for this pay period.
-              </span>
-            </label>
-            <Button
-              size="sm"
-              disabled={!isChecked || certifyMutation.isPending}
-              onClick={() => certifyMutation.mutate(ts.id)}
-              className="bg-amber-600 hover:bg-amber-700 text-white"
-            >
-              {certifyMutation.isPending && certConfirmedId === ts.id ? (
-                <span className="flex items-center gap-2">
-                  <span className="h-3 w-3 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                  Certifying...
-                </span>
-              ) : (
-                <span className="flex items-center gap-2">
-                  <ShieldCheck className="h-4 w-4" />
-                  Submit Certification
-                </span>
-              )}
-            </Button>
+            {!isReviewingCert ? (
+              <Button
+                size="sm"
+                onClick={() => {
+                  setCertReviewId(ts.id);
+                  setCertConfirmedId(null);
+                }}
+                className="bg-amber-600 hover:bg-amber-700 text-white"
+              >
+                <ShieldCheck className="h-4 w-4 mr-2" />
+                Review Certification
+              </Button>
+            ) : (
+              <>
+                <p className="text-xs font-semibold text-amber-900 uppercase">
+                  DCAA Certification Required
+                </p>
+                <p className="text-sm text-gray-700 italic leading-relaxed border-l-4 border-amber-400 pl-3">
+                  "{DCAA_CERTIFICATION_STATEMENT}"
+                </p>
+                <label className="flex items-start gap-3 cursor-pointer select-none">
+                  <Checkbox
+                    id={`cert-${ts.id}`}
+                    checked={isChecked}
+                    onCheckedChange={(checked) => setCertConfirmedId(checked ? ts.id : null)}
+                    className="mt-0.5 border-amber-500 data-[state=checked]:bg-amber-500"
+                  />
+                  <span className="text-sm text-gray-800 font-medium leading-snug">
+                    I have read the above statement and certify that it is true and accurate for this pay period.
+                  </span>
+                </label>
+                <Button
+                  size="sm"
+                  disabled={!isChecked || certifyMutation.isPending}
+                  onClick={() => certifyMutation.mutate(ts.id)}
+                  className="bg-amber-600 hover:bg-amber-700 text-white"
+                >
+                  {certifyMutation.isPending && certConfirmedId === ts.id ? (
+                    <span className="flex items-center gap-2">
+                      <span className="h-3 w-3 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                      Certifying...
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      <ShieldCheck className="h-4 w-4" />
+                      Submit Certification
+                    </span>
+                  )}
+                </Button>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -742,6 +1125,23 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
   const uniqueChargeCodes = Array.from(
     new Set(sessions.map((s) => s.chargeCode).filter((c): c is string => c !== null && c !== ''))
   ).sort();
+
+  const chargeCodesByType = clockInChargeCodes.reduce<Record<string, ChargeCode[]>>((acc, code) => {
+    const type = code.type || 'OTHER';
+    if (!acc[type]) acc[type] = [];
+    acc[type].push(code);
+    return acc;
+  }, {});
+
+  const chargeCodeTypeLabels: Record<string, string> = {
+    DIRECT: 'Direct Labor',
+    OVERHEAD: 'Overhead',
+    G_AND_A: 'G&A',
+    IR_AND_D: 'IR&D',
+    B_AND_P: 'B&P',
+    INDIRECT: 'Indirect',
+    OTHER: 'Other',
+  };
 
   const clearFilters = () => {
     setFilterChargeCode('all');
@@ -910,7 +1310,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-7">
+        <TabsList className="grid w-full grid-cols-8">
           <TabsTrigger value="time-clock" className="flex items-center gap-2">
             <Timer className="h-4 w-4" />
             Time Clock
@@ -943,9 +1343,18 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
           <TabsTrigger value="my-timesheets" className="flex items-center gap-2">
             <FileCheck className="h-4 w-4" />
             Timesheets
-            {needsCertificationTimesheets.length > 0 && (
+            {allNeedsCertificationTimesheets.length > 0 && (
               <span className="ml-1 inline-flex items-center justify-center rounded-full bg-amber-500 text-white text-xs w-4 h-4">
-                {needsCertificationTimesheets.length}
+                {allNeedsCertificationTimesheets.length}
+              </span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="time-off" className="flex items-center gap-2">
+            <CalendarOff className="h-4 w-4" />
+            Time Off
+            {pendingTimeOffCount > 0 && (
+              <span className="ml-1 inline-flex items-center justify-center rounded-full bg-yellow-500 text-white text-xs w-4 h-4">
+                {pendingTimeOffCount}
               </span>
             )}
           </TabsTrigger>
@@ -1102,6 +1511,205 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="time-off" className="mt-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <CalendarOff className="h-5 w-5" />
+                  Request Time Off
+                </CardTitle>
+                <CardDescription>
+                  Submit PTO requests into the same approval queue used by HR, supervisors, and payroll.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Request Type</Label>
+                  <Select
+                    value={timeOffForm.requestUnit}
+                    onValueChange={(value) => setTimeOffForm((prev) => ({
+                      ...prev,
+                      requestUnit: value,
+                      requestedHours: value === 'hourly' ? prev.requestedHours : '',
+                    }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="full_day">Full Day</SelectItem>
+                      <SelectItem value="half_day">Half Day</SelectItem>
+                      <SelectItem value="hourly">Hourly</SelectItem>
+                      <SelectItem value="multi_day">Multi-Day</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label>Start Date</Label>
+                    <Input
+                      type="date"
+                      min={today}
+                      value={timeOffForm.startDate}
+                      onChange={(event) => setTimeOffForm((prev) => ({
+                        ...prev,
+                        startDate: event.target.value,
+                        endDate:
+                          prev.requestUnit === 'multi_day'
+                            ? prev.endDate
+                            : event.target.value,
+                      }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{timeOffForm.requestUnit === 'multi_day' ? 'End Date' : 'Date'}</Label>
+                    <Input
+                      type="date"
+                      min={timeOffForm.startDate || today}
+                      value={timeOffForm.endDate}
+                      onChange={(event) => setTimeOffForm((prev) => ({
+                        ...prev,
+                        endDate: event.target.value,
+                      }))}
+                    />
+                  </div>
+                </div>
+
+                {timeOffForm.requestUnit === 'hourly' && (
+                  <div className="space-y-2">
+                    <Label>Hours Requested</Label>
+                    <Input
+                      type="number"
+                      min="0.5"
+                      max="8"
+                      step="0.5"
+                      placeholder="e.g. 2"
+                      value={timeOffForm.requestedHours}
+                      onChange={(event) => setTimeOffForm((prev) => ({
+                        ...prev,
+                        requestedHours: event.target.value,
+                      }))}
+                    />
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <Label>Note <span className="text-xs text-muted-foreground">(optional)</span></Label>
+                  <Textarea
+                    rows={3}
+                    className="resize-none"
+                    placeholder="Anything your supervisor or HR should know..."
+                    value={timeOffForm.employeeNote}
+                    onChange={(event) => setTimeOffForm((prev) => ({
+                      ...prev,
+                      employeeNote: event.target.value,
+                    }))}
+                  />
+                </div>
+
+                <Button
+                  className="w-full gap-2"
+                  disabled={
+                    submitTimeOffMutation.isPending ||
+                    !timeOffForm.startDate ||
+                    !timeOffForm.endDate ||
+                    timeOffForm.startDate > timeOffForm.endDate ||
+                    (timeOffForm.requestUnit === 'hourly' && (!timeOffForm.requestedHours || Number(timeOffForm.requestedHours) <= 0))
+                  }
+                  onClick={() => submitTimeOffMutation.mutate()}
+                >
+                  {submitTimeOffMutation.isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Submitting...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="h-4 w-4" />
+                      Submit PTO Request
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5" />
+                  My Time-Off Requests
+                </CardTitle>
+                <CardDescription>
+                  Track PTO status as it moves through supervisor, HR, and VP review.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {timeOffLoading ? (
+                  <div className="flex items-center justify-center py-10 text-muted-foreground">
+                    <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                    Loading requests...
+                  </div>
+                ) : timeOffRequests.length === 0 ? (
+                  <div className="text-center py-10 text-muted-foreground">
+                    <CalendarOff className="h-10 w-10 mx-auto mb-3 text-gray-300" />
+                    <p>No PTO requests submitted yet.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3 max-h-[32rem] overflow-y-auto pr-1">
+                    {timeOffRequests.map((request) => {
+                      const canCancel = ['pending', 'pending_supervisor', 'pending_hr', 'pending_vp'].includes(request.status);
+                      const denialNote = request.supervisorNote || request.hrNote || request.vpNote || request.adminNote;
+                      return (
+                        <div key={request.id} className="rounded-lg border bg-white p-4 space-y-2">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="font-semibold text-sm text-gray-900">
+                                {request.startDate} - {request.endDate}
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {request.leaveType.toUpperCase()}
+                                {request.requestUnit && request.requestUnit !== 'full_day' && ` | ${request.requestUnit.replace('_', ' ')}`}
+                                {request.requestedHours != null && ` | ${request.requestedHours}h`}
+                              </p>
+                            </div>
+                            <TimeOffStatusBadge status={request.status} />
+                          </div>
+
+                          {request.employeeNote && (
+                            <p className="text-xs text-gray-600 border-l-2 pl-2">{request.employeeNote}</p>
+                          )}
+
+                          {(request.status === 'rejected' || request.status === 'denied') && denialNote && (
+                            <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded p-2">
+                              {denialNote}
+                            </p>
+                          )}
+
+                          {canCancel && (
+                            <div className="pt-1">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-red-700 border-red-200 hover:bg-red-50"
+                                disabled={cancelTimeOffMutation.isPending}
+                                onClick={() => cancelTimeOffMutation.mutate(request.id)}
+                              >
+                                Cancel Request
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="expenses" className="mt-6">
@@ -1680,8 +2288,8 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
             <div className="flex items-start gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
               <AlertCircle className="h-4 w-4 mt-0.5 shrink-0 text-blue-500" />
               <span>
-                <strong>Attendance only.</strong> This records when you start and end your workday.
-                Project/job labor attribution is tracked separately in the <strong>Work Order Sessions</strong> tab.
+                <strong>Time clock.</strong> This records when you start and end your workday.
+                Select a charge code when you clock in if one applies; detailed work order labor is still tracked in the <strong>Work Order Sessions</strong> tab.
               </span>
             </div>
 
@@ -1747,6 +2355,37 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
                       )}
                     </div>
 
+                    {punchStatus.status === 'clocked_out' && (
+                      <div className="mx-auto max-w-xl rounded-lg border bg-white p-4 space-y-2">
+                        <Label htmlFor="portal-clock-in-charge-code">Charge code</Label>
+                        <Select
+                          value={selectedClockInChargeCode}
+                          onValueChange={setSelectedClockInChargeCode}
+                          disabled={chargeCodesLoading || punchMutation.isPending}
+                        >
+                          <SelectTrigger id="portal-clock-in-charge-code" className="w-full">
+                            <SelectValue placeholder={chargeCodesLoading ? 'Loading charge codes...' : 'Select charge code'} />
+                          </SelectTrigger>
+                          <SelectContent className="max-h-72">
+                            <SelectItem value="none">No charge code</SelectItem>
+                            {Object.keys(chargeCodesByType).sort().map((type) => (
+                              <SelectGroup key={type}>
+                                <SelectLabel>{chargeCodeTypeLabels[type] ?? type}</SelectLabel>
+                                {chargeCodesByType[type].map((cc) => (
+                                  <SelectItem key={cc.id} value={cc.code}>
+                                    {cc.code}{cc.description ? ` - ${cc.description}` : ''}
+                                  </SelectItem>
+                                ))}
+                              </SelectGroup>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          These are the same active charge codes available on the kiosk.
+                        </p>
+                      </div>
+                    )}
+
                     {/* Action buttons */}
                     <div className="flex flex-wrap gap-3 justify-center">
                       {punchStatus.status === 'clocked_out' && (
@@ -1754,7 +2393,10 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
                           size="lg"
                           className="bg-green-600 hover:bg-green-700 text-white gap-2 px-8"
                           disabled={punchMutation.isPending}
-                          onClick={() => punchMutation.mutate('clock_in')}
+                          onClick={() => punchMutation.mutate({
+                            type: 'clock_in',
+                            costCode: selectedClockInChargeCode === 'none' ? undefined : selectedClockInChargeCode,
+                          })}
                         >
                           <LogIn className="h-5 w-5" />
                           {punchMutation.isPending ? 'Recording…' : 'Clock In'}
@@ -1768,21 +2410,51 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
                             variant="outline"
                             className="border-amber-400 text-amber-700 hover:bg-amber-50 gap-2 px-6"
                             disabled={punchMutation.isPending}
-                            onClick={() => punchMutation.mutate('break_start')}
+                            onClick={() => punchMutation.mutate({ type: 'break_start' })}
                           >
                             <Coffee className="h-5 w-5" />
                             {punchMutation.isPending ? 'Recording…' : 'Start Break'}
                           </Button>
-                          <Button
-                            size="lg"
-                            variant="outline"
-                            className="border-red-400 text-red-700 hover:bg-red-50 gap-2 px-6"
-                            disabled={punchMutation.isPending}
-                            onClick={() => punchMutation.mutate('clock_out')}
-                          >
-                            <LogOut className="h-5 w-5" />
+                          {!showDailyPunchOutCertification ? (
+                            <Button
+                              size="lg"
+                              variant="outline"
+                              className="border-red-400 text-red-700 hover:bg-red-50 gap-2 px-6"
+                              disabled={punchMutation.isPending}
+                              onClick={() => setShowDailyPunchOutCertification(true)}
+                            >
+                              <LogOut className="h-5 w-5" />
+                              Clock Out
+                            </Button>
+                          ) : (
+                            <>
+                              <label className="flex w-full max-w-xl items-start gap-3 rounded-md border border-blue-200 bg-blue-50 p-3 text-left">
+                                <input
+                                  type="checkbox"
+                                  checked={dailyPunchOutConfirmed}
+                                  onChange={(event) => setDailyPunchOutConfirmed(event.target.checked)}
+                                  className="mt-1 h-4 w-4 rounded border-blue-300 text-blue-600"
+                                />
+                                <span className="text-sm text-blue-900">
+                                  I certify that today&apos;s recorded time is complete, accurate, and represents work I actually performed.
+                                </span>
+                              </label>
+                              <Button
+                                size="lg"
+                                variant="outline"
+                                className="border-red-400 text-red-700 hover:bg-red-50 gap-2 px-6"
+                                disabled={punchMutation.isPending || !dailyPunchOutConfirmed}
+                                onClick={() => punchMutation.mutate({
+                                  type: 'clock_out',
+                                  dailyCertificationConfirmed: dailyPunchOutConfirmed,
+                                })}
+                              >
+                                <LogOut className="h-5 w-5" />
                             {punchMutation.isPending ? 'Recording…' : 'Clock Out'}
-                          </Button>
+                              </Button>
+                            </>
+                          )}
+
                         </>
                       )}
 
@@ -1791,7 +2463,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
                           size="lg"
                           className="bg-amber-600 hover:bg-amber-700 text-white gap-2 px-8"
                           disabled={punchMutation.isPending}
-                          onClick={() => punchMutation.mutate('break_end')}
+                          onClick={() => punchMutation.mutate({ type: 'break_end' })}
                         >
                           <Play className="h-5 w-5" />
                           {punchMutation.isPending ? 'Recording…' : 'End Break'}
@@ -1818,6 +2490,120 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
                         })}
                       </div>
                     )}
+
+                    <div className="mt-6 rounded-lg border bg-muted/20 p-4 text-left space-y-3">
+                      <div>
+                        <h3 className="text-sm font-semibold text-gray-900">Request Punch Correction</h3>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Submit missed or incorrect punch changes for supervisor review.
+                        </p>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="sm:col-span-2 space-y-2">
+                          <div className="flex items-center justify-between gap-3">
+                            <Label>Current Pay Period Punches</Label>
+                            <Button type="button" variant="outline" size="sm" onClick={startMissingPunchCorrection}>
+                              Add Missing Punch
+                            </Button>
+                          </div>
+                          <div className="rounded-md border bg-white max-h-52 overflow-y-auto">
+                            {currentPayPeriodPunchesLoading ? (
+                              <div className="p-3 text-sm text-muted-foreground">Loading punches...</div>
+                            ) : currentPayPeriodPunches.length === 0 ? (
+                              <div className="p-3 text-sm text-muted-foreground">No punches recorded in the current pay period.</div>
+                            ) : (
+                              currentPayPeriodPunches.map((punch) => {
+                                const selected = punchCorrectionForm.requestType === 'edit_session' && punchCorrectionForm.punchLedgerId === String(punch.sessionId) && punchCorrectionForm.selectedPunchType === punch.type;
+                                return (
+                                  <button
+                                    key={`${punch.sessionId}-${punch.type}-${punch.punchedAt}`}
+                                    type="button"
+                                    onClick={() => selectPunchForCorrection(punch)}
+                                    className={`w-full px-3 py-2 text-left border-b last:border-b-0 hover:bg-muted/40 ${selected ? 'bg-blue-50' : 'bg-white'}`}
+                                  >
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                      <div className="flex items-center gap-2">
+                                        <Badge variant="outline" className={punch.type.includes('break') ? 'text-amber-700 border-amber-200' : 'text-blue-700 border-blue-200'}>
+                                          {punch.type.replace(/_/g, ' ')}
+                                        </Badge>
+                                        <span className="text-sm font-medium">
+                                          {new Date(punch.punchedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                        </span>
+                                      </div>
+                                      <span className="text-sm text-gray-700">
+                                        {new Date(punch.punchedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                                      </span>
+                                    </div>
+                                    {punch.costCode && <div className="text-xs text-muted-foreground mt-1">CC {punch.costCode}</div>}
+                                  </button>
+                                );
+                              })
+                            )}
+                          </div>
+                        </div>
+                        <div className="space-y-1 sm:col-span-2">
+                          <Label>{punchCorrectionForm.requestType === 'add_session' ? 'Missing Punch Type' : 'Correct Punch Type'}</Label>
+                          <Select
+                            value={punchCorrectionForm.selectedPunchType}
+                            onValueChange={(value) => setPunchCorrectionForm((prev) => ({ ...prev, selectedPunchType: value as PunchEventType }))}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="clock_in">Clock in</SelectItem>
+                              <SelectItem value="break_start">Meal out</SelectItem>
+                              {punchCorrectionForm.requestType === 'edit_session' && (
+                                <>
+                                  <SelectItem value="clock_out">Clock out</SelectItem>
+                                  <SelectItem value="break_end">Meal in</SelectItem>
+                                </>
+                              )}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1">
+                          <Label>Correct Clock In</Label>
+                          <Input
+                            type="datetime-local"
+                            value={punchCorrectionForm.clockIn}
+                            onChange={(event) => setPunchCorrectionForm((prev) => ({ ...prev, clockIn: event.target.value }))}
+                          />
+                        </div>
+                        {punchCorrectionForm.requestType === 'edit_session' && (
+                          <div className="space-y-1">
+                            <Label>Correct Clock Out</Label>
+                            <Input
+                              type="datetime-local"
+                              value={punchCorrectionForm.clockOut}
+                              onChange={(event) => setPunchCorrectionForm((prev) => ({ ...prev, clockOut: event.target.value }))}
+                            />
+                          </div>
+                        )}
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Reason</Label>
+                        <Textarea
+                          rows={3}
+                          value={punchCorrectionForm.reason}
+                          onChange={(event) => setPunchCorrectionForm((prev) => ({ ...prev, reason: event.target.value }))}
+                          placeholder="Explain what needs to be fixed..."
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => punchCorrectionMutation.mutate()}
+                        disabled={
+                          punchCorrectionMutation.isPending ||
+                          punchCorrectionForm.reason.trim().length < 5 ||
+                          (punchCorrectionForm.requestType === 'add_session' && !punchCorrectionForm.clockIn) ||
+                          (punchCorrectionForm.requestType === 'edit_session' && !punchCorrectionForm.punchLedgerId)
+                        }
+                      >
+                        {punchCorrectionMutation.isPending ? 'Submitting...' : 'Submit Correction Request'}
+                      </Button>
+                    </div>
                   </div>
                 )}
               </CardContent>
@@ -1842,33 +2628,68 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-4">
                   <div>
                     <div className="flex items-center gap-2">
-                      <h3 className="font-semibold text-sm text-gray-900">Current Period</h3>
+                      <h3 className="font-semibold text-sm text-gray-900">
+                        {isCurrentPayPeriod ? 'Current Period' : 'Selected Period'}
+                      </h3>
                       {runningTimesheet?.hasOpenSession && (
                         <Badge className="bg-green-100 text-green-800 border-green-200">Live</Badge>
                       )}
+                      {!isCurrentPayPeriod && (
+                        <Badge variant="outline">Viewing another period</Badge>
+                      )}
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
-                      {runningTimesheet
-                        ? `${runningTimesheet.periodStart} - ${runningTimesheet.periodEnd}`
-                        : 'Current pay period'}
+                      {selectedPayPeriodLabel}
                     </p>
                   </div>
-                  {runningTimesheet && (
-                    <div className="grid grid-cols-3 gap-2 text-center">
-                      <div className="rounded-md bg-white border px-3 py-2">
-                        <div className="text-base font-bold text-gray-900">{runningTimesheet.totalHours.toFixed(2)}</div>
-                        <div className="text-[11px] text-muted-foreground">Total</div>
-                      </div>
-                      <div className="rounded-md bg-white border px-3 py-2">
-                        <div className="text-base font-bold text-gray-900">{runningTimesheet.regularHours.toFixed(2)}</div>
-                        <div className="text-[11px] text-muted-foreground">Regular</div>
-                      </div>
-                      <div className="rounded-md bg-white border px-3 py-2">
-                        <div className="text-base font-bold text-gray-900">{runningTimesheet.overtimeHours.toFixed(2)}</div>
-                        <div className="text-[11px] text-muted-foreground">OT</div>
-                      </div>
+                  <div className="flex flex-col items-stretch sm:items-end gap-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => goToPayPeriod(shiftPayPeriod(selectedPayPeriod.start, -1))}
+                        className="gap-1"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                        Previous
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={isCurrentPayPeriod ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => goToPayPeriod(currentPayPeriod)}
+                      >
+                        Current
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => goToPayPeriod(shiftPayPeriod(selectedPayPeriod.start, 1))}
+                        className="gap-1"
+                      >
+                        Next
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
                     </div>
-                  )}
+                    {runningTimesheet && (
+                      <div className="grid grid-cols-3 gap-2 text-center">
+                        <div className="rounded-md bg-white border px-3 py-2">
+                          <div className="text-base font-bold text-gray-900">{runningTimesheet.totalHours.toFixed(2)}</div>
+                          <div className="text-[11px] text-muted-foreground">Total</div>
+                        </div>
+                        <div className="rounded-md bg-white border px-3 py-2">
+                          <div className="text-base font-bold text-gray-900">{runningTimesheet.regularHours.toFixed(2)}</div>
+                          <div className="text-[11px] text-muted-foreground">Regular</div>
+                        </div>
+                        <div className="rounded-md bg-white border px-3 py-2">
+                          <div className="text-base font-bold text-gray-900">{runningTimesheet.overtimeHours.toFixed(2)}</div>
+                          <div className="text-[11px] text-muted-foreground">OT</div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {runningTimesheetLoading ? (

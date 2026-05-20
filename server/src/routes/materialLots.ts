@@ -19,6 +19,7 @@ import {
   inventoryTransactions,
   inventoryBalances,
   inventoryItems,
+  inventoryTransactionLedger,
 } from '../../schema';
 import { db } from '../../db';
 import { eq, sql, and, like } from 'drizzle-orm';
@@ -31,7 +32,13 @@ import {
 } from '../constants/inventoryControls';
 import { openRequest as openApprovalRequest, EscalationError } from '../services/escalationService';
 import { approvalRequests } from '../../schema';
-import { checkLotUsability, enforceAndLockIfNeeded, computeEffectiveOutTimeMinutes } from '../services/lotUsability';
+import {
+  checkLotUsability,
+  enforceAndLockIfNeeded,
+  computeEffectiveOutTimeMinutes,
+  computeEffectiveOutTimeMinutesSafe,
+  isSentinelExpirationDate,
+} from '../services/lotUsability';
 
 const router = Router();
 
@@ -209,12 +216,32 @@ router.get('/by-icn/:icn', async (req: Request, res: Response) => {
 });
 
 // Validate material lot for consumption
+/**
+ * Recognises packet-style barcodes (manufacturing/cutting packet labels) so the
+ * validate endpoint can route them straight to the packet-resolution path
+ * without ever consulting `material_lots`.  Without this guard, a coincidental
+ * collision between a packet barcode and a `material_lots.internalControlNumber`
+ * would treat the scan as a lot — running the lock/usability writer against
+ * the wrong record (Task #174 root-cause #3: packet-vs-lot ICN confusion).
+ */
+function isPacketBarcode(icn: string): boolean {
+  return (
+    /^MFG-\d+-/i.test(icn) ||
+    /^PKT-/i.test(icn) ||
+    /-Q\d+-\d+$/i.test(icn)
+  );
+}
+
 router.get('/validate/:icn', async (req: Request, res: Response) => {
   try {
     const icn = req.params.icn.trim();
     const { qtyNeeded, partNumber } = req.query;
 
-    const lot = await storage.getMaterialLotByICN(icn);
+    // Packet-style barcodes (MFG-…, PKT-…, …-Q…-…) must always resolve as
+    // packets — never as material lots.  Any same-named row in material_lots
+    // would otherwise hijack the scan and run lock checks against the wrong
+    // record.  See Task #174 (packet-vs-lot ICN confusion).
+    const lot = isPacketBarcode(icn) ? null : await storage.getMaterialLotByICN(icn);
 
     if (!lot) {
       // Fallback: try looking up as a built packet barcode
@@ -547,7 +574,7 @@ router.get('/validate/:icn', async (req: Request, res: Response) => {
         const ru = ruArr[0];
         // Expose receivedUnit summary so the scanner can forward receivedUnitId in the consume payload
         validationResults.receivedUnit = { id: ru.id, quantity: Number(ru.quantity), barcode: ru.barcode, disposition: ru.disposition };
-        const blockedDispositions = ['pending_inspection', 'quarantine', 'rejected'];
+        const blockedDispositions = ['pending_inspection', 'document_hold', 'quarantine', 'rejected'];
         if (blockedDispositions.includes(ru.disposition)) {
           validationResults.valid = false;
           validationResults.status = 'RECEIVING_DISPOSITION_BLOCKED';
@@ -573,26 +600,38 @@ router.get('/validate/:icn', async (req: Request, res: Response) => {
       }
     } catch (_) { /* non-fatal: received_units table may not exist in older deployments */ }
 
-    // Shelf-life lock check (Task #165) — auto-locks expired/over out-time lots
+    // Shelf-life check (Task #165, hardened by Task #174).
+    //
+    // The validate endpoint is a READ path — it must never persist
+    // status='LOCKED' to the lot.  Doing so was the trap behind the
+    // false-positive "Lot is locked" reports: a single transient miscalculation
+    // (stale currentlyOutOfStorage flag, sentinel expirationDate) would write
+    // LOCKED, after which the lot was permanently blocked on every subsequent
+    // scan.  Pass persist:false here so that only the write paths
+    // (consume/issue/reserve) can ever write the lock.  The safe usability
+    // check also defends against stale flags by ignoring in-flight out-time
+    // unless there is a matching open OUT_START transaction.
     {
-      const { lot: maybeLockedLot, usability } = await enforceAndLockIfNeeded(lot, 'system');
+      const { usability } = await enforceAndLockIfNeeded(lot, 'system', { persist: false });
       if (!usability.usable) {
         validationResults.valid = false;
         validationResults.status = usability.status;
-        validationResults.message = `${usability.message ?? usability.status}. Lot is locked.`;
+        validationResults.message = usability.status === 'STATUS_LOCKED'
+          ? `${usability.message ?? usability.status}. Lot is locked.`
+          : (usability.message ?? usability.status);
         validationResults.errors.push(usability.message ?? usability.status);
         validationResults.requiresOverride = true;
         return res.json(validationResults);
       }
-      // Refresh lot reference if needed (no mutation occurred when usable)
-      Object.assign(lot, maybeLockedLot);
     }
 
-    // Check expiration date
+    // Check expiration date — ignore sentinel/garbage dates (epoch, year 0001)
+    // that legacy migrations stamped onto rows.  Without this guard a single
+    // bad source value would auto-flag the lot as EXPIRED on every scan.
     if (lot.expirationDate) {
       const expDate = new Date(lot.expirationDate);
       const now = new Date();
-      if (expDate < now) {
+      if (!isSentinelExpirationDate(expDate) && expDate < now) {
         validationResults.valid = false;
         validationResults.status = 'EXPIRED';
         validationResults.message = `Material lot expired on ${expDate.toLocaleDateString()}. Override required.`;
@@ -600,11 +639,13 @@ router.get('/validate/:icn', async (req: Request, res: Response) => {
         validationResults.requiresOverride = true;
         return res.json(validationResults);
       }
-      
+
       // Warn if expiring soon (within 7 days)
-      const daysUntilExpiry = Math.floor((expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-      if (daysUntilExpiry <= 7) {
-        validationResults.warnings.push(`Material lot expires in ${daysUntilExpiry} days`);
+      if (!isSentinelExpirationDate(expDate)) {
+        const daysUntilExpiry = Math.floor((expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        if (daysUntilExpiry <= 7) {
+          validationResults.warnings.push(`Material lot expires in ${daysUntilExpiry} days`);
+        }
       }
     }
 
@@ -621,19 +662,22 @@ router.get('/validate/:icn', async (req: Request, res: Response) => {
       }
     }
 
-    // Check out-time limits for time-sensitive materials
+    // Check out-time limits for time-sensitive materials.  Use the safe
+    // computation (Task #174) so a stale currentlyOutOfStorage flag from a
+    // failed return-to-storage write does not get treated as in-flight time.
     if (lot.maxOutTimeMinutes && lot.maxOutTimeMinutes > 0) {
-      const usedPercent = (lot.totalOutTimeMinutes || 0) / lot.maxOutTimeMinutes * 100;
-      
+      const effective = await computeEffectiveOutTimeMinutesSafe(lot);
+      const usedPercent = effective / lot.maxOutTimeMinutes * 100;
+
       if (usedPercent >= 100) {
         validationResults.valid = false;
         validationResults.status = 'OUT_TIME_EXCEEDED';
-        validationResults.message = `Material has exceeded maximum out-time. ${lot.totalOutTimeMinutes} of ${lot.maxOutTimeMinutes} minutes used.`;
-        validationResults.errors.push(`Out-time exceeded: ${lot.totalOutTimeMinutes} of ${lot.maxOutTimeMinutes} minutes used`);
+        validationResults.message = `Material has exceeded maximum out-time. ${effective} of ${lot.maxOutTimeMinutes} minutes used.`;
+        validationResults.errors.push(`Out-time exceeded: ${effective} of ${lot.maxOutTimeMinutes} minutes used`);
         validationResults.requiresOverride = true;
         return res.json(validationResults);
       }
-      
+
       if (usedPercent >= 75) {
         validationResults.warnings.push(`Material is at ${usedPercent.toFixed(1)}% of maximum out-time`);
       }
@@ -772,20 +816,94 @@ router.post('/', async (req: Request, res: Response) => {
     }
 
     const validatedData = insertMaterialLotSchema.parse(incoming);
-    const lot = await storage.createMaterialLot(validatedData);
 
-    // Create initial transaction record
-    await storage.createMaterialLotTransaction(createTransaction({
-      materialLotId: lot.id,
-      internalControlNumber: lot.internalControlNumber,
-      transactionType: 'RECEIVE',
-      qtyBefore: '0',
-      qtyChange: lot.receivedQty,
-      qtyAfter: lot.receivedQty,
-      toLocation: lot.storageLocation || undefined,
-      performedBy: lot.receivedBy,
-      notes: `Initial receiving from ${lot.supplier}. PO: ${lot.purchaseOrderNumber || 'N/A'}`,
-    }));
+    // Task #229 — atomically insert the lot, the initial RECEIVE
+    // material_lot_transactions row, and the inventory_transaction_ledger
+    // RECEIVE row so the lot appears in the Material Traceability Viewer
+    // immediately. If any step fails, none of them persist.
+    const lot = await db.transaction(async (tx) => {
+      const [insertedLot] = await tx.insert(materialLots).values(validatedData).returning();
+      if (!insertedLot?.id) throw new Error('material_lots insert returned no row');
+
+      await tx.insert(materialLotTransactions).values(createTransaction({
+        materialLotId: insertedLot.id,
+        internalControlNumber: insertedLot.internalControlNumber,
+        transactionType: 'RECEIVE',
+        qtyBefore: '0',
+        qtyChange: insertedLot.receivedQty,
+        qtyAfter: insertedLot.receivedQty,
+        toLocation: insertedLot.storageLocation || undefined,
+        performedBy: insertedLot.receivedBy,
+        notes: `Initial receiving from ${insertedLot.supplier}. PO: ${insertedLot.purchaseOrderNumber || 'N/A'}`,
+      }));
+
+      // Resolve the linked inventory_items row to satisfy the ITL FK
+      // (Task #248). If the lot lacks an inventoryItemId, look up by AG part
+      // number; if no row exists, auto-create a placeholder so the ledger
+      // write can proceed (no more silent skips).
+      let invItemId: number | null = insertedLot.inventoryItemId ?? null;
+      if (!invItemId && insertedLot.materialPartNumber) {
+        const { ensureInventoryItemForReceipt } = await import(
+          '../services/ensureInventoryItemForReceipt'
+        );
+        const ensured = await ensureInventoryItemForReceipt(tx, {
+          agPartNumber: insertedLot.materialPartNumber,
+          fallbackName: insertedLot.materialName ?? null,
+          source: insertedLot.supplier ?? null,
+          supplierPartNumber: insertedLot.supplierPartNumber ?? null,
+          createdBy: insertedLot.receivedBy ?? null,
+        });
+        invItemId = ensured.id;
+      }
+
+      if (invItemId) {
+        const ledgerSourceModule = 'material-lots:create';
+        const ledgerSourceRecordId = String(insertedLot.id);
+        const [existingLedger] = await tx
+          .select({ id: inventoryTransactionLedger.id })
+          .from(inventoryTransactionLedger)
+          .where(
+            and(
+              eq(inventoryTransactionLedger.sourceModule, ledgerSourceModule),
+              eq(inventoryTransactionLedger.sourceRecordId, ledgerSourceRecordId),
+            ),
+          )
+          .limit(1);
+
+        if (!existingLedger) {
+          const receivedQty = Number(insertedLot.receivedQty);
+          await recordInventoryLedgerEntry({
+            transactionType: 'RECEIVE',
+            inventoryItemId: invItemId,
+            agPartNumber: insertedLot.materialPartNumber,
+            lotId: insertedLot.id,
+            locationId: insertedLot.storageLocation ?? null,
+            unitOfMeasure: insertedLot.unitOfMeasure ?? 'EA',
+            quantityBefore: 0,
+            quantityDelta: receivedQty,
+            quantityAfter: receivedQty,
+            performedByDisplayName: insertedLot.receivedBy || 'system:material-lot-create',
+            reasonCode: 'MATERIAL_LOT_RECEIVED',
+            notes: `Initial receiving from ${insertedLot.supplier}. PO: ${insertedLot.purchaseOrderNumber || 'N/A'}`,
+            sourceModule: ledgerSourceModule,
+            sourceRecordId: ledgerSourceRecordId,
+            metadata: {
+              internalControlNumber: insertedLot.internalControlNumber,
+              supplier: insertedLot.supplier,
+              supplierLotNumber: insertedLot.supplierLotNumber,
+              purchaseOrderNumber: insertedLot.purchaseOrderNumber,
+              receivingRecordNumber: insertedLot.receivingRecordNumber,
+            },
+          }, tx);
+        }
+      } else {
+        console.warn(
+          `[materialLots POST] Skipping ITL write — no inventory_items row for lot=${insertedLot.id} part=${insertedLot.materialPartNumber}`,
+        );
+      }
+
+      return insertedLot;
+    });
 
     res.status(201).json(lot);
   } catch (error: any) {
@@ -796,7 +914,20 @@ router.post('/', async (req: Request, res: Response) => {
         details: error.errors,
       });
     }
-    res.status(500).json({ error: 'Failed to create material lot', message: error.message });
+    // Map inventory-ledger invariant/FK failures to a structured 422 so the
+    // caller can distinguish ledger-write rollbacks from generic 500s.
+    const msg = String(error?.message ?? '');
+    if (
+      error?.code === 'INVENTORY_LEDGER_VALIDATION' ||
+      /inventory[_ ]?ledger|inventory_transaction_ledger|recordInventoryLedgerEntry/i.test(msg)
+    ) {
+      return res.status(422).json({
+        error: 'Inventory ledger write failed',
+        code: 'INVENTORY_LEDGER_WRITE_FAILED',
+        message: msg,
+      });
+    }
+    res.status(500).json({ error: 'Failed to create material lot', message: msg });
   }
 });
 
@@ -1348,7 +1479,31 @@ router.post('/consume', async (req: Request, res: Response) => {
     }
 
     // ── Guard 1: Lot status (QUARANTINE/REJECTED/SCRAPPED/HOLD/LOCKED never consumable; EXPIRED handled below)
-    const hardBlockedStatuses: MaterialLotStatus[] = ['QUARANTINE', 'REJECTED', 'SCRAPPED', 'HOLD', 'LOCKED'];
+    if (lot.status === 'HOLD') {
+      if (!approvalRequestId) {
+        return res.status(403).json({
+          error: 'APPROVAL_REQUIRED',
+          code: 'DOCUMENT_HOLD_APPROVAL_REQUIRED',
+          message: 'Document-held material requires an approved document-hold release before consumption.',
+          status: lot.status,
+        });
+      }
+      const [appr] = await db.select().from(approvalRequests).where(eq(approvalRequests.id, approvalRequestId)).limit(1);
+      if (
+        !appr ||
+        appr.status !== 'APPROVED' ||
+        appr.subjectId !== lot.id ||
+        !['INV_DOCUMENT_HOLD_USE', 'INV_DOCUMENT_HOLD_RELEASE'].includes(appr.requestType)
+      ) {
+        return res.status(409).json({
+          error: 'APPROVAL_INVALID',
+          code: 'DOCUMENT_HOLD_APPROVAL_INVALID',
+          message: 'Approval is not valid for this document-held material lot.',
+        });
+      }
+    }
+
+    const hardBlockedStatuses: MaterialLotStatus[] = ['QUARANTINE', 'REJECTED', 'SCRAPPED', 'LOCKED'];
     if (hardBlockedStatuses.includes(lot.status as MaterialLotStatus)) {
       return res.status(400).json({
         error: 'LOT_NOT_USABLE',

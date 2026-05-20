@@ -1,0 +1,152 @@
+ React initialized: Object
+ React hooks: Object
+ [EPOCH SYNC] Sync engine starting
+ [EPOCH SYNC] Sync engine started — interval: 30000 ms
+ App component is rendering...
+ Environment: production
+ Base URL: /
+ [EPOCH] Service Worker Registered https://agcompepoch.xyz/
+ 🌐 API Request to /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard (timeout: 15000ms, deployment: true)
+ [EPOCH] Install prompt captured and ready
+wizard:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+ ✅ API Response from /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard: 200
+/api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/production-controls:1  Failed to load resource: the server responded with a status of 404 ()
+index-BXmfWr3V.js:1799 WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=d6d83904dc9b25200b39d86d2a6c0115541e0f01210ea6afde793cedd2ce9c42' failed: 
+(anonymous) @ index-BXmfWr3V.js:1799
+/api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/budget-overrides:1  Failed to load resource: the server responded with a status of 500 ()
+/api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/budget-overrides:1  Failed to load resource: the server responded with a status of 500 ()
+index-BXmfWr3V.js:1799 WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=d6d83904dc9b25200b39d86d2a6c0115541e0f01210ea6afde793cedd2ce9c42' failed: 
+(anonymous) @ index-BXmfWr3V.js:1799
+/api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/production-controls:1  Failed to load resource: the server responded with a status of 404 ()
+index-BXmfWr3V.js:235 🌐 API Request to /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard (timeout: 15000ms, deployment: true)
+index-BXmfWr3V.js:235 ✅ API Response from /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard: 200
+index-BXmfWr3V.js:235 🌐 API Request to /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard (timeout: 15000ms, deployment: true)
+/api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard:1  Failed to load resource: the server responded with a status of 500 ()
+index-BXmfWr3V.js:235 ✅ API Response from /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard: 500
+index-BXmfWr3V.js:5540 API error raw body: Internal Server Error
+console.error @ index-BXmfWr3V.js:5540
+be @ index-BXmfWr3V.js:235
+index-BXmfWr3V.js:5540 💥 API Request failed for /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard: Error: Internal Server Error
+    at be (index-BXmfWr3V.js:235:8799)
+console.error @ index-BXmfWr3V.js:5540
+be @ index-BXmfWr3V.js:235
+index-BXmfWr3V.js:3044 [WAD Wizard] Step navigation save failed: Error: Internal Server Error
+    at be (index-BXmfWr3V.js:235:8799)
+(anonymous) @ index-BXmfWr3V.js:3044
+index-BXmfWr3V.js:1799 WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=d6d83904dc9b25200b39d86d2a6c0115541e0f01210ea6afde793cedd2ce9c42' failed: 
+(anonymous) @ index-BXmfWr3V.js:1799
+index-BXmfWr3V.js:235 🌐 API Request to /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard (timeout: 15000ms, deployment: true)
+/api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard:1  Failed to load resource: the server responded with a status of 500 ()
+index-BXmfWr3V.js:235 ✅ API Response from /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard: 500
+index-BXmfWr3V.js:5540 API error raw body: Internal Server Error
+console.error @ index-BXmfWr3V.js:5540
+be @ index-BXmfWr3V.js:235
+index-BXmfWr3V.js:5540 💥 API Request failed for /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard: Error: Internal Server Error
+    at be (index-BXmfWr3V.js:235:8799)
+console.error @ index-BXmfWr3V.js:5540
+be @ index-BXmfWr3V.js:235
+index-BXmfWr3V.js:3044 [WAD Wizard] Step navigation save failed: Error: Internal Server Error
+    at be (index-BXmfWr3V.js:235:8799)
+(anonymous) @ index-BXmfWr3V.js:3044
+index-BXmfWr3V.js:1799 WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=d6d83904dc9b25200b39d86d2a6c0115541e0f01210ea6afde793cedd2ce9c42' failed: 
+(anonymous) @ index-BXmfWr3V.js:1799
+index-BXmfWr3V.js:235 🌐 API Request to /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard (timeout: 15000ms, deployment: true)
+/api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard:1  Failed to load resource: the server responded with a status of 503 ()
+index-BXmfWr3V.js:235 ✅ API Response from /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard: 503
+index-BXmfWr3V.js:5540 API error raw body: {"error":"Server starting, please retry"}
+console.error @ index-BXmfWr3V.js:5540
+be @ index-BXmfWr3V.js:235
+index-BXmfWr3V.js:235 [API] /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard returned startup 503; retrying in 2000ms (1/8)
+be @ index-BXmfWr3V.js:235
+index-BXmfWr3V.js:235 🌐 API Request to /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard (timeout: 15000ms, deployment: true)
+index-BXmfWr3V.js:1799 WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=d6d83904dc9b25200b39d86d2a6c0115541e0f01210ea6afde793cedd2ce9c42' failed: 
+(anonymous) @ index-BXmfWr3V.js:1799
+/api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard:1  Failed to load resource: the server responded with a status of 503 ()
+index-BXmfWr3V.js:235 ✅ API Response from /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard: 503
+index-BXmfWr3V.js:5540 API error raw body: {"error":"Server starting, please retry"}
+console.error @ index-BXmfWr3V.js:5540
+be @ index-BXmfWr3V.js:235
+index-BXmfWr3V.js:235 [API] /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard returned startup 503; retrying in 2000ms (2/8)
+be @ index-BXmfWr3V.js:235
+index-BXmfWr3V.js:235 🌐 API Request to /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard (timeout: 15000ms, deployment: true)
+index-BXmfWr3V.js:235 ✅ API Response from /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard: 200
+index-BXmfWr3V.js:235 🌐 API Request to /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard (timeout: 15000ms, deployment: true)
+index-BXmfWr3V.js:235 ✅ API Response from /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard: 200
+index-BXmfWr3V.js:235 🌐 API Request to /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard (timeout: 15000ms, deployment: true)
+index-BXmfWr3V.js:235 ✅ API Response from /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard: 200
+index-BXmfWr3V.js:235 🌐 API Request to /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard (timeout: 15000ms, deployment: true)
+index-BXmfWr3V.js:235 ✅ API Response from /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard: 200
+index-BXmfWr3V.js:235 🌐 API Request to /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard (timeout: 15000ms, deployment: true)
+index-BXmfWr3V.js:235 ✅ API Response from /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard: 200
+index-BXmfWr3V.js:235 🌐 API Request to /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard (timeout: 15000ms, deployment: true)
+index-BXmfWr3V.js:235 ✅ API Response from /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard: 200
+index-BXmfWr3V.js:235 🌐 API Request to /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard (timeout: 15000ms, deployment: true)
+index-BXmfWr3V.js:235 ✅ API Response from /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard: 200
+index-BXmfWr3V.js:235 🌐 API Request to /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard (timeout: 15000ms, deployment: true)
+index-BXmfWr3V.js:235 ✅ API Response from /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard: 200
+index-BXmfWr3V.js:235 🌐 API Request to /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard (timeout: 15000ms, deployment: true)
+index-BXmfWr3V.js:235 ✅ API Response from /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard: 200
+index-BXmfWr3V.js:235 🌐 API Request to /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard (timeout: 15000ms, deployment: true)
+index-BXmfWr3V.js:235 ✅ API Response from /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard: 200
+index-BXmfWr3V.js:235 🌐 API Request to /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard (timeout: 15000ms, deployment: true)
+index-BXmfWr3V.js:235 ✅ API Response from /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard: 200
+index-BXmfWr3V.js:235 🌐 API Request to /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard (timeout: 15000ms, deployment: true)
+index-BXmfWr3V.js:235 ✅ API Response from /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard: 200
+index-BXmfWr3V.js:235 🌐 API Request to /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard (timeout: 15000ms, deployment: true)
+index-BXmfWr3V.js:235 ✅ API Response from /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard: 200
+index-BXmfWr3V.js:235 🌐 API Request to /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard (timeout: 15000ms, deployment: true)
+index-BXmfWr3V.js:5537 App component is rendering...
+index-BXmfWr3V.js:5537 Environment: production
+index-BXmfWr3V.js:5537 Base URL: /
+index-BXmfWr3V.js:5537 App component is rendering...
+index-BXmfWr3V.js:5537 Environment: production
+index-BXmfWr3V.js:5537 Base URL: /
+index-BXmfWr3V.js:5540 Error: A <Select.Item /> must have a value prop that is not an empty string. This is because the Select value can be set to an empty string to clear the selection and show the placeholder.
+    at index-BXmfWr3V.js:1814:36301
+    at qRe (index-BXmfWr3V.js:38:17178)
+    at wze (index-BXmfWr3V.js:40:1590)
+    at YNt (index-BXmfWr3V.js:40:46526)
+    at KNt (index-BXmfWr3V.js:40:40186)
+    at Gas (index-BXmfWr3V.js:40:40109)
+    at Pde (index-BXmfWr3V.js:40:39956)
+    at Gke (index-BXmfWr3V.js:40:36268)
+    at Rze (index-BXmfWr3V.js:40:37082)
+    at OT (index-BXmfWr3V.js:38:3324)
+console.error @ index-BXmfWr3V.js:5540
+index-BXmfWr3V.js:5540 Global error caught: Error: A <Select.Item /> must have a value prop that is not an empty string. This is because the Select value can be set to an empty string to clear the selection and show the placeholder.
+    at index-BXmfWr3V.js:1814:36301
+    at qRe (index-BXmfWr3V.js:38:17178)
+    at wze (index-BXmfWr3V.js:40:1590)
+    at YNt (index-BXmfWr3V.js:40:46526)
+    at KNt (index-BXmfWr3V.js:40:40186)
+    at Gas (index-BXmfWr3V.js:40:40109)
+    at Pde (index-BXmfWr3V.js:40:39956)
+    at Gke (index-BXmfWr3V.js:40:36268)
+    at Rze (index-BXmfWr3V.js:40:37082)
+    at OT (index-BXmfWr3V.js:38:3324)
+console.error @ index-BXmfWr3V.js:5540
+index-BXmfWr3V.js:38 Uncaught Error: A <Select.Item /> must have a value prop that is not an empty string. This is because the Select value can be set to an empty string to clear the selection and show the placeholder.
+    at index-BXmfWr3V.js:1814:36301
+    at qRe (index-BXmfWr3V.js:38:17178)
+    at wze (index-BXmfWr3V.js:40:1590)
+    at YNt (index-BXmfWr3V.js:40:46526)
+    at KNt (index-BXmfWr3V.js:40:40186)
+    at Gas (index-BXmfWr3V.js:40:40109)
+    at Pde (index-BXmfWr3V.js:40:39956)
+    at Gke (index-BXmfWr3V.js:40:36268)
+    at Rze (index-BXmfWr3V.js:40:37082)
+    at OT (index-BXmfWr3V.js:38:3324)
+/api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard:1  Failed to load resource: the server responded with a status of 500 ()
+index-BXmfWr3V.js:235 ✅ API Response from /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard: 500
+index-BXmfWr3V.js:5540 API error raw body: Internal Server Error
+console.error @ index-BXmfWr3V.js:5540
+index-BXmfWr3V.js:5540 💥 API Request failed for /api/work-orders/production/4b5047ba-a21a-448a-80e2-11ce4f713ccf/wizard: Error: Internal Server Error
+    at be (index-BXmfWr3V.js:235:8799)
+console.error @ index-BXmfWr3V.js:5540
+index-BXmfWr3V.js:1799 WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=d6d83904dc9b25200b39d86d2a6c0115541e0f01210ea6afde793cedd2ce9c42' failed: 
+(anonymous) @ index-BXmfWr3V.js:1799
+index-BXmfWr3V.js:1799 WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=d6d83904dc9b25200b39d86d2a6c0115541e0f01210ea6afde793cedd2ce9c42' failed: 
+(anonymous) @ index-BXmfWr3V.js:1799
+index-nFG9VqSL.css:1  Failed to load resource: the server responded with a status of 500 ()
+index-BXmfWr3V.js:1799 WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications?token=d6d83904dc9b25200b39d86d2a6c0115541e0f01210ea6afde793cedd2ce9c42' failed: 
+(anonymous) @ index-BXmfWr3V.js:1799

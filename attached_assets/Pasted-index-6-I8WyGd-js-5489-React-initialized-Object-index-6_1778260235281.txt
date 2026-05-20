@@ -1,0 +1,109 @@
+index-6-I8WyGd.js:5489 React initialized: Object
+index-6-I8WyGd.js:5489 React hooks: Object
+index-6-I8WyGd.js:5489 [EPOCH SYNC] Sync engine starting
+index-6-I8WyGd.js:5489 [EPOCH SYNC] Sync engine started — interval: 30000 ms
+index-6-I8WyGd.js:5486 App component is rendering...
+index-6-I8WyGd.js:5486 Environment: production
+index-6-I8WyGd.js:5486 Base URL: /
+index-6-I8WyGd.js:1755 [EPOCH] Service Worker Registered https://agcompepoch.xyz/
+index-6-I8WyGd.js:1755 [EPOCH] Install prompt captured and ready
+/admin/edri/domain/PROCUREMENT:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+index-6-I8WyGd.js:235 🌐 API Request to GET (timeout: 15000ms, deployment: true)
+index-6-I8WyGd.js:235 ✅ API Response from GET: 200
+index-6-I8WyGd.js:235 🌐 API Request to GET (timeout: 15000ms, deployment: true)
+index-6-I8WyGd.js:235 ✅ API Response from GET: 200
+index-6-I8WyGd.js:235 🌐 API Request to GET (timeout: 15000ms, deployment: true)
+index-6-I8WyGd.js:235 ✅ API Response from GET: 200
+index-6-I8WyGd.js:235 🌐 API Request to GET (timeout: 15000ms, deployment: true)
+index-6-I8WyGd.js:235 ✅ API Response from GET: 200
+index-6-I8WyGd.js:235 🌐 API Request to GET (timeout: 15000ms, deployment: true)
+index-6-I8WyGd.js:235 ✅ API Response from GET: 200
+index-6-I8WyGd.js:235 🌐 API Request to GET (timeout: 15000ms, deployment: true)
+index-6-I8WyGd.js:235 ✅ API Response from GET: 200
+index-6-I8WyGd.js:235 🌐 API Request to GET (timeout: 15000ms, deployment: true)
+index-6-I8WyGd.js:235 ✅ API Response from GET: 200
+index-6-I8WyGd.js:235 🌐 API Request to GET (timeout: 15000ms, deployment: true)
+index-6-I8WyGd.js:235 ✅ API Response from GET: 200
+/api/cutting-table/fabric-items:1  Failed to load resource: the server responded with a status of 500 ()
+/api/cutting-table/packet-items:1  Failed to load resource: the server responded with a status of 500 ()
+/api/cutting-table/packet-part-items:1  Failed to load resource: the server responded with a status of 500 ()
+/api/cutting-table/fabric-items:1  Failed to load resource: the server responded with a status of 500 ()
+/api/cutting-table/packet-items:1  Failed to load resource: the server responded with a status of 500 ()
+/api/cutting-table/packet-part-items:1  Failed to load resource: the server responded with a status of 500 ()
+index-6-I8WyGd.js:2201 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-6-I8WyGd.js:2201 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+/api/cutting-table-mfg-queue/cutting-table?status=ACTIVE:1  Failed to load resource: the server responded with a status of 500 ()
+/api/cutting-table/fabric-items:1  Failed to load resource: the server responded with a status of 500 ()
+/api/cutting-table/packet-items:1  Failed to load resource: the server responded with a status of 500 ()
+/api/cutting-table/packet-part-items:1  Failed to load resource: the server responded with a status of 500 ()
+/api/cutting-table/packet-part-items:1  Failed to load resource: the server responded with a status of 500 ()
+/api/cutting-table/packet-items:1  Failed to load resource: the server responded with a status of 500 ()
+/api/cutting-table/fabric-items:1  Failed to load resource: the server responded with a status of 500 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 503 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 503 ()
+/api/cutting-table-mfg-queue/cutting-table?status=ALL:1  Failed to load resource: the server responded with a status of 500 ()
+index-6-I8WyGd.js:2201 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-6-I8WyGd.js:2201 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+/api/cutting-table-mfg-queue/cutting-table?status=ACTIVE:1  Failed to load resource: the server responded with a status of 500 ()
+index-6-I8WyGd.js:2201 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-6-I8WyGd.js:2201 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-6-I8WyGd.js:235 🌐 API Request to /api/traceability/search?key=travelerNumber&value=roc260054 (timeout: 15000ms, deployment: true)
+index-6-I8WyGd.js:235 ✅ API Response from /api/traceability/search?key=travelerNumber&value=roc260054: 200
+index-6-I8WyGd.js:235 🌐 API Request to /api/traceability/search?key=travelerNumber&value=roc260028 (timeout: 15000ms, deployment: true)
+index-6-I8WyGd.js:235 ✅ API Response from /api/traceability/search?key=travelerNumber&value=roc260028: 200
+index-6-I8WyGd.js:235 🌐 API Request to /api/traceability/search?key=operatorBadge&value=emp002 (timeout: 15000ms, deployment: true)
+index-6-I8WyGd.js:235 ✅ API Response from /api/traceability/search?key=operatorBadge&value=emp002: 200
+index-6-I8WyGd.js:235 🌐 API Request to /api/traceability/search?key=operatorBadge&value=emp001 (timeout: 15000ms, deployment: true)
+index-6-I8WyGd.js:235 ✅ API Response from /api/traceability/search?key=operatorBadge&value=emp001: 200
+index-6-I8WyGd.js:235 🌐 API Request to /api/traceability/search?key=operatorBadge&value=emp003 (timeout: 15000ms, deployment: true)
+index-6-I8WyGd.js:235 ✅ API Response from /api/traceability/search?key=operatorBadge&value=emp003: 200
+index-6-I8WyGd.js:235 🌐 API Request to /api/traceability/search?key=operatorBadge&value=emp004 (timeout: 15000ms, deployment: true)
+/api/traceability/search?key=operatorBadge&value=emp004:1  Failed to load resource: the server responded with a status of 503 ()
+index-6-I8WyGd.js:235 ✅ API Response from /api/traceability/search?key=operatorBadge&value=emp004: 503
+index-6-I8WyGd.js:5489 API error raw body: {"error":"Server starting, please retry"}
+console.error @ index-6-I8WyGd.js:5489
+index-6-I8WyGd.js:5489 💥 API Request failed for /api/traceability/search?key=operatorBadge&value=emp004: Error: Server starting, please retry
+    at we (index-6-I8WyGd.js:235:8142)
+console.error @ index-6-I8WyGd.js:5489
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 503 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 503 ()
+index-6-I8WyGd.js:235 🌐 API Request to /api/traceability/search?key=lotIcn&value=rwt009 (timeout: 15000ms, deployment: true)
+/api/traceability/search?key=lotIcn&value=rwt009:1  Failed to load resource: the server responded with a status of 503 ()
+index-6-I8WyGd.js:235 ✅ API Response from /api/traceability/search?key=lotIcn&value=rwt009: 503
+index-6-I8WyGd.js:5489 API error raw body: {"error":"Server starting, please retry"}
+console.error @ index-6-I8WyGd.js:5489
+index-6-I8WyGd.js:5489 💥 API Request failed for /api/traceability/search?key=lotIcn&value=rwt009: Error: Server starting, please retry
+    at we (index-6-I8WyGd.js:235:8142)
+console.error @ index-6-I8WyGd.js:5489
+index-6-I8WyGd.js:235 🌐 API Request to /api/traceability/search?key=lotIcn&value=rwt004 (timeout: 15000ms, deployment: true)
+/api/traceability/search?key=lotIcn&value=rwt004:1  Failed to load resource: the server responded with a status of 503 ()
+index-6-I8WyGd.js:235 ✅ API Response from /api/traceability/search?key=lotIcn&value=rwt004: 503
+index-6-I8WyGd.js:5489 API error raw body: {"error":"Server starting, please retry"}
+console.error @ index-6-I8WyGd.js:5489
+index-6-I8WyGd.js:5489 💥 API Request failed for /api/traceability/search?key=lotIcn&value=rwt004: Error: Server starting, please retry
+    at we (index-6-I8WyGd.js:235:8142)
+console.error @ index-6-I8WyGd.js:5489
+index-6-I8WyGd.js:235 🌐 API Request to /api/inventory/ledger?page=1&limit=100 (timeout: 15000ms, deployment: true)
+/api/inventory/ledger?page=1&limit=100:1  Failed to load resource: the server responded with a status of 503 ()
+index-6-I8WyGd.js:235 ✅ API Response from /api/inventory/ledger?page=1&limit=100: 503
+index-6-I8WyGd.js:5489 API error raw body: {"error":"Server starting, please retry"}
+console.error @ index-6-I8WyGd.js:5489
+index-6-I8WyGd.js:5489 💥 API Request failed for /api/inventory/ledger?page=1&limit=100: Error: Server starting, please retry
+    at we (index-6-I8WyGd.js:235:8142)
+console.error @ index-6-I8WyGd.js:5489
+/api/inventory/ledger/locations:1  Failed to load resource: the server responded with a status of 503 ()
+index-6-I8WyGd.js:235 🌐 API Request to /api/inventory/ledger?page=1&limit=100 (timeout: 15000ms, deployment: true)
+/api/inventory/ledger?page=1&limit=100:1  Failed to load resource: the server responded with a status of 503 ()
+index-6-I8WyGd.js:235 ✅ API Response from /api/inventory/ledger?page=1&limit=100: 503
+index-6-I8WyGd.js:5489 API error raw body: {"error":"Server starting, please retry"}
+console.error @ index-6-I8WyGd.js:5489
+index-6-I8WyGd.js:5489 💥 API Request failed for /api/inventory/ledger?page=1&limit=100: Error: Server starting, please retry
+    at we (index-6-I8WyGd.js:235:8142)
+console.error @ index-6-I8WyGd.js:5489
+/api/inventory/ledger/locations:1  Failed to load resource: the server responded with a status of 503 ()
+/api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 503 ()
+index-6-I8WyGd.js:1764  GET https://agcompepoch.xyz/api/internal-messages/unread/count/19 503 (Service Unavailable)
+queryFn @ index-6-I8WyGd.js:1764
+o @ index-6-I8WyGd.js:51
+x @ index-6-I8WyGd.js:51
+(anonymous) @ index-6-I8WyGd.js:51

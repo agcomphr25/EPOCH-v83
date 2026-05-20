@@ -22,6 +22,7 @@ import { db } from '../../db';
 import {
   approvalRequestHistory,
   approvalRequests,
+  approvalSignatureEvidence,
   escalationPolicies,
   users,
   type ApprovalRequest,
@@ -140,6 +141,13 @@ export interface DecisionInput {
   notes?: string | null;
   reasonCode?: string | null;
   signature?: string | null;
+  signatureMeaning?: string | null;
+  signatureReason?: string | null;
+  signerUsername?: string | null;
+  signerRole?: string | null;
+  linkedObjectType?: string | null;
+  linkedObjectId?: string | null;
+  digitalSignatureId?: string | null;
 }
 
 interface ApprovalRequestRow {
@@ -298,6 +306,33 @@ async function resolveDecision(
     }
 
     const now = new Date();
+    const signatureMeaning =
+      input.signatureMeaning?.trim() ||
+      (toStatus === 'APPROVED'
+        ? 'I approve this action and accept responsibility for the linked business object.'
+        : 'I reject this action and record the reason for the linked business object.');
+    const signatureReason =
+      input.signatureReason?.trim() ||
+      input.reasonCode?.trim() ||
+      input.notes?.trim() ||
+      `${row.requestType} ${toStatus.toLowerCase()} decision`;
+    const signerUsername =
+      input.signerUsername?.trim() ||
+      input.approver.displayName;
+    const signerRole =
+      input.signerRole?.trim() ||
+      row.currentApproverRole ||
+      input.approver.roles?.[0] ||
+      'APPROVER';
+    const linkedObjectType =
+      input.linkedObjectType?.trim() ||
+      row.subjectType ||
+      'approval_request';
+    const linkedObjectId =
+      input.linkedObjectId?.trim() ||
+      row.subjectId ||
+      row.id;
+
     const [updated] = await tx
       .update(approvalRequests)
       .set({
@@ -308,10 +343,31 @@ async function resolveDecision(
         resolutionNotes: input.notes ?? null,
         resolutionReasonCode: input.reasonCode ?? null,
         resolutionSignature: input.signature ?? null,
+        signatureMeaning,
+        signatureReason,
+        signerUsername,
+        signerRole,
+        signatureLinkedObjectType: linkedObjectType,
+        signatureLinkedObjectId: linkedObjectId,
+        digitalSignatureId: input.digitalSignatureId ?? null,
         updatedAt: now,
       })
       .where(eq(approvalRequests.id, row.id))
       .returning();
+
+    await tx.insert(approvalSignatureEvidence).values({
+      approvalRequestId: row.id,
+      decisionStatus: toStatus,
+      signatureMeaning,
+      signatureReason,
+      signerUserId: input.approver.userId ?? null,
+      signerUsername,
+      signerRole,
+      linkedObjectType,
+      linkedObjectId,
+      digitalSignatureId: input.digitalSignatureId ?? null,
+      recordedAt: now,
+    });
 
     await tx.insert(approvalRequestHistory).values({
       approvalRequestId: row.id,
@@ -323,7 +379,17 @@ async function resolveDecision(
       actorUserId: input.approver.userId ?? null,
       actorDisplayName: input.approver.displayName,
       notes: input.notes ?? null,
-      metadata: { reasonCode: input.reasonCode ?? null, hasSignature: !!input.signature },
+      metadata: {
+        reasonCode: input.reasonCode ?? null,
+        hasSignature: !!input.signature,
+        signatureMeaning,
+        signatureReason,
+        signerUsername,
+        signerRole,
+        linkedObjectType,
+        linkedObjectId,
+        digitalSignatureId: input.digitalSignatureId ?? null,
+      },
     });
 
     await recordAuditEvent(
@@ -332,12 +398,28 @@ async function resolveDecision(
         subjectType: 'approval_request',
         subjectId: row.id,
         sourceService: SOURCE,
-        actor: { id: input.approver.userId ?? null, username: input.approver.displayName },
+        actor: {
+          id: input.approver.userId ?? null,
+          username: signerUsername,
+          role: signerRole,
+        },
         reason: input.notes ?? null,
         payload: {
           requestType: row.requestType,
           level: row.escalationLevel,
           reasonCode: input.reasonCode ?? null,
+          signature: {
+            meaning: signatureMeaning,
+            reason: signatureReason,
+            signerUsername,
+            signerRole,
+            signedAt: now.toISOString(),
+            digitalSignatureId: input.digitalSignatureId ?? null,
+          },
+          linkedObject: {
+            type: linkedObjectType,
+            id: linkedObjectId,
+          },
         },
       },
       tx,

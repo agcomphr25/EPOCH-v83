@@ -4,7 +4,12 @@ import {
   arInvoices,
   arInvoiceLines,
   arPaymentAllocations,
+  mediaAttachments,
+  mediaLibrary,
   p2Customers,
+  p2CustomerContacts,
+  p2LotNumbers,
+  p2PackingSlips,
   p2PurchaseOrders,
   chartOfAccounts,
   journalEntries,
@@ -13,8 +18,58 @@ import {
 import { eq, desc, sql, and, ilike, or, inArray, isNull, not } from 'drizzle-orm';
 import { authenticateToken } from '../../middleware/auth';
 import { requirePermission } from '../../middleware/requirePermission';
+import { generateArInvoicePdf } from '../../utils/pdf/arInvoicePdf';
+import { sendEmailViaSendGrid } from '../../utils/sendgrid';
+import { createInvoiceFromPackingSlip } from '../services/invoiceFromPackingSlip';
+import { assertPostingAllowedForPeriod } from '../services/accountingPeriodService';
+import { getFileStorageProviderForObjectPath } from '../services/fileStorageProvider';
 
 const LOCKED_STATUSES = ['POSTED', 'SENT', 'VOID', 'PAID'];
+
+const REQUIRED_P2_INVOICE_COLUMNS = [
+  'ar_invoices.discount_amount',
+  'ar_invoices.freight_amount',
+  'ar_invoices.retainage_percent',
+  'ar_invoices.retainage_amount',
+  'ar_invoices.customer_visible_notes',
+  'ar_invoices.internal_notes',
+  'ar_invoices.wad_id',
+  'ar_invoices.sendgrid_message_id',
+  'ar_invoices.sent_to',
+  'ar_invoices.sent_cc',
+  'ar_invoice_lines.po_item_id',
+  'ar_invoice_lines.part_number',
+];
+
+async function getMissingP2InvoiceColumns(): Promise<string[]> {
+  const result = await db.execute(sql`
+    SELECT table_name, column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND (
+        (table_name = 'ar_invoices' AND column_name IN (
+          'discount_amount',
+          'freight_amount',
+          'retainage_percent',
+          'retainage_amount',
+          'customer_visible_notes',
+          'internal_notes',
+          'wad_id',
+          'sendgrid_message_id',
+          'sent_to',
+          'sent_cc'
+        ))
+        OR (table_name = 'ar_invoice_lines' AND column_name IN (
+          'po_item_id',
+          'part_number'
+        ))
+      )
+  `);
+
+  const rows = ((result as any).rows ?? result) as Array<{ table_name: string; column_name: string }>;
+  const existing = new Set(rows.map((row) => `${row.table_name}.${row.column_name}`));
+  return REQUIRED_P2_INVOICE_COLUMNS.filter((column) => !existing.has(column));
+}
 
 const router = Router();
 
@@ -60,7 +115,12 @@ router.get('/aging', async (req: Request, res: Response) => {
           inv.id,
           inv.due_date,
           inv.total_amount::numeric - COALESCE(
-            (SELECT SUM(amount_applied::numeric) FROM ar_payment_allocations WHERE invoice_id = inv.id), 0
+            (
+              SELECT SUM(a.amount_applied::numeric)
+              FROM ar_payment_allocations a
+              JOIN ar_payments p ON p.id = a.payment_id
+              WHERE a.invoice_id = inv.id AND COALESCE(p.status, 'posted') = 'posted'
+            ), 0
           ) - COALESCE(
             (SELECT SUM(amount::numeric) FROM credit_memos WHERE ar_invoice_id = inv.id AND status != 'cancelled'), 0
           ) AS balance
@@ -70,7 +130,7 @@ router.get('/aging', async (req: Request, res: Response) => {
       WHERE i.balance > 0
     `);
 
-    const row = agingResult.rows?.[0] || agingResult[0] || {};
+    const row = (agingResult as any).rows?.[0] || (agingResult as any)[0] || {};
     res.json({
       current: parseFloat(row.current || '0'),
       days_1_30: parseFloat(row.days_1_30 || '0'),
@@ -103,7 +163,12 @@ router.get('/aging/by-customer', async (req: Request, res: Response) => {
           inv.customer_id,
           inv.due_date,
           inv.total_amount::numeric - COALESCE(
-            (SELECT SUM(amount_applied::numeric) FROM ar_payment_allocations WHERE invoice_id = inv.id), 0
+            (
+              SELECT SUM(a.amount_applied::numeric)
+              FROM ar_payment_allocations a
+              JOIN ar_payments p ON p.id = a.payment_id
+              WHERE a.invoice_id = inv.id AND COALESCE(p.status, 'posted') = 'posted'
+            ), 0
           ) - COALESCE(
             (SELECT SUM(amount::numeric) FROM credit_memos WHERE ar_invoice_id = inv.id AND status != 'cancelled'), 0
           ) AS balance
@@ -142,7 +207,12 @@ router.get('/customer-summary/:customerId', async (req: Request, res: Response) 
         COUNT(*)::int AS open_invoices,
         COALESCE(SUM(
           inv.total_amount::numeric - COALESCE(
-            (SELECT SUM(amount_applied::numeric) FROM ar_payment_allocations WHERE invoice_id = inv.id), 0
+            (
+              SELECT SUM(a.amount_applied::numeric)
+              FROM ar_payment_allocations a
+              JOIN ar_payments p ON p.id = a.payment_id
+              WHERE a.invoice_id = inv.id AND COALESCE(p.status, 'posted') = 'posted'
+            ), 0
           ) - COALESCE(
             (SELECT SUM(amount::numeric) FROM credit_memos WHERE ar_invoice_id = inv.id AND status != 'cancelled'), 0
           )
@@ -153,7 +223,7 @@ router.get('/customer-summary/:customerId', async (req: Request, res: Response) 
         AND inv.status NOT IN ('PAID', 'VOID')
     `);
 
-    const row = (result.rows || result)?.[0] || {};
+    const row = ((result as any).rows || result as any)?.[0] || {};
     res.json({
       openInvoices: parseInt(row.open_invoices || '0'),
       balance: parseFloat(row.balance || '0'),
@@ -188,6 +258,8 @@ router.get('/', async (req: Request, res: Response) => {
         poOverride: arInvoices.poOverride,
         poNumber: p2PurchaseOrders.poNumber,
         notes: arInvoices.notes,
+        customerVisibleNotes: arInvoices.customerVisibleNotes,
+        internalNotes: arInvoices.internalNotes,
         createdBy: arInvoices.createdBy,
         createdAt: arInvoices.createdAt,
         sentAt: arInvoices.sentAt,
@@ -196,8 +268,45 @@ router.get('/', async (req: Request, res: Response) => {
         pricingAmbiguous: arInvoices.pricingAmbiguous,
         autoCreated: arInvoices.autoCreated,
         packingSlipId: arInvoices.packingSlipId,
+        lotId: arInvoices.lotId,
+        wadId: arInvoices.wadId,
+        discountAmount: arInvoices.discountAmount,
+        freightAmount: arInvoices.freightAmount,
+        retainagePercent: arInvoices.retainagePercent,
+        retainageAmount: arInvoices.retainageAmount,
+        sentTo: arInvoices.sentTo,
+        sentCc: arInvoices.sentCc,
+        journalEntryId: sql<number | null>`(
+          SELECT je.id
+          FROM journal_entries je
+          WHERE je.reference_uuid = ${arInvoices.id}
+            AND je.transaction_type = 'AR_INVOICE'
+          ORDER BY je.created_at DESC
+          LIMIT 1
+        )`,
+        journalEntryStatus: sql<string | null>`(
+          SELECT je.status
+          FROM journal_entries je
+          WHERE je.reference_uuid = ${arInvoices.id}
+            AND je.transaction_type = 'AR_INVOICE'
+          ORDER BY je.created_at DESC
+          LIMIT 1
+        )`,
+        journalLineCount: sql<number>`COALESCE((
+          SELECT COUNT(*)::int
+          FROM journal_entries je
+          JOIN journal_lines jl ON jl.journal_entry_id = je.id
+          WHERE je.reference_uuid = ${arInvoices.id}
+            AND je.transaction_type = 'AR_INVOICE'
+        ), 0)`,
         amountPaid: sql<string>`COALESCE(
-          (SELECT SUM(amount_applied) FROM ar_payment_allocations WHERE invoice_id = ${arInvoices.id}),
+          (
+            SELECT SUM(a.amount_applied)
+            FROM ar_payment_allocations a
+            JOIN ar_payments p ON p.id = a.payment_id
+            WHERE a.invoice_id = ${arInvoices.id}
+              AND COALESCE(p.status, 'posted') = 'posted'
+          ),
           0
         ) + COALESCE(
           (SELECT SUM(amount::numeric) FROM credit_memos WHERE ar_invoice_id = ${arInvoices.id} AND status != 'cancelled'),
@@ -205,7 +314,13 @@ router.get('/', async (req: Request, res: Response) => {
         )`,
         balance: sql<string>`(
           ${arInvoices.totalAmount}::numeric - COALESCE(
-            (SELECT SUM(amount_applied) FROM ar_payment_allocations WHERE invoice_id = ${arInvoices.id}),
+            (
+              SELECT SUM(a.amount_applied)
+              FROM ar_payment_allocations a
+              JOIN ar_payments p ON p.id = a.payment_id
+              WHERE a.invoice_id = ${arInvoices.id}
+                AND COALESCE(p.status, 'posted') = 'posted'
+            ),
             0
           ) - COALESCE(
             (SELECT SUM(amount::numeric) FROM credit_memos WHERE ar_invoice_id = ${arInvoices.id} AND status != 'cancelled'),
@@ -252,7 +367,13 @@ const DASHBOARD_INVOICE_SELECT = (invoices: typeof arInvoices, customers: typeof
   poNumber: purchaseOrders ? purchaseOrders.poNumber : sql<string | null>`null`,
   balance: sql<string>`(
     ${invoices.totalAmount}::numeric - COALESCE(
-      (SELECT SUM(amount_applied) FROM ar_payment_allocations WHERE invoice_id = ${invoices.id}),
+      (
+        SELECT SUM(a.amount_applied)
+        FROM ar_payment_allocations a
+        JOIN ar_payments p ON p.id = a.payment_id
+        WHERE a.invoice_id = ${invoices.id}
+          AND COALESCE(p.status, 'posted') = 'posted'
+      ),
       0
     ) - COALESCE(
       (SELECT SUM(amount::numeric) FROM credit_memos WHERE ar_invoice_id = ${invoices.id} AND status != 'cancelled'),
@@ -278,9 +399,9 @@ router.get('/summary-counts', async (_req: Request, res: Response) => {
       `),
     ]);
     res.json({
-      needsReview: parseInt((needsReviewRow.rows?.[0] ?? (needsReviewRow as any)[0])?.count ?? '0'),
-      unsent: parseInt((unsentRow.rows?.[0] ?? (unsentRow as any)[0])?.count ?? '0'),
-      disputed: parseInt((disputedRow.rows?.[0] ?? (disputedRow as any)[0])?.count ?? '0'),
+      needsReview: parseInt(((needsReviewRow as any).rows?.[0] ?? (needsReviewRow as any)[0])?.count ?? '0'),
+      unsent: parseInt(((unsentRow as any).rows?.[0] ?? (unsentRow as any)[0])?.count ?? '0'),
+      disputed: parseInt(((disputedRow as any).rows?.[0] ?? (disputedRow as any)[0])?.count ?? '0'),
     });
   } catch (error) {
     console.error('Failed to fetch summary counts:', error);
@@ -352,6 +473,53 @@ router.get('/disputed', async (_req: Request, res: Response) => {
   }
 });
 
+router.post('/from-packing-slip/:packingSlipId', requirePermission('finance.post_invoice'), async (req: Request, res: Response) => {
+  try {
+    const { packingSlipId } = req.params;
+    const [slip] = await db
+      .select({ id: p2PackingSlips.id, lotNumberId: p2PackingSlips.lotNumberId })
+      .from(p2PackingSlips)
+      .where(eq(p2PackingSlips.id, packingSlipId));
+
+    if (!slip) return res.status(404).json({ error: 'Packing slip not found' });
+    if (!slip.lotNumberId) return res.status(422).json({ error: 'Packing slip is not linked to a lot' });
+
+    const missingColumns = await getMissingP2InvoiceColumns();
+    if (missingColumns.length > 0) {
+      return res.status(500).json({
+        error: `Invoice database migration is not applied. Missing columns: ${missingColumns.join(', ')}`,
+        missingColumns,
+      });
+    }
+
+    await createInvoiceFromPackingSlip(packingSlipId, slip.lotNumberId);
+
+    const [invoice] = await db
+      .select({ id: arInvoices.id, invoiceNumber: arInvoices.invoiceNumber, status: arInvoices.status })
+      .from(arInvoices)
+      .where(eq(arInvoices.packingSlipId, packingSlipId));
+
+    res.status(201).json(invoice);
+  } catch (error) {
+    console.error('Failed to create invoice from packing slip:', error);
+    const message = error instanceof Error ? error.message : 'Failed to create invoice from packing slip';
+    res.status(500).json({ error: message });
+  }
+});
+
+router.get('/:id/pdf', async (req: Request, res: Response) => {
+  try {
+    const pdf = await generateArInvoicePdf(req.params.id);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="Invoice-${req.params.id}.pdf"`);
+    res.setHeader('Content-Length', pdf.length);
+    res.end(pdf);
+  } catch (error) {
+    console.error('Failed to generate invoice PDF:', error);
+    res.status(500).json({ error: 'Failed to generate invoice PDF' });
+  }
+});
+
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -374,15 +542,56 @@ router.get('/:id', async (req: Request, res: Response) => {
         pricingAmbiguous: arInvoices.pricingAmbiguous,
         autoCreated: arInvoices.autoCreated,
         subtotal: arInvoices.subtotal,
+        discountAmount: arInvoices.discountAmount,
+        freightAmount: arInvoices.freightAmount,
         taxAmount: arInvoices.taxAmount,
+        retainagePercent: arInvoices.retainagePercent,
+        retainageAmount: arInvoices.retainageAmount,
         totalAmount: arInvoices.totalAmount,
         status: arInvoices.status,
         notes: arInvoices.notes,
+        customerVisibleNotes: arInvoices.customerVisibleNotes,
+        internalNotes: arInvoices.internalNotes,
+        wadId: arInvoices.wadId,
+        sentAt: arInvoices.sentAt,
+        sentBy: arInvoices.sentBy,
+        sentTo: arInvoices.sentTo,
+        sentCc: arInvoices.sentCc,
+        sendgridMessageId: arInvoices.sendgridMessageId,
         createdBy: arInvoices.createdBy,
         createdAt: arInvoices.createdAt,
         updatedAt: arInvoices.updatedAt,
+        journalEntryId: sql<number | null>`(
+          SELECT je.id
+          FROM journal_entries je
+          WHERE je.reference_uuid = ${arInvoices.id}
+            AND je.transaction_type = 'AR_INVOICE'
+          ORDER BY je.created_at DESC
+          LIMIT 1
+        )`,
+        journalEntryStatus: sql<string | null>`(
+          SELECT je.status
+          FROM journal_entries je
+          WHERE je.reference_uuid = ${arInvoices.id}
+            AND je.transaction_type = 'AR_INVOICE'
+          ORDER BY je.created_at DESC
+          LIMIT 1
+        )`,
+        journalLineCount: sql<number>`COALESCE((
+          SELECT COUNT(*)::int
+          FROM journal_entries je
+          JOIN journal_lines jl ON jl.journal_entry_id = je.id
+          WHERE je.reference_uuid = ${arInvoices.id}
+            AND je.transaction_type = 'AR_INVOICE'
+        ), 0)`,
         amountPaid: sql<string>`COALESCE(
-          (SELECT SUM(amount_applied) FROM ar_payment_allocations WHERE invoice_id = ${arInvoices.id}),
+          (
+            SELECT SUM(a.amount_applied)
+            FROM ar_payment_allocations a
+            JOIN ar_payments p ON p.id = a.payment_id
+            WHERE a.invoice_id = ${arInvoices.id}
+              AND COALESCE(p.status, 'posted') = 'posted'
+          ),
           0
         ) + COALESCE(
           (SELECT SUM(amount::numeric) FROM credit_memos WHERE ar_invoice_id = ${arInvoices.id} AND status != 'cancelled'),
@@ -390,7 +599,13 @@ router.get('/:id', async (req: Request, res: Response) => {
         )`,
         balance: sql<string>`(
           ${arInvoices.totalAmount}::numeric - COALESCE(
-            (SELECT SUM(amount_applied) FROM ar_payment_allocations WHERE invoice_id = ${arInvoices.id}),
+            (
+              SELECT SUM(a.amount_applied)
+              FROM ar_payment_allocations a
+              JOIN ar_payments p ON p.id = a.payment_id
+              WHERE a.invoice_id = ${arInvoices.id}
+                AND COALESCE(p.status, 'posted') = 'posted'
+            ),
             0
           ) - COALESCE(
             (SELECT SUM(amount::numeric) FROM credit_memos WHERE ar_invoice_id = ${arInvoices.id} AND status != 'cancelled'),
@@ -439,8 +654,14 @@ router.post('/', requirePermission('finance.post_invoice'), async (req: Request,
       terms,
       poId,
       poOverride,
+      discountAmount,
+      freightAmount,
       taxAmount,
+      retainagePercent,
+      retainageAmount,
       notes,
+      customerVisibleNotes,
+      internalNotes,
       lines,
     } = req.body;
 
@@ -467,8 +688,11 @@ router.post('/', requirePermission('finance.post_invoice'), async (req: Request,
       (sum: number, line: any) => sum + parseFloat(line.lineTotal),
       0
     );
+    const discount = parseFloat(discountAmount) || 0;
+    const freight = parseFloat(freightAmount) || 0;
     const tax = parseFloat(taxAmount) || 0;
-    const totalAmount = subtotal + tax;
+    const retainage = parseFloat(retainageAmount) || 0;
+    const totalAmount = subtotal - discount + freight + tax - retainage;
 
     const result = await db.transaction(async (tx) => {
       const [invoice] = await tx
@@ -481,11 +705,17 @@ router.post('/', requirePermission('finance.post_invoice'), async (req: Request,
           terms: terms || null,
           poId: poId || null,
           poOverride: poOverride || null,
+          discountAmount: discount.toFixed(2),
+          freightAmount: freight.toFixed(2),
           subtotal: subtotal.toFixed(2),
           taxAmount: tax.toFixed(2),
+          retainagePercent: String(parseFloat(retainagePercent) || 0),
+          retainageAmount: retainage.toFixed(2),
           totalAmount: totalAmount.toFixed(2),
-          status: 'OPEN',
+          status: 'REVIEW',
           notes: notes || null,
+          customerVisibleNotes: customerVisibleNotes || null,
+          internalNotes: internalNotes || null,
           createdBy: (req as any).user?.username || null,
         })
         .returning();
@@ -493,6 +723,17 @@ router.post('/', requirePermission('finance.post_invoice'), async (req: Request,
       const lineInserts = calculatedLines.map((line: any) => ({
         invoiceId: invoice.id,
         inventoryItemId: line.inventoryItemId || null,
+        poItemId: line.poItemId || null,
+        partNumber: line.partNumber || null,
+        productionLine: line.productionLine || 'MIGRATION_REVIEW',
+        projectId: line.projectId || null,
+        projectNameSnapshot: line.projectNameSnapshot || null,
+        salespersonUserId: line.salespersonUserId || null,
+        salespersonNameSnapshot: line.salespersonNameSnapshot || null,
+        csrUserId: line.csrUserId || null,
+        csrNameSnapshot: line.csrNameSnapshot || null,
+        customerType: line.customerType || null,
+        dimensionTags: line.dimensionTags || {},
         description: line.description,
         qty: line.qty,
         unitPrice: line.unitPrice,
@@ -525,8 +766,14 @@ router.put('/:id', requirePermission('finance.post_invoice'), async (req: Reques
       terms,
       poId,
       poOverride,
+      discountAmount,
+      freightAmount,
       taxAmount,
+      retainagePercent,
+      retainageAmount,
       notes,
+      customerVisibleNotes,
+      internalNotes,
       status,
       lines,
     } = req.body;
@@ -546,7 +793,10 @@ router.put('/:id', requirePermission('finance.post_invoice'), async (req: Reques
 
     const result = await db.transaction(async (tx) => {
       let subtotal = parseFloat(existing.subtotal);
+      let discount = parseFloat(discountAmount ?? existing.discountAmount ?? '0');
+      let freight = parseFloat(freightAmount ?? existing.freightAmount ?? '0');
       let tax = parseFloat(taxAmount ?? existing.taxAmount);
+      let retainage = parseFloat(retainageAmount ?? existing.retainageAmount ?? '0');
 
       if (lines && Array.isArray(lines)) {
         await tx.delete(arInvoiceLines).where(eq(arInvoiceLines.invoiceId, id));
@@ -557,6 +807,17 @@ router.put('/:id', requirePermission('finance.post_invoice'), async (req: Reques
           return {
             invoiceId: id,
             inventoryItemId: line.inventoryItemId || null,
+            poItemId: line.poItemId || null,
+            partNumber: line.partNumber || null,
+            productionLine: line.productionLine || 'MIGRATION_REVIEW',
+            projectId: line.projectId || null,
+            projectNameSnapshot: line.projectNameSnapshot || null,
+            salespersonUserId: line.salespersonUserId || null,
+            salespersonNameSnapshot: line.salespersonNameSnapshot || null,
+            csrUserId: line.csrUserId || null,
+            csrNameSnapshot: line.csrNameSnapshot || null,
+            customerType: line.customerType || null,
+            dimensionTags: line.dimensionTags || {},
             description: line.description,
             qty: qty.toString(),
             unitPrice: unitPrice.toString(),
@@ -574,7 +835,11 @@ router.put('/:id', requirePermission('finance.post_invoice'), async (req: Reques
         }
       }
 
-      const total = subtotal + tax;
+      if (retainagePercent !== undefined && retainageAmount === undefined) {
+        const pct = parseFloat(retainagePercent) || 0;
+        retainage = ((subtotal - discount + freight + tax) * pct) / 100;
+      }
+      const total = subtotal - discount + freight + tax - retainage;
 
       const [updated] = await tx
         .update(arInvoices)
@@ -587,8 +852,15 @@ router.put('/:id', requirePermission('finance.post_invoice'), async (req: Reques
           ...(poId !== undefined && { poId: poId || null }),
           ...(poOverride !== undefined && { poOverride: poOverride || null }),
           ...(notes !== undefined && { notes: notes || null }),
+          ...(customerVisibleNotes !== undefined && { customerVisibleNotes: customerVisibleNotes || null }),
+          ...(internalNotes !== undefined && { internalNotes: internalNotes || null }),
+          ...(status !== undefined && !LOCKED_STATUSES.includes(existing.status) && { status }),
+          discountAmount: discount.toFixed(2),
+          freightAmount: freight.toFixed(2),
           subtotal: subtotal.toFixed(2),
           taxAmount: tax.toFixed(2),
+          retainagePercent: String(parseFloat(retainagePercent ?? existing.retainagePercent ?? '0') || 0),
+          retainageAmount: retainage.toFixed(2),
           totalAmount: total.toFixed(2),
           updatedAt: new Date(),
         })
@@ -622,20 +894,53 @@ router.post('/:id/post', requirePermission('finance.post_invoice'), async (req: 
     if (!['DRAFT', 'REVIEW'].includes(invoice.status)) {
       return res.status(409).json({ error: `Cannot post invoice with status ${invoice.status}` });
     }
+    if (invoice.pricingMismatch || invoice.pricingAmbiguous) {
+      return res.status(409).json({ error: 'Invoice pricing must be resolved before posting' });
+    }
+
+    await assertPostingAllowedForPeriod({
+      effectiveDate: invoice.invoiceDate,
+      user: (req as any).user,
+      postingMode: 'STANDARD',
+    });
+
+    const invoiceLines = await db
+      .select()
+      .from(arInvoiceLines)
+      .where(eq(arInvoiceLines.invoiceId, id));
 
     const total = parseFloat(invoice.totalAmount);
     const subtotal = parseFloat(invoice.subtotal);
-    const tax = parseFloat(invoice.taxAmount);
+    const discount = parseFloat(invoice.discountAmount ?? '0') || 0;
+    const freight = parseFloat(invoice.freightAmount ?? '0') || 0;
+    const tax = parseFloat(invoice.taxAmount ?? '0') || 0;
+    const retainage = parseFloat(invoice.retainageAmount ?? '0') || 0;
 
     const allAccounts = await db.select().from(chartOfAccounts);
     const arAccount = allAccounts.find((a) => a.accountName === 'Accounts Receivable');
+    const accountByNumber = (accountNumber: string) => allAccounts.find((a) => a.accountNumber === accountNumber);
+    const arAccountV2 = accountByNumber('11000') ?? arAccount;
+    const retainageAccount = retainage > 0 ? accountByNumber('11200') : null;
+    const shippingIncomeAccount = freight > 0 ? accountByNumber('43000') : null;
+    const discountAccount = discount > 0 ? accountByNumber('49000') : null;
     const revenueAccount = allAccounts.find((a) => a.accountName === 'Revenue — P2 Products');
     const taxAccount = tax > 0 ? allAccounts.find((a) => a.accountName === 'Sales Tax Payable') : null;
+    const revenueAccountV2 = accountByNumber('41000') ?? allAccounts.find((a) => a.accountName === 'Product Revenue') ?? revenueAccount;
+    const taxAccountV2 = tax > 0 ? (accountByNumber('20500') ?? taxAccount) : null;
 
-    if (!arAccount || !revenueAccount) {
+    if (!arAccountV2 || !revenueAccountV2) {
       return res.status(500).json({ error: 'Required chart-of-accounts entries not found' });
     }
-    if (tax > 0 && !taxAccount) {
+    if (retainage > 0 && !retainageAccount) {
+      return res.status(500).json({ error: 'Retainage Receivable account not found in chart of accounts' });
+    }
+    if (freight > 0 && !shippingIncomeAccount) {
+      return res.status(500).json({ error: 'Shipping Income account not found in chart of accounts' });
+    }
+    if (discount > 0 && !discountAccount) {
+      return res.status(500).json({ error: 'Discounts and Allowances account not found in chart of accounts' });
+    }
+    if (tax > 0 && !taxAccountV2) {
       return res.status(500).json({ error: 'Sales Tax Payable account not found in chart of accounts' });
     }
 
@@ -652,20 +957,94 @@ router.post('/:id/post', requirePermission('finance.post_invoice'), async (req: 
           transactionType: 'AR_INVOICE',
           referenceType: 'ar_invoice',
           referenceId: 0,
-          effectiveDate: new Date(),
+          referenceUuid: id,
+          effectiveDate: new Date(`${invoice.invoiceDate}T00:00:00`),
           memo: `AR Invoice ${invoice.invoiceNumber} — ID: ${id}`,
-          status: 'DRAFT',
+          status: 'POSTED',
+          sourceSystem: 'EPOCH',
+          sourceDocumentType: 'AR_INVOICE',
+          sourceDocumentNumber: invoice.invoiceNumber,
+          postingMode: 'STANDARD',
+          postedAt: new Date(),
+          postedBy: user,
           createdBy: user,
         })
         .returning();
 
-      type LineInsert = { journalEntryId: number; accountId: number; debitAmount: number; creditAmount: number };
+      const firstWith = <K extends keyof typeof invoiceLines[number]>(key: K) =>
+        invoiceLines.find((line) => line[key] !== null && line[key] !== undefined)?.[key] ?? null;
+      const commonDimensions = {
+        customerId: invoice.customerId,
+        productionLine: invoiceLines.length === 1 ? invoiceLines[0].productionLine : 'MIXED',
+        customerType: firstWith('customerType') as string | null,
+        projectId: firstWith('projectId') as string | null,
+        projectNameSnapshot: firstWith('projectNameSnapshot') as string | null,
+        salespersonUserId: firstWith('salespersonUserId') as number | null,
+        salespersonNameSnapshot: firstWith('salespersonNameSnapshot') as string | null,
+        csrUserId: firstWith('csrUserId') as number | null,
+        csrNameSnapshot: firstWith('csrNameSnapshot') as string | null,
+        allowability: 'ALLOWABLE',
+        directIndirect: 'DIRECT',
+        costPool: 'DIRECT',
+        dimensionTags: {
+          source: 'ar_invoice',
+          invoiceId: id,
+          invoiceNumber: invoice.invoiceNumber,
+        } as Record<string, unknown>,
+      };
+
+      type LineInsert = typeof commonDimensions & {
+        journalEntryId: number;
+        accountId: number;
+        debitAmount: number;
+        creditAmount: number;
+        inventoryItemId?: string | null;
+        partNumber?: string | null;
+      };
       const lines: LineInsert[] = [
-        { journalEntryId: entry.id, accountId: arAccount.id, debitAmount: total, creditAmount: 0 },
-        { journalEntryId: entry.id, accountId: revenueAccount.id, debitAmount: 0, creditAmount: subtotal },
+        { ...commonDimensions, journalEntryId: entry.id, accountId: arAccountV2.id, debitAmount: total, creditAmount: 0 },
       ];
+      if (discount > 0) {
+        lines.push({ ...commonDimensions, journalEntryId: entry.id, accountId: discountAccount!.id, debitAmount: discount, creditAmount: 0 });
+      }
+      if (retainage > 0) {
+        lines.push({ ...commonDimensions, journalEntryId: entry.id, accountId: retainageAccount!.id, debitAmount: retainage, creditAmount: 0 });
+      }
+      for (const line of invoiceLines) {
+        lines.push({
+          ...commonDimensions,
+          journalEntryId: entry.id,
+          accountId: revenueAccountV2.id,
+          debitAmount: 0,
+          creditAmount: parseFloat(String(line.lineTotal)) || 0,
+          productionLine: line.productionLine || 'MIGRATION_REVIEW',
+          projectId: line.projectId,
+          projectNameSnapshot: line.projectNameSnapshot,
+          salespersonUserId: line.salespersonUserId,
+          salespersonNameSnapshot: line.salespersonNameSnapshot,
+          csrUserId: line.csrUserId,
+          csrNameSnapshot: line.csrNameSnapshot,
+          customerType: line.customerType,
+          inventoryItemId: line.inventoryItemId,
+          partNumber: line.partNumber,
+          dimensionTags: {
+            ...commonDimensions.dimensionTags,
+            arInvoiceLineId: line.id,
+            lineDescription: line.description,
+          },
+        });
+      }
+      if (freight > 0) {
+        lines.push({ ...commonDimensions, journalEntryId: entry.id, accountId: shippingIncomeAccount!.id, debitAmount: 0, creditAmount: freight });
+      }
       if (tax > 0) {
-        lines.push({ journalEntryId: entry.id, accountId: taxAccount.id, debitAmount: 0, creditAmount: tax });
+        lines.push({ ...commonDimensions, journalEntryId: entry.id, accountId: taxAccountV2!.id, debitAmount: 0, creditAmount: tax, directIndirect: 'UNASSIGNED', costPool: 'NONE' });
+      }
+
+      const totalDebits = Math.round(lines.reduce((sum, line) => sum + line.debitAmount, 0) * 100) / 100;
+      const totalCredits = Math.round(lines.reduce((sum, line) => sum + line.creditAmount, 0) * 100) / 100;
+      if (Math.abs(totalDebits - totalCredits) > 0.001) {
+        throw new Error(`AR invoice journal entry is imbalanced: debits=${totalDebits}, credits=${totalCredits}`);
       }
 
       await tx.insert(journalLines).values(lines);
@@ -683,22 +1062,159 @@ router.post('/:id/post', requirePermission('finance.post_invoice'), async (req: 
   }
 });
 
+async function getInvoiceRecipients(customerId: string, explicitTo?: string): Promise<string | null> {
+  if (explicitTo) return explicitTo;
+  const [customer] = await db
+    .select({ id: p2Customers.id, email: p2Customers.contactEmail })
+    .from(p2Customers)
+    .where(eq(p2Customers.customerId, customerId));
+  if (customer?.email) return customer.email;
+  if (!customer?.id) return null;
+
+  const [primaryContact] = await db
+    .select({ email: p2CustomerContacts.email })
+    .from(p2CustomerContacts)
+    .where(and(eq(p2CustomerContacts.customerId, customer.id), eq(p2CustomerContacts.isPrimary, true)));
+  return primaryContact?.email || null;
+}
+
+async function getMediaEmailAttachments(entityRefs: Array<{ entityType: string; entityId: string }>) {
+  const attachments: Array<{ content: string; filename: string; type?: string; disposition?: string }> = [];
+  for (const ref of entityRefs) {
+    const rows = await db
+      .select({ media: mediaLibrary })
+      .from(mediaAttachments)
+      .innerJoin(mediaLibrary, eq(mediaAttachments.mediaId, mediaLibrary.id))
+      .where(and(eq(mediaAttachments.entityType, ref.entityType), eq(mediaAttachments.entityId, ref.entityId)));
+
+    for (const row of rows) {
+      try {
+        const buffer = await getFileStorageProviderForObjectPath(row.media.storagePath).downloadBuffer(row.media.storagePath);
+        attachments.push({
+          content: buffer.toString('base64'),
+          filename: row.media.filename,
+          type: row.media.mimeType || 'application/octet-stream',
+          disposition: 'attachment',
+        });
+      } catch (err) {
+        console.warn(`[InvoiceService] Skipping unavailable media attachment ${row.media.id}:`, err);
+      }
+    }
+  }
+  return attachments;
+}
+
+async function getLotFileAttachments(lotId: string | null) {
+  if (!lotId) return [];
+  const [lot] = await db
+    .select({
+      lotNumber: p2LotNumbers.lotNumber,
+      billOfLadingUrl: sql<string | null>`bill_of_lading_url`,
+      packingSlipUploadUrl: sql<string | null>`packing_slip_upload_url`,
+      certificateUploadUrl: sql<string | null>`certificate_upload_url`,
+      lotValidationReportUrl: sql<string | null>`lot_validation_report_url`,
+    })
+    .from(p2LotNumbers)
+    .where(eq(p2LotNumbers.id, lotId));
+
+  if (!lot) return [];
+  const docs = [
+    { label: 'Bill-of-Lading', path: lot.billOfLadingUrl },
+    { label: 'Uploaded-Packing-Slip', path: lot.packingSlipUploadUrl },
+    { label: 'Certificate-of-Conformance', path: lot.certificateUploadUrl },
+    { label: 'Lot-Validation-Report', path: lot.lotValidationReportUrl },
+  ].filter((d) => d.path);
+
+  const attachments: Array<{ content: string; filename: string; type?: string; disposition?: string }> = [];
+  for (const doc of docs) {
+    try {
+      const buffer = await getFileStorageProviderForObjectPath(doc.path!).downloadBuffer(doc.path!);
+      attachments.push({
+        content: buffer.toString('base64'),
+        filename: `${lot.lotNumber}-${doc.label}.pdf`,
+        type: 'application/pdf',
+        disposition: 'attachment',
+      });
+    } catch (err) {
+      console.warn(`[InvoiceService] Skipping unavailable lot backup document ${doc.path}:`, err);
+    }
+  }
+  return attachments;
+}
+
 router.post('/:id/send', requirePermission('finance.post_invoice'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const user = (req as any).user?.username || null;
+    const { to: explicitTo, cc, customerMessage } = req.body || {};
 
     const [invoice] = await db.select().from(arInvoices).where(eq(arInvoices.id, id));
     if (!invoice) {
       return res.status(404).json({ error: 'Invoice not found' });
     }
-    if (invoice.status !== 'POSTED') {
+    if (!['REVIEW', 'POSTED'].includes(invoice.status)) {
       return res.status(409).json({ error: `Cannot send invoice with status ${invoice.status}` });
+    }
+    if (invoice.pricingMismatch || invoice.pricingAmbiguous) {
+      return res.status(409).json({ error: 'Invoice pricing must be resolved before sending' });
+    }
+
+    const to = await getInvoiceRecipients(invoice.customerId, explicitTo);
+    if (!to) {
+      return res.status(422).json({ error: 'No customer email found. Add a customer contact email or provide a recipient.' });
+    }
+
+    const invoicePdf = await generateArInvoicePdf(id);
+    const mediaAttachments = await getMediaEmailAttachments([
+      { entityType: 'invoice', entityId: id },
+      ...(invoice.packingSlipId ? [{ entityType: 'packing_slip', entityId: invoice.packingSlipId }] : []),
+      ...(invoice.lotId ? [{ entityType: 'lot', entityId: invoice.lotId }] : []),
+    ]);
+    const lotAttachments = await getLotFileAttachments(invoice.lotId);
+
+    const attachments = [
+      {
+        content: invoicePdf.toString('base64'),
+        filename: `Invoice-${invoice.invoiceNumber}.pdf`,
+        type: 'application/pdf',
+        disposition: 'attachment',
+      },
+      ...mediaAttachments,
+      ...lotAttachments,
+    ];
+
+    const text = [
+      `Please find attached invoice ${invoice.invoiceNumber}.`,
+      customerMessage || invoice.customerVisibleNotes || '',
+      '',
+      `Amount due: $${Number(invoice.totalAmount || 0).toFixed(2)}`,
+      invoice.dueDate ? `Due date: ${invoice.dueDate}` : '',
+    ].filter(Boolean).join('\n');
+
+    const result = await sendEmailViaSendGrid({
+      to,
+      cc,
+      subject: `Invoice ${invoice.invoiceNumber}`,
+      text,
+      html: `<p>Please find attached invoice <strong>${invoice.invoiceNumber}</strong>.</p>${customerMessage || invoice.customerVisibleNotes ? `<p>${String(customerMessage || invoice.customerVisibleNotes).replace(/\n/g, '<br/>')}</p>` : ''}<p><strong>Amount due:</strong> $${Number(invoice.totalAmount || 0).toFixed(2)}</p>${invoice.dueDate ? `<p><strong>Due date:</strong> ${invoice.dueDate}</p>` : ''}`,
+      attachments,
+    });
+
+    if (!result.success) {
+      return res.status(502).json({ error: result.error || 'SendGrid failed to send invoice' });
     }
 
     const [updated] = await db
       .update(arInvoices)
-      .set({ status: 'SENT', sentAt: new Date(), sentBy: user, updatedAt: new Date() })
+      .set({
+        status: 'SENT',
+        sentAt: new Date(),
+        sentBy: user,
+        sentTo: to,
+        sentCc: Array.isArray(cc) ? cc : cc ? [cc] : [],
+        sendgridMessageId: result.messageId || null,
+        updatedAt: new Date(),
+      })
       .where(eq(arInvoices.id, id))
       .returning();
 
@@ -776,7 +1292,7 @@ router.post('/:id/void', requirePermission('finance.void_invoice'), async (req: 
           { journalEntryId: entry.id, accountId: arAccount.id, debitAmount: 0, creditAmount: total },
         ];
         if (tax > 0) {
-          lines.push({ journalEntryId: entry.id, accountId: taxAccount.id, debitAmount: tax, creditAmount: 0 });
+          lines.push({ journalEntryId: entry.id, accountId: taxAccount!.id, debitAmount: tax, creditAmount: 0 });
         }
 
         await tx.insert(journalLines).values(lines);

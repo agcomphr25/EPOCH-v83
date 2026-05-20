@@ -36,10 +36,52 @@ interface ApiRequestOptions extends Omit<RequestInit, 'body'> {
   timeout?: number;
   idempotencyKey?: string;
   _isRetry?: boolean;
+  _transientRetryCount?: number;
 }
 
 export function generateIdempotencyKey(): string {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
+
+const SERVER_STARTING_MESSAGE = 'Server starting, please retry';
+const MAX_TRANSIENT_RETRIES = 8;
+
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function retryAfterMs(res: Response, fallbackMs = 2000): number {
+  const retryAfter = res.headers.get('Retry-After');
+  if (!retryAfter) return fallbackMs;
+
+  const retryAfterSeconds = Number(retryAfter);
+  if (Number.isFinite(retryAfterSeconds)) {
+    return Math.max(0, retryAfterSeconds * 1000);
+  }
+
+  const retryAt = Date.parse(retryAfter);
+  if (Number.isFinite(retryAt)) {
+    return Math.max(0, retryAt - Date.now());
+  }
+
+  return fallbackMs;
+}
+
+function isServerStartingResponse(status: number, body: any, message: string): boolean {
+  return (
+    status === 503 &&
+    (message.includes(SERVER_STARTING_MESSAGE) ||
+      body?.error === SERVER_STARTING_MESSAGE ||
+      body?.message === SERVER_STARTING_MESSAGE)
+  );
+}
+
+function normalizeApiErrorMessage(message: string): string {
+  if (message.toLowerCase().includes('error code undefined')) {
+    return 'File storage is not available. Check the storage provider configuration and try again.';
+  }
+
+  return message;
 }
 
 // ─── Session expiry handler ───────────────────────────────────────────────────
@@ -52,9 +94,11 @@ let sessionExpiryNotified = false;
 // A session expiry on these pages should silently clear tokens but NOT
 // redirect to /login — that would disrupt workers mid-task.
 const KIOSK_ROUTES = [
+  '/kiosk',
   '/p2-traveler',
   '/p2-traveler-viewer',
   '/traveler',
+  '/travelers',
   '/production/timers',
   '/badge-scan',
 ];
@@ -62,6 +106,10 @@ const KIOSK_ROUTES = [
 function isKioskRoute(): boolean {
   const path = window.location.pathname;
   return KIOSK_ROUTES.some(r => path === r || path.startsWith(r + '/'));
+}
+
+function isLoginRoute(): boolean {
+  return window.location.pathname === '/login';
 }
 
 function isLocalDevelopmentHost(): boolean {
@@ -76,6 +124,15 @@ function handleSessionExpiry(reason: 'expired' | 'unauthorized' = 'expired') {
   // Clear stored tokens regardless of page type
   localStorage.removeItem('sessionToken');
   localStorage.removeItem('jwtToken');
+
+  // If a background request discovers stale auth while the user is already on
+  // the login screen, clean up quietly instead of showing an access-denied
+  // toast and reloading the page they are trying to use.
+  if (isLoginRoute()) {
+    console.warn(`[AUTH] Session ${reason} on login page - tokens cleared, no toast`);
+    sessionExpiryNotified = false;
+    return;
+  }
 
   // On kiosk/floor pages: silently drop the expired session without
   // redirecting — the badge scan flow still works without a session.
@@ -95,9 +152,10 @@ function handleSessionExpiry(reason: 'expired' | 'unauthorized' = 'expired') {
   // Redirect after a brief pause so the toast is visible
   setTimeout(() => {
     sessionExpiryNotified = false;
-    const current = window.location.pathname + window.location.search;
+    const currentPath = window.location.pathname;
+    const current = currentPath + window.location.search;
     const loginUrl =
-      current && current !== '/' && current !== '/login'
+      currentPath !== '/' && currentPath !== '/login'
         ? `/login?redirect=${encodeURIComponent(current)}`
         : '/login';
     window.location.href = loginUrl;
@@ -202,7 +260,7 @@ export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
     controller.abort();
   }, timeoutDuration);
 
-  const { _isRetry, ...fetchOptions } = options;
+  const { _isRetry, _transientRetryCount = 0, ...fetchOptions } = options;
 
   const config: RequestInit = {
     ...fetchOptions,
@@ -247,9 +305,11 @@ export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
         // Not JSON
       }
       
-      const errorMessage =
+      const errorMessage = normalizeApiErrorMessage(
         data?.message ||
         data?.error ||
+        (typeof data?.details === 'string' ? data.details : null) ||
+        (typeof data?.reason === 'string' ? data.reason : null) ||
         (Array.isArray(data?.details)
           ? data.details.map((i: any) => `${(i.path || []).join(".")}: ${i.message}`).join(", ")
           : null) ||
@@ -257,7 +317,24 @@ export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
           ? data.issues.map((i: any) => `${(i.path || []).join(".")}: ${i.message}`).join(", ")
           : null) ||
         text ||
-        `Request failed (${response.status})`;
+        `Request failed (${response.status})`
+      );
+
+      if (
+        isServerStartingResponse(response.status, data, errorMessage) &&
+        _transientRetryCount < MAX_TRANSIENT_RETRIES
+      ) {
+        const retryDelayMs = retryAfterMs(response);
+        console.warn(
+          `[API] ${url} returned startup 503; retrying in ${retryDelayMs}ms ` +
+            `(${_transientRetryCount + 1}/${MAX_TRANSIENT_RETRIES})`
+        );
+        await delay(retryDelayMs);
+        return apiRequest(url, {
+          ...options,
+          _transientRetryCount: _transientRetryCount + 1,
+        });
+      }
 
       if (response.status === 408 || errorMessage.includes('timeout')) {
         throw new Error(
@@ -266,9 +343,9 @@ export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
       }
 
       const err: any = new Error(errorMessage);
+      err.status = response.status;
       if (data) {
         err.responseData = data;
-        err.status = response.status;
       }
       throw err;
     }
@@ -371,6 +448,69 @@ export const getQueryFn: <T>(options: {
         return await res.json();
       }
 
+      if (res.status === 503) {
+        const text = await res.text();
+        let data: any = null;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          // Not JSON
+        }
+
+        const errorMessage = data?.message || data?.error || text || res.statusText;
+        if (isServerStartingResponse(res.status, data, errorMessage)) {
+          let retryDelayMs = retryAfterMs(res);
+
+          for (let attempt = 1; attempt <= MAX_TRANSIENT_RETRIES; attempt += 1) {
+            console.warn(
+              `[QUERY] ${url} returned startup 503; retrying in ${retryDelayMs}ms ` +
+                `(${attempt}/${MAX_TRANSIENT_RETRIES})`
+            );
+            await delay(retryDelayMs);
+
+            const retryRes = await fetch(url, {
+              credentials: 'include',
+              signal: controller.signal,
+              headers,
+            });
+
+            if (retryRes.status !== 503) {
+              await throwIfResNotOk(retryRes);
+              return await retryRes.json();
+            }
+
+            const retryText = await retryRes.text();
+            let retryData: any = null;
+            try {
+              retryData = JSON.parse(retryText);
+            } catch {
+              // Not JSON
+            }
+
+            const retryMessage = retryData?.message || retryData?.error || retryText || retryRes.statusText;
+            if (!isServerStartingResponse(retryRes.status, retryData, retryMessage)) {
+              const retryErr: any = new Error(retryMessage);
+              retryErr.status = retryRes.status;
+              if (retryData) {
+                retryErr.responseData = retryData;
+                Object.assign(retryErr, retryData);
+              }
+              throw retryErr;
+            }
+
+            retryDelayMs = retryAfterMs(retryRes);
+          }
+        }
+
+        const err: any = new Error(errorMessage);
+        err.status = res.status;
+        if (data) {
+          err.responseData = data;
+          Object.assign(err, data);
+        }
+        throw err;
+      }
+
       await throwIfResNotOk(res);
       return await res.json();
     } catch (error) {
@@ -406,7 +546,16 @@ export const queryClient = new QueryClient({
         if (error?.status === 401 || error?.status === 403) {
           return false;
         }
+        if (error?.status === 503) {
+          return failureCount < 6;
+        }
         return failureCount < 1;
+      },
+      retryDelay: (attemptIndex: number, error: any) => {
+        if (error?.status === 503) {
+          return Math.min(1000 * 2 ** attemptIndex, 5000);
+        }
+        return 1000;
       },
     },
     mutations: {

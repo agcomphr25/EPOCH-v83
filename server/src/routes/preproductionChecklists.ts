@@ -665,6 +665,7 @@ router.get('/my-tasks/:employeeId', async (req: Request, res: Response) => {
       notes: task.notes,
       assignedTo: task.assignedTo,
       assignedToEmployeeId: task.assignedToEmployeeId,
+      link: task.link,
       createdAt: task.createdAt,
       sectionId: section.id,
       sectionName: section.name,

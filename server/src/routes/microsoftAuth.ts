@@ -3,8 +3,30 @@ import { ConfidentialClientApplication, type AuthorizationUrlRequest, type Autho
 import { pool } from '../../db';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
+import { recordAuditEvent } from '../services/auditLedgerService';
 
 const router = Router();
+
+async function logMicrosoftSessionEvent(input: {
+  eventType: string;
+  sessionId: string;
+  userId: number;
+  username: string;
+  role: string;
+  payload: Record<string, unknown>;
+}) {
+  await recordAuditEvent({
+    eventType: input.eventType,
+    subjectType: 'user_session',
+    subjectId: input.sessionId,
+    sourceService: 'microsoftAuth.route',
+    actor: { id: input.userId, username: input.username, role: input.role },
+    payload: input.payload as any,
+    meta: input.payload as any,
+    entityType: 'user_session',
+    entityId: input.sessionId,
+  });
+}
 
 const MICROSOFT_CLIENT_ID = process.env.MICROSOFT_CLIENT_ID;
 const MICROSOFT_CLIENT_SECRET = process.env.MICROSOFT_CLIENT_SECRET;
@@ -293,11 +315,17 @@ router.get('/callback', async (req: Request, res: Response) => {
       : [];
     for (const old of oauthToDeactivate) {
       await pool.query(`UPDATE user_sessions SET is_active = false WHERE id = $1`, [old.id]);
-      await pool.query(
-        `INSERT INTO audit_events (entity_type, entity_id, action, actor_id, actor_name, actor_role, meta, created_at)
-         VALUES ('user_session', $1, 'SESSION_SUPERSEDED', $2, $3, $4, $5, NOW())`,
-        [String(old.id), userId, username, role, JSON.stringify({ reason: 'Microsoft OAuth login exceeded concurrent session limit', maxSessions: oauthMaxSessions })]
-      );
+      await logMicrosoftSessionEvent({
+        eventType: 'SESSION_SUPERSEDED',
+        sessionId: String(old.id),
+        userId,
+        username,
+        role,
+        payload: {
+          reason: 'Microsoft OAuth login exceeded concurrent session limit',
+          maxSessions: oauthMaxSessions,
+        },
+      });
     }
 
     // Store session in database — OAuth login IS credential verification
@@ -321,15 +349,18 @@ router.get('/callback', async (req: Request, res: Response) => {
       );
       const oauthSessionId = oauthSessionRow.rows?.[0]?.id ?? oauthSessionRow[0]?.id;
       if (oauthSessionId) {
-        try {
-          await pool.query(
-            `INSERT INTO audit_events (entity_type, entity_id, action, actor_id, actor_name, actor_role, meta, created_at)
-             VALUES ('user_session', $1, 'SESSION_CREATED', $2, $3, $4, $5, NOW())`,
-            [String(oauthSessionId), userId, username, role, JSON.stringify({ loginMethod: 'microsoft_oauth', email, expiresAt: expiresAt.toISOString() })]
-          );
-        } catch (auditErr) {
-          console.error('[SessionAudit] Failed to emit SESSION_CREATED for Microsoft OAuth session', oauthSessionId, auditErr);
-        }
+        await logMicrosoftSessionEvent({
+          eventType: 'SESSION_CREATED',
+          sessionId: String(oauthSessionId),
+          userId,
+          username,
+          role,
+          payload: {
+            loginMethod: 'microsoft_oauth',
+            email,
+            expiresAt: expiresAt.toISOString(),
+          },
+        });
       }
     }
 

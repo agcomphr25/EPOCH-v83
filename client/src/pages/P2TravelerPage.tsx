@@ -435,6 +435,8 @@ export default function P2TravelerPage() {
     setQcResults([]);
     setStartQcResults([]);
     setFinishQcResults([]);
+    setOperationScanValue('');
+    setCompletionOperationScanValue('');
     setNotes('');
     setTraceabilityMode('scan');
     setValidatedMaterialIndices(new Set());
@@ -759,24 +761,75 @@ export default function P2TravelerPage() {
         }),
       }) as any;
 
-      return response.workTask || response;
+      return response;
     },
-    onSuccess: (workTask) => {
+    onSuccess: (response: any) => {
+      const workTask = response.workTask || response;
+      const punch = response.punch as
+        | { action?: 'clockedIn' | 'switched' | 'unchanged'; chargeCode?: string | null; warning?: string }
+        | undefined;
       setActiveTask(workTask);
       setScanState('TASK_ACTIVE');
       queryClient.invalidateQueries({ queryKey: ['/api/p2-traveler/active-tasks', employee?.id] });
+
+      // Task #188: surface auto-punch result to operator.
+      let punchLine = '';
+      if (punch?.action === 'clockedIn' && punch.chargeCode) {
+        punchLine = ` Clocked in on ${punch.chargeCode}.`;
+      } else if (punch?.action === 'switched' && punch.chargeCode) {
+        punchLine = ` Switched charge code to ${punch.chargeCode}.`;
+      } else if (punch?.action === 'unchanged' && punch.chargeCode) {
+        punchLine = ` Punch already on ${punch.chargeCode}.`;
+      }
+
       toast({
         title: 'Task Started',
-        description: `Working on ${workTask.partName} in ${workTask.department}`,
+        description: `Working on ${workTask.partName} in ${workTask.department}.${punchLine}`,
       });
+      if (punch?.warning) {
+        toast({
+          title: 'Labor budget warning',
+          description: punch.warning,
+          variant: 'destructive',
+        });
+      }
       setShowTimerModal(true);
     },
     onError: (error: any) => {
-      toast({
-        title: 'Failed to Start Task',
-        description: error.message,
-        variant: 'destructive',
-      });
+      // Task #188: extract structured error from server (gates can fail with
+      // PTO_DAY_BLOCK, CHARGE_CODE_UNRESOLVED, NOT_CERTIFIED, etc.). apiRequest
+      // attaches the parsed JSON body as `error.responseData`.
+      let title = 'Failed to Start Task';
+      let description = error?.message || 'Unknown error';
+      try {
+        const data = error?.responseData ?? null;
+        const code = data?.error || data?.code || error?.code;
+        const msg = data?.message || data?.error || error?.message;
+        if (code === 'PTO_DAY_BLOCK') {
+          title = 'PTO Block';
+          description = msg || 'This employee has approved PTO for today. Clock-in is not permitted.';
+        } else if (code === 'CHARGE_CODE_UNRESOLVED') {
+          title = 'Charge Code Unresolved';
+          description = msg || 'This traveler has no resolvable charge code. Set a default charge code on the work order or traveler.';
+        } else if (code === 'NOT_CERTIFIED') {
+          title = 'Not Certified';
+          description = msg || 'You are not certified to start this part in this department.';
+        } else if (code === 'EMPLOYEE_NOT_FOUND') {
+          title = 'Employee Not Found';
+          description = msg || 'Your badge could not be matched to an employee record.';
+        } else if (code === 'INVALID_LABOR_APPROVAL') {
+          title = 'Invalid Labor Approval';
+          description = msg || 'The labor approval is not valid for this employee and work order.';
+        } else if (code === 'NO_TRAVELER_LINK' || code === 'NO_WAD_LINK') {
+          title = 'No Traveler Linked';
+          description = msg || 'No traveler is linked to this serialized item. Generate a traveler before starting work.';
+        } else if (msg) {
+          description = msg;
+        }
+      } catch {
+        // Fall back to error.message
+      }
+      toast({ title, description, variant: 'destructive' });
     },
   });
 
@@ -1832,7 +1885,6 @@ export default function P2TravelerPage() {
                     </div>
                   )}
 
-                  {/* Notes */}
                   <div className="space-y-2">
                     <Label htmlFor="notes">Notes (Optional)</Label>
                     <Textarea

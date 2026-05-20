@@ -11,6 +11,12 @@
 import { Router, Request, Response } from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { getPhase1FoundationCoverage } from '../services/phase1FoundationClosure';
+import { getPhase2MaterialContractChain } from '../services/phase2MaterialContractChain';
+import {
+  getPhase3DcaaQualityMaturity,
+  getPhase3DcaaQualitySummary,
+} from '../services/phase3DcaaQualityMaturity';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -86,6 +92,48 @@ router.get('/migration-guard', async (_req: Request, res: Response) => {
     console.error('[governance/migration-guard]', err);
     res.status(500).json({ error: errorMessage(err) });
   }
+});
+
+router.get('/phase1-foundation', async (_req: Request, res: Response) => {
+  const coverage = getPhase1FoundationCoverage();
+  res.json({
+    phase: 'Phase 1: Foundation Closure',
+    domains: coverage,
+    summary: {
+      domainCount: coverage.length,
+      auditEventCount: coverage.reduce((sum, item) => sum + item.auditEvents.length, 0),
+      approvalRequestTypeCount: coverage.reduce((sum, item) => sum + item.approvalRequests.length, 0),
+      hasRevisionControlFramework: coverage.some((item) => item.revisionControl),
+      hasClauseFlowdownEngine: coverage.some((item) => item.clauseFlowdown),
+    },
+  });
+});
+
+router.get('/phase2-material-contract-chain', async (_req: Request, res: Response) => {
+  const domains = getPhase2MaterialContractChain();
+  res.json({
+    phase: 'Phase 2: Cradle-to-Grave Material And Contract Chain',
+    domains,
+    summary: {
+      domainCount: domains.length,
+      controlCount: domains.reduce((sum, item) => sum + item.controls.length, 0),
+      auditEventCount: domains.reduce((sum, item) => sum + item.requiredAuditEvents.length, 0),
+      hasContractReviewChecklistEngine: domains.some((item) => item.domain === 'CONTRACT_REVIEW_CHECKLIST'),
+      hasReceivingInspectionPlans: domains.some((item) => item.domain === 'RECEIVING_INSPECTION_PLAN'),
+      hasMaterialGenealogyExport: domains.some((item) => item.domain === 'MATERIAL_GENEALOGY'),
+      hasSupplierApprovalManagement: domains.some((item) => item.domain === 'SUPPLIER_APPROVAL'),
+      hasShipmentCertPackageBuilder: domains.some((item) => item.domain === 'SHIPMENT_VALIDATION'),
+    },
+  });
+});
+
+router.get('/phase3-dcaa-quality-maturity', async (_req: Request, res: Response) => {
+  const domains = getPhase3DcaaQualityMaturity();
+  res.json({
+    phase: 'Phase 3: DCAA And Quality Maturity',
+    domains,
+    summary: getPhase3DcaaQualitySummary(domains),
+  });
 });
 
 router.get('/audit-log', async (req: Request, res: Response) => {

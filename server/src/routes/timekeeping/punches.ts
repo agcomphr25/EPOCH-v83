@@ -15,7 +15,8 @@ import bcrypt from "bcryptjs";
 import { eq, and } from "drizzle-orm";
 import { z } from "zod";
 import { actorFromUser, logAction } from "../../services/timekeeping/audit.service";
-import { findFinalizedTimesheetForPunch, isInFinalizedTimesheetPeriod, findPayrollApprovedSalariedTimesheetForPunch } from "../../services/timekeeping/timesheets.service";
+import type { SafeUser } from "../../services/timekeeping/audit.service";
+import { certifyDailyTimeOnPunchOut, findFinalizedTimesheetForPunch, isInFinalizedTimesheetPeriod, findPayrollApprovedSalariedTimesheetForPunch } from "../../services/timekeeping/timesheets.service";
 import { checkActivePTOForEmployee } from "../../services/timekeeping/timeoff.service";
 import { authenticateToken, requireRole, optionalAuth } from "../../../middleware/auth";
 import * as ledger from "../../lib/punchLedger";
@@ -23,8 +24,36 @@ import { dualWriteUpdateAllocation } from "../../lib/laborAllocationDualWrite";
 import { resolveTravelerBarcode } from "../../helpers/travelerBarcodeResolver";
 import { storage } from "../../../storage";
 import { notificationManager } from "../../services/notificationManager";
+import * as punchCorrections from "../../services/timekeeping/punchCorrections.service";
 
 const router: IRouter = Router();
+
+const PunchCorrectionChangesSchema = z.object({
+  clockIn: z.string().datetime().nullable().optional(),
+  clockOut: z.string().datetime().nullable().optional(),
+  chargeCodeId: z.number().int().positive().nullable().optional(),
+  travelerId: z.string().nullable().optional(),
+  laborClass: z.enum(["REGULAR", "BREAK"]).optional(),
+  punchType: z.enum(["clock_in", "clock_out", "break_start", "break_end"]).optional(),
+  note: z.string().max(1000).nullable().optional(),
+});
+
+const PunchCorrectionSubmitSchema = z.object({
+  punchLedgerId: z.number().int().positive().nullable().optional(),
+  requestType: z.enum(["edit_session", "add_session", "delete_session"]),
+  reason: z.string().min(5),
+  proposedChanges: PunchCorrectionChangesSchema,
+});
+
+const KioskPunchCorrectionSubmitSchema = PunchCorrectionSubmitSchema.extend({
+  employeeId: z.number().int().positive(),
+  pin: z.string().regex(/^\d{4}$/),
+});
+
+const PunchCorrectionReviewSchema = z.object({
+  decision: z.enum(["approved", "denied"]),
+  note: z.string().min(3),
+});
 
 // ---------------------------------------------------------------------------
 // PIN brute-force protection — DB-backed rate limiter for /kiosk/identify
@@ -137,6 +166,81 @@ function h(fn: (req: Request, res: Response, next: NextFunction) => Promise<void
   });
 }
 
+type PunchSessionEvent = {
+  id: number;
+  sessionId: number;
+  employeeId: number;
+  type: 'clock_in' | 'clock_out' | 'break_start' | 'break_end';
+  punchedAt: string;
+  source: string;
+  isEdited: boolean;
+  editNote: string | null;
+  costCode: string | null;
+  note: string | null;
+  hasMissingClockOut: boolean;
+};
+
+function sessionsToPunchEvents(sessions: any[]): PunchSessionEvent[] {
+  const events: PunchSessionEvent[] = [];
+  for (const s of sessions) {
+    const inType: PunchSessionEvent['type'] = s.laborClass === 'BREAK' ? 'break_start' : 'clock_in';
+    const outType: PunchSessionEvent['type'] = s.laborClass === 'BREAK' ? 'break_end' : 'clock_out';
+    const missingOut = s.clockOut == null;
+
+    const rawNote = s.editNote ?? null;
+    let inNote: string | null = null;
+    let outNote: string | null = null;
+    let inEdited = false;
+    let outEdited = false;
+
+    if (rawNote && s.isEdited) {
+      const inMatch = rawNote.match(/\[clockIn\]\s([^|]+?)(?:\s*\|\||$)/);
+      const outMatch = rawNote.match(/\[clockOut\]\s([^|]+?)(?:\s*\|\||$)/);
+      if (inMatch || outMatch) {
+        if (inMatch) { inEdited = true; inNote = inMatch[1].trim(); }
+        if (outMatch) { outEdited = true; outNote = outMatch[1].trim(); }
+      } else {
+        inEdited = true;
+        outEdited = true;
+        inNote = rawNote;
+        outNote = rawNote;
+      }
+    }
+
+    events.push({
+      id: s.id,
+      sessionId: s.id,
+      employeeId: s.employeeId,
+      type: inType,
+      punchedAt: (s.clockIn instanceof Date ? s.clockIn : new Date(s.clockIn)).toISOString(),
+      source: s.source,
+      isEdited: inEdited,
+      editNote: inNote,
+      costCode: s.chargeCode ?? null,
+      note: null,
+      hasMissingClockOut: missingOut,
+    });
+
+    if (!missingOut && s.clockOut != null) {
+      events.push({
+        id: s.id,
+        sessionId: s.id,
+        employeeId: s.employeeId,
+        type: outType,
+        punchedAt: (s.clockOut instanceof Date ? s.clockOut : new Date(s.clockOut)).toISOString(),
+        source: s.source,
+        isEdited: outEdited,
+        editNote: outNote,
+        costCode: s.chargeCode ?? null,
+        note: null,
+        hasMissingClockOut: false,
+      });
+    }
+  }
+  events.sort((a, b) => a.punchedAt.localeCompare(b.punchedAt));
+  return events;
+}
+
 // ---------------------------------------------------------------------------
 // Kiosk endpoints — intentionally public (PIN auth handled in business logic)
 // Rewired to punch_ledger — employeeId is now public.employees.id
@@ -162,6 +266,45 @@ router.get("/kiosk/punches/employee/:employeeId/current", h(async (req, res): Pr
     clockedInAt: openSession?.clockIn?.toISOString() ?? null,
     hoursToday,
     openEntry: openSession ?? null,
+  });
+}));
+
+router.post("/kiosk/punches/employee/:employeeId/active-shift", h(async (req, res): Promise<void> => {
+  const employeeId = parseInt(req.params.employeeId, 10);
+  if (isNaN(employeeId)) { res.status(400).json({ error: "Invalid employee id" }); return; }
+
+  const { pin } = req.body ?? {};
+  if (!pin || typeof pin !== "string" || !/^\d{4}$/.test(pin)) {
+    res.status(400).json({ error: "A 4-digit PIN is required" });
+    return;
+  }
+
+  const [emp] = await nativeDb
+    .select({
+      id: employees.id,
+      isActive: employees.isActive,
+      timekeeperPin: employees.timekeeperPin,
+    })
+    .from(employees)
+    .where(eq(employees.id, employeeId))
+    .limit(1);
+
+  if (!emp || !emp.isActive || !emp.timekeeperPin || !(await bcrypt.compare(pin, emp.timekeeperPin))) {
+    res.status(401).json({ error: "Invalid PIN" });
+    return;
+  }
+
+  const openSession = await ledger.getOpenSession(employeeId);
+  const to = new Date();
+  const from = openSession?.clockIn
+    ? new Date(new Date(openSession.clockIn).getTime() - 2 * 60 * 60 * 1000)
+    : new Date(to.getTime() - 18 * 60 * 60 * 1000);
+  const sessions = await ledger.listSessions({ employeeId, from, to });
+  res.json({
+    employeeId,
+    from: from.toISOString(),
+    to: to.toISOString(),
+    punches: sessionsToPunchEvents(sessions),
   });
 }));
 
@@ -378,6 +521,51 @@ router.post("/kiosk/identify", h(async (req, res): Promise<void> => {
   res.status(401).json({ error: "PIN not recognised. Please try again." });
 }));
 
+router.post("/kiosk/punch-corrections", h(async (req, res): Promise<void> => {
+  const body = KioskPunchCorrectionSubmitSchema.safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+
+  const { employeeId, pin, requestType, punchLedgerId, reason, proposedChanges } = body.data;
+  const [emp] = await nativeDb
+    .select({
+      id: employees.id,
+      isActive: employees.isActive,
+      timekeeperPin: employees.timekeeperPin,
+    })
+    .from(employees)
+    .where(eq(employees.id, employeeId))
+    .limit(1);
+
+  if (!emp || !emp.isActive || !emp.timekeeperPin) {
+    res.status(401).json({ error: "Invalid PIN" });
+    return;
+  }
+
+  const pinValid = await bcrypt.compare(pin, emp.timekeeperPin);
+  if (!pinValid) {
+    res.status(401).json({ error: "Invalid PIN" });
+    return;
+  }
+
+  const result = await punchCorrections.submitPunchCorrectionRequest({
+    employeeId,
+    punchLedgerId: punchLedgerId ?? null,
+    requestType,
+    reason,
+    proposedChanges,
+    source: "kiosk",
+    actorUser: null,
+    actorIp: req.ip ?? null,
+  });
+
+  if ("error" in result) {
+    res.status(result.statusCode).json({ error: result.error });
+    return;
+  }
+
+  res.status(201).json(result);
+}));
+
 // GET /api/timekeeping/kiosk/charge-codes — returns active charge codes for kiosk dropdown.
 // Intentionally public (no auth required — kiosk terminal is unauthenticated at HTTP level).
 router.get("/kiosk/charge-codes", h(async (req, res): Promise<void> => {
@@ -394,14 +582,13 @@ router.get("/kiosk/charge-codes", h(async (req, res): Promise<void> => {
   res.json(codes);
 }));
 
-// POST /api/timekeeping/kiosk/punch — records kiosk clock_in/out events into punch_ledger.
-// break_start and break_end are not valid kiosk actions; on_break is treated as clock_out.
+// POST /api/timekeeping/kiosk/punch — records kiosk clock_in/out/break events into punch_ledger.
 // employeeId in body is public.employees.id.
 router.post("/kiosk/punch", optionalAuth, h(async (req, res): Promise<void> => {
   const body = KioskPunchBody.safeParse(req.body);
   if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
 
-  const { employeeId, timezone, requestedAction, costCode, travelerId } = body.data;
+  const { employeeId, timezone, requestedAction, costCode, travelerId, dailyCertificationConfirmed } = body.data;
 
   // Resolve employee identity — employeeId is public.employees.id (resolved at login step)
   if (employeeId == null) {
@@ -479,11 +666,19 @@ router.post("/kiosk/punch", optionalAuth, h(async (req, res): Promise<void> => {
   const currentStatus = ledger.deriveStatus(openSession);
 
   // Resolve action: use requestedAction if provided, otherwise infer from status.
-  // on_break is treated as clock_out (breaks are not tracked via kiosk).
   let action = requestedAction;
   if (!action) {
     if (currentStatus === "clocked_out") action = "clock_in";
-    else action = "clock_out"; // covers clocked_in and on_break
+    else if (currentStatus === "on_break") action = "break_end";
+    else action = "clock_out";
+  }
+
+  if (action === "clock_out" && dailyCertificationConfirmed !== true) {
+    res.status(400).json({
+      error: "Daily employee certification is required when punching out for the day.",
+      certificationRequired: true,
+    });
+    return;
   }
 
   // Normalise on_break punches to clock_out
@@ -556,12 +751,85 @@ router.post("/kiosk/punch", optionalAuth, h(async (req, res): Promise<void> => {
         res.status(409).json({ error: "Employee is not clocked in." });
         return;
       }
+      if (currentStatus === "on_break") {
+        res.status(409).json({ error: "End break before clocking out for the day." });
+        return;
+      }
       entry = await ledger.closeSession(resolvedEmployeeId);
+      const dailyCertification = await certifyDailyTimeOnPunchOut(
+        resolvedEmployeeId,
+        entry?.clockOut ?? new Date(),
+        actorFromUser(req.user ?? null, req.ip ?? null),
+        { certificationConfirmed: true, source: "kiosk_punch_out" },
+      );
+      if (dailyCertification && "error" in dailyCertification) {
+        res.status(dailyCertification.statusCode).json({
+          error: dailyCertification.error,
+          punchRecorded: true,
+        });
+        return;
+      }
       message = `Goodbye, ${firstName}! You have clocked out.`;
       break;
     }
+    case "break_start": {
+      if (currentStatus !== "clocked_in" || !openSession) {
+        res.status(409).json({ error: currentStatus === "on_break" ? "Employee is already on break." : "Employee is not clocked in." });
+        return;
+      }
+      const closedWork = await ledger.closeSession(resolvedEmployeeId);
+      entry = await ledger.openSession({
+        employeeId: resolvedEmployeeId,
+        source: "KIOSK",
+        laborClass: "BREAK",
+        travelerId: closedWork?.travelerId ?? openSession.travelerId ?? null,
+        productionWorkOrderId: closedWork?.productionWorkOrderId ?? openSession.productionWorkOrderId ?? null,
+        chargeCodeId: closedWork?.chargeCodeId ?? openSession.chargeCodeId ?? null,
+        department: closedWork?.department ?? openSession.department ?? null,
+        operation: closedWork?.operation ?? openSession.operation ?? null,
+        projectId: closedWork?.projectId ?? openSession.projectId ?? null,
+        travelerStepId: closedWork?.travelerStepId ?? openSession.travelerStepId ?? null,
+        certificationStatus: closedWork?.certificationStatus ?? openSession.certificationStatus ?? null,
+        isOverrun: closedWork?.isOverrun ?? openSession.isOverrun ?? false,
+        overrunReason: closedWork?.overrunReason ?? openSession.overrunReason ?? null,
+        overrideReason: closedWork?.overrideReason ?? openSession.overrideReason ?? null,
+        approvalStatus: closedWork?.approvalStatus ?? openSession.approvalStatus ?? "AUTO",
+        laborApprovalId: closedWork?.laborApprovalId ?? openSession.laborApprovalId ?? null,
+        laborBudgetOverrideId: closedWork?.laborBudgetOverrideId ?? openSession.laborBudgetOverrideId ?? null,
+      });
+      message = `${firstName}, you are clocked out for break.`;
+      break;
+    }
+    case "break_end": {
+      if (currentStatus !== "on_break" || !openSession) {
+        res.status(409).json({ error: "Employee is not on break." });
+        return;
+      }
+      const closedBreak = await ledger.closeSession(resolvedEmployeeId);
+      entry = await ledger.openSession({
+        employeeId: resolvedEmployeeId,
+        source: "KIOSK",
+        laborClass: "REGULAR",
+        travelerId: closedBreak?.travelerId ?? openSession.travelerId ?? travellerIdResolved,
+        productionWorkOrderId: closedBreak?.productionWorkOrderId ?? openSession.productionWorkOrderId ?? productionWorkOrderId,
+        chargeCodeId: closedBreak?.chargeCodeId ?? openSession.chargeCodeId ?? chargeCodeId,
+        department: closedBreak?.department ?? openSession.department ?? department,
+        operation: closedBreak?.operation ?? openSession.operation ?? operation,
+        projectId: closedBreak?.projectId ?? openSession.projectId ?? null,
+        travelerStepId: closedBreak?.travelerStepId ?? openSession.travelerStepId ?? null,
+        certificationStatus: closedBreak?.certificationStatus ?? openSession.certificationStatus ?? null,
+        isOverrun: closedBreak?.isOverrun ?? openSession.isOverrun ?? false,
+        overrunReason: closedBreak?.overrunReason ?? openSession.overrunReason ?? null,
+        overrideReason: closedBreak?.overrideReason ?? openSession.overrideReason ?? null,
+        approvalStatus: closedBreak?.approvalStatus ?? openSession.approvalStatus ?? approvalStatus,
+        laborApprovalId: closedBreak?.laborApprovalId ?? openSession.laborApprovalId ?? laborApprovalId,
+        laborBudgetOverrideId: closedBreak?.laborBudgetOverrideId ?? openSession.laborBudgetOverrideId ?? laborBudgetOverrideId,
+      });
+      message = `Welcome back, ${firstName}! You are clocked in from break.`;
+      break;
+    }
     default: {
-      res.status(400).json({ error: `Invalid punch action for kiosk: ${action}. Only clock_in and clock_out are supported.` });
+      res.status(400).json({ error: `Invalid punch action for kiosk: ${action}.` });
       return;
     }
   }
@@ -579,6 +847,7 @@ router.post("/kiosk/punch", optionalAuth, h(async (req, res): Promise<void> => {
     action,
     employeeId: resolvedEmployeeId,
     message,
+    dailyCertificationRecorded: action === "clock_out",
     status: ledger.deriveStatus(action === "clock_out" ? null : entry),
   });
 }));
@@ -627,10 +896,18 @@ router.post("/punches/my", authenticateToken, h(async (req, res): Promise<void> 
     return;
   }
 
-  const { type, costCode, travelerId } = req.body ?? {};
+  const { type, costCode, travelerId, dailyCertificationConfirmed } = req.body ?? {};
   const validTypes = ["clock_in", "clock_out", "break_start", "break_end"];
   if (!type || !validTypes.includes(type)) {
     res.status(400).json({ error: `type must be one of: ${validTypes.join(", ")}` });
+    return;
+  }
+
+  if (type === "clock_out" && dailyCertificationConfirmed !== true) {
+    res.status(400).json({
+      error: "Daily employee certification is required when punching out for the day.",
+      certificationRequired: true,
+    });
     return;
   }
 
@@ -753,6 +1030,19 @@ router.post("/punches/my", authenticateToken, h(async (req, res): Promise<void> 
         return;
       }
       entry = await ledger.closeSession(epochEmployeeId);
+      const dailyCertification = await certifyDailyTimeOnPunchOut(
+        epochEmployeeId,
+        entry?.clockOut ?? new Date(),
+        actorFromUser(req.user ?? null, req.ip ?? null),
+        { certificationConfirmed: true, source: "portal_punch_out" },
+      );
+      if (dailyCertification && "error" in dailyCertification) {
+        res.status(dailyCertification.statusCode).json({
+          error: dailyCertification.error,
+          punchRecorded: true,
+        });
+        return;
+      }
       break;
     }
     case "break_start": {
@@ -798,7 +1088,7 @@ router.post("/punches/my", authenticateToken, h(async (req, res): Promise<void> 
     timestamp: new Date().toISOString(),
   });
 
-  res.status(201).json({ entry, type });
+  res.status(201).json({ entry, type, dailyCertificationRecorded: type === "clock_out" });
 }));
 
 // ---------------------------------------------------------------------------
@@ -841,82 +1131,22 @@ router.get("/punches", authenticateToken, h(async (req, res): Promise<void> => {
     to: q.data.to ? new Date(q.data.to) : undefined,
   });
 
-  // Expand each session into 1 or 2 event rows that the Punch Review UI expects.
-  type PunchEvent = {
-    id: number;
-    sessionId: number;
-    employeeId: number;
-    type: 'clock_in' | 'clock_out' | 'break_start' | 'break_end';
-    punchedAt: string;
-    source: string;
-    isEdited: boolean;
-    editNote: string | null;
-    costCode: string | null;
-    note: string | null;
-    hasMissingClockOut: boolean;
-  };
+  res.json(sessionsToPunchEvents(sessions));
+}));
 
-  const events: PunchEvent[] = [];
-  for (const s of sessions) {
-    const inType: PunchEvent['type'] = s.laborClass === 'BREAK' ? 'break_start' : 'clock_in';
-    const outType: PunchEvent['type'] = s.laborClass === 'BREAK' ? 'break_end' : 'clock_out';
-    const missingOut = s.clockOut == null;
+router.get("/punches/my", authenticateToken, h(async (req, res): Promise<void> => {
+  const employeeId = req.user?.employeeId ?? null;
+  if (!employeeId) { res.status(403).json({ error: "Your account is not linked to an employee record" }); return; }
 
-    const rawNote = s.editNote ?? null;
-    let inNote: string | null = null;
-    let outNote: string | null = null;
-    let inEdited = false;
-    let outEdited = false;
-
-    if (rawNote && s.isEdited) {
-      const inMatch = rawNote.match(/\[clockIn\]\s([^|]+?)(?:\s*\|\||$)/);
-      const outMatch = rawNote.match(/\[clockOut\]\s([^|]+?)(?:\s*\|\||$)/);
-      if (inMatch || outMatch) {
-        if (inMatch) { inEdited = true; inNote = inMatch[1].trim(); }
-        if (outMatch) { outEdited = true; outNote = outMatch[1].trim(); }
-      } else {
-        inEdited = true;
-        outEdited = true;
-        inNote = rawNote;
-        outNote = rawNote;
-      }
-    }
-
-    events.push({
-      id: s.id,
-      sessionId: s.id,
-      employeeId: s.employeeId,
-      type: inType,
-      punchedAt: (s.clockIn instanceof Date ? s.clockIn : new Date(s.clockIn)).toISOString(),
-      source: s.source,
-      isEdited: inEdited,
-      editNote: inNote,
-      costCode: s.chargeCode ?? null,
-      note: null,
-      hasMissingClockOut: missingOut,
-    });
-
-    if (!missingOut && s.clockOut != null) {
-      events.push({
-        id: s.id,
-        sessionId: s.id,
-        employeeId: s.employeeId,
-        type: outType,
-        punchedAt: (s.clockOut instanceof Date ? s.clockOut : new Date(s.clockOut)).toISOString(),
-        source: s.source,
-        isEdited: outEdited,
-        editNote: outNote,
-        costCode: s.chargeCode ?? null,
-        note: null,
-        hasMissingClockOut: false,
-      });
-    }
+  const from = typeof req.query.from === "string" ? new Date(req.query.from) : undefined;
+  const to = typeof req.query.to === "string" ? new Date(req.query.to) : undefined;
+  if ((from && Number.isNaN(from.getTime())) || (to && Number.isNaN(to.getTime()))) {
+    res.status(400).json({ error: "from/to must be valid ISO date strings" });
+    return;
   }
 
-  // Sort ascending by punchedAt so the table reads chronologically
-  events.sort((a, b) => a.punchedAt.localeCompare(b.punchedAt));
-
-  res.json(events);
+  const sessions = await ledger.listSessions({ employeeId, from, to });
+  res.json(sessionsToPunchEvents(sessions));
 }));
 
 // POST /punches — admin creates a punch_ledger entry (admin correction / manual punch)
@@ -1017,6 +1247,102 @@ router.get("/punches/:id", authenticateToken, h(async (req, res): Promise<void> 
   const row = await storage.getPunchLedgerEntryById(p.data.id);
   if (!row) { res.status(404).json({ error: "Punch not found" }); return; }
   res.json(row);
+}));
+
+router.post("/punch-corrections/my", authenticateToken, h(async (req, res): Promise<void> => {
+  const body = PunchCorrectionSubmitSchema.safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+
+  const user = req.user as SafeUser | undefined;
+  if (!user || !user.employeeId) {
+    res.status(403).json({ error: "Your account is not linked to an employee record" });
+    return;
+  }
+
+  const result = await punchCorrections.submitPunchCorrectionRequest({
+    employeeId: user.employeeId,
+    punchLedgerId: body.data.punchLedgerId ?? null,
+    requestType: body.data.requestType,
+    reason: body.data.reason,
+    proposedChanges: body.data.proposedChanges,
+    source: "employee_portal",
+    submittedByUserId: user.id,
+    actorUser: user,
+    actorIp: req.ip ?? null,
+  });
+
+  if ("error" in result) {
+    res.status(result.statusCode).json({ error: result.error });
+    return;
+  }
+
+  res.status(201).json(result);
+}));
+
+router.get("/punch-corrections/my", authenticateToken, h(async (req, res): Promise<void> => {
+  const employeeId = req.user?.employeeId ?? null;
+  if (!employeeId) { res.json([]); return; }
+  const rows = await punchCorrections.listPunchCorrections({ employeeId });
+  res.json(rows);
+}));
+
+router.get("/punch-corrections", authenticateToken, h(async (req, res): Promise<void> => {
+  const user = req.user as SafeUser | undefined;
+  if (!user) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const status = typeof req.query.status === "string" ? req.query.status : undefined;
+  const isAdmin = ["ADMIN", "OWNER", "HR"].includes(user.role);
+  const rows = await punchCorrections.listPunchCorrections({
+    status,
+    supervisorId: isAdmin ? undefined : user.employeeId ?? -1,
+  });
+  res.json(rows);
+}));
+
+router.post("/punch-corrections/:id/supervisor-review", authenticateToken, h(async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid correction id" }); return; }
+  const body = PunchCorrectionReviewSchema.safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+  const user = req.user as SafeUser | undefined;
+  if (!user) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const result = await punchCorrections.reviewPunchCorrectionSupervisor(
+    id,
+    body.data.decision,
+    body.data.note,
+    user,
+    req.ip ?? null,
+  );
+
+  if ("error" in result) {
+    res.status(result.statusCode).json({ error: result.error });
+    return;
+  }
+  res.json(result);
+}));
+
+router.post("/punch-corrections/:id/hr-review", authenticateToken, h(async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid correction id" }); return; }
+  const body = PunchCorrectionReviewSchema.safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+  const user = req.user as SafeUser | undefined;
+  if (!user) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const result = await punchCorrections.reviewPunchCorrectionHr(
+    id,
+    body.data.decision,
+    body.data.note,
+    user,
+    req.ip ?? null,
+  );
+
+  if ("error" in result) {
+    res.status(result.statusCode).json({ error: result.error });
+    return;
+  }
+  res.json(result);
 }));
 
 // PATCH/PUT /punches/:id — admin edit of punch_ledger entry (DCAA-audited, FK-enforced)

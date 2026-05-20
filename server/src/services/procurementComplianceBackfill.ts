@@ -44,8 +44,10 @@ export interface BackfillRow {
 function assignPriority(row: Omit<BackfillRow, 'priority' | 'failingReasons' | 'recommendedActions'>): BackfillPriority {
   const isIssued = ['Sent', 'Partially Received', 'Fully Received'].includes(row.status);
 
-  // No review at all is the most severe failure — drops FAR_FLOWDOWN score to 0.
-  // We don't know FAR/gov status without a review, so all no-review issued POs are HIGH.
+  // No review at all is the most severe enforced-population failure — it drops
+  // FAR_FLOWDOWN to 0 when the PO is in the current scoring population.
+  // Legacy pre-policy rows remain isolated unless they are exception-flagged.
+  // We don't know FAR/gov status without a review, so no-review issued POs are HIGH.
   if (isIssued && row.missingReview) {
     return 'HIGH';
   }

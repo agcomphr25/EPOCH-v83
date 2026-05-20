@@ -41,6 +41,7 @@ import {
   buildTraceabilityChain,
   verifyChain,
   verifyChainByIds,
+  buildGenealogy,
   exportChainCsv,
   TRACEABILITY_MANIFEST_PREFIX,
   TRACEABILITY_SEARCH_KEYS,
@@ -114,12 +115,14 @@ function makeChain(nodes: TraceabilityNode[]): TraceabilityChain {
   const edges = [...byBranch.values()].flatMap((list) =>
     list.slice(1).map((n, i) => ({ from: list[i].id, to: n.id, kind: 'lineage' as const })),
   );
+  const genealogy = buildGenealogy(nodes);
   return {
     query: { key: 'lotIcn', value: 'ICN-MAT-1' },
     resolved: { label: 'Lot ICN-MAT-1', matchedEntities: [] },
     nodes,
     edges,
     branches,
+    genealogy,
     ncrs: [],
     generatedAt: '2025-01-01T00:00:00.000Z',
   };

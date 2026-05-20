@@ -387,7 +387,7 @@ router.get('/accounts', requireExecutiveAccess, h(async (_req, res) => {
   const accounts = await db
     .select()
     .from(chartOfAccounts)
-    .orderBy(chartOfAccounts.accountName);
+    .orderBy(chartOfAccounts.accountNumber, chartOfAccounts.accountName);
   res.json(accounts);
 }));
 

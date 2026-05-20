@@ -95,6 +95,7 @@ DEV_AUTH_BYPASS = "true"
 FEATURE_WEBSITE_IMPORT = "true"
 VITE_FEATURE_WEBSITE_IMPORT = "true"
 PROTEUS_KEY_TIMECLOCK = "test-timeclock-key"
+DEBUG_TRAVELER_ROUTING_FLOW = "development"
 
 [userenv.production]
 

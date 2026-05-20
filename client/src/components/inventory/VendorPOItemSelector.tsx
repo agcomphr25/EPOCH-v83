@@ -45,6 +45,8 @@ type VendorPOItemSelectorProps = {
   vendorPoId: number;
   vendorId: number;
   poNumber: string;
+  productionLine?: string | null;
+  complianceStatus?: string | null;
   onTotalChange?: (total: number) => void;
 };
 
@@ -64,8 +66,35 @@ type VendorPOItem = {
   conversionFactor?: number;
   lineTotal: number;
   notes?: string;
-  customerPoId?: number;
+  customerPoId?: number | null;
+  projectId?: string | null;
+  productionWorkOrderId?: string | null;
+  chargeCodeId?: number | null;
   otherIdentifier?: string;
+  customerPo?: {
+    id: number;
+    poNumber: string;
+    customerName?: string;
+    status?: string;
+  };
+  project?: {
+    id: string;
+    projectCode: string;
+    projectName: string;
+  };
+  productionWorkOrder?: {
+    id: string;
+    workOrderNumber: string;
+    projectId: string;
+    partNumber?: string;
+    status?: string;
+  };
+  chargeCode?: {
+    id: number;
+    code: string;
+    description?: string | null;
+    type?: string;
+  };
 };
 
 type P2PurchaseOrder = {
@@ -74,6 +103,32 @@ type P2PurchaseOrder = {
   customerId: string;
   customerName: string;
   status: string;
+};
+
+type Project = {
+  id: string;
+  projectCode: string;
+  projectName: string;
+  status?: string;
+};
+
+type ProductionWorkOrder = {
+  id: string;
+  workOrderNumber: string;
+  projectId: string;
+  projectCode?: string;
+  projectName?: string;
+  partNumber?: string;
+  status: string;
+  defaultChargeCodeId?: number | null;
+};
+
+type ChargeCode = {
+  id: number;
+  code: string;
+  description?: string | null;
+  active?: boolean;
+  type?: string;
 };
 
 type VendorPart = {
@@ -113,6 +168,9 @@ type NewItemState = {
   quantity: number;
   unitPrice: number;
   customerPoId?: number | null;
+  projectId?: string | null;
+  productionWorkOrderId?: string | null;
+  chargeCodeId?: number | null;
   otherIdentifier: string;
   notes: string;
 };
@@ -194,7 +252,14 @@ function UnitPriceDisplay({ item }: { item: VendorPOItem }) {
   );
 }
 
-export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, onTotalChange }: VendorPOItemSelectorProps) {
+export default function VendorPOItemSelector({
+  vendorPoId,
+  vendorId,
+  poNumber,
+  productionLine,
+  complianceStatus,
+  onTotalChange,
+}: VendorPOItemSelectorProps) {
   const queryClient = useQueryClient();
   const [selectedPartId, setSelectedPartId] = useState<string>('');
   const [selectedInventoryItem, setSelectedInventoryItem] = useState<InventoryItem | null>(null);
@@ -209,11 +274,19 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
     quantity: 0,
     unitPrice: 0,
     customerPoId: undefined,
+    projectId: undefined,
+    productionWorkOrderId: undefined,
+    chargeCodeId: undefined,
     otherIdentifier: '',
     notes: '',
   });
   const [editingItemId, setEditingItemId] = useState<number | null>(null);
-  const [editedItem, setEditedItem] = useState<Partial<VendorPOItem> & { customerPoId?: number | null }>({});
+  const [editedItem, setEditedItem] = useState<Partial<VendorPOItem> & {
+    customerPoId?: number | null;
+    projectId?: string | null;
+    productionWorkOrderId?: string | null;
+    chargeCodeId?: number | null;
+  }>({});
 
   const { data: items = [], isLoading } = useQuery<VendorPOItem[]>({
     queryKey: ['/api/vendor-pos', vendorPoId, 'items'],
@@ -226,9 +299,37 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
     enabled: !!vendorId,
   });
 
+  const isP2Purchase = String(productionLine || '').toUpperCase() === 'P2';
+
   const { data: p2PurchaseOrders = [] } = useQuery<P2PurchaseOrder[]>({
     queryKey: ['/api/p2-purchase-orders-bypass'],
   });
+
+  const { data: traceabilityOptions } = useQuery<{
+    projects: Project[];
+    productionWorkOrders: ProductionWorkOrder[];
+    chargeCodes: ChargeCode[];
+  }>({
+    queryKey: ['/api/vendor-pos/traceability-options'],
+  });
+
+  const projects = traceabilityOptions?.projects ?? [];
+  const productionWorkOrders = traceabilityOptions?.productionWorkOrders ?? [];
+  const chargeCodes = traceabilityOptions?.chargeCodes ?? [];
+
+  const isP2ComplianceComplete = complianceStatus === 'Reviewed';
+  const customerPoAllocationDisabled = isP2Purchase && !isP2ComplianceComplete;
+  const projectAllocationDisabled = isP2Purchase && !isP2ComplianceComplete;
+
+  const filteredWorkOrders = useMemo(() => {
+    if (!newItem.projectId) return productionWorkOrders;
+    return productionWorkOrders.filter((wo) => wo.projectId === newItem.projectId);
+  }, [newItem.projectId, productionWorkOrders]);
+
+  const editFilteredWorkOrders = useMemo(() => {
+    if (!editedItem.projectId) return productionWorkOrders;
+    return productionWorkOrders.filter((wo) => wo.projectId === editedItem.projectId);
+  }, [editedItem.projectId, productionWorkOrders]);
 
   const hasUnitConversion = useMemo(() => {
     return selectedInventoryItem?.vendorUnit && 
@@ -300,6 +401,9 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
             quantity: 0,
             unitPrice: 0,
             customerPoId: prev.customerPoId,
+            projectId: prev.projectId,
+            productionWorkOrderId: prev.productionWorkOrderId,
+            chargeCodeId: prev.chargeCodeId,
             otherIdentifier: prev.otherIdentifier,
             notes: prev.notes,
           }));
@@ -317,6 +421,9 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
             quantity: selectedPart.minimumOrderQty || 1,
             unitPrice: selectedPart.unitPrice || 0,
             customerPoId: prev.customerPoId,
+            projectId: prev.projectId,
+            productionWorkOrderId: prev.productionWorkOrderId,
+            chargeCodeId: prev.chargeCodeId,
             otherIdentifier: prev.otherIdentifier,
             notes: prev.notes,
           }));
@@ -336,6 +443,9 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
           quantity: selectedPart.minimumOrderQty || 1,
           unitPrice: selectedPart.unitPrice || 0,
           customerPoId: prev.customerPoId,
+          projectId: prev.projectId,
+          productionWorkOrderId: prev.productionWorkOrderId,
+          chargeCodeId: prev.chargeCodeId,
           otherIdentifier: prev.otherIdentifier,
           notes: prev.notes,
         }));
@@ -360,8 +470,8 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
         onTotalChange(calculateTotal());
       }
     },
-    onError: () => {
-      toast.error('Failed to add item');
+    onError: (error: any) => {
+      toast.error(error?.message || 'Failed to add item');
     },
   });
 
@@ -400,8 +510,8 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
         onTotalChange(calculateTotal());
       }
     },
-    onError: () => {
-      toast.error('Failed to update item');
+    onError: (error: any) => {
+      toast.error(error?.message || 'Failed to update item');
     },
   });
 
@@ -421,6 +531,9 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
       quantity: 0,
       unitPrice: 0,
       customerPoId: undefined,
+      projectId: undefined,
+      productionWorkOrderId: undefined,
+      chargeCodeId: undefined,
       otherIdentifier: '',
       notes: '',
     });
@@ -429,6 +542,16 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
   };
 
   const handleAddItem = () => {
+    if (projectAllocationDisabled && (newItem.customerPoId || newItem.projectId || newItem.productionWorkOrderId)) {
+      toast.error('Complete compliance review before linking this P2 purchase to a customer PO, project, or WAD');
+      return;
+    }
+
+    if (isP2Purchase && !newItem.customerPoId && !newItem.projectId && !newItem.productionWorkOrderId && !newItem.chargeCodeId) {
+      toast.error('P2 line items need at least one traceability link: customer PO, project, WAD/work order, or charge code');
+      return;
+    }
+
     if (!newItem.description && !newItem.agPartNumber) {
       toast.error('Please provide either AG Part# or description');
       return;
@@ -454,6 +577,9 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
         unitPrice: calculatedVendorValues.vendorUnitPrice,
         lineTotal: lineTotal,
         customerPoId: newItem.customerPoId || null,
+        projectId: newItem.projectId || null,
+        productionWorkOrderId: newItem.productionWorkOrderId || null,
+        chargeCodeId: newItem.chargeCodeId || null,
         otherIdentifier: newItem.otherIdentifier || null,
         notes: newItem.notes || null,
       };
@@ -471,6 +597,9 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
         vendorUnit: newItem.vendorUnit || null,
         lineTotal: newItem.quantity * newItem.unitPrice,
         customerPoId: newItem.customerPoId || null,
+        projectId: newItem.projectId || null,
+        productionWorkOrderId: newItem.productionWorkOrderId || null,
+        chargeCodeId: newItem.chargeCodeId || null,
         otherIdentifier: newItem.otherIdentifier || null,
         notes: newItem.notes || null,
       };
@@ -488,6 +617,9 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
       unitPrice: item.unitPrice,
       notes: item.notes,
       customerPoId: item.customerPoId,
+      projectId: item.projectId,
+      productionWorkOrderId: item.productionWorkOrderId,
+      chargeCodeId: item.chargeCodeId,
       otherIdentifier: item.otherIdentifier,
     });
   };
@@ -495,6 +627,21 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
   const handleSaveEdit = (itemId: number) => {
     const originalItem = items.find(item => item.id === itemId);
     if (!originalItem) return;
+
+    const nextProjectId = 'projectId' in editedItem ? editedItem.projectId : originalItem.projectId;
+    const nextProductionWorkOrderId = 'productionWorkOrderId' in editedItem ? editedItem.productionWorkOrderId : originalItem.productionWorkOrderId;
+    const nextChargeCodeId = 'chargeCodeId' in editedItem ? editedItem.chargeCodeId : originalItem.chargeCodeId;
+    const nextCustomerPoId = 'customerPoId' in editedItem ? editedItem.customerPoId : originalItem.customerPoId;
+
+    if (projectAllocationDisabled && (nextCustomerPoId || nextProjectId || nextProductionWorkOrderId)) {
+      toast.error('Complete compliance review before linking this P2 purchase to a customer PO, project, or WAD');
+      return;
+    }
+
+    if (isP2Purchase && !nextCustomerPoId && !nextProjectId && !nextProductionWorkOrderId && !nextChargeCodeId) {
+      toast.error('P2 line items need at least one traceability link: customer PO, project, WAD/work order, or charge code');
+      return;
+    }
     
     const updatedData = {
       agPartNumber: editedItem.agPartNumber ?? originalItem.agPartNumber,
@@ -502,7 +649,10 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
       quantity: editedItem.quantity ?? originalItem.quantity,
       unitPrice: editedItem.unitPrice ?? originalItem.unitPrice,
       notes: editedItem.notes ?? originalItem.notes,
-      customerPoId: 'customerPoId' in editedItem ? editedItem.customerPoId : originalItem.customerPoId,
+      customerPoId: nextCustomerPoId,
+      projectId: nextProjectId,
+      productionWorkOrderId: nextProductionWorkOrderId,
+      chargeCodeId: nextChargeCodeId,
       otherIdentifier: 'otherIdentifier' in editedItem ? editedItem.otherIdentifier : originalItem.otherIdentifier,
     };
     
@@ -691,12 +841,13 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
             <div className="flex items-center gap-2 mb-3">
               <span className="font-medium text-purple-800 dark:text-purple-200 text-sm">📋 Internal Tracking (not shown on vendor PO)</span>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
               <div>
                 <Label htmlFor="customerPo">Customer PO</Label>
                 <Select 
                   value={newItem.customerPoId?.toString() || 'none'} 
                   onValueChange={(value) => setNewItem({ ...newItem, customerPoId: value && value !== 'none' ? parseInt(value) : undefined })}
+                  disabled={customerPoAllocationDisabled}
                 >
                   <SelectTrigger data-testid="select-customer-po">
                     <SelectValue placeholder="Select customer PO (optional)..." />
@@ -710,7 +861,82 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">Link this purchase to a customer order</p>
+                <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
+                  {customerPoAllocationDisabled
+                    ? 'P2 project allocation unlocks after compliance review is complete'
+                    : 'Link this purchase to a customer order'}
+                </p>
+              </div>
+              <div>
+                <Label htmlFor="project">Project</Label>
+                <Select
+                  value={newItem.projectId || 'none'}
+                  onValueChange={(value) => setNewItem({
+                    ...newItem,
+                    projectId: value !== 'none' ? value : undefined,
+                    productionWorkOrderId: undefined,
+                  })}
+                  disabled={projectAllocationDisabled}
+                >
+                  <SelectTrigger data-testid="select-project">
+                    <SelectValue placeholder="Select project..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {projects.map((project) => (
+                      <SelectItem key={project.id} value={project.id}>
+                        {project.projectCode} - {project.projectName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="workOrder">WAD / Work Order</Label>
+                <Select
+                  value={newItem.productionWorkOrderId || 'none'}
+                  onValueChange={(value) => {
+                    const selected = productionWorkOrders.find((wo) => wo.id === value);
+                    setNewItem({
+                      ...newItem,
+                      productionWorkOrderId: value !== 'none' ? value : undefined,
+                      projectId: selected?.projectId || newItem.projectId,
+                      chargeCodeId: selected?.defaultChargeCodeId || newItem.chargeCodeId,
+                    });
+                  }}
+                  disabled={projectAllocationDisabled}
+                >
+                  <SelectTrigger data-testid="select-production-work-order">
+                    <SelectValue placeholder="Select WAD..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {filteredWorkOrders.map((wo) => (
+                      <SelectItem key={wo.id} value={wo.id}>
+                        {wo.workOrderNumber} - {wo.partNumber || 'No part'}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="chargeCode">Charge Code</Label>
+                <Select
+                  value={newItem.chargeCodeId?.toString() || 'none'}
+                  onValueChange={(value) => setNewItem({ ...newItem, chargeCodeId: value !== 'none' ? parseInt(value) : undefined })}
+                >
+                  <SelectTrigger data-testid="select-charge-code">
+                    <SelectValue placeholder="Select charge code..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {chargeCodes.map((code) => (
+                      <SelectItem key={code.id} value={code.id.toString()}>
+                        {code.code}{code.description ? ` - ${code.description}` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label htmlFor="otherIdentifier">Other Identifier</Label>
@@ -760,6 +986,9 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
               <TableHead>Qty (Vendor)</TableHead>
               <TableHead>Unit Price</TableHead>
               <TableHead>Line Total</TableHead>
+              <TableHead className="text-purple-600">Project</TableHead>
+              <TableHead className="text-purple-600">WAD / WO</TableHead>
+              <TableHead className="text-purple-600">Charge Code</TableHead>
               <TableHead className="text-purple-600">Customer PO</TableHead>
               <TableHead className="text-purple-600">Other ID</TableHead>
               <TableHead>Notes</TableHead>
@@ -835,9 +1064,90 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
                   </TableCell>
                   <TableCell className="text-purple-600">
                     {isEditing ? (
+                      <Select
+                        value={editedItem.projectId || 'none'}
+                        onValueChange={(value) => setEditedItem({
+                          ...editedItem,
+                          projectId: value !== 'none' ? value : null,
+                          productionWorkOrderId: null,
+                        })}
+                        disabled={projectAllocationDisabled}
+                      >
+                        <SelectTrigger className="w-36" data-testid={`select-edit-project-${item.id}`}>
+                          <SelectValue placeholder="None" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          {projects.map((project) => (
+                            <SelectItem key={project.id} value={project.id}>
+                              {project.projectCode}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      item.project?.projectCode || projects.find(project => project.id === item.projectId)?.projectCode || '-'
+                    )}
+                  </TableCell>
+                  <TableCell className="text-purple-600">
+                    {isEditing ? (
+                      <Select
+                        value={editedItem.productionWorkOrderId || 'none'}
+                        onValueChange={(value) => {
+                          const selected = productionWorkOrders.find((wo) => wo.id === value);
+                          setEditedItem({
+                            ...editedItem,
+                            productionWorkOrderId: value !== 'none' ? value : null,
+                            projectId: selected?.projectId || editedItem.projectId,
+                            chargeCodeId: selected?.defaultChargeCodeId || editedItem.chargeCodeId,
+                          });
+                        }}
+                        disabled={projectAllocationDisabled}
+                      >
+                        <SelectTrigger className="w-36" data-testid={`select-edit-production-work-order-${item.id}`}>
+                          <SelectValue placeholder="None" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          {editFilteredWorkOrders.map((wo) => (
+                            <SelectItem key={wo.id} value={wo.id}>
+                              {wo.workOrderNumber}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      item.productionWorkOrder?.workOrderNumber || productionWorkOrders.find(wo => wo.id === item.productionWorkOrderId)?.workOrderNumber || '-'
+                    )}
+                  </TableCell>
+                  <TableCell className="text-purple-600">
+                    {isEditing ? (
+                      <Select
+                        value={editedItem.chargeCodeId?.toString() || 'none'}
+                        onValueChange={(value) => setEditedItem({ ...editedItem, chargeCodeId: value !== 'none' ? parseInt(value) : null })}
+                      >
+                        <SelectTrigger className="w-36" data-testid={`select-edit-charge-code-${item.id}`}>
+                          <SelectValue placeholder="None" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          {chargeCodes.map((code) => (
+                            <SelectItem key={code.id} value={code.id.toString()}>
+                              {code.code}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      item.chargeCode?.code || chargeCodes.find(code => code.id === item.chargeCodeId)?.code || '-'
+                    )}
+                  </TableCell>
+                  <TableCell className="text-purple-600">
+                    {isEditing ? (
                       <Select 
                         value={editedItem.customerPoId?.toString() || 'none'} 
-                        onValueChange={(value) => setEditedItem({ ...editedItem, customerPoId: value && value !== 'none' ? parseInt(value) : null as unknown as undefined })}
+                        onValueChange={(value) => setEditedItem({ ...editedItem, customerPoId: value && value !== 'none' ? parseInt(value) : null })}
+                        disabled={customerPoAllocationDisabled}
                       >
                         <SelectTrigger className="w-32" data-testid={`select-edit-customer-po-${item.id}`}>
                           <SelectValue placeholder="None" />
@@ -852,9 +1162,11 @@ export default function VendorPOItemSelector({ vendorPoId, vendorId, poNumber, o
                         </SelectContent>
                       </Select>
                     ) : (
-                      item.customerPoId ? 
-                        p2PurchaseOrders.find(po => po.id === item.customerPoId)?.poNumber || '-' 
+                      item.customerPo?.poNumber ||
+                      (item.customerPoId ?
+                        p2PurchaseOrders.find(po => po.id === item.customerPoId)?.poNumber || '-'
                         : '-'
+                      )
                     )}
                   </TableCell>
                   <TableCell className="text-purple-600">

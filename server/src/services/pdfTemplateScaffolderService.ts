@@ -8,6 +8,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { FillableFieldDef } from '../../schema';
+import { getFileStorageProviderForObjectPath } from './fileStorageProvider';
 
 interface TextItem {
   text: string;
@@ -360,9 +361,7 @@ export async function scaffoldFromMediaItem(
   } else if (normalizedCloudPath.startsWith('/objects/')) {
     // Try object storage for cloud-stored files
     console.log('[Scaffold] Reading PDF from object storage:', normalizedCloudPath);
-    const { ObjectStorageService } = await import('../../replit_integrations/object_storage');
-    const objectStorage = new ObjectStorageService();
-    pdfBuffer = await objectStorage.downloadAsBuffer(normalizedCloudPath);
+    pdfBuffer = await getFileStorageProviderForObjectPath(normalizedCloudPath).downloadBuffer(normalizedCloudPath);
   } else {
     throw new Error(`PDF file not found: ${storagePath}`);
   }

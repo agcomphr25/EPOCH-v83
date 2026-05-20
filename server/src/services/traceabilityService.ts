@@ -30,6 +30,7 @@ import {
   type InventoryTransactionLedger,
 } from '../../schema';
 import { verifyInventoryLedgerHashesByIds } from './inventoryTransactionLedgerService';
+import { resolveTravelerBarcode } from '../helpers/travelerBarcodeResolver';
 
 // ─────────────────────────────────────────────────────────────────────
 // Types
@@ -146,10 +147,31 @@ export interface TraceabilityBranch {
   nodeIds: string[];
 }
 
+export interface TraceabilityGenealogyStage {
+  stage:
+    | 'raw_material_lot'
+    | 'kit'
+    | 'traveler'
+    | 'assembly'
+    | 'serial_number'
+    | 'shipment';
+  label: string;
+  evidenceIds: string[];
+  occurredAt: string | null;
+  status: string | null;
+}
+
 export interface ResolvedTarget {
   label: string;
   detail?: string;
   matchedEntities: Array<{ kind: string; id: string; label: string; href: string | null }>;
+  /**
+   * True when the search anchor (e.g. traveler number) could not be matched
+   * to any underlying entity. Distinguishes "no such traveler" from "the
+   * traveler exists but has no ledger events yet". Consumers should surface
+   * different empty-state messaging based on this flag.
+   */
+  notFound?: boolean;
 }
 
 export interface TraceabilityChain {
@@ -158,6 +180,7 @@ export interface TraceabilityChain {
   nodes: TraceabilityNode[];
   edges: TraceabilityEdge[];
   branches: TraceabilityBranch[];
+  genealogy: TraceabilityGenealogyStage[];
   ncrs: Array<{
     id: number;
     rmaNumber: string | null;
@@ -324,6 +347,80 @@ export function buildBranchesAndEdges(
   return { edges, branches };
 }
 
+function mergeGenealogyStage(
+  stages: Map<string, TraceabilityGenealogyStage>,
+  stage: TraceabilityGenealogyStage['stage'],
+  label: string | null | undefined,
+  node: TraceabilityNode,
+  status?: string | null,
+): void {
+  if (!label) return;
+  const key = `${stage}:${label}`;
+  const existing = stages.get(key);
+  if (existing) {
+    if (!existing.evidenceIds.includes(node.id)) existing.evidenceIds.push(node.id);
+    if (!existing.occurredAt || node.occurredAt < existing.occurredAt) {
+      existing.occurredAt = node.occurredAt;
+    }
+    if (!existing.status && status) existing.status = status;
+    return;
+  }
+  stages.set(key, {
+    stage,
+    label,
+    evidenceIds: [node.id],
+    occurredAt: node.occurredAt,
+    status: status ?? null,
+  });
+}
+
+export function buildGenealogy(nodes: TraceabilityNode[]): TraceabilityGenealogyStage[] {
+  const stages = new Map<string, TraceabilityGenealogyStage>();
+  for (const n of nodes) {
+    mergeGenealogyStage(stages, 'raw_material_lot', n.lotIcn, n, n.statusAfter ?? n.statusBefore);
+    const metadata = n.metadata ?? {};
+    const packetId =
+      typeof metadata.packetId === 'string'
+        ? metadata.packetId
+        : typeof metadata.builtPacketId === 'string'
+          ? metadata.builtPacketId
+          : null;
+    mergeGenealogyStage(stages, 'kit', packetId, n, n.transactionType);
+    mergeGenealogyStage(stages, 'traveler', n.travelerNumber ?? n.travelerId, n, n.transactionType);
+    const assembly =
+      typeof metadata.assemblyId === 'string'
+        ? metadata.assemblyId
+        : typeof metadata.assemblyNumber === 'string'
+          ? metadata.assemblyNumber
+          : null;
+    mergeGenealogyStage(stages, 'assembly', assembly, n, n.transactionType);
+    const serial =
+      typeof metadata.serialNumber === 'string'
+        ? metadata.serialNumber
+        : typeof metadata.finishedSerialNumber === 'string'
+          ? metadata.finishedSerialNumber
+          : null;
+    mergeGenealogyStage(stages, 'serial_number', serial, n, n.transactionType);
+    const sourceModule = n.sourceModule.toLowerCase();
+    if (['packing-slip', 'packing_slip', 'p2_packing_slip', 'shipping', 'shipment'].includes(sourceModule)) {
+      mergeGenealogyStage(stages, 'shipment', n.sourceRecordId ?? n.transactionNumber, n, n.transactionType);
+    }
+  }
+  const order: Record<TraceabilityGenealogyStage['stage'], number> = {
+    raw_material_lot: 1,
+    kit: 2,
+    traveler: 3,
+    assembly: 4,
+    serial_number: 5,
+    shipment: 6,
+  };
+  return Array.from(stages.values()).sort((a, b) => {
+    const byStage = order[a.stage] - order[b.stage];
+    if (byStage !== 0) return byStage;
+    return (a.occurredAt ?? '').localeCompare(b.occurredAt ?? '');
+  });
+}
+
 /** Recompute the canonical event hash for a single ledger row (mirrors writer). */
 export function recomputeEventHash(row: InventoryTransactionLedger): string {
   const payload = {
@@ -379,6 +476,7 @@ interface ResolvedSearch {
   detail?: string;
   matchedEntities: Array<{ kind: string; id: string; label: string; href: string | null }>;
   ledgerCondition: SQL | undefined;
+  notFound?: boolean;
 }
 
 async function resolveSearch(input: TraceabilitySearchInput): Promise<ResolvedSearch> {
@@ -395,7 +493,7 @@ async function resolveSearch(input: TraceabilitySearchInput): Promise<ResolvedSe
         .where(eq(materialLots.internalControlNumber, value))
         .limit(1);
       if (!lot) {
-        return { label: `Lot ICN: ${value}`, matchedEntities: [], ledgerCondition: sql`FALSE` };
+        return { label: `Lot ICN: ${value}`, matchedEntities: [], ledgerCondition: sql`FALSE`, notFound: true };
       }
       return {
         label: `Lot ${lot.internalControlNumber}`,
@@ -411,13 +509,36 @@ async function resolveSearch(input: TraceabilitySearchInput): Promise<ResolvedSe
     }
 
     case 'travelerNumber': {
-      const [trav] = await db
+      // Case-insensitive match on traveler_number; UUID match for direct id;
+      // barcode-helper fallback for printable scan payloads (Task #183).
+      let [trav] = await db
         .select()
         .from(travelers)
-        .where(or(eq(travelers.travelerNumber, value), eq(travelers.id, value)))
+        .where(
+          or(
+            sql`LOWER(${travelers.travelerNumber}) = LOWER(${value})`,
+            eq(travelers.id, value),
+          ),
+        )
         .limit(1);
       if (!trav) {
-        return { label: `Traveler: ${value}`, matchedEntities: [], ledgerCondition: sql`FALSE` };
+        const scan = await resolveTravelerBarcode(value);
+        if (scan.ok) {
+          const [byScan] = await db
+            .select()
+            .from(travelers)
+            .where(eq(travelers.id, scan.context.travelerId))
+            .limit(1);
+          if (byScan) trav = byScan;
+        }
+      }
+      if (!trav) {
+        return {
+          label: `Traveler: ${value}`,
+          matchedEntities: [],
+          ledgerCondition: sql`FALSE`,
+          notFound: true,
+        };
       }
       return {
         label: `Traveler ${trav.travelerNumber}`,
@@ -439,7 +560,7 @@ async function resolveSearch(input: TraceabilitySearchInput): Promise<ResolvedSe
         .where(or(eq(productionWorkOrders.workOrderNumber, value), eq(productionWorkOrders.id, value)))
         .limit(1);
       if (!wo) {
-        return { label: `Work Order / WAD: ${value}`, matchedEntities: [], ledgerCondition: sql`FALSE` };
+        return { label: `Work Order / WAD: ${value}`, matchedEntities: [], ledgerCondition: sql`FALSE`, notFound: true };
       }
       return {
         label: `Work Order ${wo.workOrderNumber}`,
@@ -461,7 +582,7 @@ async function resolveSearch(input: TraceabilitySearchInput): Promise<ResolvedSe
         .where(eq(chargeCodes.code, value))
         .limit(1);
       if (!cc) {
-        return { label: `Charge Code: ${value}`, matchedEntities: [], ledgerCondition: sql`FALSE` };
+        return { label: `Charge Code: ${value}`, matchedEntities: [], ledgerCondition: sql`FALSE`, notFound: true };
       }
       return {
         label: `Charge Code ${cc.code}`,
@@ -483,7 +604,7 @@ async function resolveSearch(input: TraceabilitySearchInput): Promise<ResolvedSe
         .where(eq(projects.id, value))
         .limit(1);
       if (!proj) {
-        return { label: `Project: ${value}`, matchedEntities: [], ledgerCondition: sql`FALSE` };
+        return { label: `Project: ${value}`, matchedEntities: [], ledgerCondition: sql`FALSE`, notFound: true };
       }
       const projName = proj.projectName ?? proj.projectCode ?? proj.id;
       return {
@@ -506,7 +627,7 @@ async function resolveSearch(input: TraceabilitySearchInput): Promise<ResolvedSe
         .where(or(eq(employees.badgeScanCode, value), eq(employees.employeeCode, value)))
         .limit(1);
       if (!emp) {
-        return { label: `Operator badge: ${value}`, matchedEntities: [], ledgerCondition: sql`FALSE` };
+        return { label: `Operator badge: ${value}`, matchedEntities: [], ledgerCondition: sql`FALSE`, notFound: true };
       }
       let userId: number | null = null;
       if (emp.email) {
@@ -547,7 +668,7 @@ async function resolveSearch(input: TraceabilitySearchInput): Promise<ResolvedSe
         .where(ncrCondition)
         .limit(1);
       if (!ncr) {
-        return { label: `NCR: ${value}`, matchedEntities: [], ledgerCondition: sql`FALSE` };
+        return { label: `NCR: ${value}`, matchedEntities: [], ledgerCondition: sql`FALSE`, notFound: true };
       }
       return {
         label: `NCR #${ncr.id}${ncr.rmaNumber ? ` (${ncr.rmaNumber})` : ''}`,
@@ -604,7 +725,7 @@ async function resolveSearch(input: TraceabilitySearchInput): Promise<ResolvedSe
           ledgerCondition: eq(inventoryTransactionLedger.inventoryItemId, item.id),
         };
       }
-      return { label: `Barcode: ${value}`, matchedEntities: [], ledgerCondition: sql`FALSE` };
+      return { label: `Barcode: ${value}`, matchedEntities: [], ledgerCondition: sql`FALSE`, notFound: true };
     }
 
     default: {
@@ -837,6 +958,7 @@ export async function buildTraceabilityChain(
   const dicts = await loadJoinDictionaries(rows);
   const nodes = rows.map((r) => nodeFromLedgerRow(r, dicts));
   const { edges, branches } = buildBranchesAndEdges(nodes);
+  const genealogy = buildGenealogy(nodes);
   const ncrs = await loadRelatedNcrs(rows);
 
   return {
@@ -845,10 +967,12 @@ export async function buildTraceabilityChain(
       label: resolved.label,
       detail: resolved.detail,
       matchedEntities: resolved.matchedEntities,
+      notFound: resolved.notFound,
     },
     nodes,
     edges,
     branches,
+    genealogy,
     ncrs,
     generatedAt: new Date().toISOString(),
   };
@@ -903,6 +1027,7 @@ export async function buildChainFromEntryIds(
   const dicts = await loadJoinDictionaries(rows);
   const nodes = rows.map((r) => nodeFromLedgerRow(r, dicts));
   const { edges, branches } = buildBranchesAndEdges(nodes);
+  const genealogy = buildGenealogy(nodes);
   const ncrs = await loadRelatedNcrs(rows);
   return {
     query,
@@ -910,6 +1035,7 @@ export async function buildChainFromEntryIds(
     nodes,
     edges,
     branches,
+    genealogy,
     ncrs,
     generatedAt: new Date().toISOString(),
   };
@@ -966,8 +1092,12 @@ export interface TraceabilityExport {
     generatedAt: string;
     rowCount: number;
     sha256: string;
+    signature: string;
+    signatureAlgorithm: string;
+    signatureKeyId: string;
     query: TraceabilitySearchInput;
     resolvedLabel: string;
+    genealogy: TraceabilityGenealogyStage[];
     columns: string[];
   };
 }
@@ -983,12 +1113,29 @@ export function exportChainCsv(chain: TraceabilityChain): TraceabilityExport {
   }
   const dataCsv = lines.join('\n') + '\n';
   const sha = crypto.createHash('sha256').update(dataCsv, 'utf8').digest('hex');
-  const manifest = {
-    generatedAt: new Date().toISOString(),
+  const generatedAt = new Date().toISOString();
+  const signaturePayload = JSON.stringify({
+    generatedAt,
     rowCount: chain.nodes.length,
     sha256: sha,
     query: chain.query,
     resolvedLabel: chain.resolved.label,
+    genealogy: chain.genealogy,
+  });
+  const signingKey = process.env.EPOCH_TRACE_EXPORT_SIGNING_KEY;
+  const signature = signingKey
+    ? crypto.createHmac('sha256', signingKey).update(signaturePayload, 'utf8').digest('hex')
+    : crypto.createHash('sha256').update(signaturePayload, 'utf8').digest('hex');
+  const manifest = {
+    generatedAt,
+    rowCount: chain.nodes.length,
+    sha256: sha,
+    signature,
+    signatureAlgorithm: signingKey ? 'HMAC-SHA256' : 'SHA256-DEVELOPMENT-FALLBACK',
+    signatureKeyId: process.env.EPOCH_TRACE_EXPORT_SIGNING_KEY_ID ?? (signingKey ? 'default' : 'not-configured'),
+    query: chain.query,
+    resolvedLabel: chain.resolved.label,
+    genealogy: chain.genealogy,
     columns: CSV_COLUMNS.map((c) => c.header),
   };
   // Embed the manifest as the first line of the CSV payload. Recipients
@@ -1004,6 +1151,9 @@ export function exportChainCsv(chain: TraceabilityChain): TraceabilityExport {
 export async function exportChainPdf(chain: TraceabilityChain): Promise<{
   buffer: Buffer;
   sha256: string;
+  signature: string;
+  signatureAlgorithm: string;
+  signatureKeyId: string;
   rowCount: number;
 }> {
   const csvExport = exportChainCsv(chain);
@@ -1069,5 +1219,12 @@ export async function exportChainPdf(chain: TraceabilityChain): Promise<{
     doc.on('error', reject);
   });
 
-  return { buffer, sha256: csvExport.manifest.sha256, rowCount: chain.nodes.length };
+  return {
+    buffer,
+    sha256: csvExport.manifest.sha256,
+    signature: csvExport.manifest.signature,
+    signatureAlgorithm: csvExport.manifest.signatureAlgorithm,
+    signatureKeyId: csvExport.manifest.signatureKeyId,
+    rowCount: chain.nodes.length,
+  };
 }

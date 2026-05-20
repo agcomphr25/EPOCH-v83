@@ -1,12 +1,21 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
+import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -23,6 +32,7 @@ import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import {
   CheckCircle2,
+  XCircle,
   Clock,
   AlertTriangle,
   Search,
@@ -34,6 +44,7 @@ import {
   History,
   RefreshCw,
   ExternalLink,
+  Loader2,
 } from 'lucide-react';
 import { format, isAfter, isBefore, startOfDay } from 'date-fns';
 import { Link } from 'wouter';
@@ -48,6 +59,7 @@ interface AssignedTask {
   notes: string | null;
   assignedTo: string | null;
   assignedToEmployeeId: number | null;
+  link: string | null;
   createdAt: string;
   sectionId: string;
   sectionName: string;
@@ -70,6 +82,49 @@ interface TaskStats {
 
 interface MyTasksResponse {
   tasks: AssignedTask[];
+  stats: TaskStats;
+}
+
+interface TimekeepingApprovalTask {
+  id: string;
+  type: 'pto_approval' | 'salaried_timesheet_approval' | 'hourly_timesheet_approval' | 'forklift_evaluation';
+  title: string;
+  description: string;
+  employeeName: string;
+  startDate?: string;
+  endDate?: string;
+  requestUnit?: string | null;
+  requestedHours?: number | null;
+  employeeNote?: string | null;
+  createdAt: string;
+  priority: 'normal' | 'overdue';
+  actionUrl: string;
+  sourceId: number;
+  writtenScore?: number;
+  testType?: string;
+}
+
+interface TimekeepingTasksResponse {
+  tasks: TimekeepingApprovalTask[];
+  stats: TaskStats;
+}
+
+interface ApprovalDashboardTask {
+  id: string;
+  type: 'approval_request';
+  title: string;
+  description: string;
+  requestType: string;
+  requestedByDisplayName: string;
+  createdAt: string;
+  dueAt: string | null;
+  priority: 'normal' | 'overdue';
+  actionUrl: string;
+  sourceId: string;
+}
+
+interface ApprovalTasksResponse {
+  tasks: ApprovalDashboardTask[];
   stats: TaskStats;
 }
 
@@ -113,6 +168,20 @@ export default function MyTasksControlCenter({
     enabled: !!employeeId,
   });
 
+  const { data: timekeepingTasksData, isError: timekeepingTasksError } = useQuery<TimekeepingTasksResponse>({
+    queryKey: ['/api/timekeeping/my-tasks', employeeId],
+    queryFn: () => apiRequest(`/api/timekeeping/my-tasks/${employeeId}`),
+    enabled: !!employeeId,
+    refetchInterval: 60_000,
+  });
+
+  const { data: approvalTasksData } = useQuery<ApprovalTasksResponse>({
+    queryKey: ['/api/approvals/my-tasks', employeeId],
+    queryFn: () => apiRequest(`/api/approvals/my-tasks/${employeeId}`),
+    enabled: !!employeeId,
+    refetchInterval: 60_000,
+  });
+
   const updateTaskMutation = useMutation({
     mutationFn: ({ taskId, data }: { taskId: string; data: any }) =>
       apiRequest(`/api/preproduction-checklists/tasks/${taskId}`, {
@@ -134,13 +203,18 @@ export default function MyTasksControlCenter({
   });
 
   const tasks = tasksData?.tasks || [];
+  const timekeepingTasks = timekeepingTasksError ? [] : timekeepingTasksData?.tasks || [];
+  const approvalTasks = approvalTasksData?.tasks || [];
   const baseStats = tasksData?.stats || { total: 0, completed: 0, pending: 0, overdue: 0 };
   const sigPending = signatureStats?.pending || 0;
+  const timekeepingPending = timekeepingTasksError ? 0 : timekeepingTasksData?.stats?.pending || 0;
+  const approvalPending = approvalTasksData?.stats?.pending || 0;
+  const approvalOverdue = approvalTasksData?.stats?.overdue || 0;
   const stats = {
-    total: baseStats.total + sigPending,
+    total: baseStats.total + sigPending + timekeepingPending + approvalPending,
     completed: baseStats.completed,
-    pending: baseStats.pending + sigPending,
-    overdue: baseStats.overdue,
+    pending: baseStats.pending + sigPending + timekeepingPending + approvalPending,
+    overdue: baseStats.overdue + approvalOverdue,
   };
 
   const filteredTasks = tasks.filter((task) => {
@@ -239,7 +313,11 @@ export default function MyTasksControlCenter({
                 compact={true}
               />
 
-              {stats.pending > 0 && (
+              <ApprovalRequestTasks tasks={approvalTasks} compact={true} />
+
+              <TimekeepingApprovalTasks tasks={timekeepingTasks} compact={true} />
+
+              {filteredTasks.some((t) => !t.isCompleted) && (
                 <div className="space-y-2">
                   <p className="text-xs text-muted-foreground font-medium">Next Tasks:</p>
                   {filteredTasks
@@ -340,6 +418,10 @@ export default function MyTasksControlCenter({
           employeeName={userName || ''}
           compact={true}
         />
+
+        <ApprovalRequestTasks tasks={approvalTasks} />
+
+        <TimekeepingApprovalTasks tasks={timekeepingTasks} />
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
@@ -507,6 +589,488 @@ export default function MyTasksControlCenter({
   );
 }
 
+function ApprovalRequestTasks({
+  tasks,
+  compact = false,
+}: {
+  tasks: ApprovalDashboardTask[];
+  compact?: boolean;
+}) {
+  if (tasks.length === 0) return null;
+
+  const visibleTasks = compact ? tasks.slice(0, 3) : tasks;
+
+  return (
+    <div className="space-y-2" data-testid="approval-request-tasks">
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-muted-foreground font-medium">
+          Assigned Approvals
+        </p>
+        <Badge variant="outline">{tasks.length}</Badge>
+      </div>
+      {visibleTasks.map((task) => (
+        <div
+          key={task.id}
+          className={`flex items-start gap-3 p-3 border rounded-lg ${
+            task.priority === 'overdue'
+              ? 'bg-red-50/70 border-red-200'
+              : 'bg-blue-50/70 border-blue-200'
+          }`}
+        >
+          <ClipboardList className="h-4 w-4 mt-0.5 text-blue-700 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold truncate">{task.title}</p>
+            <p className="text-xs text-muted-foreground truncate">{task.description}</p>
+            <p className="text-xs text-muted-foreground truncate">
+              Requested by {task.requestedByDisplayName}
+            </p>
+          </div>
+          <Link href={task.actionUrl}>
+            <Button variant="outline" size="sm">
+              <ExternalLink className="h-4 w-4" />
+            </Button>
+          </Link>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function TimekeepingApprovalTasks({
+  tasks,
+  compact = false,
+}: {
+  tasks: TimekeepingApprovalTask[];
+  compact?: boolean;
+}) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [reviewTarget, setReviewTarget] = useState<{
+    task: TimekeepingApprovalTask;
+    decision: 'approved' | 'denied';
+  } | null>(null);
+  const [forkliftTarget, setForkliftTarget] = useState<TimekeepingApprovalTask | null>(null);
+  const [forkliftItems, setForkliftItems] = useState<
+    { itemKey: string; label: string; required: boolean; result: string; notes: string }[]
+  >([]);
+  const [forkliftNotes, setForkliftNotes] = useState('');
+  const [note, setNote] = useState('');
+
+  const { data: forkliftEvaluation, isLoading: forkliftLoading } = useQuery({
+    queryKey: ['/api/training/forklift/evaluations', forkliftTarget?.sourceId],
+    queryFn: () => apiRequest(`/api/training/forklift/evaluations/${forkliftTarget?.sourceId}`),
+    enabled: !!forkliftTarget?.sourceId,
+  });
+
+  useEffect(() => {
+    if (!forkliftTarget || !forkliftEvaluation?.items?.length) return;
+    setForkliftItems(
+      forkliftEvaluation.items.map((item: any) => ({
+        itemKey: item.item_key || item.itemKey,
+        label: item.label,
+        required: item.required !== false,
+        result: item.result || 'pending',
+        notes: item.notes || '',
+      })),
+    );
+  }, [forkliftEvaluation, forkliftTarget]);
+
+  const forkliftCompleteMutation = useMutation({
+    mutationFn: ({
+      task,
+      certify,
+      items,
+      evaluatorNotes,
+    }: {
+      task: TimekeepingApprovalTask;
+      certify: boolean;
+      items: typeof forkliftItems;
+      evaluatorNotes: string;
+    }) =>
+      apiRequest(`/api/training/forklift/evaluations/${task.sourceId}/complete`, {
+        method: 'POST',
+        body: JSON.stringify({
+          certify,
+          evaluatorNotes,
+          items,
+        }),
+      }),
+    onSuccess: (data: any, vars) => {
+      toast({
+        title: vars.certify ? 'Forklift certification completed' : 'Forklift evaluation marked unsatisfactory',
+        description: vars.certify
+          ? 'The laminated badge PDF is opening in a new tab.'
+          : 'The employee will need coaching or another evaluation.',
+      });
+      if (vars.certify && data?.evaluation?.id) {
+        window.open(`/api/training/forklift/evaluations/${data.evaluation.id}/badge.pdf`, '_blank', 'noopener,noreferrer');
+      }
+      setForkliftTarget(null);
+      setForkliftItems([]);
+      setForkliftNotes('');
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/my-tasks'] });
+    },
+    onError: (err: Error) => {
+      toast({
+        title: 'Unable to save forklift evaluation',
+        description: err.message || 'Please try again.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const reviewMutation = useMutation({
+    mutationFn: ({
+      task,
+      decision,
+      note,
+    }: {
+      task: TimekeepingApprovalTask;
+      decision: 'approved' | 'denied';
+      note: string;
+    }) =>
+      apiRequest(`/api/timekeeping/time-off/${task.sourceId}/review`, {
+        method: 'POST',
+        body: JSON.stringify({
+          stage: 'supervisor',
+          decision,
+          note: note || undefined,
+        }),
+      }),
+    onSuccess: (_data, vars) => {
+      toast({
+        title: vars.decision === 'approved' ? 'PTO approved' : 'PTO denied',
+        description:
+          vars.decision === 'approved'
+            ? 'The request has been advanced for the next review.'
+            : 'The employee will be notified of the denial.',
+      });
+      setReviewTarget(null);
+      setNote('');
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/my-tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/pto-command-center/summary'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/pto-command-center/pipeline'] });
+    },
+    onError: (err: Error) => {
+      toast({
+        title: 'Unable to update PTO request',
+        description: err.message || 'Please try again.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  if (tasks.length === 0) return null;
+
+  const visibleTasks = compact ? tasks.slice(0, 3) : tasks;
+  const ptoReviewTarget = reviewTarget?.task.type === 'pto_approval' ? reviewTarget : null;
+  const hasFailingForkliftItem = forkliftItems.some((item) => item.required && item.result === 'fail');
+  const hasPendingForkliftItem = forkliftItems.some((item) => item.required && item.result === 'pending');
+
+  return (
+    <>
+      <div className="space-y-2" data-testid="timekeeping-approval-tasks">
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-muted-foreground font-medium">
+            Timekeeping Approvals
+          </p>
+          <Badge variant="outline">{tasks.length}</Badge>
+        </div>
+        {visibleTasks.map((task) => (
+          <div
+            key={task.id}
+            className="flex items-start gap-3 p-3 border rounded-lg bg-amber-50/70 border-amber-200"
+          >
+            <Clock className="h-4 w-4 mt-0.5 text-amber-700 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold truncate">{task.title}</p>
+              <p className="text-xs text-muted-foreground truncate">{task.description}</p>
+            </div>
+            {task.type === 'pto_approval' ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setReviewTarget({ task, decision: 'approved' })}
+                data-testid={`button-review-pto-${task.sourceId}`}
+              >
+                Review
+              </Button>
+            ) : task.type === 'forklift_evaluation' ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setForkliftTarget(task)}
+                data-testid={`button-review-forklift-${task.sourceId}`}
+              >
+                Evaluate
+              </Button>
+            ) : (
+              <Link href={task.actionUrl}>
+                <Button variant="outline" size="sm">
+                  <ExternalLink className="h-4 w-4" />
+                </Button>
+              </Link>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <Dialog
+        open={!!ptoReviewTarget}
+        onOpenChange={(open) => {
+          if (!open) {
+            setReviewTarget(null);
+            setNote('');
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Review PTO Request</DialogTitle>
+          </DialogHeader>
+          {ptoReviewTarget && (
+            <div className="space-y-4">
+              <div className="rounded-md border bg-muted/30 p-3 text-sm space-y-1">
+                <div className="font-semibold">{ptoReviewTarget.task.employeeName}</div>
+                <div className="text-muted-foreground">
+                  {ptoReviewTarget.task.startDate || 'Start date'} to {ptoReviewTarget.task.endDate || 'End date'}
+                  {ptoReviewTarget.task.requestedHours != null
+                    ? ` - ${ptoReviewTarget.task.requestedHours} hours`
+                    : ''}
+                </div>
+                {ptoReviewTarget.task.requestUnit && (
+                  <div className="text-muted-foreground">
+                    Unit: {ptoReviewTarget.task.requestUnit.replace(/_/g, ' ')}
+                  </div>
+                )}
+                {ptoReviewTarget.task.employeeNote && (
+                  <div className="pt-2 text-muted-foreground">
+                    <span className="font-medium text-foreground">Employee note:</span>{' '}
+                    {ptoReviewTarget.task.employeeNote}
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  variant={ptoReviewTarget.decision === 'approved' ? 'default' : 'outline'}
+                  onClick={() => setReviewTarget({ ...ptoReviewTarget, decision: 'approved' })}
+                >
+                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                  Approve
+                </Button>
+                <Button
+                  variant={ptoReviewTarget.decision === 'denied' ? 'destructive' : 'outline'}
+                  onClick={() => setReviewTarget({ ...ptoReviewTarget, decision: 'denied' })}
+                >
+                  <XCircle className="h-4 w-4 mr-2" />
+                  Deny
+                </Button>
+              </div>
+
+              <div className="space-y-1">
+                <Label>
+                  {ptoReviewTarget.decision === 'denied' ? 'Denial reason' : 'Note'}
+                  {ptoReviewTarget.decision === 'denied' && <span className="text-red-500"> *</span>}
+                </Label>
+                <Textarea
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder={ptoReviewTarget.decision === 'denied' ? 'Required for denial' : 'Optional'}
+                  rows={3}
+                  className="resize-none"
+                  data-testid="textarea-pto-review-note"
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setReviewTarget(null);
+                setNote('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant={ptoReviewTarget?.decision === 'denied' ? 'destructive' : 'default'}
+              disabled={
+                reviewMutation.isPending ||
+                (ptoReviewTarget?.decision === 'denied' && !note.trim())
+              }
+              onClick={() => {
+                if (!ptoReviewTarget) return;
+                if (ptoReviewTarget.decision === 'denied' && !note.trim()) return;
+                reviewMutation.mutate({
+                  task: ptoReviewTarget.task,
+                  decision: ptoReviewTarget.decision,
+                  note: note.trim(),
+                });
+              }}
+              data-testid="button-submit-pto-review"
+            >
+              {reviewMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {ptoReviewTarget?.decision === 'denied' ? 'Submit Denial' : 'Approve Request'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!forkliftTarget}
+        onOpenChange={(open) => {
+          if (!open) {
+            setForkliftTarget(null);
+            setForkliftItems([]);
+            setForkliftNotes('');
+          }
+        }}
+      >
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Forklift Practical Evaluation</DialogTitle>
+          </DialogHeader>
+          {forkliftTarget && (
+            <div className="space-y-4">
+              <div className="rounded-md border bg-muted/30 p-3 text-sm space-y-1">
+                <div className="font-semibold">{forkliftTarget.employeeName}</div>
+                <div className="text-muted-foreground">
+                  Sit-down counterbalance forklift - written test score {forkliftTarget.writtenScore ?? '80'}%
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Needs Coaching is acceptable when the overall evaluation is satisfactory. Required Fail items block certification.
+                </div>
+              </div>
+
+              {forkliftLoading ? (
+                <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Loading checklist...
+                </div>
+              ) : (
+                <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
+                  {forkliftItems.map((item, index) => (
+                    <div key={item.itemKey} className="rounded-md border p-3 space-y-2">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-medium">{index + 1}. {item.label}</p>
+                          {item.required && <p className="text-xs text-muted-foreground">Required</p>}
+                        </div>
+                        <Select
+                          value={item.result}
+                          onValueChange={(value) => {
+                            setForkliftItems((prev) =>
+                              prev.map((row) =>
+                                row.itemKey === item.itemKey ? { ...row, result: value } : row,
+                              ),
+                            );
+                          }}
+                        >
+                          <SelectTrigger className="w-[160px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="pending">Pending</SelectItem>
+                            <SelectItem value="pass">Pass</SelectItem>
+                            <SelectItem value="needs_coaching">Needs Coaching</SelectItem>
+                            <SelectItem value="fail">Fail</SelectItem>
+                            <SelectItem value="na">N/A</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <Textarea
+                        value={item.notes}
+                        onChange={(event) => {
+                          const notes = event.target.value;
+                          setForkliftItems((prev) =>
+                            prev.map((row) =>
+                              row.itemKey === item.itemKey ? { ...row, notes } : row,
+                            ),
+                          );
+                        }}
+                        placeholder="Notes for this checklist item"
+                        rows={2}
+                        className="resize-none"
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="space-y-1">
+                <Label>Evaluator notes</Label>
+                <Textarea
+                  value={forkliftNotes}
+                  onChange={(event) => setForkliftNotes(event.target.value)}
+                  placeholder="Overall observations, coaching given, mini-course notes"
+                  rows={3}
+                  className="resize-none"
+                />
+              </div>
+
+              {hasFailingForkliftItem && (
+                <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                  One or more required items are marked Fail. Mark this evaluation unsatisfactory or update the result after coaching.
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setForkliftTarget(null);
+                setForkliftItems([]);
+                setForkliftNotes('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="outline"
+              disabled={!forkliftTarget || forkliftCompleteMutation.isPending}
+              onClick={() => {
+                if (!forkliftTarget) return;
+                forkliftCompleteMutation.mutate({
+                  task: forkliftTarget,
+                  certify: false,
+                  items: forkliftItems,
+                  evaluatorNotes: forkliftNotes.trim(),
+                });
+              }}
+            >
+              Mark Unsatisfactory
+            </Button>
+            <Button
+              disabled={
+                !forkliftTarget ||
+                forkliftCompleteMutation.isPending ||
+                hasFailingForkliftItem ||
+                hasPendingForkliftItem
+              }
+              onClick={() => {
+                if (!forkliftTarget) return;
+                forkliftCompleteMutation.mutate({
+                  task: forkliftTarget,
+                  certify: true,
+                  items: forkliftItems,
+                  evaluatorNotes: forkliftNotes.trim(),
+                });
+              }}
+              data-testid="button-submit-forklift-evaluation"
+            >
+              {forkliftCompleteMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Certify Operator
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 function ProjectTaskGroup({
   project,
   isExpanded,
@@ -608,6 +1172,18 @@ function ProjectTaskGroup({
                 </p>
               )}
             </div>
+            {task.link && !task.isCompleted && (
+              <Link href={task.link}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={(e) => e.stopPropagation()}
+                  data-testid={`link-open-task-${task.id}`}
+                >
+                  <ExternalLink className="h-4 w-4" />
+                </Button>
+              </Link>
+            )}
           </div>
         ))}
       </CollapsibleContent>

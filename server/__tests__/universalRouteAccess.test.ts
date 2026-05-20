@@ -48,9 +48,16 @@ describe('hasRouteAccess — universal routes bypass explicit permission entries
     expect(hasRouteAccess('angiet', '/employee-portal')).toBe(true);
   });
 
-  it('still allows angiet to access her explicit routes', () => {
+  it('still allows angiet to access her explicit Joey-style dashboard routes', () => {
+    expect(hasRouteAccess('angiet', '/angiet-dashboard')).toBe(true);
     expect(hasRouteAccess('angiet', '/order-entry')).toBe(true);
+    expect(hasRouteAccess('angiet', '/department-queue/cnc')).toBe(true);
+    expect(hasRouteAccess('angiet', '/department-queue/gunsmith')).toBe(true);
+    expect(hasRouteAccess('angiet', '/cutting-control-center/dashboard')).toBe(true);
+    expect(hasRouteAccess('angiet', '/fabric-inventory')).toBe(true);
     expect(hasRouteAccess('angiet', '/orders-list')).toBe(true);
+    expect(hasRouteAccess('angiet', '/customers')).toBe(true);
+    expect(hasRouteAccess('angiet', '/inventory/parts-request')).toBe(true);
   });
 
   it('still blocks angiet from routes outside her explicit list and outside universal routes', () => {

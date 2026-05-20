@@ -683,6 +683,7 @@ interface ProcurementComplianceStats {
   withSecondPartyComplete: number;
   withVendorApprovedTrue: number;
   withVendorApprovedFalse: number;
+  withDebarmentEvidence: number;
   withAttentionOrBlocked: number;
   farRequiredCount: number;
   farRequiredWithStatement: number;
@@ -707,6 +708,16 @@ async function procurementComplianceStats(dateFilterClause = '', params: unknown
                                                                             AS with_vendor_approved_true,
         COUNT(cr.id) FILTER (WHERE cr.vendor_approved = false AND cr.review_status = 'reviewed')::text
                                                                             AS with_vendor_approved_false,
+        COUNT(vp.id) FILTER (
+          WHERE EXISTS (
+            SELECT 1
+            FROM vendor_debarment_checks vdc
+            WHERE vdc.vendor_id = vp.vendor_id
+              AND vdc.context = 'po_issuance'
+              AND vdc.context_ref_id = vp.id
+              AND vdc.result = 'pass'
+          )
+        )::text                                                             AS with_debarment_evidence,
         COUNT(cr.id) FILTER (WHERE cr.review_status IN ('requires_attention','blocked'))::text
                                                                             AS with_attention_or_blocked,
         COUNT(cr.id) FILTER (WHERE cr.far_required = true)::text           AS far_required_count,
@@ -781,6 +792,7 @@ async function procurementComplianceStats(dateFilterClause = '', params: unknown
       withSecondPartyComplete: parseInt(r.with_second_party_complete, 10) || 0,
       withVendorApprovedTrue: parseInt(r.with_vendor_approved_true, 10) || 0,
       withVendorApprovedFalse: parseInt(r.with_vendor_approved_false, 10) || 0,
+      withDebarmentEvidence: parseInt(r.with_debarment_evidence, 10) || 0,
       withAttentionOrBlocked: parseInt(r.with_attention_or_blocked, 10) || 0,
       farRequiredCount: parseInt(r.far_required_count, 10) || 0,
       farRequiredWithStatement: parseInt(r.far_required_with_statement, 10) || 0,
@@ -1072,15 +1084,49 @@ export async function scoreProcurement(): Promise<DomainScorerResult> {
   }
 
   // -------------------------------------------------------------------------
-  // Check 5: VENDOR_EVALUATION
-  // Evidence source: vendors.evaluated boolean and vendors.evaluation_date date field.
-  // Note: the schema does not have a last_evaluated_at column — evaluation_date is the
-  //   actual field populated by the vendor evaluation workflow.
+  // Check 5: DEBARMENT_CHECK
+  // Evidence source: vendor_debarment_checks context='po_issuance'.
+  // The vendor PO workflow currently does not enforce this gate, so missing
+  // evidence remains visible in EDRI instead of blocking PO issuance.
+  // -------------------------------------------------------------------------
+  if (stats === null) {
+    checks['DEBARMENT_CHECK'] = 0.5;
+    evidenceItems.push({ label: 'PO issuance debarment checks', value: 'SCORER_UNAVAILABLE' });
+  } else if (totalIssuedPos === 0) {
+    checks['DEBARMENT_CHECK'] = 0.5;
+    evidenceItems.push({ label: 'PO issuance debarment checks', value: 'N/A — no issued vendor POs' });
+  } else {
+    const debarmentEvidenceCount = stats.withDebarmentEvidence;
+    const debarmentRate = debarmentEvidenceCount / totalIssuedPos;
+    checks['DEBARMENT_CHECK'] = debarmentRate >= 0.95 ? 1 : (debarmentRate > 0 ? 0.5 : 0);
+    evidenceItems.push({ label: 'Issued POs with passing debarment evidence at issuance', value: `${debarmentEvidenceCount} / ${totalIssuedPos}` });
+    if (debarmentRate < 0.95) {
+      redFlags.push({
+        domainKey: 'PROCUREMENT', flagKey: 'DEBARMENT_CHECK_NOT_CONFIGURED', severity: 'MEDIUM',
+        title: 'Debarment Check Not Fully Configured',
+        description: `${totalIssuedPos - debarmentEvidenceCount} of ${totalIssuedPos} issued vendor POs do not have passing debarment-check evidence recorded at PO issuance. This gate is currently deactivated in the vendor PO workflow.`,
+        farCitation: 'FAR 9.405', potentialScoreRecovery: 3,
+      });
+      remediationItems.push({
+        domainKey: 'PROCUREMENT', flagKey: 'DEBARMENT_CHECK_NOT_CONFIGURED',
+        title: 'Decide and configure vendor debarment-check policy',
+        description: 'If the debarment check applies, re-enable PO issuance evidence capture and require passing vendor_debarment_checks records for issued POs.',
+        priority: 'P3_MEDIUM', potentialScoreRecovery: 3,
+      });
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Check 6: VENDOR_EVALUATION
+  // Evidence source: vendors.evaluated plus scored vendor_monthly_evaluations.
+  // This intentionally matches the Vendor Management page, where historical
+  // scored evaluation records count as evaluated even if the denormalized
+  // vendor fields have not been refreshed yet.
   //   This check does NOT conflate vendor approval with performance evaluation;
   //   approved = whether the vendor is approved to be used; evaluated = whether a periodic
   //   performance evaluation has been completed.
   //
-  // Policy: Annual evaluations are only required for Approval Level A vendors
+  // Policy: evaluations are only required for Approval Level A vendors
   // (critical / high-risk suppliers). Level B and C vendors are out of scope for
   // this check, matching the policy surfaced on the Vendor Management page.
   // Vendors with no approval_level set are treated as out of scope here — they
@@ -1089,27 +1135,35 @@ export async function scoreProcurement(): Promise<DomainScorerResult> {
   // satisfied (denominator 0 → nothing to evaluate) rather than penalised.
   // -------------------------------------------------------------------------
   const totalVendors = await safeCount(`SELECT COUNT(*) AS count FROM vendors WHERE is_active = true AND approval_level = 'A'`);
-  const recentlyEvaluatedVendors = await safeCount(`
+  const evaluatedVendors = await safeCount(`
+    WITH scored_evaluations AS (
+      SELECT vendor_id
+      FROM vendor_monthly_evaluations
+      WHERE quality_score IS NOT NULL
+         OR cost_score IS NOT NULL
+         OR delivery_score IS NOT NULL
+         OR response_score IS NOT NULL
+      GROUP BY vendor_id
+    )
     SELECT COUNT(*) AS count FROM vendors
+    LEFT JOIN scored_evaluations se ON se.vendor_id = vendors.id
     WHERE is_active = true
       AND approval_level = 'A'
-      AND evaluated = true
-      AND evaluation_date IS NOT NULL
-      AND evaluation_date::timestamp > NOW() - INTERVAL '365 days'
+      AND (COALESCE(evaluated, false) = true OR se.vendor_id IS NOT NULL)
   `);
-  const evalRate = (totalVendors === null || recentlyEvaluatedVendors === null)
+  const evalRate = (totalVendors === null || evaluatedVendors === null)
     ? null
-    : (totalVendors > 0 ? recentlyEvaluatedVendors / totalVendors : 1);
+    : (totalVendors > 0 ? evaluatedVendors / totalVendors : 1);
   checks['VENDOR_EVALUATION'] = evalRate === null ? 0.5 : evalRate >= 0.75 ? 1 : (evalRate > 0 ? 0.5 : 0);
-  evidenceItems.push({ label: 'Active Level A vendors evaluated in last 365 days (evaluation_date)', value: (recentlyEvaluatedVendors === null || totalVendors === null) ? 'SCORER_UNAVAILABLE' : `${recentlyEvaluatedVendors} / ${totalVendors}` });
+  evidenceItems.push({ label: 'Active Level A vendors with performance evaluation on file', value: (evaluatedVendors === null || totalVendors === null) ? 'SCORER_UNAVAILABLE' : `${evaluatedVendors} / ${totalVendors}` });
   if (evalRate !== null && evalRate < 0.75 && totalVendors !== null && totalVendors > 0) {
     redFlags.push({
       domainKey: 'PROCUREMENT', flagKey: 'OVERDUE_VENDOR_EVALUATIONS', severity: 'MEDIUM',
-      title: 'Vendor Performance Evaluation Lapsed',
-      description: `Only ${(evalRate * 100).toFixed(0)}% of active Approval Level A vendors have a recorded performance evaluation in the last 12 months (${recentlyEvaluatedVendors} of ${totalVendors}).`,
+      title: 'Vendor Performance Evaluations Missing',
+      description: `Only ${(evalRate * 100).toFixed(0)}% of active Approval Level A vendors have a recorded performance evaluation on file (${evaluatedVendors} of ${totalVendors}).`,
       farCitation: 'FAR 44.303', potentialScoreRecovery: 3,
     });
-    remediationItems.push({ domainKey: 'PROCUREMENT', flagKey: 'OVERDUE_VENDOR_EVALUATIONS', title: 'Complete overdue vendor performance evaluations', description: 'Evaluate all active Approval Level A vendors on an annual cycle and record evaluation_date in the vendor record. Levels B and C are not subject to this requirement.', priority: 'P3_MEDIUM', potentialScoreRecovery: 3 });
+    remediationItems.push({ domainKey: 'PROCUREMENT', flagKey: 'OVERDUE_VENDOR_EVALUATIONS', title: 'Complete missing vendor performance evaluations', description: 'Evaluate active Approval Level A vendors that do not have an evaluation recorded in the vendor master or vendor monthly evaluations. Levels B and C are not subject to this requirement.', priority: 'P3_MEDIUM', potentialScoreRecovery: 3 });
   }
 
   return { rawScore: computeRawScore(checks), checks, redFlags, remediationItems, evidenceItems };
@@ -1282,7 +1336,14 @@ export async function scorePolicy(): Promise<DomainScorerResult> {
   }
 
   // Check 4: Document version control
-  const controlledDocs = await safeCount(`SELECT COUNT(*) as count FROM controlled_documents WHERE status = 'ACTIVE'`);
+  // The Master Document Register marks active controlled docs as approved; older
+  // data may still use ACTIVE, so count both while excluding expired records.
+  const controlledDocs = await safeCount(`
+    SELECT COUNT(*) as count
+    FROM controlled_documents
+    WHERE LOWER(status) IN ('approved', 'active')
+      AND (expiration_date IS NULL OR expiration_date >= CURRENT_DATE)
+  `);
   checks['DOCUMENT_VERSION_CONTROL'] = controlledDocs === null ? 0.5 : controlledDocs > 0 ? 1 : 0.5;
   evidenceItems.push({ label: 'Active controlled documents', value: controlledDocs ?? 'SCORER_UNAVAILABLE' });
   if (controlledDocs !== null && controlledDocs === 0) {

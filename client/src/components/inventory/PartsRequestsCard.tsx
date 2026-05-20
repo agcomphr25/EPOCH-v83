@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus,
@@ -66,6 +66,7 @@ interface PartsRequestFormData {
   status: string;
   expectedDelivery: string;
   notes: string;
+  approvalSignature: string;
 }
 
 interface ProjectOption {
@@ -90,6 +91,23 @@ type PartsRequestWithProject = PartsRequest & {
 
 const NONE_VALUE = '__none__';
 
+interface SessionUser {
+  id: number;
+  username: string;
+  firstName?: string;
+  lastName?: string;
+  role?: string;
+}
+
+function getDefaultRequestor(user: SessionUser | null | undefined): string {
+  if (!user) return '';
+  const fullName = [user.firstName, user.lastName]
+    .filter((s) => typeof s === 'string' && s.trim().length > 0)
+    .join(' ')
+    .trim();
+  return user.username || fullName || '';
+}
+
 export default function PartsRequestsCard() {
   const queryClient = useQueryClient();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -98,6 +116,20 @@ export default function PartsRequestsCard() {
   const [editingRequest, setEditingRequest] = useState<PartsRequest | null>(
     null
   );
+  const requestedByEditedRef = useRef(false);
+  const initialProjectId = useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    return new URLSearchParams(window.location.search).get('projectId') || '';
+  }, []);
+  const openCreateFromQuery = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return new URLSearchParams(window.location.search).get('create') === '1';
+  }, []);
+
+  const { data: sessionUser } = useQuery<SessionUser | null>({
+    queryKey: ['/api/auth/session'],
+  });
+  const defaultRequestor = getDefaultRequestor(sessionUser);
 
   const [formData, setFormData] = useState<PartsRequestFormData>({
     agPartNumber: '',
@@ -105,7 +137,7 @@ export default function PartsRequestsCard() {
     partName: '',
     requestedBy: '',
     productionLine: '',
-    projectId: '',
+    projectId: initialProjectId,
     department: '',
     quantity: '',
     urgency: 'MEDIUM',
@@ -115,6 +147,7 @@ export default function PartsRequestsCard() {
     status: 'PENDING',
     expectedDelivery: '',
     notes: '',
+    approvalSignature: '',
   });
 
   // Load parts requests
@@ -235,13 +268,14 @@ export default function PartsRequestsCard() {
   });
 
   const resetForm = () => {
+    requestedByEditedRef.current = false;
     setFormData({
       agPartNumber: '',
       partNumber: '',
       partName: '',
-      requestedBy: '',
+      requestedBy: getDefaultRequestor(sessionUser),
       productionLine: '',
-      projectId: '',
+      projectId: initialProjectId,
       department: '',
       quantity: '',
       urgency: 'MEDIUM',
@@ -251,6 +285,7 @@ export default function PartsRequestsCard() {
       status: 'PENDING',
       expectedDelivery: '',
       notes: '',
+      approvalSignature: '',
     });
   };
 
@@ -258,8 +293,32 @@ export default function PartsRequestsCard() {
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target;
+    if (name === 'requestedBy') {
+      requestedByEditedRef.current = true;
+    }
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
+
+  // When the create dialog is open and the session resolves later (or
+  // changes), seed the requestedBy field from the signed-in user as long
+  // as the user hasn't typed anything into it yet.
+  useEffect(() => {
+    if (!isCreateOpen) return;
+    if (editingRequest) return;
+    if (requestedByEditedRef.current) return;
+    if (!defaultRequestor) return;
+    setFormData((prev) =>
+      prev.requestedBy ? prev : { ...prev, requestedBy: defaultRequestor }
+    );
+  }, [isCreateOpen, editingRequest, defaultRequestor]);
+
+  useEffect(() => {
+    if (!initialProjectId) return;
+    setFormData((prev) => ({ ...prev, projectId: initialProjectId }));
+    if (openCreateFromQuery) {
+      setIsCreateOpen(true);
+    }
+  }, [initialProjectId, openCreateFromQuery]);
 
   const handleSelectChange = (name: string, value: string) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -309,6 +368,14 @@ export default function PartsRequestsCard() {
         : null;
       submitData.expectedDelivery = formData.expectedDelivery || null;
       submitData.notes = formData.notes || null;
+      if (formData.status === 'APPROVED') {
+        if (!formData.approvalSignature.trim()) {
+          toast.error('Digital approval signature is required to approve a request');
+          return;
+        }
+        submitData.approvedBy = formData.approvalSignature.trim();
+        submitData.digitalApprovalSignature = `Inventory manager approval: ${formData.approvalSignature.trim()}`;
+      }
     }
 
     if (editingRequest) {
@@ -319,6 +386,7 @@ export default function PartsRequestsCard() {
   };
 
   const handleEdit = (request: PartsRequest) => {
+    requestedByEditedRef.current = true;
     setEditingRequest(request);
     setFormData({
       agPartNumber: request.agPartNumber || '',
@@ -340,6 +408,7 @@ export default function PartsRequestsCard() {
         ? new Date(request.expectedDelivery).toISOString().split('T')[0]
         : '',
       notes: request.notes || '',
+      approvalSignature: '',
     });
     setIsEditOpen(true);
   };
@@ -354,6 +423,8 @@ export default function PartsRequestsCard() {
     switch (status) {
       case 'PENDING':
         return 'bg-yellow-100 text-yellow-800';
+      case 'PENDING_OWNER_APPROVAL':
+        return 'bg-amber-100 text-amber-900';
       case 'APPROVED':
         return 'bg-green-100 text-green-800';
       case 'ORDERED':
@@ -382,7 +453,7 @@ export default function PartsRequestsCard() {
     }
   };
 
-  const FormContent = () => (
+  const renderFormContent = () => (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
         <Label htmlFor="inventoryItem">Inventory Part *</Label>
@@ -576,6 +647,9 @@ export default function PartsRequestsCard() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="PENDING">Pending</SelectItem>
+                  <SelectItem value="PENDING_OWNER_APPROVAL" disabled>
+                    Pending Owner Approval
+                  </SelectItem>
                   <SelectItem value="APPROVED">Approved</SelectItem>
                   <SelectItem value="ORDERED">Ordered</SelectItem>
                   <SelectItem value="RECEIVED">Received</SelectItem>
@@ -617,6 +691,22 @@ export default function PartsRequestsCard() {
               onChange={handleChange}
             />
           </div>
+
+          {formData.status === 'APPROVED' && (
+            <div>
+              <Label htmlFor="approvalSignature">Digital Approval Signature</Label>
+              <Input
+                id="approvalSignature"
+                name="approvalSignature"
+                value={formData.approvalSignature}
+                onChange={handleChange}
+                placeholder="Type inventory manager name"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Requests over $1,000 will move to owner approval after this review.
+              </p>
+            </div>
+          )}
         </>
       )}
 
@@ -676,7 +766,15 @@ export default function PartsRequestsCard() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-semibold">Parts Requests</h3>
-        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+        <Dialog
+          open={isCreateOpen}
+          onOpenChange={(open) => {
+            setIsCreateOpen(open);
+            if (!open) {
+              resetForm();
+            }
+          }}
+        >
           <DialogTrigger asChild>
             <Button>
               <Plus className="h-4 w-4 mr-2" />
@@ -687,7 +785,7 @@ export default function PartsRequestsCard() {
             <DialogHeader>
               <DialogTitle>Create New Parts Request</DialogTitle>
             </DialogHeader>
-            <FormContent />
+            {renderFormContent()}
           </DialogContent>
         </Dialog>
       </div>
@@ -754,7 +852,9 @@ export default function PartsRequestsCard() {
 
                       <div className="flex items-center gap-2">
                         <Badge className={getStatusBadgeColor(request.status)}>
-                          {request.status}
+                          {request.status === 'PENDING_OWNER_APPROVAL'
+                            ? 'OWNER APPROVAL'
+                            : request.status}
                         </Badge>
                         <Badge
                           className={getUrgencyBadgeColor(request.urgency)}
@@ -804,6 +904,34 @@ export default function PartsRequestsCard() {
                           </div>
                         )}
 
+                        {request.approvalStatus && (
+                          <div className="text-xs text-gray-600 bg-blue-50 p-2 rounded">
+                            Approval: {request.approvalStatus}
+                            {request.approvalRequiredRole === 'OWNER'
+                              ? ' - owner required'
+                              : ''}
+                            {request.approvedDate
+                              ? ` - ${new Date(request.approvedDate).toLocaleString()}`
+                              : ''}
+                          </div>
+                        )}
+
+                        {Array.isArray(request.approvalHistory) &&
+                          request.approvalHistory.length > 0 && (
+                            <div className="text-xs text-gray-600 bg-gray-50 p-2 rounded space-y-1">
+                              <div className="font-medium text-gray-700">Approval History</div>
+                              {request.approvalHistory.slice(-3).map((event, index) => (
+                                <div key={`${request.id}-approval-${index}`}>
+                                  {String(event.event || 'APPROVAL')} by{' '}
+                                  {String(event.actor || 'System')}
+                                  {event.occurredAt
+                                    ? ` - ${new Date(String(event.occurredAt)).toLocaleString()}`
+                                    : ''}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
                         {request.expectedDelivery && (
                           <div className="flex items-center gap-2">
                             <Calendar className="h-4 w-4 text-gray-400" />
@@ -846,7 +974,7 @@ export default function PartsRequestsCard() {
           <DialogHeader>
             <DialogTitle>Edit Parts Request</DialogTitle>
           </DialogHeader>
-          <FormContent />
+          {renderFormContent()}
         </DialogContent>
       </Dialog>
     </div>

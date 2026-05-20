@@ -186,12 +186,242 @@ function RecipientPickerList({
   );
 }
 
+function formatReadinessDate(value: unknown): string {
+  if (!value) return 'None recorded';
+  const date = new Date(String(value));
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString();
+}
+
+function IssueReadinessCard({
+  readiness,
+  isLoading,
+  onOpenPurchasingControls,
+  onOpenComplianceReview,
+}: {
+  readiness?: IssueReadiness;
+  isLoading: boolean;
+  onOpenPurchasingControls: () => void;
+  onOpenComplianceReview: () => void;
+}) {
+  const [debarmentDialogOpen, setDebarmentDialogOpen] = useState(false);
+  const [debarmentSource, setDebarmentSource] = useState<'sam.gov' | 'manual_attestation' | 'document_upload'>('manual_attestation');
+  const [debarmentResult, setDebarmentResult] = useState<'pass' | 'fail' | 'inconclusive'>('pass');
+  const [debarmentNotes, setDebarmentNotes] = useState('');
+
+  const recordDebarment = useMutation({
+    mutationFn: () => {
+      if (!readiness?.vendorId) throw new Error('Vendor ID is missing for this PO');
+      return apiRequest('/api/vendor-debarment-checks', {
+        method: 'POST',
+        body: JSON.stringify({
+          vendorId: readiness.vendorId,
+          context: 'po_issuance',
+          contextRefId: readiness.vendorPoId,
+          source: debarmentSource,
+          result: debarmentResult,
+          notes: debarmentNotes,
+        }),
+      });
+    },
+    onSuccess: () => {
+      toast.success('Debarment check recorded');
+      setDebarmentNotes('');
+      setDebarmentResult('pass');
+      setDebarmentDialogOpen(false);
+      if (readiness?.vendorPoId) {
+        queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', readiness.vendorPoId, 'issue-readiness'] });
+      }
+      queryClient.invalidateQueries({ queryKey: ['/api/vendors'] });
+    },
+    onError: (e: any) => toast.error(e?.message ?? 'Failed to record debarment check'),
+  });
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="py-4">
+          <Skeleton className="h-5 w-48 mb-3" />
+          <Skeleton className="h-4 w-full" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!readiness) return null;
+
+  const failingSections = readiness.sections.filter((section) => section.status === 'fail');
+  const debarment = readiness.sections.find((section) => section.key === 'debarment');
+  const latestDebarment = debarment?.details?.latestPassingCheck as any;
+  const vendorMaster = readiness.sections.find((section) => section.key === 'vendor_master');
+  const vendorMasterDetails = vendorMaster?.details as any;
+
+  return (
+    <>
+    <Card className={readiness.ready ? 'border-emerald-200 bg-emerald-50/50' : 'border-amber-200 bg-amber-50/60'}>
+      <CardHeader className="pb-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <CardTitle className="text-base flex items-center gap-2">
+              {readiness.ready ? (
+                <ShieldCheck className="h-4 w-4 text-emerald-600" />
+              ) : (
+                <ShieldAlert className="h-4 w-4 text-amber-600" />
+              )}
+              PO Issue Readiness
+            </CardTitle>
+            <CardDescription>
+              Vendor approval, supplier scope, purchasing controls, and P2 review are checked separately.
+            </CardDescription>
+          </div>
+          <Badge className={readiness.ready ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800'}>
+            {readiness.ready ? 'Ready to issue' : `${failingSections.length} gate${failingSections.length === 1 ? '' : 's'} need attention`}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-5">
+          {readiness.sections.map((section) => {
+            const passed = section.status === 'pass';
+            const skipped = section.status === 'not_applicable';
+            return (
+              <div key={section.key} className="rounded-md border bg-white/80 p-3">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  {passed ? (
+                    <CheckCircle className="h-4 w-4 text-emerald-600" />
+                  ) : skipped ? (
+                    <Clock className="h-4 w-4 text-slate-400" />
+                  ) : (
+                    <XCircle className="h-4 w-4 text-red-600" />
+                  )}
+                  {section.label}
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  {passed ? 'Clear' : skipped ? 'Not required for this PO' : section.blockers[0]}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {latestDebarment && (
+          <div className="text-xs text-muted-foreground">
+            Latest passing debarment check: {formatReadinessDate(latestDebarment.checkedAt)}
+            {latestDebarment.source ? ` via ${latestDebarment.source}` : ''}
+          </div>
+        )}
+
+        {vendorMasterDetails?.vendorId && (
+          <div className="text-xs text-muted-foreground">
+            This PO is linked to vendor #{vendorMasterDetails.vendorId}
+            {typeof vendorMasterDetails.approved === 'boolean'
+              ? `; master approved: ${vendorMasterDetails.approved ? 'Yes' : 'No'}`
+              : ''}
+            {vendorMasterDetails.approvalLevel
+              ? `; approval level: ${vendorMasterDetails.approvalLevel}`
+              : ''}
+            {vendorMasterDetails.approvalExpiration
+              ? `; expires: ${formatReadinessDate(vendorMasterDetails.approvalExpiration)}`
+              : ''}
+            {Array.isArray(vendorMasterDetails.approvedSameNameVendors) && vendorMasterDetails.approvedSameNameVendors.length > 0
+              ? `. Approved same-name vendor record(s): ${vendorMasterDetails.approvedSameNameVendors.map((v: any) => `#${v.id}`).join(', ')}`
+              : ''}
+          </div>
+        )}
+
+        {failingSections.length > 0 && (
+          <div className="rounded-md border border-amber-200 bg-white/80 p-3">
+            <div className="text-sm font-medium text-amber-900 mb-2">What to fix before issuing</div>
+            <ul className="space-y-1 text-sm text-amber-900">
+              {failingSections.flatMap((section) =>
+                section.blockers.map((blocker) => (
+                  <li key={`${section.key}-${blocker}`}>- {section.label}: {blocker}</li>
+                ))
+              )}
+            </ul>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button type="button" size="sm" variant="outline" onClick={onOpenPurchasingControls}>
+                Open Purchasing Controls
+              </Button>
+              {readiness.isP2 && (
+                <Button type="button" size="sm" variant="outline" onClick={onOpenComplianceReview}>
+                  Open P2 Compliance Review
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+    <Dialog open={debarmentDialogOpen} onOpenChange={setDebarmentDialogOpen}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Record Debarment Check</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <p className="text-sm text-muted-foreground">
+            Record evidence that vendor #{readiness.vendorId} was checked for exclusions before PO issuance.
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Source</Label>
+              <select
+                className="w-full border rounded px-2 py-2 text-sm"
+                value={debarmentSource}
+                onChange={(e) => setDebarmentSource(e.target.value as any)}
+              >
+                <option value="manual_attestation">Manual Attestation</option>
+                <option value="sam.gov">SAM.gov</option>
+                <option value="document_upload">Document Upload</option>
+              </select>
+            </div>
+            <div>
+              <Label>Result</Label>
+              <select
+                className="w-full border rounded px-2 py-2 text-sm"
+                value={debarmentResult}
+                onChange={(e) => setDebarmentResult(e.target.value as any)}
+              >
+                <option value="pass">Pass</option>
+                <option value="fail">Fail</option>
+                <option value="inconclusive">Inconclusive</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <Label>Notes / Evidence Reference</Label>
+            <Textarea
+              rows={3}
+              value={debarmentNotes}
+              onChange={(e) => setDebarmentNotes(e.target.value)}
+              placeholder="Example: SAM.gov search completed, no exclusions found."
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => setDebarmentDialogOpen(false)}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            onClick={() => recordDebarment.mutate()}
+            disabled={recordDebarment.isPending || !readiness.vendorId}
+          >
+            {recordDebarment.isPending ? 'Recording...' : 'Record Check'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
+  );
+}
+
 // Types based on our schema
 type VendorPO = {
   id: number;
   poNumber: string | null;
   vendorId: number;
   vendorName?: string; // From join
+  productionLine?: 'P1' | 'P2' | 'GENERAL' | 'R_AND_D' | string | null;
   status:
     | 'Draft'
     | 'RFQ Sent'
@@ -237,7 +467,7 @@ type VendorPO = {
   // RFQ outcome notes (set when status is Declined or Expired)
   rfqOutcomeNotes?: string | null;
   // Compliance review status (augmented by list endpoint)
-  complianceStatus?: 'Pending Review' | 'Reviewed' | 'Blocked' | 'Requires Attention';
+  complianceStatus?: 'Pending Review' | 'Reviewed' | 'Blocked' | 'Requires Attention' | null;
   // Purchasing controls
   requisitionId?: number | null;
   competitionMethod?: 'competed' | 'sole-source' | 'small-purchase' | 'exception' | string | null;
@@ -246,6 +476,24 @@ type VendorPO = {
   directPoExceptionApprovedByName?: string | null;
   directPoExceptionReason?: string | null;
   directPoExceptionApprovedAt?: string | null;
+};
+
+type IssueReadinessSection = {
+  key: string;
+  label: string;
+  status: 'pass' | 'fail' | 'not_applicable';
+  blockers: string[];
+  details?: Record<string, any>;
+};
+
+type IssueReadiness = {
+  vendorPoId: number;
+  vendorId: number | null;
+  vendorName: string | null;
+  productionLine: string | null;
+  isP2: boolean;
+  ready: boolean;
+  sections: IssueReadinessSection[];
 };
 
 type VendorPOItem = {
@@ -275,11 +523,23 @@ type VendorPOItem = {
 
 type CreateVendorPOData = {
   vendorId: number;
+  productionLine?: 'P1' | 'P2' | 'GENERAL' | 'R_AND_D';
   expectedDeliveryDate?: string;
   shipVia?: string;
   notes?: string;
   externalPoNumber?: string;
 };
+
+function formatProductionLineLabel(value?: string | null): string {
+  switch (value) {
+    case 'GENERAL':
+      return 'General / Stock';
+    case 'R_AND_D':
+      return 'R&D';
+    default:
+      return value || '';
+  }
+}
 
 // Vendor PO line items display component
 function VendorPOItemsDisplay({ vendorPoId }: { vendorPoId: number }) {
@@ -742,9 +1002,16 @@ function VendorPOCard({
               className="mt-1"
               data-testid={`text-vendor-name-${vendorPo.id}`}
             >
-              <div className="flex items-center gap-1">
-                <Building2 className="w-4 h-4" />
-                {vendorPo.vendorName || 'Unknown Vendor'}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1">
+                  <Building2 className="w-4 h-4" />
+                  {vendorPo.vendorName || 'Unknown Vendor'}
+                </span>
+                {vendorPo.productionLine && (
+                  <Badge variant="outline" className="text-xs">
+                    {formatProductionLineLabel(vendorPo.productionLine)}
+                  </Badge>
+                )}
               </div>
             </CardDescription>
             <div className="mt-3">
@@ -828,8 +1095,9 @@ function VendorPOCard({
               Edit
             </Button>
           )}
-          {/* Compliance Review button for non-issued POs that haven't been reviewed */}
-          {!isIssued && onReviewCompliance && vendorPo.complianceStatus !== 'Reviewed' && (
+          {/* Compliance Review button for non-issued POs that haven't been reviewed.
+              Hidden for non-P2 POs (complianceStatus === null) — compliance review only applies to P2. */}
+          {!isIssued && onReviewCompliance && vendorPo.complianceStatus != null && vendorPo.complianceStatus !== 'Reviewed' && (
             <Button
               variant="outline"
               size="sm"
@@ -916,6 +1184,7 @@ function VendorPOForm({
 }) {
   const [formData, setFormData] = useState<CreateVendorPOData>({
     vendorId: vendorPo?.vendorId || 0,
+    productionLine: (vendorPo?.productionLine as CreateVendorPOData['productionLine']) || undefined,
     expectedDeliveryDate: vendorPo?.expectedDeliveryDate || '',
     shipVia: vendorPo?.shipVia || '',
     notes: vendorPo?.notes || '',
@@ -943,6 +1212,10 @@ function VendorPOForm({
 
     if (formData.vendorId === 0) {
       toast.error('Please select a vendor');
+      return;
+    }
+    if (!formData.productionLine) {
+      toast.error('Please select the production line for this purchase');
       return;
     }
 
@@ -988,6 +1261,37 @@ function VendorPOForm({
             ))}
           </SelectContent>
         </Select>
+      </div>
+
+      <div>
+        <Label htmlFor="productionLine">Production Line *</Label>
+        <Select
+          value={formData.productionLine}
+          onValueChange={(value) =>
+            setFormData({ ...formData, productionLine: value as CreateVendorPOData['productionLine'] })
+          }
+          data-testid="select-production-line"
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select production line..." />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="GENERAL">General / Stock</SelectItem>
+            <SelectItem value="P1">P1</SelectItem>
+            <SelectItem value="P2">P2</SelectItem>
+            <SelectItem value="R_AND_D">R&D</SelectItem>
+          </SelectContent>
+        </Select>
+        {formData.productionLine === 'P2' && (
+          <p className="mt-1 text-xs text-amber-700">
+            P2 purchases require a completed compliance review before project allocation.
+          </p>
+        )}
+        {formData.productionLine === 'R_AND_D' && (
+          <p className="mt-1 text-xs text-emerald-700">
+            R&D purchases can push through project allocation without the P2 compliance hold.
+          </p>
+        )}
       </div>
 
       <div>
@@ -1148,8 +1452,6 @@ export function ConfirmationBadgeResend({ vendorPo }: { vendorPo: VendorPO }) {
         <span
           role="button"
           tabIndex={0}
-          onPointerDown={(e) => e.stopPropagation()}
-          onTouchStart={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation();
             setOpen(true);
@@ -1765,7 +2067,11 @@ function ComplianceSummaryCard({
 }
 
 // Compliance status badge helper
-function ComplianceBadge({ status, onClick }: { status?: string; onClick?: () => void }) {
+function ComplianceBadge({ status, onClick }: { status?: string | null; onClick?: () => void }) {
+  // Explicit null = compliance not applicable (non-P2 PO). Render nothing so a
+  // stale "Blocked / Requires Attention" badge doesn't show after switching the
+  // production line away from P2.
+  if (status === null) return null;
   const isActionable = onClick && (!status || status === 'Pending Review' || status === 'Requires Attention');
   const baseClick = isActionable ? onClick : undefined;
   const hoverClass = isActionable ? 'cursor-pointer hover:opacity-80 active:opacity-60' : '';
@@ -1827,6 +2133,10 @@ type ComplianceReviewData = {
 type ComplianceSaveResult = ComplianceReviewData & {
   blockingReasons: string[];
 };
+
+function isP2ProductionLine(value: unknown): boolean {
+  return String(value ?? '').trim().toUpperCase() === 'P2';
+}
 
 function ComplianceReviewModal({
   vendorPoId,
@@ -1892,6 +2202,7 @@ function ComplianceReviewModal({
       }) as Promise<ComplianceSaveResult>,
     onSuccess: async (saved: ComplianceSaveResult) => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', vendorPoId, 'compliance-review'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', vendorPoId, 'issue-readiness'] });
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
 
       // If the saved review is blocked, record it for audit trail but do NOT proceed to issue
@@ -2256,6 +2567,15 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
     enabled: !!selectedVendorPO,
   });
 
+  const {
+    data: issueReadiness,
+    isLoading: issueReadinessLoading,
+  } = useQuery<IssueReadiness>({
+    queryKey: ['/api/vendor-pos', selectedVendorPO?.id, 'issue-readiness'],
+    queryFn: () => apiRequest(`/api/vendor-pos/${selectedVendorPO!.id}/issue-readiness`),
+    enabled: !!selectedVendorPO && ['Draft', 'RFQ Sent', 'Quote Received'].includes(selectedVendorPO.status),
+  });
+
   const issuedStatuses = ['Sent', 'Partially Received', 'Fully Received'];
   const { data: confirmationStatus, isLoading: isConfirmationLoading } = useQuery<{
     found: boolean;
@@ -2325,11 +2645,26 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
         method: 'PUT',
         body: JSON.stringify(data),
       }),
-    onSuccess: () => {
+    onSuccess: (updated: any, vars) => {
+      // Invalidate the list AND the single-PO + compliance-review queries that
+      // drive the open detail view, so the saved value (e.g. productionLine)
+      // is reflected without requiring a manual reload.
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
+      if (vars?.id != null) {
+        queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', vars.id] });
+        queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', vars.id, 'compliance-review'] });
+      }
       toast.success('Vendor purchase order updated successfully');
-      setShowForm(false);
-      setSelectedVendorPO(null);
+      if (showForm) {
+        // Dialog edit — close the dialog as before.
+        setShowForm(false);
+        setSelectedVendorPO(null);
+      } else if (updated && selectedVendorPO && selectedVendorPO.id === vars?.id) {
+        // Inline edit from the detail view — keep the detail view open and
+        // sync the local selection to the server's authoritative response so
+        // the PO Details tab reflects the just-saved values immediately.
+        setSelectedVendorPO((prev) => (prev ? { ...prev, ...updated } : prev));
+      }
     },
     onError: (error: any) => {
       toast.error(error?.message || 'Failed to update vendor purchase order');
@@ -2435,10 +2770,10 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
 
   // Send RFQ mutation - sends quote request email to vendor
   const sendRFQMutation = useMutation({
-    mutationFn: ({ id, recipients }: { id: number; recipients: string[] }) =>
+    mutationFn: ({ id, recipients, skipEmail = false, reason }: { id: number; recipients: string[]; skipEmail?: boolean; reason?: string }) =>
       apiRequest(`/api/vendor-pos/${id}/send-rfq`, {
         method: 'POST',
-        body: JSON.stringify({ recipients }),
+        body: JSON.stringify({ recipients, printOnly: skipEmail, reason }),
       }),
     onSuccess: (data: any, variables) => {
       getSendRFQInvalidationKeys(variables.id).forEach((key) =>
@@ -2446,6 +2781,8 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
       );
       if (data.emailSent) {
         toast.success(`RFQ sent to ${data.emailRecipient}`);
+      } else if (data.emailSent === false) {
+        toast.success('RFQ prepared without sending email');
       } else {
         toast.error(data.message || 'Failed to send RFQ');
       }
@@ -2590,7 +2927,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
     } catch {
       setDialogRecipients([]);
       setSelectedRecipients([]);
-      toast.error('Could not load recipients — failed to load vendor contacts. Please close and try again.');
+      toast.error('Could not load recipients. You can still use Print Only.');
     } finally {
       setIsLoadingRecipients(false);
     }
@@ -2655,8 +2992,12 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
     }
     // Navigate into detail view so we have full PO context
     setShowDetailView(true);
-    // Show compliance review modal first before proceeding to issue
-    openComplianceModal(id);
+    setNoEmailMode(false);
+    setNoEmailReason('');
+    setNoEmailConfirmed(false);
+    setPendingStatus('Sent');
+    setShowStatusChangeDialog(true);
+    loadRecipientsForPO(id);
   };
 
   const handleViewItems = (vendorPo: VendorPO) => {
@@ -2690,8 +3031,12 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
 
   const handleStatusChange = (newStatus: string) => {
     if (newStatus === 'Sent' && selectedVendorPO) {
-      // Intercept Issue PO to show compliance review modal first
-      openComplianceModal(selectedVendorPO.id);
+      setNoEmailMode(false);
+      setNoEmailReason('');
+      setNoEmailConfirmed(false);
+      setPendingStatus('Sent');
+      setShowStatusChangeDialog(true);
+      loadRecipientsForPO(selectedVendorPO.id);
       return;
     }
     setPendingStatus(newStatus);
@@ -2713,6 +3058,16 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
         changeStatusMutation.mutate({ id: selectedVendorPO.id, status: pendingStatus });
       }
     }
+  };
+
+  const confirmRFQSend = (skipEmail: boolean = false) => {
+    if (!selectedVendorPO) return;
+    sendRFQMutation.mutate({
+      id: selectedVendorPO.id,
+      recipients: skipEmail ? [] : selectedRecipients,
+      skipEmail,
+      reason: skipEmail ? 'Printed and sent separately' : undefined,
+    });
   };
 
   const handleDownloadPDF = async (poToView?: VendorPO) => {
@@ -3337,7 +3692,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
               size="sm"
               onClick={() => setPurchasingControlsOpen(true)}
               data-testid="button-purchasing-controls"
-              title="Requisition link, competition method, FAR flowdowns, debarment evidence, direct-PO exception"
+              title="Requisition link, competition method, FAR flowdowns, direct-PO exception"
             >
               Purchasing Controls
             </Button>
@@ -3527,6 +3882,15 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
           </div>
         )}
 
+        {['Draft', 'RFQ Sent', 'Quote Received'].includes(selectedVendorPO.status) && (
+          <IssueReadinessCard
+            readiness={issueReadiness}
+            isLoading={issueReadinessLoading}
+            onOpenPurchasingControls={() => setPurchasingControlsOpen(true)}
+            onOpenComplianceReview={() => openComplianceModal(selectedVendorPO.id)}
+          />
+        )}
+
         {/* RFQ Outcome Dialog (Declined / Expired) */}
         <Dialog
           open={showRfqOutcomeDialog}
@@ -3620,7 +3984,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
                   <AlertDialogTitle>Issue Purchase Order</AlertDialogTitle>
                   <AlertDialogDescription>
                     {noEmailMode
-                      ? 'Provide a reason for issuing this PO without notifying the vendor.'
+                      ? 'The vendor will not be emailed. A default audit reason will be used if this is left blank.'
                       : 'Choose how to issue this purchase order.'}
                   </AlertDialogDescription>
                 </AlertDialogHeader>
@@ -3645,7 +4009,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
                     </div>
                     <div className="space-y-1">
                       <Label htmlFor="no-email-reason" className="text-sm font-medium">
-                        Reason <span className="text-red-500">*</span>
+                        Reason <span className="text-muted-foreground">(optional)</span>
                       </Label>
                       <Textarea
                         id="no-email-reason"
@@ -3655,11 +4019,6 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
                         rows={3}
                         className="resize-none"
                       />
-                      {noEmailReason.length > 0 && noEmailReason.trim().length < 10 && (
-                        <p className="text-xs text-red-500">
-                          Must be at least 10 characters ({noEmailReason.trim().length}/10)
-                        </p>
-                      )}
                     </div>
                     <div className="flex items-center gap-2">
                       <Checkbox
@@ -3689,11 +4048,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
                       </Button>
                       <Button
                         onClick={() => confirmStatusChange(true)}
-                        disabled={
-                          noEmailReason.trim().length < 10 ||
-                          !noEmailConfirmed ||
-                          issuePOMutation.isPending
-                        }
+                        disabled={issuePOMutation.isPending}
                         className="bg-amber-600 hover:bg-amber-700 text-white"
                         data-testid="button-confirm-internal-issue"
                       >
@@ -3752,7 +4107,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
             <AlertDialogHeader>
               <AlertDialogTitle>Send Request for Quote</AlertDialogTitle>
               <AlertDialogDescription>
-                Select the recipients for this RFQ email. At least one recipient must be checked.
+                Select the recipients for this RFQ email, or print it without sending email.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <div className="space-y-2">
@@ -3767,12 +4122,32 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
               <Button
+                variant="outline"
                 onClick={() => {
                   if (selectedVendorPO) {
-                    sendRFQMutation.mutate({ id: selectedVendorPO.id, recipients: selectedRecipients });
+                    sendRFQMutation.mutate({
+                      id: selectedVendorPO.id,
+                      recipients: [],
+                      skipEmail: true,
+                      reason: 'Printed and sent separately',
+                    });
                   }
                 }}
-                disabled={sendRFQMutation.isPending || selectedRecipients.length === 0}
+                disabled={sendRFQMutation.isPending}
+                data-testid="button-print-only-rfq"
+              >
+                Print Only
+              </Button>
+              <Button
+                onClick={() => {
+                  if (selectedVendorPO) {
+                    sendRFQMutation.mutate({
+                      id: selectedVendorPO.id,
+                      recipients: selectedRecipients,
+                    });
+                  }
+                }}
+                disabled={sendRFQMutation.isPending || selectedRecipients.length === 0 || isLoadingRecipients}
                 data-testid="button-confirm-send-rfq"
               >
                 {sendRFQMutation.isPending ? (
@@ -3933,6 +4308,8 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
               vendorPoId={selectedVendorPO.id}
               vendorId={selectedVendorPO.vendorId}
               poNumber={selectedVendorPO.poNumber || `Draft #${selectedVendorPO.id}`}
+              productionLine={selectedVendorPO.productionLine}
+              complianceStatus={selectedVendorPO.complianceStatus}
               onTotalChange={(total: number) => {
                 queryClient.invalidateQueries({
                   queryKey: ['/api/vendor-pos'],
@@ -4326,7 +4703,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
 
       {/* Task #83: Purchasing Controls Modal — captures requisition link,
           competition method, sole-source justification, FAR flowdown
-          checklist, debarment-check evidence, and direct-PO exception. */}
+          checklist, and direct-PO exception. */}
       {selectedVendorPO && (
         <PurchasingControlsDialog
           open={purchasingControlsOpen}
@@ -4335,6 +4712,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
           onChanged={() => {
             queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
             queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', selectedVendorPO.id] });
+            queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', selectedVendorPO.id, 'issue-readiness'] });
           }}
         />
       )}
@@ -4382,6 +4760,15 @@ function PurchasingControlsDialog({
     onError: (e: any) => toast.error(e?.message ?? 'Save failed'),
   });
 
+  const recordException = useMutation({
+    mutationFn: () => apiRequest(`/api/vendor-pos/${vendorPo.id}/direct-po-exception`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: exceptionReason }),
+    }),
+    onSuccess: () => { toast.success('Direct-PO exception approved'); setExceptionReason(''); onChanged(); },
+    onError: (e: any) => toast.error(e?.message ?? 'Exception failed'),
+  });
+
   const recordDebarment = useMutation({
     mutationFn: () => apiRequest('/api/vendor-debarment-checks', {
       method: 'POST',
@@ -4396,15 +4783,6 @@ function PurchasingControlsDialog({
     }),
     onSuccess: () => { toast.success('Debarment check recorded'); setDebarmentNotes(''); onChanged(); },
     onError: (e: any) => toast.error(e?.message ?? 'Record failed'),
-  });
-
-  const recordException = useMutation({
-    mutationFn: () => apiRequest(`/api/vendor-pos/${vendorPo.id}/direct-po-exception`, {
-      method: 'POST',
-      body: JSON.stringify({ reason: exceptionReason }),
-    }),
-    onSuccess: () => { toast.success('Direct-PO exception approved'); setExceptionReason(''); onChanged(); },
-    onError: (e: any) => toast.error(e?.message ?? 'Exception failed'),
   });
 
   // The backend uses PUT /api/far-flowdown-clauses/po/:poId with the FULL list
@@ -4499,7 +4877,7 @@ function PurchasingControlsDialog({
             </div>
           </section>
 
-          <section className="space-y-2">
+          <section className="hidden">
             <h3 className="font-semibold">Debarment Check Evidence</h3>
             <div className="grid grid-cols-2 gap-3">
               <div>

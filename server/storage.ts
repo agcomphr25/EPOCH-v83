@@ -19,6 +19,7 @@ import {
   inventoryDepartments,
   inventoryItemDepartments,
   inventoryItemCostHistory,
+  inventoryTransactionLedger,
   inventoryScans,
   itemGroups,
   inventoryItemGroups,
@@ -131,7 +132,6 @@ import {
   employeeDocuments,
   employeeAuditLog,
   adminAuditLog,
-  auditEvents,
   // Capability-based permission system tables
   capabilities,
   employeeCapabilities,
@@ -707,6 +707,14 @@ import {
   type InsertLocalCalendarEvent,
 } from './schema';
 import { db, pool, rawSql } from './db';
+import { recordAuditEvent } from './src/services/auditLedgerService';
+import { recordInventoryLedgerEntry } from './src/services/inventoryTransactionLedgerService';
+import { assignDashboardForWorkOrder } from './src/lib/workOrderDashboardAssignment';
+import {
+  getProgramBuilds,
+  getProgramBuildStatus,
+  type ProgramBuildStatus,
+} from './src/lib/programManufacturingOrchestration';
 
 // Drizzle's transaction handle is API-compatible with `db` for the CRUD
 // surface our helpers use, but its TS type is a `PgTransaction` (not the
@@ -761,6 +769,7 @@ import {
 import { DEFAULT_SESSIONS_LIMIT } from './src/constants/sessions';
 import { userHasScopedCapability as _userHasScopedCapability } from './src/services/permissionService';
 import { formatDates } from './utils/formatDates';
+import { ensureP2PurchaseOrderReadSchema } from './src/lib/p2PurchaseOrderReadiness';
 import {
   laborEntryDraftsTable,
   type LaborEntryDraftInsert,
@@ -1777,6 +1786,10 @@ export interface IStorage {
   updateRFQRiskAssessment(id: number, data: Partial<InsertRFQRiskAssessment>): Promise<RFQRiskAssessment | undefined>;
   submitRFQRiskAssessment(id: number, username: string): Promise<RFQRiskAssessment | undefined>;
 
+  // Program Manufacturing Orchestration read methods
+  getProgramBuilds(filters?: { projectId?: string | null }): Promise<ProgramBuildStatus['build'][]>;
+  getProgramBuildStatus(buildId?: string | null, filters?: { projectId?: string | null }): Promise<ProgramBuildStatus | null>;
+
   // P2 Purchase Orders CRUD
   getAllP2PurchaseOrders(): Promise<P2PurchaseOrder[]>;
   getP2PurchaseOrder(
@@ -2035,6 +2048,7 @@ export interface IStorage {
     partNumber?: string;
     workOrderId?: string;
     inventoryItemId?: string;
+    partRoutingId?: string;
   }): Promise<Traveler[]>;
   getTraveler(id: string): Promise<Traveler | undefined>;
   getTravelerByNumber(travelerNumber: string): Promise<Traveler | undefined>;
@@ -6353,23 +6367,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deletePayment(id: number): Promise<void> {
-    // Handle foreign key constraints - delete related credit card transactions first
-    try {
-      // First, delete any related credit card transactions using raw SQL
-      await db.execute(
-        sql`DELETE FROM credit_card_transactions WHERE payment_id = ${id}`
-      );
-      console.log(
-        `🗑️ Deleted related credit card transactions for payment ${id}`
-      );
-
-      // Then delete the payment
-      await db.delete(payments).where(eq(payments.id, id));
-      console.log(`✅ Successfully deleted payment ${id}`);
-    } catch (error) {
-      console.error(`❌ Error deleting payment ${id}:`, error);
-      throw error;
-    }
+    throw new Error(
+      `Hard delete is disabled for payment ${id}. Use the payment void/reversal flow instead.`
+    );
   }
 
   // Forms CRUD
@@ -8945,37 +8945,40 @@ export class DatabaseStorage implements IStorage {
         pageSize = 10,
       } = params || {};
 
+      const evaluatedExpr = `(COALESCE(v.evaluated, false) OR COALESCE(er.has_scored_evaluation, false))`;
+      const evaluationDateExpr = `COALESCE(v.evaluation_date, er.latest_evaluation_date)`;
+
       // Build WHERE clauses for raw SQL
-      const conditions: string[] = ['is_active = true'];
+      const conditions: string[] = ['v.is_active = true'];
       
       // Search filter
       if (search && search.trim()) {
         const searchTerm = search.trim().replace(/'/g, "''"); // Escape single quotes
         conditions.push(`(
-          name ILIKE '%${searchTerm}%' OR
-          contact_person ILIKE '%${searchTerm}%' OR
-          email ILIKE '%${searchTerm}%' OR
-          phone ILIKE '%${searchTerm}%' OR
-          address ILIKE '%${searchTerm}%'
+          v.name ILIKE '%${searchTerm}%' OR
+          v.contact_person ILIKE '%${searchTerm}%' OR
+          v.email ILIKE '%${searchTerm}%' OR
+          v.phone ILIKE '%${searchTerm}%' OR
+          v.address ILIKE '%${searchTerm}%'
         )`);
       }
 
       // Approved filter
       if (approved !== 'any') {
-        conditions.push(`approved = ${approved === 'true'}`);
+        conditions.push(`v.approved = ${approved === 'true'}`);
       }
 
       // Evaluated filter
       if (evaluated !== 'any') {
-        conditions.push(`evaluated = ${evaluated === 'true'}`);
+        conditions.push(`${evaluatedExpr} = ${evaluated === 'true'}`);
       }
 
       // Evaluation date range filters
       if (evalFrom) {
-        conditions.push(`evaluation_date >= '${evalFrom}'`);
+        conditions.push(`${evaluationDateExpr} >= '${evalFrom}'`);
       }
       if (evalTo) {
-        conditions.push(`evaluation_date <= '${evalTo}'`);
+        conditions.push(`${evaluationDateExpr} <= '${evalTo}'`);
       }
 
       const whereClause = conditions.join(' AND ');
@@ -8983,15 +8986,15 @@ export class DatabaseStorage implements IStorage {
       // Parse sort
       const [sortField, sortDir] = sort.split(':');
       const sortColMap: Record<string, string> = {
-        name: 'name',
-        approved: 'approved',
-        evaluated: 'evaluated',
-        evaluationDate: 'evaluation_date',
-        updatedAt: 'updated_at',
-        createdAt: 'created_at',
-        approvalLevel: "CASE approval_level WHEN 'A' THEN 1 WHEN 'B' THEN 2 WHEN 'C' THEN 3 WHEN 'D' THEN 4 WHEN 'F' THEN 5 ELSE 6 END",
+        name: 'v.name',
+        approved: 'v.approved',
+        evaluated: evaluatedExpr,
+        evaluationDate: evaluationDateExpr,
+        updatedAt: 'v.updated_at',
+        createdAt: 'v.created_at',
+        approvalLevel: "CASE v.approval_level WHEN 'A' THEN 1 WHEN 'B' THEN 2 WHEN 'C' THEN 3 WHEN 'D' THEN 4 WHEN 'F' THEN 5 ELSE 6 END",
       };
-      const sortColumn = sortColMap[sortField] || 'created_at';
+      const sortColumn = sortColMap[sortField] || 'v.created_at';
       const sortDirection = sortDir === 'asc' ? 'ASC' : 'DESC';
 
       // Calculate offset
@@ -8999,28 +9002,95 @@ export class DatabaseStorage implements IStorage {
 
       // Execute queries using pool.query for raw SQL with dynamic parts
       const dataQuerySql = `
+        WITH scored_evaluations AS (
+          SELECT
+            vendor_id,
+            id,
+            year,
+            month,
+            quality_score,
+            cost_score,
+            delivery_score,
+            response_score,
+            make_date(year, GREATEST(LEAST(COALESCE(month, 1), 12), 1), 1) AS evaluation_date
+          FROM vendor_monthly_evaluations
+          WHERE quality_score IS NOT NULL
+             OR cost_score IS NOT NULL
+             OR delivery_score IS NOT NULL
+             OR response_score IS NOT NULL
+        ),
+        evaluation_rollup AS (
+          SELECT
+            vendor_id,
+            true AS has_scored_evaluation,
+            MAX(evaluation_date) AS latest_evaluation_date
+          FROM scored_evaluations
+          GROUP BY vendor_id
+        ),
+        latest_evaluation AS (
+          SELECT DISTINCT ON (vendor_id)
+            vendor_id,
+            quality_score,
+            cost_score,
+            delivery_score,
+            response_score,
+            (
+              COALESCE(quality_score, 0) +
+              COALESCE(cost_score, 0) +
+              COALESCE(delivery_score, 0) +
+              COALESCE(response_score, 0)
+            )::float AS latest_total_score
+          FROM scored_evaluations
+          ORDER BY vendor_id, year DESC, month DESC, id DESC
+        )
         SELECT 
-          id, name, contact_person as "contactPerson", email, additional_email as "additionalEmail",
-          phone, address, approved, evaluated,
-          evaluation_date as "evaluationDate", notes,
-          is_active as "isActive", created_at as "createdAt", updated_at as "updatedAt",
-          street, city, state, zip_code as "zipCode", country, scope_approved_for as "scopeApprovedFor",
-          scope, quality_score as "qualityScore", cost_score as "costScore", 
-          delivery_score as "deliveryScore", response_score as "responseScore",
-          approval_source as "approvalSource", approval_pdf_url as "approvalPdfUrl",
-          start_renewal_date as "startRenewalDate",
-          approval_expiration as "approvalExpiration",
-          approval_level as "approvalLevel", main_document_url as "mainDocumentUrl",
-          terms_and_conditions as "termsAndConditions", payment_terms as "paymentTerms",
-          shipping_instructions as "shippingInstructions"
-        FROM vendors
+          v.id, v.name, v.contact_person as "contactPerson", v.email, v.additional_email as "additionalEmail",
+          v.phone, v.address, v.approved, ${evaluatedExpr} as "evaluated",
+          ${evaluationDateExpr} as "evaluationDate", v.notes,
+          v.is_active as "isActive", v.created_at as "createdAt", v.updated_at as "updatedAt",
+          v.street, v.city, v.state, v.zip_code as "zipCode", v.country, v.scope_approved_for as "scopeApprovedFor",
+          v.scope, COALESCE(v.quality_score, le.quality_score) as "qualityScore", COALESCE(v.cost_score, le.cost_score) as "costScore",
+          COALESCE(v.delivery_score, le.delivery_score) as "deliveryScore", COALESCE(v.response_score, le.response_score) as "responseScore",
+          v.approval_source as "approvalSource", v.approval_pdf_url as "approvalPdfUrl",
+          v.start_renewal_date as "startRenewalDate",
+          v.approval_expiration as "approvalExpiration",
+          v.approval_level as "approvalLevel", v.main_document_url as "mainDocumentUrl",
+          v.terms_and_conditions as "termsAndConditions", v.payment_terms as "paymentTerms",
+          v.shipping_instructions as "shippingInstructions",
+          le.latest_total_score as "ytdTotalScore"
+        FROM vendors v
+        LEFT JOIN evaluation_rollup er ON er.vendor_id = v.id
+        LEFT JOIN latest_evaluation le ON le.vendor_id = v.id
         WHERE ${whereClause}
         ORDER BY ${sortColumn} ${sortDirection}
         LIMIT ${pageSize}
         OFFSET ${offset}
       `;
 
-      const countQuerySql = `SELECT COUNT(*) as count FROM vendors WHERE ${whereClause}`;
+      const countQuerySql = `
+        WITH scored_evaluations AS (
+          SELECT
+            vendor_id,
+            make_date(year, GREATEST(LEAST(COALESCE(month, 1), 12), 1), 1) AS evaluation_date
+          FROM vendor_monthly_evaluations
+          WHERE quality_score IS NOT NULL
+             OR cost_score IS NOT NULL
+             OR delivery_score IS NOT NULL
+             OR response_score IS NOT NULL
+        ),
+        evaluation_rollup AS (
+          SELECT
+            vendor_id,
+            true AS has_scored_evaluation,
+            MAX(evaluation_date) AS latest_evaluation_date
+          FROM scored_evaluations
+          GROUP BY vendor_id
+        )
+        SELECT COUNT(*) as count
+        FROM vendors v
+        LEFT JOIN evaluation_rollup er ON er.vendor_id = v.id
+        WHERE ${whereClause}
+      `;
 
       const [data, countResult] = await Promise.all([
         pool.query(dataQuerySql),
@@ -9034,7 +9104,7 @@ export class DatabaseStorage implements IStorage {
       // Enrich vendor data with YTD total scores (skip if no vendors)
       const enrichedData = vendorData.map(vendor => ({
         ...formatDates(vendor as Record<string, unknown>, VENDOR_DATE_COLUMNS),
-        ytdTotalScore: null, // Simplified - skip YTD calculation for now
+        ytdTotalScore: (vendor as any).ytdTotalScore,
       })) as Vendor[];
 
       return {
@@ -9346,6 +9416,7 @@ export class DatabaseStorage implements IStorage {
           externalPoNumber: vendorPOs.externalPoNumber,
           vendorId: vendorPOs.vendorId,
           vendorName: vendors.name,
+          productionLine: vendorPOs.productionLine,
           status: vendorPOs.status,
           orderDate: vendorPOs.orderDate,
           expectedDeliveryDate: vendorPOs.expectedDeliveryDate,
@@ -9501,6 +9572,7 @@ export class DatabaseStorage implements IStorage {
         externalPoNumber: vendorPOs.externalPoNumber,
         vendorId: vendorPOs.vendorId,
         vendorName: vendors.name,
+        productionLine: vendorPOs.productionLine,
         status: vendorPOs.status,
         orderDate: vendorPOs.orderDate,
         expectedDeliveryDate: vendorPOs.expectedDeliveryDate,
@@ -9821,6 +9893,7 @@ export class DatabaseStorage implements IStorage {
       const revisionData = {
         poNumber: newPONumber,
         vendorId: originalPO.vendorId,
+        productionLine: originalPO.productionLine,
         status: 'Draft' as const,
         orderDate: originalPO.orderDate,
         expectedDeliveryDate: originalPO.expectedDeliveryDate,
@@ -9909,13 +9982,63 @@ export class DatabaseStorage implements IStorage {
 
   // Vendor PO Items CRUD
   async getVendorPOItems(vendorPoId: number): Promise<any[]> {
-    const items = await db
-      .select()
+    try {
+      const items = await db.select({
+        id: vendorPOItems.id,
+        vendorPoId: vendorPOItems.vendorPoId,
+        lineNumber: vendorPOItems.lineNumber,
+        agPartNumber: vendorPOItems.agPartNumber,
+        description: vendorPOItems.description,
+        purchaseQty: vendorPOItems.purchaseQty,
+        purchaseUnitPrice: vendorPOItems.purchaseUnitPrice,
+        purchaseUnit: vendorPOItems.purchaseUnit,
+        quantity: vendorPOItems.quantity,
+        unitPrice: vendorPOItems.unitPrice,
+        vendorUnit: vendorPOItems.vendorUnit,
+        conversionFactor: vendorPOItems.conversionFactor,
+        lineTotal: vendorPOItems.lineTotal,
+        receivedQuantity: vendorPOItems.receivedQuantity,
+        receivedDate: vendorPOItems.receivedDate,
+        notes: vendorPOItems.notes,
+        customerPoId: vendorPOItems.customerPoId,
+        projectId: vendorPOItems.projectId,
+        productionWorkOrderId: vendorPOItems.productionWorkOrderId,
+        chargeCodeId: vendorPOItems.chargeCodeId,
+        otherIdentifier: vendorPOItems.otherIdentifier,
+        historicalAvgPrice: vendorPOItems.historicalAvgPrice,
+        priceVariancePercent: vendorPOItems.priceVariancePercent,
+        varianceFlag: vendorPOItems.varianceFlag,
+        createdAt: vendorPOItems.createdAt,
+        updatedAt: vendorPOItems.updatedAt,
+        supplierPartNumber: inventoryItems.supplierPartNumber,
+        inventoryVendorUnit: inventoryItems.vendorUnit,
+        inventoryPurchaseUnit: inventoryItems.purchaseUnit,
+        purchaseQuantity: inventoryItems.purchaseQuantity,
+        consumptionRate: inventoryItems.consumptionRate,
+        usageUnit: inventoryItems.usageUnit,
+        purchaseUnitLabel: inventoryItems.purchaseUnitLabel,
+        projectCode: projects.projectCode,
+        projectName: projects.projectName,
+        productionWorkOrderProjectId: productionWorkOrders.projectId,
+        workOrderNumber: productionWorkOrders.workOrderNumber,
+        workOrderPartNumber: productionWorkOrders.partNumber,
+        workOrderStatus: productionWorkOrders.status,
+        chargeCode: chargeCodes.code,
+        chargeCodeDescription: chargeCodes.description,
+        chargeCodeType: chargeCodes.type,
+        customerPoNumber: p2PurchaseOrders.poNumber,
+        customerName: p2PurchaseOrders.customerName,
+        customerPoStatus: p2PurchaseOrders.status,
+      })
       .from(vendorPOItems)
       .leftJoin(
         inventoryItems,
         eq(vendorPOItems.agPartNumber, inventoryItems.agPartNumber)
       )
+      .leftJoin(projects, eq(projects.id, vendorPOItems.projectId))
+      .leftJoin(productionWorkOrders, eq(productionWorkOrders.id, vendorPOItems.productionWorkOrderId))
+      .leftJoin(chargeCodes, eq(chargeCodes.id, vendorPOItems.chargeCodeId))
+      .leftJoin(p2PurchaseOrders, eq(p2PurchaseOrders.id, vendorPOItems.customerPoId))
       .where(eq(vendorPOItems.vendorPoId, vendorPoId))
       .orderBy(vendorPOItems.lineNumber);
     
@@ -9923,20 +10046,99 @@ export class DatabaseStorage implements IStorage {
     // Prioritize stored purchase unit data from vendor_po_items over inventory_items
     return items.map(row => {
       const flat = {
-        ...row.vendor_po_items,
+        id: row.id,
+        vendorPoId: row.vendorPoId,
+        lineNumber: row.lineNumber,
+        agPartNumber: row.agPartNumber,
+        description: row.description,
+        purchaseQty: row.purchaseQty,
+        purchaseUnitPrice: row.purchaseUnitPrice,
+        purchaseUnit: row.purchaseUnit || row.inventoryPurchaseUnit,
+        quantity: row.quantity,
+        unitPrice: row.unitPrice,
+        vendorUnit: row.vendorUnit || row.inventoryVendorUnit,
+        conversionFactor: row.conversionFactor,
+        lineTotal: row.lineTotal,
+        receivedQuantity: row.receivedQuantity,
+        receivedDate: row.receivedDate,
+        notes: row.notes,
+        customerPoId: row.customerPoId,
+        projectId: row.projectId,
+        productionWorkOrderId: row.productionWorkOrderId,
+        chargeCodeId: row.chargeCodeId,
+        otherIdentifier: row.otherIdentifier,
+        historicalAvgPrice: row.historicalAvgPrice,
+        priceVariancePercent: row.priceVariancePercent,
+        varianceFlag: row.varianceFlag,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
         // Include supplier part number from inventory items
-        supplierPartNumber: row.inventory_items?.supplierPartNumber,
-        // Use stored vendor/purchase unit if available, fall back to inventory_items
-        vendorUnit: row.vendor_po_items?.vendorUnit || row.inventory_items?.vendorUnit,
-        purchaseUnit: row.vendor_po_items?.purchaseUnit || row.inventory_items?.purchaseUnit,
+        supplierPartNumber: row.supplierPartNumber,
         // purchaseQuantity from inventory_items represents the conversion factor
-        purchaseQuantity: row.inventory_items?.purchaseQuantity,
-        consumptionRate: row.inventory_items?.consumptionRate,
-        usageUnit: row.inventory_items?.usageUnit,
-        purchaseUnitLabel: row.inventory_items?.purchaseUnitLabel,
+        purchaseQuantity: row.purchaseQuantity,
+        consumptionRate: row.consumptionRate,
+        usageUnit: row.usageUnit,
+        purchaseUnitLabel: row.purchaseUnitLabel,
+        project: row.projectId ? {
+          id: row.projectId,
+          projectCode: row.projectCode,
+          projectName: row.projectName,
+        } : undefined,
+        productionWorkOrder: row.productionWorkOrderId ? {
+          id: row.productionWorkOrderId,
+          workOrderNumber: row.workOrderNumber,
+          projectId: row.productionWorkOrderProjectId,
+          partNumber: row.workOrderPartNumber,
+          status: row.workOrderStatus,
+        } : undefined,
+        chargeCode: row.chargeCodeId ? {
+          id: row.chargeCodeId,
+          code: row.chargeCode,
+          description: row.chargeCodeDescription,
+          type: row.chargeCodeType,
+        } : undefined,
+        customerPo: row.customerPoId ? {
+          id: row.customerPoId,
+          poNumber: row.customerPoNumber,
+          customerName: row.customerName,
+          status: row.customerPoStatus,
+        } : undefined,
       };
       return formatDates(flat as Record<string, unknown>, VENDOR_PO_ITEM_DATE_COLUMNS) as typeof flat;
     });
+    } catch (error: any) {
+      console.warn(
+        '[VendorPO] Falling back to raw core vendor_po_items query after enriched query failed:',
+        error?.message ?? error
+      );
+
+      const coreItems = await pool.query(
+        `
+        SELECT
+          id,
+          vendor_po_id AS "vendorPoId",
+          line_number AS "lineNumber",
+          ag_part_number AS "agPartNumber",
+          description,
+          quantity,
+          unit_price AS "unitPrice",
+          line_total AS "lineTotal",
+          received_quantity AS "receivedQuantity",
+          received_date AS "receivedDate",
+          notes,
+          created_at AS "createdAt",
+          updated_at AS "updatedAt"
+        FROM vendor_po_items
+        WHERE vendor_po_id = $1
+        ORDER BY line_number
+        `,
+        [vendorPoId]
+      );
+
+      return coreItems.rows.map((row: Record<string, unknown>) =>
+        formatDates(row, VENDOR_PO_ITEM_DATE_COLUMNS)
+      );
+    }
   }
 
   async getVendorPOItemById(id: number): Promise<any | undefined> {
@@ -10100,8 +10302,37 @@ export class DatabaseStorage implements IStorage {
     notes?: string;
     createdBy?: number;
     cocLink?: string;
+    /**
+     * Optional per-unit traceability splits (Task #240). When provided, each
+     * entry creates its own material_lots row plus its own ITL RECEIVE row
+     * (keyed by `${poLineItemId}:${newCumulative}:${unitIndex}` for idempotency).
+     * Quantities must sum to `receivedQuantity`. The PO line cumulative
+     * receivedQuantity, status auto-promotion, and COGS calculation are
+     * unchanged. When omitted, behavior is unchanged from pre-Task #240.
+     */
+    units?: Array<{
+      quantity: number;
+      traceability?: Record<string, string>;
+      notes?: string;
+    }>;
   }): Promise<any> {
-    const { poLineItemId, receivedQuantity, receivedDate, notes, createdBy, cocLink } = params;
+    const { poLineItemId, receivedQuantity, receivedDate, notes, createdBy, cocLink, units } = params;
+
+    // Validate per-unit splits if supplied
+    if (units && units.length > 0) {
+      const sum = units.reduce((s, u) => s + Number(u.quantity ?? 0), 0);
+      if (Math.abs(sum - receivedQuantity) > 0.0001) {
+        throw new Error(
+          `Per-unit quantities (sum=${sum}) must equal receivedQuantity (${receivedQuantity})`,
+        );
+      }
+      for (const u of units) {
+        const q = Number(u.quantity);
+        if (!Number.isFinite(q) || q <= 0) {
+          throw new Error(`Each per-unit split must have a positive quantity (got ${u.quantity})`);
+        }
+      }
+    }
 
     // Validate received date is valid and not in the future
     if (isNaN(receivedDate.getTime())) {
@@ -10121,6 +10352,7 @@ export class DatabaseStorage implements IStorage {
         agPartNumber: vendorPOItems.agPartNumber,
         unitPrice: vendorPOItems.unitPrice,
         vendorPoId: vendorPOItems.vendorPoId,
+        description: vendorPOItems.description,
       })
       .from(vendorPOItems)
       .where(eq(vendorPOItems.id, poLineItemId));
@@ -10141,7 +10373,10 @@ export class DatabaseStorage implements IStorage {
 
     // Get the vendor PO to get vendorId
     const [vendorPO] = await db
-      .select({ vendorId: vendorPOs.vendorId })
+      .select({
+        vendorId: vendorPOs.vendorId,
+        poNumber: vendorPOs.poNumber,
+      })
       .from(vendorPOs)
       .where(eq(vendorPOs.id, poLineItem.vendorPoId));
 
@@ -10150,7 +10385,10 @@ export class DatabaseStorage implements IStorage {
     }
 
     // Get the inventory item's UOM conversion data and cutting table flags
-    const [inventoryItem] = await db
+    // (Task #248: `let` so the receiving transaction below can replace this
+    // with an auto-created placeholder when the part has no inventory_items
+    // row yet, ensuring the ITL write can proceed.)
+    let [inventoryItem] = await db
       .select({
         id: inventoryItems.id,
         agPartNumber: inventoryItems.agPartNumber,
@@ -10261,16 +10499,300 @@ export class DatabaseStorage implements IStorage {
     // Atomically update the line-item received quantity AND re-derive the parent
     // PO status within a single DB transaction, so they always commit or roll
     // back together — no gap where receipt is recorded but status is stale.
+    // Task #229 — also write a `RECEIVE` row to inventory_transaction_ledger so
+    // PO receipts surface in the Material Traceability Viewer / Inventory Ledger.
     let derivedPoStatus: string = 'Sent';
     await db.transaction(async (tx) => {
+      // The route/UI sends `receivedQuantity` as the PER-ACTION amount being
+      // received in this call (e.g. `expectedQuantity - alreadyReceived` in
+      // the receiving dialog). Read prior cumulative under FOR UPDATE so we
+      // compute newCumulative = prev + delta atomically; ITL delta = the
+      // per-action amount directly.
+      const [priorRow] = await tx
+        .select({ receivedQuantity: vendorPOItems.receivedQuantity })
+        .from(vendorPOItems)
+        .where(eq(vendorPOItems.id, poLineItemId))
+        .for('update');
+      const prevReceivedQty = Number(priorRow?.receivedQuantity ?? 0);
+      const newCumulative = prevReceivedQty + receivedQuantity;
+
       await tx
         .update(vendorPOItems)
         .set({
-          receivedQuantity,
+          receivedQuantity: newCumulative,
           receivedDate,
           updatedAt: new Date(),
         })
         .where(eq(vendorPOItems.id, poLineItemId));
+
+      // ── Inventory Transaction Ledger write (Task #229 / #248) ───────────
+      // The ITL inventory_item_id FK is NOT NULL. Previously, when the AG
+      // part number on the PO line had no matching inventory_items row we
+      // silently skipped the ledger write — the bug behind Task #248 (Rock
+      // West receipt missing from the Transactions list). Now we auto-create
+      // a placeholder inventory_items row inside this transaction so the
+      // ledger write can proceed. Truly ad-hoc PO lines with no agPartNumber
+      // still bypass the ITL because there's no part identity to track.
+      if (!inventoryItem && poLineItem.agPartNumber) {
+        const { ensureInventoryItemForReceipt } = await import(
+          './src/services/ensureInventoryItemForReceipt'
+        );
+        const ensured = await ensureInventoryItemForReceipt(tx, {
+          agPartNumber: poLineItem.agPartNumber,
+          fallbackName: poLineItem.description ?? poLineItem.agPartNumber,
+          vendorId: vendorPO.vendorId ?? null,
+          createdBy: createdBy != null ? `user:${createdBy}` : null,
+        });
+        inventoryItem = {
+          id: ensured.id,
+          agPartNumber: ensured.agPartNumber,
+          name: ensured.name,
+          source: null,
+          supplierPartNumber: null,
+          vendorUnit: null,
+          purchaseUnit: ensured.purchaseUnit,
+          purchaseQuantity: null,
+          consumptionRate: null,
+          usageUnit: ensured.usageUnit,
+          utilizedInPL1: false,
+          utilizedInPL2: false,
+          isFabric: false,
+        } as typeof inventoryItem;
+        console.warn(
+          `[vendor-po/receive] Auto-created inventory_items placeholder for ag_part_number="${poLineItem.agPartNumber}" (poLineItemId=${poLineItemId}) so ledger row could be written. Edit Parts Management to fill metadata.`,
+        );
+      }
+      if (inventoryItem) {
+        const ledgerSourceModule = 'receiving:vendor-po';
+
+        // Resolve receiver display name from users table (fall back to
+        // username, then a system marker) so traceability shows a human name.
+        let receiverDisplayName = 'system:vendor-po-receive';
+        if (createdBy != null) {
+          const [u] = await tx
+            .select({
+              username: users.username,
+              firstName: users.firstName,
+              lastName: users.lastName,
+            })
+            .from(users)
+            .where(eq(users.id, createdBy))
+            .limit(1);
+          if (u) {
+            const full = [u.firstName, u.lastName].filter(Boolean).join(' ').trim();
+            receiverDisplayName = full || u.username || `user:${createdBy}`;
+          } else {
+            receiverDisplayName = `user:${createdBy}`;
+          }
+        }
+
+        // Resolve vendor name for richer traceability metadata.
+        let vendorName: string | null = null;
+        if (vendorPO.vendorId != null) {
+          const [v] = await tx
+            .select({ name: vendors.name })
+            .from(vendors)
+            .where(eq(vendors.id, vendorPO.vendorId))
+            .limit(1);
+          vendorName = v?.name ?? null;
+        }
+
+        // Best-effort prior on-hand: aggregate across locations. Defaults to
+        // 0 when no balance row exists (vendor-PO receipts do not directly
+        // mutate inventory_balances). Used for both consolidated and per-unit
+        // ledger writes; for per-unit, the running balance is chained.
+        const balanceRows = await tx
+          .select({ quantityOnHand: inventoryBalances.quantityOnHand })
+          .from(inventoryBalances)
+          .where(eq(inventoryBalances.agPartNumber, inventoryItem.agPartNumber));
+        const baselineQuantity = balanceRows.reduce(
+          (sum, b) => sum + Number(b.quantityOnHand ?? 0),
+          0,
+        );
+
+        if (units && units.length > 0) {
+          // ── Per-unit traceability path (Task #240) ─────────────────────
+          // For each split unit, create a material_lots row carrying its own
+          // lot/roll/heat traceability values, and write a dedicated ITL
+          // RECEIVE row keyed by `${poLineItemId}:${newCumulative}:${idx}`
+          // so re-runs are idempotent at the per-unit grain.
+          const uomForLot =
+            inventoryItem.purchaseUnit ?? inventoryItem.usageUnit ?? 'EA';
+          let runningBalance = baselineQuantity;
+
+          // Pre-fetch latest ICN sequence for today; we'll increment locally
+          // as we insert multiple lots so ICNs remain unique within the batch.
+          const today = new Date();
+          const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
+          const icnPrefix = `ICN-MAT-${dateStr}-`;
+          const icnRows = await tx
+            .select({ icn: materialLots.internalControlNumber })
+            .from(materialLots)
+            .where(like(materialLots.internalControlNumber, `${icnPrefix}%`))
+            .orderBy(desc(materialLots.internalControlNumber))
+            .limit(1);
+          const lastSeq = icnRows.length > 0
+            ? parseInt(String(icnRows[0].icn ?? '').split('-').pop() ?? '0', 10)
+            : 0;
+          let nextSeq = lastSeq + 1;
+
+          for (let idx = 0; idx < units.length; idx++) {
+            const unit = units[idx];
+            const unitQty = Number(unit.quantity);
+            const trace = unit.traceability ?? {};
+
+            const ledgerSourceRecordId = `${poLineItemId}:${newCumulative}:${idx}`;
+            const [existingLedger] = await tx
+              .select({ id: inventoryTransactionLedger.id })
+              .from(inventoryTransactionLedger)
+              .where(
+                and(
+                  eq(inventoryTransactionLedger.sourceModule, ledgerSourceModule),
+                  eq(inventoryTransactionLedger.sourceRecordId, ledgerSourceRecordId),
+                ),
+              )
+              .limit(1);
+            if (existingLedger) continue;
+
+            // Map traceability fields → material_lots columns.
+            const supplierLotNumber =
+              trace.batchLotNumber || trace.rollNumber || trace.supplierBatchLotC ||
+              trace.manufactureRoll || null;
+            const parseTraceDate = (v?: string): Date | null => {
+              if (!v) return null;
+              const d = new Date(v);
+              return isNaN(d.getTime()) ? null : d;
+            };
+            const manufactureDate = parseTraceDate(trace.manufactureDate);
+            const expirationDate = parseTraceDate(trace.expirationDate);
+
+            // Compose per-unit notes: traceability key:value list + free notes.
+            const traceParts: string[] = [];
+            for (const [k, v] of Object.entries(trace)) {
+              if (v && String(v).trim()) traceParts.push(`${k}: ${v}`);
+            }
+            const unitNotes = [
+              `Unit ${idx + 1} of ${units.length}`,
+              traceParts.length ? traceParts.join(' | ') : null,
+              unit.notes || null,
+              notes && idx === 0 ? notes : null,
+            ].filter(Boolean).join(' · ');
+
+            const icn = `${icnPrefix}${String(nextSeq++).padStart(6, '0')}`;
+
+            const [lot] = await tx.insert(materialLots).values({
+              inventoryItemId: inventoryItem.id,
+              materialPartNumber: inventoryItem.agPartNumber,
+              materialName: inventoryItem.name ?? poLineItem.agPartNumber,
+              internalControlNumber: icn,
+              supplier: vendorName ?? 'Unknown',
+              supplierLotNumber,
+              supplierPartNumber: inventoryItem.supplierPartNumber ?? null,
+              purchaseOrderNumber: vendorPO.poNumber ?? null,
+              receivingRecordNumber: null,
+              receivedQty: String(unitQty),
+              remainingQty: String(unitQty),
+              unitOfMeasure: uomForLot,
+              expirationDate,
+              manufactureDate,
+              status: 'ACCEPTED',
+              receivedBy: receiverDisplayName,
+              receivedAt: receivedDate,
+              notes: unitNotes,
+            }).returning();
+
+            const quantityBefore = runningBalance;
+            const quantityAfter = quantityBefore + unitQty;
+            runningBalance = quantityAfter;
+
+            await recordInventoryLedgerEntry({
+              transactionType: 'RECEIVE',
+              inventoryItemId: inventoryItem.id,
+              agPartNumber: inventoryItem.agPartNumber,
+              lotId: lot?.id ?? null,
+              unitOfMeasure: uomForLot,
+              quantityBefore,
+              quantityDelta: unitQty,
+              quantityAfter,
+              performedByUserId: createdBy ?? null,
+              performedByDisplayName: receiverDisplayName,
+              reasonCode: 'VENDOR_PO_RECEIPT',
+              notes: unitNotes,
+              sourceModule: ledgerSourceModule,
+              sourceRecordId: ledgerSourceRecordId,
+              metadata: {
+                vendorPoId: poLineItem.vendorPoId,
+                poNumber: vendorPO.poNumber ?? null,
+                vendorId: vendorPO.vendorId ?? null,
+                vendorName,
+                poLineItemId,
+                cumulativeReceivedQuantity: newCumulative,
+                prevReceivedQuantity: prevReceivedQty,
+                receivedQuantityThisAction: receivedQuantity,
+                receivedDate: receivedDate.toISOString(),
+                cocLink: cocLink ?? null,
+                unitIndex: idx,
+                unitCount: units.length,
+                unitQuantity: unitQty,
+                traceability: trace,
+                materialLotId: lot?.id ?? null,
+                internalControlNumber: icn,
+              },
+            }, tx);
+          }
+        } else {
+          // ── Consolidated single-row path (existing behavior) ───────────
+          const ledgerSourceRecordId = `${poLineItemId}:${newCumulative}`;
+          const [existingLedger] = await tx
+            .select({ id: inventoryTransactionLedger.id })
+            .from(inventoryTransactionLedger)
+            .where(
+              and(
+                eq(inventoryTransactionLedger.sourceModule, ledgerSourceModule),
+                eq(inventoryTransactionLedger.sourceRecordId, ledgerSourceRecordId),
+              ),
+            )
+            .limit(1);
+
+          if (!existingLedger) {
+            const delta = receivedQuantity;
+            const quantityBefore = baselineQuantity;
+            const quantityAfter = quantityBefore + delta;
+
+            await recordInventoryLedgerEntry({
+              transactionType: 'RECEIVE',
+              inventoryItemId: inventoryItem.id,
+              agPartNumber: inventoryItem.agPartNumber,
+              unitOfMeasure: inventoryItem.purchaseUnit ?? inventoryItem.usageUnit ?? 'EA',
+              quantityBefore,
+              quantityDelta: delta,
+              quantityAfter,
+              performedByUserId: createdBy ?? null,
+              performedByDisplayName: receiverDisplayName,
+              reasonCode: 'VENDOR_PO_RECEIPT',
+              notes: notes ?? null,
+              sourceModule: ledgerSourceModule,
+              sourceRecordId: ledgerSourceRecordId,
+              metadata: {
+                vendorPoId: poLineItem.vendorPoId,
+                poNumber: vendorPO.poNumber ?? null,
+                vendorId: vendorPO.vendorId ?? null,
+                vendorName,
+                poLineItemId,
+                cumulativeReceivedQuantity: newCumulative,
+                prevReceivedQuantity: prevReceivedQty,
+                receivedQuantityThisAction: receivedQuantity,
+                receivedDate: receivedDate.toISOString(),
+                cocLink: cocLink ?? null,
+              },
+            }, tx);
+          }
+        }
+      } else {
+        console.warn(
+          `[recordVendorPOReceipt] No inventory_items record for ag_part_number="${poLineItem.agPartNumber}" — skipping ITL write for poLineItemId=${poLineItemId}`,
+        );
+      }
 
       // Re-read all line items inside the transaction so we see the updated row
       const allLineItems = await tx
@@ -10950,13 +11472,36 @@ export class DatabaseStorage implements IStorage {
       }
 
       // Mandatory audit event — transactional with review write.
-      await tx.insert(auditEvents).values({
+      await recordAuditEvent({
+        eventType: isUpdate ? 'COMPLIANCE_REVIEW_UPDATED' : 'COMPLIANCE_REVIEW_SUBMITTED',
+        subjectType: 'vendor',
+        subjectId: String(data.vendorPoId),
+        sourceService: 'storage.vendorPoComplianceReview',
+        actor: {
+          id: data.reviewedByUserId ?? null,
+          username: data.reviewedByDisplayName ?? null,
+          role: null,
+        },
+        reason: data.reviewNotes ?? null,
         entityType: 'vendor',
         entityId: String(data.vendorPoId),
-        action: isUpdate ? 'COMPLIANCE_REVIEW_UPDATED' : 'COMPLIANCE_REVIEW_SUBMITTED',
-        actorId: data.reviewedByUserId ?? null,
-        actorName: data.reviewedByDisplayName ?? null,
-        reason: data.reviewNotes,
+        payload: {
+          vendorPoId: data.vendorPoId,
+          reviewStatus: computedStatus,
+          governmentContract: data.governmentContract,
+          farRequired: data.farRequired,
+          dpasRequired: data.dpasRequired,
+          cocRequired: data.cocRequired,
+          mtrRequired: data.mtrRequired,
+          sourceInspectionRequired: data.sourceInspectionRequired,
+          secondPartyComplete: data.secondPartyComplete,
+          vendorApproved: data.vendorApproved,
+          reviewNotes: data.reviewNotes,
+          reviewedByUserId: data.reviewedByUserId ?? null,
+          reviewedByDisplayName: data.reviewedByDisplayName ?? null,
+          reviewedAt: now.toISOString(),
+          isUpdate,
+        },
         meta: {
           // Full field snapshot for audit completeness
           vendorPoId: data.vendorPoId,
@@ -10975,7 +11520,7 @@ export class DatabaseStorage implements IStorage {
           reviewedAt: now.toISOString(),
           isUpdate,
         },
-      });
+      }, tx);
 
       return savedReview;
     });
@@ -11006,20 +11551,32 @@ export class DatabaseStorage implements IStorage {
         .set({ reviewStatus: 'requires_attention', updatedAt: now })
         .where(eq(vendorPoComplianceReviews.vendorPoId, poId));
 
-      await tx.insert(auditEvents).values({
+      await recordAuditEvent({
+        eventType: 'COMPLIANCE_REVIEW_INVALIDATED',
+        subjectType: 'vendor',
+        subjectId: String(poId),
+        sourceService: 'storage.vendorPoComplianceReview',
+        actor: {
+          id: actorId ?? null,
+          username: actorId ? String(actorId) : 'system',
+          role: null,
+        },
+        reason,
         entityType: 'vendor',
         entityId: String(poId),
-        action: 'COMPLIANCE_REVIEW_INVALIDATED',
-        actorId: actorId ?? null,
-        actorName: actorId ? String(actorId) : 'system',
-        reason,
+        payload: {
+          vendorPoId: poId,
+          previousStatus,
+          newStatus: 'requires_attention',
+          ...meta,
+        },
         meta: {
           vendorPoId: poId,
           previousStatus,
           newStatus: 'requires_attention',
           ...meta,
         },
-      });
+      }, tx);
     });
   }
 
@@ -12030,7 +12587,7 @@ export class DatabaseStorage implements IStorage {
         
         po.itemsMap.set(row.poItemId, {
           poItemId: row.poItemId,
-          description: row.customerProductNumber || row.itemName || row.stockModelName || row.stockModelId || 'Unknown Item',
+          description: row.itemName || row.stockModelName || row.stockModelId || row.customerProductNumber || 'Unknown Item',
           quantity: row.quantity,
           actionLength: specs.actionLength || null,
           material: specs.material || null,
@@ -14645,8 +15202,21 @@ export class DatabaseStorage implements IStorage {
     return submitted;
   }
 
+  async getProgramBuilds(filters?: { projectId?: string | null }): Promise<ProgramBuildStatus['build'][]> {
+    return getProgramBuilds(filters);
+  }
+
+  async getProgramBuildStatus(
+    buildId?: string | null,
+    filters?: { projectId?: string | null }
+  ): Promise<ProgramBuildStatus | null> {
+    return getProgramBuildStatus(buildId, filters);
+  }
+
   // P2 Purchase Orders CRUD
   async getAllP2PurchaseOrders(): Promise<P2PurchaseOrder[]> {
+    await ensureP2PurchaseOrderReadSchema();
+
     // Use pg pool instead of Drizzle/Neon HTTP driver for better compatibility
     const result = await pool.query(`
       SELECT 
@@ -14658,7 +15228,8 @@ export class DatabaseStorage implements IStorage {
         tolerance_authorizer_name as "toleranceAuthorizerName",
         tolerance_notes as "toleranceNotes", bom_configured as "bomConfigured",
         locked_at as "lockedAt", locked_by as "lockedBy",
-        source_quote_id as "sourceQuoteId", created_by_id as "createdById",
+        source_quote_id as "sourceQuoteId", contract_review_role as "contractReviewRole",
+        created_by_id as "createdById",
         created_by_name as "createdByName", assigned_to_id as "assignedToId",
         assigned_to_name as "assignedToName", bom_owner_id as "bomOwnerId",
         bom_owner_name as "bomOwnerName", scheduled_by_id as "scheduledById",
@@ -14677,6 +15248,8 @@ export class DatabaseStorage implements IStorage {
   ): Promise<
     (P2PurchaseOrder & { items?: P2PurchaseOrderItem[] }) | undefined
   > {
+    await ensureP2PurchaseOrderReadSchema();
+
     const [po] = await db
       .select()
       .from(p2PurchaseOrders)
@@ -14696,17 +15269,19 @@ export class DatabaseStorage implements IStorage {
   async createP2PurchaseOrder(
     data: InsertP2PurchaseOrder
   ): Promise<P2PurchaseOrder> {
+    await ensureP2PurchaseOrderReadSchema();
+
     // Use pg pool instead of Drizzle/Neon HTTP driver for better compatibility
     const result = await pool.query(`
       INSERT INTO p2_purchase_orders (
         po_number, customer_id, customer_name, po_date, expected_delivery,
         status, notes, attachments, tolerance_authorizer_id, tolerance_authorizer_name,
-        tolerance_notes, bom_configured, source_quote_id, created_by_id, created_by_name,
-        assigned_to_id, assigned_to_name, bom_owner_id, bom_owner_name,
+        tolerance_notes, bom_configured, source_quote_id, contract_review_role,
+        created_by_id, created_by_name, assigned_to_id, assigned_to_name, bom_owner_id, bom_owner_name,
         scheduled_by_id, scheduled_by_name, production_lead_id, production_lead_name,
         project_name
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25
       )
       RETURNING id, po_number as "poNumber", customer_id as "customerId",
         customer_name as "customerName", po_date as "poDate",
@@ -14715,7 +15290,8 @@ export class DatabaseStorage implements IStorage {
         tolerance_authorizer_name as "toleranceAuthorizerName",
         tolerance_notes as "toleranceNotes", bom_configured as "bomConfigured",
         locked_at as "lockedAt", locked_by as "lockedBy",
-        source_quote_id as "sourceQuoteId", created_by_id as "createdById",
+        source_quote_id as "sourceQuoteId", contract_review_role as "contractReviewRole",
+        created_by_id as "createdById",
         created_by_name as "createdByName", assigned_to_id as "assignedToId",
         assigned_to_name as "assignedToName", bom_owner_id as "bomOwnerId",
         bom_owner_name as "bomOwnerName", scheduled_by_id as "scheduledById",
@@ -14737,6 +15313,7 @@ export class DatabaseStorage implements IStorage {
       data.toleranceNotes || null,
       data.bomConfigured || false,
       data.sourceQuoteId || null,
+      data.contractReviewRole || 'secondary',
       data.createdById || null,
       data.createdByName || null,
       data.assignedToId || null,
@@ -14756,6 +15333,8 @@ export class DatabaseStorage implements IStorage {
     id: number,
     data: Partial<InsertP2PurchaseOrder>
   ): Promise<P2PurchaseOrder> {
+    await ensureP2PurchaseOrderReadSchema();
+
     const [po] = await db
       .update(p2PurchaseOrders)
       .set(data)
@@ -15041,6 +15620,28 @@ export class DatabaseStorage implements IStorage {
       department: string;
       notes: string;
     }
+
+    // Task #242: tag generated rows with the owning project when the PO
+    // is linked to exactly one project (via projects.po_id OR
+    // project_steps.linked_p2_order_id). When multiple projects share
+    // this PO, leave project_id NULL so the dashboard falls back to
+    // PO-wide behavior rather than mis-attributing rows.
+    const projectLinkRows = await dbClient.execute(sql`
+      SELECT DISTINCT project_id::text AS project_id
+      FROM (
+        SELECT p.id AS project_id
+        FROM ${projects} p
+        WHERE p.po_id = ${poId}
+        UNION
+        SELECT ps.project_id
+        FROM ${projectSteps} ps
+        WHERE ps.linked_p2_order_id = ${poId}
+      ) s
+      WHERE project_id IS NOT NULL
+    `);
+    const projectLinks = (projectLinkRows.rows ?? projectLinkRows) as Array<{ project_id: string }>;
+    const soleProjectId: string | null =
+      projectLinks.length === 1 ? projectLinks[0].project_id : null;
 
     const pendingOrders: PendingOrder[] = [];
 
@@ -15339,6 +15940,7 @@ export class DatabaseStorage implements IStorage {
           orderId,
           p2PoId: order.p2PoId,
           p2PoItemId: order.p2PoItemId,
+          projectId: soleProjectId, // Task #242: NULL when PO is shared by multiple projects
           bomDefinitionId: order.bomDefinitionId,
           bomItemId: order.bomItemId,
           sku: order.sku,
@@ -15643,8 +16245,9 @@ export class DatabaseStorage implements IStorage {
   async updateP2PoItemWithQtySync(
     poId: number,
     itemId: number,
-    updateData: Partial<InsertP2PurchaseOrderItem>,
-    actor: { username: string; role: string; ipAddress?: string; userAgent?: string | null }
+    updateData: Partial<InsertP2PurchaseOrderItem> & { quantityDelta?: number },
+    actor: { username: string; role: string; ipAddress?: string; userAgent?: string | null },
+    existingTx?: DbOrTx,
   ): Promise<{
     item: P2PurchaseOrderItem;
     sync:
@@ -15662,7 +16265,7 @@ export class DatabaseStorage implements IStorage {
           productionOrdersRemoved: number;
         };
   }> {
-    return await db.transaction(async (tx) => {
+    const runner = async (tx: DbOrTx) => {
       // Lock the PO row first to serialize concurrent qty edits
       const [po] = await tx
         .select()
@@ -15699,8 +16302,12 @@ export class DatabaseStorage implements IStorage {
       }
 
       const oldQty = existingItem.quantity;
-      const newQty = updateData.quantity ?? oldQty;
-      const qtyChanged = updateData.quantity !== undefined && newQty !== oldQty;
+      const newQty = updateData.quantityDelta !== undefined
+        ? oldQty + updateData.quantityDelta
+        : (updateData.quantity ?? oldQty);
+      const qtyChanged =
+        (updateData.quantityDelta !== undefined && updateData.quantityDelta !== 0) ||
+        (updateData.quantity !== undefined && newQty !== oldQty);
 
       // Re-read counts inside the transaction so the in-progress guard sees a
       // consistent view of serialized units / production orders.
@@ -15730,11 +16337,16 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
-      // Build the partial update payload (recompute totalPrice if needed)
+      // Build the partial update payload (recompute totalPrice if needed).
+      // Strip the synthetic `quantityDelta` flag — it's not a column.
+      const { quantityDelta: _delta, ...rest } = updateData;
       const persistData: Partial<InsertP2PurchaseOrderItem> & { totalPrice?: number } = {
-        ...updateData,
+        ...rest,
       };
-      if (updateData.quantity !== undefined || updateData.unitPrice !== undefined) {
+      if (updateData.quantityDelta !== undefined) {
+        persistData.quantity = newQty;
+      }
+      if (qtyChanged || updateData.unitPrice !== undefined) {
         const unitPrice = updateData.unitPrice ?? existingItem.unitPrice ?? 0;
         persistData.totalPrice = newQty * unitPrice;
       }
@@ -15903,7 +16515,8 @@ export class DatabaseStorage implements IStorage {
       }
 
       return { item: updatedItem, sync };
-    });
+    };
+    return existingTx ? await runner(existingTx) : await db.transaction(runner);
   }
 
   async getP2MaterialRequirements(poId: number): Promise<any[]> {
@@ -16166,6 +16779,8 @@ export class DatabaseStorage implements IStorage {
     department?: string;
     status?: string;
   }): Promise<P2SerializedItem[]> {
+    await ensureP2PurchaseOrderReadSchema();
+
     // Use pg pool instead of Drizzle/Neon HTTP driver for better compatibility
     let whereClause = '';
     const params: any[] = [];
@@ -16600,7 +17215,7 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(routingOperations)
       .where(eq(routingOperations.partRoutingId, partRoutingId))
-      .orderBy(routingOperations.stepNumber);
+      .orderBy(asc(routingOperations.stepNumber), asc(routingOperations.id));
   }
 
   async createRoutingOperation(data: InsertRoutingOperation): Promise<RoutingOperation> {
@@ -17686,6 +18301,7 @@ export class DatabaseStorage implements IStorage {
     partNumber?: string;
     workOrderId?: string;
     inventoryItemId?: string;
+    partRoutingId?: string;
   }): Promise<Traveler[]> {
     const conditions = [];
 
@@ -17700,6 +18316,9 @@ export class DatabaseStorage implements IStorage {
     }
     if (filters?.inventoryItemId) {
       conditions.push(eq(travelers.inventoryItemId, filters.inventoryItemId));
+    }
+    if (filters?.partRoutingId) {
+      conditions.push(eq(travelers.partRoutingId, filters.partRoutingId));
     }
 
     if (conditions.length === 0) {
@@ -18616,6 +19235,46 @@ export class DatabaseStorage implements IStorage {
     return out;
   }
 
+  private _customDataFieldKey(field: any): string {
+    return String(field?.fieldKey || field?.fieldName || '')
+      .trim()
+      .replace(/\s+/g, '_')
+      .toLowerCase();
+  }
+
+  private _dedupeCustomDataFieldsByKey<T extends { fieldKey?: string; fieldName?: string }>(
+    fields: T[],
+    seen: Set<string>,
+  ): T[] {
+    const out: T[] = [];
+    for (const field of fields) {
+      const key = this._customDataFieldKey(field);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      out.push(field);
+    }
+    return out;
+  }
+
+  private _qcStandardKey(standard: any): string {
+    return [
+      standard?.standard || standard?.standardName || standard?.name || standard?.title || '',
+      standard?.tolerance || '',
+      standard?.requirement || standard?.specification || standard?.acceptanceCriteria || '',
+    ].map((value) => String(value).trim().toLowerCase()).join('|');
+  }
+
+  private _dedupeQcStandardsAcrossPhases<T>(standards: T[], seen: Set<string>): T[] {
+    const out: T[] = [];
+    for (const standard of standards) {
+      const key = this._qcStandardKey(standard);
+      if (!key.replace(/\|/g, '') || seen.has(key)) continue;
+      seen.add(key);
+      out.push(standard);
+    }
+    return out;
+  }
+
   private _taskDedupeKey(phase: string, taskType: string, title: string): string {
     return `${this._normalizePhase(phase)}|${taskType}|${title}`.toLowerCase();
   }
@@ -18667,7 +19326,7 @@ export class DatabaseStorage implements IStorage {
       serialNumber: data.serialNumber || null,
       internalControlNumber: data.internalControlNumber || null,
       quantity: data.quantity || 1,
-      status: 'DRAFT',
+      status: data.workOrderId ? 'IN_PROGRESS' : 'DRAFT',
       partRoutingId: routing.id,
       partRoutingRevision: (routing as any).routingRevision || 1,
       createdBy: data.createdBy,
@@ -18690,40 +19349,10 @@ export class DatabaseStorage implements IStorage {
       const deptConfig = departmentConfig[deptName] || {};
       const enabledPhases = this._getEnabledPhases(deptConfig);
       const createdTaskKeys = new Set<string>();
+      const createdCustomFieldKeys = new Set<string>();
+      const createdQcStandardKeys = new Set<string>();
 
-      const hasStartChecks = (deptConfig.startChecks || []).length > 0;
-      const hasFinishChecks = (deptConfig.finishChecks || []).length > 0;
-      const hasMaterials = (deptConfig.materials || []).length > 0;
-      const metadataOnlyFields = new Set(['operator', 'timestamp']);
-      const hasTraceFields = (traceabilityConfig[deptName] || []).filter(
-        (f: string) => !metadataOnlyFields.has(f)
-      ).length > 0;
-      const hasCustomFields = (deptConfig.customDataFields || []).length > 0;
-      const hasStartCustomFields = (deptConfig.startCustomDataFields || []).length > 0;
-      const hasFinishCustomFields = (deptConfig.finishCustomDataFields || []).length > 0;
-      const hasQcStandards = (deptConfig.qcStandards || []).length > 0;
-      const hasStartQcStandards = (deptConfig.startQcStandards || []).length > 0;
-      const hasFinishQcStandards = (deptConfig.finishQcStandards || []).length > 0;
-      const hasOvenCuring = (deptConfig.ovenCuringSteps || []).length > 0;
-      const routingInstPack = deptConfig.instructionPack || null;
-      const hasInstructionPackContent = routingInstPack && (
-        (routingInstPack.workInstructionRefs?.length > 0) ||
-        (routingInstPack.aiSnippets?.length > 0) ||
-        (routingInstPack.specialNotes) ||
-        (routingInstPack.media?.length > 0)
-      );
       const hasTimerConfig = deptConfig.timerConfig?.enabled;
-      const hasStdProcesses = (deptConfig.standardProcesses || []).length > 0;
-      const hasSpecialProcess = !!deptConfig.specialProcessConfig?.processName;
-
-      const hasAnyContent = hasStartChecks || hasFinishChecks || hasMaterials || hasTraceFields ||
-        hasCustomFields || hasStartCustomFields || hasFinishCustomFields ||
-        hasQcStandards || hasStartQcStandards || hasFinishQcStandards || hasOvenCuring || hasInstructionPackContent ||
-        hasTimerConfig || hasStdProcesses || hasSpecialProcess;
-
-      if (!hasAnyContent) {
-        continue;
-      }
 
       stepCounter++;
       const stepNumber = stepCounter; // 1, 2, 3, etc.
@@ -18917,7 +19546,10 @@ export class DatabaseStorage implements IStorage {
       const finishMaterials = materials.filter((m: any) => m.traceabilityPhase === 'FINISH');
 
       // START Phase Custom Data Fields
-      const startCustomFields = deptConfig.startCustomDataFields || [];
+      const startCustomFields = this._dedupeCustomDataFieldsByKey(
+        deptConfig.startCustomDataFields || [],
+        createdCustomFieldKeys,
+      );
       if (startCustomFields.length > 0) {
         const startDataTask = await this._createTaskIfAllowed({
           travelerStepId: step.id,
@@ -18952,18 +19584,6 @@ export class DatabaseStorage implements IStorage {
       const hasPhaseQcStandards = startQcStandards.length > 0 || finishQcStandards.length > 0;
       const workQcStandards = hasPhaseQcStandards ? [] : (deptConfig.qcStandards || []);
 
-      const dedupeQcStandards = (standards: any[]): any[] => {
-        const seenFieldKeys = new Set<string>();
-        const out: any[] = [];
-        for (const qc of standards) {
-          const fieldKey = `qc_${qc.standard?.replace(/\s+/g, '_').toLowerCase() || 'check'}`;
-          if (seenFieldKeys.has(fieldKey)) continue;
-          seenFieldKeys.add(fieldKey);
-          out.push(qc);
-        }
-        return out;
-      };
-
       const qcPhaseConfigs = [
         { standards: startQcStandards, phase: 'START' as const, title: 'Incoming QC Inspection', instructions: 'Complete START phase quality control verifications' },
         { standards: workQcStandards, phase: 'WORK' as const, title: 'Quality Control Checks', instructions: 'Complete WORK phase quality control verifications' },
@@ -18972,7 +19592,7 @@ export class DatabaseStorage implements IStorage {
 
       for (const qcPhase of qcPhaseConfigs) {
         if (qcPhase.standards.length === 0) continue;
-        const uniqueStandards = dedupeQcStandards(qcPhase.standards);
+        const uniqueStandards = this._dedupeQcStandardsAcrossPhases(qcPhase.standards, createdQcStandardKeys);
         if (uniqueStandards.length === 0) continue;
 
         const qcTask = await this._createTaskIfAllowed({
@@ -19310,7 +19930,10 @@ export class DatabaseStorage implements IStorage {
       }
 
       // FINISH Phase Custom Data Fields
-      const finishCustomFields = deptConfig.finishCustomDataFields || [];
+      const finishCustomFields = this._dedupeCustomDataFieldsByKey(
+        deptConfig.finishCustomDataFields || [],
+        createdCustomFieldKeys,
+      );
       if (finishCustomFields.length > 0) {
         const finishDataTask = await this._createTaskIfAllowed({
           travelerStepId: step.id,
@@ -19538,23 +20161,107 @@ export class DatabaseStorage implements IStorage {
         default: return 'WORK';
       }
     };
+    const sanitizeFieldKey = (value: string) =>
+      String(value || '')
+        .replace(/[^a-zA-Z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .toLowerCase() || 'check';
+    const normalizeQcStandards = (raw: any): any[] => {
+      if (!Array.isArray(raw)) return [];
+      const standards = raw
+        .map((qc: any) => ({
+          standard: qc.standard || qc.standardName || qc.name || qc.title || qc.characteristic || qc.checkpoint || '',
+          tolerance: qc.tolerance || qc.acceptanceTolerance || qc.nominalTolerance || '',
+          requirement: qc.requirement || qc.specification || qc.acceptanceCriteria || qc.criteria || qc.nominal || '',
+          hardQcStop: qc.hardQcStop || qc.hardStop || false,
+          referenceLink: qc.referenceLink || qc.referenceUrl || qc.documentUrl || '',
+        }))
+        .filter((qc) => qc.standard || qc.tolerance || qc.requirement);
 
-    // Group ops by unique (stepNumber, departmentName)
-    const stepGroups: Map<string, RoutingOperation[]> = new Map();
-    for (const op of ops) {
-      const key = `${op.stepNumber}__${op.departmentName}`;
-      if (!stepGroups.has(key)) stepGroups.set(key, []);
-      stepGroups.get(key)!.push(op);
+      const seen = new Set<string>();
+      return standards.filter((qc) => {
+        const key = `${qc.standard}|${qc.tolerance}|${qc.requirement}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    };
+    const getOperationQcStandards = (op: RoutingOperation, taskPhase: string): any[] => {
+      const pack = (op.instructionPack || {}) as any;
+      const packStandards = normalizeQcStandards(
+        pack.qcStandards ||
+        pack.qcRequirements ||
+        pack.qualityChecks ||
+        pack.inspectionRequirements ||
+        pack.checkpoints
+      );
+      if (packStandards.length > 0) return packStandards;
+
+      const departmentConfig = (routing.departmentConfig || {}) as Record<string, any>;
+      const deptConfig = departmentConfig[op.departmentName] || {};
+      const phaseStandards =
+        taskPhase === 'START'
+          ? normalizeQcStandards(deptConfig.startQcStandards)
+          : taskPhase === 'FINISH'
+            ? normalizeQcStandards(deptConfig.finishQcStandards)
+            : normalizeQcStandards(deptConfig.qcStandards);
+      if (phaseStandards.length > 0) return phaseStandards;
+
+      const fallbackStandards =
+        taskPhase === 'FINISH'
+          ? normalizeQcStandards(deptConfig.qcStandards)
+          : normalizeQcStandards(deptConfig.finishQcStandards);
+      if (fallbackStandards.length > 0) return fallbackStandards;
+
+      if (pack.specialNotes) {
+        return [{
+          standard: op.operationName,
+          tolerance: '',
+          requirement: pack.specialNotes,
+          hardQcStop: false,
+          referenceLink: '',
+        }];
+      }
+      return [];
+    };
+
+    const departmentSequence = Array.isArray(routing.departmentSequence)
+      ? (routing.departmentSequence as string[])
+      : [];
+    const departmentOrder = new Map(
+      departmentSequence.map((dept, index) => [String(dept).trim().toLowerCase(), index])
+    );
+    const getDepartmentOrder = (departmentName: string) =>
+      departmentOrder.get(String(departmentName || '').trim().toLowerCase()) ?? Number.MAX_SAFE_INTEGER;
+    const compareOperations = (a: RoutingOperation, b: RoutingOperation) => {
+      const aStep = Number.isFinite(Number(a.stepNumber)) ? Number(a.stepNumber) : Number.MAX_SAFE_INTEGER;
+      const bStep = Number.isFinite(Number(b.stepNumber)) ? Number(b.stepNumber) : Number.MAX_SAFE_INTEGER;
+      if (aStep !== bStep) return aStep - bStep;
+
+      const deptDiff = getDepartmentOrder(a.departmentName) - getDepartmentOrder(b.departmentName);
+      if (deptDiff !== 0) return deptDiff;
+
+      return (a.id ?? 0) - (b.id ?? 0);
+    };
+
+    const orderedOps = [...ops].sort(compareOperations);
+
+    // Keep the exact operation placement in the traveler flow. Consecutive
+    // operations for the same department become one traveler step; if a
+    // department appears again later in the routing, it remains a later step.
+    const stepGroups: RoutingOperation[][] = [];
+    for (const op of orderedOps) {
+      const currentGroup = stepGroups[stepGroups.length - 1];
+      const currentDept = currentGroup?.[0]?.departmentName;
+      if (currentGroup && currentDept === op.departmentName) {
+        currentGroup.push(op);
+      } else {
+        stepGroups.push([op]);
+      }
     }
-    const sortedKeys = Array.from(stepGroups.keys()).sort((a, b) => {
-      const [aStep] = a.split('__').map(Number);
-      const [bStep] = b.split('__').map(Number);
-      return aStep - bStep;
-    });
 
     let stepCounter = 0;
-    for (const key of sortedKeys) {
-      const groupOps = stepGroups.get(key)!;
+    for (const groupOps of stepGroups) {
       const deptName = groupOps[0].departmentName;
       stepCounter++;
       const step = await this.createTravelerStep({
@@ -19569,10 +20276,41 @@ export class DatabaseStorage implements IStorage {
       for (const op of groupOps) {
         const taskType = operationTypeToTaskType(op.operationType);
         const taskPhase = operationTypeToPhase(op.operationType);
-        const instPack = op.instructionPack as any;
-        const instructions = instPack?.specialNotes || op.operationName;
+        const instPack = (op.instructionPack || {}) as any;
+        const operationDetails = [
+          instPack?.specialNotes,
+          op.workCenter ? `Work center: ${op.workCenter}` : null,
+          op.estimatedMinutes ? `Estimated time: ${op.estimatedMinutes} minutes` : null,
+          op.isOutsideProcess ? 'Outside process required' : null,
+          op.certificateRequired ? 'Certificate required' : null,
+          op.receivingInspectionRequired ? 'Receiving inspection required' : null,
+          Array.isArray(op.requiredCalibrationAssetTags) && op.requiredCalibrationAssetTags.length > 0
+            ? `Required calibration assets: ${op.requiredCalibrationAssetTags.join(', ')}`
+            : null,
+        ].filter(Boolean);
+        const instructions = operationDetails.length > 0
+          ? operationDetails.join('\n')
+          : op.operationName;
+        const instructionPack = {
+          ...instPack,
+          routingOperation: {
+            id: op.id,
+            stepNumber: op.stepNumber,
+            departmentName: op.departmentName,
+            operationName: op.operationName,
+            operationType: op.operationType,
+            workCenter: op.workCenter,
+            estimatedMinutes: op.estimatedMinutes,
+            isOutsideProcess: op.isOutsideProcess,
+            outsideProcessType: op.outsideProcessType,
+            expectedLeadDays: op.expectedLeadDays,
+            certificateRequired: op.certificateRequired,
+            receivingInspectionRequired: op.receivingInspectionRequired,
+            requiredCalibrationAssetTags: op.requiredCalibrationAssetTags || [],
+          },
+        };
 
-        await this.createTravelerTask({
+        const task = await this.createTravelerTask({
           travelerStepId: step.id,
           taskType: taskType as any,
           taskPhase: taskPhase as any,
@@ -19585,8 +20323,27 @@ export class DatabaseStorage implements IStorage {
           requiresCertification: op.requiresCertification ?? false,
           signatureRole: op.requiresSignature ? 'OPERATOR' : null,
           status: 'NOT_STARTED',
-          instructionPack: op.instructionPack as any,
+          instructionPack,
         });
+
+        if (taskType === 'QC') {
+          const qcStandards = getOperationQcStandards(op, taskPhase);
+          for (const qc of qcStandards) {
+            await this.createTravelerTaskField({
+              travelerTaskId: task.id,
+              fieldKey: `qc_${op.id}_${sanitizeFieldKey(qc.standard || op.operationName)}`,
+              fieldLabel: qc.standard || op.operationName,
+              fieldType: 'yes_no',
+              required: true,
+              validation: {
+                tolerance: qc.tolerance || '',
+                requirement: qc.requirement || '',
+                ...(qc.hardQcStop ? { hardQcStop: true } : {}),
+                ...(qc.referenceLink ? { referenceLink: qc.referenceLink } : {}),
+              },
+            });
+          }
+        }
       }
     }
 
@@ -25360,7 +26117,21 @@ export class DatabaseStorage implements IStorage {
   // ── Production Work Orders (WAD) ──────────────────────────────────────────
 
   async createProductionWorkOrder(data: InsertProductionWorkOrder): Promise<ProductionWorkOrder> {
-    const [row] = await db.insert(productionWorkOrders).values(data).returning();
+    const assignment = assignDashboardForWorkOrder({
+      department: data.assignedDepartment,
+      queueType: data.queueType,
+      dashboardType: data.dashboardType,
+      assignedDashboardRoute: data.assignedDashboardRoute,
+      wizardData: data.wizardData,
+      departmentBudgets: data.departmentBudgets,
+    });
+    const [row] = await db.insert(productionWorkOrders).values({
+      ...data,
+      dashboardType: assignment.dashboardType,
+      queueType: assignment.queueType,
+      assignedDepartment: assignment.assignedDepartment,
+      assignedDashboardRoute: assignment.assignedDashboardRoute,
+    }).returning();
     return row;
   }
 

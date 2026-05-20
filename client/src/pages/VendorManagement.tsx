@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { cn } from '@/lib/utils';
@@ -89,6 +89,23 @@ import { FolderOpen } from 'lucide-react';
 import { useFormDraft } from '@/hooks/useFormDraft';
 import { useUnsavedChangesWarning } from '@/hooks/useUnsavedChangesWarning';
 
+function getUploadErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message?.trim()) {
+    return error.message;
+  }
+
+  if (error && typeof error === 'object') {
+    const data = error as Record<string, unknown>;
+    const message = data.message || data.error || data.reason || data.details;
+
+    if (typeof message === 'string' && message.trim()) {
+      return message;
+    }
+  }
+
+  return fallback;
+}
+
 const vendorFormSchema = insertVendorSchema.extend({
   email: z.string().email('Invalid email').optional().or(z.literal('')),
   additionalEmail: z
@@ -121,6 +138,9 @@ const vendorContactFormSchema = insertVendorContactSchema
 
 type VendorFormData = z.infer<typeof vendorFormSchema>;
 type VendorContactFormData = z.infer<typeof vendorContactFormSchema>;
+type MonthlyEvaluationsTableHandle = {
+  savePendingChanges: () => Promise<boolean>;
+};
 
 interface VendorsResponse {
   data: Vendor[];
@@ -139,6 +159,7 @@ export default function VendorManagement() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingVendor, setEditingVendor] = useState<Vendor | null>(null);
   const [deleteVendor, setDeleteVendor] = useState<Vendor | null>(null);
+  const evaluationTableRef = useRef<MonthlyEvaluationsTableHandle>(null);
 
   // Pending contacts for new vendors (before vendor is created)
   const [pendingContacts, setPendingContacts] = useState<PendingContact[]>([]);
@@ -657,31 +678,139 @@ export default function VendorManagement() {
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch('/api/vendors/upload/document', {
+      const data = await apiRequest('/api/vendors/upload/document', {
         method: 'POST',
         body: formData,
-      });
+        timeout: 60000,
+      }) as { url: string };
 
-      if (!response.ok) throw new Error('Upload failed');
-
-      const data = await response.json();
       form.setValue('mainDocumentUrl', data.url);
       setMainDocFile(file);
       toast({ title: 'Document uploaded successfully' });
     } catch (error) {
       toast({
         title: 'Upload failed',
-        description: 'Failed to upload document',
+        description: getUploadErrorMessage(error, 'Failed to upload document'),
         variant: 'destructive',
       });
     } finally {
       setUploadingMainDoc(false);
+      e.target.value = '';
     }
   };
 
   const handleRemoveMainDoc = () => {
     setMainDocFile(null);
     form.setValue('mainDocumentUrl', '');
+  };
+
+  const getVendorPdfViewUrl = (url: string) => {
+    const trimmed = url.trim();
+    const normalized = trimmed.startsWith('objects/') ? `/${trimmed}` : trimmed;
+    const isVendorStoragePath =
+      normalized.startsWith('/objects/') ||
+      normalized.startsWith('/uploads/vendor-documents/') ||
+      normalized.startsWith('/uploads/vendor-approvals/') ||
+      normalized.startsWith('vendor-documents/') ||
+      normalized.startsWith('vendor-approvals/');
+
+    return isVendorStoragePath
+      ? `/api/vendors/documents/view?path=${encodeURIComponent(normalized)}`
+      : trimmed;
+  };
+
+  // Opens a vendor PDF URL after a HEAD precheck so users get a clear toast
+  // instead of a blank tab when the underlying object is missing / forbidden /
+  // the storage backend is unavailable.
+  const openVendorPdf = async (
+    url: string | undefined | null,
+    label: string = 'document'
+  ) => {
+    const trimmed = (url || '').trim();
+    if (!trimmed) {
+      toast({
+        title: 'No document on file',
+        description: `There is no ${label} uploaded for this vendor yet.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const viewUrl = getVendorPdfViewUrl(trimmed);
+
+    // Only HEAD-precheck same-origin storage paths (`/objects/...`,
+    // `/uploads/...`) through the vendor document API. For full external URLs (e.g. a legacy
+    // `https://storage.googleapis.com/...` value) HEAD is typically blocked
+    // by CORS or unsupported, so a precheck would produce false negatives.
+    // In that case we just open the URL directly and let the browser handle it.
+    const isSameOriginStoragePath =
+      viewUrl.startsWith('/api/vendors/documents/view');
+
+    const openDirect = () => {
+      const win = window.open(viewUrl, '_blank', 'noopener,noreferrer');
+      if (!win) {
+        toast({
+          title: 'Pop-up blocked',
+          description:
+            'Your browser blocked the PDF from opening. Please allow pop-ups for this site and try again.',
+          variant: 'destructive',
+        });
+      }
+    };
+
+    if (!isSameOriginStoragePath) {
+      openDirect();
+      return;
+    }
+
+    let res: Response;
+    try {
+      res = await fetch(viewUrl, { method: 'HEAD' });
+    } catch {
+      // Network error or HEAD unsupported — fall back to direct open so we
+      // don't block a document that might actually load via GET.
+      openDirect();
+      return;
+    }
+
+    if (res.ok) {
+      openDirect();
+      return;
+    }
+
+    // HEAD may legitimately be rejected with 405 / 501 by some object stores
+    // even when GET works fine. Don't block the user — try a direct open.
+    if (res.status === 405 || res.status === 501) {
+      openDirect();
+      return;
+    }
+
+    if (res.status === 404) {
+      toast({
+        title: 'Document not found',
+        description: `The ${label} could not be located in storage. It may have been deleted — please re-upload it.`,
+        variant: 'destructive',
+      });
+    } else if (res.status === 403) {
+      toast({
+        title: 'Access denied',
+        description: `You do not have permission to view this ${label}, or its access policy is missing. Re-uploading the document will restore access.`,
+        variant: 'destructive',
+      });
+    } else if (res.status === 503) {
+      toast({
+        title: 'Storage temporarily unavailable',
+        description:
+          'The document storage is temporarily unavailable. Please try again in a moment.',
+        variant: 'destructive',
+      });
+    } else {
+      toast({
+        title: 'Unable to open document',
+        description: `An error occurred (${res.status}) while trying to open the ${label}. Please try again.`,
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleSelectFromLibrary = (url: string, filename: string) => {
@@ -708,25 +837,24 @@ export default function VendorManagement() {
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch('/api/vendors/upload/approval', {
+      const data = await apiRequest('/api/vendors/upload/approval', {
         method: 'POST',
         body: formData,
-      });
+        timeout: 60000,
+      }) as { url: string };
 
-      if (!response.ok) throw new Error('Upload failed');
-
-      const data = await response.json();
       form.setValue('approvalPdfUrl', data.url);
       setUploadedFile(file);
       toast({ title: 'File uploaded successfully' });
     } catch (error) {
       toast({
         title: 'Upload failed',
-        description: 'Failed to upload file',
+        description: getUploadErrorMessage(error, 'Failed to upload file'),
         variant: 'destructive',
       });
     } finally {
       setUploadingFile(false);
+      e.target.value = '';
     }
   };
 
@@ -940,7 +1068,10 @@ export default function VendorManagement() {
     ...extra,
   });
 
-  const onSubmit = (data: VendorFormData) => {
+  const onSubmit = async (data: VendorFormData) => {
+    const evaluationSaved = await evaluationTableRef.current?.savePendingChanges();
+    if (evaluationSaved === false) return;
+
     const normalizedData = buildNormalizedData(data);
 
     if (editingVendor) {
@@ -1213,7 +1344,7 @@ export default function VendorManagement() {
                             <span>This approved vendor's document was cleared and needs to be re-uploaded.</span>
                             <Label
                               htmlFor="main-doc-upload"
-                              className="mt-2 inline-flex cursor-pointer items-center gap-1 rounded-md border border-amber-500 bg-white px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-50 dark:bg-amber-900 dark:text-amber-200 dark:border-amber-500 dark:hover:bg-amber-800"
+                              className="mt-2 inline-flex cursor-pointer items-center gap-1 rounded-md border border-amber-500 bg-white px-3 py-1.5 text-xs font-medium text-black hover:bg-amber-50 dark:bg-amber-900 dark:text-white dark:border-amber-500 dark:hover:bg-amber-800"
                             >
                               <Upload className="h-3 w-3" />
                               Upload replacement
@@ -1228,7 +1359,7 @@ export default function VendorManagement() {
                               <Upload className="w-6 h-6 mb-1 text-gray-400" />
                               <Label
                                 htmlFor="main-doc-upload"
-                                className="cursor-pointer text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                                className="cursor-pointer text-sm text-black hover:text-black dark:text-white dark:hover:text-white"
                               >
                                 Upload from Computer
                               </Label>
@@ -1259,7 +1390,7 @@ export default function VendorManagement() {
                         <div className="border border-gray-300 dark:border-gray-600 rounded-lg p-4 bg-gray-50 dark:bg-gray-800">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              <FileText className="w-5 h-5 text-blue-600" />
+                              <FileText className="w-5 h-5 text-black dark:text-white" />
                               <span className="text-sm font-medium truncate max-w-[200px]">
                                 {mainDocFile?.name || (
                                   form.watch('mainDocumentUrl')
@@ -1279,15 +1410,19 @@ export default function VendorManagement() {
                             </Button>
                           </div>
                           {form.watch('mainDocumentUrl') && (
-                            <a
-                              href={form.watch('mainDocumentUrl')}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 mt-2 inline-block"
+                            <button
+                              type="button"
+                              className="text-xs text-black hover:text-black dark:text-white dark:hover:text-white mt-2 inline-block underline"
                               data-testid="link-view-main-doc"
+                              onClick={() =>
+                                openVendorPdf(
+                                  form.getValues('mainDocumentUrl'),
+                                  'vendor document'
+                                )
+                              }
                             >
                               View PDF
-                            </a>
+                            </button>
                           )}
                         </div>
                       )}
@@ -1781,7 +1916,7 @@ export default function VendorManagement() {
                           <Upload className="w-8 h-8 mx-auto mb-2 text-gray-400" />
                           <Label
                             htmlFor="file-upload"
-                            className="cursor-pointer text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                            className="cursor-pointer text-sm text-black hover:text-black dark:text-white dark:hover:text-white"
                           >
                             Click to upload PDF
                           </Label>
@@ -1802,7 +1937,7 @@ export default function VendorManagement() {
                         <div className="border border-gray-300 dark:border-gray-600 rounded-lg p-4 bg-gray-50 dark:bg-gray-800">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              <FileText className="w-5 h-5 text-blue-600" />
+                              <FileText className="w-5 h-5 text-black dark:text-white" />
                               <span className="text-sm font-medium">
                                 {uploadedFile?.name || (
                                   form.watch('approvalPdfUrl')
@@ -1824,54 +1959,14 @@ export default function VendorManagement() {
                           {form.watch('approvalPdfUrl') && (
                             <button
                               type="button"
-                              className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 mt-2 inline-block underline"
+                              className="text-xs text-black hover:text-black dark:text-white dark:hover:text-white mt-2 inline-block underline"
                               data-testid="link-view-pdf"
-                              onClick={async () => {
-                                const url = form.getValues('approvalPdfUrl');
-                                const newWindow = window.open('', '_blank', 'noopener,noreferrer');
-                                try {
-                                  const res = await fetch(url, { method: 'HEAD' });
-                                  if (res.ok) {
-                                    if (newWindow) {
-                                      newWindow.location.href = url;
-                                    } else {
-                                      toast({
-                                        title: 'Pop-up blocked',
-                                        description: 'Your browser blocked the PDF from opening. Please allow pop-ups for this site and try again.',
-                                        variant: 'destructive',
-                                      });
-                                    }
-                                  } else {
-                                    if (newWindow) newWindow.close();
-                                    if (res.status === 404) {
-                                      toast({
-                                        title: 'Document not found',
-                                        description: 'The approval PDF could not be located. It may have been deleted.',
-                                        variant: 'destructive',
-                                      });
-                                    } else if (res.status === 503) {
-                                      toast({
-                                        title: 'Storage temporarily unavailable',
-                                        description: 'The document storage is temporarily unavailable. Please try again in a moment.',
-                                        variant: 'destructive',
-                                      });
-                                    } else {
-                                      toast({
-                                        title: 'Unable to open document',
-                                        description: 'An error occurred while trying to open the approval PDF. Please try again.',
-                                        variant: 'destructive',
-                                      });
-                                    }
-                                  }
-                                } catch {
-                                  if (newWindow) newWindow.close();
-                                  toast({
-                                    title: 'Unable to reach storage',
-                                    description: 'Could not connect to document storage. Please check your connection and try again.',
-                                    variant: 'destructive',
-                                  });
-                                }
-                              }}
+                              onClick={() =>
+                                openVendorPdf(
+                                  form.getValues('approvalPdfUrl'),
+                                  'approval PDF'
+                                )
+                              }
                             >
                               View PDF
                             </button>
@@ -1955,7 +2050,12 @@ export default function VendorManagement() {
                         Track annual performance scores for Quality, Cost, Delivery, and Response (1-5 scale). One evaluation is due per calendar year.
                       </p>
                     </div>
-                    {editingVendor && <MonthlyEvaluationsTable vendorId={editingVendor.id} />}
+                    {editingVendor && (
+                      <MonthlyEvaluationsTable
+                        ref={evaluationTableRef}
+                        vendorId={editingVendor.id}
+                      />
+                    )}
                   </>
                 ) : (
                   <div className="bg-muted/50 border border-dashed rounded-md p-4 text-sm text-muted-foreground">
@@ -2155,7 +2255,7 @@ export default function VendorManagement() {
 
       {/* Table */}
       <div className="border rounded-lg overflow-hidden bg-white dark:bg-gray-900">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto overscroll-x-contain scroll-smooth">
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
             <thead className="bg-gray-50 dark:bg-gray-800">
               <tr>
@@ -2235,6 +2335,23 @@ export default function VendorManagement() {
                     >
                       <div className="flex items-center gap-2">
                         {vendor.name}
+                        {vendor.mainDocumentUrl?.trim() && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-6 gap-1 px-2 py-0 text-xs"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openVendorPdf(vendor.mainDocumentUrl, 'vendor document');
+                            }}
+                            data-testid={`button-view-vendor-doc-${vendor.id}`}
+                            title="View uploaded vendor document"
+                          >
+                            <FileText className="w-3 h-3" />
+                            Document
+                          </Button>
+                        )}
                         {vendor.approved && !vendor.mainDocumentUrl?.trim() && (
                           <span
                             tabIndex={0}
@@ -2352,16 +2469,18 @@ export default function VendorManagement() {
                           </div>
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <a
-                            href={vd.mainDocumentUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-1"
+                            data-testid={`button-open-vendor-doc-${vd.id}`}
+                            onClick={() =>
+                              openVendorPdf(vd.mainDocumentUrl, 'vendor document')
+                            }
                           >
-                            <Button variant="outline" size="sm" className="gap-1">
-                              <ExternalLink className="w-4 h-4" />
-                              Open
-                            </Button>
-                          </a>
+                            <ExternalLink className="w-4 h-4" />
+                            Open
+                          </Button>
                         </td>
                       </tr>
                     );
@@ -2491,7 +2610,7 @@ export default function VendorManagement() {
                 <Upload className="w-10 h-10 mx-auto mb-2 text-gray-400" />
                 <Label
                   htmlFor="csv-upload"
-                  className="cursor-pointer text-blue-600 hover:text-blue-700 dark:text-blue-400 font-medium"
+                  className="cursor-pointer text-black hover:text-black dark:text-white dark:hover:text-white font-medium"
                 >
                   Upload Vendors CSV
                 </Label>
@@ -2505,7 +2624,7 @@ export default function VendorManagement() {
                   disabled={importingCsv}
                 />
                 {importingCsv && (
-                  <p className="text-sm text-blue-600 mt-2">
+                  <p className="text-sm text-black dark:text-white mt-2">
                     Importing...
                   </p>
                 )}
@@ -2519,10 +2638,10 @@ export default function VendorManagement() {
                 CSV should include vendor names and annual scores (Annual- Quality, Annual- Cost, Annual- Delivery, Annual- Response). Vendor names must match existing vendors.
               </p>
               <div className="border-2 border-dashed border-blue-300 dark:border-blue-600 rounded-lg p-6 text-center bg-white dark:bg-gray-900">
-                <Upload className="w-10 h-10 mx-auto mb-2 text-blue-400" />
+                <Upload className="w-10 h-10 mx-auto mb-2 text-black dark:text-white" />
                 <Label
                   htmlFor="evaluations-csv-upload"
-                  className="cursor-pointer text-blue-600 hover:text-blue-700 dark:text-blue-400 font-medium"
+                  className="cursor-pointer text-black hover:text-black dark:text-white dark:hover:text-white font-medium"
                 >
                   Upload Evaluations CSV
                 </Label>
@@ -2536,7 +2655,7 @@ export default function VendorManagement() {
                   disabled={importingCsv}
                 />
                 {importingCsv && (
-                  <p className="text-sm text-blue-600 mt-2">
+                  <p className="text-sm text-black dark:text-white mt-2">
                     Importing evaluations...
                   </p>
                 )}
@@ -2570,7 +2689,10 @@ export default function VendorManagement() {
 }
 
 // Annual Evaluations Table Component
-function MonthlyEvaluationsTable({ vendorId }: { vendorId: number }) {
+const MonthlyEvaluationsTable = forwardRef<
+  MonthlyEvaluationsTableHandle,
+  { vendorId: number }
+>(function MonthlyEvaluationsTable({ vendorId }, ref) {
   const { toast } = useToast();
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [editingField, setEditingField] = useState<string | null>(null);
@@ -2630,6 +2752,8 @@ function MonthlyEvaluationsTable({ vendorId }: { vendorId: number }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendors', vendorId, 'evaluations'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/vendors'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/vendors/evaluations/ytd-summary'] });
       setPendingChanges({});
       toast({ title: 'Success', description: 'Annual evaluation saved successfully' });
     },
@@ -2661,6 +2785,19 @@ function MonthlyEvaluationsTable({ vendorId }: { vendorId: number }) {
     await saveMutation.mutateAsync({ ...base, ...pendingChanges });
   };
 
+  useImperativeHandle(ref, () => ({
+    savePendingChanges: async () => {
+      if (!hasPendingChanges) return true;
+
+      try {
+        await handleSave();
+        return true;
+      } catch {
+        return false;
+      }
+    },
+  }));
+
   const handleDiscard = () => {
     setPendingChanges({});
     setEditingField(null);
@@ -2674,24 +2811,21 @@ function MonthlyEvaluationsTable({ vendorId }: { vendorId: number }) {
 
     if (isEditing) {
       return (
-        <Select
-          defaultValue={value !== null && value !== undefined ? value.toString() : 'na'}
-          onValueChange={(v) => handleFieldSelect(field, v)}
-          open={true}
-          onOpenChange={(open) => { if (!open) setEditingField(null); }}
+        <select
+          autoFocus
+          value={value !== null && value !== undefined ? value.toString() : 'na'}
+          onChange={(e) => handleFieldSelect(field, e.target.value)}
+          onBlur={() => setEditingField(null)}
+          className="h-8 w-20 rounded border border-input bg-background p-1 text-center text-sm"
+          data-testid={`select-annual-${field}`}
         >
-          <SelectTrigger className="w-20 h-8 text-center p-1">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="5">5</SelectItem>
-            <SelectItem value="4">4</SelectItem>
-            <SelectItem value="3">3</SelectItem>
-            <SelectItem value="2">2</SelectItem>
-            <SelectItem value="1">1</SelectItem>
-            <SelectItem value="na">N/A</SelectItem>
-          </SelectContent>
-        </Select>
+          <option value="5">5</option>
+          <option value="4">4</option>
+          <option value="3">3</option>
+          <option value="2">2</option>
+          <option value="1">1</option>
+          <option value="na">N/A</option>
+        </select>
       );
     }
 
@@ -2752,7 +2886,7 @@ function MonthlyEvaluationsTable({ vendorId }: { vendorId: number }) {
       </div>
 
       {/* Annual evaluation grid for the selected year */}
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto overscroll-x-contain scroll-smooth">
         <table className="w-full border-collapse border border-gray-300 dark:border-gray-600 text-sm">
           <thead>
             <tr className="bg-gray-100 dark:bg-gray-800">
@@ -2804,7 +2938,7 @@ function MonthlyEvaluationsTable({ vendorId }: { vendorId: number }) {
             return (
               <div key={year}>
                 <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{year}</p>
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto overscroll-x-contain scroll-smooth">
                   <table className="w-full border-collapse border border-gray-200 dark:border-gray-700 text-sm">
                     <thead>
                       <tr className="bg-gray-50 dark:bg-gray-800/50">
@@ -2850,4 +2984,4 @@ function MonthlyEvaluationsTable({ vendorId }: { vendorId: number }) {
       )}
     </div>
   );
-}
+});

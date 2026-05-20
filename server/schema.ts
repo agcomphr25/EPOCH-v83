@@ -525,6 +525,11 @@ export const payments = pgTable('payments', {
   notes: text('notes'), // Optional notes for the payment
   processingFee: real('processing_fee'), // Optional wire/bank processing fee (nullable)
   batchId: integer('batch_id').references(() => bulkPaymentBatches.id),
+  status: text('status').default('posted').notNull(), // posted, voided, reversal
+  voidedAt: timestamp('voided_at'),
+  voidedBy: text('voided_by'),
+  voidReason: text('void_reason'),
+  reversalOfPaymentId: integer('reversal_of_payment_id'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -818,6 +823,12 @@ export const partsRequests = pgTable('parts_requests', {
   estimatedCost: real('estimated_cost'),
   reason: text('reason'), // Why the part is needed
   status: text('status').default('PENDING').notNull(), // PENDING, APPROVED, ORDERED, RECEIVED, DELIVERED_TO_DEPT, REJECTED
+  approvalRequiredRole: text('approval_required_role').default('INVENTORY_MANAGER'), // INVENTORY_MANAGER, OWNER
+  approvalStatus: text('approval_status').default('PENDING'), // PENDING, OWNER_PENDING, APPROVED, REJECTED
+  ownerApprovedBy: text('owner_approved_by'),
+  ownerApprovedAt: timestamp('owner_approved_at'),
+  digitalApprovalSignature: text('digital_approval_signature'),
+  approvalHistory: jsonb('approval_history').$type<Array<Record<string, unknown>>>().default(sql`'[]'::jsonb`),
   requestDate: timestamp('request_date').defaultNow().notNull(),
   approvedBy: text('approved_by'),
   approvedDate: timestamp('approved_date'),
@@ -1662,6 +1673,9 @@ export const userSessions = pgTable('user_sessions', {
   isActive: boolean('is_active').default(true),
   ipAddress: text('ip_address'),
   userAgent: text('user_agent'),
+  deviceFingerprint: text('device_fingerprint'),
+  mfaVerifiedAt: timestamp('mfa_verified_at'),
+  securityPolicyVersion: text('security_policy_version').default('cmmc-itar-v1'),
   lastCredentialVerifiedAt: timestamp('last_credential_verified_at'),
   createdAt: timestamp('created_at').defaultNow(),
 });
@@ -2321,10 +2335,10 @@ export const insertPaymentSchema = createInsertSchema(payments)
   })
   .extend({
     orderId: z.string().min(1, 'Order ID is required'),
-    paymentType: z.enum(['credit_card', 'agr', 'check', 'cash', 'ach', 'aaaa', 'wire']),
+    paymentType: z.enum(['credit_card', 'agr', 'check', 'cash', 'ach', 'aaaa', 'wire', 'payment_reversal']),
     paymentAmount: z
       .number()
-      .min(0, 'Payment amount cannot be negative'),
+      .refine((amount) => Number.isFinite(amount), 'Payment amount must be a valid number'),
     paymentDate: z.coerce.date(),
     notes: z.string().optional().nullable(),
   });
@@ -2967,8 +2981,14 @@ export const insertPartsRequestSchema = createInsertSchema(partsRequests)
     estimatedCost: z.number().min(0).optional().nullable(),
     reason: z.string().optional().nullable(),
     status: z
-      .enum(['PENDING', 'APPROVED', 'ORDERED', 'ORDERED_PARTIAL', 'RECEIVED', 'RECEIVED_PARTIAL', 'DELIVERED_TO_DEPT', 'REJECTED', 'CANCEL_REQUESTED', 'CANCELED'])
+      .enum(['PENDING', 'PENDING_OWNER_APPROVAL', 'APPROVED', 'ORDERED', 'ORDERED_PARTIAL', 'RECEIVED', 'RECEIVED_PARTIAL', 'DELIVERED_TO_DEPT', 'REJECTED', 'CANCEL_REQUESTED', 'CANCELED'])
       .default('PENDING'),
+    approvalRequiredRole: z.enum(['INVENTORY_MANAGER', 'OWNER']).default('INVENTORY_MANAGER').optional(),
+    approvalStatus: z.enum(['PENDING', 'OWNER_PENDING', 'APPROVED', 'REJECTED']).default('PENDING').optional(),
+    ownerApprovedBy: z.string().optional().nullable(),
+    ownerApprovedAt: z.coerce.date().optional().nullable(),
+    digitalApprovalSignature: z.string().optional().nullable(),
+    approvalHistory: z.array(z.record(z.unknown())).optional().nullable(),
     approvedBy: z.string().optional().nullable(),
     approvedDate: z.coerce.date().optional().nullable(),
     orderDate: z.coerce.date().optional().nullable(),
@@ -3563,6 +3583,10 @@ export const vendors = pgTable('vendors', {
   startRenewalDate: date('start_renewal_date'), // Date when vendor approval started or was renewed
   approvalExpiration: date('approval_expiration'), // Date when vendor approval expires
   approved: boolean('approved').notNull().default(false),
+  debarmentStatus: text('debarment_status').notNull().default('unknown'),
+  debarmentCheckedAt: timestamp('debarment_checked_at'),
+  debarmentEvidenceUrl: text('debarment_evidence_url'),
+  debarmentNotes: text('debarment_notes'),
   evaluated: boolean('evaluated').notNull().default(false),
   evaluationDate: date('evaluation_date'),
   qualityScore: integer('quality_score'), // 1-5: 1=Poor, 2=Needs improvement, 3=Acceptable, 4=Good, 5=Excellent
@@ -3609,6 +3633,72 @@ export const vendorMonthlyEvaluations = pgTable('vendor_monthly_evaluations', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
+
+export const supplierScopes = pgTable('supplier_scopes', {
+  id: serial('id').primaryKey(),
+  vendorId: integer('vendor_id').notNull().references(() => vendors.id, { onDelete: 'cascade' }),
+  scopeCode: text('scope_code').notNull(),
+  description: text('description'),
+  productionLine: text('production_line'),
+  materialCategory: text('material_category'),
+  partNumberPattern: text('part_number_pattern'),
+  status: text('status').notNull().default('active'),
+  approvedByUserId: integer('approved_by_user_id'),
+  approvedByDisplayName: text('approved_by_display_name'),
+  approvedAt: timestamp('approved_at'),
+  expiresAt: date('expires_at'),
+  evidenceUrl: text('evidence_url'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  vendorIdx: index('idx_supplier_scopes_vendor_id').on(table.vendorId),
+  statusIdx: index('idx_supplier_scopes_status').on(table.status),
+  vendorScopeUnique: unique('supplier_scopes_vendor_scope_unique').on(table.vendorId, table.scopeCode),
+}));
+
+export const supplierAudits = pgTable('supplier_audits', {
+  id: serial('id').primaryKey(),
+  vendorId: integer('vendor_id').notNull().references(() => vendors.id, { onDelete: 'cascade' }),
+  auditType: text('audit_type').notNull().default('qualification'),
+  status: text('status').notNull().default('open'),
+  performedByUserId: integer('performed_by_user_id'),
+  performedByDisplayName: text('performed_by_display_name'),
+  auditDate: date('audit_date').notNull(),
+  nextAuditDue: date('next_audit_due'),
+  findings: text('findings'),
+  correctiveActions: text('corrective_actions'),
+  evidenceUrl: text('evidence_url'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  vendorIdx: index('idx_supplier_audits_vendor_id').on(table.vendorId),
+  statusIdx: index('idx_supplier_audits_status').on(table.status),
+  nextDueIdx: index('idx_supplier_audits_next_due').on(table.nextAuditDue),
+}));
+
+export const supplierScorecards = pgTable('supplier_scorecards', {
+  id: serial('id').primaryKey(),
+  vendorId: integer('vendor_id').notNull().references(() => vendors.id, { onDelete: 'cascade' }),
+  periodStart: date('period_start').notNull(),
+  periodEnd: date('period_end').notNull(),
+  qualityScore: integer('quality_score').notNull(),
+  deliveryScore: integer('delivery_score').notNull(),
+  costScore: integer('cost_score').notNull(),
+  responsivenessScore: integer('responsiveness_score').notNull(),
+  overallScore: real('overall_score').notNull(),
+  status: text('status').notNull().default('acceptable'),
+  reviewedByUserId: integer('reviewed_by_user_id'),
+  reviewedByDisplayName: text('reviewed_by_display_name'),
+  reviewedAt: timestamp('reviewed_at'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  vendorIdx: index('idx_supplier_scorecards_vendor_id').on(table.vendorId),
+  periodIdx: index('idx_supplier_scorecards_period').on(table.periodStart, table.periodEnd),
+  vendorPeriodUnique: unique('supplier_scorecards_vendor_period_unique').on(table.vendorId, table.periodStart, table.periodEnd),
+}));
 
 // Enhanced Inventory MRP Tables
 
@@ -3796,6 +3886,7 @@ export const vendorPOs = pgTable('vendor_pos', {
   vendorId: integer('vendor_id')
     .references(() => vendors.id)
     .notNull(),
+  productionLine: text('production_line'), // P1 | P2 | GENERAL | R_AND_D; P2 requires compliance review before project allocation
   status: text('status').notNull().default('Draft'), // Draft, RFQ Sent, Quote Received, Declined, Expired, Sent, Partially Received, Fully Received, Cancelled
   orderDate: date('order_date'),
   expectedDeliveryDate: date('expected_delivery_date'),
@@ -3859,6 +3950,12 @@ export const vendorPOItems = pgTable('vendor_po_items', {
   notes: text('notes'),
   customerPoId: integer('customer_po_id')
     .references(() => p2PurchaseOrders.id), // Optional link to customer PO (internal tracking only)
+  projectId: uuid('project_id')
+    .references((): AnyPgColumn => projects.id, { onDelete: 'set null' }), // Optional project traceability
+  productionWorkOrderId: uuid('production_work_order_id')
+    .references((): AnyPgColumn => productionWorkOrders.id, { onDelete: 'set null' }), // Optional WAD/work order traceability
+  chargeCodeId: integer('charge_code_id')
+    .references((): AnyPgColumn => chargeCodes.id, { onDelete: 'set null' }), // Optional cost objective traceability
   otherIdentifier: text('other_identifier'), // Optional identifier when no customer PO (internal tracking only)
   historicalAvgPrice: real('historical_avg_price'),
   priceVariancePercent: real('price_variance_percent'),
@@ -4183,6 +4280,10 @@ export const insertVendorSchema = createInsertSchema(vendors)
     startRenewalDate: z.string().optional().nullable(),
     approvalExpiration: z.string().optional().nullable(),
     approved: z.boolean().default(false),
+    debarmentStatus: z.enum(['unknown', 'clear', 'debarred', 'suspended', 'excluded', 'blocked']).optional(),
+    debarmentCheckedAt: z.string().optional().nullable(),
+    debarmentEvidenceUrl: z.string().optional().nullable(),
+    debarmentNotes: z.string().optional().nullable(),
     evaluated: z.boolean().default(false),
     evaluationDate: z.string().optional().nullable(),
     qualityScore: z.number().int().min(1).max(5).optional().nullable(),
@@ -4349,9 +4450,15 @@ export const digitalSignatures = pgTable('digital_signatures', {
   id: uuid('id').primaryKey().defaultRandom(),
   signerUserId: integer('signer_user_id').notNull().references(() => users.id),
   signerRole: text('signer_role').notNull(),
+  signerUsername: text('signer_username'),
   certificateId: uuid('certificate_id').notNull().references(() => userSigningKeys.id),
   algorithm: text('algorithm').notNull().default('Ed25519'),
   transactionClass: text('transaction_class').notNull(),
+  signatureMeaning: text('signature_meaning'),
+  signatureReason: text('signature_reason'),
+  linkedObjectType: text('linked_object_type'),
+  linkedObjectId: text('linked_object_id'),
+  approvalRequestId: uuid('approval_request_id'),
   payloadHash: text('payload_hash').notNull(),
   payloadCanonical: jsonb('payload_canonical').$type<Record<string, unknown>>().notNull(),
   signatureBytes: text('signature_bytes').notNull(),
@@ -4361,6 +4468,8 @@ export const digitalSignatures = pgTable('digital_signatures', {
   signerIdx: index('digital_signatures_signer_idx').on(t.signerUserId),
   classIdx: index('digital_signatures_class_idx').on(t.transactionClass),
   certificateIdx: index('digital_signatures_certificate_idx').on(t.certificateId),
+  linkedObjectIdx: index('digital_signatures_linked_object_idx').on(t.linkedObjectType, t.linkedObjectId),
+  approvalRequestIdx: index('digital_signatures_approval_request_idx').on(t.approvalRequestId),
 }));
 
 export type DigitalSignature = typeof digitalSignatures.$inferSelect;
@@ -4394,6 +4503,9 @@ export const insertVendorPOSchema = createInsertSchema(vendorPOs)
   .extend({
     poNumber: z.string().nullable().optional(),
     vendorId: z.number().int().positive('Vendor ID is required'),
+    productionLine: z.enum(['P1', 'P2', 'GENERAL', 'R_AND_D'], {
+      required_error: 'Production line is required',
+    }),
     status: z.enum(['Draft', 'RFQ Sent', 'Quote Received', 'Declined', 'Expired', 'Sent', 'Partially Received', 'Fully Received', 'Cancelled']).default('Draft'),
     orderDate: z.string().optional().nullable(),
     expectedDeliveryDate: z.string().optional().nullable(),
@@ -4633,9 +4745,128 @@ export const nonconformanceRecords = pgTable('nonconformance_records', {
   lastConfirmedByUserId: integer('last_confirmed_by_user_id'), // Who confirmed the state
   confirmationNote: text('confirmation_note'), // Optional short note with confirmation
   attentionRisk: text('attention_risk').$type<'low' | 'medium' | 'high'>(), // Computed staleness risk level
+  containmentAction: text('containment_action'),
+  containmentOwner: text('containment_owner'),
+  containmentDueDate: date('containment_due_date'),
+  containmentCompletedAt: timestamp('containment_completed_at'),
+  rootCause: text('root_cause'),
+  rootCauseMethod: text('root_cause_method'),
+  correctiveAction: text('corrective_action'),
+  preventiveAction: text('preventive_action'),
+  capaRequired: boolean('capa_required').default(false),
+  capaId: uuid('capa_id'),
+  dispositionRationale: text('disposition_rationale'),
+  dispositionApprovedByUserId: integer('disposition_approved_by_user_id'),
+  dispositionApprovedByDisplayName: text('disposition_approved_by_display_name'),
+  dispositionApprovedAt: timestamp('disposition_approved_at'),
+  effectivenessReview: text('effectiveness_review'),
+  effectivenessStatus: text('effectiveness_status').default('not_started'),
+  effectivenessReviewedByUserId: integer('effectiveness_reviewed_by_user_id'),
+  effectivenessReviewedByDisplayName: text('effectiveness_reviewed_by_display_name'),
+  effectivenessReviewedAt: timestamp('effectiveness_reviewed_at'),
+  recurrenceDetected: boolean('recurrence_detected').default(false),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
+
+export const capaRecords = pgTable('capa_records', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  capaNumber: text('capa_number').notNull().unique(),
+  sourceType: text('source_type').notNull().default('NCR'),
+  sourceId: text('source_id'),
+  nonconformanceId: integer('nonconformance_id').references(() => nonconformanceRecords.id, { onDelete: 'set null' }),
+  title: text('title').notNull(),
+  problemStatement: text('problem_statement').notNull(),
+  containmentAction: text('containment_action'),
+  rootCause: text('root_cause'),
+  correctiveAction: text('corrective_action'),
+  preventiveAction: text('preventive_action'),
+  recurrenceCheckPlan: text('recurrence_check_plan'),
+  recurrenceDetected: boolean('recurrence_detected').default(false).notNull(),
+  effectivenessCriteria: text('effectiveness_criteria'),
+  effectivenessReview: text('effectiveness_review'),
+  effectivenessStatus: text('effectiveness_status').notNull().default('not_started'),
+  status: text('status').notNull().default('open'),
+  ownerUserId: integer('owner_user_id'),
+  ownerDisplayName: text('owner_display_name'),
+  dueDate: date('due_date'),
+  closedByUserId: integer('closed_by_user_id'),
+  closedByDisplayName: text('closed_by_display_name'),
+  closedAt: timestamp('closed_at'),
+  evidenceUrls: text('evidence_urls').array().notNull().default(sql`ARRAY[]::text[]`),
+  createdByUserId: integer('created_by_user_id'),
+  createdByDisplayName: text('created_by_display_name'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  sourceIdx: index('capa_records_source_idx').on(table.sourceType, table.sourceId),
+  ncrIdx: index('capa_records_ncr_idx').on(table.nonconformanceId),
+  statusIdx: index('capa_records_status_idx').on(table.status),
+  effectivenessIdx: index('capa_records_effectiveness_idx').on(table.effectivenessStatus),
+}));
+
+export const calibrationAssets = pgTable('calibration_assets', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  assetTag: text('asset_tag').notNull().unique(),
+  name: text('name').notNull(),
+  assetType: text('asset_type').notNull().default('gage'),
+  serialNumber: text('serial_number'),
+  location: text('location'),
+  ownerDepartment: text('owner_department'),
+  status: text('status').notNull().default('active'),
+  calibrationIntervalDays: integer('calibration_interval_days').notNull().default(365),
+  lastCalibrationDate: date('last_calibration_date'),
+  calibrationDueDate: date('calibration_due_date'),
+  evidenceUrl: text('evidence_url'),
+  lockoutReason: text('lockout_reason'),
+  lockedOutAt: timestamp('locked_out_at'),
+  metadata: jsonb('metadata').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  assetTagIdx: index('calibration_assets_asset_tag_idx').on(table.assetTag),
+  statusIdx: index('calibration_assets_status_idx').on(table.status),
+  dueDateIdx: index('calibration_assets_due_date_idx').on(table.calibrationDueDate),
+}));
+
+export const calibrationEvents = pgTable('calibration_events', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  assetId: uuid('asset_id').notNull().references(() => calibrationAssets.id, { onDelete: 'cascade' }),
+  eventType: text('event_type').notNull().default('calibration'),
+  eventDate: date('event_date').notNull(),
+  result: text('result').notNull().default('pass'),
+  performedBy: text('performed_by'),
+  vendorName: text('vendor_name'),
+  certificateNumber: text('certificate_number'),
+  evidenceUrl: text('evidence_url'),
+  nextDueDate: date('next_due_date'),
+  notes: text('notes'),
+  createdByUserId: integer('created_by_user_id'),
+  createdByDisplayName: text('created_by_display_name'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  assetIdx: index('calibration_events_asset_idx').on(table.assetId),
+  eventDateIdx: index('calibration_events_date_idx').on(table.eventDate),
+}));
+
+export const calibrationUseLogs = pgTable('calibration_use_logs', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  assetId: uuid('asset_id').references(() => calibrationAssets.id, { onDelete: 'set null' }),
+  assetTag: text('asset_tag').notNull(),
+  travelerId: varchar('traveler_id', { length: 255 }),
+  travelerStepId: varchar('traveler_step_id', { length: 255 }),
+  routingOperationId: integer('routing_operation_id'),
+  orderId: text('order_id'),
+  usedByUserId: integer('used_by_user_id'),
+  usedByDisplayName: text('used_by_display_name'),
+  useStatus: text('use_status').notNull().default('accepted'),
+  gateMessage: text('gate_message'),
+  usedAt: timestamp('used_at').defaultNow().notNull(),
+}, (table) => ({
+  assetTagIdx: index('calibration_use_logs_asset_tag_idx').on(table.assetTag),
+  travelerIdx: index('calibration_use_logs_traveler_idx').on(table.travelerId),
+  statusIdx: index('calibration_use_logs_status_idx').on(table.useStatus),
+}));
 
 export const insertNonconformanceRecordSchema = createInsertSchema(
   nonconformanceRecords
@@ -4678,6 +4909,26 @@ export const insertNonconformanceRecordSchema = createInsertSchema(
     shippingCarrier: z.string().optional().nullable(),
     shippedDate: z.string().optional().nullable(),
     customerNotified: z.boolean().optional().default(false),
+    containmentAction: z.string().optional().nullable(),
+    containmentOwner: z.string().optional().nullable(),
+    containmentDueDate: z.string().optional().nullable(),
+    containmentCompletedAt: z.coerce.date().optional().nullable(),
+    rootCause: z.string().optional().nullable(),
+    rootCauseMethod: z.string().optional().nullable(),
+    correctiveAction: z.string().optional().nullable(),
+    preventiveAction: z.string().optional().nullable(),
+    capaRequired: z.boolean().optional().default(false),
+    capaId: z.string().uuid().optional().nullable(),
+    dispositionRationale: z.string().optional().nullable(),
+    dispositionApprovedByUserId: z.number().int().optional().nullable(),
+    dispositionApprovedByDisplayName: z.string().optional().nullable(),
+    dispositionApprovedAt: z.coerce.date().optional().nullable(),
+    effectivenessReview: z.string().optional().nullable(),
+    effectivenessStatus: z.enum(['not_started', 'pending_review', 'effective', 'ineffective']).optional().default('not_started'),
+    effectivenessReviewedByUserId: z.number().int().optional().nullable(),
+    effectivenessReviewedByDisplayName: z.string().optional().nullable(),
+    effectivenessReviewedAt: z.coerce.date().optional().nullable(),
+    recurrenceDetected: z.boolean().optional().default(false),
   });
 
 // Types for Module 8
@@ -4701,6 +4952,36 @@ export type InsertNonconformanceRecord = z.infer<
   typeof insertNonconformanceRecordSchema
 >;
 export type NonconformanceRecord = typeof nonconformanceRecords.$inferSelect;
+export const insertCapaRecordSchema = createInsertSchema(capaRecords)
+  .omit({ id: true, capaNumber: true, createdAt: true, updatedAt: true, closedAt: true })
+  .extend({
+    title: z.string().min(1, 'CAPA title is required'),
+    problemStatement: z.string().min(1, 'Problem statement is required'),
+    status: z.enum(['open', 'in_progress', 'effectiveness_review', 'closed', 'void']).default('open'),
+    effectivenessStatus: z.enum(['not_started', 'pending_review', 'effective', 'ineffective']).default('not_started'),
+    evidenceUrls: z.array(z.string()).optional().default([]),
+  });
+export type CapaRecord = typeof capaRecords.$inferSelect;
+export type InsertCapaRecord = z.infer<typeof insertCapaRecordSchema>;
+
+export const insertCalibrationAssetSchema = createInsertSchema(calibrationAssets)
+  .omit({ id: true, createdAt: true, updatedAt: true, lockedOutAt: true })
+  .extend({
+    assetTag: z.string().min(1, 'Asset tag is required'),
+    name: z.string().min(1, 'Asset name is required'),
+    status: z.enum(['active', 'due_soon', 'expired', 'locked_out', 'retired']).default('active'),
+  });
+export const insertCalibrationEventSchema = createInsertSchema(calibrationEvents)
+  .omit({ id: true, createdAt: true })
+  .extend({
+    assetId: z.string().uuid(),
+    eventDate: z.string().min(1, 'Event date is required'),
+    result: z.enum(['pass', 'fail', 'limited_use']).default('pass'),
+  });
+export type CalibrationAsset = typeof calibrationAssets.$inferSelect;
+export type InsertCalibrationAsset = z.infer<typeof insertCalibrationAssetSchema>;
+export type CalibrationEvent = typeof calibrationEvents.$inferSelect;
+export type InsertCalibrationEvent = z.infer<typeof insertCalibrationEventSchema>;
 export type InsertPdfDocument = z.infer<typeof insertPdfDocumentSchema>;
 export type PdfDocument = typeof pdfDocuments.$inferSelect;
 
@@ -4871,6 +5152,7 @@ export const p2PurchaseOrders = pgTable('p2_purchase_orders', {
   lockedBy: integer('locked_by').references(() => employees.id), // Who locked the PO
 
   sourceQuoteId: uuid('source_quote_id').references(() => quotes.id), // Links PO to originating quote
+  contractReviewRole: text('contract_review_role').notNull().default('secondary'), // primary requires contract review before P2 release; secondary does not
   
   // Ownership fields for accountability and audit compliance
   createdById: integer('created_by_id').references(() => employees.id), // Who created the PO
@@ -4886,6 +5168,11 @@ export const p2PurchaseOrders = pgTable('p2_purchase_orders', {
   
   // Project association — free-text field for internal project name or number
   projectName: text('project_name'),
+  securityClassification: text('security_classification').notNull().default('internal'), // public | internal | cui | itar
+  cuiCategory: text('cui_category'),
+  itarCategory: text('itar_category'),
+  exportControlJurisdiction: text('export_control_jurisdiction'),
+  customerFileAccessRule: text('customer_file_access_rule').notNull().default('authenticated'),
 
   // Scrap rate tracking — incremented by nonconforming disposition workflow
   scrappedItemCount: integer('scrapped_item_count').notNull().default(0),
@@ -4927,6 +5214,10 @@ export const rfqRiskAssessments = pgTable('rfq_risk_assessments', {
   riskDetermination: text('risk_determination'),
   bidDecision: text('bid_decision'),
   status: text('status').notNull().default('draft'), // draft or submitted
+  securityClassification: text('security_classification').notNull().default('internal'), // public | internal | cui | itar
+  cuiCategory: text('cui_category'),
+  itarCategory: text('itar_category'),
+  exportControlJurisdiction: text('export_control_jurisdiction'),
   submittedBy: text('submitted_by'), // Username who submitted
   submittedAt: timestamp('submitted_at'), // When it was submitted
   attachments: text('attachments').array(), // PDF file paths
@@ -5145,6 +5436,7 @@ export const routingOperations = pgTable('routing_operations', {
   expectedLeadDays: integer('expected_lead_days'),
   certificateRequired: boolean('certificate_required').default(false),
   receivingInspectionRequired: boolean('receiving_inspection_required').default(false),
+  requiredCalibrationAssetTags: text('required_calibration_asset_tags').array().notNull().default(sql`ARRAY[]::text[]`),
 
   instructionPack: jsonb('instruction_pack').default('{}'),
 
@@ -5607,6 +5899,7 @@ export const chargeCodes = pgTable('charge_codes', {
   code: text('code').notNull().unique(),
   description: text('description'),
   type: text('type').notNull().default('DIRECT'), // DIRECT | OVERHEAD | G_AND_A
+  costHandling: text('cost_handling').notNull().default('DIRECT_CONTRACT'), // DIRECT_CONTRACT | IRAD | BID_PROPOSAL | FRINGE | OVERHEAD | G_AND_A | UNALLOWABLE | OTHER
   contractReference: text('contract_reference'),
   department: text('department'),
   requiresApproval: boolean('requires_approval').notNull().default(false),
@@ -5906,6 +6199,24 @@ export const p2WorkTasks = pgTable('p2_work_tasks', {
   employeeName: text('employee_name').notNull(), // Denormalized for display
   certificationId: integer('certification_id')
     .references(() => p2EmployeePartCertifications.id, { onDelete: 'set null' }), // Link to certification used for audit trail
+  travelerId: varchar('traveler_id', { length: 255 })
+    .references(() => travelers.id, { onDelete: 'set null' }),
+  travelerStepId: varchar('traveler_step_id', { length: 255 })
+    .references(() => travelerSteps.id, { onDelete: 'set null' }),
+  productionWorkOrderId: uuid('production_work_order_id')
+    .references(() => productionWorkOrders.id, { onDelete: 'set null' }),
+  projectId: uuid('project_id')
+    .references(() => projects.id, { onDelete: 'set null' }),
+  chargeCodeId: integer('charge_code_id')
+    .references(() => chargeCodes.id, { onDelete: 'set null' }),
+  operationName: text('operation_name'),
+  operationScanValue: text('operation_scan_value'),
+  operationScannedAt: timestamp('operation_scanned_at'),
+  operationScannedBy: integer('operation_scanned_by').references(() => employees.id, { onDelete: 'set null' }),
+  electronicSignoffRequired: boolean('electronic_signoff_required').notNull().default(true),
+  electronicSignoffStatus: text('electronic_signoff_status').notNull().default('PENDING'),
+  electronicSignoffAt: timestamp('electronic_signoff_at'),
+  electronicSignoffBy: integer('electronic_signoff_by').references(() => employees.id, { onDelete: 'set null' }),
   status: text('status').notNull().default('IN_PROGRESS'), // IN_PROGRESS, COMPLETED, PAUSED
   startedAt: timestamp('started_at').notNull().defaultNow(), // Task start timestamp
   completedAt: timestamp('completed_at'), // Task completion timestamp
@@ -5921,6 +6232,10 @@ export const p2WorkTasks = pgTable('p2_work_tasks', {
   statusIdx: index('p2_work_tasks_status_idx').on(table.status),
   departmentIdx: index('p2_work_tasks_department_idx').on(table.department),
   itemStatusIdx: index('p2_work_tasks_item_status_idx').on(table.serializedItemId, table.status),
+  travelerIdx: index('p2_work_tasks_traveler_id_idx').on(table.travelerId),
+  travelerStepIdx: index('p2_work_tasks_traveler_step_id_idx').on(table.travelerStepId),
+  wadIdx: index('p2_work_tasks_wad_id_idx').on(table.productionWorkOrderId),
+  projectIdx: index('p2_work_tasks_project_id_idx').on(table.projectId),
 }));
 
 // P2 Oven Cure Logs - Records oven cure cycles for AS9100 traceability
@@ -6412,6 +6727,7 @@ export const insertP2PurchaseOrderSchema = createInsertSchema(p2PurchaseOrders)
     status: z.enum(['OPEN', 'CLOSED', 'CANCELED']).default('OPEN'),
     notes: z.string().optional().nullable(),
     sourceQuoteId: z.string().uuid().optional().nullable(),
+    contractReviewRole: z.enum(['primary', 'secondary']).default('secondary'),
   });
 
 export const insertP2PurchaseOrderItemSchema = createInsertSchema(
@@ -7733,6 +8049,11 @@ export const p2ProductionOrders = pgTable('p2_production_orders', {
   p2PoItemId: integer('p2_po_item_id')
     .references(() => p2PurchaseOrderItems.id)
     .notNull(),
+  // Task #242: scope p2 production rows to a specific project when the
+  // PO is shared by multiple projects. Nullable: rows that cannot be
+  // deterministically attributed to a single project fall back to the
+  // PO-wide view in the PM Control Center.
+  projectId: uuid('project_id'),
   bomDefinitionId: uuid('bom_definition_id'), // Foreign key to BOM definition
   bomItemId: uuid('bom_item_id'), // Foreign key to BOM item
   sku: text('sku').notNull(), // From BOM definition
@@ -8778,7 +9099,7 @@ export const internalMessages = pgTable('internal_messages', {
   id: serial('id').primaryKey(),
   subject: text('subject').notNull(),
   message: text('message').notNull(),
-  senderId: integer('sender_id').notNull(),
+  senderId: integer('sender_id'),
   senderName: text('sender_name').notNull(),
   recipientType: text('recipient_type').notNull(), // 'user' or 'department'
   recipientUserId: integer('recipient_user_id'),
@@ -9764,6 +10085,14 @@ export const controlledDocuments = pgTable('controlled_documents', {
   filePath: text('file_path'), // Path to current version file
   // CMMC Classification: visibility level for access control enforcement
   classification: text('classification').notNull().default('internal'), // public | internal | restricted | classified
+  cuiCategory: text('cui_category'),
+  itarCategory: text('itar_category'),
+  exportControlJurisdiction: text('export_control_jurisdiction'),
+  customerId: text('customer_id'),
+  contractArtifactType: text('contract_artifact_type'),
+  accessRule: text('access_rule').notNull().default('authenticated'), // authenticated | explicit_grant | admin_only
+  mfaRequired: boolean('mfa_required').notNull().default(false),
+  downloadTrackingRequired: boolean('download_tracking_required').notNull().default(true),
   createdBy: text('created_by').notNull(),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
@@ -9812,13 +10141,19 @@ export type InsertDocumentVersionHistory = z.infer<typeof insertDocumentVersionH
 // ============================================================================
 export const objectAccessLog = pgTable('object_access_log', {
   id: serial('id').primaryKey(),
-  documentId: uuid('document_id').references(() => controlledDocuments.id).notNull(),
+  documentId: uuid('document_id').references(() => controlledDocuments.id),
+  vaultDocumentId: integer('vault_document_id'),
   userId: text('user_id').notNull(), // username of the actor
-  action: text('action').notNull(), // 'view' | 'download' | 'denied'
+  action: text('action').notNull(), // 'view' | 'download' | 'denied' | 'link_issued'
   ipAddress: text('ip_address'),
+  userAgent: text('user_agent'),
+  deviceFingerprint: text('device_fingerprint'),
+  linkExpiresAt: timestamp('link_expires_at'),
+  sessionId: integer('session_id'),
   accessedAt: timestamp('accessed_at').defaultNow().notNull(),
 }, (table) => ({
   documentIdIdx: index('object_access_log_document_id_idx').on(table.documentId),
+  vaultDocumentIdIdx: index('object_access_log_vault_document_id_idx').on(table.vaultDocumentId),
   userIdIdx: index('object_access_log_user_id_idx').on(table.userId),
   accessedAtIdx: index('object_access_log_accessed_at_idx').on(table.accessedAt),
   actionIdx: index('object_access_log_action_idx').on(table.action),
@@ -9870,6 +10205,11 @@ export const quotes = pgTable('quotes', {
   quotedBy: text('quoted_by'),
   notes: text('notes'),
   attachments: text('attachments').array(), // PDF file paths
+  securityClassification: text('security_classification').notNull().default('internal'), // public | internal | cui | itar
+  cuiCategory: text('cui_category'),
+  itarCategory: text('itar_category'),
+  exportControlJurisdiction: text('export_control_jurisdiction'),
+  customerFileAccessRule: text('customer_file_access_rule').notNull().default('authenticated'),
   // Bridge column: integer FK to customers.id for joining back to the master customers table.
   // Populated on insert from the resolved customers record matching the text customer_id,
   // or copied directly from the parent RFQ when a quote is created from an estimating RFQ.
@@ -9914,6 +10254,105 @@ export const insertQuoteLineItemSchema = createInsertSchema(quoteLineItems).omit
 // Types
 export type QuoteLineItem = typeof quoteLineItems.$inferSelect;
 export type InsertQuoteLineItem = z.infer<typeof insertQuoteLineItemSchema>;
+
+// Quote Snapshots - Immutable contractual quote revisions captured when a quote is sent.
+export const quoteSnapshots = pgTable('quote_snapshots', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  quoteId: uuid('quote_id').notNull().references(() => quotes.id, { onDelete: 'restrict' }),
+  quoteNumber: text('quote_number').notNull(),
+  revisionNumber: integer('revision_number').notNull(),
+  revisionLabel: text('revision_label').notNull(),
+  statusAtSnapshot: text('status_at_snapshot').notNull().default('SENT'),
+  customerId: text('customer_id').notNull(),
+  customerName: text('customer_name').notNull(),
+  customersIntegerId: integer('customers_integer_id'),
+  description: text('description'),
+  totalAmount: real('total_amount').notNull().default(0),
+  validUntil: timestamp('valid_until'),
+  quotedBy: text('quoted_by'),
+  notes: text('notes'),
+  bomAssumptions: jsonb('bom_assumptions').$type<Record<string, unknown> | unknown[] | null>(),
+  laborAssumptions: jsonb('labor_assumptions').$type<Record<string, unknown> | unknown[] | null>(),
+  leadTimes: jsonb('lead_times').$type<Record<string, unknown> | unknown[] | null>(),
+  exclusions: jsonb('exclusions').$type<Record<string, unknown> | unknown[] | null>(),
+  certRequirements: jsonb('cert_requirements').$type<Record<string, unknown> | unknown[] | null>(),
+  contractualClauses: jsonb('contractual_clauses').$type<Record<string, unknown> | unknown[] | null>(),
+  sourceData: jsonb('source_data').$type<Record<string, unknown> | null>(),
+  sentAt: timestamp('sent_at').defaultNow().notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  quoteRevisionUnique: uniqueIndex('quote_snapshots_quote_revision_unique').on(table.quoteId, table.revisionNumber),
+  quoteIdIdx: index('quote_snapshots_quote_id_idx').on(table.quoteId),
+}));
+
+export const insertQuoteSnapshotSchema = createInsertSchema(quoteSnapshots).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type QuoteSnapshot = typeof quoteSnapshots.$inferSelect;
+export type InsertQuoteSnapshot = z.infer<typeof insertQuoteSnapshotSchema>;
+
+export const quoteLineSnapshots = pgTable('quote_line_snapshots', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  quoteSnapshotId: uuid('quote_snapshot_id').notNull().references(() => quoteSnapshots.id, { onDelete: 'restrict' }),
+  quoteId: uuid('quote_id').notNull().references(() => quotes.id, { onDelete: 'restrict' }),
+  quoteLineItemId: uuid('quote_line_item_id').references(() => quoteLineItems.id, { onDelete: 'set null' }),
+  lineNumber: integer('line_number').notNull(),
+  quantity: real('quantity').notNull().default(1),
+  description: text('description').notNull(),
+  unitPrice: real('unit_price').notNull().default(0),
+  totalPrice: real('total_price').notNull().default(0),
+  inventoryItemId: integer('inventory_item_id'),
+  agPartNumber: text('ag_part_number'),
+  lineRevision: text('line_revision'),
+  laborHours: real('labor_hours'),
+  department: text('department'),
+  bomAssumptions: jsonb('bom_assumptions').$type<Record<string, unknown> | unknown[] | null>(),
+  laborAssumptions: jsonb('labor_assumptions').$type<Record<string, unknown> | unknown[] | null>(),
+  leadTimeDays: integer('lead_time_days'),
+  certRequirements: jsonb('cert_requirements').$type<Record<string, unknown> | unknown[] | null>(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  snapshotIdx: index('quote_line_snapshots_snapshot_id_idx').on(table.quoteSnapshotId),
+  quoteIdIdx: index('quote_line_snapshots_quote_id_idx').on(table.quoteId),
+}));
+
+export const insertQuoteLineSnapshotSchema = createInsertSchema(quoteLineSnapshots).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type QuoteLineSnapshot = typeof quoteLineSnapshots.$inferSelect;
+export type InsertQuoteLineSnapshot = z.infer<typeof insertQuoteLineSnapshotSchema>;
+
+export const quotePoReconciliations = pgTable('quote_po_reconciliations', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  quoteId: uuid('quote_id').notNull().references(() => quotes.id, { onDelete: 'restrict' }),
+  quoteSnapshotId: uuid('quote_snapshot_id').references(() => quoteSnapshots.id, { onDelete: 'restrict' }),
+  p2PurchaseOrderId: integer('p2_purchase_order_id').notNull().references(() => p2PurchaseOrders.id, { onDelete: 'cascade' }),
+  poNumber: text('po_number').notNull(),
+  status: text('status').notNull().default('MATCH'),
+  revisionMismatch: boolean('revision_mismatch').notNull().default(false),
+  pricingMismatch: boolean('pricing_mismatch').notNull().default(false),
+  clauseMismatch: boolean('clause_mismatch').notNull().default(false),
+  scheduleMismatch: boolean('schedule_mismatch').notNull().default(false),
+  quantityMismatch: boolean('quantity_mismatch').notNull().default(false),
+  mismatchSummary: jsonb('mismatch_summary').$type<Record<string, unknown> | null>(),
+  checkedAt: timestamp('checked_at').defaultNow().notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  poIdx: index('quote_po_reconciliations_po_id_idx').on(table.p2PurchaseOrderId),
+  quoteIdx: index('quote_po_reconciliations_quote_id_idx').on(table.quoteId),
+}));
+
+export const insertQuotePoReconciliationSchema = createInsertSchema(quotePoReconciliations).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type QuotePoReconciliation = typeof quotePoReconciliations.$inferSelect;
+export type InsertQuotePoReconciliation = z.infer<typeof insertQuotePoReconciliationSchema>;
 
 // Cost Centers - Track business units, departments, and projects for expense allocation
 export const costCenters = pgTable('cost_centers', {
@@ -11069,6 +11508,8 @@ export const projects = pgTable('projects', {
   actualShipDate: date('actual_ship_date'),
   currentStage: text('current_stage').default('rfq_received'),
   stageUpdatedAt: timestamp('stage_updated_at').defaultNow(),
+  currentRevisionNumber: integer('current_revision_number').notNull().default(0),
+  currentRevisionLabel: text('current_revision_label').notNull().default('Rev 0'),
   poId: integer('po_id').references(() => p2PurchaseOrders.id),
   projectManagerId: integer('project_manager_id').references(() => employees.id),
   reminderDays: integer('reminder_days').default(3), // Days before reminder is sent for stuck steps
@@ -11098,6 +11539,35 @@ export const insertProjectSchema = createInsertSchema(projects).omit({
 
 export type Project = typeof projects.$inferSelect;
 export type InsertProject = z.infer<typeof insertProjectSchema>;
+
+// Project Revisions - Controlled changes to project scope, PO linkage, and production basis
+export const projectRevisions = pgTable('project_revisions', {
+  id: serial('id').primaryKey(),
+  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  revisionNumber: integer('revision_number').notNull(),
+  revisionLabel: text('revision_label').notNull(),
+  revisionType: text('revision_type').notNull().default('PROJECT_CHANGE'),
+  summary: text('summary').notNull(),
+  reason: text('reason').notNull(),
+  previousPoId: integer('previous_po_id').references(() => p2PurchaseOrders.id),
+  newPoId: integer('new_po_id').references(() => p2PurchaseOrders.id),
+  createdBy: integer('created_by').references(() => employees.id),
+  createdByDisplayName: text('created_by_display_name'),
+  metadata: jsonb('metadata'),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  projectIdIdx: index('project_revisions_project_id_idx').on(table.projectId),
+  projectRevisionUnique: uniqueIndex('project_revisions_project_revision_unique').on(table.projectId, table.revisionNumber),
+  createdAtIdx: index('project_revisions_created_at_idx').on(table.createdAt),
+}));
+
+export const insertProjectRevisionSchema = createInsertSchema(projectRevisions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ProjectRevision = typeof projectRevisions.$inferSelect;
+export type InsertProjectRevision = z.infer<typeof insertProjectRevisionSchema>;
 
 // Project Steps - Individual workflow steps for each project
 export const projectSteps = pgTable('project_steps', {
@@ -11543,10 +12013,16 @@ export type InsertMediaAttachment = z.infer<typeof insertMediaAttachmentSchema>;
 export const voiceNotes = pgTable('voice_notes', {
   id: uuid('id').defaultRandom().primaryKey(),
   transcription: text('transcription').notNull(), // The transcribed text from voice
+  title: text('title'),
+  summary: text('summary'),
   linkedOrderId: text('linked_order_id'), // Order ID extracted from speech (e.g., "EL069")
-  noteType: text('note_type').notNull().default('order'), // 'order' or 'general'
+  noteType: text('note_type').notNull().default('journal'), // 'journal', 'production_concern', etc.
   category: text('category'), // User-defined category (e.g., "metal insert", "duratec", "thickness")
   tags: text('tags').array(), // Extracted keywords/tags for searching
+  extractedTasks: jsonb('extracted_tasks').$type<string[]>(),
+  suggestedLinks: jsonb('suggested_links').$type<Array<{ type: string; id: string; label: string; confidence?: string }>>(),
+  followUpQuestions: jsonb('follow_up_questions').$type<string[]>(),
+  visibility: text('visibility').notNull().default('private'),
   recordedById: integer('recorded_by_id').references(() => employees.id),
   recordedByUsername: text('recorded_by_username').notNull(), // Username for quick reference
   recordedAt: timestamp('recorded_at').defaultNow(),
@@ -14157,6 +14633,27 @@ export const productionProgramRunEvents = pgTable('production_program_run_events
   occurredAtIdx: index('production_program_run_events_occurred_at_idx').on(table.occurredAt),
 }));
 
+// Production Item Audit Records - durable snapshots for reconstructing an item's timer card
+export const productionItemAuditRecords = pgTable('production_item_audit_records', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  itemIdentifier: text('item_identifier').notNull(),
+  serialNumber: text('serial_number'),
+  travelerId: varchar('traveler_id', { length: 255 }),
+  travelerNumber: varchar('traveler_number', { length: 255 }),
+  runId: uuid('run_id').references(() => productionProgramRuns.id, { onDelete: 'set null' }),
+  eventType: text('event_type').notNull(),
+  eventAt: timestamp('event_at').defaultNow().notNull(),
+  actorUserId: integer('actor_user_id').references(() => users.id),
+  cardSnapshot: jsonb('card_snapshot').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  itemIdentifierIdx: index('production_item_audit_item_identifier_idx').on(table.itemIdentifier),
+  serialNumberIdx: index('production_item_audit_serial_number_idx').on(table.serialNumber),
+  travelerIdIdx: index('production_item_audit_traveler_id_idx').on(table.travelerId),
+  runIdIdx: index('production_item_audit_run_id_idx').on(table.runId),
+  eventAtIdx: index('production_item_audit_event_at_idx').on(table.eventAt),
+}));
+
 // Insert schemas for Production Timer module
 export const insertProductionProgramSchema = createInsertSchema(productionPrograms).omit({
   id: true,
@@ -14188,6 +14685,7 @@ export type InsertProductionProgramStep = z.infer<typeof insertProductionProgram
 export type ProductionProgramRun = typeof productionProgramRuns.$inferSelect;
 export type InsertProductionProgramRun = z.infer<typeof insertProductionProgramRunSchema>;
 export type ProductionProgramRunEvent = typeof productionProgramRunEvents.$inferSelect;
+export type ProductionItemAuditRecord = typeof productionItemAuditRecords.$inferSelect;
 export type InsertProductionProgramRunEvent = z.infer<typeof insertProductionProgramRunEventSchema>;
 
 // ============================================================================
@@ -14391,6 +14889,68 @@ export const insertOnboardingSessionCaptureSchema = createInsertSchema(onboardin
 
 export type OnboardingSessionCapture = typeof onboardingSessionCaptures.$inferSelect;
 export type InsertOnboardingSessionCapture = z.infer<typeof insertOnboardingSessionCaptureSchema>;
+
+// Onboarding Invitations - short-lived access grants for new-hire paperwork.
+export const onboardingInvitations = pgTable('onboarding_invitations', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  sessionId: uuid('session_id').references(() => onboardingSessions.id, { onDelete: 'cascade' }).notNull(),
+  employeeId: integer('employee_id').references(() => employees.id),
+  tokenHash: text('token_hash').notNull().unique(),
+  publicTokenHint: text('public_token_hint'),
+  deliveryMode: text('delivery_mode').notNull().default('in_person'),
+  status: text('status').notNull().default('active'),
+  expiresAt: timestamp('expires_at').notNull(),
+  email: text('email'),
+  phone: text('phone'),
+  emailVerifiedAt: timestamp('email_verified_at'),
+  phoneVerifiedAt: timestamp('phone_verified_at'),
+  noCellPhoneAvailable: boolean('no_cell_phone_available').notNull().default(false),
+  noCellPhoneReason: text('no_cell_phone_reason'),
+  noCellPhoneMarkedByUserId: integer('no_cell_phone_marked_by_user_id').references(() => users.id),
+  noCellPhoneMarkedAt: timestamp('no_cell_phone_marked_at'),
+  createdByUserId: integer('created_by_user_id').references(() => users.id),
+  createdByDisplayName: text('created_by_display_name'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  revokedAt: timestamp('revoked_at'),
+  revokedByUserId: integer('revoked_by_user_id').references(() => users.id),
+  revokedReason: text('revoked_reason'),
+}, (table) => ({
+  sessionIdx: index('onboarding_invitations_session_idx').on(table.sessionId),
+  employeeIdx: index('onboarding_invitations_employee_idx').on(table.employeeId),
+  statusIdx: index('onboarding_invitations_status_idx').on(table.status),
+}));
+
+export const onboardingVerificationCodes = pgTable('onboarding_verification_codes', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  invitationId: uuid('invitation_id').references(() => onboardingInvitations.id, { onDelete: 'cascade' }).notNull(),
+  channel: text('channel').notNull(),
+  codeHash: text('code_hash').notNull(),
+  status: text('status').notNull().default('pending'),
+  attempts: integer('attempts').notNull().default(0),
+  sentTo: text('sent_to'),
+  sentAt: timestamp('sent_at').defaultNow().notNull(),
+  expiresAt: timestamp('expires_at').notNull(),
+  verifiedAt: timestamp('verified_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  invitationIdx: index('onboarding_verification_codes_invitation_idx').on(table.invitationId),
+  channelStatusIdx: index('onboarding_verification_codes_channel_status_idx').on(table.channel, table.status),
+}));
+
+export const insertOnboardingInvitationSchema = createInsertSchema(onboardingInvitations).omit({
+  id: true,
+  createdAt: true,
+});
+export type OnboardingInvitation = typeof onboardingInvitations.$inferSelect;
+export type InsertOnboardingInvitation = z.infer<typeof insertOnboardingInvitationSchema>;
+
+export const insertOnboardingVerificationCodeSchema = createInsertSchema(onboardingVerificationCodes).omit({
+  id: true,
+  sentAt: true,
+  createdAt: true,
+});
+export type OnboardingVerificationCode = typeof onboardingVerificationCodes.$inferSelect;
+export type InsertOnboardingVerificationCode = z.infer<typeof insertOnboardingVerificationCodeSchema>;
 
 // ============================================================
 // Asset Management & Work Order System
@@ -14814,8 +15374,21 @@ export type InsertExecutiveRundownItem = z.infer<typeof insertExecutiveRundownIt
 // Chart of accounts — canonical account definitions
 export const chartOfAccounts = pgTable('chart_of_accounts', {
   id: serial('id').primaryKey(),
+  accountNumber: text('account_number').unique(),
   accountName: text('account_name').notNull().unique(),
   accountType: text('account_type').notNull(), // ASSET, LIABILITY, EXPENSE, REVENUE, etc.
+  parentAccountId: integer('parent_account_id').references((): AnyPgColumn => chartOfAccounts.id),
+  normalBalance: text('normal_balance').notNull().default('DEBIT'), // DEBIT | CREDIT
+  financialStatementSection: text('financial_statement_section'),
+  costPool: text('cost_pool').notNull().default('NONE'), // NONE | DIRECT | FRINGE | OVERHEAD | G_AND_A | UNALLOWABLE | OTHER
+  defaultAllowability: text('default_allowability').notNull().default('ALLOWABLE'), // ALLOWABLE | UNALLOWABLE | NEEDS_REVIEW
+  defaultDirectIndirect: text('default_direct_indirect').notNull().default('UNASSIGNED'), // DIRECT | INDIRECT | UNASSIGNED
+  billingTreatment: text('billing_treatment').notNull().default('NOT_BILLABLE'), // BILLABLE | NON_BILLABLE | PASS_THROUGH | NOT_BILLABLE
+  requiresDocumentation: boolean('requires_documentation').notNull().default(false),
+  requiresReview: boolean('requires_review').notNull().default(false),
+  systemControlled: boolean('system_controlled').notNull().default(false),
+  isActive: boolean('is_active').notNull().default(true),
+  description: text('description'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -14834,9 +15407,18 @@ export const journalEntries = pgTable('journal_entries', {
   transactionType: text('transaction_type').notNull(), // WIRE_PAYMENT
   referenceType: text('reference_type').notNull(),     // payment
   referenceId: integer('reference_id').notNull(),      // payments.id
+  referenceUuid: uuid('reference_uuid'),
   effectiveDate: timestamp('effective_date').notNull(),
-  status: text('status').notNull().default('DRAFT'),   // DRAFT | EXPORTED | VOIDED
+  status: text('status').notNull().default('DRAFT'),   // DRAFT | POSTED | EXPORTED | VOIDED
   memo: text('memo'),
+  sourceSystem: text('source_system').notNull().default('EPOCH'),
+  sourceDocumentType: text('source_document_type'),
+  sourceDocumentNumber: text('source_document_number'),
+  migrationBatchId: text('migration_batch_id'),
+  postingMode: text('posting_mode').notNull().default('STANDARD'), // STANDARD | HISTORICAL_MIGRATION | ADJUSTMENT | REVERSAL
+  postedAt: timestamp('posted_at'),
+  postedBy: text('posted_by'),
+  reversalOfJournalEntryId: integer('reversal_of_journal_entry_id').references((): AnyPgColumn => journalEntries.id),
   createdBy: text('created_by'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
@@ -14865,6 +15447,25 @@ export const journalLines = pgTable('journal_lines', {
     .notNull(),
   debitAmount: real('debit_amount').default(0),
   creditAmount: real('credit_amount').default(0),
+  customerId: text('customer_id'),
+  customerNameSnapshot: text('customer_name_snapshot'),
+  customerType: text('customer_type'),
+  projectId: text('project_id'),
+  projectNameSnapshot: text('project_name_snapshot'),
+  contractNumber: text('contract_number'),
+  productionLine: text('production_line'),
+  department: text('department'),
+  chargeCodeId: integer('charge_code_id').references(() => chargeCodes.id),
+  inventoryItemId: text('inventory_item_id'),
+  partNumber: text('part_number'),
+  salespersonUserId: integer('salesperson_user_id').references(() => users.id),
+  salespersonNameSnapshot: text('salesperson_name_snapshot'),
+  csrUserId: integer('csr_user_id').references(() => users.id),
+  csrNameSnapshot: text('csr_name_snapshot'),
+  allowability: text('allowability').notNull().default('ALLOWABLE'),
+  directIndirect: text('direct_indirect').notNull().default('UNASSIGNED'),
+  costPool: text('cost_pool'),
+  dimensionTags: jsonb('dimension_tags').notNull().default(sql`'{}'::jsonb`),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
@@ -14876,6 +15477,44 @@ export const insertJournalLineSchema = createInsertSchema(journalLines).omit({
 });
 export type JournalLine = typeof journalLines.$inferSelect;
 export type InsertJournalLine = z.infer<typeof insertJournalLineSchema>;
+
+export const accountingAdminUsers = pgTable('accounting_admin_users', {
+  id: serial('id').primaryKey(),
+  username: text('username').notNull().unique(),
+  active: boolean('active').notNull().default(true),
+  grantedBy: text('granted_by'),
+  grantedAt: timestamp('granted_at').defaultNow(),
+});
+export const insertAccountingAdminUserSchema = createInsertSchema(accountingAdminUsers).omit({
+  id: true,
+  grantedAt: true,
+});
+export type AccountingAdminUser = typeof accountingAdminUsers.$inferSelect;
+export type InsertAccountingAdminUser = z.infer<typeof insertAccountingAdminUserSchema>;
+
+export const accountingPeriods = pgTable('accounting_periods', {
+  id: serial('id').primaryKey(),
+  periodYear: integer('period_year').notNull(),
+  periodMonth: integer('period_month').notNull(),
+  status: text('status').notNull().default('MIGRATION'), // OPEN | MIGRATION | SOFT_CLOSED | HARD_CLOSED | FINAL_LOCKED
+  hardLockEnforcedAt: timestamp('hard_lock_enforced_at'),
+  closedBy: text('closed_by'),
+  closedAt: timestamp('closed_at'),
+  reopenedBy: text('reopened_by'),
+  reopenedAt: timestamp('reopened_at'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  uniquePeriod: unique('accounting_periods_year_month_unique').on(table.periodYear, table.periodMonth),
+}));
+export const insertAccountingPeriodSchema = createInsertSchema(accountingPeriods).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type AccountingPeriod = typeof accountingPeriods.$inferSelect;
+export type InsertAccountingPeriod = z.infer<typeof insertAccountingPeriodSchema>;
 
 // ─── Sign Order Page Settings (singleton) ────────────────────────────────────
 export const signOrderPageSettings = pgTable('sign_order_page_settings', {
@@ -14972,14 +15611,21 @@ export const arInvoices = pgTable('ar_invoices', {
   poId: text('po_id'),         // kept — free-text PO reference from legacy flow
   poOverride: text('po_override'),
   subtotal: numeric('subtotal').notNull(),
+  discountAmount: numeric('discount_amount').notNull().default('0'),
+  freightAmount: numeric('freight_amount').notNull().default('0'),
   taxAmount: numeric('tax_amount').notNull().default('0'),
+  retainagePercent: numeric('retainage_percent').notNull().default('0'),
+  retainageAmount: numeric('retainage_amount').notNull().default('0'),
   totalAmount: numeric('total_amount').notNull(),
   // status valid values: DRAFT, REVIEW, POSTED, SENT, DISPUTED, VOID, PAID
   status: text('status').notNull().default('DRAFT'),
   notes: text('notes'),
+  customerVisibleNotes: text('customer_visible_notes'),
+  internalNotes: text('internal_notes'),
   // Shipment traceability — populated when invoice is raised against a specific shipment
   lotId: uuid('lot_id').references(() => p2LotNumbers.id),
   packingSlipId: uuid('packing_slip_id').references(() => p2PackingSlips.id),
+  wadId: uuid('wad_id'),
   createdBy: text('created_by'),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
@@ -14988,6 +15634,9 @@ export const arInvoices = pgTable('ar_invoices', {
   postedBy: text('posted_by'),
   sentAt: timestamp('sent_at'),
   sentBy: text('sent_by'),
+  sendgridMessageId: text('sendgrid_message_id'),
+  sentTo: text('sent_to'),
+  sentCc: text('sent_cc').array(),
   voidedAt: timestamp('voided_at'),
   voidedBy: text('voided_by'),
   voidReason: text('void_reason'),
@@ -15018,6 +15667,17 @@ export const arInvoiceLines = pgTable('ar_invoice_lines', {
   id: uuid('id').defaultRandom().primaryKey(),
   invoiceId: uuid('invoice_id').notNull().references(() => arInvoices.id, { onDelete: 'cascade' }),
   inventoryItemId: text('inventory_item_id'),
+  poItemId: integer('po_item_id').references(() => p2PurchaseOrderItems.id),
+  partNumber: text('part_number'),
+  productionLine: text('production_line').notNull().default('MIGRATION_REVIEW'),
+  projectId: text('project_id'),
+  projectNameSnapshot: text('project_name_snapshot'),
+  salespersonUserId: integer('salesperson_user_id').references(() => users.id),
+  salespersonNameSnapshot: text('salesperson_name_snapshot'),
+  csrUserId: integer('csr_user_id').references(() => users.id),
+  csrNameSnapshot: text('csr_name_snapshot'),
+  customerType: text('customer_type'),
+  dimensionTags: jsonb('dimension_tags').notNull().default(sql`'{}'::jsonb`),
   description: text('description').notNull(),
   qty: numeric('qty').notNull(),
   unitPrice: numeric('unit_price').notNull(),
@@ -15042,6 +15702,10 @@ export const arPayments = pgTable('ar_payments', {
   amount: numeric('amount').notNull(),
   notes: text('notes'),
   createdBy: text('created_by'),
+  status: text('status').default('posted').notNull(), // posted, voided
+  voidedAt: timestamp('voided_at'),
+  voidedBy: text('voided_by'),
+  voidReason: text('void_reason'),
   createdAt: timestamp('created_at').defaultNow(),
 }, (table) => ({
   customerIdx: index('ar_payments_customer_id_idx').on(table.customerId),
@@ -15462,6 +16126,48 @@ export const insertOrderActivityEventSchema = createInsertSchema(orderActivityEv
 export type OrderActivityEvent = typeof orderActivityEvents.$inferSelect;
 export type InsertOrderActivityEvent = z.infer<typeof insertOrderActivityEventSchema>;
 
+export const p1FulfillmentAttempts = pgTable(
+  'p1_fulfillment_attempts',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    orderId: text('order_id').notNull(),
+    status: text('status').notNull().default('IN_PROGRESS'),
+    currentStep: text('current_step').notNull().default('READINESS'),
+    failedStep: text('failed_step'),
+    failureCode: text('failure_code'),
+    failureMessage: text('failure_message'),
+    remediationHint: text('remediation_hint'),
+    source: text('source').notNull().default('shipping'),
+    sourceRoute: text('source_route'),
+    trackingNumber: text('tracking_number'),
+    shipmentRecordId: uuid('shipment_record_id'),
+    journalEntryId: integer('journal_entry_id').references(() => journalEntries.id),
+    notificationStatus: text('notification_status').default('NOT_ATTEMPTED'),
+    actorUserId: integer('actor_user_id'),
+    actorDisplayName: text('actor_display_name'),
+    metadata: jsonb('metadata').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`),
+    startedAt: timestamp('started_at').notNull().defaultNow(),
+    completedAt: timestamp('completed_at'),
+    createdAt: timestamp('created_at').defaultNow(),
+    updatedAt: timestamp('updated_at').defaultNow(),
+  },
+  (table) => ({
+    orderIdIdx: index('p1_fulfillment_attempts_order_id_idx').on(table.orderId),
+    statusIdx: index('p1_fulfillment_attempts_status_idx').on(table.status),
+    failedStepIdx: index('p1_fulfillment_attempts_failed_step_idx').on(table.failedStep),
+    updatedAtIdx: index('p1_fulfillment_attempts_updated_at_idx').on(table.updatedAt),
+  })
+);
+
+export const insertP1FulfillmentAttemptSchema = createInsertSchema(p1FulfillmentAttempts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type P1FulfillmentAttempt = typeof p1FulfillmentAttempts.$inferSelect;
+export type InsertP1FulfillmentAttempt = z.infer<typeof insertP1FulfillmentAttemptSchema>;
+
 // ─── CNC Dashboard ────────────────────────────────────────────────────────────
 
 export const cncScheduleSettings = pgTable('cnc_schedule_settings', {
@@ -15812,6 +16518,65 @@ export const receiptDocuments = pgTable('receipt_documents', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+export const receivingInspectionPlans = pgTable('receiving_inspection_plans', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: text('name').notNull(),
+  priority: integer('priority').notNull().default(100),
+  inventoryItemId: integer('inventory_item_id').references(() => inventoryItems.id, { onDelete: 'set null' }),
+  agPartNumber: text('ag_part_number'),
+  materialType: text('material_type'),
+  riskLevel: text('risk_level'), // LOW | MEDIUM | HIGH | CRITICAL
+  supplierName: text('supplier_name'),
+  supplierStatus: text('supplier_status'), // APPROVED | PROBATION | CONDITIONAL | BLOCKED
+  flightCritical: boolean('flight_critical'),
+  sampleSizePercent: integer('sample_size_percent').notNull().default(100),
+  requiredCheckpoints: jsonb('required_checkpoints').notNull().default([]),
+  requiredDocuments: jsonb('required_documents').notNull().default([]),
+  autoDisposition: text('auto_disposition').notNull().default('pending_inspection'),
+  requiresQualitySignature: boolean('requires_quality_signature').notNull().default(false),
+  isActive: boolean('is_active').notNull().default(true),
+  createdByUserId: integer('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdByDisplayName: text('created_by_display_name'),
+  updatedByUserId: integer('updated_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  updatedByDisplayName: text('updated_by_display_name'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  activeIdx: index('receiving_inspection_plans_active_idx').on(table.isActive),
+  itemIdx: index('receiving_inspection_plans_item_idx').on(table.inventoryItemId),
+  partIdx: index('receiving_inspection_plans_part_idx').on(table.agPartNumber),
+  supplierIdx: index('receiving_inspection_plans_supplier_idx').on(table.supplierName),
+  priorityIdx: index('receiving_inspection_plans_priority_idx').on(table.priority),
+}));
+
+export const insertReceivingInspectionPlanSchema = createInsertSchema(receivingInspectionPlans)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    name: z.string().min(1, 'Plan name is required'),
+    priority: z.number().int().min(0).max(1000).default(100),
+    inventoryItemId: z.number().int().positive().optional().nullable(),
+    agPartNumber: z.string().optional().nullable(),
+    materialType: z.string().optional().nullable(),
+    riskLevel: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).optional().nullable(),
+    supplierName: z.string().optional().nullable(),
+    supplierStatus: z.enum(['APPROVED', 'PROBATION', 'CONDITIONAL', 'BLOCKED']).optional().nullable(),
+    flightCritical: z.boolean().optional().nullable(),
+    sampleSizePercent: z.number().int().min(0).max(100).default(100),
+    requiredCheckpoints: z.array(z.string()).default([]),
+    requiredDocuments: z.array(z.string()).default([]),
+    autoDisposition: z.enum(['pending_inspection', 'document_hold', 'quarantine']).default('pending_inspection'),
+    requiresQualitySignature: z.boolean().default(false),
+    isActive: z.boolean().default(true),
+  });
+
+export const updateReceivingInspectionPlanSchema = insertReceivingInspectionPlanSchema.partial();
+export type ReceivingInspectionPlan = typeof receivingInspectionPlans.$inferSelect;
+export type InsertReceivingInspectionPlan = z.infer<typeof insertReceivingInspectionPlanSchema>;
+
 export const insertCncSetupPhotoSchema = createInsertSchema(cncSetupPhotos).omit({
   id: true,
   createdAt: true,
@@ -15997,6 +16762,11 @@ export const productionWorkOrders = pgTable('production_work_orders', {
   warningThreshold: numeric('warning_threshold'),
   blockedThreshold: numeric('blocked_threshold'),
   defaultChargeCodeId: integer('default_charge_code_id').references(() => chargeCodes.id, { onDelete: 'set null' }),
+  dashboardType: text('dashboard_type'),
+  queueType: text('queue_type'),
+  assignedDepartment: text('assigned_department'),
+  assignedDashboardRoute: text('assigned_dashboard_route'),
+  manufacturingQueueId: integer('manufacturing_queue_id').references(() => manufacturingQueue.id, { onDelete: 'set null' }),
   wadStatus: text('wad_status').notNull().default('DRAFT'),
   wizardData: jsonb('wizard_data'),
   createdAt: timestamp('created_at').defaultNow(),
@@ -16022,6 +16792,11 @@ export const insertProductionWorkOrderSchema = createInsertSchema(productionWork
     departmentBudgets: z.record(z.any()).optional(),
     warningThreshold: z.string().regex(/^\d+(\.\d+)?$/, 'Must be a positive decimal').optional().nullable(),
     blockedThreshold: z.string().regex(/^\d+(\.\d+)?$/, 'Must be a positive decimal').optional().nullable(),
+    dashboardType: z.string().optional().nullable(),
+    queueType: z.string().optional().nullable(),
+    assignedDepartment: z.string().optional().nullable(),
+    assignedDashboardRoute: z.string().optional().nullable(),
+    manufacturingQueueId: z.number().int().optional().nullable(),
     wadStatus: z.enum(['DRAFT', 'PENDING_APPROVAL', 'APPROVED']).optional().default('DRAFT'),
     wizardData: z.record(z.any()).optional().nullable(),
   })
@@ -16042,6 +16817,111 @@ export const insertProductionWorkOrderSchema = createInsertSchema(productionWork
 
 export type ProductionWorkOrder = typeof productionWorkOrders.$inferSelect;
 export type InsertProductionWorkOrder = z.infer<typeof insertProductionWorkOrderSchema>;
+
+// Program Manufacturing Orchestration - additive layer above P2 queues/WADs.
+export const programBuilds = pgTable('program_builds', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'set null' }),
+  p2PurchaseOrderId: integer('p2_purchase_order_id').references(() => p2PurchaseOrders.id, { onDelete: 'set null' }),
+  programCode: text('program_code').notNull().unique(),
+  programName: text('program_name').notNull(),
+  buildName: text('build_name').notNull(),
+  buildType: text('build_type').notNull().default('program'),
+  status: text('status').notNull().default('PLANNED'),
+  priority: integer('priority').notNull().default(50),
+  targetShipDate: date('target_ship_date'),
+  customerName: text('customer_name'),
+  notes: text('notes'),
+  metadata: jsonb('metadata').default({}).notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  projectIdIdx: index('program_builds_project_id_idx').on(table.projectId),
+  poIdIdx: index('program_builds_po_id_idx').on(table.p2PurchaseOrderId),
+  statusIdx: index('program_builds_status_idx').on(table.status),
+}));
+
+export const programAssemblies = pgTable('program_assemblies', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  programBuildId: uuid('program_build_id').notNull().references(() => programBuilds.id, { onDelete: 'cascade' }),
+  parentAssemblyId: uuid('parent_assembly_id').references((): AnyPgColumn => programAssemblies.id, { onDelete: 'cascade' }),
+  assemblyCode: text('assembly_code').notNull(),
+  assemblyName: text('assembly_name').notNull(),
+  level: integer('level').notNull().default(0),
+  sequence: integer('sequence').notNull().default(0),
+  assemblyType: text('assembly_type').notNull().default('assembly'),
+  partNumber: text('part_number'),
+  requiredQuantity: integer('required_quantity').notNull().default(1),
+  status: text('status').notNull().default('PLANNED'),
+  plannedStartDate: date('planned_start_date'),
+  plannedFinishDate: date('planned_finish_date'),
+  targetShipDate: date('target_ship_date'),
+  metadata: jsonb('metadata').default({}).notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  buildIdx: index('program_assemblies_build_idx').on(table.programBuildId),
+  parentIdx: index('program_assemblies_parent_idx').on(table.parentAssemblyId),
+  codeUnique: uniqueIndex('program_assemblies_build_code_unique').on(table.programBuildId, table.assemblyCode),
+}));
+
+export const programAssemblyLinks = pgTable('program_assembly_links', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  assemblyId: uuid('assembly_id').notNull().references(() => programAssemblies.id, { onDelete: 'cascade' }),
+  manufacturingQueueId: integer('manufacturing_queue_id').references(() => manufacturingQueue.id, { onDelete: 'set null' }),
+  productionWorkOrderId: uuid('production_work_order_id').references(() => productionWorkOrders.id, { onDelete: 'set null' }),
+  travelerId: varchar('traveler_id', { length: 255 }).references(() => travelers.id, { onDelete: 'set null' }),
+  p2SerializedItemId: uuid('p2_serialized_item_id').references(() => p2SerializedItems.id, { onDelete: 'set null' }),
+  linkType: text('link_type').notNull().default('queue_item'),
+  requiredQuantity: integer('required_quantity').notNull().default(1),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  assemblyIdx: index('program_assembly_links_assembly_idx').on(table.assemblyId),
+  queueIdx: index('program_assembly_links_queue_idx').on(table.manufacturingQueueId),
+  travelerIdx: index('program_assembly_links_traveler_idx').on(table.travelerId),
+}));
+
+export const programAssemblyDependencies = pgTable('program_assembly_dependencies', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  assemblyId: uuid('assembly_id').notNull().references(() => programAssemblies.id, { onDelete: 'cascade' }),
+  dependsOnAssemblyId: uuid('depends_on_assembly_id').notNull().references(() => programAssemblies.id, { onDelete: 'cascade' }),
+  dependencyType: text('dependency_type').notNull().default('finish_to_start'),
+  isBlocking: boolean('is_blocking').notNull().default(true),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  assemblyIdx: index('program_assembly_dependencies_assembly_idx').on(table.assemblyId),
+  dependsOnIdx: index('program_assembly_dependencies_depends_on_idx').on(table.dependsOnAssemblyId),
+  uniqueDependency: uniqueIndex('program_assembly_dependencies_unique').on(table.assemblyId, table.dependsOnAssemblyId),
+}));
+
+export const insertProgramBuildSchema = createInsertSchema(programBuilds).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const insertProgramAssemblySchema = createInsertSchema(programAssemblies).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const insertProgramAssemblyLinkSchema = createInsertSchema(programAssemblyLinks).omit({
+  id: true,
+  createdAt: true,
+});
+export const insertProgramAssemblyDependencySchema = createInsertSchema(programAssemblyDependencies).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ProgramBuild = typeof programBuilds.$inferSelect;
+export type ProgramAssembly = typeof programAssemblies.$inferSelect;
+export type ProgramAssemblyLink = typeof programAssemblyLinks.$inferSelect;
+export type ProgramAssemblyDependency = typeof programAssemblyDependencies.$inferSelect;
+export type InsertProgramBuild = z.infer<typeof insertProgramBuildSchema>;
+export type InsertProgramAssembly = z.infer<typeof insertProgramAssemblySchema>;
+export type InsertProgramAssemblyLink = z.infer<typeof insertProgramAssemblyLinkSchema>;
+export type InsertProgramAssemblyDependency = z.infer<typeof insertProgramAssemblyDependencySchema>;
 
 // ─── LABOR THRESHOLD SETTINGS (system-wide singleton) ─────────────────────────
 
@@ -16254,6 +17134,185 @@ export const estimatingPricingSnapshots = pgTable('estimating_pricing_snapshots'
 export const insertEstimatingPricingSnapshotSchema = createInsertSchema(estimatingPricingSnapshots).omit({ id: true, calculatedAt: true });
 export type EstimatingPricingSnapshot = typeof estimatingPricingSnapshots.$inferSelect;
 export type InsertEstimatingPricingSnapshot = z.infer<typeof insertEstimatingPricingSnapshotSchema>;
+
+export const estimateVersions = pgTable('estimate_versions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  rfqId: uuid('rfq_id').notNull().references(() => estimatingRfqs.id, { onDelete: 'cascade' }),
+  versionNumber: integer('version_number').notNull(),
+  createdBy: integer('created_by'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  supersededBy: uuid('superseded_by'),
+  changeSummary: text('change_summary'),
+  status: text('status').default('DRAFT').notNull(),
+  marginSummary: jsonb('margin_summary').default({}).notNull(),
+  pricingSnapshot: jsonb('pricing_snapshot').default({}).notNull(),
+}, (table) => ({
+  rfqVersionIdx: uniqueIndex('estimate_versions_rfq_version_idx').on(table.rfqId, table.versionNumber),
+  rfqIdx: index('estimate_versions_rfq_id_idx').on(table.rfqId),
+}));
+
+export const insertEstimateVersionSchema = createInsertSchema(estimateVersions)
+  .omit({ id: true, createdAt: true, supersededBy: true })
+  .extend({
+    versionNumber: z.number().int().positive().optional(),
+  });
+export type EstimateVersion = typeof estimateVersions.$inferSelect;
+export type InsertEstimateVersion = z.infer<typeof insertEstimateVersionSchema>;
+
+export const estimateLineVersions = pgTable('estimate_line_versions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  estimateVersionId: uuid('estimate_version_id').notNull().references(() => estimateVersions.id, { onDelete: 'cascade' }),
+  rfqPartId: uuid('rfq_part_id').references(() => estimatingRfqParts.id, { onDelete: 'set null' }),
+  sourceTable: text('source_table').notNull(),
+  sourceId: uuid('source_id'),
+  lineNumber: integer('line_number'),
+  lineCategory: text('line_category').notNull(),
+  lineSummary: text('line_summary'),
+  quantity: numeric('quantity', { precision: 12, scale: 4 }),
+  unitCost: numeric('unit_cost', { precision: 12, scale: 4 }),
+  totalCost: numeric('total_cost', { precision: 14, scale: 4 }),
+  marginPercent: numeric('margin_percent', { precision: 8, scale: 4 }),
+  sellPrice: numeric('sell_price', { precision: 14, scale: 4 }),
+  sourcePayload: jsonb('source_payload').default({}).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => ({
+  versionIdx: index('estimate_line_versions_version_id_idx').on(table.estimateVersionId),
+  partIdx: index('estimate_line_versions_rfq_part_id_idx').on(table.rfqPartId),
+}));
+
+export const insertEstimateLineVersionSchema = createInsertSchema(estimateLineVersions).omit({ id: true, createdAt: true });
+export type EstimateLineVersion = typeof estimateLineVersions.$inferSelect;
+export type InsertEstimateLineVersion = z.infer<typeof insertEstimateLineVersionSchema>;
+
+export const estimateAssumptions = pgTable('estimate_assumptions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  rfqId: uuid('rfq_id').notNull().references(() => estimatingRfqs.id, { onDelete: 'cascade' }),
+  rfqPartId: uuid('rfq_part_id').references(() => estimatingRfqParts.id, { onDelete: 'cascade' }),
+  assumptionType: text('assumption_type').notNull(),
+  assumptionText: text('assumption_text').notNull(),
+  numericValue: numeric('numeric_value', { precision: 14, scale: 4 }),
+  uom: text('uom'),
+  confidenceLevel: text('confidence_level').default('MEDIUM').notNull(),
+  sourceReference: text('source_reference'),
+  createdBy: integer('created_by'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  rfqIdx: index('estimate_assumptions_rfq_id_idx').on(table.rfqId),
+  typeIdx: index('estimate_assumptions_type_idx').on(table.assumptionType),
+}));
+
+export const insertEstimateAssumptionSchema = createInsertSchema(estimateAssumptions)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    assumptionType: z.enum(['LABOR', 'SCRAP', 'MATERIAL_YIELD', 'TOOLING_LIFE', 'SETUP_TIME']),
+    confidenceLevel: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional(),
+  });
+export type EstimateAssumption = typeof estimateAssumptions.$inferSelect;
+export type InsertEstimateAssumption = z.infer<typeof insertEstimateAssumptionSchema>;
+
+export const estimatingApprovals = pgTable('estimating_approvals', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  rfqId: uuid('rfq_id').notNull().references(() => estimatingRfqs.id, { onDelete: 'cascade' }),
+  estimateVersionId: uuid('estimate_version_id').references(() => estimateVersions.id, { onDelete: 'set null' }),
+  approvalRole: text('approval_role').notNull(),
+  approvalStatus: text('approval_status').default('PENDING').notNull(),
+  approvalThreshold: numeric('approval_threshold', { precision: 14, scale: 2 }),
+  signerUserId: integer('signer_user_id'),
+  signerDisplayName: text('signer_display_name'),
+  digitalSignature: text('digital_signature'),
+  approvalComments: text('approval_comments'),
+  requestedAt: timestamp('requested_at').defaultNow().notNull(),
+  signedAt: timestamp('signed_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  rfqRoleIdx: uniqueIndex('estimating_approvals_rfq_role_idx').on(table.rfqId, table.approvalRole),
+  rfqIdx: index('estimating_approvals_rfq_id_idx').on(table.rfqId),
+}));
+
+export const insertEstimatingApprovalSchema = createInsertSchema(estimatingApprovals)
+  .omit({ id: true, requestedAt: true, createdAt: true, updatedAt: true })
+  .extend({
+    approvalRole: z.enum(['ESTIMATOR', 'ENGINEERING', 'FINANCE', 'EXECUTIVE']),
+    approvalStatus: z.enum(['PENDING', 'APPROVED', 'REJECTED', 'CHANGES_REQUESTED']).optional(),
+    signedAt: z.coerce.date().nullable().optional(),
+  });
+export type EstimatingApproval = typeof estimatingApprovals.$inferSelect;
+export type InsertEstimatingApproval = z.infer<typeof insertEstimatingApprovalSchema>;
+
+export const riskAssessments = pgTable('risk_assessments', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  rfqId: uuid('rfq_id').notNull().references(() => estimatingRfqs.id, { onDelete: 'cascade' }),
+  estimateVersionId: uuid('estimate_version_id').references(() => estimateVersions.id, { onDelete: 'set null' }),
+  status: text('status').default('DRAFT').notNull(),
+  overallScore: integer('overall_score').default(0).notNull(),
+  overallLevel: text('overall_level').default('LOW').notNull(),
+  approvalRouting: jsonb('approval_routing').default([]).notNull(),
+  createdBy: integer('created_by'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  rfqIdx: index('risk_assessments_rfq_id_idx').on(table.rfqId),
+}));
+
+export const insertRiskAssessmentSchema = createInsertSchema(riskAssessments).omit({ id: true, createdAt: true, updatedAt: true });
+export type RiskAssessment = typeof riskAssessments.$inferSelect;
+export type InsertRiskAssessment = z.infer<typeof insertRiskAssessmentSchema>;
+
+export const riskItems = pgTable('risk_items', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  riskAssessmentId: uuid('risk_assessment_id').notNull().references(() => riskAssessments.id, { onDelete: 'cascade' }),
+  category: text('category').notNull(),
+  description: text('description').notNull(),
+  severity: integer('severity').notNull(),
+  probability: integer('probability').notNull(),
+  score: integer('score').notNull(),
+  ownerUserId: integer('owner_user_id'),
+  ownerDisplayName: text('owner_display_name'),
+  status: text('status').default('OPEN').notNull(),
+  requiresApproval: boolean('requires_approval').default(false).notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  assessmentIdx: index('risk_items_assessment_id_idx').on(table.riskAssessmentId),
+  categoryIdx: index('risk_items_category_idx').on(table.category),
+}));
+
+export const insertRiskItemSchema = createInsertSchema(riskItems)
+  .omit({ id: true, score: true, createdAt: true, updatedAt: true })
+  .extend({
+    category: z.enum(['TECHNICAL', 'SUPPLY_CHAIN', 'FINANCIAL', 'SCHEDULE', 'COMPLIANCE', 'QUALITY']),
+    severity: z.number().int().min(1).max(5),
+    probability: z.number().int().min(1).max(5),
+  });
+export type RiskItem = typeof riskItems.$inferSelect;
+export type InsertRiskItem = z.infer<typeof insertRiskItemSchema>;
+
+export const mitigationActions = pgTable('mitigation_actions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  riskItemId: uuid('risk_item_id').notNull().references(() => riskItems.id, { onDelete: 'cascade' }),
+  actionDescription: text('action_description').notNull(),
+  assignedToUserId: integer('assigned_to_user_id'),
+  assignedToDisplayName: text('assigned_to_display_name'),
+  dueDate: timestamp('due_date'),
+  status: text('status').default('OPEN').notNull(),
+  completedAt: timestamp('completed_at'),
+  createdBy: integer('created_by'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => ({
+  riskItemIdx: index('mitigation_actions_risk_item_id_idx').on(table.riskItemId),
+}));
+
+export const insertMitigationActionSchema = createInsertSchema(mitigationActions)
+  .omit({ id: true, createdAt: true, updatedAt: true })
+  .extend({
+    dueDate: z.coerce.date().nullable().optional(),
+    completedAt: z.coerce.date().nullable().optional(),
+  });
+export type MitigationAction = typeof mitigationActions.$inferSelect;
+export type InsertMitigationAction = z.infer<typeof insertMitigationActionSchema>;
 
 export const estimatingDefaults = pgTable('estimating_defaults', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -16810,15 +17869,37 @@ export const vaultDocuments = pgTable('vault_documents', {
   description: text('description'),
   objectPath: text('object_path').notNull(),
   classification: text('classification').notNull().default('internal'), // public | internal | cui | itar
+  cuiCategory: text('cui_category'),
+  itarCategory: text('itar_category'),
+  exportControlJurisdiction: text('export_control_jurisdiction'),
+  documentCategory: text('document_category').notNull().default('controlled_document'), // cad | drawing | spec | customer_file | controlled_document | policy
+  customerId: text('customer_id'),
+  customerName: text('customer_name'),
+  contractArtifactType: text('contract_artifact_type'),
+  sourceEntityType: text('source_entity_type'),
+  sourceEntityId: text('source_entity_id'),
   scopeType: text('scope_type').notNull().default('global'), // global | project | department
   scopeValue: text('scope_value'), // projectId or department name when scoped
   contentType: text('content_type').notNull().default('application/octet-stream'),
   fileSizeBytes: integer('file_size_bytes'),
+  checksumSha256: text('checksum_sha256'),
+  encryptionAtRestPolicy: text('encryption_at_rest_policy').notNull().default('object_storage_managed'),
+  accessRule: text('access_rule').notNull().default('authenticated'), // authenticated | explicit_grant | admin_only
+  mfaRequired: boolean('mfa_required').notNull().default(false),
+  deviceTrackingRequired: boolean('device_tracking_required').notNull().default(true),
+  downloadTrackingRequired: boolean('download_tracking_required').notNull().default(true),
+  expiringLinksRequired: boolean('expiring_links_required').notNull().default(true),
+  linkExpiresInSeconds: integer('link_expires_in_seconds').notNull().default(900),
+  sessionTimeoutMinutes: integer('session_timeout_minutes').notNull().default(30),
   uploaderUserId: integer('uploader_user_id').notNull(),
   uploaderDisplayName: text('uploader_display_name').notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => ({
   classificationIdx: index('vault_documents_classification_idx').on(table.classification),
+  documentCategoryIdx: index('vault_documents_document_category_idx').on(table.documentCategory),
+  customerIdIdx: index('vault_documents_customer_id_idx').on(table.customerId),
+  sourceEntityIdx: index('vault_documents_source_entity_idx').on(table.sourceEntityType, table.sourceEntityId),
   scopeTypeIdx: index('vault_documents_scope_type_idx').on(table.scopeType),
   uploaderIdx: index('vault_documents_uploader_idx').on(table.uploaderUserId),
 }));
@@ -16826,6 +17907,7 @@ export const vaultDocuments = pgTable('vault_documents', {
 export const insertVaultDocumentSchema = createInsertSchema(vaultDocuments).omit({
   id: true,
   createdAt: true,
+  updatedAt: true,
 });
 export type VaultDocument = typeof vaultDocuments.$inferSelect;
 export type InsertVaultDocument = z.infer<typeof insertVaultDocumentSchema>;
@@ -17318,6 +18400,184 @@ export type ProductionControlTemplate = typeof productionControlTemplates.$infer
 export type InsertProductionControlTemplate = z.infer<typeof insertProductionControlTemplateSchema>;
 
 // ---------------------------------------------------------------------------
+// Engineering Control - reusable revision, effectivity, and ECO framework
+// ---------------------------------------------------------------------------
+
+export const engineeringControlledArtifactTypeEnum = pgEnum('engineering_controlled_artifact_type', [
+  'BOM',
+  'ROUTING',
+  'TRAVELER_TEMPLATE',
+  'WORK_INSTRUCTION',
+  'SPEC',
+  'QC_FORM',
+]);
+
+export const engineeringReleaseStateEnum = pgEnum('engineering_release_state', [
+  'draft',
+  'review',
+  'approved',
+  'released',
+  'obsolete',
+]);
+
+export const engineeringEcoStatusEnum = pgEnum('engineering_eco_status', [
+  'draft',
+  'impact_review',
+  'approval',
+  'approved',
+  'rejected',
+  'implemented',
+  'released',
+  'closed',
+]);
+
+export const engineeringControlledRevisions = pgTable('engineering_controlled_revisions', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  artifactType: engineeringControlledArtifactTypeEnum('artifact_type').notNull(),
+  artifactId: text('artifact_id').notNull(),
+  artifactNumber: text('artifact_number'),
+  title: text('title').notNull(),
+  revision: text('revision').notNull(),
+  releaseState: engineeringReleaseStateEnum('release_state').notNull().default('draft'),
+  description: text('description'),
+  sourceModule: text('source_module'),
+  sourceVersionId: text('source_version_id'),
+  changeSummary: text('change_summary'),
+  effectivitySerialStart: text('effectivity_serial_start'),
+  effectivitySerialEnd: text('effectivity_serial_end'),
+  effectivityStartDate: date('effectivity_start_date'),
+  effectivityEndDate: date('effectivity_end_date'),
+  effectivityCustomerId: text('effectivity_customer_id'),
+  effectivityCustomerName: text('effectivity_customer_name'),
+  effectivityProjectId: uuid('effectivity_project_id'),
+  effectivityProjectNumber: text('effectivity_project_number'),
+  createdBy: text('created_by').notNull().default('system'),
+  reviewedBy: text('reviewed_by'),
+  reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+  approvedBy: text('approved_by'),
+  approvedAt: timestamp('approved_at', { withTimezone: true }),
+  releasedBy: text('released_by'),
+  releasedAt: timestamp('released_at', { withTimezone: true }),
+  obsoleteBy: text('obsolete_by'),
+  obsoleteAt: timestamp('obsolete_at', { withTimezone: true }),
+  releaseNotes: text('release_notes'),
+  metadata: jsonb('metadata').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`),
+  createdAt: timestamp('created_at', { withTimezone: true }).default(sql`now()`),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).default(sql`now()`),
+}, (table) => ({
+  artifactIdx: index('ecr_artifact_idx').on(table.artifactType, table.artifactId),
+  releaseStateIdx: index('ecr_release_state_idx').on(table.releaseState),
+  effectivityDateIdx: index('ecr_effectivity_date_idx').on(table.effectivityStartDate, table.effectivityEndDate),
+  effectivityCustomerIdx: index('ecr_effectivity_customer_idx').on(table.effectivityCustomerId),
+  effectivityProjectIdx: index('ecr_effectivity_project_idx').on(table.effectivityProjectId),
+  revisionUniqueIdx: uniqueIndex('ecr_artifact_revision_unique').on(table.artifactType, table.artifactId, table.revision),
+}));
+
+export const engineeringChangeOrders = pgTable('engineering_change_orders', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  ecoNumber: text('eco_number').notNull().unique(),
+  title: text('title').notNull(),
+  reason: text('reason').notNull(),
+  changeDescription: text('change_description').notNull(),
+  status: engineeringEcoStatusEnum('status').notNull().default('draft'),
+  requestedBy: text('requested_by').notNull().default('system'),
+  requestedAt: timestamp('requested_at', { withTimezone: true }).default(sql`now()`),
+  impactReview: jsonb('impact_review').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`),
+  impactReviewedBy: text('impact_reviewed_by'),
+  impactReviewedAt: timestamp('impact_reviewed_at', { withTimezone: true }),
+  approvalPlan: jsonb('approval_plan').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`),
+  approvedBy: text('approved_by'),
+  approvedAt: timestamp('approved_at', { withTimezone: true }),
+  rejectedBy: text('rejected_by'),
+  rejectedAt: timestamp('rejected_at', { withTimezone: true }),
+  rejectionReason: text('rejection_reason'),
+  implementationDate: date('implementation_date'),
+  implementedBy: text('implemented_by'),
+  implementedAt: timestamp('implemented_at', { withTimezone: true }),
+  releaseLinkage: jsonb('release_linkage').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`),
+  releasedBy: text('released_by'),
+  releasedAt: timestamp('released_at', { withTimezone: true }),
+  closedBy: text('closed_by'),
+  closedAt: timestamp('closed_at', { withTimezone: true }),
+  metadata: jsonb('metadata').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`),
+  createdAt: timestamp('created_at', { withTimezone: true }).default(sql`now()`),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).default(sql`now()`),
+}, (table) => ({
+  statusIdx: index('eco_status_idx').on(table.status),
+  implementationDateIdx: index('eco_implementation_date_idx').on(table.implementationDate),
+}));
+
+export const engineeringEcoRevisionLinks = pgTable('engineering_eco_revision_links', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  ecoId: uuid('eco_id').notNull().references(() => engineeringChangeOrders.id, { onDelete: 'cascade' }),
+  revisionId: uuid('revision_id').notNull().references(() => engineeringControlledRevisions.id, { onDelete: 'cascade' }),
+  linkType: text('link_type').notNull().default('release'),
+  notes: text('notes'),
+  createdBy: text('created_by').notNull().default('system'),
+  createdAt: timestamp('created_at', { withTimezone: true }).default(sql`now()`),
+}, (table) => ({
+  ecoIdx: index('eco_revision_links_eco_idx').on(table.ecoId),
+  revisionIdx: index('eco_revision_links_revision_idx').on(table.revisionId),
+  ecoRevisionUniqueIdx: uniqueIndex('eco_revision_links_unique').on(table.ecoId, table.revisionId, table.linkType),
+}));
+
+export const insertEngineeringControlledRevisionSchema = createInsertSchema(engineeringControlledRevisions).omit({
+  id: true,
+  reviewedAt: true,
+  approvedAt: true,
+  releasedAt: true,
+  obsoleteAt: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  artifactType: z.enum(['BOM', 'ROUTING', 'TRAVELER_TEMPLATE', 'WORK_INSTRUCTION', 'SPEC', 'QC_FORM']),
+  artifactId: z.string().min(1),
+  title: z.string().min(1),
+  revision: z.string().min(1),
+  releaseState: z.enum(['draft', 'review', 'approved', 'released', 'obsolete']).default('draft'),
+  metadata: z.record(z.unknown()).optional().nullable(),
+});
+
+export const insertEngineeringChangeOrderSchema = createInsertSchema(engineeringChangeOrders).omit({
+  id: true,
+  requestedAt: true,
+  impactReviewedAt: true,
+  approvedAt: true,
+  rejectedAt: true,
+  implementedAt: true,
+  releasedAt: true,
+  closedAt: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  ecoNumber: z.string().min(1),
+  title: z.string().min(1),
+  reason: z.string().min(1),
+  changeDescription: z.string().min(1),
+  status: z.enum(['draft', 'impact_review', 'approval', 'approved', 'rejected', 'implemented', 'released', 'closed']).default('draft'),
+  impactReview: z.record(z.unknown()).optional().nullable(),
+  approvalPlan: z.record(z.unknown()).optional().nullable(),
+  releaseLinkage: z.record(z.unknown()).optional().nullable(),
+  metadata: z.record(z.unknown()).optional().nullable(),
+});
+
+export const insertEngineeringEcoRevisionLinkSchema = createInsertSchema(engineeringEcoRevisionLinks).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  ecoId: z.string().uuid(),
+  revisionId: z.string().uuid(),
+  linkType: z.string().min(1).default('release'),
+});
+
+export type EngineeringControlledRevision = typeof engineeringControlledRevisions.$inferSelect;
+export type InsertEngineeringControlledRevision = z.infer<typeof insertEngineeringControlledRevisionSchema>;
+export type EngineeringChangeOrder = typeof engineeringChangeOrders.$inferSelect;
+export type InsertEngineeringChangeOrder = z.infer<typeof insertEngineeringChangeOrderSchema>;
+export type EngineeringEcoRevisionLink = typeof engineeringEcoRevisionLinks.$inferSelect;
+export type InsertEngineeringEcoRevisionLink = z.infer<typeof insertEngineeringEcoRevisionLinkSchema>;
+
+// ---------------------------------------------------------------------------
 // WAD Production Controls — persisted controls + provision record per WAD
 // ---------------------------------------------------------------------------
 
@@ -17537,6 +18797,133 @@ export const vendorPoFarFlowdowns = pgTable('vendor_po_far_flowdowns', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 }, (t) => ({ uniq: unique().on(t.vendorPoId, t.clauseId) }));
 
+export const projectFarFlowdowns = pgTable('project_far_flowdowns', {
+  id: serial('id').primaryKey(),
+  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  purchaseReviewChecklistId: integer('purchase_review_checklist_id').references(() => purchaseReviewChecklists.id, { onDelete: 'set null' }),
+  clauseId: integer('clause_id').notNull().references(() => farFlowdownClauses.id),
+  applicable: boolean('applicable').notNull().default(true),
+  reasoning: text('reasoning').notNull(),
+  source: text('source').notNull().default('purchase_review_checklist'),
+  status: text('status').notNull().default('open'),
+  recordedByUserId: integer('recorded_by_user_id'),
+  recordedByDisplayName: text('recorded_by_display_name'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (t) => ({
+  uniq: unique().on(t.projectId, t.clauseId),
+  projectIdx: index('idx_project_far_flowdowns_project_id').on(t.projectId),
+  checklistIdx: index('idx_project_far_flowdowns_checklist_id').on(t.purchaseReviewChecklistId),
+}));
+
+export const contractReviewChecklistTemplates = pgTable('contract_review_checklist_templates', {
+  id: serial('id').primaryKey(),
+  name: text('name').notNull(),
+  description: text('description'),
+  version: integer('version').notNull().default(1),
+  reviewAreas: text('review_areas').array().notNull().default(sql`ARRAY['engineering','quality','procurement','scheduling','finance']::text[]`),
+  checklistItems: jsonb('checklist_items').$type<Array<Record<string, unknown>>>().notNull().default(sql`'[]'::jsonb`),
+  applicabilityRule: jsonb('applicability_rule').$type<Record<string, unknown> | null>(),
+  status: text('status').notNull().default('draft'),
+  isActive: boolean('is_active').notNull().default(true),
+  createdByUserId: integer('created_by_user_id'),
+  createdByDisplayName: text('created_by_display_name'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (t) => ({
+  activeIdx: index('idx_contract_review_templates_active').on(t.isActive),
+  nameVersionUnique: unique().on(t.name, t.version),
+}));
+
+export const contractClauses = pgTable('contract_clauses', {
+  id: serial('id').primaryKey(),
+  clauseNumber: text('clause_number').notNull().unique(),
+  title: text('title').notNull(),
+  description: text('description'),
+  clauseType: text('clause_type').notNull().default('CUSTOMER'), // FAR | DFARS | CUSTOMER | QUALITY | INTERNAL
+  source: text('source').notNull().default('contract_review'),
+  defaultFlowTargets: text('default_flow_targets').array().notNull().default(sql`ARRAY['po','traveler','qc','supplier_po','cert_package']::text[]`),
+  isActive: boolean('is_active').notNull().default(true),
+  effectiveDate: timestamp('effective_date'),
+  retiredAt: timestamp('retired_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (t) => ({
+  activeIdx: index('idx_contract_clauses_active').on(t.isActive),
+  typeIdx: index('idx_contract_clauses_type').on(t.clauseType),
+}));
+
+export const clauseTemplates = pgTable('clause_templates', {
+  id: serial('id').primaryKey(),
+  checklistTemplateId: integer('checklist_template_id').notNull().references(() => contractReviewChecklistTemplates.id, { onDelete: 'cascade' }),
+  contractClauseId: integer('contract_clause_id').notNull().references(() => contractClauses.id, { onDelete: 'cascade' }),
+  reviewArea: text('review_area').notNull(),
+  requirementText: text('requirement_text').notNull(),
+  requiredArtifacts: text('required_artifacts').array().notNull().default(sql`ARRAY[]::text[]`),
+  flowTargets: text('flow_targets').array().notNull().default(sql`ARRAY['po','traveler','qc','supplier_po','cert_package']::text[]`),
+  applicabilityRule: jsonb('applicability_rule').$type<Record<string, unknown> | null>(),
+  required: boolean('required').notNull().default(true),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (t) => ({
+  templateClauseUnique: unique().on(t.checklistTemplateId, t.contractClauseId, t.reviewArea),
+  templateIdx: index('idx_clause_templates_template_id').on(t.checklistTemplateId),
+  clauseIdx: index('idx_clause_templates_clause_id').on(t.contractClauseId),
+}));
+
+export const contractReviewChecklistInstances = pgTable('contract_review_checklist_instances', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  checklistTemplateId: integer('checklist_template_id').notNull().references(() => contractReviewChecklistTemplates.id, { onDelete: 'restrict' }),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'set null' }),
+  purchaseReviewChecklistId: integer('purchase_review_checklist_id').references(() => purchaseReviewChecklists.id, { onDelete: 'set null' }),
+  p2PurchaseOrderId: integer('p2_purchase_order_id').references(() => p2PurchaseOrders.id, { onDelete: 'set null' }),
+  vendorPoId: integer('vendor_po_id').references(() => vendorPOs.id, { onDelete: 'set null' }),
+  travelerId: varchar('traveler_id', { length: 255 }).references(() => travelers.id, { onDelete: 'set null' }),
+  securityClassification: text('security_classification').notNull().default('internal'), // public | internal | cui | itar
+  cuiCategory: text('cui_category'),
+  itarCategory: text('itar_category'),
+  exportControlJurisdiction: text('export_control_jurisdiction'),
+  status: text('status').notNull().default('draft'),
+  reviewAreaStatus: jsonb('review_area_status').$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
+  responses: jsonb('responses').$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
+  missingReviewAreas: text('missing_review_areas').array().notNull().default(sql`ARRAY[]::text[]`),
+  createdByUserId: integer('created_by_user_id'),
+  createdByDisplayName: text('created_by_display_name'),
+  submittedAt: timestamp('submitted_at'),
+  approvedAt: timestamp('approved_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (t) => ({
+  projectIdx: index('idx_contract_review_instances_project_id').on(t.projectId),
+  templateIdx: index('idx_contract_review_instances_template_id').on(t.checklistTemplateId),
+  vendorPoIdx: index('idx_contract_review_instances_vendor_po_id').on(t.vendorPoId),
+}));
+
+export const flowedRequirements = pgTable('flowed_requirements', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  contractReviewInstanceId: uuid('contract_review_instance_id').references(() => contractReviewChecklistInstances.id, { onDelete: 'cascade' }),
+  contractClauseId: integer('contract_clause_id').notNull().references(() => contractClauses.id, { onDelete: 'restrict' }),
+  clauseTemplateId: integer('clause_template_id').references(() => clauseTemplates.id, { onDelete: 'set null' }),
+  targetType: text('target_type').notNull(), // po | traveler | qc | supplier_po | cert_package
+  targetId: text('target_id').notNull(),
+  requirementText: text('requirement_text').notNull(),
+  requiredArtifacts: text('required_artifacts').array().notNull().default(sql`ARRAY[]::text[]`),
+  status: text('status').notNull().default('open'),
+  source: text('source').notNull().default('contract_review'),
+  flowedAt: timestamp('flowed_at').defaultNow().notNull(),
+  satisfiedAt: timestamp('satisfied_at'),
+  satisfiedByUserId: integer('satisfied_by_user_id'),
+  satisfiedByDisplayName: text('satisfied_by_display_name'),
+  evidence: jsonb('evidence').$type<Record<string, unknown> | null>(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (t) => ({
+  targetIdx: index('idx_flowed_requirements_target').on(t.targetType, t.targetId),
+  instanceIdx: index('idx_flowed_requirements_instance_id').on(t.contractReviewInstanceId),
+  clauseIdx: index('idx_flowed_requirements_clause_id').on(t.contractClauseId),
+  targetClauseUnique: unique().on(t.contractReviewInstanceId, t.contractClauseId, t.targetType, t.targetId),
+}));
+
 export const vendorDebarmentChecks = pgTable('vendor_debarment_checks', {
   id: serial('id').primaryKey(),
   vendorId: integer('vendor_id').notNull().references(() => vendors.id),
@@ -17588,6 +18975,43 @@ export const insertFarFlowdownClauseSchema = createInsertSchema(farFlowdownClaus
   title: z.string().min(1),
 });
 
+export const REQUIRED_CONTRACT_REVIEW_AREAS = ['engineering', 'quality', 'procurement', 'scheduling', 'finance'] as const;
+
+export const insertContractReviewChecklistTemplateSchema = createInsertSchema(contractReviewChecklistTemplates).omit({
+  id: true, createdAt: true, updatedAt: true,
+}).extend({
+  name: z.string().min(1),
+  reviewAreas: z.array(z.string()).default([...REQUIRED_CONTRACT_REVIEW_AREAS]),
+});
+
+export const insertContractClauseSchema = createInsertSchema(contractClauses).omit({
+  id: true, createdAt: true, updatedAt: true,
+}).extend({
+  clauseNumber: z.string().min(1),
+  title: z.string().min(1),
+});
+
+export const insertClauseTemplateSchema = createInsertSchema(clauseTemplates).omit({
+  id: true, createdAt: true, updatedAt: true,
+}).extend({
+  reviewArea: z.enum(REQUIRED_CONTRACT_REVIEW_AREAS),
+  requirementText: z.string().min(5),
+});
+
+export const insertContractReviewChecklistInstanceSchema = createInsertSchema(contractReviewChecklistInstances).omit({
+  id: true, createdAt: true, updatedAt: true, submittedAt: true, approvedAt: true,
+}).extend({
+  checklistTemplateId: z.number().int().positive(),
+});
+
+export const insertFlowedRequirementSchema = createInsertSchema(flowedRequirements).omit({
+  id: true, flowedAt: true, createdAt: true, updatedAt: true,
+}).extend({
+  targetType: z.enum(['po', 'traveler', 'qc', 'supplier_po', 'cert_package']),
+  targetId: z.string().min(1),
+  requirementText: z.string().min(5),
+});
+
 export const insertVendorDebarmentCheckSchema = createInsertSchema(vendorDebarmentChecks).omit({
   id: true, checkedAt: true,
 }).extend({
@@ -17595,6 +19019,34 @@ export const insertVendorDebarmentCheckSchema = createInsertSchema(vendorDebarme
   context: z.enum(['requisition_approval', 'po_issuance', 'periodic']),
   source: z.enum(['sam.gov', 'manual_attestation', 'document_upload']),
   result: z.enum(['pass', 'fail', 'inconclusive']),
+});
+
+export const insertSupplierScopeSchema = createInsertSchema(supplierScopes).omit({
+  id: true, createdAt: true, updatedAt: true,
+}).extend({
+  vendorId: z.number().int().positive(),
+  scopeCode: z.string().min(1),
+  status: z.enum(['active', 'inactive', 'suspended']).default('active'),
+});
+
+export const insertSupplierAuditSchema = createInsertSchema(supplierAudits).omit({
+  id: true, createdAt: true, updatedAt: true,
+}).extend({
+  vendorId: z.number().int().positive(),
+  auditType: z.enum(['qualification', 'surveillance', 'corrective_action', 'renewal']).default('qualification'),
+  status: z.enum(['open', 'passed', 'failed', 'conditional']).default('open'),
+  auditDate: z.string().min(1),
+});
+
+export const insertSupplierScorecardSchema = createInsertSchema(supplierScorecards).omit({
+  id: true, createdAt: true, updatedAt: true,
+}).extend({
+  vendorId: z.number().int().positive(),
+  qualityScore: z.number().int().min(1).max(5),
+  deliveryScore: z.number().int().min(1).max(5),
+  costScore: z.number().int().min(1).max(5),
+  responsivenessScore: z.number().int().min(1).max(5),
+  status: z.enum(['preferred', 'acceptable', 'conditional', 'disqualified']).default('acceptable'),
 });
 
 export type PurchaseRequisition = typeof purchaseRequisitions.$inferSelect;
@@ -17606,9 +19058,26 @@ export type PurchaseRequisitionApprovalChain = typeof purchaseRequisitionApprova
 export type FarFlowdownClause = typeof farFlowdownClauses.$inferSelect;
 export type InsertFarFlowdownClause = z.infer<typeof insertFarFlowdownClauseSchema>;
 export type VendorPoFarFlowdown = typeof vendorPoFarFlowdowns.$inferSelect;
+export type ProjectFarFlowdown = typeof projectFarFlowdowns.$inferSelect;
+export type ContractReviewChecklistTemplate = typeof contractReviewChecklistTemplates.$inferSelect;
+export type InsertContractReviewChecklistTemplate = z.infer<typeof insertContractReviewChecklistTemplateSchema>;
+export type ContractClause = typeof contractClauses.$inferSelect;
+export type InsertContractClause = z.infer<typeof insertContractClauseSchema>;
+export type ClauseTemplate = typeof clauseTemplates.$inferSelect;
+export type InsertClauseTemplate = z.infer<typeof insertClauseTemplateSchema>;
+export type ContractReviewChecklistInstance = typeof contractReviewChecklistInstances.$inferSelect;
+export type InsertContractReviewChecklistInstance = z.infer<typeof insertContractReviewChecklistInstanceSchema>;
+export type FlowedRequirement = typeof flowedRequirements.$inferSelect;
+export type InsertFlowedRequirement = z.infer<typeof insertFlowedRequirementSchema>;
 export type VendorDebarmentCheck = typeof vendorDebarmentChecks.$inferSelect;
 export type InsertVendorDebarmentCheck = z.infer<typeof insertVendorDebarmentCheckSchema>;
 export type ProcurementSettings = typeof procurementSettings.$inferSelect;
+export type SupplierScope = typeof supplierScopes.$inferSelect;
+export type InsertSupplierScope = z.infer<typeof insertSupplierScopeSchema>;
+export type SupplierAudit = typeof supplierAudits.$inferSelect;
+export type InsertSupplierAudit = z.infer<typeof insertSupplierAuditSchema>;
+export type SupplierScorecard = typeof supplierScorecards.$inferSelect;
+export type InsertSupplierScorecard = z.infer<typeof insertSupplierScorecardSchema>;
 
 // ---------------------------------------------------------------------------
 // Task #85 — Audit Evidence Hardening
@@ -17756,6 +19225,13 @@ export const approvalRequests = pgTable('approval_requests', {
   resolvedByDisplayName: text('resolved_by_display_name'),
   resolutionNotes: text('resolution_notes'),
   resolutionSignature: text('resolution_signature'),
+  signatureMeaning: text('signature_meaning'),
+  signatureReason: text('signature_reason'),
+  signerUsername: text('signer_username'),
+  signerRole: text('signer_role'),
+  signatureLinkedObjectType: text('signature_linked_object_type'),
+  signatureLinkedObjectId: text('signature_linked_object_id'),
+  digitalSignatureId: uuid('digital_signature_id').references(() => digitalSignatures.id),
   resolutionReasonCode: text('resolution_reason_code'),
   policyId: integer('policy_id').references(() => escalationPolicies.id),
   createdAt: timestamp('created_at').notNull().defaultNow(),
@@ -17766,7 +19242,59 @@ export const approvalRequests = pgTable('approval_requests', {
   statusDeadlineIdx: index('approval_requests_status_deadline_idx').on(t.status, t.currentLevelDeadline),
   typeIdx: index('approval_requests_request_type_idx').on(t.requestType),
   subjectIdx: index('approval_requests_subject_idx').on(t.subjectType, t.subjectId),
+  signatureLinkedObjectIdx: index('approval_requests_signature_linked_object_idx').on(t.signatureLinkedObjectType, t.signatureLinkedObjectId),
 }));
+
+export const approvalSignatureEvidence = pgTable('approval_signature_evidence', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  approvalRequestId: uuid('approval_request_id').notNull().references(() => approvalRequests.id, { onDelete: 'cascade' }),
+  decisionStatus: text('decision_status').notNull(),
+  signatureMeaning: text('signature_meaning').notNull(),
+  signatureReason: text('signature_reason').notNull(),
+  signerUserId: integer('signer_user_id'),
+  signerUsername: text('signer_username').notNull(),
+  signerRole: text('signer_role').notNull(),
+  linkedObjectType: text('linked_object_type').notNull(),
+  linkedObjectId: text('linked_object_id').notNull(),
+  digitalSignatureId: uuid('digital_signature_id').references(() => digitalSignatures.id),
+  recordedAt: timestamp('recorded_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  approvalRequestIdx: index('approval_signature_evidence_request_idx').on(t.approvalRequestId),
+  linkedObjectIdx: index('approval_signature_evidence_linked_object_idx').on(t.linkedObjectType, t.linkedObjectId),
+  signerIdx: index('approval_signature_evidence_signer_idx').on(t.signerUserId),
+}));
+
+export const auditRequiredEventCoverage = pgTable('audit_required_event_coverage', {
+  id: serial('id').primaryKey(),
+  domainKey: text('domain_key').notNull(),
+  objectType: text('object_type').notNull(),
+  lifecycleStage: text('lifecycle_stage').notNull(),
+  requiredEventType: text('required_event_type').notNull(),
+  requiredSourceService: text('required_source_service').notNull(),
+  evidenceRequirement: text('evidence_requirement').notNull(),
+  requiredActorRole: text('required_actor_role'),
+  signatureRequired: boolean('signature_required').notNull().default(false),
+  retentionObjectType: text('retention_object_type').notNull(),
+  complianceBasis: text('compliance_basis').notNull().default('DCAA audit evidence'),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  domainIdx: index('audit_required_event_coverage_domain_idx').on(t.domainKey),
+  objectIdx: index('audit_required_event_coverage_object_idx').on(t.objectType),
+  eventUidx: uniqueIndex('audit_required_event_coverage_event_uidx').on(t.domainKey, t.objectType, t.requiredEventType),
+}));
+
+export const auditObjectRetentionPolicies = pgTable('audit_object_retention_policies', {
+  id: serial('id').primaryKey(),
+  objectType: text('object_type').notNull().unique(),
+  minRetentionDays: integer('min_retention_days').notNull().default(2555),
+  archiveAfterDays: integer('archive_after_days'),
+  legalHoldSupported: boolean('legal_hold_supported').notNull().default(true),
+  description: text('description').notNull(),
+  updatedBy: text('updated_by'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
 
 export const approvalRequestHistory = pgTable('approval_request_history', {
   id: bigint('id', { mode: 'number' }).primaryKey().generatedByDefaultAsIdentity(),

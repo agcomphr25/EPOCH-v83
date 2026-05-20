@@ -108,6 +108,7 @@ import OfflineIndicator from './OfflineIndicator';
 import GlobalSearch from './GlobalSearch';
 import ExecutiveRundownDropdown from './ExecutiveRundownDropdown';
 import { useQuery } from '@tanstack/react-query';
+import { apiRequest } from '@/lib/queryClient';
 import { hasFullAccess, hasRouteAccess, isUserInPermissionsList, DEFAULT_USER_ROUTES, isAdminUser, getRequiredCapability } from '@/config/userPermissions';
 import { getDashboardRoute } from '@/config/dashboardMapping';
 import {
@@ -201,9 +202,11 @@ export default function Navigation() {
 
   const trainingAlertCount = recertCountData?.count ?? 0;
 
-  // Fetch compliance backfill queue count for nav badge
+  // Fetch score-impacting compliance backfill count for nav badge.
+  // Legacy pre-policy items stay visible on the queue page, but are isolated from ERDI scoring.
   const { data: backfillRows } = useQuery<Array<{ id: number }>>({
-    queryKey: ['/api/vendor-pos/compliance-backfill'],
+    queryKey: ['/api/vendor-pos/compliance-backfill', 'enforced'],
+    queryFn: () => apiRequest('/api/vendor-pos/compliance-backfill?filter=enforced'),
     staleTime: 5 * 60 * 1000,
     retry: false,
   });
@@ -1034,6 +1037,12 @@ export default function Navigation() {
       description: 'Manage chart of accounts, monthly entries, and cost allocations',
     },
     {
+      path: '/finance/chart-of-accounts',
+      label: 'Chart of Accounts',
+      icon: BookOpen,
+      description: 'View the authoritative 5-digit GAAP and DCAA account master',
+    },
+    {
       path: '/finance/burden-rates',
       label: 'Burden Rates',
       icon: Calculator,
@@ -1226,6 +1235,12 @@ export default function Navigation() {
       description: 'CNC operations and maintenance management dashboard',
     },
     {
+      path: '/angiet-dashboard',
+      label: 'ANGIET Dashboard',
+      icon: Settings,
+      description: 'Cutting Table, CNC & Gunsmith Operations dashboard',
+    },
+    {
       path: '/bradw-dashboard',
       label: 'BRADW Dashboard',
       icon: Users,
@@ -1289,10 +1304,22 @@ export default function Navigation() {
       description: 'Complete P2 workflow: orders, BOMs, scheduling, routing, and certifications',
     },
     {
+      path: '/p2-customers',
+      label: 'P2 Customers',
+      icon: Users,
+      description: 'Manage customers for P2 purchase orders and RFQ tracking',
+    },
+    {
       path: '/wad-wizard',
       label: 'WAD Wizard',
       icon: FileCheck,
       description: 'Launch the Work Authorization Document wizard for any Production Work Order',
+    },
+    {
+      path: '/wad-status',
+      label: 'WAD Status',
+      icon: FileCheck,
+      description: 'Backlog of projects in P2 Release / Production with WAD authoring status',
     },
     {
       path: '/help/p2-order-guide',
@@ -1448,10 +1475,10 @@ export default function Navigation() {
       description: 'Step-based timing programs for production processes',
     },
     {
-      path: '/voice-notes',
-      label: 'Voice Notes',
+      path: '/knowledge-capture',
+      label: 'Knowledge Capture',
       icon: Mic,
-      description: 'Voice-activated notes for production issues and tracking',
+      description: 'Private voice journal for process observations and business knowledge',
     },
     {
       path: '/metric-directory',
@@ -1630,14 +1657,16 @@ export default function Navigation() {
     if (!isUserInPermissionsList(username)) {
       return items.filter((item) => {
         const cap = getRequiredCapability(item.path);
-        if (cap && navCapSet.has(cap)) return true;
+        const caps = Array.isArray(cap) ? cap : cap ? [cap] : [];
+        if (caps.some((requiredCap) => navCapSet.has(requiredCap))) return true;
         return DEFAULT_USER_ROUTES.some(route => item.path === route || item.path.startsWith(route + '/'));
       });
     }
 
     return items.filter((item) => {
       const cap = getRequiredCapability(item.path);
-      if (cap && navCapSet.has(cap)) return true;
+      const caps = Array.isArray(cap) ? cap : cap ? [cap] : [];
+      if (caps.some((requiredCap) => navCapSet.has(requiredCap))) return true;
       return hasRouteAccess(username, item.path, userRole);
     });
   };
@@ -2707,8 +2736,8 @@ export default function Navigation() {
               <Button
                 variant={location.startsWith('/admin/edri') ? 'default' : 'ghost'}
                 className={cn(
-                  'flex items-center gap-2 text-sm text-sky-500 hover:bg-sky-50 hover:text-sky-600',
-                  location.startsWith('/admin/edri') && 'bg-sky-400 text-white hover:bg-sky-500 hover:text-white'
+                  'flex items-center gap-2 text-sm text-foreground hover:bg-gray-100 hover:text-foreground',
+                  location.startsWith('/admin/edri') && 'bg-primary text-white hover:bg-primary hover:text-white'
                 )}
                 onClick={() => { closeAllDropdowns(); setLocation('/admin/edri'); }}
               >
@@ -2737,8 +2766,8 @@ export default function Navigation() {
               <Button
                 variant={location.startsWith('/admin/continuity') ? 'default' : 'ghost'}
                 className={cn(
-                  'flex items-center gap-2 text-sm',
-                  location.startsWith('/admin/continuity') && 'bg-primary text-white'
+                  'flex items-center gap-2 text-sm text-foreground hover:bg-gray-100 hover:text-foreground',
+                  location.startsWith('/admin/continuity') && 'bg-primary text-white hover:bg-primary hover:text-white'
                 )}
                 onClick={() => { closeAllDropdowns(); setLocation('/admin/continuity'); }}
               >

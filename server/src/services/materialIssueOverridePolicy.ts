@@ -22,6 +22,7 @@ import type { MaterialIssueBlockerCode } from './materialIssueGates';
 export type MaterialIssueOverrideReason =
   | 'ROUTING_STEP_BYPASS'
   | 'WAD_LATE_RELEASE'
+  | 'DOCUMENT_HOLD_RELEASE'
   | 'LOT_QUARANTINE_DEVIATION'
   | 'EMERGENCY_PRODUCTION';
 
@@ -60,6 +61,15 @@ const CATALOG: Record<MaterialIssueOverrideReason, MaterialIssueOverrideReasonSp
     allowedRoles: ['Manufacturing Manager'],
     requiresWrittenReason: true,
   },
+  DOCUMENT_HOLD_RELEASE: {
+    reason: 'DOCUMENT_HOLD_RELEASE',
+    description:
+      'Allow a one-time material draw from a document-held lot only after ' +
+      'Quality confirms the missing cert package has a governed temporary release.',
+    bypassesGates: ['LOT_DOCUMENT_HELD'],
+    allowedRoles: ['Quality Manager', 'Compliance Manager'],
+    requiresWrittenReason: true,
+  },
   LOT_QUARANTINE_DEVIATION: {
     reason: 'LOT_QUARANTINE_DEVIATION',
     description:
@@ -82,6 +92,7 @@ const CATALOG: Record<MaterialIssueOverrideReason, MaterialIssueOverrideReasonSp
     bypassesGates: [
       'WAD_NOT_RELEASED',
       'LOT_QUARANTINED',
+      'LOT_DOCUMENT_HELD',
     ],
     allowedRoles: ['OWNER', 'Plant Manager'],
     requiresWrittenReason: true,

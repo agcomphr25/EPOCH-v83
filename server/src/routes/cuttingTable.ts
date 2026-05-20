@@ -10,8 +10,9 @@ import {
   cuttingPacketBOMParts,
   cuttingPacketBOMCuts,
   cuttingFabricInventory,
+  cuttingFabricInventoryTransactions,
 } from '../../schema';
-import { and, gte, lte, eq, desc, ilike } from 'drizzle-orm';
+import { and, gte, lte, eq, desc, ilike, or, isNull } from 'drizzle-orm';
 import {
   insertCuttingMaterialSchema,
   insertCuttingFabricTypeSchema,
@@ -33,6 +34,34 @@ import {
 } from '../../schema';
 
 const router = Router();
+
+function parseFabricStockQuantity(value: unknown): number {
+  if (value === null || value === undefined || value === '') return 0;
+  const parsed = typeof value === 'number' ? value : parseFloat(String(value));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function nonZeroInventoryDelta(quantity: number): number {
+  if (quantity === 0) return 0;
+  const magnitude = Math.max(1, Math.round(Math.abs(quantity)));
+  return quantity < 0 ? -magnitude : magnitude;
+}
+
+function syncFabricStockFields<T extends Record<string, any>>(data: T): T {
+  const next = { ...data };
+  const hasQuantityInStock = next.quantityInStock !== undefined && next.quantityInStock !== null && next.quantityInStock !== '';
+  const hasSquareMeters = next.squareMeters !== undefined && next.squareMeters !== null && next.squareMeters !== '';
+
+  if (hasSquareMeters) {
+    const quantity = parseFabricStockQuantity(next.squareMeters);
+    next.quantityInStock = quantity;
+  } else if (hasQuantityInStock) {
+    const quantity = parseFabricStockQuantity(next.quantityInStock);
+    next.squareMeters = String(quantity);
+  }
+
+  return next as T;
+}
 
 // Materials endpoints
 router.get('/materials', async (req, res) => {
@@ -322,22 +351,45 @@ router.get('/packet-composition-items', async (req, res) => {
 });
 
 // Fabric Items - Get inventory items marked as fabrics (is_fabric = true)
+// Max rows returned by these list endpoints. Bounds an otherwise-unbounded
+// SELECT so a runaway dataset cannot exhaust memory and crash the server
+// (root cause of task #178: full inventory_items scan via getAllInventoryItems).
+const CUTTING_LIST_MAX_ROWS = 5000;
+
+const inventoryActiveCondition = or(
+  eq(inventoryItems.isActive, true),
+  isNull(inventoryItems.isActive),
+);
+
 router.get('/fabric-items', async (req, res) => {
   try {
-    const allItems = await storage.getAllInventoryItems();
-    const fabricItems = allItems
-      .filter((item) => item.isFabric === true)
-      .map((item) => ({
-        id: item.id,
-        agPartNumber: item.agPartNumber,
-        name: item.name,
-        fabric: item.name,
-        sku: item.sku,
-      }));
-    
+    const rows = await db
+      .select({
+        id: inventoryItems.id,
+        agPartNumber: inventoryItems.agPartNumber,
+        name: inventoryItems.name,
+        sku: inventoryItems.sku,
+      })
+      .from(inventoryItems)
+      .where(and(eq(inventoryItems.isFabric, true), inventoryActiveCondition))
+      .orderBy(inventoryItems.name)
+      .limit(CUTTING_LIST_MAX_ROWS);
+
+    const fabricItems = rows.map((item) => ({
+      id: item.id,
+      agPartNumber: item.agPartNumber,
+      name: item.name,
+      fabric: item.name,
+      sku: item.sku,
+    }));
+
     res.json(fabricItems);
-  } catch (error) {
-    console.error('Error fetching fabric items:', error);
+  } catch (error: any) {
+    console.error('[cutting-table/fabric-items] DB error:', {
+      route: '/api/cutting-table/fabric-items',
+      message: error?.message,
+      code: error?.code,
+    });
     res.status(500).json({ error: 'Failed to fetch fabric items' });
   }
 });
@@ -345,19 +397,25 @@ router.get('/fabric-items', async (req, res) => {
 // Packet Items - Get inventory items marked as packets (is_packet = true)
 router.get('/packet-items', async (req, res) => {
   try {
-    const allItems = await storage.getAllInventoryItems();
-    const packetItems = allItems
-      .filter((item: any) => item.isPacket === true)
-      .map((item) => ({
-        id: item.id,
-        agPartNumber: item.agPartNumber,
-        name: item.name,
-        sku: item.sku,
-      }));
-    
-    res.json(packetItems);
-  } catch (error) {
-    console.error('Error fetching packet items:', error);
+    const rows = await db
+      .select({
+        id: inventoryItems.id,
+        agPartNumber: inventoryItems.agPartNumber,
+        name: inventoryItems.name,
+        sku: inventoryItems.sku,
+      })
+      .from(inventoryItems)
+      .where(and(eq(inventoryItems.isPacket, true), inventoryActiveCondition))
+      .orderBy(inventoryItems.name)
+      .limit(CUTTING_LIST_MAX_ROWS);
+
+    res.json(rows);
+  } catch (error: any) {
+    console.error('[cutting-table/packet-items] DB error:', {
+      route: '/api/cutting-table/packet-items',
+      message: error?.message,
+      code: error?.code,
+    });
     res.status(500).json({ error: 'Failed to fetch packet items' });
   }
 });
@@ -365,19 +423,25 @@ router.get('/packet-items', async (req, res) => {
 // Packet Part Items - Get inventory items with manufacturedCategory = 'PACKET'
 router.get('/packet-part-items', async (req, res) => {
   try {
-    const allItems = await storage.getAllInventoryItems();
-    const packetPartItems = allItems
-      .filter((item) => item.manufacturedCategory === 'PACKET')
-      .map((item) => ({
-        id: item.id,
-        agPartNumber: item.agPartNumber,
-        name: item.name,
-        sku: item.sku,
-      }));
-    
-    res.json(packetPartItems);
-  } catch (error) {
-    console.error('Error fetching packet part items:', error);
+    const rows = await db
+      .select({
+        id: inventoryItems.id,
+        agPartNumber: inventoryItems.agPartNumber,
+        name: inventoryItems.name,
+        sku: inventoryItems.sku,
+      })
+      .from(inventoryItems)
+      .where(and(eq(inventoryItems.manufacturedCategory, 'PACKET'), inventoryActiveCondition))
+      .orderBy(inventoryItems.name)
+      .limit(CUTTING_LIST_MAX_ROWS);
+
+    res.json(rows);
+  } catch (error: any) {
+    console.error('[cutting-table/packet-part-items] DB error:', {
+      route: '/api/cutting-table/packet-part-items',
+      message: error?.message,
+      code: error?.code,
+    });
     res.status(500).json({ error: 'Failed to fetch packet part items' });
   }
 });
@@ -801,30 +865,31 @@ router.get('/fabric-inventory-by-barcode/:barcode', async (req, res) => {
 router.post('/fabric-inventory', async (req, res) => {
   try {
     const validatedData = insertCuttingFabricInventorySchema.parse(req.body);
+    const fabricInventoryData = syncFabricStockFields(validatedData);
     
-    if (!validatedData.barcode) {
+    if (!fabricInventoryData.barcode) {
       const date = new Date().toISOString().split('T')[0].replace(/-/g, '');
       const random = Math.floor(Math.random() * 9999).toString().padStart(4, '0');
       
       let prefix = 'FAB';
-      if (validatedData.productionLineId) {
-        const line = await storage.getCuttingProductionLine(validatedData.productionLineId);
+      if (fabricInventoryData.productionLineId) {
+        const line = await storage.getCuttingProductionLine(fabricInventoryData.productionLineId);
         if (line && line.lineName === 'P2') {
           prefix = 'FI-P2';
         }
       }
       
-      validatedData.barcode = `${prefix}-${date}-${random}`;
+      fabricInventoryData.barcode = `${prefix}-${date}-${random}`;
     }
     
-    if (!validatedData.internalControlNumber) {
+    if (!fabricInventoryData.internalControlNumber) {
       const date = new Date().toISOString().split('T')[0].replace(/-/g, '');
       const seq = Date.now().toString().slice(-6);
       const rand = Math.floor(Math.random() * 9999).toString().padStart(4, '0');
-      validatedData.internalControlNumber = `ICN-${date}-${seq}-${rand}`;
+      fabricInventoryData.internalControlNumber = `ICN-${date}-${seq}-${rand}`;
     }
     
-    const inventory = await storage.createCuttingFabricInventory(validatedData);
+    const inventory = await storage.createCuttingFabricInventory(fabricInventoryData);
     res.json(inventory);
   } catch (error) {
     console.error('Error creating fabric inventory:', error);
@@ -835,7 +900,7 @@ router.post('/fabric-inventory', async (req, res) => {
 router.put('/fabric-inventory/:id', async (req, res) => {
   try {
     const validatedData = insertCuttingFabricInventorySchema.partial().parse(req.body);
-    const inventory = await storage.updateCuttingFabricInventory(req.params.id, validatedData);
+    const inventory = await storage.updateCuttingFabricInventory(req.params.id, syncFabricStockFields(validatedData));
     res.json(inventory);
   } catch (error) {
     console.error('Error updating fabric inventory:', error);
@@ -846,7 +911,7 @@ router.put('/fabric-inventory/:id', async (req, res) => {
 router.patch('/fabric-inventory/:id', async (req, res) => {
   try {
     const validatedData = insertCuttingFabricInventorySchema.partial().parse(req.body);
-    const inventory = await storage.updateCuttingFabricInventory(req.params.id, validatedData);
+    const inventory = await storage.updateCuttingFabricInventory(req.params.id, syncFabricStockFields(validatedData));
     res.json(inventory);
   } catch (error) {
     console.error('Error updating fabric inventory:', error);
@@ -874,6 +939,7 @@ router.post('/fabric-inventory/:id/deplete', async (req, res) => {
       depletedAt: new Date(),
       depletedBy: depletedBy,
       quantityInStock: 0,
+      squareMeters: '0',
     });
 
     await storage.createCuttingFabricInventoryTransaction({
@@ -996,6 +1062,14 @@ router.post('/fabric-inventory/:id/assign-freezer', async (req, res) => {
     if (!freezerNumber || isNaN(parseInt(freezerNumber))) {
       return res.status(400).json({ error: 'Valid freezer number is required' });
     }
+
+    const existing = await storage.getCuttingFabricInventory(rollId);
+    if (!existing) {
+      return res.status(404).json({ error: 'Fabric inventory roll not found' });
+    }
+    if (existing.status === 'depleted') {
+      return res.status(409).json({ error: 'Cannot assign freezer to a depleted roll' });
+    }
     
     const inventory = await storage.updateCuttingFabricInventory(rollId, {
       freezerNumber: parseInt(freezerNumber),
@@ -1021,6 +1095,14 @@ router.post('/fabric-inventory/:id/receive', async (req, res) => {
     
     if (!freezerNumber || isNaN(parseInt(freezerNumber))) {
       return res.status(400).json({ error: 'Valid freezer number is required' });
+    }
+
+    const existing = await storage.getCuttingFabricInventory(rollId);
+    if (!existing) {
+      return res.status(404).json({ error: 'Fabric inventory roll not found' });
+    }
+    if (existing.status === 'depleted') {
+      return res.status(409).json({ error: 'Cannot receive depleted fabric into a freezer' });
     }
     
     const updateData: any = {
@@ -3501,15 +3583,30 @@ router.post('/packet-boms/:id/cuts', async (req, res) => {
         
         if (currentInventory) {
           const currentSquareMeters = parseFloat(currentInventory.squareMeters?.toString() || '0');
+          const currentQuantityInStock = parseFabricStockQuantity(currentInventory.quantityInStock);
           const usedSquareMeters = parseFloat(squareMetersUsed) || 0;
           const newSquareMeters = Math.max(0, currentSquareMeters - usedSquareMeters);
+          const newQuantityInStock = Math.max(0, currentQuantityInStock - usedSquareMeters);
+          const isDepleted = newSquareMeters <= 0 && newQuantityInStock <= 0;
           
           await db.update(cuttingFabricInventory)
             .set({ 
               squareMeters: newSquareMeters.toString(),
+              quantityInStock: newQuantityInStock,
+              status: isDepleted ? 'depleted' : currentInventory.status,
+              depletedAt: isDepleted ? new Date() : currentInventory.depletedAt,
+              depletedBy: isDepleted ? (operatorName || 'unknown') : currentInventory.depletedBy,
               updatedAt: new Date(),
             })
             .where(eq(cuttingFabricInventory.id, fabricInventoryId));
+
+          await db.insert(cuttingFabricInventoryTransactions).values({
+            fabricInventoryId,
+            changeType: 'ISSUE',
+            quantityDelta: nonZeroInventoryDelta(-usedSquareMeters),
+            performedBy: operatorName || 'unknown',
+            notes: `Cut record ${newCut.id}: ${usedSquareMeters} square meters used from roll ${rollNumber}`,
+          });
           
           console.log(`[CUT RECORDED] Roll ${rollNumber}: ${usedSquareMeters}m² consumed, ${newSquareMeters}m² remaining`);
         }

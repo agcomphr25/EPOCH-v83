@@ -81,6 +81,76 @@ type QuantityBreakRow = {
   sortOrder: number;
 };
 
+type EstimateVersionRow = {
+  id: string;
+  version_number: number;
+  created_at: string;
+  created_by?: number | null;
+  change_summary?: string | null;
+  status: string;
+  superseded_by?: string | null;
+  margin_summary?: Record<string, unknown>;
+  line_versions?: unknown[];
+};
+
+type EstimateAssumptionRow = {
+  id: string;
+  assumption_type: string;
+  assumption_text: string;
+  numeric_value?: string | null;
+  uom?: string | null;
+  confidence_level: string;
+  source_reference?: string | null;
+  created_at: string;
+};
+
+type EstimatingApprovalRow = {
+  id: string;
+  approval_role: string;
+  approval_status: string;
+  signer_display_name?: string | null;
+  approval_comments?: string | null;
+  signed_at?: string | null;
+};
+
+type RiskItemRow = {
+  id: string;
+  category: string;
+  description: string;
+  severity: number;
+  probability: number;
+  score: number;
+  status: string;
+  requires_approval: boolean;
+  owner_display_name?: string | null;
+};
+
+type RiskAssessmentRow = {
+  id: string;
+  status: string;
+  overall_score: number;
+  overall_level: string;
+  approval_routing?: string[];
+  risk_items?: RiskItemRow[];
+};
+
+type ReleaseReadiness = {
+  readyForQuoteRelease: boolean;
+  requiredRoles: string[];
+  missingRoles: string[];
+  executiveRequired: boolean;
+  executiveTriggers: string[];
+  totalEstimateValue: number;
+  minMarginPercent: number | null;
+  risk: {
+    assessmentId: string | null;
+    status: string | null;
+    overallScore: number;
+    overallLevel: string;
+    blockingRiskCount: number;
+  };
+};
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const defaultDepartmentOptions = [
@@ -183,6 +253,36 @@ export default function RFQBuilderPage() {
   const [createdQuoteNumber, setCreatedQuoteNumber] = useState<string | null>(null);
   const [isHandingOff, setIsHandingOff] = useState(false);
   const [marginPercent, setMarginPercent] = useState(20);
+  const [controlMessage, setControlMessage] = useState("");
+  const [versionSummary, setVersionSummary] = useState("");
+  const [assumptionDraft, setAssumptionDraft] = useState({
+    assumptionType: "LABOR",
+    assumptionText: "",
+    numericValue: "",
+    uom: "",
+    confidenceLevel: "MEDIUM",
+    sourceReference: "",
+  });
+  const [approvalDraft, setApprovalDraft] = useState({
+    approvalRole: "ESTIMATOR",
+    approvalStatus: "APPROVED",
+    signerDisplayName: "",
+    digitalSignature: "",
+    approvalComments: "",
+  });
+  const [riskDraft, setRiskDraft] = useState({
+    category: "TECHNICAL",
+    description: "",
+    severity: 3,
+    probability: 3,
+    ownerDisplayName: "",
+    requiresApproval: false,
+  });
+  const [mitigationDraft, setMitigationDraft] = useState({
+    actionDescription: "",
+    assignedToDisplayName: "",
+    status: "OPEN",
+  });
 
   const isEditMode = useMemo(() => Boolean(rfqId), [rfqId]);
 
@@ -190,42 +290,67 @@ export default function RFQBuilderPage() {
 
   const rfqQuery = useQuery({
     queryKey: ["estimating-rfq", rfqId], enabled: !!rfqId,
-    queryFn: async () => { const res = await apiRequest("GET", `/api/estimating/rfqs/${rfqId}`); return res.json(); },
+    queryFn: async () => apiRequest(`/api/estimating/rfqs/${rfqId}`),
   });
 
   const partsQuery = useQuery({
     queryKey: ["estimating-rfq-parts", rfqId], enabled: !!rfqId,
-    queryFn: async () => { const res = await apiRequest("GET", `/api/estimating/rfqs/${rfqId}/parts`); return res.json(); },
+    queryFn: async () => apiRequest(`/api/estimating/rfqs/${rfqId}/parts`),
   });
 
   const toolingQuery = useQuery({
     queryKey: ["estimating-rfq-tooling", rfqId], enabled: !!rfqId,
-    queryFn: async () => { const res = await apiRequest("GET", `/api/estimating/rfqs/${rfqId}/tooling`); return res.json(); },
+    queryFn: async () => apiRequest(`/api/estimating/rfqs/${rfqId}/tooling`),
   });
 
   const bomLinesQuery = useQuery({
     queryKey: ["estimating-rfq-bom-lines", rfqId], enabled: !!rfqId,
-    queryFn: async () => { const res = await apiRequest("GET", `/api/estimating/rfqs/${rfqId}/bom-lines`); return res.json(); },
+    queryFn: async () => apiRequest(`/api/estimating/rfqs/${rfqId}/bom-lines`),
   });
 
   const processRowsQuery = useQuery({
     queryKey: ["estimating-rfq-process-rows", rfqId], enabled: !!rfqId,
-    queryFn: async () => { const res = await apiRequest("GET", `/api/estimating/rfqs/${rfqId}/process-rows`); return res.json(); },
+    queryFn: async () => apiRequest(`/api/estimating/rfqs/${rfqId}/process-rows`),
   });
 
   const adjustmentsQuery = useQuery({
     queryKey: ["estimating-rfq-adjustments", rfqId], enabled: !!rfqId,
-    queryFn: async () => { const res = await apiRequest("GET", `/api/estimating/rfqs/${rfqId}/adjustments`); return res.json(); },
+    queryFn: async () => apiRequest(`/api/estimating/rfqs/${rfqId}/adjustments`),
   });
 
   const shippingQuery = useQuery({
     queryKey: ["estimating-rfq-shipping", rfqId], enabled: !!rfqId,
-    queryFn: async () => { const res = await apiRequest("GET", `/api/estimating/rfqs/${rfqId}/shipping`); return res.json(); },
+    queryFn: async () => apiRequest(`/api/estimating/rfqs/${rfqId}/shipping`),
   });
 
   const quantityBreaksQuery = useQuery({
     queryKey: ["estimating-rfq-quantity-breaks", rfqId], enabled: !!rfqId,
-    queryFn: async () => { const res = await apiRequest("GET", `/api/estimating/rfqs/${rfqId}/quantity-breaks`); return res.json(); },
+    queryFn: async () => apiRequest(`/api/estimating/rfqs/${rfqId}/quantity-breaks`),
+  });
+
+  const versionsQuery = useQuery<EstimateVersionRow[]>({
+    queryKey: ["estimating-rfq-versions", rfqId], enabled: !!rfqId,
+    queryFn: async () => apiRequest(`/api/estimating/rfqs/${rfqId}/versions`),
+  });
+
+  const assumptionsQuery = useQuery<EstimateAssumptionRow[]>({
+    queryKey: ["estimating-rfq-assumptions", rfqId], enabled: !!rfqId,
+    queryFn: async () => apiRequest(`/api/estimating/rfqs/${rfqId}/assumptions`),
+  });
+
+  const approvalsQuery = useQuery<EstimatingApprovalRow[]>({
+    queryKey: ["estimating-rfq-approvals", rfqId], enabled: !!rfqId,
+    queryFn: async () => apiRequest(`/api/estimating/rfqs/${rfqId}/approvals`),
+  });
+
+  const riskAssessmentsQuery = useQuery<RiskAssessmentRow[]>({
+    queryKey: ["estimating-rfq-risk-assessments", rfqId], enabled: !!rfqId,
+    queryFn: async () => apiRequest(`/api/estimating/rfqs/${rfqId}/risk-assessments`),
+  });
+
+  const releaseReadinessQuery = useQuery<ReleaseReadiness>({
+    queryKey: ["estimating-rfq-release-readiness", rfqId, marginPercent], enabled: !!rfqId,
+    queryFn: async () => apiRequest(`/api/estimating/rfqs/${rfqId}/approval-readiness`, { method: "POST", body: {} }),
   });
 
   // ── Hydration ────────────────────────────────────────────────────────────────
@@ -353,8 +478,8 @@ export default function RFQBuilderPage() {
       materialSpec: p.materialSpec, processFamily: p.processFamily,
       makeBuyType: p.makeBuyType, partType: p.partType, notes: p.notes,
     }));
-    await apiRequest("DELETE", `/api/estimating/rfqs/${id}/parts`);
-    for (const p of valid) await apiRequest("POST", `/api/estimating/rfqs/${id}/parts`, p);
+    await apiRequest(`/api/estimating/rfqs/${id}/parts`, { method: "DELETE" });
+    for (const p of valid) await apiRequest(`/api/estimating/rfqs/${id}/parts`, { method: "POST", body: p });
   };
 
   const handleHeaderChange = (field: keyof RfqHeader, value: string) =>
@@ -371,19 +496,28 @@ export default function RFQBuilderPage() {
       return prev.filter((_, i) => i !== index).map((r, i) => ({ ...r, lineNumber: i + 1 }));
     });
 
+  const buildHeaderPayload = () => {
+    const payload = {
+      ...header,
+      customerId: header.customerId ? Number(header.customerId) : null,
+      quoteDueDate: header.quoteDueDate || null,
+      requestedDueDate: header.requestedDueDate || null,
+    };
+    if (!payload.rfqNumber.trim()) delete (payload as Partial<RfqHeader>).rfqNumber;
+    return payload;
+  };
+
   // ── Mutations ────────────────────────────────────────────────────────────────
 
   const createRfqMutation = useMutation({
     mutationFn: async () => {
-      const payload = { ...header, customerId: header.customerId ? Number(header.customerId) : null,
-        quoteDueDate: header.quoteDueDate || null, requestedDueDate: header.requestedDueDate || null };
-      const res = await apiRequest("POST", "/api/estimating/rfqs", payload);
-      return res.json();
+      return apiRequest("/api/estimating/rfqs", { method: "POST", body: buildHeaderPayload() });
     },
     onSuccess: async (created) => {
+      setHeader((prev) => ({ ...prev, rfqNumber: created.rfqNumber ?? prev.rfqNumber }));
       await saveParts(created.id);
       await queryClient.invalidateQueries({ queryKey: ["/api/estimating/rfqs"] });
-      setSaveMessage("Draft RFQ saved.");
+      setSaveMessage(`Draft RFQ ${created.rfqNumber ?? ""} saved.`);
       setLocation(`/rfq-builder/${created.id}`);
     },
     onError: () => setSaveMessage("Failed to save RFQ. Please try again."),
@@ -391,10 +525,7 @@ export default function RFQBuilderPage() {
 
   const updateRfqMutation = useMutation({
     mutationFn: async () => {
-      const payload = { ...header, customerId: header.customerId ? Number(header.customerId) : null,
-        quoteDueDate: header.quoteDueDate || null, requestedDueDate: header.requestedDueDate || null };
-      const res = await apiRequest("PATCH", `/api/estimating/rfqs/${rfqId}`, payload);
-      return res.json();
+      return apiRequest(`/api/estimating/rfqs/${rfqId}`, { method: "PATCH", body: buildHeaderPayload() });
     },
     onSuccess: async () => {
       await saveParts(rfqId!);
@@ -408,7 +539,6 @@ export default function RFQBuilderPage() {
 
   const onSaveDraft = () => {
     setSaveMessage("");
-    if (!header.rfqNumber.trim()) { setSaveMessage("RFQ number is required."); return; }
     if (!parts.some((p) => p.partNumber.trim())) { setSaveMessage("Add at least one part number before saving."); return; }
     if (isEditMode) updateRfqMutation.mutate(); else createRfqMutation.mutate();
   };
@@ -432,21 +562,21 @@ export default function RFQBuilderPage() {
   const saveToolingRow = async (row: ToolingRow) => {
     if (!rfqId) { setToolingMessage("Save the RFQ header first before adding tooling."); return; }
     if (!row.description.trim()) { setToolingMessage("Tooling description is required."); return; }
-    await apiRequest("POST", `/api/estimating/rfqs/${rfqId}/tooling`, {
+    await apiRequest(`/api/estimating/rfqs/${rfqId}/tooling`, { method: "POST", body: {
       description: row.description, toolingType: row.toolingType,
       quantity: Number(row.quantity || 0), unitCost: Number(row.unitCost || 0),
       appliesToScope: row.appliesToScope, pricingTreatment: row.pricingTreatment,
       amortizationQty: row.amortizationQty ? Number(row.amortizationQty) : null,
       chargeTiming: row.chargeTiming, customerOwnedTooling: !!row.customerOwnedTooling,
       notes: row.notes ?? "",
-    });
+    } });
     setToolingMessage("Tooling row saved.");
     await queryClient.invalidateQueries({ queryKey: ["estimating-rfq-tooling", rfqId] });
   };
 
   const deleteToolingRow = async (index: number, row: ToolingRow) => {
     if (row.id) {
-      await apiRequest("DELETE", `/api/estimating/tooling/${row.id}`);
+      await apiRequest(`/api/estimating/tooling/${row.id}`, { method: "DELETE" });
       await queryClient.invalidateQueries({ queryKey: ["estimating-rfq-tooling", rfqId] });
       setToolingMessage("Tooling row deleted."); return;
     }
@@ -477,7 +607,7 @@ export default function RFQBuilderPage() {
   const saveBomLine = async (row: BomLineRow) => {
     if (!rfqId) { setBomMessage("Save the RFQ first before adding BOM lines."); return; }
     if (!row.description.trim()) { setBomMessage("BOM line description is required."); return; }
-    await apiRequest("POST", `/api/estimating/rfqs/${rfqId}/bom-lines`, {
+    await apiRequest(`/api/estimating/rfqs/${rfqId}/bom-lines`, { method: "POST", body: {
       rfqPartId: row.rfqPartId, inventoryItemId: row.inventoryItemId ?? null,
       childPartAgNumber: row.childPartAgNumber || "", description: row.description,
       category: row.category, quantityPerPart: Number(row.quantityPerPart || 0),
@@ -485,14 +615,14 @@ export default function RFQBuilderPage() {
       scrapPercent: Number(row.scrapPercent || 0), isEstimated: !!row.isEstimated,
       isDraftInventoryItem: !!row.isDraftInventoryItem, vendorNameSnapshot: row.vendorNameSnapshot || "",
       materialSpec: row.materialSpec || "", notes: row.notes || "",
-    });
+    } });
     setBomMessage("BOM line saved.");
     await queryClient.invalidateQueries({ queryKey: ["estimating-rfq-bom-lines", rfqId] });
   };
 
   const deleteBomLine = async (index: number, row: BomLineRow) => {
     if (row.id) {
-      await apiRequest("DELETE", `/api/estimating/bom-lines/${row.id}`);
+      await apiRequest(`/api/estimating/bom-lines/${row.id}`, { method: "DELETE" });
       await queryClient.invalidateQueries({ queryKey: ["estimating-rfq-bom-lines", rfqId] });
       setBomMessage("BOM line deleted."); return;
     }
@@ -548,18 +678,18 @@ export default function RFQBuilderPage() {
   const saveProcessRow = async (row: ProcessRow) => {
     if (!rfqId) { setProcessMessage("Save the RFQ first before adding process rows."); return; }
     if (!row.departmentName.trim()) { setProcessMessage("Department name is required."); return; }
-    await apiRequest("POST", `/api/estimating/rfqs/${rfqId}/process-rows`, {
+    await apiRequest(`/api/estimating/rfqs/${rfqId}/process-rows`, { method: "POST", body: {
       rfqPartId: row.rfqPartId, departmentName: row.departmentName, sourceType: row.sourceType,
       setupHours: Number(row.setupHours || 0), hoursPerPart: Number(row.hoursPerPart || 0),
       hourlyRate: Number(row.hourlyRate || 0), notes: row.notes || "",
-    });
+    } });
     setProcessMessage("Process row saved.");
     await queryClient.invalidateQueries({ queryKey: ["estimating-rfq-process-rows", rfqId] });
   };
 
   const deleteProcessRow = async (index: number, row: ProcessRow) => {
     if (row.id) {
-      await apiRequest("DELETE", `/api/estimating/process-rows/${row.id}`);
+      await apiRequest(`/api/estimating/process-rows/${row.id}`, { method: "DELETE" });
       await queryClient.invalidateQueries({ queryKey: ["estimating-rfq-process-rows", rfqId] });
       setProcessMessage("Process row deleted."); return;
     }
@@ -615,21 +745,21 @@ export default function RFQBuilderPage() {
   const saveAdjustmentRow = async (row: AdjustmentRow) => {
     if (!rfqId) { setAdjustmentMessage("Save the RFQ first before adding adjustments."); return; }
     if (!row.description.trim()) { setAdjustmentMessage("Adjustment description is required."); return; }
-    await apiRequest("POST", `/api/estimating/rfqs/${rfqId}/adjustments`, {
+    await apiRequest(`/api/estimating/rfqs/${rfqId}/adjustments`, { method: "POST", body: {
       rfqPartId: row.appliesToScope === "PART" ? row.rfqPartId : null,
       adjustmentType: row.adjustmentType, description: row.description,
       pricingMode: row.pricingMode, amount: Number(row.amount || 0),
       percentValue: row.percentValue != null ? Number(row.percentValue) : null,
       appliesToScope: row.appliesToScope, includeInCustomerPrice: !!row.includeInCustomerPrice,
       notes: row.notes || "",
-    });
+    } });
     setAdjustmentMessage("Adjustment saved.");
     await queryClient.invalidateQueries({ queryKey: ["estimating-rfq-adjustments", rfqId] });
   };
 
   const deleteAdjustmentRow = async (index: number, row: AdjustmentRow) => {
     if (row.id) {
-      await apiRequest("DELETE", `/api/estimating/adjustments/${row.id}`);
+      await apiRequest(`/api/estimating/adjustments/${row.id}`, { method: "DELETE" });
       await queryClient.invalidateQueries({ queryKey: ["estimating-rfq-adjustments", rfqId] });
       setAdjustmentMessage("Adjustment deleted."); return;
     }
@@ -696,20 +826,20 @@ export default function RFQBuilderPage() {
 
   const saveShippingRow = async (row: ShippingRow) => {
     if (!rfqId) { setShippingMessage("Save the RFQ first before adding shipping."); return; }
-    await apiRequest("POST", `/api/estimating/rfqs/${rfqId}/shipping`, {
+    await apiRequest(`/api/estimating/rfqs/${rfqId}/shipping`, { method: "POST", body: {
       rfqPartId: shippingScopeFilter === "PART" ? row.rfqPartId : null,
       shippingMode: row.shippingMode, description: row.description || "",
       method: row.method || "", amount: Number(row.amount || 0),
       allocationMethod: row.allocationMethod || "EVEN",
       includeInCustomerPrice: !!row.includeInCustomerPrice, notes: row.notes || "",
-    });
+    } });
     setShippingMessage("Shipping row saved.");
     await queryClient.invalidateQueries({ queryKey: ["estimating-rfq-shipping", rfqId] });
   };
 
   const deleteShippingRow = async (index: number, row: ShippingRow) => {
     if (row.id) {
-      await apiRequest("DELETE", `/api/estimating/shipping/${row.id}`);
+      await apiRequest(`/api/estimating/shipping/${row.id}`, { method: "DELETE" });
       await queryClient.invalidateQueries({ queryKey: ["estimating-rfq-shipping", rfqId] });
       setShippingMessage("Shipping row deleted."); return;
     }
@@ -755,16 +885,16 @@ export default function RFQBuilderPage() {
   const saveQuantityBreakRow = async (row: QuantityBreakRow) => {
     if (!rfqId) { setQuantityBreakMessage("Save the RFQ first before adding quantity breaks."); return; }
     if (!row.label.trim()) { setQuantityBreakMessage("Quantity break label is required."); return; }
-    await apiRequest("POST", `/api/estimating/rfqs/${rfqId}/quantity-breaks`, {
+    await apiRequest(`/api/estimating/rfqs/${rfqId}/quantity-breaks`, { method: "POST", body: {
       label: row.label, quantity: Number(row.quantity || 1), sortOrder: Number(row.sortOrder || 0),
-    });
+    } });
     setQuantityBreakMessage("Quantity break saved.");
     await queryClient.invalidateQueries({ queryKey: ["estimating-rfq-quantity-breaks", rfqId] });
   };
 
   const deleteQuantityBreakRow = async (index: number, row: QuantityBreakRow) => {
     if (row.id) {
-      await apiRequest("DELETE", `/api/estimating/quantity-breaks/${row.id}`);
+      await apiRequest(`/api/estimating/quantity-breaks/${row.id}`, { method: "DELETE" });
       await queryClient.invalidateQueries({ queryKey: ["estimating-rfq-quantity-breaks", rfqId] });
       setQuantityBreakMessage("Quantity break deleted."); return;
     }
@@ -888,11 +1018,114 @@ export default function RFQBuilderPage() {
     );
   }, [pricingMatrix, rfqId, marginPercent]);
 
+  const latestVersion = versionsQuery.data?.[0];
+  const latestRiskAssessment = riskAssessmentsQuery.data?.[0];
+  const riskItems = latestRiskAssessment?.risk_items ?? [];
+  const releaseReadiness = releaseReadinessQuery.data;
+
+  const refreshControls = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["estimating-rfq-versions", rfqId] }),
+      queryClient.invalidateQueries({ queryKey: ["estimating-rfq-assumptions", rfqId] }),
+      queryClient.invalidateQueries({ queryKey: ["estimating-rfq-approvals", rfqId] }),
+      queryClient.invalidateQueries({ queryKey: ["estimating-rfq-risk-assessments", rfqId] }),
+      queryClient.invalidateQueries({ queryKey: ["estimating-rfq-release-readiness", rfqId] }),
+    ]);
+  };
+
+  const createEstimateVersion = async () => {
+    if (!rfqId) { setControlMessage("Save the RFQ before creating a controlled estimate version."); return; }
+    setControlMessage("");
+    const data = await apiRequest(`/api/estimating/rfqs/${rfqId}/versions`, { method: "POST", body: {
+      changeSummary: versionSummary || "Controlled pricing review snapshot",
+      status: "DRAFT",
+    } });
+    setVersionSummary("");
+    setControlMessage(`Estimate version ${data.version_number ?? data.versionNumber ?? ""} captured with ${data.lineCount ?? 0} controlled lines.`);
+    await refreshControls();
+  };
+
+  const addAssumption = async () => {
+    if (!rfqId) { setControlMessage("Save the RFQ before adding assumptions."); return; }
+    if (!assumptionDraft.assumptionText.trim()) { setControlMessage("Assumption text is required."); return; }
+    await apiRequest(`/api/estimating/rfqs/${rfqId}/assumptions`, { method: "POST", body: {
+      ...assumptionDraft,
+      numericValue: assumptionDraft.numericValue || null,
+      uom: assumptionDraft.uom || null,
+      sourceReference: assumptionDraft.sourceReference || null,
+    } });
+    setAssumptionDraft((prev) => ({ ...prev, assumptionText: "", numericValue: "", uom: "", sourceReference: "" }));
+    setControlMessage("Assumption added and audit event recorded.");
+    await refreshControls();
+  };
+
+  const saveApproval = async () => {
+    if (!rfqId) { setControlMessage("Save the RFQ before recording approvals."); return; }
+    await apiRequest(`/api/estimating/rfqs/${rfqId}/approvals`, { method: "POST", body: {
+      ...approvalDraft,
+      estimateVersionId: latestVersion?.id ?? null,
+      signerDisplayName: approvalDraft.signerDisplayName || null,
+      digitalSignature: approvalDraft.digitalSignature || null,
+      approvalComments: approvalDraft.approvalComments || null,
+    } });
+    setApprovalDraft((prev) => ({ ...prev, digitalSignature: "", approvalComments: "" }));
+    setControlMessage(`${approvalDraft.approvalRole} approval ${approvalDraft.approvalStatus.toLowerCase()} and audit event recorded.`);
+    await refreshControls();
+  };
+
+  const ensureRiskAssessment = async () => {
+    if (!rfqId) { setControlMessage("Save the RFQ before starting risk review."); return null; }
+    if (latestRiskAssessment) return latestRiskAssessment;
+    const data = await apiRequest(`/api/estimating/rfqs/${rfqId}/risk-assessments`, { method: "POST", body: {
+      estimateVersionId: latestVersion?.id ?? null,
+      status: "DRAFT",
+    } });
+    await refreshControls();
+    return data as RiskAssessmentRow;
+  };
+
+  const addRiskItem = async () => {
+    const assessment = await ensureRiskAssessment();
+    if (!assessment) return;
+    if (!riskDraft.description.trim()) { setControlMessage("Risk description is required."); return; }
+    await apiRequest(`/api/estimating/risk-assessments/${assessment.id}/items`, { method: "POST", body: riskDraft });
+    setRiskDraft((prev) => ({ ...prev, description: "", ownerDisplayName: "", requiresApproval: false }));
+    setControlMessage("Risk item scored and audit event recorded.");
+    await refreshControls();
+  };
+
+  const closeRiskItem = async (riskItemId: string) => {
+    await apiRequest(`/api/estimating/risk-items/${riskItemId}`, { method: "PATCH", body: { status: "CLOSED" } });
+    setControlMessage("Risk item closed and audit event recorded.");
+    await refreshControls();
+  };
+
+  const addMitigation = async (riskItemId: string) => {
+    if (!mitigationDraft.actionDescription.trim()) { setControlMessage("Mitigation action is required."); return; }
+    await apiRequest(`/api/estimating/risk-items/${riskItemId}/mitigations`, { method: "POST", body: {
+      ...mitigationDraft,
+      assignedToDisplayName: mitigationDraft.assignedToDisplayName || null,
+      completedAt: mitigationDraft.status === "CLOSED" ? new Date().toISOString() : null,
+    } });
+    setMitigationDraft({ actionDescription: "", assignedToDisplayName: "", status: "OPEN" });
+    setControlMessage("Mitigation action recorded.");
+    await refreshControls();
+  };
+
+  const updateRiskAssessmentStatus = async (status: string) => {
+    const assessment = await ensureRiskAssessment();
+    if (!assessment) return;
+    await apiRequest(`/api/estimating/risk-assessments/${assessment.id}/status`, { method: "PATCH", body: { status } });
+    setControlMessage(`Risk assessment marked ${status}.`);
+    await refreshControls();
+  };
+
   const savePricingSnapshots = async () => {
     if (!rfqId) { setPricingSnapshotMessage("Save the RFQ first before saving pricing."); return; }
     if (!pricingSnapshotRows.length) { setPricingSnapshotMessage("No pricing rows to save."); return; }
-    await apiRequest("POST", `/api/estimating/rfqs/${rfqId}/pricing-snapshots`, pricingSnapshotRows);
+    await apiRequest(`/api/estimating/rfqs/${rfqId}/pricing-snapshots`, { method: "POST", body: pricingSnapshotRows });
     setPricingSnapshotMessage("Pricing snapshots saved.");
+    await refreshControls();
   };
 
   const createDraftQuoteFromRfq = async () => {
@@ -903,12 +1136,12 @@ export default function RFQBuilderPage() {
     setCreatedQuoteNumber(null);
     try {
       await savePricingSnapshots();
-      const res = await apiRequest("POST", `/api/estimating/rfqs/${rfqId}/create-draft-quote`, {});
-      const data = await res.json();
+      const data = await apiRequest(`/api/estimating/rfqs/${rfqId}/create-draft-quote`, { method: "POST", body: {} });
       setCreatedQuoteId(data.quoteId);
       setCreatedQuoteNumber(data.quoteNumber);
-    } catch {
-      setQuoteHandoffError("Failed to create draft quote. Check the console for details.");
+      await refreshControls();
+    } catch (error: any) {
+      setQuoteHandoffError(error?.message || "Failed to create draft quote. Check the release controls above.");
     } finally {
       setIsHandingOff(false);
     }
@@ -953,8 +1186,16 @@ export default function RFQBuilderPage() {
           <div className="border rounded-lg p-5 space-y-4">
             <h2 className="text-lg font-semibold">Step 1 — RFQ Header</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm mb-1">RFQ Number</label>
+                <input
+                  className="w-full border rounded px-3 py-2 bg-muted text-muted-foreground"
+                  value={header.rfqNumber || "Auto-generated when saved"}
+                  readOnly
+                />
+              </div>
               {([
-                ["rfqNumber", "RFQ Number"], ["customerId", "Customer ID"],
+                ["customerId", "Customer ID"],
                 ["customerNameSnapshot", "Customer Name Snapshot"], ["revision", "Revision"],
               ] as [keyof RfqHeader, string][]).map(([field, label]) => (
                 <div key={field}>
@@ -1425,11 +1666,163 @@ export default function RFQBuilderPage() {
             </div>
           </div>
 
-          {/* ── Step 8: Pricing Summary + Quote Handoff ─────────────────────── */}
+          <div className="border rounded-lg p-5 space-y-5">
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+              <div>
+                <h2 className="text-lg font-semibold">Step 8 - Controlled Estimate Release</h2>
+                <p className="text-sm text-muted-foreground">Capture the controlled version, assumptions, approvals, risk score, and mitigation status before quote handoff.</p>
+              </div>
+              <div className={`rounded border px-4 py-3 text-sm ${releaseReadiness?.readyForQuoteRelease ? "border-green-200 bg-green-50 text-green-800" : "border-amber-200 bg-amber-50 text-amber-900"}`}>
+                <p className="font-semibold">{releaseReadiness?.readyForQuoteRelease ? "Ready for quote release" : "Release controls incomplete"}</p>
+                <p className="mt-1">Required roles: {(releaseReadiness?.requiredRoles ?? ["ESTIMATOR", "ENGINEERING", "FINANCE"]).join(", ")}</p>
+                {releaseReadiness?.missingRoles?.length ? <p>Missing: {releaseReadiness.missingRoles.join(", ")}</p> : null}
+                {releaseReadiness?.executiveRequired ? <p>Executive required: {releaseReadiness.executiveTriggers.join(", ")}</p> : null}
+                <p>Risk: {releaseReadiness?.risk.status ?? "No assessment"} / {releaseReadiness?.risk.overallLevel ?? "UNKNOWN"} ({releaseReadiness?.risk.blockingRiskCount ?? 0} blockers)</p>
+              </div>
+            </div>
+
+            {controlMessage && <div className="rounded border px-3 py-2 text-sm">{controlMessage}</div>}
+
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              <div className="rounded border p-4 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="font-semibold">Estimate Versions</h3>
+                    <p className="text-xs text-muted-foreground">Historical pricing visibility and margin snapshots.</p>
+                  </div>
+                  <button type="button" className="border rounded px-3 py-2 text-sm" onClick={createEstimateVersion} disabled={!rfqId}>
+                    Capture Version
+                  </button>
+                </div>
+                <input className="w-full border rounded px-3 py-2 text-sm" placeholder="Change summary" value={versionSummary} onChange={(e) => setVersionSummary(e.target.value)} />
+                <div className="space-y-2 max-h-[180px] overflow-auto">
+                  {(versionsQuery.data ?? []).length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No controlled estimate versions yet.</p>
+                  ) : (
+                    (versionsQuery.data ?? []).map((version) => (
+                      <div key={version.id} className="rounded border px-3 py-2 text-sm">
+                        <div className="flex justify-between gap-3">
+                          <span className="font-medium">Version {version.version_number}</span>
+                          <span className={version.superseded_by ? "text-muted-foreground" : "text-green-700"}>{version.superseded_by ? "Superseded" : "Current"}</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">{version.change_summary || "No change summary"} - {new Date(version.created_at).toLocaleString()}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded border p-4 space-y-3">
+                <h3 className="font-semibold">Assumption Review</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <select className="border rounded px-3 py-2 text-sm" value={assumptionDraft.assumptionType} onChange={(e) => setAssumptionDraft((prev) => ({ ...prev, assumptionType: e.target.value }))}>
+                    {["LABOR", "SCRAP", "MATERIAL_YIELD", "TOOLING_LIFE", "SETUP_TIME"].map((type) => <option key={type} value={type}>{type}</option>)}
+                  </select>
+                  <input className="border rounded px-3 py-2 text-sm" placeholder="Value" value={assumptionDraft.numericValue} onChange={(e) => setAssumptionDraft((prev) => ({ ...prev, numericValue: e.target.value }))} />
+                  <input className="border rounded px-3 py-2 text-sm" placeholder="UOM" value={assumptionDraft.uom} onChange={(e) => setAssumptionDraft((prev) => ({ ...prev, uom: e.target.value }))} />
+                </div>
+                <textarea className="w-full border rounded px-3 py-2 text-sm min-h-[70px]" placeholder="Assumption text" value={assumptionDraft.assumptionText} onChange={(e) => setAssumptionDraft((prev) => ({ ...prev, assumptionText: e.target.value }))} />
+                <div className="flex gap-2">
+                  <select className="border rounded px-3 py-2 text-sm" value={assumptionDraft.confidenceLevel} onChange={(e) => setAssumptionDraft((prev) => ({ ...prev, confidenceLevel: e.target.value }))}>
+                    {["LOW", "MEDIUM", "HIGH"].map((level) => <option key={level} value={level}>{level}</option>)}
+                  </select>
+                  <input className="flex-1 border rounded px-3 py-2 text-sm" placeholder="Source reference" value={assumptionDraft.sourceReference} onChange={(e) => setAssumptionDraft((prev) => ({ ...prev, sourceReference: e.target.value }))} />
+                  <button type="button" className="border rounded px-3 py-2 text-sm" onClick={addAssumption}>Add</button>
+                </div>
+                <div className="space-y-2 max-h-[160px] overflow-auto">
+                  {(assumptionsQuery.data ?? []).map((assumption) => (
+                    <div key={assumption.id} className="rounded border px-3 py-2 text-sm">
+                      <p className="font-medium">{assumption.assumption_type} - {assumption.confidence_level}</p>
+                      <p>{assumption.assumption_text}</p>
+                      {(assumption.numeric_value || assumption.uom) && <p className="text-xs text-muted-foreground">{assumption.numeric_value ?? ""} {assumption.uom ?? ""}</p>}
+                    </div>
+                  ))}
+                  {(assumptionsQuery.data ?? []).length === 0 && <p className="text-sm text-muted-foreground">No structured assumptions yet.</p>}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              <div className="rounded border p-4 space-y-3">
+                <h3 className="font-semibold">Role Approvals</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <select className="border rounded px-3 py-2 text-sm" value={approvalDraft.approvalRole} onChange={(e) => setApprovalDraft((prev) => ({ ...prev, approvalRole: e.target.value }))}>
+                    {["ESTIMATOR", "ENGINEERING", "FINANCE", "EXECUTIVE"].map((role) => <option key={role} value={role}>{role}</option>)}
+                  </select>
+                  <select className="border rounded px-3 py-2 text-sm" value={approvalDraft.approvalStatus} onChange={(e) => setApprovalDraft((prev) => ({ ...prev, approvalStatus: e.target.value }))}>
+                    {["PENDING", "APPROVED", "REJECTED", "CHANGES_REQUESTED"].map((status) => <option key={status} value={status}>{status}</option>)}
+                  </select>
+                  <input className="border rounded px-3 py-2 text-sm" placeholder="Signer display name" value={approvalDraft.signerDisplayName} onChange={(e) => setApprovalDraft((prev) => ({ ...prev, signerDisplayName: e.target.value }))} />
+                  <input className="border rounded px-3 py-2 text-sm" placeholder="Digital signature / initials" value={approvalDraft.digitalSignature} onChange={(e) => setApprovalDraft((prev) => ({ ...prev, digitalSignature: e.target.value }))} />
+                </div>
+                <textarea className="w-full border rounded px-3 py-2 text-sm min-h-[64px]" placeholder="Approval comments" value={approvalDraft.approvalComments} onChange={(e) => setApprovalDraft((prev) => ({ ...prev, approvalComments: e.target.value }))} />
+                <button type="button" className="border rounded px-3 py-2 text-sm" onClick={saveApproval}>Save Approval</button>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {(approvalsQuery.data ?? []).map((approval) => (
+                    <div key={approval.id} className="rounded border px-3 py-2 text-sm">
+                      <p className="font-medium">{approval.approval_role}: {approval.approval_status}</p>
+                      <p className="text-xs text-muted-foreground">{approval.signer_display_name || "No signer"} {approval.signed_at ? `- ${new Date(approval.signed_at).toLocaleString()}` : ""}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded border p-4 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="font-semibold">Risk Scoring + Mitigation</h3>
+                    <p className="text-xs text-muted-foreground">Severity x probability drives approval routing.</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button type="button" className="border rounded px-3 py-2 text-sm" onClick={() => updateRiskAssessmentStatus("IN_REVIEW")}>Review</button>
+                    <button type="button" className="border rounded px-3 py-2 text-sm" onClick={() => updateRiskAssessmentStatus("APPROVED")}>Approve Risk</button>
+                  </div>
+                </div>
+                <div className="rounded border px-3 py-2 text-sm">
+                  <p className="font-medium">Current: {latestRiskAssessment?.status ?? "Not started"} / {latestRiskAssessment?.overall_level ?? "UNKNOWN"} / Score {latestRiskAssessment?.overall_score ?? 0}</p>
+                  <p className="text-xs text-muted-foreground">Routing: {(latestRiskAssessment?.approval_routing ?? []).join(", ") || "None"}</p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+                  <select className="border rounded px-3 py-2 text-sm" value={riskDraft.category} onChange={(e) => setRiskDraft((prev) => ({ ...prev, category: e.target.value }))}>
+                    {["TECHNICAL", "SUPPLY_CHAIN", "FINANCIAL", "SCHEDULE", "COMPLIANCE", "QUALITY"].map((category) => <option key={category} value={category}>{category}</option>)}
+                  </select>
+                  <input type="number" min={1} max={5} className="border rounded px-3 py-2 text-sm" value={riskDraft.severity} onChange={(e) => setRiskDraft((prev) => ({ ...prev, severity: Number(e.target.value) }))} />
+                  <input type="number" min={1} max={5} className="border rounded px-3 py-2 text-sm" value={riskDraft.probability} onChange={(e) => setRiskDraft((prev) => ({ ...prev, probability: Number(e.target.value) }))} />
+                  <label className="flex items-center gap-2 text-sm border rounded px-3 py-2">
+                    <input type="checkbox" checked={riskDraft.requiresApproval} onChange={(e) => setRiskDraft((prev) => ({ ...prev, requiresApproval: e.target.checked }))} />
+                    Requires approval
+                  </label>
+                </div>
+                <textarea className="w-full border rounded px-3 py-2 text-sm min-h-[64px]" placeholder="Risk description" value={riskDraft.description} onChange={(e) => setRiskDraft((prev) => ({ ...prev, description: e.target.value }))} />
+                <div className="flex gap-2">
+                  <input className="flex-1 border rounded px-3 py-2 text-sm" placeholder="Risk owner" value={riskDraft.ownerDisplayName} onChange={(e) => setRiskDraft((prev) => ({ ...prev, ownerDisplayName: e.target.value }))} />
+                  <button type="button" className="border rounded px-3 py-2 text-sm" onClick={addRiskItem}>Add Risk</button>
+                </div>
+                <div className="space-y-2 max-h-[240px] overflow-auto">
+                  {riskItems.map((item) => (
+                    <div key={item.id} className="rounded border px-3 py-2 text-sm space-y-2">
+                      <div className="flex justify-between gap-3">
+                        <p className="font-medium">{item.category} - Score {item.score} - {item.status}</p>
+                        <button type="button" className="border rounded px-2 py-1 text-xs" onClick={() => closeRiskItem(item.id)}>Close</button>
+                      </div>
+                      <p>{item.description}</p>
+                      <div className="flex gap-2">
+                        <input className="flex-1 border rounded px-2 py-1 text-xs" placeholder="Mitigation action" value={mitigationDraft.actionDescription} onChange={(e) => setMitigationDraft((prev) => ({ ...prev, actionDescription: e.target.value }))} />
+                        <button type="button" className="border rounded px-2 py-1 text-xs" onClick={() => addMitigation(item.id)}>Add Mitigation</button>
+                      </div>
+                    </div>
+                  ))}
+                  {riskItems.length === 0 && <p className="text-sm text-muted-foreground">No structured risk items yet.</p>}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Step 9: Pricing Summary + Quote Handoff ─────────────────────── */}
           <div className="border rounded-lg p-5 space-y-5">
             <div className="flex items-center justify-between gap-4 flex-wrap">
               <div>
-                <h2 className="text-lg font-semibold">Step 8 — Pricing Summary + Quote Handoff</h2>
+                <h2 className="text-lg font-semibold">Step 9 - Pricing Summary + Quote Handoff</h2>
                 <p className="text-sm text-muted-foreground">Review final pricing, save snapshots, and create a draft quote.</p>
               </div>
               <div className="flex gap-2 flex-wrap">
@@ -1444,7 +1837,7 @@ export default function RFQBuilderPage() {
                 <button
                   className="bg-primary text-primary-foreground rounded px-4 py-2 text-sm disabled:opacity-50"
                   onClick={createDraftQuoteFromRfq}
-                  disabled={!rfqId || !pricingSnapshotRows.length || isHandingOff}
+                  disabled={!rfqId || !pricingSnapshotRows.length || isHandingOff || !releaseReadiness?.readyForQuoteRelease}
                   type="button"
                 >
                   {isHandingOff ? "Creating…" : "Create Draft Quote"}

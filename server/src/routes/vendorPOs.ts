@@ -15,8 +15,490 @@ import { generateMagicLink, peekMagicLink, validateMagicLink, createVendorConfir
 import { sendCommunication } from '../../communication/send';
 import { db } from '../../db';
 import { sql } from 'drizzle-orm';
+import {
+  getVendorQualificationBlockers,
+  emitProcurementLedgerEvent,
+  hasCurrentVendorMasterApproval,
+} from '../services/procurementControlsService';
+import { sendApiError } from '../../utils/apiErrors';
 
 const router = Router();
+
+// Temporary operational override: purchasing leadership is transitioning, so
+// vendor PO issuance must not be blocked by procurement/compliance gates.
+const VENDOR_PO_ISSUE_GATES_DEACTIVATED = true;
+
+let vendorPOReadSchemaReady: Promise<void> | null = null;
+
+function ensureVendorPOReadSchema(): Promise<void> {
+  if (!vendorPOReadSchemaReady) {
+    vendorPOReadSchemaReady = (async () => {
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS company_settings (
+          id serial PRIMARY KEY,
+          company_name text,
+          company_address text,
+          company_phone text,
+          company_email text,
+          company_website text,
+          company_logo_url text,
+          company_logo_filename text,
+          company_logo_mimetype text,
+          created_at timestamp DEFAULT now() NOT NULL,
+          updated_at timestamp DEFAULT now() NOT NULL
+        )
+      `);
+
+      await db.execute(sql`
+        ALTER TABLE company_settings
+          ADD COLUMN IF NOT EXISTS company_name text,
+          ADD COLUMN IF NOT EXISTS company_address text,
+          ADD COLUMN IF NOT EXISTS company_phone text,
+          ADD COLUMN IF NOT EXISTS company_email text,
+          ADD COLUMN IF NOT EXISTS company_website text,
+          ADD COLUMN IF NOT EXISTS company_logo_url text,
+          ADD COLUMN IF NOT EXISTS company_logo_filename text,
+          ADD COLUMN IF NOT EXISTS company_logo_mimetype text,
+          ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now(),
+          ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()
+      `);
+
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS vendor_po_settings (
+          id serial PRIMARY KEY,
+          contact_name text,
+          contact_title text,
+          contact_phone text,
+          contact_email text,
+          terms_and_conditions text,
+          payment_terms text,
+          shipping_instructions text,
+          created_at timestamp DEFAULT now() NOT NULL,
+          updated_at timestamp DEFAULT now() NOT NULL
+        )
+      `);
+
+      await db.execute(sql`
+        ALTER TABLE vendor_po_settings
+          ADD COLUMN IF NOT EXISTS contact_name text,
+          ADD COLUMN IF NOT EXISTS contact_title text,
+          ADD COLUMN IF NOT EXISTS contact_phone text,
+          ADD COLUMN IF NOT EXISTS contact_email text,
+          ADD COLUMN IF NOT EXISTS terms_and_conditions text,
+          ADD COLUMN IF NOT EXISTS payment_terms text,
+          ADD COLUMN IF NOT EXISTS shipping_instructions text,
+          ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now(),
+          ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()
+      `);
+
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS optional_settings (
+          id serial PRIMARY KEY,
+          name text NOT NULL,
+          statement text NOT NULL,
+          sort_order integer DEFAULT 0,
+          is_active boolean DEFAULT true NOT NULL,
+          created_at timestamp DEFAULT now() NOT NULL,
+          updated_at timestamp DEFAULT now() NOT NULL
+        )
+      `);
+
+      await db.execute(sql`
+        ALTER TABLE optional_settings
+          ADD COLUMN IF NOT EXISTS name text,
+          ADD COLUMN IF NOT EXISTS statement text,
+          ADD COLUMN IF NOT EXISTS sort_order integer DEFAULT 0,
+          ADD COLUMN IF NOT EXISTS is_active boolean DEFAULT true,
+          ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now(),
+          ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now()
+      `);
+
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS po_optional_settings (
+          id serial PRIMARY KEY,
+          vendor_po_id integer,
+          optional_setting_id integer,
+          created_at timestamp DEFAULT now()
+        )
+      `);
+
+      await db.execute(sql`
+        ALTER TABLE po_optional_settings
+          ADD COLUMN IF NOT EXISTS vendor_po_id integer,
+          ADD COLUMN IF NOT EXISTS optional_setting_id integer,
+          ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now()
+      `);
+
+      await db.execute(sql`
+        CREATE UNIQUE INDEX IF NOT EXISTS po_optional_settings_unique_idx
+          ON po_optional_settings(vendor_po_id, optional_setting_id)
+      `);
+
+      await db.execute(sql`
+        DO $$
+        BEGIN
+          IF to_regclass('public.vendor_pos') IS NOT NULL THEN
+            ALTER TABLE vendor_pos
+              ADD COLUMN IF NOT EXISTS external_po_number text,
+              ADD COLUMN IF NOT EXISTS production_line text,
+              ADD COLUMN IF NOT EXISTS revision_number integer NOT NULL DEFAULT 0,
+              ADD COLUMN IF NOT EXISTS parent_po_id integer,
+              ADD COLUMN IF NOT EXISTS change_reason text,
+              ADD COLUMN IF NOT EXISTS is_current_revision boolean NOT NULL DEFAULT true,
+              ADD COLUMN IF NOT EXISTS revised_at timestamp,
+              ADD COLUMN IF NOT EXISTS revised_by text,
+              ADD COLUMN IF NOT EXISTS issued_without_email boolean NOT NULL DEFAULT false,
+              ADD COLUMN IF NOT EXISTS issued_without_email_reason text,
+              ADD COLUMN IF NOT EXISTS issued_without_email_at timestamp,
+              ADD COLUMN IF NOT EXISTS rfq_outcome_notes text,
+              ADD COLUMN IF NOT EXISTS vendor_confirmed_at timestamp,
+              ADD COLUMN IF NOT EXISTS vendor_confirmed_action text,
+              ADD COLUMN IF NOT EXISTS archived boolean NOT NULL DEFAULT false,
+              ADD COLUMN IF NOT EXISTS requisition_id integer,
+              ADD COLUMN IF NOT EXISTS competition_method text,
+              ADD COLUMN IF NOT EXISTS sole_source_justification text,
+              ADD COLUMN IF NOT EXISTS direct_po_exception_approved_by_id integer,
+              ADD COLUMN IF NOT EXISTS direct_po_exception_approved_by_name text,
+              ADD COLUMN IF NOT EXISTS direct_po_exception_reason text,
+              ADD COLUMN IF NOT EXISTS direct_po_exception_approved_at timestamp;
+          END IF;
+
+          IF to_regclass('public.vendor_po_items') IS NOT NULL THEN
+            ALTER TABLE vendor_po_items
+              ADD COLUMN IF NOT EXISTS received_quantity real DEFAULT 0,
+              ADD COLUMN IF NOT EXISTS purchase_qty real,
+              ADD COLUMN IF NOT EXISTS purchase_unit_price real,
+              ADD COLUMN IF NOT EXISTS purchase_unit text,
+              ADD COLUMN IF NOT EXISTS pricing_unit text,
+              ADD COLUMN IF NOT EXISTS vendor_unit text,
+              ADD COLUMN IF NOT EXISTS conversion_factor real,
+              ADD COLUMN IF NOT EXISTS customer_po_id integer,
+              ADD COLUMN IF NOT EXISTS project_id uuid,
+              ADD COLUMN IF NOT EXISTS production_work_order_id uuid,
+              ADD COLUMN IF NOT EXISTS charge_code_id integer,
+              ADD COLUMN IF NOT EXISTS other_identifier text,
+              ADD COLUMN IF NOT EXISTS historical_avg_price real,
+              ADD COLUMN IF NOT EXISTS price_variance_percent real,
+              ADD COLUMN IF NOT EXISTS variance_flag boolean DEFAULT false;
+
+            IF EXISTS (
+              SELECT 1
+              FROM information_schema.columns
+              WHERE table_schema = 'public'
+                AND table_name = 'vendor_po_items'
+                AND column_name = 'customer_po_id'
+                AND data_type <> 'integer'
+            ) THEN
+              ALTER TABLE vendor_po_items
+                ALTER COLUMN customer_po_id TYPE integer
+                USING CASE
+                  WHEN customer_po_id::text ~ '^[0-9]+$' THEN customer_po_id::integer
+                  ELSE NULL
+                END;
+            END IF;
+
+            IF EXISTS (
+              SELECT 1
+              FROM information_schema.columns
+              WHERE table_schema = 'public'
+                AND table_name = 'vendor_po_items'
+                AND column_name = 'received_quantity'
+                AND data_type = 'integer'
+            ) THEN
+              ALTER TABLE vendor_po_items
+                ALTER COLUMN received_quantity TYPE real
+                USING received_quantity::real;
+            END IF;
+          END IF;
+        END $$;
+      `);
+    })().catch((err) => {
+      vendorPOReadSchemaReady = null;
+      throw err;
+    });
+  }
+  return vendorPOReadSchemaReady;
+}
+
+router.use(async (_req, res, next) => {
+  try {
+    await ensureVendorPOReadSchema();
+    next();
+  } catch (error) {
+    console.error('[VendorPO] Schema readiness check failed:', error);
+    res.status(503).json({ error: 'Vendor PO database is preparing, please retry' });
+  }
+});
+
+function isP2ProductionLine(value: unknown): boolean {
+  return String(value ?? '').trim().toUpperCase() === 'P2';
+}
+
+async function getVendorPOComplianceBlockers(vendorPoId: number): Promise<string[]> {
+  const review = await storage.getVendorPOComplianceReview(vendorPoId);
+  if (!review) {
+    return ['P2 purchase requires a completed compliance review before it can be allocated to a project'];
+  }
+
+  const blockers: string[] = [];
+  if (review.reviewStatus === 'requires_attention') {
+    blockers.push('Compliance review requires attention because the PO changed after review');
+  } else if (review.reviewStatus !== 'reviewed') {
+    blockers.push(`Compliance review status is "${review.reviewStatus}" and must be "reviewed"`);
+  }
+  if (!review.secondPartyComplete) blockers.push('Second-party approval is not complete');
+  if (!review.vendorApproved) blockers.push('Vendor is not approved');
+  if (!review.reviewNotes?.trim()) blockers.push('Compliance justification is missing');
+  return blockers;
+}
+
+type IssueReadinessSection = {
+  key: string;
+  label: string;
+  status: 'pass' | 'fail' | 'not_applicable';
+  blockers: string[];
+  details?: Record<string, unknown>;
+};
+
+async function buildVendorPOIssueReadiness(vendorPO: any): Promise<{
+  vendorPoId: number;
+  vendorId: number | null;
+  vendorName: string | null;
+  productionLine: string | null;
+  isP2: boolean;
+  ready: boolean;
+  sections: IssueReadinessSection[];
+}> {
+  const isP2 = isP2ProductionLine(vendorPO.productionLine);
+  const { db: drizzleDb } = await import('../../db');
+  const {
+    purchaseRequisitions,
+    vendorPoFarFlowdowns,
+    vendorDebarmentChecks,
+    procurementSettings,
+    vendors,
+  } = await import('../../schema');
+  const { eq: dEq, and: dAnd, gte: dGte, desc: dDesc, sql: dSql } = await import('drizzle-orm');
+
+  const vendorId = Number(vendorPO.vendorId);
+  const [vendor] = Number.isFinite(vendorId)
+    ? await drizzleDb.select().from(vendors).where(dEq(vendors.id, vendorId)).limit(1)
+    : [];
+
+  const [setting] = await drizzleDb.select().from(procurementSettings).limit(1);
+  const freshnessDays = setting?.debarmentCheckFreshnessDays ?? 30;
+  const cutoff = new Date(Date.now() - freshnessDays * 86_400_000);
+  const freshDebarment = Number.isFinite(vendorId)
+    ? await drizzleDb.select().from(vendorDebarmentChecks).where(dAnd(
+      dEq(vendorDebarmentChecks.vendorId, vendorId),
+      dGte(vendorDebarmentChecks.checkedAt, cutoff),
+      dEq(vendorDebarmentChecks.result, 'pass'),
+    )).orderBy(dDesc(vendorDebarmentChecks.checkedAt)).limit(1)
+    : [];
+
+  const vendorMasterBlockers: string[] = [];
+  let approvedSameNameVendors: Array<{ id: number; name: string }> = [];
+  if (!vendor) {
+    vendorMasterBlockers.push('Vendor record not found');
+  } else {
+    if (vendor.isActive === false) vendorMasterBlockers.push('Vendor is inactive');
+    const vendorMasterApproved = hasCurrentVendorMasterApproval(vendor);
+    if (!vendorMasterApproved) {
+      approvedSameNameVendors = await drizzleDb
+        .select({ id: vendors.id, name: vendors.name })
+        .from(vendors)
+        .where(dSql`
+          LOWER(${vendors.name}) = LOWER(${vendor.name})
+          AND ${vendors.isActive} IS DISTINCT FROM false
+          AND (
+            ${vendors.approved} = true
+            OR (
+              NULLIF(TRIM(${vendors.approvalLevel}), '') IS NOT NULL
+              AND ${vendors.approvalExpiration} IS NOT NULL
+              AND ${vendors.approvalExpiration} >= CURRENT_DATE
+            )
+          )
+          AND ${vendors.id} <> ${vendor.id}
+        `)
+        .limit(5);
+      if (approvedSameNameVendors.length > 0) {
+        vendorMasterBlockers.push(
+          `This PO is linked to vendor #${vendor.id}, which is not approved. Approved vendor record(s) with the same name: ${approvedSameNameVendors.map((v) => `#${v.id}`).join(', ')}`
+        );
+      } else {
+        vendorMasterBlockers.push(`Vendor master record #${vendor.id} is not approved`);
+      }
+    }
+    if (vendor.approvalExpiration && new Date(vendor.approvalExpiration) < new Date()) {
+      vendorMasterBlockers.push(`Vendor approval expired on ${vendor.approvalExpiration}`);
+    }
+  }
+
+  const supplierQualificationBlockers = await getVendorQualificationBlockers(
+    vendorPO.id,
+    vendorId,
+    vendorPO.productionLine ?? null,
+  );
+  const scopeBlockers = supplierQualificationBlockers.filter((reason) =>
+    reason.includes('scope') ||
+    reason.includes('line items') ||
+    reason.includes('outside the vendor')
+  );
+
+  const purchasingBlockers: string[] = [];
+  if (vendorPO.requisitionId) {
+    const [r] = await drizzleDb.select().from(purchaseRequisitions)
+      .where(dEq(purchaseRequisitions.id, vendorPO.requisitionId));
+    if (!r) purchasingBlockers.push('Linked requisition not found');
+    else if (r.status !== 'APPROVED' && r.status !== 'CONVERTED_TO_PO') {
+      purchasingBlockers.push(`Linked requisition must be APPROVED (currently ${r.status})`);
+    }
+  }
+  if (!vendorPO.competitionMethod) {
+    purchasingBlockers.push('Competition method must be recorded');
+  }
+  if (vendorPO.competitionMethod === 'sole-source' &&
+      (!vendorPO.soleSourceJustification || vendorPO.soleSourceJustification.trim().length < 10)) {
+    purchasingBlockers.push('Sole-source justification required');
+  }
+  const flowdowns = await drizzleDb.select().from(vendorPoFarFlowdowns)
+    .where(dEq(vendorPoFarFlowdowns.vendorPoId, vendorPO.id));
+  if (flowdowns.length === 0) {
+    purchasingBlockers.push('FAR flowdown checklist has not been recorded for this PO');
+  } else if (flowdowns.some((fd) => !fd.reasoning || fd.reasoning.trim().length < 3)) {
+    purchasingBlockers.push('One or more FAR flowdown entries is missing applicability reasoning');
+  }
+
+  const complianceBlockers = isP2 ? await getVendorPOComplianceBlockers(vendorPO.id) : [];
+  const sections: IssueReadinessSection[] = [
+    {
+      key: 'vendor_master',
+      label: VENDOR_PO_ISSUE_GATES_DEACTIVATED ? 'Vendor Master Approval (deactivated)' : 'Vendor Master Approval',
+      status: VENDOR_PO_ISSUE_GATES_DEACTIVATED ? 'not_applicable' : vendorMasterBlockers.length > 0 ? 'fail' : 'pass',
+      blockers: VENDOR_PO_ISSUE_GATES_DEACTIVATED ? [] : vendorMasterBlockers,
+      details: vendor ? {
+        deactivatedForIssuance: VENDOR_PO_ISSUE_GATES_DEACTIVATED,
+        deactivatedBlockers: vendorMasterBlockers,
+        vendorId: vendor.id,
+        vendorName: vendor.name,
+        approved: hasCurrentVendorMasterApproval(vendor),
+        rawApprovedFlag: vendor.approved,
+        approvalLevel: vendor.approvalLevel ?? null,
+        approvalExpiration: vendor.approvalExpiration ?? null,
+        debarmentStatus: vendor.debarmentStatus ?? null,
+        debarmentCheckedAt: vendor.debarmentCheckedAt ?? null,
+        approvedSameNameVendors,
+      } : {
+        vendorId,
+        deactivatedForIssuance: VENDOR_PO_ISSUE_GATES_DEACTIVATED,
+        deactivatedBlockers: vendorMasterBlockers,
+      },
+    },
+    {
+      key: 'debarment',
+      label: 'Debarment Check (deactivated)',
+      status: 'not_applicable',
+      blockers: [],
+      details: {
+        deactivated: true,
+        deactivatedReason: 'Debarment check is temporarily not enforced on vendor PO issuance.',
+        freshnessDays,
+        latestPassingCheck: freshDebarment[0] ?? null,
+      },
+    },
+    {
+      key: 'supplier_scope',
+      label: VENDOR_PO_ISSUE_GATES_DEACTIVATED ? 'Approved Supplier Scope (deactivated)' : 'Approved Supplier Scope',
+      status: VENDOR_PO_ISSUE_GATES_DEACTIVATED ? 'not_applicable' : scopeBlockers.length > 0 ? 'fail' : 'pass',
+      blockers: VENDOR_PO_ISSUE_GATES_DEACTIVATED ? [] : scopeBlockers,
+      details: {
+        deactivatedForIssuance: VENDOR_PO_ISSUE_GATES_DEACTIVATED,
+        deactivatedBlockers: scopeBlockers,
+      },
+    },
+    {
+      key: 'purchasing_controls',
+      label: VENDOR_PO_ISSUE_GATES_DEACTIVATED ? 'Purchasing Controls (deactivated)' : 'Purchasing Controls',
+      status: VENDOR_PO_ISSUE_GATES_DEACTIVATED || !isP2 ? 'not_applicable' : purchasingBlockers.length > 0 ? 'fail' : 'pass',
+      blockers: VENDOR_PO_ISSUE_GATES_DEACTIVATED || !isP2 ? [] : purchasingBlockers,
+      details: {
+        deactivatedForIssuance: VENDOR_PO_ISSUE_GATES_DEACTIVATED,
+        deactivatedBlockers: purchasingBlockers,
+        requisitionId: vendorPO.requisitionId ?? null,
+        competitionMethod: vendorPO.competitionMethod ?? null,
+        flowdownCount: flowdowns.length,
+      },
+    },
+    {
+      key: 'p2_compliance_review',
+      label: VENDOR_PO_ISSUE_GATES_DEACTIVATED ? 'P2 Compliance Review (deactivated)' : 'P2 Compliance Review',
+      status: VENDOR_PO_ISSUE_GATES_DEACTIVATED || !isP2 ? 'not_applicable' : complianceBlockers.length > 0 ? 'fail' : 'pass',
+      blockers: VENDOR_PO_ISSUE_GATES_DEACTIVATED || !isP2 ? [] : complianceBlockers,
+      details: {
+        appliesToProductionLine: isP2,
+        deactivatedForIssuance: VENDOR_PO_ISSUE_GATES_DEACTIVATED,
+        deactivatedBlockers: complianceBlockers,
+      },
+    },
+  ];
+
+  return {
+    vendorPoId: vendorPO.id,
+    vendorId: vendor?.id ?? vendorId ?? null,
+    vendorName: vendor?.name ?? vendorPO.vendorName ?? null,
+    productionLine: vendorPO.productionLine ?? null,
+    isP2,
+    ready: sections.every((section) => section.status !== 'fail'),
+    sections,
+  };
+}
+
+function hasTraceabilityLink(data: Record<string, unknown>): boolean {
+  return ['customerPoId', 'projectId', 'productionWorkOrderId', 'chargeCodeId'].some((key) => {
+    const value = data[key];
+    return value !== undefined && value !== null && String(value).trim() !== '';
+  });
+}
+
+async function requireP2ComplianceBeforeProjectAllocation(
+  vendorPoId: number,
+  traceability: { customerPoId?: unknown; projectId?: unknown; productionWorkOrderId?: unknown }
+) {
+  const hasProjectAllocation =
+    traceability.customerPoId !== undefined && traceability.customerPoId !== null ||
+    traceability.projectId !== undefined && traceability.projectId !== null ||
+    traceability.productionWorkOrderId !== undefined && traceability.productionWorkOrderId !== null;
+  if (!hasProjectAllocation) return;
+  const vendorPO = await storage.getVendorPO(vendorPoId);
+  if (!vendorPO) {
+    const error: any = new Error('Vendor PO not found');
+    error.status = 404;
+    throw error;
+  }
+  if (!isP2ProductionLine(vendorPO.productionLine)) return;
+
+  const blockers = await getVendorPOComplianceBlockers(vendorPoId);
+  if (blockers.length > 0) {
+    const error: any = new Error(`Cannot allocate P2 vendor purchase to a project. Reason(s): ${blockers.join('; ')}.`);
+    error.status = 422;
+    error.blockingReasons = blockers;
+    throw error;
+  }
+}
+
+async function requireP2LineTraceability(vendorPoId: number, data: Record<string, unknown>) {
+  const vendorPO = await storage.getVendorPO(vendorPoId);
+  if (!isP2ProductionLine(vendorPO?.productionLine)) return;
+
+  if (!hasTraceabilityLink(data)) {
+    const error: any = new Error(
+      'P2 vendor PO lines must include at least one traceability link: customer PO, project, WAD/work order, or charge code.'
+    );
+    error.status = 422;
+    error.blockingReasons = [error.message];
+    throw error;
+  }
+}
 
 /**
  * Build the set of allowed recipient emails for a vendor:
@@ -45,6 +527,15 @@ function filterAllowedRecipients(raw: unknown, allowed: Set<string>): string[] {
     .filter((e): e is string => typeof e === 'string')
     .map((e) => e.trim().toLowerCase())
     .filter((e) => allowed.has(e));
+}
+
+function rowsFromDbResult<T>(result: unknown): T[] {
+  if (Array.isArray(result)) return result as T[];
+  if (result && typeof result === 'object' && 'rows' in result) {
+    const rows = (result as { rows?: unknown }).rows;
+    return Array.isArray(rows) ? (rows as T[]) : [];
+  }
+  return [];
 }
 
 /**
@@ -142,12 +633,7 @@ router.get('/', async (req: Request, res: Response) => {
     type CountRow = { vendor_po_id: number; cnt: number };
     const countMap: Record<number, number> = {};
     if (countResult.status === 'fulfilled') {
-      const countRows = countResult.value;
-      const rows: CountRow[] = (
-        countRows && typeof countRows === 'object' && 'rows' in countRows
-          ? (countRows as { rows: CountRow[] }).rows
-          : countRows
-      ) as CountRow[];
+      const rows = rowsFromDbResult<CountRow>(countResult.value);
       for (const row of rows) {
         countMap[row.vendor_po_id] = Number(row.cnt);
       }
@@ -161,12 +647,7 @@ router.get('/', async (req: Request, res: Response) => {
     const confirmUsedAtMap: Record<number, string | null> = {};
     const confirmExpiresAtMap: Record<number, string | null> = {};
     if (confirmResult.status === 'fulfilled') {
-      const confirmRows = confirmResult.value;
-      const cRows: ConfirmRow[] = (
-        confirmRows && typeof confirmRows === 'object' && 'rows' in confirmRows
-          ? (confirmRows as { rows: ConfirmRow[] }).rows
-          : confirmRows
-      ) as ConfirmRow[];
+      const cRows = rowsFromDbResult<ConfirmRow>(confirmResult.value);
       const now = new Date();
       for (const cr of cRows) {
         if (cr.vendor_po_id == null) continue;
@@ -190,12 +671,7 @@ router.get('/', async (req: Request, res: Response) => {
     type ComplianceRow = { vendor_po_id: number; review_status: string; second_party_complete: boolean; vendor_approved: boolean; review_notes: string | null };
     const complianceMap: Record<number, ComplianceStatusBadge> = {};
     if (complianceResult.status === 'fulfilled') {
-      const complianceRows = complianceResult.value;
-      const cRows: ComplianceRow[] = (
-        complianceRows && typeof complianceRows === 'object' && 'rows' in complianceRows
-          ? (complianceRows as { rows: ComplianceRow[] }).rows
-          : complianceRows
-      ) as ComplianceRow[];
+      const cRows = rowsFromDbResult<ComplianceRow>(complianceResult.value);
       for (const cr of cRows) {
         if (cr.vendor_po_id == null) continue;
         if (cr.review_status === 'requires_attention') {
@@ -212,8 +688,13 @@ router.get('/', async (req: Request, res: Response) => {
       console.error('[VendorPO] Compliance review query failed:', complianceResult.reason);
     }
 
-    const augment = (po: POShape) => {
+    const augment = (po: POShape & { productionLine?: string | null }) => {
       const isIssued = ['Sent', 'Partially Received', 'Fully Received'].includes(po.status ?? '');
+      // Compliance review only gates P2 POs. For non-P2 lines (GENERAL/P1/R_AND_D)
+      // we hide the badge entirely so a stale review left over from when the PO
+      // was P2 doesn't show as "Blocked / Requires Attention". The DB row is left
+      // intact so flipping back to P2 re-surfaces the prior state.
+      const showCompliance = !VENDOR_PO_ISSUE_GATES_DEACTIVATED && isP2ProductionLine(po.productionLine);
       return {
         ...po,
         pendingReceiptCount: countMap[po.id] ?? 0,
@@ -222,8 +703,10 @@ router.get('/', async (req: Request, res: Response) => {
         confirmationBadge: (isIssued ? (confirmMap[po.id] ?? 'no_link') : null) as ConfirmBadge,
         confirmationUsedAt: isIssued ? (confirmUsedAtMap[po.id] ?? null) : null,
         confirmationExpiresAt: isIssued ? (confirmExpiresAtMap[po.id] ?? null) : null,
-        // Compliance status badge: 'Pending Review' if no review exists
-        complianceStatus: (complianceMap[po.id] ?? 'Pending Review') as ComplianceStatusBadge,
+        // Compliance status badge: 'Pending Review' if no review exists; null when not a P2 PO
+        complianceStatus: (showCompliance
+          ? (complianceMap[po.id] ?? 'Pending Review')
+          : null) as ComplianceStatusBadge | null,
       };
     };
 
@@ -442,7 +925,8 @@ router.delete('/optional-settings/:id', async (req: Request, res: Response) => {
 });
 
 // GET /api/vendor-pos/compliance-backfill - Procurement Compliance Backfill Queue
-// Returns all issued POs with compliance gaps, enriched with per-row failing reasons and recommended actions.
+// Returns issued POs with compliance gaps, enriched with per-row failing reasons and recommended actions.
+// Default "all" includes isolated legacy rows; "enforced" matches the current ERDI scoring population.
 // Must be defined BEFORE /:id to avoid route conflict.
 // Query param: filter = 'all' | 'enforced' | 'legacy' | 'audit-sensitive-legacy'
 const backfillFilterSchema = z.enum(['all', 'enforced', 'legacy', 'audit-sensitive-legacy']).default('all');
@@ -562,6 +1046,43 @@ router.put('/compliance-effective-date', async (req: Request, res: Response) => 
   }
 });
 
+// GET /api/vendor-pos/traceability-options - Options for line-level project/WAD/charge-code links
+router.get('/traceability-options', async (_req: Request, res: Response) => {
+  try {
+    const [projects, productionWorkOrders, chargeCodes] = await Promise.all([
+      storage.getAllProjects(),
+      storage.getAllProductionWorkOrders(),
+      storage.listChargeCodes(true),
+    ]);
+
+    res.json({ projects, productionWorkOrders, chargeCodes });
+  } catch (error) {
+    console.error('Get vendor PO traceability options error:', error);
+    res.status(500).json({ error: 'Failed to retrieve traceability options' });
+  }
+});
+
+// GET /api/vendor-pos/:id/issue-readiness - Explain all gates that affect PO issuance
+router.get('/:id/issue-readiness', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid vendor PO ID' });
+    }
+
+    const vendorPO = await storage.getVendorPO(id);
+    if (!vendorPO) {
+      return res.status(404).json({ error: 'Vendor PO not found' });
+    }
+
+    const readiness = await buildVendorPOIssueReadiness(vendorPO);
+    res.json(readiness);
+  } catch (error: any) {
+    console.error('[VendorPO] Issue readiness error:', error);
+    res.status(500).json({ error: error.message || 'Failed to build PO issue readiness' });
+  }
+});
+
 // GET /api/vendor-pos/:id - Get a single vendor PO
 router.get('/:id', async (req: Request, res: Response) => {
   try {
@@ -620,12 +1141,10 @@ router.post('/', requirePermission('purchasing.manage_pos'), async (req: Request
     res.status(201).json(vendorPO);
   } catch (error) {
     console.error('Create vendor PO error:', error);
-    if (error instanceof z.ZodError) {
-      return res
-        .status(400)
-        .json({ error: 'Invalid vendor PO data', details: error.errors });
-    }
-    res.status(500).json({ error: 'Failed to create vendor PO' });
+    return sendApiError(res, error, {
+      fallbackMessage: 'Failed to create vendor PO',
+      source: 'vendorPO.create',
+    });
   }
 });
 
@@ -684,6 +1203,14 @@ router.put('/:id', requirePermission('purchasing.manage_pos'), async (req: Reque
         newValue: data.vendorId,
       });
     }
+    if ((data as any).productionLine !== undefined && (data as any).productionLine !== existingPO.productionLine) {
+      const actorId = (req as any).user?.id as number | undefined;
+      await storage.invalidateVendorPoComplianceReview(id, 'Production line changed after compliance review', actorId, {
+        changedField: 'productionLine',
+        previousValue: existingPO.productionLine,
+        newValue: (data as any).productionLine,
+      });
+    }
 
     const vendorPO = await storage.updateVendorPO(id, data);
 
@@ -694,12 +1221,10 @@ router.put('/:id', requirePermission('purchasing.manage_pos'), async (req: Reque
     res.json(vendorPO);
   } catch (error) {
     console.error('Update vendor PO error:', error);
-    if (error instanceof z.ZodError) {
-      return res
-        .status(400)
-        .json({ error: 'Invalid vendor PO data', details: error.errors });
-    }
-    res.status(500).json({ error: 'Failed to update vendor PO' });
+    return sendApiError(res, error, {
+      fallbackMessage: 'Failed to update vendor PO',
+      source: 'vendorPO.update',
+    });
   }
 });
 
@@ -825,16 +1350,24 @@ router.post('/:id/items', async (req: Request, res: Response) => {
       { changedField: 'lineItems', action: 'added' },
     );
 
+    await requireP2LineTraceability(vendorPoId, data as Record<string, unknown>);
+    await requireP2ComplianceBeforeProjectAllocation(vendorPoId, data);
+
     const item = await storage.createVendorPOItem(data);
     res.status(201).json(item);
   } catch (error) {
     console.error('Create vendor PO item error:', error);
-    if (error instanceof z.ZodError) {
-      return res
-        .status(400)
-        .json({ error: 'Invalid vendor PO item data', details: error.errors });
+    if ((error as any)?.status) {
+      return sendApiError(res, error, {
+        fallbackMessage: 'Failed to create vendor PO item',
+        source: 'vendorPO.item.create',
+        exposeMessage: true,
+      });
     }
-    res.status(500).json({ error: 'Failed to create vendor PO item' });
+    return sendApiError(res, error, {
+      fallbackMessage: 'Failed to create vendor PO item',
+      source: 'vendorPO.item.create',
+    });
   }
 });
 
@@ -849,19 +1382,44 @@ router.put('/items/:itemId', async (req: Request, res: Response) => {
     // Fetch old item to compare material fields before updating.
     const oldItem = await storage.getVendorPOItemById(itemId);
     const data = insertVendorPOItemSchema.partial().parse(req.body);
+    const materialFields: Array<{ key: string; label: string }> = [
+      { key: 'quantity', label: 'quantity' },
+      { key: 'unitPrice', label: 'unit price' },
+      { key: 'purchaseQty', label: 'purchase quantity' },
+      { key: 'purchaseUnitPrice', label: 'purchase unit price' },
+    ];
+    const changedField = oldItem
+      ? materialFields.find(
+          (f) => data[f.key as keyof typeof data] !== undefined && Number(data[f.key as keyof typeof data]) !== Number(oldItem[f.key])
+        )
+      : undefined;
+
+    if (oldItem) {
+      const finalTraceability = {
+        customerPoId: data.customerPoId !== undefined ? data.customerPoId : oldItem.customerPoId,
+        projectId: data.projectId !== undefined ? data.projectId : oldItem.projectId,
+        productionWorkOrderId: data.productionWorkOrderId !== undefined ? data.productionWorkOrderId : oldItem.productionWorkOrderId,
+        chargeCodeId: data.chargeCodeId !== undefined ? data.chargeCodeId : oldItem.chargeCodeId,
+      };
+      await requireP2LineTraceability(oldItem.vendorPoId, finalTraceability);
+      await requireP2ComplianceBeforeProjectAllocation(oldItem.vendorPoId, finalTraceability);
+
+      if (changedField && hasTraceabilityLink(finalTraceability)) {
+        const vendorPO = await storage.getVendorPO(oldItem.vendorPoId);
+        if (isP2ProductionLine(vendorPO?.productionLine)) {
+          const error: any = new Error(
+            `Cannot keep a P2 line linked to project traceability while changing ${changedField.label}. Clear the traceability links, save the material change, complete compliance review, then allocate it again.`
+          );
+          error.status = 422;
+          error.blockingReasons = [error.message];
+          throw error;
+        }
+      }
+    }
 
     // Invalidate compliance review BEFORE updating the item so that if invalidation
     // fails the item mutation never commits (fail-safe).
     if (oldItem) {
-      const materialFields: Array<{ key: string; label: string }> = [
-        { key: 'quantity', label: 'quantity' },
-        { key: 'unitPrice', label: 'unit price' },
-        { key: 'purchaseQty', label: 'purchase quantity' },
-        { key: 'purchaseUnitPrice', label: 'purchase unit price' },
-      ];
-      const changedField = materialFields.find(
-        (f) => data[f.key as keyof typeof data] !== undefined && Number(data[f.key as keyof typeof data]) !== Number(oldItem[f.key])
-      );
       if (changedField) {
         const actorId = (req as any).user?.id as number | undefined;
         await storage.invalidateVendorPoComplianceReview(
@@ -882,12 +1440,17 @@ router.put('/items/:itemId', async (req: Request, res: Response) => {
     res.json(item);
   } catch (error) {
     console.error('Update vendor PO item error:', error);
-    if (error instanceof z.ZodError) {
-      return res
-        .status(400)
-        .json({ error: 'Invalid vendor PO item data', details: error.errors });
+    if ((error as any)?.status) {
+      return sendApiError(res, error, {
+        fallbackMessage: 'Failed to update vendor PO item',
+        source: 'vendorPO.item.update',
+        exposeMessage: true,
+      });
     }
-    res.status(500).json({ error: 'Failed to update vendor PO item' });
+    return sendApiError(res, error, {
+      fallbackMessage: 'Failed to update vendor PO item',
+      source: 'vendorPO.item.update',
+    });
   }
 });
 
@@ -938,9 +1501,17 @@ router.post('/items/:itemId/receive', async (req: Request, res: Response) => {
       createdBy: z.number().int().positive().optional(), // Employee ID
       cocLink: z.string().optional(), // Certificate of Conformance link
       documentUrl: z.string().optional(), // Uploaded document URL
+      // Per-unit traceability splits (Task #240). When provided, each entry
+      // creates its own material_lots row + its own ITL RECEIVE row. Sum of
+      // unit quantities must equal `receivedQuantity`.
+      units: z.array(z.object({
+        quantity: z.number().positive('Unit quantity must be positive'),
+        traceability: z.record(z.string(), z.string()).optional(),
+        notes: z.string().optional(),
+      })).optional(),
     });
 
-    const { receivedQuantity, receivedDate, notes, createdBy, cocLink, documentUrl } = receiveSchema.parse(req.body);
+    const { receivedQuantity, receivedDate, notes, createdBy, cocLink, documentUrl, units } = receiveSchema.parse(req.body);
 
     // Record PO receipt and calculate COGS
     const result = await storage.recordVendorPOReceipt({
@@ -950,21 +1521,17 @@ router.post('/items/:itemId/receive', async (req: Request, res: Response) => {
       notes: documentUrl ? `${notes || ''} | Document: ${documentUrl}`.trim() : notes,
       createdBy,
       cocLink,
+      units,
     });
 
     res.json(result);
   } catch (error) {
     console.error('Record PO receipt error:', error);
-    if (error instanceof z.ZodError) {
-      return res
-        .status(400)
-        .json({ error: 'Invalid receipt data', details: error.errors });
-    }
-    // Pass business logic errors (like validation failures) to the client with 400
-    if (error instanceof Error) {
-      return res.status(400).json({ error: error.message });
-    }
-    res.status(500).json({ error: 'Failed to record PO receipt' });
+    return sendApiError(res, error, {
+      fallbackMessage: 'Failed to record PO receipt',
+      source: 'vendorPO.item.receive',
+      exposeMessage: true,
+    });
   }
 });
 
@@ -1321,7 +1888,7 @@ router.post('/:id/send-rfq', async (req: Request, res: Response) => {
       });
     }
 
-    const { recipients: rawRecipients } = req.body ?? {};
+    const { recipients: rawRecipients, printOnly } = req.body ?? {};
     const allowedEmails = await getAllowedVendorEmails(vendorPO.vendorId);
     const { to: rfqTo, cc: rfqCc } = deriveToAndCc(
       rawRecipients,
@@ -1329,6 +1896,24 @@ router.post('/:id/send-rfq', async (req: Request, res: Response) => {
       allowedEmails,
       ['laurie.tandy@agadvanced.com']
     );
+
+    const shouldPrintOnly =
+      printOnly === true ||
+      printOnly === 'true' ||
+      printOnly === 1 ||
+      printOnly === '1';
+
+    if (shouldPrintOnly) {
+      const updatedPO = await storage.updateVendorPO(id, { status: 'RFQ Sent' });
+      return res.json({
+        ...updatedPO,
+        emailSent: false,
+        emailRecipient: rfqTo,
+        emailCc: rfqCc,
+        printOnly: true,
+        message: `RFQ prepared for printing only.`,
+      });
+    }
 
     // Fetch line items for the RFQ
     const items = await storage.getVendorPOItems(id);
@@ -1385,10 +1970,12 @@ router.post('/:id/send-rfq', async (req: Request, res: Response) => {
 
     if (!emailResult.success) {
       console.error('Failed to send RFQ email:', emailResult.error);
-      return res.status(500).json({
-        error: 'Failed to send RFQ email',
-        message: emailResult.error || 'Email service unavailable. Please try again.',
-        emailSent: false,
+      const emailError: any = new Error(emailResult.error || 'Email service unavailable. Please try again.');
+      emailError.status = 503;
+      return sendApiError(res, emailError, {
+        fallbackMessage: 'Failed to send RFQ email',
+        source: 'vendorPO.rfq.email',
+        exposeMessage: true,
       });
     }
 
@@ -1406,10 +1993,11 @@ router.post('/:id/send-rfq', async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Send RFQ error:', error);
-    if (error instanceof Error) {
-      return res.status(400).json({ error: error.message });
-    }
-    res.status(500).json({ error: 'Failed to send RFQ' });
+    return sendApiError(res, error, {
+      fallbackMessage: 'Failed to send RFQ',
+      source: 'vendorPO.rfq.send',
+      exposeMessage: true,
+    });
   }
 });
 
@@ -1471,12 +2059,16 @@ router.post('/:id/direct-po-exception', requirePermission('purchasing.direct_po_
       actor: { id: approverId, username: u?.username, role: u?.role },
       reason: trimmed,
       meta: { poNumber: existing.poNumber ?? null },
-    }).catch(() => {});
+    });
 
     res.json({ ok: true, vendorPO: updated });
   } catch (err: any) {
     console.error('Direct-PO exception error:', err);
-    res.status(500).json({ error: err?.message ?? 'Failed to record direct-PO exception' });
+    return sendApiError(res, err, {
+      fallbackMessage: 'Failed to record direct-PO exception',
+      source: 'vendorPO.directPoException',
+      exposeMessage: true,
+    });
   }
 });
 
@@ -1508,22 +2100,51 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
 
     const performedBy = String((req as any).user?.username ?? (req as any).user?.id ?? 'unknown');
     const performedByEmail = (req as any).user?.email as string | undefined;
+    const actor = {
+      id: (req as any).user?.id,
+      username: (req as any).user?.username,
+      role: (req as any).user?.role,
+    };
 
-    // ── PURCHASING-CONTROLS GATE (Task #83): require approved requisition + fresh debarment check + FAR flowdowns ─
+    const supplierQualificationBlockers = await getVendorQualificationBlockers(id, vendorPO.vendorId, vendorPO.productionLine ?? null);
+    if (supplierQualificationBlockers.length > 0) {
+      await emitProcurementLedgerEvent({
+        action: VENDOR_PO_ISSUE_GATES_DEACTIVATED
+          ? 'VENDOR_PO_ISSUE_SUPPLIER_QUALIFICATION_GATE_DEACTIVATED'
+          : 'VENDOR_PO_ISSUE_BLOCKED_SUPPLIER_QUALIFICATION',
+        entityId: id,
+        actor,
+        reason: supplierQualificationBlockers.join('; '),
+        meta: {
+          vendorPoId: id,
+          vendorId: vendorPO.vendorId,
+          productionLine: vendorPO.productionLine ?? null,
+          blockers: supplierQualificationBlockers,
+        },
+      });
+      if (!VENDOR_PO_ISSUE_GATES_DEACTIVATED) {
+        return res.status(422).json({
+          error: 'Supplier qualification gate failed',
+          message: `Cannot issue PO. Reason(s): ${supplierQualificationBlockers.join('; ')}.`,
+          supplierQualificationBlocked: true,
+          blockingReasons: supplierQualificationBlockers,
+        });
+      }
+    }
+
+    // ── PURCHASING-CONTROLS GATE (Task #83): require approved requisition + FAR flowdowns ─
     {
       const { db: drizzleDb } = await import('../../db');
       const {
         purchaseRequisitions,
         vendorPoFarFlowdowns,
-        vendorDebarmentChecks,
         procurementSettings,
       } = await import('../../schema');
-      const { eq: dEq, and: dAnd, gte: dGte, desc: dDesc } = await import('drizzle-orm');
+      const { eq: dEq } = await import('drizzle-orm');
 
       const [setting] = await drizzleDb.select().from(procurementSettings).limit(1);
       const allowDirectPo = setting?.allowDirectPo ?? false;
       const directPoCap = setting?.directPoExceptionCapability ?? 'purchasing.direct_po_exception';
-      const freshnessDays = setting?.debarmentCheckFreshnessDays ?? 30;
 
       const purchasingBlockers: string[] = [];
 
@@ -1593,24 +2214,26 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
         }
       }
 
-      // (4) Vendor debarment check freshness
-      const cutoff = new Date(Date.now() - freshnessDays * 86_400_000);
-      const fresh = await drizzleDb.select().from(vendorDebarmentChecks).where(dAnd(
-        dEq(vendorDebarmentChecks.vendorId, vendorPO.vendorId),
-        dGte(vendorDebarmentChecks.checkedAt, cutoff),
-        dEq(vendorDebarmentChecks.result, 'pass'),
-      )).orderBy(dDesc(vendorDebarmentChecks.checkedAt)).limit(1);
-      if (fresh.length === 0) {
-        purchasingBlockers.push(`No fresh passing debarment check for vendor (within ${freshnessDays} days)`);
-      } else {
-        // Defer po_issuance evidence creation until AFTER issuance succeeds —
-        // a failed issuance attempt must not leave behind issuance evidence.
-        (req as any)._task83_freshDebarmentCheckId = fresh[0].id;
-        (req as any)._task83_freshDebarmentSource = fresh[0].source;
-        (req as any)._task83_freshDebarmentResult = fresh[0].result;
+      if (purchasingBlockers.length > 0 && VENDOR_PO_ISSUE_GATES_DEACTIVATED) {
+        await emitProcurementLedgerEvent({
+          action: 'VENDOR_PO_ISSUE_PURCHASING_CONTROLS_GATE_DEACTIVATED',
+          entityId: id,
+          actor,
+          reason: purchasingBlockers.join('; '),
+          meta: { vendorPoId: id, vendorId: vendorPO.vendorId, productionLine: vendorPO.productionLine ?? null, blockers: purchasingBlockers },
+        });
       }
 
-      if (purchasingBlockers.length > 0) {
+      // P2/customer-project purchases normally remain hard-blocked. This can be
+      // re-enabled by turning off VENDOR_PO_ISSUE_GATES_DEACTIVATED.
+      if (purchasingBlockers.length > 0 && isP2ProductionLine(vendorPO.productionLine) && !VENDOR_PO_ISSUE_GATES_DEACTIVATED) {
+        await emitProcurementLedgerEvent({
+          action: 'VENDOR_PO_ISSUE_BLOCKED_PURCHASING_CONTROLS',
+          entityId: id,
+          actor,
+          reason: purchasingBlockers.join('; '),
+          meta: { vendorPoId: id, vendorId: vendorPO.vendorId, productionLine: vendorPO.productionLine ?? null, blockers: purchasingBlockers },
+        });
         return res.status(422).json({
           error: 'Purchasing controls gate failed',
           message: `Cannot issue PO. Reason(s): ${purchasingBlockers.join('; ')}.`,
@@ -1621,22 +2244,24 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
     }
 
     // ── COMPLIANCE GATE: Server-side enforcement (UI gate is not sufficient) ─
-    // All four conditions are checked independently; status field alone is not trusted
-    // because DB edits or migration drift could leave it inconsistent.
-    const complianceReview = await storage.getVendorPOComplianceReview(id);
-    {
+    // Only enforced for P2 POs. Non-P2 production lines (GENERAL/P1/R_AND_D) are
+    // not gated by the compliance review even if a stale review row exists from
+    // when the PO was previously P2. The same isP2ProductionLine guard is used by
+    // requireP2ComplianceBeforeProjectAllocation so issuance and project-allocation
+    // gates stay consistent. The DB row is left intact so flipping back to P2
+    // re-surfaces the prior state (and invalidateVendorPoComplianceReview already
+    // marks it 'requires_attention' on production-line change).
+    const complianceReview = isP2ProductionLine(vendorPO.productionLine)
+      ? await storage.getVendorPOComplianceReview(id)
+      : null;
+    if (isP2ProductionLine(vendorPO.productionLine)) {
       const blockingReasons: string[] = [];
       if (!complianceReview) {
         blockingReasons.push('No compliance review found — complete the pre-issue review before issuing');
       } else {
         // Explicit requires_attention check — PO changed after review
         if (complianceReview.reviewStatus === 'requires_attention') {
-          return res.status(422).json({
-            error: 'Compliance review requires attention',
-            message: 'Compliance review requires attention because PO changed after review.',
-            complianceBlocked: true,
-            blockingReasons: ['Compliance review requires attention because PO changed after review.'],
-          });
+          blockingReasons.push('Compliance review requires attention because PO changed after review.');
         }
         if (complianceReview.reviewStatus !== 'reviewed') {
           blockingReasons.push(`Compliance review status is "${complianceReview.reviewStatus}" — must be "reviewed"`);
@@ -1652,24 +2277,31 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
         }
       }
       if (blockingReasons.length > 0) {
-        return res.status(422).json({
-          error: 'Compliance review gate failed',
-          message: `Cannot issue PO. Reason(s): ${blockingReasons.join('; ')}.`,
-          complianceBlocked: true,
-          blockingReasons,
+        await emitProcurementLedgerEvent({
+          action: VENDOR_PO_ISSUE_GATES_DEACTIVATED
+            ? 'VENDOR_PO_ISSUE_COMPLIANCE_REVIEW_GATE_DEACTIVATED'
+            : 'VENDOR_PO_ISSUE_BLOCKED_COMPLIANCE_REVIEW',
+          entityId: id,
+          actor,
+          reason: blockingReasons.join('; '),
+          meta: { vendorPoId: id, vendorId: vendorPO.vendorId, productionLine: vendorPO.productionLine ?? null, blockers: blockingReasons },
         });
+        if (!VENDOR_PO_ISSUE_GATES_DEACTIVATED) {
+          return res.status(422).json({
+            error: 'Compliance review gate failed',
+            message: `Cannot issue PO. Reason(s): ${blockingReasons.join('; ')}.`,
+            complianceBlocked: true,
+            blockingReasons,
+          });
+        }
       }
     }
 
     // ── PATH A: Issue WITHOUT emailing vendor (legacy/backfill) ──────────────
     if (skip) {
-      const trimmedReason = typeof reason === 'string' ? reason.trim() : '';
-      if (trimmedReason.length < 10 || !/\S/.test(trimmedReason)) {
-        return res.status(400).json({
-          error: 'Reason required',
-          message: 'Please provide a meaningful reason (at least 10 characters) for issuing without notifying the vendor.',
-        });
-      }
+      const trimmedReason = typeof reason === 'string' && reason.trim().length >= 10
+        ? reason.trim()
+        : 'Issued without vendor email during temporary purchasing controls deactivation.';
 
       const nowAt = new Date();
       const { vendorPO: issuedPO, poNumber } = await storage.issueVendorPO(id, {
@@ -1681,6 +2313,14 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
       });
 
       console.log(`[VendorPOIssuedNoEmail] PO ${poNumber} issued WITHOUT email by ${performedBy} — reason: ${trimmedReason}`);
+
+      await emitProcurementLedgerEvent({
+        action: 'VENDOR_PO_ISSUED_WITHOUT_EMAIL',
+        entityId: id,
+        actor,
+        reason: trimmedReason,
+        meta: { vendorPoId: id, vendorId: vendorPO.vendorId, poNumber, issuedWithoutEmail: true },
+      });
 
       // Task #83: NOW (post-issuance success) record po_issuance debarment evidence
       try {
@@ -1733,9 +2373,45 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
     }
 
     if (!vendor.email) {
-      return res.status(400).json({ 
-        error: 'Vendor email not configured',
-        message: 'Please add a contact email for this vendor before issuing the PO.',
+      const nowAt = new Date();
+      const fallbackReason = 'Issued without vendor email because vendor email is not configured.';
+      const { vendorPO: issuedPO, poNumber } = await storage.issueVendorPO(id, {
+        issuedWithoutEmail: true,
+        reason: fallbackReason,
+        issuedWithoutEmailAt: nowAt,
+        performedBy,
+        performedByEmail,
+      });
+
+      await emitProcurementLedgerEvent({
+        action: 'VENDOR_PO_ISSUED_WITHOUT_EMAIL',
+        entityId: id,
+        actor,
+        reason: fallbackReason,
+        meta: { vendorPoId: id, vendorId: vendorPO.vendorId, poNumber, issuedWithoutEmail: true, vendorEmailMissing: true },
+      });
+
+      if (vendorPO.requisitionId) {
+        try {
+          const { db: drizzleDb } = await import('../../db');
+          const { purchaseRequisitions } = await import('../../schema');
+          const { eq: dEq } = await import('drizzle-orm');
+          await drizzleDb.update(purchaseRequisitions).set({
+            status: 'CONVERTED_TO_PO',
+            convertedToPoId: id,
+            convertedAt: new Date(),
+            updatedAt: new Date(),
+          }).where(dEq(purchaseRequisitions.id, vendorPO.requisitionId));
+        } catch (e) {
+          console.error('[Task #83] failed to auto-convert requisition', e);
+        }
+      }
+
+      return res.json({
+        ...issuedPO,
+        emailSent: false,
+        poNumber,
+        message: 'PO issued successfully. Vendor email is not configured, so no confirmation email was sent.',
       });
     }
 
@@ -1744,6 +2420,13 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
 
     // Atomic transactional issuance: lock row, generate number, update status
     const { vendorPO: issuedPO, poNumber } = await storage.issueVendorPO(id);
+
+    await emitProcurementLedgerEvent({
+      action: 'VENDOR_PO_ISSUED',
+      entityId: id,
+      actor,
+      meta: { vendorPoId: id, vendorId: vendorPO.vendorId, poNumber, issuedWithoutEmail: false },
+    });
 
     // Generate magic link for PO confirmation — produce a frontend URL, not the raw API endpoint
     const { token: confirmToken, expiresAt } = await generateMagicLink({
@@ -1796,12 +2479,30 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
     });
 
     if (!emailResult.success) {
-      console.error('Failed to send PO confirmation email:', emailResult.error);
-      return res.status(500).json({
-        error: 'PO issued but confirmation email failed',
-        message: emailResult.error || 'Email service unavailable. PO has been issued — you may resend the email later.',
-        emailSent: false,
+      const requestId = res.locals.requestId;
+      const emailFailureMessage =
+        emailResult.error || 'Email service unavailable. PO has been issued - you may resend the email later.';
+
+      console.error('[VendorPOIssuedEmailFailed]', {
+        requestId,
         poNumber,
+        vendorPOId: id,
+        to: issueToEmail,
+        cc: issueCcList,
+        error: emailResult.error,
+      });
+
+      return res.json({
+        ...issuedPO,
+        success: true,
+        partialSuccess: true,
+        emailSent: false,
+        emailError: emailFailureMessage,
+        retryAction: 'resend',
+        poNumber,
+        requestId,
+        confirmationLinkExpires: expiresAt,
+        message: 'PO issued successfully, but the confirmation email was not sent. Use resend to notify the vendor.',
       });
     }
 
@@ -1853,16 +2554,11 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
     });
   } catch (error: any) {
     console.error('Issue vendor PO error:', error);
-    if (error?.code === '23505' || error?.message?.includes('duplicate key') || error?.message?.includes('vendor_pos_po_number')) {
-      return res.status(409).json({
-        error: 'PO number conflict',
-        message: 'A PO number conflict occurred. Please try again.',
-      });
-    }
-    if (error instanceof Error) {
-      return res.status(400).json({ error: error.message });
-    }
-    res.status(500).json({ error: 'Failed to issue vendor PO' });
+    return sendApiError(res, error, {
+      fallbackMessage: 'Failed to issue vendor PO',
+      source: 'vendorPO.issue',
+      exposeMessage: true,
+    });
   }
 });
 
@@ -2089,10 +2785,12 @@ router.post('/:id/resend', async (req: Request, res: Response) => {
 
     if (!emailResult.success) {
       console.error('Failed to resend PO confirmation email:', emailResult.error);
-      return res.status(500).json({
-        error: 'Failed to resend PO confirmation email',
-        message: emailResult.error || 'Email service unavailable.',
-        emailSent: false,
+      const emailError: any = new Error(emailResult.error || 'Email service unavailable.');
+      emailError.status = 503;
+      return sendApiError(res, emailError, {
+        fallbackMessage: 'Failed to resend PO confirmation email',
+        source: 'vendorPO.resend.email',
+        exposeMessage: true,
       });
     }
 
@@ -2107,10 +2805,11 @@ router.post('/:id/resend', async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Resend vendor PO error:', error);
-    if (error instanceof Error) {
-      return res.status(400).json({ error: error.message });
-    }
-    res.status(500).json({ error: 'Failed to resend vendor PO' });
+    return sendApiError(res, error, {
+      fallbackMessage: 'Failed to resend vendor PO',
+      source: 'vendorPO.resend',
+      exposeMessage: true,
+    });
   }
 });
 
@@ -2174,7 +2873,13 @@ router.get('/confirm/preview', async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('[VendorPOConfirmPreview] error:', error);
-    res.status(500).json({ valid: false, errorCode: 'TOKEN_NOT_FOUND', error: 'Failed to preview confirmation', contactInfo });
+    res.status(500).json({
+      valid: false,
+      errorCode: 'TOKEN_NOT_FOUND',
+      error: 'Failed to preview confirmation',
+      requestId: res.locals.requestId,
+      contactInfo,
+    });
   }
 });
 
@@ -2229,7 +2934,12 @@ router.post('/confirm', async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('[VendorPOConfirm] error:', error);
-    res.status(500).json({ success: false, errorCode: 'TOKEN_NOT_FOUND', error: 'Failed to process confirmation' });
+    res.status(500).json({
+      success: false,
+      errorCode: 'TOKEN_NOT_FOUND',
+      error: 'Failed to process confirmation',
+      requestId: res.locals.requestId,
+    });
   }
 });
 

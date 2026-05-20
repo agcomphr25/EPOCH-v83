@@ -19,9 +19,14 @@ interface UnreadCountResponse {
 }
 
 interface CurrentUser {
-  id: number;
-  username: string;
-  role: string;
+  id?: number;
+  username?: string;
+  role?: string;
+  user?: {
+    id?: number;
+    username?: string;
+    role?: string;
+  };
 }
 
 export default function MessageNotificationPopup() {
@@ -33,25 +38,27 @@ export default function MessageNotificationPopup() {
   const { data: currentUser } = useQuery<CurrentUser>({
     queryKey: ['/api/auth/session'],
   });
+  const sessionUser = currentUser?.user ?? currentUser;
+  const currentUserId = sessionUser?.id;
 
   // Get unread message count
   const { data: unreadData, isLoading } = useQuery<UnreadCountResponse>({
-    queryKey: ['/api/internal-messages/unread/count', currentUser?.id],
+    queryKey: ['/api/internal-messages/unread/count', currentUserId],
     queryFn: async () => {
-      const res = await fetch(`/api/internal-messages/unread/count/${currentUser!.id}`);
+      const res = await fetch(`/api/internal-messages/unread/count/${currentUserId}`);
       if (!res.ok) throw new Error(await res.text());
       return res.json();
     },
-    enabled: !!currentUser?.id,
+    enabled: !!currentUserId,
     refetchInterval: 60000,
   });
 
   // Reset hasBeenShown flag when user changes (logout/login)
   useEffect(() => {
-    if (currentUser?.id) {
+    if (currentUserId) {
       setHasBeenShown(false);
     }
-  }, [currentUser?.id]);
+  }, [currentUserId]);
 
   // Show popup on login when user has unread messages
   useEffect(() => {
@@ -60,12 +67,12 @@ export default function MessageNotificationPopup() {
       unreadData &&
       unreadData.hasUnread &&
       !hasBeenShown &&
-      currentUser?.id
+      currentUserId
     ) {
       setIsOpen(true);
       setHasBeenShown(true);
     }
-  }, [unreadData, isLoading, hasBeenShown, currentUser]);
+  }, [unreadData, isLoading, hasBeenShown, currentUserId]);
 
   const handleViewMessages = () => {
     setIsOpen(false);

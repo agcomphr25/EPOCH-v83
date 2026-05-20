@@ -100,6 +100,14 @@ export async function submitPTORequest(
     }
   );
 
+  if (initialStatus === "pending_supervisor") {
+    const { notifyPTOApprovalNeeded } = await import("./approvalNotifications.service");
+    void notifyPTOApprovalNeeded(row!.id);
+  } else if (initialStatus === "pending_hr") {
+    const { notifyPTOHrAdminNeeded } = await import("./approvalNotifications.service");
+    void notifyPTOHrAdminNeeded(row!.id, "Employee has no supervisor assigned; routed directly to HR/Admin.");
+  }
+
   return row!;
 }
 
@@ -178,6 +186,22 @@ async function _supervisorDecision(
     actor: actorFromUser(actorUser, actorIp),
   });
 
+  const { notifyPTOEmployeeStatus, notifyPTOHrAdminNeeded } = await import("./approvalNotifications.service");
+  if (decision === "approved") {
+    void notifyPTOEmployeeStatus(
+      req.id,
+      `PTO request #${req.id} approved by supervisor`,
+      "Your PTO request was approved by your supervisor and is now waiting for HR/Admin review."
+    );
+    void notifyPTOHrAdminNeeded(req.id, "Supervisor approved; HR/Admin review is now required.");
+  } else {
+    void notifyPTOEmployeeStatus(
+      req.id,
+      `PTO request #${req.id} denied by supervisor`,
+      `Your PTO request was denied by your supervisor.${note ? `\nReason: ${note}` : ""}`
+    );
+  }
+
   return updated!;
 }
 
@@ -217,6 +241,21 @@ async function _hrDecision(
     newValues: { status: nextStatus, hrDecision: decision, hrNote: note ?? null },
     actor: actorFromUser(actorUser, actorIp),
   });
+
+  const { notifyPTOEmployeeStatus } = await import("./approvalNotifications.service");
+  if (decision === "approved") {
+    void notifyPTOEmployeeStatus(
+      req.id,
+      `PTO request #${req.id} approved by HR/Admin`,
+      "Your PTO request was approved by HR/Admin and is now waiting for final review."
+    );
+  } else {
+    void notifyPTOEmployeeStatus(
+      req.id,
+      `PTO request #${req.id} denied by HR/Admin`,
+      `Your PTO request was denied by HR/Admin.${note ? `\nReason: ${note}` : ""}`
+    );
+  }
 
   return updated!;
 }
@@ -297,6 +336,21 @@ async function _vpDecision(
 
     return u!;
   });
+
+  const { notifyPTOEmployeeStatus } = await import("./approvalNotifications.service");
+  if (decision === "approved") {
+    void notifyPTOEmployeeStatus(
+      req.id,
+      `PTO request #${req.id} approved`,
+      "Your PTO request has received final approval."
+    );
+  } else {
+    void notifyPTOEmployeeStatus(
+      req.id,
+      `PTO request #${req.id} denied`,
+      `Your PTO request was denied during final review.${note ? `\nReason: ${note}` : ""}`
+    );
+  }
 
   return updated;
 }

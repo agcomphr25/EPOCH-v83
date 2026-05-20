@@ -12,6 +12,7 @@ import {
   p2VacuumLeakTests,
   p2FinalInspectionResults,
   p2SerializedItems,
+  travelers,
 } from '../../schema';
 import { eq, and, desc, or, inArray } from 'drizzle-orm';
 import { z } from 'zod';
@@ -171,6 +172,98 @@ async function resolveUserId(req: Request): Promise<number | null> {
   return null;
 }
 
+function field(row: any, camel: string, snake: string) {
+  return row?.[camel] ?? row?.[snake] ?? null;
+}
+
+async function resolveItemIdentity(run: any): Promise<{
+  itemIdentifier: string;
+  serialNumber: string | null;
+  travelerId: string | null;
+  travelerNumber: string | null;
+}> {
+  const serialNumber = field(run, 'serialNumber', 'serial_number');
+  const travelerId = field(run, 'travelerId', 'traveler_id');
+
+  let travelerNumber: string | null = null;
+  if (travelerId) {
+    const [traveler] = await db
+      .select({
+        travelerNumber: travelers.travelerNumber,
+        serialNumber: travelers.serialNumber,
+        lotNumber: travelers.lotNumber,
+      })
+      .from(travelers)
+      .where(eq(travelers.id, travelerId))
+      .limit(1);
+
+    travelerNumber = traveler?.travelerNumber ?? null;
+    const travelerSerial = traveler?.serialNumber ?? traveler?.lotNumber ?? null;
+    return {
+      itemIdentifier: travelerNumber ?? travelerSerial ?? serialNumber ?? travelerId,
+      serialNumber: serialNumber ?? travelerSerial,
+      travelerId,
+      travelerNumber,
+    };
+  }
+
+  return {
+    itemIdentifier: serialNumber ?? field(run, 'id', 'id') ?? 'UNKNOWN_ITEM',
+    serialNumber,
+    travelerId: null,
+    travelerNumber: null,
+  };
+}
+
+function buildRunSnapshot(run: any, itemIdentity: Awaited<ReturnType<typeof resolveItemIdentity>>, eventType: string, program?: any) {
+  return {
+    id: field(run, 'id', 'id'),
+    itemIdentifier: itemIdentity.itemIdentifier,
+    travelerId: itemIdentity.travelerId,
+    travelerNumber: itemIdentity.travelerNumber,
+    serialNumber: itemIdentity.serialNumber,
+    programId: field(run, 'programId', 'program_id'),
+    programName: program?.name ?? null,
+    instanceName: field(run, 'instanceName', 'instance_name'),
+    sku: field(run, 'sku', 'sku'),
+    inventoryItemId: field(run, 'inventoryItemId', 'inventory_item_id'),
+    mandrelNumber: field(run, 'mandrelNumber', 'mandrel_number'),
+    ovenNumber: field(run, 'ovenNumber', 'oven_number'),
+    ovenSlot: field(run, 'ovenSlot', 'oven_slot'),
+    status: field(run, 'status', 'status'),
+    currentStepIndex: field(run, 'currentStepIndex', 'current_step_index'),
+    departmentName: field(run, 'departmentName', 'department_name'),
+    startedAt: field(run, 'startedAt', 'started_at'),
+    completedAt: field(run, 'completedAt', 'completed_at'),
+    totalElapsedSeconds: field(run, 'totalElapsedSeconds', 'total_elapsed_seconds'),
+    recordedEventType: eventType,
+  };
+}
+
+async function recordItemAudit(run: any, eventType: string, actorUserId: number | null, program?: any): Promise<void> {
+  try {
+    const identity = await resolveItemIdentity(run);
+    const snapshot = buildRunSnapshot(run, identity, eventType, program);
+    await pool.query(
+      `INSERT INTO production_item_audit_records
+        (item_identifier, serial_number, traveler_id, traveler_number, run_id, event_type, event_at, actor_user_id, card_snapshot)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7, $8::jsonb)`,
+      [
+        identity.itemIdentifier,
+        identity.serialNumber,
+        identity.travelerId,
+        identity.travelerNumber,
+        field(run, 'id', 'id'),
+        eventType,
+        actorUserId,
+        JSON.stringify(snapshot),
+      ],
+    );
+  } catch (err: any) {
+    console.warn('[ProductionTimer] Item audit snapshot skipped:', err?.message ?? err);
+  }
+}
+
 const router = Router();
 
 // Apply optional auth and action token validation to all routes
@@ -259,6 +352,8 @@ router.post('/runs/start', async (req: Request, res: Response) => {
         .set({ linkedLogId, linkedLogType })
         .where(eq(productionProgramRuns.id, run.id));
     }
+
+    await recordItemAudit({ ...run, linkedLogId, linkedLogType }, 'started', userId, program);
 
     console.log(`[ProductionTimer] Run started: ${run.id} for program ${program.name}${linkedLogType ? ` (auto-linked ${linkedLogType} log ${linkedLogId})` : ''}`);
 
@@ -350,6 +445,8 @@ router.post('/runs/:id/pause', async (req: Request, res: Response) => {
       occurredAt: now,
     });
 
+    await recordItemAudit(updated, 'paused', userId);
+
     console.log(`[ProductionTimer] Run paused: ${id}`);
 
     return res.json(updated);
@@ -394,6 +491,8 @@ router.post('/runs/:id/step-timeout', async (req: Request, res: Response) => {
       stepIndex: run.currentStepIndex,
       occurredAt: now,
     });
+
+    await recordItemAudit(updated, 'step_timeout', null);
 
     console.log(`[ProductionTimer] Step timed out, awaiting next: ${id}`);
 
@@ -443,6 +542,8 @@ router.post('/runs/:id/resume', async (req: Request, res: Response) => {
       userId,
       occurredAt: new Date(),
     });
+
+    await recordItemAudit(updated, 'resumed', userId);
 
     console.log(`[ProductionTimer] Run resumed: ${id}`);
 
@@ -518,6 +619,7 @@ router.post('/runs/:id/advance', async (req: Request, res: Response) => {
 
       // Auto-close linked AS9100 log entry
       await autoCloseLinkedLog(run, 'PASS', completedAt);
+      await recordItemAudit(updated, 'program_completed', userId);
 
       console.log(`[ProductionTimer] Run completed: ${id}, elapsed: ${totalElapsedSeconds}s`);
 
@@ -541,6 +643,8 @@ router.post('/runs/:id/advance', async (req: Request, res: Response) => {
       userId,
       occurredAt: new Date(),
     });
+
+    await recordItemAudit(updated, 'advanced', userId);
 
     console.log(`[ProductionTimer] Run advanced to step ${nextStepIndex}: ${id}`);
 
@@ -598,6 +702,7 @@ router.post('/runs/:id/stop', async (req: Request, res: Response) => {
 
     // Auto-close linked AS9100 log entry (with STOPPED result so technicians know it was interrupted)
     await autoCloseLinkedLog(run, 'STOPPED', completedAt);
+    await recordItemAudit(updated, 'stopped', userId);
 
     console.log(`[ProductionTimer] Run stopped: ${id}, elapsed: ${totalElapsedSeconds}s`);
 
@@ -638,6 +743,7 @@ router.get('/runs', async (req: Request, res: Response) => {
     const runs = runsResult || [];
 
     const runsWithDetails = await Promise.all(runs.map(async (run: any) => {
+      const itemIdentity = await resolveItemIdentity(run);
       const events = await pool.query(
         `SELECT * FROM production_program_run_events WHERE run_id = $1 ORDER BY occurred_at`,
         [run.id]
@@ -667,6 +773,9 @@ router.get('/runs', async (req: Request, res: Response) => {
 
       return {
         id: run.id,
+        itemIdentifier: itemIdentity.itemIdentifier,
+        travelerId: itemIdentity.travelerId,
+        travelerNumber: itemIdentity.travelerNumber,
         programId: run.program_id,
         startedByUserId: run.started_by_user_id,
         instanceName: run.instance_name,
@@ -746,6 +855,58 @@ router.get('/runs/history', async (req: Request, res: Response) => {
   }
 });
 
+router.get('/runs/item-audit/:identifier', async (req: Request, res: Response) => {
+  try {
+    const identifier = decodeURIComponent(req.params.identifier || '').trim();
+    if (!identifier) {
+      return res.status(400).json({ error: 'Identifier is required' });
+    }
+
+    const records = await pool.query(
+      `SELECT
+         id,
+         item_identifier,
+         serial_number,
+         traveler_id,
+         traveler_number,
+         run_id,
+         event_type,
+         event_at,
+         actor_user_id,
+         card_snapshot,
+         created_at
+       FROM production_item_audit_records
+       WHERE item_identifier = $1
+          OR serial_number = $1
+          OR traveler_number = $1
+          OR traveler_id = $1
+       ORDER BY event_at DESC, created_at DESC
+       LIMIT 250`,
+      [identifier],
+    );
+
+    return res.json({
+      identifier,
+      records: records.map((row: any) => ({
+        id: row.id,
+        itemIdentifier: row.item_identifier,
+        serialNumber: row.serial_number,
+        travelerId: row.traveler_id,
+        travelerNumber: row.traveler_number,
+        runId: row.run_id,
+        eventType: row.event_type,
+        eventAt: row.event_at,
+        actorUserId: row.actor_user_id,
+        cardSnapshot: row.card_snapshot,
+        createdAt: row.created_at,
+      })),
+    });
+  } catch (error) {
+    console.error('[ProductionTimer] Error fetching item audit:', error);
+    return res.status(500).json({ error: 'Failed to fetch item audit records' });
+  }
+});
+
 router.get('/runs/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -778,8 +939,12 @@ router.get('/runs/:id', async (req: Request, res: Response) => {
       .where(eq(productionProgramSteps.programId, run.programId))
       .orderBy(productionProgramSteps.stepIndex);
 
+    const itemIdentity = await resolveItemIdentity(run);
+
     return res.json({
       ...run,
+      itemIdentifier: itemIdentity.itemIdentifier,
+      travelerNumber: itemIdentity.travelerNumber,
       program,
       steps,
       events,
@@ -818,6 +983,8 @@ router.patch('/runs/:id', async (req: Request, res: Response) => {
       })
       .where(eq(productionProgramRuns.id, id))
       .returning();
+
+    await recordItemAudit(updated, 'updated', null);
 
     console.log(`[ProductionTimer] Run updated: ${id}`);
     return res.json(updated);

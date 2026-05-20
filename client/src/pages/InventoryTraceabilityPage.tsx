@@ -114,6 +114,7 @@ interface TraceabilityChain {
     label: string;
     detail?: string;
     matchedEntities: Array<{ kind: string; id: string; label: string; href: string | null }>;
+    notFound?: boolean;
   };
   nodes: TraceabilityNode[];
   edges: TraceabilityEdge[];
@@ -409,11 +410,17 @@ export default function InventoryTraceabilityPage() {
       setChain(data);
       setVerifyResult(null);
       if (!data.nodes.length) {
+        const notFound = data.resolved.notFound === true;
         toast({
-          title: 'No traceability events found',
-          description: data.resolved.matchedEntities.length
+          title: notFound
+            ? `Not found: ${data.query.value}`
+            : 'No traceability events found',
+          description: notFound
+            ? `No ${SEARCH_KEYS.find((k) => k.value === data.query.key)?.label ?? 'entity'} matching "${data.query.value}" exists in the system.`
+            : data.resolved.matchedEntities.length
             ? 'Entity resolved but no inventory ledger events are linked yet.'
             : 'Could not resolve the search value to a known entity.',
+          variant: notFound ? 'destructive' : 'default',
         });
       }
     },

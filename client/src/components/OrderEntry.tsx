@@ -57,14 +57,24 @@ import { useToast } from '@/hooks/use-toast';
 import {
   Package,
   Users,
+  SlidersHorizontal,
+  AlertTriangle,
+  ClipboardList,
   ChevronDown,
+  DollarSign,
   Send,
   CheckCircle,
   Check,
   ChevronsUpDown,
   Paperclip,
   ExternalLink,
+  FileText,
   Loader2,
+  Palette,
+  ShieldCheck,
+  Truck,
+  UserRound,
+  Wrench,
 } from 'lucide-react';
 // @ts-ignore
 import debounce from 'lodash.debounce';
@@ -157,10 +167,51 @@ const TIKKA_BARREL_OPTIONS = [
   'tikka_hca_heavy',
 ] as const;
 
+type ConsoleStyleMode = 'standard' | 'industrial' | 'retro';
+
+const consoleStyleOptions: { value: ConsoleStyleMode; label: string }[] = [
+  { value: 'standard', label: 'Standard' },
+  { value: 'industrial', label: 'Workbench' },
+  { value: 'retro', label: 'Retro' },
+];
+
 export default function OrderEntry() {
   console.log('OrderEntry component rendering...');
   const { toast } = useToast();
   const [location, setLocation] = useLocation();
+  const [consoleStyleMode, setConsoleStyleMode] = useState<ConsoleStyleMode>(() => {
+    if (typeof window === 'undefined') return 'standard';
+    try {
+      const savedStyle = window.localStorage.getItem('order-entry-console-style');
+      if (
+        savedStyle === 'standard' ||
+        savedStyle === 'industrial' ||
+        savedStyle === 'retro'
+      ) {
+        return savedStyle;
+      }
+      return window.localStorage.getItem('order-entry-console-mode') === 'true'
+        ? 'industrial'
+        : 'standard';
+    } catch {
+      return 'standard';
+    }
+  });
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        'order-entry-console-style',
+        consoleStyleMode
+      );
+      window.localStorage.setItem(
+        'order-entry-console-mode',
+        String(consoleStyleMode !== 'standard')
+      );
+    } catch {
+      // Preference persistence is best-effort only.
+    }
+  }, [consoleStyleMode]);
 
   // Form state
   const [customer, setCustomer] = useState<Customer | null>(null);
@@ -2925,7 +2976,10 @@ export default function OrderEntry() {
         qdSameSideConfirmed,
         qdSameSideConfirmedBy,
         qdSameSideConfirmedAt: qdSameSideConfirmedAt?.toISOString() || null,
-        createdBy: username || 'system',
+        createdBy:
+          typeof window !== 'undefined'
+            ? window.localStorage.getItem('dev_username') || 'system'
+            : 'system',
       };
 
       const response = await apiRequest('/api/orders/pending-payment', {
@@ -2948,13 +3002,222 @@ export default function OrderEntry() {
   };
 
   const selectedModel = modelOptions.find((m) => m.id === modelId);
+  const isConsoleMode = consoleStyleMode !== 'standard';
+  const consoleWorkflowItems = [
+    {
+      label: 'Customer',
+      value: customer ? 'Locked' : 'Open',
+      active: Boolean(customer),
+    },
+    {
+      label: 'Model',
+      value: selectedModel ? 'Selected' : 'Open',
+      active: Boolean(selectedModel),
+    },
+    {
+      label: 'Validation',
+      value: Object.keys(errors).length ? 'Review' : 'Ready',
+      active: Object.keys(errors).length === 0,
+      warning: Object.keys(errors).length > 0,
+    },
+    {
+      label: 'Payment',
+      value: orderPayments.length ? `${orderPayments.length} logged` : 'Pending',
+      active: orderPayments.length > 0,
+    },
+  ];
+  const isWorkbenchMode = consoleStyleMode === 'industrial';
+  const selectedFeatureCount = Object.entries(features).filter(([, value]) => {
+    if (value === undefined || value === null || value === '') return false;
+    if (Array.isArray(value)) return value.length > 0;
+    if (typeof value === 'boolean') return value;
+    return true;
+  }).length;
+  const openIssueCount = Object.keys(errors).length;
+  const workbenchAlerts = [
+    !customer ? 'Customer is still open' : null,
+    !selectedModel ? 'Stock model has not been selected' : null,
+    showDiscountWarning ? 'Discount text is in notes without a structured discount' : null,
+    openIssueCount ? `${openIssueCount} validation item${openIssueCount === 1 ? '' : 's'} need review` : null,
+    !isVerified ? 'ERP verification is not checked' : null,
+  ].filter(Boolean) as string[];
+  const workbenchJumpItems = [
+    {
+      id: 'order-intake',
+      label: 'Order',
+      meta: orderId || 'New order',
+      icon: ClipboardList,
+      active: Boolean(orderId),
+    },
+    {
+      id: 'customer-intake',
+      label: 'Customer',
+      meta: customer ? customer.name || 'Selected' : 'Open',
+      icon: UserRound,
+      active: Boolean(customer),
+    },
+    {
+      id: 'product-intake',
+      label: 'Product',
+      meta: selectedModel?.displayName || selectedModel?.name || 'Choose model',
+      icon: Wrench,
+      active: Boolean(selectedModel),
+    },
+    {
+      id: 'finish-intake',
+      label: 'Finish',
+      meta: features.paint_options || features.texture_options ? 'Touched' : 'Open',
+      icon: Palette,
+      active: Boolean(features.paint_options || features.texture_options),
+    },
+    {
+      id: 'shipping-intake',
+      label: 'Shipping',
+      meta:
+        specialShipping.international ||
+        specialShipping.nextDayAir ||
+        specialShipping.billToReceiver ||
+        hasAltShipTo
+          ? 'Special'
+          : 'Standard',
+      icon: Truck,
+      active: Boolean(
+        specialShipping.international ||
+          specialShipping.nextDayAir ||
+          specialShipping.billToReceiver ||
+          hasAltShipTo
+      ),
+    },
+    {
+      id: 'pricing-intake',
+      label: 'Pricing',
+      meta: formatCurrency(totalPrice + shipping),
+      icon: DollarSign,
+      active: totalPrice + shipping > 0,
+    },
+    {
+      id: 'notes-intake',
+      label: 'Notes',
+      meta: notes.trim() ? 'Captured' : 'Open',
+      icon: FileText,
+      active: Boolean(notes.trim()),
+    },
+    {
+      id: 'review-intake',
+      label: 'Review',
+      meta: isVerified ? 'Verified' : 'Not verified',
+      icon: ShieldCheck,
+      active: isVerified,
+    },
+  ];
+  const jumpToWorkbenchSection = (sectionId: string) => {
+    const target = document.getElementById(sectionId);
+    target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   return (
-    <div className="container mx-auto p-4 space-y-6">
+    <div
+      className={`order-entry-shell container mx-auto p-4 space-y-6 ${
+        isConsoleMode ? `order-entry-console order-entry-console-${consoleStyleMode}` : ''
+      }`}
+    >
+      <div className="order-console-toggle flex items-center justify-end gap-3">
+        <div className="flex items-center gap-2 text-sm font-medium">
+          <SlidersHorizontal className="h-4 w-4" />
+          <span>Visual Mode</span>
+        </div>
+        <div
+          className="order-console-mode-control"
+          role="group"
+          aria-label="Order entry visual mode"
+        >
+          {consoleStyleOptions.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={consoleStyleMode === option.value ? 'is-selected' : ''}
+              onClick={() => setConsoleStyleMode(option.value)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {isWorkbenchMode && (
+        <div className="order-workbench-panel" aria-label="Order entry workbench">
+          <div className="order-workbench-hero">
+            <div>
+              <div className="order-workbench-kicker">Prototype intake lens</div>
+              <h2>Capture the order in whatever sequence the call gives it to you.</h2>
+              <p>
+                Jump to any bucket, keep the price close, and let the mistake radar
+                call out anything that needs a second look.
+              </p>
+            </div>
+            <div className="order-workbench-price">
+              <span>Current total</span>
+              <strong>{formatCurrency(totalPrice + shipping)}</strong>
+              <button
+                type="button"
+                onClick={() => jumpToWorkbenchSection('pricing-intake')}
+              >
+                Open pricing
+              </button>
+            </div>
+          </div>
+
+          <div className="order-workbench-map">
+            {workbenchJumpItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={item.active ? 'is-active' : ''}
+                  onClick={() => jumpToWorkbenchSection(item.id)}
+                >
+                  <Icon className="h-4 w-4" />
+                  <span>{item.label}</span>
+                  <small>{item.meta}</small>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="order-workbench-radar">
+            <div>
+              <span>{selectedFeatureCount}</span>
+              <small>configured inputs</small>
+            </div>
+            <div>
+              <span>{miscItems.length}</span>
+              <small>misc items</small>
+            </div>
+            <div>
+              <span>{orderPayments.length}</span>
+              <small>payments</small>
+            </div>
+            <div className={workbenchAlerts.length ? 'has-alerts' : 'is-clear'}>
+              <span>{workbenchAlerts.length}</span>
+              <small>{workbenchAlerts.length ? 'radar flags' : 'clear flags'}</small>
+            </div>
+            {workbenchAlerts.length > 0 && (
+              <div className="order-workbench-alerts">
+                <AlertTriangle className="h-4 w-4" />
+                <div>
+                  {workbenchAlerts.slice(0, 3).map((alert) => (
+                    <p key={alert}>{alert}</p>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column - Order Form */}
         <div className="lg:col-span-2 space-y-6">
-          <Card>
+          <Card className={isConsoleMode ? 'order-console-workbench' : undefined}>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
@@ -3023,6 +3286,50 @@ export default function OrderEntry() {
                   </div>
                 )}
               </div>
+              {isConsoleMode && (
+                <div className="order-console-module">
+                  <div className="order-console-display grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div>
+                      <span>ORDER</span>
+                      <strong>{orderId || 'GENERATING'}</strong>
+                    </div>
+                    <div>
+                      <span>MODE</span>
+                      <strong>
+                        {isEditMode ? 'EDIT' : isDuplicateMode ? 'COPY' : 'CREATE'}
+                      </strong>
+                    </div>
+                    <div>
+                      <span>DUE</span>
+                      <strong>
+                        {dueDate && !isNaN(dueDate.getTime())
+                          ? dueDate.toISOString().split('T')[0]
+                          : 'PENDING'}
+                      </strong>
+                    </div>
+                    <div>
+                      <span>TOTAL</span>
+                      <strong>${(totalPrice + shipping).toFixed(2)}</strong>
+                    </div>
+                  </div>
+                  <div className="order-console-workflow">
+                    {consoleWorkflowItems.map((item) => (
+                      <div
+                        key={item.label}
+                        className={`order-console-workflow-item ${
+                          item.active ? 'is-active' : ''
+                        } ${item.warning ? 'is-warning' : ''}`}
+                      >
+                        <span aria-hidden="true" />
+                        <div>
+                          <strong>{item.label}</strong>
+                          <small>{item.value}</small>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </CardHeader>
             <CardContent className="space-y-4">
               {showOrderDraftBanner && isNewOrderMode && (
@@ -3056,7 +3363,7 @@ export default function OrderEntry() {
               )}
               <form onSubmit={handleSubmit} className="space-y-4">
                 {/* Order ID and Dates */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div id="order-intake" className="grid grid-cols-1 md:grid-cols-3 gap-4 scroll-mt-28">
                   <div>
                     <Label htmlFor="orderId">Order ID</Label>
                     <Input
@@ -3212,7 +3519,7 @@ export default function OrderEntry() {
                 </div>
 
                 {/* Customer Selection and Customer PO */}
-                <div className="grid grid-cols-2 gap-6">
+                <div id="customer-intake" className="grid grid-cols-2 gap-6 scroll-mt-28">
                   <div>
                     <CustomerSearchInput
                       value={customer}
@@ -3303,7 +3610,7 @@ export default function OrderEntry() {
                 </div>
 
                 {/* Shipping Options & Address - Combined Accordion */}
-                <div className="mt-6 border rounded-lg p-4 bg-blue-50">
+                <div id="shipping-intake" className="mt-6 border rounded-lg p-4 bg-blue-50 scroll-mt-28">
                   <Accordion type="single" collapsible className="w-full">
                     <AccordionItem value="shipping-options">
                       <AccordionTrigger className="text-left">
@@ -3732,7 +4039,7 @@ export default function OrderEntry() {
                 )}
 
                 {/* Stock Model Selection and Price Override Row */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div id="product-intake" className="grid grid-cols-1 lg:grid-cols-2 gap-4 scroll-mt-28">
                   {/* Stock Model Selection */}
                   <div>
                     <Label>Stock Model</Label>
@@ -5273,7 +5580,7 @@ export default function OrderEntry() {
                     </div>
 
                     {/* Paint Options */}
-                    <div>
+                    <div id="finish-intake" className="scroll-mt-28">
                       <Label>Paint Options</Label>
                       <Select
                         value={features.paint_options || undefined}
@@ -5372,7 +5679,7 @@ export default function OrderEntry() {
                 </div>
 
                 {/* Custom Order and Notes */}
-                <div>
+                <div id="notes-intake" className="scroll-mt-28">
                   <Label htmlFor="notes">Notes</Label>
                   <Textarea
                     id="notes"
@@ -5559,13 +5866,13 @@ export default function OrderEntry() {
 
         {/* Right Column - Order Summary */}
         <div className="space-y-6">
-          <Card>
+          <Card id="pricing-intake" className={isConsoleMode ? 'order-console-summary-card scroll-mt-28' : 'scroll-mt-28'}>
             <CardHeader>
               <CardTitle>Order Summary</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Main Total Display */}
-              <div className="text-center space-y-2 border-b pb-4">
+              <div className="order-summary-total text-center space-y-2 border-b pb-4">
                 <div className="flex justify-between items-center">
                   <span className="text-3xl font-bold">1</span>
                   <span className="text-3xl font-bold text-blue-600">
@@ -6566,7 +6873,7 @@ export default function OrderEntry() {
               )}
 
               {/* Verified Checkbox */}
-              <div className="flex items-center space-x-2 pt-4 pb-2">
+              <div id="review-intake" className="flex items-center space-x-2 pt-4 pb-2 scroll-mt-28">
                 <input
                   type="checkbox"
                   id="verified-checkbox"
@@ -6583,7 +6890,7 @@ export default function OrderEntry() {
               </div>
 
               {/* Action Buttons */}
-              <div className="space-y-2">
+              <div className="order-console-actions space-y-2">
                 <Button
                   type="button"
                   className="w-full"

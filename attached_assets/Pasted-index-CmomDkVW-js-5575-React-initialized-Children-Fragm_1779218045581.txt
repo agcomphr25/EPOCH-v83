@@ -1,0 +1,377 @@
+index-CmomDkVW.js:5575 React initialized: {Children: {…}, Fragment: Symbol(react.fragment), Profiler: Symbol(react.profiler), Component: ƒ, PureComponent: ƒ, …}
+index-CmomDkVW.js:5575 React hooks: {useState: ƒ, useEffect: ƒ}
+index-CmomDkVW.js:5575 [EPOCH SYNC] Sync engine starting
+index-CmomDkVW.js:5575 [EPOCH SYNC] Sync engine started — interval: 30000 ms
+index-CmomDkVW.js:5572 App component is rendering...
+index-CmomDkVW.js:5572 Environment: production
+index-CmomDkVW.js:5572 Base URL: /
+index-CmomDkVW.js:1825 [EPOCH] Service Worker Registered https://agcompepoch.xyz/
+index-CmomDkVW.js:1825 [EPOCH] Install prompt captured and ready
+login?redirect=%2Ftravelers%2F2e37689b-b05e-4bfd-8e12-b354bf1503a4%2Fexecute%3Fbadge%3D757ed306c664…:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+index-CmomDkVW.js:235  GET https://agcompepoch.xyz/api/auth/session 401 (Unauthorized)
+(anonymous) @ index-CmomDkVW.js:235
+o @ index-CmomDkVW.js:51
+x @ index-CmomDkVW.js:51
+start @ index-CmomDkVW.js:51
+fetch @ index-CmomDkVW.js:51
+ZV @ index-CmomDkVW.js:51
+onSubscribe @ index-CmomDkVW.js:51
+subscribe @ index-CmomDkVW.js:51
+(anonymous) @ index-CmomDkVW.js:51
+o1t @ index-CmomDkVW.js:38
+Dxe @ index-CmomDkVW.js:40
+V7 @ index-CmomDkVW.js:40
+fHe @ index-CmomDkVW.js:40
+RT @ index-CmomDkVW.js:38
+Jis @ index-CmomDkVW.js:40
+LO @ index-CmomDkVW.js:40
+M1t @ index-CmomDkVW.js:40
+b @ index-CmomDkVW.js:25
+k @ index-CmomDkVW.js:25
+postMessage
+P @ index-CmomDkVW.js:25
+k @ index-CmomDkVW.js:25
+postMessage
+P @ index-CmomDkVW.js:25
+F @ index-CmomDkVW.js:25
+t.unstable_scheduleCallback @ index-CmomDkVW.js:25
+V1t @ index-CmomDkVW.js:40
+uj @ index-CmomDkVW.js:40
+CC @ index-CmomDkVW.js:40
+Rxe @ index-CmomDkVW.js:40
+Fxe.render.PFe.render @ index-CmomDkVW.js:40
+(anonymous) @ index-CmomDkVW.js:5575
+index-CmomDkVW.js:1834  GET https://agcompepoch.xyz/api/auth/session 401 (Unauthorized)
+queryFn @ index-CmomDkVW.js:1834
+o @ index-CmomDkVW.js:51
+x @ index-CmomDkVW.js:51
+start @ index-CmomDkVW.js:51
+fetch @ index-CmomDkVW.js:51
+ZV @ index-CmomDkVW.js:51
+onSubscribe @ index-CmomDkVW.js:51
+subscribe @ index-CmomDkVW.js:51
+(anonymous) @ index-CmomDkVW.js:51
+o1t @ index-CmomDkVW.js:38
+Dxe @ index-CmomDkVW.js:40
+V7 @ index-CmomDkVW.js:40
+fHe @ index-CmomDkVW.js:40
+RT @ index-CmomDkVW.js:38
+Jis @ index-CmomDkVW.js:40
+LO @ index-CmomDkVW.js:40
+M1t @ index-CmomDkVW.js:40
+b @ index-CmomDkVW.js:25
+k @ index-CmomDkVW.js:25
+postMessage
+P @ index-CmomDkVW.js:25
+k @ index-CmomDkVW.js:25
+postMessage
+P @ index-CmomDkVW.js:25
+F @ index-CmomDkVW.js:25
+t.unstable_scheduleCallback @ index-CmomDkVW.js:25
+V1t @ index-CmomDkVW.js:40
+uj @ index-CmomDkVW.js:40
+CC @ index-CmomDkVW.js:40
+Rxe @ index-CmomDkVW.js:40
+Fxe.render.PFe.render @ index-CmomDkVW.js:40
+(anonymous) @ index-CmomDkVW.js:5575
+index-CmomDkVW.js:235 🌐 API Request to /api/vendor-pos/compliance-backfill?filter=enforced (timeout: 15000ms, deployment: true)
+index-CmomDkVW.js:2271 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+index-CmomDkVW.js:235  GET https://agcompepoch.xyz/api/employees/recertification-count 401 (Unauthorized)
+(anonymous) @ index-CmomDkVW.js:235
+o @ index-CmomDkVW.js:51
+x @ index-CmomDkVW.js:51
+start @ index-CmomDkVW.js:51
+fetch @ index-CmomDkVW.js:51
+ZV @ index-CmomDkVW.js:51
+onSubscribe @ index-CmomDkVW.js:51
+subscribe @ index-CmomDkVW.js:51
+(anonymous) @ index-CmomDkVW.js:51
+o1t @ index-CmomDkVW.js:38
+Dxe @ index-CmomDkVW.js:40
+V7 @ index-CmomDkVW.js:40
+Jis @ index-CmomDkVW.js:40
+LO @ index-CmomDkVW.js:40
+fHe @ index-CmomDkVW.js:40
+RT @ index-CmomDkVW.js:38
+(anonymous) @ index-CmomDkVW.js:40
+index-CmomDkVW.js:235 [AUTH] Query returned 401 for /api/employees/recertification-count
+(anonymous) @ index-CmomDkVW.js:235
+await in (anonymous)
+o @ index-CmomDkVW.js:51
+x @ index-CmomDkVW.js:51
+start @ index-CmomDkVW.js:51
+fetch @ index-CmomDkVW.js:51
+ZV @ index-CmomDkVW.js:51
+onSubscribe @ index-CmomDkVW.js:51
+subscribe @ index-CmomDkVW.js:51
+(anonymous) @ index-CmomDkVW.js:51
+o1t @ index-CmomDkVW.js:38
+Dxe @ index-CmomDkVW.js:40
+V7 @ index-CmomDkVW.js:40
+Jis @ index-CmomDkVW.js:40
+LO @ index-CmomDkVW.js:40
+fHe @ index-CmomDkVW.js:40
+RT @ index-CmomDkVW.js:38
+(anonymous) @ index-CmomDkVW.js:40
+index-CmomDkVW.js:235 [AUTH] 401 on /api/employees/recertification-count — checking session state
+Vwt @ index-CmomDkVW.js:235
+(anonymous) @ index-CmomDkVW.js:235
+await in (anonymous)
+o @ index-CmomDkVW.js:51
+x @ index-CmomDkVW.js:51
+start @ index-CmomDkVW.js:51
+fetch @ index-CmomDkVW.js:51
+ZV @ index-CmomDkVW.js:51
+onSubscribe @ index-CmomDkVW.js:51
+subscribe @ index-CmomDkVW.js:51
+(anonymous) @ index-CmomDkVW.js:51
+o1t @ index-CmomDkVW.js:38
+Dxe @ index-CmomDkVW.js:40
+V7 @ index-CmomDkVW.js:40
+Jis @ index-CmomDkVW.js:40
+LO @ index-CmomDkVW.js:40
+fHe @ index-CmomDkVW.js:40
+RT @ index-CmomDkVW.js:38
+(anonymous) @ index-CmomDkVW.js:40
+index-CmomDkVW.js:235  GET https://agcompepoch.xyz/api/vendor-pos/compliance-backfill?filter=enforced 401 (Unauthorized)
+je @ index-CmomDkVW.js:235
+queryFn @ index-CmomDkVW.js:1834
+o @ index-CmomDkVW.js:51
+x @ index-CmomDkVW.js:51
+start @ index-CmomDkVW.js:51
+fetch @ index-CmomDkVW.js:51
+ZV @ index-CmomDkVW.js:51
+onSubscribe @ index-CmomDkVW.js:51
+subscribe @ index-CmomDkVW.js:51
+(anonymous) @ index-CmomDkVW.js:51
+o1t @ index-CmomDkVW.js:38
+Dxe @ index-CmomDkVW.js:40
+V7 @ index-CmomDkVW.js:40
+Jis @ index-CmomDkVW.js:40
+LO @ index-CmomDkVW.js:40
+fHe @ index-CmomDkVW.js:40
+RT @ index-CmomDkVW.js:38
+(anonymous) @ index-CmomDkVW.js:40
+index-CmomDkVW.js:235 ✅ API Response from /api/vendor-pos/compliance-backfill?filter=enforced: 401
+index-CmomDkVW.js:235 [AUTH] 401 on /api/vendor-pos/compliance-backfill?filter=enforced — checking session state
+Vwt @ index-CmomDkVW.js:235
+je @ index-CmomDkVW.js:235
+await in je
+queryFn @ index-CmomDkVW.js:1834
+o @ index-CmomDkVW.js:51
+x @ index-CmomDkVW.js:51
+start @ index-CmomDkVW.js:51
+fetch @ index-CmomDkVW.js:51
+ZV @ index-CmomDkVW.js:51
+onSubscribe @ index-CmomDkVW.js:51
+subscribe @ index-CmomDkVW.js:51
+(anonymous) @ index-CmomDkVW.js:51
+o1t @ index-CmomDkVW.js:38
+Dxe @ index-CmomDkVW.js:40
+V7 @ index-CmomDkVW.js:40
+Jis @ index-CmomDkVW.js:40
+LO @ index-CmomDkVW.js:40
+fHe @ index-CmomDkVW.js:40
+RT @ index-CmomDkVW.js:38
+(anonymous) @ index-CmomDkVW.js:40
+index-CmomDkVW.js:235  GET https://agcompepoch.xyz/api/auth/session 401 (Unauthorized)
+Tds @ index-CmomDkVW.js:235
+Vwt @ index-CmomDkVW.js:235
+(anonymous) @ index-CmomDkVW.js:235
+await in (anonymous)
+o @ index-CmomDkVW.js:51
+x @ index-CmomDkVW.js:51
+start @ index-CmomDkVW.js:51
+fetch @ index-CmomDkVW.js:51
+ZV @ index-CmomDkVW.js:51
+onSubscribe @ index-CmomDkVW.js:51
+subscribe @ index-CmomDkVW.js:51
+(anonymous) @ index-CmomDkVW.js:51
+o1t @ index-CmomDkVW.js:38
+Dxe @ index-CmomDkVW.js:40
+V7 @ index-CmomDkVW.js:40
+Jis @ index-CmomDkVW.js:40
+LO @ index-CmomDkVW.js:40
+fHe @ index-CmomDkVW.js:40
+RT @ index-CmomDkVW.js:38
+(anonymous) @ index-CmomDkVW.js:40
+index-CmomDkVW.js:235 [AUTH] Session check returned 401 — session is gone
+Tds @ index-CmomDkVW.js:235
+await in Tds
+Vwt @ index-CmomDkVW.js:235
+(anonymous) @ index-CmomDkVW.js:235
+await in (anonymous)
+o @ index-CmomDkVW.js:51
+x @ index-CmomDkVW.js:51
+start @ index-CmomDkVW.js:51
+fetch @ index-CmomDkVW.js:51
+ZV @ index-CmomDkVW.js:51
+onSubscribe @ index-CmomDkVW.js:51
+subscribe @ index-CmomDkVW.js:51
+(anonymous) @ index-CmomDkVW.js:51
+o1t @ index-CmomDkVW.js:38
+Dxe @ index-CmomDkVW.js:40
+V7 @ index-CmomDkVW.js:40
+Jis @ index-CmomDkVW.js:40
+LO @ index-CmomDkVW.js:40
+fHe @ index-CmomDkVW.js:40
+RT @ index-CmomDkVW.js:38
+(anonymous) @ index-CmomDkVW.js:40
+index-CmomDkVW.js:235 [AUTH] Session expired on kiosk page — tokens cleared, no redirect
+Dds @ index-CmomDkVW.js:235
+Vwt @ index-CmomDkVW.js:235
+await in Vwt
+(anonymous) @ index-CmomDkVW.js:235
+await in (anonymous)
+o @ index-CmomDkVW.js:51
+x @ index-CmomDkVW.js:51
+start @ index-CmomDkVW.js:51
+fetch @ index-CmomDkVW.js:51
+ZV @ index-CmomDkVW.js:51
+onSubscribe @ index-CmomDkVW.js:51
+subscribe @ index-CmomDkVW.js:51
+(anonymous) @ index-CmomDkVW.js:51
+o1t @ index-CmomDkVW.js:38
+Dxe @ index-CmomDkVW.js:40
+V7 @ index-CmomDkVW.js:40
+Jis @ index-CmomDkVW.js:40
+LO @ index-CmomDkVW.js:40
+fHe @ index-CmomDkVW.js:40
+RT @ index-CmomDkVW.js:38
+(anonymous) @ index-CmomDkVW.js:40
+index-CmomDkVW.js:235  GET https://agcompepoch.xyz/api/auth/session 401 (Unauthorized)
+Tds @ index-CmomDkVW.js:235
+Vwt @ index-CmomDkVW.js:235
+je @ index-CmomDkVW.js:235
+await in je
+queryFn @ index-CmomDkVW.js:1834
+o @ index-CmomDkVW.js:51
+x @ index-CmomDkVW.js:51
+start @ index-CmomDkVW.js:51
+fetch @ index-CmomDkVW.js:51
+ZV @ index-CmomDkVW.js:51
+onSubscribe @ index-CmomDkVW.js:51
+subscribe @ index-CmomDkVW.js:51
+(anonymous) @ index-CmomDkVW.js:51
+o1t @ index-CmomDkVW.js:38
+Dxe @ index-CmomDkVW.js:40
+V7 @ index-CmomDkVW.js:40
+Jis @ index-CmomDkVW.js:40
+LO @ index-CmomDkVW.js:40
+fHe @ index-CmomDkVW.js:40
+RT @ index-CmomDkVW.js:38
+(anonymous) @ index-CmomDkVW.js:40
+index-CmomDkVW.js:235 [AUTH] Session check returned 401 — session is gone
+Tds @ index-CmomDkVW.js:235
+await in Tds
+Vwt @ index-CmomDkVW.js:235
+je @ index-CmomDkVW.js:235
+await in je
+queryFn @ index-CmomDkVW.js:1834
+o @ index-CmomDkVW.js:51
+x @ index-CmomDkVW.js:51
+start @ index-CmomDkVW.js:51
+fetch @ index-CmomDkVW.js:51
+ZV @ index-CmomDkVW.js:51
+onSubscribe @ index-CmomDkVW.js:51
+subscribe @ index-CmomDkVW.js:51
+(anonymous) @ index-CmomDkVW.js:51
+o1t @ index-CmomDkVW.js:38
+Dxe @ index-CmomDkVW.js:40
+V7 @ index-CmomDkVW.js:40
+Jis @ index-CmomDkVW.js:40
+LO @ index-CmomDkVW.js:40
+fHe @ index-CmomDkVW.js:40
+RT @ index-CmomDkVW.js:38
+(anonymous) @ index-CmomDkVW.js:40
+index-CmomDkVW.js:235 [AUTH] Session expired on kiosk page — tokens cleared, no redirect
+Dds @ index-CmomDkVW.js:235
+Vwt @ index-CmomDkVW.js:235
+await in Vwt
+je @ index-CmomDkVW.js:235
+await in je
+queryFn @ index-CmomDkVW.js:1834
+o @ index-CmomDkVW.js:51
+x @ index-CmomDkVW.js:51
+start @ index-CmomDkVW.js:51
+fetch @ index-CmomDkVW.js:51
+ZV @ index-CmomDkVW.js:51
+onSubscribe @ index-CmomDkVW.js:51
+subscribe @ index-CmomDkVW.js:51
+(anonymous) @ index-CmomDkVW.js:51
+o1t @ index-CmomDkVW.js:38
+Dxe @ index-CmomDkVW.js:40
+V7 @ index-CmomDkVW.js:40
+Jis @ index-CmomDkVW.js:40
+LO @ index-CmomDkVW.js:40
+fHe @ index-CmomDkVW.js:40
+RT @ index-CmomDkVW.js:38
+(anonymous) @ index-CmomDkVW.js:40
+index-CmomDkVW.js:5575 API error raw body: {"error":"No session token"}
+console.error @ index-CmomDkVW.js:5575
+je @ index-CmomDkVW.js:235
+await in je
+queryFn @ index-CmomDkVW.js:1834
+o @ index-CmomDkVW.js:51
+x @ index-CmomDkVW.js:51
+start @ index-CmomDkVW.js:51
+fetch @ index-CmomDkVW.js:51
+ZV @ index-CmomDkVW.js:51
+onSubscribe @ index-CmomDkVW.js:51
+subscribe @ index-CmomDkVW.js:51
+(anonymous) @ index-CmomDkVW.js:51
+o1t @ index-CmomDkVW.js:38
+Dxe @ index-CmomDkVW.js:40
+V7 @ index-CmomDkVW.js:40
+Jis @ index-CmomDkVW.js:40
+LO @ index-CmomDkVW.js:40
+fHe @ index-CmomDkVW.js:40
+RT @ index-CmomDkVW.js:38
+(anonymous) @ index-CmomDkVW.js:40
+index-CmomDkVW.js:5575 💥 API Request failed for /api/vendor-pos/compliance-backfill?filter=enforced: Error: No session token
+    at je (index-CmomDkVW.js:235:9246)
+console.error @ index-CmomDkVW.js:5575
+je @ index-CmomDkVW.js:235
+await in je
+queryFn @ index-CmomDkVW.js:1834
+o @ index-CmomDkVW.js:51
+x @ index-CmomDkVW.js:51
+start @ index-CmomDkVW.js:51
+fetch @ index-CmomDkVW.js:51
+ZV @ index-CmomDkVW.js:51
+onSubscribe @ index-CmomDkVW.js:51
+subscribe @ index-CmomDkVW.js:51
+(anonymous) @ index-CmomDkVW.js:51
+o1t @ index-CmomDkVW.js:38
+Dxe @ index-CmomDkVW.js:40
+V7 @ index-CmomDkVW.js:40
+Jis @ index-CmomDkVW.js:40
+LO @ index-CmomDkVW.js:40
+fHe @ index-CmomDkVW.js:40
+RT @ index-CmomDkVW.js:38
+(anonymous) @ index-CmomDkVW.js:40
+index-CmomDkVW.js:235 🌐 API Request to /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974 (timeout: 15000ms, deployment: true)
+index-CmomDkVW.js:235 ✅ API Response from /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974: 200
+index-CmomDkVW.js:235 🌐 API Request to /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600084 (timeout: 15000ms, deployment: true)
+index-CmomDkVW.js:235 ✅ API Response from /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600084: 200
+index-CmomDkVW.js:235 🌐 API Request to /api/p2-traveler/generate-traveler (timeout: 15000ms, deployment: true)
+index-CmomDkVW.js:235 ✅ API Response from /api/p2-traveler/generate-traveler: 200
+index-CmomDkVW.js:235  GET https://agcompepoch.xyz/api/auth/session 401 (Unauthorized)
+(anonymous) @ index-CmomDkVW.js:235
+o @ index-CmomDkVW.js:51
+x @ index-CmomDkVW.js:51
+start @ index-CmomDkVW.js:51
+fetch @ index-CmomDkVW.js:51
+ZV @ index-CmomDkVW.js:51
+onSubscribe @ index-CmomDkVW.js:51
+subscribe @ index-CmomDkVW.js:51
+(anonymous) @ index-CmomDkVW.js:51
+o1t @ index-CmomDkVW.js:38
+Dxe @ index-CmomDkVW.js:40
+V7 @ index-CmomDkVW.js:40
+Jis @ index-CmomDkVW.js:40
+LO @ index-CmomDkVW.js:40
+fHe @ index-CmomDkVW.js:40
+RT @ index-CmomDkVW.js:38
+(anonymous) @ index-CmomDkVW.js:40
+/travelers/2e37689b-b05e-4bfd-8e12-b354bf1503a4/execute?badge=757ed306c66446f7871fac16bd141974:1 [DOM] Password forms should have (optionally hidden) username fields for accessibility: (More info: https://goo.gl/9p2vKq) <form class=​"max-w-xs mx-auto space-y-3">​…​</form>​

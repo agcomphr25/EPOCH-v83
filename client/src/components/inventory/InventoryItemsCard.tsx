@@ -75,6 +75,54 @@ import { parseLeadTimeToDays } from '@/utils/leadTimeUtils';
 type TraceabilityVisibility = 'required' | 'optional' | 'hidden';
 type TraceabilityFieldConfig = Record<string, TraceabilityVisibility>;
 
+type VendorOption = {
+  id: number;
+  name: string;
+};
+
+function createInventoryRequestId() {
+  return `inv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+async function readInventoryMutationError(response: Response, fallbackRequestId?: string) {
+  const contentType = response.headers.get('content-type') || '';
+  const requestId =
+    response.headers.get('x-inventory-request-id') ||
+    response.headers.get('x-request-id') ||
+    fallbackRequestId ||
+    response.headers.get('x-cloud-trace-context');
+
+  let message = '';
+  let body: unknown = null;
+
+  if (contentType.includes('application/json')) {
+    body = await response.json().catch(() => null);
+    if (body && typeof body === 'object') {
+      const errorBody = body as { error?: unknown; message?: unknown; requestId?: unknown };
+      message =
+        typeof errorBody.error === 'string'
+          ? errorBody.error
+          : typeof errorBody.message === 'string'
+            ? errorBody.message
+            : '';
+    }
+  } else {
+    message = (await response.text().catch(() => '')).trim();
+  }
+
+  const statusText = response.statusText ? ` ${response.statusText}` : '';
+  const requestHint = requestId ? ` [request ${requestId}]` : '';
+  const error = new Error(`Inventory save failed (${response.status}${statusText}): ${message || 'No error details returned'}${requestHint}`);
+  console.error('Inventory mutation failed', {
+    status: response.status,
+    statusText: response.statusText,
+    requestId,
+    contentType,
+    body,
+  });
+  return error;
+}
+
 const TRACEABILITY_CONFIG_FIELDS: { key: string; label: string; type: 'text' | 'date' }[] = [
   { key: 'lotNumber', label: 'Lot Number', type: 'text' },
   { key: 'batchNumber', label: 'Batch Number', type: 'text' },
@@ -963,7 +1011,6 @@ const InventoryForm = ({
         </div>
         {formData.hasSds && (
           <div>
-            <Label htmlFor="sdsFile">Upload SDS PDF</Label>
             <Input
               id="sdsFile"
               name="sdsFile"
@@ -1012,7 +1059,6 @@ const InventoryForm = ({
         </div>
         {formData.hasTds && (
           <div>
-            <Label htmlFor="tdsFile">Upload TDS PDF</Label>
             <Input
               id="tdsFile"
               name="tdsFile"
@@ -1061,7 +1107,6 @@ const InventoryForm = ({
         </div>
         {formData.hasOtherDocs && (
           <div>
-            <Label htmlFor="otherDocsFile">Upload Other Docs PDF</Label>
             <Input
               id="otherDocsFile"
               name="otherDocsFile"
@@ -1426,9 +1471,9 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
     }
   }, [isError, error]);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: vendorsResponse } = useQuery<{ data: any[] }>({
-    queryKey: ['/api/vendors'],
+  const { data: vendorsResponse } = useQuery<{ data: VendorOption[] }>({
+    queryKey: ['/api/vendors', 'inventory-item-select'],
+    queryFn: () => apiRequest('/api/vendors?pageSize=10000&sort=name:asc'),
   });
 
   const vendors = vendorsResponse?.data || [];
@@ -1714,14 +1759,20 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       if (otherDocsFile) {
         formData.append('otherDocsFile', otherDocsFile);
       }
+
+      const requestId = createInventoryRequestId();
       
       const response = await fetch('/api/inventory/items', {
         method: 'POST',
+        credentials: 'include',
+        headers: {
+          'X-Inventory-Request-Id': requestId,
+        },
         body: formData,
       });
       
       if (!response.ok) {
-        throw new Error('Failed to create inventory item');
+        throw await readInventoryMutationError(response, requestId);
       }
       
       return response.json();
@@ -1734,7 +1785,7 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
         queryKey: ['/api/enhanced/inventory/items'],
       });
     },
-    onError: () => toast.error('Failed to create inventory item'),
+    onError: (error: any) => toast.error(error instanceof Error ? error.message : 'Failed to create inventory item'),
   });
 
   const updateMutation = useMutation({
@@ -1751,15 +1802,20 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       if (otherDocsFile) {
         formData.append('otherDocsFile', otherDocsFile);
       }
+
+      const requestId = createInventoryRequestId();
       
       const response = await fetch(`/api/inventory/items/${id}`, {
         method: 'PUT',
+        credentials: 'include',
+        headers: {
+          'X-Inventory-Request-Id': requestId,
+        },
         body: formData,
       });
       
       if (!response.ok) {
-        const errBody = await response.json().catch(() => ({}));
-        throw new Error(errBody.error || 'Failed to update inventory item');
+        throw await readInventoryMutationError(response, requestId);
       }
       
       return response.json();
@@ -2025,6 +2081,10 @@ export default function InventoryItemsCard({ initialSearchTerm }: InventoryItems
       toast.error('Please select a PDF file');
       e.target.value = '';
     }
+  }, []);
+
+  const handleOpenFilePicker = useCallback((id: string) => {
+    document.getElementById(id)?.click();
   }, []);
 
   const handleSubmit = useCallback(

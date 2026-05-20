@@ -32,6 +32,8 @@ export interface Payment {
   paymentDate: string;
   notes?: string;
   processingFee?: number | null;
+  status?: string;
+  reversalOfPaymentId?: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -90,7 +92,7 @@ export default function PaymentManager({
 
   // Fetch payments for this order
   const {
-    data: payments = [],
+    data: rawPayments = [],
     isLoading,
     refetch,
   } = useQuery({
@@ -98,6 +100,7 @@ export default function PaymentManager({
     queryFn: () => apiRequest(`/api/orders/${orderId}/payments`),
     enabled: !!orderId && orderId !== 'undefined',
   });
+  const payments: Payment[] = Array.isArray(rawPayments) ? rawPayments : [];
 
   // Calculate totals
   const totalPaid = payments.reduce(
@@ -159,14 +162,15 @@ export default function PaymentManager({
 
   // Delete payment mutation
   const deletePaymentMutation = useMutation({
-    mutationFn: (id: number) =>
+    mutationFn: ({ id, reason }: { id: number; reason: string }) =>
       apiRequest(`/api/orders/payments/${id}`, {
         method: 'DELETE',
+        body: { reason },
       }),
     onSuccess: () => {
       toast({
-        title: 'Payment Deleted',
-        description: 'Payment has been successfully removed.',
+        title: 'Payment Voided',
+        description: 'Payment has been reversed and preserved for audit.',
       });
       refetch();
     },
@@ -208,8 +212,9 @@ export default function PaymentManager({
   };
 
   const handleDeletePayment = (id: number) => {
-    if (confirm('Are you sure you want to delete this payment?')) {
-      deletePaymentMutation.mutate(id);
+    const reason = window.prompt('Enter a reason for voiding this payment. The original payment will remain in the audit trail.');
+    if (reason?.trim()) {
+      deletePaymentMutation.mutate({ id, reason: reason.trim() });
     }
   };
 
@@ -374,6 +379,9 @@ export default function PaymentManager({
           <div className="space-y-2 max-h-32 overflow-y-auto">
             {payments.map((payment: Payment) => (
               <div key={payment.id} className="border rounded p-2 text-sm">
+                {payment.status === 'voided' && (
+                  <div className="mb-1 text-xs font-medium text-destructive">VOIDED</div>
+                )}
                 <div className="flex justify-between items-center">
                   <div className="flex items-center gap-2">
                     <span className="font-medium">
@@ -395,6 +403,7 @@ export default function PaymentManager({
                       variant="outline"
                       size="sm"
                       onClick={() => handleDeletePayment(payment.id)}
+                      disabled={payment.status === 'voided' || payment.status === 'reversal' || payment.paymentType === 'payment_reversal'}
                     >
                       <Trash2 className="h-3 w-3" />
                     </Button>

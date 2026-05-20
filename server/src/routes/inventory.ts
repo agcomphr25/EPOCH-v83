@@ -2,6 +2,9 @@ import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs/promises';
+import * as fsSync from 'fs';
+import os from 'os';
+import { randomUUID } from 'crypto';
 import { sql, eq, and, gte, lte, ilike, or, inArray, desc, asc, type SQL } from 'drizzle-orm';
 import { validateSameFamily } from '../utils/unitConversionService';
 import {
@@ -42,10 +45,25 @@ import { requirePermission } from '../../middleware/requirePermission';
 
 const router = Router();
 
-// Pre-create PDF upload directories to avoid async issues in multer
-const SDS_UPLOAD_DIR = path.join(process.cwd(), 'server/src/assets/sds');
-const TDS_UPLOAD_DIR = path.join(process.cwd(), 'server/src/assets/tds');
-const OTHER_DOCS_UPLOAD_DIR = path.join(process.cwd(), 'server/src/assets/other-docs');
+const isHostedProduction =
+  process.env.NODE_ENV === 'production' ||
+  process.env.REPL_DEPLOYMENT === 'true' ||
+  process.env.REPLIT_DEPLOYMENT === 'true';
+
+const INVENTORY_UPLOAD_ROOT = process.env.INVENTORY_UPLOAD_DIR
+  ? path.resolve(process.env.INVENTORY_UPLOAD_DIR)
+  : isHostedProduction
+    ? path.join(os.tmpdir(), 'epoch-inventory-documents')
+    : path.join(process.cwd(), 'uploads', 'inventory-documents');
+
+// Keep legacy locations readable so existing DB file paths still work.
+const LEGACY_SDS_UPLOAD_DIR = path.join(process.cwd(), 'server/src/assets/sds');
+const LEGACY_TDS_UPLOAD_DIR = path.join(process.cwd(), 'server/src/assets/tds');
+const LEGACY_OTHER_DOCS_UPLOAD_DIR = path.join(process.cwd(), 'server/src/assets/other-docs');
+
+const SDS_UPLOAD_DIR = path.join(INVENTORY_UPLOAD_ROOT, 'sds');
+const TDS_UPLOAD_DIR = path.join(INVENTORY_UPLOAD_ROOT, 'tds');
+const OTHER_DOCS_UPLOAD_DIR = path.join(INVENTORY_UPLOAD_ROOT, 'other-docs');
 
 fs.mkdir(SDS_UPLOAD_DIR, { recursive: true }).catch(err => {
   console.error('Failed to create SDS upload directory:', err);
@@ -57,17 +75,26 @@ fs.mkdir(OTHER_DOCS_UPLOAD_DIR, { recursive: true }).catch(err => {
   console.error('Failed to create Other Docs upload directory:', err);
 });
 
+function ensureUploadDir(uploadDir: string) {
+  fsSync.mkdirSync(uploadDir, { recursive: true });
+}
+
 // Configure multer storage for PDF uploads
 const pdfStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    // Determine destination based on field name
-    let uploadDir = SDS_UPLOAD_DIR;
-    if (file.fieldname === 'tdsFile') {
-      uploadDir = TDS_UPLOAD_DIR;
-    } else if (file.fieldname === 'otherDocsFile') {
-      uploadDir = OTHER_DOCS_UPLOAD_DIR;
+    try {
+      // Determine destination based on field name
+      let uploadDir = SDS_UPLOAD_DIR;
+      if (file.fieldname === 'tdsFile') {
+        uploadDir = TDS_UPLOAD_DIR;
+      } else if (file.fieldname === 'otherDocsFile') {
+        uploadDir = OTHER_DOCS_UPLOAD_DIR;
+      }
+      ensureUploadDir(uploadDir);
+      cb(null, uploadDir);
+    } catch (error) {
+      cb(error as Error, '');
     }
-    cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
@@ -88,6 +115,98 @@ const pdfUpload = multer({
     }
   }
 });
+
+const inventoryPdfUpload = pdfUpload.fields([
+  { name: 'sdsFile', maxCount: 1 },
+  { name: 'tdsFile', maxCount: 1 },
+  { name: 'otherDocsFile', maxCount: 1 },
+]);
+
+function getInventoryRequestId(req: Request, res: Response) {
+  const existingId = req.headers['x-inventory-request-id'] || req.headers['x-request-id'];
+  const requestId = Array.isArray(existingId) ? existingId[0] : existingId || randomUUID();
+  res.locals.inventoryRequestId = requestId;
+  res.setHeader('X-Inventory-Request-Id', requestId);
+  return requestId;
+}
+
+function summarizeInventoryFiles(files: unknown) {
+  if (!files || typeof files !== 'object') {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(files as Record<string, Express.Multer.File[]>).map(([field, fieldFiles]) => [
+      field,
+      fieldFiles.map(file => ({
+        originalname: file.originalname,
+        mimetype: file.mimetype,
+        size: file.size,
+        path: file.path,
+      })),
+    ]),
+  );
+}
+
+function handleInventoryPdfUpload(req: Request, res: Response, next: (err?: any) => void) {
+  const requestId = getInventoryRequestId(req, res);
+  console.log(`[inventory-upload:${requestId}] start`, {
+    method: req.method,
+    path: req.originalUrl,
+    contentType: req.headers['content-type'],
+    contentLength: req.headers['content-length'],
+  });
+
+  inventoryPdfUpload(req, res, (error: any) => {
+    if (!error) {
+      console.log(`[inventory-upload:${requestId}] complete`, {
+        fields: Object.keys(req.body || {}),
+        dataBytes: typeof req.body?.data === 'string' ? Buffer.byteLength(req.body.data) : 0,
+        files: summarizeInventoryFiles(req.files),
+      });
+      return next();
+    }
+
+    console.error(`[inventory-upload:${requestId}] error`, error);
+    const message = error instanceof multer.MulterError
+      ? error.message
+      : error instanceof Error
+        ? error.message
+        : 'Failed to upload inventory document';
+    const statusCode = error instanceof multer.MulterError || message === 'Only PDF files are allowed' ? 400 : 500;
+    return res.status(statusCode).json({ error: message, requestId, code: 'INVENTORY_UPLOAD_FAILED' });
+  });
+}
+
+function sendInventoryUpdateError(res: Response, error: unknown, fallbackMessage = 'Failed to update inventory item') {
+  const requestId = res.locals.inventoryRequestId;
+  const message = error instanceof Error ? error.message : fallbackMessage;
+  const statusCode = error instanceof Error ? 400 : 500;
+  return res.status(statusCode).json({ error: message, requestId, code: 'INVENTORY_UPDATE_FAILED' });
+}
+
+async function resolveInventoryDocumentPath(primaryDir: string, legacyDir: string, filename: string) {
+  const primaryPath = path.resolve(primaryDir, filename);
+  if (!primaryPath.startsWith(path.resolve(primaryDir))) {
+    return null;
+  }
+
+  try {
+    await fs.access(primaryPath);
+    return primaryPath;
+  } catch {
+    const legacyPath = path.resolve(legacyDir, filename);
+    if (!legacyPath.startsWith(path.resolve(legacyDir))) {
+      return null;
+    }
+    try {
+      await fs.access(legacyPath);
+      return legacyPath;
+    } catch {
+      return null;
+    }
+  }
+}
 
 // Enhanced Inventory API - Get all items (mounted at /api/enhanced/inventory/items)
 // Supports optional query param: ?manufacturedCategory=MACHINED_PART
@@ -226,7 +345,7 @@ router.get('/items/by-part-number/:partNumber', async (req: Request, res: Respon
 });
 
 // Enhanced Inventory API - Update item
-router.put('/inventory/items/:id', requirePermission('inventory.adjust'), pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name: 'tdsFile', maxCount: 1 }, { name: 'otherDocsFile', maxCount: 1 }]), async (req: Request, res: Response) => {
+router.put('/inventory/items/:id', requirePermission('inventory.adjust'), handleInventoryPdfUpload, async (req: Request, res: Response) => {
   try {
     const itemId = parseInt(req.params.id);
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
@@ -317,11 +436,8 @@ router.put('/inventory/items/:id', requirePermission('inventory.adjust'), pdfUpl
     
     res.json(withSupplySourceDashboard(updatedItem));
   } catch (error) {
-    console.error('Update enhanced inventory item error:', error);
-    if (error instanceof Error) {
-      return res.status(400).json({ error: error.message });
-    }
-    res.status(500).json({ error: 'Failed to update inventory item' });
+    console.error(`[inventory-update:${res.locals.inventoryRequestId || 'unknown'}] enhanced error`, error);
+    return sendInventoryUpdateError(res, error);
   }
 });
 
@@ -349,7 +465,7 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // POST route for creating inventory items at the root level (to match client expectations)
-router.post('/', requirePermission('inventory.adjust'), pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name: 'tdsFile', maxCount: 1 }, { name: 'otherDocsFile', maxCount: 1 }]), async (req: Request, res: Response) => {
+router.post('/', requirePermission('inventory.adjust'), handleInventoryPdfUpload, async (req: Request, res: Response) => {
   try {
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
     const dataString = req.body.data;
@@ -406,7 +522,7 @@ router.post('/', requirePermission('inventory.adjust'), pdfUpload.fields([{ name
 });
 
 // PUT route for updating inventory items at the root level
-router.put('/:id', requirePermission('inventory.adjust'), pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name: 'tdsFile', maxCount: 1 }, { name: 'otherDocsFile', maxCount: 1 }]), async (req: Request, res: Response) => {
+router.put('/:id', requirePermission('inventory.adjust'), handleInventoryPdfUpload, async (req: Request, res: Response) => {
   try {
     const itemId = parseInt(req.params.id);
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
@@ -451,11 +567,8 @@ router.put('/:id', requirePermission('inventory.adjust'), pdfUpload.fields([{ na
     const updatedItem = await storage.updateInventoryItem(itemId, updates);
     res.json(withSupplySourceDashboard(updatedItem));
   } catch (error) {
-    console.error('Update inventory item error:', error);
-    if (error instanceof Error) {
-      return res.status(400).json({ error: error.message });
-    }
-    res.status(500).json({ error: 'Failed to update inventory item' });
+    console.error(`[inventory-update:${res.locals.inventoryRequestId || 'unknown'}] root error`, error);
+    return sendInventoryUpdateError(res, error);
   }
 });
 
@@ -533,7 +646,7 @@ router.get('/items/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/items', requirePermission('inventory.adjust'), pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name: 'tdsFile', maxCount: 1 }, { name: 'otherDocsFile', maxCount: 1 }]), async (req: Request, res: Response) => {
+router.post('/items', requirePermission('inventory.adjust'), handleInventoryPdfUpload, async (req: Request, res: Response) => {
   try {
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
     const dataString = req.body.data;
@@ -595,7 +708,7 @@ router.post('/items', requirePermission('inventory.adjust'), pdfUpload.fields([{
   }
 });
 
-router.put('/items/:id', requirePermission('inventory.adjust'), pdfUpload.fields([{ name: 'sdsFile', maxCount: 1 }, { name: 'tdsFile', maxCount: 1 }, { name: 'otherDocsFile', maxCount: 1 }]), async (req: Request, res: Response) => {
+router.put('/items/:id', requirePermission('inventory.adjust'), handleInventoryPdfUpload, async (req: Request, res: Response) => {
   try {
     const itemId = parseInt(req.params.id);
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
@@ -686,11 +799,8 @@ router.put('/items/:id', requirePermission('inventory.adjust'), pdfUpload.fields
     
     res.json(withSupplySourceDashboard(updatedItem));
   } catch (error) {
-    console.error('Update inventory item error:', error);
-    if (error instanceof Error) {
-      return res.status(400).json({ error: error.message });
-    }
-    res.status(500).json({ error: 'Failed to update inventory item' });
+    console.error(`[inventory-update:${res.locals.inventoryRequestId || 'unknown'}] items error`, error);
+    return sendInventoryUpdateError(res, error);
   }
 });
 
@@ -1003,6 +1113,41 @@ router.get('/parts-requests', async (req: Request, res: Response) => {
   }
 });
 
+const OWNER_APPROVAL_THRESHOLD = 1000;
+
+function getPartsRequestTotalCost(request: { estimatedCost?: number | null }) {
+  return Number(request.estimatedCost || 0);
+}
+
+function appendApprovalHistory(
+  request: { approvalHistory?: Array<Record<string, unknown>> | null },
+  entry: Record<string, unknown>
+) {
+  const existing = Array.isArray(request.approvalHistory) ? request.approvalHistory : [];
+  return [...existing, { ...entry, occurredAt: new Date().toISOString() }];
+}
+
+function getApprovalActor(req: Request, fallback?: string | null) {
+  return req.user?.username || fallback?.trim() || 'Unknown approver';
+}
+
+router.get('/parts-requests/owner-approvals', async (_req: Request, res: Response) => {
+  try {
+    const requests = await storage.getAllPartsRequests();
+    res.json(
+      requests.filter(
+        (request) =>
+          request.isActive !== false &&
+          request.status === 'PENDING_OWNER_APPROVAL' &&
+          request.approvalStatus === 'OWNER_PENDING'
+      )
+    );
+  } catch (error) {
+    console.error('Get owner approval parts requests error:', error);
+    res.status(500).json({ error: 'Failed to fetch owner approval requests' });
+  }
+});
+
 // Resolve a free-text source string to a vendors.id via case-insensitive name match.
 // Future improvement: replace with inventory_items.source_vendor_id (FK) once schema migration is done.
 async function resolveSourceVendorId(sourceText: string | null | undefined, db: any): Promise<number | null> {
@@ -1021,6 +1166,20 @@ async function resolveSourceVendorId(sourceText: string | null | undefined, db: 
 router.post('/parts-requests', async (req: Request, res: Response) => {
   try {
     const requestData = insertPartsRequestSchema.parse(req.body);
+    const now = new Date();
+    requestData.status = 'PENDING';
+    requestData.approvalStatus = 'PENDING';
+    requestData.approvalRequiredRole = 'INVENTORY_MANAGER';
+    requestData.approvalHistory = [
+      {
+        event: 'REQUEST_CREATED',
+        actor: requestData.requestedBy,
+        fromStatus: null,
+        toStatus: 'PENDING',
+        notes: 'Parts request submitted for inventory manager review.',
+        occurredAt: now.toISOString(),
+      },
+    ];
 
     if (requestData.agPartNumber) {
       const { inventoryItems } = await import('../../schema');
@@ -1064,16 +1223,96 @@ router.post('/parts-requests', async (req: Request, res: Response) => {
   }
 });
 
+router.post('/parts-requests/:id/approve', async (req: Request, res: Response) => {
+  try {
+    const requestId = parseInt(req.params.id);
+    const {
+      approvedBy,
+      digitalSignature,
+      notes,
+      decision = 'APPROVED',
+    } = req.body as {
+      approvedBy?: string;
+      digitalSignature?: string;
+      notes?: string;
+      decision?: 'APPROVED' | 'REJECTED';
+    };
+
+    const existingRequest = await storage.getPartsRequest(requestId);
+    if (!existingRequest) {
+      return res.status(404).json({ error: 'Request not found' });
+    }
+
+    if (existingRequest.status !== 'PENDING_OWNER_APPROVAL') {
+      return res.status(400).json({ error: `Request is not waiting on owner approval. Current status: ${existingRequest.status}` });
+    }
+
+    const actor = getApprovalActor(req, approvedBy);
+    const now = new Date();
+    const isApproved = decision !== 'REJECTED';
+    const nextStatus = isApproved ? 'APPROVED' : 'REJECTED';
+    const signature = digitalSignature || `${actor} digital approval ${now.toISOString()}`;
+    const approvalHistory = appendApprovalHistory(existingRequest, {
+      event: isApproved ? 'OWNER_APPROVED' : 'OWNER_REJECTED',
+      actor,
+      fromStatus: existingRequest.status,
+      toStatus: nextStatus,
+      approvalLevel: 'OWNER',
+      digitalSignature: signature,
+      notes: notes || null,
+      totalCost: getPartsRequestTotalCost(existingRequest),
+    });
+
+    const updatedRequest = await storage.updatePartsRequest(requestId, {
+      status: nextStatus,
+      approvalStatus: isApproved ? 'APPROVED' : 'REJECTED',
+      approvedBy: isApproved ? actor : existingRequest.approvedBy,
+      approvedDate: isApproved ? now : existingRequest.approvedDate,
+      ownerApprovedBy: isApproved ? actor : existingRequest.ownerApprovedBy,
+      ownerApprovedAt: isApproved ? now : existingRequest.ownerApprovedAt,
+      digitalApprovalSignature: signature,
+      rejectionReason: isApproved ? existingRequest.rejectionReason : notes || existingRequest.rejectionReason,
+      rejectedBy: isApproved ? existingRequest.rejectedBy : actor,
+      rejectedAt: isApproved ? existingRequest.rejectedAt : now,
+      notes: notes ?? existingRequest.notes,
+      approvalHistory,
+      updatedAt: now,
+    } as any);
+
+    const { partsRequestStatusHistory } = await import('../../schema');
+    await db.insert(partsRequestStatusHistory).values({
+      partsRequestId: requestId,
+      fromStatus: existingRequest.status,
+      toStatus: nextStatus,
+      changedBy: actor,
+      reason: isApproved ? 'Owner digital approval completed.' : notes || 'Owner rejected approval request.',
+    });
+
+    res.json(updatedRequest);
+  } catch (error) {
+    console.error('Approve owner parts request error:', error);
+    if (error instanceof Error) {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: 'Failed to approve parts request' });
+  }
+});
+
 router.put('/parts-requests/:id', async (req: Request, res: Response) => {
   try {
     const requestId = parseInt(req.params.id);
     const updates = insertPartsRequestSchema.partial().parse(req.body);
+    const existingRequest = await storage.getPartsRequest(requestId);
+    if (!existingRequest) {
+      return res.status(404).json({ error: 'Request not found' });
+    }
     
     // Enforce status transition rules: PENDING → APPROVED → ORDERED → RECEIVED → DELIVERED_TO_DEPT
     // Also allows PENDING → REJECTED
     if (updates.status) {
       const validTransitions: Record<string, string[]> = {
-        'APPROVED': ['PENDING'],
+        'PENDING_OWNER_APPROVAL': ['PENDING'],
+        'APPROVED': ['PENDING', 'PENDING_OWNER_APPROVAL'],
         'REJECTED': ['PENDING', 'CANCEL_REQUESTED'],
         'ORDERED': ['PENDING', 'APPROVED'],
         'ORDERED_PARTIAL': ['PENDING', 'APPROVED'],
@@ -1085,12 +1324,6 @@ router.put('/parts-requests/:id', async (req: Request, res: Response) => {
       };
       
       if (validTransitions[updates.status]) {
-        // Get current status
-        const existingRequest = await storage.getPartsRequest(requestId);
-        if (!existingRequest) {
-          return res.status(404).json({ error: 'Request not found' });
-        }
-        
         const allowedFromStatuses = validTransitions[updates.status];
         if (!allowedFromStatuses.includes(existingRequest.status)) {
           return res.status(400).json({ 
@@ -1107,6 +1340,35 @@ router.put('/parts-requests/:id', async (req: Request, res: Response) => {
         updates.rejectedAt = updates.rejectedAt ?? new Date();
         updates.rejectionReason = updates.rejectionReason ?? updates.notes ?? null;
       }
+    }
+
+    if (updates.status === 'APPROVED') {
+      const effectiveRequest = { ...existingRequest, ...updates };
+      const totalCost = getPartsRequestTotalCost(effectiveRequest);
+      const actor = getApprovalActor(req, updates.approvedBy ?? null);
+      const now = new Date();
+      const needsOwnerApproval = totalCost > OWNER_APPROVAL_THRESHOLD;
+      const nextStatus = needsOwnerApproval ? 'PENDING_OWNER_APPROVAL' : 'APPROVED';
+      const signature = updates.digitalApprovalSignature || `${actor} digital approval ${now.toISOString()}`;
+
+      updates.approvalRequiredRole = needsOwnerApproval ? 'OWNER' : 'INVENTORY_MANAGER';
+      updates.approvalStatus = needsOwnerApproval ? 'OWNER_PENDING' : 'APPROVED';
+      updates.status = nextStatus;
+      updates.approvedBy = needsOwnerApproval ? existingRequest.approvedBy : actor;
+      updates.approvedDate = needsOwnerApproval ? existingRequest.approvedDate : now;
+      updates.digitalApprovalSignature = needsOwnerApproval ? existingRequest.digitalApprovalSignature : signature;
+      updates.approvalHistory = appendApprovalHistory(existingRequest, {
+        event: needsOwnerApproval ? 'OWNER_APPROVAL_REQUESTED' : 'INVENTORY_MANAGER_APPROVED',
+        actor,
+        fromStatus: existingRequest.status,
+        toStatus: nextStatus,
+        approvalLevel: needsOwnerApproval ? 'OWNER' : 'INVENTORY_MANAGER',
+        digitalSignature: needsOwnerApproval ? null : signature,
+        notes: needsOwnerApproval
+          ? `Total cost $${totalCost.toFixed(2)} exceeds the $${OWNER_APPROVAL_THRESHOLD.toFixed(2)} inventory manager approval limit.`
+          : updates.notes ?? null,
+        totalCost,
+      });
     }
     
     const updatedRequest = await storage.updatePartsRequest(requestId, updates);
@@ -1651,9 +1913,19 @@ router.get('/parts-requests/pending-receipts', async (req: Request, res: Respons
 // Receive parts against ORDER LINES (not requests directly)
 router.post('/parts-requests/receive', requirePermission('inventory.manage_requests'), async (req: Request, res: Response) => {
   try {
-    const { partsRequests, partsRequestBatches, partsRequestOrderLines, partsRequestOrderAllocations, partsRequestReceipts, partsRequestReceiptLines, partsRequestStatusHistory } = await import('../../schema');
-    const { db } = await import('../../db');
-    const { eq, sql: sqlTag } = await import('drizzle-orm');
+    const {
+      partsRequests,
+      partsRequestBatches,
+      partsRequestOrderLines,
+      partsRequestOrderAllocations,
+      partsRequestReceipts,
+      partsRequestReceiptLines,
+      partsRequestStatusHistory,
+      inventoryItems: inventoryItemsTable,
+      inventoryBalances: inventoryBalancesTable,
+      inventoryTransactionLedger: inventoryTransactionLedgerTable,
+    } = await import('../../schema');
+    const { recordInventoryLedgerEntry } = await import('../services/inventoryTransactionLedgerService');
 
     const { batchId, receivedBy, notes, lines } = req.body as {
       batchId: number;
@@ -1669,93 +1941,191 @@ router.post('/parts-requests/receive', requirePermission('inventory.manage_reque
       return res.status(400).json({ error: 'No receipt lines provided' });
     }
 
-    const [receipt] = await db.insert(partsRequestReceipts).values({
-      batchId: batchId || null,
-      vendorId: null,
-      receivedBy,
-      notes: notes || null,
-    }).returning();
+    // Task #229 — wrap the entire receipt (parent receipt row, line updates,
+    // allocation propagation, batch status, request status history, AND the
+    // ITL `RECEIVE` writes) in a single db.transaction so the ledger and the
+    // parts-request state cannot diverge. ITL failure rolls back everything.
+    const receipt = await db.transaction(async (tx) => {
+      const [createdReceipt] = await tx.insert(partsRequestReceipts).values({
+        batchId: batchId || null,
+        vendorId: null,
+        receivedBy,
+        notes: notes || null,
+      }).returning();
 
-    let allFullyReceived = true;
-    let anyReceived = false;
+      let allFullyReceived = true;
+      let anyReceived = false;
 
-    for (const line of lines) {
-      if (line.qtyReceived <= 0) continue;
-      anyReceived = true;
+      for (const line of lines) {
+        if (line.qtyReceived <= 0) continue;
+        anyReceived = true;
 
-      const [orderLine] = await db.select().from(partsRequestOrderLines).where(eq(partsRequestOrderLines.id, line.orderLineId));
-      if (!orderLine) continue;
+        const [orderLine] = await tx.select().from(partsRequestOrderLines).where(eq(partsRequestOrderLines.id, line.orderLineId));
+        if (!orderLine) continue;
 
-      const newOrderLineReceived = orderLine.qtyReceived + line.qtyReceived;
-      const orderLineStatus = newOrderLineReceived >= orderLine.qtyOrdered ? 'RECEIVED' : 'PARTIALLY_RECEIVED';
+        const newOrderLineReceived = orderLine.qtyReceived + line.qtyReceived;
+        const orderLineStatus = newOrderLineReceived >= orderLine.qtyOrdered ? 'RECEIVED' : 'PARTIALLY_RECEIVED';
 
-      await db.update(partsRequestOrderLines).set({
-        qtyReceived: newOrderLineReceived,
-        status: orderLineStatus,
-        updatedAt: new Date(),
-      }).where(eq(partsRequestOrderLines.id, line.orderLineId));
-
-      await db.insert(partsRequestReceiptLines).values({
-        receiptId: receipt.id,
-        orderLineId: line.orderLineId,
-        qtyReceived: line.qtyReceived,
-      });
-
-      if (newOrderLineReceived < orderLine.qtyOrdered) {
-        allFullyReceived = false;
-      }
-
-      const allocations = await db.select().from(partsRequestOrderAllocations).where(eq(partsRequestOrderAllocations.orderLineId, line.orderLineId));
-
-      let remainingToApply = line.qtyReceived;
-      for (const alloc of allocations) {
-        if (remainingToApply <= 0) break;
-        const canApply = Math.min(remainingToApply, alloc.qtyAllocated - alloc.qtyReceivedApplied);
-        if (canApply <= 0) continue;
-
-        await db.update(partsRequestOrderAllocations).set({
-          qtyReceivedApplied: alloc.qtyReceivedApplied + canApply,
-          status: (alloc.qtyReceivedApplied + canApply) >= alloc.qtyAllocated ? 'RECEIVED' : 'PARTIALLY_RECEIVED',
+        await tx.update(partsRequestOrderLines).set({
+          qtyReceived: newOrderLineReceived,
+          status: orderLineStatus,
           updatedAt: new Date(),
-        }).where(eq(partsRequestOrderAllocations.id, alloc.id));
+        }).where(eq(partsRequestOrderLines.id, line.orderLineId));
 
-        const [request] = await db.select().from(partsRequests).where(eq(partsRequests.id, alloc.partsRequestId));
-        if (request) {
-          const newTotalReceived = (request.qtyReceived || 0) + canApply;
-          const requestStatus = newTotalReceived >= (request.qtyOrdered || request.quantity) ? 'RECEIVED' : 'RECEIVED_PARTIAL';
+        const [receiptLine] = await tx.insert(partsRequestReceiptLines).values({
+          receiptId: createdReceipt.id,
+          orderLineId: line.orderLineId,
+          qtyReceived: line.qtyReceived,
+        }).returning();
 
-          await db.update(partsRequests).set({
-            qtyReceived: newTotalReceived,
-            status: requestStatus,
-            actualDelivery: new Date().toISOString().split('T')[0],
-            updatedAt: new Date(),
-          }).where(eq(partsRequests.id, alloc.partsRequestId));
-
-          await db.insert(partsRequestStatusHistory).values({
-            partsRequestId: alloc.partsRequestId,
-            fromStatus: request.status,
-            toStatus: requestStatus,
-            changedBy: receivedBy,
-            reason: `Received ${canApply} units via order line #${line.orderLineId}`,
-          });
+        if (newOrderLineReceived < orderLine.qtyOrdered) {
+          allFullyReceived = false;
         }
 
-        remainingToApply -= canApply;
-      }
-    }
+        // ── Inventory Transaction Ledger write (Task #229 / #248) ──────────
+        // The ITL inventory_item_id FK is NOT NULL. Previously, when a part
+        // had no matching inventory_items row we silently skipped the ledger
+        // write — that's the bug behind Task #248 (Rock West receipt missing
+        // from the Transactions list). Now: when an agPartNumber is present
+        // but no inventory_items row exists, auto-create a minimal placeholder
+        // inside the same transaction, then write the ledger row. Truly
+        // ad-hoc lines (no agPartNumber) still skip with a warning because
+        // there's no part identity to track.
+        if (orderLine.agPartNumber) {
+          const { ensureInventoryItemForReceipt } = await import(
+            '../services/ensureInventoryItemForReceipt'
+          );
+          const invItem = await ensureInventoryItemForReceipt(tx, {
+            agPartNumber: orderLine.agPartNumber,
+            fallbackName: orderLine.partName ?? orderLine.partNumber ?? null,
+            createdBy: receivedBy ?? null,
+          });
 
-    if (batchId && anyReceived) {
-      const batchStatus = allFullyReceived ? 'RECEIVED' : 'PARTIALLY_RECEIVED';
-      await db.update(partsRequestBatches).set({
-        status: batchStatus,
-        updatedAt: new Date(),
-      }).where(eq(partsRequestBatches.id, batchId));
-    }
+          {
+            const ledgerSourceModule = 'receiving:parts-request';
+            // Stable composite source key: anchored to the parent receipt id +
+            // the business order-line id (not the surrogate receipt-line PK).
+            // Within one receipt call, an order line can only be received once,
+            // so this collapses to exactly one ITL row per line per receipt.
+            const ledgerSourceRecordId = `${createdReceipt.id}:${line.orderLineId}`;
+            const [existingLedger] = await tx
+              .select({ id: inventoryTransactionLedgerTable.id })
+              .from(inventoryTransactionLedgerTable)
+              .where(
+                and(
+                  eq(inventoryTransactionLedgerTable.sourceModule, ledgerSourceModule),
+                  eq(inventoryTransactionLedgerTable.sourceRecordId, ledgerSourceRecordId),
+                ),
+              )
+              .limit(1);
+
+            if (!existingLedger) {
+              const balanceRows = await tx
+                .select({ quantityOnHand: inventoryBalancesTable.quantityOnHand })
+                .from(inventoryBalancesTable)
+                .where(eq(inventoryBalancesTable.agPartNumber, invItem.agPartNumber));
+              const quantityBefore = balanceRows.reduce(
+                (sum, b) => sum + Number(b.quantityOnHand ?? 0),
+                0,
+              );
+              const quantityAfter = quantityBefore + line.qtyReceived;
+
+              await recordInventoryLedgerEntry({
+                transactionType: 'RECEIVE',
+                inventoryItemId: invItem.id,
+                agPartNumber: invItem.agPartNumber,
+                unitOfMeasure: invItem.purchaseUnit ?? invItem.usageUnit ?? 'EA',
+                quantityBefore,
+                quantityDelta: line.qtyReceived,
+                quantityAfter,
+                performedByDisplayName: receivedBy || 'system:parts-request-receive',
+                reasonCode: 'PARTS_REQUEST_RECEIPT',
+                notes: notes ?? null,
+                sourceModule: ledgerSourceModule,
+                sourceRecordId: ledgerSourceRecordId,
+                metadata: {
+                  receiptId: createdReceipt.id,
+                  orderLineId: line.orderLineId,
+                  batchId: batchId ?? null,
+                  partNumber: orderLine.partNumber,
+                  partName: orderLine.partName,
+                },
+              }, tx);
+            }
+          }
+        } else {
+          console.warn(
+            `[parts-requests/receive] Skipping ITL write — order line ${line.orderLineId} has no agPartNumber (ad-hoc request)`,
+          );
+        }
+
+        const allocations = await tx.select().from(partsRequestOrderAllocations).where(eq(partsRequestOrderAllocations.orderLineId, line.orderLineId));
+
+        let remainingToApply = line.qtyReceived;
+        for (const alloc of allocations) {
+          if (remainingToApply <= 0) break;
+          const canApply = Math.min(remainingToApply, alloc.qtyAllocated - alloc.qtyReceivedApplied);
+          if (canApply <= 0) continue;
+
+          await tx.update(partsRequestOrderAllocations).set({
+            qtyReceivedApplied: alloc.qtyReceivedApplied + canApply,
+            status: (alloc.qtyReceivedApplied + canApply) >= alloc.qtyAllocated ? 'RECEIVED' : 'PARTIALLY_RECEIVED',
+            updatedAt: new Date(),
+          }).where(eq(partsRequestOrderAllocations.id, alloc.id));
+
+          const [request] = await tx.select().from(partsRequests).where(eq(partsRequests.id, alloc.partsRequestId));
+          if (request) {
+            const newTotalReceived = (request.qtyReceived || 0) + canApply;
+            const requestStatus = newTotalReceived >= (request.qtyOrdered || request.quantity) ? 'RECEIVED' : 'RECEIVED_PARTIAL';
+
+            await tx.update(partsRequests).set({
+              qtyReceived: newTotalReceived,
+              status: requestStatus,
+              actualDelivery: new Date().toISOString().split('T')[0],
+              updatedAt: new Date(),
+            }).where(eq(partsRequests.id, alloc.partsRequestId));
+
+            await tx.insert(partsRequestStatusHistory).values({
+              partsRequestId: alloc.partsRequestId,
+              fromStatus: request.status,
+              toStatus: requestStatus,
+              changedBy: receivedBy,
+              reason: `Received ${canApply} units via order line #${line.orderLineId}`,
+            });
+          }
+
+          remainingToApply -= canApply;
+        }
+      }
+
+      if (batchId && anyReceived) {
+        const batchStatus = allFullyReceived ? 'RECEIVED' : 'PARTIALLY_RECEIVED';
+        await tx.update(partsRequestBatches).set({
+          status: batchStatus,
+          updatedAt: new Date(),
+        }).where(eq(partsRequestBatches.id, batchId));
+      }
+
+      return createdReceipt;
+    });
 
     res.status(201).json(receipt);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Receive parts error:', error);
-    res.status(500).json({ error: 'Failed to receive parts' });
+    // Surface inventory-ledger validation/FK failures as a structured 422 so
+    // the caller can distinguish ledger invariant failures from generic 500s.
+    const msg = String(error?.message ?? '');
+    if (
+      error?.code === 'INVENTORY_LEDGER_VALIDATION' ||
+      /inventory[_ ]?ledger|inventory_transaction_ledger|recordInventoryLedgerEntry/i.test(msg)
+    ) {
+      return res.status(422).json({
+        error: 'Inventory ledger write failed',
+        code: 'INVENTORY_LEDGER_WRITE_FAILED',
+        message: msg,
+      });
+    }
+    res.status(500).json({ error: 'Failed to receive parts', message: msg });
   }
 });
 
@@ -3459,16 +3829,8 @@ router.get('/sds/:filename', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid filename' });
     }
     
-    // Build absolute path and ensure it's within SDS directory
-    const filePath = path.resolve(SDS_UPLOAD_DIR, filename);
-    if (!filePath.startsWith(path.resolve(SDS_UPLOAD_DIR))) {
-      return res.status(400).json({ error: 'Invalid file path' });
-    }
-    
-    // Check if file exists
-    try {
-      await fs.access(filePath);
-    } catch {
+    const filePath = await resolveInventoryDocumentPath(SDS_UPLOAD_DIR, LEGACY_SDS_UPLOAD_DIR, filename);
+    if (!filePath) {
       return res.status(404).json({ error: 'SDS file not found' });
     }
     
@@ -3496,16 +3858,8 @@ router.get('/tds/:filename', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid filename' });
     }
     
-    // Build absolute path and ensure it's within TDS directory
-    const filePath = path.resolve(TDS_UPLOAD_DIR, filename);
-    if (!filePath.startsWith(path.resolve(TDS_UPLOAD_DIR))) {
-      return res.status(400).json({ error: 'Invalid file path' });
-    }
-    
-    // Check if file exists
-    try {
-      await fs.access(filePath);
-    } catch {
+    const filePath = await resolveInventoryDocumentPath(TDS_UPLOAD_DIR, LEGACY_TDS_UPLOAD_DIR, filename);
+    if (!filePath) {
       return res.status(404).json({ error: 'TDS file not found' });
     }
     
@@ -3533,16 +3887,8 @@ router.get('/other-docs/:filename', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid filename' });
     }
     
-    // Build absolute path and ensure it's within Other Docs directory
-    const filePath = path.resolve(OTHER_DOCS_UPLOAD_DIR, filename);
-    if (!filePath.startsWith(path.resolve(OTHER_DOCS_UPLOAD_DIR))) {
-      return res.status(400).json({ error: 'Invalid file path' });
-    }
-    
-    // Check if file exists
-    try {
-      await fs.access(filePath);
-    } catch {
+    const filePath = await resolveInventoryDocumentPath(OTHER_DOCS_UPLOAD_DIR, LEGACY_OTHER_DOCS_UPLOAD_DIR, filename);
+    if (!filePath) {
       return res.status(404).json({ error: 'Other Docs file not found' });
     }
     

@@ -1,12 +1,30 @@
 import { Router, Request, Response } from 'express';
 import { pool } from '../../db';
+import { ensureProductionWorkflowReadSchema } from '../lib/productionWorkflowReadiness';
+import { assignDashboardForWorkOrder } from '../lib/workOrderDashboardAssignment';
 
 const router = Router();
+
+router.use(async (_req, res, next) => {
+  try {
+    await ensureProductionWorkflowReadSchema();
+    next();
+  } catch (error) {
+    console.error('[PM Dashboard] Production workflow schema readiness failed:', error);
+    res.status(503).json({ error: 'Production workflow schema is being prepared, please retry' });
+  }
+});
 
 function h(fn: (req: Request, res: Response) => Promise<void>) {
   return (req: Request, res: Response) =>
     fn(req, res).catch((err) => {
-      console.error('[PM Dashboard]', err?.message ?? err);
+      console.error('[PM Dashboard]', {
+        method: req.method,
+        path: req.originalUrl,
+        projectId: req.params?.projectId,
+        message: err?.message ?? String(err),
+        stack: err?.stack,
+      });
       if (!res.headersSent) res.status(500).json({ error: 'Internal server error', message: err?.message });
     });
 }
@@ -70,12 +88,28 @@ interface ProductionRow {
   quantityRequired: number;
   quantityCompleted: number;
   quantityCompletedToday: number;
+  sourceType: string;
+  sourceLabel: string;
+  dashboardType: string | null;
+  queueType: string | null;
+  assignedDepartment: string | null;
+  assignedDashboardRoute: string | null;
+  dashboardLabel: string | null;
+  manufacturingQueueId: number | null;
+  wizardData?: unknown;
+  departmentBudgets?: unknown;
+  wadStatus: string | null;
+  p2PoId: number | null;
+  p2PoNumber: string | null;
   status: string;
   dueDate: string | null;
   currentDepartment: string | null;
   currentTravelerStep: string | null;
   activeTravelerId: string | null;
   activeTravelerNumber: string | null;
+  ncrReplacementCount: number;
+  activeReplacementCount: number;
+  replacementSerialNumbers: string | null;
   daysScheduleVariance: string | null;
   blockReason: string | null;
 }
@@ -87,6 +121,20 @@ interface ChargeCodeAggRow {
   taskName: string | null;
   budgetedHours: string;
   actualHours: string;
+}
+
+interface DailyLaborRow {
+  workDate: string;
+  employeeId: number;
+  employeeName: string;
+  department: string | null;
+  chargeCode: string | null;
+  workOrderNumber: string | null;
+  travelerNumber: string | null;
+  budgetedHours: string;
+  actualHours: string;
+  activeMinutes: string;
+  openSessionCount: string;
 }
 
 interface LiveSessionRow {
@@ -108,6 +156,7 @@ interface CertRow {
 }
 
 interface MaterialSummaryRow {
+  plannedCost: string;
   committedCost: string;
   consumedCost: string;
 }
@@ -135,6 +184,187 @@ const ORDERED_PARTS_REQUEST_STATUSES = [
   'DELIVERED_TO_DEPT',
 ];
 
+// ─── Item-level progress helper ──────────────────────────────────────────────
+// Aggregates p2_serialized_items per (po_id, po_item_id) for a project so the
+// PM Control Center reports the same numbers as the order card. "Completed"
+// includes rows whose serialized-item status is stale but whose matching
+// traveler has already completed; SCRAPPED / CANCELLED units are excluded.
+interface SerializedItemGroup {
+  poId: number;
+  poItemId: number;
+  partNumber: string | null;
+  partName: string | null;
+  poNumber: string | null;
+  totalUnits: number;
+  completedUnits: number;
+  inProductionUnits: number;
+  pendingUnits: number;
+  completedTodayUnits: number;
+  currentDepartment: string | null;
+  dueDate: string | null;
+}
+
+interface SerializedItemAggregate {
+  linkedPoIds: number[];
+  groups: SerializedItemGroup[];
+  totalRequired: number;
+  totalCompleted: number;
+}
+
+async function getProjectSerializedItemAggregate(
+  projectId: string,
+  today: string,
+): Promise<SerializedItemAggregate> {
+  const linkRows = await pool.query<{ po_id: string }>(`
+    WITH project_po_link AS (
+      SELECT p.po_id AS po_id
+      FROM projects p
+      WHERE p.id = $1 AND p.po_id IS NOT NULL
+      UNION
+      SELECT ps.linked_p2_order_id AS po_id
+      FROM project_steps ps
+      WHERE ps.project_id = $1 AND ps.linked_p2_order_id IS NOT NULL
+      UNION
+      SELECT DISTINCT p2po.p2_po_id AS po_id
+      FROM p2_production_orders p2po
+      WHERE p2po.project_id = $1::uuid
+    )
+    SELECT DISTINCT po_id::text FROM project_po_link WHERE po_id IS NOT NULL
+  `, [projectId]);
+
+  const linkedPoIds = linkRows
+    .map(r => parseInt(r.po_id, 10))
+    .filter(n => Number.isFinite(n));
+
+  if (!linkedPoIds.length) {
+    return { linkedPoIds: [], groups: [], totalRequired: 0, totalCompleted: 0 };
+  }
+
+  const groupRows = await pool.query<{
+    poId: string;
+    poItemId: string;
+    partNumber: string | null;
+    partName: string | null;
+    poNumber: string | null;
+    totalUnits: string;
+    completedUnits: string;
+    inProductionUnits: string;
+    pendingUnits: string;
+    completedTodayUnits: string;
+    currentDepartment: string | null;
+    dueDate: string | null;
+  }>(`
+    WITH item_state AS (
+      SELECT
+        psi.*,
+        EXISTS (
+          SELECT 1
+          FROM travelers t
+          WHERE t.status = 'COMPLETED'
+            AND t.serial_number IS NOT NULL
+            AND LOWER(TRIM(t.serial_number)) = LOWER(TRIM(psi.serial_number))
+        ) AS has_completed_traveler,
+        COALESCE(
+          psi.completed_at,
+          (
+            SELECT MAX(t.completed_at)
+            FROM travelers t
+            WHERE t.status = 'COMPLETED'
+              AND t.serial_number IS NOT NULL
+              AND LOWER(TRIM(t.serial_number)) = LOWER(TRIM(psi.serial_number))
+          )
+        ) AS effective_completed_at
+      FROM p2_serialized_items psi
+    )
+    SELECT
+      psi.po_id::text AS "poId",
+      psi.po_item_id::text AS "poItemId",
+      MAX(COALESCE(poi.part_number, psi.part_number)) AS "partNumber",
+      MAX(COALESCE(poi.part_name, psi.part_name)) AS "partName",
+      MAX(psi.po_number) AS "poNumber",
+      COUNT(*) FILTER (
+        WHERE psi.status NOT IN ('SCRAPPED', 'CANCELLED', 'CANCELED')
+      )::text AS "totalUnits",
+      COUNT(*) FILTER (
+        WHERE psi.status = 'COMPLETED' OR psi.has_completed_traveler
+      )::text AS "completedUnits",
+      COUNT(*) FILTER (
+        WHERE psi.status NOT IN ('SCRAPPED', 'CANCELLED', 'CANCELED', 'COMPLETED')
+          AND NOT psi.has_completed_traveler
+          AND psi.current_stage_index > 0
+      )::text AS "inProductionUnits",
+      COUNT(*) FILTER (
+        WHERE psi.status NOT IN ('SCRAPPED', 'CANCELLED', 'CANCELED', 'COMPLETED')
+          AND NOT psi.has_completed_traveler
+          AND psi.current_stage_index = 0
+      )::text AS "pendingUnits",
+      COUNT(*) FILTER (
+        WHERE (psi.status = 'COMPLETED' OR psi.has_completed_traveler)
+          AND psi.effective_completed_at IS NOT NULL
+          AND psi.effective_completed_at::date = $2::date
+      )::text AS "completedTodayUnits",
+      (
+        SELECT psi2.current_department
+        FROM item_state psi2
+        WHERE psi2.po_id = psi.po_id
+          AND psi2.po_item_id = psi.po_item_id
+          AND psi2.status NOT IN ('SCRAPPED', 'CANCELLED', 'CANCELED', 'COMPLETED')
+          AND NOT psi2.has_completed_traveler
+        GROUP BY psi2.current_department
+        ORDER BY COUNT(*) DESC
+        LIMIT 1
+      ) AS "currentDepartment",
+      (
+        SELECT MIN(p2po.due_date)::text
+        FROM p2_production_orders p2po
+        WHERE p2po.p2_po_id = psi.po_id
+          AND p2po.p2_po_item_id = psi.po_item_id
+      ) AS "dueDate"
+    FROM item_state psi
+    LEFT JOIN p2_purchase_order_items poi ON poi.id = psi.po_item_id
+    WHERE psi.po_id = ANY($1::int[])
+    GROUP BY psi.po_id, psi.po_item_id
+    ORDER BY psi.po_id, psi.po_item_id
+  `, [linkedPoIds, today]);
+
+  const groups: SerializedItemGroup[] = groupRows.map(r => ({
+    poId: parseInt(r.poId, 10),
+    poItemId: parseInt(r.poItemId, 10),
+    partNumber: r.partNumber,
+    partName: r.partName,
+    poNumber: r.poNumber,
+    totalUnits: parseInt(r.totalUnits, 10) || 0,
+    completedUnits: parseInt(r.completedUnits, 10) || 0,
+    inProductionUnits: parseInt(r.inProductionUnits, 10) || 0,
+    pendingUnits: parseInt(r.pendingUnits, 10) || 0,
+    completedTodayUnits: parseInt(r.completedTodayUnits, 10) || 0,
+    currentDepartment: r.currentDepartment,
+    dueDate: r.dueDate,
+  }));
+
+  const totalRequired = groups.reduce((s, g) => s + g.totalUnits, 0);
+  const totalCompleted = groups.reduce((s, g) => s + g.completedUnits, 0);
+
+  return { linkedPoIds, groups, totalRequired, totalCompleted };
+}
+
+async function getProjectSerializedItemAggregateOrFallback(
+  projectId: string,
+  today: string,
+): Promise<SerializedItemAggregate> {
+  try {
+    return await getProjectSerializedItemAggregate(projectId, today);
+  } catch (error) {
+    console.error('[PM Dashboard] Serialized item aggregate failed; using legacy project totals', {
+      projectId,
+      today,
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    return { linkedPoIds: [], groups: [], totalRequired: 0, totalCompleted: 0 };
+  }
+}
+
 // GET /api/pm-dashboard/managers — distinct PMs who own at least one active project
 router.get('/managers', h(async (_req, res) => {
   const result = await pool.query<{ id: number; name: string }>(`
@@ -159,7 +389,7 @@ router.get('/projects', h(async (_req, res) => {
       p.target_ship_date AS "targetShipDate",
       p.project_manager_id AS "projectManagerId",
       e.name AS "projectManagerName",
-      p.po_id AS "poId",
+      project_po_link.linked_po_id AS "poId",
       po.po_number AS "poNumber",
       COALESCE(
         (SELECT ps.status FROM project_steps ps WHERE ps.project_id = p.id AND ps.step_type = 'p2_order' LIMIT 1), 'pending'
@@ -178,7 +408,21 @@ router.get('/projects', h(async (_req, res) => {
       ) AS "rfqStepStatus"
     FROM projects p
     LEFT JOIN employees e ON e.id = p.project_manager_id
-    LEFT JOIN p2_purchase_orders po ON po.id = p.po_id
+    LEFT JOIN LATERAL (
+      SELECT COALESCE(
+        p.po_id,
+        (
+          SELECT ps.linked_p2_order_id
+          FROM project_steps ps
+          WHERE ps.project_id = p.id
+            AND ps.step_type = 'p2_order'
+            AND ps.linked_p2_order_id IS NOT NULL
+          ORDER BY ps.updated_at DESC NULLS LAST, ps.completed_at DESC NULLS LAST
+          LIMIT 1
+        )
+      ) AS linked_po_id
+    ) project_po_link ON TRUE
+    LEFT JOIN p2_purchase_orders po ON po.id = project_po_link.linked_po_id
     WHERE p.status NOT IN ('cancelled', 'completed')
     ORDER BY p.project_code ASC
   `);
@@ -206,12 +450,75 @@ router.get('/:projectId/summary', h(async (req, res) => {
   }
 
   const woRes = await pool.query<WorkOrderCountRow>(`
+    WITH project_po_link AS (
+      SELECT p.po_id AS po_id
+      FROM projects p
+      WHERE p.id = $1
+        AND p.po_id IS NOT NULL
+      UNION
+      SELECT ps.linked_p2_order_id AS po_id
+      FROM project_steps ps
+      WHERE ps.project_id = $1
+        AND ps.linked_p2_order_id IS NOT NULL
+      UNION
+      SELECT DISTINCT p2po.p2_po_id AS po_id
+      FROM p2_production_orders p2po
+      WHERE p2po.project_id = $1::uuid
+    ),
+    p2_superseding_parts AS (
+      SELECT DISTINCT LOWER(TRIM(part_number)) AS part_number
+      FROM (
+        SELECT poi.part_number
+        FROM project_po_link ppl
+        JOIN p2_purchase_order_items poi ON poi.po_id = ppl.po_id
+        WHERE poi.part_number IS NOT NULL AND TRIM(poi.part_number) <> ''
+        UNION
+        SELECT p2po.sku AS part_number
+        FROM project_po_link ppl
+        JOIN p2_production_orders p2po ON p2po.p2_po_id = ppl.po_id
+        WHERE p2po.sku IS NOT NULL AND TRIM(p2po.sku) <> ''
+        UNION
+        SELECT p2po.part_name AS part_number
+        FROM project_po_link ppl
+        JOIN p2_production_orders p2po ON p2po.p2_po_id = ppl.po_id
+        WHERE p2po.part_name IS NOT NULL AND TRIM(p2po.part_name) <> ''
+      ) parts
+    ),
+    rows AS (
+      -- Task #258: exclude WAD WOs cancelled by the P2 supersede rule.
+      SELECT status FROM production_work_orders
+       WHERE project_id = $1
+        AND status NOT IN ('CANCELLED', 'CANCELED')
+        AND NOT (
+          work_order_number LIKE 'WAD-%'
+          AND status NOT IN ('COMPLETE', 'COMPLETED', 'CLOSED')
+          AND EXISTS (
+            SELECT 1 FROM p2_superseding_parts psp
+            WHERE psp.part_number = LOWER(TRIM(production_work_orders.part_number))
+          )
+        )
+      UNION ALL
+      SELECT
+        CASE
+          WHEN SUM(COALESCE(p2po.quantity, 0)) > 0
+            AND SUM(COALESCE(p2po.quantity_manufactured, 0))
+              >= SUM(COALESCE(p2po.quantity, 0))
+            THEN 'COMPLETED'
+          WHEN SUM(COALESCE(p2po.quantity_manufactured, 0)) > 0
+            OR bool_or(p2po.status IN ('IN_PROGRESS', 'in_progress'))
+            THEN 'IN_PROGRESS'
+          ELSE 'PENDING'
+        END AS status
+      FROM project_po_link ppl
+      JOIN p2_production_orders p2po ON p2po.p2_po_id = ppl.po_id
+      WHERE p2po.status NOT IN ('CANCELLED', 'CANCELED')
+      GROUP BY p2po.p2_po_id, p2po.p2_po_item_id, p2po.department
+    )
     SELECT
       COUNT(*) AS "totalWorkOrders",
-      COUNT(*) FILTER (WHERE status IN ('COMPLETE', 'CLOSED')) AS "completedWorkOrders",
+      COUNT(*) FILTER (WHERE status IN ('COMPLETE', 'COMPLETED', 'CLOSED')) AS "completedWorkOrders",
       COUNT(*) FILTER (WHERE status = 'BLOCKED') AS "blockedWorkOrders"
-    FROM production_work_orders
-    WHERE project_id = $1
+    FROM rows
   `, [projectId]);
 
   // Open traveler count + blocked/hold travelers
@@ -250,22 +557,28 @@ router.get('/:projectId/summary', h(async (req, res) => {
   const materialRes = await pool.query<MaterialCostRow>(`
     SELECT
       COALESCE(SUM(mlr.quantity_reserved * COALESCE(ii.unit_cost, 0)), 0) AS "committedMaterialCost",
-      0 AS "plannedMaterialCost"
+      (
+        SELECT COALESCE(SUM(
+          COALESCE(NULLIF(wo.wizard_data->'step5'->>'materialSpendCap', '')::numeric, 0)
+        ), 0)
+        FROM production_work_orders wo
+        WHERE wo.project_id = $1
+      ) AS "plannedMaterialCost"
     FROM material_lot_reservations mlr
     JOIN material_lots ml ON ml.id = mlr.material_lot_id
     LEFT JOIN inventory_items ii ON ii.id = ml.inventory_item_id
-    WHERE mlr.traveler_id IN (
-      SELECT id FROM travelers WHERE project_id = $1
+    WHERE mlr.traveler_id::text IN (
+      SELECT id::text FROM travelers WHERE project_id = $1
     )
   `, [projectId]);
 
   const consumedRes = await pool.query<ConsumedCostRow>(`
-    SELECT COALESCE(SUM(tmc.quantity_used * COALESCE(ii.unit_cost, 0)), 0) AS "consumedMaterialCost"
+    SELECT COALESCE(SUM(COALESCE(tmc.qty_used, tmc.quantity_used, 0) * COALESCE(ii.unit_cost, 0)), 0) AS "consumedMaterialCost"
     FROM traveler_material_consumption tmc
     JOIN material_lots ml ON ml.id = tmc.material_lot_id
     LEFT JOIN inventory_items ii ON ii.id = ml.inventory_item_id
-    WHERE tmc.traveler_id IN (
-      SELECT id FROM travelers WHERE project_id = $1
+    WHERE tmc.traveler_id::text IN (
+      SELECT id::text FROM travelers WHERE project_id = $1
     )
   `, [projectId]);
 
@@ -279,22 +592,199 @@ router.get('/:projectId/summary', h(async (req, res) => {
 
   // Quantity-based production percent
   const qtyProgressRes = await pool.query<{ totalRequired: string; totalCompleted: string }>(`
+    WITH project_po_link AS (
+      SELECT p.po_id AS po_id
+      FROM projects p
+      WHERE p.id = $1
+        AND p.po_id IS NOT NULL
+      UNION
+      SELECT ps.linked_p2_order_id AS po_id
+      FROM project_steps ps
+      WHERE ps.project_id = $1
+        AND ps.linked_p2_order_id IS NOT NULL
+      UNION
+      SELECT DISTINCT p2po.p2_po_id AS po_id
+      FROM p2_production_orders p2po
+      WHERE p2po.project_id = $1::uuid
+    ),
+    qty_rows AS (
+      SELECT
+        COALESCE(wo2.quantity, 0)::numeric AS required_qty,
+        COALESCE((
+          SELECT COUNT(*) FROM travelers t2
+          WHERE t2.production_work_order_id = wo2.id
+            AND t2.status IN ('COMPLETE', 'CLOSED')
+        ), 0)::numeric AS completed_qty
+      FROM production_work_orders wo2
+      WHERE wo2.project_id = $1
+        -- Task #258: exclude WAD WOs cancelled by the P2 supersede rule.
+        AND wo2.status NOT IN ('CANCELLED', 'CANCELED')
+        AND NOT (
+          wo2.work_order_number LIKE 'WAD-%'
+          AND wo2.status NOT IN ('COMPLETE', 'COMPLETED', 'CLOSED')
+          AND EXISTS (
+            SELECT 1
+            FROM (
+              SELECT DISTINCT LOWER(TRIM(part_number)) AS part_number
+              FROM (
+                SELECT poi.part_number
+                FROM project_po_link ppl
+                JOIN p2_purchase_order_items poi ON poi.po_id = ppl.po_id
+                WHERE poi.part_number IS NOT NULL AND TRIM(poi.part_number) <> ''
+                UNION
+                SELECT p2po2.sku AS part_number
+                FROM project_po_link ppl
+                JOIN p2_production_orders p2po2 ON p2po2.p2_po_id = ppl.po_id
+                WHERE p2po2.sku IS NOT NULL AND TRIM(p2po2.sku) <> ''
+                UNION
+                SELECT p2po2.part_name AS part_number
+                FROM project_po_link ppl
+                JOIN p2_production_orders p2po2 ON p2po2.p2_po_id = ppl.po_id
+                WHERE p2po2.part_name IS NOT NULL AND TRIM(p2po2.part_name) <> ''
+              ) parts
+            ) psp
+            WHERE psp.part_number = LOWER(TRIM(wo2.part_number))
+          )
+        )
+      UNION ALL
+      SELECT
+        COALESCE(p2po.quantity, 0)::numeric AS required_qty,
+        COALESCE(p2po.quantity_manufactured, 0)::numeric AS completed_qty
+      FROM project_po_link ppl
+      JOIN p2_production_orders p2po ON p2po.p2_po_id = ppl.po_id
+      WHERE p2po.status NOT IN ('CANCELLED', 'CANCELED')
+    )
     SELECT
-      COALESCE(SUM(wo2.quantity), 0) AS "totalRequired",
-      COALESCE(SUM(
-        (SELECT COUNT(*) FROM travelers t2
-         WHERE t2.production_work_order_id = wo2.id
-           AND t2.status IN ('COMPLETE', 'CLOSED'))
-      ), 0) AS "totalCompleted"
-    FROM production_work_orders wo2
-    WHERE wo2.project_id = $1
+      COALESCE(SUM(required_qty), 0) AS "totalRequired",
+      COALESCE(SUM(completed_qty), 0) AS "totalCompleted"
+    FROM qty_rows
   `, [projectId]);
 
   const wo = woRes[0];
-  const total = parseInt(wo.totalWorkOrders) || 0;
-  const completed = parseInt(wo.completedWorkOrders) || 0;
-  const totalRequired = parseFloat(qtyProgressRes[0].totalRequired) || 0;
-  const totalCompleted = parseFloat(qtyProgressRes[0].totalCompleted) || 0;
+  const wadTotal = parseInt(wo.totalWorkOrders) || 0;
+  const wadCompleted = parseInt(wo.completedWorkOrders) || 0;
+
+  // Item-level progress: when serialized items exist for the linked P2 PO,
+  // these become the source of truth for production counts so the PM
+  // Control Center matches the order card. Falls back to the existing
+  // WAD/quantity_manufactured values when no serialized items exist.
+  const today = new Date().toISOString().slice(0, 10);
+  const itemAgg = await getProjectSerializedItemAggregateOrFallback(projectId, today);
+
+  let total = wadTotal;
+  let completed = wadCompleted;
+  let totalRequired = parseFloat(qtyProgressRes[0].totalRequired) || 0;
+  let totalCompleted = parseFloat(qtyProgressRes[0].totalCompleted) || 0;
+
+  if (itemAgg.groups.length > 0) {
+    // Replace P2 portion of WO row counts with serialized item groups so
+    // the KPI matches the rebuilt /production table.
+    // Task #258: exclude WAD WOs cancelled by the P2 supersede rule so KPIs
+    // match the /production table.
+    const wadOnlyTotal = await pool.query<{ count: string }>(
+      `WITH project_po_link AS (
+         SELECT p.po_id AS po_id
+         FROM projects p
+         WHERE p.id = $1 AND p.po_id IS NOT NULL
+         UNION
+         SELECT ps.linked_p2_order_id AS po_id
+         FROM project_steps ps
+         WHERE ps.project_id = $1 AND ps.linked_p2_order_id IS NOT NULL
+         UNION
+         SELECT DISTINCT p2po.p2_po_id AS po_id
+         FROM p2_production_orders p2po
+         WHERE p2po.project_id = $1::uuid
+       ),
+       p2_superseding_parts AS (
+         SELECT DISTINCT LOWER(TRIM(part_number)) AS part_number
+         FROM (
+           SELECT poi.part_number
+           FROM project_po_link ppl
+           JOIN p2_purchase_order_items poi ON poi.po_id = ppl.po_id
+           WHERE poi.part_number IS NOT NULL AND TRIM(poi.part_number) <> ''
+           UNION
+           SELECT p2po.sku AS part_number
+           FROM project_po_link ppl
+           JOIN p2_production_orders p2po ON p2po.p2_po_id = ppl.po_id
+           WHERE p2po.sku IS NOT NULL AND TRIM(p2po.sku) <> ''
+           UNION
+           SELECT p2po.part_name AS part_number
+           FROM project_po_link ppl
+           JOIN p2_production_orders p2po ON p2po.p2_po_id = ppl.po_id
+           WHERE p2po.part_name IS NOT NULL AND TRIM(p2po.part_name) <> ''
+         ) parts
+       )
+       SELECT COUNT(*)::text AS count FROM production_work_orders
+       WHERE project_id = $1
+         AND status NOT IN ('CANCELLED', 'CANCELED')
+         AND NOT (
+           work_order_number LIKE 'WAD-%'
+           AND status NOT IN ('COMPLETE', 'COMPLETED', 'CLOSED')
+           AND EXISTS (
+             SELECT 1 FROM p2_superseding_parts psp
+             WHERE psp.part_number = LOWER(TRIM(production_work_orders.part_number))
+           )
+         )`,
+      [projectId],
+    );
+    const wadOnlyCompleted = await pool.query<{ count: string }>(
+      `WITH project_po_link AS (
+         SELECT p.po_id AS po_id
+         FROM projects p
+         WHERE p.id = $1 AND p.po_id IS NOT NULL
+         UNION
+         SELECT ps.linked_p2_order_id AS po_id
+         FROM project_steps ps
+         WHERE ps.project_id = $1 AND ps.linked_p2_order_id IS NOT NULL
+         UNION
+         SELECT DISTINCT p2po.p2_po_id AS po_id
+         FROM p2_production_orders p2po
+         WHERE p2po.project_id = $1::uuid
+       ),
+       p2_superseding_parts AS (
+         SELECT DISTINCT LOWER(TRIM(part_number)) AS part_number
+         FROM (
+           SELECT poi.part_number
+           FROM project_po_link ppl
+           JOIN p2_purchase_order_items poi ON poi.po_id = ppl.po_id
+           WHERE poi.part_number IS NOT NULL AND TRIM(poi.part_number) <> ''
+           UNION
+           SELECT p2po.sku AS part_number
+           FROM project_po_link ppl
+           JOIN p2_production_orders p2po ON p2po.p2_po_id = ppl.po_id
+           WHERE p2po.sku IS NOT NULL AND TRIM(p2po.sku) <> ''
+           UNION
+           SELECT p2po.part_name AS part_number
+           FROM project_po_link ppl
+           JOIN p2_production_orders p2po ON p2po.p2_po_id = ppl.po_id
+           WHERE p2po.part_name IS NOT NULL AND TRIM(p2po.part_name) <> ''
+         ) parts
+       )
+       SELECT COUNT(*)::text AS count FROM production_work_orders
+       WHERE project_id = $1
+         AND status IN ('COMPLETE', 'COMPLETED', 'CLOSED')
+         AND NOT (
+           work_order_number LIKE 'WAD-%'
+           AND status NOT IN ('COMPLETE', 'COMPLETED', 'CLOSED')
+           AND EXISTS (
+             SELECT 1 FROM p2_superseding_parts psp
+             WHERE psp.part_number = LOWER(TRIM(production_work_orders.part_number))
+           )
+         )`,
+      [projectId],
+    );
+    const wadCount = parseInt(wadOnlyTotal[0]?.count ?? '0', 10) || 0;
+    const wadDoneCount = parseInt(wadOnlyCompleted[0]?.count ?? '0', 10) || 0;
+    const p2GroupCount = itemAgg.groups.length;
+    const p2DoneGroupCount = itemAgg.groups.filter(
+      g => g.totalUnits > 0 && g.completedUnits >= g.totalUnits,
+    ).length;
+    total = wadCount + p2GroupCount;
+    completed = wadDoneCount + p2DoneGroupCount;
+    totalRequired = itemAgg.totalRequired;
+    totalCompleted = itemAgg.totalCompleted;
+  }
+
   const productionPercent = totalRequired > 0
     ? Math.min(100, Math.round((totalCompleted / totalRequired) * 100))
     : (total > 0 ? Math.round((completed / total) * 100) : 0);
@@ -338,8 +828,47 @@ router.get('/:projectId/production', h(async (req, res) => {
   const today = new Date().toISOString().slice(0, 10);
 
   const result = await pool.query<ProductionRow>(`
-    SELECT
-      wo.id AS "productionWorkOrderId",
+    WITH project_po_link AS (
+      -- Highest priority: the explicit projects.po_id pointer.
+      SELECT p.po_id AS po_id
+      FROM projects p
+      WHERE p.id = $2
+        AND p.po_id IS NOT NULL
+      UNION
+      -- Fallback: any project_steps row that links a P2 PO. We deliberately do
+      -- NOT restrict to step_type = 'p2_order' because the link can also be
+      -- attached during preproduction or other steps depending on workflow.
+      SELECT ps.linked_p2_order_id AS po_id
+      FROM project_steps ps
+      WHERE ps.project_id = $2
+        AND ps.linked_p2_order_id IS NOT NULL
+      UNION
+      SELECT DISTINCT p2po.p2_po_id AS po_id
+      FROM p2_production_orders p2po
+      WHERE p2po.project_id = $2::uuid
+    ),
+    p2_superseding_parts AS (
+      SELECT DISTINCT LOWER(TRIM(part_number)) AS part_number
+      FROM (
+        SELECT poi.part_number
+        FROM project_po_link ppl
+        JOIN p2_purchase_order_items poi ON poi.po_id = ppl.po_id
+        WHERE poi.part_number IS NOT NULL AND TRIM(poi.part_number) <> ''
+        UNION
+        SELECT p2po.sku AS part_number
+        FROM project_po_link ppl
+        JOIN p2_production_orders p2po ON p2po.p2_po_id = ppl.po_id
+        WHERE p2po.sku IS NOT NULL AND TRIM(p2po.sku) <> ''
+        UNION
+        SELECT p2po.part_name AS part_number
+        FROM project_po_link ppl
+        JOIN p2_production_orders p2po ON p2po.p2_po_id = ppl.po_id
+        WHERE p2po.part_name IS NOT NULL AND TRIM(p2po.part_name) <> ''
+      ) parts
+    ),
+    wad_rows AS (
+      SELECT
+      wo.id::text AS "productionWorkOrderId",
       wo.work_order_number AS "workOrderNumber",
       wo.part_number AS "partNumber",
       wo.quantity AS "quantityRequired",
@@ -354,6 +883,19 @@ router.get('/:projectId/production', h(async (req, res) => {
           AND t2.status IN ('COMPLETE', 'CLOSED')
           AND t2.updated_at::date = $1::date
       )::int AS "quantityCompletedToday",
+      'production_work_order'::text AS "sourceType",
+      'WAD'::text AS "sourceLabel",
+      wo.dashboard_type AS "dashboardType",
+      wo.queue_type AS "queueType",
+      wo.assigned_department AS "assignedDepartment",
+      wo.assigned_dashboard_route AS "assignedDashboardRoute",
+      NULL::text AS "dashboardLabel",
+      wo.manufacturing_queue_id AS "manufacturingQueueId",
+      wo.wizard_data AS "wizardData",
+      wo.department_budgets AS "departmentBudgets",
+      wo.wad_status AS "wadStatus",
+      NULL::int AS "p2PoId",
+      NULL::text AS "p2PoNumber",
       wo.status,
       wo.due_date AS "dueDate",
       (
@@ -380,7 +922,7 @@ router.get('/:projectId/production', h(async (req, res) => {
         LIMIT 1
       ) AS "currentTravelerStep",
       (
-        SELECT t.id FROM travelers t
+        SELECT t.id::text FROM travelers t
         WHERE t.production_work_order_id = wo.id
           AND t.status NOT IN ('COMPLETE', 'CLOSED', 'SCRAPPED', 'CANCELLED')
         ORDER BY t.created_at DESC
@@ -393,6 +935,9 @@ router.get('/:projectId/production', h(async (req, res) => {
         ORDER BY t.created_at DESC
         LIMIT 1
       ) AS "activeTravelerNumber",
+      0::int AS "ncrReplacementCount",
+      0::int AS "activeReplacementCount",
+      NULL::text AS "replacementSerialNumbers",
       CASE
         WHEN wo.due_date IS NULL THEN NULL
         WHEN wo.status IN ('COMPLETE', 'CLOSED') THEN
@@ -414,11 +959,280 @@ router.get('/:projectId/production', h(async (req, res) => {
         LIMIT 1
       ) AS "blockReason"
     FROM production_work_orders wo
-    WHERE wo.project_id = $2
-    ORDER BY wo.created_at ASC
+      WHERE wo.project_id = $2
+        -- Task #258: hide WAD WOs cancelled by the P2 supersede rule.
+        AND wo.status NOT IN ('CANCELLED', 'CANCELED')
+        AND NOT (
+          wo.work_order_number LIKE 'WAD-%'
+          AND wo.status NOT IN ('COMPLETE', 'COMPLETED', 'CLOSED')
+          AND EXISTS (
+            SELECT 1 FROM p2_superseding_parts psp
+            WHERE psp.part_number = LOWER(TRIM(wo.part_number))
+          )
+        )
+    ),
+    p2_rows AS (
+      SELECT
+        ('p2-production-order-group:' || p2po.p2_po_id::text || ':' ||
+          COALESCE(p2po.p2_po_item_id::text, 'null') || ':' ||
+          COALESCE(p2po.department, '')) AS "productionWorkOrderId",
+        CASE
+          WHEN COUNT(*) = 1 THEN MIN(p2po.order_id)
+          ELSE MIN(p2po.order_id) || '–' || MAX(p2po.order_id) || ' (' || COUNT(*) || ')'
+        END AS "workOrderNumber",
+        COALESCE(MAX(p2poi.part_number), MAX(p2po.sku)) AS "partNumber",
+        SUM(COALESCE(p2po.quantity, 0))::int AS "quantityRequired",
+        SUM(COALESCE(p2po.quantity_manufactured, 0))::int AS "quantityCompleted",
+        SUM(
+          CASE
+            WHEN p2po.completed_at IS NOT NULL
+              AND p2po.completed_at::date = $1::date
+            THEN COALESCE(p2po.quantity_manufactured, 0)
+            ELSE 0
+          END
+        )::int AS "quantityCompletedToday",
+        'p2_production_order'::text AS "sourceType",
+        'P2'::text AS "sourceLabel",
+        NULL::text AS "dashboardType",
+        NULL::text AS "queueType",
+        NULL::text AS "assignedDepartment",
+        NULL::text AS "assignedDashboardRoute",
+        NULL::text AS "dashboardLabel",
+        NULL::int AS "manufacturingQueueId",
+        NULL::jsonb AS "wizardData",
+        NULL::jsonb AS "departmentBudgets",
+        NULL::text AS "wadStatus",
+        p2po.p2_po_id AS "p2PoId",
+        MAX(p2po_head.po_number) AS "p2PoNumber",
+        CASE
+          WHEN SUM(COALESCE(p2po.quantity, 0)) > 0
+            AND SUM(COALESCE(p2po.quantity_manufactured, 0))
+              >= SUM(COALESCE(p2po.quantity, 0))
+            THEN 'COMPLETED'
+          WHEN SUM(COALESCE(p2po.quantity_manufactured, 0)) > 0
+            OR bool_or(p2po.status IN ('IN_PROGRESS', 'in_progress'))
+            THEN 'IN_PROGRESS'
+          ELSE 'PENDING'
+        END AS status,
+        MIN(p2po.due_date) AS "dueDate",
+        p2po.department AS "currentDepartment",
+        NULL::text AS "currentTravelerStep",
+        NULL::text AS "activeTravelerId",
+        NULL::text AS "activeTravelerNumber",
+        (
+          SELECT COUNT(*)::int
+          FROM p2_serialized_items psi
+          WHERE psi.po_id = p2po.p2_po_id
+            AND (p2po.p2_po_item_id IS NULL OR psi.po_item_id = p2po.p2_po_item_id)
+            AND psi.metadata->>'isReplacement' = 'true'
+        ) AS "ncrReplacementCount",
+        (
+          SELECT COUNT(*)::int
+          FROM p2_serialized_items psi
+          WHERE psi.po_id = p2po.p2_po_id
+            AND (p2po.p2_po_item_id IS NULL OR psi.po_item_id = p2po.p2_po_item_id)
+            AND psi.status = 'ACTIVE'
+            AND psi.metadata->>'isReplacement' = 'true'
+        ) AS "activeReplacementCount",
+        (
+          SELECT string_agg(psi.serial_number, ', ' ORDER BY psi.created_at DESC)
+          FROM p2_serialized_items psi
+          WHERE psi.po_id = p2po.p2_po_id
+            AND (p2po.p2_po_item_id IS NULL OR psi.po_item_id = p2po.p2_po_item_id)
+            AND psi.metadata->>'isReplacement' = 'true'
+        ) AS "replacementSerialNumbers",
+        CASE
+          WHEN MIN(p2po.due_date) IS NULL THEN NULL
+          WHEN bool_and(p2po.status IN ('COMPLETED', 'CLOSED'))
+            AND MAX(p2po.completed_at) IS NOT NULL
+            THEN (MAX(p2po.completed_at)::date - MIN(p2po.due_date)::date)
+          WHEN bool_and(p2po.status IN ('COMPLETED', 'CLOSED'))
+            THEN NULL
+          ELSE ($1::date - MIN(p2po.due_date)::date)
+        END AS "daysScheduleVariance",
+        NULL::text AS "blockReason"
+      FROM project_po_link ppl
+      JOIN p2_purchase_orders p2po_head ON p2po_head.id = ppl.po_id
+      JOIN p2_production_orders p2po ON p2po.p2_po_id = p2po_head.id
+        -- Task #242: scope to this project's slice of the PO. Rows with a
+        -- non-null project_id are only included when they belong to this
+        -- project; rows with project_id IS NULL fall back to PO-wide so
+        -- POs that cannot be deterministically attributed to a single
+        -- project keep working as they did before.
+        AND (p2po.project_id IS NULL OR p2po.project_id = $2::uuid)
+      LEFT JOIN p2_purchase_order_items p2poi ON p2poi.id = p2po.p2_po_item_id
+      -- No status filter: match WAD branch which returns rows regardless of status.
+      GROUP BY p2po.p2_po_id, p2po.p2_po_item_id, p2po.department
+    )
+    SELECT * FROM wad_rows
+    UNION ALL
+    SELECT * FROM p2_rows
+    ORDER BY "sourceType" ASC, "workOrderNumber" ASC
   `, [today, projectId]);
 
-  res.json(result);
+  // Count of P2 POs linked to this project (used by the frontend to render an
+  // actionable empty state when zero rows are returned).
+  const linkRes = await pool.query<{ count: string }>(`
+    WITH project_po_link AS (
+      SELECT p.po_id AS po_id
+      FROM projects p
+      WHERE p.id = $1
+        AND p.po_id IS NOT NULL
+      UNION
+      SELECT ps.linked_p2_order_id AS po_id
+      FROM project_steps ps
+      WHERE ps.project_id = $1
+        AND ps.linked_p2_order_id IS NOT NULL
+      UNION
+      SELECT DISTINCT p2po.p2_po_id AS po_id
+      FROM p2_production_orders p2po
+      WHERE p2po.project_id = $1::uuid
+    )
+    SELECT COUNT(*)::text AS count FROM project_po_link
+  `, [projectId]);
+
+  const linkedP2PoCount = parseInt(linkRes[0]?.count ?? '0', 10) || 0;
+
+  // Item-level override: when serialized items exist for the project's linked
+  // P2 PO, drive the P2 portion of the production table from p2_serialized_items
+  // (the same source the order card uses) so the dashboard and order card agree.
+  // The WAD half of the union (production_work_orders + travelers) is preserved.
+  const itemAgg = await getProjectSerializedItemAggregateOrFallback(projectId, today);
+  let finalRows: ProductionRow[] = result;
+  if (itemAgg.groups.length > 0) {
+    const wadOnly = result.filter(r => r.sourceType !== 'p2_production_order');
+
+    // Pull p2 PO numbers + replacement counts in one batch keyed by (poId, poItemId).
+    const replKey = (poId: number, poItemId: number) => `${poId}:${poItemId}`;
+    const replMap = new Map<string, { ncr: number; active: number; serials: string | null }>();
+    if (itemAgg.linkedPoIds.length) {
+      const replRows = await pool.query<{
+        poId: string; poItemId: string;
+        ncr: string; active: string; serials: string | null;
+      }>(`
+        SELECT
+          psi.po_id::text AS "poId",
+          psi.po_item_id::text AS "poItemId",
+          COUNT(*) FILTER (WHERE psi.metadata->>'isReplacement' = 'true')::text AS "ncr",
+          COUNT(*) FILTER (
+            WHERE psi.status = 'ACTIVE' AND psi.metadata->>'isReplacement' = 'true'
+          )::text AS "active",
+          string_agg(
+            CASE WHEN psi.metadata->>'isReplacement' = 'true' THEN psi.serial_number END,
+            ', ' ORDER BY psi.created_at DESC
+          ) AS "serials"
+        FROM p2_serialized_items psi
+        WHERE psi.po_id = ANY($1::int[])
+        GROUP BY psi.po_id, psi.po_item_id
+      `, [itemAgg.linkedPoIds]);
+      for (const r of replRows) {
+        replMap.set(replKey(parseInt(r.poId, 10), parseInt(r.poItemId, 10)), {
+          ncr: parseInt(r.ncr, 10) || 0,
+          active: parseInt(r.active, 10) || 0,
+          serials: r.serials,
+        });
+      }
+    }
+
+    const todayDate = new Date(today + 'T00:00:00Z');
+    const p2Rows: ProductionRow[] = itemAgg.groups.map(g => {
+      const repl = replMap.get(replKey(g.poId, g.poItemId));
+      const status: string =
+        g.totalUnits > 0 && g.completedUnits >= g.totalUnits
+          ? 'COMPLETED'
+          : (g.completedUnits > 0 || g.inProductionUnits > 0)
+            ? 'IN_PROGRESS'
+            : 'PLANNED';
+      let daysScheduleVariance: string | null = null;
+      if (g.dueDate) {
+        const due = new Date(g.dueDate.slice(0, 10) + 'T00:00:00Z');
+        const diffDays = Math.round((todayDate.getTime() - due.getTime()) / (1000 * 60 * 60 * 24));
+        daysScheduleVariance = String(diffDays);
+      }
+      return {
+        productionWorkOrderId:
+          `p2-serialized-group:${g.poId}:${g.poItemId}`,
+        workOrderNumber: g.poNumber ?? `PO-${g.poId}`,
+        partNumber: g.partNumber ?? '',
+        quantityRequired: g.totalUnits,
+        quantityCompleted: g.completedUnits,
+        quantityCompletedToday: g.completedTodayUnits,
+        sourceType: 'p2_production_order',
+        sourceLabel: 'P2',
+        dashboardType: null,
+        queueType: null,
+        assignedDepartment: null,
+        assignedDashboardRoute: null,
+        dashboardLabel: null,
+        manufacturingQueueId: null,
+        wizardData: null,
+        departmentBudgets: null,
+        wadStatus: null,
+        p2PoId: g.poId,
+        p2PoNumber: g.poNumber,
+        status,
+        dueDate: g.dueDate,
+        currentDepartment: g.currentDepartment,
+        currentTravelerStep: null,
+        activeTravelerId: null,
+        activeTravelerNumber: null,
+        ncrReplacementCount: repl?.ncr ?? 0,
+        activeReplacementCount: repl?.active ?? 0,
+        replacementSerialNumbers: repl?.serials ?? null,
+        daysScheduleVariance,
+        blockReason: null,
+      };
+    });
+
+    finalRows = [...wadOnly, ...p2Rows].sort((a, b) => {
+      if (a.sourceType !== b.sourceType) return a.sourceType < b.sourceType ? -1 : 1;
+      return (a.workOrderNumber ?? '').localeCompare(b.workOrderNumber ?? '');
+    });
+  }
+
+  const rowsWithAssignments = finalRows.map((row) => {
+    if (row.sourceType === 'p2_production_order') {
+      const params = new URLSearchParams({ tab: 'production' });
+      if (row.p2PoId) params.set('poId', String(row.p2PoId));
+      if (row.p2PoNumber) params.set('po', row.p2PoNumber);
+
+      return {
+        ...row,
+        dashboardType: 'P2',
+        queueType: row.currentDepartment ?? 'P2',
+        assignedDepartment: row.currentDepartment ?? 'P2 Production',
+        assignedDashboardRoute: `/p2-control-center?${params.toString()}`,
+        dashboardLabel: 'P2 Control Center',
+        manufacturingQueueId: row.manufacturingQueueId ?? null,
+        wizardData: undefined,
+        departmentBudgets: undefined,
+      };
+    }
+
+    const assignment = assignDashboardForWorkOrder({
+      department: row.currentDepartment ?? row.currentTravelerStep,
+      dashboardType: row.dashboardType,
+      queueType: row.queueType,
+      assignedDepartment: row.assignedDepartment,
+      assignedDashboardRoute: row.assignedDashboardRoute,
+      wizardData: row.wizardData,
+      departmentBudgets: row.departmentBudgets,
+    });
+
+    return {
+      ...row,
+      dashboardType: row.dashboardType ?? assignment.dashboardType,
+      queueType: row.queueType ?? assignment.queueType,
+      assignedDepartment: row.assignedDepartment ?? assignment.assignedDepartment,
+      assignedDashboardRoute: row.assignedDashboardRoute ?? assignment.assignedDashboardRoute,
+      dashboardLabel: assignment.dashboardLabel,
+      manufacturingQueueId: row.manufacturingQueueId ?? null,
+      wizardData: undefined,
+      departmentBudgets: undefined,
+    };
+  });
+
+  res.json({ rows: rowsWithAssignments, linkedP2PoCount });
 }));
 
 // GET /api/pm-dashboard/:projectId/production/:workOrderId — drawer detail
@@ -546,30 +1360,35 @@ router.get('/:projectId/labor', h(async (req, res) => {
   // This replaces timekeeping.labor_authorizations per-charge-code authorization aggregation using
   // the native labor_budget_overrides (approved overrun authorizations) as the budget authority.
   const chargeCodeRes = await pool.query<ChargeCodeAggRow>(`
-    WITH project_work_order_budgets AS (
-      -- Compute per-work-order authorized budget from base + APPROVED overrides
+    WITH wad_budget_rows AS (
+      -- Pull the authored WAD Step 4 time bank into PM even before anyone clocks time.
       SELECT
         wo.id AS work_order_id,
-        COALESCE(wo.total_budget_hours::numeric, 0)
-        + COALESCE((
-          SELECT SUM(lbo.requested_hours::numeric)
-          FROM labor_budget_overrides lbo
-          WHERE lbo.production_work_order_id = wo.id
-            AND lbo.status = 'APPROVED'
-        ), 0) AS authorized_hours
+        NULLIF(TRIM(cc_row->>'chargeCode'), '') AS charge_code,
+        NULLIF(TRIM(cc_row->>'department'), '') AS department,
+        NULLIF(TRIM(cc_row->>'operation'), '') AS task_name,
+        COALESCE(NULLIF(cc_row->>'budgetedHours', '')::numeric, 0) AS budgeted_hours
       FROM production_work_orders wo
+      CROSS JOIN LATERAL jsonb_array_elements(
+        CASE
+          WHEN jsonb_typeof(wo.wizard_data->'step4'->'chargeCodes') = 'array'
+            THEN wo.wizard_data->'step4'->'chargeCodes'
+          ELSE '[]'::jsonb
+        END
+      ) AS cc_row
       WHERE wo.project_id = $1
+        AND COALESCE(NULLIF(cc_row->>'classification', ''), 'DIRECT') = 'DIRECT'
     ),
     charge_actuals AS (
       -- Actual hours per charge code within the project scope
       SELECT
-        pl.charge_code_id,
-        pl.production_work_order_id,
+        COALESCE(pl.charge_code, lcc.code) AS charge_code,
         SUM(EXTRACT(EPOCH FROM (pl.clock_out - pl.clock_in)) / 3600.0) AS actual_hours
       FROM punch_ledger pl
+      LEFT JOIN public.charge_codes lcc ON lcc.id = pl.charge_code_id
       WHERE pl.clock_out IS NOT NULL
         AND pl.labor_class = 'REGULAR'
-        AND pl.charge_code_id IS NOT NULL
+        AND COALESCE(pl.charge_code, lcc.code) IS NOT NULL
         AND (
           pl.production_work_order_id IN (
             SELECT id FROM production_work_orders WHERE project_id = $1
@@ -578,39 +1397,30 @@ router.get('/:projectId/labor', h(async (req, res) => {
             SELECT id::text FROM travelers WHERE project_id = $1
           )
         )
-      GROUP BY pl.charge_code_id, pl.production_work_order_id
+      GROUP BY COALESCE(pl.charge_code, lcc.code)
     ),
     charge_code_totals AS (
-      -- Roll up actual hours; budget = sum of authorized_hours for each distinct work order
-      -- that has punch_ledger sessions against this charge code.
-      -- SUM(DISTINCT value) would miscount when two WOs share equal authorized_hours, so we
-      -- aggregate by distinct work_order_id in a subquery first, then sum the results.
       SELECT
-        ca.charge_code_id,
-        SUM(ca.actual_hours) AS actual_hours,
-        COALESCE((
-          SELECT SUM(pwob.authorized_hours)
-          FROM project_work_order_budgets pwob
-          WHERE pwob.work_order_id IN (
-            SELECT DISTINCT ca2.production_work_order_id
-            FROM charge_actuals ca2
-            WHERE ca2.charge_code_id = ca.charge_code_id
-              AND ca2.production_work_order_id IS NOT NULL
-          )
-        ), 0) AS budgeted_hours
-      FROM charge_actuals ca
-      GROUP BY ca.charge_code_id
+        COALESCE(wbr.charge_code, ca.charge_code) AS charge_code,
+        MAX(wbr.department) AS department,
+        MAX(wbr.task_name) AS task_name,
+        COALESCE(SUM(wbr.budgeted_hours), 0) AS budgeted_hours,
+        COALESCE(MAX(ca.actual_hours), 0) AS actual_hours
+      FROM wad_budget_rows wbr
+      FULL OUTER JOIN charge_actuals ca ON ca.charge_code = wbr.charge_code
+      WHERE COALESCE(wbr.charge_code, ca.charge_code) IS NOT NULL
+      GROUP BY COALESCE(wbr.charge_code, ca.charge_code)
     )
     SELECT
-      lcc.id AS "chargeCodeId",
-      lcc.code AS "chargeCode",
-      lcc.department,
-      lcc.description AS "taskName",
+      COALESCE(lcc.id, ABS(HASHTEXT(cct.charge_code))) AS "chargeCodeId",
+      cct.charge_code AS "chargeCode",
+      COALESCE(cct.department, lcc.department) AS department,
+      COALESCE(cct.task_name, lcc.description) AS "taskName",
       ROUND(cct.budgeted_hours::numeric, 2) AS "budgetedHours",
       ROUND(cct.actual_hours::numeric, 4) AS "actualHours"
     FROM charge_code_totals cct
-    JOIN public.charge_codes lcc ON lcc.id = cct.charge_code_id
-    ORDER BY lcc.code ASC
+    LEFT JOIN public.charge_codes lcc ON lcc.code = cct.charge_code
+    ORDER BY cct.charge_code ASC
   `, [projectId]);
 
   const chargeCodeRows = chargeCodeRes.map((r) => {
@@ -659,7 +1469,7 @@ router.get('/:projectId/labor', h(async (req, res) => {
     ORDER BY pl.clock_in DESC
   `, [projectId]);
 
-  const employeeIds = [...new Set(liveRes.map((r) => r.employeeId))];
+  const employeeIds = Array.from(new Set(liveRes.map((r) => r.employeeId)));
   const certMap: Record<number, string> = {};
   const authMap: Record<number, boolean> = {};
 
@@ -726,6 +1536,104 @@ router.get('/:projectId/labor', h(async (req, res) => {
     authorizedForWork: authMap[r.employeeId] ?? false,
   }));
 
+  const dailyRes = await pool.query<DailyLaborRow>(`
+    WITH wad_budget_rows AS (
+      SELECT
+        wo.id AS work_order_id,
+        NULLIF(TRIM(cc_row->>'chargeCode'), '') AS charge_code,
+        NULLIF(TRIM(cc_row->>'department'), '') AS department,
+        COALESCE(NULLIF(cc_row->>'budgetedHours', '')::numeric, 0) AS budgeted_hours
+      FROM production_work_orders wo
+      CROSS JOIN LATERAL jsonb_array_elements(
+        CASE
+          WHEN jsonb_typeof(wo.wizard_data->'step4'->'chargeCodes') = 'array'
+            THEN wo.wizard_data->'step4'->'chargeCodes'
+          ELSE '[]'::jsonb
+        END
+      ) AS cc_row
+      WHERE wo.project_id = $1
+        AND COALESCE(NULLIF(cc_row->>'classification', ''), 'DIRECT') = 'DIRECT'
+    ),
+    work_order_budget AS (
+      SELECT
+        work_order_id,
+        SUM(budgeted_hours) AS budgeted_hours
+      FROM wad_budget_rows
+      GROUP BY work_order_id
+    )
+    SELECT
+      pl.clock_in::date::text AS "workDate",
+      pl.employee_id AS "employeeId",
+      e.name AS "employeeName",
+      pl.department AS department,
+      pl.charge_code AS "chargeCode",
+      wo.work_order_number AS "workOrderNumber",
+      t.traveler_number AS "travelerNumber",
+      COALESCE(MAX(wob.budgeted_hours), 0) AS "budgetedHours",
+      COALESCE(SUM(
+        CASE
+          WHEN pl.clock_out IS NOT NULL AND pl.labor_class = 'REGULAR'
+            THEN EXTRACT(EPOCH FROM (pl.clock_out - pl.clock_in)) / 3600.0
+          ELSE 0
+        END
+      ), 0) AS "actualHours",
+      COALESCE(SUM(
+        CASE
+          WHEN pl.clock_out IS NULL
+            THEN EXTRACT(EPOCH FROM (NOW() - pl.clock_in)) / 60.0
+          ELSE 0
+        END
+      ), 0) AS "activeMinutes",
+      COUNT(*) FILTER (WHERE pl.clock_out IS NULL)::text AS "openSessionCount"
+    FROM punch_ledger pl
+    JOIN employees e ON e.id = pl.employee_id
+    LEFT JOIN production_work_orders wo ON wo.id = pl.production_work_order_id
+    LEFT JOIN travelers t ON t.id::text = pl.traveler_id
+    LEFT JOIN work_order_budget wob
+      ON wob.work_order_id = COALESCE(pl.production_work_order_id, t.production_work_order_id)
+    WHERE (
+      pl.production_work_order_id IN (
+        SELECT id FROM production_work_orders WHERE project_id = $1
+      )
+      OR pl.traveler_id IN (
+        SELECT id::text FROM travelers WHERE project_id = $1
+      )
+    )
+    GROUP BY
+      pl.clock_in::date,
+      pl.employee_id,
+      e.name,
+      pl.department,
+      pl.charge_code,
+      wo.work_order_number,
+      t.traveler_number
+    ORDER BY pl.clock_in::date DESC, e.name ASC
+    LIMIT 30
+  `, [projectId]);
+
+  const dailyLaborRows = dailyRes.map((r) => {
+    const budgetedHoursForRow = parseFloat(r.budgetedHours) || 0;
+    const actualHoursForRow = parseFloat(r.actualHours) || 0;
+    const activeHoursForRow = (parseFloat(r.activeMinutes) || 0) / 60;
+    const usedHours = actualHoursForRow + activeHoursForRow;
+    return {
+      workDate: r.workDate,
+      employeeId: r.employeeId,
+      employeeName: r.employeeName,
+      department: r.department,
+      chargeCode: r.chargeCode,
+      workOrderNumber: r.workOrderNumber,
+      travelerNumber: r.travelerNumber,
+      budgetedHours: budgetedHoursForRow,
+      actualHours: actualHoursForRow,
+      activeHours: activeHoursForRow,
+      usedHours,
+      remainingHours: budgetedHoursForRow - usedHours,
+      percentConsumed: budgetedHoursForRow > 0 ? Math.round((usedHours / budgetedHoursForRow) * 100) : 0,
+      openSessionCount: parseInt(r.openSessionCount, 10) || 0,
+    };
+  });
+
   res.json({
     summary: {
       budgetedHours,
@@ -736,6 +1644,7 @@ router.get('/:projectId/labor', h(async (req, res) => {
     },
     chargeCodeRows,
     liveFeed,
+    dailyLaborRows,
   });
 }));
 
@@ -745,24 +1654,30 @@ router.get('/:projectId/materials', h(async (req, res) => {
 
   const summaryRes = await pool.query<MaterialSummaryRow>(`
     SELECT
+      COALESCE(wad_budget_sub.planned, 0) AS "plannedCost",
       COALESCE(committed_sub.committed, 0) + COALESCE(parts_request_sub.committed, 0) AS "committedCost",
       COALESCE(consumed_sub.consumed, 0) AS "consumedCost"
     FROM (
+      SELECT SUM(COALESCE(NULLIF(wo.wizard_data->'step5'->>'materialSpendCap', '')::numeric, 0)) AS planned
+      FROM production_work_orders wo
+      WHERE wo.project_id = $1
+    ) wad_budget_sub,
+    (
       SELECT SUM(mlr.quantity_reserved * COALESCE(ii.unit_cost, 0)) AS committed
       FROM material_lot_reservations mlr
       JOIN material_lots ml ON ml.id = mlr.material_lot_id
       LEFT JOIN inventory_items ii ON ii.id = ml.inventory_item_id
-      WHERE mlr.traveler_id IN (
-        SELECT id FROM travelers WHERE project_id = $1
+      WHERE mlr.traveler_id::text IN (
+        SELECT id::text FROM travelers WHERE project_id = $1
       )
     ) committed_sub,
     (
-      SELECT SUM(tmc.quantity_used * COALESCE(ii.unit_cost, 0)) AS consumed
+      SELECT SUM(COALESCE(tmc.qty_used, tmc.quantity_used, 0) * COALESCE(ii.unit_cost, 0)) AS consumed
       FROM traveler_material_consumption tmc
       JOIN material_lots ml ON ml.id = tmc.material_lot_id
       LEFT JOIN inventory_items ii ON ii.id = ml.inventory_item_id
-      WHERE tmc.traveler_id IN (
-        SELECT id FROM travelers WHERE project_id = $1
+      WHERE tmc.traveler_id::text IN (
+        SELECT id::text FROM travelers WHERE project_id = $1
       )
     ) consumed_sub,
     (
@@ -802,13 +1717,13 @@ router.get('/:projectId/materials', h(async (req, res) => {
     LEFT JOIN (
       SELECT material_lot_id, SUM(quantity_reserved) AS qty_reserved
       FROM material_lot_reservations
-      WHERE traveler_id IN (SELECT id FROM travelers WHERE project_id = $1)
+      WHERE traveler_id::text IN (SELECT id::text FROM travelers WHERE project_id = $1)
       GROUP BY material_lot_id
     ) mlr_agg ON mlr_agg.material_lot_id = ml.id
     LEFT JOIN (
-      SELECT material_lot_id, SUM(quantity_used) AS qty_consumed
+      SELECT material_lot_id, SUM(COALESCE(qty_used, quantity_used, 0)) AS qty_consumed
       FROM traveler_material_consumption
-      WHERE traveler_id IN (SELECT id FROM travelers WHERE project_id = $1)
+      WHERE traveler_id::text IN (SELECT id::text FROM travelers WHERE project_id = $1)
       GROUP BY material_lot_id
     ) tmc_agg ON tmc_agg.material_lot_id = ml.id
     WHERE
@@ -858,13 +1773,14 @@ router.get('/:projectId/materials', h(async (req, res) => {
 
   const committedCost = parseFloat(summaryRes[0]?.committedCost) || 0;
   const consumedCost = parseFloat(summaryRes[0]?.consumedCost) || 0;
+  const plannedCost = parseFloat(summaryRes[0]?.plannedCost) || 0;
 
   res.json({
     summary: {
-      plannedCost: 0,
+      plannedCost,
       committedCost,
       consumedCost,
-      remainingCost: 0 - committedCost - consumedCost,
+      remainingCost: plannedCost - committedCost - consumedCost,
     },
     rows: [...rowsRes, ...partsRequestRowsRes],
   });

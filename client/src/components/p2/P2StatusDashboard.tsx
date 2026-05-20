@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Link } from 'wouter';
 import { 
   FileText,
   Package,
@@ -40,13 +41,21 @@ interface POStatus {
   hasBOMsNeeded: boolean;
   status: 'pending' | 'in_progress' | 'completed';
   rawStatus?: string;
+  projectId?: string | null;
+  projectCode?: string | null;
   projectName?: string | null;
 }
 
 export default function P2StatusDashboard({ onStartBOM, onViewPO, selectedPOIds = [] }: P2StatusDashboardProps) {
   const [activeSortBy, setActiveSortBy] = useState<'default' | 'project_asc' | 'project_desc'>('default');
 
-  const { data: poStatuses = [], isLoading } = useQuery<POStatus[]>({
+  const {
+    data: poStatuses = [],
+    error: poStatusesError,
+    isError: isPOStatusesError,
+    isLoading,
+    refetch: refetchPOStatuses,
+  } = useQuery<POStatus[]>({
     queryKey: ['/api/p2/control-center/po-statuses'],
   });
 
@@ -116,6 +125,30 @@ export default function P2StatusDashboard({ onStartBOM, onViewPO, selectedPOIds 
       <Card>
         <CardContent className="py-12 text-center text-muted-foreground">
           Loading status dashboard...
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (isPOStatusesError) {
+    const message = poStatusesError instanceof Error
+      ? poStatusesError.message
+      : 'Failed to fetch PO statuses';
+
+    return (
+      <Card className="border-destructive/40">
+        <CardContent className="py-12 text-center">
+          <AlertCircle className="h-12 w-12 mx-auto text-destructive mb-4" />
+          <p className="font-medium text-destructive">P2 order status could not be loaded</p>
+          <p className="text-sm text-muted-foreground mt-2">{message}</p>
+          <Button
+            variant="outline"
+            className="mt-4"
+            onClick={() => refetchPOStatuses()}
+            data-testid="button-retry-p2-statuses"
+          >
+            Retry
+          </Button>
         </CardContent>
       </Card>
     );
@@ -221,9 +254,23 @@ export default function P2StatusDashboard({ onStartBOM, onViewPO, selectedPOIds 
                         </div>
                         <p className="text-muted-foreground mb-1">{po.customerName}</p>
                         {po.projectName && (
-                          <div className="flex items-center gap-1 text-sm text-muted-foreground mb-2">
+                          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground mb-2">
                             <FolderOpen className="h-3 w-3" />
                             <span>Project: <span className="font-medium text-foreground">{po.projectName}</span></span>
+                            {po.projectId && (
+                              <>
+                                <Link href={`/projects/${po.projectId}`}>
+                                  <Button variant="link" size="sm" className="h-auto p-0 text-xs">
+                                    {po.projectCode || 'Project Detail'}
+                                  </Button>
+                                </Link>
+                                <Link href={`/pm-control-center?project=${po.projectId}`}>
+                                  <Button variant="link" size="sm" className="h-auto p-0 text-xs">
+                                    PM Control
+                                  </Button>
+                                </Link>
+                              </>
+                            )}
                           </div>
                         )}
                         
@@ -258,6 +305,18 @@ export default function P2StatusDashboard({ onStartBOM, onViewPO, selectedPOIds 
                       </div>
 
                       <div className="flex flex-col gap-2">
+                        {po.projectId && (
+                          <Link href={`/pm-control-center?project=${po.projectId}`}>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="w-full"
+                              data-testid={`button-pm-control-${po.id}`}
+                            >
+                              PM Control
+                            </Button>
+                          </Link>
+                        )}
                         <Button 
                           size="sm" 
                           variant={po.hasBOMsNeeded ? "default" : "outline"}
@@ -316,14 +375,27 @@ export default function P2StatusDashboard({ onStartBOM, onViewPO, selectedPOIds 
                       </TableCell>
                       <TableCell>{getStatusBadge(po.status)}</TableCell>
                       <TableCell>
-                        <Button 
-                          size="sm" 
-                          variant="ghost"
-                          onClick={() => onViewPO?.(po.id)}
-                          data-testid={`button-view-completed-po-${po.id}`}
-                        >
-                          View <ArrowRight className="h-4 w-4 ml-1" />
-                        </Button>
+                        <div className="flex justify-end gap-2">
+                          {po.projectId && (
+                            <Link href={`/pm-control-center?project=${po.projectId}`}>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                data-testid={`button-pm-control-completed-${po.id}`}
+                              >
+                                PM Control
+                              </Button>
+                            </Link>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => onViewPO?.(po.id)}
+                            data-testid={`button-view-completed-po-${po.id}`}
+                          >
+                            View <ArrowRight className="h-4 w-4 ml-1" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

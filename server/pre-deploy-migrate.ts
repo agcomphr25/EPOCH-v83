@@ -193,7 +193,7 @@ async function runGovernanceGate(migrationsDir: string, migrationFiles: string[]
 
 async function main() {
   console.log('🔧 Pre-deploy migration runner starting...');
-  console.log(`   DATABASE_URL host: ${DATABASE_URL!.replace(/:[^:@]*@/, ':***@')}`);
+  console.log(`   DATABASE_URL host: ${connectionString.replace(/:[^:@]*@/, ':***@')}`);
 
   const migrationsDir = path.resolve(__dirname, '../migrations');
 
@@ -348,6 +348,15 @@ async function main() {
       notes TEXT
     )
   `, 'Ensure inventory_audit_records table');
+
+  await runSql(`
+    DO $$ BEGIN
+      IF to_regclass('public.routing_operations') IS NOT NULL THEN
+        ALTER TABLE public.routing_operations
+          ADD COLUMN IF NOT EXISTS required_calibration_asset_tags text[] NOT NULL DEFAULT ARRAY[]::text[];
+      END IF;
+    END $$;
+  `, 'Ensure routing_operations.required_calibration_asset_tags column');
 
   // ------------------------------------------------------------------
   // STEP 4: Quick verification — report remaining integer→uuid mismatches

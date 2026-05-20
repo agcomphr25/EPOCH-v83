@@ -1,4 +1,4 @@
-import { pgSchema, serial, integer, text, timestamp, boolean, doublePrecision, jsonb, numeric, date, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { pgSchema, serial, integer, text, timestamp, boolean, doublePrecision, jsonb, numeric, date, index, unique, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { employees, users } from "../../schema";
@@ -71,6 +71,27 @@ export const timesheetsTable = timekeepingSchema.table("timesheets", {
 });
 
 export type Timesheet = typeof timesheetsTable.$inferSelect;
+
+export const dailyTimeCertificationsTable = timekeepingSchema.table("daily_time_certifications", {
+  id: serial("id").primaryKey(),
+  timesheetId: integer("timesheet_id").notNull().references(() => timesheetsTable.id, { onDelete: "cascade" }),
+  employeeId: integer("employee_id").notNull().references(() => employees.id, { onDelete: "cascade" }),
+  workDate: text("work_date").notNull(),
+  workHours: doublePrecision("work_hours").notNull().default(0),
+  certifiedAt: timestamp("certified_at", { withTimezone: true }).notNull().defaultNow(),
+  certifiedByUserId: integer("certified_by_user_id").references(() => users.id),
+  certificationStatement: text("certification_statement").notNull(),
+  certificationVersion: integer("certification_version").notNull().default(1),
+  source: text("source").notNull().default("employee_self"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+}, (t) => ({
+  timesheetDateUnique: unique().on(t.timesheetId, t.workDate),
+  timesheetIdx: index("idx_daily_time_certifications_timesheet").on(t.timesheetId),
+  employeeDateIdx: index("idx_daily_time_certifications_employee_date").on(t.employeeId, t.workDate),
+}));
+
+export type DailyTimeCertification = typeof dailyTimeCertificationsTable.$inferSelect;
 
 export const leaveEntriesTable = timekeepingSchema.table("leave_entries", {
   id: serial("id").primaryKey(),
@@ -243,7 +264,10 @@ export const salariedTimesheetsTable = timekeepingSchema.table("salaried_timeshe
   certifiedBy: integer("certified_by"),
   certificationStatement: text("certification_statement"),
   certificationVersion: integer("certification_version").default(1),
+  supervisorEmployeeId: integer("supervisor_employee_id").references(() => employees.id),
   supervisorApprovedAt: timestamp("supervisor_approved_at", { withTimezone: true }),
+  supervisorApprovedBy: integer("supervisor_approved_by"),
+  supervisorApprovalNote: text("supervisor_approval_note"),
   payrollApprovedAt: timestamp("payroll_approved_at", { withTimezone: true }),
   payrollApprovedBy: integer("payroll_approved_by"),
   reopenedAt: timestamp("reopened_at", { withTimezone: true }),
@@ -362,6 +386,36 @@ export const insertTimesheetCorrectionSchema = createInsertSchema(timesheetCorre
 export type InsertTimesheetCorrection = z.infer<typeof insertTimesheetCorrectionSchema>;
 export type TimesheetCorrection = typeof timesheetCorrectionsTable.$inferSelect;
 
+export const punchCorrectionRequestsTable = timekeepingSchema.table("punch_correction_requests", {
+  id: serial("id").primaryKey(),
+  employeeId: integer("employee_id").notNull().references(() => employees.id, { onDelete: "cascade" }),
+  punchLedgerId: integer("punch_ledger_id"),
+  requestType: text("request_type").notNull(),
+  source: text("source").notNull().default("employee_portal"),
+  status: text("status").notNull().default("pending_supervisor"),
+  reason: text("reason").notNull(),
+  originalSnapshot: jsonb("original_snapshot"),
+  proposedChanges: jsonb("proposed_changes").notNull(),
+  supervisorId: integer("supervisor_id"),
+  supervisorDecision: text("supervisor_decision"),
+  supervisorNote: text("supervisor_note"),
+  supervisorReviewedAt: timestamp("supervisor_reviewed_at", { withTimezone: true }),
+  supervisorReviewedBy: integer("supervisor_reviewed_by"),
+  hrDecision: text("hr_decision"),
+  hrNote: text("hr_note"),
+  hrReviewedAt: timestamp("hr_reviewed_at", { withTimezone: true }),
+  hrReviewedBy: integer("hr_reviewed_by"),
+  appliedAt: timestamp("applied_at", { withTimezone: true }),
+  appliedBy: integer("applied_by"),
+  afterSnapshot: jsonb("after_snapshot"),
+  submittedByUserId: integer("submitted_by_user_id"),
+  submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+
+export type PunchCorrectionRequest = typeof punchCorrectionRequestsTable.$inferSelect;
+
 // ---------------------------------------------------------------------------
 // TIMEKEEPING POLICY SETTINGS
 // Centralizes all compliance rules that were previously hardcoded in service
@@ -373,6 +427,7 @@ export type TimesheetCorrection = typeof timesheetCorrectionsTable.$inferSelect;
 export const policySettingsTable = timekeepingSchema.table("policy_settings", {
   id: serial("id").primaryKey(),
   certificationRequired: boolean("certification_required").notNull().default(true),
+  dailyCertificationRequired: boolean("daily_certification_required").notNull().default(true),
   correctionApprovalRequired: boolean("correction_approval_required").notNull().default(true),
   minimumHoursPerWeek: doublePrecision("minimum_hours_per_week"),
   lateSubmissionGraceDays: integer("late_submission_grace_days"),

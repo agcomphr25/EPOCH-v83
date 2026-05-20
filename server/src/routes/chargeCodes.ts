@@ -47,19 +47,22 @@ router.post('/', authenticateToken, requireRole('ADMIN'), h(async (req, res) => 
     sourceService: 'chargeCodes.routes',
     actor: { id: actorId, username: actorName, role: actorRole },
     fieldsChanged: {
-      code: created.code,
-      type: created.type,
-      active: created.active,
+      code: { before: null, after: created.code },
+      type: { before: null, after: created.type },
+      costHandling: { before: null, after: created.costHandling },
+      active: { before: null, after: created.active },
     },
     meta: {
       billable: created.billable,
       requiresApproval: created.requiresApproval,
+      costHandling: created.costHandling,
     },
     ipAddress: req.ip ?? null,
     userAgent: req.headers['user-agent'] ?? null,
     payload: {
       code: created.code,
       type: created.type,
+      costHandling: created.costHandling,
       active: created.active,
       billable: created.billable,
       requiresApproval: created.requiresApproval,
@@ -97,11 +100,11 @@ router.patch('/:id', authenticateToken, requireRole('ADMIN'), h(async (req, res)
   const action = isDeactivation ? 'CHARGE_CODE_DEACTIVATED' : 'CHARGE_CODE_UPDATED';
   const reason: string | null = (req.body as any).reason ?? null;
 
-  const fieldsChanged: Record<string, { from: unknown; to: unknown }> = {};
+  const fieldsChanged: Record<string, { before: unknown; after: unknown }> = {};
   for (const [key, toVal] of Object.entries(parsed.data)) {
     const fromVal = existing ? (existing as Record<string, unknown>)[key] : undefined;
     if (fromVal !== toVal) {
-      fieldsChanged[key] = { from: fromVal, to: toVal };
+      fieldsChanged[key] = { before: fromVal, after: toVal };
     }
   }
 
@@ -116,7 +119,7 @@ router.patch('/:id', authenticateToken, requireRole('ADMIN'), h(async (req, res)
     meta: { isDeactivation },
     ipAddress: req.ip ?? null,
     userAgent: req.headers['user-agent'] ?? null,
-    payload: { id, isDeactivation, fieldsChanged },
+    payload: { id, isDeactivation, fieldsChanged: fieldsChanged as any },
   });
 
   res.json(updated);

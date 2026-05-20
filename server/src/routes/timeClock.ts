@@ -80,7 +80,7 @@ async function validateActiveChargeCode(
 
 interface JobSwitchResult {
   entry: PunchLedgerEntry;
-  chargeContext: ChargeContext;
+  chargeContext: ChargeContext & { resolvedChargeCode?: string | null };
   warning?: string;
   laborStatus?: WorkOrderLaborStatusResult;
 }
@@ -105,16 +105,6 @@ async function executeJobSwitch(params: {
 }): Promise<{ ok: true; result: JobSwitchResult } | { ok: false; status: number; body: Record<string, unknown> }> {
   const { employeeId, context, parsedApprovalId } = params;
 
-  // 1. Reject inactive charge codes before touching any session
-  const chargeValidation = await validateActiveChargeCode(context.chargeCode);
-  if (!chargeValidation.valid) {
-    return {
-      ok: false,
-      status: 422,
-      body: { error: chargeValidation.errorCode, message: chargeValidation.error },
-    };
-  }
-
   // 2. Resolve string employeeId to public.employees.id (integer) for punch_ledger FK
   const canonicalStr = await resolveCanonicalEmployeeId(employeeId);
   const numericEmployeeId = canonicalStr != null ? parseInt(canonicalStr, 10) : null;
@@ -128,24 +118,6 @@ async function executeJobSwitch(params: {
 
   // 3. Require an open punch_ledger session for the switch
   const currentOpenEntry = await storage.getOpenPunchLedgerEntry(numericEmployeeId);
-
-  // Duplicate-session guard: reject a switch to the same traveler/charge code already active
-  if (
-    currentOpenEntry &&
-    currentOpenEntry.travelerId != null &&
-    currentOpenEntry.travelerId === context.travelerId &&
-    currentOpenEntry.chargeCode === context.chargeCode
-  ) {
-    return {
-      ok: false,
-      status: 409,
-      body: {
-        error: 'DUPLICATE_SESSION',
-        message: `Employee is already clocked in against this traveler and charge code (entry #${currentOpenEntry.id}). No switch needed.`,
-        currentEntryId: currentOpenEntry.id,
-      },
-    };
-  }
 
   if (!currentOpenEntry) {
     return {
@@ -217,6 +189,7 @@ async function executeJobSwitch(params: {
   // Fail-closed: if WAD is linked and resolution fails, abort the switch — never proceed
   // with a null charge code for traveler-driven sessions against a known WAD.
   let resolvedChargeCodeId: number | null = null;
+  let resolvedChargeCode: string | null = null;
   const jobSwitchCcResult = await resolveChargeCode({
     productionWorkOrderId: context.wadId ?? null,
     travelerId: context.travelerId ?? null,
@@ -225,6 +198,7 @@ async function executeJobSwitch(params: {
   });
   if (!('error' in jobSwitchCcResult)) {
     resolvedChargeCodeId = jobSwitchCcResult.chargeCodeId;
+    resolvedChargeCode = jobSwitchCcResult.chargeCode;
   } else if (context.wadId) {
     // WAD is linked but no charge code could be resolved — block the switch
     return {
@@ -238,6 +212,38 @@ async function executeJobSwitch(params: {
     };
   }
   // If no wadId at all, proceed with null chargeCodeId
+
+  const sessionChargeCode = resolvedChargeCode ?? context.chargeCode ?? null;
+  const chargeValidation = await validateActiveChargeCode(sessionChargeCode);
+  if (!chargeValidation.valid) {
+    return {
+      ok: false,
+      status: 422,
+      body: { error: chargeValidation.errorCode, message: chargeValidation.error },
+    };
+  }
+
+  // Duplicate-session guard: reject a switch to the same traveler/charge code already active.
+  // Compare against the resolved WAD charge-code identity, not the barcode context's
+  // derived WAD/work-order number.
+  const sameTraveler =
+    currentOpenEntry.travelerId != null &&
+    currentOpenEntry.travelerId === context.travelerId;
+  const sameChargeCode =
+    resolvedChargeCodeId != null && currentOpenEntry.chargeCodeId != null
+      ? currentOpenEntry.chargeCodeId === resolvedChargeCodeId
+      : currentOpenEntry.chargeCode === sessionChargeCode;
+  if (sameTraveler && sameChargeCode) {
+    return {
+      ok: false,
+      status: 409,
+      body: {
+        error: 'DUPLICATE_SESSION',
+        message: `Employee is already clocked in against this traveler and charge code (entry #${currentOpenEntry.id}). No switch needed.`,
+        currentEntryId: currentOpenEntry.id,
+      },
+    };
+  }
 
   const [jobSwitchProjectId, jobSwitchBudget, jobSwitchCertResult] = await Promise.all([
     deriveProjectId(context.wadId ?? null),
@@ -321,7 +327,7 @@ async function executeJobSwitch(params: {
           previousTravelerId: currentOpenEntry.travelerId ?? null,
           previousChargeCode: currentOpenEntry.chargeCode ?? null,
           newTravelerId: context.travelerId,
-          newChargeCode: context.chargeCode,
+          newChargeCode: sessionChargeCode,
           timestamp: new Date().toISOString(),
           source: 'punch_ledger',
         },
@@ -344,7 +350,7 @@ async function executeJobSwitch(params: {
       },
       newValues: {
         travelerId: context.travelerId ?? null,
-        chargeCode: context.chargeCode ?? null,
+        chargeCode: sessionChargeCode,
         productionWorkOrderId: context.wadId ?? null,
         editReason: 'job switch via traveler scan',
         timestamp: new Date().toISOString(),
@@ -358,11 +364,460 @@ async function executeJobSwitch(params: {
     console.error('[TimeClock] Failed to write JOB_SWITCH DCAA audit entry:', dcaaAuditErr);
   }
 
-  const result: JobSwitchResult = { entry: updatedEntry, chargeContext: context };
+  const result: JobSwitchResult = {
+    entry: updatedEntry,
+    chargeContext: { ...context, resolvedChargeCode: sessionChargeCode },
+  };
   if (warningMessage) result.warning = warningMessage;
   if (laborStatusForResponse) result.laborStatus = laborStatusForResponse;
 
   return { ok: true, result };
+}
+
+/**
+ * Result type for executeTravelerAutoPunch.
+ * `action` describes the punch_ledger transition that was performed:
+ *   - 'clockedIn' — no open session existed; a new one was opened
+ *   - 'switched'  — open session existed on a different traveler/charge code; updated in place
+ *   - 'unchanged' — open session was already on this traveler+chargeCode; no-op
+ */
+export type TravelerAutoPunchAction = 'clockedIn' | 'switched' | 'unchanged';
+
+export type TravelerAutoPunchResult =
+  | {
+      ok: true;
+      action: TravelerAutoPunchAction;
+      entry: PunchLedgerEntry | null;
+      chargeContext: ChargeContext & { resolvedChargeCode?: string | null };
+      warning?: string;
+      laborStatus?: WorkOrderLaborStatusResult;
+      budgetOverrideId?: number | null;
+      warnedOnOverrun?: boolean;
+      overrunReason?: string | null;
+    }
+  | { ok: false; status: number; body: Record<string, unknown> };
+
+/**
+ * Open a fresh TRAVELER-source punch_ledger session for a traveler context.
+ * Extracted from the kiosk /api/time-clock/clock-in/traveler route so the same
+ * code path is reused by the P2 Traveler auto-punch helper (Task #188).
+ *
+ * Performs:
+ *   1. Deterministic charge-code resolution (fail-closed when WAD has no resolvable code).
+ *   2. Project id derivation from the WAD.
+ *   3. Budget enforcement (BLOCKED → override / approval / FLAGGED with WARN; WARNING → PENDING_APPROVAL).
+ *   4. ledger.openSession with the correct approvalStatus per §5.2 (Task #77).
+ *
+ * Caller is responsible for running entry gates and the PTO check.
+ */
+async function executeTravelerClockIn(params: {
+  context: ChargeContext;
+  numericEmployeeId: number;
+  canonicalEmployeeIdStr: string;
+  activeStepId: string | null;
+  clockInCertStatus: string | null;
+  parsedApprovalId: number | null;
+}): Promise<TravelerAutoPunchResult> {
+  const {
+    context,
+    numericEmployeeId,
+    canonicalEmployeeIdStr,
+    activeStepId,
+    clockInCertStatus,
+    parsedApprovalId,
+  } = params;
+
+  // Resolve chargeCodeId deterministically from WAD (Task #1235).
+  // Fail-closed: if WAD is linked and resolution fails, return 400.
+  let chargeCodeId: number | null = null;
+  let wadResolvedChargeCode: string | null = null;
+  const wadCcResult = await resolveChargeCode({
+    productionWorkOrderId: context.wadId ?? null,
+    travelerId: context.travelerId ?? null,
+    travelerStepId: activeStepId ?? null,
+    department: context.department ?? null,
+  });
+  if (!('error' in wadCcResult)) {
+    chargeCodeId = wadCcResult.chargeCodeId;
+    wadResolvedChargeCode = wadCcResult.chargeCode;
+  } else if (context.wadId) {
+    return {
+      ok: false,
+      status: 400,
+      body: {
+        error: 'CHARGE_CODE_UNRESOLVED',
+        message: wadCcResult.error,
+        hint: 'Set a default charge code on the production work order or the traveler, or create an active charge code for this department.',
+      },
+    };
+  }
+
+  const resolvedProjectId = await deriveProjectId(context.wadId ?? null);
+
+  if (context.wadId) {
+    const laborStatus = await evaluateWorkOrderLaborStatus(context.wadId, context.department);
+    const overrunLabel = laborBudgetConsumptionLabel(laborStatus);
+    const isOverrun = laborStatus.status === 'BLOCKED';
+    const overrunReason = isOverrun
+      ? `Labor budget exhausted (${overrunLabel}). Session recorded under WARN policy — supervisor approval required.`
+      : null;
+
+    if (laborStatus.status === 'BLOCKED') {
+      const activeOverride = await storage.getApprovedActiveLaborBudgetOverride(
+        context.wadId,
+        canonicalEmployeeIdStr,
+      );
+
+      if (activeOverride) {
+        const entry = await ledger.openSession({
+          employeeId: numericEmployeeId,
+          source: 'TRAVELER',
+          laborClass: 'REGULAR',
+          travelerId: context.travelerId ?? null,
+          productionWorkOrderId: context.wadId ?? null,
+          chargeCodeId,
+          department: context.department ?? null,
+          operation: context.operation ?? null,
+          projectId: resolvedProjectId,
+          travelerStepId: activeStepId,
+          certificationStatus: clockInCertStatus,
+          isOverrun,
+          overrunReason,
+          approvalStatus: 'APPROVED_OVERRUN',
+          laborBudgetOverrideId: activeOverride.id,
+        });
+        await storage.consumeLaborBudgetOverride(activeOverride.id);
+        return {
+          ok: true,
+          action: 'clockedIn',
+          entry,
+          chargeContext: { ...context, resolvedChargeCode: wadResolvedChargeCode },
+          laborStatus,
+          budgetOverrideId: activeOverride.id,
+        };
+      }
+
+      if (parsedApprovalId == null) {
+        const warnEntry = await ledger.openSession({
+          employeeId: numericEmployeeId,
+          source: 'TRAVELER',
+          laborClass: 'REGULAR',
+          travelerId: context.travelerId ?? null,
+          productionWorkOrderId: context.wadId ?? null,
+          chargeCodeId,
+          department: context.department ?? null,
+          operation: context.operation ?? null,
+          projectId: resolvedProjectId,
+          travelerStepId: activeStepId,
+          certificationStatus: clockInCertStatus,
+          isOverrun,
+          overrunReason,
+          approvalStatus: 'FLAGGED',
+        });
+        return {
+          ok: true,
+          action: 'clockedIn',
+          entry: warnEntry,
+          chargeContext: { ...context, resolvedChargeCode: wadResolvedChargeCode },
+          laborStatus,
+          warnedOnOverrun: true,
+          overrunReason,
+        };
+      }
+
+      const approval = await storage.getLaborApprovalById(parsedApprovalId);
+      if (
+        !approval ||
+        approval.productionWorkOrderId !== context.wadId ||
+        approval.employeeId !== canonicalEmployeeIdStr
+      ) {
+        return {
+          ok: false,
+          status: 403,
+          body: {
+            error: 'INVALID_LABOR_APPROVAL',
+            message: 'The provided laborApprovalId is not valid for this employee and work order.',
+          },
+        };
+      }
+      const entry = await ledger.openSession({
+        employeeId: numericEmployeeId,
+        source: 'TRAVELER',
+        laborClass: 'REGULAR',
+        travelerId: context.travelerId ?? null,
+        productionWorkOrderId: context.wadId ?? null,
+        chargeCodeId,
+        department: context.department ?? null,
+        operation: context.operation ?? null,
+        projectId: resolvedProjectId,
+        travelerStepId: activeStepId,
+        certificationStatus: clockInCertStatus,
+        isOverrun,
+        overrunReason,
+        approvalStatus: 'APPROVED_OVERRUN',
+        laborApprovalId: approval.id,
+      });
+      return {
+        ok: true,
+        action: 'clockedIn',
+        entry,
+        chargeContext: { ...context, resolvedChargeCode: wadResolvedChargeCode },
+      };
+    }
+
+    if (laborStatus.status === 'WARNING') {
+      const entry = await ledger.openSession({
+        employeeId: numericEmployeeId,
+        source: 'TRAVELER',
+        laborClass: 'REGULAR',
+        travelerId: context.travelerId ?? null,
+        productionWorkOrderId: context.wadId ?? null,
+        chargeCodeId,
+        department: context.department ?? null,
+        operation: context.operation ?? null,
+        projectId: resolvedProjectId,
+        travelerStepId: activeStepId,
+        certificationStatus: clockInCertStatus,
+        isOverrun: false,
+        overrunReason: null,
+        // §5.2 (Task #77): WAD-linked traveler sessions enter PENDING_APPROVAL,
+        // even on the WARNING path — supervisor approval is still required.
+        approvalStatus: 'PENDING_APPROVAL',
+      });
+      return {
+        ok: true,
+        action: 'clockedIn',
+        entry,
+        chargeContext: { ...context, resolvedChargeCode: wadResolvedChargeCode },
+        warning: `Work order is approaching its labor budget limit (${overrunLabel}).`,
+        laborStatus,
+      };
+    }
+  }
+
+  // No WAD linked — flag the session per Phase 1 WARN policy.
+  const noWadLinked = !context.wadId && !!context.travelerId;
+  const entry = await ledger.openSession({
+    employeeId: numericEmployeeId,
+    source: 'TRAVELER',
+    laborClass: 'REGULAR',
+    travelerId: context.travelerId ?? null,
+    productionWorkOrderId: context.wadId ?? null,
+    chargeCodeId,
+    department: context.department ?? null,
+    operation: context.operation ?? null,
+    projectId: resolvedProjectId,
+    travelerStepId: activeStepId,
+    certificationStatus: clockInCertStatus,
+    isOverrun: noWadLinked,
+    overrunReason: noWadLinked
+      ? 'NO_WAD_LINKED — traveler has no production work order; charge code and project traceability are incomplete. Supervisor review required.'
+      : null,
+    // §5.2 (Task #77): TRAVELER-source WAD-linked sessions enter PENDING_APPROVAL.
+    // No-WAD traveler sessions are still FLAGGED for supervisor triage.
+    approvalStatus: noWadLinked ? 'FLAGGED' : 'PENDING_APPROVAL',
+  });
+
+  return {
+    ok: true,
+    action: 'clockedIn',
+    entry,
+    chargeContext: { ...context, resolvedChargeCode: wadResolvedChargeCode },
+  };
+}
+
+/**
+ * Unified traveler auto-punch orchestrator (Task #188).
+ *
+ * Given a traveler ChargeContext and an employee identifier, ensures the
+ * employee's open punch_ledger session is on the traveler's resolved charge
+ * code:
+ *   - no open session   → run `executeTravelerClockIn` (clock in fresh)
+ *   - open same job     → no-op, return action='unchanged'
+ *   - open different    → call `executeJobSwitch` (in-place switch)
+ *
+ * Reused by the kiosk barcode clock-in route AND the P2 Traveler start-task
+ * route so both paths apply identical gates (WAD release, material readiness,
+ * training, PTO, budget, charge-code activeness) and produce identical
+ * punch_ledger writes.
+ *
+ * `ptoOverride` is supplied by the kiosk barcode flow so an authenticated
+ * ADMIN/OWNER may force clock-in past an active PTO entry. The P2 Traveler
+ * route does not pass it (no admin override path on the floor tablet).
+ */
+export async function executeTravelerAutoPunch(params: {
+  context: ChargeContext;
+  employeeIdString: string;
+  parsedApprovalId: number | null;
+  ptoOverride?: {
+    requested: boolean;
+    reason: string | null;
+    user: Express.Request['user'] | null;
+    ip: string | null;
+  };
+}): Promise<TravelerAutoPunchResult> {
+  const { context, employeeIdString, parsedApprovalId, ptoOverride } = params;
+
+  // Gates: WAD release, material readiness, training/cert.
+  const clockInGate = await evaluateTravelerClockInGates(
+    context.travelerId,
+    context.wadId,
+    employeeIdString,
+  );
+  if (clockInGate.gateError) {
+    return { ok: false, status: 403, body: clockInGate.gateError as unknown as Record<string, unknown> };
+  }
+
+  // Resolve canonical employee id.
+  const canonicalEmployeeIdStr = await resolveCanonicalEmployeeId(employeeIdString);
+  const numericEmployeeId =
+    canonicalEmployeeIdStr != null ? parseInt(canonicalEmployeeIdStr, 10) : null;
+  if (numericEmployeeId == null || isNaN(numericEmployeeId)) {
+    return {
+      ok: false,
+      status: 404,
+      body: { error: 'EMPLOYEE_NOT_FOUND', message: `Employee '${employeeIdString}' not found` },
+    };
+  }
+
+  // Stamp cert status on session for Task #1235 traceability.
+  let clockInCertStatus: string | null = null;
+  if (clockInGate.activeStepId) {
+    const certRes = await resolveCertificationStatus({
+      travelerId: context.travelerId,
+      stepId: clockInGate.activeStepId,
+      employeeId: numericEmployeeId,
+    });
+    clockInCertStatus = certRes.status;
+  }
+
+  const openEntry = await storage.getOpenPunchLedgerEntry(numericEmployeeId);
+
+  if (openEntry) {
+    // Resolve the charge code the way the write paths do (executeTravelerClockIn
+    // / executeJobSwitch both call resolveChargeCode), so a "no-op" decision is
+    // made against the same identity the next write would produce.
+    const ccResolveForCompare = await resolveChargeCode({
+      productionWorkOrderId: context.wadId ?? null,
+      travelerId: context.travelerId ?? null,
+      travelerStepId: clockInGate.activeStepId ?? null,
+      department: context.department ?? null,
+    });
+
+    // Fail-closed when the WAD is linked but no charge code can be resolved.
+    // Otherwise the open-session "unchanged" branch would silently bypass the
+    // CHARGE_CODE_UNRESOLVED gate that the clock-in / switch paths enforce.
+    if ('error' in ccResolveForCompare) {
+      if (context.wadId) {
+        return {
+          ok: false,
+          status: 400,
+          body: {
+            error: 'CHARGE_CODE_UNRESOLVED',
+            message: ccResolveForCompare.error,
+            hint: 'Set a default charge code on the production work order or the traveler, or create an active charge code for this department.',
+          },
+        };
+      }
+      // No WAD linked → fall through to switch path so existing behavior handles it.
+    } else {
+      const resolvedCompareChargeCodeId = ccResolveForCompare.chargeCodeId;
+      const resolvedCompareChargeCode = ccResolveForCompare.chargeCode;
+
+      // Validate that the resolved charge code is still active (matches the
+      // gate enforced by clock-in / switch paths via openSession).
+      const activenessCheck = await validateActiveChargeCode(resolvedCompareChargeCode);
+      if (!activenessCheck.valid) {
+        return {
+          ok: false,
+          status: 400,
+          body: { error: activenessCheck.errorCode, message: activenessCheck.error },
+        };
+      }
+
+      const sameTraveler =
+        openEntry.travelerId != null && openEntry.travelerId === context.travelerId;
+      const sameChargeCode =
+        resolvedCompareChargeCodeId != null
+          ? openEntry.chargeCodeId === resolvedCompareChargeCodeId
+          : openEntry.chargeCode === resolvedCompareChargeCode;
+
+      if (sameTraveler && sameChargeCode) {
+        return {
+          ok: true,
+          action: 'unchanged',
+          entry: openEntry,
+          chargeContext: {
+            ...context,
+            resolvedChargeCode: resolvedCompareChargeCode ?? openEntry.chargeCode ?? null,
+          },
+        };
+      }
+    }
+    // Otherwise switch in place.
+    const switchResult = await executeJobSwitch({
+      employeeId: employeeIdString,
+      context,
+      parsedApprovalId,
+    });
+    if (!switchResult.ok) return switchResult;
+    return {
+      ok: true,
+      action: 'switched',
+      entry: switchResult.result.entry,
+      chargeContext: {
+        ...switchResult.result.chargeContext,
+        resolvedChargeCode: switchResult.result.entry.chargeCode ?? null,
+      },
+      warning: switchResult.result.warning,
+      laborStatus: switchResult.result.laborStatus,
+    };
+  }
+
+  // No open session — PTO check before opening a fresh one.
+  const tcToday = new Date().toISOString().slice(0, 10);
+  const tcPtoBlock = await checkActivePTOForEmployee(numericEmployeeId, tcToday);
+  if (tcPtoBlock) {
+    const tcIsAdmin = ptoOverride?.user?.role === 'ADMIN' || ptoOverride?.user?.role === 'OWNER';
+    if (ptoOverride?.requested && tcIsAdmin && ptoOverride.reason) {
+      const { logAction: tcLogAction, actorFromUser: tcActorFromUser } = await import(
+        '../services/timekeeping/audit.service'
+      );
+      await tcLogAction({
+        tableName: 'leave_entries',
+        recordId: tcPtoBlock.leaveEntryId,
+        action: 'UPDATE',
+        oldValues: null,
+        newValues: {
+          ptoClockInOverride: true,
+          overrideActorId: ptoOverride.user?.id ?? null,
+          overrideReason: ptoOverride.reason,
+          overrideTimestamp: new Date().toISOString(),
+          source: 'BARCODE',
+        },
+        actor: tcActorFromUser(ptoOverride.user ?? null, ptoOverride.ip ?? null),
+      });
+    } else {
+      return {
+        ok: false,
+        status: 422,
+        body: {
+          error: 'PTO_DAY_BLOCK',
+          message: 'This employee has approved PTO for today. Clock-in is not permitted.',
+          leaveEntryId: tcPtoBlock.leaveEntryId,
+        },
+      };
+    }
+  }
+
+  return executeTravelerClockIn({
+    context,
+    numericEmployeeId,
+    canonicalEmployeeIdStr: canonicalEmployeeIdStr!,
+    activeStepId: clockInGate.activeStepId,
+    clockInCertStatus,
+    parsedApprovalId,
+  });
 }
 
 const VALID_EVENT_TYPES = [
@@ -497,6 +952,18 @@ async function resolveEmployeeByCode(
   code: string
 ): Promise<{ id: number; name: string } | null> {
   const trimmed = code.trim();
+
+  // Numeric input: treat as employees.id (Task #188 — P2 Traveler auto-punch
+  // path passes the numeric employee id rather than a badge code).
+  if (/^\d+$/.test(trimmed)) {
+    const byId = await db
+      .select({ id: employees.id, name: employees.name })
+      .from(employees)
+      .where(eq(employees.id, parseInt(trimmed, 10)))
+      .limit(1);
+    if (byId.length > 0) return byId[0];
+  }
+
   const byCode = await db
     .select({ id: employees.id, name: employees.name })
     .from(employees)
@@ -1189,264 +1656,47 @@ export function registerTimeClockRoutes(app: Express) {
 
       const { context } = result;
 
-      // Traveler entry gates — enforce WAD release, material readiness, and training before clock-in.
-      // Phase 1 WARN: cert failures (isCertWarn=true) are allowed through and flagged.
-      const clockInGate = await evaluateTravelerClockInGates(context.travelerId, context.wadId, employeeId.trim());
-      if (clockInGate.gateError) {
-        return res.status(403).json(clockInGate.gateError);
-      }
-
-      // Resolve employee string id to public.employees.id integer for punch_ledger
-      const canonicalEmployeeIdStr = await resolveCanonicalEmployeeId(employeeId.trim());
-      const numericEmployeeId = canonicalEmployeeIdStr != null ? parseInt(canonicalEmployeeIdStr, 10) : null;
-      if (numericEmployeeId == null || isNaN(numericEmployeeId)) {
-        return res.status(404).json({ error: 'EMPLOYEE_NOT_FOUND', message: `Employee '${employeeId.trim()}' not found` });
-      }
-
-      // Resolve certificationStatus at clock-in time (Task #1235 traceability — stamp on session).
-      let clockInCertStatus: string | null = null;
-      if (clockInGate.activeStepId && numericEmployeeId != null) {
-        const certRes = await resolveCertificationStatus({
-          travelerId: context.travelerId,
-          stepId: clockInGate.activeStepId,
-          employeeId: numericEmployeeId,
-        });
-        clockInCertStatus = certRes.status;
-      }
-
-      const openEntry = await storage.getOpenPunchLedgerEntry(numericEmployeeId);
-      if (openEntry) {
-        // Auto-switch: employee is already clocked in — switchAssignment IN PLACE
-        const switchResult = await executeJobSwitch({
-          employeeId: employeeId.trim(),
-          context,
-          parsedApprovalId,
-        });
-        if (!switchResult.ok) {
-          return res.status(switchResult.status).json(switchResult.body);
-        }
-        return res.status(201).json({ switched: true, ...switchResult.result });
-      }
-
-      // PTO block: refuse new clock-in sessions on approved PTO days (barcode path).
-      // Admin override is possible when an ADMIN/OWNER user supplies their JWT in the
-      // Authorization header along with adminPtoOverride=true and adminOverrideReason.
-      // optionalAuth middleware (applied to this route) populates req.user when a valid
-      // token is present; unauthenticated barcode scanner sessions leave req.user undefined.
-      const tcToday = new Date().toISOString().slice(0, 10);
-      const tcPtoBlock = await checkActivePTOForEmployee(numericEmployeeId, tcToday);
-      if (tcPtoBlock) {
-        const tcAdminOverride = req.body?.adminPtoOverride === true;
-        const tcOverrideReason = typeof req.body?.adminOverrideReason === 'string' ? req.body.adminOverrideReason.trim() : null;
-        const tcUser = req.user;
-        const tcIsAdmin = tcUser?.role === 'ADMIN' || tcUser?.role === 'OWNER';
-        if (tcAdminOverride && tcIsAdmin && tcOverrideReason) {
-          const { logAction: tcLogAction, actorFromUser: tcActorFromUser } = await import('../services/timekeeping/audit.service');
-          await tcLogAction({
-            tableName: 'leave_entries',
-            recordId: tcPtoBlock.leaveEntryId,
-            action: 'UPDATE',
-            oldValues: null,
-            newValues: {
-              ptoClockInOverride: true,
-              overrideActorId: tcUser?.id ?? null,
-              overrideReason: tcOverrideReason,
-              overrideTimestamp: new Date().toISOString(),
-              source: 'BARCODE',
-            },
-            actor: tcActorFromUser(tcUser ?? null, req.ip ?? null),
-          });
-        } else {
-          return res.status(422).json({
-            error: 'PTO_DAY_BLOCK',
-            message: 'This employee has approved PTO for today. Clock-in is not permitted.',
-            leaveEntryId: tcPtoBlock.leaveEntryId,
-          });
-        }
-      }
-
-      // No open session — clock the employee in via punch_ledger
-      let validatedApprovalId: number | null = null;
-      let validatedBudgetOverrideId: number | null = null;
-
-      // Resolve chargeCodeId deterministically from WAD (Task #1235).
-      // Fail-closed: if WAD is linked and resolution fails, return 400 — never proceed
-      // with a null charge code for traveler-driven sessions against a known WAD.
-      let chargeCodeId: number | null = null;
-      let wadResolvedChargeCode: string | null = null;
-      const wadCcResult = await resolveChargeCode({
-        productionWorkOrderId: context.wadId ?? null,
-        travelerId: context.travelerId ?? null,
-        travelerStepId: clockInGate.activeStepId ?? null,
-        department: context.department ?? null,
-      });
-      if (!('error' in wadCcResult)) {
-        chargeCodeId = wadCcResult.chargeCodeId;
-        wadResolvedChargeCode = wadCcResult.chargeCode;
-      } else if (context.wadId) {
-        // WAD is linked but no charge code could be resolved — block session creation
-        return res.status(400).json({
-          error: 'CHARGE_CODE_UNRESOLVED',
-          message: wadCcResult.error,
-          hint: 'Set a default charge code on the production work order or the traveler, or create an active charge code for this department.',
-        });
-      }
-      // If no wadId at all, proceed with null chargeCodeId (non-WAD session)
-
-      // Derive projectId server-side from WAD (never accepted from client)
-      const resolvedProjectId = await deriveProjectId(context.wadId ?? null);
-
-      if (context.wadId) {
-        const laborStatus = await evaluateWorkOrderLaborStatus(context.wadId, context.department);
-
-        // Compute overrun state for punch_ledger stamping
-        const overrunLabel = laborBudgetConsumptionLabel(laborStatus);
-        const isOverrun = laborStatus.status === 'BLOCKED';
-        const overrunReason = isOverrun
-          ? `Labor budget exhausted (${overrunLabel}). Session recorded under WARN policy — supervisor approval required.`
-          : null;
-
-        if (laborStatus.status === 'BLOCKED') {
-          const activeOverride = await storage.getApprovedActiveLaborBudgetOverride(
-            context.wadId,
-            canonicalEmployeeIdStr!
-          );
-
-          if (activeOverride) {
-            validatedBudgetOverrideId = activeOverride.id;
-            const entry = await ledger.openSession({
-              employeeId: numericEmployeeId,
-              source: 'TRAVELER',
-              laborClass: 'REGULAR',
-              travelerId: context.travelerId ?? null,
-              productionWorkOrderId: context.wadId ?? null,
-              chargeCodeId,
-              department: context.department ?? null,
-              operation: context.operation ?? null,
-              projectId: resolvedProjectId,
-              travelerStepId: clockInGate.activeStepId,
-              certificationStatus: clockInCertStatus,
-              isOverrun,
-              overrunReason,
-              approvalStatus: 'APPROVED_OVERRUN',
-              laborBudgetOverrideId: validatedBudgetOverrideId,
-            });
-            await storage.consumeLaborBudgetOverride(activeOverride.id);
-            return res.status(201).json({ entry, chargeContext: { ...context, resolvedChargeCode: wadResolvedChargeCode }, laborStatus, budgetOverrideId: validatedBudgetOverrideId });
-          }
-
-            // Phase 1 WARN: no pre-approved override/approval → allow through, flag for supervisor review
-          if (parsedApprovalId == null) {
-            const warnEntry = await ledger.openSession({
-              employeeId: numericEmployeeId,
-              source: 'TRAVELER',
-              laborClass: 'REGULAR',
-              travelerId: context.travelerId ?? null,
-              productionWorkOrderId: context.wadId ?? null,
-              chargeCodeId,
-              department: context.department ?? null,
-              operation: context.operation ?? null,
-              projectId: resolvedProjectId,
-              travelerStepId: clockInGate.activeStepId,
-              certificationStatus: clockInCertStatus,
-              isOverrun,
-              overrunReason,
-              approvalStatus: 'FLAGGED',
-            });
-            return res.status(201).json({
-              entry: warnEntry,
-              chargeContext: { ...context, resolvedChargeCode: wadResolvedChargeCode },
-              laborStatus,
-              warnedOnOverrun: true,
-              overrunReason,
-            });
-          }
-          const approval = await storage.getLaborApprovalById(parsedApprovalId);
-          if (
-            !approval ||
-            approval.productionWorkOrderId !== context.wadId ||
-            approval.employeeId !== canonicalEmployeeIdStr
-          ) {
-            return res.status(403).json({
-              error: 'INVALID_LABOR_APPROVAL',
-              message: 'The provided laborApprovalId is not valid for this employee and work order.',
-            });
-          }
-          validatedApprovalId = approval.id;
-          const entry = await ledger.openSession({
-            employeeId: numericEmployeeId,
-            source: 'TRAVELER',
-            laborClass: 'REGULAR',
-            travelerId: context.travelerId ?? null,
-            productionWorkOrderId: context.wadId ?? null,
-            chargeCodeId,
-            department: context.department ?? null,
-            operation: context.operation ?? null,
-            projectId: resolvedProjectId,
-            travelerStepId: clockInGate.activeStepId,
-            certificationStatus: clockInCertStatus,
-            isOverrun,
-            overrunReason,
-            approvalStatus: 'APPROVED_OVERRUN',
-            laborApprovalId: validatedApprovalId,
-          });
-          return res.status(201).json({ entry, chargeContext: { ...context, resolvedChargeCode: wadResolvedChargeCode }, laborStatus });
-        }
-
-        if (laborStatus.status === 'WARNING') {
-          const entry = await ledger.openSession({
-            employeeId: numericEmployeeId,
-            source: 'TRAVELER',
-            laborClass: 'REGULAR',
-            travelerId: context.travelerId ?? null,
-            productionWorkOrderId: context.wadId ?? null,
-            chargeCodeId,
-            department: context.department ?? null,
-            operation: context.operation ?? null,
-            projectId: resolvedProjectId,
-            travelerStepId: clockInGate.activeStepId,
-            certificationStatus: clockInCertStatus,
-            isOverrun: false,
-            overrunReason: null,
-            // §5.2 (Task #77): WAD-linked traveler sessions enter PENDING_APPROVAL,
-            // even on the WARNING path — supervisor approval is still required.
-            approvalStatus: 'PENDING_APPROVAL',
-          });
-          return res.status(201).json({
-            entry,
-            chargeContext: { ...context, resolvedChargeCode: wadResolvedChargeCode },
-            warning: `Work order is approaching its labor budget limit (${overrunLabel}).`,
-            laborStatus,
-          });
-        }
-      }
-
-      // If no WAD is linked, flag the session so it is not silently untraced.
-      // Phase 1 WARN: traveler-driven sessions without a WAD are allowed through but
-      // stamped as FLAGGED + overrunReason so supervisors can audit and resolve.
-      const noWadLinked = !context.wadId && !!context.travelerId;
-      const entry = await ledger.openSession({
-        employeeId: numericEmployeeId,
-        source: 'TRAVELER',
-        laborClass: 'REGULAR',
-        travelerId: context.travelerId ?? null,
-        productionWorkOrderId: context.wadId ?? null,
-        chargeCodeId,
-        department: context.department ?? null,
-        operation: context.operation ?? null,
-        projectId: resolvedProjectId,
-        travelerStepId: clockInGate.activeStepId,
-        certificationStatus: clockInCertStatus,
-        isOverrun: noWadLinked,
-        overrunReason: noWadLinked
-          ? 'NO_WAD_LINKED — traveler has no production work order; charge code and project traceability are incomplete. Supervisor review required.'
-          : null,
-        // §5.2 (Task #77): TRAVELER-source WAD-linked sessions enter PENDING_APPROVAL.
-        // No-WAD traveler sessions are still FLAGGED for supervisor triage.
-        approvalStatus: noWadLinked ? 'FLAGGED' : 'PENDING_APPROVAL',
+      const autoPunch = await executeTravelerAutoPunch({
+        context,
+        employeeIdString: employeeId.trim(),
+        parsedApprovalId,
+        ptoOverride: {
+          requested: req.body?.adminPtoOverride === true,
+          reason:
+            typeof req.body?.adminOverrideReason === 'string'
+              ? req.body.adminOverrideReason.trim()
+              : null,
+          user: req.user ?? null,
+          ip: req.ip ?? null,
+        },
       });
 
-      return res.status(201).json({ entry, chargeContext: { ...context, resolvedChargeCode: wadResolvedChargeCode } });
+      if (!autoPunch.ok) {
+        return res.status(autoPunch.status).json(autoPunch.body);
+      }
+
+      if (autoPunch.action === 'switched') {
+        return res.status(201).json({
+          switched: true,
+          entry: autoPunch.entry,
+          chargeContext: autoPunch.chargeContext,
+          warning: autoPunch.warning,
+          laborStatus: autoPunch.laborStatus,
+        });
+      }
+
+      const clockInResponseBody: Record<string, unknown> = {
+        entry: autoPunch.entry,
+        chargeContext: autoPunch.chargeContext,
+      };
+      if (autoPunch.warning != null) clockInResponseBody.warning = autoPunch.warning;
+      if (autoPunch.laborStatus != null) clockInResponseBody.laborStatus = autoPunch.laborStatus;
+      if (autoPunch.budgetOverrideId != null) clockInResponseBody.budgetOverrideId = autoPunch.budgetOverrideId;
+      if (autoPunch.warnedOnOverrun) {
+        clockInResponseBody.warnedOnOverrun = true;
+        clockInResponseBody.overrunReason = autoPunch.overrunReason ?? null;
+      }
+      return res.status(201).json(clockInResponseBody);
     } catch (error) {
       console.error('[TimeClock] Error clocking in via traveler barcode:', error);
       return res.status(500).json({ error: 'Internal server error', details: 'Failed to clock in via traveler barcode' });

@@ -417,14 +417,50 @@ router.post('/mark-shipped/:orderId', requirePermission('shipping.mark_shipped')
         const { sendCustomerNotification } = await import(
           '../../utils/notifications'
         );
-        await sendCustomerNotification({
+        const preferredMethods =
+          notificationMethod === 'both'
+            ? ['email', 'sms']
+            : notificationMethod === 'sms'
+              ? ['sms']
+              : notificationMethod === 'email'
+                ? ['email']
+                : undefined;
+        const notificationResult = await sendCustomerNotification({
           orderId,
           trackingNumber,
           carrier: shippingCarrier,
           estimatedDelivery: estimatedDelivery
             ? new Date(estimatedDelivery)
             : undefined,
+          preferredMethods,
         });
+        // Align order's notificationMethod column with what actually succeeded
+        if (notificationResult?.success && notificationResult.methods?.length) {
+          const actualMethod = notificationResult.methods.join(', ');
+          let synced = false;
+          try {
+            await storage.updateFinalizedOrder(orderId, { notificationMethod: actualMethod });
+            synced = true;
+          } catch (finalizedErr) {
+            console.warn(
+              `[mark-shipped] Could not sync notificationMethod on finalized order ${orderId} (${actualMethod}); falling back to draft:`,
+              finalizedErr instanceof Error ? finalizedErr.message : finalizedErr
+            );
+            try {
+              await storage.updateOrderDraft(orderId, { notificationMethod: actualMethod });
+              synced = true;
+            } catch (draftErr) {
+              console.error(
+                `[mark-shipped] Failed to persist notificationMethod=${actualMethod} for order ${orderId} on both finalized and draft tables:`,
+                draftErr instanceof Error ? draftErr.message : draftErr
+              );
+            }
+          }
+          if (!synced) {
+            // Order row's notificationMethod may now disagree with communication_logs;
+            // logged above so it is visible in deployment logs.
+          }
+        }
       } catch (notificationError) {
         console.error(
           'Failed to send customer notification:',
@@ -550,6 +586,7 @@ router.post('/update-tracking/:orderId', async (req: Request, res: Response) => 
       carrier,
       estimatedDelivery,
       sendNotification = false,
+      notificationMethod,
     } = req.body;
 
     if (!trackingNumber) {
@@ -589,11 +626,20 @@ router.post('/update-tracking/:orderId', async (req: Request, res: Response) => 
     if (sendNotification) {
       try {
         const { sendCustomerNotification } = await import('../../utils/notifications');
+        const preferredMethods =
+          notificationMethod === 'both'
+            ? ['email', 'sms']
+            : notificationMethod === 'sms'
+              ? ['sms']
+              : notificationMethod === 'email'
+                ? ['email']
+                : undefined;
         notificationResult = await sendCustomerNotification({
           orderId,
           trackingNumber: trackingNumber.trim(),
           carrier: carrier || 'UPS',
           estimatedDelivery: estimatedDelivery ? new Date(estimatedDelivery) : undefined,
+          preferredMethods,
         });
 
         if (notificationResult.success) {
@@ -2707,13 +2753,14 @@ router.post('/notify-customer/:orderId', async (req: Request, res: Response) => 
     // ===========================================
     // 🔥 MANUAL RESEND - BYPASSES DEDUPLICATION
     // ===========================================
-    const { sendCustomerNotification } = await import('../../utils/notifications');
+    const { sendCustomerNotification, normalizeNotificationMethods } = await import('../../utils/notifications');
     
-    // Use customer's actual preferred communication method, or default to email if not set
-    const customerPreference = (customer.preferredCommunicationMethod as string[]) || [];
-    const preferredMethods: string[] = customerPreference.length > 0 
-      ? customerPreference 
-      : (customer.email ? ['email'] : (customer.phone ? ['sms'] : []));
+    // Use customer's actual preferred communication method, or default to the first available contact method.
+    const preferredMethods = normalizeNotificationMethods(
+      customer.preferredCommunicationMethod,
+      { email: customer.email, phone: customer.phone }
+    );
+    const customerPreference = customer.preferredCommunicationMethod;
     
     console.log('[NOTIFY-CUSTOMER] Customer preference:', customerPreference, '→ Using:', preferredMethods);
     
@@ -2722,6 +2769,8 @@ router.post('/notify-customer/:orderId', async (req: Request, res: Response) => 
       trackingNumber: order.trackingNumber,
       carrier: order.shippingCarrier || 'UPS',
       estimatedDelivery: order.estimatedDelivery ? new Date(order.estimatedDelivery) : undefined,
+      customerEmail: customer.email || undefined,
+      customerPhone: customer.phone || undefined,
       preferredMethods,
       forceResend: true, // Manual resend bypasses deduplication
     });
@@ -2743,7 +2792,7 @@ router.post('/notify-customer/:orderId', async (req: Request, res: Response) => 
 
     // Otherwise fail (email+sms both failed)
     console.log('[API RESPONSE] All notification methods failed:', notificationResult.errors);
-    return res.status(500).json({
+    return res.status(422).json({
       success: false,
       error: 'No valid notification method could be delivered',
       details: notificationResult.errors,

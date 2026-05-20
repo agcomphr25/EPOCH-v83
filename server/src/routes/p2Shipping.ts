@@ -11,17 +11,48 @@ import {
 } from '../../schema';
 import { eq, inArray, desc } from 'drizzle-orm';
 import { authenticateToken, requireRole } from '../../middleware/auth';
+import { requirePermission } from '../../middleware/requirePermission';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { generatePackingSlipPdf } from '../../utils/pdf/packingSlipPdf';
 import type { PackingSlipData, PackingSlipItem } from '../../utils/pdf/types';
 import { COMPANY_INFO } from '../../utils/pdf/pdfConfig';
+import {
+  buildCertPackageExport,
+  evaluateShippingCertPackageGate,
+} from '../services/certPackageService';
+import { recordAuditEvent } from '../services/auditLedgerService';
 import multer from 'multer';
-import { ObjectStorageService } from '../../replit_integrations/object_storage/objectStorage';
+import {
+  getFileStorageProvider,
+  getFileStorageProviderForObjectPath,
+} from '../services/fileStorageProvider';
 
 const upload = multer({ storage: multer.memoryStorage() });
-const objectStorageService = new ObjectStorageService();
 
 const router = Router();
+
+async function uploadP2EvidenceFile(file: Express.Multer.File, scope: string, entityId?: string): Promise<string> {
+  return getFileStorageProvider().uploadBuffer({
+    buffer: file.buffer,
+    fileName: file.originalname,
+    contentType: file.mimetype || 'application/octet-stream',
+    scope,
+    entityId,
+  });
+}
+
+async function downloadStoredBuffer(storagePath: string): Promise<Buffer> {
+  return getFileStorageProviderForObjectPath(storagePath).downloadBuffer(storagePath);
+}
+
+function auditActor(req: Request) {
+  const user = (req as any).user;
+  return {
+    id: typeof user?.id === 'number' ? user.id : null,
+    username: user?.username ?? user?.email ?? user?.displayName ?? null,
+    role: user?.role ?? null,
+  };
+}
 
 // ─── Session auth helper (for PDF routes that use cookie-based sessions) ─────
 async function getUserFromSession(req: Request): Promise<{ username: string; role: string } | null> {
@@ -128,7 +159,7 @@ const createLotSchema = z.object({
   createdBy: z.string().min(1).default('system'),
 });
 
-router.post('/lots', async (req: Request, res: Response) => {
+router.post('/lots', authenticateToken, requirePermission('shipping.release_shipment'), async (req: Request, res: Response) => {
   try {
     const input = createLotSchema.parse(req.body);
 
@@ -150,7 +181,7 @@ router.post('/lots', async (req: Request, res: Response) => {
       });
     }
 
-    const poNumbers = [...new Set(serials.map((s) => s.poNumber))];
+    const poNumbers = Array.from(new Set(serials.map((s) => s.poNumber)));
     if (poNumbers.length > 1) {
       return res.status(400).json({
         error: 'All serials must belong to the same PO',
@@ -221,6 +252,13 @@ router.get('/lots/existing-shipments', async (req: Request, res: Response) => {
       slip_number: string;
       cert_id: string | null;
       cert_number: string | null;
+      invoice_id: string | null;
+      invoice_number: string | null;
+      invoice_status: string | null;
+      invoice_total_amount: string | null;
+      journal_entry_id: number | null;
+      journal_entry_status: string | null;
+      journal_line_count: number | null;
     }>(`
       SELECT
         l.po_id,
@@ -229,10 +267,37 @@ router.get('/lots/existing-shipments', async (req: Request, res: Response) => {
         ps.id          AS slip_id,
         ps.packing_slip_number AS slip_number,
         cc.id          AS cert_id,
-        cc.certificate_number  AS cert_number
+        cc.certificate_number  AS cert_number,
+        inv.id AS invoice_id,
+        inv.invoice_number,
+        inv.status AS invoice_status,
+        inv.total_amount AS invoice_total_amount,
+        je.id AS journal_entry_id,
+        je.status AS journal_entry_status,
+        COALESCE(jlc.line_count, 0)::int AS journal_line_count
       FROM p2_lot_numbers l
       JOIN p2_packing_slips ps ON ps.id = l.packing_slip_id
       LEFT JOIN p2_certificates_of_conformance cc ON cc.id = l.certificate_id
+      LEFT JOIN LATERAL (
+        SELECT id, invoice_number, status, total_amount
+        FROM ar_invoices
+        WHERE packing_slip_id = ps.id OR lot_id = l.id
+        ORDER BY created_at DESC
+        LIMIT 1
+      ) inv ON true
+      LEFT JOIN LATERAL (
+        SELECT id, status
+        FROM journal_entries
+        WHERE reference_uuid = inv.id
+          AND transaction_type = 'AR_INVOICE'
+        ORDER BY created_at DESC
+        LIMIT 1
+      ) je ON true
+      LEFT JOIN LATERAL (
+        SELECT COUNT(*)::int AS line_count
+        FROM journal_lines
+        WHERE journal_entry_id = je.id
+      ) jlc ON true
       WHERE l.po_id IS NOT NULL AND l.packing_slip_id IS NOT NULL
       ORDER BY l.created_at DESC
     `);
@@ -274,7 +339,7 @@ const createPackingSlipSchema = z.object({
   isNoChargeReplacement: z.boolean().optional(),
 });
 
-router.post('/packing-slips', async (req: Request, res: Response) => {
+router.post('/packing-slips', authenticateToken, requirePermission('shipping.release_shipment'), async (req: Request, res: Response) => {
   try {
     const input = createPackingSlipSchema.parse(req.body);
 
@@ -313,11 +378,13 @@ router.post('/packing-slips', async (req: Request, res: Response) => {
 
     const byPart: Record<string, typeof serials> = {};
     for (const s of serials) {
-      if (!byPart[s.partNumber]) byPart[s.partNumber] = [];
-      byPart[s.partNumber].push(s);
+      const key = s.poItemId ? String(s.poItemId) : s.partNumber;
+      if (!byPart[key]) byPart[key] = [];
+      byPart[key].push(s);
     }
 
     const lineItems = Object.values(byPart).map((group) => ({
+      poItemId: group[0].poItemId,
       partNumber: group[0].partNumber,
       partName: group[0].partName,
       quantity: group.length,
@@ -757,7 +824,7 @@ router.get('/packing-slips/:id/pdf', async (req: Request, res: Response) => {
 // Accepts a multipart/form-data file field named "file" (PDF only).
 // Stores the file in object storage and saves the path to external_pdf_url.
 // ============================================================
-router.post('/packing-slips/:id/attach-pdf', upload.single('file'), async (req: Request, res: Response) => {
+router.post('/packing-slips/:id/attach-pdf', authenticateToken, requirePermission('shipping.release_shipment'), upload.single('file'), async (req: Request, res: Response) => {
   try {
     const [slip] = await db
       .select()
@@ -770,11 +837,13 @@ router.post('/packing-slips/:id/attach-pdf', upload.single('file'), async (req: 
       return res.status(400).json({ error: 'Only PDF files are accepted' });
     }
 
-    const storagePath = await objectStorageService.uploadBuffer(
-      req.file.buffer,
-      `packing-slip-${slip.packingSlipNumber}-external.pdf`,
-      'application/pdf'
-    );
+    const storagePath = await getFileStorageProvider().uploadBuffer({
+      buffer: req.file.buffer,
+      fileName: `packing-slip-${slip.packingSlipNumber}-external.pdf`,
+      contentType: 'application/pdf',
+      scope: 'p2-packing-slip-external',
+      entityId: slip.id,
+    });
 
     const [updated] = await db
       .update(p2PackingSlips)
@@ -792,7 +861,7 @@ router.post('/packing-slips/:id/attach-pdf', upload.single('file'), async (req: 
 // ============================================================
 // DELETE /api/p2/packing-slips/:id/attach-pdf — Remove external PDF
 // ============================================================
-router.delete('/packing-slips/:id/attach-pdf', async (req: Request, res: Response) => {
+router.delete('/packing-slips/:id/attach-pdf', authenticateToken, requirePermission('shipping.release_shipment'), async (req: Request, res: Response) => {
   try {
     const [slip] = await db
       .select()
@@ -822,7 +891,7 @@ const createCertificateSchema = z.object({
   certificationText: z.string().optional(),
 });
 
-router.post('/certificates', async (req: Request, res: Response) => {
+router.post('/certificates', authenticateToken, requirePermission('shipping.release_shipment'), async (req: Request, res: Response) => {
   try {
     const input = createCertificateSchema.parse(req.body);
 
@@ -1176,9 +1245,19 @@ router.get('/shipments', async (req: Request, res: Response) => {
          l.shipped_at,
          l.created_at,
          ps.id AS packing_slip_id,
-         ps.packing_slip_number
+         ps.packing_slip_number,
+         inv.id AS invoice_id,
+         inv.invoice_number,
+         inv.status AS invoice_status
        FROM p2_lot_numbers l
        LEFT JOIN p2_packing_slips ps ON ps.lot_number_id = l.id
+       LEFT JOIN LATERAL (
+         SELECT id, invoice_number, status
+         FROM ar_invoices
+         WHERE packing_slip_id = ps.id OR lot_id = l.id
+         ORDER BY created_at DESC
+         LIMIT 1
+       ) inv ON true
        ORDER BY l.created_at DESC
        LIMIT 500`
     );
@@ -1270,11 +1349,37 @@ router.get('/shipments/:lotId', async (req: Request, res: Response) => {
       );
     }
 
-    // Fetch invoice if linked to this lot
+    // Fetch invoice and posting status if linked to this lot or packing slip
     const invoiceRows = await pool.query(
-      `SELECT id, invoice_number, invoice_date, due_date, total_amount, status
-       FROM ar_invoices WHERE lot_id = $1 LIMIT 1`,
-      [lotId]
+      `SELECT
+         inv.id,
+         inv.invoice_number,
+         inv.invoice_date,
+         inv.due_date,
+         inv.total_amount,
+         inv.status,
+         inv.packing_slip_id,
+         je.id AS journal_entry_id,
+         je.status AS journal_entry_status,
+         COALESCE(jlc.line_count, 0)::int AS journal_line_count
+       FROM ar_invoices inv
+       LEFT JOIN LATERAL (
+         SELECT id, status
+         FROM journal_entries
+         WHERE reference_uuid = inv.id
+           AND transaction_type = 'AR_INVOICE'
+         ORDER BY created_at DESC
+         LIMIT 1
+       ) je ON true
+       LEFT JOIN LATERAL (
+         SELECT COUNT(*)::int AS line_count
+         FROM journal_lines
+         WHERE journal_entry_id = je.id
+       ) jlc ON true
+       WHERE inv.lot_id = $1 OR ($2::uuid IS NOT NULL AND inv.packing_slip_id = $2::uuid)
+       ORDER BY inv.created_at DESC
+       LIMIT 1`,
+      [lotId, lot.packing_slip_id]
     );
     const invoice = invoiceRows.length ? invoiceRows[0] : null;
 
@@ -1285,11 +1390,57 @@ router.get('/shipments/:lotId', async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/p2/shipments/:lotId/cert-package — evaluate shipment/cert-package readiness
+router.get('/shipments/:lotId/cert-package', async (req: Request, res: Response) => {
+  try {
+    const gate = await evaluateShippingCertPackageGate(req.params.lotId);
+    if (!gate) return res.status(404).json({ error: 'Lot not found' });
+    return res.json(gate);
+  } catch (err: any) {
+    console.error('Cert package gate error:', err);
+    return res.status(500).json({ error: 'Failed to evaluate cert package readiness' });
+  }
+});
+
+// GET /api/p2/shipments/:lotId/cert-package/export — deterministic package manifest + hash
+router.get('/shipments/:lotId/cert-package/export', async (req: Request, res: Response) => {
+  try {
+    const certPackage = await buildCertPackageExport(req.params.lotId);
+    if (!certPackage) return res.status(404).json({ error: 'Lot not found' });
+
+    res.set('Content-Type', 'application/json');
+    res.set(
+      'Content-Disposition',
+      `attachment; filename="cert-package-${certPackage.lotNumber}.json"`
+    );
+    return res.send(JSON.stringify(certPackage, null, 2));
+  } catch (err: any) {
+    console.error('Cert package export error:', err);
+    return res.status(500).json({ error: 'Failed to export cert package' });
+  }
+});
+
 // PATCH /api/p2/shipments/:lotId — update tracking, carrier, notes; optionally mark shipped
-router.patch('/shipments/:lotId', async (req: Request, res: Response) => {
+router.patch('/shipments/:lotId', authenticateToken, requirePermission('shipping.mark_shipped'), async (req: Request, res: Response) => {
   try {
     const { lotId } = req.params;
     const { trackingNumber, carrier, notes, markShipped, shippedBy } = req.body;
+    let shipmentGate: Awaited<ReturnType<typeof evaluateShippingCertPackageGate>> | null = null;
+
+    if (markShipped) {
+      shipmentGate = await evaluateShippingCertPackageGate(lotId);
+      if (!shipmentGate) return res.status(404).json({ error: 'Lot not found' });
+      if (!shipmentGate.readyToShip) {
+        return res.status(409).json({
+          error: 'Shipment blocked by cert package gate',
+          gate: 'shipping_cert_package',
+          message: 'Shipment cannot be marked shipped until all required cert-package evidence is complete.',
+          blockers: shipmentGate.blockers,
+          evidence: shipmentGate.evidence,
+          revisionSnapshot: shipmentGate.revisionSnapshot,
+        });
+      }
+    }
 
     const setClauses: string[] = [];
     const vals: any[] = [];
@@ -1346,6 +1497,37 @@ router.patch('/shipments/:lotId', async (req: Request, res: Response) => {
       }
     }
 
+    if (markShipped && shipmentGate) {
+      await recordAuditEvent({
+        eventType: 'SHIPMENT_RELEASED',
+        subjectType: 'shipment',
+        subjectId: lotId,
+        sourceService: 'p2Shipping.route',
+        actor: auditActor(req),
+        reason: notes || 'Shipment marked shipped after cert package gate cleared',
+        payload: {
+          lotId,
+          trackingNumber: trackingNumber || null,
+          carrier: carrier || null,
+          shippedBy: shippedBy || auditActor(req).username || 'system',
+          gate: 'shipping_cert_package',
+          readyToShip: shipmentGate.readyToShip,
+          blockers: shipmentGate.blockers as any,
+          evidence: shipmentGate.evidence as any,
+          revisionSnapshot: shipmentGate.revisionSnapshot as any,
+        },
+        entityType: 'shipment',
+        entityId: lotId,
+        meta: {
+          lotId,
+          trackingNumber: trackingNumber || null,
+          carrier: carrier || null,
+          gate: 'shipping_cert_package',
+          readyToShip: shipmentGate.readyToShip,
+        },
+      });
+    }
+
     return res.json({ success: true });
   } catch (err: any) {
     console.error('Shipment update error:', err);
@@ -1354,16 +1536,12 @@ router.patch('/shipments/:lotId', async (req: Request, res: Response) => {
 });
 
 // POST /api/p2/shipments/:lotId/upload-bol — upload Bill of Lading PDF/image
-router.post('/shipments/:lotId/upload-bol', upload.single('file'), async (req: Request, res: Response) => {
+router.post('/shipments/:lotId/upload-bol', authenticateToken, requirePermission('shipping.release_shipment'), upload.single('file'), async (req: Request, res: Response) => {
   try {
     const { lotId } = req.params;
     if (!req.file) return res.status(400).json({ error: 'No file provided' });
 
-    const storagePath = await objectStorageService.uploadBuffer(
-      req.file.buffer,
-      req.file.originalname,
-      req.file.mimetype
-    );
+    const storagePath = await uploadP2EvidenceFile(req.file, 'p2-bill-of-lading', lotId);
 
     await pool.query(
       `UPDATE p2_lot_numbers SET bill_of_lading_url = $1, updated_at = NOW() WHERE id = $2`,
@@ -1387,7 +1565,7 @@ router.get('/shipments/:lotId/bill-of-lading', async (req: Request, res: Respons
     const bolUrl = rows[0]?.bill_of_lading_url;
     if (!bolUrl) return res.status(404).json({ error: 'No bill of lading attached' });
 
-    const buffer = await objectStorageService.downloadAsBuffer(bolUrl);
+    const buffer = await downloadStoredBuffer(bolUrl);
     const ext = bolUrl.split('.').pop()?.toLowerCase();
     const contentType = ext === 'pdf' ? 'application/pdf'
       : (ext === 'png' ? 'image/png' : (ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 'application/octet-stream'));
@@ -1401,16 +1579,12 @@ router.get('/shipments/:lotId/bill-of-lading', async (req: Request, res: Respons
 });
 
 // POST /api/p2/shipments/:lotId/upload-lot-validation-report — upload Lot Validation Report PDF/image
-router.post('/shipments/:lotId/upload-lot-validation-report', upload.single('file'), async (req: Request, res: Response) => {
+router.post('/shipments/:lotId/upload-lot-validation-report', authenticateToken, requirePermission('shipping.release_shipment'), upload.single('file'), async (req: Request, res: Response) => {
   try {
     const { lotId } = req.params;
     if (!req.file) return res.status(400).json({ error: 'No file provided' });
 
-    const storagePath = await objectStorageService.uploadBuffer(
-      req.file.buffer,
-      req.file.originalname,
-      req.file.mimetype
-    );
+    const storagePath = await uploadP2EvidenceFile(req.file, 'p2-lot-validation-report', lotId);
 
     await pool.query(
       `UPDATE p2_lot_numbers SET lot_validation_report_url = $1, updated_at = NOW() WHERE id = $2`,
@@ -1434,7 +1608,7 @@ router.get('/shipments/:lotId/lot-validation-report', async (req: Request, res: 
     const fileUrl = rows[0]?.lot_validation_report_url;
     if (!fileUrl) return res.status(404).json({ error: 'No lot validation report attached' });
 
-    const buffer = await objectStorageService.downloadAsBuffer(fileUrl);
+    const buffer = await downloadStoredBuffer(fileUrl);
     const ext = fileUrl.split('.').pop()?.toLowerCase();
     const contentType = ext === 'pdf' ? 'application/pdf'
       : (ext === 'png' ? 'image/png' : (ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 'application/octet-stream'));
@@ -1448,16 +1622,12 @@ router.get('/shipments/:lotId/lot-validation-report', async (req: Request, res: 
 });
 
 // POST /api/p2/shipments/:lotId/upload-packing-slip — upload external packing slip PDF
-router.post('/shipments/:lotId/upload-packing-slip', upload.single('file'), async (req: Request, res: Response) => {
+router.post('/shipments/:lotId/upload-packing-slip', authenticateToken, requirePermission('shipping.release_shipment'), upload.single('file'), async (req: Request, res: Response) => {
   try {
     const { lotId } = req.params;
     if (!req.file) return res.status(400).json({ error: 'No file provided' });
 
-    const storagePath = await objectStorageService.uploadBuffer(
-      req.file.buffer,
-      req.file.originalname,
-      req.file.mimetype
-    );
+    const storagePath = await uploadP2EvidenceFile(req.file, 'p2-packing-slip-upload', lotId);
 
     await pool.query(
       `UPDATE p2_lot_numbers SET packing_slip_upload_url = $1, updated_at = NOW() WHERE id = $2`,
@@ -1481,7 +1651,7 @@ router.get('/shipments/:lotId/packing-slip-upload', async (req: Request, res: Re
     const fileUrl = rows[0]?.packing_slip_upload_url;
     if (!fileUrl) return res.status(404).json({ error: 'No packing slip upload attached' });
 
-    const buffer = await objectStorageService.downloadAsBuffer(fileUrl);
+    const buffer = await downloadStoredBuffer(fileUrl);
     const ext = fileUrl.split('.').pop()?.toLowerCase();
     const contentType = ext === 'pdf' ? 'application/pdf'
       : (ext === 'png' ? 'image/png' : (ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 'application/octet-stream'));
@@ -1495,16 +1665,12 @@ router.get('/shipments/:lotId/packing-slip-upload', async (req: Request, res: Re
 });
 
 // POST /api/p2/shipments/:lotId/upload-certificate — upload external certificate PDF
-router.post('/shipments/:lotId/upload-certificate', upload.single('file'), async (req: Request, res: Response) => {
+router.post('/shipments/:lotId/upload-certificate', authenticateToken, requirePermission('shipping.release_shipment'), upload.single('file'), async (req: Request, res: Response) => {
   try {
     const { lotId } = req.params;
     if (!req.file) return res.status(400).json({ error: 'No file provided' });
 
-    const storagePath = await objectStorageService.uploadBuffer(
-      req.file.buffer,
-      req.file.originalname,
-      req.file.mimetype
-    );
+    const storagePath = await uploadP2EvidenceFile(req.file, 'p2-certificate-upload', lotId);
 
     await pool.query(
       `UPDATE p2_lot_numbers SET certificate_upload_url = $1, updated_at = NOW() WHERE id = $2`,
@@ -1528,7 +1694,7 @@ router.get('/shipments/:lotId/certificate-upload', async (req: Request, res: Res
     const fileUrl = rows[0]?.certificate_upload_url;
     if (!fileUrl) return res.status(404).json({ error: 'No certificate upload attached' });
 
-    const buffer = await objectStorageService.downloadAsBuffer(fileUrl);
+    const buffer = await downloadStoredBuffer(fileUrl);
     const ext = fileUrl.split('.').pop()?.toLowerCase();
     const contentType = ext === 'pdf' ? 'application/pdf'
       : (ext === 'png' ? 'image/png' : (ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : 'application/octet-stream'));

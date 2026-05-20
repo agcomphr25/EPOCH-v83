@@ -17,6 +17,7 @@ import { eq, desc, sql, and } from 'drizzle-orm';
 import { authenticateToken } from '../../middleware/auth';
 import { requireAdminAccess } from '../../middleware/routeAuthorization';
 import { auditService } from '../services/auditService';
+import { assertPostingAllowedForPeriod } from '../services/accountingPeriodService';
 
 const router = Router();
 
@@ -318,7 +319,10 @@ router.post('/', async (req: Request, res: Response) => {
 
     const paymentsRes = await db.execute(sql`
       SELECT COALESCE(SUM(amount_applied::numeric), 0) AS total_payments
-      FROM ar_payment_allocations WHERE invoice_id = ${arInvoiceId}::uuid
+      FROM ar_payment_allocations a
+      JOIN ar_payments p ON p.id = a.payment_id
+      WHERE a.invoice_id = ${arInvoiceId}::uuid
+        AND COALESCE(p.status, 'posted') = 'posted'
     `);
     const creditsRes = await db.execute(sql`
       SELECT COALESCE(SUM(amount::numeric), 0) AS total_credits
@@ -345,6 +349,12 @@ router.post('/', async (req: Request, res: Response) => {
     }
 
     const memoNumber = await generateMemoNumber();
+    const effectiveDate = new Date();
+    await assertPostingAllowedForPeriod({
+      effectiveDate,
+      user: (req as any).user ?? { username: createdBy || 'System' },
+      postingMode: 'ADJUSTMENT',
+    });
 
     const newMemo = await db.transaction(async (tx) => {
       const [memo] = await tx
@@ -370,7 +380,7 @@ router.post('/', async (req: Request, res: Response) => {
           transactionType: 'AR_CREDIT_MEMO',
           referenceType: 'credit_memo',
           referenceId: memo.id,
-          effectiveDate: new Date(),
+          effectiveDate,
           memo: `Credit Memo ${memoNumber} — Invoice ${invoice.invoiceNumber}`,
           status: 'DRAFT',
           createdBy: createdBy || 'System',

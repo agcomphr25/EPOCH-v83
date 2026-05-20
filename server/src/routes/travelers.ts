@@ -12,7 +12,10 @@ import { resolveChargeCode, deriveProjectId, resolveCertificationStatus, resolve
 import { resolvePacketBarcode } from '../lib/packetResolution';
 import { getActiveRoutingStep } from '../services/routingStepService';
 import { laborAllocationsEnabled } from '../lib/featureFlags';
+import { ensureProductionWorkflowReadSchema } from '../lib/productionWorkflowReadiness';
 import * as allocationService from '../services/laborAllocationService';
+import { buildChargeContextFromTraveler } from '../helpers/travelerBarcodeResolver';
+import { executeTravelerAutoPunch } from './timeClock';
 import { db } from '../../db';
 import {
   insertTravelerSchema,
@@ -61,6 +64,34 @@ const DEPT_ALIASES: Record<string, string> = {
   'shipping': 'shipping',
 };
 
+const TRACE_FIELD_ALIASES: Record<string, string[]> = {
+  trace_internalcontrolnumber: ['internalControlNumber', 'material_internal_control_number', 'material_icn'],
+  trace_supplier: ['supplier'],
+  trace_inventorypartnumber: ['inventoryPartNumber', 'material_part_number'],
+  trace_batchlotnumber: ['batchLotNumber', 'material_batch_number', 'material_lot'],
+  trace_manufacturer: ['manufacturer', 'material_brand'],
+  trace_rollnumber: ['rollNumber'],
+  trace_expirationdate: ['expirationDate', 'material_expiration_date'],
+  trace_receiveddate: ['receivedDate'],
+};
+
+function resolveTraceFieldValue(
+  fieldKey: string,
+  fieldValues: Record<string, unknown>,
+): unknown {
+  const aliases = TRACE_FIELD_ALIASES[fieldKey];
+  if (!aliases) return undefined;
+
+  for (const alias of aliases) {
+    const value = fieldValues[alias];
+    if (value !== undefined && value !== null && value !== '') {
+      return value;
+    }
+  }
+
+  return undefined;
+}
+
 function normalizeDept(d: string): string {
   let lower = d.toLowerCase().trim();
   lower = lower.replace(/^pending\s+/i, '');
@@ -82,7 +113,7 @@ function getDeptTimestampField(dept: string): string | null {
   return map[key] || null;
 }
 
-async function syncP2SerializedItemOnStepComplete(
+export async function syncP2SerializedItemOnStepComplete(
   traveler: { id: string; serialNumber?: string | null; partNumber?: string | null },
   completedStep: { departmentName: string; stepNumber: number },
   performedBy: string
@@ -90,14 +121,31 @@ async function syncP2SerializedItemOnStepComplete(
   try {
     if (!traveler.serialNumber) return;
 
+    // Trim + case-insensitive lookup that normalizes BOTH sides — the
+    // DB column may itself have leading/trailing whitespace, so a bare
+    // `ilike(col, trimmedInput)` is not enough. Do NOT restrict to
+    // status='ACTIVE' here — if we find a non-ACTIVE row we want to log
+    // and skip rather than silently miss the item (Task #257).
+    const trimmedSerial = traveler.serialNumber.trim();
     const serializedItem = await db.query.p2SerializedItems.findFirst({
-      where: and(
-        ilike(p2SerializedItems.serialNumber, traveler.serialNumber),
-        eq(p2SerializedItems.status, 'ACTIVE')
-      ),
+      where: sql`LOWER(TRIM(${p2SerializedItems.serialNumber})) = LOWER(TRIM(${trimmedSerial}))`,
     });
 
-    if (!serializedItem) return;
+    if (!serializedItem) {
+      console.warn(
+        `[P2 Sync] No p2_serialized_items row found for serial "${trimmedSerial}" ` +
+        `(traveler=${traveler.id}, step=${completedStep.stepNumber})`
+      );
+      return;
+    }
+
+    if (serializedItem.status !== 'ACTIVE') {
+      console.log(
+        `[P2 Sync] Skipping "${serializedItem.barcode}" — status is "${serializedItem.status}" ` +
+        `(traveler=${traveler.id}, step=${completedStep.stepNumber})`
+      );
+      return;
+    }
 
     let routing = serializedItem.partRoutingId
       ? await db.query.partRoutings.findFirst({
@@ -127,8 +175,35 @@ async function syncP2SerializedItemOnStepComplete(
 
     const stepDeptIndex = departmentSequence.findIndex(d => normalizeDept(d) === normalizedStepDept);
 
+    // Final-step fallback (Task #257): even if the completed step's dept
+    // doesn't appear in the routing sequence (or is "behind" the item),
+    // detect "this was the traveler's last step" and force-complete the
+    // item. Otherwise the item is stranded forever in Pending Layup /
+    // its current dept.
+    const remainingSteps = await db
+      .select({ id: travelerSteps.id, status: travelerSteps.status })
+      .from(travelerSteps)
+      .where(eq(travelerSteps.travelerId, traveler.id));
+    const noOpenStepsLeft = remainingSteps.every((s) => {
+      const st = String(s.status).toUpperCase();
+      return st !== 'NOT_STARTED' && st !== 'IN_PROGRESS' && st !== 'STARTED';
+    });
+
     if (normalizedStepDept !== normalizedItemDept) {
       if (stepDeptIndex < 0 || stepDeptIndex < currentIndex) {
+        if (noOpenStepsLeft) {
+          console.log(
+            `[P2 Sync] Step dept "${stepDept}" not in routing for "${serializedItem.barcode}" ` +
+            `but no open steps remain on traveler ${traveler.id} — force-completing.`
+          );
+          await forceCompleteP2SerializedItem(
+            serializedItem,
+            departmentSequence,
+            performedBy,
+            `Traveler ${traveler.id} fully completed (step ${completedStep.stepNumber}, dept "${stepDept}" not in routing sequence)`
+          );
+          return;
+        }
         console.log(`[P2 Sync] Step dept "${stepDept}" is behind or unknown vs item dept "${itemDept}" — skipping`);
         return;
       }
@@ -153,12 +228,22 @@ async function syncP2SerializedItemOnStepComplete(
       }
     }
 
-    if (targetIndex < departmentSequence.length) {
+    // If the routing says we'd advance past the end OR the traveler has
+    // no more open steps, terminate the item.
+    const shouldComplete = targetIndex >= departmentSequence.length || noOpenStepsLeft;
+
+    if (!shouldComplete) {
       updates.currentDepartment = nextDepartment;
       updates.currentStageIndex = targetIndex;
     } else {
       updates.status = 'COMPLETED';
       updates.completedAt = new Date();
+      // Backfill any remaining per-dept completion timestamps so the
+      // history is consistent with the COMPLETED status.
+      for (let i = currentIndex; i < departmentSequence.length; i++) {
+        const f = getDeptTimestampField(departmentSequence[i]);
+        if (f && !updates[f]) updates[f] = new Date();
+      }
     }
 
     const result = await db.update(p2SerializedItems)
@@ -171,22 +256,157 @@ async function syncP2SerializedItemOnStepComplete(
       return;
     }
 
+    const toDept = shouldComplete ? 'COMPLETED' : (nextDepartment || 'COMPLETED');
     await db.insert(p2SerializedItemEvents).values({
       serializedItemId: serializedItem.id,
       barcode: serializedItem.barcode,
       eventType: 'TRANSITION',
       fromDepartment: itemDept,
-      toDepartment: nextDepartment || 'COMPLETED',
+      toDepartment: toDept,
       fromStageIndex: currentIndex,
-      toStageIndex: targetIndex < departmentSequence.length ? targetIndex : null,
+      toStageIndex: shouldComplete ? null : targetIndex,
       performedBy,
       notes: `Synced from traveler step completion (${traveler.id}, step ${completedStep.stepNumber})`,
     });
 
-    console.log(`[P2 Sync] Advanced "${serializedItem.barcode}" from "${itemDept}" to "${nextDepartment || 'COMPLETED'}"`);
+    console.log(`[P2 Sync] Advanced "${serializedItem.barcode}" from "${itemDept}" to "${toDept}"`);
   } catch (err: any) {
-    console.error('[P2 Sync] Failed to sync serialized item on step complete:', err?.message);
+    // Task #257: emit a structured error log and write an audit event so
+    // silent drift becomes visible the next time someone looks.
+    console.error('[P2 Sync] Failed to sync serialized item on step complete:', {
+      travelerId: traveler.id,
+      serialNumber: traveler.serialNumber,
+      stepNumber: completedStep.stepNumber,
+      stepDept: completedStep.departmentName,
+      error: err?.message,
+      stack: err?.stack,
+    });
+    try {
+      if (traveler.serialNumber) {
+        const trimmed = traveler.serialNumber.trim();
+        const item = await db.query.p2SerializedItems.findFirst({
+          where: sql`LOWER(TRIM(${p2SerializedItems.serialNumber})) = LOWER(TRIM(${trimmed}))`,
+        });
+        if (item) {
+          await db.insert(p2SerializedItemEvents).values({
+            serializedItemId: item.id,
+            barcode: item.barcode,
+            eventType: 'NOTE',
+            fromDepartment: item.currentDepartment,
+            toDepartment: item.currentDepartment,
+            fromStageIndex: item.currentStageIndex || 0,
+            toStageIndex: item.currentStageIndex || 0,
+            performedBy: performedBy || 'system',
+            notes: `P2 Sync error on traveler ${traveler.id} step ${completedStep.stepNumber}: ${err?.message ?? 'unknown'}`,
+          });
+        }
+      }
+    } catch (_auditErr) {
+      // best-effort; do not throw out of the catch
+    }
   }
+}
+
+/**
+ * Task #257: belt-and-suspenders for the traveler-completion path.
+ * Force-advance the matching p2_serialized_items row to COMPLETED even
+ * if the per-step sync missed it (unknown dept, lookup miss, etc.).
+ * Safe to call multiple times — no-ops when the row is already
+ * COMPLETED / SCRAPPED / HOLD or when no row matches.
+ */
+async function forceCompleteP2SerializedItemForTraveler(
+  traveler: { id: string; serialNumber?: string | null; partNumber?: string | null },
+  performedBy: string
+): Promise<void> {
+  try {
+    if (!traveler.serialNumber) return;
+    const trimmedSerial = traveler.serialNumber.trim();
+    // Normalize BOTH sides — DB column may itself have whitespace.
+    const item = await db.query.p2SerializedItems.findFirst({
+      where: sql`LOWER(TRIM(${p2SerializedItems.serialNumber})) = LOWER(TRIM(${trimmedSerial}))`,
+    });
+    if (!item) {
+      console.warn(
+        `[P2 ForceComplete] No p2_serialized_items row for serial "${trimmedSerial}" (traveler=${traveler.id})`
+      );
+      return;
+    }
+    if (item.status !== 'ACTIVE') {
+      console.log(
+        `[P2 ForceComplete] "${item.barcode}" already in terminal state "${item.status}" — no action`
+      );
+      return;
+    }
+
+    let routing = item.partRoutingId
+      ? await db.query.partRoutings.findFirst({
+          where: eq(partRoutings.id, item.partRoutingId),
+        })
+      : null;
+    if (!routing && item.partNumber) {
+      routing = await db.query.partRoutings.findFirst({
+        where: and(eq(partRoutings.partNumber, item.partNumber), eq(partRoutings.isActive, true)),
+      });
+    }
+    const departmentSequence = routing?.departmentSequence
+      ? (routing.departmentSequence as string[])
+      : [...P2_DEPARTMENT_STAGES];
+
+    await forceCompleteP2SerializedItem(
+      item,
+      departmentSequence,
+      performedBy,
+      `Traveler ${traveler.id} marked COMPLETED — belt-and-suspenders force-complete`
+    );
+  } catch (err: any) {
+    console.error('[P2 ForceComplete] Failed:', {
+      travelerId: traveler.id,
+      serialNumber: traveler.serialNumber,
+      error: err?.message,
+      stack: err?.stack,
+    });
+  }
+}
+
+async function forceCompleteP2SerializedItem(
+  item: { id: string; barcode: string; currentDepartment: string; currentStageIndex: number | null; status: string },
+  departmentSequence: string[],
+  performedBy: string,
+  reason: string
+): Promise<void> {
+  const now = new Date();
+  const currentIndex = item.currentStageIndex || 0;
+  const updates: any = {
+    status: 'COMPLETED',
+    completedAt: now,
+    updatedAt: now,
+  };
+  for (let i = currentIndex; i < departmentSequence.length; i++) {
+    const f = getDeptTimestampField(departmentSequence[i]);
+    if (f && !updates[f]) updates[f] = now;
+  }
+  const result = await db.update(p2SerializedItems)
+    .set(updates)
+    .where(and(eq(p2SerializedItems.id, item.id), eq(p2SerializedItems.status, 'ACTIVE')))
+    .returning({ id: p2SerializedItems.id });
+
+  if (!result.length) {
+    console.log(`[P2 ForceComplete] "${item.barcode}" no-op (status changed concurrently)`);
+    return;
+  }
+
+  await db.insert(p2SerializedItemEvents).values({
+    serializedItemId: item.id,
+    barcode: item.barcode,
+    eventType: 'TRANSITION',
+    fromDepartment: item.currentDepartment,
+    toDepartment: 'COMPLETED',
+    fromStageIndex: currentIndex,
+    toStageIndex: null,
+    performedBy,
+    notes: reason,
+  });
+  console.log(`[P2 ForceComplete] "${item.barcode}" -> COMPLETED (${reason})`);
 }
 
 const router = Router();
@@ -196,24 +416,42 @@ router.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
+router.use(async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    await ensureProductionWorkflowReadSchema();
+    next();
+  } catch (error) {
+    console.error('[Travelers] production workflow schema readiness failed:', error);
+    res.status(503).json({
+      error: 'Traveler workflow schema is not ready',
+      message: 'Traveler data is temporarily unavailable while production workflow tables are prepared.',
+    });
+  }
+});
+
 router.use(validateActionToken);
 
 // Get all travelers with optional filters
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const { status, partNumber, workOrderId, inventoryItemId } = req.query;
+    const { status, partNumber, workOrderId, inventoryItemId, partRoutingId, routingId } = req.query;
 
     const filters: {
       status?: string;
       partNumber?: string;
       workOrderId?: string;
       inventoryItemId?: string;
+      partRoutingId?: string;
     } = {};
 
     if (status && typeof status === 'string') filters.status = status;
     if (partNumber && typeof partNumber === 'string') filters.partNumber = partNumber;
     if (workOrderId && typeof workOrderId === 'string') filters.workOrderId = workOrderId;
     if (inventoryItemId && typeof inventoryItemId === 'string') filters.inventoryItemId = inventoryItemId;
+    const routingIdParam = (typeof partRoutingId === 'string' && partRoutingId)
+      || (typeof routingId === 'string' && routingId)
+      || null;
+    if (routingIdParam) filters.partRoutingId = routingIdParam;
 
     const travelers = await storage.getTravelers(
       Object.keys(filters).length > 0 ? filters : undefined
@@ -615,6 +853,146 @@ router.delete('/:id', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * Shared helper: promote a DRAFT traveler to IN_PROGRESS.
+ *
+ * Runs the kit-release and WAD-release gates exactly as `POST /:id/start` does,
+ * updates the traveler status, emits the STATUS_CHANGED traveler event, logs the
+ * TRAVELER_STARTED audit event, and auto-transitions the linked WAD from
+ * RELEASED → IN_PROGRESS.
+ *
+ * Returns either { ok: true, traveler } on success, or { ok: false, status, body }
+ * containing the exact response shape the standalone /start endpoint would have
+ * returned, so callers can forward it directly to the client.
+ */
+async function promoteTravelerToInProgress(
+  traveler: NonNullable<Awaited<ReturnType<typeof storage.getTraveler>>>,
+  actorName: string,
+  actorUser?: { employeeId?: number; id?: number; username?: string }
+): Promise<
+  | { ok: true; traveler: NonNullable<Awaited<ReturnType<typeof storage.getTraveler>>> }
+  | { ok: false; status: number; body: any }
+> {
+  const id = traveler.id;
+
+  // Kit release gate: if traveler is linked to a KIT queue item, it must be RELEASED.
+  if (traveler.inventoryItemId) {
+    const numericItemId = parseInt(traveler.inventoryItemId, 10);
+    if (!isNaN(numericItemId)) {
+      const baseConditions = and(
+        eq(manufacturingQueue.inventoryItemId, numericItemId),
+        eq(manufacturingQueue.queueType, 'KIT')
+      );
+
+      let linkedKitItem: { id: number; status: string } | undefined;
+      if (traveler.workOrderId) {
+        const [narrowRow] = await db
+          .select({ id: manufacturingQueue.id, status: manufacturingQueue.status })
+          .from(manufacturingQueue)
+          .where(
+            and(
+              baseConditions,
+              eq(manufacturingQueue.parentProductionOrderId, traveler.workOrderId)
+            )
+          )
+          .orderBy(desc(manufacturingQueue.createdAt))
+          .limit(1);
+        linkedKitItem = narrowRow;
+      }
+
+      if (!linkedKitItem) {
+        const [broadRow] = await db
+          .select({ id: manufacturingQueue.id, status: manufacturingQueue.status })
+          .from(manufacturingQueue)
+          .where(
+            and(
+              baseConditions,
+              notInArray(manufacturingQueue.status, ['CANCELLED', 'COMPLETED'])
+            )
+          )
+          .orderBy(desc(manufacturingQueue.createdAt))
+          .limit(1);
+        linkedKitItem = broadRow;
+      }
+
+      if (linkedKitItem && linkedKitItem.status !== 'RELEASED') {
+        return {
+          ok: false,
+          status: 400,
+          body: {
+            error: 'Kit not released — release the linked kit queue item before starting this traveler',
+            kitQueueItemId: linkedKitItem.id,
+            kitStatus: linkedKitItem.status,
+          },
+        };
+      }
+    }
+  }
+
+  // WAD gate: traveler's linked production work order must be RELEASED or IN_PROGRESS.
+  if (traveler.productionWorkOrderId) {
+    const wad = await storage.getWorkOrderById(traveler.productionWorkOrderId);
+    if (!wad) {
+      return {
+        ok: false,
+        status: 404,
+        body: {
+          error: 'Linked work order not found — cannot start traveler without a valid WAD',
+          workOrderId: traveler.productionWorkOrderId,
+        },
+      };
+    }
+    const wadGate = await evaluateWadReleaseGate(traveler.productionWorkOrderId);
+    if (!wadGate.allowed) {
+      return {
+        ok: false,
+        status: 403,
+        body: {
+          error: 'Work order not released to floor',
+          workOrderId: traveler.productionWorkOrderId,
+          workOrderStatus: wad.status,
+          reason: wadGate.reason,
+        },
+      };
+    }
+  }
+
+  const updatedTraveler = await storage.updateTraveler(id, { status: 'IN_PROGRESS' });
+
+  await storage.createTravelerEvent({
+    travelerId: id,
+    actor: actorName || 'system',
+    action: 'STATUS_CHANGED',
+    details: { from: 'DRAFT', to: 'IN_PROGRESS' },
+  });
+
+  auditService.logEvent({
+    entityType: 'traveler',
+    entityId: id,
+    action: 'TRAVELER_STARTED',
+    actor: {
+      id: actorUser?.employeeId ?? actorUser?.id ?? undefined,
+      username: actorName || actorUser?.username || 'system',
+    },
+    meta: {
+      workOrderId: traveler.productionWorkOrderId ?? undefined,
+      partNumber: traveler.partNumber ?? undefined,
+      travelerNumber: traveler.travelerNumber ?? undefined,
+    },
+  }).catch(err => console.warn('[Audit] TRAVELER_STARTED log failed:', err?.message));
+
+  // Auto-transition the WAD from RELEASED → IN_PROGRESS on first traveler start
+  if (traveler.productionWorkOrderId) {
+    const wad = await storage.getWorkOrderById(traveler.productionWorkOrderId);
+    if (wad && wad.status === 'RELEASED') {
+      await storage.updateWorkOrderStatus(wad.id, 'IN_PROGRESS');
+      console.log(`[Travelers] WAD ${wad.id} transitioned to IN_PROGRESS on first traveler start`);
+    }
+  }
+
+  return { ok: true, traveler: updatedTraveler };
+}
+
 // Start traveler (DRAFT -> IN_PROGRESS)
 router.post('/:id/start', requirePermission('travelers.start'), async (req: Request, res: Response) => {
   try {
@@ -633,124 +1011,22 @@ router.post('/:id/start', requirePermission('travelers.start'), async (req: Requ
       });
     }
 
-    // Kit release gate: if traveler is linked to a KIT queue item, it must be RELEASED.
-    // Linkage strategy (most-to-least specific):
-    //   1. inventoryItemId + parentProductionOrderId (workOrderId on traveler)
-    //   2. inventoryItemId only — pick most recently created KIT row (desc createdAt)
-    if (traveler.inventoryItemId) {
-      const numericItemId = parseInt(traveler.inventoryItemId, 10);
-      if (!isNaN(numericItemId)) {
-        // Build base conditions
-        const baseConditions = and(
-          eq(manufacturingQueue.inventoryItemId, numericItemId),
-          eq(manufacturingQueue.queueType, 'KIT')
-        );
-
-        // Try narrow match first: also match parentProductionOrderId when workOrderId is set
-        let linkedKitItem: { id: number; status: string } | undefined;
-        if (traveler.workOrderId) {
-          const [narrowRow] = await db
-            .select({ id: manufacturingQueue.id, status: manufacturingQueue.status })
-            .from(manufacturingQueue)
-            .where(
-              and(
-                baseConditions,
-                eq(manufacturingQueue.parentProductionOrderId, traveler.workOrderId)
-              )
-            )
-            .orderBy(desc(manufacturingQueue.createdAt))
-            .limit(1);
-          linkedKitItem = narrowRow;
-        }
-
-        // Fall back to inventory-item-only match — constrained to open/relevant statuses
-        // (PENDING or RELEASED only; skip CANCELLED and COMPLETED rows to avoid false blocks)
-        if (!linkedKitItem) {
-          const [broadRow] = await db
-            .select({ id: manufacturingQueue.id, status: manufacturingQueue.status })
-            .from(manufacturingQueue)
-            .where(
-              and(
-                baseConditions,
-                notInArray(manufacturingQueue.status, ['CANCELLED', 'COMPLETED'])
-              )
-            )
-            .orderBy(desc(manufacturingQueue.createdAt))
-            .limit(1);
-          linkedKitItem = broadRow;
-        }
-
-        if (linkedKitItem && linkedKitItem.status !== 'RELEASED') {
-          return res.status(400).json({
-            error: 'Kit not released — release the linked kit queue item before starting this traveler',
-            kitQueueItemId: linkedKitItem.id,
-            kitStatus: linkedKitItem.status,
-          });
-        }
-      }
-    }
-
-    // WAD gate: traveler's linked production work order must be RELEASED.
-    // Missing WAD is treated as a hard failure — no bypass path exists.
-    if (traveler.productionWorkOrderId) {
-      const wad = await storage.getWorkOrderById(traveler.productionWorkOrderId);
-      if (!wad) {
-        return res.status(404).json({
-          error: 'Linked work order not found — cannot start traveler without a valid WAD',
-          workOrderId: traveler.productionWorkOrderId,
-        });
-      }
-      // Allow RELEASED or IN_PROGRESS: IN_PROGRESS means a prior traveler on this WAD already
-      // started (which auto-transitioned the WAD), so subsequent travelers are still authorized.
-      if (wad.status !== 'RELEASED' && wad.status !== 'IN_PROGRESS') {
-        return res.status(403).json({
-          error: 'Work order not released to floor',
-          workOrderId: traveler.productionWorkOrderId,
-          workOrderStatus: wad.status,
-        });
-      }
-    }
-
-    const updatedTraveler = await storage.updateTraveler(id, { status: 'IN_PROGRESS' });
-
-    await storage.createTravelerEvent({
-      travelerId: id,
-      actor: startedBy || 'system',
-      action: 'STATUS_CHANGED',
-      details: { from: 'DRAFT', to: 'IN_PROGRESS' },
-    });
-
     const startActorUser = (req as any).user;
-    auditService.logEvent({
-      entityType: 'traveler',
-      entityId: id,
-      action: 'TRAVELER_STARTED',
-      actor: {
-        id: startActorUser?.employeeId ?? startActorUser?.id ?? undefined,
-        username: startedBy || startActorUser?.username || 'system',
-      },
-      meta: {
-        workOrderId: traveler.productionWorkOrderId ?? undefined,
-        partNumber: traveler.partNumber ?? undefined,
-        travelerNumber: traveler.travelerNumber ?? undefined,
-      },
-    }).catch(err => console.warn('[Audit] TRAVELER_STARTED log failed:', err?.message));
-
-    // Auto-transition the WAD to IN_PROGRESS when the first traveler step starts
-    if (traveler.productionWorkOrderId) {
-      const wad = await storage.getWorkOrderById(traveler.productionWorkOrderId);
-      if (wad && wad.status === 'RELEASED') {
-        await storage.updateWorkOrderStatus(wad.id, 'IN_PROGRESS');
-        console.log(`[Travelers] WAD ${wad.id} transitioned to IN_PROGRESS on first traveler start`);
-      }
+    const result = await promoteTravelerToInProgress(
+      traveler,
+      startedBy || startActorUser?.username || 'system',
+      startActorUser
+    );
+    if (!result.ok) {
+      return res.status(result.status).json(result.body);
     }
-
-    res.json(updatedTraveler);
+    return res.json(result.traveler);
   } catch (error: any) {
     console.error('Error starting traveler:', error);
     res.status(500).json({ error: 'Failed to start traveler', message: error.message });
   }
 });
+
 
 // Complete traveler (requires all steps completed and signed)
 router.post('/:id/complete', requirePermission('travelers.finish'), async (req: Request, res: Response) => {
@@ -835,6 +1111,11 @@ router.post('/:id/complete', requirePermission('travelers.finish'), async (req: 
         completedBy || 'system'
       );
     }
+
+    // Task #257: belt-and-suspenders. If the per-step sync missed the
+    // matching p2_serialized_items row (unknown dept, lookup miss, etc.)
+    // force-advance it to COMPLETED now that the traveler is done.
+    await forceCompleteP2SerializedItemForTraveler(traveler, completedBy || 'system');
 
     res.json(updatedTraveler);
   } catch (error: any) {
@@ -1103,7 +1384,6 @@ async function performStepStart(
         (t.taskType === 'CHECK' || t.taskType === 'GATE_CHECK') &&
         t.status === 'NOT_STARTED' &&
         !t.requiresSignature &&
-        !t.requiresCertification &&
         badgeGatePattern.test(t.title)
     );
     for (const gateTask of gateCheckTasks) {
@@ -1271,10 +1551,22 @@ router.post('/:travelerId/steps/:stepId/start/override', requirePermission('work
     const operatorName = resolvedOperator.name;
 
     // Validate traveler and step state
-    const traveler = await storage.getTraveler(travelerId);
+    let traveler = await storage.getTraveler(travelerId);
     if (!traveler) return res.status(404).json({ error: 'Traveler not found' });
 
-    if (traveler.status !== 'IN_PROGRESS') {
+    if (traveler.status === 'DRAFT') {
+      // Auto-promote DRAFT → IN_PROGRESS using the same gates as POST /:id/start.
+      // Gate failures (kit not released / WAD not released) surface using the same
+      // response shape the standalone /start endpoint returns today.
+      const promote = await promoteTravelerToInProgress(traveler, supervisor.name, {
+        employeeId: supervisor.id,
+        username: supervisor.name,
+      });
+      if (!promote.ok) {
+        return res.status(promote.status).json(promote.body);
+      }
+      traveler = promote.traveler;
+    } else if (traveler.status !== 'IN_PROGRESS') {
       return res.status(400).json({
         error: 'Traveler must be IN_PROGRESS to start a step',
         currentStatus: traveler.status,
@@ -1475,7 +1767,7 @@ router.get('/:travelerId/steps/:stepId/labor-context', async (req: Request, res:
 router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Response) => {
   try {
     const { travelerId, stepId } = req.params;
-    const { startedBy, badgeScan, employeeId: bodyEmployeeId } = req.body;
+    const { startedBy, badgeScan, employeeId: bodyEmployeeId, laborApprovalId } = req.body;
 
     // Resolve badge scan code to employee name and ID if badge was scanned.
     // Normalise dashes so scanner-formatted UUIDs (xxxxxxxx-xxxx-...) match DB rows
@@ -1515,12 +1807,26 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
       }
     }
 
-    const traveler = await storage.getTraveler(travelerId);
+    let traveler = await storage.getTraveler(travelerId);
     if (!traveler) {
       return res.status(404).json({ error: 'Traveler not found' });
     }
 
-    if (traveler.status !== 'IN_PROGRESS') {
+    if (traveler.status === 'DRAFT') {
+      // Auto-promote DRAFT → IN_PROGRESS so operators on the kiosk don't need
+      // an admin to flip the status first. Runs the same kit-release and
+      // WAD-release gates as POST /:id/start; gate failures surface using the
+      // standalone /start endpoint's response shape.
+      const promote = await promoteTravelerToInProgress(
+        traveler,
+        resolvedName,
+        { employeeId: resolvedEmployeeId, username: resolvedName }
+      );
+      if (!promote.ok) {
+        return res.status(promote.status).json(promote.body);
+      }
+      traveler = promote.traveler;
+    } else if (traveler.status !== 'IN_PROGRESS') {
       return res.status(400).json({
         error: 'Traveler must be IN_PROGRESS to start a step',
         currentStatus: traveler.status,
@@ -1539,6 +1845,13 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
       });
     }
 
+    const stepTasksForOperation = await storage.getTravelerTasks(stepId);
+    const activeOperationName =
+      stepTasksForOperation.find((t: any) => t.status === 'IN_PROGRESS')?.title ||
+      stepTasksForOperation.find((t: any) => t.status === 'NOT_STARTED')?.title ||
+      stepTasksForOperation[0]?.title ||
+      step.departmentName ||
+      null;
     // WAD release gate: the linked production work order must be RELEASED or IN_PROGRESS.
     // IN_PROGRESS is permitted because the WAD auto-transitions when the first traveler starts;
     // subsequent travelers on the same WAD would otherwise be incorrectly blocked.
@@ -1561,12 +1874,7 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
     // but the employee is NOT blocked. Identity, traveler-authorization, and P2 part-certification
     // failures remain HARD BLOCKS (these require explicit supervisor remediation, not just a flag).
     const trainingGate = await evaluateTravelerTrainingGate(travelerId, stepId, resolvedEmployeeId, resolvedName);
-    const isOperationCertFailure =
-      !trainingGate.allowed &&
-      trainingGate.requirementType === 'training_module' &&
-      (trainingGate.missingRequirement?.startsWith('operation_cert:') ?? false);
-
-    if (!trainingGate.allowed && !isOperationCertFailure) {
+    if (!trainingGate.allowed) {
       // Hard block — identity, traveler-authorization, or P2 part-cert failure
       return res.status(403).json(
         buildTrainingGateErrorBody(
@@ -1577,8 +1885,6 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
         )
       );
     }
-    // isOperationCertFailure === true → falls through (WARN: stamp status, allow start)
-
     // Sequence and material gates: previous step must be COMPLETED; lot/ICN must be allocated.
     // Training authorization is already confirmed above; evaluateTravelerStartGates is kept
     // for sequence + material checks only (it also runs a secondary training check that will
@@ -1586,9 +1892,6 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
     const startGate = await evaluateTravelerStartGates(travelerId, stepId, {
       employeeId: resolvedEmployeeId,
       employeeName: resolvedName,
-      // Phase 1 WARN: if the training gate already recorded a cert failure and allowed through,
-      // skip the duplicate cert block in evaluateTravelerStartGates so the step is not double-blocked.
-      skipOperationCertCheck: isOperationCertFailure,
     });
     if (!startGate.allowed) {
       return res.status(403).json(
@@ -1613,6 +1916,50 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
         message: ccResult.error,
         hint: 'Set a default charge code on the production work order or the traveler.',
       });
+    }
+    let travelerAutoPunch:
+      | { action: 'clockedIn' | 'switched' | 'unchanged'; chargeCode: string | null; warning?: string }
+      | null = null;
+    if (traveler.productionWorkOrderId) {
+      if (resolvedEmployeeId == null) {
+        return res.status(400).json({
+          error: 'EMPLOYEE_NOT_RESOLVED',
+          message: 'A recognized employee badge or employee record is required before the traveler can change the active charge-code punch.',
+        });
+      }
+
+      const contextResult = await buildChargeContextFromTraveler({
+        id: traveler.id,
+        travelerNumber: traveler.travelerNumber,
+        productionWorkOrderId: traveler.productionWorkOrderId,
+      });
+      if (!contextResult.ok) {
+        return res.status(400).json({
+          error: contextResult.error.code,
+          message: contextResult.error.message,
+        });
+      }
+
+      const parsedApprovalId =
+        laborApprovalId != null && !Number.isNaN(parseInt(String(laborApprovalId), 10))
+          ? parseInt(String(laborApprovalId), 10)
+          : null;
+      const autoPunch = await executeTravelerAutoPunch({
+        context: contextResult.context,
+        employeeIdString: String(resolvedEmployeeId),
+        parsedApprovalId,
+      });
+      if (!autoPunch.ok) {
+        return res.status(autoPunch.status).json(autoPunch.body);
+      }
+      travelerAutoPunch = {
+        action: autoPunch.action,
+        chargeCode:
+          autoPunch.chargeContext?.resolvedChargeCode ??
+          autoPunch.chargeContext?.chargeCode ??
+          null,
+        warning: autoPunch.warning,
+      };
     }
     // ──────────────────────────────────────────────────────────────────────
 
@@ -1647,12 +1994,11 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
       chargeCodeResolvedFrom: 'error' in ccResult ? null : ccResult.resolvedFrom,
       certificationStatus: certResult.status,
       certificationName: certResult.certificationName,
-      certReason: certResult.reason ?? (isOperationCertFailure ? trainingGate.reason : null),
+      certReason: certResult.reason,
       isOverrun: budgetResult.isOverrun,
       nearlyExhausted: budgetResult.nearlyExhausted,
       overrunReason: budgetResult.overrunReason,
       projectId,
-      warnedOnCert: isOperationCertFailure,
     };
 
     // Stamp the open punch entry for this employee with step-level traceability.
@@ -1662,6 +2008,7 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
         await storage.updatePunchLedgerEntry(openEntry.id, {
           travelerStepId: stepId,
           chargeCodeId: 'error' in ccResult ? null : ccResult.chargeCodeId,
+          operation: activeOperationName,
           certificationStatus: certResult.status,
           isOverrun: budgetResult.isOverrun,
           overrunReason: budgetResult.overrunReason,
@@ -1669,7 +2016,7 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
         });
 
         // Phase D: close current allocation and open a new segment for the new traveler step.
-        if (laborAllocationsEnabled) {
+        if (laborAllocationsEnabled && travelerAutoPunch?.action !== 'clockedIn' && travelerAutoPunch?.action !== 'switched') {
           const updatedOpenEntry = await storage.getOpenPunchLedgerEntry(resolvedEmployeeId);
           if (updatedOpenEntry) {
             allocationService.switchAllocation(updatedOpenEntry, {
@@ -1679,7 +2026,7 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
               productionWorkOrderId: traveler.productionWorkOrderId ?? null,
               projectId: projectId ?? null,
               department: step.departmentName ?? null,
-              operation: null,
+              operation: activeOperationName,
             }).catch((e: unknown) =>
               console.warn('[travelers/step-start] switchAllocation failed (non-fatal):', (e as Error)?.message)
             );
@@ -1689,7 +2036,7 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
     }
     // ──────────────────────────────────────────────────────────────────────
 
-    res.json({ ...updatedStep, wadLaborContext });
+    res.json({ ...updatedStep, wadLaborContext, autoPunch: travelerAutoPunch });
   } catch (error: any) {
     console.error('Error starting step:', error);
     res.status(500).json({ error: 'Failed to start step', message: error.message });
@@ -1744,9 +2091,11 @@ router.post('/:travelerId/steps/:stepId/sign', requirePermission('travelers.sign
     // Normalize by stripping dashes so UUID badges match whether or not they include
     // hyphens — mirrors the REPLACE() strategy used in badgeAuth middleware.
     let signingEmployeeId: number | undefined;
+    let resolvedEmployeeName: string | null = null;
     let signingEmployeeName: string = signedByName || signedBy || 'unknown';
-    if (badgeScan) {
-      const normalizedSignBadge = badgeScan.replace(/-/g, '');
+    const lookupKey = badgeScan || signedBy;
+    if (lookupKey) {
+      const normalizedSignBadge = String(lookupKey).replace(/-/g, '');
       const signerByBadge = await db
         .select({ id: employees.id, name: employees.name })
         .from(employees)
@@ -1755,18 +2104,36 @@ router.post('/:travelerId/steps/:stepId/sign', requirePermission('travelers.sign
       if (signerByBadge.length > 0) {
         signingEmployeeId = signerByBadge[0].id;
         signingEmployeeName = signerByBadge[0].name;
+        resolvedEmployeeName = signerByBadge[0].name;
       } else {
         const signerByCode = await db
           .select({ id: employees.id, name: employees.name })
           .from(employees)
-          .where(sql`LOWER(${employees.employeeCode}) = LOWER(${badgeScan})`)
+          .where(sql`LOWER(${employees.employeeCode}) = LOWER(${lookupKey})`)
           .limit(1);
         if (signerByCode.length > 0) {
           signingEmployeeId = signerByCode[0].id;
           signingEmployeeName = signerByCode[0].name;
+          resolvedEmployeeName = signerByCode[0].name;
         }
       }
     }
+
+    // Persist the human-readable employee name on the signature so the UI never
+    // falls back to the raw badge UUID. Prefer the resolved employee name from
+    // the badge lookup; otherwise accept a non-empty client-supplied name only
+    // when it doesn't itself look like a raw badge/UUID/EMP code identifier.
+    const HEX_BADGE_RE = /^[0-9a-f-]{16,}$/i;
+    const EMP_CODE_RE = /^EMP\d+$/i;
+    const isRawIdentifier = (v: string) =>
+      HEX_BADGE_RE.test(v) || HEX_BADGE_RE.test(v.replace(/-/g, '')) || EMP_CODE_RE.test(v) || /^ADMIN_FORCE_SIGN$/i.test(v);
+    const trimmedSignedByName = typeof signedByName === 'string' ? signedByName.trim() : '';
+    const clientNameUsable =
+      trimmedSignedByName &&
+      trimmedSignedByName !== signedBy &&
+      trimmedSignedByName !== badgeScan &&
+      !isRawIdentifier(trimmedSignedByName);
+    const signedByNameToStore = resolvedEmployeeName ?? (clientNameUsable ? trimmedSignedByName : null);
 
     // QC training enforcement gate — independent of permission gate; both must pass
     const qcTrainingGate = await evaluateQcTrainingGate(travelerId, stepId, signingEmployeeId, signingEmployeeName);
@@ -1879,7 +2246,7 @@ router.post('/:travelerId/steps/:stepId/sign', requirePermission('travelers.sign
       travelerStepId: stepId,
       travelerTaskId: matchedGateTask?.id || null,
       signedBy,
-      signedByName: signedByName || null,
+      signedByName: signedByNameToStore,
       signatureRole: signatureRole || matchedGateTask?.signatureRole || null,
       badgeScan: badgeScan || null,
       meaning,
@@ -1934,7 +2301,7 @@ router.post('/:travelerId/steps/:stepId/sign', requirePermission('travelers.sign
     await storage.createTravelerEvent({
       travelerId,
       actor: signedBy,
-      actorName: signedByName,
+      actorName: signedByNameToStore ?? signedByName ?? null,
       action: 'SIGNED',
       details: {
         stepId,
@@ -2234,6 +2601,9 @@ router.post('/:travelerId/tasks/:taskId/complete', async (req: Request, res: Res
       const resolvedFieldValidations = fieldValidations || {};
       for (const field of fields) {
         let value = resolvedFieldValues[field.fieldKey];
+        if (value === undefined && (task.taskType === 'TRACE' || task.taskType === 'TRACEABILITY')) {
+          value = resolveTraceFieldValue(field.fieldKey, resolvedFieldValues);
+        }
         if (value === undefined && field.fieldKey === 'operator') {
           value = completedBy || step.startedBy || 'unknown';
         }
@@ -2658,9 +3028,44 @@ router.post('/:travelerId/admin/force-sign-step', async (req: Request, res: Resp
     const { travelerId } = req.params;
     const { stepId, reason, signedBy, signedByName } = req.body;
 
-    if (!stepId || !reason || !signedBy || !signedByName) {
-      return res.status(400).json({ error: 'stepId, reason, signedBy, and signedByName are required' });
+    if (!stepId || !reason || !signedBy) {
+      return res.status(400).json({ error: 'stepId, reason, and signedBy are required' });
     }
+
+    // Resolve the human-readable employee name from the badge/code so the stored
+    // signature shows the operator's name instead of a raw badge UUID. Falls
+    // back to the supplied signedByName if no employee record is matched.
+    let resolvedForceSignName: string | null = null;
+    const forceSignLookup = String(signedBy);
+    if (forceSignLookup) {
+      const normalizedForceBadge = forceSignLookup.replace(/-/g, '');
+      const forceSignerByBadge = await db
+        .select({ name: employees.name })
+        .from(employees)
+        .where(sql`REPLACE(${employees.badgeScanCode}, '-', '') = ${normalizedForceBadge}`)
+        .limit(1);
+      if (forceSignerByBadge.length > 0) {
+        resolvedForceSignName = forceSignerByBadge[0].name;
+      } else {
+        const forceSignerByCode = await db
+          .select({ name: employees.name })
+          .from(employees)
+          .where(sql`LOWER(${employees.employeeCode}) = LOWER(${forceSignLookup})`)
+          .limit(1);
+        if (forceSignerByCode.length > 0) {
+          resolvedForceSignName = forceSignerByCode[0].name;
+        }
+      }
+    }
+    const FORCE_HEX_RE = /^[0-9a-f-]{16,}$/i;
+    const FORCE_EMP_RE = /^EMP\d+$/i;
+    const forceIsRawIdentifier = (v: string) =>
+      FORCE_HEX_RE.test(v) || FORCE_HEX_RE.test(v.replace(/-/g, '')) || FORCE_EMP_RE.test(v);
+    const trimmedForceName = typeof signedByName === 'string' ? signedByName.trim() : '';
+    const forceClientNameUsable =
+      trimmedForceName && trimmedForceName !== signedBy && !forceIsRawIdentifier(trimmedForceName);
+    const forceSignedByNameToStore =
+      resolvedForceSignName ?? (forceClientNameUsable ? trimmedForceName : null);
 
     const traveler = await storage.getTraveler(travelerId);
     if (!traveler) {
@@ -2700,7 +3105,7 @@ router.post('/:travelerId/admin/force-sign-step', async (req: Request, res: Resp
     const signature = await storage.createTravelerSignature({
       travelerStepId: stepId,
       signedBy,
-      signedByName,
+      signedByName: forceSignedByNameToStore,
       badgeScan: 'ADMIN_FORCE_SIGN',
       signedAt: new Date(),
       meaning: 'COMPLETED',

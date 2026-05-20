@@ -92,6 +92,33 @@ interface LocationsResponse {
 
 const LIMIT = 100;
 
+// Wraps a fetch-style call so the routes-ready 503 ("Server starting, please
+// retry") emitted by server/index.ts during the boot window is silently
+// retried for ~10s instead of surfacing as a "Failed to load inventory
+// ledger" error toast. Mirrors the LoginPage `fetchWithBootRetry` pattern
+// introduced in task #114 and re-applied here per task #178.
+async function withBootRetry<T>(
+  fn: () => Promise<T>,
+  maxAttempts = 6,
+  delayMs = 1500,
+): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      // Only retry the boot-gate 503. Every other error (4xx, real 5xx,
+      // network) is rethrown immediately so the existing UX is unchanged.
+      if (err?.status !== 503) throw err;
+      lastErr = err;
+      if (attempt < maxAttempts) {
+        await new Promise((r) => setTimeout(r, delayMs));
+      }
+    }
+  }
+  throw lastErr;
+}
+
 function buildQuery(params: Record<string, string | number | undefined>): string {
   const sp = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
@@ -198,6 +225,7 @@ export default function InventoryLedgerPage() {
 
   const { data: locationsData } = useQuery<LocationsResponse>({
     queryKey: ['/api/inventory/ledger/locations'],
+    queryFn: () => withBootRetry(() => apiRequest('/api/inventory/ledger/locations')),
   });
 
   const queryString = useMemo(
@@ -237,7 +265,7 @@ export default function InventoryLedgerPage() {
     isFetching,
   } = useQuery<LedgerResponse>({
     queryKey: ['/api/inventory/ledger', queryString],
-    queryFn: () => apiRequest(`/api/inventory/ledger?${queryString}`),
+    queryFn: () => withBootRetry(() => apiRequest(`/api/inventory/ledger?${queryString}`)),
   });
 
   const departments = useMemo(() => {

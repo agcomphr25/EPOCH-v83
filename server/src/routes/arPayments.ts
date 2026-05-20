@@ -6,10 +6,27 @@ import {
   arPaymentAllocations,
   arInvoices,
   p2Customers,
+  creditMemos,
 } from '../../schema';
 import { eq, desc, sql, and } from 'drizzle-orm';
 import { authenticateToken } from '../../middleware/auth';
 import { requirePermission } from '../../middleware/requirePermission';
+import { auditService } from '../services/auditService';
+import {
+  createOrUpdateArPaymentJournalEntry,
+  reverseArPaymentJournalEntry,
+} from '../services/arPaymentPostingService';
+
+const postedPaymentAllocationTotalSql = (invoiceId: unknown) => sql<string>`COALESCE(
+  (
+    SELECT SUM(a.amount_applied)
+    FROM ar_payment_allocations a
+    JOIN ar_payments p ON p.id = a.payment_id
+    WHERE a.invoice_id = ${invoiceId}
+      AND COALESCE(p.status, 'posted') = 'posted'
+  ),
+  0
+)`;
 
 const editPaymentSchema = z.object({
   paymentDate: z.string().min(1, 'paymentDate is required'),
@@ -45,6 +62,10 @@ router.get('/', async (req: Request, res: Response) => {
         referenceNumber: arPayments.referenceNumber,
         amount: arPayments.amount,
         notes: arPayments.notes,
+        status: arPayments.status,
+        voidedAt: arPayments.voidedAt,
+        voidedBy: arPayments.voidedBy,
+        voidReason: arPayments.voidReason,
         createdBy: arPayments.createdBy,
         createdAt: arPayments.createdAt,
         allocatedAmount: sql<string>`COALESCE(
@@ -78,6 +99,10 @@ router.get('/:id', async (req: Request, res: Response) => {
         referenceNumber: arPayments.referenceNumber,
         amount: arPayments.amount,
         notes: arPayments.notes,
+        status: arPayments.status,
+        voidedAt: arPayments.voidedAt,
+        voidedBy: arPayments.voidedBy,
+        voidReason: arPayments.voidReason,
         createdBy: arPayments.createdBy,
         createdAt: arPayments.createdAt,
       })
@@ -123,18 +148,37 @@ router.post('/', requirePermission('finance.manage_payments'), async (req: Reque
       return res.status(400).json({ error: 'amount must be a positive number' });
     }
 
-    const [payment] = await db
-      .insert(arPayments)
-      .values({
-        customerId,
-        paymentDate,
-        paymentMethod,
-        referenceNumber: referenceNumber || null,
-        amount: parsedAmount.toFixed(2),
-        notes: notes || null,
-        createdBy: (req as any).user?.username || null,
-      })
-      .returning();
+    const payment = await db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(arPayments)
+        .values({
+          customerId,
+          paymentDate,
+          paymentMethod,
+          referenceNumber: referenceNumber || null,
+          amount: parsedAmount.toFixed(2),
+          notes: notes || null,
+          createdBy: (req as any).user?.username || null,
+        })
+        .returning();
+
+      await createOrUpdateArPaymentJournalEntry(created.id, (req as any).user, tx);
+
+      return created;
+    });
+
+    try {
+      await auditService.logEvent({
+        entityType: 'p1_order',
+        entityId: customerId,
+        action: 'AR_PAYMENT_CREATED',
+        actor: { username: (req as any).user?.username || 'system' },
+        meta: { payment },
+      });
+    } catch (auditError) {
+      console.error('[Audit] Failed to log AR payment creation:', auditError);
+      return res.status(500).json({ error: 'Payment was created but audit logging failed. Contact an administrator.' });
+    }
 
     res.status(201).json(payment);
   } catch (error) {
@@ -159,6 +203,9 @@ router.post('/:id/allocate', requirePermission('finance.manage_payments'), async
 
     if (!payment) {
       return res.status(404).json({ error: 'Payment not found' });
+    }
+    if (payment.status === 'voided') {
+      return res.status(409).json({ error: 'Cannot allocate a voided payment' });
     }
 
     const existingAllocations = await db
@@ -204,7 +251,7 @@ router.post('/:id/allocate', requirePermission('finance.manage_payments'), async
 
         const invoiceAllocations = await tx
           .select({
-            total: sql<string>`COALESCE(SUM(amount_applied), 0)`,
+            total: postedPaymentAllocationTotalSql(invoiceId),
           })
           .from(arPaymentAllocations)
           .where(eq(arPaymentAllocations.invoiceId, invoiceId));
@@ -241,8 +288,26 @@ router.post('/:id/allocate', requirePermission('finance.manage_payments'), async
         }
       }
 
+      await createOrUpdateArPaymentJournalEntry(id, (req as any).user, tx);
+
       return insertedAllocations;
     });
+
+    try {
+      await auditService.logEvent({
+        entityType: 'p1_order',
+        entityId: payment.customerId,
+        action: 'AR_PAYMENT_ALLOCATED',
+        actor: { username: (req as any).user?.username || 'system' },
+        meta: {
+          paymentId: id,
+          allocations: result,
+        },
+      });
+    } catch (auditError) {
+      console.error('[Audit] Failed to log AR payment allocation:', auditError);
+      return res.status(500).json({ error: 'Payment was allocated but audit logging failed. Contact an administrator.' });
+    }
 
     res.status(201).json(result);
   } catch (error: any) {
@@ -271,6 +336,9 @@ router.put('/:id', requirePermission('finance.manage_payments'), async (req: Req
     if (!payment) {
       return res.status(404).json({ error: 'Payment not found' });
     }
+    if (payment.status === 'voided') {
+      return res.status(409).json({ error: 'Cannot edit a voided payment' });
+    }
 
     const [allocResult] = await db
       .select({ total: sql<string>`COALESCE(SUM(amount_applied), 0)` })
@@ -284,17 +352,23 @@ router.put('/:id', requirePermission('finance.manage_payments'), async (req: Req
       });
     }
 
-    const [updated] = await db
-      .update(arPayments)
-      .set({
-        paymentDate,
-        paymentMethod,
-        referenceNumber: referenceNumber || null,
-        amount: amount.toFixed(2),
-        notes: notes || null,
-      })
-      .where(eq(arPayments.id, id))
-      .returning();
+    const updated = await db.transaction(async (tx) => {
+      const [saved] = await tx
+        .update(arPayments)
+        .set({
+          paymentDate,
+          paymentMethod,
+          referenceNumber: referenceNumber || null,
+          amount: amount.toFixed(2),
+          notes: notes || null,
+        })
+        .where(eq(arPayments.id, id))
+        .returning();
+
+      await createOrUpdateArPaymentJournalEntry(id, (req as any).user, tx);
+
+      return saved;
+    });
 
     res.json(updated);
   } catch (error) {
@@ -306,6 +380,12 @@ router.put('/:id', requirePermission('finance.manage_payments'), async (req: Req
 router.delete('/:id', requirePermission('finance.manage_payments'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const voidReason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+    const user = (req as any).user?.username || (req as any).user?.role || 'system';
+
+    if (!voidReason) {
+      return res.status(400).json({ error: 'A void reason is required. Payments are voided, not deleted.' });
+    }
 
     const [payment] = await db
       .select()
@@ -315,6 +395,9 @@ router.delete('/:id', requirePermission('finance.manage_payments'), async (req: 
     if (!payment) {
       return res.status(404).json({ error: 'Payment not found' });
     }
+    if (payment.status === 'voided') {
+      return res.status(409).json({ error: 'Payment is already voided' });
+    }
 
     const affectedInvoiceIds = await db
       .select({ invoiceId: arPaymentAllocations.invoiceId })
@@ -322,17 +405,39 @@ router.delete('/:id', requirePermission('finance.manage_payments'), async (req: 
       .where(eq(arPaymentAllocations.paymentId, id));
 
     await db.transaction(async (tx) => {
-      await tx.delete(arPayments).where(eq(arPayments.id, id));
+      await tx
+        .update(arPayments)
+        .set({
+          status: 'voided',
+          voidedAt: new Date(),
+          voidedBy: user,
+          voidReason,
+        })
+        .where(eq(arPayments.id, id));
+
+      await reverseArPaymentJournalEntry(id, voidReason, { username: user }, tx);
 
       for (const { invoiceId } of affectedInvoiceIds) {
         const remaining = await tx
           .select({
-            total: sql<string>`COALESCE(SUM(amount_applied), 0)`,
+            total: postedPaymentAllocationTotalSql(invoiceId),
           })
           .from(arPaymentAllocations)
           .where(eq(arPaymentAllocations.invoiceId, invoiceId));
 
         const remainingPaid = parseFloat(remaining[0]?.total || '0');
+        const [creditResult] = await tx
+          .select({
+            total: sql<string>`COALESCE(SUM(amount::numeric), 0)`,
+          })
+          .from(creditMemos)
+          .where(
+            and(
+              eq(creditMemos.arInvoiceId, invoiceId),
+              sql`${creditMemos.status} != 'cancelled'`
+            )
+          );
+        const remainingCredits = parseFloat(creditResult?.total || '0');
         const [invoice] = await tx
           .select()
           .from(arInvoices)
@@ -340,7 +445,7 @@ router.delete('/:id', requirePermission('finance.manage_payments'), async (req: 
 
         if (invoice) {
           const invoiceTotal = parseFloat(invoice.totalAmount);
-          const newStatus = remainingPaid >= invoiceTotal - 0.005 ? 'PAID' : 'OPEN';
+          const newStatus = remainingPaid + remainingCredits >= invoiceTotal - 0.005 ? 'PAID' : 'OPEN';
           await tx
             .update(arInvoices)
             .set({ status: newStatus, updatedAt: new Date() })
@@ -349,10 +454,30 @@ router.delete('/:id', requirePermission('finance.manage_payments'), async (req: 
       }
     });
 
-    res.json({ success: true, message: 'Payment deleted' });
+    try {
+      await auditService.logEvent({
+        entityType: 'p1_order',
+        entityId: payment.customerId,
+        action: 'AR_PAYMENT_VOIDED',
+        actor: { username: user },
+        reason: voidReason,
+        meta: {
+          paymentId: id,
+          customerId: payment.customerId,
+          amount: payment.amount,
+          affectedInvoiceIds: affectedInvoiceIds.map((row) => row.invoiceId),
+          originalPayment: payment,
+        },
+      });
+    } catch (auditError) {
+      console.error('[Audit] Failed to log AR payment void:', auditError);
+      return res.status(500).json({ error: 'Payment was voided but audit logging failed. Contact an administrator.' });
+    }
+
+    res.json({ success: true, message: 'Payment voided' });
   } catch (error) {
-    console.error('Failed to delete AR payment:', error);
-    res.status(500).json({ error: 'Failed to delete AR payment' });
+    console.error('Failed to void AR payment:', error);
+    res.status(500).json({ error: 'Failed to void AR payment' });
   }
 });
 

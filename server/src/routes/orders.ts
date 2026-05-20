@@ -5,7 +5,7 @@ import { db } from '../../db';
 import { pool } from '../../db';
 import { payments, allOrders, orders, customerAddresses, communicationLogs } from '../../../shared/schema';
 import { journalEntries } from '../../schema';
-import { eq, sql, desc, and } from 'drizzle-orm';
+import { eq, sql, desc, and, or } from 'drizzle-orm';
 import { storage } from '../../storage';
 import { generateP1OrderId } from '../../utils/orderIdGenerator';
 import {
@@ -31,11 +31,37 @@ import {
 } from '../../../shared/adminConfig';
 import { auditService } from '../services/auditService';
 import { orderActivityEvents } from '../../schema';
-import * as accountingService from '../services/accountingService';
-import { sendOrderConfirmationNotification, OrderConfirmationOutcome } from '../../utils/notifications';
+import {
+  createOrUpdateP1PaymentJournalEntry,
+  reverseP1PaymentJournalEntry,
+} from '../services/p1PaymentPostingService';
+import {
+  normalizeNotificationMethods,
+  sendCustomerNotification,
+  sendOrderConfirmationNotification,
+  OrderConfirmationOutcome,
+} from '../../utils/notifications';
 import { generateOrderPdf, PdfIntent } from '../../services/orderPdfService';
 
 const router = Router();
+
+async function getExportedPaymentJournalStatus(paymentId: number) {
+  const [existingJournal] = await db
+    .select({ status: journalEntries.status })
+    .from(journalEntries)
+    .where(
+      and(
+        eq(journalEntries.referenceId, paymentId),
+        or(
+          eq(journalEntries.referenceType, 'payment'),
+          eq(journalEntries.referenceType, 'p1_payment'),
+        ),
+      ),
+    )
+    .limit(1);
+
+  return existingJournal?.status === 'EXPORTED' ? existingJournal.status : null;
+}
 
 /**
  * Compute the bottom metal source from order features without side effects.
@@ -1688,10 +1714,49 @@ router.post('/fulfill', async (req: Request, res: Response) => {
     };
     const updatedOrder = await storage.fulfillOrder(orderId, actor);
 
+    let notificationResult = null;
+    if (updatedOrder.trackingNumber && !updatedOrder.customerNotified) {
+      try {
+        if (!updatedOrder.customerId) {
+          console.warn(`[FULFILL-NOTIFY] Order ${orderId} has tracking but no customerId; skipping customer notification`);
+        } else {
+          const customer = await storage.getCustomerById(updatedOrder.customerId);
+          if (!customer || (!customer.email && !customer.phone)) {
+            console.warn(`[FULFILL-NOTIFY] Order ${orderId} has no usable customer contact; skipping customer notification`);
+          } else {
+            const preferredMethods = normalizeNotificationMethods(
+              customer.preferredCommunicationMethod,
+              { email: customer.email, phone: customer.phone }
+            );
+
+            notificationResult = await sendCustomerNotification({
+              orderId: updatedOrder.orderId,
+              trackingNumber: updatedOrder.trackingNumber,
+              carrier: updatedOrder.shippingCarrier || 'UPS',
+              estimatedDelivery: updatedOrder.estimatedDelivery
+                ? new Date(updatedOrder.estimatedDelivery)
+                : undefined,
+              customerEmail: customer.email || undefined,
+              customerPhone: customer.phone || undefined,
+              preferredMethods,
+            });
+
+            if (!notificationResult.success) {
+              console.error(`[FULFILL-NOTIFY] Customer notification failed for order ${orderId}:`, notificationResult.errors);
+            }
+          }
+        }
+      } catch (notificationError) {
+        console.error(`[FULFILL-NOTIFY] Customer notification failed for order ${orderId}:`, notificationError);
+      }
+    }
+
     res.json({
       success: true,
       message: 'Order fulfilled successfully',
       order: updatedOrder,
+      notificationSent: notificationResult?.success || false,
+      notificationMethods: notificationResult?.methods || [],
     });
   } catch (error) {
     console.error('Fulfill order error:', error);
@@ -2057,8 +2122,25 @@ router.post('/:orderId/payments', async (req: Request, res: Response) => {
     const paymentData = insertPaymentSchema.parse({ ...req.body, orderId });
     console.log('Validated payment data:', paymentData);
 
-    const newPayment = await storage.createPayment(paymentData);
+    const newPayment = await db.transaction(async (tx) => {
+      const [payment] = await tx.insert(payments).values(paymentData).returning();
+      await createOrUpdateP1PaymentJournalEntry(payment.id, (req as any).user, tx);
+      return payment;
+    });
     console.log('Payment created successfully:', newPayment);
+
+    try {
+      await auditService.logEvent({
+        entityType: 'p1_order',
+        entityId: orderId,
+        action: 'PAYMENT_ADDED',
+        actor: { username: (req as any).user?.username || (req as any).user?.role || 'system' },
+        meta: { payment: newPayment },
+      });
+    } catch (auditError) {
+      console.error('[Audit] Failed to log payment creation:', auditError);
+      return res.status(500).json({ error: 'Payment was created but audit logging failed. Contact an administrator.' });
+    }
 
     res.status(201).json(newPayment);
   } catch (error) {
@@ -2078,32 +2160,24 @@ router.put('/payments/:paymentId', async (req: Request, res: Response) => {
   try {
     const paymentId = parseInt(req.params.paymentId);
 
-    // Block edit if journal entry is EXPORTED
-    const [existingJournal] = await db
-      .select({ status: journalEntries.status })
-      .from(journalEntries)
-      .where(
-        and(
-          eq(journalEntries.referenceType, 'payment'),
-          eq(journalEntries.referenceId, paymentId)
-        )
-      )
-      .limit(1);
-
-    if (existingJournal?.status === 'EXPORTED') {
+    // Block edit if an old or current journal entry is EXPORTED.
+    const exportedStatus = await getExportedPaymentJournalStatus(paymentId);
+    if (exportedStatus === 'EXPORTED') {
       return res.status(409).json({
         error: 'Cannot edit payment — journal entry is EXPORTED',
       });
     }
 
     const paymentData = insertPaymentSchema.parse(req.body);
-    const updatedPayment = await storage.updatePayment(paymentId, paymentData);
-
-    try {
-      await accountingService.createOrUpdateFromPayment(updatedPayment, (req as any).user);
-    } catch (accountingError) {
-      console.error('[Accounting] Failed to update journal entry for payment edit:', accountingError);
-    }
+    const updatedPayment = await db.transaction(async (tx) => {
+      const [payment] = await tx
+        .update(payments)
+        .set({ ...paymentData, updatedAt: new Date() })
+        .where(eq(payments.id, paymentId))
+        .returning();
+      await createOrUpdateP1PaymentJournalEntry(payment.id, (req as any).user, tx);
+      return payment;
+    });
 
     res.json(updatedPayment);
   } catch (error) {
@@ -2117,20 +2191,26 @@ router.put('/payments/:paymentId', async (req: Request, res: Response) => {
   }
 });
 
-// Delete a payment
+// Void a payment. The original row is preserved and a reversal row offsets it.
 router.delete('/payments/:paymentId', async (req: Request, res: Response) => {
   try {
     const paymentId = parseInt(req.params.paymentId);
+    const voidReason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+    const user = (req as any).user?.username || (req as any).user?.role || 'system';
 
     // Validate payment ID
     if (isNaN(paymentId)) {
       console.error('Invalid payment ID:', req.params.paymentId);
       return res.status(400).json({ error: 'Invalid payment ID' });
     }
+    if (!voidReason) {
+      return res.status(400).json({ error: 'A void reason is required. Payments are reversed, not deleted.' });
+    }
 
-    console.log(`🗑️ Attempting to delete payment ID: ${paymentId}`);
+    console.log(`Voiding payment ID: ${paymentId}`);
 
     // Check if payment exists by trying to get it directly
+    let existingPayment: any;
     try {
       const result = await db
         .select()
@@ -2141,6 +2221,13 @@ router.delete('/payments/:paymentId', async (req: Request, res: Response) => {
         console.error('Payment not found:', paymentId);
         return res.status(404).json({ error: 'Payment not found' });
       }
+      existingPayment = result[0];
+      if (existingPayment.status === 'voided') {
+        return res.status(409).json({ error: 'Payment is already voided' });
+      }
+      if (existingPayment.paymentType === 'payment_reversal' || existingPayment.status === 'reversal') {
+        return res.status(409).json({ error: 'Cannot void a reversal payment' });
+      }
       console.log(
         `✅ Payment found: ${paymentId}, orderId: ${result[0].orderId}`
       );
@@ -2149,30 +2236,79 @@ router.delete('/payments/:paymentId', async (req: Request, res: Response) => {
       return res.status(500).json({ error: 'Error validating payment' });
     }
 
-    // Check if an EXPORTED journal entry exists — block deletion if so
+    // Check if an old or current journal entry has already been exported.
     try {
-      const journalCheck = await accountingService.deleteJournalEntryForPayment(paymentId);
-      if (journalCheck.blocked) {
+      const exportedStatus = await getExportedPaymentJournalStatus(paymentId);
+      if (exportedStatus === 'EXPORTED') {
         return res.status(409).json({
-          error: 'Cannot delete this payment — an exported accounting journal entry exists. Contact your accountant to reverse it first.',
+          error: 'Cannot void this payment because an exported accounting journal entry exists. Contact accounting to reverse it first.',
         });
       }
     } catch (journalCheckError) {
-      console.error('[Accounting] Error checking journal entry before payment delete:', journalCheckError);
+      console.error('[Accounting] Error checking journal entry before payment void:', journalCheckError);
     }
 
-    await storage.deletePayment(paymentId);
-    console.log(`✅ Successfully deleted payment ID: ${paymentId}`);
-    res.json({ success: true });
+    const result = await db.transaction(async (tx) => {
+      const [voidedPayment] = await tx
+        .update(payments)
+        .set({
+          status: 'voided',
+          voidedAt: new Date(),
+          voidedBy: user,
+          voidReason,
+          updatedAt: new Date(),
+        })
+        .where(eq(payments.id, paymentId))
+        .returning();
+
+      const [reversal] = await tx
+        .insert(payments)
+        .values({
+          orderId: existingPayment.orderId,
+          paymentType: 'payment_reversal',
+          paymentAmount: -Math.abs(Number(existingPayment.paymentAmount || 0)),
+          paymentDate: new Date(),
+          notes: `Reversal of payment ${paymentId}: ${voidReason}`,
+          processingFee: existingPayment.processingFee ? -Math.abs(Number(existingPayment.processingFee)) : null,
+          batchId: existingPayment.batchId || null,
+          status: 'reversal',
+          reversalOfPaymentId: paymentId,
+        })
+        .returning();
+
+      const journalReversal = await reverseP1PaymentJournalEntry(paymentId, voidReason, { username: user }, tx);
+
+      return { voidedPayment, reversal, journalReversal };
+    });
+
+    try {
+      await auditService.logEvent({
+        entityType: 'p1_order',
+        entityId: existingPayment.orderId,
+        action: 'PAYMENT_VOIDED',
+        actor: { username: user },
+        reason: voidReason,
+        meta: {
+          paymentId,
+          reversalPaymentId: result.reversal.id,
+          originalPayment: existingPayment,
+        },
+      });
+    } catch (auditError) {
+      console.error('[Audit] Failed to log payment void:', auditError);
+      return res.status(500).json({ error: 'Payment was reversed but audit logging failed. Contact an administrator.' });
+    }
+    console.log(`Successfully voided payment ID: ${paymentId} with reversal ${result.reversal.id}`);
+    res.json({ success: true, message: 'Payment voided with reversal', ...result });
   } catch (error) {
-    console.error('Delete payment error:', error);
+    console.error('Void payment error:', error);
     console.error('Error details:', {
       message: (error as Error).message,
       stack: (error as Error).stack,
       paymentId: req.params.paymentId,
     });
     res.status(500).json({
-      error: 'Failed to delete payment',
+      error: 'Failed to void payment',
       details: (error as Error).message,
     });
   }
@@ -2191,15 +2327,6 @@ router.post('/bulk-payment', async (req: Request, res: Response) => {
     }
 
     console.log(`💳 Processing bulk payment for ${paymentItems.length} orders`);
-
-    // Determine if this is a bulk wire — extract top-level wire metadata once
-    const firstItem = paymentItems[0];
-    const bulkPaymentType = firstItem?.paymentType || '';
-    const totalFee = bulkPaymentType === 'wire' ? (parseFloat(firstItem?.processingFee) || 0) : 0;
-    const bulkPaymentDate = firstItem?.paymentDate ? new Date(firstItem.paymentDate) : new Date();
-    const bulkMemo = firstItem?.notes || null;
-    let totalGross = 0;
-    const createdPaymentIds: number[] = [];
 
     const results = [];
     const errors = [];
@@ -2224,19 +2351,11 @@ router.post('/bulk-payment', async (req: Request, res: Response) => {
           notes: item.notes || null,
         });
 
-        const newPayment = await storage.createPayment(paymentData);
-
-        if (paymentType === 'wire') {
-          // Suppress per-row accounting for wire — ONE consolidated entry is created after the loop
-          totalGross += parseFloat(paymentAmount);
-          createdPaymentIds.push(newPayment.id);
-        } else {
-          try {
-            await accountingService.createOrUpdateFromPayment(newPayment, (req as any).user);
-          } catch (accountingError) {
-            console.error('[Accounting] Failed to create journal entry for bulk payment:', accountingError);
-          }
-        }
+        const newPayment = await db.transaction(async (tx) => {
+          const [payment] = await tx.insert(payments).values(paymentData).returning();
+          await createOrUpdateP1PaymentJournalEntry(payment.id, (req as any).user, tx);
+          return payment;
+        });
 
         const allPayments = await storage.getPaymentsByOrderId(orderId);
         const totalPaid = allPayments.reduce(
@@ -2296,22 +2415,6 @@ router.post('/bulk-payment', async (req: Request, res: Response) => {
           orderId: item.orderId,
           error: (error as Error).message,
         });
-      }
-    }
-
-    // After loop: create ONE consolidated journal entry for bulk wire payments
-    if (bulkPaymentType === 'wire' && createdPaymentIds.length > 0) {
-      try {
-        await accountingService.createBulkWireJournalEntry({
-          paymentIds: createdPaymentIds,
-          totalGross: Math.round(totalGross * 100) / 100,
-          totalFee,
-          paymentDate: bulkPaymentDate,
-          memo: bulkMemo,
-          user: (req as any).user,
-        });
-      } catch (err) {
-        console.error('[Accounting] Failed to create consolidated bulk wire journal entry:', err);
       }
     }
 

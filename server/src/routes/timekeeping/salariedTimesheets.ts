@@ -32,6 +32,7 @@ import {
   type RequestHandler,
 } from "express";
 import { authenticateToken, authenticatePortalToken } from "../../../middleware/auth";
+import { requirePermission } from "../../../middleware/requirePermission";
 import { getOrCreateSettings } from "../../services/timekeeping/settings.service";
 import * as svc from "../../services/timekeeping/salariedTimesheet.service";
 import * as costSvc from "../../services/timekeeping/salariedLaborCostingService";
@@ -46,7 +47,7 @@ import {
   laborEntryDraftsTable,
   employeesTable,
 } from "../../schema/timekeeping";
-import { eq, and, gte, lte } from "drizzle-orm";
+import { eq, and, gte, lte, inArray } from "drizzle-orm";
 
 function h(fn: (req: Request, res: Response, next: NextFunction) => Promise<void>): RequestHandler {
   return (req, res, next) => fn(req, res, next).catch((err) => {
@@ -165,10 +166,38 @@ router.get(
 router.get(
   "/salaried-timesheet/admin/review",
   authenticateToken,
+  requirePermission("timekeeping.salaried.view_review_queue"),
   h(async (req, res): Promise<void> => {
     if (!(await requireFeatureFlag(req, res))) return;
     const queue = await svc.getAdminReviewQueue();
-    res.json(queue);
+    const user = (req as any).user;
+    if (user?.role === "ADMIN" || user?.role === "OWNER") {
+      res.json(queue);
+      return;
+    }
+
+    const callerEmployeeId: number | null = user?.employeeId ?? null;
+    if (!callerEmployeeId) {
+      res.json([]);
+      return;
+    }
+
+    const employeeIds = [...new Set(queue.map((row) => row.timesheet.employeeId))];
+    if (employeeIds.length === 0) {
+      res.json([]);
+      return;
+    }
+
+    const employeeRows = await db
+      .select({ id: employees.id, supervisorEmployeeId: employees.supervisorEmployeeId })
+      .from(employees)
+      .where(inArray(employees.id, employeeIds));
+    const supervisorByEmployee = new Map(employeeRows.map((row) => [row.id, row.supervisorEmployeeId ?? null]));
+
+    res.json(queue.filter((row) => {
+      const assigned = row.timesheet.supervisorEmployeeId ?? supervisorByEmployee.get(row.timesheet.employeeId) ?? null;
+      return assigned === callerEmployeeId;
+    }));
   }),
 );
 
@@ -247,6 +276,10 @@ const certifyBodySchema = z.object({
   certificationConfirmed: z.literal(true),
 });
 
+const supervisorApproveBodySchema = z.object({
+  note: z.string().max(2000).optional(),
+});
+
 // ---------------------------------------------------------------------------
 // POST /api/timekeeping/salaried-timesheet/:id/certify
 // Employee self-certifies the timesheet (attestation).
@@ -272,6 +305,7 @@ router.post(
 
     const ts = await loadTimesheet(id, res);
     if (!ts) return;
+    if (!(await requireSalaryPayType(ts.employeeId, res))) return;
 
     const user = (req as any).user;
     const userId: number | null = user?.id ?? null;
@@ -303,8 +337,22 @@ router.post(
       return;
     }
 
+    const [employeeRow] = await db
+      .select({ supervisorEmployeeId: employees.supervisorEmployeeId })
+      .from(employees)
+      .where(eq(employees.id, ts.employeeId))
+      .limit(1);
+    const supervisorEmployeeId = employeeRow?.supervisorEmployeeId ?? null;
+    if (!supervisorEmployeeId) {
+      res.status(409).json({
+        error: "This salaried employee has no supervisor assigned. Assign a supervisor on the employee profile before submitting.",
+      });
+      return;
+    }
+
     const previousStatus = ts.status;
     const now = new Date();
+    const totalActualHours = await svc.recalculateTimesheetTotal(id);
 
     // Update timesheet — write certification fields atomically
     const [updated] = await db
@@ -315,6 +363,10 @@ router.post(
         certifiedBy: userId,
         certificationStatement: DCAA_CERTIFICATION_STATEMENT,
         certificationVersion: DCAA_CERTIFICATION_VERSION,
+        supervisorEmployeeId,
+        supervisorApprovedAt: null,
+        supervisorApprovedBy: null,
+        supervisorApprovalNote: null,
       })
       .where(eq(salariedTimesheetsTable.id, id))
       .returning();
@@ -339,13 +391,14 @@ router.post(
         certificationStatement: DCAA_CERTIFICATION_STATEMENT,
         certificationVersion: DCAA_CERTIFICATION_VERSION,
         certifiedByUserId: userId,
+        supervisorEmployeeId,
         periodStart: ts.periodStart,
         periodEnd: ts.periodEnd,
-        totalActualHours: ts.totalActualHours,
+        totalActualHours,
         linesSnapshot: lines.map((l) => ({
           id: l.id,
           date: l.date,
-          actualHours: l.actualHours,
+          hours: l.hours,
           chargeCodeId: l.chargeCodeId,
           travelerId: l.travelerId,
           note: l.note,
@@ -353,6 +406,9 @@ router.post(
       },
       ipAddress: req.ip,
     });
+
+    const { notifySalariedTimesheetApprovalNeeded } = await import("../../services/timekeeping/approvalNotifications.service");
+    void notifySalariedTimesheetApprovalNeeded(id);
 
     res.json({
       timesheetId: id,
@@ -372,6 +428,7 @@ router.post(
 router.post(
   "/salaried-timesheet/:id/supervisor-approve",
   authenticateToken,
+  requirePermission("timekeeping.salaried.approve_supervisor"),
   h(async (req, res): Promise<void> => {
     if (!(await requireFeatureFlag(req, res))) return;
 
@@ -380,16 +437,52 @@ router.post(
 
     const ts = await loadTimesheet(id, res);
     if (!ts) return;
+    if (!(await requireSalaryPayType(ts.employeeId, res))) return;
 
     const user = (req as any).user;
     const userId: number | null = user?.id ?? null;
     const userName: string | null = user?.name ?? user?.username ?? null;
+    const parsedBody = supervisorApproveBodySchema.safeParse(req.body ?? {});
+    if (!parsedBody.success) {
+      res.status(400).json({ error: "Validation failed", details: parsedBody.error.flatten() });
+      return;
+    }
+    const note = parsedBody.data.note?.trim() || null;
 
     if (ts.status !== "SUBMITTED") {
       res.status(409).json({
         error: `Cannot supervisor-approve timesheet in status '${ts.status}'. Expected SUBMITTED.`,
         currentStatus: ts.status,
       });
+      return;
+    }
+
+    const callerEmployeeId: number | null = user?.employeeId ?? null;
+    const isAdminOwner = user?.role === "ADMIN" || user?.role === "OWNER";
+    if (!callerEmployeeId && !isAdminOwner) {
+      res.status(403).json({ error: "Your account is not linked to an employee record and cannot approve salaried timesheets." });
+      return;
+    }
+    if (callerEmployeeId && ts.employeeId === callerEmployeeId) {
+      res.status(403).json({ error: "You cannot supervisor-approve your own salaried timesheet." });
+      return;
+    }
+
+    let assignedSupervisorId: number | null = ts.supervisorEmployeeId ?? null;
+    if (!assignedSupervisorId) {
+      const [employeeRow] = await db
+        .select({ supervisorEmployeeId: employees.supervisorEmployeeId })
+        .from(employees)
+        .where(eq(employees.id, ts.employeeId))
+        .limit(1);
+      assignedSupervisorId = employeeRow?.supervisorEmployeeId ?? null;
+    }
+    if (!assignedSupervisorId) {
+      res.status(409).json({ error: "This salaried employee has no supervisor assigned. Assign one before approval." });
+      return;
+    }
+    if (assignedSupervisorId !== callerEmployeeId && !isAdminOwner) {
+      res.status(403).json({ error: "You are not the assigned supervisor for this salaried timesheet." });
       return;
     }
 
@@ -432,9 +525,16 @@ router.post(
       .set({
         status: "SUPERVISOR_APPROVED",
         supervisorApprovedAt: new Date(),
+        supervisorApprovedBy: userId,
+        supervisorEmployeeId: assignedSupervisorId,
+        supervisorApprovalNote: note,
       })
-      .where(eq(salariedTimesheetsTable.id, id))
+      .where(and(eq(salariedTimesheetsTable.id, id), eq(salariedTimesheetsTable.status, "SUBMITTED")))
       .returning();
+    if (!updated) {
+      res.status(409).json({ error: "Timesheet was already reviewed by another session. Refresh and try again." });
+      return;
+    }
 
     await writeAudit({
       timesheetId: id,
@@ -446,6 +546,9 @@ router.post(
       afterState: {
         status: "SUPERVISOR_APPROVED",
         supervisorApprovedAt: updated?.supervisorApprovedAt,
+        supervisorApprovedBy: userId,
+        supervisorEmployeeId: assignedSupervisorId,
+        supervisorApprovalNote: note,
         needsReviewDraftCount,
         needsReviewDraftIds,
       },
@@ -480,6 +583,7 @@ router.post(
 router.post(
   "/salaried-timesheet/:id/payroll-approve",
   authenticateToken,
+  requirePermission("timekeeping.salaried.approve_payroll"),
   h(async (req, res): Promise<void> => {
     if (!(await requireFeatureFlag(req, res))) return;
 
@@ -488,6 +592,7 @@ router.post(
 
     const ts = await loadTimesheet(id, res);
     if (!ts) return;
+    if (!(await requireSalaryPayType(ts.employeeId, res))) return;
 
     const user = (req as any).user;
     const userId: number | null = user?.id ?? null;
@@ -603,6 +708,7 @@ router.post(
 router.post(
   "/salaried-timesheet/:id/reopen",
   authenticateToken,
+  requirePermission("timekeeping.salaried.reopen"),
   h(async (req, res): Promise<void> => {
     if (!(await requireFeatureFlag(req, res))) return;
 
@@ -611,6 +717,7 @@ router.post(
 
     const ts = await loadTimesheet(id, res);
     if (!ts) return;
+    if (!(await requireSalaryPayType(ts.employeeId, res))) return;
 
     const user = (req as any).user;
     const userId: number | null = user?.id ?? null;
@@ -659,6 +766,9 @@ router.post(
         certifiedBy: null,
         certificationStatement: null,
         certificationVersion: null,
+        supervisorApprovedAt: null,
+        supervisorApprovedBy: null,
+        supervisorApprovalNote: null,
       })
       .where(eq(salariedTimesheetsTable.id, id))
       .returning();
@@ -729,6 +839,7 @@ router.post(
 
     const epochEmployeeId = req.portalEmployeeId;
     if (!epochEmployeeId) { res.status(401).json({ error: "Portal auth required" }); return; }
+    if (!(await requireSalaryPayType(epochEmployeeId, res))) return;
 
     const parsed = addLineSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -783,6 +894,7 @@ router.patch(
 
     const epochEmployeeId = req.portalEmployeeId;
     if (!epochEmployeeId) { res.status(401).json({ error: "Portal auth required" }); return; }
+    if (!(await requireSalaryPayType(epochEmployeeId, res))) return;
 
     const parsed = updateLineSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -837,6 +949,7 @@ router.delete(
 
     const epochEmployeeId = req.portalEmployeeId;
     if (!epochEmployeeId) { res.status(401).json({ error: "Portal auth required" }); return; }
+    if (!(await requireSalaryPayType(epochEmployeeId, res))) return;
 
     const ts = await loadTimesheet(timesheetId, res);
     if (!ts) return;
@@ -883,6 +996,9 @@ router.get(
   authenticatePortalToken,
   h(async (req, res): Promise<void> => {
     if (!(await requireFeatureFlag(req, res))) return;
+    const epochEmployeeId = req.portalEmployeeId;
+    if (!epochEmployeeId) { res.status(401).json({ error: "Portal auth required" }); return; }
+    if (!(await requireSalaryPayType(epochEmployeeId, res))) return;
     const codes = await svc.getIndirectCodes();
     res.json(codes);
   }),
@@ -899,6 +1015,7 @@ router.get(
 
     const epochEmployeeId = req.portalEmployeeId;
     if (!epochEmployeeId) { res.status(401).json({ error: "Portal auth required" }); return; }
+    if (!(await requireSalaryPayType(epochEmployeeId, res))) return;
 
     const result = await svc.getSuggestedTravelers(epochEmployeeId, 5);
     res.json(result);
@@ -916,6 +1033,7 @@ router.get(
 
     const epochEmployeeId = req.portalEmployeeId;
     if (!epochEmployeeId) { res.status(401).json({ error: "Portal auth required" }); return; }
+    if (!(await requireSalaryPayType(epochEmployeeId, res))) return;
 
     const travelers = await svc.getAllActiveTravelers();
     res.json(travelers);
@@ -934,6 +1052,7 @@ router.post(
 
     const epochEmployeeId = req.portalEmployeeId;
     if (!epochEmployeeId) { res.status(401).json({ error: "Portal auth required" }); return; }
+    if (!(await requireSalaryPayType(epochEmployeeId, res))) return;
 
     const timesheetId = Number(req.params.timesheetId);
     if (!timesheetId) { res.status(400).json({ error: "Invalid timesheet ID" }); return; }
@@ -962,10 +1081,18 @@ router.post(
       return;
     }
 
-    const empRow = await db.select({ name: employees.name }).from(employees)
+    const empRow = await db.select({ name: employees.name, supervisorEmployeeId: employees.supervisorEmployeeId }).from(employees)
       .where(eq(employees.id, epochEmployeeId)).limit(1);
+    const supervisorEmployeeId = empRow[0]?.supervisorEmployeeId ?? null;
+    if (!supervisorEmployeeId) {
+      res.status(409).json({
+        error: "This salaried employee has no supervisor assigned. Assign a supervisor on the employee profile before submitting.",
+      });
+      return;
+    }
 
     const now = new Date();
+    const totalActualHours = await svc.recalculateTimesheetTotal(timesheetId);
     const [updated] = await db
       .update(salariedTimesheetsTable)
       .set({
@@ -974,6 +1101,10 @@ router.post(
         certifiedBy: epochEmployeeId,
         certificationStatement: DCAA_CERTIFICATION_STATEMENT,
         certificationVersion: DCAA_CERTIFICATION_VERSION,
+        supervisorEmployeeId,
+        supervisorApprovedAt: null,
+        supervisorApprovedBy: null,
+        supervisorApprovalNote: null,
       })
       .where(eq(salariedTimesheetsTable.id, timesheetId))
       .returning();
@@ -997,13 +1128,14 @@ router.post(
         certificationStatement: DCAA_CERTIFICATION_STATEMENT,
         certificationVersion: DCAA_CERTIFICATION_VERSION,
         certifiedByEmployeeId: epochEmployeeId,
+        supervisorEmployeeId,
         periodStart: ts.periodStart,
         periodEnd: ts.periodEnd,
-        totalActualHours: ts.totalActualHours,
+        totalActualHours,
         linesSnapshot: certLines.map((l) => ({
           id: l.id,
           date: l.date,
-          actualHours: l.actualHours,
+          hours: l.hours,
           chargeCodeId: l.chargeCodeId,
           travelerId: l.travelerId,
           note: l.note,

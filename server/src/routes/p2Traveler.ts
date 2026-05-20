@@ -12,6 +12,10 @@ import {
   travelers,
   travelerSteps,
   travelerTasks,
+  p2PurchaseOrderItems,
+  projects,
+  productionWorkOrders,
+  inventoryItems,
   cuttingBuiltPackets,
   cuttingBuiltPacketFabricSources,
   cuttingFabricInventory,
@@ -21,11 +25,178 @@ import {
   insertP2SerializedItemCustomDataSchema,
   P2_DEPARTMENT_STAGES,
 } from '../../schema';
-import { eq, and, desc, or, ilike, inArray, asc, sql } from 'drizzle-orm';
+import { eq, and, desc, or, ilike, inArray, asc, sql, type SQL } from 'drizzle-orm';
 import { storage } from '../../storage';
 import { createEmployeeIdentitySnapshot } from '../../identity/userIdentity';
+import { buildChargeContextFromTraveler } from '../helpers/travelerBarcodeResolver';
+import { executeTravelerAutoPunch, type TravelerAutoPunchResult } from './timeClock';
+import { ensureProductionWorkflowReadSchema } from '../lib/productionWorkflowReadiness';
 
 const router = Router();
+
+router.use(async (_req, res, next) => {
+  try {
+    await ensureProductionWorkflowReadSchema();
+    next();
+  } catch (error) {
+    console.error('[P2Traveler] Schema readiness check failed:', error);
+    res.status(503).json({ error: 'Production traveler schema is not ready, please retry' });
+  }
+});
+
+/**
+ * Task #188: Auto-switch the operator's punch_ledger session to the WAD's
+ * charge code when they start a P2 Traveler task. Reuses the same gates as
+ * the kiosk traveler-scan flow (executeTravelerAutoPunch).
+ *
+ * Returns:
+ *   - { ok: true,  punch: { action, chargeCode, warning? } } on success
+ *   - { ok: false, status, body }                            to short-circuit the route
+ *
+ * Fail-closed: when no traveler is linked, or any kiosk-equivalent gate
+ * (WAD release, material readiness, certification, PTO, charge-code
+ * resolution, charge-code activeness, budget) fails, returns { ok: false }
+ * so the caller does NOT create or resume a p2_work_tasks row.
+ */
+async function runAutoPunchForP2Task(params: {
+  serialNumber: string;
+  partNumber: string;
+  inventoryItemId?: string | number | null;
+  partRoutingId?: string | null;
+  internalPartNumber?: string | null;
+  serializedItemPartNumber?: string | null;
+  employeeId: string | number;
+  laborApprovalId?: number | null;
+  adminPtoOverride?: boolean;
+  adminOverrideReason?: string | null;
+  user?: Express.Request['user'] | null;
+  ip?: string | null;
+}): Promise<
+  | {
+      ok: true;
+      entry: any;
+      chargeContext: any;
+      punch: { action: 'clockedIn' | 'switched' | 'unchanged'; chargeCode?: string | null; warning?: string };
+    }
+  | { ok: false; status: number; body: Record<string, unknown> }
+> {
+  // Mirror the identity match that `generate-traveler` uses when checking
+  // for an existing traveler row (see same file, ~line 1425). The OR-set
+  // must accept any of: partRoutingId, partNumber (cert vs raw serialized
+  // item), internal part number, or inventoryItemId (compared as strings).
+  // serialNumber stays a hard AND so we never accept a different serial's
+  // traveler.
+  const partNumberCandidates = new Set<string>();
+  const addPart = (val?: string | null) => {
+    if (val == null) return;
+    const trimmed = String(val).trim();
+    if (trimmed.length > 0) partNumberCandidates.add(trimmed);
+  };
+  addPart(params.partNumber);
+  addPart(params.internalPartNumber);
+  addPart(params.serializedItemPartNumber);
+
+  const travelerPartMatches: SQL<unknown>[] = [];
+  for (const pn of Array.from(partNumberCandidates)) {
+    travelerPartMatches.push(eq(travelers.partNumber, pn));
+    travelerPartMatches.push(sql`lower(trim(${travelers.partNumber})) = lower(trim(${pn}))`);
+  }
+  if (params.inventoryItemId != null) {
+    travelerPartMatches.push(
+      sql`${travelers.inventoryItemId} IS NOT NULL AND ${travelers.inventoryItemId}::text = ${String(params.inventoryItemId)}`,
+    );
+  }
+  if (params.partRoutingId) {
+    travelerPartMatches.push(eq(travelers.partRoutingId, params.partRoutingId));
+  }
+
+  const linkedTraveler = travelerPartMatches.length === 0
+    ? null
+    : await db
+        .select({
+          id: travelers.id,
+          travelerNumber: travelers.travelerNumber,
+          productionWorkOrderId: travelers.productionWorkOrderId,
+        })
+        .from(travelers)
+        .where(
+          and(
+            eq(travelers.serialNumber, params.serialNumber),
+            or(...travelerPartMatches),
+          ),
+        )
+        .limit(1)
+        .then((rows) => rows[0] ?? null);
+  if (!linkedTraveler) {
+    // Fail-closed: a P2 task cannot start without a traveler/WAD link, otherwise
+    // we would create a p2_work_tasks row that is not anchored to any project
+    // charge code, breaking the unified labor pipeline (Constitution §5.2).
+    // Diagnostic line: surface the resolved identity inputs and the candidate
+    // match keys we tried so a future floor report is debuggable from logs.
+    console.warn(
+      '[p2Traveler.runAutoPunchForP2Task] NO_TRAVELER_LINK',
+      JSON.stringify({
+        serialNumber: params.serialNumber,
+        certificationPartNumber: params.partNumber,
+        serializedItemPartNumber: params.serializedItemPartNumber ?? null,
+        internalPartNumber: params.internalPartNumber ?? null,
+        inventoryItemId: params.inventoryItemId ?? null,
+        partRoutingId: params.partRoutingId ?? null,
+        candidatePartNumbers: Array.from(partNumberCandidates.values()),
+      }),
+    );
+    return {
+      ok: false,
+      status: 409,
+      body: {
+        error: 'NO_TRAVELER_LINK',
+        message:
+          'No traveler is linked to this serialized item. Generate a traveler before starting work.',
+      },
+    };
+  }
+  const ctxResult = await buildChargeContextFromTraveler(linkedTraveler);
+  if (!ctxResult.ok) {
+    return {
+      ok: false,
+      status: 400,
+      body: {
+        error: ctxResult.error.code || 'CHARGE_CODE_UNRESOLVED',
+        message: ctxResult.error.message,
+      },
+    };
+  }
+  const autoPunch: TravelerAutoPunchResult = await executeTravelerAutoPunch({
+    context: ctxResult.context,
+    employeeIdString: String(params.employeeId),
+    parsedApprovalId: params.laborApprovalId ?? null,
+    ptoOverride:
+      params.adminPtoOverride
+        ? {
+            requested: true,
+            reason: params.adminOverrideReason ?? null,
+            user: params.user ?? null,
+            ip: params.ip ?? null,
+          }
+        : undefined,
+  });
+  if (!autoPunch.ok) {
+    return { ok: false, status: autoPunch.status, body: autoPunch.body };
+  }
+  return {
+    ok: true,
+    entry: autoPunch.entry,
+    chargeContext: autoPunch.chargeContext,
+    punch: {
+      action: autoPunch.action,
+      chargeCode:
+        autoPunch.chargeContext?.resolvedChargeCode ??
+        autoPunch.chargeContext?.chargeCode ??
+        null,
+      warning: autoPunch.warning,
+    },
+  };
+}
 
 function getTraceValue(item: any): string {
   return typeof item?.value === 'string' ? item.value.trim() : '';
@@ -184,6 +355,978 @@ function getDepartmentVariants(department: string): string[] {
   return DEPARTMENT_ALIASES[department] || [department];
 }
 
+function getBasePartNumberWithoutRevision(partNumber?: string | null): string | null {
+  const match = partNumber?.match(/^(.+?)\s*Rev\s*\w+$/i);
+  return match ? match[1].trim() : null;
+}
+
+async function getSerializedItemInventoryIdentity(serializedItem: any) {
+  let poItem: typeof p2PurchaseOrderItems.$inferSelect | null = null;
+  let inventoryItem: typeof inventoryItems.$inferSelect | null = null;
+
+  if (serializedItem?.poItemId) {
+    poItem = await db.query.p2PurchaseOrderItems.findFirst({
+      where: eq(p2PurchaseOrderItems.id, serializedItem.poItemId),
+    }) ?? null;
+  }
+
+  if (poItem?.inventoryItemId) {
+    inventoryItem = await db.query.inventoryItems.findFirst({
+      where: eq(inventoryItems.id, poItem.inventoryItemId),
+    }) ?? null;
+  }
+
+  if (!inventoryItem && serializedItem?.partNumber) {
+    inventoryItem = await db.query.inventoryItems.findFirst({
+      where: eq(inventoryItems.agPartNumber, serializedItem.partNumber),
+    }) ?? null;
+  }
+
+  return {
+    poItem,
+    inventoryItem,
+    inventoryItemId: poItem?.inventoryItemId ?? inventoryItem?.id ?? null,
+    internalPartNumber: inventoryItem?.agPartNumber ?? poItem?.partNumber ?? serializedItem?.partNumber ?? null,
+    partName: inventoryItem?.name ?? poItem?.partName ?? serializedItem?.partName ?? null,
+  };
+}
+
+async function findActiveRoutingForSerializedItem(serializedItem: any) {
+  const identity = await getSerializedItemInventoryIdentity(serializedItem);
+
+  if ((serializedItem as any).partRoutingId) {
+    const linkedRouting = await db.query.partRoutings.findFirst({
+      where: and(
+        eq(partRoutings.id, (serializedItem as any).partRoutingId),
+        eq(partRoutings.isActive, true)
+      ),
+    });
+    if (linkedRouting) return linkedRouting;
+  }
+
+  if (identity.inventoryItemId != null) {
+    const byInventoryItem = await db.query.partRoutings.findFirst({
+      where: and(
+        eq(partRoutings.inventoryItemId, String(identity.inventoryItemId)),
+        eq(partRoutings.isActive, true)
+      ),
+    });
+    if (byInventoryItem) return byInventoryItem;
+  }
+
+  if (identity.internalPartNumber) {
+    const byInternalPartNumber = await db.query.partRoutings.findFirst({
+      where: and(
+        eq(partRoutings.partNumber, identity.internalPartNumber),
+        eq(partRoutings.isActive, true)
+      ),
+    });
+    if (byInternalPartNumber) return byInternalPartNumber;
+
+    const byInternalPartNumberCase = await db.query.partRoutings.findFirst({
+      where: and(
+        ilike(partRoutings.partNumber, identity.internalPartNumber),
+        eq(partRoutings.isActive, true)
+      ),
+    });
+    if (byInternalPartNumberCase) return byInternalPartNumberCase;
+  }
+
+  const basePartCandidates = [
+    getBasePartNumberWithoutRevision(identity.internalPartNumber),
+    getBasePartNumberWithoutRevision(serializedItem.partNumber),
+  ].filter((partNumber): partNumber is string => Boolean(partNumber));
+
+  for (const basePartNumber of Array.from(new Set(basePartCandidates))) {
+    const byBasePartNumber = await db.query.partRoutings.findFirst({
+      where: and(
+        eq(partRoutings.partNumber, basePartNumber),
+        eq(partRoutings.isActive, true)
+      ),
+    });
+    if (byBasePartNumber) return byBasePartNumber;
+
+    const byBasePartNumberCase = await db.query.partRoutings.findFirst({
+      where: and(
+        ilike(partRoutings.partNumber, basePartNumber),
+        eq(partRoutings.isActive, true)
+      ),
+    });
+    if (byBasePartNumberCase) return byBasePartNumberCase;
+  }
+
+  let routing = await db.query.partRoutings.findFirst({
+    where: and(
+      eq(partRoutings.partNumber, serializedItem.partNumber),
+      eq(partRoutings.isActive, true)
+    ),
+  });
+
+  if (!routing) {
+    routing = await db.query.partRoutings.findFirst({
+      where: and(
+        ilike(partRoutings.partNumber, serializedItem.partNumber),
+        eq(partRoutings.isActive, true)
+      ),
+    });
+  }
+
+  if (!routing) {
+    const basePartNumber = getBasePartNumberWithoutRevision(serializedItem.partNumber);
+    if (basePartNumber) {
+      const allRoutings = await db
+        .select()
+        .from(partRoutings)
+        .where(and(
+          ilike(partRoutings.partNumber, `${basePartNumber} Rev%`),
+          eq(partRoutings.isActive, true)
+        ));
+      if (allRoutings.length > 0) {
+        routing = allRoutings[0];
+      }
+    }
+  }
+
+  return routing ?? null;
+}
+
+async function findProductionWorkOrderForSerializedItem(params: {
+  serializedItem: typeof p2SerializedItems.$inferSelect;
+  routing: typeof partRoutings.$inferSelect | null;
+  inventoryIdentity: Awaited<ReturnType<typeof getSerializedItemInventoryIdentity>>;
+}) {
+  const { serializedItem, routing, inventoryIdentity } = params;
+  const projectRows = await db
+    .select({ id: projects.id })
+    .from(projects)
+    .where(eq(projects.poId, serializedItem.poId));
+
+  if (projectRows.length === 0) return null;
+
+  const partCandidates = new Set<string>();
+  const addPart = (value?: string | null) => {
+    const trimmed = value?.trim();
+    if (trimmed) partCandidates.add(trimmed);
+  };
+  addPart(inventoryIdentity.internalPartNumber);
+  addPart(routing?.partNumber ?? null);
+  addPart(serializedItem.partNumber);
+
+  const partFilters = Array.from(partCandidates).flatMap((part) => [
+    eq(productionWorkOrders.partNumber, part),
+    sql`lower(trim(${productionWorkOrders.partNumber})) = lower(trim(${part}))`,
+  ]);
+
+  const whereParts: SQL<unknown>[] = [
+    inArray(productionWorkOrders.projectId, projectRows.map((project) => project.id)),
+    sql`${productionWorkOrders.status} NOT IN ('CANCELLED', 'CANCELED', 'CLOSED', 'COMPLETE')`,
+  ];
+  if (partFilters.length > 0) {
+    whereParts.push(or(...partFilters)!);
+  }
+
+  const [workOrder] = await db
+    .select()
+    .from(productionWorkOrders)
+    .where(and(...whereParts))
+    .orderBy(desc(productionWorkOrders.createdAt))
+    .limit(1);
+
+  return workOrder ?? null;
+}
+
+async function ensureTravelerForSerializedItem(params: {
+  serializedItem: typeof p2SerializedItems.$inferSelect;
+  routing: typeof partRoutings.$inferSelect;
+  inventoryIdentity: Awaited<ReturnType<typeof getSerializedItemInventoryIdentity>>;
+  actor: string;
+}) {
+  const { serializedItem, routing, inventoryIdentity, actor } = params;
+  const travelerPartMatches: SQL<unknown>[] = [
+    eq(travelers.partRoutingId, routing.id),
+    eq(travelers.partNumber, serializedItem.partNumber),
+  ];
+  if (inventoryIdentity.inventoryItemId != null) {
+    travelerPartMatches.push(
+      sql`${travelers.inventoryItemId} IS NOT NULL AND ${travelers.inventoryItemId}::text = ${String(inventoryIdentity.inventoryItemId)}`,
+    );
+  }
+  if (inventoryIdentity.internalPartNumber) {
+    travelerPartMatches.push(eq(travelers.partNumber, inventoryIdentity.internalPartNumber));
+    travelerPartMatches.push(sql`lower(trim(${travelers.partNumber})) = lower(trim(${inventoryIdentity.internalPartNumber}))`);
+  }
+
+  const existingTraveler = await db.query.travelers.findFirst({
+    where: and(
+      eq(travelers.serialNumber, serializedItem.serialNumber),
+      or(...travelerPartMatches),
+    ),
+  });
+
+  const workOrder = await findProductionWorkOrderForSerializedItem({
+    serializedItem,
+    routing,
+    inventoryIdentity,
+  });
+
+  if (existingTraveler) {
+    const repaired = await ensureExistingTravelerHasRoutingDetails({
+      traveler: existingTraveler,
+      routing,
+      actor,
+    });
+    let traveler = existingTraveler;
+    if (workOrder && existingTraveler.productionWorkOrderId !== workOrder.id) {
+      traveler = await storage.linkTravelerToProductionWorkOrder(existingTraveler.id, workOrder.id);
+    }
+    return { traveler, created: false, repaired, linkedWorkOrderId: workOrder?.id ?? null };
+  }
+
+  let traveler = await storage.generateTravelerFromRouting(routing.id, {
+    serialNumber: serializedItem.serialNumber,
+    lotNumber: serializedItem.poNumber || undefined,
+    createdBy: actor,
+  });
+
+  await storage.updateTraveler(traveler.id, { status: 'IN_PROGRESS' });
+  await alignNewTravelerToSerializedItemStage({
+    travelerId: traveler.id,
+    serializedItem,
+    actor,
+  });
+  if (workOrder) {
+    traveler = await storage.linkTravelerToProductionWorkOrder(traveler.id, workOrder.id);
+  }
+
+  return { traveler, created: true, repaired: true, linkedWorkOrderId: workOrder?.id ?? null };
+}
+
+async function alignNewTravelerToSerializedItemStage(params: {
+  travelerId: string;
+  serializedItem: typeof p2SerializedItems.$inferSelect;
+  actor: string;
+}) {
+  const { travelerId, serializedItem, actor } = params;
+  const currentStageIndex = serializedItem.currentStageIndex || 0;
+  const steps = await db
+    .select()
+    .from(travelerSteps)
+    .where(eq(travelerSteps.travelerId, travelerId))
+    .orderBy(asc(travelerSteps.stepNumber));
+
+  if (steps.length === 0) return;
+
+  const now = new Date();
+  for (let i = 0; i < steps.length && i < currentStageIndex; i++) {
+    await db
+      .update(travelerSteps)
+      .set({
+        status: 'COMPLETED',
+        completedAt: now,
+        completedBy: actor,
+      })
+      .where(eq(travelerSteps.id, steps[i].id));
+
+    await db
+      .update(travelerTasks)
+      .set({
+        status: 'COMPLETED',
+        completedAt: now,
+        completedBy: actor,
+      })
+      .where(eq(travelerTasks.travelerStepId, steps[i].id));
+  }
+
+  const activeStep = steps[Math.min(currentStageIndex, steps.length - 1)];
+  await db
+    .update(travelerSteps)
+    .set({
+      status: 'IN_PROGRESS',
+      startedAt: now,
+      startedBy: actor,
+    })
+    .where(eq(travelerSteps.id, activeStep.id));
+}
+
+function operationTypeToTravelerTaskType(operationType: string | null | undefined) {
+  switch (operationType) {
+    case 'SETUP':
+    case 'RUN':
+      return 'PROCESS';
+    case 'INSPECT':
+    case 'QC':
+      return 'QC';
+    case 'OSP':
+      return 'SPECIAL_PROCESS';
+    case 'MATERIAL':
+      return 'TRACE';
+    default:
+      return 'CHECK';
+  }
+}
+
+function operationTypeToTravelerPhase(operationType: string | null | undefined) {
+  switch (operationType) {
+    case 'SETUP':
+    case 'MATERIAL':
+      return 'START';
+    case 'QC':
+    case 'INSPECT':
+      return 'FINISH';
+    default:
+      return 'WORK';
+  }
+}
+
+function normalizeTravelerTaskPhase(phase: string | null | undefined): 'START' | 'WORK' | 'FINISH' {
+  const normalized = (phase || '').toUpperCase();
+  return normalized === 'START' || normalized === 'WORK' || normalized === 'FINISH' ? normalized : 'WORK';
+}
+
+function getEnabledTravelerTaskPhases(departmentConfig: any): Set<'START' | 'WORK' | 'FINISH'> {
+  if (Array.isArray(departmentConfig?.enabledPhases) && departmentConfig.enabledPhases.length > 0) {
+    return new Set(departmentConfig.enabledPhases.map((phase: any) => normalizeTravelerTaskPhase(phase)));
+  }
+
+  if (departmentConfig?.phasesEnabled && typeof departmentConfig.phasesEnabled === 'object') {
+    const phases = new Set<'START' | 'WORK' | 'FINISH'>();
+    if (departmentConfig.phasesEnabled.start) phases.add('START');
+    if (departmentConfig.phasesEnabled.work) phases.add('WORK');
+    if (departmentConfig.phasesEnabled.finish) phases.add('FINISH');
+    if (phases.size > 0) return phases;
+  }
+
+  const phases = new Set<'START' | 'WORK' | 'FINISH'>();
+  if (departmentConfig?.startEnabled === true) phases.add('START');
+  if (departmentConfig?.workEnabled === true) phases.add('WORK');
+  if (departmentConfig?.finishEnabled === true) phases.add('FINISH');
+  return phases.size > 0 ? phases : new Set<'START' | 'WORK' | 'FINISH'>(['START', 'WORK', 'FINISH']);
+}
+
+function travelerTaskKey(task: {
+  taskPhase?: string | null;
+  taskType?: string | null;
+  title?: string | null;
+}) {
+  return [
+    normalizeTravelerTaskPhase(task.taskPhase),
+    task.taskType || 'CHECK',
+    (task.title || '').trim(),
+  ].join('|').toLowerCase();
+}
+
+function dedupeTravelerFieldsByKey(fields: any[]) {
+  const seen = new Set<string>();
+  return fields.filter((field) => {
+    const key = (field.fieldKey || '').trim();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function customFieldToTravelerField(field: any) {
+  return {
+    fieldKey: field.fieldKey || field.fieldName?.replace(/\s+/g, '_').toLowerCase() || 'custom',
+    fieldLabel: field.fieldLabel || field.fieldName || 'Custom Field',
+    fieldType: field.fieldType || 'text',
+    required: field.required ?? field.isRequired ?? false,
+    validation: field.validation || null,
+  };
+}
+
+function customFieldKey(field: any) {
+  return String(field?.fieldKey || field?.fieldName || '')
+    .trim()
+    .replace(/\s+/g, '_')
+    .toLowerCase();
+}
+
+function dedupeCustomFieldsAcrossPhases(fields: any[], seen: Set<string>) {
+  const out: any[] = [];
+  for (const field of fields) {
+    const key = customFieldKey(field);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(field);
+  }
+  return out;
+}
+
+function qcStandardKey(standard: any) {
+  return [
+    standard?.standard || standard?.standardName || standard?.name || standard?.title || '',
+    standard?.tolerance || '',
+    standard?.requirement || standard?.specification || standard?.acceptanceCriteria || '',
+  ].map((value) => String(value).trim().toLowerCase()).join('|');
+}
+
+function dedupeQcStandardsAcrossPhases(standards: any[], seen: Set<string>) {
+  const out: any[] = [];
+  for (const standard of standards) {
+    const key = qcStandardKey(standard);
+    if (!key.replace(/\|/g, '') || seen.has(key)) continue;
+    seen.add(key);
+    out.push(standard);
+  }
+  return out;
+}
+
+function travelerPhaseRank(task: { taskPhase?: string | null; sortOrder?: number | null }) {
+  const phase = normalizeTravelerTaskPhase(task.taskPhase);
+  const phaseOrder: Record<string, number> = { START: 0, WORK: 1, FINISH: 2 };
+  return [phaseOrder[phase] ?? 1, task.sortOrder ?? 0] as const;
+}
+
+function isUntouchedTravelerTask(task: any, fields: any[]) {
+  if (task.status && task.status !== 'NOT_STARTED') return false;
+  if (task.startedAt || task.completedAt || task.completedBy) return false;
+  return fields.every((field) => !field.value && !field.recordedAt && !field.recordedBy);
+}
+
+function isPhaseDataEntryTask(task: any) {
+  return task.taskType === 'PROCESS' && /^((start|finish) phase data entry|process data entry)$/i.test(task.title || '');
+}
+
+async function pruneUntouchedDuplicatePhaseTasks(stepId: string) {
+  const tasks = await storage.getTravelerTasks(stepId);
+  const sortedTasks = [...tasks].sort((a, b) => {
+    const [phaseA, orderA] = travelerPhaseRank(a);
+    const [phaseB, orderB] = travelerPhaseRank(b);
+    return phaseA - phaseB || orderA - orderB;
+  });
+
+  const seenCustomFieldKeys = new Set<string>();
+  const seenQcFieldKeys = new Set<string>();
+  let pruned = false;
+
+  for (const task of sortedTasks) {
+    const fields = await storage.getTravelerTaskFields(task.id);
+    const fieldKeys = fields.map((field) => String(field.fieldKey || '').trim().toLowerCase()).filter(Boolean);
+    const isDuplicateCustomDataTask =
+      isPhaseDataEntryTask(task) &&
+      fieldKeys.length > 0 &&
+      fieldKeys.every((key) => seenCustomFieldKeys.has(key));
+    const isDuplicateQcTask =
+      task.taskType === 'QC' &&
+      fieldKeys.length > 0 &&
+      fieldKeys.every((key) => seenQcFieldKeys.has(key));
+
+    if ((isDuplicateCustomDataTask || isDuplicateQcTask) && isUntouchedTravelerTask(task, fields)) {
+      await storage.deleteTravelerTask(task.id);
+      pruned = true;
+      continue;
+    }
+
+    if (isPhaseDataEntryTask(task)) {
+      for (const key of fieldKeys) seenCustomFieldKeys.add(key);
+    }
+    if (task.taskType === 'QC') {
+      for (const key of fieldKeys) seenQcFieldKeys.add(key);
+    }
+  }
+
+  return pruned;
+}
+
+async function createTravelerTaskWithFieldsIfMissing(params: {
+  stepId: string;
+  enabledPhases: Set<'START' | 'WORK' | 'FINISH'>;
+  existingTaskKeys: Set<string>;
+  task: any;
+  fields?: any[];
+}) {
+  const phase = normalizeTravelerTaskPhase(params.task.taskPhase);
+  if (!params.enabledPhases.has(phase)) return false;
+
+  const key = travelerTaskKey({ ...params.task, taskPhase: phase });
+  if (params.existingTaskKeys.has(key)) return false;
+  params.existingTaskKeys.add(key);
+
+  const created = await storage.createTravelerTask({
+    ...params.task,
+    travelerStepId: params.stepId,
+    taskPhase: phase,
+    status: params.task.status || 'NOT_STARTED',
+  } as any);
+
+  for (const field of dedupeTravelerFieldsByKey(params.fields || [])) {
+    await storage.createTravelerTaskField({
+      travelerTaskId: created.id,
+      fieldKey: field.fieldKey,
+      fieldLabel: field.fieldLabel,
+      fieldType: field.fieldType || 'text',
+      required: field.required ?? false,
+      validation: field.validation || null,
+    } as any);
+  }
+
+  return true;
+}
+
+async function backfillDepartmentConfiguredTravelerTasks(params: {
+  stepId: string;
+  departmentName: string;
+  routing: typeof partRoutings.$inferSelect;
+}) {
+  const { stepId, departmentName, routing } = params;
+  const tasks = await storage.getTravelerTasks(stepId);
+  const existingTaskKeys = new Set(tasks.map((task) => travelerTaskKey(task)));
+  const departmentConfigByName = (routing.departmentConfig || {}) as Record<string, any>;
+  const departmentConfig = departmentConfigByName[departmentName] || {};
+  const traceabilityConfig = (routing.traceabilityConfig || {}) as Record<string, string[]>;
+  const enabledPhases = getEnabledTravelerTaskPhases(departmentConfig);
+  const createdCustomFieldKeys = new Set<string>();
+  const createdQcStandardKeys = new Set<string>();
+  let repaired = false;
+  let sortOrder = tasks.reduce((max, task) => Math.max(max, task.sortOrder ?? 0), -1) + 1;
+
+  const addTask = async (task: any, fields?: any[]) => {
+    const created = await createTravelerTaskWithFieldsIfMissing({
+      stepId,
+      enabledPhases,
+      existingTaskKeys,
+      task: {
+        required: true,
+        sortOrder: sortOrder++,
+        timePolicy: 'AUTO_ON_COMPLETE',
+        requiresSignature: false,
+        signatureRole: null,
+        requiresCertification: false,
+        ...task,
+      },
+      fields,
+    });
+    if (created) repaired = true;
+  };
+
+  const signatureConfig = departmentConfig.signatureConfig || {
+    startRequiresSignature: false,
+    finishRequiresSignature: true,
+    requiredSignatures: ['operator'],
+  };
+  const primarySignatureRole = String(signatureConfig.requiredSignatures?.[0] || 'operator').toUpperCase();
+
+  await addTask({
+    taskType: 'CHECK',
+    taskPhase: 'START',
+    title: 'Badge Scan',
+    instructions: `Badge scan to start work in ${departmentName}`,
+    timePolicy: 'AUTO_ON_START',
+    requiresSignature: signatureConfig.startRequiresSignature || false,
+    signatureRole: signatureConfig.startRequiresSignature ? primarySignatureRole : null,
+    requiresCertification: true,
+    sortOrder: 0,
+  });
+
+  for (const check of departmentConfig.startChecks || []) {
+    await addTask({
+      taskType: check.taskType || 'CHECK',
+      taskPhase: 'START',
+      title: check.title,
+      instructions: check.instructions || `Complete: ${check.title}`,
+      required: check.required !== false,
+      timePolicy: check.timePolicy || 'AUTO_ON_COMPLETE',
+      requiresSignature: check.requiresSignature || false,
+      signatureRole: check.requiresSignature ? (check.signatureRole || 'OPERATOR') : null,
+      requiresCertification: check.requiresCertification || false,
+      instructionPack: check.instructionPack || null,
+    });
+  }
+
+  const nonMaterialTraceFields = new Set(['operator', 'timestamp']);
+  const traceFields = (traceabilityConfig[departmentName] || [])
+    .filter((field: string) => !nonMaterialTraceFields.has(field))
+    .map((field: string) => ({
+      fieldKey: `trace_${field.replace(/\s+/g, '_').toLowerCase()}`,
+      fieldLabel: field.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase()),
+      fieldType: 'text',
+      required: true,
+    }));
+  if (traceFields.length > 0) {
+    await addTask({
+      taskType: 'TRACE',
+      taskPhase: 'START',
+      title: 'Material Traceability',
+      instructions: 'Record required material traceability before work continues.',
+    }, traceFields);
+  }
+
+  const startCustomFields = dedupeCustomFieldsAcrossPhases(
+    departmentConfig.startCustomDataFields || [],
+    createdCustomFieldKeys,
+  ).map(customFieldToTravelerField);
+  if (startCustomFields.length > 0) {
+    await addTask({
+      taskType: 'PROCESS',
+      taskPhase: 'START',
+      title: 'Start Phase Data Entry',
+      instructions: 'Enter required data for the START phase',
+    }, startCustomFields);
+  }
+
+  const instructionPack = departmentConfig.instructionPack || null;
+  const hasInstructionPack = instructionPack && (
+    instructionPack.workInstructionRefs?.length > 0 ||
+    instructionPack.aiSnippets?.length > 0 ||
+    instructionPack.specialNotes ||
+    instructionPack.media?.length > 0
+  );
+  const hasWiAckStartCheck = (departmentConfig.startChecks || []).some((check: any) =>
+    check.title?.toLowerCase().includes('work instruction') && check.title?.toLowerCase().includes('acknowledged')
+  );
+  if (hasInstructionPack && !hasWiAckStartCheck) {
+    await addTask({
+      taskType: 'PROCESS',
+      taskPhase: 'WORK',
+      title: 'Work Instructions',
+      instructions: instructionPack.specialNotes || 'Review instruction pack before proceeding',
+      required: false,
+      instructionPack,
+    });
+  }
+
+  const hasPhaseSpecificDataFields =
+    (departmentConfig.startCustomDataFields?.length > 0) ||
+    (departmentConfig.finishCustomDataFields?.length > 0);
+  const workCustomFields = hasPhaseSpecificDataFields
+    ? []
+    : (departmentConfig.customDataFields || []).map(customFieldToTravelerField);
+  if (workCustomFields.length > 0) {
+    await addTask({
+      taskType: 'PROCESS',
+      taskPhase: 'WORK',
+      title: 'Process Data Entry',
+      instructions: 'Enter required process data',
+    }, workCustomFields);
+  }
+
+  for (const check of departmentConfig.workChecks || []) {
+    await addTask({
+      taskType: check.taskType || 'CHECK',
+      taskPhase: 'WORK',
+      title: check.title,
+      instructions: check.instructions || `Complete: ${check.title}`,
+      required: check.required !== false,
+      timePolicy: check.timePolicy || 'AUTO_ON_COMPLETE',
+      requiresSignature: check.requiresSignature || false,
+      signatureRole: check.requiresSignature ? (check.signatureRole || 'OPERATOR') : null,
+      requiresCertification: check.requiresCertification || false,
+      instructionPack: check.instructionPack || null,
+    });
+  }
+
+  const qcTaskConfigs = [
+    { standards: departmentConfig.startQcStandards || [], phase: 'START', title: 'Incoming QC Inspection' },
+    {
+      standards: (departmentConfig.startQcStandards?.length > 0 || departmentConfig.finishQcStandards?.length > 0)
+        ? []
+        : (departmentConfig.qcStandards || []),
+      phase: 'WORK',
+      title: 'Quality Control Checks',
+    },
+    { standards: departmentConfig.finishQcStandards || [], phase: 'FINISH', title: 'Final QC Inspection' },
+  ];
+  for (const qcTaskConfig of qcTaskConfigs) {
+    if (qcTaskConfig.standards.length === 0) continue;
+    const uniqueStandards = dedupeQcStandardsAcrossPhases(qcTaskConfig.standards, createdQcStandardKeys);
+    if (uniqueStandards.length === 0) continue;
+    const fields = uniqueStandards.map((standard: any) => ({
+      fieldKey: `qc_${standard.standard?.replace(/\s+/g, '_').toLowerCase() || 'check'}`,
+      fieldLabel: standard.standard || 'QC Check',
+      fieldType: 'yes_no',
+      required: true,
+      validation: {
+        tolerance: standard.tolerance,
+        requirement: standard.requirement,
+        ...(standard.hardQcStop ? { hardQcStop: true } : {}),
+        ...(standard.referenceLink ? { referenceLink: standard.referenceLink } : {}),
+      },
+    }));
+    await addTask({
+      taskType: 'QC',
+      taskPhase: qcTaskConfig.phase,
+      title: qcTaskConfig.title,
+      instructions: `Complete ${qcTaskConfig.phase} phase quality control verifications`,
+      requiresSignature: true,
+      signatureRole: 'QC',
+    }, fields);
+  }
+
+  const ovenCuringSteps = departmentConfig.ovenCuringSteps || [];
+  if (ovenCuringSteps.length > 0) {
+    await addTask({
+      taskType: 'PROCESS',
+      taskPhase: 'WORK',
+      title: 'Oven Curing',
+      instructions: 'Complete oven curing process',
+      timePolicy: 'MANUAL_ENTRY',
+    }, ovenCuringSteps.map((cureStep: any, index: number) => ({
+      fieldKey: `cure_step_${index + 1}_complete`,
+      fieldLabel: `Cure Step ${index + 1}: ${cureStep.temperature} for ${cureStep.time}`,
+      fieldType: 'yes_no',
+      required: true,
+      validation: { temperature: cureStep.temperature, time: cureStep.time },
+    })));
+  }
+
+  for (const process of departmentConfig.standardProcesses || []) {
+    const processConfig = process.config || {};
+    const processName = process.name || processConfig.processName || 'Standard Process';
+    await addTask({
+      taskType: 'PROCESS',
+      taskPhase: 'WORK',
+      title: processConfig.customDataFields?.length > 0 ? `${processName} - Data Entry` : processName,
+      instructions: processConfig.notes || `Follow standard process: ${processName}`,
+    }, (processConfig.customDataFields || []).map(customFieldToTravelerField));
+
+    if (processConfig.qcStandards?.length > 0) {
+      await addTask({
+        taskType: 'QC',
+        taskPhase: 'WORK',
+        title: `${processName} - QC Checks`,
+        instructions: `Complete quality checks for ${processName}`,
+        requiresSignature: true,
+        signatureRole: 'QC',
+      }, processConfig.qcStandards.map((standard: any) => ({
+        fieldKey: `stdproc_qc_${standard.standard?.replace(/\s+/g, '_').toLowerCase() || 'check'}`,
+        fieldLabel: standard.standard || 'QC Check',
+        fieldType: 'yes_no',
+        required: true,
+        validation: {
+          tolerance: standard.tolerance,
+          requirement: standard.requirement,
+          ...(standard.referenceLink ? { referenceLink: standard.referenceLink } : {}),
+        },
+      })));
+    }
+  }
+
+  const specialProcessConfig = departmentConfig.specialProcessConfig;
+  if (specialProcessConfig?.processName) {
+    if (specialProcessConfig.customDataFields?.length > 0) {
+      await addTask({
+        taskType: 'PROCESS',
+        taskPhase: 'WORK',
+        title: `${specialProcessConfig.processName} - Data Entry`,
+        instructions: specialProcessConfig.notes || `Enter data for ${specialProcessConfig.processName}`,
+      }, specialProcessConfig.customDataFields.map(customFieldToTravelerField));
+    }
+
+    if (specialProcessConfig.qcStandards?.length > 0) {
+      await addTask({
+        taskType: 'QC',
+        taskPhase: 'WORK',
+        title: `${specialProcessConfig.processName} - QC Checks`,
+        instructions: `Complete quality checks for ${specialProcessConfig.processName}`,
+        requiresSignature: true,
+        signatureRole: 'QC',
+      }, specialProcessConfig.qcStandards.map((standard: any) => ({
+        fieldKey: `sp_qc_${standard.standard?.replace(/\s+/g, '_').toLowerCase() || 'check'}`,
+        fieldLabel: standard.standard || 'QC Check',
+        fieldType: 'yes_no',
+        required: true,
+        validation: {
+          tolerance: standard.tolerance,
+          requirement: standard.requirement,
+          ...(standard.referenceLink ? { referenceLink: standard.referenceLink } : {}),
+        },
+      })));
+    }
+  }
+
+  for (const check of departmentConfig.finishChecks || []) {
+    await addTask({
+      taskType: check.taskType || 'CHECK',
+      taskPhase: 'FINISH',
+      title: check.title,
+      instructions: check.instructions || `Complete: ${check.title}`,
+      required: check.required !== false,
+      timePolicy: check.timePolicy || 'AUTO_ON_COMPLETE',
+      requiresSignature: check.requiresSignature || false,
+      signatureRole: check.requiresSignature ? (check.signatureRole || 'QC') : null,
+      requiresCertification: check.requiresCertification || false,
+    });
+  }
+
+  const finishCustomFields = dedupeCustomFieldsAcrossPhases(
+    departmentConfig.finishCustomDataFields || [],
+    createdCustomFieldKeys,
+  ).map(customFieldToTravelerField);
+  if (finishCustomFields.length > 0) {
+    await addTask({
+      taskType: 'PROCESS',
+      taskPhase: 'FINISH',
+      title: 'Finish Phase Data Entry',
+      instructions: 'Enter required data for the FINISH phase',
+    }, finishCustomFields);
+  }
+
+  const hasSignatureTask = tasks.some((task) => task.taskType === 'SIGNATURE' || task.requiresSignature);
+  if (!hasSignatureTask) {
+    await addTask({
+      taskType: 'SIGNATURE',
+      taskPhase: 'FINISH',
+      title: `Department Signoff - ${departmentName}`,
+      instructions: `Operator signature required to complete ${departmentName}`,
+      requiresSignature: true,
+      signatureRole: 'OPERATOR',
+    });
+  }
+
+  return repaired;
+}
+
+async function ensureExistingTravelerHasRoutingDetails(params: {
+  traveler: typeof travelers.$inferSelect;
+  routing: typeof partRoutings.$inferSelect | null;
+  actor: string;
+}) {
+  const { traveler, routing, actor } = params;
+  if (!routing) return false;
+
+  const travelerRoutingPatch: Record<string, unknown> = {};
+  if (traveler.partRoutingId !== routing.id) {
+    travelerRoutingPatch.partRoutingId = routing.id;
+    travelerRoutingPatch.partRoutingRevision = (routing as any).routingRevision || traveler.partRoutingRevision || 1;
+  }
+  if (traveler.inventoryItemId !== routing.inventoryItemId) {
+    travelerRoutingPatch.inventoryItemId = routing.inventoryItemId;
+  }
+  if (Object.keys(travelerRoutingPatch).length > 0) {
+    await db
+      .update(travelers)
+      .set({
+        ...travelerRoutingPatch,
+        updatedAt: new Date(),
+      } as any)
+      .where(eq(travelers.id, traveler.id));
+  }
+
+  const existingSteps = await db
+    .select()
+    .from(travelerSteps)
+    .where(eq(travelerSteps.travelerId, traveler.id))
+    .orderBy(asc(travelerSteps.stepNumber));
+
+  const existingStepsByDepartment = new Map(
+    existingSteps.map((step) => [String(step.departmentName || '').toLowerCase(), step])
+  );
+
+  let repaired = false;
+
+  const operations = await storage.getRoutingOperations(routing.id);
+  if (operations.length > 0) {
+    const stepGroups = new Map<string, Array<(typeof operations)[number]>>();
+    for (const op of operations) {
+      const key = `${op.stepNumber}__${op.departmentName}`;
+      if (!stepGroups.has(key)) stepGroups.set(key, []);
+      stepGroups.get(key)!.push(op);
+    }
+
+    const sortedKeys = Array.from(stepGroups.keys()).sort((a, b) => {
+      const [aStep] = a.split('__').map(Number);
+      const [bStep] = b.split('__').map(Number);
+      return aStep - bStep;
+    });
+
+    let stepNumber = 0;
+    for (const key of sortedKeys) {
+      const groupOps = stepGroups.get(key)!;
+      const departmentName = groupOps[0].departmentName;
+      let step = existingStepsByDepartment.get(String(departmentName || '').toLowerCase());
+      if (!step) {
+        step = await storage.createTravelerStep({
+          travelerId: traveler.id,
+          departmentName,
+          stepNumber: ++stepNumber,
+          status: 'NOT_STARTED',
+          assignedTechnicianId: null,
+        } as any);
+        repaired = true;
+      } else {
+        stepNumber = Math.max(stepNumber + 1, step.stepNumber || 0);
+      }
+
+      let sortOrder = 0;
+      const tasks = await storage.getTravelerTasks(step.id);
+      const existingTaskKeys = new Set(tasks.map((task) => travelerTaskKey(task)));
+      for (const op of groupOps) {
+        const instructionPack = op.instructionPack as any;
+        const created = await createTravelerTaskWithFieldsIfMissing({
+          stepId: step.id,
+          enabledPhases: new Set<'START' | 'WORK' | 'FINISH'>(['START', 'WORK', 'FINISH']),
+          existingTaskKeys,
+          task: {
+            taskType: operationTypeToTravelerTaskType(op.operationType) as any,
+            taskPhase: operationTypeToTravelerPhase(op.operationType) as any,
+            title: op.operationName,
+            instructions: instructionPack?.specialNotes || op.operationName,
+            required: true,
+            sortOrder: sortOrder++,
+            timePolicy: 'AUTO_ON_COMPLETE',
+            requiresSignature: op.requiresSignature ?? false,
+            signatureRole: op.requiresSignature ? 'OPERATOR' : null,
+            requiresCertification: op.requiresCertification ?? false,
+            instructionPack,
+            status: 'NOT_STARTED',
+          },
+        });
+        if (created) repaired = true;
+      }
+
+      const pruned = await pruneUntouchedDuplicatePhaseTasks(step.id);
+      if (pruned) repaired = true;
+    }
+  } else {
+    const departmentSequence = Array.isArray(routing.departmentSequence)
+      ? routing.departmentSequence as string[]
+      : [];
+
+    let stepNumber = 0;
+    for (const departmentName of departmentSequence) {
+      let step = existingStepsByDepartment.get(String(departmentName || '').toLowerCase());
+      if (!step) {
+        step = await storage.createTravelerStep({
+          travelerId: traveler.id,
+          departmentName,
+          stepNumber: ++stepNumber,
+          status: 'NOT_STARTED',
+          assignedTechnicianId: null,
+        } as any);
+        repaired = true;
+      } else {
+        stepNumber = Math.max(stepNumber + 1, step.stepNumber || 0);
+      }
+
+      const backfilled = await backfillDepartmentConfiguredTravelerTasks({
+        stepId: step.id,
+        departmentName,
+        routing,
+      });
+      if (backfilled) repaired = true;
+
+      const pruned = await pruneUntouchedDuplicatePhaseTasks(step.id);
+      if (pruned) repaired = true;
+    }
+  }
+
+  if (!repaired) return false;
+
+  await storage.createTravelerEvent({
+    travelerId: traveler.id,
+    actor,
+    action: 'ROUTING_STEPS_REPAIRED',
+    details: {
+      fromRoutingId: routing.id,
+      fromRoutingRevision: (routing as any).routingRevision || 1,
+      reason: 'Existing P2 traveler had missing routing steps/tasks when opened from barcode scan',
+    },
+  });
+
+  return true;
+}
+
 // GET /api/p2-traveler/badge-lookup/:employeeCode
 // Look up employee by badge code (badge_scan_code UUID or employee_code)
 router.get('/badge-lookup/:employeeCode', async (req: Request, res: Response) => {
@@ -313,42 +1456,8 @@ router.get('/verify-certification/:employeeCode/:barcode', async (req: Request, 
       return res.status(404).json({ error: 'Part not found. Verify the barcode and try again.' });
     }
 
-    // Get part routing - try exact match first, then base part number (without revision)
-    let routing = await db.query.partRoutings.findFirst({
-      where: and(
-        eq(partRoutings.partNumber, serializedItem.partNumber),
-        eq(partRoutings.isActive, true)
-      ),
-    });
-
-    if (!routing) {
-      // Try case-insensitive exact match
-      routing = await db.query.partRoutings.findFirst({
-        where: and(
-          ilike(partRoutings.partNumber, serializedItem.partNumber),
-          eq(partRoutings.isActive, true)
-        ),
-      });
-    }
-
-    if (!routing) {
-      // Try matching base part number (strip revision suffix like "Rev N", "REV P", etc.)
-      const basePartMatch = serializedItem.partNumber.match(/^(.+?)\s*Rev\s*\w+$/i);
-      if (basePartMatch) {
-        const basePartNumber = basePartMatch[1].trim();
-        // Find any active routing whose part number starts with the same base
-        const allRoutings = await db
-          .select()
-          .from(partRoutings)
-          .where(and(
-            ilike(partRoutings.partNumber, `${basePartNumber} Rev%`),
-            eq(partRoutings.isActive, true)
-          ));
-        if (allRoutings.length > 0) {
-          routing = allRoutings[0];
-        }
-      }
-    }
+    const inventoryIdentity = await getSerializedItemInventoryIdentity(serializedItem);
+    const routing = await findActiveRoutingForSerializedItem(serializedItem);
 
     const departmentSequence: string[] = routing?.departmentSequence 
       ? (routing.departmentSequence as string[]) 
@@ -362,10 +1471,17 @@ router.get('/verify-certification/:employeeCode/:barcode', async (req: Request, 
     const nextDepartment = departmentSequence[currentIndex];
 
     const deptVariants = getDepartmentVariants(nextDepartment);
+    const certificationPartNumber =
+      inventoryIdentity.internalPartNumber ||
+      routing?.partNumber ||
+      serializedItem.partNumber;
     const certification = await db.query.p2EmployeePartCertifications.findFirst({
       where: and(
         eq(p2EmployeePartCertifications.employeeId, employee.id),
-        eq(p2EmployeePartCertifications.partNumber, serializedItem.partNumber),
+        or(
+          eq(p2EmployeePartCertifications.partNumber, certificationPartNumber),
+          eq(p2EmployeePartCertifications.partNumber, serializedItem.partNumber)
+        ),
         or(
           inArray(p2EmployeePartCertifications.department, deptVariants),
           sql`lower(trim(${p2EmployeePartCertifications.department})) = lower(trim(${nextDepartment}))`
@@ -391,8 +1507,8 @@ router.get('/verify-certification/:employeeCode/:barcode', async (req: Request, 
         id: serializedItem.id,
         barcode: serializedItem.barcode,
         serialNumber: serializedItem.serialNumber,
-        partNumber: serializedItem.partNumber,
-        partName: serializedItem.partName,
+        partNumber: certificationPartNumber,
+        partName: inventoryIdentity.partName || serializedItem.partName,
         customerName: serializedItem.customerName,
         currentDepartment: serializedItem.currentDepartment,
         status: serializedItem.status,
@@ -431,22 +1547,8 @@ router.get('/part-info/:barcode', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Part not found' });
     }
 
-    let routing = null as any;
-
-    if ((serializedItem as any).partRoutingId) {
-      routing = await db.query.partRoutings.findFirst({
-        where: and(
-          eq(partRoutings.id, (serializedItem as any).partRoutingId),
-          eq(partRoutings.isActive, true)
-        ),
-      });
-    }
-
-    if (!routing) {
-      routing = await db.query.partRoutings.findFirst({
-        where: and(eq(partRoutings.partNumber, serializedItem.partNumber), eq(partRoutings.isActive, true)),
-      });
-    }
+    const inventoryIdentity = await getSerializedItemInventoryIdentity(serializedItem);
+    const routing = await findActiveRoutingForSerializedItem(serializedItem);
 
     const departmentSequence = routing?.departmentSequence
       ? (routing.departmentSequence as string[])
@@ -461,8 +1563,8 @@ router.get('/part-info/:barcode', async (req: Request, res: Response) => {
         id: serializedItem.id,
         barcode: serializedItem.barcode,
         serialNumber: serializedItem.serialNumber,
-        partNumber: serializedItem.partNumber,
-        partName: serializedItem.partName,
+        partNumber: inventoryIdentity.internalPartNumber || routing?.partNumber || serializedItem.partNumber,
+        partName: inventoryIdentity.partName || serializedItem.partName,
         customerName: serializedItem.customerName,
         currentDepartment: serializedItem.currentDepartment,
         currentStageIndex: currentIndex,
@@ -522,58 +1624,22 @@ router.post('/generate-traveler', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Serialized item not found' });
     }
 
-    // Check if a traveler already exists for this serialized item's serial number and part
-    const existingTraveler = await db.query.travelers.findFirst({
-      where: and(
-        eq(travelers.serialNumber, serializedItem.serialNumber),
-        eq(travelers.partNumber, serializedItem.partNumber)
-      ),
-    });
-
-    if (existingTraveler) {
-      return res.json({
-        travelerId: existingTraveler.id,
-        travelerNumber: existingTraveler.travelerNumber,
-        created: false,
-      });
-    }
-
-    // Find the active routing for this part
-    let routing = await db.query.partRoutings.findFirst({
-      where: and(
-        eq(partRoutings.partNumber, serializedItem.partNumber),
-        eq(partRoutings.isActive, true)
-      ),
-    });
-
-    if (!routing) {
-      routing = await db.query.partRoutings.findFirst({
-        where: and(
-          ilike(partRoutings.partNumber, serializedItem.partNumber),
-          eq(partRoutings.isActive, true)
-        ),
-      });
-    }
-
-    if (!routing) {
-      const basePartMatch = serializedItem.partNumber.match(/^(.+?)\s*Rev\s*\w+$/i);
-      if (basePartMatch) {
-        const basePartNumber = basePartMatch[1].trim();
-        const allRoutings = await db
-          .select()
-          .from(partRoutings)
-          .where(and(
-            ilike(partRoutings.partNumber, `${basePartNumber} Rev%`),
-            eq(partRoutings.isActive, true)
-          ));
-        if (allRoutings.length > 0) {
-          routing = allRoutings[0];
-        }
-      }
-    }
+    const inventoryIdentity = await getSerializedItemInventoryIdentity(serializedItem);
+    const routing = await findActiveRoutingForSerializedItem(serializedItem);
 
     if (!routing) {
       return res.status(404).json({ error: 'No active routing found for this part number' });
+    }
+
+    if (serializedItem.partRoutingId !== routing.id) {
+      await db
+        .update(p2SerializedItems)
+        .set({
+          partRoutingId: routing.id,
+          partRoutingRevision: (routing as any).routingRevision || serializedItem.partRoutingRevision || 1,
+          updatedAt: new Date(),
+        })
+        .where(eq(p2SerializedItems.id, serializedItem.id));
     }
 
     let resolvedDisplayName = employeeCode || 'p2-system';
@@ -587,6 +1653,48 @@ router.post('/generate-traveler', async (req: Request, res: Response) => {
       }
     }
 
+    const travelerPartMatches = [
+      eq(travelers.partRoutingId, routing.id),
+      eq(travelers.partNumber, serializedItem.partNumber),
+    ];
+    if (inventoryIdentity.inventoryItemId != null) {
+      travelerPartMatches.push(eq(travelers.inventoryItemId, String(inventoryIdentity.inventoryItemId)));
+    }
+    if (inventoryIdentity.internalPartNumber) {
+      travelerPartMatches.push(eq(travelers.partNumber, inventoryIdentity.internalPartNumber));
+    }
+
+    // Check if a traveler already exists for this serialized item and inventory part identity.
+    const existingTraveler = await db.query.travelers.findFirst({
+      where: and(
+        eq(travelers.serialNumber, serializedItem.serialNumber),
+        or(...travelerPartMatches)
+      ),
+    });
+
+    if (existingTraveler) {
+      const repaired = await ensureExistingTravelerHasRoutingDetails({
+        traveler: existingTraveler,
+        routing,
+        actor: resolvedDisplayName,
+      });
+      const workOrder = await findProductionWorkOrderForSerializedItem({
+        serializedItem,
+        routing,
+        inventoryIdentity,
+      });
+      if (workOrder && existingTraveler.productionWorkOrderId !== workOrder.id) {
+        await storage.linkTravelerToProductionWorkOrder(existingTraveler.id, workOrder.id);
+      }
+
+      return res.json({
+        travelerId: existingTraveler.id,
+        travelerNumber: existingTraveler.travelerNumber,
+        created: false,
+        repaired,
+      });
+    }
+
     const traveler = await storage.generateTravelerFromRouting(routing.id, {
       serialNumber: serializedItem.serialNumber,
       lotNumber: serializedItem.poNumber || undefined,
@@ -594,6 +1702,14 @@ router.post('/generate-traveler', async (req: Request, res: Response) => {
     });
 
     await storage.updateTraveler(traveler.id, { status: 'IN_PROGRESS' });
+    const workOrder = await findProductionWorkOrderForSerializedItem({
+      serializedItem,
+      routing,
+      inventoryIdentity,
+    });
+    if (workOrder) {
+      await storage.linkTravelerToProductionWorkOrder(traveler.id, workOrder.id);
+    }
 
     const currentStageIndex = serializedItem.currentStageIndex || 0;
     if (currentStageIndex > 0) {
@@ -699,32 +1815,25 @@ router.post('/start-task', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Part not found' });
     }
 
-    let routing = null as any;
-
-    if ((serializedItem as any).partRoutingId) {
-      routing = await db.query.partRoutings.findFirst({
-        where: and(
-          eq(partRoutings.id, (serializedItem as any).partRoutingId),
-          eq(partRoutings.isActive, true)
-        ),
-      });
-    }
-
-    if (!routing) {
-      routing = await db.query.partRoutings.findFirst({
-        where: and(eq(partRoutings.partNumber, serializedItem.partNumber), eq(partRoutings.isActive, true)),
-      });
-    }
+    const inventoryIdentity = await getSerializedItemInventoryIdentity(serializedItem);
+    const routing = await findActiveRoutingForSerializedItem(serializedItem);
 
     const departmentConfig = routing ? (routing.departmentConfig as any) : {};
     const config = departmentConfig?.[department] || {};
 
     // BACKEND CERTIFICATION ENFORCEMENT - Critical for AS9100 compliance
     const startDeptVariants = getDepartmentVariants(department);
+    const certificationPartNumber =
+      inventoryIdentity.internalPartNumber ||
+      routing?.partNumber ||
+      serializedItem.partNumber;
     const certification = await db.query.p2EmployeePartCertifications.findFirst({
       where: and(
         eq(p2EmployeePartCertifications.employeeId, parseInt(employeeId)),
-        eq(p2EmployeePartCertifications.partNumber, serializedItem.partNumber),
+        or(
+          eq(p2EmployeePartCertifications.partNumber, certificationPartNumber),
+          eq(p2EmployeePartCertifications.partNumber, serializedItem.partNumber)
+        ),
         or(
           inArray(p2EmployeePartCertifications.department, startDeptVariants),
           sql`lower(trim(${p2EmployeePartCertifications.department})) = lower(trim(${department}))`
@@ -739,6 +1848,15 @@ router.post('/start-task', async (req: Request, res: Response) => {
       return res.status(403).json({ 
         error: `Employee ${employeeName} is not certified for ${department} on part ${partNumber}`,
         code: 'NOT_CERTIFIED'
+      });
+    }
+
+    if (routing) {
+      await ensureTravelerForSerializedItem({
+        serializedItem,
+        routing,
+        inventoryIdentity,
+        actor: displayName,
       });
     }
 
@@ -758,11 +1876,32 @@ router.post('/start-task', async (req: Request, res: Response) => {
     }
     
     if (existingTask && existingTask.employeeId === parseInt(employeeId)) {
-      return res.json({ 
+      // Task #188: also auto-switch the punch on resume so the operator's
+      // active punch_ledger session is on the correct WAD/charge-code.
+      const resumedPunch = await runAutoPunchForP2Task({
+        serialNumber: serializedItem.serialNumber,
+        partNumber: certificationPartNumber,
+        inventoryItemId: inventoryIdentity.inventoryItemId,
+        partRoutingId: routing?.id ?? serializedItem.partRoutingId ?? null,
+        internalPartNumber: inventoryIdentity.internalPartNumber,
+        serializedItemPartNumber: serializedItem.partNumber,
+        employeeId,
+        laborApprovalId: req.body?.laborApprovalId ? parseInt(req.body.laborApprovalId, 10) : null,
+        adminPtoOverride: req.body?.adminPtoOverride === true,
+        adminOverrideReason:
+          typeof req.body?.adminOverrideReason === 'string' ? req.body.adminOverrideReason.trim() : null,
+        user: req.user ?? null,
+        ip: req.ip ?? null,
+      });
+      if (!resumedPunch.ok) {
+        return res.status(resumedPunch.status).json(resumedPunch.body);
+      }
+      return res.json({
         success: true,
         workTask: existingTask,
         resumed: true,
-        message: 'Resumed existing task' 
+        message: 'Resumed existing task',
+        punch: resumedPunch.punch,
       });
     }
 
@@ -786,6 +1925,32 @@ router.post('/start-task', async (req: Request, res: Response) => {
       }
     }
 
+    // Task #188: Auto-switch operator's punch_ledger session to the WAD's
+    // charge code. Runs the same gates as the kiosk traveler-scan flow
+    // (WAD release, material readiness, certification, PTO, budget,
+    // charge-code activeness). Per Task #77, traveler punches default to
+    // PENDING_APPROVAL. If a gate fails we return BEFORE inserting the
+    // p2_work_tasks row so the operator is not "started" against an
+    // unauthorized charge code.
+    const startPunch = await runAutoPunchForP2Task({
+      serialNumber: serializedItem.serialNumber,
+      partNumber: certificationPartNumber,
+      inventoryItemId: inventoryIdentity.inventoryItemId,
+      partRoutingId: routing?.id ?? serializedItem.partRoutingId ?? null,
+      internalPartNumber: inventoryIdentity.internalPartNumber,
+      serializedItemPartNumber: serializedItem.partNumber,
+      employeeId,
+      laborApprovalId: req.body?.laborApprovalId ? parseInt(req.body.laborApprovalId, 10) : null,
+      adminPtoOverride: req.body?.adminPtoOverride === true,
+      adminOverrideReason:
+        typeof req.body?.adminOverrideReason === 'string' ? req.body.adminOverrideReason.trim() : null,
+      user: req.user ?? null,
+      ip: req.ip ?? null,
+    });
+    if (!startPunch.ok) {
+      return res.status(startPunch.status).json(startPunch.body);
+    }
+
     const incomingTraceabilityData = Array.isArray(traceabilityData)
       ? traceabilityData.filter((item: any) => getTraceValue(item))
       : [];
@@ -806,6 +1971,14 @@ router.post('/start-task', async (req: Request, res: Response) => {
       employeeCode,
       employeeName,
       certificationId: certification.id,
+      travelerId: startPunch.chargeContext.travelerId ?? null,
+      travelerStepId: startPunch.entry?.travelerStepId ?? null,
+      productionWorkOrderId: startPunch.entry?.productionWorkOrderId ?? null,
+      projectId: startPunch.entry?.projectId ?? null,
+      chargeCodeId: startPunch.entry?.chargeCodeId ?? null,
+      operationName: startPunch.chargeContext.operation ?? department,
+      electronicSignoffRequired: true,
+      electronicSignoffStatus: 'PENDING',
       status: 'IN_PROGRESS',
       startedAt: new Date(),
       traceabilityData: incomingTraceabilityData,
@@ -915,6 +2088,7 @@ router.post('/start-task', async (req: Request, res: Response) => {
       success: true,
       workTask,
       message: 'Task started successfully',
+      punch: startPunch.punch,
     });
   } catch (error: any) {
     console.error('Error starting task:', error);
@@ -993,6 +2167,9 @@ router.post('/complete-task', async (req: Request, res: Response) => {
         status: 'COMPLETED',
         completedAt: new Date(),
         durationMinutes,
+        electronicSignoffStatus: 'SIGNED',
+        electronicSignoffAt: new Date(),
+        electronicSignoffBy: workTask.employeeId,
         notes: notes || workTask.notes,
         updatedAt: new Date(),
       })
@@ -1007,22 +2184,7 @@ router.post('/complete-task', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Serialized item not found' });
     }
 
-    let routing = null as any;
-
-    if ((serializedItem as any).partRoutingId) {
-      routing = await db.query.partRoutings.findFirst({
-        where: and(
-          eq(partRoutings.id, (serializedItem as any).partRoutingId),
-          eq(partRoutings.isActive, true)
-        ),
-      });
-    }
-
-    if (!routing) {
-      routing = await db.query.partRoutings.findFirst({
-        where: and(eq(partRoutings.partNumber, serializedItem.partNumber), eq(partRoutings.isActive, true)),
-      });
-    }
+    const routing = await findActiveRoutingForSerializedItem(serializedItem);
 
     const departmentSequence = routing?.departmentSequence
       ? (routing.departmentSequence as string[])

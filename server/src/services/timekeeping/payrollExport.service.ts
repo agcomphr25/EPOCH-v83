@@ -174,6 +174,40 @@ export class PayrollImportEmployeeMatchError extends Error {
   }
 }
 
+export interface PayrollExportReadinessBlocker {
+  code:
+    | "TIMESHEET_NOT_READY"
+    | "MISSING_EMPLOYEE_ATTESTATION"
+    | "MISSING_SUPERVISOR_APPROVAL"
+    | "OPEN_TIMESHEET_CORRECTION";
+  employeeId: number;
+  timesheetId: number;
+  status?: string | null;
+  message: string;
+}
+
+export class PayrollExportReadinessError extends Error {
+  readonly httpStatus = 422;
+  readonly details: { blockers: PayrollExportReadinessBlocker[] };
+
+  constructor(blockers: PayrollExportReadinessBlocker[]) {
+    super(
+      `Payroll export is blocked by ${blockers.length} unresolved timekeeping control ` +
+        `${blockers.length === 1 ? "issue" : "issues"}. Resolve certification, approval, and correction blockers before export.`,
+    );
+    this.name = "PayrollExportReadinessError";
+    this.details = { blockers };
+  }
+}
+
+export interface PayrollExportReadinessResult {
+  periodStart: string;
+  periodEnd: string;
+  ready: boolean;
+  blockerCount: number;
+  blockers: PayrollExportReadinessBlocker[];
+}
+
 // ---------------------------------------------------------------------------
 // CSV building
 // ---------------------------------------------------------------------------
@@ -245,6 +279,10 @@ export interface PayrollSnapshotDataSource {
   fetchTimesheets(periodStart: string, periodEnd: string): Promise<PayrollSnapshotTimesheet[]>;
   fetchLeaveEntries(periodStart: string, periodEnd: string): Promise<PayrollSnapshotLeaveEntry[]>;
   fetchEmployees(employeeIds: number[]): Promise<PayrollSnapshotEmployee[]>;
+  fetchPayrollReadinessBlockers?(
+    periodStart: string,
+    periodEnd: string,
+  ): Promise<PayrollExportReadinessBlocker[]>;
 }
 
 /**
@@ -349,6 +387,97 @@ function txDataSource(client: DbOrTx): PayrollSnapshotDataSource {
       }
       return out;
     },
+    async fetchPayrollReadinessBlockers(periodStart, periodEnd) {
+      const result = await client.execute(sql`
+        WITH period_timesheets AS (
+          SELECT
+            id,
+            employee_id,
+            status,
+            total_hours,
+            employee_attested,
+            attested_at,
+            certification_statement,
+            certification_version,
+            reviewed_at,
+            reviewed_by
+          FROM timekeeping.timesheets
+          WHERE period_start >= ${periodStart}
+            AND period_end <= ${periodEnd}
+        ),
+        blockers AS (
+          SELECT
+            'TIMESHEET_NOT_READY'::text AS code,
+            employee_id,
+            id AS timesheet_id,
+            status,
+            'Timesheet has recorded hours but is not certified or locked.'::text AS message
+          FROM period_timesheets
+          WHERE status NOT IN ('certified', 'locked')
+            AND COALESCE(total_hours, 0) > 0
+
+          UNION ALL
+
+          SELECT
+            'MISSING_EMPLOYEE_ATTESTATION'::text AS code,
+            employee_id,
+            id AS timesheet_id,
+            status,
+            'Certified/locked timesheet is missing employee attestation evidence.'::text AS message
+          FROM period_timesheets
+          WHERE status IN ('certified', 'locked')
+            AND (
+              employee_attested IS DISTINCT FROM TRUE
+              OR attested_at IS NULL
+              OR certification_statement IS NULL
+              OR BTRIM(certification_statement) = ''
+              OR certification_version IS NULL
+            )
+
+          UNION ALL
+
+          SELECT
+            'MISSING_SUPERVISOR_APPROVAL'::text AS code,
+            employee_id,
+            id AS timesheet_id,
+            status,
+            'Certified/locked timesheet is missing supervisor review evidence.'::text AS message
+          FROM period_timesheets
+          WHERE status IN ('certified', 'locked')
+            AND (reviewed_at IS NULL OR reviewed_by IS NULL)
+
+          UNION ALL
+
+          SELECT
+            'OPEN_TIMESHEET_CORRECTION'::text AS code,
+            pt.employee_id,
+            pt.id AS timesheet_id,
+            pt.status,
+            'Timesheet has an unresolved correction request.'::text AS message
+          FROM period_timesheets pt
+          JOIN timekeeping.timesheet_corrections tc
+            ON tc.timesheet_id = pt.id
+          WHERE tc.status NOT IN ('approved', 'rejected')
+        )
+        SELECT code, employee_id, timesheet_id, status, message
+        FROM blockers
+        ORDER BY employee_id, timesheet_id, code
+      `);
+      const rows = ((result as { rows?: unknown[] }).rows ?? result) as Array<{
+        code: PayrollExportReadinessBlocker["code"];
+        employee_id: number;
+        timesheet_id: number;
+        status: string | null;
+        message: string;
+      }>;
+      return rows.map((row) => ({
+        code: row.code,
+        employeeId: Number(row.employee_id),
+        timesheetId: Number(row.timesheet_id),
+        status: row.status,
+        message: row.message,
+      }));
+    },
   };
 }
 
@@ -356,6 +485,46 @@ function assertFiniteNonNegative(value: number, field: string, context: string):
   if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
     throw new InvalidHourValueError(field, value, context);
   }
+}
+
+async function assertPayrollExportReady(
+  dataSource: PayrollSnapshotDataSource,
+  periodStart: string,
+  periodEnd: string,
+): Promise<void> {
+  const blockers = await fetchPayrollExportReadinessBlockers(dataSource, periodStart, periodEnd);
+  if (blockers.length > 0) {
+    throw new PayrollExportReadinessError(blockers);
+  }
+}
+
+async function fetchPayrollExportReadinessBlockers(
+  dataSource: PayrollSnapshotDataSource,
+  periodStart: string,
+  periodEnd: string,
+): Promise<PayrollExportReadinessBlocker[]> {
+  return dataSource.fetchPayrollReadinessBlockers
+    ? await dataSource.fetchPayrollReadinessBlockers(periodStart, periodEnd)
+    : [];
+}
+
+export async function getPayrollExportReadiness(
+  periodStart: string,
+  periodEnd: string,
+  dataSourceOverride?: PayrollSnapshotDataSource,
+): Promise<PayrollExportReadinessResult> {
+  const blockers = await fetchPayrollExportReadinessBlockers(
+    dataSourceOverride ?? txDataSource(db),
+    periodStart,
+    periodEnd,
+  );
+  return {
+    periodStart,
+    periodEnd,
+    ready: blockers.length === 0,
+    blockerCount: blockers.length,
+    blockers,
+  };
 }
 
 /**
@@ -809,6 +978,11 @@ export interface ImportTimeTrakGoGustoCsvInput {
   actor: AuditActor;
   supersedeReason?: string;
   sourceFileName?: string | null;
+  /**
+   * Test seam for readiness gating. Production import callers should not pass
+   * this; they always evaluate readiness from the transaction data source.
+   */
+  dataSourceOverride?: PayrollSnapshotDataSource;
 }
 
 function requireActorId(actor: AuditActor): number {
@@ -835,6 +1009,7 @@ export async function createRegularFullPeriodBatch(
     // Build the snapshot data source from the tx so all reads see the same
     // SERIALIZABLE snapshot as the supersede + insert pair.
     const dataSource = input.dataSourceOverride ?? txDataSource(tx);
+    await assertPayrollExportReady(dataSource, input.periodStart, input.periodEnd);
 
     // Look up prior batches for this (period, regular_full_period).  At most one
     // active or processed; many superseded revisions possible.
@@ -1043,6 +1218,9 @@ export async function importTimeTrakGoGustoCsvBatch(
   const rows = await resolveImportedRows(parsedRows);
 
   return await withSerializableRetry(async (tx) => {
+    const dataSource = input.dataSourceOverride ?? txDataSource(tx);
+    await assertPayrollExportReady(dataSource, input.periodStart, input.periodEnd);
+
     const prior = await tx
       .select()
       .from(payrollExportBatchesTable)

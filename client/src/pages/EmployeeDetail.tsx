@@ -96,6 +96,7 @@ interface Employee {
   buildingKeyAccess?: boolean;
   tciAccess?: boolean;
   hasPin?: boolean;
+  supervisorEmployeeId?: number | null;
 }
 
 interface CertificationFile {
@@ -528,6 +529,20 @@ export default function EmployeeDetail() {
     },
     enabled: !!id,
   });
+
+  const { data: allEmployees = [] } = useQuery<Employee[]>({
+    queryKey: ['/api/employees'],
+    queryFn: async () => {
+      const response = await fetch('/api/employees');
+      if (!response.ok) throw new Error('Failed to fetch employees');
+      return response.json();
+    },
+  });
+
+  const supervisorOptions = allEmployees
+    .filter((emp) => emp.isActive !== false && String(emp.id) !== String(id))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const assignedSupervisor = allEmployees.find((emp) => emp.id === employee?.supervisorEmployeeId);
 
   const { data: certifications = [] } = useQuery({
     queryKey: ['/api/employee-certifications', { employeeId: id }],
@@ -1386,6 +1401,45 @@ export default function EmployeeDetail() {
                       >
                         {employee.userRole}
                       </Badge>
+                    )}
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <Label className="text-xs text-gray-500">
+                      Reports To:
+                    </Label>
+                    {isEditing ? (
+                      <Select
+                        value={
+                          editData.supervisorEmployeeId == null
+                            ? 'none'
+                            : String(editData.supervisorEmployeeId)
+                        }
+                        onValueChange={(value) =>
+                          setEditData((prev) => ({
+                            ...prev,
+                            supervisorEmployeeId: value === 'none' ? null : Number(value),
+                          }))
+                        }
+                      >
+                        <SelectTrigger className="w-full" data-testid="select-supervisor-employee">
+                          <SelectValue placeholder="Assign supervisor" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No supervisor assigned</SelectItem>
+                          {supervisorOptions.map((sup) => (
+                            <SelectItem key={sup.id} value={String(sup.id)}>
+                              {sup.name}{sup.department ? ` - ${sup.department}` : ''}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <span>
+                        {assignedSupervisor
+                          ? `${assignedSupervisor.name}${assignedSupervisor.department ? ` - ${assignedSupervisor.department}` : ''}`
+                          : 'No supervisor assigned'}
+                      </span>
                     )}
                   </div>
                 </div>

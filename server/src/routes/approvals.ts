@@ -27,8 +27,8 @@ import {
   InventoryExecutorError,
 } from '../services/inventoryApprovalExecutor';
 import { db } from '../../db';
-import { approvalRequests } from '../../schema';
-import { eq } from 'drizzle-orm';
+import { approvalRequestHistory, approvalRequests, employees, users } from '../../schema';
+import { and, asc, eq } from 'drizzle-orm';
 
 export const approvalsRouter = Router();
 export const escalationPoliciesRouter = Router();
@@ -85,6 +85,75 @@ approvalsRouter.get('/', async (req: Request, res: Response) => {
   }
 });
 
+approvalsRouter.get('/my-tasks/:employeeId', async (req: Request, res: Response) => {
+  try {
+    const employeeId = Number(req.params.employeeId);
+    if (!Number.isInteger(employeeId) || employeeId <= 0) {
+      return res.status(400).json({ error: 'invalid employee id', code: 'INVALID_EMPLOYEE_ID' });
+    }
+
+    const actorEmployeeId = req.user?.employeeId ?? null;
+    if (!isAdminOrOwner(req) && actorEmployeeId !== employeeId) {
+      return res.status(403).json({ error: 'not authorized to view approval tasks', code: 'FORBIDDEN' });
+    }
+
+    const [linkedUser] = await db
+      .select({ userId: users.id })
+      .from(users)
+      .where(and(eq(users.employeeId, employeeId), eq(users.isActive, true)))
+      .limit(1);
+
+    if (!linkedUser) {
+      return res.json({ tasks: [], stats: { total: 0, pending: 0, completed: 0, overdue: 0 } });
+    }
+
+    const rows = await db
+      .select()
+      .from(approvalRequests)
+      .where(
+        and(
+          eq(approvalRequests.status, 'PENDING'),
+          eq(approvalRequests.currentApproverUserId, linkedUser.userId),
+        ),
+      )
+      .orderBy(asc(approvalRequests.currentLevelDeadline))
+      .limit(100);
+
+    const now = Date.now();
+    const tasks = rows.map((row) => {
+      const deadlineMs = row.currentLevelDeadline ? new Date(row.currentLevelDeadline).getTime() : null;
+      const overdue = deadlineMs != null && deadlineMs <= now;
+      return {
+        id: `approval-${row.id}`,
+        type: 'approval_request',
+        title: `Approval required: ${row.requestType}`,
+        description: row.subjectType && row.subjectId
+          ? `${row.subjectType} #${row.subjectId}`
+          : `Requested by ${row.requestedByDisplayName}`,
+        requestType: row.requestType,
+        requestedByDisplayName: row.requestedByDisplayName,
+        createdAt: row.createdAt,
+        dueAt: row.currentLevelDeadline,
+        priority: overdue ? 'overdue' : 'normal',
+        actionUrl: `/approvals?requestId=${row.id}`,
+        sourceId: row.id,
+      };
+    });
+
+    res.json({
+      tasks,
+      stats: {
+        total: tasks.length,
+        pending: tasks.length,
+        completed: 0,
+        overdue: tasks.filter((task) => task.priority === 'overdue').length,
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message ?? 'approval tasks failed' });
+  }
+});
+
 approvalsRouter.get('/:id', async (req: Request, res: Response) => {
   try {
     const result = await getRequest(req.params.id);
@@ -113,10 +182,112 @@ approvalsRouter.get('/:id', async (req: Request, res: Response) => {
   }
 });
 
+const assignmentBodySchema = z.object({
+  employeeId: z.number().int().positive().nullable().optional(),
+});
+
+approvalsRouter.patch('/:id/assignment', async (req: Request, res: Response) => {
+  try {
+    const body = assignmentBodySchema.parse(req.body ?? {});
+    const [row] = await db
+      .select()
+      .from(approvalRequests)
+      .where(eq(approvalRequests.id, req.params.id));
+    if (!row) return res.status(404).json({ error: 'approval request not found', code: 'NOT_FOUND' });
+    if (row.status !== 'PENDING') {
+      return res.status(409).json({ error: `approval request is ${row.status}`, code: 'NOT_PENDING' });
+    }
+
+    const actor = actorFromReq(req);
+    const isAssignedUser =
+      row.currentApproverUserId != null &&
+      actor.userId != null &&
+      row.currentApproverUserId === actor.userId;
+    const isAssignedRole =
+      !!row.currentApproverRole && actor.roles.includes(row.currentApproverRole);
+    if (!isAdminOrOwner(req) && !isAssignedUser && !isAssignedRole) {
+      return res.status(403).json({ error: 'not authorized to assign this approval', code: 'FORBIDDEN' });
+    }
+
+    let assigneeUserId: number | null = null;
+    let assigneeName: string | null = null;
+    if (body.employeeId != null) {
+      const [assignee] = await db
+        .select({
+          employeeId: employees.id,
+          employeeName: employees.name,
+          userId: users.id,
+        })
+        .from(employees)
+        .leftJoin(users, and(eq(users.employeeId, employees.id), eq(users.isActive, true)))
+        .where(eq(employees.id, body.employeeId))
+        .limit(1);
+
+      if (!assignee) {
+        return res.status(404).json({ error: 'employee not found', code: 'EMPLOYEE_NOT_FOUND' });
+      }
+      if (assignee.userId == null) {
+        return res.status(400).json({
+          error: 'selected employee does not have an active user account',
+          code: 'EMPLOYEE_WITHOUT_USER',
+        });
+      }
+      if (row.requestedByUserId != null && row.requestedByUserId === assignee.userId) {
+        return res.status(403).json({
+          error: 'Self-approval is not permitted. Assign this request to another employee.',
+          code: 'SELF_APPROVAL_BLOCKED',
+        });
+      }
+      assigneeUserId = assignee.userId;
+      assigneeName = assignee.employeeName;
+    }
+
+    const now = new Date();
+    const [updated] = await db
+      .update(approvalRequests)
+      .set({
+        currentApproverUserId: assigneeUserId,
+        updatedAt: now,
+      })
+      .where(eq(approvalRequests.id, row.id))
+      .returning();
+
+    await db.insert(approvalRequestHistory).values({
+      approvalRequestId: row.id,
+      event: 'ASSIGNED',
+      fromLevel: row.escalationLevel,
+      toLevel: row.escalationLevel,
+      fromStatus: row.status,
+      toStatus: row.status,
+      actorUserId: actor.userId,
+      actorDisplayName: actor.displayName,
+      notes: assigneeUserId == null
+        ? 'Approval assignment cleared'
+        : `Approval assigned to ${assigneeName}`,
+      metadata: {
+        assignedEmployeeId: body.employeeId ?? null,
+        assignedUserId: assigneeUserId,
+        assignedEmployeeName: assigneeName,
+      },
+    });
+
+    res.json(updated);
+  } catch (err: any) {
+    handleEscalationError(err, res);
+  }
+});
+
 const decisionBodySchema = z.object({
   notes: z.string().optional().nullable(),
   reasonCode: z.string().optional().nullable(),
   signature: z.string().optional().nullable(),
+  signatureMeaning: z.string().optional().nullable(),
+  signatureReason: z.string().optional().nullable(),
+  signerUsername: z.string().optional().nullable(),
+  signerRole: z.string().optional().nullable(),
+  linkedObjectType: z.string().optional().nullable(),
+  linkedObjectId: z.string().optional().nullable(),
+  digitalSignatureId: z.string().uuid().optional().nullable(),
 });
 
 approvalsRouter.post('/:id/approve', async (req: Request, res: Response) => {
@@ -163,6 +334,13 @@ approvalsRouter.post('/:id/approve', async (req: Request, res: Response) => {
       notes: body.notes ?? null,
       reasonCode: body.reasonCode ?? null,
       signature: body.signature ?? null,
+      signatureMeaning: body.signatureMeaning ?? null,
+      signatureReason: body.signatureReason ?? null,
+      signerUsername: body.signerUsername ?? null,
+      signerRole: body.signerRole ?? null,
+      linkedObjectType: body.linkedObjectType ?? null,
+      linkedObjectId: body.linkedObjectId ?? null,
+      digitalSignatureId: body.digitalSignatureId ?? null,
     });
 
     // Run the inventory executor inline so the operator sees the outcome
@@ -207,6 +385,13 @@ approvalsRouter.post('/:id/reject', async (req: Request, res: Response) => {
       notes: body.notes ?? null,
       reasonCode: body.reasonCode ?? null,
       signature: body.signature ?? null,
+      signatureMeaning: body.signatureMeaning ?? null,
+      signatureReason: body.signatureReason ?? null,
+      signerUsername: body.signerUsername ?? null,
+      signerRole: body.signerRole ?? null,
+      linkedObjectType: body.linkedObjectType ?? null,
+      linkedObjectId: body.linkedObjectId ?? null,
+      digitalSignatureId: body.digitalSignatureId ?? null,
     });
     res.json(result);
   } catch (err: any) {

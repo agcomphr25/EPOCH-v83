@@ -69,8 +69,35 @@ export function OrderAttachments({
   const uploadMutation = useMutation({
     mutationFn: async ({ files, notes }: { files: File[]; notes: string }) => {
       const uploadedAttachments = [];
+
+      async function uploadViaLocalFallback(reason: string, fallbackFiles: File[]) {
+        const formData = new FormData();
+        formData.append('orderId', orderId);
+        if (notes) formData.append('notes', notes);
+        fallbackFiles.forEach(file => formData.append('files', file));
+
+        console.warn('[OrderAttachments] Falling back to local upload', {
+          orderId,
+          reason,
+          fileCount: fallbackFiles.length,
+        });
+
+        const fallbackResponse = await fetch('/api/order-attachments/local-upload', {
+          method: 'POST',
+          credentials: 'include',
+          body: formData,
+        });
+
+        if (!fallbackResponse.ok) {
+          const error = await fallbackResponse.json().catch(() => ({}));
+          throw new Error(error.error || 'Fallback upload failed');
+        }
+
+        const data = await fallbackResponse.json();
+        return data.attachments ?? [];
+      }
       
-      for (const file of files) {
+      for (const [index, file] of files.entries()) {
         // Step 1: Request presigned URL from backend
         const urlResponse = await fetch('/api/order-attachments/request-upload-url', {
           method: 'POST',
@@ -87,7 +114,19 @@ export function OrderAttachments({
         if (!urlResponse.ok) {
           const error = await urlResponse.json().catch(() => ({}));
           console.error('Request upload URL failed:', urlResponse.status, error);
-          throw new Error(error.error || 'Failed to get upload URL');
+          if (
+            urlResponse.status === 401 ||
+            urlResponse.status === 403 ||
+            urlResponse.status === 503 ||
+            String(error.reason || error.details || '').toLowerCase().includes('storage signing unauthorized')
+          ) {
+            const fallbackAttachments = await uploadViaLocalFallback(
+              error.details || error.reason || `HTTP ${urlResponse.status}`,
+              files.slice(index),
+            );
+            return [...uploadedAttachments, ...fallbackAttachments];
+          }
+          throw new Error(error.details || error.reason || error.error || 'Failed to get upload URL');
         }
         
         const { uploadURL, objectPath } = await urlResponse.json();
@@ -100,7 +139,8 @@ export function OrderAttachments({
         });
         
         if (!uploadResponse.ok) {
-          throw new Error(`Failed to upload ${file.name} to cloud storage`);
+          const error = await uploadResponse.json().catch(() => ({}));
+          throw new Error(error.details || error.reason || `Failed to upload ${file.name} to cloud storage`);
         }
         
         // Step 3: Complete upload - save metadata to database

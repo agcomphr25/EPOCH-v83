@@ -18,6 +18,26 @@ function h(fn: (req: Request, res: Response, next: NextFunction) => Promise<void
 
 const router: IRouter = Router();
 
+async function resolveUserEmployeeId(user: SafeUser | undefined | null): Promise<number | null> {
+  if (!user) return null;
+  if (user.employeeId != null) return user.employeeId;
+
+  const username = String(user.username ?? "").trim();
+  if (!username) return null;
+
+  const { pool } = await import("../../../db");
+  const { rows } = await pool.query<{ id: number }>(
+    `
+      SELECT e.id
+      FROM employees e
+      WHERE LOWER(e.employee_code) = LOWER($1)
+      LIMIT 1
+    `,
+    [username]
+  );
+  return rows[0]?.id ?? null;
+}
+
 // ---------------------------------------------------------------------------
 // Validation schemas
 // ---------------------------------------------------------------------------
@@ -51,6 +71,55 @@ const StageReviewSchema = z.object({
   // Legacy field
   adminNote: z.string().max(2000).optional(),
 });
+
+// ---------------------------------------------------------------------------
+// Logged-in employee portal — submit/read own PTO
+// ---------------------------------------------------------------------------
+router.post(
+  "/time-off/my",
+  authenticateToken,
+  h(async (req, res): Promise<void> => {
+    const user = req.user as SafeUser | undefined;
+    const employeeId = user?.employeeId ?? null;
+    if (!user || !employeeId) { res.status(403).json({ error: "Your account is not linked to an employee record" }); return; }
+
+    const parse = PortalCreateRequestSchema.safeParse(req.body);
+    if (!parse.success) { res.status(400).json({ error: parse.error.message }); return; }
+    const { startDate, endDate, requestUnit, requestedHours, partialDayDate, employeeNote } = parse.data;
+    if (startDate > endDate) { res.status(400).json({ error: "startDate must not be after endDate" }); return; }
+    if (requestUnit === "hourly" && !requestedHours) {
+      res.status(400).json({ error: "requestedHours is required when requestUnit is 'hourly'" }); return;
+    }
+
+    const request = await svc.submitPTORequest({
+      employeeId,
+      startDate,
+      endDate,
+      leaveType: "pto",
+      requestUnit,
+      requestedHours: requestedHours ?? null,
+      partialDayDate: partialDayDate ?? null,
+      employeeNote,
+      submittedByUserId: user.id,
+      submittedOnBehalf: false,
+      actorUser: user,
+      actorIp: req.ip ?? null,
+    });
+    res.status(201).json(request);
+  })
+);
+
+router.get(
+  "/time-off/my",
+  authenticateToken,
+  h(async (req, res): Promise<void> => {
+    const employeeId = req.user?.employeeId ?? null;
+    if (!employeeId) { res.status(403).json({ error: "Your account is not linked to an employee record" }); return; }
+
+    const requests = await svc.getTimeOffRequestsByEmployee(employeeId);
+    res.json(requests);
+  })
+);
 
 // ---------------------------------------------------------------------------
 // Employee portal — submit PTO
@@ -273,34 +342,39 @@ router.post(
 
     // ADMIN/OWNER bypass capability check
     if (!isAdminOrOwner) {
+      let isAssignedSupervisorReviewer = false;
+
+      // Supervisor stage: assigned supervisors can review their own direct reports
+      // even if they do not carry the broader PTO supervisor capability.
+      if (stage === "supervisor") {
+        const reviewerEpochEmployeeId: number | null = await resolveUserEmployeeId(user);
+        if (reviewerEpochEmployeeId === null) {
+          res.status(403).json({ error: "Your account is not linked to an employee record and cannot perform supervisor reviews." }); return;
+        }
+        const { pool } = await import("../../../db");
+        const { rows } = await pool.query<{ supervisor_id: number | null }>(
+          `
+            SELECT COALESCE(r.supervisor_id, e.supervisor_employee_id) AS supervisor_id
+            FROM timekeeping.time_off_requests r
+            LEFT JOIN employees e ON e.id = r.employee_id
+            WHERE r.id = $1
+            LIMIT 1
+          `,
+          [id],
+        );
+        const assignedSupervisorId = rows[0]?.supervisor_id ?? null;
+        if (assignedSupervisorId !== null && assignedSupervisorId !== reviewerEpochEmployeeId) {
+          res.status(403).json({ error: "You are not the assigned supervisor for this request." }); return;
+        }
+        isAssignedSupervisorReviewer = assignedSupervisorId === reviewerEpochEmployeeId;
+      }
+
       const requiredCap = stageCapMap[stage];
       if (requiredCap) {
         const { getUserPermissions } = await import("../../services/permissionService");
         const { permissionSet } = await getUserPermissions(user.id, user.role);
-        if (!permissionSet.has(requiredCap)) {
+        if (!permissionSet.has(requiredCap) && !isAssignedSupervisorReviewer) {
           res.status(403).json({ error: `Missing capability: ${requiredCap}` }); return;
-        }
-      }
-
-      // Supervisor stage: enforce reviewer-to-request supervisor assignment.
-      // user.employeeId is the epoch employee ID from AuthUser (number | null).
-      // Fail closed: if the reviewer has no linked epoch employee, deny access.
-      if (stage === "supervisor") {
-        const reviewerEpochEmployeeId: number | null = user.employeeId ?? null;
-        if (reviewerEpochEmployeeId === null) {
-          res.status(403).json({ error: "Your account is not linked to an employee record and cannot perform supervisor reviews." }); return;
-        }
-        const { db } = await import("../../../db");
-        const { timeOffRequestsTable } = await import("../../schema/timekeeping");
-        const { eq } = await import("drizzle-orm");
-        const rows = await db
-          .select({ supervisorId: timeOffRequestsTable.supervisorId })
-          .from(timeOffRequestsTable)
-          .where(eq(timeOffRequestsTable.id, id))
-          .limit(1);
-        const assignedSupervisorId: number | null = rows[0]?.supervisorId ?? null;
-        if (assignedSupervisorId !== null && assignedSupervisorId !== reviewerEpochEmployeeId) {
-          res.status(403).json({ error: "You are not the assigned supervisor for this request." }); return;
         }
       }
     }

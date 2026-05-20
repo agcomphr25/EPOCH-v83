@@ -24,6 +24,8 @@ router.post('/api/p2/schedule-items', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Item IDs array is required' });
     }
 
+    const { ensureProductionWorkflowReadSchema } = await import('../lib/productionWorkflowReadiness');
+    await ensureProductionWorkflowReadSchema();
     const { db } = await import('../../db');
     const {
       p2SerializedItems,
@@ -33,24 +35,58 @@ router.post('/api/p2/schedule-items', async (req: Request, res: Response) => {
       cuttingPacketBOMs,
     } = await import('../../schema');
     const { eq, inArray, and } = await import('drizzle-orm');
+    const serializedItemIds = itemIds.filter(
+      (id: unknown): id is string =>
+        typeof id === 'string' && !id.startsWith('legacy-p2-production-order-')
+    );
+    const legacyProductionOrderIds = [
+      ...new Set(
+        itemIds
+          .map((id: unknown) => {
+            const match = typeof id === 'string'
+              ? id.match(/^legacy-p2-production-order-(\d+)(?:-\d+)?$/)
+              : null;
+            return match ? Number(match[1]) : null;
+          })
+          .filter((id: number | null): id is number => Number.isInteger(id))
+      ),
+    ];
 
     // Update all items to move to Layup department (scheduled for production)
-    const result = await db
-      .update(p2SerializedItems)
-      .set({
-        currentDepartment: 'Layup',
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          inArray(p2SerializedItems.id, itemIds),
-          eq(p2SerializedItems.status, 'ACTIVE'),
-          eq(p2SerializedItems.currentDepartment, 'Pending Layup')
+    const result = serializedItemIds.length > 0
+      ? await db
+        .update(p2SerializedItems)
+        .set({
+          currentDepartment: 'Layup',
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            inArray(p2SerializedItems.id, serializedItemIds),
+            eq(p2SerializedItems.status, 'ACTIVE'),
+            eq(p2SerializedItems.currentDepartment, 'Pending Layup')
+          )
         )
-      )
-      .returning({ id: p2SerializedItems.id, poId: p2SerializedItems.poId });
+        .returning({ id: p2SerializedItems.id, poId: p2SerializedItems.poId })
+      : [];
 
-    console.log(`Scheduled ${result.length} items for production`);
+    const legacyResult = legacyProductionOrderIds.length > 0
+      ? await db
+        .update(p2ProductionOrders)
+        .set({
+          scheduledLayupDate: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            inArray(p2ProductionOrders.id, legacyProductionOrderIds),
+            eq(p2ProductionOrders.status, 'PENDING')
+          )
+        )
+        .returning({ id: p2ProductionOrders.id, poId: p2ProductionOrders.p2PoId })
+      : [];
+
+    console.log(`Scheduled ${result.length + legacyResult.length} items for production`);
 
     // Auto-sync P2 cutting table demands for the affected POs.
     // All cutting orders for the affected POs are resolved to their actual packet
@@ -66,7 +102,10 @@ router.post('/api/p2/schedule-items', async (req: Request, res: Response) => {
       const { upsertGroupedCuttingQueueEntry } = await import(
         '../utils/cuttingQueueGroupingHelper'
       );
-      const affectedPoIds = [...new Set(result.map((r) => r.poId))];
+      const affectedPoIds = [...new Set([
+        ...result.map((r) => r.poId),
+        ...legacyResult.map((r) => r.poId),
+      ])];
 
       // CF/FG packet items used as fallback when SKU lookup misses
       const cfPacketItem = await db
@@ -297,9 +336,9 @@ router.post('/api/p2/schedule-items', async (req: Request, res: Response) => {
 
     res.json({
       success: true,
-      scheduled: result.length,
+      scheduled: result.length + legacyResult.length,
       cuttingTableDemands: cuttingTableSynced,
-      message: `${result.length} items moved to Layup department${cuttingTableSynced > 0 ? `, ${cuttingTableSynced} cutting table stock packet demands created` : ''}`,
+      message: `${result.length + legacyResult.length} items scheduled for production${cuttingTableSynced > 0 ? `, ${cuttingTableSynced} cutting table stock packet demands created` : ''}`,
     });
   } catch (_error) {
     console.error('P2 schedule-items error:', _error);

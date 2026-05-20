@@ -95,12 +95,13 @@ export default function RFQRiskAssessment() {
   // Read customerId from URL query param (set when navigating from a project)
   const search = useSearch();
   const urlCustomerId = new URLSearchParams(search).get('customerId') ?? '';
+  const urlAssessmentId = new URLSearchParams(search).get('id') ?? '';
 
   // Tab and search state
   const [activeTab, setActiveTab] = useState('create');
   // If a customerId was passed via URL, keep the create tab active rather than
   // auto-switching to the view list (the operator is starting a new RFQ for that customer).
-  const [userSwitchedTab, setUserSwitchedTab] = useState(!!urlCustomerId);
+  const [userSwitchedTab, setUserSwitchedTab] = useState(!!urlCustomerId || !!urlAssessmentId);
   const [searchTerm, setSearchTerm] = useState('');
   const [editingAssessmentId, setEditingAssessmentId] = useState<number | null>(null);
   const [isViewingSubmitted, setIsViewingSubmitted] = useState(false);
@@ -179,6 +180,18 @@ export default function RFQRiskAssessment() {
       setActiveTab('view');
     }
   }, [assessments.length, userSwitchedTab]);
+
+  const loadedUrlAssessmentRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!urlAssessmentId || assessments.length === 0 || loadedUrlAssessmentRef.current === urlAssessmentId) return;
+
+    const linkedAssessment = assessments.find((assessment) => String(assessment.id) === urlAssessmentId);
+    if (!linkedAssessment) return;
+
+    loadedUrlAssessmentRef.current = urlAssessmentId;
+    loadAssessmentForEditing(linkedAssessment.rfqNumber);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlAssessmentId, assessments]);
 
   // Authorization logic for high-risk RFQs (score > 16)
   const isHighRisk = formData.totalOverallPoints > 16;

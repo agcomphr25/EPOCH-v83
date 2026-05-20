@@ -1,6 +1,12 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
-import { Pool } from 'pg';
+import { Pool, type QueryResult, type QueryResultRow } from 'pg';
 import * as schema from './schema';
+import {
+  createInitialDatabaseHealth,
+  runDatabaseHealthCheck,
+  type DatabaseHealthSnapshot,
+} from './bootstrap/dbHealth';
+import { buildPgPoolConfig, getDbHealthcheckTimeoutMs } from './bootstrap/dbPoolConfig';
 
 const connectionString =
   process.env.FORCE_DATABASE_URL ||
@@ -46,10 +52,37 @@ export function getDatabaseTargetInfo() {
   }
 }
 
-console.log('Initializing database connection...', getDatabaseTargetInfo());
+const poolConfig = buildPgPoolConfig(connectionString);
+let databaseHealth: DatabaseHealthSnapshot = createInitialDatabaseHealth(getDatabaseTargetInfo());
 
-export const pgPool = new Pool({
-  connectionString,
+console.log('Initializing database connection...', {
+  ...getDatabaseTargetInfo(),
+  pool: {
+    max: poolConfig.max,
+    idleTimeoutMillis: poolConfig.idleTimeoutMillis,
+    connectionTimeoutMillis: poolConfig.connectionTimeoutMillis,
+    queryTimeoutMillis: poolConfig.query_timeout,
+    statementTimeoutMillis: poolConfig.statement_timeout,
+    ssl: Boolean(poolConfig.ssl),
+  },
+});
+
+export const pgPool = new Pool(poolConfig);
+
+pgPool.on('error', (error) => {
+  databaseHealth = {
+    ...databaseHealth,
+    status: 'unhealthy',
+    checkedAt: new Date().toISOString(),
+    latencyMs: null,
+    error: error.message,
+  };
+  console.error('[db:pool] Idle client error:', {
+    message: error.message,
+    code: (error as any).code,
+    detail: (error as any).detail,
+    hint: (error as any).hint,
+  });
 });
 
 export const db = drizzle({ client: pgPool, schema });
@@ -66,12 +99,40 @@ export async function rawSql(strings: TemplateStringsArray, ...values: any[]): P
   return result.rows;
 }
 
+export type CompatibleQueryResult<T extends QueryResultRow = any> =
+  T[] &
+  Pick<QueryResult<T>, 'rows' | 'rowCount' | 'command' | 'oid' | 'fields'>;
+
+function toCompatibleQueryResult<T extends QueryResultRow>(
+  result: QueryResult<T>,
+): CompatibleQueryResult<T> {
+  const rows = [...result.rows] as CompatibleQueryResult<T>;
+
+  Object.defineProperties(rows, {
+    rows: { value: rows, enumerable: false },
+    rowCount: { value: result.rowCount, enumerable: false },
+    command: { value: result.command, enumerable: false },
+    oid: { value: result.oid, enumerable: false },
+    fields: { value: result.fields, enumerable: false },
+  });
+
+  return rows;
+}
+
+export async function queryRows<T extends QueryResultRow = any>(
+  queryString: string,
+  params?: any[],
+): Promise<T[]> {
+  return pgPool.query<T>(queryString, params || []).then((result) => result.rows);
+}
+
 export async function testDatabaseConnection() {
   try {
     console.log('Testing database connection...');
 
+    const timeoutMs = getDbHealthcheckTimeoutMs();
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Database connection timeout')), 30000)
+      setTimeout(() => reject(new Error(`Database connection timeout after ${timeoutMs}ms`)), timeoutMs)
     );
 
     await Promise.race([pgPool.query('SELECT 1'), timeoutPromise]);
@@ -85,12 +146,27 @@ export async function testDatabaseConnection() {
   }
 }
 
+export function getDatabaseHealthSnapshot() {
+  return databaseHealth;
+}
+
+export async function checkDatabaseHealth() {
+  const result = await runDatabaseHealthCheck(
+    () => pgPool.query('SELECT 1'),
+    getDatabaseTargetInfo(),
+    getDbHealthcheckTimeoutMs(),
+  );
+  databaseHealth = result;
+  return result;
+}
+
 export const pool = {
-  query: async (queryString: string, params?: any[]) => {
-    const result = await pgPool.query(queryString, params || []);
-    const rows = [...result.rows] as any[];
-    (rows as any).rowCount = result.rowCount;
-    return rows;
+  query: async <T extends QueryResultRow = any>(
+    queryString: string,
+    params?: any[],
+  ): Promise<CompatibleQueryResult<T>> => {
+    const result = await pgPool.query<T>(queryString, params || []);
+    return toCompatibleQueryResult(result);
   },
   end: () => pgPool.end(),
   connect: () => pgPool.connect(),

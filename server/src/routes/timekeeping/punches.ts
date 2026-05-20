@@ -1149,6 +1149,25 @@ router.get("/punches/my", authenticateToken, h(async (req, res): Promise<void> =
   res.json(sessionsToPunchEvents(sessions));
 }));
 
+router.get("/punches/my/active-shift", authenticateToken, h(async (req, res): Promise<void> => {
+  const employeeId = req.user?.employeeId ?? null;
+  if (!employeeId) { res.status(403).json({ error: "Your account is not linked to an employee record" }); return; }
+
+  const openSession = await ledger.getOpenSession(employeeId);
+  const to = new Date();
+  const from = openSession?.clockIn
+    ? new Date(new Date(openSession.clockIn).getTime() - 2 * 60 * 60 * 1000)
+    : new Date(to.getTime() - 18 * 60 * 60 * 1000);
+  const sessions = await ledger.listSessions({ employeeId, from, to });
+
+  res.json({
+    employeeId,
+    from: from.toISOString(),
+    to: to.toISOString(),
+    punches: sessionsToPunchEvents(sessions),
+  });
+}));
+
 // POST /punches — admin creates a punch_ledger entry (admin correction / manual punch)
 // employeeId must resolve to public.employees.id; clock-in opens a session, clock-out closes it.
 router.post("/punches", authenticateToken, requireRole('ADMIN', 'OWNER'), h(async (req, res): Promise<void> => {

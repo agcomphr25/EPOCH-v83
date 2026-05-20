@@ -3107,35 +3107,95 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   app.get('/api/p2/control-center/scheduling-list', async (req, res) => {
     try {
       const { storage } = await import('../../storage');
+      const { pool: dbPool } = await import('../../db');
       const serializedItems = await storage.getP2SerializedItems({});
-      const pos = await storage.getAllP2PurchaseOrders();
-      
-      // Filter for items that are ACTIVE and either pending layup or in early production stages
-      // Items are schedulable if they haven't completed production yet
-      const schedulingList = serializedItems
-        .filter((s: any) => {
-          // Must be ACTIVE (not completed, scrapped, or on hold)
+
+      const poItemResult = await dbPool.query(
+        `SELECT
+           poi.id AS "poItemId",
+           poi.po_id AS "poId",
+           poi.part_number AS "partNumber",
+           poi.part_name AS "partName",
+           poi.quantity AS "orderedQuantity",
+           po.po_number AS "poNumber",
+           po.expected_delivery AS "dueDate",
+           po.status AS "poStatus"
+         FROM p2_purchase_order_items poi
+         JOIN p2_purchase_orders po ON po.id = poi.po_id
+         WHERE COALESCE(UPPER(po.status), '') NOT IN ('COMPLETED', 'CANCELED', 'CANCELLED', 'CLOSED')`
+      );
+      const poItems = Array.isArray(poItemResult)
+        ? poItemResult
+        : ((poItemResult as any)?.rows ?? []);
+      const poItemById = new Map<number, any>(
+        poItems.map((item: any) => [Number(item.poItemId), item])
+      );
+
+      const serializedByPoItemId = new Map<number, any[]>();
+      for (const item of serializedItems as any[]) {
+        const poItemId = Number(item.poItemId);
+        if (!poItemById.has(poItemId)) continue;
+        if (!serializedByPoItemId.has(poItemId)) {
+          serializedByPoItemId.set(poItemId, []);
+        }
+        serializedByPoItemId.get(poItemId)!.push(item);
+      }
+
+      const sortBySequence = (a: any, b: any) =>
+        (Number(a.sequenceNumber) || 0) - (Number(b.sequenceNumber) || 0) ||
+        String(a.id).localeCompare(String(b.id));
+
+      const schedulingList: any[] = [];
+      for (const poItem of poItems) {
+        const items = (serializedByPoItemId.get(Number(poItem.poItemId)) ?? [])
+          .sort(sortBySequence);
+        if (items.length === 0) continue;
+
+        const orderedQuantity = Number(poItem.orderedQuantity) || 0;
+        const completedCount = items.filter((s: any) => s.status === 'COMPLETED').length;
+        const otherInProductionCount = items.filter((s: any) => {
           if (s.status !== 'ACTIVE') return false;
-          // Schedulable if in Pending Layup or Layup department (early stages)
-          const dept = s.currentDepartment || '';
-          return dept === 'Pending Layup' || dept === 'Layup' || dept === '' || !dept;
-        })
-        .map((s: any) => {
-          const po = pos.find((p: any) => p.id === s.poId);
-          const isScheduled = s.currentDepartment === 'Layup';
-          return {
+          const dept = String(s.currentDepartment || '').trim();
+          return dept !== '' && dept !== 'Pending Layup' && dept !== 'Layup';
+        }).length;
+        const earlyStageCapacity = Math.max(
+          0,
+          orderedQuantity - completedCount - otherInProductionCount
+        );
+
+        const scheduledItems = items.filter((s: any) =>
+          s.status === 'ACTIVE' && String(s.currentDepartment || '').trim() === 'Layup'
+        );
+        const pendingItems = items.filter((s: any) => {
+          if (s.status !== 'ACTIVE') return false;
+          const dept = String(s.currentDepartment || '').trim();
+          return dept === '' || dept === 'Pending Layup';
+        });
+
+        const scheduledToShow = scheduledItems.slice(0, earlyStageCapacity);
+        const pendingToShow = pendingItems.slice(
+          0,
+          Math.max(0, earlyStageCapacity - scheduledToShow.length)
+        );
+
+        for (const s of [...scheduledToShow, ...pendingToShow]) {
+          const isScheduled = String(s.currentDepartment || '').trim() === 'Layup';
+          schedulingList.push({
             id: s.id,
-            poNumber: s.poNumber || po?.poNumber || 'Unknown',
-            partNumber: s.partNumber || 'Unknown',
-            description: s.partName || '',
+            poId: poItem.poId,
+            poItemId: poItem.poItemId,
+            poNumber: poItem.poNumber || s.poNumber || 'Unknown',
+            partNumber: poItem.partNumber || s.partNumber || 'Unknown',
+            description: poItem.partName || s.partName || '',
             totalQuantity: 1,
             scheduledQuantity: isScheduled ? 1 : 0,
             remainingQuantity: isScheduled ? 0 : 1,
-            dueDate: po?.expectedDelivery || po?.dueDate,
+            dueDate: poItem.dueDate,
             priority: 'normal',
             status: isScheduled ? 'scheduled' : 'pending'
-          };
-        });
+          });
+        }
+      }
       
       res.json(schedulingList);
     } catch (_error) {

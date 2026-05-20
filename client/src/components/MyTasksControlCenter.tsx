@@ -3,10 +3,19 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
+import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -23,6 +32,7 @@ import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import {
   CheckCircle2,
+  XCircle,
   Clock,
   AlertTriangle,
   Search,
@@ -34,6 +44,7 @@ import {
   History,
   RefreshCw,
   ExternalLink,
+  Loader2,
 } from 'lucide-react';
 import { format, isAfter, isBefore, startOfDay } from 'date-fns';
 import { Link } from 'wouter';
@@ -80,6 +91,11 @@ interface TimekeepingApprovalTask {
   title: string;
   description: string;
   employeeName: string;
+  startDate?: string;
+  endDate?: string;
+  requestUnit?: string | null;
+  requestedHours?: number | null;
+  employeeNote?: string | null;
   createdAt: string;
   priority: 'normal' | 'overdue';
   actionUrl: string;
@@ -625,36 +641,202 @@ function TimekeepingApprovalTasks({
   tasks: TimekeepingApprovalTask[];
   compact?: boolean;
 }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [reviewTarget, setReviewTarget] = useState<{
+    task: TimekeepingApprovalTask;
+    decision: 'approved' | 'denied';
+  } | null>(null);
+  const [note, setNote] = useState('');
+
+  const reviewMutation = useMutation({
+    mutationFn: ({
+      task,
+      decision,
+      note,
+    }: {
+      task: TimekeepingApprovalTask;
+      decision: 'approved' | 'denied';
+      note: string;
+    }) =>
+      apiRequest(`/api/timekeeping/time-off/${task.sourceId}/review`, {
+        method: 'POST',
+        body: JSON.stringify({
+          stage: 'supervisor',
+          decision,
+          note: note || undefined,
+        }),
+      }),
+    onSuccess: (_data, vars) => {
+      toast({
+        title: vars.decision === 'approved' ? 'PTO approved' : 'PTO denied',
+        description:
+          vars.decision === 'approved'
+            ? 'The request has been advanced for the next review.'
+            : 'The employee will be notified of the denial.',
+      });
+      setReviewTarget(null);
+      setNote('');
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/my-tasks'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/pto-command-center/summary'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/pto-command-center/pipeline'] });
+    },
+    onError: (err: Error) => {
+      toast({
+        title: 'Unable to update PTO request',
+        description: err.message || 'Please try again.',
+        variant: 'destructive',
+      });
+    },
+  });
+
   if (tasks.length === 0) return null;
 
   const visibleTasks = compact ? tasks.slice(0, 3) : tasks;
+  const ptoReviewTarget = reviewTarget?.task.type === 'pto_approval' ? reviewTarget : null;
 
   return (
-    <div className="space-y-2" data-testid="timekeeping-approval-tasks">
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-muted-foreground font-medium">
-          Timekeeping Approvals
-        </p>
-        <Badge variant="outline">{tasks.length}</Badge>
-      </div>
-      {visibleTasks.map((task) => (
-        <div
-          key={task.id}
-          className="flex items-start gap-3 p-3 border rounded-lg bg-amber-50/70 border-amber-200"
-        >
-          <Clock className="h-4 w-4 mt-0.5 text-amber-700 shrink-0" />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold truncate">{task.title}</p>
-            <p className="text-xs text-muted-foreground truncate">{task.description}</p>
-          </div>
-          <Link href={task.actionUrl}>
-            <Button variant="outline" size="sm">
-              <ExternalLink className="h-4 w-4" />
-            </Button>
-          </Link>
+    <>
+      <div className="space-y-2" data-testid="timekeeping-approval-tasks">
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-muted-foreground font-medium">
+            Timekeeping Approvals
+          </p>
+          <Badge variant="outline">{tasks.length}</Badge>
         </div>
-      ))}
-    </div>
+        {visibleTasks.map((task) => (
+          <div
+            key={task.id}
+            className="flex items-start gap-3 p-3 border rounded-lg bg-amber-50/70 border-amber-200"
+          >
+            <Clock className="h-4 w-4 mt-0.5 text-amber-700 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold truncate">{task.title}</p>
+              <p className="text-xs text-muted-foreground truncate">{task.description}</p>
+            </div>
+            {task.type === 'pto_approval' ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setReviewTarget({ task, decision: 'approved' })}
+                data-testid={`button-review-pto-${task.sourceId}`}
+              >
+                Review
+              </Button>
+            ) : (
+              <Link href={task.actionUrl}>
+                <Button variant="outline" size="sm">
+                  <ExternalLink className="h-4 w-4" />
+                </Button>
+              </Link>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <Dialog
+        open={!!ptoReviewTarget}
+        onOpenChange={(open) => {
+          if (!open) {
+            setReviewTarget(null);
+            setNote('');
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Review PTO Request</DialogTitle>
+          </DialogHeader>
+          {ptoReviewTarget && (
+            <div className="space-y-4">
+              <div className="rounded-md border bg-muted/30 p-3 text-sm space-y-1">
+                <div className="font-semibold">{ptoReviewTarget.task.employeeName}</div>
+                <div className="text-muted-foreground">
+                  {ptoReviewTarget.task.startDate || 'Start date'} to {ptoReviewTarget.task.endDate || 'End date'}
+                  {ptoReviewTarget.task.requestedHours != null
+                    ? ` - ${ptoReviewTarget.task.requestedHours} hours`
+                    : ''}
+                </div>
+                {ptoReviewTarget.task.requestUnit && (
+                  <div className="text-muted-foreground">
+                    Unit: {ptoReviewTarget.task.requestUnit.replace(/_/g, ' ')}
+                  </div>
+                )}
+                {ptoReviewTarget.task.employeeNote && (
+                  <div className="pt-2 text-muted-foreground">
+                    <span className="font-medium text-foreground">Employee note:</span>{' '}
+                    {ptoReviewTarget.task.employeeNote}
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  variant={ptoReviewTarget.decision === 'approved' ? 'default' : 'outline'}
+                  onClick={() => setReviewTarget({ ...ptoReviewTarget, decision: 'approved' })}
+                >
+                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                  Approve
+                </Button>
+                <Button
+                  variant={ptoReviewTarget.decision === 'denied' ? 'destructive' : 'outline'}
+                  onClick={() => setReviewTarget({ ...ptoReviewTarget, decision: 'denied' })}
+                >
+                  <XCircle className="h-4 w-4 mr-2" />
+                  Deny
+                </Button>
+              </div>
+
+              <div className="space-y-1">
+                <Label>
+                  {ptoReviewTarget.decision === 'denied' ? 'Denial reason' : 'Note'}
+                  {ptoReviewTarget.decision === 'denied' && <span className="text-red-500"> *</span>}
+                </Label>
+                <Textarea
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder={ptoReviewTarget.decision === 'denied' ? 'Required for denial' : 'Optional'}
+                  rows={3}
+                  className="resize-none"
+                  data-testid="textarea-pto-review-note"
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setReviewTarget(null);
+                setNote('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant={ptoReviewTarget?.decision === 'denied' ? 'destructive' : 'default'}
+              disabled={
+                reviewMutation.isPending ||
+                (ptoReviewTarget?.decision === 'denied' && !note.trim())
+              }
+              onClick={() => {
+                if (!ptoReviewTarget) return;
+                if (ptoReviewTarget.decision === 'denied' && !note.trim()) return;
+                reviewMutation.mutate({
+                  task: ptoReviewTarget.task,
+                  decision: ptoReviewTarget.decision,
+                  note: note.trim(),
+                });
+              }}
+              data-testid="button-submit-pto-review"
+            >
+              {reviewMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {ptoReviewTarget?.decision === 'denied' ? 'Submit Denial' : 'Approve Request'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

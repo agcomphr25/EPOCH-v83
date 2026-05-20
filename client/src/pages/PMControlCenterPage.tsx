@@ -124,6 +124,13 @@ interface WorkOrderRow {
   replacementSerialNumbers?: string | null;
   daysScheduleVariance: number | null;
   blockReason: string | null;
+  linkedWadId?: string | null;
+  linkedWadNumber?: string | null;
+  linkedWadStatus?: string | null;
+  linkedWadWorkOrderStatus?: string | null;
+  productionConnectionStatus?: 'CONNECTED' | 'WAD_MISSING' | 'WAD_NOT_MATCHED' | 'WAD_INCOMPLETE' | 'TRAVELER_NOT_ACTIVE' | string | null;
+  productionConnectionLabel?: string | null;
+  productionConnectionDetail?: string | null;
 }
 
 interface WorkOrderDetail {
@@ -311,6 +318,51 @@ const WO_STATUS_COLORS: Record<string, string> = {
   CLOSED: 'bg-gray-200 text-gray-500',
   BLOCKED: 'bg-red-100 text-red-700',
 };
+
+const CONNECTION_STATUS_COLORS: Record<string, string> = {
+  CONNECTED: 'bg-green-100 text-green-700 border-green-200',
+  WAD_MISSING: 'bg-red-100 text-red-700 border-red-200',
+  WAD_NOT_MATCHED: 'bg-orange-100 text-orange-700 border-orange-200',
+  WAD_INCOMPLETE: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+  TRAVELER_NOT_ACTIVE: 'bg-blue-100 text-blue-700 border-blue-200',
+};
+
+function ProductionConnectionCell({ row, navTo }: { row: WorkOrderRow; navTo: (path: string) => void }) {
+  if (row.sourceType !== 'p2_production_order') {
+    return (
+      <div className="text-xs text-muted-foreground">
+        WAD source
+      </div>
+    );
+  }
+
+  const status = row.productionConnectionStatus ?? 'WAD_MISSING';
+  const label = row.productionConnectionLabel ?? 'Connection check';
+  const detail = row.productionConnectionDetail ?? 'P2 production is shown without changing production flow.';
+
+  return (
+    <div className="flex min-w-[190px] flex-col gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${CONNECTION_STATUS_COLORS[status] ?? 'bg-gray-100 text-gray-700 border-gray-200'}`}>
+          {label}
+        </Badge>
+        {row.linkedWadNumber && (
+          <button
+            type="button"
+            className="font-mono text-xs text-primary hover:underline"
+            onClick={() => row.linkedWadId && navTo(`/production-work-orders/${row.linkedWadId}`)}
+            title={row.linkedWadStatus || undefined}
+          >
+            {row.linkedWadNumber}
+          </button>
+        )}
+      </div>
+      <div className="text-xs text-muted-foreground line-clamp-2" title={detail}>
+        {detail}
+      </div>
+    </div>
+  );
+}
 
 const MATERIAL_STATUS_COLORS: Record<string, string> = {
   OVER_ISSUED: 'bg-red-100 text-red-700',
@@ -677,6 +729,7 @@ function ProductionTab({ projectId }: { projectId: string }) {
               <TableHead>Status</TableHead>
               <TableHead>Department</TableHead>
               <TableHead>Dashboard / Queue</TableHead>
+              <TableHead>Connection</TableHead>
               <TableHead>Current Step</TableHead>
               <TableHead>Active Traveler</TableHead>
               <TableHead>Due Date</TableHead>
@@ -783,6 +836,9 @@ function ProductionTab({ projectId }: { projectId: string }) {
                       <span className="text-muted-foreground">—</span>
                     )}
                   </div>
+                </TableCell>
+                <TableCell className="text-sm" onClick={(e) => e.stopPropagation()}>
+                  <ProductionConnectionCell row={row} navTo={navTo} />
                 </TableCell>
                 <TableCell className="text-sm">{row.currentTravelerStep ?? <span className="text-muted-foreground">—</span>}</TableCell>
                 <TableCell className="text-sm" onClick={(e) => e.stopPropagation()}>

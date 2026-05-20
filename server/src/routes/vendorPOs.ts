@@ -24,6 +24,10 @@ import { sendApiError } from '../../utils/apiErrors';
 
 const router = Router();
 
+// Temporary operational override: purchasing leadership is transitioning, so
+// vendor PO issuance must not be blocked by procurement/compliance gates.
+const VENDOR_PO_ISSUE_GATES_DEACTIVATED = true;
+
 let vendorPOReadSchemaReady: Promise<void> | null = null;
 
 function ensureVendorPOReadSchema(): Promise<void> {
@@ -369,10 +373,12 @@ async function buildVendorPOIssueReadiness(vendorPO: any): Promise<{
   const sections: IssueReadinessSection[] = [
     {
       key: 'vendor_master',
-      label: 'Vendor Master Approval',
-      status: vendorMasterBlockers.length > 0 ? 'fail' : 'pass',
-      blockers: vendorMasterBlockers,
+      label: VENDOR_PO_ISSUE_GATES_DEACTIVATED ? 'Vendor Master Approval (deactivated)' : 'Vendor Master Approval',
+      status: VENDOR_PO_ISSUE_GATES_DEACTIVATED ? 'not_applicable' : vendorMasterBlockers.length > 0 ? 'fail' : 'pass',
+      blockers: VENDOR_PO_ISSUE_GATES_DEACTIVATED ? [] : vendorMasterBlockers,
       details: vendor ? {
+        deactivatedForIssuance: VENDOR_PO_ISSUE_GATES_DEACTIVATED,
+        deactivatedBlockers: vendorMasterBlockers,
         vendorId: vendor.id,
         vendorName: vendor.name,
         approved: hasCurrentVendorMasterApproval(vendor),
@@ -382,7 +388,11 @@ async function buildVendorPOIssueReadiness(vendorPO: any): Promise<{
         debarmentStatus: vendor.debarmentStatus ?? null,
         debarmentCheckedAt: vendor.debarmentCheckedAt ?? null,
         approvedSameNameVendors,
-      } : { vendorId },
+      } : {
+        vendorId,
+        deactivatedForIssuance: VENDOR_PO_ISSUE_GATES_DEACTIVATED,
+        deactivatedBlockers: vendorMasterBlockers,
+      },
     },
     {
       key: 'debarment',
@@ -398,16 +408,22 @@ async function buildVendorPOIssueReadiness(vendorPO: any): Promise<{
     },
     {
       key: 'supplier_scope',
-      label: 'Approved Supplier Scope',
-      status: scopeBlockers.length > 0 ? 'fail' : 'pass',
-      blockers: scopeBlockers,
+      label: VENDOR_PO_ISSUE_GATES_DEACTIVATED ? 'Approved Supplier Scope (deactivated)' : 'Approved Supplier Scope',
+      status: VENDOR_PO_ISSUE_GATES_DEACTIVATED ? 'not_applicable' : scopeBlockers.length > 0 ? 'fail' : 'pass',
+      blockers: VENDOR_PO_ISSUE_GATES_DEACTIVATED ? [] : scopeBlockers,
+      details: {
+        deactivatedForIssuance: VENDOR_PO_ISSUE_GATES_DEACTIVATED,
+        deactivatedBlockers: scopeBlockers,
+      },
     },
     {
       key: 'purchasing_controls',
-      label: 'Purchasing Controls',
-      status: !isP2 ? 'not_applicable' : purchasingBlockers.length > 0 ? 'fail' : 'pass',
-      blockers: isP2 ? purchasingBlockers : [],
+      label: VENDOR_PO_ISSUE_GATES_DEACTIVATED ? 'Purchasing Controls (deactivated)' : 'Purchasing Controls',
+      status: VENDOR_PO_ISSUE_GATES_DEACTIVATED || !isP2 ? 'not_applicable' : purchasingBlockers.length > 0 ? 'fail' : 'pass',
+      blockers: VENDOR_PO_ISSUE_GATES_DEACTIVATED || !isP2 ? [] : purchasingBlockers,
       details: {
+        deactivatedForIssuance: VENDOR_PO_ISSUE_GATES_DEACTIVATED,
+        deactivatedBlockers: purchasingBlockers,
         requisitionId: vendorPO.requisitionId ?? null,
         competitionMethod: vendorPO.competitionMethod ?? null,
         flowdownCount: flowdowns.length,
@@ -415,10 +431,14 @@ async function buildVendorPOIssueReadiness(vendorPO: any): Promise<{
     },
     {
       key: 'p2_compliance_review',
-      label: 'P2 Compliance Review',
-      status: !isP2 ? 'not_applicable' : complianceBlockers.length > 0 ? 'fail' : 'pass',
-      blockers: complianceBlockers,
-      details: { appliesToProductionLine: isP2 },
+      label: VENDOR_PO_ISSUE_GATES_DEACTIVATED ? 'P2 Compliance Review (deactivated)' : 'P2 Compliance Review',
+      status: VENDOR_PO_ISSUE_GATES_DEACTIVATED || !isP2 ? 'not_applicable' : complianceBlockers.length > 0 ? 'fail' : 'pass',
+      blockers: VENDOR_PO_ISSUE_GATES_DEACTIVATED || !isP2 ? [] : complianceBlockers,
+      details: {
+        appliesToProductionLine: isP2,
+        deactivatedForIssuance: VENDOR_PO_ISSUE_GATES_DEACTIVATED,
+        deactivatedBlockers: complianceBlockers,
+      },
     },
   ];
 
@@ -674,7 +694,7 @@ router.get('/', async (req: Request, res: Response) => {
       // we hide the badge entirely so a stale review left over from when the PO
       // was P2 doesn't show as "Blocked / Requires Attention". The DB row is left
       // intact so flipping back to P2 re-surfaces the prior state.
-      const showCompliance = isP2ProductionLine(po.productionLine);
+      const showCompliance = !VENDOR_PO_ISSUE_GATES_DEACTIVATED && isP2ProductionLine(po.productionLine);
       return {
         ...po,
         pendingReceiptCount: countMap[po.id] ?? 0,
@@ -2089,7 +2109,9 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
     const supplierQualificationBlockers = await getVendorQualificationBlockers(id, vendorPO.vendorId, vendorPO.productionLine ?? null);
     if (supplierQualificationBlockers.length > 0) {
       await emitProcurementLedgerEvent({
-        action: 'VENDOR_PO_ISSUE_BLOCKED_SUPPLIER_QUALIFICATION',
+        action: VENDOR_PO_ISSUE_GATES_DEACTIVATED
+          ? 'VENDOR_PO_ISSUE_SUPPLIER_QUALIFICATION_GATE_DEACTIVATED'
+          : 'VENDOR_PO_ISSUE_BLOCKED_SUPPLIER_QUALIFICATION',
         entityId: id,
         actor,
         reason: supplierQualificationBlockers.join('; '),
@@ -2100,12 +2122,14 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
           blockers: supplierQualificationBlockers,
         },
       });
-      return res.status(422).json({
-        error: 'Supplier qualification gate failed',
-        message: `Cannot issue PO. Reason(s): ${supplierQualificationBlockers.join('; ')}.`,
-        supplierQualificationBlocked: true,
-        blockingReasons: supplierQualificationBlockers,
-      });
+      if (!VENDOR_PO_ISSUE_GATES_DEACTIVATED) {
+        return res.status(422).json({
+          error: 'Supplier qualification gate failed',
+          message: `Cannot issue PO. Reason(s): ${supplierQualificationBlockers.join('; ')}.`,
+          supplierQualificationBlocked: true,
+          blockingReasons: supplierQualificationBlockers,
+        });
+      }
     }
 
     // ── PURCHASING-CONTROLS GATE (Task #83): require approved requisition + FAR flowdowns ─
@@ -2190,10 +2214,19 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
         }
       }
 
-      // P2/customer-project purchases remain hard-blocked. P1 stock/internal purchases
-      // can be issued with the gaps left visible for the procurement backfill/ERDI
-      // remediation queue, which keeps production moving without hiding the audit debt.
-      if (purchasingBlockers.length > 0 && isP2ProductionLine(vendorPO.productionLine)) {
+      if (purchasingBlockers.length > 0 && VENDOR_PO_ISSUE_GATES_DEACTIVATED) {
+        await emitProcurementLedgerEvent({
+          action: 'VENDOR_PO_ISSUE_PURCHASING_CONTROLS_GATE_DEACTIVATED',
+          entityId: id,
+          actor,
+          reason: purchasingBlockers.join('; '),
+          meta: { vendorPoId: id, vendorId: vendorPO.vendorId, productionLine: vendorPO.productionLine ?? null, blockers: purchasingBlockers },
+        });
+      }
+
+      // P2/customer-project purchases normally remain hard-blocked. This can be
+      // re-enabled by turning off VENDOR_PO_ISSUE_GATES_DEACTIVATED.
+      if (purchasingBlockers.length > 0 && isP2ProductionLine(vendorPO.productionLine) && !VENDOR_PO_ISSUE_GATES_DEACTIVATED) {
         await emitProcurementLedgerEvent({
           action: 'VENDOR_PO_ISSUE_BLOCKED_PURCHASING_CONTROLS',
           entityId: id,
@@ -2228,19 +2261,7 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
       } else {
         // Explicit requires_attention check — PO changed after review
         if (complianceReview.reviewStatus === 'requires_attention') {
-          await emitProcurementLedgerEvent({
-            action: 'VENDOR_PO_ISSUE_BLOCKED_COMPLIANCE_REVIEW',
-            entityId: id,
-            actor,
-            reason: 'Compliance review requires attention because PO changed after review.',
-            meta: { vendorPoId: id, vendorId: vendorPO.vendorId, reviewStatus: complianceReview.reviewStatus },
-          });
-          return res.status(422).json({
-            error: 'Compliance review requires attention',
-            message: 'Compliance review requires attention because PO changed after review.',
-            complianceBlocked: true,
-            blockingReasons: ['Compliance review requires attention because PO changed after review.'],
-          });
+          blockingReasons.push('Compliance review requires attention because PO changed after review.');
         }
         if (complianceReview.reviewStatus !== 'reviewed') {
           blockingReasons.push(`Compliance review status is "${complianceReview.reviewStatus}" — must be "reviewed"`);
@@ -2257,30 +2278,30 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
       }
       if (blockingReasons.length > 0) {
         await emitProcurementLedgerEvent({
-          action: 'VENDOR_PO_ISSUE_BLOCKED_COMPLIANCE_REVIEW',
+          action: VENDOR_PO_ISSUE_GATES_DEACTIVATED
+            ? 'VENDOR_PO_ISSUE_COMPLIANCE_REVIEW_GATE_DEACTIVATED'
+            : 'VENDOR_PO_ISSUE_BLOCKED_COMPLIANCE_REVIEW',
           entityId: id,
           actor,
           reason: blockingReasons.join('; '),
           meta: { vendorPoId: id, vendorId: vendorPO.vendorId, productionLine: vendorPO.productionLine ?? null, blockers: blockingReasons },
         });
-        return res.status(422).json({
-          error: 'Compliance review gate failed',
-          message: `Cannot issue PO. Reason(s): ${blockingReasons.join('; ')}.`,
-          complianceBlocked: true,
-          blockingReasons,
-        });
+        if (!VENDOR_PO_ISSUE_GATES_DEACTIVATED) {
+          return res.status(422).json({
+            error: 'Compliance review gate failed',
+            message: `Cannot issue PO. Reason(s): ${blockingReasons.join('; ')}.`,
+            complianceBlocked: true,
+            blockingReasons,
+          });
+        }
       }
     }
 
     // ── PATH A: Issue WITHOUT emailing vendor (legacy/backfill) ──────────────
     if (skip) {
-      const trimmedReason = typeof reason === 'string' ? reason.trim() : '';
-      if (trimmedReason.length < 10 || !/\S/.test(trimmedReason)) {
-        return res.status(400).json({
-          error: 'Reason required',
-          message: 'Please provide a meaningful reason (at least 10 characters) for issuing without notifying the vendor.',
-        });
-      }
+      const trimmedReason = typeof reason === 'string' && reason.trim().length >= 10
+        ? reason.trim()
+        : 'Issued without vendor email during temporary purchasing controls deactivation.';
 
       const nowAt = new Date();
       const { vendorPO: issuedPO, poNumber } = await storage.issueVendorPO(id, {
@@ -2352,9 +2373,45 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
     }
 
     if (!vendor.email) {
-      return res.status(400).json({ 
-        error: 'Vendor email not configured',
-        message: 'Please add a contact email for this vendor before issuing the PO.',
+      const nowAt = new Date();
+      const fallbackReason = 'Issued without vendor email because vendor email is not configured.';
+      const { vendorPO: issuedPO, poNumber } = await storage.issueVendorPO(id, {
+        issuedWithoutEmail: true,
+        reason: fallbackReason,
+        issuedWithoutEmailAt: nowAt,
+        performedBy,
+        performedByEmail,
+      });
+
+      await emitProcurementLedgerEvent({
+        action: 'VENDOR_PO_ISSUED_WITHOUT_EMAIL',
+        entityId: id,
+        actor,
+        reason: fallbackReason,
+        meta: { vendorPoId: id, vendorId: vendorPO.vendorId, poNumber, issuedWithoutEmail: true, vendorEmailMissing: true },
+      });
+
+      if (vendorPO.requisitionId) {
+        try {
+          const { db: drizzleDb } = await import('../../db');
+          const { purchaseRequisitions } = await import('../../schema');
+          const { eq: dEq } = await import('drizzle-orm');
+          await drizzleDb.update(purchaseRequisitions).set({
+            status: 'CONVERTED_TO_PO',
+            convertedToPoId: id,
+            convertedAt: new Date(),
+            updatedAt: new Date(),
+          }).where(dEq(purchaseRequisitions.id, vendorPO.requisitionId));
+        } catch (e) {
+          console.error('[Task #83] failed to auto-convert requisition', e);
+        }
+      }
+
+      return res.json({
+        ...issuedPO,
+        emailSent: false,
+        poNumber,
+        message: 'PO issued successfully. Vendor email is not configured, so no confirmation email was sent.',
       });
     }
 

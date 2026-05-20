@@ -20,7 +20,7 @@ import {
   travelerSteps,
   routingOperations,
 } from '../../schema';
-import { eq, and, inArray, sql } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { storage } from '../../storage';
 
 export type CertificationStatus = 'VALID' | 'EXPIRED' | 'MISSING';
@@ -48,6 +48,10 @@ function departmentKey(department: string): string {
   return department.trim().replace(/[^a-z0-9]/gi, '').toUpperCase();
 }
 
+function sqlList(values: string[]) {
+  return sql.join(values.map((value) => sql`${value}`), sql`, `);
+}
+
 export function getDepartmentChargeCodeCandidates(department: string | null | undefined): string[] {
   if (!department) return [];
 
@@ -56,6 +60,10 @@ export function getDepartmentChargeCodeCandidates(department: string | null | un
 
   const aliases = DEPARTMENT_ALIASES[departmentKey(trimmed)] ?? [];
   return Array.from(new Set([trimmed, ...aliases]));
+}
+
+export function getDepartmentChargeCodeCandidateKeys(department: string | null | undefined): string[] {
+  return Array.from(new Set(getDepartmentChargeCodeCandidates(department).map(departmentKey)));
 }
 
 interface WadChargeCodeRow {
@@ -225,10 +233,15 @@ export async function resolveChargeCode(params: {
   // and the WAD row carries the active code "QC".
   const wadDepartmentChargeCode = findWadDepartmentChargeCode(wad.wizardData, effectiveDepartment);
   if (wadDepartmentChargeCode) {
+    const wadChargeCodeKeys = getDepartmentChargeCodeCandidateKeys(wadDepartmentChargeCode);
     const [cc] = await db
       .select({ id: chargeCodes.id, code: chargeCodes.code })
       .from(chargeCodes)
-      .where(and(sql`upper(${chargeCodes.code}) = upper(${wadDepartmentChargeCode})`, eq(chargeCodes.active, true)))
+      .where(and(
+        sql`upper(regexp_replace(coalesce(${chargeCodes.code}, ''), '[^a-zA-Z0-9]', '', 'g')) in (${sqlList(wadChargeCodeKeys)})`,
+        eq(chargeCodes.active, true)
+      ))
+      .orderBy(sql`case when upper(regexp_replace(coalesce(${chargeCodes.code}, ''), '[^a-zA-Z0-9]', '', 'g')) = ${departmentKey(wadDepartmentChargeCode)} then 0 else 1 end`)
       .limit(1);
 
     if (cc) {
@@ -240,16 +253,34 @@ export async function resolveChargeCode(params: {
   // departmentName (operation-scoped via effectiveDepartment resolved from travelerStepId,
   // or caller-supplied department as fallback).
   const departmentCandidates = getDepartmentChargeCodeCandidates(effectiveDepartment);
-  if (departmentCandidates.length > 0) {
+  const departmentCandidateKeys = getDepartmentChargeCodeCandidateKeys(effectiveDepartment);
+  if (departmentCandidateKeys.length > 0) {
     const [deptCc] = await db
       .select({ id: chargeCodes.id, code: chargeCodes.code })
       .from(chargeCodes)
-      .where(and(inArray(chargeCodes.department, departmentCandidates), eq(chargeCodes.active, true)))
-      .orderBy(sql`case when ${chargeCodes.department} = ${departmentCandidates[0]} then 0 else 1 end`)
+      .where(and(
+        sql`upper(regexp_replace(coalesce(${chargeCodes.department}, ''), '[^a-zA-Z0-9]', '', 'g')) in (${sqlList(departmentCandidateKeys)})`,
+        eq(chargeCodes.active, true)
+      ))
+      .orderBy(sql`case when upper(regexp_replace(coalesce(${chargeCodes.department}, ''), '[^a-zA-Z0-9]', '', 'g')) = ${departmentKey(departmentCandidates[0])} then 0 else 1 end`)
       .limit(1);
 
     if (deptCc) {
       return { chargeCodeId: deptCc.id, chargeCode: deptCc.code, resolvedFrom: 'department_match' };
+    }
+
+    const [codeCc] = await db
+      .select({ id: chargeCodes.id, code: chargeCodes.code })
+      .from(chargeCodes)
+      .where(and(
+        sql`upper(regexp_replace(coalesce(${chargeCodes.code}, ''), '[^a-zA-Z0-9]', '', 'g')) in (${sqlList(departmentCandidateKeys)})`,
+        eq(chargeCodes.active, true)
+      ))
+      .orderBy(sql`case when upper(regexp_replace(coalesce(${chargeCodes.code}, ''), '[^a-zA-Z0-9]', '', 'g')) = ${departmentKey(departmentCandidates[0])} then 0 else 1 end`)
+      .limit(1);
+
+    if (codeCc) {
+      return { chargeCodeId: codeCc.id, chargeCode: codeCc.code, resolvedFrom: 'department_match' };
     }
   }
 

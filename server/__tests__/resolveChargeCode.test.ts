@@ -28,6 +28,10 @@ describe('getDepartmentChargeCodeCandidates', () => {
     expect(getDepartmentChargeCodeCandidates('QC')).toEqual(['QC', 'Quality Control']);
   });
 
+  it('matches Final QC routing steps to QC charge codes', () => {
+    expect(getDepartmentChargeCodeCandidates('Final QC')).toEqual(['Final QC', 'QC', 'Quality Control']);
+  });
+
   it('keeps non-aliased departments exact', () => {
     expect(getDepartmentChargeCodeCandidates('Layup')).toEqual(['Layup']);
   });
@@ -57,5 +61,17 @@ describe('findWadDepartmentChargeCode', () => {
     };
 
     expect(findWadDepartmentChargeCode(wizardData, 'QC')).toBe('QC');
+  });
+
+  it('uses the WAD Step 4 QC code when routing says Final QC', () => {
+    const wizardData = {
+      step4: {
+        chargeCodes: [
+          { department: 'QC', chargeCode: 'QC' },
+        ],
+      },
+    };
+
+    expect(findWadDepartmentChargeCode(wizardData, 'Final QC')).toBe('QC');
   });
 });

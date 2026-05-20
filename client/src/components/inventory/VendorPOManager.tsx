@@ -249,20 +249,38 @@ function IssueReadinessCard({
 
   if (!readiness) return null;
 
-  const failingSections = readiness.sections.filter((section) => section.status === 'fail');
+  const deactivatedIssueGateKeys = new Set([
+    'vendor_master',
+    'debarment',
+    'supplier_scope',
+    'purchasing_controls',
+    'p2_compliance_review',
+  ]);
+  const displaySections = readiness.sections.map((section) =>
+    deactivatedIssueGateKeys.has(section.key)
+      ? {
+          ...section,
+          label: section.label.includes('deactivated') ? section.label : `${section.label} (deactivated)`,
+          status: 'not_applicable' as const,
+          blockers: [],
+        }
+      : section
+  );
+  const failingSections = displaySections.filter((section) => section.status === 'fail');
   const debarment = readiness.sections.find((section) => section.key === 'debarment');
   const latestDebarment = debarment?.details?.latestPassingCheck as any;
   const vendorMaster = readiness.sections.find((section) => section.key === 'vendor_master');
   const vendorMasterDetails = vendorMaster?.details as any;
+  const readyToIssue = failingSections.length === 0;
 
   return (
     <>
-    <Card className={readiness.ready ? 'border-emerald-200 bg-emerald-50/50' : 'border-amber-200 bg-amber-50/60'}>
+    <Card className={readyToIssue ? 'border-emerald-200 bg-emerald-50/50' : 'border-amber-200 bg-amber-50/60'}>
       <CardHeader className="pb-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <CardTitle className="text-base flex items-center gap-2">
-              {readiness.ready ? (
+              {readyToIssue ? (
                 <ShieldCheck className="h-4 w-4 text-emerald-600" />
               ) : (
                 <ShieldAlert className="h-4 w-4 text-amber-600" />
@@ -270,17 +288,17 @@ function IssueReadinessCard({
               PO Issue Readiness
             </CardTitle>
             <CardDescription>
-              Vendor approval, supplier scope, purchasing controls, and P2 review are checked separately.
+              Vendor approval, supplier scope, purchasing controls, and P2 review are visible for audit context but deactivated for PO issuance.
             </CardDescription>
           </div>
-          <Badge className={readiness.ready ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800'}>
-            {readiness.ready ? 'Ready to issue' : `${failingSections.length} gate${failingSections.length === 1 ? '' : 's'} need attention`}
+          <Badge className={readyToIssue ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800'}>
+            {readyToIssue ? 'Ready to issue' : `${failingSections.length} gate${failingSections.length === 1 ? '' : 's'} need attention`}
           </Badge>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-5">
-          {readiness.sections.map((section) => {
+          {displaySections.map((section) => {
             const passed = section.status === 'pass';
             const skipped = section.status === 'not_applicable';
             return (
@@ -4818,6 +4836,10 @@ function PurchasingControlsDialog({
           <DialogTitle>Purchasing Controls — PO #{vendorPo.poNumber ?? vendorPo.id}</DialogTitle>
         </DialogHeader>
         <div className="space-y-5">
+          <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            Purchasing controls are temporarily deactivated for PO issuance. Competition method, requisition linkage,
+            FAR flowdowns, and direct-PO exceptions can still be recorded here, but blank values will not prevent issuing.
+          </div>
           <section className="space-y-2">
             <h3 className="font-semibold">Requisition & Competition</h3>
             <div className="grid grid-cols-2 gap-3">
@@ -4826,7 +4848,7 @@ function PurchasingControlsDialog({
                 <Input value={requisitionId} onChange={(e) => setRequisitionId(e.target.value)} placeholder="APPROVED requisition id" data-testid="input-po-requisition-id" />
               </div>
               <div>
-                <Label>Competition Method</Label>
+                <Label>Competition Method <span className="text-muted-foreground">(optional while deactivated)</span></Label>
                 <select className="w-full border rounded px-2 py-2 text-sm" value={competitionMethod} onChange={(e) => setCompetitionMethod(e.target.value)} data-testid="select-po-competition-method">
                   <option value="">— select —</option>
                   <option value="competed">Competed</option>

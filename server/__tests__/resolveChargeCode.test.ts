@@ -17,7 +17,7 @@ vi.mock('../schema', () => ({
   routingOperations: {},
 }));
 
-import { getDepartmentChargeCodeCandidates } from '../src/lib/resolveChargeCode';
+import { findWadDepartmentChargeCode, getDepartmentChargeCodeCandidates } from '../src/lib/resolveChargeCode';
 
 describe('getDepartmentChargeCodeCandidates', () => {
   it('matches Quality Control routing steps to QC charge codes', () => {
@@ -30,5 +30,32 @@ describe('getDepartmentChargeCodeCandidates', () => {
 
   it('keeps non-aliased departments exact', () => {
     expect(getDepartmentChargeCodeCandidates('Layup')).toEqual(['Layup']);
+  });
+});
+
+describe('findWadDepartmentChargeCode', () => {
+  it('uses the WAD Step 4 QC code when routing says Quality Control', () => {
+    const wizardData = {
+      step4: {
+        chargeCodes: [
+          { department: 'Layup', chargeCode: 'LAYUP' },
+          { department: 'QC', chargeCode: 'QC' },
+        ],
+      },
+    };
+
+    expect(findWadDepartmentChargeCode(wizardData, 'Quality Control')).toBe('QC');
+  });
+
+  it('uses the WAD Step 4 Quality Control code when routing says QC', () => {
+    const wizardData = {
+      step4: {
+        chargeCodes: [
+          { department: 'Quality Control', chargeCode: 'QC' },
+        ],
+      },
+    };
+
+    expect(findWadDepartmentChargeCode(wizardData, 'QC')).toBe('QC');
   });
 });

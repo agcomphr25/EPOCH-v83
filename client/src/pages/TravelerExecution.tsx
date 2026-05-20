@@ -379,7 +379,7 @@ export default function TravelerExecution() {
   // Labor context query — fetched per-step for NOT_STARTED steps (Task #1235)
   interface LaborContext {
     chargeCode: string | null;
-    chargeCodeResolvedFrom: 'wad_default' | 'traveler_default' | 'department_match' | null;
+    chargeCodeResolvedFrom: 'wad_default' | 'traveler_default' | 'wad_department' | 'department_match' | null;
     chargeCodeError: string | null;
     isOverrun: boolean;
     nearlyExhausted: boolean;
@@ -2085,7 +2085,7 @@ export default function TravelerExecution() {
                               Charge code:{' '}
                               <span className="font-mono font-semibold text-foreground">{laborContext.chargeCode}</span>
                               <span className="ml-1 text-[10px] text-muted-foreground">
-                                ({laborContext.chargeCodeResolvedFrom === 'wad_default' ? 'WAD default' : laborContext.chargeCodeResolvedFrom === 'traveler_default' ? 'traveler default' : 'dept match'})
+                                ({laborContext.chargeCodeResolvedFrom === 'wad_default' ? 'WAD default' : laborContext.chargeCodeResolvedFrom === 'traveler_default' ? 'traveler default' : laborContext.chargeCodeResolvedFrom === 'wad_department' ? 'WAD dept' : 'dept match'})
                               </span>
                             </span>
                           ) : (

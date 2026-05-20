@@ -163,6 +163,66 @@ type CurrentUser = {
   lastName?: string;
   role: string;
   employeeId: number | null;
+  payType?: 'HOURLY' | 'SALARY' | null;
+};
+
+type SalariedTimesheetHeader = {
+  id: number;
+  employeeId: number;
+  periodStart: string;
+  periodEnd: string;
+  status: string;
+  totalActualHours: number;
+  certifiedAt: string | null;
+  certificationStatement: string | null;
+  supervisorApprovedAt: string | null;
+  payrollApprovedAt: string | null;
+};
+
+type SalariedTimesheetLine = {
+  id: number;
+  timesheetId: number;
+  date: string;
+  lineType: 'DIRECT' | 'INDIRECT' | 'PTO' | 'HOLIDAY' | string;
+  chargeCodeId: number | null;
+  indirectCodeId: number | null;
+  travelerId: string | null;
+  hours: number;
+  source: string;
+  note: string | null;
+  isLocked: boolean;
+  originalNarrative: string | null;
+};
+
+type SalariedTimesheetView = {
+  timesheet: SalariedTimesheetHeader;
+  lines: SalariedTimesheetLine[];
+};
+
+type IndirectCode = {
+  id: number;
+  code: string;
+  label: string;
+  description: string | null;
+  chargeCodeId: number;
+};
+
+type TravelerOption = {
+  id: string;
+  travelerNumber?: string | null;
+  description?: string | null;
+  status?: string | null;
+};
+
+type SalariedLineForm = {
+  id: number | null;
+  date: string;
+  lineType: 'DIRECT' | 'INDIRECT';
+  travelerId: string;
+  indirectCodeId: string;
+  hours: string;
+  note: string;
+  originalNarrative: string;
 };
 
 type ExpenseForm = {
@@ -265,10 +325,44 @@ function shiftPayPeriod(periodStart: string, offset: number): { start: string; e
   };
 }
 
+function getWeekForDate(value: string | Date = new Date()): { start: string; end: string } {
+  const date = typeof value === 'string' ? new Date(`${value}T12:00:00`) : value;
+  const utc = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+  const day = new Date(utc).getUTCDay();
+  const mondayOffset = day === 0 ? -6 : 1 - day;
+  const startUTC = utc + mondayOffset * DAY_MS;
+  return {
+    start: ymdFromUtc(startUTC),
+    end: ymdFromUtc(startUTC + 6 * DAY_MS),
+  };
+}
+
+function shiftWeek(weekStart: string, offset: number): { start: string; end: string } {
+  const [year, month, day] = weekStart.split('-').map(Number);
+  const startUTC = Date.UTC(year, month - 1, day) + offset * 7 * DAY_MS;
+  return {
+    start: ymdFromUtc(startUTC),
+    end: ymdFromUtc(startUTC + 6 * DAY_MS),
+  };
+}
+
 function formatPayPeriodLabel(start: string, end: string): string {
   const startDate = new Date(`${start}T12:00:00`);
   const endDate = new Date(`${end}T12:00:00`);
   return `${startDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - ${endDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`;
+}
+
+function emptySalariedLineForm(date: string): SalariedLineForm {
+  return {
+    id: null,
+    date,
+    lineType: 'INDIRECT',
+    travelerId: '',
+    indirectCodeId: '',
+    hours: '',
+    note: '',
+    originalNarrative: '',
+  };
 }
 
 function SessionStatusBadge({ status }: { status: string }) {
@@ -360,6 +454,13 @@ interface PunchEvent {
   hasMissingClockOut?: boolean;
 }
 
+type ActiveShiftPunchResponse = {
+  employeeId: number;
+  from: string;
+  to: string;
+  punches: PunchEvent[];
+};
+
 function portalFetch(url: string, init?: Parameters<typeof fetch>[1]) {
   const token =
     localStorage.getItem('sessionToken') ||
@@ -430,6 +531,8 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
       return response.json();
     },
   });
+
+  const isSalariedEmployee = currentUser?.payType === 'SALARY';
 
   const canSubmitOwnerExpense =
     currentUser?.role === 'OWNER' || currentUser?.role === 'ADMIN';
@@ -533,13 +636,34 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
     const urlPeriod = params.get('period');
     return getPayPeriodForDate(isDateString(urlPeriod) ? urlPeriod : new Date()).start;
   });
+  const [selectedSalariedWeekStart, setSelectedSalariedWeekStart] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlPeriod = params.get('period');
+    return getWeekForDate(isDateString(urlPeriod) ? urlPeriod : new Date()).start;
+  });
+  const [salariedLineForm, setSalariedLineForm] = useState<SalariedLineForm>(() =>
+    emptySalariedLineForm(getWeekForDate().start),
+  );
+  const [salariedCertReviewId, setSalariedCertReviewId] = useState<number | null>(null);
+  const [salariedCertConfirmedId, setSalariedCertConfirmedId] = useState<number | null>(null);
   const selectedPayPeriod = getPayPeriodForDate(selectedPayPeriodStart);
   const selectedPayPeriodLabel = formatPayPeriodLabel(selectedPayPeriod.start, selectedPayPeriod.end);
   const isCurrentPayPeriod = selectedPayPeriod.start === currentPayPeriod.start;
+  const currentSalariedWeek = getWeekForDate();
+  const selectedSalariedWeek = getWeekForDate(selectedSalariedWeekStart);
+  const selectedSalariedWeekLabel = formatPayPeriodLabel(selectedSalariedWeek.start, selectedSalariedWeek.end);
+  const isCurrentSalariedWeek = selectedSalariedWeek.start === currentSalariedWeek.start;
 
   const goToPayPeriod = (period: { start: string; end: string }) => {
     setSelectedPayPeriodStart(period.start);
     setDailySignOffDate(period.start);
+  };
+
+  const goToSalariedWeek = (period: { start: string; end: string }) => {
+    setSelectedSalariedWeekStart(period.start);
+    setSalariedLineForm((prev) => ({ ...prev, date: period.start }));
+    setSalariedCertReviewId(null);
+    setSalariedCertConfirmedId(null);
   };
 
   const {
@@ -553,7 +677,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
       if (!res.ok) throw new Error('Failed to fetch timesheets');
       return res.json();
     },
-    enabled: activeTab === 'my-timesheets',
+    enabled: activeTab === 'my-timesheets' && !!currentUser && !isSalariedEmployee,
   });
 
   const {
@@ -570,7 +694,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
       if (!res.ok) throw new Error('Failed to fetch running timesheet');
       return res.json();
     },
-    enabled: activeTab === 'my-timesheets',
+    enabled: activeTab === 'my-timesheets' && !!currentUser && !isSalariedEmployee,
     refetchInterval: 30000,
   });
 
@@ -584,7 +708,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
       if (!res.ok) throw new Error('Failed to fetch daily sign-off status');
       return res.json();
     },
-    enabled: activeTab === 'my-timesheets' && !!dailySignOffDate,
+    enabled: activeTab === 'my-timesheets' && !!dailySignOffDate && !!currentUser && !isSalariedEmployee,
   });
 
   const certifyMutation = useMutation({
@@ -656,6 +780,143 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
     },
     onError: (err: any) => {
       toast({ title: 'Daily sign-off failed', description: err?.message ?? 'Please try again.', variant: 'destructive' });
+    },
+  });
+
+  const {
+    data: salariedTimesheet,
+    isLoading: salariedTimesheetLoading,
+    refetch: refetchSalariedTimesheet,
+  } = useQuery<SalariedTimesheetView>({
+    queryKey: ['/api/timekeeping/salaried-timesheet', 'portal', employeeId, selectedSalariedWeek.start],
+    queryFn: async () => {
+      const res = await portalFetch(`/api/timekeeping/salaried-timesheet/portal/${employeeId}/my/${selectedSalariedWeek.start}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as any).error ?? 'Failed to fetch salaried timesheet');
+      }
+      return res.json();
+    },
+    enabled: activeTab === 'my-timesheets' && isSalariedEmployee,
+  });
+
+  const { data: indirectCodes = [], isLoading: indirectCodesLoading } = useQuery<IndirectCode[]>({
+    queryKey: ['/api/timekeeping/salaried-timesheet', 'portal', employeeId, 'indirect-codes'],
+    queryFn: async () => {
+      const res = await portalFetch(`/api/timekeeping/salaried-timesheet/portal/${employeeId}/indirect-codes`);
+      if (!res.ok) throw new Error('Failed to fetch indirect codes');
+      return res.json();
+    },
+    enabled: activeTab === 'my-timesheets' && isSalariedEmployee,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: travelerOptions = [], isLoading: travelerOptionsLoading } = useQuery<TravelerOption[]>({
+    queryKey: ['/api/timekeeping/salaried-timesheet', 'portal', employeeId, 'travelers-all'],
+    queryFn: async () => {
+      const res = await portalFetch(`/api/timekeeping/salaried-timesheet/portal/${employeeId}/travelers/all`);
+      if (!res.ok) throw new Error('Failed to fetch travelers');
+      return res.json();
+    },
+    enabled: activeTab === 'my-timesheets' && isSalariedEmployee,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const salariedWeekFromIso = `${selectedSalariedWeek.start}T00:00:00.000Z`;
+  const salariedWeekToIso = `${selectedSalariedWeek.end}T23:59:59.999Z`;
+  const { data: salariedWeekPunches = [], isLoading: salariedWeekPunchesLoading } = useQuery<PunchEvent[]>({
+    queryKey: ['/api/timekeeping/punches/my', 'salaried-reference', selectedSalariedWeek.start, selectedSalariedWeek.end],
+    queryFn: async () => {
+      const res = await portalFetch(`/api/timekeeping/punches/my?from=${encodeURIComponent(salariedWeekFromIso)}&to=${encodeURIComponent(salariedWeekToIso)}`);
+      if (!res.ok) throw new Error('Failed to fetch punch reference');
+      return res.json();
+    },
+    enabled: activeTab === 'my-timesheets' && isSalariedEmployee,
+    staleTime: 30_000,
+  });
+
+  const saveSalariedLineMutation = useMutation({
+    mutationFn: async () => {
+      if (!salariedTimesheet) throw new Error('Salaried timesheet is not loaded yet.');
+      const hours = Number(salariedLineForm.hours);
+      if (!Number.isFinite(hours) || hours <= 0) throw new Error('Hours must be greater than 0.');
+      const payload = {
+        date: salariedLineForm.date,
+        lineType: salariedLineForm.lineType,
+        hours,
+        note: salariedLineForm.note.trim() || null,
+        originalNarrative: salariedLineForm.originalNarrative.trim() || null,
+        ...(salariedLineForm.lineType === 'DIRECT'
+          ? { travelerId: salariedLineForm.travelerId }
+          : { indirectCodeId: Number(salariedLineForm.indirectCodeId) }),
+      };
+      const base = `/api/timekeeping/salaried-timesheet/portal/${employeeId}/timesheets/${salariedTimesheet.timesheet.id}/lines`;
+      const res = await portalFetch(
+        salariedLineForm.id ? `${base}/${salariedLineForm.id}` : base,
+        {
+          method: salariedLineForm.id ? 'PATCH' : 'POST',
+          body: JSON.stringify(payload),
+        },
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as any).error ?? 'Failed to save salaried line');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: 'Timesheet line saved', description: 'Your weekly salary timesheet was updated.' });
+      setSalariedLineForm(emptySalariedLineForm(selectedSalariedWeek.start));
+      refetchSalariedTimesheet();
+    },
+    onError: (err: any) => {
+      toast({ title: 'Could not save line', description: err?.message ?? 'Please try again.', variant: 'destructive' });
+    },
+  });
+
+  const deleteSalariedLineMutation = useMutation({
+    mutationFn: async (lineId: number) => {
+      if (!salariedTimesheet) throw new Error('Salaried timesheet is not loaded yet.');
+      const res = await portalFetch(
+        `/api/timekeeping/salaried-timesheet/portal/${employeeId}/timesheets/${salariedTimesheet.timesheet.id}/lines/${lineId}`,
+        { method: 'DELETE' },
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as any).error ?? 'Failed to delete salaried line');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: 'Timesheet line removed', description: 'The draft line was removed.' });
+      refetchSalariedTimesheet();
+    },
+    onError: (err: any) => {
+      toast({ title: 'Could not remove line', description: err?.message ?? 'Please try again.', variant: 'destructive' });
+    },
+  });
+
+  const certifySalariedMutation = useMutation({
+    mutationFn: async (timesheetId: number) => {
+      const res = await portalFetch(`/api/timekeeping/salaried-timesheet/portal/${employeeId}/certify/${timesheetId}`, {
+        method: 'POST',
+        body: JSON.stringify({ certificationConfirmed: true }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as any).error ?? 'Failed to submit salaried timesheet');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: 'Timesheet submitted', description: 'Your weekly timesheet is pending supervisor approval.' });
+      setSalariedCertReviewId(null);
+      setSalariedCertConfirmedId(null);
+      refetchSalariedTimesheet();
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/my-tasks'] });
+    },
+    onError: (err: any) => {
+      toast({ title: 'Submission failed', description: err?.message ?? 'Please try again.', variant: 'destructive' });
     },
   });
 
@@ -794,14 +1055,14 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
       params.delete('sort');
     }
     if (activeTab === 'my-timesheets') {
-      params.set('period', selectedPayPeriod.start);
+      params.set('period', isSalariedEmployee ? selectedSalariedWeek.start : selectedPayPeriod.start);
     } else {
       params.delete('period');
     }
     const newSearch = params.toString();
     const newUrl = `${window.location.pathname}${newSearch ? `?${newSearch}` : ''}`;
     window.history.replaceState(null, '', newUrl);
-  }, [activeTab, filterChargeCode, filterDateFrom, filterDateTo, sortOrder, selectedPayPeriod.start]);
+  }, [activeTab, filterChargeCode, filterDateFrom, filterDateTo, sortOrder, selectedPayPeriod.start, selectedSalariedWeek.start, isSalariedEmployee]);
 
   // Punch status — attendance clock (NOT WAD labor attribution)
   const {
@@ -830,14 +1091,13 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
     staleTime: 5 * 60 * 1000,
   });
 
-  const currentPayPeriodFromIso = `${currentPayPeriod.start}T00:00:00.000Z`;
-  const currentPayPeriodToIso = `${currentPayPeriod.end}T23:59:59.999Z`;
-  const { data: currentPayPeriodPunches = [], isLoading: currentPayPeriodPunchesLoading } = useQuery<PunchEvent[]>({
-    queryKey: ['/api/timekeeping/punches/my', currentPayPeriod.start, currentPayPeriod.end],
+  const { data: activeShiftPunches = [], isLoading: activeShiftPunchesLoading } = useQuery<PunchEvent[]>({
+    queryKey: ['/api/timekeeping/punches/my/active-shift'],
     queryFn: async () => {
-      const res = await portalFetch(`/api/timekeeping/punches/my?from=${encodeURIComponent(currentPayPeriodFromIso)}&to=${encodeURIComponent(currentPayPeriodToIso)}`);
-      if (!res.ok) throw new Error('Failed to fetch current pay period punches');
-      return res.json();
+      const res = await portalFetch('/api/timekeeping/punches/my/active-shift');
+      if (!res.ok) throw new Error('Failed to fetch active shift punches');
+      const data = await res.json() as ActiveShiftPunchResponse;
+      return Array.isArray(data.punches) ? data.punches : [];
     },
     enabled: activeTab === 'time-clock',
     staleTime: 30_000,
@@ -867,6 +1127,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
       setDailyPunchOutConfirmed(false);
       setShowDailyPunchOutCertification(false);
       queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/punches/my/current'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/punches/my/active-shift'] });
       queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/timesheets', 'mine', 'running'] });
     },
     onError: (err: Error) => {
@@ -878,6 +1139,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
         setDailyPunchOutConfirmed(false);
         setShowDailyPunchOutCertification(false);
         queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/punches/my/current'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/punches/my/active-shift'] });
         queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/timesheets', 'mine', 'running'] });
         return;
       }
@@ -911,6 +1173,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
       toast({ title: 'Correction submitted', description: 'Your request was sent for supervisor review.' });
       setPunchCorrectionForm({ requestType: 'edit_session', punchLedgerId: '', selectedPunchType: 'clock_in', clockIn: '', clockOut: '', reason: '' });
       queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/punch-corrections', 'mine'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/punches/my/active-shift'] });
     },
     onError: (err: any) => {
       toast({ title: 'Correction failed', description: err?.message ?? 'Unable to submit correction.', variant: 'destructive' });
@@ -1120,6 +1383,283 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
       </div>
     );
   };
+
+  const salariedLines = salariedTimesheet?.lines ?? [];
+  const salariedTotalHours = salariedTimesheet?.timesheet.totalActualHours ?? 0;
+  const salariedEditable =
+    salariedTimesheet?.timesheet.status === 'OPEN' || salariedTimesheet?.timesheet.status === 'REOPENED';
+  const salariedWeekDays = Array.from({ length: 7 }, (_, index) => {
+    const [year, month, day] = selectedSalariedWeek.start.split('-').map(Number);
+    return ymdFromUtc(Date.UTC(year, month - 1, day) + index * DAY_MS);
+  });
+  const salaryKioskSessions = Array.from(
+    salariedWeekPunches.reduce<Map<number, { sessionId: number; clockIn: PunchEvent; clockOut?: PunchEvent }>>((acc, punch) => {
+      const existing = acc.get(punch.sessionId);
+      if (punch.type === 'clock_in') {
+        acc.set(punch.sessionId, { sessionId: punch.sessionId, clockIn: punch, clockOut: existing?.clockOut });
+      } else if (punch.type === 'clock_out' && existing) {
+        existing.clockOut = punch;
+      } else if (punch.type === 'clock_out') {
+        acc.set(punch.sessionId, { sessionId: punch.sessionId, clockIn: punch, clockOut: punch });
+      }
+      return acc;
+    }, new Map()).values(),
+  ).filter((session) => session.clockIn.type === 'clock_in');
+
+  const fillSalariedFormFromLine = (line: SalariedTimesheetLine) => {
+    if (line.isLocked) return;
+    setSalariedLineForm({
+      id: line.id,
+      date: line.date,
+      lineType: line.lineType === 'DIRECT' ? 'DIRECT' : 'INDIRECT',
+      travelerId: line.travelerId ?? '',
+      indirectCodeId: line.indirectCodeId ? String(line.indirectCodeId) : '',
+      hours: String(line.hours),
+      note: line.note ?? '',
+      originalNarrative: line.originalNarrative ?? '',
+    });
+  };
+
+  const fillSalariedFormFromPunch = (session: { sessionId: number; clockIn: PunchEvent; clockOut?: PunchEvent }) => {
+    const clockInTime = new Date(session.clockIn.punchedAt);
+    const clockOutTime = session.clockOut ? new Date(session.clockOut.punchedAt) : null;
+    const hours = clockOutTime && clockOutTime > clockInTime
+      ? ((clockOutTime.getTime() - clockInTime.getTime()) / 3_600_000).toFixed(2)
+      : '';
+    setSalariedLineForm({
+      id: null,
+      date: toLocalDateStr(session.clockIn.punchedAt),
+      lineType: 'INDIRECT',
+      travelerId: '',
+      indirectCodeId: '',
+      hours,
+      note: `Drafted from kiosk punch #${session.sessionId}`,
+      originalNarrative: `${formatDateTime(session.clockIn.punchedAt)}${session.clockOut ? ` to ${formatDateTime(session.clockOut.punchedAt)}` : ''}`,
+    });
+  };
+
+  const renderSalariedTimesheets = () => (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <FileCheck className="h-5 w-5" />
+          Weekly Salary Timesheet
+        </CardTitle>
+        <CardDescription>
+          Enter weekly direct and indirect labor, review PTO/holiday lines, and submit for supervisor approval.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="rounded-lg border border-blue-200 bg-blue-50/60 p-4 mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-semibold text-sm text-gray-900">{isCurrentSalariedWeek ? 'Current Week' : 'Selected Week'}</h3>
+                {salariedTimesheet?.timesheet.status && <Badge variant="outline" className="capitalize">{salariedTimesheet.timesheet.status.replace(/_/g, ' ').toLowerCase()}</Badge>}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">{selectedSalariedWeekLabel}</p>
+            </div>
+            <div className="flex flex-col items-stretch sm:items-end gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => goToSalariedWeek(shiftWeek(selectedSalariedWeek.start, -1))} className="gap-1">
+                  <ChevronLeft className="h-4 w-4" />
+                  Previous
+                </Button>
+                <Button type="button" variant={isCurrentSalariedWeek ? 'default' : 'outline'} size="sm" onClick={() => goToSalariedWeek(currentSalariedWeek)}>Current</Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => goToSalariedWeek(shiftWeek(selectedSalariedWeek.start, 1))} className="gap-1">
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-center">
+                <div className="rounded-md bg-white border px-3 py-2">
+                  <div className="text-base font-bold text-gray-900">{salariedTotalHours.toFixed(2)}</div>
+                  <div className="text-[11px] text-muted-foreground">Total</div>
+                </div>
+                <div className="rounded-md bg-white border px-3 py-2">
+                  <div className="text-base font-bold text-gray-900">{Math.max(0, 40 - salariedTotalHours).toFixed(2)}</div>
+                  <div className="text-[11px] text-muted-foreground">To 40</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {salariedTimesheetLoading ? (
+          <div className="flex items-center justify-center py-10 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            Loading weekly timesheet...
+          </div>
+        ) : !salariedTimesheet ? (
+          <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">Could not load your salaried weekly timesheet.</div>
+        ) : (
+          <div className="space-y-6">
+            <div className="overflow-x-auto rounded-md border bg-white">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-32">Date</TableHead>
+                    <TableHead>Lines</TableHead>
+                    <TableHead className="text-right">Hours</TableHead>
+                    <TableHead className="w-24 text-right">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {salariedWeekDays.map((day) => {
+                    const lines = salariedLines.filter((line) => line.date === day);
+                    const dayHours = lines.reduce((sum, line) => sum + Number(line.hours ?? 0), 0);
+                    return (
+                      <TableRow key={day}>
+                        <TableCell className="font-medium whitespace-nowrap">{new Date(`${day}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</TableCell>
+                        <TableCell>
+                          {lines.length === 0 ? (
+                            <span className="text-xs text-muted-foreground">No lines entered</span>
+                          ) : (
+                            <div className="space-y-2">
+                              {lines.map((line) => (
+                                <div key={line.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+                                  <Badge variant="outline" className={line.lineType === 'DIRECT' ? 'text-blue-700 border-blue-200' : 'text-emerald-700 border-emerald-200'}>{line.lineType}</Badge>
+                                  <span className="font-medium text-gray-700">{Number(line.hours).toFixed(2)}h</span>
+                                  {line.travelerId && <span className="text-muted-foreground">Traveler {line.travelerId}</span>}
+                                  {line.note && <span className="text-muted-foreground">{line.note}</span>}
+                                  {line.isLocked && <Badge className="bg-gray-100 text-gray-700 border-gray-200">Locked</Badge>}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right font-semibold">{dayHours.toFixed(2)}</TableCell>
+                        <TableCell className="text-right">
+                          {salariedEditable && <Button type="button" variant="ghost" size="sm" onClick={() => setSalariedLineForm({ ...emptySalariedLineForm(day), date: day })}>Add</Button>}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+
+            <div className="rounded-lg border p-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                <div>
+                  <h3 className="font-semibold text-sm text-gray-900">{salariedLineForm.id ? 'Edit Line' : 'Add Line'}</h3>
+                  <p className="text-xs text-muted-foreground mt-1">Use direct lines for traveler/job time and indirect lines for admin, sick, vacation, training, and other notes.</p>
+                </div>
+                {salariedLineForm.id && <Button type="button" variant="outline" size="sm" onClick={() => setSalariedLineForm(emptySalariedLineForm(selectedSalariedWeek.start))}>New Line</Button>}
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                <div>
+                  <Label>Date</Label>
+                  <Input type="date" value={salariedLineForm.date} onChange={(event) => setSalariedLineForm((prev) => ({ ...prev, date: event.target.value }))} disabled={!salariedEditable} />
+                </div>
+                <div>
+                  <Label>Type</Label>
+                  <Select value={salariedLineForm.lineType} onValueChange={(value: 'DIRECT' | 'INDIRECT') => setSalariedLineForm((prev) => ({ ...prev, lineType: value }))} disabled={!salariedEditable}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="INDIRECT">Indirect</SelectItem>
+                      <SelectItem value="DIRECT">Direct</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>{salariedLineForm.lineType === 'DIRECT' ? 'Traveler' : 'Indirect Code'}</Label>
+                  {salariedLineForm.lineType === 'DIRECT' ? (
+                    <Select value={salariedLineForm.travelerId || '__none'} onValueChange={(value) => setSalariedLineForm((prev) => ({ ...prev, travelerId: value === '__none' ? '' : value }))} disabled={!salariedEditable || travelerOptionsLoading}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none">Select traveler</SelectItem>
+                        {travelerOptions.map((traveler) => <SelectItem key={traveler.id} value={traveler.id}>{traveler.id}{traveler.description ? ` - ${traveler.description}` : ''}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Select value={salariedLineForm.indirectCodeId || '__none'} onValueChange={(value) => setSalariedLineForm((prev) => ({ ...prev, indirectCodeId: value === '__none' ? '' : value }))} disabled={!salariedEditable || indirectCodesLoading}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none">Select code</SelectItem>
+                        {indirectCodes.map((code) => <SelectItem key={code.id} value={String(code.id)}>{code.code} - {code.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+                <div>
+                  <Label>Hours</Label>
+                  <Input type="number" min="0" step="0.25" value={salariedLineForm.hours} onChange={(event) => setSalariedLineForm((prev) => ({ ...prev, hours: event.target.value }))} disabled={!salariedEditable} />
+                </div>
+                <div className="flex items-end">
+                  <Button
+                    type="button"
+                    className="w-full"
+                    disabled={!salariedEditable || saveSalariedLineMutation.isPending || !salariedLineForm.date || !salariedLineForm.hours || (salariedLineForm.lineType === 'DIRECT' ? !salariedLineForm.travelerId : !salariedLineForm.indirectCodeId)}
+                    onClick={() => saveSalariedLineMutation.mutate()}
+                  >
+                    {saveSalariedLineMutation.isPending ? 'Saving...' : 'Save Line'}
+                  </Button>
+                </div>
+              </div>
+              <div className="mt-3">
+                <Label>Notes</Label>
+                <Textarea value={salariedLineForm.note} onChange={(event) => setSalariedLineForm((prev) => ({ ...prev, note: event.target.value }))} disabled={!salariedEditable} placeholder="Work performed, PTO context, sick/vacation note, or correction context" />
+              </div>
+            </div>
+
+            {salariedLines.some((line) => !line.isLocked) && (
+              <div className="rounded-lg border p-4 space-y-2">
+                <h3 className="font-semibold text-sm text-gray-900">Editable Lines</h3>
+                {salariedLines.filter((line) => !line.isLocked).map((line) => (
+                  <div key={line.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-md border bg-white p-3 text-sm">
+                    <div><span className="font-medium">{line.date}</span><span className="text-muted-foreground"> - {line.lineType} - {Number(line.hours).toFixed(2)}h</span>{line.note && <span className="text-muted-foreground"> - {line.note}</span>}</div>
+                    <div className="flex items-center gap-2">
+                      <Button type="button" variant="outline" size="sm" onClick={() => fillSalariedFormFromLine(line)} disabled={!salariedEditable}>Edit</Button>
+                      <Button type="button" variant="outline" size="sm" onClick={() => deleteSalariedLineMutation.mutate(line.id)} disabled={!salariedEditable || deleteSalariedLineMutation.isPending}>Remove</Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="rounded-lg border p-4">
+              <h3 className="font-semibold text-sm text-gray-900 mb-1">Kiosk Punch Reference</h3>
+              <p className="text-xs text-muted-foreground mb-3">These punches are preserved as reference. Use one to prefill a draft line when it belongs on the salary timesheet.</p>
+              {salariedWeekPunchesLoading ? (
+                <div className="text-sm text-muted-foreground">Loading punch reference...</div>
+              ) : salaryKioskSessions.length === 0 ? (
+                <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">No kiosk punches recorded for this week.</div>
+              ) : (
+                <div className="space-y-2">
+                  {salaryKioskSessions.map((session) => (
+                    <div key={session.sessionId} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-md border bg-white p-3 text-sm">
+                      <div><span className="font-medium">{formatDateTime(session.clockIn.punchedAt)}</span><span className="text-muted-foreground"> to {session.clockOut ? formatDateTime(session.clockOut.punchedAt) : 'open/missing out'}</span></div>
+                      <Button type="button" variant="outline" size="sm" onClick={() => fillSalariedFormFromPunch(session)} disabled={!salariedEditable || !session.clockOut}>Use as Line</Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 space-y-3">
+              <p className="text-sm text-gray-700 italic leading-relaxed border-l-4 border-amber-400 pl-3">"{DCAA_CERTIFICATION_STATEMENT}"</p>
+              {salariedTimesheet.timesheet.certifiedAt ? (
+                <div className="rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800">Certified on {new Date(salariedTimesheet.timesheet.certifiedAt).toLocaleString()}</div>
+              ) : salariedCertReviewId !== salariedTimesheet.timesheet.id ? (
+                <Button type="button" size="sm" onClick={() => setSalariedCertReviewId(salariedTimesheet.timesheet.id)} disabled={!salariedEditable || salariedTotalHours <= 0}>Review Certification</Button>
+              ) : (
+                <>
+                  <label className="flex items-start gap-3 cursor-pointer select-none">
+                    <Checkbox checked={salariedCertConfirmedId === salariedTimesheet.timesheet.id} onCheckedChange={(checked) => setSalariedCertConfirmedId(checked ? salariedTimesheet.timesheet.id : null)} className="mt-0.5 border-amber-500 data-[state=checked]:bg-amber-500" />
+                    <span className="text-sm text-gray-800 font-medium leading-snug">I have reviewed this weekly timesheet and certify that it is complete and accurate.</span>
+                  </label>
+                  <Button type="button" size="sm" disabled={salariedCertConfirmedId !== salariedTimesheet.timesheet.id || certifySalariedMutation.isPending} onClick={() => certifySalariedMutation.mutate(salariedTimesheet.timesheet.id)} className="bg-amber-600 hover:bg-amber-700 text-white">
+                    {certifySalariedMutation.isPending ? 'Submitting...' : 'Submit to Supervisor'}
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
 
   // Unique charge codes from loaded sessions for the filter dropdown
   const uniqueChargeCodes = Array.from(
@@ -2501,36 +3041,36 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
                       <div className="grid gap-3 sm:grid-cols-2">
                         <div className="sm:col-span-2 space-y-2">
                           <div className="flex items-center justify-between gap-3">
-                            <Label>Current Pay Period Punches</Label>
+                            <div>
+                              <Label className="uppercase tracking-widest text-muted-foreground">Active Shift Punches</Label>
+                              <p className="text-xs text-muted-foreground">Tap a punch to edit it.</p>
+                            </div>
                             <Button type="button" variant="outline" size="sm" onClick={startMissingPunchCorrection}>
-                              Add Missing Punch
+                              Add
                             </Button>
                           </div>
                           <div className="rounded-md border bg-white max-h-52 overflow-y-auto">
-                            {currentPayPeriodPunchesLoading ? (
+                            {activeShiftPunchesLoading ? (
                               <div className="p-3 text-sm text-muted-foreground">Loading punches...</div>
-                            ) : currentPayPeriodPunches.length === 0 ? (
-                              <div className="p-3 text-sm text-muted-foreground">No punches recorded in the current pay period.</div>
+                            ) : activeShiftPunches.length === 0 ? (
+                              <div className="p-3 text-sm text-muted-foreground">No punches found for this active shift.</div>
                             ) : (
-                              currentPayPeriodPunches.map((punch) => {
+                              activeShiftPunches.map((punch) => {
                                 const selected = punchCorrectionForm.requestType === 'edit_session' && punchCorrectionForm.punchLedgerId === String(punch.sessionId) && punchCorrectionForm.selectedPunchType === punch.type;
                                 return (
                                   <button
                                     key={`${punch.sessionId}-${punch.type}-${punch.punchedAt}`}
                                     type="button"
                                     onClick={() => selectPunchForCorrection(punch)}
-                                    className={`w-full px-3 py-2 text-left border-b last:border-b-0 hover:bg-muted/40 ${selected ? 'bg-blue-50' : 'bg-white'}`}
+                                    className={`w-full px-3 py-3 text-left border-b last:border-b-0 hover:bg-muted/40 ${selected ? 'bg-blue-50 ring-1 ring-blue-300' : 'bg-white'}`}
                                   >
                                     <div className="flex flex-wrap items-center justify-between gap-2">
                                       <div className="flex items-center gap-2">
                                         <Badge variant="outline" className={punch.type.includes('break') ? 'text-amber-700 border-amber-200' : 'text-blue-700 border-blue-200'}>
                                           {punch.type.replace(/_/g, ' ')}
                                         </Badge>
-                                        <span className="text-sm font-medium">
-                                          {new Date(punch.punchedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                                        </span>
                                       </div>
-                                      <span className="text-sm text-gray-700">
+                                      <span className="text-sm font-medium text-gray-700">
                                         {new Date(punch.punchedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
                                       </span>
                                     </div>
@@ -2613,6 +3153,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
 
         {/* ── Timesheets (hourly self-certification) ───────────────────── */}
         <TabsContent value="my-timesheets" className="mt-6">
+          {isSalariedEmployee ? renderSalariedTimesheets() : (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -2877,6 +3418,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
               )}
             </CardContent>
           </Card>
+          )}
         </TabsContent>
 
       </Tabs>

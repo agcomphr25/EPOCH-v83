@@ -27,19 +27,10 @@ import {
   Plus,
 } from 'lucide-react';
 import { format, differenceInDays, differenceInBusinessDays, parseISO } from 'date-fns';
+import { apiRequest } from '@/lib/queryClient';
 
 async function safeFetch<T>(url: string): Promise<T> {
-  const res = await fetch(url);
-  if (!res.ok) {
-    let message = res.statusText;
-    try {
-      const body = await res.json();
-      if (body.error) message = body.error;
-      else if (body.message) message = body.message;
-    } catch {}
-    throw new Error(`${res.status}: ${message}`);
-  }
-  return res.json();
+  return apiRequest(url) as Promise<T>;
 }
 
 function QueryErrorBanner({ message }: { message?: string }) {

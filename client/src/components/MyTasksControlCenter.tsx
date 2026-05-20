@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -87,7 +87,7 @@ interface MyTasksResponse {
 
 interface TimekeepingApprovalTask {
   id: string;
-  type: 'pto_approval' | 'salaried_timesheet_approval' | 'hourly_timesheet_approval';
+  type: 'pto_approval' | 'salaried_timesheet_approval' | 'hourly_timesheet_approval' | 'forklift_evaluation';
   title: string;
   description: string;
   employeeName: string;
@@ -100,6 +100,8 @@ interface TimekeepingApprovalTask {
   priority: 'normal' | 'overdue';
   actionUrl: string;
   sourceId: number;
+  writtenScore?: number;
+  testType?: string;
 }
 
 interface TimekeepingTasksResponse {
@@ -647,7 +649,75 @@ function TimekeepingApprovalTasks({
     task: TimekeepingApprovalTask;
     decision: 'approved' | 'denied';
   } | null>(null);
+  const [forkliftTarget, setForkliftTarget] = useState<TimekeepingApprovalTask | null>(null);
+  const [forkliftItems, setForkliftItems] = useState<
+    { itemKey: string; label: string; required: boolean; result: string; notes: string }[]
+  >([]);
+  const [forkliftNotes, setForkliftNotes] = useState('');
   const [note, setNote] = useState('');
+
+  const { data: forkliftEvaluation, isLoading: forkliftLoading } = useQuery({
+    queryKey: ['/api/training/forklift/evaluations', forkliftTarget?.sourceId],
+    queryFn: () => apiRequest(`/api/training/forklift/evaluations/${forkliftTarget?.sourceId}`),
+    enabled: !!forkliftTarget?.sourceId,
+  });
+
+  useEffect(() => {
+    if (!forkliftTarget || !forkliftEvaluation?.items?.length) return;
+    setForkliftItems(
+      forkliftEvaluation.items.map((item: any) => ({
+        itemKey: item.item_key || item.itemKey,
+        label: item.label,
+        required: item.required !== false,
+        result: item.result || 'pending',
+        notes: item.notes || '',
+      })),
+    );
+  }, [forkliftEvaluation, forkliftTarget]);
+
+  const forkliftCompleteMutation = useMutation({
+    mutationFn: ({
+      task,
+      certify,
+      items,
+      evaluatorNotes,
+    }: {
+      task: TimekeepingApprovalTask;
+      certify: boolean;
+      items: typeof forkliftItems;
+      evaluatorNotes: string;
+    }) =>
+      apiRequest(`/api/training/forklift/evaluations/${task.sourceId}/complete`, {
+        method: 'POST',
+        body: JSON.stringify({
+          certify,
+          evaluatorNotes,
+          items,
+        }),
+      }),
+    onSuccess: (data: any, vars) => {
+      toast({
+        title: vars.certify ? 'Forklift certification completed' : 'Forklift evaluation marked unsatisfactory',
+        description: vars.certify
+          ? 'The laminated badge PDF is opening in a new tab.'
+          : 'The employee will need coaching or another evaluation.',
+      });
+      if (vars.certify && data?.evaluation?.id) {
+        window.open(`/api/training/forklift/evaluations/${data.evaluation.id}/badge.pdf`, '_blank', 'noopener,noreferrer');
+      }
+      setForkliftTarget(null);
+      setForkliftItems([]);
+      setForkliftNotes('');
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/my-tasks'] });
+    },
+    onError: (err: Error) => {
+      toast({
+        title: 'Unable to save forklift evaluation',
+        description: err.message || 'Please try again.',
+        variant: 'destructive',
+      });
+    },
+  });
 
   const reviewMutation = useMutation({
     mutationFn: ({
@@ -694,6 +764,8 @@ function TimekeepingApprovalTasks({
 
   const visibleTasks = compact ? tasks.slice(0, 3) : tasks;
   const ptoReviewTarget = reviewTarget?.task.type === 'pto_approval' ? reviewTarget : null;
+  const hasFailingForkliftItem = forkliftItems.some((item) => item.required && item.result === 'fail');
+  const hasPendingForkliftItem = forkliftItems.some((item) => item.required && item.result === 'pending');
 
   return (
     <>
@@ -722,6 +794,15 @@ function TimekeepingApprovalTasks({
                 data-testid={`button-review-pto-${task.sourceId}`}
               >
                 Review
+              </Button>
+            ) : task.type === 'forklift_evaluation' ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setForkliftTarget(task)}
+                data-testid={`button-review-forklift-${task.sourceId}`}
+              >
+                Evaluate
               </Button>
             ) : (
               <Link href={task.actionUrl}>
@@ -832,6 +913,156 @@ function TimekeepingApprovalTasks({
             >
               {reviewMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {ptoReviewTarget?.decision === 'denied' ? 'Submit Denial' : 'Approve Request'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!forkliftTarget}
+        onOpenChange={(open) => {
+          if (!open) {
+            setForkliftTarget(null);
+            setForkliftItems([]);
+            setForkliftNotes('');
+          }
+        }}
+      >
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Forklift Practical Evaluation</DialogTitle>
+          </DialogHeader>
+          {forkliftTarget && (
+            <div className="space-y-4">
+              <div className="rounded-md border bg-muted/30 p-3 text-sm space-y-1">
+                <div className="font-semibold">{forkliftTarget.employeeName}</div>
+                <div className="text-muted-foreground">
+                  Sit-down counterbalance forklift - written test score {forkliftTarget.writtenScore ?? '80'}%
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Needs Coaching is acceptable when the overall evaluation is satisfactory. Required Fail items block certification.
+                </div>
+              </div>
+
+              {forkliftLoading ? (
+                <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Loading checklist...
+                </div>
+              ) : (
+                <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
+                  {forkliftItems.map((item, index) => (
+                    <div key={item.itemKey} className="rounded-md border p-3 space-y-2">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-medium">{index + 1}. {item.label}</p>
+                          {item.required && <p className="text-xs text-muted-foreground">Required</p>}
+                        </div>
+                        <Select
+                          value={item.result}
+                          onValueChange={(value) => {
+                            setForkliftItems((prev) =>
+                              prev.map((row) =>
+                                row.itemKey === item.itemKey ? { ...row, result: value } : row,
+                              ),
+                            );
+                          }}
+                        >
+                          <SelectTrigger className="w-[160px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="pending">Pending</SelectItem>
+                            <SelectItem value="pass">Pass</SelectItem>
+                            <SelectItem value="needs_coaching">Needs Coaching</SelectItem>
+                            <SelectItem value="fail">Fail</SelectItem>
+                            <SelectItem value="na">N/A</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <Textarea
+                        value={item.notes}
+                        onChange={(event) => {
+                          const notes = event.target.value;
+                          setForkliftItems((prev) =>
+                            prev.map((row) =>
+                              row.itemKey === item.itemKey ? { ...row, notes } : row,
+                            ),
+                          );
+                        }}
+                        placeholder="Notes for this checklist item"
+                        rows={2}
+                        className="resize-none"
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="space-y-1">
+                <Label>Evaluator notes</Label>
+                <Textarea
+                  value={forkliftNotes}
+                  onChange={(event) => setForkliftNotes(event.target.value)}
+                  placeholder="Overall observations, coaching given, mini-course notes"
+                  rows={3}
+                  className="resize-none"
+                />
+              </div>
+
+              {hasFailingForkliftItem && (
+                <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                  One or more required items are marked Fail. Mark this evaluation unsatisfactory or update the result after coaching.
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setForkliftTarget(null);
+                setForkliftItems([]);
+                setForkliftNotes('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="outline"
+              disabled={!forkliftTarget || forkliftCompleteMutation.isPending}
+              onClick={() => {
+                if (!forkliftTarget) return;
+                forkliftCompleteMutation.mutate({
+                  task: forkliftTarget,
+                  certify: false,
+                  items: forkliftItems,
+                  evaluatorNotes: forkliftNotes.trim(),
+                });
+              }}
+            >
+              Mark Unsatisfactory
+            </Button>
+            <Button
+              disabled={
+                !forkliftTarget ||
+                forkliftCompleteMutation.isPending ||
+                hasFailingForkliftItem ||
+                hasPendingForkliftItem
+              }
+              onClick={() => {
+                if (!forkliftTarget) return;
+                forkliftCompleteMutation.mutate({
+                  task: forkliftTarget,
+                  certify: true,
+                  items: forkliftItems,
+                  evaluatorNotes: forkliftNotes.trim(),
+                });
+              }}
+              data-testid="button-submit-forklift-evaluation"
+            >
+              {forkliftCompleteMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Certify Operator
             </Button>
           </DialogFooter>
         </DialogContent>

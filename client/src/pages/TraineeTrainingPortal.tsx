@@ -73,6 +73,27 @@ interface QuizResults {
   }[];
 }
 
+interface ForkliftQuestion {
+  id: string;
+  question: string;
+  options: string[];
+}
+
+interface ForkliftWrittenTest {
+  programTitle: string;
+  passingScore: number;
+  questions: ForkliftQuestion[];
+}
+
+interface ForkliftWrittenResult {
+  score: number;
+  passed: boolean;
+  passingScore: number;
+  correctCount: number;
+  totalQuestions: number;
+  evaluation?: { id: number; status: string } | null;
+}
+
 interface ProgramAssignment {
   id: number;
   programId: number;
@@ -117,6 +138,11 @@ export default function TraineeTrainingPortal() {
   const [quizSubmitted, setQuizSubmitted] = useState(false);
   const [quizResults, setQuizResults] = useState<QuizResults | null>(null);
   const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
+  const [forkliftDialogOpen, setForkliftDialogOpen] = useState(false);
+  const [forkliftTest, setForkliftTest] = useState<ForkliftWrittenTest | null>(null);
+  const [forkliftAnswers, setForkliftAnswers] = useState<Record<string, string>>({});
+  const [forkliftResult, setForkliftResult] = useState<ForkliftWrittenResult | null>(null);
+  const [forkliftTestType, setForkliftTestType] = useState('initial');
 
   const { data: currentUser } = useQuery<{ id: number; employeeId?: number; name?: string }>({
     queryKey: ['/api/auth/session'],
@@ -177,6 +203,47 @@ export default function TraineeTrainingPortal() {
     },
     onError: (error: any) => {
       toast({ title: 'Error submitting quiz', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const startForkliftWrittenTestMutation = useMutation({
+    mutationFn: async () => apiRequest('/api/training/forklift/written-test'),
+    onSuccess: (data: ForkliftWrittenTest) => {
+      setForkliftTest(data);
+      setForkliftAnswers({});
+      setForkliftResult(null);
+      setForkliftDialogOpen(true);
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error loading forklift test', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const submitForkliftWrittenTestMutation = useMutation({
+    mutationFn: async () => {
+      if (!forkliftTest) throw new Error('No forklift test loaded');
+      return apiRequest('/api/training/forklift/written-test/submit', {
+        method: 'POST',
+        body: JSON.stringify({
+          employeeId: traineeId,
+          testType: forkliftTestType,
+          questionIds: forkliftTest.questions.map((q) => q.id),
+          answers: forkliftAnswers,
+        }),
+      });
+    },
+    onSuccess: (data: ForkliftWrittenResult) => {
+      setForkliftResult(data);
+      toast({
+        title: data.passed ? 'Forklift written test passed' : 'Forklift written test not passed',
+        description: data.passed
+          ? `You scored ${data.score}%. agrace now has a practical evaluation task.`
+          : `You scored ${data.score}%. You need ${data.passingScore}% to continue.`,
+        variant: data.passed ? 'default' : 'destructive',
+      });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error submitting forklift test', description: error.message, variant: 'destructive' });
     },
   });
 
@@ -270,7 +337,59 @@ export default function TraineeTrainingPortal() {
               <Badge variant="secondary" className="ml-1">{trainingPlans.length}</Badge>
             )}
           </TabsTrigger>
+          <TabsTrigger value="forklift" className="gap-2">
+            <ClipboardCheck className="h-4 w-4" />
+            Forklift
+          </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="forklift" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Award className="h-5 w-5 text-primary" />
+                Sit-Down Counterbalance Forklift Operator
+              </CardTitle>
+              <CardDescription>
+                Complete the randomized written test. A passing score creates a practical evaluation task for agrace.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-sm text-muted-foreground">
+                Passing score: 80%. AGC refresh: 6 months. OSHA evaluation: 3 years.
+              </div>
+              <div className="w-full sm:w-[240px]">
+                <Label className="text-xs text-muted-foreground">Evaluation type</Label>
+                <select
+                  value={forkliftTestType}
+                  onChange={(event) => setForkliftTestType(event.target.value)}
+                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="initial">Initial certification</option>
+                  <option value="agc_6_month_refresher">AGC 6-month refresher</option>
+                  <option value="osha_3_year_evaluation">OSHA 3-year evaluation</option>
+                  <option value="incident_refresher">Incident / near-miss refresher</option>
+                </select>
+              </div>
+              <Button
+                onClick={() => startForkliftWrittenTestMutation.mutate()}
+                disabled={startForkliftWrittenTestMutation.isPending || !traineeId}
+              >
+                {startForkliftWrittenTestMutation.isPending ? (
+                  <span className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 animate-spin" />
+                    Loading
+                  </span>
+                ) : (
+                  <>
+                    <Play className="h-4 w-4 mr-2" />
+                    Start Written Test
+                  </>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         {/* Program-Based Training */}
         <TabsContent value="programs" className="space-y-4">
@@ -627,6 +746,96 @@ export default function TraineeTrainingPortal() {
                   </>
                 ) : (
                   <Button onClick={() => setQuizDialogOpen(false)}>
+                    Close
+                  </Button>
+                )}
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={forkliftDialogOpen} onOpenChange={setForkliftDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          {forkliftTest && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <ClipboardCheck className="h-5 w-5 text-primary" />
+                  {forkliftTest.programTitle} Written Test
+                </DialogTitle>
+                <p className="text-sm text-muted-foreground">
+                  Questions and answer choices are randomized. You need {forkliftTest.passingScore}% to continue to the practical evaluation.
+                </p>
+              </DialogHeader>
+
+              <div className="space-y-6 py-4">
+                {forkliftTest.questions.map((question, idx) => (
+                  <div key={question.id} className="p-4 rounded-lg border border-gray-200">
+                    <p className="font-medium mb-3">
+                      {idx + 1}. {question.question}
+                    </p>
+                    <RadioGroup
+                      value={forkliftAnswers[question.id] || ''}
+                      onValueChange={(value) => setForkliftAnswers((prev) => ({ ...prev, [question.id]: value }))}
+                      disabled={!!forkliftResult}
+                    >
+                      {question.options.map((option, optIdx) => (
+                        <div key={option} className="flex items-center space-x-2 p-2 rounded">
+                          <RadioGroupItem value={option} id={`forklift-${question.id}-${optIdx}`} />
+                          <Label htmlFor={`forklift-${question.id}-${optIdx}`} className="cursor-pointer flex-1">
+                            {option}
+                          </Label>
+                        </div>
+                      ))}
+                    </RadioGroup>
+                  </div>
+                ))}
+              </div>
+
+              {forkliftResult && (
+                <div className={`p-4 rounded-lg ${forkliftResult.passed ? 'bg-green-100 border-green-300' : 'bg-red-100 border-red-300'} border`}>
+                  <div className="flex items-center gap-3">
+                    {forkliftResult.passed ? (
+                      <CheckCircle className="h-8 w-8 text-green-600" />
+                    ) : (
+                      <AlertCircle className="h-8 w-8 text-red-600" />
+                    )}
+                    <div>
+                      <h4 className={`font-semibold ${forkliftResult.passed ? 'text-green-800' : 'text-red-800'}`}>
+                        {forkliftResult.passed ? 'Written Test Passed' : 'Written Test Not Passed'}
+                      </h4>
+                      <p className={`text-sm ${forkliftResult.passed ? 'text-green-700' : 'text-red-700'}`}>
+                        Score: {forkliftResult.score}% ({forkliftResult.correctCount}/{forkliftResult.totalQuestions} correct)
+                      </p>
+                      {forkliftResult.passed && (
+                        <p className="text-sm text-green-700">
+                          agrace now has a My Tasks item to complete your practical mini-course checklist.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <DialogFooter>
+                {!forkliftResult ? (
+                  <>
+                    <Button variant="outline" onClick={() => setForkliftDialogOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={() => submitForkliftWrittenTestMutation.mutate()}
+                      disabled={
+                        Object.keys(forkliftAnswers).length < forkliftTest.questions.length ||
+                        submitForkliftWrittenTestMutation.isPending
+                      }
+                    >
+                      {submitForkliftWrittenTestMutation.isPending ? 'Submitting...' : 'Submit Test'}
+                    </Button>
+                  </>
+                ) : (
+                  <Button onClick={() => setForkliftDialogOpen(false)}>
                     Close
                   </Button>
                 )}

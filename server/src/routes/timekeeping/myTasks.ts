@@ -11,6 +11,53 @@ function h(fn: (req: Request, res: Response, next: NextFunction) => Promise<void
 
 const router: IRouter = Router();
 
+let forkliftTablesEnsured = false;
+async function ensureForkliftTaskTables() {
+  if (forkliftTablesEnsured) return;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS forklift_written_attempts (
+      id SERIAL PRIMARY KEY,
+      employee_id INTEGER NOT NULL REFERENCES employees(id),
+      test_type TEXT NOT NULL DEFAULT 'initial',
+      score INTEGER NOT NULL,
+      passed BOOLEAN NOT NULL DEFAULT false,
+      question_order JSONB NOT NULL DEFAULT '[]'::jsonb,
+      answers JSONB NOT NULL DEFAULT '{}'::jsonb,
+      submitted_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS forklift_operator_evaluations (
+      id SERIAL PRIMARY KEY,
+      written_attempt_id INTEGER REFERENCES forklift_written_attempts(id),
+      employee_id INTEGER NOT NULL REFERENCES employees(id),
+      evaluator_employee_id INTEGER NOT NULL REFERENCES employees(id),
+      test_type TEXT NOT NULL DEFAULT 'initial',
+      status TEXT NOT NULL DEFAULT 'pending_evaluation',
+      practical_result TEXT,
+      evaluator_notes TEXT,
+      certified_at TIMESTAMP,
+      agc_refresher_due_at TIMESTAMP,
+      osha_evaluation_due_at TIMESTAMP,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS forklift_evaluation_items (
+      id SERIAL PRIMARY KEY,
+      evaluation_id INTEGER NOT NULL REFERENCES forklift_operator_evaluations(id) ON DELETE CASCADE,
+      item_key TEXT NOT NULL,
+      label TEXT NOT NULL,
+      required BOOLEAN NOT NULL DEFAULT true,
+      result TEXT NOT NULL DEFAULT 'pending',
+      notes TEXT,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      UNIQUE(evaluation_id, item_key)
+    );
+  `);
+  forkliftTablesEnsured = true;
+}
+
 async function resolveEmployeeIdForUser(user: any): Promise<number | null> {
   if (!user) return null;
   if (user.employeeId != null) return Number(user.employeeId);
@@ -67,7 +114,9 @@ router.get(
       return;
     }
 
-    const [pto, salaried, hourly] = await Promise.all([
+    await ensureForkliftTaskTables();
+
+    const [pto, salaried, hourly, forklift] = await Promise.all([
       pool.query(
         `
           SELECT r.id,
@@ -124,6 +173,24 @@ router.get(
         `,
         [employeeId],
       ),
+      pool.query(
+        `
+          SELECT ev.id,
+                 ev.employee_id,
+                 e.name AS employee_name,
+                 ev.test_type,
+                 ev.created_at,
+                 wa.score AS written_score,
+                 wa.submitted_at AS written_submitted_at
+          FROM forklift_operator_evaluations ev
+          JOIN employees e ON e.id = ev.employee_id
+          LEFT JOIN forklift_written_attempts wa ON wa.id = ev.written_attempt_id
+          WHERE ev.status = 'pending_evaluation'
+            AND ev.evaluator_employee_id = $1
+          ORDER BY ev.created_at ASC
+        `,
+        [employeeId],
+      ),
     ]);
 
     const ptoTasks = pto.rows.map((r: any) => ({
@@ -167,7 +234,21 @@ router.get(
       sourceId: r.id,
     }));
 
-    const tasks = [...ptoTasks, ...salariedTasks, ...hourlyTasks].sort(
+    const forkliftTasks = forklift.rows.map((r: any) => ({
+      id: `forklift-${r.id}`,
+      type: "forklift_evaluation",
+      title: `Evaluate forklift operator: ${r.employee_name}`,
+      description: `Written test passed at ${Number(r.written_score ?? 0)}% - ${String(r.test_type || "initial").replace(/_/g, " ")} evaluation`,
+      employeeName: r.employee_name,
+      createdAt: r.created_at,
+      priority: "normal",
+      actionUrl: "/training/my-training",
+      sourceId: r.id,
+      writtenScore: r.written_score,
+      testType: r.test_type,
+    }));
+
+    const tasks = [...ptoTasks, ...salariedTasks, ...hourlyTasks, ...forkliftTasks].sort(
       (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
     );
 

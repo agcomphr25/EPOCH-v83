@@ -166,7 +166,31 @@ async function insertInternalInboxMessage(params: {
         recipient_name,
         is_urgent
       )
-      VALUES ($1, $2, NULL, 'EPOCH Timekeeping', 'person', $3, $4, $5)
+      VALUES (
+        $1,
+        $2,
+        COALESCE(
+          (
+            SELECT id
+            FROM users
+            WHERE username IN ('system', 'admin', 'glennj')
+            ORDER BY
+              CASE username
+                WHEN 'system' THEN 0
+                WHEN 'admin' THEN 1
+                WHEN 'glennj' THEN 2
+                ELSE 3
+              END
+            LIMIT 1
+          ),
+          $3
+        ),
+        'EPOCH Timekeeping',
+        'person',
+        $3,
+        $4,
+        $5
+      )
       RETURNING id
     `,
     [

@@ -18,7 +18,13 @@ router.use(async (_req, res, next) => {
 function h(fn: (req: Request, res: Response) => Promise<void>) {
   return (req: Request, res: Response) =>
     fn(req, res).catch((err) => {
-      console.error('[PM Dashboard]', err?.message ?? err);
+      console.error('[PM Dashboard]', {
+        method: req.method,
+        path: req.originalUrl,
+        projectId: req.params?.projectId,
+        message: err?.message ?? String(err),
+        stack: err?.stack,
+      });
       if (!res.headersSent) res.status(500).json({ error: 'Internal server error', message: err?.message });
     });
 }
@@ -342,6 +348,23 @@ async function getProjectSerializedItemAggregate(
   return { linkedPoIds, groups, totalRequired, totalCompleted };
 }
 
+async function getProjectSerializedItemAggregateOrFallback(
+  projectId: string,
+  today: string,
+): Promise<SerializedItemAggregate> {
+  try {
+    return await getProjectSerializedItemAggregate(projectId, today);
+  } catch (error) {
+    console.error('[PM Dashboard] Serialized item aggregate failed; using legacy project totals', {
+      projectId,
+      today,
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    return { linkedPoIds: [], groups: [], totalRequired: 0, totalCompleted: 0 };
+  }
+}
+
 // GET /api/pm-dashboard/managers — distinct PMs who own at least one active project
 router.get('/managers', h(async (_req, res) => {
   const result = await pool.query<{ id: number; name: string }>(`
@@ -646,7 +669,7 @@ router.get('/:projectId/summary', h(async (req, res) => {
   // Control Center matches the order card. Falls back to the existing
   // WAD/quantity_manufactured values when no serialized items exist.
   const today = new Date().toISOString().slice(0, 10);
-  const itemAgg = await getProjectSerializedItemAggregate(projectId, today);
+  const itemAgg = await getProjectSerializedItemAggregateOrFallback(projectId, today);
 
   let total = wadTotal;
   let completed = wadCompleted;
@@ -1074,7 +1097,7 @@ router.get('/:projectId/production', h(async (req, res) => {
   // P2 PO, drive the P2 portion of the production table from p2_serialized_items
   // (the same source the order card uses) so the dashboard and order card agree.
   // The WAD half of the union (production_work_orders + travelers) is preserved.
-  const itemAgg = await getProjectSerializedItemAggregate(projectId, today);
+  const itemAgg = await getProjectSerializedItemAggregateOrFallback(projectId, today);
   let finalRows: ProductionRow[] = result;
   if (itemAgg.groups.length > 0) {
     const wadOnly = result.filter(r => r.sourceType !== 'p2_production_order');
@@ -1446,7 +1469,7 @@ router.get('/:projectId/labor', h(async (req, res) => {
     ORDER BY pl.clock_in DESC
   `, [projectId]);
 
-  const employeeIds = [...new Set(liveRes.map((r) => r.employeeId))];
+  const employeeIds = Array.from(new Set(liveRes.map((r) => r.employeeId)));
   const certMap: Record<number, string> = {};
   const authMap: Record<number, boolean> = {};
 

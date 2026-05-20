@@ -36,6 +36,14 @@ type WadStatusRow = {
   pwoCount: number;
   wadStatus: 'NONE' | 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED';
   gateSatisfied: boolean;
+  p2HasProductionDemand: boolean;
+  p2PoCount: number;
+  p2PoNumbers: string | null;
+  p2DemandQuantity: number;
+  p2SerializedCount: number;
+  p2ActiveUnits: number;
+  p2ProductionOrderCount: number;
+  p2WadConnectionStatus: 'P2_WAD_APPROVED' | 'P2_WAD_INCOMPLETE' | 'P2_WAD_MISSING' | 'NO_P2_DEMAND';
   latestPwoId: string | null;
   latestWorkOrderNumber: string | null;
   percentComplete: number;
@@ -54,6 +62,20 @@ const WAD_BADGE: Record<string, string> = {
   DRAFT: 'bg-gray-100 text-gray-700',
   PENDING_APPROVAL: 'bg-yellow-100 text-yellow-800',
   APPROVED: 'bg-green-100 text-green-800',
+};
+
+const P2_WAD_BADGE: Record<string, string> = {
+  P2_WAD_APPROVED: 'bg-green-100 text-green-800 border border-green-200',
+  P2_WAD_INCOMPLETE: 'bg-yellow-100 text-yellow-800 border border-yellow-200',
+  P2_WAD_MISSING: 'bg-red-100 text-red-800 border border-red-200',
+  NO_P2_DEMAND: 'bg-gray-100 text-gray-700 border border-gray-200',
+};
+
+const P2_WAD_LABEL: Record<string, string> = {
+  P2_WAD_APPROVED: 'P2 + WAD ready',
+  P2_WAD_INCOMPLETE: 'P2 + WAD incomplete',
+  P2_WAD_MISSING: 'P2 needs WAD',
+  NO_P2_DEMAND: 'No P2 demand',
 };
 
 export default function WADStatusDashboard() {
@@ -113,6 +135,8 @@ export default function WADStatusDashboard() {
     pending: data.filter((r) => r.wadStatus === 'PENDING_APPROVAL').length,
     approved: data.filter((r) => r.wadStatus === 'APPROVED').length,
     backfillCandidates: data.filter((r) => r.currentStage === 'production' && !r.gateSatisfied).length,
+    p2Demand: data.filter((r) => r.p2HasProductionDemand).length,
+    p2WadGaps: data.filter((r) => r.p2HasProductionDemand && !r.gateSatisfied).length,
   }), [data]);
 
   return (
@@ -135,12 +159,13 @@ export default function WADStatusDashboard() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
         <SummaryCard label="Projects" value={counts.total} icon={<LayoutDashboard className="h-4 w-4" />} />
         <SummaryCard label="No WAD" value={counts.none} tone="red" icon={<FileWarning className="h-4 w-4" />} />
         <SummaryCard label="Draft" value={counts.draft} tone="gray" icon={<Clock className="h-4 w-4" />} />
         <SummaryCard label="Pending Approval" value={counts.pending} tone="amber" icon={<Clock className="h-4 w-4" />} />
         <SummaryCard label="Approved" value={counts.approved} tone="green" icon={<CheckCircle2 className="h-4 w-4" />} />
+        <SummaryCard label="P2 WAD Gaps" value={counts.p2WadGaps} tone="amber" icon={<AlertTriangle className="h-4 w-4" />} />
       </div>
 
       {counts.backfillCandidates > 0 && (
@@ -150,6 +175,9 @@ export default function WADStatusDashboard() {
             <strong>{counts.backfillCandidates}</strong> project{counts.backfillCandidates === 1 ? '' : 's'} already in
             production {counts.backfillCandidates === 1 ? 'is' : 'are'} missing an approved WAD. Approving here records
             a <code>wad_backfill</code> audit event and flips the WAD gate without regressing the stage.
+            {counts.p2WadGaps > 0 && (
+              <> P2-linked production demand is now shown on this dashboard so the gap is visible without changing production flow.</>
+            )}
           </div>
         </div>
       )}
@@ -208,6 +236,7 @@ export default function WADStatusDashboard() {
                     <TableHead>Customer / PO</TableHead>
                     <TableHead>Stage</TableHead>
                     <TableHead>WAD Status</TableHead>
+                    <TableHead>P2 Demand</TableHead>
                     <TableHead className="w-28 text-center">Progress</TableHead>
                     <TableHead>Latest WO</TableHead>
                     <TableHead className="hidden md:table-cell">Last Edited</TableHead>
@@ -252,6 +281,26 @@ export default function WADStatusDashboard() {
                               <Badge variant="outline" className="text-[10px] border-amber-400 text-amber-700">
                                 BACKFILL
                               </Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          <div className="flex min-w-[170px] flex-col gap-1">
+                            <Badge className={P2_WAD_BADGE[row.p2WadConnectionStatus] ?? P2_WAD_BADGE.NO_P2_DEMAND}>
+                              {P2_WAD_LABEL[row.p2WadConnectionStatus] ?? P2_WAD_LABEL.NO_P2_DEMAND}
+                            </Badge>
+                            {row.p2HasProductionDemand ? (
+                              <div className="text-muted-foreground">
+                                {row.p2DemandQuantity} units
+                                {row.p2ActiveUnits > 0 && <> · {row.p2ActiveUnits} active</>}
+                                {row.p2PoNumbers && (
+                                  <div className="truncate max-w-[190px]" title={row.p2PoNumbers}>
+                                    PO {row.p2PoNumbers}
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">No linked P2 PO demand</span>
                             )}
                           </div>
                         </TableCell>

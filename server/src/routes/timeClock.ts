@@ -80,7 +80,7 @@ async function validateActiveChargeCode(
 
 interface JobSwitchResult {
   entry: PunchLedgerEntry;
-  chargeContext: ChargeContext;
+  chargeContext: ChargeContext & { resolvedChargeCode?: string | null };
   warning?: string;
   laborStatus?: WorkOrderLaborStatusResult;
 }
@@ -105,16 +105,6 @@ async function executeJobSwitch(params: {
 }): Promise<{ ok: true; result: JobSwitchResult } | { ok: false; status: number; body: Record<string, unknown> }> {
   const { employeeId, context, parsedApprovalId } = params;
 
-  // 1. Reject inactive charge codes before touching any session
-  const chargeValidation = await validateActiveChargeCode(context.chargeCode);
-  if (!chargeValidation.valid) {
-    return {
-      ok: false,
-      status: 422,
-      body: { error: chargeValidation.errorCode, message: chargeValidation.error },
-    };
-  }
-
   // 2. Resolve string employeeId to public.employees.id (integer) for punch_ledger FK
   const canonicalStr = await resolveCanonicalEmployeeId(employeeId);
   const numericEmployeeId = canonicalStr != null ? parseInt(canonicalStr, 10) : null;
@@ -128,24 +118,6 @@ async function executeJobSwitch(params: {
 
   // 3. Require an open punch_ledger session for the switch
   const currentOpenEntry = await storage.getOpenPunchLedgerEntry(numericEmployeeId);
-
-  // Duplicate-session guard: reject a switch to the same traveler/charge code already active
-  if (
-    currentOpenEntry &&
-    currentOpenEntry.travelerId != null &&
-    currentOpenEntry.travelerId === context.travelerId &&
-    currentOpenEntry.chargeCode === context.chargeCode
-  ) {
-    return {
-      ok: false,
-      status: 409,
-      body: {
-        error: 'DUPLICATE_SESSION',
-        message: `Employee is already clocked in against this traveler and charge code (entry #${currentOpenEntry.id}). No switch needed.`,
-        currentEntryId: currentOpenEntry.id,
-      },
-    };
-  }
 
   if (!currentOpenEntry) {
     return {
@@ -217,6 +189,7 @@ async function executeJobSwitch(params: {
   // Fail-closed: if WAD is linked and resolution fails, abort the switch — never proceed
   // with a null charge code for traveler-driven sessions against a known WAD.
   let resolvedChargeCodeId: number | null = null;
+  let resolvedChargeCode: string | null = null;
   const jobSwitchCcResult = await resolveChargeCode({
     productionWorkOrderId: context.wadId ?? null,
     travelerId: context.travelerId ?? null,
@@ -225,6 +198,7 @@ async function executeJobSwitch(params: {
   });
   if (!('error' in jobSwitchCcResult)) {
     resolvedChargeCodeId = jobSwitchCcResult.chargeCodeId;
+    resolvedChargeCode = jobSwitchCcResult.chargeCode;
   } else if (context.wadId) {
     // WAD is linked but no charge code could be resolved — block the switch
     return {
@@ -238,6 +212,38 @@ async function executeJobSwitch(params: {
     };
   }
   // If no wadId at all, proceed with null chargeCodeId
+
+  const sessionChargeCode = resolvedChargeCode ?? context.chargeCode ?? null;
+  const chargeValidation = await validateActiveChargeCode(sessionChargeCode);
+  if (!chargeValidation.valid) {
+    return {
+      ok: false,
+      status: 422,
+      body: { error: chargeValidation.errorCode, message: chargeValidation.error },
+    };
+  }
+
+  // Duplicate-session guard: reject a switch to the same traveler/charge code already active.
+  // Compare against the resolved WAD charge-code identity, not the barcode context's
+  // derived WAD/work-order number.
+  const sameTraveler =
+    currentOpenEntry.travelerId != null &&
+    currentOpenEntry.travelerId === context.travelerId;
+  const sameChargeCode =
+    resolvedChargeCodeId != null && currentOpenEntry.chargeCodeId != null
+      ? currentOpenEntry.chargeCodeId === resolvedChargeCodeId
+      : currentOpenEntry.chargeCode === sessionChargeCode;
+  if (sameTraveler && sameChargeCode) {
+    return {
+      ok: false,
+      status: 409,
+      body: {
+        error: 'DUPLICATE_SESSION',
+        message: `Employee is already clocked in against this traveler and charge code (entry #${currentOpenEntry.id}). No switch needed.`,
+        currentEntryId: currentOpenEntry.id,
+      },
+    };
+  }
 
   const [jobSwitchProjectId, jobSwitchBudget, jobSwitchCertResult] = await Promise.all([
     deriveProjectId(context.wadId ?? null),
@@ -321,7 +327,7 @@ async function executeJobSwitch(params: {
           previousTravelerId: currentOpenEntry.travelerId ?? null,
           previousChargeCode: currentOpenEntry.chargeCode ?? null,
           newTravelerId: context.travelerId,
-          newChargeCode: context.chargeCode,
+          newChargeCode: sessionChargeCode,
           timestamp: new Date().toISOString(),
           source: 'punch_ledger',
         },
@@ -344,7 +350,7 @@ async function executeJobSwitch(params: {
       },
       newValues: {
         travelerId: context.travelerId ?? null,
-        chargeCode: context.chargeCode ?? null,
+        chargeCode: sessionChargeCode,
         productionWorkOrderId: context.wadId ?? null,
         editReason: 'job switch via traveler scan',
         timestamp: new Date().toISOString(),
@@ -358,7 +364,10 @@ async function executeJobSwitch(params: {
     console.error('[TimeClock] Failed to write JOB_SWITCH DCAA audit entry:', dcaaAuditErr);
   }
 
-  const result: JobSwitchResult = { entry: updatedEntry, chargeContext: context };
+  const result: JobSwitchResult = {
+    entry: updatedEntry,
+    chargeContext: { ...context, resolvedChargeCode: sessionChargeCode },
+  };
   if (warningMessage) result.warning = warningMessage;
   if (laborStatusForResponse) result.laborStatus = laborStatusForResponse;
 

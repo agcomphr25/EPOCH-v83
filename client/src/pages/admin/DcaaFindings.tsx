@@ -103,6 +103,7 @@ const DOMAIN_LABELS: Record<string, string> = {
   INVENTORY: 'Inventory',
   POLICY: 'Policy',
   GOVT_PROPERTY: 'Govt. Property',
+  SECURITY: 'Security',
 };
 
 function SeverityBadge({ severity }: { severity: string }) {

@@ -352,6 +352,7 @@ import EdriEvidence from './pages/admin/EdriEvidence';
 import EdriSnapshotDetail from './pages/admin/EdriSnapshotDetail';
 import EdriSupportingDocs from './pages/admin/EdriSupportingDocs';
 import DcaaFindings from './pages/admin/DcaaFindings';
+import SecurityCenter from './pages/admin/SecurityCenter';
 import ChargeCodeUsageReport from './pages/admin/ChargeCodeUsageReport';
 import LaborDistributionReport from './pages/admin/LaborDistributionReport';
 import TransactionEvidenceMap from './pages/admin/TransactionEvidenceMap';
@@ -1409,6 +1410,7 @@ function App() {
                   <Route path="/admin/edri/executive-matrix" component={EdriExecutiveMatrix} />
                   <Route path="/admin/edri/snapshot/:snapshotId" component={EdriSnapshotDetail} />
                   <Route path="/admin/dcaa-findings" component={DcaaFindings} />
+                  <Route path="/admin/security-center" component={SecurityCenter} />
 
                   {/* CMMC 2.0 Level 2 Readiness Dashboard */}
                   <Route path="/admin/cmmc" component={CmmcDashboard} />

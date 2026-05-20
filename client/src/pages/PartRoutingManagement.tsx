@@ -208,6 +208,26 @@ const emptyNewOp = {
   requiresCertification: false,
 };
 
+function buildNextOperationDraft(
+  routing: PartRouting | null,
+  existingOps: RoutingOperation[] = []
+) {
+  const maxStepNumber = existingOps.reduce(
+    (maxStep, op) => Math.max(maxStep, Number(op.stepNumber) || 0),
+    0
+  );
+  const nextStepNumber = maxStepNumber + 1;
+  const departments = routing?.departmentSequence || [];
+  const nextDepartment =
+    departments[Math.min(Math.max(nextStepNumber - 1, 0), Math.max(departments.length - 1, 0))] || '';
+
+  return {
+    ...emptyNewOp,
+    stepNumber: nextStepNumber,
+    departmentName: nextDepartment,
+  };
+}
+
 export default function PartRoutingManagement() {
   const [, navigate] = useLocation();
   const [searchTerm, setSearchTerm] = useState('');
@@ -332,9 +352,9 @@ export default function PartRoutingManagement() {
         body: JSON.stringify(data),
         headers: { 'Content-Type': 'application/json' },
       }),
-    onSuccess: () => {
+    onSuccess: (created: any) => {
       toast({ title: 'Operation added' });
-      setNewOp({ ...emptyNewOp });
+      setNewOp(buildNextOperationDraft(operationsDialog.routing, [...operations, created]));
       queryClient.invalidateQueries({ queryKey: ['/api/part-routings', operationsDialog.routing?.id, 'operations'] });
     },
     onError: (e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' }),
@@ -740,7 +760,7 @@ export default function PartRoutingManagement() {
                             variant="outline"
                             size="sm"
                             onClick={() => {
-                              setNewOp({ ...emptyNewOp });
+                              setNewOp(buildNextOperationDraft(routing));
                               setOperationsDialog({ open: true, routing });
                             }}
                             title="Manage operations"
@@ -932,12 +952,28 @@ export default function PartRoutingManagement() {
               </div>
               <div>
                 <Label className="text-xs mb-1 block">Department</Label>
-                <Input
-                  placeholder="e.g. Layup"
-                  value={newOp.departmentName}
-                  onChange={(e) => setNewOp((p) => ({ ...p, departmentName: e.target.value }))}
-                  className="h-8"
-                />
+                {operationsDialog.routing?.departmentSequence?.length ? (
+                  <Select
+                    value={newOp.departmentName}
+                    onValueChange={(value) => setNewOp((p) => ({ ...p, departmentName: value }))}
+                  >
+                    <SelectTrigger className="h-8">
+                      <SelectValue placeholder="Select department" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {operationsDialog.routing.departmentSequence.map((dept, idx) => (
+                        <SelectItem key={`${dept}-${idx}`} value={dept}>{dept}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    placeholder="e.g. Layup"
+                    value={newOp.departmentName}
+                    onChange={(e) => setNewOp((p) => ({ ...p, departmentName: e.target.value }))}
+                    className="h-8"
+                  />
+                )}
               </div>
               <div>
                 <Label className="text-xs mb-1 block">Operation Name</Label>

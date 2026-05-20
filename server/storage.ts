@@ -17215,7 +17215,7 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(routingOperations)
       .where(eq(routingOperations.partRoutingId, partRoutingId))
-      .orderBy(routingOperations.stepNumber);
+      .orderBy(asc(routingOperations.stepNumber), asc(routingOperations.id));
   }
 
   async createRoutingOperation(data: InsertRoutingOperation): Promise<RoutingOperation> {
@@ -20225,22 +20225,43 @@ export class DatabaseStorage implements IStorage {
       return [];
     };
 
-    // Group ops by unique (stepNumber, departmentName)
-    const stepGroups: Map<string, RoutingOperation[]> = new Map();
-    for (const op of ops) {
-      const key = `${op.stepNumber}__${op.departmentName}`;
-      if (!stepGroups.has(key)) stepGroups.set(key, []);
-      stepGroups.get(key)!.push(op);
+    const departmentSequence = Array.isArray(routing.departmentSequence)
+      ? (routing.departmentSequence as string[])
+      : [];
+    const departmentOrder = new Map(
+      departmentSequence.map((dept, index) => [String(dept).trim().toLowerCase(), index])
+    );
+    const getDepartmentOrder = (departmentName: string) =>
+      departmentOrder.get(String(departmentName || '').trim().toLowerCase()) ?? Number.MAX_SAFE_INTEGER;
+    const compareOperations = (a: RoutingOperation, b: RoutingOperation) => {
+      const aStep = Number.isFinite(Number(a.stepNumber)) ? Number(a.stepNumber) : Number.MAX_SAFE_INTEGER;
+      const bStep = Number.isFinite(Number(b.stepNumber)) ? Number(b.stepNumber) : Number.MAX_SAFE_INTEGER;
+      if (aStep !== bStep) return aStep - bStep;
+
+      const deptDiff = getDepartmentOrder(a.departmentName) - getDepartmentOrder(b.departmentName);
+      if (deptDiff !== 0) return deptDiff;
+
+      return (a.id ?? 0) - (b.id ?? 0);
+    };
+
+    const orderedOps = [...ops].sort(compareOperations);
+
+    // Keep the exact operation placement in the traveler flow. Consecutive
+    // operations for the same department become one traveler step; if a
+    // department appears again later in the routing, it remains a later step.
+    const stepGroups: RoutingOperation[][] = [];
+    for (const op of orderedOps) {
+      const currentGroup = stepGroups[stepGroups.length - 1];
+      const currentDept = currentGroup?.[0]?.departmentName;
+      if (currentGroup && currentDept === op.departmentName) {
+        currentGroup.push(op);
+      } else {
+        stepGroups.push([op]);
+      }
     }
-    const sortedKeys = Array.from(stepGroups.keys()).sort((a, b) => {
-      const [aStep] = a.split('__').map(Number);
-      const [bStep] = b.split('__').map(Number);
-      return aStep - bStep;
-    });
 
     let stepCounter = 0;
-    for (const key of sortedKeys) {
-      const groupOps = stepGroups.get(key)!;
+    for (const groupOps of stepGroups) {
       const deptName = groupOps[0].departmentName;
       stepCounter++;
       const step = await this.createTravelerStep({
@@ -20255,8 +20276,39 @@ export class DatabaseStorage implements IStorage {
       for (const op of groupOps) {
         const taskType = operationTypeToTaskType(op.operationType);
         const taskPhase = operationTypeToPhase(op.operationType);
-        const instPack = op.instructionPack as any;
-        const instructions = instPack?.specialNotes || op.operationName;
+        const instPack = (op.instructionPack || {}) as any;
+        const operationDetails = [
+          instPack?.specialNotes,
+          op.workCenter ? `Work center: ${op.workCenter}` : null,
+          op.estimatedMinutes ? `Estimated time: ${op.estimatedMinutes} minutes` : null,
+          op.isOutsideProcess ? 'Outside process required' : null,
+          op.certificateRequired ? 'Certificate required' : null,
+          op.receivingInspectionRequired ? 'Receiving inspection required' : null,
+          Array.isArray(op.requiredCalibrationAssetTags) && op.requiredCalibrationAssetTags.length > 0
+            ? `Required calibration assets: ${op.requiredCalibrationAssetTags.join(', ')}`
+            : null,
+        ].filter(Boolean);
+        const instructions = operationDetails.length > 0
+          ? operationDetails.join('\n')
+          : op.operationName;
+        const instructionPack = {
+          ...instPack,
+          routingOperation: {
+            id: op.id,
+            stepNumber: op.stepNumber,
+            departmentName: op.departmentName,
+            operationName: op.operationName,
+            operationType: op.operationType,
+            workCenter: op.workCenter,
+            estimatedMinutes: op.estimatedMinutes,
+            isOutsideProcess: op.isOutsideProcess,
+            outsideProcessType: op.outsideProcessType,
+            expectedLeadDays: op.expectedLeadDays,
+            certificateRequired: op.certificateRequired,
+            receivingInspectionRequired: op.receivingInspectionRequired,
+            requiredCalibrationAssetTags: op.requiredCalibrationAssetTags || [],
+          },
+        };
 
         const task = await this.createTravelerTask({
           travelerStepId: step.id,
@@ -20271,7 +20323,7 @@ export class DatabaseStorage implements IStorage {
           requiresCertification: op.requiresCertification ?? false,
           signatureRole: op.requiresSignature ? 'OPERATOR' : null,
           status: 'NOT_STARTED',
-          instructionPack: op.instructionPack as any,
+          instructionPack,
         });
 
         if (taskType === 'QC') {

@@ -41,6 +41,15 @@ async function resolveEmployeeIdForUser(user: any): Promise<number | null> {
 }
 
 router.get(
+  "/my-employee-id",
+  authenticateToken,
+  h(async (req, res): Promise<void> => {
+    const employeeId = await resolveEmployeeIdForUser(req.user as any);
+    res.json({ employeeId });
+  }),
+);
+
+router.get(
   "/my-tasks/:employeeId",
   authenticateToken,
   h(async (req, res): Promise<void> => {

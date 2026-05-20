@@ -17,7 +17,11 @@ vi.mock('../schema', () => ({
   routingOperations: {},
 }));
 
-import { findWadDepartmentChargeCode, getDepartmentChargeCodeCandidates } from '../src/lib/resolveChargeCode';
+import {
+  findWadDepartmentChargeCode,
+  getDepartmentChargeCodeCandidateKeys,
+  getDepartmentChargeCodeCandidates,
+} from '../src/lib/resolveChargeCode';
 
 describe('getDepartmentChargeCodeCandidates', () => {
   it('matches Quality Control routing steps to QC charge codes', () => {
@@ -34,6 +38,16 @@ describe('getDepartmentChargeCodeCandidates', () => {
 
   it('keeps non-aliased departments exact', () => {
     expect(getDepartmentChargeCodeCandidates('Layup')).toEqual(['Layup']);
+  });
+});
+
+describe('getDepartmentChargeCodeCandidateKeys', () => {
+  it('normalizes QC aliases for database comparisons', () => {
+    expect(getDepartmentChargeCodeCandidateKeys('Quality Control')).toEqual(['QUALITYCONTROL', 'QC']);
+  });
+
+  it('normalizes punctuation and spacing for active charge-code lookups', () => {
+    expect(getDepartmentChargeCodeCandidateKeys('quality-control ')).toEqual(['QUALITYCONTROL', 'QC']);
   });
 });
 

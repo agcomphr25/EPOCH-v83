@@ -2992,11 +2992,6 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
     }
     // Navigate into detail view so we have full PO context
     setShowDetailView(true);
-    if (isP2ProductionLine(poFromList?.productionLine)) {
-      // Show compliance review modal first before proceeding to issue
-      openComplianceModal(id);
-      return;
-    }
     setNoEmailMode(false);
     setNoEmailReason('');
     setNoEmailConfirmed(false);
@@ -3036,17 +3031,12 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
 
   const handleStatusChange = (newStatus: string) => {
     if (newStatus === 'Sent' && selectedVendorPO) {
-      if (isP2ProductionLine(selectedVendorPO.productionLine)) {
-        // P2 work stays behind the formal compliance review gate.
-        openComplianceModal(selectedVendorPO.id);
-      } else {
-        setNoEmailMode(false);
-        setNoEmailReason('');
-        setNoEmailConfirmed(false);
-        setPendingStatus('Sent');
-        setShowStatusChangeDialog(true);
-        loadRecipientsForPO(selectedVendorPO.id);
-      }
+      setNoEmailMode(false);
+      setNoEmailReason('');
+      setNoEmailConfirmed(false);
+      setPendingStatus('Sent');
+      setShowStatusChangeDialog(true);
+      loadRecipientsForPO(selectedVendorPO.id);
       return;
     }
     setPendingStatus(newStatus);
@@ -3994,7 +3984,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
                   <AlertDialogTitle>Issue Purchase Order</AlertDialogTitle>
                   <AlertDialogDescription>
                     {noEmailMode
-                      ? 'Provide a reason for issuing this PO without notifying the vendor.'
+                      ? 'The vendor will not be emailed. A default audit reason will be used if this is left blank.'
                       : 'Choose how to issue this purchase order.'}
                   </AlertDialogDescription>
                 </AlertDialogHeader>
@@ -4019,7 +4009,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
                     </div>
                     <div className="space-y-1">
                       <Label htmlFor="no-email-reason" className="text-sm font-medium">
-                        Reason <span className="text-red-500">*</span>
+                        Reason <span className="text-muted-foreground">(optional)</span>
                       </Label>
                       <Textarea
                         id="no-email-reason"
@@ -4029,11 +4019,6 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
                         rows={3}
                         className="resize-none"
                       />
-                      {noEmailReason.length > 0 && noEmailReason.trim().length < 10 && (
-                        <p className="text-xs text-red-500">
-                          Must be at least 10 characters ({noEmailReason.trim().length}/10)
-                        </p>
-                      )}
                     </div>
                     <div className="flex items-center gap-2">
                       <Checkbox
@@ -4063,11 +4048,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
                       </Button>
                       <Button
                         onClick={() => confirmStatusChange(true)}
-                        disabled={
-                          noEmailReason.trim().length < 10 ||
-                          !noEmailConfirmed ||
-                          issuePOMutation.isPending
-                        }
+                        disabled={issuePOMutation.isPending}
                         className="bg-amber-600 hover:bg-amber-700 text-white"
                         data-testid="button-confirm-internal-issue"
                       >

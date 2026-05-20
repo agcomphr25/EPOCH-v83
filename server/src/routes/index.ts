@@ -3532,8 +3532,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           });
         }
       }
-      
-      res.json([...schedulingList, ...legacySchedulingList, ...legacyProjectSchedulingList]);
+
+      res.json(schedulingList);
     } catch (_error) {
       console.error('P2 Control Center scheduling list error:', _error);
       res.status(500).json({ error: 'Failed to fetch scheduling list' });

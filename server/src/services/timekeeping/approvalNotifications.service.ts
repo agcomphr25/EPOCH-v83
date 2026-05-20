@@ -166,7 +166,7 @@ async function insertInternalInboxMessage(params: {
         recipient_name,
         is_urgent
       )
-      VALUES ($1, $2, NULL, 'EPOCH Timekeeping', 'person', $3, $4, $5)
+      VALUES ($1, $2, 0, 'EPOCH Timekeeping', 'person', $3, $4, $5)
       RETURNING id
     `,
     [

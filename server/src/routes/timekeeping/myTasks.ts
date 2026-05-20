@@ -11,6 +11,35 @@ function h(fn: (req: Request, res: Response, next: NextFunction) => Promise<void
 
 const router: IRouter = Router();
 
+async function resolveEmployeeIdForUser(user: any): Promise<number | null> {
+  if (!user) return null;
+  if (user.employeeId != null) return Number(user.employeeId);
+
+  const username = typeof user.username === "string" ? user.username.trim() : "";
+  if (!username) return null;
+
+  const { rows } = await pool.query<{ employee_id: number | null }>(
+    `
+      SELECT e.id AS employee_id
+      FROM employees e
+      LEFT JOIN users u ON u.id = $1
+      WHERE LOWER(e.employee_code) = LOWER($2)
+         OR (u.email IS NOT NULL AND e.email IS NOT NULL AND LOWER(u.email) = LOWER(e.email))
+      ORDER BY
+        CASE
+          WHEN LOWER(e.employee_code) = LOWER($2) THEN 0
+          WHEN u.email IS NOT NULL AND e.email IS NOT NULL AND LOWER(u.email) = LOWER(e.email) THEN 1
+          ELSE 2
+        END,
+        e.id ASC
+      LIMIT 1
+    `,
+    [user.id ?? null, username],
+  );
+
+  return rows[0]?.employee_id ?? null;
+}
+
 router.get(
   "/my-tasks/:employeeId",
   authenticateToken,
@@ -23,7 +52,8 @@ router.get(
 
     const user = req.user as any;
     const isElevated = user?.role === "ADMIN" || user?.role === "OWNER";
-    if (!isElevated && user?.employeeId !== employeeId) {
+    const resolvedEmployeeId = await resolveEmployeeIdForUser(user);
+    if (!isElevated && resolvedEmployeeId !== employeeId) {
       res.status(403).json({ error: "You can only view your own timekeeping tasks." });
       return;
     }
@@ -44,7 +74,7 @@ router.get(
           FROM timekeeping.time_off_requests r
           JOIN employees e ON e.id = r.employee_id
           WHERE r.status IN ('pending_supervisor', 'pending')
-            AND r.supervisor_id = $1
+            AND COALESCE(r.supervisor_id, e.supervisor_employee_id) = $1
           ORDER BY r.created_at ASC
         `,
         [employeeId],

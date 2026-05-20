@@ -9099,7 +9099,7 @@ export const internalMessages = pgTable('internal_messages', {
   id: serial('id').primaryKey(),
   subject: text('subject').notNull(),
   message: text('message').notNull(),
-  senderId: integer('sender_id').notNull(),
+  senderId: integer('sender_id'),
   senderName: text('sender_name').notNull(),
   recipientType: text('recipient_type').notNull(), // 'user' or 'department'
   recipientUserId: integer('recipient_user_id'),

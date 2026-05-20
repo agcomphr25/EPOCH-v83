@@ -949,6 +949,8 @@ router.get('/oem-shipments', authenticateToken, async (req, res) => {
       SELECT * FROM shipment_aggregates
     `;
 
+    const countParams = [...params];
+
     params.push(parseInt(limit as string, 10));
     params.push(parseInt(offset as string, 10));
     const canSeePrices = req.user?.username === 'glennj';
@@ -963,7 +965,7 @@ router.get('/oem-shipments', authenticateToken, async (req, res) => {
       FROM shipment_records sr
       WHERE ${conditions.join(' AND ')}
     `;
-    const countResult = await pool.query(countQuery, params.slice(0, -2));
+    const countResult = await pool.query(countQuery, countParams);
     const total = parseInt((countResult.rows || countResult)[0]?.total || '0', 10);
 
     console.log(`📊 Found ${shipments.length} shipments (total: ${total})`);

@@ -108,6 +108,7 @@ vi.mock('../schema', () => ({
 // ---------------------------------------------------------------------------
 
 import { storage } from '../storage';
+import { pool } from '../db';
 import { generatePoPackingSlipPdf } from '../utils/pdf/packingSlipPdf';
 
 // ---------------------------------------------------------------------------
@@ -403,5 +404,50 @@ describe('POST /api/po-orders/process-shipment — packing slip description prio
     expect(res.body.success).toBe(true);
     expect(typeof res.body.trackingNumber).toBe('string');
     expect(res.body.trackingNumber).toMatch(/^TEST-/);
+  });
+});
+
+describe('GET /api/po-orders/oem-shipments', () => {
+  let app: express.Express;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+
+    app = express();
+    app.use(express.json());
+    const poShippingRouter = (await import('../src/routes/poShippingQC')).default;
+    app.use('/api/po-orders', poShippingRouter);
+  });
+
+  afterEach(() => {
+    vi.resetModules();
+  });
+
+  it('uses only filter params for the total-count query when no filters are set', async () => {
+    vi.mocked(pool.query)
+      .mockResolvedValueOnce({ rows: [{ table_exists: true }] } as any)
+      .mockResolvedValueOnce({
+        rows: [{
+          id: '11111111-1111-1111-1111-111111111111',
+          customer_id: 'CUST-1',
+          customer_name: 'OEM Customer',
+          master_tracking_number: '1Z999',
+          created_at: '2026-05-20T12:00:00.000Z',
+          item_count: 1,
+          stock_count: 1,
+          accessory_count: 0,
+          po_count: 1,
+          has_shipping_label: true,
+          items: [],
+        }],
+      } as any)
+      .mockResolvedValueOnce({ rows: [{ total: '1' }] } as any);
+
+    const res = await request(app).get('/api/po-orders/oem-shipments');
+
+    expect(res.status).toBe(200);
+    expect(res.body.pagination.total).toBe(1);
+    expect(vi.mocked(pool.query).mock.calls[1][1]).toEqual([50, 0, false]);
+    expect(vi.mocked(pool.query).mock.calls[2][1]).toEqual([]);
   });
 });

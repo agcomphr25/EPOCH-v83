@@ -85,6 +85,13 @@ router.get('/unread/count/:userId', async (req, res) => {
       return;
     }
 
+    try {
+      const { ensurePendingPTOApprovalNotificationsForUser } = await import('../services/timekeeping/approvalNotifications.service');
+      await ensurePendingPTOApprovalNotificationsForUser(userId);
+    } catch (err: any) {
+      console.warn('[internal-messages] PTO unread catch-up skipped:', err?.message ?? err);
+    }
+
     const messages = await storage.getMessagesForUser(userId);
 
     // Count unread messages for this user

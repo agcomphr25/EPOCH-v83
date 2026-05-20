@@ -228,11 +228,12 @@ export async function ensurePendingPTOApprovalNotificationsForUser(userId: numbe
 
   const { rows } = await pool.query<{ id: number }>(
     `
-      SELECT id
-      FROM timekeeping.time_off_requests
-      WHERE status IN ('pending_supervisor', 'pending')
-        AND supervisor_id = $1
-      ORDER BY created_at ASC
+      SELECT r.id
+      FROM timekeeping.time_off_requests r
+      LEFT JOIN employees e ON e.id = r.employee_id
+      WHERE r.status IN ('pending_supervisor', 'pending')
+        AND COALESCE(r.supervisor_id, e.supervisor_employee_id) = $1
+      ORDER BY r.created_at ASC
       LIMIT 50
     `,
     [supervisorEmployeeId],
@@ -316,7 +317,7 @@ async function getPTORequestNotificationRow(requestId: number): Promise<PTOReque
              r.request_unit,
              r.requested_hours,
              r.employee_note,
-             r.supervisor_id,
+             COALESCE(r.supervisor_id, e.supervisor_employee_id) AS supervisor_id,
              r.status
       FROM timekeeping.time_off_requests r
       LEFT JOIN employees e ON e.id = r.employee_id

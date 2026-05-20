@@ -54,9 +54,14 @@ interface User {
 }
 
 interface CurrentUser {
-  id: number;
-  username: string;
-  role: string;
+  id?: number;
+  username?: string;
+  role?: string;
+  user?: {
+    id?: number;
+    username?: string;
+    role?: string;
+  };
 }
 
 export default function InternalCommunicationBoard() {
@@ -89,7 +94,8 @@ export default function InternalCommunicationBoard() {
     queryKey: ['/api/auth/session'],
   });
 
-  const currentUserId = currentUser?.id || 0;
+  const sessionUser = currentUser?.user ?? currentUser;
+  const currentUserId = sessionUser?.id || 0;
 
   const { data: departments = [] } = useQuery<Department[]>({
     queryKey: ['/api/departments'],

@@ -3444,144 +3444,96 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       await ensureProductionWorkflowReadSchema();
       const { storage } = await import('../../storage');
       const { pool: dbPool } = await import('../../db');
-      const serializedItems = await applyTravelerStateToP2Items(
-        await storage.getP2SerializedItems({})
+      const serializedItems = await storage.getP2SerializedItems({});
+
+      const poItemResult = await dbPool.query(
+        `SELECT
+           poi.id AS "poItemId",
+           poi.po_id AS "poId",
+           poi.part_number AS "partNumber",
+           poi.part_name AS "partName",
+           poi.quantity AS "orderedQuantity",
+           po.po_number AS "poNumber",
+           po.expected_delivery AS "dueDate",
+           po.status AS "poStatus"
+         FROM p2_purchase_order_items poi
+         JOIN p2_purchase_orders po ON po.id = poi.po_id
+         WHERE COALESCE(UPPER(po.status), '') NOT IN ('COMPLETED', 'CANCELED', 'CANCELLED', 'CLOSED')`
       );
-      const pos = await storage.getAllP2PurchaseOrders();
-      
-      // Filter for items that are ACTIVE and either pending layup or in early production stages
-      // Items are schedulable if they haven't completed production yet
-      const schedulingList = serializedItems
-        .filter((s: any) => {
-          // Must be ACTIVE (not completed, scrapped, or on hold)
+      const poItems = Array.isArray(poItemResult)
+        ? poItemResult
+        : ((poItemResult as any)?.rows ?? []);
+      const poItemById = new Map<number, any>(
+        poItems.map((item: any) => [Number(item.poItemId), item])
+      );
+
+      const serializedByPoItemId = new Map<number, any[]>();
+      for (const item of serializedItems as any[]) {
+        const poItemId = Number(item.poItemId);
+        if (!poItemById.has(poItemId)) continue;
+        if (!serializedByPoItemId.has(poItemId)) {
+          serializedByPoItemId.set(poItemId, []);
+        }
+        serializedByPoItemId.get(poItemId)!.push(item);
+      }
+
+      const sortBySequence = (a: any, b: any) =>
+        (Number(a.sequenceNumber) || 0) - (Number(b.sequenceNumber) || 0) ||
+        String(a.id).localeCompare(String(b.id));
+
+      const schedulingList: any[] = [];
+      for (const poItem of poItems) {
+        const items = (serializedByPoItemId.get(Number(poItem.poItemId)) ?? [])
+          .sort(sortBySequence);
+        if (items.length === 0) continue;
+
+        const orderedQuantity = Number(poItem.orderedQuantity) || 0;
+        const completedCount = items.filter((s: any) => s.status === 'COMPLETED').length;
+        const otherInProductionCount = items.filter((s: any) => {
           if (s.status !== 'ACTIVE') return false;
-          // Schedulable if in Pending Layup or Layup department (early stages)
-          const dept = s.currentDepartment || '';
-          return dept === 'Pending Layup' || dept === 'Layup' || dept === '' || !dept;
-        })
-        .map((s: any) => {
-          const po = pos.find((p: any) => p.id === s.poId);
-          const isScheduled = s.currentDepartment === 'Layup';
-          return {
+          const dept = String(s.currentDepartment || '').trim();
+          return dept !== '' && dept !== 'Pending Layup' && dept !== 'Layup';
+        }).length;
+        const earlyStageCapacity = Math.max(
+          0,
+          orderedQuantity - completedCount - otherInProductionCount
+        );
+
+        const scheduledItems = items.filter((s: any) =>
+          s.status === 'ACTIVE' && String(s.currentDepartment || '').trim() === 'Layup'
+        );
+        const pendingItems = items.filter((s: any) => {
+          if (s.status !== 'ACTIVE') return false;
+          const dept = String(s.currentDepartment || '').trim();
+          return dept === '' || dept === 'Pending Layup';
+        });
+
+        const scheduledToShow = scheduledItems.slice(0, earlyStageCapacity);
+        const pendingToShow = pendingItems.slice(
+          0,
+          Math.max(0, earlyStageCapacity - scheduledToShow.length)
+        );
+
+        for (const s of [...scheduledToShow, ...pendingToShow]) {
+          const isScheduled = String(s.currentDepartment || '').trim() === 'Layup';
+          schedulingList.push({
             id: s.id,
-            poNumber: s.poNumber || po?.poNumber || 'Unknown',
-            partNumber: s.partNumber || 'Unknown',
-            description: s.partName || '',
+            poId: poItem.poId,
+            poItemId: poItem.poItemId,
+            poNumber: poItem.poNumber || s.poNumber || 'Unknown',
+            partNumber: poItem.partNumber || s.partNumber || 'Unknown',
+            description: poItem.partName || s.partName || '',
             totalQuantity: 1,
             scheduledQuantity: isScheduled ? 1 : 0,
             remainingQuantity: isScheduled ? 0 : 1,
-            dueDate: po?.expectedDelivery || po?.dueDate,
+            dueDate: poItem.dueDate,
             priority: 'normal',
             status: isScheduled ? 'scheduled' : 'pending'
-          };
-        });
+          });
+        }
+      }
 
-      const legacySchedulingRows = await dbPool.query(
-        `SELECT
-           p2po.id,
-           p2po.order_id AS "orderId",
-           p2po.p2_po_id AS "poId",
-           p2po.p2_po_item_id AS "poItemId",
-           p2po.quantity,
-           GREATEST(p2po.quantity - COALESCE(p2po.quantity_manufactured, 0), 0)::int AS "openQuantity",
-           p2po.department,
-           p2po.scheduled_layup_date AS "scheduledLayupDate",
-           p2po.due_date AS "dueDate",
-           p2po.status,
-           po.po_number AS "poNumber",
-           COALESCE(poi.part_number, p2po.sku) AS "partNumber",
-           COALESCE(poi.part_name, p2po.part_name) AS "partName"
-         FROM p2_production_orders p2po
-         JOIN p2_purchase_orders po ON po.id = p2po.p2_po_id
-         LEFT JOIN p2_purchase_order_items poi ON poi.id = p2po.p2_po_item_id
-         WHERE COALESCE(UPPER(p2po.status), '') NOT IN ('COMPLETED', 'CLOSED', 'CANCELLED', 'CANCELED')
-           AND GREATEST(p2po.quantity - COALESCE(p2po.quantity_manufactured, 0), 0) > 0
-         ORDER BY p2po.due_date NULLS LAST, p2po.created_at`
-      );
-      const legacySchedulingList = p2ControlRows(legacySchedulingRows).flatMap((row: any) => {
-        const isScheduled = !!row.scheduledLayupDate || String(row.department || '').toLowerCase() === 'layup';
-        const openQuantity = Math.max(1, Number(row.openQuantity || row.quantity || 1));
-        return Array.from({ length: openQuantity }, (_unused, index) => ({
-          id: `legacy-p2-production-order-${row.id}-${index + 1}`,
-          poNumber: row.poNumber || `PO-${row.poId}`,
-          partNumber: row.partNumber || row.orderId || 'Unknown',
-          description: row.partName || row.department || '',
-          totalQuantity: 1,
-          scheduledQuantity: isScheduled ? 1 : 0,
-          remainingQuantity: isScheduled ? 0 : 1,
-          dueDate: row.dueDate,
-          priority: 'normal',
-          status: isScheduled ? 'scheduled' : 'pending',
-        }));
-      });
-
-      const legacyProjectSchedulingRows = await dbPool.query(
-         `WITH project_po_link AS (
-           SELECT p.id AS project_id, p.po_id AS po_id
-           FROM projects p
-           WHERE p.po_id IS NOT NULL
-           UNION
-           SELECT ps.project_id, ps.linked_p2_order_id AS po_id
-           FROM project_steps ps
-           WHERE ps.linked_p2_order_id IS NOT NULL
-           UNION
-           SELECT p.id AS project_id, po.id AS po_id
-           FROM p2_purchase_orders po
-           JOIN projects p ON LOWER(TRIM(po.project_name)) IN (
-             LOWER(TRIM(p.project_code)),
-             LOWER(TRIM(p.project_name)),
-             LOWER(TRIM(CONCAT_WS(' - ', NULLIF(p.project_code, ''), NULLIF(p.project_name, ''))))
-           )
-           WHERE po.project_name IS NOT NULL
-             AND TRIM(po.project_name) <> ''
-         )
-         SELECT DISTINCT ON (wo.id)
-           wo.id,
-           wo.work_order_number AS "workOrderNumber",
-           wo.part_number AS "partNumber",
-           wo.description,
-           COALESCE(wo.quantity, 1)::int AS quantity,
-           wo.due_date AS "dueDate",
-           wo.start_date AS "startDate",
-           wo.assigned_department AS "assignedDepartment",
-           wo.assigned_dashboard_route AS "assignedDashboardRoute",
-           wo.status,
-           po.po_number AS "poNumber"
-         FROM project_po_link ppl
-         JOIN production_work_orders wo ON wo.project_id = ppl.project_id
-         JOIN p2_purchase_orders po ON po.id = ppl.po_id
-         WHERE COALESCE(UPPER(wo.status), '') NOT IN ('COMPLETE', 'COMPLETED', 'CLOSED', 'CANCELLED', 'CANCELED')
-           AND NOT (
-             wo.work_order_number LIKE 'WAD-%'
-             AND COALESCE(UPPER(wo.status), '') NOT IN ('COMPLETE', 'COMPLETED', 'CLOSED')
-             AND EXISTS (
-               SELECT 1
-               FROM p2_purchase_order_items poi
-               WHERE poi.po_id = ppl.po_id
-                 AND poi.part_number IS NOT NULL
-                 AND LOWER(TRIM(poi.part_number)) = LOWER(TRIM(wo.part_number))
-             )
-           )
-         ORDER BY wo.id, wo.due_date NULLS LAST, wo.work_order_number`
-      );
-      const legacyProjectSchedulingList = p2ControlRows(legacyProjectSchedulingRows).flatMap((row: any) => {
-        const quantity = Math.max(1, Number(row.quantity || 1));
-        return Array.from({ length: quantity }, (_unused, index) => ({
-          id: `legacy-project-work-order-${row.id}-${index + 1}`,
-          poNumber: row.poNumber || 'Unknown',
-          partNumber: row.partNumber || row.workOrderNumber || 'Unknown',
-          description: row.description || row.workOrderNumber || 'Legacy project work order',
-          totalQuantity: 1,
-          scheduledQuantity: 1,
-          remainingQuantity: 0,
-          dueDate: row.dueDate,
-          priority: 'normal',
-          status: 'scheduled',
-          isLegacyProjectWorkOrder: true,
-        }));
-      });
-      
-      res.json([...schedulingList, ...legacySchedulingList, ...legacyProjectSchedulingList]);
+      res.json(schedulingList);
     } catch (_error) {
       console.error('P2 Control Center scheduling list error:', _error);
       res.status(500).json({ error: 'Failed to fetch scheduling list' });

@@ -20,7 +20,7 @@ import {
   travelerSteps,
   routingOperations,
 } from '../../schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray, sql } from 'drizzle-orm';
 import { storage } from '../../storage';
 
 export type CertificationStatus = 'VALID' | 'EXPIRED' | 'MISSING';
@@ -37,6 +37,26 @@ export interface ResolveChargeCodeError {
 }
 
 export type ResolveChargeCodeResult = ResolvedChargeCode | ResolveChargeCodeError;
+
+const DEPARTMENT_ALIASES: Record<string, string[]> = {
+  QC: ['QC', 'Quality Control'],
+  QUALITYCONTROL: ['Quality Control', 'QC'],
+  FINALQC: ['Final QC', 'QC', 'Quality Control'],
+};
+
+function departmentKey(department: string): string {
+  return department.trim().replace(/[^a-z0-9]/gi, '').toUpperCase();
+}
+
+export function getDepartmentChargeCodeCandidates(department: string | null | undefined): string[] {
+  if (!department) return [];
+
+  const trimmed = department.trim();
+  if (!trimmed) return [];
+
+  const aliases = DEPARTMENT_ALIASES[departmentKey(trimmed)] ?? [];
+  return Array.from(new Set([trimmed, ...aliases]));
+}
 
 /**
  * Resolve a charge code for a traveler-driven labor session.
@@ -170,11 +190,13 @@ export async function resolveChargeCode(params: {
   // Priority 3: Active charge code whose department matches the routing operation's
   // departmentName (operation-scoped via effectiveDepartment resolved from travelerStepId,
   // or caller-supplied department as fallback).
-  if (effectiveDepartment) {
+  const departmentCandidates = getDepartmentChargeCodeCandidates(effectiveDepartment);
+  if (departmentCandidates.length > 0) {
     const [deptCc] = await db
       .select({ id: chargeCodes.id, code: chargeCodes.code })
       .from(chargeCodes)
-      .where(and(eq(chargeCodes.department, effectiveDepartment), eq(chargeCodes.active, true)))
+      .where(and(inArray(chargeCodes.department, departmentCandidates), eq(chargeCodes.active, true)))
+      .orderBy(sql`case when ${chargeCodes.department} = ${departmentCandidates[0]} then 0 else 1 end`)
       .limit(1);
 
     if (deptCc) {

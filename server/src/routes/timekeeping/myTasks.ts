@@ -81,11 +81,27 @@ async function resolveEmployeeIdForUser(user: any): Promise<number | null> {
       LEFT JOIN users u ON u.id = $1
       WHERE LOWER(e.employee_code) = LOWER($2)
          OR (u.email IS NOT NULL AND e.email IS NOT NULL AND LOWER(u.email) = LOWER(e.email))
+         OR LOWER(CONCAT(
+              REGEXP_REPLACE(SPLIT_PART(TRIM(e.name), ' ', 1), '[^[:alnum:]]', '', 'g'),
+              LEFT(REGEXP_REPLACE((REGEXP_SPLIT_TO_ARRAY(TRIM(e.name), '[[:space:]]+'))[ARRAY_LENGTH(REGEXP_SPLIT_TO_ARRAY(TRIM(e.name), '[[:space:]]+'), 1)], '[^[:alnum:]]', '', 'g'), 1)
+            )) = LOWER($2)
+         OR LOWER(CONCAT(
+              LEFT(REGEXP_REPLACE(SPLIT_PART(TRIM(e.name), ' ', 1), '[^[:alnum:]]', '', 'g'), 1),
+              REGEXP_REPLACE((REGEXP_SPLIT_TO_ARRAY(TRIM(e.name), '[[:space:]]+'))[ARRAY_LENGTH(REGEXP_SPLIT_TO_ARRAY(TRIM(e.name), '[[:space:]]+'), 1)], '[^[:alnum:]]', '', 'g')
+            )) = LOWER($2)
       ORDER BY
         CASE
           WHEN LOWER(e.employee_code) = LOWER($2) THEN 0
           WHEN u.email IS NOT NULL AND e.email IS NOT NULL AND LOWER(u.email) = LOWER(e.email) THEN 1
-          ELSE 2
+          WHEN LOWER(CONCAT(
+                 REGEXP_REPLACE(SPLIT_PART(TRIM(e.name), ' ', 1), '[^[:alnum:]]', '', 'g'),
+                 LEFT(REGEXP_REPLACE((REGEXP_SPLIT_TO_ARRAY(TRIM(e.name), '[[:space:]]+'))[ARRAY_LENGTH(REGEXP_SPLIT_TO_ARRAY(TRIM(e.name), '[[:space:]]+'), 1)], '[^[:alnum:]]', '', 'g'), 1)
+               )) = LOWER($2) THEN 2
+          WHEN LOWER(CONCAT(
+                 LEFT(REGEXP_REPLACE(SPLIT_PART(TRIM(e.name), ' ', 1), '[^[:alnum:]]', '', 'g'), 1),
+                 REGEXP_REPLACE((REGEXP_SPLIT_TO_ARRAY(TRIM(e.name), '[[:space:]]+'))[ARRAY_LENGTH(REGEXP_SPLIT_TO_ARRAY(TRIM(e.name), '[[:space:]]+'), 1)], '[^[:alnum:]]', '', 'g')
+               )) = LOWER($2) THEN 3
+          ELSE 4
         END,
         e.id ASC
       LIMIT 1
@@ -125,7 +141,7 @@ router.get(
 
     await ensureForkliftTaskTables();
 
-    const [pto, salaried, hourly, forklift, payrollReview, salariedReviewQueue] = await Promise.all([
+    const [pto, punchCorrections, salaried, hourly, forklift, payrollReview, salariedReviewQueue] = await Promise.all([
       pool.query(
         `
           SELECT r.id,
@@ -143,6 +159,25 @@ router.get(
           WHERE r.status IN ('pending_supervisor', 'pending')
             AND COALESCE(r.supervisor_id, e.supervisor_employee_id) = $1
           ORDER BY r.created_at ASC
+        `,
+        [employeeId],
+      ),
+      pool.query(
+        `
+          SELECT r.id,
+                 r.employee_id,
+                 e.name AS employee_name,
+                 r.punch_ledger_id,
+                 r.request_type,
+                 r.status,
+                 r.reason,
+                 r.submitted_at,
+                 r.created_at
+          FROM timekeeping.punch_correction_requests r
+          JOIN employees e ON e.id = r.employee_id
+          WHERE r.status = 'pending_supervisor'
+            AND COALESCE(r.supervisor_id, e.supervisor_employee_id) = $1
+          ORDER BY COALESCE(r.submitted_at, r.created_at) ASC
         `,
         [employeeId],
       ),
@@ -267,6 +302,20 @@ router.get(
       sourceId: r.id,
     }));
 
+    const punchCorrectionTasks = punchCorrections.rows.map((r: any) => ({
+      id: `punch-correction-${r.id}`,
+      type: "punch_correction_approval",
+      title: `Review punch edit: ${r.employee_name}`,
+      description: `${String(r.request_type || "correction").replace(/_/g, " ")}${r.punch_ledger_id ? ` for punch #${r.punch_ledger_id}` : ""} - ${r.reason}`,
+      employeeName: r.employee_name,
+      employeeNote: r.reason,
+      createdAt: r.submitted_at ?? r.created_at,
+      priority: "normal",
+      actionUrl: "/time-clock-admin?tab=corrections",
+      sourceId: r.id,
+      requestType: r.request_type,
+    }));
+
     const blockedHourlyTasks = incompleteHourlyRows.map((row) => ({
         id: `hourly-blocked-${row.employeeId}-${row.timesheetId ?? "missing"}`,
         type: "hourly_timesheet_blocked",
@@ -324,7 +373,7 @@ router.get(
       testType: r.test_type,
     }));
 
-    const tasks = [...ptoTasks, ...salariedTasks, ...hourlyTasks, ...blockedHourlyTasks, ...missingSalariedTasks, ...needsReviewSalariedTasks, ...forkliftTasks].sort(
+    const tasks = [...ptoTasks, ...punchCorrectionTasks, ...salariedTasks, ...hourlyTasks, ...blockedHourlyTasks, ...missingSalariedTasks, ...needsReviewSalariedTasks, ...forkliftTasks].sort(
       (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
     );
 

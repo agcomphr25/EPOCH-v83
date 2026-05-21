@@ -202,6 +202,14 @@ const ORDERED_PARTS_REQUEST_STATUSES = [
   'DELIVERED_TO_DEPT',
 ];
 
+async function publicTableExists(tableName: string): Promise<boolean> {
+  const rows = await pool.query<{ exists: boolean }>(
+    `SELECT to_regclass($1) IS NOT NULL AS "exists"`,
+    [`public.${tableName}`],
+  );
+  return rows[0]?.exists === true;
+}
+
 // ─── Item-level progress helper ──────────────────────────────────────────────
 // Aggregates p2_serialized_items per (po_id, po_item_id) for a project so the
 // PM Control Center reports the same numbers as the order card. "Completed"
@@ -1617,28 +1625,30 @@ router.get('/:projectId/labor', h(async (req, res) => {
   if (employeeIds.length > 0) {
     // Certification status: join training_certifications to public.certifications catalog
     // so certification type metadata (name, validity period, isRequired) is available.
-    const certRes = await pool.query<CertRow & { certificationName: string | null }>(`
-      SELECT DISTINCT ON (tc.trainee_id)
-        tc.trainee_id AS "employeeId",
-        c.name AS "certificationName",
-        tc.status,
-        tc.expires_at::text AS "expiresDate"
-      FROM training_certifications tc
-      JOIN certifications c ON c.id = tc.certification_id
-      WHERE tc.trainee_id = ANY($1::int[])
-      ORDER BY tc.trainee_id, tc.certified_at DESC NULLS LAST
-    `, [employeeIds]);
+    if (await publicTableExists('training_certifications')) {
+      const certRes = await pool.query<CertRow & { certificationName: string | null }>(`
+        SELECT DISTINCT ON (tc.trainee_id)
+          tc.trainee_id AS "employeeId",
+          c.name AS "certificationName",
+          tc.status,
+          tc.expires_at::text AS "expiresDate"
+        FROM training_certifications tc
+        LEFT JOIN certifications c ON c.id = tc.certification_id
+        WHERE tc.trainee_id = ANY($1::int[])
+        ORDER BY tc.trainee_id, tc.certified_at DESC NULLS LAST
+      `, [employeeIds]);
 
-    const today = new Date().toISOString().slice(0, 10);
-    for (const row of certRes) {
-      if (!row.expiresDate) {
-        certMap[row.employeeId] = 'Unknown';
-      } else if (row.expiresDate < today) {
-        certMap[row.employeeId] = 'Expired';
-      } else if (row.status === 'certified') {
-        certMap[row.employeeId] = 'Valid';
-      } else {
-        certMap[row.employeeId] = 'Missing';
+      const today = new Date().toISOString().slice(0, 10);
+      for (const row of certRes) {
+        if (!row.expiresDate) {
+          certMap[row.employeeId] = 'Unknown';
+        } else if (row.expiresDate < today) {
+          certMap[row.employeeId] = 'Expired';
+        } else if (row.status === 'certified') {
+          certMap[row.employeeId] = 'Valid';
+        } else {
+          certMap[row.employeeId] = 'Missing';
+        }
       }
     }
 
@@ -1835,7 +1845,7 @@ router.get('/:projectId/materials', h(async (req, res) => {
       ii.id AS "inventoryItemId",
       ii.ag_part_number AS "itemCode",
       ii.name AS "itemName",
-      ml.lot_number AS "lotNumber",
+      ml.supplier_lot_number AS "lotNumber",
       ml.internal_control_number AS "internalControlNumber",
       GREATEST(
         COALESCE(mlr_agg.qty_reserved, 0),

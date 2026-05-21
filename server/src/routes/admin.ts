@@ -1512,7 +1512,7 @@ router.get('/order-lookup', authenticateToken, requirePermission('admin.order_lo
     // Get the production order and its specs, plus directly linked item code
     const orderRows = await pool.query(
       `SELECT po.id, po.order_id, po.po_number, po.current_department, po.production_status,
-              po.specifications, po.item_id, po.item_name, po.po_item_id,
+              po.specifications, po.item_code, po.item_id, po.item_name, po.po_item_id,
               poi.item_id  AS poi_item_id,
               poi.item_name AS poi_item_name
        FROM production_orders po

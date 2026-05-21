@@ -44,6 +44,12 @@ interface POStatus {
   projectId?: string | null;
   projectCode?: string | null;
   projectName?: string | null;
+  linkedWadCount?: number;
+  approvedWadCount?: number;
+  releasedWadCount?: number;
+  wadNumbers?: string | null;
+  p2WadConnectionStatus?: 'WAD_READY' | 'WAD_INCOMPLETE' | 'WAD_MISSING' | 'WAD_NOT_MATCHED' | 'NO_PROJECT_LINK';
+  p2WadConnectionLabel?: string;
 }
 
 export default function P2StatusDashboard({ onStartBOM, onViewPO, selectedPOIds = [] }: P2StatusDashboardProps) {
@@ -113,6 +119,45 @@ export default function P2StatusDashboard({ onStartBOM, onViewPO, selectedPOIds 
       );
     }
     return null;
+  };
+
+  const getWadConnectionBadge = (po: POStatus) => {
+    const status = po.p2WadConnectionStatus || (po.projectId ? 'WAD_MISSING' : 'NO_PROJECT_LINK');
+    const config: Record<string, { className: string; label: string; title: string }> = {
+      WAD_READY: {
+        className: 'border-green-300 bg-green-50 text-green-700 dark:bg-green-950/40 dark:text-green-300',
+        label: po.p2WadConnectionLabel || 'WAD ready',
+        title: po.wadNumbers ? `WAD: ${po.wadNumbers}` : 'Linked WAD is approved or released',
+      },
+      WAD_INCOMPLETE: {
+        className: 'border-amber-300 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300',
+        label: po.p2WadConnectionLabel || 'WAD incomplete',
+        title: po.wadNumbers ? `WAD: ${po.wadNumbers}` : 'Linked project has WAD work that is not ready',
+      },
+      WAD_MISSING: {
+        className: 'border-red-300 bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300',
+        label: po.p2WadConnectionLabel || 'WAD missing',
+        title: 'Linked project has no visible WAD work order',
+      },
+      WAD_NOT_MATCHED: {
+        className: 'border-amber-300 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300',
+        label: po.p2WadConnectionLabel || 'WAD not matched',
+        title: 'Linked project has WAD work, but not for this P2 line',
+      },
+      NO_PROJECT_LINK: {
+        className: 'border-slate-300 bg-slate-50 text-slate-700 dark:bg-slate-900 dark:text-slate-300',
+        label: po.p2WadConnectionLabel || 'No project link',
+        title: 'Assign a project to show WAD context',
+      },
+    };
+    const badge = config[status] || config.WAD_MISSING;
+
+    return (
+      <Badge variant="outline" className={`gap-1 ${badge.className}`} title={badge.title}>
+        <FileText className="h-3 w-3" />
+        {badge.label}
+      </Badge>
+    );
   };
 
   const getProgressPercentage = (po: POStatus): number => {
@@ -245,6 +290,7 @@ export default function P2StatusDashboard({ onStartBOM, onViewPO, selectedPOIds 
                           <span className="font-semibold text-lg">{po.poNumber}</span>
                           {getStatusBadge(po.status)}
                           {getReadyForProductionBadge(po)}
+                          {getWadConnectionBadge(po)}
                           {po.hasBOMsNeeded && (
                             <Badge variant="destructive" className="gap-1">
                               <AlertCircle className="h-3 w-3" />

@@ -50,7 +50,8 @@ import {
   ArrowDown,
   Check,
   Users,
-  FolderOpen
+  FolderOpen,
+  FileText
 } from 'lucide-react';
 import JsBarcode from 'jsbarcode';
 import { getBarcodeFormat } from '@/lib/barcodeFormat';
@@ -87,6 +88,12 @@ interface QueueItem {
   isLegacyProjectWorkOrder?: boolean;
   productionWorkOrderId?: string | null;
   workOrderNumber?: string | null;
+  linkedWadId?: string | null;
+  linkedWadNumber?: string | null;
+  linkedWadStatus?: string | null;
+  linkedWadWorkOrderStatus?: string | null;
+  p2WadConnectionStatus?: 'WAD_READY' | 'WAD_INCOMPLETE' | 'WAD_MISSING' | 'WAD_NOT_MATCHED' | 'NO_PROJECT_LINK';
+  p2WadConnectionLabel?: string;
   activeTravelerId?: string | null;
   activeTravelerNumber?: string | null;
   hasActiveTask: boolean;
@@ -131,6 +138,20 @@ interface PartInfo {
   departmentConfig: any;
   traceabilityRequirements: any[];
 }
+
+const getP2WadBadgeClass = (status?: string | null) => {
+  switch (status) {
+    case 'WAD_READY':
+      return 'border-green-300 bg-green-50 text-green-700 dark:bg-green-950/40 dark:text-green-300';
+    case 'WAD_INCOMPLETE':
+    case 'WAD_NOT_MATCHED':
+      return 'border-amber-300 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300';
+    case 'WAD_MISSING':
+      return 'border-red-300 bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300';
+    default:
+      return 'border-slate-300 bg-slate-50 text-slate-700 dark:bg-slate-900 dark:text-slate-300';
+  }
+};
 
 interface P2ProductionQueueProps {
   selectedPONumbers?: string[];
@@ -1015,6 +1036,27 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                                               Assign project from the POs tab
                                             </div>
                                           )}
+                                          <div className="mt-1 flex flex-wrap items-center gap-2">
+                                            {item.linkedWadId && item.linkedWadNumber && (
+                                              <button
+                                                type="button"
+                                                className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                                                onClick={() => setLocation(`/production-work-orders/${item.linkedWadId}`)}
+                                                title={item.linkedWadStatus || item.linkedWadWorkOrderStatus || undefined}
+                                              >
+                                                <FileText className="h-3 w-3" />
+                                                {item.linkedWadNumber}
+                                              </button>
+                                            )}
+                                            <Badge
+                                              variant="outline"
+                                              className={`gap-1 text-[10px] ${getP2WadBadgeClass(item.p2WadConnectionStatus)}`}
+                                              title={item.linkedWadStatus || item.linkedWadWorkOrderStatus || item.p2WadConnectionLabel || undefined}
+                                            >
+                                              <FileText className="h-3 w-3" />
+                                              {item.p2WadConnectionLabel || (item.projectId ? 'WAD missing' : 'No project link')}
+                                            </Badge>
+                                          </div>
                                         </TableCell>
                                         <TableCell>
                                           {item.status === 'COMPLETED' ? (

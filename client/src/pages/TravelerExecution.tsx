@@ -1360,6 +1360,9 @@ export default function TravelerExecution() {
   };
 
   const currentStep = steps.find((s) => s.id === currentStepId);
+  const canEditLegacyCurrentStepData = Boolean(
+    currentStep && legacyRocBackfillEditScope.stepIds.has(currentStep.id)
+  );
 
   useEffect(() => {
     setStepNotes(currentStep?.notes ?? '');
@@ -2459,7 +2462,9 @@ export default function TravelerExecution() {
                   </div>
                 )}
 
-                {currentStep.status === 'IN_PROGRESS' && (() => {
+                {(currentStep.status === 'IN_PROGRESS' || canEditLegacyCurrentStepData) && (() => {
+                  const isLegacyBackfilledStepDataEntry =
+                    currentStep.status === 'COMPLETED' && canEditLegacyCurrentStepData;
                   const isGateTask = (t: TravelerTask) => t.taskType === 'END_GATE' || t.taskType === 'SIGNATURE';
                   const allRequiredNonGateComplete = currentStep.tasks
                     .filter((t) => t.required && !isGateTask(t) && !isBadgeGateTask(t))
@@ -2467,10 +2472,18 @@ export default function TravelerExecution() {
                   const unsignedSigTasks = currentStep.tasks.filter(
                     (t) => t.requiresSignature && t.status !== 'COMPLETED' && !isGateTask(t)
                   );
-                  const canSignStep = allRequiredNonGateComplete && unsignedSigTasks.length === 0;
+                  const canSignStep =
+                    !isLegacyBackfilledStepDataEntry &&
+                    allRequiredNonGateComplete &&
+                    unsignedSigTasks.length === 0;
 
                   return (
                   <div className="space-y-6">
+                    {isLegacyBackfilledStepDataEntry && (
+                      <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+                        This step was completed by the supervised legacy ROC routing backfill. Routing remains complete, and collected data fields are open for record entry with timestamped audit history.
+                      </div>
+                    )}
 
                     {/* Step-level Work Instructions from routing (always visible) */}
                     {(() => {
@@ -3306,6 +3319,7 @@ export default function TravelerExecution() {
                       );
                     })}
 
+                    {!isLegacyBackfilledStepDataEntry && (
                     <div className="pt-4 border-t space-y-3">
                       {!canSignStep && (
                         <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
@@ -3362,6 +3376,7 @@ export default function TravelerExecution() {
                         </Button>
                       </div>
                     </div>
+                    )}
                   </div>
                   );
                 })()}

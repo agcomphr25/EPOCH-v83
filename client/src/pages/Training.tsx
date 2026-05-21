@@ -131,6 +131,7 @@ const trainingTranslations = {
     transforming: 'Transforming...',
     aiTransform: 'AI Transform',
     startTraining: 'Start Training',
+    previewModule: 'Preview Module',
     noModulesTitle: 'No Training Modules Yet',
     noModulesDesc: 'Create training modules for employee certification programs',
     createFirstModule: 'Create Your First Module',
@@ -168,6 +169,7 @@ const trainingTranslations = {
     transforming: 'Transformando...',
     aiTransform: 'Transformar con IA',
     startTraining: 'Iniciar Capacitación',
+    previewModule: 'Vista Previa',
     noModulesTitle: 'Aún No Hay Módulos de Capacitación',
     noModulesDesc: 'Cree módulos de capacitación para programas de certificación de empleados',
     createFirstModule: 'Crear su Primer Módulo',
@@ -197,15 +199,9 @@ const trainingTranslations = {
 
 interface TrainingProps {
   lang?: 'en' | 'es';
-  onStartForkliftCertification?: () => void;
 }
 
-function isForkliftCertificationModule(module: any): boolean {
-  const searchable = `${module?.title || ''} ${module?.description || ''} ${module?.category || ''}`.toLowerCase();
-  return searchable.includes('forklift') || searchable.includes('powered industrial truck');
-}
-
-export default function Training({ lang = 'en', onStartForkliftCertification }: TrainingProps) {
+export default function Training({ lang = 'en' }: TrainingProps) {
   const { toast } = useToast();
   const t = trainingTranslations[lang];
   const [createOpen, setCreateOpen] = useState(false);
@@ -413,30 +409,14 @@ export default function Training({ lang = 'en', onStartForkliftCertification }: 
                         </>
                       )}
                     </Button>
-                    {isForkliftCertificationModule(module) ? (
+                    <Link href={`/training/${module.id}`} className="flex-1">
                       <Button
-                        className="flex-1"
+                        className="w-full"
                         data-testid={`button-start-training-${module.id}`}
-                        onClick={() => {
-                          if (onStartForkliftCertification) {
-                            onStartForkliftCertification();
-                            return;
-                          }
-                          window.location.href = '/training-control-center?tab=forklift';
-                        }}
                       >
-                        {t.startTraining}
+                        {t.previewModule}
                       </Button>
-                    ) : (
-                      <Link href={`/training/${module.id}`} className="flex-1">
-                        <Button
-                          className="w-full"
-                          data-testid={`button-start-training-${module.id}`}
-                        >
-                          {t.startTraining}
-                        </Button>
-                      </Link>
-                    )}
+                    </Link>
                   </div>
                 </div>
               </CardContent>

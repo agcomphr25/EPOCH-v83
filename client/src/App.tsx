@@ -1240,7 +1240,7 @@ function App() {
 
                   {/* Training Routes */}
                   <Route path="/training-control-center" component={TrainingControlCenter} />
-                  <Route path="/training"><Redirect to="/training-control-center" /></Route>
+                  <Route path="/training"><Redirect to="/training/my-training" /></Route>
                   <Route path="/training-management"><Redirect to="/training-control-center" /></Route>
                   <Route path="/training-matrix"><Redirect to="/training-control-center" /></Route>
                   <Route path="/training-matrix-import"><Redirect to="/training-control-center" /></Route>

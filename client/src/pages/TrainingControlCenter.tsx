@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Link, useLocation } from 'wouter';
+import { useState } from 'react';
+import { Link } from 'wouter';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,8 +13,7 @@ import {
   AlertCircle,
   UserCheck,
   BookOpen,
-  Wrench,
-  ClipboardCheck
+  Wrench
 } from 'lucide-react';
 
 import Training from './Training';
@@ -23,7 +22,6 @@ import TrainingManagement from './TrainingManagement';
 import TrainingMatrixManage from './TrainingMatrixManage';
 import TrainTheTrainer from './TrainTheTrainer';
 import TrainingContentLibrary from './TrainingContentLibrary';
-import TraineeTrainingPortal from './TraineeTrainingPortal';
 
 interface TrainingStats {
   totalModules: number;
@@ -34,24 +32,7 @@ interface TrainingStats {
 }
 
 type Language = 'en' | 'es';
-type TrainingTab = 'modules' | 'library' | 'matrix' | 'assignments' | 'trainer' | 'forklift' | 'management';
-
-const TRAINING_TABS = new Set<TrainingTab>([
-  'modules',
-  'library',
-  'matrix',
-  'assignments',
-  'trainer',
-  'forklift',
-  'management',
-]);
-
-function getTabFromLocation(location: string): TrainingTab {
-  const browserSearch = typeof window !== 'undefined' ? window.location.search.replace(/^\?/, '') : '';
-  const query = browserSearch || location.split('?')[1] || '';
-  const tab = new URLSearchParams(query).get('tab');
-  return TRAINING_TABS.has(tab as TrainingTab) ? (tab as TrainingTab) : 'modules';
-}
+type TrainingTab = 'modules' | 'library' | 'matrix' | 'assignments' | 'trainer' | 'management';
 
 const translations = {
   en: {
@@ -71,7 +52,6 @@ const translations = {
     tabMatrix: 'Matrix',
     tabAssignments: 'Assignments',
     tabTrainer: 'Train-the-Trainer',
-    tabForklift: 'Forklift',
     tabManagement: 'Management',
   },
   es: {
@@ -91,14 +71,12 @@ const translations = {
     tabMatrix: 'Matriz',
     tabAssignments: 'Asignaciones',
     tabTrainer: 'Entrenador de Entrenadores',
-    tabForklift: 'Montacargas',
     tabManagement: 'Gestión',
   },
 };
 
 export default function TrainingControlCenter() {
-  const [location] = useLocation();
-  const [activeTab, setActiveTab] = useState<TrainingTab>(() => getTabFromLocation(location));
+  const [activeTab, setActiveTab] = useState<TrainingTab>('modules');
   const [lang, setLang] = useState<Language>(() => (localStorage.getItem('trainingLang') as Language) || 'en');
 
   const toggleLang = () => {
@@ -108,18 +86,6 @@ export default function TrainingControlCenter() {
   };
 
   const t = translations[lang];
-
-  useEffect(() => {
-    const tab = getTabFromLocation(location);
-    setActiveTab(tab);
-  }, [location]);
-
-  const openForkliftCertification = () => {
-    setActiveTab('forklift');
-    if (typeof window !== 'undefined') {
-      window.history.pushState({}, '', '/training-control-center?tab=forklift');
-    }
-  };
 
   const { data: stats } = useQuery<TrainingStats>({
     queryKey: ['/api/training/stats'],
@@ -202,7 +168,7 @@ export default function TrainingControlCenter() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <div className="flex items-center gap-2">
-          <TabsList className="grid flex-1 grid-cols-7">
+          <TabsList className="grid flex-1 grid-cols-6">
           <TabsTrigger value="modules" className="flex items-center gap-2" data-testid="tab-modules">
             <GraduationCap className="h-4 w-4" />
             {t.tabModules}
@@ -223,10 +189,6 @@ export default function TrainingControlCenter() {
             <UserCheck className="h-4 w-4" />
             {t.tabTrainer}
           </TabsTrigger>
-          <TabsTrigger value="forklift" className="flex items-center gap-2" data-testid="tab-forklift">
-            <ClipboardCheck className="h-4 w-4" />
-            {t.tabForklift}
-          </TabsTrigger>
           <TabsTrigger value="management" className="flex items-center gap-2" data-testid="tab-management">
             <Settings className="h-4 w-4" />
             {t.tabManagement}
@@ -244,7 +206,7 @@ export default function TrainingControlCenter() {
         </div>
 
         <TabsContent value="modules" className="space-y-4">
-          <Training lang={lang} onStartForkliftCertification={openForkliftCertification} />
+          <Training lang={lang} />
         </TabsContent>
 
         <TabsContent value="library" className="space-y-4">
@@ -261,10 +223,6 @@ export default function TrainingControlCenter() {
 
         <TabsContent value="trainer" className="space-y-4">
           <TrainTheTrainer />
-        </TabsContent>
-
-        <TabsContent value="forklift" className="space-y-4">
-          <TraineeTrainingPortal embedded defaultTab="forklift" />
         </TabsContent>
 
         <TabsContent value="management" className="space-y-4">

@@ -130,7 +130,12 @@ const stepDescriptions = [
   { step: 4, title: "Trainee Does / Trainer Observes", icon: CheckCircle, bgClass: "bg-green-500", description: "Demonstrate competency with trainer observation" },
 ];
 
-export default function TraineeTrainingPortal() {
+interface TraineeTrainingPortalProps {
+  embedded?: boolean;
+  defaultTab?: 'programs' | '4step' | 'forklift';
+}
+
+export default function TraineeTrainingPortal({ embedded = false, defaultTab = 'programs' }: TraineeTrainingPortalProps = {}) {
   const { toast } = useToast();
   const [quizDialogOpen, setQuizDialogOpen] = useState(false);
   const [selectedQuiz, setSelectedQuiz] = useState<StepQuiz | null>(null);
@@ -281,7 +286,7 @@ export default function TraineeTrainingPortal() {
 
   if (isLoading || programsLoading) {
     return (
-      <div className="container mx-auto px-4 py-8">
+      <div className={embedded ? 'space-y-6' : 'container mx-auto px-4 py-8'}>
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
         </div>
@@ -310,7 +315,8 @@ export default function TraineeTrainingPortal() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className={embedded ? 'space-y-6' : 'container mx-auto px-4 py-8'}>
+      {!embedded && (
       <div className="mb-8">
         <h1 className="text-3xl font-bold flex items-center gap-3">
           <GraduationCap className="h-8 w-8 text-primary" />
@@ -320,8 +326,9 @@ export default function TraineeTrainingPortal() {
           Complete your assigned training programs and quizzes
         </p>
       </div>
+      )}
 
-      <Tabs defaultValue="programs" className="space-y-6">
+      <Tabs defaultValue={defaultTab} className="space-y-6">
         <TabsList>
           <TabsTrigger value="programs" className="gap-2">
             <BookOpen className="h-4 w-4" />

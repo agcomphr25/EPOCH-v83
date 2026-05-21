@@ -294,6 +294,10 @@ const supervisorApproveBodySchema = z.object({
   note: z.string().max(2000).optional(),
 });
 
+const supervisorRejectBodySchema = z.object({
+  note: z.string().min(3, "A rejection note is required.").max(2000),
+});
+
 // ---------------------------------------------------------------------------
 // Session-authenticated employee portal routes.
 // These mirror the portal-token routes for normal logged-in employee portal use.
@@ -630,6 +634,112 @@ router.post(
         },
       }),
       message: "Timesheet approved by supervisor and queued for payroll approval.",
+    });
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// POST /api/timekeeping/salaried-timesheet/:id/supervisor-reject
+// Supervisor returns a submitted timesheet to the employee for correction.
+// Valid from: SUBMITTED
+// Transitions to: REOPENED
+// ---------------------------------------------------------------------------
+router.post(
+  "/salaried-timesheet/:id/supervisor-reject",
+  authenticateToken,
+  requirePermission("timekeeping.salaried.approve_supervisor"),
+  h(async (req, res): Promise<void> => {
+    if (!(await requireFeatureFlag(req, res))) return;
+
+    const id = Number(req.params.id);
+    if (!id) { res.status(400).json({ error: "Invalid timesheet ID" }); return; }
+
+    const parsedBody = supervisorRejectBodySchema.safeParse(req.body ?? {});
+    if (!parsedBody.success) {
+      res.status(400).json({ error: parsedBody.error.flatten().fieldErrors.note?.[0] ?? "A rejection note is required." });
+      return;
+    }
+    const note = parsedBody.data.note.trim();
+
+    const ts = await loadTimesheet(id, res);
+    if (!ts) return;
+    if (!(await requireSalaryPayType(ts.employeeId, res))) return;
+
+    if (ts.status !== "SUBMITTED") {
+      res.status(409).json({
+        error: `Cannot reject timesheet in status '${ts.status}'. Expected SUBMITTED.`,
+        currentStatus: ts.status,
+      });
+      return;
+    }
+
+    const user = (req as any).user;
+    const userId: number | null = user?.id ?? null;
+    const userName: string | null = user?.name ?? user?.username ?? null;
+    const callerEmployeeId: number | null = user?.employeeId ?? null;
+    const isAdminOwner = user?.role === "ADMIN" || user?.role === "OWNER";
+    if (!callerEmployeeId && !isAdminOwner) {
+      res.status(403).json({ error: "Your account is not linked to an employee record and cannot reject salaried timesheets." });
+      return;
+    }
+    if (callerEmployeeId && ts.employeeId === callerEmployeeId) {
+      res.status(403).json({ error: "You cannot reject your own salaried timesheet." });
+      return;
+    }
+
+    let assignedSupervisorId: number | null = ts.supervisorEmployeeId ?? null;
+    if (!assignedSupervisorId) {
+      const [employeeRow] = await db
+        .select({ supervisorEmployeeId: employees.supervisorEmployeeId })
+        .from(employees)
+        .where(eq(employees.id, ts.employeeId))
+        .limit(1);
+      assignedSupervisorId = employeeRow?.supervisorEmployeeId ?? null;
+    }
+    if (assignedSupervisorId !== callerEmployeeId && !isAdminOwner) {
+      res.status(403).json({ error: "You are not the assigned supervisor for this salaried timesheet." });
+      return;
+    }
+
+    const now = new Date();
+    const [updated] = await db
+      .update(salariedTimesheetsTable)
+      .set({
+        status: "REOPENED",
+        reopenedAt: now,
+        reopenReason: note,
+        supervisorApprovalNote: note,
+      })
+      .where(and(eq(salariedTimesheetsTable.id, id), eq(salariedTimesheetsTable.status, "SUBMITTED")))
+      .returning();
+
+    if (!updated) {
+      res.status(409).json({ error: "Timesheet was already reviewed by another session. Refresh and try again." });
+      return;
+    }
+
+    await writeAudit({
+      timesheetId: id,
+      action: "SUPERVISOR_REJECTED",
+      actorId: userId,
+      actorName: userName,
+      actorRole: user?.role ?? null,
+      beforeState: { status: "SUBMITTED" },
+      afterState: {
+        status: "REOPENED",
+        reopenedAt: updated.reopenedAt,
+        supervisorEmployeeId: assignedSupervisorId,
+        rejectionNote: note,
+      },
+      reason: note,
+      ipAddress: req.ip,
+    });
+
+    res.json({
+      timesheetId: id,
+      status: "REOPENED",
+      reopenedAt: updated.reopenedAt,
+      message: "Timesheet returned to the employee for correction.",
     });
   }),
 );

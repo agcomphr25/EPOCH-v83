@@ -16,6 +16,7 @@ import { ensureProductionWorkflowReadSchema } from '../lib/productionWorkflowRea
 import * as allocationService from '../services/laborAllocationService';
 import { buildChargeContextFromTraveler } from '../helpers/travelerBarcodeResolver';
 import { executeTravelerAutoPunch } from './timeClock';
+import { recordAuditEvent } from '../services/auditLedgerService';
 import { db } from '../../db';
 import {
   insertTravelerSchema,
@@ -31,6 +32,8 @@ import {
   travelerSteps,
   travelerTasks,
   travelerTaskFields,
+  travelerSignatures,
+  travelerEvents,
   travelerAuthorizedNotes,
   auditEvents,
   chargeCodes,
@@ -97,6 +100,9 @@ const LEGACY_ROC_BACKFILL_DEFAULT_CUTOFF = '2026-05-20';
 const LEGACY_ROC_BACKFILL_DEFAULT_APPROVER = 'Tasha Mireles';
 const LEGACY_ROC_LAYUP_CHARGE_CODE = 'ROC-LU330-050126';
 const LEGACY_ROC_QC_CHARGE_CODE = 'ROC-QC330-050126';
+const LEGACY_ROC_CANCELED_TRAVELER_NUMBER = 'TRV-2026-000271';
+const LEGACY_ROC_APPROVAL_REASON =
+  'Legacy routing remediation approved by Tasha Mireles. The prior six-department traveler routing was compressed into the current Layup and Quality Control charge-code structure after the 2026-05-20 routing change. Existing captured traveler data is preserved. Missing legacy gate evidence is closed by supervised backfill so serialized production travelers can continue without changing the current traveler creation or execution process.';
 
 const LEGACY_ROC_DEPARTMENT_CHARGE_CODE_MAP: Record<string, 'layup' | 'qualityControl'> = {
   'mold prep': 'layup',
@@ -118,6 +124,13 @@ const legacyRocDryRunSchema = z.object({
     layup: z.string().trim().min(1).optional(),
     qualityControl: z.string().trim().min(1).optional(),
   }).optional(),
+});
+
+const legacyRocApplySchema = z.object({
+  travelerIds: z.array(z.string().trim().min(1)).min(1).optional(),
+  approver: z.string().trim().min(1).default(LEGACY_ROC_BACKFILL_DEFAULT_APPROVER),
+  reason: z.string().trim().min(1).default(LEGACY_ROC_APPROVAL_REASON),
+  confirmSupervisorApproval: z.literal(true),
 });
 
 function normalizeLegacyRocValue(value: unknown): string {
@@ -856,6 +869,350 @@ router.post('/legacy-roc-backfill/dry-run', requirePermission('work_orders.overr
     }
     console.error('Error building legacy ROC traveler backfill dry-run:', error);
     res.status(500).json({ error: 'Failed to build legacy ROC traveler backfill dry-run', message: error.message });
+  }
+});
+
+router.post('/legacy-roc-backfill/apply', requirePermission('work_orders.override_charges'), async (req: Request, res: Response) => {
+  try {
+    const parsed = legacyRocApplySchema.parse(req.body ?? {});
+    const defaultSerials = [...LEGACY_ROC_BACKFILL_DEFAULT_SERIALS];
+    const now = new Date();
+
+    const layupChargeCode = await db.query.chargeCodes.findFirst({
+      where: and(eq(chargeCodes.code, LEGACY_ROC_LAYUP_CHARGE_CODE), eq(chargeCodes.active, true)),
+    });
+    const qcChargeCode = await db.query.chargeCodes.findFirst({
+      where: and(eq(chargeCodes.code, LEGACY_ROC_QC_CHARGE_CODE), eq(chargeCodes.active, true)),
+    });
+    if (!layupChargeCode || !qcChargeCode) {
+      return res.status(400).json({
+        error: 'TARGET_CHARGE_CODE_INACTIVE',
+        message: 'Both ROC legacy backfill charge codes must exist and be active before apply can run.',
+        chargeCodes: {
+          layup: layupChargeCode ? { id: layupChargeCode.id, code: layupChargeCode.code, active: layupChargeCode.active } : null,
+          qualityControl: qcChargeCode ? { id: qcChargeCode.id, code: qcChargeCode.code, active: qcChargeCode.active } : null,
+        },
+      });
+    }
+
+    const allowedTravelerRows = await db
+      .select()
+      .from(travelers)
+      .where(inArray(travelers.serialNumber, defaultSerials));
+    const allowedTravelerIds = new Set(
+      allowedTravelerRows
+        .filter((traveler) => traveler.travelerNumber !== LEGACY_ROC_CANCELED_TRAVELER_NUMBER)
+        .filter((traveler) => !['COMPLETED', 'CANCELED', 'CANCELLED'].includes(String(traveler.status).toUpperCase()))
+        .map((traveler) => traveler.id)
+    );
+    const requestedTravelerIds = parsed.travelerIds?.length
+      ? parsed.travelerIds
+      : [...allowedTravelerIds];
+    const deniedTravelerIds = requestedTravelerIds.filter((id) => !allowedTravelerIds.has(id));
+    if (deniedTravelerIds.length > 0) {
+      return res.status(400).json({
+        error: 'TRAVELER_NOT_IN_LEGACY_ROC_SCOPE',
+        message: 'Apply is limited to the active legacy ROC travelers from the approved dry-run scope.',
+        deniedTravelerIds,
+      });
+    }
+
+    const results = [];
+
+    for (const travelerId of requestedTravelerIds) {
+      const traveler = allowedTravelerRows.find((row) => row.id === travelerId);
+      if (!traveler) continue;
+
+      const priorBackfill = await db.query.travelerEvents.findFirst({
+        where: and(
+          eq(travelerEvents.travelerId, traveler.id),
+          eq(travelerEvents.action, 'LEGACY_ROC_ROUTING_BACKFILL_APPLIED')
+        ),
+      });
+      if (priorBackfill) {
+        results.push({
+          travelerId: traveler.id,
+          travelerNumber: traveler.travelerNumber,
+          status: 'skipped',
+          reason: 'Legacy ROC routing backfill already applied.',
+        });
+        continue;
+      }
+
+      const serializedItem = traveler.serialNumber
+        ? await db.query.p2SerializedItems.findFirst({
+            where: sql`LOWER(TRIM(${p2SerializedItems.serialNumber})) = LOWER(TRIM(${traveler.serialNumber.trim()}))`,
+          })
+        : null;
+
+      const steps = await db
+        .select()
+        .from(travelerSteps)
+        .where(eq(travelerSteps.travelerId, traveler.id))
+        .orderBy(asc(travelerSteps.stepNumber));
+      const mappedSteps = steps.filter((step) => getLegacyRocChargeCodeKey(step.departmentName));
+      if (mappedSteps.length === 0) {
+        results.push({
+          travelerId: traveler.id,
+          travelerNumber: traveler.travelerNumber,
+          status: 'skipped',
+          reason: 'No mapped legacy six-department traveler steps found.',
+        });
+        continue;
+      }
+
+      const result = await db.transaction(async (tx) => {
+        const stepResults = [];
+
+        for (const step of mappedSteps) {
+          const chargeKey = getLegacyRocChargeCodeKey(step.departmentName);
+          const targetChargeCode = chargeKey === 'qualityControl' ? qcChargeCode : layupChargeCode;
+          const tasks = await tx
+            .select()
+            .from(travelerTasks)
+            .where(eq(travelerTasks.travelerStepId, step.id));
+          const taskIds = tasks.map((task) => task.id);
+          const fields = taskIds.length > 0
+            ? await tx
+                .select()
+                .from(travelerTaskFields)
+                .where(inArray(travelerTaskFields.travelerTaskId, taskIds))
+            : [];
+
+          const incompleteRequiredTasks = tasks.filter((task) => task.required && String(task.status).toUpperCase() !== 'COMPLETED');
+          const missingRequiredFields = fields.filter((field) => field.required && String(field.value ?? '').trim() === '');
+          const changedTaskIds: string[] = [];
+
+          for (const task of tasks) {
+            if (String(task.status).toUpperCase() === 'COMPLETED') continue;
+            await tx
+              .update(travelerTasks)
+              .set({
+                status: 'COMPLETED',
+                completedAt: now,
+                completedBy: parsed.approver,
+              })
+              .where(eq(travelerTasks.id, task.id));
+            changedTaskIds.push(task.id);
+          }
+
+          const existingSignature = await tx
+            .select({ id: travelerSignatures.id })
+            .from(travelerSignatures)
+            .where(and(
+              eq(travelerSignatures.travelerStepId, step.id),
+              eq(travelerSignatures.badgeScan, 'LEGACY_ROC_BACKFILL')
+            ))
+            .limit(1);
+          if (existingSignature.length === 0) {
+            await tx.insert(travelerSignatures).values({
+              travelerStepId: step.id,
+              signedBy: parsed.approver,
+              signedByName: parsed.approver,
+              badgeScan: 'LEGACY_ROC_BACKFILL',
+              signedAt: now,
+              meaning: 'LEGACY_ROUTING_REMEDIATION',
+              notes: parsed.reason,
+              signatureData: null,
+            });
+          }
+
+          const beforeStepStatus = step.status;
+          if (String(step.status).toUpperCase() !== 'COMPLETED') {
+            await tx
+              .update(travelerSteps)
+              .set({
+                status: 'COMPLETED',
+                completedAt: now,
+                completedBy: parsed.approver,
+                notes: step.notes
+                  ? `${step.notes}\n\nLegacy ROC routing backfill: ${parsed.reason}`
+                  : `Legacy ROC routing backfill: ${parsed.reason}`,
+              })
+              .where(eq(travelerSteps.id, step.id));
+          }
+
+          const stepPayload = {
+            stepId: step.id,
+            stepNumber: step.stepNumber,
+            departmentName: step.departmentName,
+            mappedDepartment: chargeKey === 'qualityControl' ? 'Quality Control' : 'Layup',
+            targetChargeCodeId: targetChargeCode.id,
+            targetChargeCode: targetChargeCode.code,
+            beforeStepStatus,
+            afterStepStatus: 'COMPLETED',
+            changedTaskIds,
+            incompleteRequiredTaskIds: incompleteRequiredTasks.map((task) => task.id),
+            missingRequiredFields: missingRequiredFields.map((field) => ({
+              id: field.id,
+              travelerTaskId: field.travelerTaskId,
+              fieldKey: field.fieldKey,
+              fieldLabel: field.fieldLabel,
+            })),
+          };
+
+          await tx.insert(travelerEvents).values({
+            travelerId: traveler.id,
+            actor: parsed.approver,
+            actorName: parsed.approver,
+            action: 'LEGACY_ROC_ROUTING_STEP_BACKFILLED',
+            details: {
+              ...stepPayload,
+              reason: parsed.reason,
+              approvedAt: now.toISOString(),
+            },
+          });
+
+          await recordAuditEvent({
+            eventType: 'LEGACY_ROC_ROUTING_STEP_BACKFILLED',
+            subjectType: 'traveler_step',
+            subjectId: step.id,
+            sourceService: 'travelers.legacyRocBackfill',
+            actor: { username: parsed.approver, role: 'supervisor' },
+            occurredAt: now,
+            reason: parsed.reason,
+            entityType: 'traveler',
+            entityId: traveler.id,
+            payload: {
+              travelerId: traveler.id,
+              travelerNumber: traveler.travelerNumber,
+              serialNumber: traveler.serialNumber ?? null,
+              ...stepPayload,
+            },
+            meta: {
+              travelerId: traveler.id,
+              travelerNumber: traveler.travelerNumber,
+              serialNumber: traveler.serialNumber ?? null,
+            },
+          }, tx);
+
+          stepResults.push(stepPayload);
+        }
+
+        const finalSteps = await tx
+          .select({ status: travelerSteps.status })
+          .from(travelerSteps)
+          .where(eq(travelerSteps.travelerId, traveler.id));
+        const allStepsCompleted = finalSteps.every((step) => String(step.status).toUpperCase() === 'COMPLETED');
+
+        let travelerCompleted = false;
+        const beforeTravelerStatus = traveler.status;
+        if (allStepsCompleted && String(traveler.status).toUpperCase() !== 'COMPLETED') {
+          await tx
+            .update(travelers)
+            .set({ status: 'COMPLETED', updatedAt: now })
+            .where(eq(travelers.id, traveler.id));
+          travelerCompleted = true;
+        }
+
+        let serializedItemUpdated = false;
+        if (serializedItem && serializedItem.status === 'ACTIVE') {
+          await tx
+            .update(p2SerializedItems)
+            .set({
+              status: allStepsCompleted ? 'COMPLETED' : serializedItem.status,
+              completedAt: allStepsCompleted ? now : serializedItem.completedAt,
+              updatedAt: now,
+            })
+            .where(eq(p2SerializedItems.id, serializedItem.id));
+
+          await tx.insert(p2SerializedItemEvents).values({
+            serializedItemId: serializedItem.id,
+            barcode: serializedItem.barcode,
+            eventType: 'NOTE',
+            fromDepartment: serializedItem.currentDepartment,
+            toDepartment: allStepsCompleted ? 'COMPLETED' : serializedItem.currentDepartment,
+            fromStageIndex: serializedItem.currentStageIndex ?? null,
+            toStageIndex: allStepsCompleted ? null : serializedItem.currentStageIndex ?? null,
+            performedBy: parsed.approver,
+            notes: parsed.reason,
+            metadata: {
+              travelerId: traveler.id,
+              travelerNumber: traveler.travelerNumber,
+              action: 'LEGACY_ROC_ROUTING_BACKFILL_APPLIED',
+            },
+          });
+          serializedItemUpdated = true;
+        }
+
+        await tx.insert(travelerEvents).values({
+          travelerId: traveler.id,
+          actor: parsed.approver,
+          actorName: parsed.approver,
+          action: 'LEGACY_ROC_ROUTING_BACKFILL_APPLIED',
+          details: {
+            reason: parsed.reason,
+            approvedAt: now.toISOString(),
+            beforeTravelerStatus,
+            afterTravelerStatus: travelerCompleted ? 'COMPLETED' : beforeTravelerStatus,
+            travelerCompleted,
+            serializedItemUpdated,
+            stepCount: stepResults.length,
+            stepIds: stepResults.map((step) => step.stepId),
+          },
+        });
+
+        await recordAuditEvent({
+          eventType: 'LEGACY_ROC_ROUTING_BACKFILL_APPLIED',
+          subjectType: 'traveler',
+          subjectId: traveler.id,
+          sourceService: 'travelers.legacyRocBackfill',
+          actor: { username: parsed.approver, role: 'supervisor' },
+          occurredAt: now,
+          reason: parsed.reason,
+          entityType: 'traveler',
+          entityId: traveler.id,
+          payload: {
+            travelerId: traveler.id,
+            travelerNumber: traveler.travelerNumber,
+            serialNumber: traveler.serialNumber ?? null,
+            beforeTravelerStatus,
+            afterTravelerStatus: travelerCompleted ? 'COMPLETED' : beforeTravelerStatus,
+            travelerCompleted,
+            serializedItemId: serializedItem?.id ?? null,
+            serializedItemUpdated,
+            stepResults,
+          },
+          meta: {
+            travelerId: traveler.id,
+            travelerNumber: traveler.travelerNumber,
+            serialNumber: traveler.serialNumber ?? null,
+          },
+        }, tx);
+
+        return {
+          travelerId: traveler.id,
+          travelerNumber: traveler.travelerNumber,
+          serialNumber: traveler.serialNumber,
+          status: 'applied',
+          travelerCompleted,
+          serializedItemUpdated,
+          stepCount: stepResults.length,
+        };
+      });
+
+      results.push(result);
+    }
+
+    res.json({
+      mode: 'apply',
+      writesPerformed: true,
+      approver: parsed.approver,
+      reason: parsed.reason,
+      excludedTravelerNumber: LEGACY_ROC_CANCELED_TRAVELER_NUMBER,
+      summary: {
+        requested: requestedTravelerIds.length,
+        applied: results.filter((result) => result.status === 'applied').length,
+        skipped: results.filter((result) => result.status === 'skipped').length,
+      },
+      results,
+    });
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error applying legacy ROC traveler backfill:', error);
+    res.status(500).json({ error: 'Failed to apply legacy ROC traveler backfill', message: error.message });
   }
 });
 

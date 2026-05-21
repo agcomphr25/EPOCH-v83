@@ -173,6 +173,27 @@ interface LegacyRocBackfillReport {
   rows: LegacyRocBackfillReportRow[];
 }
 
+interface LegacyRocBackfillApplyResult {
+  mode: 'apply';
+  writesPerformed: true;
+  approver: string;
+  summary: {
+    requested: number;
+    applied: number;
+    skipped: number;
+  };
+  results: {
+    travelerId: string;
+    travelerNumber: string;
+    serialNumber?: string | null;
+    status: 'applied' | 'skipped';
+    reason?: string;
+    travelerCompleted?: boolean;
+    serializedItemUpdated?: boolean;
+    stepCount?: number;
+  }[];
+}
+
 const STATUS_COLORS: Record<string, string> = {
   DRAFT: 'bg-gray-100 text-gray-800',
   IN_PROGRESS: 'bg-blue-100 text-blue-800',
@@ -201,6 +222,7 @@ export default function TravelerManagement() {
   const [showOffSystemLinkDialog, setShowOffSystemLinkDialog] = useState(false);
   const [showLegacyRocBackfillDialog, setShowLegacyRocBackfillDialog] = useState(false);
   const [legacyRocBackfillReport, setLegacyRocBackfillReport] = useState<LegacyRocBackfillReport | null>(null);
+  const [legacyRocApplyResult, setLegacyRocApplyResult] = useState<LegacyRocBackfillApplyResult | null>(null);
   const [offSystemLinkDraft, setOffSystemLinkDraft] = useState('');
   const [selectedTraveler, setSelectedTraveler] = useState<Traveler | null>(null);
   const [selectedRouting, setSelectedRouting] = useState<string>('');
@@ -244,6 +266,7 @@ export default function TravelerManagement() {
       }) as Promise<LegacyRocBackfillReport>,
     onSuccess: (report) => {
       setLegacyRocBackfillReport(report);
+      setLegacyRocApplyResult(null);
       setShowLegacyRocBackfillDialog(true);
       toast({
         title: 'Dry-run complete',
@@ -254,6 +277,30 @@ export default function TravelerManagement() {
       toast({
         title: 'Dry-run failed',
         description: error.message || 'Could not generate the legacy ROC backfill report',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const legacyRocBackfillApplyMutation = useMutation({
+    mutationFn: () =>
+      apiRequest('/api/travelers/legacy-roc-backfill/apply', {
+        method: 'POST',
+        body: { confirmSupervisorApproval: true },
+        timeout: 120000,
+      }) as Promise<LegacyRocBackfillApplyResult>,
+    onSuccess: (result) => {
+      setLegacyRocApplyResult(result);
+      queryClient.invalidateQueries({ queryKey: ['/api/travelers'] });
+      toast({
+        title: 'Legacy backfill applied',
+        description: `${result.summary.applied} travelers updated, ${result.summary.skipped} skipped`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Apply failed',
+        description: error.message || 'Could not apply the legacy ROC backfill',
         variant: 'destructive',
       });
     },
@@ -1061,6 +1108,16 @@ export default function TravelerManagement() {
                                   {(action.missingRequiredFields.length > 0 || action.incompleteRequiredTasks.length > 0) && (
                                     <span className="text-amber-700"> review</span>
                                   )}
+                                  {action.incompleteRequiredTasks.length > 0 && (
+                                    <div className="text-[11px] text-amber-700">
+                                      Tasks: {action.incompleteRequiredTasks.map((task) => task.title).join(', ')}
+                                    </div>
+                                  )}
+                                  {action.missingRequiredFields.length > 0 && (
+                                    <div className="text-[11px] text-amber-700">
+                                      Fields: {action.missingRequiredFields.map((field) => field.fieldLabel || field.fieldKey).join(', ')}
+                                    </div>
+                                  )}
                                 </div>
                               ))
                             )}
@@ -1074,12 +1131,40 @@ export default function TravelerManagement() {
                   </TableBody>
                 </Table>
               </ScrollArea>
+
+              {legacyRocApplyResult && (
+                <div className="rounded border border-emerald-200 bg-emerald-50 p-3 text-sm">
+                  <p className="font-medium text-emerald-900">
+                    Applied {legacyRocApplyResult.summary.applied} traveler backfill(s); skipped {legacyRocApplyResult.summary.skipped}.
+                  </p>
+                  <div className="mt-2 grid gap-1 md:grid-cols-2">
+                    {legacyRocApplyResult.results.map((result) => (
+                      <div key={result.travelerId} className="text-emerald-900">
+                        <span className="font-mono">{result.travelerNumber}</span>
+                        <span className="text-emerald-700"> {result.status}</span>
+                        {result.stepCount ? <span className="text-emerald-700"> ({result.stepCount} steps)</span> : null}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowLegacyRocBackfillDialog(false)}>
               Close
+            </Button>
+            <Button
+              onClick={() => {
+                const ok = window.confirm('Apply the supervised legacy ROC backfill to the 11 active travelers and write timestamped audit records?');
+                if (ok) legacyRocBackfillApplyMutation.mutate();
+              }}
+              disabled={legacyRocBackfillApplyMutation.isPending || !legacyRocBackfillReport}
+              data-testid="button-legacy-roc-apply"
+            >
+              {legacyRocBackfillApplyMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Apply Supervised Backfill
             </Button>
           </DialogFooter>
         </DialogContent>

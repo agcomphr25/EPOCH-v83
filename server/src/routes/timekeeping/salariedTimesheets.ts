@@ -872,6 +872,7 @@ router.post(
 
 const addLineSchema = z.object({
   lineType: z.enum(["DIRECT", "INDIRECT"]),
+  chargeCodeId: z.number().int().positive().optional().nullable(),
   travelerId: z.string().optional().nullable(),
   indirectCodeId: z.number().int().positive().optional().nullable(),
   hours: z.number().gt(0, "Hours must be greater than 0").max(24),
@@ -881,6 +882,10 @@ const addLineSchema = z.object({
 });
 
 const updateLineSchema = z.object({
+  lineType: z.enum(["DIRECT", "INDIRECT"]).optional(),
+  chargeCodeId: z.number().int().positive().nullable().optional(),
+  travelerId: z.string().nullable().optional(),
+  indirectCodeId: z.number().int().positive().nullable().optional(),
   hours: z.number().gt(0, "Hours must be greater than 0").max(24).optional(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   note: z.string().max(500).nullable().optional(),

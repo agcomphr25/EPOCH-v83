@@ -178,6 +178,8 @@ type PunchSessionEvent = {
   costCode: string | null;
   note: string | null;
   hasMissingClockOut: boolean;
+  hasMissingClockIn: boolean;
+  reviewReason: string | null;
 };
 
 function sessionsToPunchEvents(sessions: any[]): PunchSessionEvent[] {
@@ -186,6 +188,13 @@ function sessionsToPunchEvents(sessions: any[]): PunchSessionEvent[] {
     const inType: PunchSessionEvent['type'] = s.laborClass === 'BREAK' ? 'break_start' : 'clock_in';
     const outType: PunchSessionEvent['type'] = s.laborClass === 'BREAK' ? 'break_end' : 'clock_out';
     const missingOut = s.clockOut == null;
+    const sessionNote = [s.editNote, s.overrideReason].filter(Boolean).join(' | ');
+    const missingIn = /missing[_\s-]?in|missing IN punch|clockIn inferred/i.test(sessionNote);
+    const reviewReason = missingOut
+      ? 'Missing clock-out'
+      : missingIn
+        ? 'Missing clock-in was inferred from TimeTrakGO hours'
+        : null;
 
     const rawNote = s.editNote ?? null;
     let inNote: string | null = null;
@@ -219,6 +228,8 @@ function sessionsToPunchEvents(sessions: any[]): PunchSessionEvent[] {
       costCode: s.chargeCode ?? null,
       note: null,
       hasMissingClockOut: missingOut,
+      hasMissingClockIn: missingIn,
+      reviewReason,
     });
 
     if (!missingOut && s.clockOut != null) {
@@ -234,6 +245,8 @@ function sessionsToPunchEvents(sessions: any[]): PunchSessionEvent[] {
         costCode: s.chargeCode ?? null,
         note: null,
         hasMissingClockOut: false,
+        hasMissingClockIn: false,
+        reviewReason: null,
       });
     }
   }

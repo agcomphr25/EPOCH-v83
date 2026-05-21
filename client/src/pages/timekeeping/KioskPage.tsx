@@ -22,7 +22,7 @@ interface PunchStatus {
   status: string;
   clockedInAt: string | null;
   hoursToday: number;
-  openEntry?: { id?: number; clockIn?: string; clockOut?: string | null } | null;
+  openEntry?: { id?: number; clockIn?: string; clockOut?: string | null; chargeCode?: string | null } | null;
 }
 
 interface ChargeCode {
@@ -41,6 +41,15 @@ interface PunchEvent {
   punchedAt: string;
   costCode: string | null;
   hasMissingClockOut?: boolean;
+}
+
+interface ShiftRow {
+  sessionId: number;
+  label: string;
+  startAt: string | null;
+  endAt: string | null;
+  costCode: string | null;
+  isOpen: boolean;
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -173,6 +182,41 @@ const PIN_LENGTH = 4;
 
 const PIN_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'backspace', '0', 'submit'];
 
+function formatKioskTime(ts: string | null): string {
+  if (!ts) return 'In progress';
+  return new Date(ts).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+}
+
+function formatKioskHours(hours: number): string {
+  return `${hours.toFixed(2)} hr${Math.abs(hours - 1) < 0.005 ? '' : 's'}`;
+}
+
+function buildShiftRows(punches: PunchEvent[]): ShiftRow[] {
+  const rows = new Map<number, ShiftRow>();
+
+  for (const punch of punches) {
+    const existing = rows.get(punch.sessionId) ?? {
+      sessionId: punch.sessionId,
+      label: punch.type === 'break_start' || punch.type === 'break_end' ? 'Break' : 'Work',
+      startAt: null,
+      endAt: null,
+      costCode: punch.costCode,
+      isOpen: false,
+    };
+
+    if (punch.type === 'clock_in' || punch.type === 'break_start') {
+      existing.startAt = punch.punchedAt;
+    } else {
+      existing.endAt = punch.punchedAt;
+    }
+    existing.costCode = existing.costCode ?? punch.costCode;
+    existing.isOpen = !!punch.hasMissingClockOut || !existing.endAt;
+    rows.set(punch.sessionId, existing);
+  }
+
+  return Array.from(rows.values()).sort((a, b) => (a.startAt ?? '').localeCompare(b.startAt ?? ''));
+}
+
 export default function KioskPage() {
   const [step, setStep] = useState<KioskStep>('idle');
   const [pin, setPin] = useState('');
@@ -188,6 +232,7 @@ export default function KioskPage() {
   const [dcaaViolation, setDcaaViolation] = useState<DcaaPolicyViolation | null>(null);
   const [countdown, setCountdown] = useState(RESULT_DISPLAY_SEC);
   const [lockoutSecondsRemaining, setLockoutSecondsRemaining] = useState(0);
+  const [certificationReviewLoading, setCertificationReviewLoading] = useState(false);
   const [correctionForm, setCorrectionForm] = useState({
     requestType: 'edit_session',
     punchLedgerId: '',
@@ -227,6 +272,7 @@ export default function KioskPage() {
     setCorrectionForm({ requestType: 'edit_session', punchLedgerId: '', selectedPunchType: 'clock_in', clockIn: '', clockOut: '', reason: '' });
     setActiveShiftPunches([]);
     setCorrectionLoading(false);
+    setCertificationReviewLoading(false);
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     if (countdownRef.current) clearInterval(countdownRef.current);
     if (lockoutRef.current) clearInterval(lockoutRef.current);
@@ -338,6 +384,7 @@ export default function KioskPage() {
         status = await statusRes.json();
       }
       setPunchStatus(status);
+      setSelectedChargeCode(status?.openEntry?.chargeCode ?? '');
       setDailyCertificationConfirmed(false);
       setShowClockOutCertification(false);
 
@@ -402,10 +449,29 @@ export default function KioskPage() {
     }
   }, [dailyCertificationConfirmed, employee, punchStatus, restartIdleTimer, selectedChargeCode]);
 
-  const handleClockOutIntent = useCallback(() => {
+  const loadActiveShiftPunches = useCallback(async () => {
+    if (!employee) return [];
+    const res = await fetch(`/api/timekeeping/kiosk/punches/employee/${employee.id}/active-shift`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin }),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data.punches) ? data.punches as PunchEvent[] : [];
+  }, [employee, pin]);
+
+  const handleClockOutIntent = useCallback(async () => {
     setShowClockOutCertification(true);
+    setDailyCertificationConfirmed(false);
     restartIdleTimer();
-  }, [restartIdleTimer]);
+    setCertificationReviewLoading(true);
+    try {
+      setActiveShiftPunches(await loadActiveShiftPunches());
+    } finally {
+      setCertificationReviewLoading(false);
+    }
+  }, [loadActiveShiftPunches, restartIdleTimer]);
 
   const openCorrectionForm = useCallback(async () => {
     const openEntry = punchStatus?.openEntry;
@@ -422,19 +488,11 @@ export default function KioskPage() {
     if (!employee) return;
     setCorrectionLoading(true);
     try {
-      const res = await fetch(`/api/timekeeping/kiosk/punches/employee/${employee.id}/active-shift`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pin }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setActiveShiftPunches(Array.isArray(data.punches) ? data.punches : []);
-      }
+      setActiveShiftPunches(await loadActiveShiftPunches());
     } finally {
       setCorrectionLoading(false);
     }
-  }, [employee, pin, punchStatus, restartIdleTimer]);
+  }, [employee, loadActiveShiftPunches, punchStatus, restartIdleTimer]);
 
   const selectCorrectionPunch = useCallback((punch: PunchEvent) => {
     const local = new Date(punch.punchedAt).toISOString().slice(0, 16);
@@ -782,6 +840,8 @@ export default function KioskPage() {
     const isOnBreak = punchStatus.status === 'on_break';
     const isClockOut = meta.action === 'clock_out';
     const showPrimaryActions = !showClockOutCertification;
+    const showChargeCodePicker = (isClockIn || isOnBreak) && chargeCodes.length > 0;
+    const shiftRows = buildShiftRows(activeShiftPunches);
     return (
       <div className="min-h-screen bg-gray-50 text-gray-900 flex flex-col items-center justify-center px-8">
         <div className="w-full max-w-sm space-y-6 text-center">
@@ -802,7 +862,7 @@ export default function KioskPage() {
             )}
           </div>
 
-          {isClockIn && chargeCodes.length > 0 && (
+          {showChargeCodePicker && (
             <ChargeCodePicker
               chargeCodes={chargeCodes}
               value={selectedChargeCode}
@@ -860,30 +920,82 @@ export default function KioskPage() {
           )}
 
           {isClockOut && showClockOutCertification && (
-            <div className="space-y-4">
-              <label className="flex items-start gap-3 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-left shadow-sm">
-                <input
-                  type="checkbox"
-                  checked={dailyCertificationConfirmed}
-                  onChange={(event) => {
-                    setDailyCertificationConfirmed(event.target.checked);
-                    restartIdleTimer();
-                  }}
-                  className="mt-1 h-5 w-5 rounded border-blue-300 text-blue-600"
-                />
-                <span className="text-sm text-blue-900">
-                  I certify that today&apos;s recorded time is complete, accurate, and represents work I actually performed.
-                </span>
-              </label>
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/40 px-6">
+              <div className="w-full max-w-lg rounded-3xl bg-white p-6 text-left shadow-2xl">
+                <div className="text-center">
+                  <p className="text-xs uppercase tracking-[0.24em] text-gray-400">Review Today</p>
+                  <p className="mt-1 text-3xl font-bold text-gray-900">{formatKioskHours(punchStatus.hoursToday)}</p>
+                  <p className="mt-1 text-sm text-gray-500">Worked today before this clock-out</p>
+                </div>
 
-              <Button
-                size="lg"
-                onClick={() => handleConfirm('clock_out')}
-                disabled={!dailyCertificationConfirmed}
-                className="w-full h-16 text-xl font-bold bg-blue-600 hover:bg-blue-700 rounded-2xl text-white"
-              >
-                Clock Out
-              </Button>
+                <div className="mt-5 max-h-64 space-y-2 overflow-y-auto">
+                  {certificationReviewLoading ? (
+                    <div className="rounded-2xl border border-gray-200 p-4 text-center text-sm text-gray-500">Loading today&apos;s punches...</div>
+                  ) : shiftRows.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-gray-200 p-4 text-center text-sm text-gray-500">No punch breakdown available.</div>
+                  ) : (
+                    shiftRows.map((row) => {
+                      const startMs = row.startAt ? new Date(row.startAt).getTime() : null;
+                      const endMs = row.endAt ? new Date(row.endAt).getTime() : (row.isOpen ? now.getTime() : null);
+                      const rowHours = startMs && endMs && endMs > startMs ? (endMs - startMs) / 3_600_000 : 0;
+                      return (
+                        <div key={row.sessionId} className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold text-gray-900">{row.label}</p>
+                              {row.costCode && <p className="mt-0.5 text-xs text-gray-500">CC {row.costCode}</p>}
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm font-semibold text-gray-900">{formatKioskHours(rowHours)}</p>
+                              <p className="text-xs text-gray-500">
+                                {formatKioskTime(row.startAt)} - {formatKioskTime(row.endAt)}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                <label className="mt-5 flex items-start gap-3 rounded-2xl border border-blue-200 bg-blue-50 p-4">
+                  <input
+                    type="checkbox"
+                    checked={dailyCertificationConfirmed}
+                    onChange={(event) => {
+                      setDailyCertificationConfirmed(event.target.checked);
+                      restartIdleTimer();
+                    }}
+                    className="mt-1 h-5 w-5 rounded border-blue-300 text-blue-600"
+                  />
+                  <span className="text-sm text-blue-900">
+                    I certify that today&apos;s recorded time is complete, accurate, and represents work I actually performed.
+                  </span>
+                </label>
+
+                <div className="mt-5 grid grid-cols-2 gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setShowClockOutCertification(false);
+                      setDailyCertificationConfirmed(false);
+                      restartIdleTimer();
+                    }}
+                    className="h-14 rounded-2xl"
+                  >
+                    Back
+                  </Button>
+                  <Button
+                    size="lg"
+                    onClick={() => handleConfirm('clock_out')}
+                    disabled={!dailyCertificationConfirmed}
+                    className="h-14 rounded-2xl bg-blue-600 text-lg font-bold text-white hover:bg-blue-700"
+                  >
+                    Clock Out
+                  </Button>
+                </div>
+              </div>
             </div>
           )}
 

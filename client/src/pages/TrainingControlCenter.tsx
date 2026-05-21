@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link } from 'wouter';
+import { useEffect, useState } from 'react';
+import { Link, useLocation } from 'wouter';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -34,6 +34,23 @@ interface TrainingStats {
 }
 
 type Language = 'en' | 'es';
+type TrainingTab = 'modules' | 'library' | 'matrix' | 'assignments' | 'trainer' | 'forklift' | 'management';
+
+const TRAINING_TABS = new Set<TrainingTab>([
+  'modules',
+  'library',
+  'matrix',
+  'assignments',
+  'trainer',
+  'forklift',
+  'management',
+]);
+
+function getTabFromLocation(location: string): TrainingTab {
+  const query = location.split('?')[1] || '';
+  const tab = new URLSearchParams(query).get('tab');
+  return TRAINING_TABS.has(tab as TrainingTab) ? (tab as TrainingTab) : 'modules';
+}
 
 const translations = {
   en: {
@@ -79,7 +96,8 @@ const translations = {
 };
 
 export default function TrainingControlCenter() {
-  const [activeTab, setActiveTab] = useState('modules');
+  const [location] = useLocation();
+  const [activeTab, setActiveTab] = useState<TrainingTab>(() => getTabFromLocation(location));
   const [lang, setLang] = useState<Language>(() => (localStorage.getItem('trainingLang') as Language) || 'en');
 
   const toggleLang = () => {
@@ -89,6 +107,11 @@ export default function TrainingControlCenter() {
   };
 
   const t = translations[lang];
+
+  useEffect(() => {
+    const tab = getTabFromLocation(location);
+    setActiveTab(tab);
+  }, [location]);
 
   const { data: stats } = useQuery<TrainingStats>({
     queryKey: ['/api/training/stats'],

@@ -26,6 +26,10 @@ import { punchLedgerCutoverDate } from "../../lib/featureFlags";
  */
 const STALE_SESSION_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours
 
+function isHourlyTimekeepingEmployee(employee: { payType?: string | null }): boolean {
+  return (employee.payType ?? "HOURLY").toUpperCase() !== "SALARY";
+}
+
 export interface DashboardSummary {
   totalEmployees: number;
   activeEmployees: number;
@@ -92,7 +96,7 @@ function computeAttendanceState(
   // Only include employees with a timekeeping anchor (timekeepingId != null).
   // Public-only employees (no timekeeping.employees row) cannot be mapped to the
   // Employee API shape via toApiEmployee() and must be excluded from the board.
-  const activeEmployees = allEmployees.filter((e) => e.isActive && e.timekeepingId != null);
+  const activeEmployees = allEmployees.filter((e) => e.isActive && e.timekeepingId != null && isHourlyTimekeepingEmployee(e));
   const activeEpochIds = new Set(activeEmployees.map((e) => e.epochEmployeeId));
   const empByEpochId = new Map(activeEmployees.map((e) => [e.epochEmployeeId, e]));
 
@@ -291,7 +295,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
   const totalEmployees = allEmployees.length;
   // Count only employees enrolled in timekeeping (timekeepingId != null), consistent
   // with the In/Out Board which excludes public-only employees from its list.
-  const activeEmployees = allEmployees.filter((e) => e.isActive && e.timekeepingId != null).length;
+  const activeEmployees = allEmployees.filter((e) => e.isActive && e.timekeepingId != null && isHourlyTimekeepingEmployee(e)).length;
 
   // Build latestLegacyPunch map: epochEmployeeId → most-recent punch row.
   // punchesTable.employeeId references public.employees.id (epochEmployeeId),
@@ -357,7 +361,11 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
   const legacyHoursByEmp = new Map<number, number>();
 
   if (needsLedger) {
-    const activeEpochIdsForHours = new Set(allEmployees.filter((e) => e.isActive).map((e) => e.epochEmployeeId));
+    const activeEpochIdsForHours = new Set(
+      allEmployees
+        .filter((e) => e.isActive && isHourlyTimekeepingEmployee(e))
+        .map((e) => e.epochEmployeeId)
+    );
     const ledgerStartMs = ledgerStart.getTime();
     // Defensive end clip — for the in-progress current week, summaryNow is the
     // natural upper bound; weekEnd guards the case where the function is ever
@@ -458,7 +466,7 @@ export async function getEmployeeStatus(): Promise<EmployeeStatusEntry[]> {
   const allEmployees = await listResolvedEmployees();
   // Only include employees with a timekeeping anchor — public-only employees
   // cannot be mapped to the Employee API shape via toApiEmployee().
-  const activeEmployees = allEmployees.filter((e) => e.isActive && e.timekeepingId != null);
+  const activeEmployees = allEmployees.filter((e) => e.isActive && e.timekeepingId != null && isHourlyTimekeepingEmployee(e));
   const empByEpochId = new Map(activeEmployees.map((e) => [e.epochEmployeeId, e]));
 
   // IMPORTANT — ID namespace:
@@ -1101,7 +1109,10 @@ export async function getPayrollReviewBatch(
     }
   }
 
-  const hourly: HourlyPayrollReviewRow[] = activeEmployees.map((emp) => {
+  const hourlyEmployees = activeEmployees.filter(isHourlyTimekeepingEmployee);
+  const salariedEmployees = activeEmployees.filter((employee) => !isHourlyTimekeepingEmployee(employee));
+
+  const hourly: HourlyPayrollReviewRow[] = hourlyEmployees.map((emp) => {
     const timesheet = emp.timekeepingId != null ? timesheetByTkId.get(emp.timekeepingId) : undefined;
     const totalHours = round2(totalHoursByEpochId.get(emp.epochEmployeeId) ?? 0);
     const { regularHours, overtimeHours } = computePeriodOvertime(totalHours, rangeStart, rangeEnd, settings.overtimeThresholdWeekly);
@@ -1160,7 +1171,7 @@ export async function getPayrollReviewBatch(
     });
   }
   const salariedByTkId = new Map(salariedSheets.map((timesheet) => [timesheet.employeeId, timesheet]));
-  const salaried = activeEmployees
+  const salaried = salariedEmployees
     .filter((emp) => emp.timekeepingId != null)
     .map((emp): SalariedPayrollReviewRow => {
       const tkId = emp.timekeepingId!;
@@ -1222,7 +1233,7 @@ export async function getEmployeeHoursForPeriod(
   const rangeEnd = to ?? defaultEnd;
 
   const allEmployees = await listResolvedEmployees();
-  const activeEmployees = allEmployees.filter((e) => e.isActive);
+  const activeEmployees = allEmployees.filter((e) => e.isActive && isHourlyTimekeepingEmployee(e));
   const now = new Date();
 
   const hoursByEpochId = new Map<number, number>();

@@ -1220,6 +1220,46 @@ export default function TimeClockAdminPage() {
     onError: () => toast({ title: 'Error', description: 'Failed to recalculate.', variant: 'destructive' }),
   });
 
+  const [autoPreparedTimesheetPeriod, setAutoPreparedTimesheetPeriod] = useState<string | null>(null);
+  const autoPrepareTimesheetsMutation = useMutation({
+    mutationFn: async ({ periodStart, periodEnd }: { periodStart: string; periodEnd: string }) => {
+      const res = await fetch('/api/timekeeping/admin/timesheets/generate', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ periodStart, periodEnd }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error ?? 'Failed to prepare timesheets');
+      return data as {
+        periodStart: string;
+        periodEnd: string;
+        created: Array<{ employeeId: number; timesheetId: number }>;
+        skipped: Array<{ employeeId: number; reason: string }>;
+        failed: Array<{ employeeId: number; reason: string }>;
+      };
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/timesheets'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/dashboard/summary'] });
+      if (result.failed.length > 0) {
+        toast({
+          title: 'Timesheet preparation needs attention',
+          description: `${result.failed.length} employee timesheet${result.failed.length === 1 ? '' : 's'} could not be prepared.`,
+          variant: 'destructive',
+        });
+      }
+    },
+    onError: (err: Error) => {
+      setAutoPreparedTimesheetPeriod(null);
+      toast({
+        title: 'Timesheet preparation failed',
+        description: err.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
   const attestMutation = useMutation({
     mutationFn: ({ id, overrideReason }: { id: number; overrideReason: string }) =>
       apiRequest(`/api/timekeeping/timesheets/${id}/certify-admin`, {
@@ -1459,6 +1499,15 @@ export default function TimeClockAdminPage() {
       setPinnedTs(fresh);
     }
   }, [timesheets]);
+
+  useEffect(() => {
+    if (activeTab !== 'timesheets') return;
+    if (!hoursFrom || !hoursTo || hoursFrom > hoursTo) return;
+    const periodKey = `${hoursFrom}:${hoursTo}`;
+    if (autoPreparedTimesheetPeriod === periodKey || autoPrepareTimesheetsMutation.isPending) return;
+    setAutoPreparedTimesheetPeriod(periodKey);
+    autoPrepareTimesheetsMutation.mutate({ periodStart: hoursFrom, periodEnd: hoursTo });
+  }, [activeTab, hoursFrom, hoursTo, autoPreparedTimesheetPeriod, autoPrepareTimesheetsMutation.isPending]);
 
   const [punchFrom, setPunchFrom] = useState(() => {
     const queryFrom = initialTimeClockQueryParam('from');
@@ -2421,17 +2470,43 @@ export default function TimeClockAdminPage() {
             >
               <RefreshCw className="h-4 w-4" />
             </Button>
-            <Button
-              size="sm"
-              className="ml-auto"
-              onClick={() => setReviewTsOpen(true)}
-            >
-              <FileText className="h-4 w-4 mr-1" />
-              Review Timesheet
-            </Button>
+            <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+              {autoPrepareTimesheetsMutation.isPending && (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Preparing current period
+                </>
+              )}
+              {!autoPrepareTimesheetsMutation.isPending && autoPreparedTimesheetPeriod === `${hoursFrom}:${hoursTo}` && (
+                <>
+                  <CheckCircle className="h-3.5 w-3.5 text-green-600" />
+                  Current period prepared
+                </>
+              )}
+            </div>
           </div>
 
           <Card>
+            <CardHeader className="pb-2">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <CardTitle className="text-base">Hourly Timesheet Review Queue</CardTitle>
+                  <CardDescription>
+                    Drafts and submitted timesheets are prepared automatically from hourly punch data.
+                  </CardDescription>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {(['draft', 'submitted', 'certified', 'locked'] as const).map(status => {
+                    const count = timesheets?.filter(ts => ts.status === status).length ?? 0;
+                    return (
+                      <Badge key={status} variant="outline" className="capitalize tabular-nums">
+                        {status.replace('_', ' ')} {count}
+                      </Badge>
+                    );
+                  })}
+                </div>
+              </div>
+            </CardHeader>
             <CardContent className="pt-0">
               {tsLoading ? (
                 <div className="flex items-center justify-center h-32">
@@ -2442,8 +2517,9 @@ export default function TimeClockAdminPage() {
                   No timesheets found for the selected filter.
                 </p>
               ) : (
+                <div className="max-h-[520px] overflow-auto">
                 <Table>
-                  <TableHeader>
+                  <TableHeader className="sticky top-0 z-10 bg-background">
                     <TableRow>
                       <TableHead>Employee</TableHead>
                       <TableHead>Period</TableHead>
@@ -2637,6 +2713,7 @@ export default function TimeClockAdminPage() {
                     })}
                   </TableBody>
                 </Table>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -2821,8 +2898,9 @@ export default function TimeClockAdminPage() {
                   </p>
                 </div>
               ) : (
+                <div className="max-h-[520px] overflow-auto">
                 <Table>
-                  <TableHeader>
+                  <TableHeader className="sticky top-0 z-10 bg-background">
                     <TableRow>
                       <TableHead>Employee</TableHead>
                       <TableHead>Issue</TableHead>
@@ -2913,6 +2991,7 @@ export default function TimeClockAdminPage() {
                     })}
                   </TableBody>
                 </Table>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -2938,8 +3017,9 @@ export default function TimeClockAdminPage() {
             </CardHeader>
             {showAllPunchEvents && (
               <CardContent className="pt-0">
+                <div className="max-h-[560px] overflow-auto">
                 <Table>
-                  <TableHeader>
+                  <TableHeader className="sticky top-0 z-10 bg-background">
                     <TableRow>
                       <TableHead>Employee</TableHead>
                       <TableHead>Type</TableHead>
@@ -3024,6 +3104,7 @@ export default function TimeClockAdminPage() {
                     })}
                   </TableBody>
                 </Table>
+                </div>
               </CardContent>
             )}
           </Card>

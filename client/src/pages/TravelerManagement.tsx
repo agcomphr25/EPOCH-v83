@@ -115,6 +115,64 @@ interface PartRouting {
   isActive?: boolean;
 }
 
+interface LegacyRocBackfillStepAction {
+  stepId: string;
+  stepNumber: number;
+  departmentName: string;
+  status: string;
+  mapsTo: string;
+  targetChargeCode: { id?: number; code: string; active: boolean; missing?: boolean };
+  incompleteRequiredTasks: { id: string; title: string; status: string }[];
+  missingRequiredFields: { id: string; fieldLabel: string; fieldKey: string }[];
+  proposedAction: 'already_completed_no_write' | 'eligible_for_legacy_mapping_apply' | 'manual_review_required';
+}
+
+interface LegacyRocBackfillReportRow {
+  inputSerial: string;
+  classification: 'safe_to_apply' | 'needs_review' | 'do_not_touch';
+  reasons: string[];
+  traveler: {
+    id: string;
+    travelerNumber: string;
+    serialNumber: string | null;
+    status: string;
+    partNumber: string | null;
+    createdAt: string;
+  } | null;
+  serializedItem: {
+    serialNumber: string;
+    barcode: string;
+    currentDepartment: string;
+    status: string;
+    partNumber: string;
+  } | null;
+  proposedActions: LegacyRocBackfillStepAction[];
+}
+
+interface LegacyRocBackfillReport {
+  mode: 'dry_run';
+  writesPerformed: false;
+  scope: {
+    serials: string[];
+    cutoffDate: string;
+    approver: string;
+    departmentMapping: Record<string, string>;
+  };
+  chargeCodes: {
+    layup: { id: number; code: string; active: boolean } | null;
+    qualityControl: { id: number; code: string; active: boolean } | null;
+  };
+  summary: {
+    totalRows: number;
+    safe_to_apply: number;
+    needs_review: number;
+    do_not_touch: number;
+    proposedStepActions: number;
+    manualReviewStepActions: number;
+  };
+  rows: LegacyRocBackfillReportRow[];
+}
+
 const STATUS_COLORS: Record<string, string> = {
   DRAFT: 'bg-gray-100 text-gray-800',
   IN_PROGRESS: 'bg-blue-100 text-blue-800',
@@ -141,6 +199,8 @@ export default function TravelerManagement() {
   const [showBlockDialog, setShowBlockDialog] = useState(false);
   const [showAuthorizedNotesDialog, setShowAuthorizedNotesDialog] = useState(false);
   const [showOffSystemLinkDialog, setShowOffSystemLinkDialog] = useState(false);
+  const [showLegacyRocBackfillDialog, setShowLegacyRocBackfillDialog] = useState(false);
+  const [legacyRocBackfillReport, setLegacyRocBackfillReport] = useState<LegacyRocBackfillReport | null>(null);
   const [offSystemLinkDraft, setOffSystemLinkDraft] = useState('');
   const [selectedTraveler, setSelectedTraveler] = useState<Traveler | null>(null);
   const [selectedRouting, setSelectedRouting] = useState<string>('');
@@ -173,6 +233,30 @@ export default function TravelerManagement() {
 
   const { data: routings = [] } = useQuery<PartRouting[]>({
     queryKey: ['/api/part-routings'],
+  });
+
+  const legacyRocBackfillDryRunMutation = useMutation({
+    mutationFn: () =>
+      apiRequest('/api/travelers/legacy-roc-backfill/dry-run', {
+        method: 'POST',
+        body: {},
+        timeout: 120000,
+      }) as Promise<LegacyRocBackfillReport>,
+    onSuccess: (report) => {
+      setLegacyRocBackfillReport(report);
+      setShowLegacyRocBackfillDialog(true);
+      toast({
+        title: 'Dry-run complete',
+        description: `${report.summary.safe_to_apply} safe, ${report.summary.needs_review} need review, ${report.summary.do_not_touch} skipped`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Dry-run failed',
+        description: error.message || 'Could not generate the legacy ROC backfill report',
+        variant: 'destructive',
+      });
+    },
   });
 
   const createMutation = useMutation({
@@ -585,10 +669,25 @@ export default function TravelerManagement() {
             AS9100-compliant production travelers for manufacturing execution
           </p>
         </div>
-        <Button onClick={() => setShowCreateDialog(true)} data-testid="button-create-traveler">
-          <Plus className="h-4 w-4 mr-2" />
-          Create Traveler
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => legacyRocBackfillDryRunMutation.mutate()}
+            disabled={legacyRocBackfillDryRunMutation.isPending}
+            data-testid="button-legacy-roc-dry-run"
+          >
+            {legacyRocBackfillDryRunMutation.isPending ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Clipboard className="h-4 w-4 mr-2" />
+            )}
+            Legacy ROC Dry Run
+          </Button>
+          <Button onClick={() => setShowCreateDialog(true)} data-testid="button-create-traveler">
+            <Plus className="h-4 w-4 mr-2" />
+            Create Traveler
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
@@ -855,6 +954,136 @@ export default function TravelerManagement() {
           </Table>
         </CardContent>
       </Card>
+
+      <Dialog open={showLegacyRocBackfillDialog} onOpenChange={setShowLegacyRocBackfillDialog}>
+        <DialogContent className="max-w-6xl">
+          <DialogHeader>
+            <DialogTitle>Legacy ROC Traveler Backfill Dry Run</DialogTitle>
+            <DialogDescription>
+              Read-only report for the May 20 routing change. No traveler, task, charge-code, or audit records are changed by this report.
+            </DialogDescription>
+          </DialogHeader>
+
+          {legacyRocBackfillReport && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                <div className="rounded border p-3">
+                  <p className="text-xs text-muted-foreground">Rows</p>
+                  <p className="text-xl font-semibold">{legacyRocBackfillReport.summary.totalRows}</p>
+                </div>
+                <div className="rounded border p-3">
+                  <p className="text-xs text-muted-foreground">Safe</p>
+                  <p className="text-xl font-semibold text-emerald-700">{legacyRocBackfillReport.summary.safe_to_apply}</p>
+                </div>
+                <div className="rounded border p-3">
+                  <p className="text-xs text-muted-foreground">Review</p>
+                  <p className="text-xl font-semibold text-amber-700">{legacyRocBackfillReport.summary.needs_review}</p>
+                </div>
+                <div className="rounded border p-3">
+                  <p className="text-xs text-muted-foreground">Skipped</p>
+                  <p className="text-xl font-semibold text-slate-700">{legacyRocBackfillReport.summary.do_not_touch}</p>
+                </div>
+                <div className="rounded border p-3">
+                  <p className="text-xs text-muted-foreground">Step Actions</p>
+                  <p className="text-xl font-semibold">{legacyRocBackfillReport.summary.proposedStepActions}</p>
+                </div>
+              </div>
+
+              <div className="rounded border p-3 text-sm">
+                <div className="grid gap-2 md:grid-cols-3">
+                  <div>
+                    <span className="text-muted-foreground">Approver: </span>
+                    <span className="font-medium">{legacyRocBackfillReport.scope.approver}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Cutoff: </span>
+                    <span className="font-medium">{legacyRocBackfillReport.scope.cutoffDate}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Writes: </span>
+                    <span className="font-medium">{legacyRocBackfillReport.writesPerformed ? 'Yes' : 'No'}</span>
+                  </div>
+                </div>
+              </div>
+
+              <ScrollArea className="h-[520px] rounded border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>ROC ID</TableHead>
+                      <TableHead>Traveler</TableHead>
+                      <TableHead>Current Dept</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Classification</TableHead>
+                      <TableHead>Mapped Steps</TableHead>
+                      <TableHead>Reason</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {legacyRocBackfillReport.rows.map((row, index) => (
+                      <TableRow key={`${row.inputSerial}-${row.traveler?.id ?? index}`}>
+                        <TableCell className="font-mono text-sm">{row.inputSerial}</TableCell>
+                        <TableCell>
+                          {row.traveler ? (
+                            <div>
+                              <p className="font-medium">{row.traveler.travelerNumber}</p>
+                              <p className="text-xs text-muted-foreground">{row.traveler.partNumber || row.serializedItem?.partNumber || '-'}</p>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">No traveler</span>
+                          )}
+                        </TableCell>
+                        <TableCell>{row.serializedItem?.currentDepartment || '-'}</TableCell>
+                        <TableCell>{row.traveler?.status || row.serializedItem?.status || '-'}</TableCell>
+                        <TableCell>
+                          <Badge
+                            className={
+                              row.classification === 'safe_to_apply'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : row.classification === 'needs_review'
+                                  ? 'bg-amber-100 text-amber-800'
+                                  : 'bg-slate-100 text-slate-800'
+                            }
+                          >
+                            {row.classification.replace(/_/g, ' ')}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            {row.proposedActions.length === 0 ? (
+                              <span className="text-muted-foreground">None</span>
+                            ) : (
+                              row.proposedActions.map((action) => (
+                                <div key={action.stepId} className="text-xs">
+                                  <span className="font-medium">{action.stepNumber}. {action.departmentName}</span>
+                                  <span className="text-muted-foreground"> to {action.mapsTo}</span>
+                                  <span className="font-mono"> {action.targetChargeCode.code}</span>
+                                  {(action.missingRequiredFields.length > 0 || action.incompleteRequiredTasks.length > 0) && (
+                                    <span className="text-amber-700"> review</span>
+                                  )}
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="max-w-[320px] text-xs text-muted-foreground">
+                          {row.reasons.join(' ')}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowLegacyRocBackfillDialog(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Create Dialog */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>

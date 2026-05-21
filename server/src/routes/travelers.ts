@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
-import { eq, and, asc, desc, ilike, notInArray, sql, or } from 'drizzle-orm';
+import { eq, and, asc, desc, ilike, inArray, notInArray, sql, or } from 'drizzle-orm';
 import { auditService } from '../services/auditService';
 import { requirePermission } from '../../middleware/requirePermission';
 import { validateActionToken } from '../../middleware/actionToken';
@@ -29,8 +29,11 @@ import {
   p2SerializedItemEvents,
   travelers,
   travelerSteps,
+  travelerTasks,
+  travelerTaskFields,
   travelerAuthorizedNotes,
   auditEvents,
+  chargeCodes,
   partRoutings,
   inventoryItems,
   manufacturingQueue,
@@ -74,6 +77,65 @@ const TRACE_FIELD_ALIASES: Record<string, string[]> = {
   trace_expirationdate: ['expirationDate', 'material_expiration_date'],
   trace_receiveddate: ['receivedDate'],
 };
+
+const LEGACY_ROC_BACKFILL_DEFAULT_SERIALS = [
+  'ROC2600084',
+  'ROC2600089',
+  'ROC2600083',
+  'ROC2600086',
+  'ROC2600080',
+  'ROC2600079',
+  'ROC2600078',
+  'ROC2600077',
+  'ROC2600076',
+  'ROC2600075',
+  'ROC2600074',
+  'ROC2600046',
+] as const;
+
+const LEGACY_ROC_BACKFILL_DEFAULT_CUTOFF = '2026-05-20';
+const LEGACY_ROC_BACKFILL_DEFAULT_APPROVER = 'Tasha Mireles';
+const LEGACY_ROC_LAYUP_CHARGE_CODE = 'ROC-LU330-050126';
+const LEGACY_ROC_QC_CHARGE_CODE = 'ROC-QC330-050126';
+
+const LEGACY_ROC_DEPARTMENT_CHARGE_CODE_MAP: Record<string, 'layup' | 'qualityControl'> = {
+  'mold prep': 'layup',
+  layup: 'layup',
+  'cello wrap': 'layup',
+  'oven/cure': 'layup',
+  'oven cure': 'layup',
+  'quality control': 'qualityControl',
+  qc: 'qualityControl',
+  'final qc': 'qualityControl',
+  finalqc: 'qualityControl',
+};
+
+const legacyRocDryRunSchema = z.object({
+  serials: z.array(z.string().trim().min(1)).min(1).optional(),
+  cutoffDate: z.string().trim().min(1).optional(),
+  approver: z.string().trim().min(1).optional(),
+  chargeCodes: z.object({
+    layup: z.string().trim().min(1).optional(),
+    qualityControl: z.string().trim().min(1).optional(),
+  }).optional(),
+});
+
+function normalizeLegacyRocValue(value: unknown): string {
+  return String(value ?? '').trim().toLowerCase();
+}
+
+function getLegacyRocChargeCodeKey(departmentName: string | null | undefined): 'layup' | 'qualityControl' | null {
+  const normalized = normalizeLegacyRocValue(departmentName).replace(/[_-]+/g, ' ').replace(/\s+/g, ' ');
+  return LEGACY_ROC_DEPARTMENT_CHARGE_CODE_MAP[normalized] ?? null;
+}
+
+function parseLegacyRocCutoff(cutoffDate: string): Date {
+  // Treat a date-only cutoff as the end of that local production day.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(cutoffDate)) {
+    return new Date(`${cutoffDate}T23:59:59.999`);
+  }
+  return new Date(cutoffDate);
+}
 
 function resolveTraceFieldValue(
   fieldKey: string,
@@ -499,6 +561,301 @@ router.get('/by-serial/:serialNumber', async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('Error fetching travelers by serial number:', error);
     res.status(500).json({ error: 'Failed to fetch travelers', message: error.message });
+  }
+});
+
+router.post('/legacy-roc-backfill/dry-run', requirePermission('work_orders.override_charges'), async (req: Request, res: Response) => {
+  try {
+    const parsed = legacyRocDryRunSchema.parse(req.body ?? {});
+    const serials = [...new Set(
+      (parsed.serials ?? [...LEGACY_ROC_BACKFILL_DEFAULT_SERIALS])
+        .map((s) => s.trim())
+        .filter(Boolean)
+    )];
+    const cutoffDate = parsed.cutoffDate ?? LEGACY_ROC_BACKFILL_DEFAULT_CUTOFF;
+    const cutoff = parseLegacyRocCutoff(cutoffDate);
+
+    if (Number.isNaN(cutoff.getTime())) {
+      return res.status(400).json({ error: 'Invalid cutoffDate', message: `Could not parse cutoff date '${cutoffDate}'.` });
+    }
+
+    const chargeCodeConfig = {
+      layup: parsed.chargeCodes?.layup ?? LEGACY_ROC_LAYUP_CHARGE_CODE,
+      qualityControl: parsed.chargeCodes?.qualityControl ?? LEGACY_ROC_QC_CHARGE_CODE,
+    };
+
+    const chargeCodeRows = await db
+      .select({
+        id: chargeCodes.id,
+        code: chargeCodes.code,
+        department: chargeCodes.department,
+        active: chargeCodes.active,
+      })
+      .from(chargeCodes)
+      .where(inArray(chargeCodes.code, [chargeCodeConfig.layup, chargeCodeConfig.qualityControl]));
+    const chargeCodeByCode = new Map(chargeCodeRows.map((cc) => [cc.code, cc]));
+    const chargeCodeStatus = {
+      layup: chargeCodeByCode.get(chargeCodeConfig.layup) ?? null,
+      qualityControl: chargeCodeByCode.get(chargeCodeConfig.qualityControl) ?? null,
+    };
+
+    const reportRows: any[] = [];
+
+    for (const serial of serials) {
+      const normalizedSerial = normalizeLegacyRocValue(serial);
+      const serializedItem = await db.query.p2SerializedItems.findFirst({
+        where: sql`
+          LOWER(TRIM(${p2SerializedItems.serialNumber})) = ${normalizedSerial}
+          OR LOWER(TRIM(${p2SerializedItems.barcode})) = ${normalizedSerial}
+          OR LOWER(TRIM(COALESCE(${p2SerializedItems.travelerBarcode}, ''))) = ${normalizedSerial}
+          OR LOWER(TRIM(COALESCE(${p2SerializedItems.customerSerialNumber}, ''))) = ${normalizedSerial}
+        `,
+      });
+
+      const travelerLookupValues = [
+        serial,
+        serializedItem?.serialNumber,
+        serializedItem?.barcode,
+        serializedItem?.travelerBarcode,
+        serializedItem?.customerSerialNumber,
+      ]
+        .map((v) => String(v ?? '').trim())
+        .filter(Boolean);
+
+      const travelersById = new Map<string, any>();
+      for (const lookupValue of [...new Set(travelerLookupValues)]) {
+        const normalizedLookup = normalizeLegacyRocValue(lookupValue);
+        const matches = await db
+          .select()
+          .from(travelers)
+          .where(sql`
+            LOWER(TRIM(COALESCE(${travelers.serialNumber}, ''))) = ${normalizedLookup}
+            OR LOWER(TRIM(COALESCE(${travelers.internalControlNumber}, ''))) = ${normalizedLookup}
+            OR LOWER(TRIM(COALESCE(${travelers.lotNumber}, ''))) = ${normalizedLookup}
+            OR LOWER(TRIM(${travelers.travelerNumber})) = ${normalizedLookup}
+          `);
+        for (const traveler of matches) travelersById.set(traveler.id, traveler);
+      }
+
+      if (travelersById.size === 0) {
+        reportRows.push({
+          inputSerial: serial,
+          serializedItem: serializedItem
+            ? {
+                id: serializedItem.id,
+                serialNumber: serializedItem.serialNumber,
+                barcode: serializedItem.barcode,
+                travelerBarcode: serializedItem.travelerBarcode,
+                currentDepartment: serializedItem.currentDepartment,
+                status: serializedItem.status,
+                partNumber: serializedItem.partNumber,
+                partRoutingId: serializedItem.partRoutingId,
+                partRoutingRevision: serializedItem.partRoutingRevision,
+              }
+            : null,
+          traveler: null,
+          classification: 'needs_review',
+          reasons: serializedItem
+            ? ['Serialized item was found, but no matching traveler was found.']
+            : ['No serialized item or traveler was found for this ROC identifier.'],
+          proposedActions: [],
+        });
+        continue;
+      }
+
+      for (const traveler of travelersById.values()) {
+        const steps = await db
+          .select()
+          .from(travelerSteps)
+          .where(eq(travelerSteps.travelerId, traveler.id))
+          .orderBy(asc(travelerSteps.stepNumber));
+
+        const stepReports = [];
+        for (const step of steps) {
+          const chargeKey = getLegacyRocChargeCodeKey(step.departmentName);
+          if (!chargeKey) continue;
+
+          const tasks = await db
+            .select()
+            .from(travelerTasks)
+            .where(eq(travelerTasks.travelerStepId, step.id))
+            .orderBy(asc(travelerTasks.sortOrder));
+          const taskIds = tasks.map((task) => task.id);
+          const fields = taskIds.length > 0
+            ? await db
+                .select()
+                .from(travelerTaskFields)
+                .where(inArray(travelerTaskFields.travelerTaskId, taskIds))
+            : [];
+
+          const missingRequiredFields = fields
+            .filter((field) => field.required && String(field.value ?? '').trim() === '')
+            .map((field) => ({
+              id: field.id,
+              travelerTaskId: field.travelerTaskId,
+              fieldKey: field.fieldKey,
+              fieldLabel: field.fieldLabel,
+            }));
+          const incompleteRequiredTasks = tasks
+            .filter((task) => task.required && String(task.status).toUpperCase() !== 'COMPLETED')
+            .map((task) => ({
+              id: task.id,
+              title: task.title,
+              taskType: task.taskType,
+              taskPhase: task.taskPhase,
+              status: task.status,
+            }));
+
+          const targetCode = chargeKey === 'layup' ? chargeCodeConfig.layup : chargeCodeConfig.qualityControl;
+          const targetChargeCode = chargeCodeByCode.get(targetCode) ?? null;
+          const hasActiveTargetChargeCode = targetChargeCode?.active === true;
+
+          stepReports.push({
+            stepId: step.id,
+            stepNumber: step.stepNumber,
+            departmentName: step.departmentName,
+            status: step.status,
+            startedAt: step.startedAt,
+            completedAt: step.completedAt,
+            completedBy: step.completedBy,
+            mapsTo: chargeKey === 'layup' ? 'Layup' : 'Quality Control',
+            targetChargeCode: targetChargeCode
+              ? {
+                  id: targetChargeCode.id,
+                  code: targetChargeCode.code,
+                  department: targetChargeCode.department,
+                  active: targetChargeCode.active,
+                }
+              : { code: targetCode, active: false, missing: true },
+            taskCount: tasks.length,
+            incompleteRequiredTasks,
+            missingRequiredFields,
+            proposedAction: String(step.status).toUpperCase() === 'COMPLETED'
+              ? 'already_completed_no_write'
+              : hasActiveTargetChargeCode && missingRequiredFields.length === 0
+                ? 'eligible_for_legacy_mapping_apply'
+                : 'manual_review_required',
+          });
+        }
+
+        const routing = traveler.partRoutingId
+          ? await db.query.partRoutings.findFirst({ where: eq(partRoutings.id, traveler.partRoutingId) })
+          : null;
+        const routingSequence = Array.isArray(routing?.departmentSequence)
+          ? routing.departmentSequence as string[]
+          : [];
+        const createdAt = traveler.createdAt ? new Date(traveler.createdAt) : null;
+        const createdAfterCutoff = createdAt ? createdAt > cutoff : false;
+        const terminalStatus = ['COMPLETED', 'CANCELED', 'CANCELLED'].includes(String(traveler.status).toUpperCase());
+        const activeChargeCodesMissing =
+          chargeCodeStatus.layup?.active !== true || chargeCodeStatus.qualityControl?.active !== true;
+        const reviewSteps = stepReports.filter((step) => step.proposedAction === 'manual_review_required');
+        const eligibleSteps = stepReports.filter((step) => step.proposedAction === 'eligible_for_legacy_mapping_apply');
+
+        const reasons: string[] = [];
+        if (terminalStatus) reasons.push(`Traveler status is terminal (${traveler.status}).`);
+        if (createdAfterCutoff) reasons.push(`Traveler was created after cutoff ${cutoffDate}.`);
+        if (stepReports.length === 0) reasons.push('Traveler has no legacy six-department steps in the approved mapping.');
+        if (activeChargeCodesMissing) reasons.push('One or both target charge codes are missing or inactive.');
+        if (reviewSteps.length > 0) reasons.push('One or more mapped legacy steps have missing required evidence or an inactive/missing target charge code.');
+        if (!terminalStatus && !createdAfterCutoff && stepReports.length > 0 && eligibleSteps.length > 0 && reviewSteps.length === 0 && !activeChargeCodesMissing) {
+          reasons.push('Eligible for apply step after supervisor approval; dry-run performed no writes.');
+        }
+
+        const classification = terminalStatus || createdAfterCutoff || stepReports.length === 0
+          ? 'do_not_touch'
+          : activeChargeCodesMissing || reviewSteps.length > 0
+            ? 'needs_review'
+            : 'safe_to_apply';
+
+        reportRows.push({
+          inputSerial: serial,
+          serializedItem: serializedItem
+            ? {
+                id: serializedItem.id,
+                serialNumber: serializedItem.serialNumber,
+                barcode: serializedItem.barcode,
+                travelerBarcode: serializedItem.travelerBarcode,
+                currentDepartment: serializedItem.currentDepartment,
+                currentStageIndex: serializedItem.currentStageIndex,
+                status: serializedItem.status,
+                partNumber: serializedItem.partNumber,
+                partRoutingId: serializedItem.partRoutingId,
+                partRoutingRevision: serializedItem.partRoutingRevision,
+              }
+            : null,
+          traveler: {
+            id: traveler.id,
+            travelerNumber: traveler.travelerNumber,
+            serialNumber: traveler.serialNumber,
+            internalControlNumber: traveler.internalControlNumber,
+            status: traveler.status,
+            partNumber: traveler.partNumber,
+            partRoutingId: traveler.partRoutingId,
+            partRoutingRevision: traveler.partRoutingRevision,
+            createdAt: traveler.createdAt,
+          },
+          routing: routing
+            ? {
+                id: routing.id,
+                partNumber: routing.partNumber,
+                routingRevision: (routing as any).routingRevision ?? null,
+                departmentSequence: routingSequence,
+              }
+            : null,
+          classification,
+          reasons,
+          proposedActions: stepReports,
+        });
+      }
+    }
+
+    const summary = reportRows.reduce((acc, row) => {
+      acc.totalRows += 1;
+      acc[row.classification] = (acc[row.classification] ?? 0) + 1;
+      acc.proposedStepActions += row.proposedActions.filter(
+        (action: any) => action.proposedAction === 'eligible_for_legacy_mapping_apply'
+      ).length;
+      acc.manualReviewStepActions += row.proposedActions.filter(
+        (action: any) => action.proposedAction === 'manual_review_required'
+      ).length;
+      return acc;
+    }, {
+      totalRows: 0,
+      safe_to_apply: 0,
+      needs_review: 0,
+      do_not_touch: 0,
+      proposedStepActions: 0,
+      manualReviewStepActions: 0,
+    } as Record<string, number>);
+
+    res.json({
+      mode: 'dry_run',
+      writesPerformed: false,
+      scope: {
+        serials,
+        cutoffDate,
+        cutoffTimestamp: cutoff.toISOString(),
+        approver: parsed.approver ?? LEGACY_ROC_BACKFILL_DEFAULT_APPROVER,
+        departmentMapping: {
+          'Mold Prep': chargeCodeConfig.layup,
+          Layup: chargeCodeConfig.layup,
+          'Cello Wrap': chargeCodeConfig.layup,
+          'Oven/Cure': chargeCodeConfig.layup,
+          'Quality Control': chargeCodeConfig.qualityControl,
+          'Final QC': chargeCodeConfig.qualityControl,
+        },
+      },
+      chargeCodes: chargeCodeStatus,
+      summary,
+      rows: reportRows,
+    });
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error building legacy ROC traveler backfill dry-run:', error);
+    res.status(500).json({ error: 'Failed to build legacy ROC traveler backfill dry-run', message: error.message });
   }
 });
 

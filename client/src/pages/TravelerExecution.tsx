@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import SignatureCanvas from 'react-signature-canvas';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
@@ -507,6 +507,23 @@ export default function TravelerExecution() {
   });
 
   const { traveler, steps = [], events = [] } = travelerData || {};
+  const legacyRocBackfillEditScope = useMemo(() => {
+    const stepIds = new Set<string>();
+    const taskIds = new Set<string>();
+
+    for (const event of events) {
+      if (event.action !== 'LEGACY_ROC_ROUTING_STEP_BACKFILLED') continue;
+      const details = event.details ?? {};
+      if (typeof details.stepId === 'string') stepIds.add(details.stepId);
+      if (Array.isArray(details.changedTaskIds)) {
+        details.changedTaskIds.forEach((id: unknown) => {
+          if (typeof id === 'string') taskIds.add(id);
+        });
+      }
+    }
+
+    return { stepIds, taskIds };
+  }, [events]);
 
   // Labor budget status for the WAD linked to this traveler
   const { data: wadLaborStatus } = useQuery<{ status: string; totalHours: number; totalBudget: number | null; percentUsed: number | null } | null>({
@@ -2610,6 +2627,10 @@ export default function TravelerExecution() {
                               {phaseTasks.map((task) => {
                                 const TaskIcon = TASK_TYPE_ICONS[task.taskType] || FileText;
                                 const isComplete = task.status === 'COMPLETED';
+                                const canEditLegacyRocBackfilledData =
+                                  legacyRocBackfillEditScope.stepIds.has(task.travelerStepId) ||
+                                  legacyRocBackfillEditScope.taskIds.has(task.id);
+                                const fieldInputDisabled = isComplete && !canEditLegacyRocBackfilledData;
 
                                 return (
                                   <AccordionItem key={task.id} value={task.id} className="border-b last:border-b-0">
@@ -2658,6 +2679,11 @@ export default function TravelerExecution() {
                                     </AccordionTrigger>
                                     <AccordionContent className="px-4">
                                       <div className="pl-12 space-y-4 pb-4">
+                                        {isComplete && canEditLegacyRocBackfilledData && (
+                                          <div className="rounded border border-blue-200 bg-blue-50 p-2 text-xs text-blue-800">
+                                            Legacy routing backfill is complete; collected data fields remain open for record entry.
+                                          </div>
+                                        )}
                                         {task.instructions && (
                                           <p className="text-sm text-muted-foreground">
                                             {task.instructions}
@@ -2743,7 +2769,7 @@ export default function TravelerExecution() {
                                           );
                                         })()}
 
-                                        {(task.taskType === 'TRACE' || task.taskType === 'TRACEABILITY') && !isComplete ? (
+                                        {(task.taskType === 'TRACE' || task.taskType === 'TRACEABILITY') && !fieldInputDisabled ? (
                                           <MaterialScanner
                                             travelerId={traveler.id}
                                             travelerStepId={currentStep.id}
@@ -3060,7 +3086,7 @@ export default function TravelerExecution() {
                                                               placeholder={field.validation?.tolerance ? `Enter result (Tolerance: ${field.validation.tolerance})` : 'Enter measured result...'}
                                                               value={fieldValues[task.id]?.[`${field.fieldKey}_result`] || (field.value?.includes('|') ? field.value.split('|')[1] : '') || ''}
                                                               onChange={(e) => handleFieldChange(task.id, `${field.fieldKey}_result`, e.target.value)}
-                                                              disabled={isComplete}
+                                                              disabled={fieldInputDisabled}
                                                               className="text-sm h-9"
                                                             />
                                                           </div>
@@ -3080,7 +3106,7 @@ export default function TravelerExecution() {
                                                                 checked ? 'yes' : 'no'
                                                               )
                                                             }
-                                                            disabled={isComplete}
+                                                            disabled={fieldInputDisabled}
                                                           />
                                                           <Label htmlFor={field.id} className="text-sm cursor-pointer">
                                                             Verified / Pass
@@ -3102,7 +3128,7 @@ export default function TravelerExecution() {
                                                             className="text-sm bg-muted flex-1"
                                                             placeholder="Select from Fabric Inventory..."
                                                           />
-                                                          {!isComplete && (
+                                                          {!fieldInputDisabled && (
                                                             <Button
                                                               size="sm"
                                                               variant="outline"
@@ -3140,7 +3166,7 @@ export default function TravelerExecution() {
                                                             e.target.value
                                                           )
                                                         }
-                                                        disabled={isComplete}
+                                                        disabled={fieldInputDisabled}
                                                         className="text-sm"
                                                       />
                                                     ) : (
@@ -3160,7 +3186,7 @@ export default function TravelerExecution() {
                                                             e.target.value
                                                           )
                                                         }
-                                                        disabled={isComplete || (field.validation?.readonly === true && !!field.value)}
+                                                        disabled={fieldInputDisabled || (field.validation?.readonly === true && !!field.value)}
                                                         className={`text-sm ${field.validation?.readonly && field.value ? 'bg-muted' : ''}`}
                                                         placeholder={field.validation?.readonly ? 'Auto-filled from inventory' : undefined}
                                                       />

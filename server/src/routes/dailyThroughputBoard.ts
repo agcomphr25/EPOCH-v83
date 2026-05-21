@@ -1,7 +1,7 @@
 import { type Request, Response } from 'express';
 import { pool } from '../../db';
 
-const SLOTS_TARGET = 22;
+const SLOTS_TARGET = 7;
 
 const DEPT_LABEL_MAP: Record<string, string> = {
   'Mold Prep': 'PREP',
@@ -339,13 +339,17 @@ export async function dailyThroughputBoardHandler(req: Request, res: Response): 
 
     const overflowCount = filledSlots.filter((s: any) => s.isOverflow).length;
 
+    const targetSlots = filledSlots.filter((s: any) => !s.isOverflow);
+    const goalSlot = targetSlots[SLOTS_TARGET - 1] ?? null;
+    const goalIsGreen = goalSlot?.status === 'GREEN';
+
     const summary = {
       target: SLOTS_TARGET,
-      started: filledSlots.length,
-      green: filledSlots.filter((s: any) => s.status === 'GREEN').length,
-      inProcess: filledSlots.filter((s: any) => s.status === 'IN_PROCESS').length,
-      blocked: filledSlots.filter((s: any) => s.status === 'BLOCKED').length,
-      cancelled: filledSlots.filter((s: any) => s.status === 'CANCELLED').length,
+      started: targetSlots.length,
+      green: goalIsGreen ? SLOTS_TARGET : targetSlots.filter((s: any) => s.status === 'GREEN').length,
+      inProcess: targetSlots.filter((s: any) => s.status === 'IN_PROCESS').length,
+      blocked: targetSlots.filter((s: any) => s.status === 'BLOCKED').length,
+      cancelled: targetSlots.filter((s: any) => s.status === 'CANCELLED').length,
       notStarted: ghostSlots.length,
       overflowCount,
     };

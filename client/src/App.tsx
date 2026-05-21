@@ -597,6 +597,7 @@ function App() {
               <PolicyAcknowledgmentGate />
               <ConditionalMainWrapper>
                 <RouteGuard>
+                  <React.Suspense fallback={<div className="flex items-center justify-center min-h-[60vh]"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" /></div>}>
                   <Switch>
                     <Route path="/" component={RootRedirect} />
                     <Route path="/access-denied" component={AccessDenied} />
@@ -1444,6 +1445,7 @@ function App() {
                     {/* Catch-all route for 404 */}
                     <Route component={NotFound} />
                   </Switch>
+                  </React.Suspense>
                 </RouteGuard>
               </ConditionalMainWrapper>
             </div>

@@ -87,7 +87,7 @@ interface MyTasksResponse {
 
 interface TimekeepingApprovalTask {
   id: string;
-  type: 'pto_approval' | 'salaried_timesheet_approval' | 'hourly_timesheet_approval' | 'forklift_evaluation';
+  type: 'pto_approval' | 'salaried_timesheet_approval' | 'hourly_timesheet_approval' | 'hourly_timesheet_blocked' | 'salaried_timesheet_blocked' | 'forklift_evaluation';
   title: string;
   description: string;
   employeeName: string;
@@ -728,22 +728,44 @@ function TimekeepingApprovalTasks({
       task: TimekeepingApprovalTask;
       decision: 'approved' | 'denied';
       note: string;
-    }) =>
-      apiRequest(`/api/timekeeping/time-off/${task.sourceId}/review`, {
+    }) => {
+      if (task.type === 'hourly_timesheet_approval') {
+        return apiRequest(
+          `/api/timekeeping/timesheets/${task.sourceId}/${decision === 'approved' ? 'approve' : 'reject'}`,
+          {
+            method: 'POST',
+            body: decision === 'denied' ? JSON.stringify({ rejectionNote: note }) : undefined,
+          },
+        );
+      }
+      if (task.type === 'salaried_timesheet_approval') {
+        return apiRequest(
+          `/api/timekeeping/salaried-timesheet/${task.sourceId}/${decision === 'approved' ? 'supervisor-approve' : 'supervisor-reject'}`,
+          {
+            method: 'POST',
+            body: JSON.stringify(decision === 'approved' ? { note: note || undefined } : { note }),
+          },
+        );
+      }
+      return apiRequest(`/api/timekeeping/time-off/${task.sourceId}/review`, {
         method: 'POST',
         body: JSON.stringify({
           stage: 'supervisor',
           decision,
           note: note || undefined,
         }),
-      }),
+      });
+    },
     onSuccess: (_data, vars) => {
       toast({
-        title: vars.decision === 'approved' ? 'PTO approved' : 'PTO denied',
-        description:
-          vars.decision === 'approved'
+        title: vars.decision === 'approved' ? 'Review approved' : 'Review rejected',
+        description: vars.task.type === 'pto_approval'
+          ? vars.decision === 'approved'
             ? 'The request has been advanced for the next review.'
-            : 'The employee will be notified of the denial.',
+            : 'The employee will be notified of the denial.'
+          : vars.decision === 'approved'
+            ? 'The timesheet is ready for payroll approval.'
+            : 'The timesheet has been returned for correction.',
       });
       setReviewTarget(null);
       setNote('');
@@ -764,6 +786,9 @@ function TimekeepingApprovalTasks({
 
   const visibleTasks = compact ? tasks.slice(0, 3) : tasks;
   const ptoReviewTarget = reviewTarget?.task.type === 'pto_approval' ? reviewTarget : null;
+  const timesheetReviewTarget = reviewTarget && ['hourly_timesheet_approval', 'salaried_timesheet_approval'].includes(reviewTarget.task.type)
+    ? reviewTarget
+    : null;
   const hasFailingForkliftItem = forkliftItems.some((item) => item.required && item.result === 'fail');
   const hasPendingForkliftItem = forkliftItems.some((item) => item.required && item.result === 'pending');
 
@@ -779,9 +804,17 @@ function TimekeepingApprovalTasks({
         {visibleTasks.map((task) => (
           <div
             key={task.id}
-            className="flex items-start gap-3 p-3 border rounded-lg bg-amber-50/70 border-amber-200"
+            className={`flex items-start gap-3 p-3 border rounded-lg ${
+              task.type.endsWith('_blocked')
+                ? 'bg-red-50/70 border-red-200'
+                : 'bg-amber-50/70 border-amber-200'
+            }`}
           >
-            <Clock className="h-4 w-4 mt-0.5 text-amber-700 shrink-0" />
+            {task.type.endsWith('_blocked') ? (
+              <AlertTriangle className="h-4 w-4 mt-0.5 text-red-700 shrink-0" />
+            ) : (
+              <Clock className="h-4 w-4 mt-0.5 text-amber-700 shrink-0" />
+            )}
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold truncate">{task.title}</p>
               <p className="text-xs text-muted-foreground truncate">{task.description}</p>
@@ -804,10 +837,19 @@ function TimekeepingApprovalTasks({
               >
                 Evaluate
               </Button>
+            ) : task.type === 'hourly_timesheet_approval' || task.type === 'salaried_timesheet_approval' ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setReviewTarget({ task, decision: 'approved' })}
+                data-testid={`button-review-timesheet-${task.sourceId}`}
+              >
+                Review
+              </Button>
             ) : (
               <Link href={task.actionUrl}>
                 <Button variant="outline" size="sm">
-                  <ExternalLink className="h-4 w-4" />
+                  Follow up
                 </Button>
               </Link>
             )}
@@ -913,6 +955,91 @@ function TimekeepingApprovalTasks({
             >
               {reviewMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {ptoReviewTarget?.decision === 'denied' ? 'Submit Denial' : 'Approve Request'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!timesheetReviewTarget}
+        onOpenChange={(open) => {
+          if (!open) {
+            setReviewTarget(null);
+            setNote('');
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Review Timesheet</DialogTitle>
+          </DialogHeader>
+          {timesheetReviewTarget && (
+            <div className="space-y-4">
+              <div className="rounded-md border bg-muted/30 p-3 text-sm space-y-1">
+                <div className="font-semibold">{timesheetReviewTarget.task.employeeName}</div>
+                <div className="text-muted-foreground">{timesheetReviewTarget.task.description}</div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  variant={timesheetReviewTarget.decision === 'approved' ? 'default' : 'outline'}
+                  onClick={() => setReviewTarget({ ...timesheetReviewTarget, decision: 'approved' })}
+                >
+                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                  Approve
+                </Button>
+                <Button
+                  variant={timesheetReviewTarget.decision === 'denied' ? 'destructive' : 'outline'}
+                  onClick={() => setReviewTarget({ ...timesheetReviewTarget, decision: 'denied' })}
+                >
+                  <XCircle className="h-4 w-4 mr-2" />
+                  Reject
+                </Button>
+              </div>
+
+              <div className="space-y-1">
+                <Label>
+                  {timesheetReviewTarget.decision === 'denied' ? 'Rejection reason' : 'Approval note'}
+                  {timesheetReviewTarget.decision === 'denied' && <span className="text-red-500"> *</span>}
+                </Label>
+                <Textarea
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder={timesheetReviewTarget.decision === 'denied' ? 'Required for rejection' : 'Optional'}
+                  rows={3}
+                  className="resize-none"
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setReviewTarget(null);
+                setNote('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant={timesheetReviewTarget?.decision === 'denied' ? 'destructive' : 'default'}
+              disabled={
+                reviewMutation.isPending ||
+                (timesheetReviewTarget?.decision === 'denied' && note.trim().length < 3)
+              }
+              onClick={() => {
+                if (!timesheetReviewTarget) return;
+                if (timesheetReviewTarget.decision === 'denied' && note.trim().length < 3) return;
+                reviewMutation.mutate({
+                  task: timesheetReviewTarget.task,
+                  decision: timesheetReviewTarget.decision,
+                  note: note.trim(),
+                });
+              }}
+            >
+              {reviewMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {timesheetReviewTarget?.decision === 'denied' ? 'Reject Timesheet' : 'Approve Timesheet'}
             </Button>
           </DialogFooter>
         </DialogContent>

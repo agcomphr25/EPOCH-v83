@@ -1,6 +1,8 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction, type RequestHandler } from "express";
 import { authenticateToken } from "../../../middleware/auth";
 import { pool } from "../../../db";
+import { getPayrollReviewBatch } from "../../services/timekeeping/dashboard.service";
+import { getAdminReviewQueue } from "../../services/timekeeping/salariedTimesheet.service";
 
 function h(fn: (req: Request, res: Response, next: NextFunction) => Promise<void>): RequestHandler {
   return (req, res, next) => fn(req, res, next).catch((err) => {
@@ -10,6 +12,13 @@ function h(fn: (req: Request, res: Response, next: NextFunction) => Promise<void
 }
 
 const router: IRouter = Router();
+
+const INCOMPLETE_HOURLY_ISSUES = new Set([
+  "missing_punch",
+  "pending_correction",
+  "unapproved_labor",
+  "missing_timesheet",
+]);
 
 let forkliftTablesEnsured = false;
 async function ensureForkliftTaskTables() {
@@ -116,7 +125,7 @@ router.get(
 
     await ensureForkliftTaskTables();
 
-    const [pto, salaried, hourly, forklift] = await Promise.all([
+    const [pto, salaried, hourly, forklift, payrollReview, salariedReviewQueue] = await Promise.all([
       pool.query(
         `
           SELECT r.id,
@@ -191,6 +200,8 @@ router.get(
         `,
         [employeeId],
       ),
+      getPayrollReviewBatch(),
+      getAdminReviewQueue(),
     ]);
 
     const ptoTasks = pto.rows.map((r: any) => ({
@@ -210,7 +221,15 @@ router.get(
       sourceId: r.id,
     }));
 
-    const salariedTasks = salaried.rows.map((r: any) => ({
+    const needsReviewSalariedIds = new Set(
+      salariedReviewQueue
+        .filter((row) => row.needsReviewDraftCount > 0)
+        .map((row) => row.timesheet.id),
+    );
+
+    const salariedTasks = salaried.rows
+      .filter((r: any) => !needsReviewSalariedIds.has(Number(r.id)))
+      .map((r: any) => ({
       id: `salaried-${r.id}`,
       type: "salaried_timesheet_approval",
       title: `Approve salaried timesheet: ${r.employee_name}`,
@@ -222,7 +241,21 @@ router.get(
       sourceId: r.id,
     }));
 
-    const hourlyTasks = hourly.rows.map((r: any) => ({
+    const subordinateRows = await pool.query<{ id: number }>(
+      `SELECT id FROM employees WHERE supervisor_employee_id = $1`,
+      [employeeId],
+    );
+    const subordinateEpochIds = new Set(subordinateRows.rows.map((row) => Number(row.id)));
+    const incompleteHourlyRows = payrollReview.hourly
+      .filter((row) => subordinateEpochIds.has(row.employeeId))
+      .filter((row) => row.issues.some((issue) => INCOMPLETE_HOURLY_ISSUES.has(issue.code)));
+    const incompleteHourlyTimesheetIds = new Set(
+      incompleteHourlyRows.map((row) => row.timesheetId).filter((id): id is number => id != null),
+    );
+
+    const hourlyTasks = hourly.rows
+      .filter((r: any) => !incompleteHourlyTimesheetIds.has(Number(r.id)))
+      .map((r: any) => ({
       id: `hourly-${r.id}`,
       type: "hourly_timesheet_approval",
       title: `Approve hourly timesheet: ${r.employee_name}`,
@@ -233,6 +266,49 @@ router.get(
       actionUrl: "/time-clock-admin?tab=timesheets",
       sourceId: r.id,
     }));
+
+    const blockedHourlyTasks = incompleteHourlyRows.map((row) => ({
+        id: `hourly-blocked-${row.employeeId}-${row.timesheetId ?? "missing"}`,
+        type: "hourly_timesheet_blocked",
+        title: `Blocked hourly timesheet: ${row.employeeName}`,
+        description: `${payrollReview.periodStart} to ${payrollReview.periodEnd} - ${row.issues.map((issue) => issue.label).join(", ")}`,
+        employeeName: row.employeeName,
+        createdAt: payrollReview.generatedAt,
+        priority: "overdue",
+        actionUrl: "/time-clock-admin?tab=payroll",
+        sourceId: row.timesheetId ?? row.employeeId,
+      }));
+
+    const missingSalariedTasks = payrollReview.salaried
+      .filter((row) => subordinateEpochIds.has(row.employeeId))
+      .filter((row) => row.issues.some((issue) => issue.code === "missing_salaried_timesheet"))
+      .filter((row) => row.status !== "SUBMITTED")
+      .map((row) => ({
+        id: `salaried-blocked-${row.employeeId}-${row.timesheetId ?? "missing"}`,
+        type: "salaried_timesheet_blocked",
+        title: `Blocked salaried timesheet: ${row.employeeName}`,
+        description: `${payrollReview.periodStart} to ${payrollReview.periodEnd} - ${row.issues.map((issue) => issue.label).join(", ")}`,
+        employeeName: row.employeeName,
+        createdAt: payrollReview.generatedAt,
+        priority: "overdue",
+        actionUrl: "/time-clock-admin?tab=payroll",
+        sourceId: row.timesheetId ?? row.employeeId,
+      }));
+
+    const needsReviewSalariedTasks = salariedReviewQueue
+      .filter((row) => row.needsReviewDraftCount > 0)
+      .filter((row) => subordinateEpochIds.has(row.timesheet.employeeId))
+      .map((row) => ({
+        id: `salaried-blocked-${row.timesheet.employeeId}-${row.timesheet.id}`,
+        type: "salaried_timesheet_blocked",
+        title: `Blocked salaried timesheet: ${row.employeeName ?? `Employee #${row.timesheet.employeeId}`}`,
+        description: `${row.timesheet.periodStart} to ${row.timesheet.periodEnd} - ${row.needsReviewDraftCount} labor draft${row.needsReviewDraftCount === 1 ? "" : "s"} need review`,
+        employeeName: row.employeeName ?? `Employee #${row.timesheet.employeeId}`,
+        createdAt: row.timesheet.certifiedAt ?? row.timesheet.createdAt,
+        priority: "overdue",
+        actionUrl: "/time-clock-admin?tab=timesheets",
+        sourceId: row.timesheet.id,
+      }));
 
     const forkliftTasks = forklift.rows.map((r: any) => ({
       id: `forklift-${r.id}`,
@@ -248,7 +324,7 @@ router.get(
       testType: r.test_type,
     }));
 
-    const tasks = [...ptoTasks, ...salariedTasks, ...hourlyTasks, ...forkliftTasks].sort(
+    const tasks = [...ptoTasks, ...salariedTasks, ...hourlyTasks, ...blockedHourlyTasks, ...missingSalariedTasks, ...needsReviewSalariedTasks, ...forkliftTasks].sort(
       (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
     );
 

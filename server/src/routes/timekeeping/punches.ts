@@ -825,7 +825,7 @@ router.post("/kiosk/punch", optionalAuth, h(async (req, res): Promise<void> => {
         laborClass: "REGULAR",
         travelerId: closedBreak?.travelerId ?? openSession.travelerId ?? travellerIdResolved,
         productionWorkOrderId: closedBreak?.productionWorkOrderId ?? openSession.productionWorkOrderId ?? productionWorkOrderId,
-        chargeCodeId: closedBreak?.chargeCodeId ?? openSession.chargeCodeId ?? chargeCodeId,
+        chargeCodeId: chargeCodeId ?? closedBreak?.chargeCodeId ?? openSession.chargeCodeId,
         department: closedBreak?.department ?? openSession.department ?? department,
         operation: closedBreak?.operation ?? openSession.operation ?? operation,
         projectId: closedBreak?.projectId ?? openSession.projectId ?? null,

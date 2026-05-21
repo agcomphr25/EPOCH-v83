@@ -941,7 +941,7 @@ export default function DailyThroughputBoard() {
 
   const displaySlots = useMemo(() => {
     if (!data) return [];
-    return data.slots.slice(0, 22 + data.slots.filter((s) => s.isOverflow).length);
+    return data.slots.slice(0, data.targetSlots + data.slots.filter((s) => s.isOverflow).length);
   }, [data]);
 
   const lastUpdated = dataUpdatedAt

@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { auditService } from '../services/auditService';
-import { db } from '../../db';
+import { db, pool } from '../../db';
 import {
   workOrders,
   workOrderParts,
@@ -57,6 +57,114 @@ import {
 } from '../services/productionControl/productionControlAI.service';
 
 const router = Router();
+
+type WadStatusP2Demand = {
+  projectId: string;
+  p2PoCount: number;
+  p2PoNumbers: string | null;
+  p2DemandQuantity: number;
+  p2SerializedCount: number;
+  p2ActiveUnits: number;
+  p2ProductionOrderCount: number;
+};
+
+async function getWadStatusP2Demand(projectIds: string[]): Promise<Map<string, WadStatusP2Demand>> {
+  if (projectIds.length === 0) return new Map();
+
+  const rows = await pool.query<{
+    projectId: string;
+    p2PoCount: string;
+    p2PoNumbers: string | null;
+    p2DemandQuantity: string;
+    p2SerializedCount: string;
+    p2ActiveUnits: string;
+    p2ProductionOrderCount: string;
+  }>(`
+    WITH project_po_link AS (
+      SELECT p.id AS project_id, p.po_id AS po_id
+      FROM projects p
+      WHERE p.id = ANY($1::uuid[])
+        AND p.po_id IS NOT NULL
+      UNION
+      SELECT ps.project_id, ps.linked_p2_order_id AS po_id
+      FROM project_steps ps
+      WHERE ps.project_id = ANY($1::uuid[])
+        AND ps.linked_p2_order_id IS NOT NULL
+      UNION
+      SELECT DISTINCT p2po.project_id, p2po.p2_po_id AS po_id
+      FROM p2_production_orders p2po
+      WHERE p2po.project_id = ANY($1::uuid[])
+        AND p2po.project_id IS NOT NULL
+      UNION
+      SELECT p.id AS project_id, po.id AS po_id
+      FROM p2_purchase_orders po
+      JOIN projects p ON LOWER(TRIM(po.project_name)) IN (
+        LOWER(TRIM(p.project_code)),
+        LOWER(TRIM(p.project_name)),
+        LOWER(TRIM(CONCAT_WS(' - ', NULLIF(p.project_code, ''), NULLIF(p.project_name, ''))))
+      )
+      WHERE p.id = ANY($1::uuid[])
+        AND po.project_name IS NOT NULL
+        AND TRIM(po.project_name) <> ''
+    ),
+    distinct_links AS (
+      SELECT DISTINCT project_id, po_id
+      FROM project_po_link
+      WHERE project_id IS NOT NULL
+        AND po_id IS NOT NULL
+    ),
+    ordered_qty AS (
+      SELECT dl.project_id, COALESCE(SUM(poi.quantity), 0)::int AS qty
+      FROM distinct_links dl
+      JOIN p2_purchase_order_items poi ON poi.po_id = dl.po_id
+      GROUP BY dl.project_id
+    ),
+    serialized AS (
+      SELECT
+        dl.project_id,
+        COUNT(psi.id)::int AS serialized_count,
+        COUNT(psi.id) FILTER (
+          WHERE COALESCE(UPPER(psi.status), '') NOT IN ('COMPLETED', 'CLOSED', 'CANCELLED', 'CANCELED', 'SCRAPPED', 'SHIPPED')
+        )::int AS active_units
+      FROM distinct_links dl
+      JOIN p2_serialized_items psi ON psi.po_id = dl.po_id
+      GROUP BY dl.project_id
+    ),
+    production_orders AS (
+      SELECT dl.project_id, COUNT(p2po.id)::int AS production_order_count
+      FROM distinct_links dl
+      JOIN p2_production_orders p2po ON p2po.p2_po_id = dl.po_id
+      GROUP BY dl.project_id
+    )
+    SELECT
+      dl.project_id::text AS "projectId",
+      COUNT(DISTINCT dl.po_id)::text AS "p2PoCount",
+      string_agg(DISTINCT po.po_number, ', ' ORDER BY po.po_number) AS "p2PoNumbers",
+      COALESCE(MAX(oq.qty), 0)::text AS "p2DemandQuantity",
+      COALESCE(MAX(s.serialized_count), 0)::text AS "p2SerializedCount",
+      COALESCE(MAX(s.active_units), 0)::text AS "p2ActiveUnits",
+      COALESCE(MAX(po2.production_order_count), 0)::text AS "p2ProductionOrderCount"
+    FROM distinct_links dl
+    JOIN p2_purchase_orders po ON po.id = dl.po_id
+    LEFT JOIN ordered_qty oq ON oq.project_id = dl.project_id
+    LEFT JOIN serialized s ON s.project_id = dl.project_id
+    LEFT JOIN production_orders po2 ON po2.project_id = dl.project_id
+    GROUP BY dl.project_id
+  `, [projectIds]);
+
+  return new Map(rows.map((row) => [
+    row.projectId,
+    {
+      projectId: row.projectId,
+      p2PoCount: parseInt(row.p2PoCount, 10) || 0,
+      p2PoNumbers: row.p2PoNumbers,
+      p2DemandQuantity: parseInt(row.p2DemandQuantity, 10) || 0,
+      p2SerializedCount: parseInt(row.p2SerializedCount, 10) || 0,
+      p2ActiveUnits: parseInt(row.p2ActiveUnits, 10) || 0,
+      p2ProductionOrderCount: parseInt(row.p2ProductionOrderCount, 10) || 0,
+    },
+  ]));
+}
 
 router.use(async (_req, res, next) => {
   try {
@@ -558,10 +666,33 @@ router.get('/production/wad-status', authenticateToken, requirePermission('work_
               AND ps.status = 'completed'
               AND ps.step_type IN ('purchase_review_checklist', 'preproduction_checklist', 'p2_order')
           )`,
+          sql`EXISTS (
+            SELECT 1
+            FROM project_steps ps
+            WHERE ps.project_id = ${projects.id}
+              AND ps.linked_p2_order_id IS NOT NULL
+          )`,
+          sql`EXISTS (
+            SELECT 1
+            FROM p2_production_orders p2po
+            WHERE p2po.project_id = ${projects.id}
+          )`,
+          sql`EXISTS (
+            SELECT 1
+            FROM p2_purchase_orders po
+            WHERE po.project_name IS NOT NULL
+              AND TRIM(po.project_name) <> ''
+              AND LOWER(TRIM(po.project_name)) IN (
+                LOWER(TRIM(${projects.projectCode})),
+                LOWER(TRIM(${projects.projectName})),
+                LOWER(TRIM(CONCAT_WS(' - ', NULLIF(${projects.projectCode}, ''), NULLIF(${projects.projectName}, ''))))
+              )
+          )`,
         ),
       ));
 
     const projectIds = projRows.map((p) => p.id);
+    const p2DemandByProject = await getWadStatusP2Demand(projectIds);
     const woRows = projectIds.length > 0
       ? await db
           .select({
@@ -608,6 +739,7 @@ router.get('/production/wad-status', authenticateToken, requirePermission('work_
 
     const result = projRows.map((p) => {
       const wos = byProject.get(p.id) ?? [];
+      const p2Demand = p2DemandByProject.get(p.id) ?? null;
       let aggregateStatus: 'NONE' | 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' = 'NONE';
       let bestRank = 0;
       let latestPwo: typeof woRows[number] | null = null;
@@ -639,10 +771,29 @@ router.get('/production/wad-status', authenticateToken, requirePermission('work_
         projectName: p.projectName,
         customerName: p.customerName,
         currentStage: p.currentStage,
-        poNumber: p.poNumber,
+        poNumber: p.poNumber ?? p2Demand?.p2PoNumbers ?? null,
         pwoCount: wos.length,
         wadStatus: aggregateStatus,
         gateSatisfied,
+        p2HasProductionDemand: !!p2Demand && (
+          p2Demand.p2PoCount > 0 ||
+          p2Demand.p2DemandQuantity > 0 ||
+          p2Demand.p2SerializedCount > 0 ||
+          p2Demand.p2ProductionOrderCount > 0
+        ),
+        p2PoCount: p2Demand?.p2PoCount ?? 0,
+        p2PoNumbers: p2Demand?.p2PoNumbers ?? null,
+        p2DemandQuantity: p2Demand?.p2DemandQuantity ?? 0,
+        p2SerializedCount: p2Demand?.p2SerializedCount ?? 0,
+        p2ActiveUnits: p2Demand?.p2ActiveUnits ?? 0,
+        p2ProductionOrderCount: p2Demand?.p2ProductionOrderCount ?? 0,
+        p2WadConnectionStatus: p2Demand
+          ? gateSatisfied
+            ? 'P2_WAD_APPROVED'
+            : wos.length > 0
+              ? 'P2_WAD_INCOMPLETE'
+              : 'P2_WAD_MISSING'
+          : 'NO_P2_DEMAND',
         latestPwoId: latestPwo?.id ?? null,
         latestWorkOrderNumber: latestPwo?.workOrderNumber ?? null,
         percentComplete,

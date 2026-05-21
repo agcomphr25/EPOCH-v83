@@ -297,6 +297,9 @@ interface Punch {
   reviewReason?: string | null;
 }
 
+type PunchEventFilter = 'all' | 'review' | 'timetrakgo' | 'edited' | 'manual' | 'kiosk_portal' | 'open';
+type PunchEventSort = 'newest' | 'oldest' | 'employee';
+
 interface DcaaViolation {
   ruleId: string;
   reason: string;
@@ -1534,7 +1537,58 @@ export default function TimeClockAdminPage() {
     enabled: activeTab === 'punches',
   });
   const [showAllPunchEvents, setShowAllPunchEvents] = useState(false);
+  const [allPunchFilter, setAllPunchFilter] = useState<PunchEventFilter>('all');
+  const [allPunchSearch, setAllPunchSearch] = useState('');
+  const [allPunchSort, setAllPunchSort] = useState<PunchEventSort>('newest');
   const reviewPunches = (punches ?? []).filter(p => p.hasMissingClockOut || p.hasMissingClockIn);
+  const allPunchEvents = punches ?? [];
+  const matchesPunchEventFilter = (punch: Punch, filter: PunchEventFilter): boolean => {
+    const source = punch.source.toUpperCase();
+    if (filter === 'all') return true;
+    if (filter === 'review') return Boolean(punch.hasMissingClockOut || punch.hasMissingClockIn);
+    if (filter === 'timetrakgo') return source === 'TIMETRAKGO_IMPORT';
+    if (filter === 'edited') return punch.isEdited;
+    if (filter === 'manual') return source.includes('ADMIN') || source.includes('MANUAL');
+    if (filter === 'kiosk_portal') return source === 'KIOSK' || source === 'PORTAL';
+    if (filter === 'open') return punch.hasMissingClockOut;
+    return true;
+  };
+  const filteredAllPunchEvents = allPunchEvents
+    .filter(punch => matchesPunchEventFilter(punch, allPunchFilter))
+    .filter(punch => {
+      const q = allPunchSearch.trim().toLowerCase();
+      if (!q) return true;
+      const empName = employeeNameFromEpochId(punch.employeeId);
+      return [
+        empName,
+        punchTypeLabel(punch.type),
+        fmtTime(punch.punchedAt),
+        punch.source,
+        punch.costCode,
+        punch.reviewReason,
+        punch.editNote,
+        punch.note,
+      ].some(value => String(value ?? '').toLowerCase().includes(q));
+    })
+    .sort((a, b) => {
+      if (allPunchSort === 'employee') {
+        const nameDiff = employeeNameFromEpochId(a.employeeId).localeCompare(employeeNameFromEpochId(b.employeeId));
+        if (nameDiff !== 0) return nameDiff;
+        return a.punchedAt.localeCompare(b.punchedAt);
+      }
+      return allPunchSort === 'oldest'
+        ? a.punchedAt.localeCompare(b.punchedAt)
+        : b.punchedAt.localeCompare(a.punchedAt);
+    });
+  const punchEventFilters: Array<{ value: PunchEventFilter; label: string; count: number }> = [
+    { value: 'all', label: 'All', count: allPunchEvents.length },
+    { value: 'review', label: 'Needs Review', count: allPunchEvents.filter(p => matchesPunchEventFilter(p, 'review')).length },
+    { value: 'timetrakgo', label: 'TimeTrakGO', count: allPunchEvents.filter(p => matchesPunchEventFilter(p, 'timetrakgo')).length },
+    { value: 'edited', label: 'Edited', count: allPunchEvents.filter(p => matchesPunchEventFilter(p, 'edited')).length },
+    { value: 'manual', label: 'Manual/Admin', count: allPunchEvents.filter(p => matchesPunchEventFilter(p, 'manual')).length },
+    { value: 'kiosk_portal', label: 'Kiosk/Portal', count: allPunchEvents.filter(p => matchesPunchEventFilter(p, 'kiosk_portal')).length },
+    { value: 'open', label: 'Open Sessions', count: allPunchEvents.filter(p => matchesPunchEventFilter(p, 'open')).length },
+  ];
 
   useEffect(() => {
     if (activeTab !== 'punches' || !highlightedPunchId || !punches?.length) return;
@@ -3002,7 +3056,7 @@ export default function TimeClockAdminPage() {
                 <div>
                   <CardTitle className="text-base">All punch events</CardTitle>
                   <CardDescription>
-                    Complete chronological event log for audit checks and payroll reconciliation.
+                    Complete event log for audit checks and payroll reconciliation.
                   </CardDescription>
                 </div>
                 <Button
@@ -3011,12 +3065,50 @@ export default function TimeClockAdminPage() {
                   onClick={() => setShowAllPunchEvents(value => !value)}
                 >
                   {showAllPunchEvents ? <ChevronUp className="h-4 w-4 mr-1" /> : <ChevronDown className="h-4 w-4 mr-1" />}
-                  {showAllPunchEvents ? 'Hide' : `Show ${punches?.length ?? 0}`}
+                  {showAllPunchEvents ? 'Hide' : `Show ${filteredAllPunchEvents.length}/${allPunchEvents.length}`}
                 </Button>
               </div>
             </CardHeader>
             {showAllPunchEvents && (
               <CardContent className="pt-0">
+                <div className="sticky top-0 z-20 space-y-3 border-b bg-background pb-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Input
+                      value={allPunchSearch}
+                      onChange={event => setAllPunchSearch(event.target.value)}
+                      placeholder="Search employee, source, note, cost code..."
+                      className="h-8 min-w-[240px] flex-1 text-sm"
+                    />
+                    <Select value={allPunchSort} onValueChange={(value) => setAllPunchSort(value as PunchEventSort)}>
+                      <SelectTrigger className="h-8 w-[150px] text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="newest">Newest first</SelectItem>
+                        <SelectItem value="oldest">Oldest first</SelectItem>
+                        <SelectItem value="employee">Employee</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {punchEventFilters.map(filter => (
+                      <Button
+                        key={filter.value}
+                        type="button"
+                        size="sm"
+                        variant={allPunchFilter === filter.value ? 'default' : 'outline'}
+                        className="h-7 gap-1 px-2 text-xs"
+                        onClick={() => setAllPunchFilter(filter.value)}
+                      >
+                        {filter.label}
+                        <span className="font-mono text-[10px] opacity-80">{filter.count}</span>
+                      </Button>
+                    ))}
+                    <span className="ml-auto text-xs text-muted-foreground tabular-nums">
+                      Showing {filteredAllPunchEvents.length} of {allPunchEvents.length}
+                    </span>
+                  </div>
+                </div>
                 <div className="max-h-[560px] overflow-auto">
                 <Table>
                   <TableHeader className="sticky top-0 z-10 bg-background">
@@ -3030,7 +3122,13 @@ export default function TimeClockAdminPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(punches ?? []).map(p => {
+                    {filteredAllPunchEvents.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
+                          No punch events match the current filters.
+                        </TableCell>
+                      </TableRow>
+                    ) : filteredAllPunchEvents.map(p => {
                       const empName = employeeNameFromEpochId(p.employeeId);
                       const isHighlightedPunch = highlightedPunchId === p.sessionId;
                       return (

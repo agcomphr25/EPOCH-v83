@@ -199,6 +199,11 @@ interface TrainingProps {
   lang?: 'en' | 'es';
 }
 
+function isForkliftCertificationModule(module: any): boolean {
+  const searchable = `${module?.title || ''} ${module?.description || ''} ${module?.category || ''}`.toLowerCase();
+  return searchable.includes('forklift') || searchable.includes('powered industrial truck');
+}
+
 export default function Training({ lang = 'en' }: TrainingProps) {
   const { toast } = useToast();
   const t = trainingTranslations[lang];
@@ -407,7 +412,10 @@ export default function Training({ lang = 'en' }: TrainingProps) {
                         </>
                       )}
                     </Button>
-                    <Link href={`/training/${module.id}`} className="flex-1">
+                    <Link
+                      href={isForkliftCertificationModule(module) ? '/training-control-center?tab=forklift' : `/training/${module.id}`}
+                      className="flex-1"
+                    >
                       <Button
                         className="w-full"
                         data-testid={`button-start-training-${module.id}`}

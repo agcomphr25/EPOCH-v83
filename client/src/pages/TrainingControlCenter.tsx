@@ -13,7 +13,8 @@ import {
   AlertCircle,
   UserCheck,
   BookOpen,
-  Wrench
+  Wrench,
+  ClipboardCheck
 } from 'lucide-react';
 
 import Training from './Training';
@@ -22,6 +23,7 @@ import TrainingManagement from './TrainingManagement';
 import TrainingMatrixManage from './TrainingMatrixManage';
 import TrainTheTrainer from './TrainTheTrainer';
 import TrainingContentLibrary from './TrainingContentLibrary';
+import TraineeTrainingPortal from './TraineeTrainingPortal';
 
 interface TrainingStats {
   totalModules: number;
@@ -36,7 +38,7 @@ type Language = 'en' | 'es';
 const translations = {
   en: {
     pageTitle: 'Training Control Center',
-    pageSubtitle: 'Unified training management: modules, matrix, and assignments',
+    pageSubtitle: 'Unified training management: modules, certifications, matrix, and assignments',
     programBuilder: 'Program Builder',
     statModules: 'Modules',
     statModulesDesc: 'available',
@@ -51,11 +53,12 @@ const translations = {
     tabMatrix: 'Matrix',
     tabAssignments: 'Assignments',
     tabTrainer: 'Train-the-Trainer',
+    tabForklift: 'Forklift',
     tabManagement: 'Management',
   },
   es: {
     pageTitle: 'Centro de Control de Capacitación',
-    pageSubtitle: 'Gestión unificada de capacitación: módulos, matriz y asignaciones',
+    pageSubtitle: 'Gestión unificada de capacitación: módulos, certificaciones, matriz y asignaciones',
     programBuilder: 'Constructor de Programas',
     statModules: 'Módulos',
     statModulesDesc: 'disponibles',
@@ -70,6 +73,7 @@ const translations = {
     tabMatrix: 'Matriz',
     tabAssignments: 'Asignaciones',
     tabTrainer: 'Entrenador de Entrenadores',
+    tabForklift: 'Montacargas',
     tabManagement: 'Gestión',
   },
 };
@@ -167,7 +171,7 @@ export default function TrainingControlCenter() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <div className="flex items-center gap-2">
-          <TabsList className="grid flex-1 grid-cols-6">
+          <TabsList className="grid flex-1 grid-cols-7">
           <TabsTrigger value="modules" className="flex items-center gap-2" data-testid="tab-modules">
             <GraduationCap className="h-4 w-4" />
             {t.tabModules}
@@ -187,6 +191,10 @@ export default function TrainingControlCenter() {
           <TabsTrigger value="trainer" className="flex items-center gap-2" data-testid="tab-trainer">
             <UserCheck className="h-4 w-4" />
             {t.tabTrainer}
+          </TabsTrigger>
+          <TabsTrigger value="forklift" className="flex items-center gap-2" data-testid="tab-forklift">
+            <ClipboardCheck className="h-4 w-4" />
+            {t.tabForklift}
           </TabsTrigger>
           <TabsTrigger value="management" className="flex items-center gap-2" data-testid="tab-management">
             <Settings className="h-4 w-4" />
@@ -222,6 +230,10 @@ export default function TrainingControlCenter() {
 
         <TabsContent value="trainer" className="space-y-4">
           <TrainTheTrainer />
+        </TabsContent>
+
+        <TabsContent value="forklift" className="space-y-4">
+          <TraineeTrainingPortal embedded defaultTab="forklift" />
         </TabsContent>
 
         <TabsContent value="management" className="space-y-4">

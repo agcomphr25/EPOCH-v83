@@ -1946,6 +1946,7 @@ export interface IStorage {
   getPartRoutingByPartNumber(partNumber: string): Promise<PartRouting | undefined>;
   updatePartRouting(id: string, data: Partial<InsertPartRouting>): Promise<PartRouting>;
   deletePartRouting(id: string): Promise<void>;
+  syncOpenTravelersFromRoutingChange(partRoutingId: string, actor?: string): Promise<{ travelerCount: number; changes: string[] }>;
 
   // Routing Operations
   getRoutingOperations(partRoutingId: string): Promise<RoutingOperation[]>;
@@ -17199,6 +17200,10 @@ export class DatabaseStorage implements IStorage {
       throw new Error(`Failed to update part routing ${id}`);
     }
 
+    await this.syncOpenTravelersFromRoutingChange(id, 'routing-update').catch((error) => {
+      console.error(`[RoutingSync] Failed to sync open travelers for routing ${id}:`, error);
+    });
+
     return updated;
   }
 
@@ -17220,6 +17225,9 @@ export class DatabaseStorage implements IStorage {
 
   async createRoutingOperation(data: InsertRoutingOperation): Promise<RoutingOperation> {
     const [op] = await db.insert(routingOperations).values(data).returning();
+    await this.syncOpenTravelersFromRoutingChange(op.partRoutingId, 'routing-operation-create').catch((error) => {
+      console.error(`[RoutingSync] Failed after creating routing operation ${op.id}:`, error);
+    });
     return op;
   }
 
@@ -17230,21 +17238,530 @@ export class DatabaseStorage implements IStorage {
       .where(eq(routingOperations.id, id))
       .returning();
     if (!updated) throw new Error(`Routing operation ${id} not found`);
+    await this.syncOpenTravelersFromRoutingChange(updated.partRoutingId, 'routing-operation-update').catch((error) => {
+      console.error(`[RoutingSync] Failed after updating routing operation ${id}:`, error);
+    });
     return updated;
   }
 
   async deleteRoutingOperation(id: number): Promise<void> {
+    const [existing] = await db
+      .select()
+      .from(routingOperations)
+      .where(eq(routingOperations.id, id))
+      .limit(1);
     await db.delete(routingOperations).where(eq(routingOperations.id, id));
+    if (existing?.partRoutingId) {
+      await this.syncOpenTravelersFromRoutingChange(existing.partRoutingId, 'routing-operation-delete').catch((error) => {
+        console.error(`[RoutingSync] Failed after deleting routing operation ${id}:`, error);
+      });
+    }
   }
 
   async replaceRoutingOperations(partRoutingId: string, operations: InsertRoutingOperation[]): Promise<RoutingOperation[]> {
     await db.delete(routingOperations).where(eq(routingOperations.partRoutingId, partRoutingId));
-    if (operations.length === 0) return [];
+    if (operations.length === 0) {
+      await this.syncOpenTravelersFromRoutingChange(partRoutingId, 'routing-operations-replace').catch((error) => {
+        console.error(`[RoutingSync] Failed after clearing routing operations for ${partRoutingId}:`, error);
+      });
+      return [];
+    }
     const inserted = await db
       .insert(routingOperations)
       .values(operations.map(op => ({ ...op, partRoutingId })))
       .returning();
+    await this.syncOpenTravelersFromRoutingChange(partRoutingId, 'routing-operations-replace').catch((error) => {
+      console.error(`[RoutingSync] Failed after replacing routing operations for ${partRoutingId}:`, error);
+    });
     return inserted;
+  }
+
+  async syncOpenTravelersFromRoutingChange(
+    partRoutingId: string,
+    actor = 'routing-sync'
+  ): Promise<{ travelerCount: number; changes: string[] }> {
+    const routing = await this.getPartRouting(partRoutingId);
+    if (!routing) return { travelerCount: 0, changes: [] };
+
+    const linkedTravelers = await db
+      .select()
+      .from(travelers)
+      .where(and(
+        eq(travelers.partRoutingId, partRoutingId),
+        notInArray(travelers.status, ['COMPLETED', 'CANCELED'])
+      ));
+
+    if (linkedTravelers.length === 0) {
+      return { travelerCount: 0, changes: [] };
+    }
+
+    const sanitizeFieldKey = (value: string) =>
+      String(value || '')
+        .replace(/[^a-zA-Z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .toLowerCase() || 'field';
+    const normalizeKey = (value: string | null | undefined) =>
+      String(value || '').trim().toLowerCase();
+    const operationTypeToTaskType = (t: string) => {
+      switch (t) {
+        case 'SETUP': return 'PROCESS';
+        case 'RUN': return 'PROCESS';
+        case 'INSPECT': return 'QC';
+        case 'OSP': return 'SPECIAL_PROCESS';
+        case 'MATERIAL': return 'TRACE';
+        case 'QC': return 'QC';
+        default: return 'CHECK';
+      }
+    };
+    const operationTypeToPhase = (t: string) => {
+      switch (t) {
+        case 'SETUP': return 'START';
+        case 'MATERIAL': return 'START';
+        case 'QC': return 'FINISH';
+        case 'INSPECT': return 'FINISH';
+        default: return 'WORK';
+      }
+    };
+    const normalizeQcStandards = (raw: any): any[] => {
+      if (!Array.isArray(raw)) return [];
+      const seen = new Set<string>();
+      const out: any[] = [];
+      for (const qc of raw) {
+        const normalized = {
+          standard: qc.standard || qc.standardName || qc.name || qc.title || qc.characteristic || qc.checkpoint || '',
+          tolerance: qc.tolerance || qc.acceptanceTolerance || qc.nominalTolerance || '',
+          requirement: qc.requirement || qc.specification || qc.acceptanceCriteria || qc.criteria || qc.nominal || '',
+          hardQcStop: qc.hardQcStop || qc.hardStop || false,
+          referenceLink: qc.referenceLink || qc.referenceUrl || qc.documentUrl || '',
+        };
+        if (!normalized.standard && !normalized.tolerance && !normalized.requirement) continue;
+        const key = `${normalized.standard}|${normalized.tolerance}|${normalized.requirement}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(normalized);
+      }
+      return out;
+    };
+    const mapRoleToSignatureRole = (role: string): string => {
+      const roleMap: Record<string, string> = {
+        operator: 'OPERATOR',
+        qc_inspector: 'QC',
+        supervisor: 'LEAD',
+        engineering: 'ENGINEERING',
+        lead: 'LEAD',
+        qc: 'QC',
+        custom: 'CUSTOM',
+      };
+      return roleMap[String(role || '').toLowerCase()] || String(role || 'OPERATOR').toUpperCase();
+    };
+    const mapRoleToLabel = (role: string): string => {
+      const labelMap: Record<string, string> = {
+        operator: 'Operator',
+        qc_inspector: 'QC Inspector',
+        supervisor: 'Supervisor/Lead',
+        engineering: 'Engineering',
+        lead: 'Lead',
+        qc: 'QC',
+        custom: 'Custom',
+      };
+      const normalized = String(role || 'operator').toLowerCase();
+      return labelMap[normalized] || normalized.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    };
+    const buildTaskKeys = (tasks: TravelerTask[]) =>
+      new Set(tasks.map((task) => this._taskDedupeKey(task.taskPhase, task.taskType, task.title)));
+    const createMissingFields = async (
+      taskId: string,
+      fields: Array<{
+        fieldKey: string;
+        fieldLabel: string;
+        fieldType?: string;
+        required?: boolean;
+        validation?: any;
+      }>
+    ) => {
+      const existingFields = await this.getTravelerTaskFields(taskId);
+      const existingKeys = new Set(existingFields.map((field) => field.fieldKey));
+      let added = 0;
+      for (const field of this._dedupeFieldsByKey(fields.map((f) => ({
+        ...f,
+        fieldKey: sanitizeFieldKey(f.fieldKey || f.fieldLabel),
+      })))) {
+        if (existingKeys.has(field.fieldKey)) continue;
+        await this.createTravelerTaskField({
+          travelerTaskId: taskId,
+          fieldKey: field.fieldKey,
+          fieldLabel: field.fieldLabel,
+          fieldType: field.fieldType || 'text',
+          required: field.required || false,
+          validation: field.validation,
+        });
+        existingKeys.add(field.fieldKey);
+        added++;
+      }
+      return added;
+    };
+    const ensureTask = async (
+      stepId: string,
+      enabledPhases: Set<'START' | 'WORK' | 'FINISH'>,
+      createdTaskKeys: Set<string>,
+      taskData: any,
+      fields: any[] = []
+    ) => {
+      const dedupeKey = this._taskDedupeKey(taskData.taskPhase, taskData.taskType, taskData.title);
+      const existingTasks = await this.getTravelerTasks(stepId);
+      const existing = existingTasks.find((task) => this._taskDedupeKey(task.taskPhase, task.taskType, task.title) === dedupeKey);
+      if (existing) {
+        const addedFields = fields.length > 0 ? await createMissingFields(existing.id, fields) : 0;
+        return { task: existing, created: false, addedFields };
+      }
+      const created = await this._createTaskIfAllowed(taskData, enabledPhases, createdTaskKeys);
+      let addedFields = 0;
+      if (created && fields.length > 0) {
+        addedFields = await createMissingFields(created.id, fields);
+      }
+      return { task: created, created: !!created, addedFields };
+    };
+    const findOrCreateStep = async (
+      travelerId: string,
+      existingSteps: TravelerStep[],
+      deptName: string,
+      fallbackStepNumber: number,
+      changes: string[]
+    ) => {
+      const existing = existingSteps.find((step) => normalizeKey(step.departmentName) === normalizeKey(deptName));
+      if (existing) return existing;
+      const stepNumber = Math.max(fallbackStepNumber, ...existingSteps.map((step) => step.stepNumber || 0), 0) + 1;
+      const created = await this.createTravelerStep({
+        travelerId,
+        departmentName: deptName,
+        stepNumber,
+        status: 'NOT_STARTED',
+        assignedTechnicianId: null,
+      });
+      existingSteps.push(created);
+      changes.push(`${deptName}: added missing traveler step from routing`);
+      return created;
+    };
+
+    const operations = await this.getRoutingOperations(partRoutingId);
+    const departmentSequence = Array.isArray(routing.departmentSequence)
+      ? (routing.departmentSequence as string[])
+      : [];
+    const departmentOrder = new Map(departmentSequence.map((dept, index) => [normalizeKey(dept), index]));
+    const compareOperations = (a: RoutingOperation, b: RoutingOperation) => {
+      const aStep = Number.isFinite(Number(a.stepNumber)) ? Number(a.stepNumber) : Number.MAX_SAFE_INTEGER;
+      const bStep = Number.isFinite(Number(b.stepNumber)) ? Number(b.stepNumber) : Number.MAX_SAFE_INTEGER;
+      if (aStep !== bStep) return aStep - bStep;
+      const deptDiff =
+        (departmentOrder.get(normalizeKey(a.departmentName)) ?? Number.MAX_SAFE_INTEGER) -
+        (departmentOrder.get(normalizeKey(b.departmentName)) ?? Number.MAX_SAFE_INTEGER);
+      if (deptDiff !== 0) return deptDiff;
+      return (a.id ?? 0) - (b.id ?? 0);
+    };
+    const operationGroups: RoutingOperation[][] = [];
+    for (const op of [...operations].sort(compareOperations)) {
+      const currentGroup = operationGroups[operationGroups.length - 1];
+      const currentDept = currentGroup?.[0]?.departmentName;
+      if (currentGroup && normalizeKey(currentDept) === normalizeKey(op.departmentName)) {
+        currentGroup.push(op);
+      } else {
+        operationGroups.push([op]);
+      }
+    }
+
+    const allChanges: string[] = [];
+    const departmentConfig = (routing.departmentConfig || {}) as Record<string, any>;
+
+    for (const traveler of linkedTravelers) {
+      const travelerChanges: string[] = [];
+      if (traveler.partRoutingRevision !== ((routing as any).routingRevision || traveler.partRoutingRevision)) {
+        await this.updateTraveler(traveler.id, {
+          partRoutingRevision: (routing as any).routingRevision || traveler.partRoutingRevision,
+        } as any);
+      }
+
+      const steps = await this.getTravelerSteps(traveler.id);
+      const syncDepartment = async (
+        deptName: string,
+        groupOps: RoutingOperation[],
+        fallbackStepNumber: number
+      ) => {
+        const step = await findOrCreateStep(traveler.id, steps, deptName, fallbackStepNumber, travelerChanges);
+        if (step.status === 'COMPLETED') return;
+
+        const deptConfig = departmentConfig[deptName] || {};
+        const enabledPhases = this._getEnabledPhases(deptConfig);
+        const existingTasks = await this.getTravelerTasks(step.id);
+        const createdTaskKeys = buildTaskKeys(existingTasks);
+        let sortOrder = existingTasks.reduce((maxOrder, task) => Math.max(maxOrder, task.sortOrder || 0), -1) + 1;
+
+        for (const op of groupOps) {
+          const taskType = operationTypeToTaskType(op.operationType);
+          const taskPhase = operationTypeToPhase(op.operationType);
+          const instPack = (op.instructionPack || {}) as any;
+          const operationDetails = [
+            instPack?.specialNotes,
+            op.workCenter ? `Work center: ${op.workCenter}` : null,
+            op.estimatedMinutes ? `Estimated time: ${op.estimatedMinutes} minutes` : null,
+            op.isOutsideProcess ? 'Outside process required' : null,
+            op.certificateRequired ? 'Certificate required' : null,
+            op.receivingInspectionRequired ? 'Receiving inspection required' : null,
+            Array.isArray(op.requiredCalibrationAssetTags) && op.requiredCalibrationAssetTags.length > 0
+              ? `Required calibration assets: ${op.requiredCalibrationAssetTags.join(', ')}`
+              : null,
+          ].filter(Boolean);
+          const instructionPack = {
+            ...instPack,
+            routingOperation: {
+              id: op.id,
+              stepNumber: op.stepNumber,
+              departmentName: op.departmentName,
+              operationName: op.operationName,
+              operationType: op.operationType,
+              workCenter: op.workCenter,
+              estimatedMinutes: op.estimatedMinutes,
+              isOutsideProcess: op.isOutsideProcess,
+              outsideProcessType: op.outsideProcessType,
+              expectedLeadDays: op.expectedLeadDays,
+              certificateRequired: op.certificateRequired,
+              receivingInspectionRequired: op.receivingInspectionRequired,
+              requiredCalibrationAssetTags: op.requiredCalibrationAssetTags || [],
+              certificationId: op.certificationId,
+              vendorId: op.vendorId,
+            },
+          };
+          const fields = taskType === 'TRACE'
+            ? this._buildTraceFields(this._getTracePolicyForDepartment(deptName).capture)
+            : taskType === 'QC'
+              ? normalizeQcStandards(
+                  instPack.qcStandards ||
+                  instPack.qcRequirements ||
+                  instPack.qualityChecks ||
+                  instPack.inspectionRequirements ||
+                  instPack.checkpoints ||
+                  (taskPhase === 'START' ? deptConfig.startQcStandards : taskPhase === 'FINISH' ? deptConfig.finishQcStandards : deptConfig.qcStandards)
+                ).map((qc) => ({
+                  fieldKey: `qc_${op.id}_${sanitizeFieldKey(qc.standard || op.operationName)}`,
+                  fieldLabel: qc.standard || op.operationName,
+                  fieldType: 'yes_no',
+                  required: true,
+                  validation: {
+                    tolerance: qc.tolerance || '',
+                    requirement: qc.requirement || '',
+                    ...(qc.hardQcStop ? { hardQcStop: true } : {}),
+                    ...(qc.referenceLink ? { referenceLink: qc.referenceLink } : {}),
+                  },
+                }))
+              : [];
+          const result = await ensureTask(step.id, enabledPhases, createdTaskKeys, {
+            travelerStepId: step.id,
+            taskType: taskType as any,
+            taskPhase: taskPhase as any,
+            title: op.operationName,
+            instructions: operationDetails.length > 0 ? operationDetails.join('\n') : op.operationName,
+            required: true,
+            sortOrder: sortOrder++,
+            timePolicy: 'AUTO_ON_COMPLETE',
+            requiresSignature: op.requiresSignature ?? false,
+            requiresCertification: op.requiresCertification ?? false,
+            signatureRole: op.requiresSignature ? 'OPERATOR' : null,
+            status: 'NOT_STARTED',
+            instructionPack,
+          }, fields);
+          if (result.created) travelerChanges.push(`${deptName}: added operation task "${op.operationName}"`);
+          if (!result.created && result.addedFields > 0) travelerChanges.push(`${deptName}: added missing fields for "${op.operationName}"`);
+        }
+
+        const instructionPack = deptConfig.instructionPack || null;
+        const workInstructionRefs = (instructionPack?.workInstructionRefs || []) as any[];
+        if (workInstructionRefs.length > 0) {
+          const result = await ensureTask(step.id, enabledPhases, createdTaskKeys, {
+            travelerStepId: step.id,
+            taskType: 'CHECK',
+            taskPhase: 'START',
+            title: `WI Acknowledged (${workInstructionRefs.length} doc${workInstructionRefs.length > 1 ? 's' : ''})`,
+            instructions: 'Review and acknowledge the routing work instructions before starting this department.',
+            required: true,
+            sortOrder: sortOrder++,
+            timePolicy: 'AUTO_ON_COMPLETE',
+            requiresSignature: false,
+            signatureRole: null,
+            requiresCertification: false,
+            instructionPack,
+            status: 'NOT_STARTED',
+          });
+          if (result.created) travelerChanges.push(`${deptName}: added work-instruction acknowledgement`);
+        }
+
+        for (const check of deptConfig.startChecks || []) {
+          const result = await ensureTask(step.id, enabledPhases, createdTaskKeys, {
+            travelerStepId: step.id,
+            taskType: check.taskType || 'CHECK',
+            taskPhase: 'START',
+            title: check.title,
+            instructions: check.instructions || `Complete: ${check.title}`,
+            required: check.required !== false,
+            sortOrder: sortOrder++,
+            timePolicy: check.timePolicy || 'AUTO_ON_COMPLETE',
+            requiresSignature: check.requiresSignature || false,
+            signatureRole: check.requiresSignature ? (check.signatureRole || 'OPERATOR') : null,
+            requiresCertification: check.requiresCertification || false,
+            status: 'NOT_STARTED',
+          });
+          if (result.created) travelerChanges.push(`${deptName}: added start check "${check.title}"`);
+        }
+
+        const customTaskConfigs = [
+          ['START', 'Start Phase Data Entry', 'Enter required data for the START phase', deptConfig.startCustomDataFields || []],
+          [
+            'WORK',
+            'Process Data Entry',
+            'Enter required process data for this department',
+            (deptConfig.startCustomDataFields || []).length > 0 || (deptConfig.finishCustomDataFields || []).length > 0
+              ? []
+              : (deptConfig.customDataFields || []),
+          ],
+          ['FINISH', 'Finish Phase Data Entry', 'Enter required data for the FINISH phase', deptConfig.finishCustomDataFields || []],
+        ] as const;
+        for (const [phase, title, instructions, rawFields] of customTaskConfigs) {
+          if (!Array.isArray(rawFields) || rawFields.length === 0) continue;
+          const result = await ensureTask(step.id, enabledPhases, createdTaskKeys, {
+            travelerStepId: step.id,
+            taskType: 'PROCESS',
+            taskPhase: phase,
+            title,
+            instructions,
+            required: true,
+            sortOrder: sortOrder++,
+            timePolicy: 'AUTO_ON_COMPLETE',
+            requiresSignature: false,
+            requiresCertification: false,
+            status: 'NOT_STARTED',
+          }, rawFields.map((field: any) => ({
+            fieldKey: field.fieldKey || field.fieldName || 'custom',
+            fieldLabel: field.fieldName || field.fieldLabel || 'Custom Field',
+            fieldType: field.fieldType || 'text',
+            required: field.isRequired || field.required || false,
+          })));
+          if (result.created) travelerChanges.push(`${deptName}: added ${phase} custom data task`);
+          if (!result.created && result.addedFields > 0) travelerChanges.push(`${deptName}: added missing fields for ${phase} custom data`);
+        }
+
+        const qcOperationPhases = new Set(
+          groupOps
+            .filter((op) => operationTypeToTaskType(op.operationType) === 'QC')
+            .map((op) => operationTypeToPhase(op.operationType))
+        );
+        const qcTaskConfigs = [
+          ['START', 'Incoming QC Inspection', 'Complete START phase quality control verifications', deptConfig.startQcStandards || []],
+          ['WORK', 'Quality Control Checks', 'Complete WORK phase quality control verifications', deptConfig.qcStandards || []],
+          ['FINISH', 'Final QC Inspection', 'Complete FINISH phase quality control verifications', deptConfig.finishQcStandards || []],
+        ] as const;
+        for (const [phase, title, instructions, standards] of qcTaskConfigs) {
+          if (qcOperationPhases.has(phase)) continue;
+          const normalizedStandards = normalizeQcStandards(standards);
+          if (normalizedStandards.length === 0) continue;
+          const result = await ensureTask(step.id, enabledPhases, createdTaskKeys, {
+            travelerStepId: step.id,
+            taskType: 'QC',
+            taskPhase: phase,
+            title,
+            instructions,
+            required: true,
+            sortOrder: sortOrder++,
+            timePolicy: 'AUTO_ON_COMPLETE',
+            requiresSignature: true,
+            signatureRole: 'QC',
+            requiresCertification: false,
+            status: 'NOT_STARTED',
+          }, normalizedStandards.map((qc) => ({
+            fieldKey: `qc_${qc.standard || title}`,
+            fieldLabel: qc.standard || title,
+            fieldType: 'yes_no',
+            required: true,
+            validation: {
+              tolerance: qc.tolerance || '',
+              requirement: qc.requirement || '',
+              ...(qc.hardQcStop ? { hardQcStop: true } : {}),
+              ...(qc.referenceLink ? { referenceLink: qc.referenceLink } : {}),
+            },
+          })));
+          if (result.created) travelerChanges.push(`${deptName}: added ${phase} QC task "${title}"`);
+          if (!result.created && result.addedFields > 0) travelerChanges.push(`${deptName}: added missing QC fields for "${title}"`);
+        }
+
+        for (const check of deptConfig.finishChecks || []) {
+          const result = await ensureTask(step.id, enabledPhases, createdTaskKeys, {
+            travelerStepId: step.id,
+            taskType: check.taskType || 'CHECK',
+            taskPhase: 'FINISH',
+            title: check.title,
+            instructions: check.instructions || `Complete: ${check.title}`,
+            required: check.required !== false,
+            sortOrder: sortOrder++,
+            timePolicy: check.timePolicy || 'AUTO_ON_COMPLETE',
+            requiresSignature: check.requiresSignature || false,
+            signatureRole: check.requiresSignature ? (check.signatureRole || 'QC') : null,
+            requiresCertification: check.requiresCertification || false,
+            status: 'NOT_STARTED',
+          });
+          if (result.created) travelerChanges.push(`${deptName}: added finish check "${check.title}"`);
+        }
+
+        const signatureConfig = deptConfig.signatureConfig || {
+          finishRequiresSignature: true,
+          requiredSignatures: ['operator'],
+        };
+        if (signatureConfig.finishRequiresSignature && Array.isArray(signatureConfig.requiredSignatures) && signatureConfig.requiredSignatures.length > 0) {
+          for (const role of signatureConfig.requiredSignatures) {
+            const roleLabel = mapRoleToLabel(role);
+            const result = await ensureTask(step.id, enabledPhases, createdTaskKeys, {
+              travelerStepId: step.id,
+              taskType: 'SIGNATURE',
+              taskPhase: 'FINISH',
+              title: signatureConfig.requiredSignatures.length === 1
+                ? `Department Signoff - ${deptName}`
+                : `${roleLabel} Signoff - ${deptName}`,
+              instructions: `${roleLabel} signature required to complete ${deptName}`,
+              required: true,
+              sortOrder: sortOrder++,
+              timePolicy: 'AUTO_ON_COMPLETE',
+              requiresSignature: true,
+              signatureRole: mapRoleToSignatureRole(role) as any,
+              requiresCertification: false,
+              status: 'NOT_STARTED',
+            });
+            if (result.created) travelerChanges.push(`${deptName}: added ${roleLabel} signoff`);
+          }
+        }
+      };
+
+      if (operationGroups.length > 0) {
+        for (let i = 0; i < operationGroups.length; i++) {
+          await syncDepartment(operationGroups[i][0].departmentName, operationGroups[i], i + 1);
+        }
+      } else {
+        for (let i = 0; i < departmentSequence.length; i++) {
+          await syncDepartment(departmentSequence[i], [], i + 1);
+        }
+      }
+
+      if (travelerChanges.length > 0) {
+        await this.createTravelerEvent({
+          travelerId: traveler.id,
+          actor,
+          action: 'SYNC_FROM_ROUTING_CHANGE',
+          details: {
+            partRoutingId,
+            routingRevision: (routing as any).routingRevision || null,
+            changes: travelerChanges,
+          },
+        });
+        allChanges.push(...travelerChanges.map((change) => `${traveler.travelerNumber}: ${change}`));
+      }
+    }
+
+    return { travelerCount: linkedTravelers.length, changes: allChanges };
   }
 
   // Routing CNC Operations
@@ -20224,6 +20741,325 @@ export class DatabaseStorage implements IStorage {
       }
       return [];
     };
+    const mapRoutingRoleToSignatureRole = (role: string): string => {
+      const roleMap: Record<string, string> = {
+        operator: 'OPERATOR',
+        qc_inspector: 'QC',
+        supervisor: 'LEAD',
+        engineering: 'ENGINEERING',
+        lead: 'LEAD',
+        qc: 'QC',
+        custom: 'CUSTOM',
+      };
+      return roleMap[String(role || '').toLowerCase()] || String(role || 'OPERATOR').toUpperCase();
+    };
+    const mapRoutingRoleToLabel = (role: string): string => {
+      const labelMap: Record<string, string> = {
+        operator: 'Operator',
+        qc_inspector: 'QC Inspector',
+        supervisor: 'Supervisor/Lead',
+        engineering: 'Engineering',
+        lead: 'Lead',
+        qc: 'QC',
+        custom: 'Custom',
+      };
+      const normalized = String(role || 'operator').toLowerCase();
+      return labelMap[normalized] || normalized.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    };
+    const createTaskFieldRows = async (
+      travelerTaskId: string,
+      fields: Array<{
+        fieldKey: string;
+        fieldLabel: string;
+        fieldType?: string;
+        required?: boolean;
+        validation?: any;
+      }>
+    ) => {
+      for (const field of this._dedupeFieldsByKey(fields.map((f) => ({
+        ...f,
+        fieldKey: sanitizeFieldKey(f.fieldKey || f.fieldLabel),
+      })))) {
+        await this.createTravelerTaskField({
+          travelerTaskId,
+          fieldKey: field.fieldKey,
+          fieldLabel: field.fieldLabel,
+          fieldType: field.fieldType || 'text',
+          required: field.required || false,
+          validation: field.validation,
+        });
+      }
+    };
+    const createCustomDataTask = async (
+      stepId: string,
+      enabledPhases: Set<'START' | 'WORK' | 'FINISH'>,
+      createdTaskKeys: Set<string>,
+      phase: 'START' | 'WORK' | 'FINISH',
+      title: string,
+      instructions: string,
+      customFields: any[],
+      sortOrder: number,
+    ) => {
+      if (!Array.isArray(customFields) || customFields.length === 0) return sortOrder;
+      const task = await this._createTaskIfAllowed({
+        travelerStepId: stepId,
+        taskType: 'PROCESS',
+        taskPhase: phase,
+        title,
+        instructions,
+        required: true,
+        sortOrder: sortOrder++,
+        timePolicy: 'AUTO_ON_COMPLETE',
+        requiresSignature: false,
+        requiresCertification: false,
+        status: 'NOT_STARTED',
+      }, enabledPhases, createdTaskKeys);
+      if (task) {
+        await createTaskFieldRows(task.id, customFields.map((field: any) => ({
+          fieldKey: field.fieldKey || field.fieldName || 'custom',
+          fieldLabel: field.fieldName || field.fieldLabel || 'Custom Field',
+          fieldType: field.fieldType || 'text',
+          required: field.isRequired || field.required || false,
+        })));
+      }
+      return sortOrder;
+    };
+    const createQcStandardsTask = async (
+      stepId: string,
+      enabledPhases: Set<'START' | 'WORK' | 'FINISH'>,
+      createdTaskKeys: Set<string>,
+      phase: 'START' | 'WORK' | 'FINISH',
+      title: string,
+      instructions: string,
+      standards: any[],
+      sortOrder: number,
+    ) => {
+      const normalized = normalizeQcStandards(standards);
+      if (normalized.length === 0) return sortOrder;
+      const task = await this._createTaskIfAllowed({
+        travelerStepId: stepId,
+        taskType: 'QC',
+        taskPhase: phase,
+        title,
+        instructions,
+        required: true,
+        sortOrder: sortOrder++,
+        timePolicy: 'AUTO_ON_COMPLETE',
+        requiresSignature: true,
+        signatureRole: 'QC',
+        requiresCertification: false,
+        status: 'NOT_STARTED',
+      }, enabledPhases, createdTaskKeys);
+      if (task) {
+        await createTaskFieldRows(task.id, normalized.map((qc: any) => ({
+          fieldKey: `qc_${qc.standard || title}`,
+          fieldLabel: qc.standard || title,
+          fieldType: 'yes_no',
+          required: true,
+          validation: {
+            tolerance: qc.tolerance || '',
+            requirement: qc.requirement || '',
+            ...(qc.hardQcStop ? { hardQcStop: true } : {}),
+            ...(qc.referenceLink ? { referenceLink: qc.referenceLink } : {}),
+          },
+        })));
+      }
+      return sortOrder;
+    };
+    const createDepartmentConfigTasks = async (
+      stepId: string,
+      deptName: string,
+      deptConfig: any,
+      enabledPhases: Set<'START' | 'WORK' | 'FINISH'>,
+      createdTaskKeys: Set<string>,
+      sortOrder: number,
+      existingGroupOps: RoutingOperation[],
+    ) => {
+      const instructionPack = deptConfig.instructionPack || null;
+      const workInstructionRefs = (instructionPack?.workInstructionRefs || []) as any[];
+      if (workInstructionRefs.length > 0) {
+        await this._createTaskIfAllowed({
+          travelerStepId: stepId,
+          taskType: 'CHECK',
+          taskPhase: 'START',
+          title: `WI Acknowledged (${workInstructionRefs.length} doc${workInstructionRefs.length > 1 ? 's' : ''})`,
+          instructions: 'Review and acknowledge the routing work instructions before starting this department.',
+          required: true,
+          sortOrder: sortOrder++,
+          timePolicy: 'AUTO_ON_COMPLETE',
+          requiresSignature: false,
+          signatureRole: null,
+          requiresCertification: false,
+          instructionPack,
+          status: 'NOT_STARTED',
+        }, enabledPhases, createdTaskKeys);
+      }
+
+      for (const check of deptConfig.startChecks || []) {
+        await this._createTaskIfAllowed({
+          travelerStepId: stepId,
+          taskType: check.taskType || 'CHECK',
+          taskPhase: 'START',
+          title: check.title,
+          instructions: check.instructions || `Complete: ${check.title}`,
+          required: check.required !== false,
+          sortOrder: sortOrder++,
+          timePolicy: check.timePolicy || 'AUTO_ON_COMPLETE',
+          requiresSignature: check.requiresSignature || false,
+          signatureRole: check.requiresSignature ? (check.signatureRole || 'OPERATOR') : null,
+          requiresCertification: check.requiresCertification || false,
+          status: 'NOT_STARTED',
+        }, enabledPhases, createdTaskKeys);
+      }
+
+      sortOrder = await createCustomDataTask(
+        stepId,
+        enabledPhases,
+        createdTaskKeys,
+        'START',
+        'Start Phase Data Entry',
+        'Enter required data for the START phase',
+        deptConfig.startCustomDataFields || [],
+        sortOrder,
+      );
+
+      const hasMaterialOperation = existingGroupOps.some((op) => op.operationType === 'MATERIAL');
+      const tracePolicy = this._getTracePolicyForDepartment(deptName);
+      if (!hasMaterialOperation && tracePolicy.enabled) {
+        const traceFields = this._buildTraceFields(tracePolicy.capture);
+        if (traceFields.length > 0) {
+          const task = await this._createTaskIfAllowed({
+            travelerStepId: stepId,
+            taskType: 'TRACE',
+            taskPhase: tracePolicy.phase,
+            title: 'Material Traceability',
+            instructions: 'Select the material used from inventory. Fields will auto-fill.',
+            required: true,
+            sortOrder: sortOrder++,
+            timePolicy: 'AUTO_ON_COMPLETE',
+            requiresSignature: false,
+            requiresCertification: false,
+            signatureRole: null,
+            status: 'NOT_STARTED',
+          }, enabledPhases, createdTaskKeys);
+          if (task) {
+            await createTaskFieldRows(task.id, traceFields);
+          }
+        }
+      }
+
+      const hasPhaseSpecificDataFields =
+        (deptConfig.startCustomDataFields || []).length > 0 ||
+        (deptConfig.finishCustomDataFields || []).length > 0;
+      sortOrder = await createCustomDataTask(
+        stepId,
+        enabledPhases,
+        createdTaskKeys,
+        'WORK',
+        'Process Data Entry',
+        'Enter required process data for this department',
+        hasPhaseSpecificDataFields ? [] : (deptConfig.customDataFields || []),
+        sortOrder,
+      );
+
+      const qcOperationPhases = new Set(
+        existingGroupOps
+          .filter((op) => operationTypeToTaskType(op.operationType) === 'QC')
+          .map((op) => operationTypeToPhase(op.operationType))
+      );
+      if (!qcOperationPhases.has('START')) {
+        sortOrder = await createQcStandardsTask(
+          stepId,
+          enabledPhases,
+          createdTaskKeys,
+          'START',
+          'Incoming QC Inspection',
+          'Complete START phase quality control verifications',
+          deptConfig.startQcStandards || [],
+          sortOrder,
+        );
+      }
+      if (!qcOperationPhases.has('WORK')) {
+        sortOrder = await createQcStandardsTask(
+          stepId,
+          enabledPhases,
+          createdTaskKeys,
+          'WORK',
+          'Quality Control Checks',
+          'Complete WORK phase quality control verifications',
+          deptConfig.qcStandards || [],
+          sortOrder,
+        );
+      }
+      if (!qcOperationPhases.has('FINISH')) {
+        sortOrder = await createQcStandardsTask(
+          stepId,
+          enabledPhases,
+          createdTaskKeys,
+          'FINISH',
+          'Final QC Inspection',
+          'Complete FINISH phase quality control verifications',
+          deptConfig.finishQcStandards || [],
+          sortOrder,
+        );
+      }
+
+      sortOrder = await createCustomDataTask(
+        stepId,
+        enabledPhases,
+        createdTaskKeys,
+        'FINISH',
+        'Finish Phase Data Entry',
+        'Enter required data for the FINISH phase',
+        deptConfig.finishCustomDataFields || [],
+        sortOrder,
+      );
+
+      for (const check of deptConfig.finishChecks || []) {
+        await this._createTaskIfAllowed({
+          travelerStepId: stepId,
+          taskType: check.taskType || 'CHECK',
+          taskPhase: 'FINISH',
+          title: check.title,
+          instructions: check.instructions || `Complete: ${check.title}`,
+          required: check.required !== false,
+          sortOrder: sortOrder++,
+          timePolicy: check.timePolicy || 'AUTO_ON_COMPLETE',
+          requiresSignature: check.requiresSignature || false,
+          signatureRole: check.requiresSignature ? (check.signatureRole || 'QC') : null,
+          requiresCertification: check.requiresCertification || false,
+          status: 'NOT_STARTED',
+        }, enabledPhases, createdTaskKeys);
+      }
+
+      const signatureConfig = deptConfig.signatureConfig || {
+        finishRequiresSignature: true,
+        requiredSignatures: ['operator'],
+      };
+      if (signatureConfig.finishRequiresSignature && Array.isArray(signatureConfig.requiredSignatures) && signatureConfig.requiredSignatures.length > 0) {
+        for (const role of signatureConfig.requiredSignatures) {
+          const roleLabel = mapRoutingRoleToLabel(role);
+          await this._createTaskIfAllowed({
+            travelerStepId: stepId,
+            taskType: 'SIGNATURE',
+            taskPhase: 'FINISH',
+            title: signatureConfig.requiredSignatures.length === 1
+              ? `Department Signoff - ${deptName}`
+              : `${roleLabel} Signoff - ${deptName}`,
+            instructions: `${roleLabel} signature required to complete ${deptName}`,
+            required: true,
+            sortOrder: sortOrder++,
+            timePolicy: 'AUTO_ON_COMPLETE',
+            requiresSignature: true,
+            signatureRole: mapRoutingRoleToSignatureRole(role) as any,
+            requiresCertification: false,
+            status: 'NOT_STARTED',
+          }, enabledPhases, createdTaskKeys);
+        }
+      }
+
+      return sortOrder;
+    };
 
     const departmentSequence = Array.isArray(routing.departmentSequence)
       ? (routing.departmentSequence as string[])
@@ -20273,6 +21109,10 @@ export class DatabaseStorage implements IStorage {
       });
 
       let sortOrder = 0;
+      const departmentConfig = (routing.departmentConfig || {}) as Record<string, any>;
+      const deptConfig = departmentConfig[deptName] || {};
+      const enabledPhases = this._getEnabledPhases(deptConfig);
+      const createdTaskKeys = new Set<string>();
       for (const op of groupOps) {
         const taskType = operationTypeToTaskType(op.operationType);
         const taskPhase = operationTypeToPhase(op.operationType);
@@ -20307,6 +21147,8 @@ export class DatabaseStorage implements IStorage {
             certificateRequired: op.certificateRequired,
             receivingInspectionRequired: op.receivingInspectionRequired,
             requiredCalibrationAssetTags: op.requiredCalibrationAssetTags || [],
+            certificationId: op.certificationId,
+            vendorId: op.vendorId,
           },
         };
 
@@ -20344,7 +21186,24 @@ export class DatabaseStorage implements IStorage {
             });
           }
         }
+
+        if (taskType === 'TRACE') {
+          const tracePolicy = this._getTracePolicyForDepartment(deptName);
+          const traceFields = this._buildTraceFields(tracePolicy.capture);
+          if (traceFields.length > 0) {
+            await createTaskFieldRows(task.id, traceFields);
+          }
+        }
       }
+      sortOrder = await createDepartmentConfigTasks(
+        step.id,
+        deptName,
+        deptConfig,
+        enabledPhases,
+        createdTaskKeys,
+        sortOrder,
+        groupOps,
+      );
     }
 
     await this.createTravelerEvent({

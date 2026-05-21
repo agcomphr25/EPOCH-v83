@@ -9,6 +9,7 @@ import { auditService } from '../services/auditService';
 import { requirePermission } from '../../middleware/requirePermission';
 import { allOrders, linkedOrders, linkedOrderGroups, nonconformanceRecords, shipmentAccountingSnapshots, stockModels } from '../../schema';
 import { recordShippingUpdate } from '../services/orderActivityService';
+import { createOrUpdateP1ShipmentRevenueFromSnapshot } from '../services/p1ShipmentRevenueService';
 import { v4 as uuidv4 } from 'uuid';
 import {
   getOperationalWeek,
@@ -478,11 +479,14 @@ router.post('/mark-shipped/:orderId', requirePermission('shipping.mark_shipped')
       console.error('[ForecastAccuracy] Error recording actual completion:', accuracyError);
     }
 
-    // Capture accounting snapshot for QuickBooks journal entry prep
+    // Capture accounting snapshot and draft revenue recognition for admin review
     try {
-      await captureAccountingSnapshot(orderId);
+      const snapshot = await captureAccountingSnapshot(orderId);
+      if (snapshot?.id) {
+        await createOrUpdateP1ShipmentRevenueFromSnapshot(snapshot.id, (req as any).user);
+      }
     } catch (snapshotError) {
-      console.error('[Accounting Prep] Error capturing snapshot:', snapshotError);
+      console.error('[Accounting Prep] Error capturing shipment revenue draft:', snapshotError);
     }
 
     // Log audit event for shipped order

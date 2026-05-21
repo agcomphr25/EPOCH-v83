@@ -17376,26 +17376,45 @@ export class DatabaseStorage implements IStorage {
         fieldLabel: string;
         fieldType?: string;
         required?: boolean;
+        value?: string | null;
         validation?: any;
       }>
     ) => {
       const existingFields = await this.getTravelerTaskFields(taskId);
-      const existingKeys = new Set(existingFields.map((field) => field.fieldKey));
       let added = 0;
       for (const field of this._dedupeFieldsByKey(fields.map((f) => ({
         ...f,
         fieldKey: sanitizeFieldKey(f.fieldKey || f.fieldLabel),
       })))) {
-        if (existingKeys.has(field.fieldKey)) continue;
+        const existingField = existingFields.find((existing) => existing.fieldKey === field.fieldKey);
+        if (existingField) {
+          const nextValue = field.value === undefined ? existingField.value : field.value;
+          const shouldUpdate =
+            existingField.fieldLabel !== field.fieldLabel ||
+            existingField.fieldType !== (field.fieldType || 'text') ||
+            existingField.required !== (field.required || false) ||
+            existingField.value !== nextValue ||
+            JSON.stringify(existingField.validation || null) !== JSON.stringify(field.validation || null);
+          if (shouldUpdate && ((field.validation as any)?.readonly === true || !existingField.value)) {
+            await this.updateTravelerTaskField(existingField.id, {
+              fieldLabel: field.fieldLabel,
+              fieldType: field.fieldType || 'text',
+              required: field.required || false,
+              value: nextValue,
+              validation: field.validation,
+            } as any);
+          }
+          continue;
+        }
         await this.createTravelerTaskField({
           travelerTaskId: taskId,
           fieldKey: field.fieldKey,
           fieldLabel: field.fieldLabel,
           fieldType: field.fieldType || 'text',
           required: field.required || false,
+          value: field.value,
           validation: field.validation,
         });
-        existingKeys.add(field.fieldKey);
         added++;
       }
       return added;
@@ -17409,8 +17428,38 @@ export class DatabaseStorage implements IStorage {
     ) => {
       const dedupeKey = this._taskDedupeKey(taskData.taskPhase, taskData.taskType, taskData.title);
       const existingTasks = await this.getTravelerTasks(stepId);
-      const existing = existingTasks.find((task) => this._taskDedupeKey(task.taskPhase, task.taskType, task.title) === dedupeKey);
+      const routingOperationId = taskData.instructionPack?.routingOperation?.id;
+      const existing = existingTasks.find((task) =>
+        routingOperationId &&
+        (task.instructionPack as any)?.routingOperation?.id === routingOperationId
+      ) || existingTasks.find((task) => this._taskDedupeKey(task.taskPhase, task.taskType, task.title) === dedupeKey);
       if (existing) {
+        if (existing.status !== 'COMPLETED') {
+          const nextInstructionPack = taskData.instructionPack ?? existing.instructionPack;
+          const shouldUpdateTask =
+            existing.title !== taskData.title ||
+            existing.instructions !== taskData.instructions ||
+            existing.taskType !== taskData.taskType ||
+            existing.taskPhase !== taskData.taskPhase ||
+            existing.required !== taskData.required ||
+            existing.requiresSignature !== taskData.requiresSignature ||
+            existing.requiresCertification !== taskData.requiresCertification ||
+            JSON.stringify(existing.instructionPack || null) !== JSON.stringify(nextInstructionPack || null);
+          if (shouldUpdateTask) {
+            await this.updateTravelerTask(existing.id, {
+              title: taskData.title,
+              instructions: taskData.instructions,
+              taskType: taskData.taskType,
+              taskPhase: taskData.taskPhase,
+              required: taskData.required,
+              timePolicy: taskData.timePolicy,
+              requiresSignature: taskData.requiresSignature,
+              requiresCertification: taskData.requiresCertification,
+              signatureRole: taskData.signatureRole,
+              instructionPack: nextInstructionPack,
+            } as any);
+          }
+        }
         const addedFields = fields.length > 0 ? await createMissingFields(existing.id, fields) : 0;
         return { task: existing, created: false, addedFields };
       }
@@ -17441,6 +17490,62 @@ export class DatabaseStorage implements IStorage {
       existingSteps.push(created);
       changes.push(`${deptName}: added missing traveler step from routing`);
       return created;
+    };
+    const buildOperationEvidenceFields = (op: RoutingOperation) => {
+      const operationKey = `routing_operation_${op.id}`;
+      return [
+        {
+          fieldKey: `${operationKey}_completed`,
+          fieldLabel: `Completed: ${op.operationName}`,
+          fieldType: 'yes_no',
+          required: true,
+          validation: {
+            source: 'routing_operation',
+            routingOperationId: op.id,
+            operationType: op.operationType,
+            departmentName: op.departmentName,
+            requirement: 'Confirm this routing operation was performed.',
+          },
+        },
+        {
+          fieldKey: `${operationKey}_department`,
+          fieldLabel: 'Routing Department',
+          fieldType: 'text',
+          required: false,
+          value: op.departmentName,
+          validation: { readonly: true, source: 'routing_operation', routingOperationId: op.id },
+        },
+        {
+          fieldKey: `${operationKey}_type`,
+          fieldLabel: 'Routing Operation Type',
+          fieldType: 'text',
+          required: false,
+          value: op.operationType,
+          validation: { readonly: true, source: 'routing_operation', routingOperationId: op.id },
+        },
+        ...(op.workCenter ? [{
+          fieldKey: `${operationKey}_work_center`,
+          fieldLabel: 'Routing Work Center',
+          fieldType: 'text',
+          required: false,
+          value: op.workCenter,
+          validation: { readonly: true, source: 'routing_operation', routingOperationId: op.id },
+        }] : []),
+        ...(op.estimatedMinutes ? [{
+          fieldKey: `${operationKey}_estimated_minutes`,
+          fieldLabel: 'Estimated Minutes',
+          fieldType: 'number',
+          required: false,
+          value: String(op.estimatedMinutes),
+          validation: { readonly: true, source: 'routing_operation', routingOperationId: op.id },
+        }, {
+          fieldKey: `${operationKey}_actual_minutes`,
+          fieldLabel: 'Actual Minutes',
+          fieldType: 'number',
+          required: false,
+          validation: { source: 'routing_operation', routingOperationId: op.id },
+        }] : []),
+      ];
     };
 
     const operations = await this.getRoutingOperations(partRoutingId);
@@ -17531,28 +17636,34 @@ export class DatabaseStorage implements IStorage {
             },
           };
           const fields = taskType === 'TRACE'
-            ? this._buildTraceFields(this._getTracePolicyForDepartment(deptName).capture)
+            ? [
+                ...buildOperationEvidenceFields(op),
+                ...this._buildTraceFields(this._getTracePolicyForDepartment(deptName).capture),
+              ]
             : taskType === 'QC'
-              ? normalizeQcStandards(
-                  instPack.qcStandards ||
-                  instPack.qcRequirements ||
-                  instPack.qualityChecks ||
-                  instPack.inspectionRequirements ||
-                  instPack.checkpoints ||
-                  (taskPhase === 'START' ? deptConfig.startQcStandards : taskPhase === 'FINISH' ? deptConfig.finishQcStandards : deptConfig.qcStandards)
-                ).map((qc) => ({
-                  fieldKey: `qc_${op.id}_${sanitizeFieldKey(qc.standard || op.operationName)}`,
-                  fieldLabel: qc.standard || op.operationName,
-                  fieldType: 'yes_no',
-                  required: true,
-                  validation: {
-                    tolerance: qc.tolerance || '',
-                    requirement: qc.requirement || '',
-                    ...(qc.hardQcStop ? { hardQcStop: true } : {}),
-                    ...(qc.referenceLink ? { referenceLink: qc.referenceLink } : {}),
-                  },
-                }))
-              : [];
+              ? [
+                  ...buildOperationEvidenceFields(op),
+                  ...normalizeQcStandards(
+                    instPack.qcStandards ||
+                    instPack.qcRequirements ||
+                    instPack.qualityChecks ||
+                    instPack.inspectionRequirements ||
+                    instPack.checkpoints ||
+                    (taskPhase === 'START' ? deptConfig.startQcStandards : taskPhase === 'FINISH' ? deptConfig.finishQcStandards : deptConfig.qcStandards)
+                  ).map((qc) => ({
+                    fieldKey: `qc_${op.id}_${sanitizeFieldKey(qc.standard || op.operationName)}`,
+                    fieldLabel: qc.standard || op.operationName,
+                    fieldType: 'yes_no',
+                    required: true,
+                    validation: {
+                      tolerance: qc.tolerance || '',
+                      requirement: qc.requirement || '',
+                      ...(qc.hardQcStop ? { hardQcStop: true } : {}),
+                      ...(qc.referenceLink ? { referenceLink: qc.referenceLink } : {}),
+                    },
+                  })),
+                ]
+              : buildOperationEvidenceFields(op);
           const result = await ensureTask(step.id, enabledPhases, createdTaskKeys, {
             travelerStepId: step.id,
             taskType: taskType as any,
@@ -20773,6 +20884,7 @@ export class DatabaseStorage implements IStorage {
         fieldLabel: string;
         fieldType?: string;
         required?: boolean;
+        value?: string | null;
         validation?: any;
       }>
     ) => {
@@ -20786,9 +20898,66 @@ export class DatabaseStorage implements IStorage {
           fieldLabel: field.fieldLabel,
           fieldType: field.fieldType || 'text',
           required: field.required || false,
+          value: field.value,
           validation: field.validation,
         });
       }
+    };
+    const buildOperationEvidenceFields = (op: RoutingOperation) => {
+      const operationKey = `routing_operation_${op.id}`;
+      return [
+        {
+          fieldKey: `${operationKey}_completed`,
+          fieldLabel: `Completed: ${op.operationName}`,
+          fieldType: 'yes_no',
+          required: true,
+          validation: {
+            source: 'routing_operation',
+            routingOperationId: op.id,
+            operationType: op.operationType,
+            departmentName: op.departmentName,
+            requirement: 'Confirm this routing operation was performed.',
+          },
+        },
+        {
+          fieldKey: `${operationKey}_department`,
+          fieldLabel: 'Routing Department',
+          fieldType: 'text',
+          required: false,
+          value: op.departmentName,
+          validation: { readonly: true, source: 'routing_operation', routingOperationId: op.id },
+        },
+        {
+          fieldKey: `${operationKey}_type`,
+          fieldLabel: 'Routing Operation Type',
+          fieldType: 'text',
+          required: false,
+          value: op.operationType,
+          validation: { readonly: true, source: 'routing_operation', routingOperationId: op.id },
+        },
+        ...(op.workCenter ? [{
+          fieldKey: `${operationKey}_work_center`,
+          fieldLabel: 'Routing Work Center',
+          fieldType: 'text',
+          required: false,
+          value: op.workCenter,
+          validation: { readonly: true, source: 'routing_operation', routingOperationId: op.id },
+        }] : []),
+        ...(op.estimatedMinutes ? [{
+          fieldKey: `${operationKey}_estimated_minutes`,
+          fieldLabel: 'Estimated Minutes',
+          fieldType: 'number',
+          required: false,
+          value: String(op.estimatedMinutes),
+          validation: { readonly: true, source: 'routing_operation', routingOperationId: op.id },
+        }, {
+          fieldKey: `${operationKey}_actual_minutes`,
+          fieldLabel: 'Actual Minutes',
+          fieldType: 'number',
+          required: false,
+          validation: { source: 'routing_operation', routingOperationId: op.id },
+        }] : []),
+      ];
     };
     const createCustomDataTask = async (
       stepId: string,
@@ -21167,6 +21336,8 @@ export class DatabaseStorage implements IStorage {
           status: 'NOT_STARTED',
           instructionPack,
         });
+
+        await createTaskFieldRows(task.id, buildOperationEvidenceFields(op));
 
         if (taskType === 'QC') {
           const qcStandards = getOperationQcStandards(op, taskPhase);

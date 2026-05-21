@@ -7,6 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
+import MyTasksControlCenter from '@/components/MyTasksControlCenter';
 
 interface ShippedOrderDiscount {
   orderId: string;
@@ -57,6 +58,15 @@ const MONTHS = [
 ];
 
 export default function TANDYMTestDashboard() {
+  const { data: currentUser } = useQuery<{ id: number; username: string; role: string; employeeId?: number }>({
+    queryKey: ['currentUser'],
+  });
+  const { data: resolvedEmployee } = useQuery<{ employeeId: number | null }>({
+    queryKey: ['/api/timekeeping/my-employee-id'],
+    enabled: !!currentUser && !currentUser.employeeId,
+  });
+  const dashboardEmployeeId = currentUser?.employeeId ?? resolvedEmployee?.employeeId ?? null;
+
   const { data, isLoading, error } = useQuery<DashboardWidgetData>({
     queryKey: ['/api/finance/dashboard-widgets'],
   });
@@ -120,6 +130,14 @@ export default function TANDYMTestDashboard() {
   return (
     <div className="p-6 space-y-6" data-testid="tandym-dashboard">
       <h1 className="text-2xl font-bold" data-testid="page-title">Tandym Dashboard</h1>
+
+      {dashboardEmployeeId && (
+        <MyTasksControlCenter
+          employeeId={dashboardEmployeeId}
+          userName={currentUser?.username ?? 'tandym'}
+          compact={false}
+        />
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1 space-y-6">

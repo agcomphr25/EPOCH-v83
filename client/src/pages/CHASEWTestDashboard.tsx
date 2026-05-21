@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FolderKanban, HardDrive, Users, GitBranch, Factory } from 'lucide-react';
 import { Link } from 'wouter';
 import PipelineBoardWidget from '@/components/widgets/PipelineBoardWidget';
+import MyTasksControlCenter from '@/components/MyTasksControlCenter';
 
 const navCards = [
   {
@@ -44,9 +45,14 @@ const navCards = [
 ];
 
 export default function CHASEWTestDashboard() {
-  const { data: currentUser } = useQuery<{ id: number; username: string; role: string }>({
+  const { data: currentUser } = useQuery<{ id: number; username: string; role: string; employeeId?: number }>({
     queryKey: ['currentUser'],
   });
+  const { data: resolvedEmployee } = useQuery<{ employeeId: number | null }>({
+    queryKey: ['/api/timekeeping/my-employee-id'],
+    enabled: !!currentUser && !currentUser.employeeId,
+  });
+  const dashboardEmployeeId = currentUser?.employeeId ?? resolvedEmployee?.employeeId ?? null;
 
   return (
     <div className="p-6 space-y-6 max-w-full mx-auto">
@@ -84,6 +90,14 @@ export default function CHASEWTestDashboard() {
           </Link>
         ))}
       </div>
+
+      {dashboardEmployeeId && (
+        <MyTasksControlCenter
+          employeeId={dashboardEmployeeId}
+          userName={currentUser?.username ?? 'chasew'}
+          compact={false}
+        />
+      )}
 
       {/* Projects Pipeline */}
       <Card>

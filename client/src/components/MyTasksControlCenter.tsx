@@ -87,7 +87,7 @@ interface MyTasksResponse {
 
 interface TimekeepingApprovalTask {
   id: string;
-  type: 'pto_approval' | 'salaried_timesheet_approval' | 'hourly_timesheet_approval' | 'hourly_timesheet_blocked' | 'salaried_timesheet_blocked' | 'forklift_evaluation';
+  type: 'pto_approval' | 'punch_correction_approval' | 'salaried_timesheet_approval' | 'hourly_timesheet_approval' | 'hourly_timesheet_blocked' | 'salaried_timesheet_blocked' | 'forklift_evaluation';
   title: string;
   description: string;
   employeeName: string;
@@ -100,6 +100,7 @@ interface TimekeepingApprovalTask {
   priority: 'normal' | 'overdue';
   actionUrl: string;
   sourceId: number;
+  requestType?: string;
   writtenScore?: number;
   testType?: string;
 }
@@ -747,6 +748,12 @@ function TimekeepingApprovalTasks({
           },
         );
       }
+      if (task.type === 'punch_correction_approval') {
+        return apiRequest(`/api/timekeeping/punch-corrections/${task.sourceId}/supervisor-review`, {
+          method: 'POST',
+          body: JSON.stringify({ decision, note }),
+        });
+      }
       return apiRequest(`/api/timekeeping/time-off/${task.sourceId}/review`, {
         method: 'POST',
         body: JSON.stringify({
@@ -763,6 +770,10 @@ function TimekeepingApprovalTasks({
           ? vars.decision === 'approved'
             ? 'The request has been advanced for the next review.'
             : 'The employee will be notified of the denial.'
+          : vars.task.type === 'punch_correction_approval'
+            ? vars.decision === 'approved'
+              ? 'The punch edit has been advanced to payroll review.'
+              : 'The employee will be notified of the denial.'
           : vars.decision === 'approved'
             ? 'The timesheet is ready for payroll approval.'
             : 'The timesheet has been returned for correction.',
@@ -772,10 +783,11 @@ function TimekeepingApprovalTasks({
       queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/my-tasks'] });
       queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/pto-command-center/summary'] });
       queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/pto-command-center/pipeline'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/punch-corrections'] });
     },
     onError: (err: Error) => {
       toast({
-        title: 'Unable to update PTO request',
+        title: 'Unable to update review',
         description: err.message || 'Please try again.',
         variant: 'destructive',
       });
@@ -785,7 +797,9 @@ function TimekeepingApprovalTasks({
   if (tasks.length === 0) return null;
 
   const visibleTasks = compact ? tasks.slice(0, 3) : tasks;
-  const ptoReviewTarget = reviewTarget?.task.type === 'pto_approval' ? reviewTarget : null;
+  const requestReviewTarget = reviewTarget && ['pto_approval', 'punch_correction_approval'].includes(reviewTarget.task.type)
+    ? reviewTarget
+    : null;
   const timesheetReviewTarget = reviewTarget && ['hourly_timesheet_approval', 'salaried_timesheet_approval'].includes(reviewTarget.task.type)
     ? reviewTarget
     : null;
@@ -819,12 +833,12 @@ function TimekeepingApprovalTasks({
               <p className="text-sm font-semibold truncate">{task.title}</p>
               <p className="text-xs text-muted-foreground truncate">{task.description}</p>
             </div>
-            {task.type === 'pto_approval' ? (
+            {task.type === 'pto_approval' || task.type === 'punch_correction_approval' ? (
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setReviewTarget({ task, decision: 'approved' })}
-                data-testid={`button-review-pto-${task.sourceId}`}
+                data-testid={`button-review-${task.type === 'pto_approval' ? 'pto' : 'punch-correction'}-${task.sourceId}`}
               >
                 Review
               </Button>
@@ -858,7 +872,7 @@ function TimekeepingApprovalTasks({
       </div>
 
       <Dialog
-        open={!!ptoReviewTarget}
+        open={!!requestReviewTarget}
         onOpenChange={(open) => {
           if (!open) {
             setReviewTarget(null);
@@ -868,42 +882,50 @@ function TimekeepingApprovalTasks({
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Review PTO Request</DialogTitle>
+            <DialogTitle>
+              {requestReviewTarget?.task.type === 'punch_correction_approval' ? 'Review Punch Edit' : 'Review PTO Request'}
+            </DialogTitle>
           </DialogHeader>
-          {ptoReviewTarget && (
+          {requestReviewTarget && (
             <div className="space-y-4">
               <div className="rounded-md border bg-muted/30 p-3 text-sm space-y-1">
-                <div className="font-semibold">{ptoReviewTarget.task.employeeName}</div>
-                <div className="text-muted-foreground">
-                  {ptoReviewTarget.task.startDate || 'Start date'} to {ptoReviewTarget.task.endDate || 'End date'}
-                  {ptoReviewTarget.task.requestedHours != null
-                    ? ` - ${ptoReviewTarget.task.requestedHours} hours`
-                    : ''}
-                </div>
-                {ptoReviewTarget.task.requestUnit && (
-                  <div className="text-muted-foreground">
-                    Unit: {ptoReviewTarget.task.requestUnit.replace(/_/g, ' ')}
-                  </div>
+                <div className="font-semibold">{requestReviewTarget.task.employeeName}</div>
+                {requestReviewTarget.task.type === 'punch_correction_approval' ? (
+                  <div className="text-muted-foreground">{requestReviewTarget.task.description}</div>
+                ) : (
+                  <>
+                    <div className="text-muted-foreground">
+                      {requestReviewTarget.task.startDate || 'Start date'} to {requestReviewTarget.task.endDate || 'End date'}
+                      {requestReviewTarget.task.requestedHours != null
+                        ? ` - ${requestReviewTarget.task.requestedHours} hours`
+                        : ''}
+                    </div>
+                    {requestReviewTarget.task.requestUnit && (
+                      <div className="text-muted-foreground">
+                        Unit: {requestReviewTarget.task.requestUnit.replace(/_/g, ' ')}
+                      </div>
+                    )}
+                  </>
                 )}
-                {ptoReviewTarget.task.employeeNote && (
+                {requestReviewTarget.task.employeeNote && (
                   <div className="pt-2 text-muted-foreground">
                     <span className="font-medium text-foreground">Employee note:</span>{' '}
-                    {ptoReviewTarget.task.employeeNote}
+                    {requestReviewTarget.task.employeeNote}
                   </div>
                 )}
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <Button
-                  variant={ptoReviewTarget.decision === 'approved' ? 'default' : 'outline'}
-                  onClick={() => setReviewTarget({ ...ptoReviewTarget, decision: 'approved' })}
+                  variant={requestReviewTarget.decision === 'approved' ? 'default' : 'outline'}
+                  onClick={() => setReviewTarget({ ...requestReviewTarget, decision: 'approved' })}
                 >
                   <CheckCircle2 className="h-4 w-4 mr-2" />
                   Approve
                 </Button>
                 <Button
-                  variant={ptoReviewTarget.decision === 'denied' ? 'destructive' : 'outline'}
-                  onClick={() => setReviewTarget({ ...ptoReviewTarget, decision: 'denied' })}
+                  variant={requestReviewTarget.decision === 'denied' ? 'destructive' : 'outline'}
+                  onClick={() => setReviewTarget({ ...requestReviewTarget, decision: 'denied' })}
                 >
                   <XCircle className="h-4 w-4 mr-2" />
                   Deny
@@ -912,16 +934,20 @@ function TimekeepingApprovalTasks({
 
               <div className="space-y-1">
                 <Label>
-                  {ptoReviewTarget.decision === 'denied' ? 'Denial reason' : 'Note'}
-                  {ptoReviewTarget.decision === 'denied' && <span className="text-red-500"> *</span>}
+                  {requestReviewTarget.task.type === 'punch_correction_approval'
+                    ? 'Supervisor note'
+                    : requestReviewTarget.decision === 'denied'
+                      ? 'Denial reason'
+                      : 'Note'}
+                  {(requestReviewTarget.task.type === 'punch_correction_approval' || requestReviewTarget.decision === 'denied') && <span className="text-red-500"> *</span>}
                 </Label>
                 <Textarea
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
-                  placeholder={ptoReviewTarget.decision === 'denied' ? 'Required for denial' : 'Optional'}
+                  placeholder={requestReviewTarget.task.type === 'punch_correction_approval' || requestReviewTarget.decision === 'denied' ? 'Required for review' : 'Optional'}
                   rows={3}
                   className="resize-none"
-                  data-testid="textarea-pto-review-note"
+                  data-testid="textarea-timekeeping-request-review-note"
                 />
               </div>
             </div>
@@ -937,24 +963,26 @@ function TimekeepingApprovalTasks({
               Cancel
             </Button>
             <Button
-              variant={ptoReviewTarget?.decision === 'denied' ? 'destructive' : 'default'}
+              variant={requestReviewTarget?.decision === 'denied' ? 'destructive' : 'default'}
               disabled={
                 reviewMutation.isPending ||
-                (ptoReviewTarget?.decision === 'denied' && !note.trim())
+                (requestReviewTarget?.task.type === 'punch_correction_approval' && note.trim().length < 3) ||
+                (requestReviewTarget?.decision === 'denied' && !note.trim())
               }
               onClick={() => {
-                if (!ptoReviewTarget) return;
-                if (ptoReviewTarget.decision === 'denied' && !note.trim()) return;
+                if (!requestReviewTarget) return;
+                if (requestReviewTarget.task.type === 'punch_correction_approval' && note.trim().length < 3) return;
+                if (requestReviewTarget.decision === 'denied' && !note.trim()) return;
                 reviewMutation.mutate({
-                  task: ptoReviewTarget.task,
-                  decision: ptoReviewTarget.decision,
+                  task: requestReviewTarget.task,
+                  decision: requestReviewTarget.decision,
                   note: note.trim(),
                 });
               }}
-              data-testid="button-submit-pto-review"
+              data-testid="button-submit-timekeeping-request-review"
             >
               {reviewMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {ptoReviewTarget?.decision === 'denied' ? 'Submit Denial' : 'Approve Request'}
+              {requestReviewTarget?.decision === 'denied' ? 'Submit Denial' : 'Approve Request'}
             </Button>
           </DialogFooter>
         </DialogContent>

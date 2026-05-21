@@ -49,6 +49,11 @@ export default function ManufacturingOperationsDashboard({
   }>({
     queryKey: ['currentUser'],
   });
+  const { data: resolvedEmployee } = useQuery<{ employeeId: number | null }>({
+    queryKey: ['/api/timekeeping/my-employee-id'],
+    enabled: !!currentUser && !currentUser.employeeId,
+  });
+  const dashboardEmployeeId = currentUser?.employeeId ?? resolvedEmployee?.employeeId ?? null;
 
   const { data: allOrders = [] } = useQuery<unknown[]>({
     queryKey: ['/api/orders/all'],
@@ -180,10 +185,10 @@ export default function ManufacturingOperationsDashboard({
         ))}
       </div>
 
-      {currentUser?.employeeId && (
+      {dashboardEmployeeId && (
         <MyTasksControlCenter
-          employeeId={currentUser.employeeId}
-          userName={currentUser.username}
+          employeeId={dashboardEmployeeId}
+          userName={currentUser?.username ?? ownerName.toLowerCase()}
           compact={false}
         />
       )}

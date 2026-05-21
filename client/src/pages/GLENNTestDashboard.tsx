@@ -67,6 +67,11 @@ export default function GLENNTestDashboard() {
   const { data: currentUser, isLoading: isUserLoading } = useQuery<{ id: number; username: string; role: string; employeeId?: number }>({
     queryKey: ['currentUser'],
   });
+  const { data: resolvedEmployee } = useQuery<{ employeeId: number | null }>({
+    queryKey: ['/api/timekeeping/my-employee-id'],
+    enabled: !!currentUser && !currentUser.employeeId,
+  });
+  const dashboardEmployeeId = currentUser?.employeeId ?? resolvedEmployee?.employeeId ?? null;
 
   const { data: orderStats, isLoading: isStatsLoading } = useQuery<{ pending: number; inProduction: number; completed: number }>({
     queryKey: ['/api/orders/stats'],
@@ -74,7 +79,14 @@ export default function GLENNTestDashboard() {
   });
 
   if (!isPremiumMode) {
-    return <LightModeDashboard currentUser={currentUser} isUserLoading={isUserLoading} onToggleMode={() => setIsPremiumMode(true)} />;
+    return (
+      <LightModeDashboard
+        currentUser={currentUser}
+        dashboardEmployeeId={dashboardEmployeeId}
+        isUserLoading={isUserLoading}
+        onToggleMode={() => setIsPremiumMode(true)}
+      />
+    );
   }
 
   return (
@@ -495,12 +507,12 @@ export default function GLENNTestDashboard() {
               <div className="h-4 w-5/6 bg-white/10 rounded animate-pulse" />
             </div>
           </div>
-        ) : currentUser?.employeeId ? (
+        ) : dashboardEmployeeId ? (
           <div className="mt-8">
             <div className="depth-card">
               <MyTasksControlCenter
-                employeeId={currentUser.employeeId}
-                userName={currentUser.username}
+                employeeId={dashboardEmployeeId}
+                userName={currentUser?.username ?? 'glennj'}
                 compact={false}
               />
             </div>
@@ -519,10 +531,12 @@ export default function GLENNTestDashboard() {
 
 function LightModeDashboard({ 
   currentUser, 
+  dashboardEmployeeId,
   isUserLoading,
   onToggleMode 
 }: { 
   currentUser?: { id: number; username: string; role: string; employeeId?: number }; 
+  dashboardEmployeeId?: number | null;
   isUserLoading?: boolean;
   onToggleMode: () => void;
 }) {
@@ -696,10 +710,10 @@ function LightModeDashboard({
           <div className="h-4 w-3/4 bg-gray-100 rounded animate-pulse" />
           <div className="h-4 w-5/6 bg-gray-100 rounded animate-pulse" />
         </div>
-      ) : currentUser?.employeeId ? (
+      ) : dashboardEmployeeId ? (
         <MyTasksControlCenter
-          employeeId={currentUser.employeeId}
-          userName={currentUser.username}
+          employeeId={dashboardEmployeeId}
+          userName={currentUser?.username ?? 'glennj'}
           compact={false}
         />
       ) : null}

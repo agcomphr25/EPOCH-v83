@@ -49,6 +49,11 @@ export default function DARLENEBTestDashboard() {
   const { data: currentUser } = useQuery<{ id: number; username: string; role: string; employeeId?: number }>({
     queryKey: ['currentUser'],
   });
+  const { data: resolvedEmployee } = useQuery<{ employeeId: number | null }>({
+    queryKey: ['/api/timekeeping/my-employee-id'],
+    enabled: !!currentUser && !currentUser.employeeId,
+  });
+  const dashboardEmployeeId = currentUser?.employeeId ?? resolvedEmployee?.employeeId ?? null;
 
   const handleLogout = () => {
     // Clear authentication tokens
@@ -391,10 +396,10 @@ export default function DARLENEBTestDashboard() {
       </div>
 
       {/* My Tasks Control Center */}
-      {currentUser?.employeeId && (
+      {dashboardEmployeeId && (
         <MyTasksControlCenter
-          employeeId={currentUser.employeeId}
-          userName={currentUser.username}
+          employeeId={dashboardEmployeeId}
+          userName={currentUser?.username ?? 'darleneb'}
           compact={false}
         />
       )}

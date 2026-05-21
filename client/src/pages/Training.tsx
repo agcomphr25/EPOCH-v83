@@ -197,6 +197,7 @@ const trainingTranslations = {
 
 interface TrainingProps {
   lang?: 'en' | 'es';
+  onStartForkliftCertification?: () => void;
 }
 
 function isForkliftCertificationModule(module: any): boolean {
@@ -204,7 +205,7 @@ function isForkliftCertificationModule(module: any): boolean {
   return searchable.includes('forklift') || searchable.includes('powered industrial truck');
 }
 
-export default function Training({ lang = 'en' }: TrainingProps) {
+export default function Training({ lang = 'en', onStartForkliftCertification }: TrainingProps) {
   const { toast } = useToast();
   const t = trainingTranslations[lang];
   const [createOpen, setCreateOpen] = useState(false);
@@ -412,17 +413,30 @@ export default function Training({ lang = 'en' }: TrainingProps) {
                         </>
                       )}
                     </Button>
-                    <Link
-                      href={isForkliftCertificationModule(module) ? '/training-control-center?tab=forklift' : `/training/${module.id}`}
-                      className="flex-1"
-                    >
+                    {isForkliftCertificationModule(module) ? (
                       <Button
-                        className="w-full"
+                        className="flex-1"
                         data-testid={`button-start-training-${module.id}`}
+                        onClick={() => {
+                          if (onStartForkliftCertification) {
+                            onStartForkliftCertification();
+                            return;
+                          }
+                          window.location.href = '/training-control-center?tab=forklift';
+                        }}
                       >
                         {t.startTraining}
                       </Button>
-                    </Link>
+                    ) : (
+                      <Link href={`/training/${module.id}`} className="flex-1">
+                        <Button
+                          className="w-full"
+                          data-testid={`button-start-training-${module.id}`}
+                        >
+                          {t.startTraining}
+                        </Button>
+                      </Link>
+                    )}
                   </div>
                 </div>
               </CardContent>

@@ -798,7 +798,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
   } = useQuery<SalariedTimesheetView>({
     queryKey: ['/api/timekeeping/salaried-timesheet', 'portal', employeeId, selectedSalariedWeek.start],
     queryFn: async () => {
-      const res = await portalFetch(`/api/timekeeping/salaried-timesheet/portal/${employeeId}/my/${selectedSalariedWeek.start}`);
+      const res = await portalFetch(`/api/timekeeping/salaried-timesheet/my/${selectedSalariedWeek.start}`);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error((err as any).error ?? 'Failed to fetch salaried timesheet');
@@ -811,7 +811,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
   const { data: indirectCodes = [], isLoading: indirectCodesLoading } = useQuery<IndirectCode[]>({
     queryKey: ['/api/timekeeping/salaried-timesheet', 'portal', employeeId, 'indirect-codes'],
     queryFn: async () => {
-      const res = await portalFetch(`/api/timekeeping/salaried-timesheet/portal/${employeeId}/indirect-codes`);
+      const res = await portalFetch('/api/timekeeping/salaried-timesheet/my/indirect-codes');
       if (!res.ok) throw new Error('Failed to fetch indirect codes');
       return res.json();
     },
@@ -822,7 +822,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
   const { data: travelerOptions = [], isLoading: travelerOptionsLoading } = useQuery<TravelerOption[]>({
     queryKey: ['/api/timekeeping/salaried-timesheet', 'portal', employeeId, 'travelers-all'],
     queryFn: async () => {
-      const res = await portalFetch(`/api/timekeeping/salaried-timesheet/portal/${employeeId}/travelers/all`);
+      const res = await portalFetch('/api/timekeeping/salaried-timesheet/my/travelers/all');
       if (!res.ok) throw new Error('Failed to fetch travelers');
       return res.json();
     },
@@ -858,7 +858,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
           ? { travelerId: salariedLineForm.travelerId }
           : { indirectCodeId: Number(salariedLineForm.indirectCodeId) }),
       };
-      const base = `/api/timekeeping/salaried-timesheet/portal/${employeeId}/timesheets/${salariedTimesheet.timesheet.id}/lines`;
+      const base = `/api/timekeeping/salaried-timesheet/my/timesheets/${salariedTimesheet.timesheet.id}/lines`;
       const res = await portalFetch(
         salariedLineForm.id ? `${base}/${salariedLineForm.id}` : base,
         {
@@ -887,7 +887,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
     mutationFn: async (lineId: number) => {
       if (!salariedTimesheet) throw new Error('Salaried timesheet is not loaded yet.');
       const res = await portalFetch(
-        `/api/timekeeping/salaried-timesheet/portal/${employeeId}/timesheets/${salariedTimesheet.timesheet.id}/lines/${lineId}`,
+        `/api/timekeeping/salaried-timesheet/my/timesheets/${salariedTimesheet.timesheet.id}/lines/${lineId}`,
         { method: 'DELETE' },
       );
       if (!res.ok) {
@@ -907,7 +907,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
 
   const certifySalariedMutation = useMutation({
     mutationFn: async (timesheetId: number) => {
-      const res = await portalFetch(`/api/timekeeping/salaried-timesheet/portal/${employeeId}/certify/${timesheetId}`, {
+      const res = await portalFetch(`/api/timekeeping/salaried-timesheet/my/certify/${timesheetId}`, {
         method: 'POST',
         body: JSON.stringify({ certificationConfirmed: true }),
       });

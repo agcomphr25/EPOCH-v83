@@ -293,6 +293,8 @@ interface Punch {
   editNote: string | null;
   costCode: string | null;
   hasMissingClockOut: boolean;
+  hasMissingClockIn?: boolean;
+  reviewReason?: string | null;
 }
 
 interface DcaaViolation {
@@ -1482,6 +1484,8 @@ export default function TimeClockAdminPage() {
     },
     enabled: activeTab === 'punches',
   });
+  const [showAllPunchEvents, setShowAllPunchEvents] = useState(false);
+  const reviewPunches = (punches ?? []).filter(p => p.hasMissingClockOut || p.hasMissingClockIn);
 
   useEffect(() => {
     if (activeTab !== 'punches' || !highlightedPunchId || !punches?.length) return;
@@ -1910,7 +1914,7 @@ export default function TimeClockAdminPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="sticky top-0 z-30 -mx-4 flex items-center justify-between gap-4 border-b bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:-mx-6 sm:px-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Time Clock Admin</h1>
           <p className="text-muted-foreground text-sm mt-1">
@@ -1925,7 +1929,7 @@ export default function TimeClockAdminPage() {
 
       <div className="grid gap-6 xl:grid-cols-[240px_minmax(0,1fr)]">
         <aside className="space-y-2">
-          <div className="rounded-lg border bg-card p-2">
+          <div className="sticky top-[84px] rounded-lg border bg-card p-2">
             {navGroups.map(group => {
               const Icon = group.icon;
               const isActive = group.id === activeNavGroup.id;
@@ -2636,6 +2640,7 @@ export default function TimeClockAdminPage() {
               )}
             </CardContent>
           </Card>
+
         </TabsContent>
 
         {/* ── CORRECTIONS TAB ── */}
@@ -2785,7 +2790,20 @@ export default function TimeClockAdminPage() {
           </div>
 
           <Card>
-            <CardContent className="pt-0">
+            <CardHeader className="pb-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <CardTitle className="text-base">Needs review</CardTitle>
+                  <CardDescription>
+                    Missing punch exceptions for the selected date range. Full punch history is available below.
+                  </CardDescription>
+                </div>
+                <Badge variant={reviewPunches.length > 0 ? 'destructive' : 'outline'} className="tabular-nums">
+                  {reviewPunches.length} to review
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent>
               {punchesLoading ? (
                 <div className="flex items-center justify-center h-32">
                   <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -2794,20 +2812,28 @@ export default function TimeClockAdminPage() {
                 <p className="text-sm text-muted-foreground text-center py-12">
                   No punches found for this date range.
                 </p>
+              ) : reviewPunches.length === 0 ? (
+                <div className="rounded-md border border-dashed p-8 text-center">
+                  <CheckCircle className="mx-auto mb-2 h-6 w-6 text-green-600" />
+                  <p className="text-sm font-medium">No missing punch exceptions in this range.</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Use the full event log below when you need to inspect all imported or kiosk punches.
+                  </p>
+                </div>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Employee</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Punched At</TableHead>
+                      <TableHead>Issue</TableHead>
+                      <TableHead>Punch Time</TableHead>
                       <TableHead>Source</TableHead>
                       <TableHead>Note</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {punches.map(p => {
+                    {reviewPunches.map(p => {
                       const empName = employeeNameFromEpochId(p.employeeId);
                       const isHighlightedPunch = highlightedPunchId === p.sessionId;
                       return (
@@ -2815,19 +2841,19 @@ export default function TimeClockAdminPage() {
                           data-punch-session-id={p.sessionId}
                           key={`${p.sessionId}-${p.type}`}
                           className={[
-                            p.hasMissingClockOut ? 'bg-amber-50/60 dark:bg-amber-900/10' : p.isEdited ? 'bg-yellow-50/40 dark:bg-yellow-900/10' : '',
+                            p.hasMissingClockOut || p.hasMissingClockIn ? 'bg-amber-50/60 dark:bg-amber-900/10' : p.isEdited ? 'bg-yellow-50/40 dark:bg-yellow-900/10' : '',
                             isHighlightedPunch ? 'ring-2 ring-amber-400 ring-inset' : '',
                           ].filter(Boolean).join(' ') || undefined}
                         >
                           <TableCell className="font-medium">{empName}</TableCell>
                           <TableCell>
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex flex-wrap items-center gap-1.5">
                               <Badge variant="outline" className="text-xs">
                                 {punchTypeLabel(p.type)}
                               </Badge>
-                              {p.hasMissingClockOut && (
+                              {(p.hasMissingClockOut || p.hasMissingClockIn) && (
                                 <Badge className="text-xs bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-700">
-                                  Missing Clock Out
+                                  {p.hasMissingClockOut ? 'Missing Clock Out' : 'Missing Clock In'}
                                 </Badge>
                               )}
                             </div>
@@ -2840,6 +2866,9 @@ export default function TimeClockAdminPage() {
                             {p.costCode && <span className="ml-1 text-xs">({p.costCode})</span>}
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
+                            {p.reviewReason && (
+                              <span className="mr-1">{p.reviewReason}</span>
+                            )}
                             {p.isEdited && (
                               <span className="text-yellow-600 mr-1 text-xs">✎ edited:</span>
                             )}
@@ -2886,6 +2915,117 @@ export default function TimeClockAdminPage() {
                 </Table>
               )}
             </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <CardTitle className="text-base">All punch events</CardTitle>
+                  <CardDescription>
+                    Complete chronological event log for audit checks and payroll reconciliation.
+                  </CardDescription>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowAllPunchEvents(value => !value)}
+                >
+                  {showAllPunchEvents ? <ChevronUp className="h-4 w-4 mr-1" /> : <ChevronDown className="h-4 w-4 mr-1" />}
+                  {showAllPunchEvents ? 'Hide' : `Show ${punches?.length ?? 0}`}
+                </Button>
+              </div>
+            </CardHeader>
+            {showAllPunchEvents && (
+              <CardContent className="pt-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Employee</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Punched At</TableHead>
+                      <TableHead>Source</TableHead>
+                      <TableHead>Note</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(punches ?? []).map(p => {
+                      const empName = employeeNameFromEpochId(p.employeeId);
+                      const isHighlightedPunch = highlightedPunchId === p.sessionId;
+                      return (
+                        <TableRow
+                          data-punch-session-id={p.sessionId}
+                          key={`all-${p.sessionId}-${p.type}`}
+                          className={[
+                            p.hasMissingClockOut || p.hasMissingClockIn ? 'bg-amber-50/60 dark:bg-amber-900/10' : p.isEdited ? 'bg-yellow-50/40 dark:bg-yellow-900/10' : '',
+                            isHighlightedPunch ? 'ring-2 ring-amber-400 ring-inset' : '',
+                          ].filter(Boolean).join(' ') || undefined}
+                        >
+                          <TableCell className="font-medium">{empName}</TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <Badge variant="outline" className="text-xs">
+                                {punchTypeLabel(p.type)}
+                              </Badge>
+                              {(p.hasMissingClockOut || p.hasMissingClockIn) && (
+                                <Badge className="text-xs bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-700">
+                                  {p.hasMissingClockOut ? 'Missing Clock Out' : 'Missing Clock In'}
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {fmtTime(p.punchedAt)}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground capitalize">
+                            {p.source}
+                            {p.costCode && <span className="ml-1 text-xs">({p.costCode})</span>}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
+                            {p.reviewReason ?? p.editNote ?? p.note ?? '-'}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              {p.hasMissingClockOut && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                                  title="Close session - record missing clock-out"
+                                  onClick={() => openCloseSession(p)}
+                                >
+                                  <LogOut className="h-3 w-3" />
+                                </Button>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => openEditPunch(p, empName)}
+                              >
+                                <Edit2 className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                                onClick={() => {
+                                  setDeletePunchTarget(p);
+                                  setDeleteNote('');
+                                }}
+                                disabled={deletePunchMutation.isPending}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            )}
           </Card>
         </TabsContent>
 

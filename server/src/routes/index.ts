@@ -3000,6 +3000,95 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     return Array.isArray(result) ? result : (result?.rows ?? []);
   }
 
+  function normalizeP2ControlPartKey(value: unknown): string {
+    return String(value || '').trim().toLowerCase();
+  }
+
+  function getP2ControlWadStatusLabel(status: string): string {
+    const labels: Record<string, string> = {
+      WAD_READY: 'WAD ready',
+      WAD_INCOMPLETE: 'WAD incomplete',
+      WAD_MISSING: 'WAD missing',
+      WAD_NOT_MATCHED: 'WAD not matched',
+      NO_PROJECT_LINK: 'No project link',
+    };
+    return labels[status] || 'WAD unknown';
+  }
+
+  function buildP2ProjectWadContext(project: any, summary: any) {
+    const linkedWadCount = Number(summary?.wadCount ?? 0);
+    const approvedWadCount = Number(summary?.approvedWadCount ?? 0);
+    const releasedWadCount = Number(summary?.releasedWadCount ?? 0);
+    const status = !project?.projectId
+      ? 'NO_PROJECT_LINK'
+      : linkedWadCount === 0
+        ? 'WAD_MISSING'
+        : (approvedWadCount > 0 || releasedWadCount > 0)
+          ? 'WAD_READY'
+          : 'WAD_INCOMPLETE';
+
+    return {
+      linkedWadCount,
+      approvedWadCount,
+      releasedWadCount,
+      wadNumbers: summary?.wadNumbers ?? null,
+      p2WadConnectionStatus: status,
+      p2WadConnectionLabel: getP2ControlWadStatusLabel(status),
+    };
+  }
+
+  function buildP2ItemWadContext(
+    project: any,
+    partNumber: unknown,
+    wadByProjectPart: Map<string, any>,
+    wadSummaryByProject: Map<string, any>,
+  ) {
+    if (!project?.projectId) {
+      const status = 'NO_PROJECT_LINK';
+      return {
+        linkedWadId: null,
+        linkedWadNumber: null,
+        linkedWadStatus: null,
+        linkedWadWorkOrderStatus: null,
+        p2WadConnectionStatus: status,
+        p2WadConnectionLabel: getP2ControlWadStatusLabel(status),
+      };
+    }
+
+    const projectId = String(project.projectId);
+    const partKey = normalizeP2ControlPartKey(partNumber);
+    const matchedWad = partKey ? wadByProjectPart.get(`${projectId}:${partKey}`) : null;
+    const projectSummary = wadSummaryByProject.get(projectId);
+
+    if (!matchedWad) {
+      const status = Number(projectSummary?.wadCount ?? 0) > 0 ? 'WAD_NOT_MATCHED' : 'WAD_MISSING';
+      return {
+        linkedWadId: null,
+        linkedWadNumber: null,
+        linkedWadStatus: null,
+        linkedWadWorkOrderStatus: null,
+        p2WadConnectionStatus: status,
+        p2WadConnectionLabel: getP2ControlWadStatusLabel(status),
+      };
+    }
+
+    const wadStatus = String(matchedWad.wadStatus || '').toUpperCase();
+    const workOrderStatus = String(matchedWad.status || '').toUpperCase();
+    const status = wadStatus === 'APPROVED'
+      || ['RELEASED', 'IN_PROGRESS', 'COMPLETE', 'COMPLETED', 'CLOSED'].includes(workOrderStatus)
+      ? 'WAD_READY'
+      : 'WAD_INCOMPLETE';
+
+    return {
+      linkedWadId: matchedWad.id ?? null,
+      linkedWadNumber: matchedWad.workOrderNumber ?? null,
+      linkedWadStatus: matchedWad.wadStatus ?? null,
+      linkedWadWorkOrderStatus: matchedWad.status ?? null,
+      p2WadConnectionStatus: status,
+      p2WadConnectionLabel: getP2ControlWadStatusLabel(status),
+    };
+  }
+
   // P2 Control Center API Routes
   app.get('/api/p2/control-center/stats', async (req, res) => {
     try {
@@ -3359,6 +3448,37 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const projectByPoId = new Map<number, any>(
         projectRows.map((r: any) => [r.poId, r])
       );
+      const projectIds = [...new Set(
+        projectRows
+          .map((row: any) => row.projectId)
+          .filter(Boolean)
+          .map((projectId: any) => String(projectId))
+      )];
+      const wadSummaryRows = projectIds.length > 0
+        ? await optionalP2Rows(
+            'WAD project summary',
+            dbPool.query(
+            `SELECT
+               project_id::text AS "projectId",
+               COUNT(*)::int AS "wadCount",
+               COUNT(*) FILTER (WHERE COALESCE(UPPER(wad_status), '') = 'APPROVED')::int AS "approvedWadCount",
+               COUNT(*) FILTER (
+                 WHERE COALESCE(UPPER(wad_status), '') = 'APPROVED'
+                    OR COALESCE(UPPER(status), '') IN ('RELEASED', 'IN_PROGRESS', 'COMPLETE', 'COMPLETED', 'CLOSED')
+               )::int AS "releasedWadCount",
+               STRING_AGG(work_order_number, ', ' ORDER BY created_at DESC NULLS LAST) AS "wadNumbers"
+             FROM production_work_orders
+             WHERE project_id = ANY($1::uuid[])
+               AND COALESCE(UPPER(status), '') NOT IN ('CANCELLED', 'CANCELED')
+               AND (work_order_number LIKE 'WAD-%' OR wad_status IS NOT NULL)
+             GROUP BY project_id`,
+            [projectIds]
+          )
+          )
+        : [];
+      const wadSummaryByProject = new Map<string, any>(
+        wadSummaryRows.map((row: any) => [String(row.projectId), row])
+      );
 
       // Sum ordered quantities from all PO line items, grouped by po_id.
       // This ensures PO lines that haven't had serialized items generated yet
@@ -3412,6 +3532,12 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         
         const rawStatus = normalizeP2Status(po.status) || 'OPEN';
 
+        const linkedProject = projectByPoId.get(po.id);
+        const wadContext = buildP2ProjectWadContext(
+          linkedProject,
+          linkedProject?.projectId ? wadSummaryByProject.get(String(linkedProject.projectId)) : null
+        );
+
         return {
           id: po.id,
           poNumber: po.poNumber,
@@ -3422,9 +3548,10 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           inProductionItems,
           pendingItems,
           hasBOMsNeeded: !po.bomConfigured,
-          projectId: projectByPoId.get(po.id)?.projectId ?? null,
-          projectCode: projectByPoId.get(po.id)?.projectCode ?? null,
-          projectName: projectByPoId.get(po.id)?.projectName ?? po.projectName ?? null,
+          projectId: linkedProject?.projectId ?? null,
+          projectCode: linkedProject?.projectCode ?? null,
+          projectName: linkedProject?.projectName ?? po.projectName ?? null,
+          ...wadContext,
           rawStatus,
           status: completedItems === totalItems && totalItems > 0 ? 'completed' : 
                   (inProductionItems > 0 || rawStatus === 'IN_PRODUCTION') ? 'in_progress' : 'pending'
@@ -3683,6 +3810,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
            wo.description,
            COALESCE(wo.quantity, 1)::int AS quantity,
            wo.status,
+           wo.wad_status AS "wadStatus",
            wo.due_date AS "dueDate",
            wo.project_id AS "projectId",
            p.project_code AS "projectCode",
@@ -3812,6 +3940,49 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const projectByPoId = new Map<number, any>(
         projectRows.map((row: any) => [Number(row.poId), row])
       );
+      const projectIds = [...new Set(
+        projectRows
+          .map((row: any) => row.projectId)
+          .filter(Boolean)
+          .map((projectId: any) => String(projectId))
+      )];
+      const wadRows = projectIds.length > 0
+        ? await optionalP2Rows(
+            'WAD item context',
+            dbPool.query(
+            `SELECT DISTINCT ON (project_id, LOWER(TRIM(COALESCE(part_number, ''))))
+               id::text AS id,
+               project_id::text AS "projectId",
+               work_order_number AS "workOrderNumber",
+               part_number AS "partNumber",
+               status,
+               wad_status AS "wadStatus",
+               created_at AS "createdAt"
+             FROM production_work_orders
+             WHERE project_id = ANY($1::uuid[])
+               AND COALESCE(UPPER(status), '') NOT IN ('CANCELLED', 'CANCELED')
+               AND (work_order_number LIKE 'WAD-%' OR wad_status IS NOT NULL)
+             ORDER BY project_id, LOWER(TRIM(COALESCE(part_number, ''))), created_at DESC NULLS LAST`,
+            [projectIds]
+          )
+          )
+        : [];
+      const wadByProjectPart = new Map<string, any>();
+      const wadSummaryByProject = new Map<string, any>();
+      wadRows.forEach((row: any) => {
+        const projectId = String(row.projectId || '');
+        if (!projectId) return;
+
+        const summary = wadSummaryByProject.get(projectId) || { wadCount: 0 };
+        summary.wadCount += 1;
+        wadSummaryByProject.set(projectId, summary);
+
+        const partKey = normalizeP2ControlPartKey(row.partNumber);
+        const mapKey = partKey ? `${projectId}:${partKey}` : '';
+        if (mapKey && !wadByProjectPart.has(mapKey)) {
+          wadByProjectPart.set(mapKey, row);
+        }
+      });
       
       const serializedPoItemKeys = new Set(
         items
@@ -3922,6 +4093,12 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         const poId = item.poId ?? item.po_id ?? null;
         const linkedProject = poId ? projectByPoId.get(Number(poId)) : null;
         const metadata = item.metadata || {};
+        const wadContext = buildP2ItemWadContext(
+          linkedProject,
+          item.partNumber,
+          wadByProjectPart,
+          wadSummaryByProject
+        );
         
         departmentQueues[dept].push({
           id: item.id,
@@ -3938,6 +4115,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           projectId: linkedProject?.projectId ?? null,
           projectCode: linkedProject?.projectCode ?? null,
           projectName: linkedProject?.projectName ?? null,
+          ...wadContext,
           isReplacement: metadata.isReplacement === true,
           replacementForSerializedItemId: metadata.replacementForSerializedItemId ?? null,
           replacementForSerialNumber: metadata.replacementForSerialNumber ?? null,
@@ -3981,6 +4159,12 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           || manufactured >= quantity
           ? 'COMPLETED'
           : 'ACTIVE';
+        const wadContext = buildP2ItemWadContext(
+          linkedProject,
+          row.partNumber || row.orderId,
+          wadByProjectPart,
+          wadSummaryByProject
+        );
 
         departmentQueues[dept].push({
           id: `legacy-p2-production-order-${row.id}`,
@@ -3997,6 +4181,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           projectId: linkedProject?.projectId ?? null,
           projectCode: linkedProject?.projectCode ?? null,
           projectName: linkedProject?.projectName ?? null,
+          ...wadContext,
           isLegacyProductionOrder: true,
           hasActiveTask: normalizedStatus === 'IN_PROGRESS',
           barcodePrintedAt: null,
@@ -4032,6 +4217,12 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           ['IN_PROGRESS', 'ACTIVE', 'STARTED'].includes(String(row.activeTravelerStatus || '').toUpperCase()) ||
           ['IN_PROGRESS', 'ACTIVE', 'STARTED', 'RELEASED'].includes(normalizedStatus)
         );
+        const wadContext = buildP2ItemWadContext(
+          linkedProject,
+          row.partNumber || row.workOrderNumber,
+          wadByProjectPart,
+          wadSummaryByProject
+        );
 
         departmentQueues[dept].push({
           id: `legacy-project-work-order-${row.id}`,
@@ -4050,6 +4241,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           projectId: linkedProject?.projectId ?? null,
           projectCode: linkedProject?.projectCode ?? null,
           projectName: linkedProject?.projectName ?? null,
+          ...wadContext,
           isLegacyProjectWorkOrder: true,
           activeTravelerId: row.activeTravelerId || null,
           activeTravelerNumber: row.activeTravelerNumber || null,

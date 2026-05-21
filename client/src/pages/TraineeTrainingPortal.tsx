@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
+import { useLocation } from 'wouter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -94,6 +95,15 @@ interface ForkliftWrittenResult {
   evaluation?: { id: number; status: string } | null;
 }
 
+interface TrainingModuleSummary {
+  id: number;
+  title: string;
+  description?: string | null;
+  category?: string | null;
+  content?: string | null;
+  contentHtml?: string | null;
+}
+
 interface ProgramAssignment {
   id: number;
   programId: number;
@@ -135,7 +145,16 @@ interface TraineeTrainingPortalProps {
   defaultTab?: 'programs' | '4step' | 'forklift';
 }
 
+const traineeTrainingTabs = new Set(['programs', '4step', 'forklift']);
+
+function getTraineeTrainingTab(defaultTab: TraineeTrainingPortalProps['defaultTab']) {
+  const query = typeof window !== 'undefined' ? window.location.search.replace(/^\?/, '') : '';
+  const tab = new URLSearchParams(query).get('tab');
+  return traineeTrainingTabs.has(tab || '') ? tab! : defaultTab || 'programs';
+}
+
 export default function TraineeTrainingPortal({ embedded = false, defaultTab = 'programs' }: TraineeTrainingPortalProps = {}) {
+  const [location] = useLocation();
   const { toast } = useToast();
   const [quizDialogOpen, setQuizDialogOpen] = useState(false);
   const [selectedQuiz, setSelectedQuiz] = useState<StepQuiz | null>(null);
@@ -148,6 +167,7 @@ export default function TraineeTrainingPortal({ embedded = false, defaultTab = '
   const [forkliftAnswers, setForkliftAnswers] = useState<Record<string, string>>({});
   const [forkliftResult, setForkliftResult] = useState<ForkliftWrittenResult | null>(null);
   const [forkliftTestType, setForkliftTestType] = useState('initial');
+  const [forkliftTrainingReviewed, setForkliftTrainingReviewed] = useState(false);
 
   const { data: currentUser } = useQuery<{ id: number; employeeId?: number; name?: string }>({
     queryKey: ['/api/auth/session'],
@@ -169,6 +189,15 @@ export default function TraineeTrainingPortal({ embedded = false, defaultTab = '
       return res.json();
     },
     enabled: !!traineeId,
+  });
+
+  const { data: trainingModules = [] } = useQuery<TrainingModuleSummary[]>({
+    queryKey: ['/api/training/modules'],
+  });
+
+  const forkliftTrainingModule = trainingModules.find((module) => {
+    const searchable = `${module.title || ''} ${module.description || ''} ${module.category || ''}`.toLowerCase();
+    return searchable.includes('forklift') || searchable.includes('powered industrial truck');
   });
 
   const startQuizMutation = useMutation({
@@ -328,7 +357,7 @@ export default function TraineeTrainingPortal({ embedded = false, defaultTab = '
       </div>
       )}
 
-      <Tabs defaultValue={defaultTab} className="space-y-6">
+      <Tabs key={`${location}-${getTraineeTrainingTab(defaultTab)}`} defaultValue={getTraineeTrainingTab(defaultTab)} className="space-y-6">
         <TabsList>
           <TabsTrigger value="programs" className="gap-2">
             <BookOpen className="h-4 w-4" />
@@ -358,42 +387,95 @@ export default function TraineeTrainingPortal({ embedded = false, defaultTab = '
                 Sit-Down Counterbalance Forklift Operator
               </CardTitle>
               <CardDescription>
-                Complete the randomized written test. A passing score creates a practical evaluation task for agrace.
+                Review the training material first, then complete the randomized written test. A passing score creates a practical evaluation task for agrace.
               </CardDescription>
             </CardHeader>
-            <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="text-sm text-muted-foreground">
-                Passing score: 80%. AGC refresh: 6 months. OSHA evaluation: 3 years.
+            <CardContent className="space-y-5">
+              <div className="rounded-lg border bg-muted/30 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <div className="text-sm font-semibold">Step 1: Review training material</div>
+                    <p className="text-sm text-muted-foreground">
+                      This material is pulled from the OSHA Forklift Certification training module and should be reviewed before the written test.
+                    </p>
+                  </div>
+                  <Button
+                    variant={forkliftTrainingReviewed ? 'default' : 'outline'}
+                    onClick={() => setForkliftTrainingReviewed(true)}
+                    data-testid="button-mark-forklift-training-reviewed"
+                  >
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    {forkliftTrainingReviewed ? 'Reviewed' : 'Mark Reviewed'}
+                  </Button>
+                </div>
+
+                <div className="mt-4 max-h-[420px] overflow-y-auto rounded-md border bg-background p-4">
+                  {forkliftTrainingModule?.contentHtml ? (
+                    <div
+                      className="prose prose-sm max-w-none"
+                      dangerouslySetInnerHTML={{ __html: forkliftTrainingModule.contentHtml }}
+                    />
+                  ) : forkliftTrainingModule?.content ? (
+                    <div className="whitespace-pre-wrap text-sm leading-6">{forkliftTrainingModule.content}</div>
+                  ) : (
+                    <div className="flex items-start gap-3 text-sm text-muted-foreground">
+                      <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                      <div>No forklift module content was found. The written test is held until training material is available.</div>
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="w-full sm:w-[240px]">
-                <Label className="text-xs text-muted-foreground">Evaluation type</Label>
-                <select
-                  value={forkliftTestType}
-                  onChange={(event) => setForkliftTestType(event.target.value)}
-                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                >
-                  <option value="initial">Initial certification</option>
-                  <option value="agc_6_month_refresher">AGC 6-month refresher</option>
-                  <option value="osha_3_year_evaluation">OSHA 3-year evaluation</option>
-                  <option value="incident_refresher">Incident / near-miss refresher</option>
-                </select>
-              </div>
-              <Button
-                onClick={() => startForkliftWrittenTestMutation.mutate()}
-                disabled={startForkliftWrittenTestMutation.isPending || !traineeId}
-              >
-                {startForkliftWrittenTestMutation.isPending ? (
-                  <span className="flex items-center gap-2">
-                    <Clock className="h-4 w-4 animate-spin" />
-                    Loading
-                  </span>
-                ) : (
-                  <>
-                    <Play className="h-4 w-4 mr-2" />
-                    Start Written Test
-                  </>
+
+              <div className="rounded-lg border p-4">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <div className="text-sm font-semibold">Step 2: Written test</div>
+                    <p className="text-sm text-muted-foreground">
+                      Passing score: 80%. AGC refresh: 6 months. OSHA evaluation: 3 years.
+                    </p>
+                  </div>
+                  <div className="w-full sm:w-[240px]">
+                    <Label className="text-xs text-muted-foreground">Evaluation type</Label>
+                    <select
+                      value={forkliftTestType}
+                      onChange={(event) => setForkliftTestType(event.target.value)}
+                      className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    >
+                      <option value="initial">Initial certification</option>
+                      <option value="agc_6_month_refresher">AGC 6-month refresher</option>
+                      <option value="osha_3_year_evaluation">OSHA 3-year evaluation</option>
+                      <option value="incident_refresher">Incident / near-miss refresher</option>
+                    </select>
+                  </div>
+                  <Button
+                    onClick={() => startForkliftWrittenTestMutation.mutate()}
+                    disabled={startForkliftWrittenTestMutation.isPending || !traineeId || !forkliftTrainingReviewed || !forkliftTrainingModule}
+                    data-testid="button-start-forklift-written-test"
+                  >
+                    {startForkliftWrittenTestMutation.isPending ? (
+                      <span className="flex items-center gap-2">
+                        <Clock className="h-4 w-4 animate-spin" />
+                        Loading
+                      </span>
+                    ) : (
+                      <>
+                        <Play className="h-4 w-4 mr-2" />
+                        Start Written Test
+                      </>
+                    )}
+                  </Button>
+                </div>
+                {!forkliftTrainingReviewed && (
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    Mark the training material reviewed to unlock the written test.
+                  </p>
                 )}
-              </Button>
+                {!forkliftTrainingModule && (
+                  <p className="mt-3 text-xs text-destructive">
+                    OSHA Forklift Certification module content is missing or not published.
+                  </p>
+                )}
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

@@ -677,10 +677,12 @@ export default function EmployeePortal() {
                   </p>
                 )}
               </div>
-              <Button variant="outline" className="w-full" disabled>
-                <Award className="w-4 h-4 mr-2" />
-                View All Certifications
-              </Button>
+              <Link href="/training/my-training?tab=forklift">
+                <Button variant="outline" className="w-full">
+                  <Award className="w-4 h-4 mr-2" />
+                  Open Training Center
+                </Button>
+              </Link>
             </CardContent>
           </Card>
 

@@ -7,6 +7,10 @@ import { auditService } from '../services/auditService';
 import { generatePoPackingSlipPdf } from '../../utils/pdf/packingSlipPdf';
 import type { PackingSlipData, PackingSlipItem } from '../../utils/pdf/types';
 import { groupItemsByDescription, resolvePackingSlipDescription } from '../helpers/packingSlipHelper';
+import {
+  createOrUpdateP1ShipmentRevenueFromShipmentRecord,
+  reverseP1ShipmentRevenueDraftOrEntry,
+} from '../services/p1ShipmentRevenueService';
 
 const router = Router();
 
@@ -1584,6 +1588,17 @@ router.post('/oem-shipments/:id/return-to-qc', authenticateToken, async (req, re
       userAgent: req.headers['user-agent'] as string | null,
     });
 
+    try {
+      await reverseP1ShipmentRevenueDraftOrEntry(
+        'p1_shipment_record',
+        id,
+        reason || 'Shipment returned to Shipping QC',
+        req.user,
+      );
+    } catch (revenueErr: any) {
+      console.error(`Failed to reverse P1 PO shipment revenue draft for ${id}:`, revenueErr.message);
+    }
+
     // Delete shipment_items so they don't appear in OEM Shipments anymore
     const deleteItemsResult = await pool.query(`
       DELETE FROM shipment_items 
@@ -2410,6 +2425,12 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
         });
 
         console.log(`✅ Shipment persisted to database: ${shipmentId}`);
+
+        try {
+          await createOrUpdateP1ShipmentRevenueFromShipmentRecord(createdShipment.id, req.user);
+        } catch (revenueErr: any) {
+          console.error(`Failed to create P1 PO shipment revenue draft for ${createdShipment.id}:`, revenueErr.message);
+        }
 
         // Verify packing slips were persisted for all items
         const verifyResult = await pool.query<{ id: string; packing_slip_base64: string | null }>(

@@ -13,6 +13,11 @@ import {
   p2PackingSlips,
   p2PurchaseOrders,
   payments,
+  purchaseOrderItems,
+  purchaseOrders,
+  shipmentAccountingSnapshots,
+  shipmentItems,
+  shipmentRecords,
 } from '../../schema';
 
 export type AccountingSourceTraceNode = {
@@ -295,6 +300,80 @@ async function resolveP1Order(nodes: AccountingSourceTraceNode[], orderId: strin
   });
 }
 
+async function resolveP1ShipmentRevenue(nodes: AccountingSourceTraceNode[], entry: typeof journalEntries.$inferSelect) {
+  if (entry.referenceType === 'p1_shipment_snapshot' && entry.referenceUuid) {
+    const [snapshot] = await db
+      .select()
+      .from(shipmentAccountingSnapshots)
+      .where(eq(shipmentAccountingSnapshots.id, entry.referenceUuid))
+      .limit(1);
+    if (!snapshot) return;
+
+    addNode(nodes, {
+      type: 'p1_shipment_accounting_snapshot',
+      id: snapshot.id,
+      label: `P1 Shipment Revenue ${snapshot.salesOrderId || snapshot.shipmentId}`,
+      relationship: 'generated_from',
+      subtitle: snapshot.customerName ? `Customer: ${snapshot.customerName}` : null,
+      status: 'DRAFT_REVIEW',
+      amount: snapshot.netTotal,
+    });
+
+    if (snapshot.salesOrderId) {
+      await resolveP1Order(nodes, snapshot.salesOrderId);
+    }
+    return;
+  }
+
+  if (entry.referenceType === 'p1_shipment_record' && entry.referenceUuid) {
+    const [shipment] = await db
+      .select()
+      .from(shipmentRecords)
+      .where(eq(shipmentRecords.id, entry.referenceUuid))
+      .limit(1);
+    if (!shipment) return;
+
+    addNode(nodes, {
+      type: 'p1_shipment_record',
+      id: shipment.id,
+      label: shipment.invoiceNumber ? `P1 Shipment ${shipment.invoiceNumber}` : `P1 Shipment ${shipment.reference}`,
+      relationship: 'generated_from',
+      subtitle: shipment.masterTrackingNumber ? `Tracking ${shipment.masterTrackingNumber}` : null,
+      url: `/oem-shipments`,
+      status: 'SHIPPED',
+    });
+
+    const items = await db
+      .select({
+        shipmentItemId: shipmentItems.id,
+        orderId: shipmentItems.orderId,
+        quantity: shipmentItems.quantity,
+        poItemId: purchaseOrderItems.id,
+        unitPrice: purchaseOrderItems.unitPrice,
+        poNumber: purchaseOrders.poNumber,
+        customerName: purchaseOrders.customerName,
+      })
+      .from(shipmentItems)
+      .leftJoin(purchaseOrderItems, eq(shipmentItems.poItemId, purchaseOrderItems.id))
+      .leftJoin(purchaseOrders, eq(purchaseOrderItems.poId, purchaseOrders.id))
+      .where(eq(shipmentItems.shipmentId, shipment.id));
+
+    for (const item of items) {
+      addNode(nodes, {
+        type: 'p1_shipment_item',
+        id: item.shipmentItemId,
+        label: item.poNumber ? `PO ${item.poNumber} item` : `Shipment item ${item.shipmentItemId}`,
+        relationship: 'supports',
+        subtitle: `${item.quantity ?? 0} @ $${Number(item.unitPrice ?? 0).toFixed(2)}${item.customerName ? ` - ${item.customerName}` : ''}`,
+        amount: Math.round(Number(item.quantity ?? 0) * Number(item.unitPrice ?? 0) * 100) / 100,
+      });
+      if (item.orderId) {
+        await resolveP1Order(nodes, item.orderId);
+      }
+    }
+  }
+}
+
 async function resolveFallbackInvoice(nodes: AccountingSourceTraceNode[], entry: typeof journalEntries.$inferSelect) {
   if (nodes.length > 0 || !entry.sourceDocumentNumber) return;
 
@@ -379,6 +458,9 @@ export async function getJournalEntrySourceTrace(journalEntryId: number): Promis
   }
   if (entry.referenceType === 'p1_payment' || entry.transactionType === 'P1_CUSTOMER_PAYMENT') {
     await resolveP1Payment(sources, entry);
+  }
+  if (entry.referenceType.startsWith('p1_shipment') || entry.transactionType.startsWith('P1_SHIPMENT_REVENUE')) {
+    await resolveP1ShipmentRevenue(sources, entry);
   }
 
   await resolveFromLineTags(sources, entry, tagObjects);

@@ -133,6 +133,15 @@ const legacyRocApplySchema = z.object({
   confirmSupervisorApproval: z.literal(true),
 });
 
+const LEGACY_ROC_RESTORE_REASON =
+  'Traveler TRV-2026-000271 was canceled accidentally during manual troubleshooting of the legacy routing/charge-code issue. Cancellation is preserved in the audit history. Traveler is restored to active status for supervised legacy routing remediation and continuation of production record completion.';
+
+const legacyRocRestoreSchema = z.object({
+  approver: z.string().trim().min(1).default(LEGACY_ROC_BACKFILL_DEFAULT_APPROVER),
+  reason: z.string().trim().min(1).default(LEGACY_ROC_RESTORE_REASON),
+  confirmSupervisorApproval: z.literal(true),
+});
+
 function normalizeLegacyRocValue(value: unknown): string {
   return String(value ?? '').trim().toLowerCase();
 }
@@ -901,7 +910,6 @@ router.post('/legacy-roc-backfill/apply', requirePermission('work_orders.overrid
       .where(inArray(travelers.serialNumber, defaultSerials));
     const allowedTravelerIds = new Set(
       allowedTravelerRows
-        .filter((traveler) => traveler.travelerNumber !== LEGACY_ROC_CANCELED_TRAVELER_NUMBER)
         .filter((traveler) => !['COMPLETED', 'CANCELED', 'CANCELLED'].includes(String(traveler.status).toUpperCase()))
         .map((traveler) => traveler.id)
     );
@@ -1199,7 +1207,7 @@ router.post('/legacy-roc-backfill/apply', requirePermission('work_orders.overrid
       writesPerformed: true,
       approver: parsed.approver,
       reason: parsed.reason,
-      excludedTravelerNumber: LEGACY_ROC_CANCELED_TRAVELER_NUMBER,
+      restoreRequiredTravelerNumber: LEGACY_ROC_CANCELED_TRAVELER_NUMBER,
       summary: {
         requested: requestedTravelerIds.length,
         applied: results.filter((result) => result.status === 'applied').length,
@@ -1213,6 +1221,112 @@ router.post('/legacy-roc-backfill/apply', requirePermission('work_orders.overrid
     }
     console.error('Error applying legacy ROC traveler backfill:', error);
     res.status(500).json({ error: 'Failed to apply legacy ROC traveler backfill', message: error.message });
+  }
+});
+
+router.post('/legacy-roc-backfill/restore-canceled', requirePermission('work_orders.override_charges'), async (req: Request, res: Response) => {
+  try {
+    const parsed = legacyRocRestoreSchema.parse(req.body ?? {});
+    const now = new Date();
+
+    const [traveler] = await db
+      .select()
+      .from(travelers)
+      .where(eq(travelers.travelerNumber, LEGACY_ROC_CANCELED_TRAVELER_NUMBER))
+      .limit(1);
+
+    if (!traveler) {
+      return res.status(404).json({
+        error: 'TRAVELER_NOT_FOUND',
+        message: `${LEGACY_ROC_CANCELED_TRAVELER_NUMBER} was not found.`,
+      });
+    }
+
+    const normalizedSerial = normalizeLegacyRocValue(traveler.serialNumber);
+    const inScope = [...LEGACY_ROC_BACKFILL_DEFAULT_SERIALS].map(normalizeLegacyRocValue).includes(normalizedSerial);
+    if (!inScope) {
+      return res.status(400).json({
+        error: 'TRAVELER_NOT_IN_LEGACY_ROC_SCOPE',
+        message: `${LEGACY_ROC_CANCELED_TRAVELER_NUMBER} is not linked to the approved ROC serial scope.`,
+      });
+    }
+
+    if (String(traveler.status).toUpperCase() !== 'CANCELED' && String(traveler.status).toUpperCase() !== 'CANCELLED') {
+      return res.json({
+        mode: 'restore_canceled',
+        writesPerformed: false,
+        status: 'skipped',
+        travelerId: traveler.id,
+        travelerNumber: traveler.travelerNumber,
+        message: `Traveler is already ${traveler.status}; no restore was needed.`,
+      });
+    }
+
+    const result = await db.transaction(async (tx) => {
+      const [updatedTraveler] = await tx
+        .update(travelers)
+        .set({
+          status: 'IN_PROGRESS',
+          updatedAt: now,
+        })
+        .where(eq(travelers.id, traveler.id))
+        .returning();
+
+      await tx.insert(travelerEvents).values({
+        travelerId: traveler.id,
+        actor: parsed.approver,
+        actorName: parsed.approver,
+        action: 'LEGACY_ROC_CANCELED_TRAVELER_RESTORED',
+        details: {
+          reason: parsed.reason,
+          restoredAt: now.toISOString(),
+          beforeTravelerStatus: traveler.status,
+          afterTravelerStatus: 'IN_PROGRESS',
+          serialNumber: traveler.serialNumber ?? null,
+        },
+      });
+
+      await recordAuditEvent({
+        eventType: 'LEGACY_ROC_CANCELED_TRAVELER_RESTORED',
+        subjectType: 'traveler',
+        subjectId: traveler.id,
+        sourceService: 'travelers.legacyRocBackfill',
+        actor: { username: parsed.approver, role: 'supervisor' },
+        occurredAt: now,
+        reason: parsed.reason,
+        entityType: 'traveler',
+        entityId: traveler.id,
+        payload: {
+          travelerId: traveler.id,
+          travelerNumber: traveler.travelerNumber,
+          serialNumber: traveler.serialNumber ?? null,
+          beforeTravelerStatus: traveler.status,
+          afterTravelerStatus: 'IN_PROGRESS',
+        },
+        meta: {
+          travelerId: traveler.id,
+          travelerNumber: traveler.travelerNumber,
+          serialNumber: traveler.serialNumber ?? null,
+        },
+      }, tx);
+
+      return updatedTraveler;
+    });
+
+    res.json({
+      mode: 'restore_canceled',
+      writesPerformed: true,
+      status: 'restored',
+      traveler: result,
+      approver: parsed.approver,
+      reason: parsed.reason,
+    });
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Validation failed', issues: error.issues });
+    }
+    console.error('Error restoring legacy ROC canceled traveler:', error);
+    res.status(500).json({ error: 'Failed to restore legacy ROC canceled traveler', message: error.message });
   }
 });
 
@@ -3521,7 +3635,7 @@ router.get('/:travelerId/tasks/:taskId/fields', async (req: Request, res: Respon
 // Update a task field value
 router.patch('/:travelerId/tasks/:taskId/fields/:fieldId', async (req: Request, res: Response) => {
   try {
-    const { travelerId, fieldId } = req.params;
+    const { travelerId, taskId, fieldId } = req.params;
     const { value, recordedBy, validation } = req.body;
 
     const traveler = await storage.getTraveler(travelerId);
@@ -3538,7 +3652,81 @@ router.patch('/:travelerId/tasks/:taskId/fields/:fieldId', async (req: Request, 
       updateData.validation = validation;
     }
 
+    const [existingField] = await db
+      .select()
+      .from(travelerTaskFields)
+      .where(eq(travelerTaskFields.id, fieldId))
+      .limit(1);
+    const task = await storage.getTravelerTask(taskId);
+    const step = task ? await storage.getTravelerStep(task.travelerStepId) : null;
+
     const updatedField = await storage.updateTravelerTaskField(fieldId, updateData);
+
+    if (task && step) {
+      const legacyBackfillEvent = await db.query.travelerEvents.findFirst({
+        where: and(
+          eq(travelerEvents.travelerId, travelerId),
+          eq(travelerEvents.action, 'LEGACY_ROC_ROUTING_STEP_BACKFILLED'),
+          sql`${travelerEvents.details}->>'stepId' = ${step.id}`
+        ),
+      });
+
+      if (legacyBackfillEvent) {
+        const actor = recordedBy || 'unknown';
+        await storage.createTravelerEvent({
+          travelerId,
+          actor,
+          actorName: actor,
+          action: 'LEGACY_ROC_BACKFILL_FIELD_RECORDED',
+          details: {
+            stepId: step.id,
+            stepNumber: step.stepNumber,
+            departmentName: step.departmentName,
+            taskId,
+            taskTitle: task.title,
+            fieldId,
+            fieldKey: updatedField.fieldKey,
+            fieldLabel: updatedField.fieldLabel,
+            previousValue: existingField?.value ?? null,
+            recordedValue: value ?? null,
+            recordedAt: updateData.recordedAt.toISOString(),
+            reason: 'Collected traveler data entered after supervised legacy ROC routing backfill.',
+          },
+        });
+
+        await recordAuditEvent({
+          eventType: 'LEGACY_ROC_BACKFILL_FIELD_RECORDED',
+          subjectType: 'traveler_task_field',
+          subjectId: fieldId,
+          sourceService: 'travelers.legacyRocBackfill',
+          actor: { username: actor, role: null },
+          occurredAt: updateData.recordedAt,
+          reason: 'Collected traveler data entered after supervised legacy ROC routing backfill.',
+          entityType: 'traveler',
+          entityId: travelerId,
+          payload: {
+            travelerId,
+            travelerNumber: traveler.travelerNumber,
+            serialNumber: traveler.serialNumber ?? null,
+            stepId: step.id,
+            stepNumber: step.stepNumber,
+            departmentName: step.departmentName,
+            taskId,
+            taskTitle: task.title,
+            fieldId,
+            fieldKey: updatedField.fieldKey,
+            fieldLabel: updatedField.fieldLabel,
+            previousValue: existingField?.value ?? null,
+            recordedValue: value ?? null,
+          },
+          meta: {
+            travelerId,
+            travelerNumber: traveler.travelerNumber,
+            serialNumber: traveler.serialNumber ?? null,
+          },
+        });
+      }
+    }
 
     res.json(updatedField);
   } catch (error: any) {

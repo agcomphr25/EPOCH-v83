@@ -194,6 +194,16 @@ interface LegacyRocBackfillApplyResult {
   }[];
 }
 
+interface LegacyRocRestoreResult {
+  mode: 'restore_canceled';
+  writesPerformed: boolean;
+  status: 'restored' | 'skipped';
+  traveler?: Traveler;
+  travelerId?: string;
+  travelerNumber?: string;
+  message?: string;
+}
+
 const STATUS_COLORS: Record<string, string> = {
   DRAFT: 'bg-gray-100 text-gray-800',
   IN_PROGRESS: 'bg-blue-100 text-blue-800',
@@ -223,6 +233,7 @@ export default function TravelerManagement() {
   const [showLegacyRocBackfillDialog, setShowLegacyRocBackfillDialog] = useState(false);
   const [legacyRocBackfillReport, setLegacyRocBackfillReport] = useState<LegacyRocBackfillReport | null>(null);
   const [legacyRocApplyResult, setLegacyRocApplyResult] = useState<LegacyRocBackfillApplyResult | null>(null);
+  const [legacyRocRestoreResult, setLegacyRocRestoreResult] = useState<LegacyRocRestoreResult | null>(null);
   const [offSystemLinkDraft, setOffSystemLinkDraft] = useState('');
   const [selectedTraveler, setSelectedTraveler] = useState<Traveler | null>(null);
   const [selectedRouting, setSelectedRouting] = useState<string>('');
@@ -267,6 +278,7 @@ export default function TravelerManagement() {
     onSuccess: (report) => {
       setLegacyRocBackfillReport(report);
       setLegacyRocApplyResult(null);
+      setLegacyRocRestoreResult(null);
       setShowLegacyRocBackfillDialog(true);
       toast({
         title: 'Dry-run complete',
@@ -277,6 +289,33 @@ export default function TravelerManagement() {
       toast({
         title: 'Dry-run failed',
         description: error.message || 'Could not generate the legacy ROC backfill report',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const legacyRocRestoreCanceledMutation = useMutation({
+    mutationFn: () =>
+      apiRequest('/api/travelers/legacy-roc-backfill/restore-canceled', {
+        method: 'POST',
+        body: { confirmSupervisorApproval: true },
+        timeout: 120000,
+      }) as Promise<LegacyRocRestoreResult>,
+    onSuccess: (result) => {
+      setLegacyRocRestoreResult(result);
+      queryClient.invalidateQueries({ queryKey: ['/api/travelers'] });
+      toast({
+        title: result.status === 'restored' ? 'Traveler restored' : 'No restore needed',
+        description: result.status === 'restored'
+          ? 'TRV-2026-000271 is active again for supervised backfill.'
+          : result.message,
+      });
+      legacyRocBackfillDryRunMutation.mutate();
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Restore failed',
+        description: error.message || 'Could not restore the canceled ROC traveler',
         variant: 'destructive',
       });
     },
@@ -698,6 +737,9 @@ export default function TravelerManagement() {
     blocked: travelers.filter((t) => t.status === 'BLOCKED').length,
     scrapped: travelers.filter((t) => t.status === 'SCRAPPED').length,
   };
+  const hasCanceledLegacyRocTraveler = legacyRocBackfillReport?.rows.some(
+    (row) => row.traveler?.travelerNumber === 'TRV-2026-000271' && row.traveler.status.toUpperCase() === 'CANCELED'
+  ) ?? false;
 
   if (isLoading) {
     return (
@@ -1148,6 +1190,16 @@ export default function TravelerManagement() {
                   </div>
                 </div>
               )}
+
+              {legacyRocRestoreResult && (
+                <div className="rounded border border-blue-200 bg-blue-50 p-3 text-sm">
+                  <p className="font-medium text-blue-900">
+                    {legacyRocRestoreResult.status === 'restored'
+                      ? 'TRV-2026-000271 was restored to active status with an audit trail.'
+                      : legacyRocRestoreResult.message}
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
@@ -1155,9 +1207,23 @@ export default function TravelerManagement() {
             <Button variant="outline" onClick={() => setShowLegacyRocBackfillDialog(false)}>
               Close
             </Button>
+            {hasCanceledLegacyRocTraveler && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const ok = window.confirm('Restore TRV-2026-000271 from canceled to active status with a timestamped audit record?');
+                  if (ok) legacyRocRestoreCanceledMutation.mutate();
+                }}
+                disabled={legacyRocRestoreCanceledMutation.isPending}
+                data-testid="button-legacy-roc-restore-canceled"
+              >
+                {legacyRocRestoreCanceledMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Restore Canceled Traveler
+              </Button>
+            )}
             <Button
               onClick={() => {
-                const ok = window.confirm('Apply the supervised legacy ROC backfill to the 11 active travelers and write timestamped audit records?');
+                const ok = window.confirm('Apply the supervised legacy ROC backfill to the active eligible travelers and write timestamped audit records?');
                 if (ok) legacyRocBackfillApplyMutation.mutate();
               }}
               disabled={legacyRocBackfillApplyMutation.isPending || !legacyRocBackfillReport}

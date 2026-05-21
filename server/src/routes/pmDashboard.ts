@@ -1464,15 +1464,17 @@ router.get('/:projectId/labor', h(async (req, res) => {
     WHERE wo.project_id = $1
   `, [projectId]);
 
-  // Actual hours from punch_ledger (closed REGULAR sessions)
+  // Labor used from punch_ledger. PM views include open sessions so supervisors see
+  // active WAD time-bank consumption before an employee clocks out.
   const actualRes = await pool.query<{ actualHours: string }>(`
     SELECT COALESCE(SUM(
-      EXTRACT(EPOCH FROM (pl.clock_out - pl.clock_in)) / 3600.0
+      EXTRACT(EPOCH FROM (COALESCE(pl.clock_out, NOW()) - pl.clock_in)) / 3600.0
     ), 0) AS "actualHours"
     FROM punch_ledger pl
-    WHERE pl.clock_out IS NOT NULL
-      AND pl.labor_class = 'REGULAR'
+    WHERE pl.labor_class = 'REGULAR'
       AND (
+        pl.project_id = $1
+        OR
         pl.production_work_order_id IN (
           SELECT id FROM production_work_orders WHERE project_id = $1
         )
@@ -1487,7 +1489,10 @@ router.get('/:projectId/labor', h(async (req, res) => {
     SELECT COUNT(*) AS "openSessionCount"
     FROM punch_ledger pl
     WHERE pl.clock_out IS NULL
+      AND pl.labor_class = 'REGULAR'
       AND (
+        pl.project_id = $1
+        OR
         pl.production_work_order_id IN (
           SELECT id FROM production_work_orders WHERE project_id = $1
         )
@@ -1531,14 +1536,15 @@ router.get('/:projectId/labor', h(async (req, res) => {
     charge_actuals AS (
       -- Actual hours per charge code within the project scope
       SELECT
-        COALESCE(pl.charge_code, lcc.code) AS charge_code,
-        SUM(EXTRACT(EPOCH FROM (pl.clock_out - pl.clock_in)) / 3600.0) AS actual_hours
+        COALESCE(lcc.code, pl.charge_code) AS charge_code,
+        SUM(EXTRACT(EPOCH FROM (COALESCE(pl.clock_out, NOW()) - pl.clock_in)) / 3600.0) AS actual_hours
       FROM punch_ledger pl
       LEFT JOIN public.charge_codes lcc ON lcc.id = pl.charge_code_id
-      WHERE pl.clock_out IS NOT NULL
-        AND pl.labor_class = 'REGULAR'
-        AND COALESCE(pl.charge_code, lcc.code) IS NOT NULL
+      WHERE pl.labor_class = 'REGULAR'
+        AND COALESCE(lcc.code, pl.charge_code) IS NOT NULL
         AND (
+          pl.project_id = $1
+          OR
           pl.production_work_order_id IN (
             SELECT id FROM production_work_orders WHERE project_id = $1
           )
@@ -1546,7 +1552,7 @@ router.get('/:projectId/labor', h(async (req, res) => {
             SELECT id::text FROM travelers WHERE project_id = $1
           )
         )
-      GROUP BY COALESCE(pl.charge_code, lcc.code)
+      GROUP BY COALESCE(lcc.code, pl.charge_code)
     ),
     charge_code_totals AS (
       SELECT
@@ -1600,14 +1606,18 @@ router.get('/:projectId/labor', h(async (req, res) => {
       pl.traveler_id AS "travelerId",
       t.traveler_number AS "travelerNumber",
       pl.department,
-      pl.charge_code AS "chargeCode",
+      COALESCE(lcc.code, pl.charge_code) AS "chargeCode",
       pl.clock_in AS "startedAt",
       ROUND(EXTRACT(EPOCH FROM (NOW() - pl.clock_in)) / 60) AS "elapsedMinutes"
     FROM punch_ledger pl
     JOIN employees e ON e.id = pl.employee_id
     LEFT JOIN travelers t ON t.id::text = pl.traveler_id
+    LEFT JOIN public.charge_codes lcc ON lcc.id = pl.charge_code_id
     WHERE pl.clock_out IS NULL
+      AND pl.labor_class = 'REGULAR'
       AND (
+        pl.project_id = $1
+        OR
         pl.production_work_order_id IN (
           SELECT id FROM production_work_orders WHERE project_id = $1
         )
@@ -1717,7 +1727,7 @@ router.get('/:projectId/labor', h(async (req, res) => {
       pl.employee_id AS "employeeId",
       e.name AS "employeeName",
       pl.department AS department,
-      pl.charge_code AS "chargeCode",
+      COALESCE(lcc.code, pl.charge_code) AS "chargeCode",
       wo.work_order_number AS "workOrderNumber",
       t.traveler_number AS "travelerNumber",
       COALESCE(MAX(wob.budgeted_hours), 0) AS "budgetedHours",
@@ -1740,22 +1750,26 @@ router.get('/:projectId/labor', h(async (req, res) => {
     JOIN employees e ON e.id = pl.employee_id
     LEFT JOIN production_work_orders wo ON wo.id = pl.production_work_order_id
     LEFT JOIN travelers t ON t.id::text = pl.traveler_id
+    LEFT JOIN public.charge_codes lcc ON lcc.id = pl.charge_code_id
     LEFT JOIN work_order_budget wob
       ON wob.work_order_id = COALESCE(pl.production_work_order_id, t.production_work_order_id)
-    WHERE (
-      pl.production_work_order_id IN (
-        SELECT id FROM production_work_orders WHERE project_id = $1
+    WHERE pl.labor_class = 'REGULAR'
+      AND (
+        pl.project_id = $1
+        OR
+        pl.production_work_order_id IN (
+          SELECT id FROM production_work_orders WHERE project_id = $1
+        )
+        OR pl.traveler_id IN (
+          SELECT id::text FROM travelers WHERE project_id = $1
+        )
       )
-      OR pl.traveler_id IN (
-        SELECT id::text FROM travelers WHERE project_id = $1
-      )
-    )
     GROUP BY
       pl.clock_in::date,
       pl.employee_id,
       e.name,
       pl.department,
-      pl.charge_code,
+      COALESCE(lcc.code, pl.charge_code),
       wo.work_order_number,
       t.traveler_number
     ORDER BY pl.clock_in::date DESC, e.name ASC

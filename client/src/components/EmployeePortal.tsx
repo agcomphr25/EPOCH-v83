@@ -12,6 +12,13 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
   Select,
   SelectContent,
   SelectGroup,
@@ -644,6 +651,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
   const [salariedLineForm, setSalariedLineForm] = useState<SalariedLineForm>(() =>
     emptySalariedLineForm(getWeekForDate().start),
   );
+  const [salariedEntryOpen, setSalariedEntryOpen] = useState(false);
   const [salariedCertReviewId, setSalariedCertReviewId] = useState<number | null>(null);
   const [salariedCertConfirmedId, setSalariedCertConfirmedId] = useState<number | null>(null);
   const selectedPayPeriod = getPayPeriodForDate(selectedPayPeriodStart);
@@ -867,6 +875,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
     onSuccess: () => {
       toast({ title: 'Timesheet line saved', description: 'Your weekly salary timesheet was updated.' });
       setSalariedLineForm(emptySalariedLineForm(selectedSalariedWeek.start));
+      setSalariedEntryOpen(false);
       refetchSalariedTimesheet();
     },
     onError: (err: any) => {
@@ -1418,6 +1427,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
       note: line.note ?? '',
       originalNarrative: line.originalNarrative ?? '',
     });
+    setSalariedEntryOpen(true);
   };
 
   const fillSalariedFormFromPunch = (session: { sessionId: number; clockIn: PunchEvent; clockOut?: PunchEvent }) => {
@@ -1436,6 +1446,12 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
       note: `Drafted from kiosk punch #${session.sessionId}`,
       originalNarrative: `${formatDateTime(session.clockIn.punchedAt)}${session.clockOut ? ` to ${formatDateTime(session.clockOut.punchedAt)}` : ''}`,
     });
+    setSalariedEntryOpen(true);
+  };
+
+  const openSalariedEntry = (date = selectedSalariedWeek.start) => {
+    setSalariedLineForm({ ...emptySalariedLineForm(date), date });
+    setSalariedEntryOpen(true);
   };
 
   const renderSalariedTimesheets = () => (
@@ -1471,6 +1487,16 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <Button type="button" size="sm" onClick={() => openSalariedEntry()} disabled={!salariedEditable}>
+                  Add Time
+                </Button>
+                {salaryKioskSessions.length > 0 && (
+                  <Button type="button" variant="outline" size="sm" onClick={() => fillSalariedFormFromPunch(salaryKioskSessions[0])} disabled={!salariedEditable || !salaryKioskSessions[0]?.clockOut}>
+                    Use Kiosk Punches
+                  </Button>
+                )}
+              </div>
               <div className="grid grid-cols-2 gap-2 text-center">
                 <div className="rounded-md bg-white border px-3 py-2">
                   <div className="text-base font-bold text-gray-900">{salariedTotalHours.toFixed(2)}</div>
@@ -1494,6 +1520,11 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
           <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">Could not load your salaried weekly timesheet.</div>
         ) : (
           <div className="space-y-6">
+            {!salariedEditable && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                This week is currently locked because it is {salariedTimesheet.timesheet.status.replace(/_/g, ' ').toLowerCase()}. Ask your supervisor or HR/admin to reopen it before making changes.
+              </div>
+            )}
             <div className="overflow-x-auto rounded-md border bg-white">
               <Table>
                 <TableHeader>
@@ -1530,7 +1561,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
                         </TableCell>
                         <TableCell className="text-right font-semibold">{dayHours.toFixed(2)}</TableCell>
                         <TableCell className="text-right">
-                          {salariedEditable && <Button type="button" variant="ghost" size="sm" onClick={() => setSalariedLineForm({ ...emptySalariedLineForm(day), date: day })}>Add</Button>}
+                          {salariedEditable && <Button type="button" variant="ghost" size="sm" onClick={() => openSalariedEntry(day)}>{lines.length > 0 ? 'Add/Edit' : 'Add Time'}</Button>}
                         </TableCell>
                       </TableRow>
                     );
@@ -1636,6 +1667,76 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
                 </div>
               )}
             </div>
+
+            <Dialog open={salariedEntryOpen} onOpenChange={setSalariedEntryOpen}>
+              <DialogContent className="sm:max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>{salariedLineForm.id ? 'Edit Time' : 'Add Time'}</DialogTitle>
+                </DialogHeader>
+                {!salariedEditable ? (
+                  <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
+                    This timesheet is no longer editable. Ask your supervisor or HR/admin to reopen it before making changes.
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <Label>Date</Label>
+                        <Input type="date" value={salariedLineForm.date} onChange={(event) => setSalariedLineForm((prev) => ({ ...prev, date: event.target.value }))} />
+                      </div>
+                      <div>
+                        <Label>Hours</Label>
+                        <Input type="number" min="0" step="0.25" value={salariedLineForm.hours} onChange={(event) => setSalariedLineForm((prev) => ({ ...prev, hours: event.target.value }))} />
+                      </div>
+                      <div>
+                        <Label>Time Type</Label>
+                        <Select value={salariedLineForm.lineType} onValueChange={(value: 'DIRECT' | 'INDIRECT') => setSalariedLineForm((prev) => ({ ...prev, lineType: value }))}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="INDIRECT">Indirect / notes</SelectItem>
+                            <SelectItem value="DIRECT">Direct traveler</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label>{salariedLineForm.lineType === 'DIRECT' ? 'Traveler' : 'Indirect Code'}</Label>
+                        {salariedLineForm.lineType === 'DIRECT' ? (
+                          <Select value={salariedLineForm.travelerId || '__none'} onValueChange={(value) => setSalariedLineForm((prev) => ({ ...prev, travelerId: value === '__none' ? '' : value }))} disabled={travelerOptionsLoading}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none">Select traveler</SelectItem>
+                              {travelerOptions.map((traveler) => <SelectItem key={traveler.id} value={traveler.id}>{traveler.id}{traveler.description ? ` - ${traveler.description}` : ''}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Select value={salariedLineForm.indirectCodeId || '__none'} onValueChange={(value) => setSalariedLineForm((prev) => ({ ...prev, indirectCodeId: value === '__none' ? '' : value }))} disabled={indirectCodesLoading}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none">Select code</SelectItem>
+                              {indirectCodes.map((code) => <SelectItem key={code.id} value={String(code.id)}>{code.code} - {code.label}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <Label>Notes</Label>
+                      <Textarea value={salariedLineForm.note} onChange={(event) => setSalariedLineForm((prev) => ({ ...prev, note: event.target.value }))} placeholder="What did this time cover?" />
+                    </div>
+                  </div>
+                )}
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => setSalariedEntryOpen(false)}>Cancel</Button>
+                  <Button
+                    type="button"
+                    disabled={!salariedEditable || saveSalariedLineMutation.isPending || !salariedLineForm.date || !salariedLineForm.hours || (salariedLineForm.lineType === 'DIRECT' ? !salariedLineForm.travelerId : !salariedLineForm.indirectCodeId)}
+                    onClick={() => saveSalariedLineMutation.mutate()}
+                  >
+                    {saveSalariedLineMutation.isPending ? 'Saving...' : 'Save Time'}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
 
             <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 space-y-3">
               <p className="text-sm text-gray-700 italic leading-relaxed border-l-4 border-amber-400 pl-3">"{DCAA_CERTIFICATION_STATEMENT}"</p>

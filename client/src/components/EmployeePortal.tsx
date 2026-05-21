@@ -224,6 +224,7 @@ type TravelerOption = {
 type SalariedLineForm = {
   id: number | null;
   date: string;
+  chargeCodeId: string;
   lineType: 'DIRECT' | 'INDIRECT';
   travelerId: string;
   indirectCodeId: string;
@@ -363,6 +364,7 @@ function emptySalariedLineForm(date: string): SalariedLineForm {
   return {
     id: null,
     date,
+    chargeCodeId: '',
     lineType: 'INDIRECT',
     travelerId: '',
     indirectCodeId: '',
@@ -466,6 +468,16 @@ type ActiveShiftPunchResponse = {
   from: string;
   to: string;
   punches: PunchEvent[];
+};
+
+const CHARGE_CODE_TYPE_LABELS: Record<string, string> = {
+  DIRECT: 'Direct Labor',
+  OVERHEAD: 'Overhead',
+  G_AND_A: 'G&A',
+  IR_AND_D: 'IR&D',
+  B_AND_P: 'B&P',
+  INDIRECT: 'Indirect',
+  OTHER: 'Other',
 };
 
 function portalFetch(url: string, init?: Parameters<typeof fetch>[1]) {
@@ -808,7 +820,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
     enabled: activeTab === 'my-timesheets' && isSalariedEmployee,
   });
 
-  const { data: indirectCodes = [], isLoading: indirectCodesLoading } = useQuery<IndirectCode[]>({
+  const { data: indirectCodes = [] } = useQuery<IndirectCode[]>({
     queryKey: ['/api/timekeeping/salaried-timesheet', 'portal', employeeId, 'indirect-codes'],
     queryFn: async () => {
       const res = await portalFetch('/api/timekeeping/salaried-timesheet/my/indirect-codes');
@@ -824,6 +836,17 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
     queryFn: async () => {
       const res = await portalFetch('/api/timekeeping/salaried-timesheet/my/travelers/all');
       if (!res.ok) throw new Error('Failed to fetch travelers');
+      return res.json();
+    },
+    enabled: activeTab === 'my-timesheets' && isSalariedEmployee,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: salariedChargeCodes = [], isLoading: salariedChargeCodesLoading } = useQuery<ChargeCode[]>({
+    queryKey: ['/api/timekeeping/charge-codes', 'salaried-entry'],
+    queryFn: async () => {
+      const res = await portalFetch('/api/timekeeping/charge-codes');
+      if (!res.ok) throw new Error('Failed to fetch charge codes');
       return res.json();
     },
     enabled: activeTab === 'my-timesheets' && isSalariedEmployee,
@@ -848,15 +871,22 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
       if (!salariedTimesheet) throw new Error('Salaried timesheet is not loaded yet.');
       const hours = Number(salariedLineForm.hours);
       if (!Number.isFinite(hours) || hours <= 0) throw new Error('Hours must be greater than 0.');
+      const chargeCodeId = Number(salariedLineForm.chargeCodeId);
+      if (!Number.isFinite(chargeCodeId) || chargeCodeId <= 0) throw new Error('Select a charge code.');
+      const selectedChargeCode = salariedChargeCodes.find((code) => code.id === chargeCodeId);
+      const lineType = selectedChargeCode?.type === 'DIRECT' ? 'DIRECT' : 'INDIRECT';
+      const matchedIndirectCode = indirectCodes.find((code) => code.chargeCodeId === chargeCodeId);
+      if (lineType === 'DIRECT' && !salariedLineForm.travelerId) throw new Error('Select a traveler for direct labor.');
       const payload = {
         date: salariedLineForm.date,
-        lineType: salariedLineForm.lineType,
+        lineType,
+        chargeCodeId,
         hours,
         note: salariedLineForm.note.trim() || null,
         originalNarrative: salariedLineForm.originalNarrative.trim() || null,
-        ...(salariedLineForm.lineType === 'DIRECT'
+        ...(lineType === 'DIRECT'
           ? { travelerId: salariedLineForm.travelerId }
-          : { indirectCodeId: Number(salariedLineForm.indirectCodeId) }),
+          : { indirectCodeId: matchedIndirectCode?.id ?? null }),
       };
       const base = `/api/timekeeping/salaried-timesheet/my/timesheets/${salariedTimesheet.timesheet.id}/lines`;
       const res = await portalFetch(
@@ -1414,12 +1444,26 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
       return acc;
     }, new Map()).values(),
   ).filter((session) => session.clockIn.type === 'clock_in');
+  const selectedSalariedChargeCode = salariedChargeCodes.find((code) => String(code.id) === salariedLineForm.chargeCodeId);
+  const selectedSalariedChargeCodeRequiresTraveler = selectedSalariedChargeCode?.type === 'DIRECT';
+  const groupedSalariedChargeCodes = salariedChargeCodes.reduce<Record<string, ChargeCode[]>>((acc, code) => {
+    const type = code.type || 'OTHER';
+    if (!acc[type]) acc[type] = [];
+    acc[type].push(code);
+    return acc;
+  }, {});
+  const chargeCodeName = (chargeCodeId: number | null) => {
+    const code = salariedChargeCodes.find((candidate) => candidate.id === chargeCodeId);
+    if (!code) return chargeCodeId ? `Charge code ${chargeCodeId}` : null;
+    return `${code.code}${code.description ? ` - ${code.description}` : ''}`;
+  };
 
   const fillSalariedFormFromLine = (line: SalariedTimesheetLine) => {
     if (line.isLocked) return;
     setSalariedLineForm({
       id: line.id,
       date: line.date,
+      chargeCodeId: line.chargeCodeId ? String(line.chargeCodeId) : '',
       lineType: line.lineType === 'DIRECT' ? 'DIRECT' : 'INDIRECT',
       travelerId: line.travelerId ?? '',
       indirectCodeId: line.indirectCodeId ? String(line.indirectCodeId) : '',
@@ -1439,6 +1483,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
     setSalariedLineForm({
       id: null,
       date: toLocalDateStr(session.clockIn.punchedAt),
+      chargeCodeId: '',
       lineType: 'INDIRECT',
       travelerId: '',
       indirectCodeId: '',
@@ -1551,6 +1596,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
                                 <div key={line.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
                                   <Badge variant="outline" className={line.lineType === 'DIRECT' ? 'text-blue-700 border-blue-200' : 'text-emerald-700 border-emerald-200'}>{line.lineType}</Badge>
                                   <span className="font-medium text-gray-700">{Number(line.hours).toFixed(2)}h</span>
+                                  {chargeCodeName(line.chargeCodeId) && <span className="text-muted-foreground">{chargeCodeName(line.chargeCodeId)}</span>}
                                   {line.travelerId && <span className="text-muted-foreground">Traveler {line.travelerId}</span>}
                                   {line.note && <span className="text-muted-foreground">{line.note}</span>}
                                   {line.isLocked && <Badge className="bg-gray-100 text-gray-700 border-gray-200">Locked</Badge>}
@@ -1568,70 +1614,6 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
                   })}
                 </TableBody>
               </Table>
-            </div>
-
-            <div className="rounded-lg border p-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-                <div>
-                  <h3 className="font-semibold text-sm text-gray-900">{salariedLineForm.id ? 'Edit Line' : 'Add Line'}</h3>
-                  <p className="text-xs text-muted-foreground mt-1">Use direct lines for traveler/job time and indirect lines for admin, sick, vacation, training, and other notes.</p>
-                </div>
-                {salariedLineForm.id && <Button type="button" variant="outline" size="sm" onClick={() => setSalariedLineForm(emptySalariedLineForm(selectedSalariedWeek.start))}>New Line</Button>}
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-                <div>
-                  <Label>Date</Label>
-                  <Input type="date" value={salariedLineForm.date} onChange={(event) => setSalariedLineForm((prev) => ({ ...prev, date: event.target.value }))} disabled={!salariedEditable} />
-                </div>
-                <div>
-                  <Label>Type</Label>
-                  <Select value={salariedLineForm.lineType} onValueChange={(value: 'DIRECT' | 'INDIRECT') => setSalariedLineForm((prev) => ({ ...prev, lineType: value }))} disabled={!salariedEditable}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="INDIRECT">Indirect</SelectItem>
-                      <SelectItem value="DIRECT">Direct</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label>{salariedLineForm.lineType === 'DIRECT' ? 'Traveler' : 'Indirect Code'}</Label>
-                  {salariedLineForm.lineType === 'DIRECT' ? (
-                    <Select value={salariedLineForm.travelerId || '__none'} onValueChange={(value) => setSalariedLineForm((prev) => ({ ...prev, travelerId: value === '__none' ? '' : value }))} disabled={!salariedEditable || travelerOptionsLoading}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none">Select traveler</SelectItem>
-                        {travelerOptions.map((traveler) => <SelectItem key={traveler.id} value={traveler.id}>{traveler.id}{traveler.description ? ` - ${traveler.description}` : ''}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <Select value={salariedLineForm.indirectCodeId || '__none'} onValueChange={(value) => setSalariedLineForm((prev) => ({ ...prev, indirectCodeId: value === '__none' ? '' : value }))} disabled={!salariedEditable || indirectCodesLoading}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none">Select code</SelectItem>
-                        {indirectCodes.map((code) => <SelectItem key={code.id} value={String(code.id)}>{code.code} - {code.label}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  )}
-                </div>
-                <div>
-                  <Label>Hours</Label>
-                  <Input type="number" min="0" step="0.25" value={salariedLineForm.hours} onChange={(event) => setSalariedLineForm((prev) => ({ ...prev, hours: event.target.value }))} disabled={!salariedEditable} />
-                </div>
-                <div className="flex items-end">
-                  <Button
-                    type="button"
-                    className="w-full"
-                    disabled={!salariedEditable || saveSalariedLineMutation.isPending || !salariedLineForm.date || !salariedLineForm.hours || (salariedLineForm.lineType === 'DIRECT' ? !salariedLineForm.travelerId : !salariedLineForm.indirectCodeId)}
-                    onClick={() => saveSalariedLineMutation.mutate()}
-                  >
-                    {saveSalariedLineMutation.isPending ? 'Saving...' : 'Save Line'}
-                  </Button>
-                </div>
-              </div>
-              <div className="mt-3">
-                <Label>Notes</Label>
-                <Textarea value={salariedLineForm.note} onChange={(event) => setSalariedLineForm((prev) => ({ ...prev, note: event.target.value }))} disabled={!salariedEditable} placeholder="Work performed, PTO context, sick/vacation note, or correction context" />
-              </div>
             </div>
 
             {salariedLines.some((line) => !line.isLocked) && (
@@ -1688,36 +1670,52 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
                         <Label>Hours</Label>
                         <Input type="number" min="0" step="0.25" value={salariedLineForm.hours} onChange={(event) => setSalariedLineForm((prev) => ({ ...prev, hours: event.target.value }))} />
                       </div>
-                      <div>
-                        <Label>Time Type</Label>
-                        <Select value={salariedLineForm.lineType} onValueChange={(value: 'DIRECT' | 'INDIRECT') => setSalariedLineForm((prev) => ({ ...prev, lineType: value }))}>
-                          <SelectTrigger><SelectValue /></SelectTrigger>
+                      <div className="sm:col-span-2">
+                        <Label>Charge Code</Label>
+                        <Select
+                          value={salariedLineForm.chargeCodeId || '__none'}
+                          onValueChange={(value) => {
+                            const chargeCodeId = value === '__none' ? '' : value;
+                            const selected = salariedChargeCodes.find((code) => String(code.id) === chargeCodeId);
+                            const mappedIndirectCode = indirectCodes.find((code) => String(code.chargeCodeId) === chargeCodeId);
+                            setSalariedLineForm((prev) => ({
+                              ...prev,
+                              chargeCodeId,
+                              lineType: selected?.type === 'DIRECT' ? 'DIRECT' : 'INDIRECT',
+                              indirectCodeId: mappedIndirectCode ? String(mappedIndirectCode.id) : '',
+                              travelerId: selected?.type === 'DIRECT' ? prev.travelerId : '',
+                            }));
+                          }}
+                          disabled={salariedChargeCodesLoading}
+                        >
+                          <SelectTrigger><SelectValue placeholder="Select charge code" /></SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="INDIRECT">Indirect / notes</SelectItem>
-                            <SelectItem value="DIRECT">Direct traveler</SelectItem>
+                            <SelectItem value="__none">Select charge code</SelectItem>
+                            {Object.entries(groupedSalariedChargeCodes).map(([type, codes]) => (
+                              <SelectGroup key={type}>
+                                <SelectLabel>{CHARGE_CODE_TYPE_LABELS[type] ?? type}</SelectLabel>
+                                {codes.map((code) => (
+                                  <SelectItem key={code.id} value={String(code.id)}>
+                                    {code.code}{code.description ? ` - ${code.description}` : ''}
+                                  </SelectItem>
+                                ))}
+                              </SelectGroup>
+                            ))}
                           </SelectContent>
                         </Select>
                       </div>
-                      <div>
-                        <Label>{salariedLineForm.lineType === 'DIRECT' ? 'Traveler' : 'Indirect Code'}</Label>
-                        {salariedLineForm.lineType === 'DIRECT' ? (
+                      {selectedSalariedChargeCodeRequiresTraveler && (
+                        <div className="sm:col-span-2">
+                          <Label>Traveler</Label>
                           <Select value={salariedLineForm.travelerId || '__none'} onValueChange={(value) => setSalariedLineForm((prev) => ({ ...prev, travelerId: value === '__none' ? '' : value }))} disabled={travelerOptionsLoading}>
-                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectTrigger><SelectValue placeholder="Select traveler" /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="__none">Select traveler</SelectItem>
                               {travelerOptions.map((traveler) => <SelectItem key={traveler.id} value={traveler.id}>{traveler.id}{traveler.description ? ` - ${traveler.description}` : ''}</SelectItem>)}
                             </SelectContent>
                           </Select>
-                        ) : (
-                          <Select value={salariedLineForm.indirectCodeId || '__none'} onValueChange={(value) => setSalariedLineForm((prev) => ({ ...prev, indirectCodeId: value === '__none' ? '' : value }))} disabled={indirectCodesLoading}>
-                            <SelectTrigger><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="__none">Select code</SelectItem>
-                              {indirectCodes.map((code) => <SelectItem key={code.id} value={String(code.id)}>{code.code} - {code.label}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </div>
                     <div>
                       <Label>Notes</Label>
@@ -1729,7 +1727,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
                   <Button type="button" variant="outline" onClick={() => setSalariedEntryOpen(false)}>Cancel</Button>
                   <Button
                     type="button"
-                    disabled={!salariedEditable || saveSalariedLineMutation.isPending || !salariedLineForm.date || !salariedLineForm.hours || (salariedLineForm.lineType === 'DIRECT' ? !salariedLineForm.travelerId : !salariedLineForm.indirectCodeId)}
+                    disabled={!salariedEditable || saveSalariedLineMutation.isPending || !salariedLineForm.date || !salariedLineForm.hours || !salariedLineForm.chargeCodeId || (selectedSalariedChargeCodeRequiresTraveler && !salariedLineForm.travelerId)}
                     onClick={() => saveSalariedLineMutation.mutate()}
                   >
                     {saveSalariedLineMutation.isPending ? 'Saving...' : 'Save Time'}
@@ -1773,16 +1771,6 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
     acc[type].push(code);
     return acc;
   }, {});
-
-  const chargeCodeTypeLabels: Record<string, string> = {
-    DIRECT: 'Direct Labor',
-    OVERHEAD: 'Overhead',
-    G_AND_A: 'G&A',
-    IR_AND_D: 'IR&D',
-    B_AND_P: 'B&P',
-    INDIRECT: 'Indirect',
-    OTHER: 'Other',
-  };
 
   const clearFilters = () => {
     setFilterChargeCode('all');
@@ -3011,7 +2999,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
                             <SelectItem value="none">No charge code</SelectItem>
                             {Object.keys(chargeCodesByType).sort().map((type) => (
                               <SelectGroup key={type}>
-                                <SelectLabel>{chargeCodeTypeLabels[type] ?? type}</SelectLabel>
+                                <SelectLabel>{CHARGE_CODE_TYPE_LABELS[type] ?? type}</SelectLabel>
                                 {chargeCodesByType[type].map((cc) => (
                                   <SelectItem key={cc.id} value={cc.code}>
                                     {cc.code}{cc.description ? ` - ${cc.description}` : ''}

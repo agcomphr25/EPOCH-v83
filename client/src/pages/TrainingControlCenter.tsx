@@ -47,7 +47,8 @@ const TRAINING_TABS = new Set<TrainingTab>([
 ]);
 
 function getTabFromLocation(location: string): TrainingTab {
-  const query = location.split('?')[1] || '';
+  const browserSearch = typeof window !== 'undefined' ? window.location.search.replace(/^\?/, '') : '';
+  const query = browserSearch || location.split('?')[1] || '';
   const tab = new URLSearchParams(query).get('tab');
   return TRAINING_TABS.has(tab as TrainingTab) ? (tab as TrainingTab) : 'modules';
 }
@@ -112,6 +113,13 @@ export default function TrainingControlCenter() {
     const tab = getTabFromLocation(location);
     setActiveTab(tab);
   }, [location]);
+
+  const openForkliftCertification = () => {
+    setActiveTab('forklift');
+    if (typeof window !== 'undefined') {
+      window.history.pushState({}, '', '/training-control-center?tab=forklift');
+    }
+  };
 
   const { data: stats } = useQuery<TrainingStats>({
     queryKey: ['/api/training/stats'],
@@ -236,7 +244,7 @@ export default function TrainingControlCenter() {
         </div>
 
         <TabsContent value="modules" className="space-y-4">
-          <Training lang={lang} />
+          <Training lang={lang} onStartForkliftCertification={openForkliftCertification} />
         </TabsContent>
 
         <TabsContent value="library" className="space-y-4">

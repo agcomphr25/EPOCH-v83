@@ -21,6 +21,10 @@ import { recordAuditEvent, type AuditPayload } from "../auditLedgerService";
 
 export type { Timesheet };
 
+function isHourlyTimekeepingEmployee(employee: { payType?: string | null }): boolean {
+  return (employee.payType ?? "HOURLY").toUpperCase() !== "SALARY";
+}
+
 export async function listTimesheets(filters?: {
   employeeId?: number | null;
   status?: string | null;
@@ -1294,7 +1298,7 @@ export async function generateTimesheetsForAllEmployees(
 
   const allEmployees = await listResolvedEmployees();
   const activeWithTimekeeping = allEmployees.filter(
-    (e) => e.isActive && e.timekeepingId != null
+    (e) => e.isActive && e.timekeepingId != null && isHourlyTimekeepingEmployee(e)
   );
 
   for (const emp of activeWithTimekeeping) {
@@ -1322,7 +1326,11 @@ export async function generateTimesheetsForAllEmployees(
     }
 
     try {
-      const ts = await createTimesheet({ employeeId, periodStart, periodEnd }, actor);
+      const ts = await getOrAutoCreateTimesheet(employeeId, periodStart, periodEnd, actor);
+      if (!ts) {
+        result.skipped.push({ employeeId, reason: "No punch hours for period" });
+        continue;
+      }
       result.created.push({ employeeId, timesheetId: ts.id });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

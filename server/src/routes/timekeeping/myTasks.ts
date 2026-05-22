@@ -1,7 +1,7 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction, type RequestHandler } from "express";
 import { authenticateToken } from "../../../middleware/auth";
 import { pool } from "../../../db";
-import { getPayrollReviewBatch } from "../../services/timekeeping/dashboard.service";
+import { getPayrollReviewBatch, type PayrollReviewBatch } from "../../services/timekeeping/dashboard.service";
 import { getAdminReviewQueue } from "../../services/timekeeping/salariedTimesheet.service";
 
 function h(fn: (req: Request, res: Response, next: NextFunction) => Promise<void>): RequestHandler {
@@ -19,6 +19,47 @@ const INCOMPLETE_HOURLY_ISSUES = new Set([
   "unapproved_labor",
   "missing_timesheet",
 ]);
+
+function emptyPayrollReviewBatch(): PayrollReviewBatch {
+  return {
+    periodStart: "",
+    periodEnd: "",
+    label: "Unavailable",
+    generatedAt: new Date().toISOString(),
+    summary: {
+      employeeCount: 0,
+      totalHours: 0,
+      regularHours: 0,
+      overtimeHours: 0,
+      leaveHours: 0,
+      missingPunchCount: 0,
+      blockedCount: 0,
+      readyCount: 0,
+      lockedCount: 0,
+      pendingCorrectionCount: 0,
+    },
+    hourly: [],
+    salaried: [],
+  };
+}
+
+async function optionalValue<T>(label: string, promise: Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await promise;
+  } catch (err: any) {
+    console.error(`[timekeeping/myTasks] Optional task source failed (${label})`, err?.message ?? err);
+    return fallback;
+  }
+}
+
+async function optionalQuery<T>(label: string, query: string, params: unknown[]): Promise<{ rows: T[] }> {
+  try {
+    return await pool.query<T>(query, params);
+  } catch (err: any) {
+    console.error(`[timekeeping/myTasks] Optional task query failed (${label})`, err?.message ?? err);
+    return { rows: [] };
+  }
+}
 
 let forkliftTablesEnsured = false;
 async function ensureForkliftTaskTables() {
@@ -142,10 +183,11 @@ router.get(
       return;
     }
 
-    await ensureForkliftTaskTables();
+    await optionalValue("ensureForkliftTaskTables", ensureForkliftTaskTables(), undefined);
 
     const [pto, punchCorrections, salaried, hourly, forklift, payrollReview, salariedReviewQueue] = await Promise.all([
-      pool.query(
+      optionalQuery(
+        "pto",
         `
           SELECT r.id,
                  r.employee_id,
@@ -165,7 +207,8 @@ router.get(
         `,
         [employeeId],
       ),
-      pool.query(
+      optionalQuery(
+        "punchCorrections",
         `
           SELECT r.id,
                  r.employee_id,
@@ -184,7 +227,8 @@ router.get(
         `,
         [employeeId],
       ),
-      pool.query(
+      optionalQuery(
+        "salariedTimesheets",
         `
           SELECT st.id,
                  st.employee_id,
@@ -202,7 +246,8 @@ router.get(
         `,
         [employeeId],
       ),
-      pool.query(
+      optionalQuery(
+        "hourlyTimesheets",
         `
           SELECT t.id,
                  t.employee_id,
@@ -220,7 +265,8 @@ router.get(
         `,
         [employeeId],
       ),
-      pool.query(
+      optionalQuery(
+        "forkliftEvaluations",
         `
           SELECT ev.id,
                  ev.employee_id,
@@ -238,8 +284,8 @@ router.get(
         `,
         [employeeId],
       ),
-      getPayrollReviewBatch(),
-      getAdminReviewQueue(),
+      optionalValue("payrollReviewBatch", getPayrollReviewBatch(), emptyPayrollReviewBatch()),
+      optionalValue("salariedReviewQueue", getAdminReviewQueue(), []),
     ]);
 
     const ptoTasks = pto.rows.map((r: any) => ({

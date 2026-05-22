@@ -210,7 +210,75 @@ function summarizeAccumulation(
   });
 }
 
+let accumulationSchemaReady: Promise<void> | null = null;
+
+async function ensureAccumulationSchema(): Promise<void> {
+  accumulationSchemaReady ??= (async () => {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS burden_rate_accumulations (
+        id                  SERIAL PRIMARY KEY,
+        calculation_year    INTEGER     NOT NULL,
+        lookback_start      DATE        NOT NULL,
+        lookback_end        DATE        NOT NULL,
+        rate_type           TEXT        NOT NULL DEFAULT 'PROVISIONAL',
+        effective_from      DATE        NOT NULL,
+        status              TEXT        NOT NULL DEFAULT 'DRAFT',
+        notes               TEXT,
+        created_by          TEXT        NOT NULL,
+        created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        posted_at           TIMESTAMPTZ,
+        CONSTRAINT burden_rate_accumulations_rate_type_chk
+          CHECK (rate_type IN ('PROVISIONAL', 'BILLING', 'FINAL')),
+        CONSTRAINT burden_rate_accumulations_status_chk
+          CHECK (status IN ('DRAFT', 'POSTED'))
+      )
+    `);
+
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_burden_rate_accumulations_year
+        ON burden_rate_accumulations (calculation_year, rate_type, created_at DESC)
+    `);
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS burden_rate_accumulation_expense_lines (
+        id                  SERIAL PRIMARY KEY,
+        accumulation_id     INTEGER     NOT NULL REFERENCES burden_rate_accumulations(id) ON DELETE CASCADE,
+        pool_id             INTEGER     NOT NULL REFERENCES indirect_cost_pools(id),
+        line_item           TEXT        NOT NULL,
+        monthly_amounts     JSONB       NOT NULL DEFAULT '{}'::jsonb,
+        notes               TEXT,
+        created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_burden_rate_accumulation_expense_lines_accumulation
+        ON burden_rate_accumulation_expense_lines (accumulation_id, pool_id)
+    `);
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS burden_rate_accumulation_bases (
+        id                  SERIAL PRIMARY KEY,
+        accumulation_id     INTEGER     NOT NULL REFERENCES burden_rate_accumulations(id) ON DELETE CASCADE,
+        pool_id             INTEGER     NOT NULL REFERENCES indirect_cost_pools(id),
+        base_amount         NUMERIC(14,4) NOT NULL DEFAULT 0,
+        base_source         TEXT,
+        created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        CONSTRAINT burden_rate_accumulation_bases_unique
+          UNIQUE (accumulation_id, pool_id)
+      )
+    `);
+  })().catch((err) => {
+    accumulationSchemaReady = null;
+    throw err;
+  });
+
+  return accumulationSchemaReady;
+}
+
 export async function getBurdenRateAccumulation(accumulationId: number) {
+  await ensureAccumulationSchema();
+
   const [accumulation] = await db
     .select()
     .from(burdenRateAccumulations)
@@ -240,6 +308,8 @@ export async function getBurdenRateAccumulation(accumulationId: number) {
 }
 
 export async function getLatestBurdenRateAccumulation(calculationYear?: number) {
+  await ensureAccumulationSchema();
+
   const rows = calculationYear
     ? await db
       .select()
@@ -258,6 +328,8 @@ export async function getLatestBurdenRateAccumulation(calculationYear?: number) 
 }
 
 export async function saveBurdenRateAccumulation(input: BurdenRateAccumulationInput, createdBy: string) {
+  await ensureAccumulationSchema();
+
   const expenseLines = input.expenseLines
     .map((line) => ({
       ...line,
@@ -320,6 +392,8 @@ export async function saveBurdenRateAccumulation(input: BurdenRateAccumulationIn
 }
 
 export async function postAccumulationRates(accumulationId: number, actor: string) {
+  await ensureAccumulationSchema();
+
   const payload = await getBurdenRateAccumulation(accumulationId);
   if (!payload) throw Object.assign(new Error('Burden rate accumulation not found.'), { code: 'NOT_FOUND' });
   if (payload.accumulation.status === 'POSTED') {

@@ -45,9 +45,9 @@ export default function AGTestDashboard() {
   });
   const { data: resolvedEmployee } = useQuery<{ employeeId: number | null }>({
     queryKey: ['/api/timekeeping/my-employee-id'],
-    enabled: !!currentUser && !currentUser.employeeId,
+    enabled: !!currentUser,
   });
-  const dashboardEmployeeId = currentUser?.employeeId ?? resolvedEmployee?.employeeId ?? null;
+  const dashboardEmployeeId = resolvedEmployee?.employeeId ?? currentUser?.employeeId ?? null;
 
   const toggleExpand = (section: string) => {
     setExpandedSection(expandedSection === section ? null : section);

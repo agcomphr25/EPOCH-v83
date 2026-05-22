@@ -17516,6 +17516,54 @@ export const insertAppliedBurdenAmountSchema = createInsertSchema(appliedBurdenA
 export type AppliedBurdenAmount = typeof appliedBurdenAmounts.$inferSelect;
 export type InsertAppliedBurdenAmount = z.infer<typeof insertAppliedBurdenAmountSchema>;
 
+export const burdenRateAccumulations = pgTable('burden_rate_accumulations', {
+  id: serial('id').primaryKey(),
+  calculationYear: integer('calculation_year').notNull(),
+  lookbackStart: date('lookback_start').notNull(),
+  lookbackEnd: date('lookback_end').notNull(),
+  rateType: text('rate_type').notNull().default('PROVISIONAL'), // PROVISIONAL | BILLING | FINAL
+  effectiveFrom: date('effective_from').notNull(),
+  status: text('status').notNull().default('DRAFT'), // DRAFT | POSTED
+  notes: text('notes'),
+  createdBy: text('created_by').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  postedAt: timestamp('posted_at', { withTimezone: true }),
+});
+export const insertBurdenRateAccumulationSchema = createInsertSchema(burdenRateAccumulations).omit({
+  id: true, createdAt: true, postedAt: true,
+});
+export type BurdenRateAccumulation = typeof burdenRateAccumulations.$inferSelect;
+export type InsertBurdenRateAccumulation = z.infer<typeof insertBurdenRateAccumulationSchema>;
+
+export const burdenRateAccumulationExpenseLines = pgTable('burden_rate_accumulation_expense_lines', {
+  id: serial('id').primaryKey(),
+  accumulationId: integer('accumulation_id').notNull().references(() => burdenRateAccumulations.id, { onDelete: 'cascade' }),
+  poolId: integer('pool_id').notNull().references(() => indirectCostPools.id),
+  lineItem: text('line_item').notNull(),
+  monthlyAmounts: jsonb('monthly_amounts').$type<Record<string, number>>().notNull().default(sql`'{}'::jsonb`),
+  notes: text('notes'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+export const insertBurdenRateAccumulationExpenseLineSchema = createInsertSchema(burdenRateAccumulationExpenseLines).omit({
+  id: true, createdAt: true,
+});
+export type BurdenRateAccumulationExpenseLine = typeof burdenRateAccumulationExpenseLines.$inferSelect;
+export type InsertBurdenRateAccumulationExpenseLine = z.infer<typeof insertBurdenRateAccumulationExpenseLineSchema>;
+
+export const burdenRateAccumulationBases = pgTable('burden_rate_accumulation_bases', {
+  id: serial('id').primaryKey(),
+  accumulationId: integer('accumulation_id').notNull().references(() => burdenRateAccumulations.id, { onDelete: 'cascade' }),
+  poolId: integer('pool_id').notNull().references(() => indirectCostPools.id),
+  baseAmount: numeric('base_amount', { precision: 14, scale: 4 }).notNull().default('0'),
+  baseSource: text('base_source'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+export const insertBurdenRateAccumulationBaseSchema = createInsertSchema(burdenRateAccumulationBases).omit({
+  id: true, createdAt: true,
+});
+export type BurdenRateAccumulationBase = typeof burdenRateAccumulationBases.$inferSelect;
+export type InsertBurdenRateAccumulationBase = z.infer<typeof insertBurdenRateAccumulationBaseSchema>;
+
 // ============================================================================
 // CYCLE COUNT SESSIONS — AS9100 Physical Inventory Verification Workflow
 // ============================================================================

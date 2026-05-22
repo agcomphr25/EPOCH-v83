@@ -5,7 +5,7 @@
  */
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { db } from '../../db';
 import {
   allocationBases,
@@ -19,14 +19,18 @@ import { authenticateToken } from '../../middleware/auth';
 import { requireAdminAccess } from '../../middleware/routeAuthorization';
 import {
   applyBurdenForPeriod,
+  getBurdenRateAccumulation,
+  getLatestBurdenRateAccumulation,
   getRunBreakdown,
   listApplicationRuns,
   listBases,
   listPools,
   listRatesForPool,
+  postAccumulationRates,
   previewRateChange,
   recomputeBurdenForApplied,
   resolveRateStack,
+  saveBurdenRateAccumulation,
   verifyPeriodBurdenComplete,
 } from '../services/burdenRatesService';
 
@@ -37,6 +41,26 @@ router.use(requireAdminAccess);
 const periodSchema = z.object({
   year: z.number().int().min(2000).max(2100),
   month: z.number().int().min(1).max(12),
+});
+
+const accumulationSchema = z.object({
+  calculationYear: z.number().int().min(2000).max(2100),
+  lookbackStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  lookbackEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  rateType: z.enum(['PROVISIONAL', 'BILLING', 'FINAL']),
+  effectiveFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  notes: z.string().optional().nullable(),
+  expenseLines: z.array(z.object({
+    poolId: z.number().int(),
+    lineItem: z.string().min(1),
+    monthlyAmounts: z.record(z.coerce.number()),
+    notes: z.string().optional().nullable(),
+  })).min(1),
+  bases: z.array(z.object({
+    poolId: z.number().int(),
+    baseAmount: z.coerce.number().nonnegative(),
+    baseSource: z.string().optional().nullable(),
+  })).default([]),
 });
 
 // ── Allocation bases ────────────────────────────────────────────────────────
@@ -235,6 +259,53 @@ router.post('/preview', async (req, res) => {
 });
 
 // ── Application runs ────────────────────────────────────────────────────────
+router.get('/accumulations/latest', async (req, res) => {
+  const year = req.query.year ? Number(req.query.year) : undefined;
+  try {
+    res.json(await getLatestBurdenRateAccumulation(Number.isFinite(year) ? year : undefined));
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.get('/accumulations/:id', async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) return res.status(400).json({ error: 'Invalid id' });
+  try {
+    const payload = await getBurdenRateAccumulation(id);
+    if (!payload) return res.status(404).json({ error: 'Accumulation not found' });
+    res.json(payload);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post('/accumulations', async (req, res) => {
+  const parsed = accumulationSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'Invalid accumulation', details: parsed.error.format() });
+  const actor = (req.user as any)?.username || (req.user as any)?.email || 'admin';
+  try {
+    res.status(201).json(await saveBurdenRateAccumulation(parsed.data, actor));
+  } catch (e: any) {
+    if (e.code === 'NO_EXPENSE_LINES') return res.status(400).json({ error: e.message, code: e.code });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post('/accumulations/:id/post-rates', async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) return res.status(400).json({ error: 'Invalid id' });
+  const actor = (req.user as any)?.username || (req.user as any)?.email || 'admin';
+  try {
+    res.json(await postAccumulationRates(id, actor));
+  } catch (e: any) {
+    if (['NOT_FOUND', 'ALREADY_POSTED', 'NO_POSTABLE_RATES', 'RATE_EXISTS'].includes(e.code)) {
+      return res.status(e.code === 'NOT_FOUND' ? 404 : 409).json({ error: e.message, code: e.code });
+    }
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.get('/runs', async (req, res) => {
   const limit = Math.min(Number(req.query.limit ?? 50) || 50, 200);
   try {

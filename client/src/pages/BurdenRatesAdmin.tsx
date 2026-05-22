@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -71,6 +71,23 @@ type AccumulationPayload = {
     createdAt: string;
     postedAt: string | null;
   };
+  expenseLines: {
+    id: number;
+    accumulationId: number;
+    poolId: number;
+    lineItem: string;
+    monthlyAmounts: Record<string, number>;
+    notes: string | null;
+    createdAt: string;
+  }[];
+  bases: {
+    id: number;
+    accumulationId: number;
+    poolId: number;
+    baseAmount: string;
+    baseSource: string | null;
+    createdAt: string;
+  }[];
   summary: {
     poolId: number;
     poolCode: string;
@@ -174,10 +191,12 @@ export default function BurdenRatesAdmin() {
     ]);
     const [basesByPool, setBasesByPool] = useState<Record<number, { baseAmount: string; baseSource: string }>>({});
     const [result, setResult] = useState<AccumulationPayload | null>(null);
+    const [loadedAccumulationId, setLoadedAccumulationId] = useState<number | null>(null);
 
     const months = monthKeysBetween(form.lookbackStart, form.lookbackEnd);
     const activePools = pools.filter((pool) => pool.isActive);
     const selectablePools = activePools.length > 0 ? activePools : pools;
+    const defaultPoolId = selectablePools[0]?.id ?? 0;
 
     const latest = useQuery<AccumulationPayload | null>({
       queryKey: ['/api/burden-rates/accumulations/latest', form.calculationYear],
@@ -187,6 +206,43 @@ export default function BurdenRatesAdmin() {
         return r.json();
       },
     });
+
+    const loadAccumulationIntoForm = useCallback((payload: AccumulationPayload) => {
+      setResult(payload);
+      setForm({
+        calculationYear: payload.accumulation.calculationYear,
+        lookbackStart: payload.accumulation.lookbackStart,
+        lookbackEnd: payload.accumulation.lookbackEnd,
+        rateType: payload.accumulation.rateType,
+        effectiveFrom: payload.accumulation.effectiveFrom,
+        notes: '',
+      });
+      setLines(payload.expenseLines.length > 0
+        ? payload.expenseLines.map((line) => ({
+          localId: line.id,
+          poolId: line.poolId,
+          lineItem: line.lineItem,
+          monthlyAmounts: Object.fromEntries(
+            Object.entries(line.monthlyAmounts ?? {}).map(([month, value]) => [month, String(value ?? '')]),
+          ),
+        }))
+        : [{ localId: Date.now(), poolId: defaultPoolId, lineItem: '', monthlyAmounts: {} }]);
+      setBasesByPool(Object.fromEntries(
+        payload.bases.map((base) => [
+          base.poolId,
+          { baseAmount: String(base.baseAmount ?? ''), baseSource: base.baseSource ?? '' },
+        ]),
+      ));
+      setLoadedAccumulationId(payload.accumulation.id);
+    }, [defaultPoolId]);
+
+    useEffect(() => {
+      if (!latest.data?.accumulation || loadedAccumulationId === latest.data.accumulation.id || result) return;
+      const hasUserEnteredData = lines.some((line) =>
+        line.lineItem.trim() || Object.values(line.monthlyAmounts).some((value) => Number(value || 0) !== 0),
+      );
+      if (!hasUserEnteredData) loadAccumulationIntoForm(latest.data);
+    }, [latest.data, loadedAccumulationId, result, lines, loadAccumulationIntoForm]);
 
     const save = useMutation({
       mutationFn: async () => {
@@ -220,7 +276,7 @@ export default function BurdenRatesAdmin() {
         });
       },
       onSuccess: (data: any) => {
-        setResult(data);
+        loadAccumulationIntoForm(data);
         queryClient.invalidateQueries({ queryKey: ['/api/burden-rates/accumulations/latest', form.calculationYear] });
         toast({ title: 'Accumulation saved', description: `Calculation #${data.accumulation.id} is ready to review.` });
       },
@@ -259,6 +315,7 @@ export default function BurdenRatesAdmin() {
       return { poolId: pool.id, poolCode: pool.code, poolName: pool.name, expenseTotal, baseAmount, calculatedRate: baseAmount > 0 ? expenseTotal / baseAmount : 0 };
     });
     const summary = result?.summary ?? draftSummary;
+    const displayedAccumulation = result?.accumulation ?? latest.data?.accumulation;
 
     return (
       <div className="space-y-4">
@@ -289,9 +346,9 @@ export default function BurdenRatesAdmin() {
               <div><Label>Effective From</Label><Input type="date" value={form.effectiveFrom} onChange={(e) => setForm({ ...form, effectiveFrom: e.target.value })} data-testid="input-accumulation-effective" /></div>
             </div>
 
-            {latest.data?.accumulation && !result && (
+            {displayedAccumulation && (
               <div className="rounded-md border bg-muted/30 p-3 text-sm">
-                Latest saved calculation for {form.calculationYear}: #{latest.data.accumulation.id} ({latest.data.accumulation.status})
+                Loaded calculation for {displayedAccumulation.calculationYear}: #{displayedAccumulation.id} ({displayedAccumulation.status})
               </div>
             )}
 

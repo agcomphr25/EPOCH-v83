@@ -190,6 +190,14 @@ export default function BurdenRatesAdmin() {
 
     const save = useMutation({
       mutationFn: async () => {
+        const rowsWithAmounts = lines.filter((line) =>
+          months.some((m) => Number(line.monthlyAmounts[m] || 0) !== 0),
+        );
+        const unnamedRows = rowsWithAmounts.filter((line) => line.lineItem.trim().length === 0);
+        if (unnamedRows.length > 0) {
+          throw new Error('Name each expense row before saving, such as Utilities, Machine Maintenance, or Janitorial.');
+        }
+
         const expenseLines = lines
           .map((line) => ({
             poolId: line.poolId || selectablePools[0]?.id,
@@ -197,6 +205,10 @@ export default function BurdenRatesAdmin() {
             monthlyAmounts: Object.fromEntries(months.map((m) => [m, Number(line.monthlyAmounts[m] || 0)])),
           }))
           .filter((line) => line.poolId && line.lineItem);
+        if (expenseLines.length === 0) {
+          throw new Error('Add at least one named QuickBooks expense line with monthly dollars before saving.');
+        }
+
         const bases = selectablePools.map((pool) => ({
           poolId: pool.id,
           baseAmount: Number(basesByPool[pool.id]?.baseAmount || 0),
@@ -290,25 +302,30 @@ export default function BurdenRatesAdmin() {
                     <TableHead className="min-w-[160px]">Pool</TableHead>
                     <TableHead className="min-w-[220px]">QuickBooks Line Item</TableHead>
                     {months.map((m) => <TableHead key={m} className="text-right min-w-[110px]">{m}</TableHead>)}
+                    <TableHead className="text-right min-w-[120px]">Line Total</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {lines.map((line) => (
-                    <TableRow key={line.localId}>
-                      <TableCell>
-                        <Select value={String(line.poolId || selectablePools[0]?.id || '')} onValueChange={(v) => updateLine(line.localId, { poolId: Number(v) })}>
-                          <SelectTrigger><SelectValue placeholder="Pool" /></SelectTrigger>
-                          <SelectContent>
-                            {selectablePools.map((pool) => <SelectItem key={pool.id} value={String(pool.id)}>{pool.code}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                      <TableCell><Input value={line.lineItem} placeholder="QB account or line item" onChange={(e) => updateLine(line.localId, { lineItem: e.target.value })} /></TableCell>
-                      {months.map((m) => (
-                        <TableCell key={m}><Input className="text-right" type="number" step="0.01" value={line.monthlyAmounts[m] ?? ''} onChange={(e) => updateMonth(line.localId, m, e.target.value)} /></TableCell>
-                      ))}
-                    </TableRow>
-                  ))}
+                  {lines.map((line) => {
+                    const lineTotal = months.reduce((sum, m) => sum + Number(line.monthlyAmounts[m] || 0), 0);
+                    return (
+                      <TableRow key={line.localId}>
+                        <TableCell>
+                          <Select value={String(line.poolId || selectablePools[0]?.id || '')} onValueChange={(v) => updateLine(line.localId, { poolId: Number(v) })}>
+                            <SelectTrigger><SelectValue placeholder="Pool" /></SelectTrigger>
+                            <SelectContent>
+                              {selectablePools.map((pool) => <SelectItem key={pool.id} value={String(pool.id)}>{pool.code}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell><Input value={line.lineItem} placeholder="Utilities, maintenance, janitorial..." onChange={(e) => updateLine(line.localId, { lineItem: e.target.value })} /></TableCell>
+                        {months.map((m) => (
+                          <TableCell key={m}><Input className="text-right" type="number" step="0.01" value={line.monthlyAmounts[m] ?? ''} onChange={(e) => updateMonth(line.localId, m, e.target.value)} /></TableCell>
+                        ))}
+                        <TableCell className="text-right font-mono">{fmtMoney(lineTotal)}</TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>

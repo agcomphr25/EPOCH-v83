@@ -124,6 +124,7 @@ const safeFiles = [
   '0099_punch_ledger_pending_approval.sql',
   '0100_audit_ledger_privilege_hardening.sql',
   '0100_burden_rates_engine.sql',
+  '0101_burden_rate_accumulation.sql',
   '0101_audit_tamper_attempts_durable.sql',
   '0102_traveler_off_system_completion_link.sql',
   '0103_accounting_control_center.sql',

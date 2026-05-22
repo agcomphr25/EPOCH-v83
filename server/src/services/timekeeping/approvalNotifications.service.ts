@@ -219,53 +219,43 @@ async function insertInternalInboxMessage(params: {
   );
 }
 
-async function resolveEmployeeIdForUser(userId: number): Promise<number | null> {
-  const { rows } = await pool.query<{ employee_id: number | null }>(
+export async function ensurePendingPTOApprovalNotificationsForUser(userId: number): Promise<void> {
+  await dismissPTOApprovalInboxNotificationsForUser(userId);
+  await dismissPunchCorrectionApprovalInboxNotificationsForUser(userId);
+}
+
+async function dismissPTOApprovalInboxNotificationsForUser(userId: number): Promise<void> {
+  await pool.query(
     `
-      SELECT COALESCE(u.employee_id, e.id) AS employee_id
-      FROM users u
-      LEFT JOIN employees e ON (
-        LOWER(e.employee_code) = LOWER(u.username)
-        OR (u.email IS NOT NULL AND e.email IS NOT NULL AND LOWER(e.email) = LOWER(u.email))
-      )
-      WHERE u.id = $1
-        AND u.is_active = true
-      ORDER BY
-        CASE
-          WHEN u.employee_id IS NOT NULL THEN 0
-          WHEN LOWER(e.employee_code) = LOWER(u.username) THEN 1
-          WHEN u.email IS NOT NULL AND e.email IS NOT NULL AND LOWER(e.email) = LOWER(u.email) THEN 2
-          ELSE 3
-        END,
-        e.id ASC
-      LIMIT 1
+      UPDATE message_recipients mr
+      SET is_read = true,
+          is_accomplished = true,
+          read_at = COALESCE(mr.read_at, NOW()),
+          accomplished_at = COALESCE(mr.accomplished_at, NOW())
+      FROM internal_messages im
+      WHERE im.id = mr.message_id
+        AND mr.user_id = $1
+        AND im.subject LIKE 'PTO request #% needs supervisor approval'
     `,
     [userId],
   );
-
-  return rows[0]?.employee_id ?? null;
 }
 
-export async function ensurePendingPTOApprovalNotificationsForUser(userId: number): Promise<void> {
-  const supervisorEmployeeId = await resolveEmployeeIdForUser(userId);
-  if (!supervisorEmployeeId) return;
-
-  const { rows } = await pool.query<{ id: number }>(
+async function dismissPunchCorrectionApprovalInboxNotificationsForUser(userId: number): Promise<void> {
+  await pool.query(
     `
-      SELECT r.id
-      FROM timekeeping.time_off_requests r
-      LEFT JOIN employees e ON e.id = r.employee_id
-      WHERE r.status IN ('pending_supervisor', 'pending')
-        AND COALESCE(r.supervisor_id, e.supervisor_employee_id) = $1
-      ORDER BY r.created_at ASC
-      LIMIT 50
+      UPDATE message_recipients mr
+      SET is_read = true,
+          is_accomplished = true,
+          read_at = COALESCE(mr.read_at, NOW()),
+          accomplished_at = COALESCE(mr.accomplished_at, NOW())
+      FROM internal_messages im
+      WHERE im.id = mr.message_id
+        AND mr.user_id = $1
+        AND im.subject LIKE 'Time punch correction #% needs supervisor approval'
     `,
-    [supervisorEmployeeId],
+    [userId],
   );
-
-  for (const row of rows) {
-    await notifyPTOApprovalNeeded(row.id);
-  }
 }
 
 async function findUserByEmployeeId(employeeId: number | null | undefined): Promise<InboxRecipient | null> {
@@ -449,23 +439,9 @@ export async function notifyPTOApprovalNeeded(requestId: number): Promise<void> 
     return;
   }
 
-  await notifySupervisor({
-    supervisorEmployeeId: row.supervisor_id,
-    kind: "pto",
-    referenceId: row.id,
-    subject: "PTO request needs supervisor review",
-    message: `${row.employee_name || "An employee"} requested PTO from ${row.start_date} to ${row.end_date}.`,
-    url: "/pto-command-center",
-  });
-
   const supervisorUser = await findUserByEmployeeId(row.supervisor_id);
   if (supervisorUser) {
-    await insertInternalInboxMessage({
-      recipient: supervisorUser,
-      subject: `PTO request #${row.id} needs supervisor approval`,
-      message: `${formatPTORequestSummary(row)}\n\nStatus: pending supervisor approval\nReview: /pto-command-center?requestId=${row.id}`,
-      isUrgent: false,
-    });
+    await dismissPTOApprovalInboxNotificationsForUser(supervisorUser.userId);
     return;
   }
 
@@ -513,12 +489,7 @@ export async function notifyPunchCorrectionApprovalNeeded(requestId: number): Pr
 
   const supervisorUser = await findUserByEmployeeId(row.supervisor_id);
   if (supervisorUser) {
-    await insertInternalInboxMessage({
-      recipient: supervisorUser,
-      subject: `Time punch correction #${row.id} needs supervisor approval`,
-      message: `${formatPunchCorrectionSummary(row)}\n\nStatus: pending supervisor approval\nReview: /time-clock-admin?tab=corrections`,
-      isUrgent: false,
-    });
+    await dismissPunchCorrectionApprovalInboxNotificationsForUser(supervisorUser.userId);
     return;
   }
 

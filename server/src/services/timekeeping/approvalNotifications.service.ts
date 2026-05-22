@@ -221,6 +221,7 @@ async function insertInternalInboxMessage(params: {
 
 export async function ensurePendingPTOApprovalNotificationsForUser(userId: number): Promise<void> {
   await dismissPTOApprovalInboxNotificationsForUser(userId);
+  await dismissPunchCorrectionApprovalInboxNotificationsForUser(userId);
 }
 
 async function dismissPTOApprovalInboxNotificationsForUser(userId: number): Promise<void> {
@@ -235,6 +236,23 @@ async function dismissPTOApprovalInboxNotificationsForUser(userId: number): Prom
       WHERE im.id = mr.message_id
         AND mr.user_id = $1
         AND im.subject LIKE 'PTO request #% needs supervisor approval'
+    `,
+    [userId],
+  );
+}
+
+async function dismissPunchCorrectionApprovalInboxNotificationsForUser(userId: number): Promise<void> {
+  await pool.query(
+    `
+      UPDATE message_recipients mr
+      SET is_read = true,
+          is_accomplished = true,
+          read_at = COALESCE(mr.read_at, NOW()),
+          accomplished_at = COALESCE(mr.accomplished_at, NOW())
+      FROM internal_messages im
+      WHERE im.id = mr.message_id
+        AND mr.user_id = $1
+        AND im.subject LIKE 'Time punch correction #% needs supervisor approval'
     `,
     [userId],
   );
@@ -471,12 +489,7 @@ export async function notifyPunchCorrectionApprovalNeeded(requestId: number): Pr
 
   const supervisorUser = await findUserByEmployeeId(row.supervisor_id);
   if (supervisorUser) {
-    await insertInternalInboxMessage({
-      recipient: supervisorUser,
-      subject: `Time punch correction #${row.id} needs supervisor approval`,
-      message: `${formatPunchCorrectionSummary(row)}\n\nStatus: pending supervisor approval\nReview: /time-clock-admin?tab=corrections`,
-      isUrgent: false,
-    });
+    await dismissPunchCorrectionApprovalInboxNotificationsForUser(supervisorUser.userId);
     return;
   }
 

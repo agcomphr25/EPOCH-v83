@@ -69,17 +69,18 @@ async function ensureForkliftTaskTables() {
 
 async function resolveEmployeeIdForUser(user: any): Promise<number | null> {
   if (!user) return null;
-  if (user.employeeId != null) return Number(user.employeeId);
 
   const username = typeof user.username === "string" ? user.username.trim() : "";
-  if (!username) return null;
+  if (!username && user.id == null) return user.employeeId == null ? null : Number(user.employeeId);
 
   const { rows } = await pool.query<{ employee_id: number | null }>(
     `
       SELECT e.id AS employee_id
       FROM employees e
       LEFT JOIN users u ON u.id = $1
-      WHERE LOWER(e.employee_code) = LOWER($2)
+      WHERE e.id = u.employee_id
+         OR e.id = $3
+         OR LOWER(e.employee_code) = LOWER($2)
          OR (u.email IS NOT NULL AND e.email IS NOT NULL AND LOWER(u.email) = LOWER(e.email))
          OR LOWER(CONCAT(
               REGEXP_REPLACE(SPLIT_PART(TRIM(e.name), ' ', 1), '[^[:alnum:]]', '', 'g'),
@@ -91,22 +92,24 @@ async function resolveEmployeeIdForUser(user: any): Promise<number | null> {
             )) = LOWER($2)
       ORDER BY
         CASE
-          WHEN LOWER(e.employee_code) = LOWER($2) THEN 0
-          WHEN u.email IS NOT NULL AND e.email IS NOT NULL AND LOWER(u.email) = LOWER(e.email) THEN 1
+          WHEN e.id = u.employee_id THEN 0
+          WHEN LOWER(e.employee_code) = LOWER($2) THEN 1
+          WHEN u.email IS NOT NULL AND e.email IS NOT NULL AND LOWER(u.email) = LOWER(e.email) THEN 2
           WHEN LOWER(CONCAT(
                  REGEXP_REPLACE(SPLIT_PART(TRIM(e.name), ' ', 1), '[^[:alnum:]]', '', 'g'),
                  LEFT(REGEXP_REPLACE((REGEXP_SPLIT_TO_ARRAY(TRIM(e.name), '[[:space:]]+'))[ARRAY_LENGTH(REGEXP_SPLIT_TO_ARRAY(TRIM(e.name), '[[:space:]]+'), 1)], '[^[:alnum:]]', '', 'g'), 1)
-               )) = LOWER($2) THEN 2
+               )) = LOWER($2) THEN 3
           WHEN LOWER(CONCAT(
                  LEFT(REGEXP_REPLACE(SPLIT_PART(TRIM(e.name), ' ', 1), '[^[:alnum:]]', '', 'g'), 1),
                  REGEXP_REPLACE((REGEXP_SPLIT_TO_ARRAY(TRIM(e.name), '[[:space:]]+'))[ARRAY_LENGTH(REGEXP_SPLIT_TO_ARRAY(TRIM(e.name), '[[:space:]]+'), 1)], '[^[:alnum:]]', '', 'g')
-               )) = LOWER($2) THEN 3
-          ELSE 4
+               )) = LOWER($2) THEN 4
+          WHEN e.id = $3 THEN 5
+          ELSE 6
         END,
         e.id ASC
       LIMIT 1
     `,
-    [user.id ?? null, username],
+    [user.id ?? null, username, user.employeeId == null ? null : Number(user.employeeId)],
   );
 
   return rows[0]?.employee_id ?? null;

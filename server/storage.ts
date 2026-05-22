@@ -5882,6 +5882,7 @@ export class DatabaseStorage implements IStorage {
         status: allOrders.status,
         modelId: allOrders.modelId,
         shipping: allOrders.shipping,
+        shippingMethod: allOrders.shippingMethod,
         paymentAmount: allOrders.paymentAmount,
         isPaid: allOrders.isPaid,
         isVerified: allOrders.isVerified,

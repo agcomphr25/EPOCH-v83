@@ -318,6 +318,10 @@ const P2PipelineBoardPage = React.lazy(() => import('./pages/P2PipelineBoardPage
 const PMControlCenterPage = React.lazy(() => import('./pages/PMControlCenterPage'));
 const HelpCenter = React.lazy(() => import('./pages/HelpCenter'));
 const P2OrderGuide = React.lazy(() => import('./pages/P2OrderGuide'));
+const TimeclockTrainingProgramGuide = React.lazy(() => import('./pages/TimeclockTrainingProgramGuide'));
+const PTORequestGuide = React.lazy(() => import('./pages/PTORequestGuide'));
+const PunchEditRequestGuide = React.lazy(() => import('./pages/PunchEditRequestGuide'));
+const TimesheetReviewGuide = React.lazy(() => import('./pages/TimesheetReviewGuide'));
 const TravelerManagement = React.lazy(() => import('./pages/TravelerManagement'));
 const TravelerExecution = React.lazy(() => import('./pages/TravelerExecution'));
 const MaterialReceivingPage = React.lazy(() => import('./pages/MaterialReceivingPage'));
@@ -1111,6 +1115,10 @@ function App() {
                   <Route path="/refund-request" component={RefundRequest} />
                   <Route path="/help" component={HelpCenter} />
                   <Route path="/help/p2-order-guide" component={P2OrderGuide} />
+                  <Route path="/help/timeclock-training-program" component={TimeclockTrainingProgramGuide} />
+                  <Route path="/help/pto-request-guide" component={PTORequestGuide} />
+                  <Route path="/help/punch-edit-request-guide" component={PunchEditRequestGuide} />
+                  <Route path="/help/timesheet-review-guide" component={TimesheetReviewGuide} />
                   <Route path="/refund-queue" component={RefundQueue} />
                   <Route path="/rma-form" component={RMAFormPage} />
 

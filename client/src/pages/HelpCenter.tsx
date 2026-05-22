@@ -17,6 +17,10 @@ import {
   BookOpen,
   FileText,
   ArrowRight,
+  CalendarCheck,
+  ClipboardCheck,
+  FilePenLine,
+  ShieldCheck,
 } from 'lucide-react';
 import { Link } from 'wouter';
 
@@ -149,13 +153,78 @@ const faqData: FAQItem[] = [
     answer: 'Refunds can only be issued for money that has been received. The system limits refund requests to the actual amount paid on the order to prevent over-refunding.',
     category: 'General',
   },
+
+  // Timekeeping
+  {
+    id: 'tk-1',
+    question: 'Where do I submit a PTO request?',
+    answer: 'Open Employee Portal and select the Time Off tab. Choose the request type, dates, optional note, and click Submit PTO Request. You can track the status in My Time-Off Requests.',
+    category: 'Timekeeping',
+  },
+  {
+    id: 'tk-2',
+    question: 'How do I request a punch correction?',
+    answer: 'Open Employee Portal and select the Time Clock tab. Use Request Punch Correction to select an existing punch or add a missing punch, enter the corrected time details, write a clear reason, and submit the request for review.',
+    category: 'Timekeeping',
+  },
+  {
+    id: 'tk-3',
+    question: 'Where do I review and certify my timesheet?',
+    answer: 'Open Employee Portal and select the Timesheets tab. Review the pay period, complete daily sign-offs, prepare the period for certification when needed, and certify any items listed under Needs Certification.',
+    category: 'Timekeeping',
+  },
+  {
+    id: 'tk-4',
+    question: 'Why does EPOCH ask me to certify time records?',
+    answer: 'Employee certification helps confirm that recorded labor is complete, accurate, and represents work actually performed. These acknowledgments support DCAA-ready timekeeping controls and audit evidence.',
+    category: 'Timekeeping',
+  },
 ];
 
 const categories = [
   { name: 'Order Entry', icon: ShoppingCart, color: 'bg-blue-100 text-blue-800' },
   { name: 'Production Queue', icon: Factory, color: 'bg-green-100 text-green-800' },
   { name: 'Bill of Materials', icon: Layers, color: 'bg-purple-100 text-purple-800' },
+  { name: 'Timekeeping', icon: ClipboardCheck, color: 'bg-amber-100 text-amber-800' },
   { name: 'General', icon: HelpCircle, color: 'bg-gray-100 text-gray-800' },
+];
+
+const guideCards = [
+  {
+    href: '/help/timeclock-training-program',
+    title: 'Timeclock Training and Certification Program',
+    description: 'Starter program outline for employee timeclock training and certification',
+    icon: ShieldCheck,
+    color: 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400',
+  },
+  {
+    href: '/help/pto-request-guide',
+    title: 'How to Submit a PTO Request',
+    description: 'Request full-day, half-day, hourly, or multi-day PTO from Employee Portal',
+    icon: CalendarCheck,
+    color: 'bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-400',
+  },
+  {
+    href: '/help/punch-edit-request-guide',
+    title: 'How to Request a Punch Edit',
+    description: 'Submit missed or incorrect punch changes for supervisor review',
+    icon: FilePenLine,
+    color: 'bg-amber-100 dark:bg-amber-900 text-amber-600 dark:text-amber-400',
+  },
+  {
+    href: '/help/timesheet-review-guide',
+    title: 'How to View and Certify Timesheets',
+    description: 'Review daily sign-offs, certify pay periods, and view timesheet history',
+    icon: ClipboardCheck,
+    color: 'bg-purple-100 dark:bg-purple-900 text-purple-600 dark:text-purple-400',
+  },
+  {
+    href: '/help/p2-order-guide',
+    title: 'How to Create a New P2 Order',
+    description: 'Complete walkthrough of the P2 order creation process',
+    icon: FileText,
+    color: 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400',
+  },
 ];
 
 export default function HelpCenter() {
@@ -283,21 +352,26 @@ export default function HelpCenter() {
             Step-by-Step Guides
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <Link href="/help/p2-order-guide">
-            <div className="flex items-center justify-between p-3 rounded-md border hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
-                  <FileText className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+        <CardContent className="space-y-3">
+          {guideCards.map((guide) => {
+            const Icon = guide.icon;
+            return (
+              <Link key={guide.href} href={guide.href}>
+                <div className="flex items-center justify-between p-3 rounded-md border hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-lg ${guide.color}`}>
+                      <Icon className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-medium">{guide.title}</h3>
+                      <p className="text-sm text-muted-foreground">{guide.description}</p>
+                    </div>
+                  </div>
+                  <ArrowRight className="h-4 w-4 text-muted-foreground" />
                 </div>
-                <div>
-                  <h3 className="font-medium">How to Create a New P2 Order</h3>
-                  <p className="text-sm text-muted-foreground">Complete walkthrough of the P2 order creation process</p>
-                </div>
-              </div>
-              <ArrowRight className="h-4 w-4 text-muted-foreground" />
-            </div>
-          </Link>
+              </Link>
+            );
+          })}
         </CardContent>
       </Card>
 

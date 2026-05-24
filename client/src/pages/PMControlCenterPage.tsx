@@ -214,6 +214,34 @@ interface DailyLaborRow {
   openSessionCount: number;
 }
 
+interface LaborEntryTraceRow {
+  sessionId: number;
+  employeeId: number;
+  employeeName: string;
+  clockIn: string;
+  clockOut: string | null;
+  hours: number;
+  source: string;
+  laborClass: string | null;
+  department: string | null;
+  operation: string | null;
+  chargeCode: string | null;
+  workOrderNumber: string | null;
+  travelerNumber: string | null;
+  approvalStatus: string | null;
+  isEdited: boolean;
+  editNote: string | null;
+  timesheetId: number | null;
+  timesheetStatus: string | null;
+  periodStart: string | null;
+  periodEnd: string | null;
+  locked: boolean;
+}
+
+type LaborTraceTarget =
+  | { type: 'chargeCode'; label: string; chargeCode: string }
+  | { type: 'daily'; label: string; employeeId: number; workDate: string; chargeCode: string | null };
+
 interface LaborData {
   summary: LaborSummary;
   chargeCodeRows: ChargeCodeRow[];
@@ -292,6 +320,20 @@ function fmtDate(d: string | null) {
 
 function fmtHours(h: number) {
   return h.toFixed(1) + ' hrs';
+}
+
+function fmtTime(iso: string | null) {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleString([], {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return iso;
+  }
 }
 
 function fmtCurrency(n: number) {
@@ -405,6 +447,27 @@ function CertBadge({ status }: { status: string }) {
       <HelpCircle className="h-3 w-3" /> Unknown
     </Badge>
   );
+}
+
+function dateInputValue(iso: string | null) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso.slice(0, 10);
+  return d.toISOString().slice(0, 10);
+}
+
+function buildTimeClockPunchUrl(entry: LaborEntryTraceRow) {
+  const date = dateInputValue(entry.clockIn);
+  const params = new URLSearchParams({
+    tab: 'punches',
+    from: date,
+    to: date,
+    punchId: String(entry.sessionId),
+    employeeId: String(entry.employeeId),
+    showAll: '1',
+    q: entry.chargeCode ?? '',
+  });
+  return `/time-clock-admin?${params.toString()}`;
 }
 
 function KpiCard({
@@ -972,11 +1035,43 @@ function ProductionTab({ projectId }: { projectId: string }) {
 // ── Direct Labor Tab ──────────────────────────────────────────────────────────
 
 function DirectLaborTab({ projectId }: { projectId: string }) {
+  const [, navTo] = useLocation();
+  const [traceTarget, setTraceTarget] = useState<LaborTraceTarget | null>(null);
+
   const { data, isLoading, isError } = useQuery<LaborData>({
     queryKey: ['/api/pm-dashboard', projectId, 'labor'],
     queryFn: () => safeFetch<LaborData>(`/api/pm-dashboard/${projectId}/labor`),
     enabled: !!projectId,
     refetchInterval: 30000,
+  });
+
+  const { data: currentUser } = useQuery<{ id: number; username: string; role: string } | null>({
+    queryKey: ['/api/auth/me'],
+    queryFn: () => safeFetch<{ id: number; username: string; role: string } | null>('/api/auth/me'),
+  });
+
+  const canTraceLabor = currentUser?.username?.toLowerCase() === 'glennj'
+    && currentUser?.role?.toUpperCase() === 'ADMIN';
+
+  const traceParams = new URLSearchParams();
+  if (traceTarget?.type === 'chargeCode') {
+    traceParams.set('chargeCode', traceTarget.chargeCode);
+  } else if (traceTarget?.type === 'daily') {
+    traceParams.set('employeeId', String(traceTarget.employeeId));
+    traceParams.set('workDate', traceTarget.workDate);
+    if (traceTarget.chargeCode) traceParams.set('chargeCode', traceTarget.chargeCode);
+  }
+
+  const {
+    data: traceEntries = [],
+    isLoading: traceLoading,
+    isError: traceError,
+  } = useQuery<LaborEntryTraceRow[]>({
+    queryKey: ['/api/pm-dashboard', projectId, 'labor', 'entries', traceTarget],
+    queryFn: () => safeFetch<LaborEntryTraceRow[]>(
+      `/api/pm-dashboard/${projectId}/labor/entries?${traceParams.toString()}`
+    ),
+    enabled: !!projectId && !!traceTarget && canTraceLabor,
   });
 
   if (isLoading) {
@@ -1036,6 +1131,7 @@ function DirectLaborTab({ projectId }: { projectId: string }) {
                   <TableHead className="text-right">Remaining</TableHead>
                   <TableHead className="text-right">%</TableHead>
                   <TableHead className="min-w-[100px]">Labor Used</TableHead>
+                  {canTraceLabor && <TableHead className="text-right">Trace</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1080,6 +1176,21 @@ function DirectLaborTab({ projectId }: { projectId: string }) {
                         )}
                       </div>
                     </TableCell>
+                    {canTraceLabor && (
+                      <TableCell className="text-right">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setTraceTarget({
+                            type: 'chargeCode',
+                            label: row.chargeCode,
+                            chargeCode: row.chargeCode,
+                          })}
+                        >
+                          Entries
+                        </Button>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
@@ -1110,6 +1221,7 @@ function DirectLaborTab({ projectId }: { projectId: string }) {
                   <TableHead className="text-right">WAD Bank</TableHead>
                   <TableHead className="text-right">Remaining</TableHead>
                   <TableHead className="text-right">%</TableHead>
+                  {canTraceLabor && <TableHead className="text-right">Trace</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1143,6 +1255,23 @@ function DirectLaborTab({ projectId }: { projectId: string }) {
                         {row.percentConsumed}%
                       </Badge>
                     </TableCell>
+                    {canTraceLabor && (
+                      <TableCell className="text-right">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setTraceTarget({
+                            type: 'daily',
+                            label: `${row.employeeName} - ${fmtDate(row.workDate)}`,
+                            employeeId: row.employeeId,
+                            workDate: row.workDate,
+                            chargeCode: row.chargeCode,
+                          })}
+                        >
+                          Entries
+                        </Button>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
@@ -1202,6 +1331,92 @@ function DirectLaborTab({ projectId }: { projectId: string }) {
           </div>
         )}
       </div>
+
+      <Sheet open={!!traceTarget} onOpenChange={(open) => !open && setTraceTarget(null)}>
+        <SheetContent className="w-[520px] sm:w-[760px] overflow-y-auto">
+          <SheetHeader className="mb-4">
+            <SheetTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5" />
+              Labor Entries
+              {traceTarget && <Badge variant="outline">{traceTarget.label}</Badge>}
+            </SheetTitle>
+          </SheetHeader>
+
+          <div className="space-y-4">
+            <div className="rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">
+              These rows are read-only here. Use Timekeeper to make corrections so locked timesheets keep the existing audit and correction workflow.
+            </div>
+
+            {traceLoading ? (
+              <div className="space-y-2">
+                {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full" />)}
+              </div>
+            ) : traceError ? (
+              <QueryErrorBanner message="Failed to load labor entry trace." />
+            ) : traceEntries.length === 0 ? (
+              <Card className="p-6 text-center">
+                <p className="text-sm text-muted-foreground">No time entries matched this labor line.</p>
+              </Card>
+            ) : (
+              <div className="rounded-md border overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Employee</TableHead>
+                      <TableHead>Time</TableHead>
+                      <TableHead className="text-right">Hours</TableHead>
+                      <TableHead>WAD / Traveler</TableHead>
+                      <TableHead>Timesheet</TableHead>
+                      <TableHead className="text-right">Timekeeper</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {traceEntries.map(entry => (
+                      <TableRow key={entry.sessionId}>
+                        <TableCell>
+                          <div className="font-medium text-sm">{entry.employeeName}</div>
+                          <div className="text-xs text-muted-foreground font-mono">{entry.chargeCode ?? 'No charge code'}</div>
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          <div>{fmtTime(entry.clockIn)}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {entry.clockOut ? fmtTime(entry.clockOut) : 'Open session'}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right text-sm">{fmtHours(entry.hours)}</TableCell>
+                        <TableCell className="text-sm">
+                          <div className="font-mono">{entry.workOrderNumber ?? 'WAD'}</div>
+                          <div className="text-xs text-muted-foreground">{entry.travelerNumber ?? entry.department ?? 'Direct labor'}</div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {entry.timesheetId ? (
+                              <Badge className={entry.locked ? 'bg-slate-200 text-slate-800' : 'bg-blue-100 text-blue-800'}>
+                                TS #{entry.timesheetId} {entry.timesheetStatus ?? ''}
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline">No timesheet</Badge>
+                            )}
+                            {entry.isEdited && <Badge className="bg-yellow-100 text-yellow-800">Edited</Badge>}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            size="sm"
+                            onClick={() => navTo(buildTimeClockPunchUrl(entry))}
+                          >
+                            Open
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

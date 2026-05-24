@@ -1523,12 +1523,18 @@ export default function TimeClockAdminPage() {
     const queryTo = initialTimeClockQueryParam('to');
     return /^\d{4}-\d{2}-\d{2}$/.test(queryTo) ? queryTo : new Date().toISOString().slice(0, 10);
   });
+  const [punchEmployeeId] = useState(() => {
+    const value = initialTimeClockQueryParam('employeeId');
+    return /^\d+$/.test(value) ? value : '';
+  });
 
   const { data: punches, isLoading: punchesLoading, refetch: refetchPunches } = useQuery<Punch[]>({
-    queryKey: ['/api/timekeeping/punches', punchFrom, punchTo],
+    queryKey: ['/api/timekeeping/punches', punchFrom, punchTo, punchEmployeeId],
     queryFn: async () => {
+      const params = new URLSearchParams({ from: punchFrom, to: punchTo });
+      if (punchEmployeeId) params.set('employeeId', punchEmployeeId);
       const res = await fetch(
-        `/api/timekeeping/punches?from=${punchFrom}&to=${punchTo}`,
+        `/api/timekeeping/punches?${params.toString()}`,
         { credentials: 'include' }
       );
       if (!res.ok) throw new Error('Failed to load punches');
@@ -1536,9 +1542,9 @@ export default function TimeClockAdminPage() {
     },
     enabled: activeTab === 'punches',
   });
-  const [showAllPunchEvents, setShowAllPunchEvents] = useState(false);
+  const [showAllPunchEvents, setShowAllPunchEvents] = useState(() => initialTimeClockQueryParam('showAll') === '1' || !!highlightedPunchId);
   const [allPunchFilter, setAllPunchFilter] = useState<PunchEventFilter>('all');
-  const [allPunchSearch, setAllPunchSearch] = useState('');
+  const [allPunchSearch, setAllPunchSearch] = useState(() => initialTimeClockQueryParam('q'));
   const [allPunchSort, setAllPunchSort] = useState<PunchEventSort>('newest');
   const reviewPunches = (punches ?? []).filter(p => p.hasMissingClockOut || p.hasMissingClockIn);
   const allPunchEvents = punches ?? [];

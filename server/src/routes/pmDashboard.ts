@@ -167,6 +167,29 @@ interface LiveSessionRow {
   elapsedMinutes: string;
 }
 
+interface LaborEntryTraceRow {
+  sessionId: number;
+  employeeId: number;
+  employeeName: string;
+  clockIn: string;
+  clockOut: string | null;
+  hours: string;
+  source: string;
+  laborClass: string | null;
+  department: string | null;
+  operation: string | null;
+  chargeCode: string | null;
+  workOrderNumber: string | null;
+  travelerNumber: string | null;
+  approvalStatus: string | null;
+  isEdited: boolean;
+  editNote: string | null;
+  timesheetId: number | null;
+  timesheetStatus: string | null;
+  periodStart: string | null;
+  periodEnd: string | null;
+}
+
 interface CertRow {
   employeeId: number;
   status: string;
@@ -208,6 +231,12 @@ async function publicTableExists(tableName: string): Promise<boolean> {
     [`public.${tableName}`],
   );
   return rows[0]?.exists === true;
+}
+
+function canTraceProjectLabor(user: { username?: string | null; role?: string | null } | undefined): boolean {
+  const username = String(user?.username ?? '').trim().toLowerCase();
+  const role = String(user?.role ?? '').trim().toUpperCase();
+  return username === 'glennj' && role === 'ADMIN';
 }
 
 // ─── Item-level progress helper ──────────────────────────────────────────────
@@ -1811,6 +1840,95 @@ router.get('/:projectId/labor', h(async (req, res) => {
     liveFeed,
     dailyLaborRows,
   });
+}));
+
+// GET /api/pm-dashboard/:projectId/labor/entries - read-only traceability from PM labor usage to Timekeeper punches
+router.get('/:projectId/labor/entries', h(async (req, res) => {
+  const { projectId } = req.params;
+
+  if (!canTraceProjectLabor(req.user)) {
+    res.status(403).json({ error: 'Labor entry trace is currently restricted to glennj/admin.' });
+    return;
+  }
+
+  const chargeCode = typeof req.query.chargeCode === 'string' && req.query.chargeCode.trim()
+    ? req.query.chargeCode.trim()
+    : null;
+  const employeeId = typeof req.query.employeeId === 'string' && /^\d+$/.test(req.query.employeeId)
+    ? Number(req.query.employeeId)
+    : null;
+  const workDate = typeof req.query.workDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(req.query.workDate)
+    ? req.query.workDate
+    : null;
+
+  const filters: string[] = [];
+  const params: unknown[] = [projectId];
+  if (chargeCode) {
+    params.push(chargeCode);
+    filters.push(`COALESCE(lcc.code, pl.charge_code) = $${params.length}`);
+  }
+  if (employeeId != null) {
+    params.push(employeeId);
+    filters.push(`pl.employee_id = $${params.length}`);
+  }
+  if (workDate) {
+    params.push(workDate);
+    filters.push(`pl.clock_in::date = $${params.length}::date`);
+  }
+
+  const filterSql = filters.length ? `AND ${filters.join(' AND ')}` : '';
+
+  const rows = await pool.query<LaborEntryTraceRow>(`
+    SELECT
+      pl.id AS "sessionId",
+      pl.employee_id AS "employeeId",
+      e.name AS "employeeName",
+      pl.clock_in AS "clockIn",
+      pl.clock_out AS "clockOut",
+      ROUND(EXTRACT(EPOCH FROM (COALESCE(pl.clock_out, NOW()) - pl.clock_in)) / 3600.0, 4) AS "hours",
+      pl.source,
+      pl.labor_class AS "laborClass",
+      pl.department,
+      pl.operation,
+      COALESCE(lcc.code, pl.charge_code) AS "chargeCode",
+      wo.work_order_number AS "workOrderNumber",
+      t.traveler_number AS "travelerNumber",
+      pl.approval_status AS "approvalStatus",
+      pl.is_edited AS "isEdited",
+      pl.edit_note AS "editNote",
+      ts.id AS "timesheetId",
+      ts.status AS "timesheetStatus",
+      ts.period_start AS "periodStart",
+      ts.period_end AS "periodEnd"
+    FROM punch_ledger pl
+    JOIN employees e ON e.id = pl.employee_id
+    LEFT JOIN public.charge_codes lcc ON lcc.id = pl.charge_code_id
+    LEFT JOIN production_work_orders wo ON wo.id = pl.production_work_order_id
+    LEFT JOIN travelers t ON t.id::text = pl.traveler_id
+    LEFT JOIN timekeeping.timesheets ts
+      ON ts.employee_id = pl.employee_id
+     AND pl.clock_in::date BETWEEN ts.period_start::date AND ts.period_end::date
+    WHERE pl.labor_class = 'REGULAR'
+      AND (
+        pl.project_id = $1
+        OR
+        pl.production_work_order_id IN (
+          SELECT id FROM production_work_orders WHERE project_id = $1
+        )
+        OR pl.traveler_id IN (
+          SELECT id::text FROM travelers WHERE project_id = $1
+        )
+      )
+      ${filterSql}
+    ORDER BY pl.clock_in DESC, pl.id DESC
+    LIMIT 300
+  `, params);
+
+  res.json(rows.map((row) => ({
+    ...row,
+    hours: parseFloat(row.hours) || 0,
+    locked: ['certified', 'locked', 'correction_requested', 'correction_approved'].includes(String(row.timesheetStatus ?? '').toLowerCase()),
+  })));
 }));
 
 // GET /api/pm-dashboard/:projectId/materials — material budget

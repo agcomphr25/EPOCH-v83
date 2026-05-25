@@ -450,4 +450,33 @@ describe('GET /api/po-orders/oem-shipments', () => {
     expect(vi.mocked(pool.query).mock.calls[1][1]).toEqual([50, 0, false]);
     expect(vi.mocked(pool.query).mock.calls[2][1]).toEqual([]);
   });
+
+  it('does not hard-reference fulfillment attempts when the artifact table is absent', async () => {
+    vi.mocked(pool.query)
+      .mockResolvedValueOnce({
+        rows: [{ table_exists: true, fulfillment_attempts_table_exists: false }],
+      } as any)
+      .mockResolvedValueOnce({
+        rows: [{
+          id: '11111111-1111-1111-1111-111111111111',
+          customer_id: 'CUST-1',
+          customer_name: 'OEM Customer',
+          master_tracking_number: '1Z999',
+          created_at: '2026-05-20T12:00:00.000Z',
+          item_count: 1,
+          stock_count: 1,
+          accessory_count: 0,
+          po_count: 1,
+          has_shipping_label: true,
+          items: [],
+        }],
+      } as any)
+      .mockResolvedValueOnce({ rows: [{ total: '1' }] } as any);
+
+    const res = await request(app).get('/api/po-orders/oem-shipments');
+
+    expect(res.status).toBe(200);
+    expect(res.body.shipments).toHaveLength(1);
+    expect(vi.mocked(pool.query).mock.calls[1][0]).not.toContain('p1_fulfillment_attempts');
+  });
 });

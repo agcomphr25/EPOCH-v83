@@ -107,20 +107,6 @@ async function findP1PackingSlipInvoice(shipmentRecordId: string, poNumber: stri
              OR inv.internal_notes ILIKE 'Source: P1 OEM shipment%'
            )
          )
-         OR (
-           inv.po_override = $1
-           AND inv.invoice_number IN (
-             SELECT pfa.metadata->>'invoiceNumber'
-             FROM p1_fulfillment_attempts pfa
-             WHERE pfa.metadata->>'invoiceNumber' IS NOT NULL
-               AND pfa.metadata->>'poNumber' = $1
-               AND pfa.order_id = ANY($2::text[])
-           )
-           AND (
-             inv.notes ILIKE 'Auto-created from P1 OEM packing slip%'
-             OR inv.internal_notes ILIKE 'Source: P1 OEM shipment%'
-           )
-         )
        )
      ORDER BY inv.created_at DESC
      LIMIT 1`,
@@ -914,12 +900,19 @@ router.get('/oem-shipments', authenticateToken, async (req, res) => {
 
     // Check if shipment_records table exists
     const tableCheck = await pool.query(`
-      SELECT EXISTS (
-        SELECT FROM information_schema.tables 
-        WHERE table_schema = 'public' AND table_name = 'shipment_records'
-      ) as table_exists
+      SELECT
+        EXISTS (
+          SELECT FROM information_schema.tables
+          WHERE table_schema = 'public' AND table_name = 'shipment_records'
+        ) as table_exists,
+        EXISTS (
+          SELECT FROM information_schema.tables
+          WHERE table_schema = 'public' AND table_name = 'p1_fulfillment_attempts'
+        ) as fulfillment_attempts_table_exists
     `);
-    const tableExists = (tableCheck.rows || tableCheck)[0]?.table_exists || false;
+    const tableInfo = (tableCheck.rows || tableCheck)[0] || {};
+    const tableExists = tableInfo.table_exists || false;
+    const fulfillmentAttemptsTableExists = tableInfo.fulfillment_attempts_table_exists || false;
 
     if (!tableExists) {
       // Fallback: Query shipped items from production_orders instead
@@ -1018,6 +1011,40 @@ router.get('/oem-shipments', authenticateToken, async (req, res) => {
       paramIndex++;
     }
 
+    const packingSlipInvoiceNumberSql = fulfillmentAttemptsTableExists
+      ? `(
+                SELECT pfa.metadata->>'invoiceNumber'
+                FROM p1_fulfillment_attempts pfa
+                WHERE pfa.metadata->>'invoiceNumber' IS NOT NULL
+                  AND pfa.metadata->>'poNumber' = COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number)
+                  AND (
+                    pfa.order_id = si.order_id
+                    OR pfa.shipment_record_id = sr.id
+                  )
+                ORDER BY COALESCE(pfa.completed_at, pfa.updated_at, pfa.created_at) DESC
+                LIMIT 1
+              )`
+      : `NULL`;
+    const fulfillmentAttemptInvoiceSql = fulfillmentAttemptsTableExists
+      ? `OR (
+                inv.po_override = COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number)
+                AND inv.invoice_number IN (
+                  SELECT pfa.metadata->>'invoiceNumber'
+                  FROM p1_fulfillment_attempts pfa
+                  WHERE pfa.metadata->>'invoiceNumber' IS NOT NULL
+                    AND pfa.metadata->>'poNumber' = COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number)
+                    AND (
+                      pfa.order_id = si.order_id
+                      OR pfa.shipment_record_id = sr.id
+                    )
+                )
+                AND (
+                  inv.notes ILIKE 'Auto-created from P1 OEM packing slip%'
+                  OR inv.internal_notes ILIKE 'Source: P1 OEM shipment%'
+                )
+              )`
+      : ``;
+
     // Main query - lightweight, no base64 blobs
     // Use COALESCE to get customer_name, description and po_number from production_orders or purchase_order_items when not set
     const query = `
@@ -1063,18 +1090,7 @@ router.get('/oem-shipments', authenticateToken, async (req, res) => {
               'itemType', COALESCE(poi.item_type, 'stock_model'),
               'unitPrice', CASE WHEN $${paramIndex + 2}::boolean THEN poi.unit_price ELSE NULL END,
               'lineTotal', CASE WHEN $${paramIndex + 2}::boolean THEN COALESCE(poi.unit_price, 0) * COALESCE(si.quantity, 1) ELSE NULL END,
-              'packingSlipInvoiceNumber', (
-                SELECT pfa.metadata->>'invoiceNumber'
-                FROM p1_fulfillment_attempts pfa
-                WHERE pfa.metadata->>'invoiceNumber' IS NOT NULL
-                  AND pfa.metadata->>'poNumber' = COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number)
-                  AND (
-                    pfa.order_id = si.order_id
-                    OR pfa.shipment_record_id = sr.id
-                  )
-                ORDER BY COALESCE(pfa.completed_at, pfa.updated_at, pfa.created_at) DESC
-                LIMIT 1
-              ),
+              'packingSlipInvoiceNumber', ${packingSlipInvoiceNumberSql},
               'invoiceId', inv.id,
               'invoiceNumber', inv.invoice_number,
               'invoiceStatus', inv.status
@@ -1112,23 +1128,7 @@ router.get('/oem-shipments', authenticateToken, async (req, res) => {
                     )
                   )
               )
-              OR (
-                inv.po_override = COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number)
-                AND inv.invoice_number IN (
-                  SELECT pfa.metadata->>'invoiceNumber'
-                  FROM p1_fulfillment_attempts pfa
-                  WHERE pfa.metadata->>'invoiceNumber' IS NOT NULL
-                    AND pfa.metadata->>'poNumber' = COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number)
-                    AND (
-                      pfa.order_id = si.order_id
-                      OR pfa.shipment_record_id = sr.id
-                    )
-                )
-                AND (
-                  inv.notes ILIKE 'Auto-created from P1 OEM packing slip%'
-                  OR inv.internal_notes ILIKE 'Source: P1 OEM shipment%'
-                )
-              )
+              ${fulfillmentAttemptInvoiceSql}
               OR (
                 inv.po_override = COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number)
                 AND inv.invoice_number = sr.invoice_number

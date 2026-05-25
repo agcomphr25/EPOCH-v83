@@ -24,12 +24,13 @@ type SubmitPunchCorrectionInput = {
   employeeId: number;
   punchLedgerId?: number | null;
   requestType: PunchCorrectionRequestType;
-  source: "employee_portal" | "kiosk";
+  source: "employee_portal" | "kiosk" | "admin";
   reason: string;
   proposedChanges: PunchCorrectionChanges;
   submittedByUserId?: number | null;
   actorUser?: SafeUser | null;
   actorIp?: string | null;
+  requireSupervisor?: boolean;
 };
 
 function toIso(value: unknown): string | null {
@@ -125,6 +126,9 @@ export async function submitPunchCorrectionRequest(input: SubmitPunchCorrectionI
   // the change is allowed and applied.
 
   const { supervisorId, status } = await resolveSupervisor(input.employeeId);
+  if (input.requireSupervisor && !supervisorId) {
+    return { error: "A supervisor is required before this punch correction can be submitted.", statusCode: 422 };
+  }
   const [row] = await db
     .insert(punchCorrectionRequestsTable)
     .values({

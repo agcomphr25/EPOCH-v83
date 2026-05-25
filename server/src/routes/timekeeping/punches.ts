@@ -50,6 +50,10 @@ const KioskPunchCorrectionSubmitSchema = PunchCorrectionSubmitSchema.extend({
   pin: z.string().regex(/^\d{4}$/),
 });
 
+const AdminPunchCorrectionSubmitSchema = PunchCorrectionSubmitSchema.extend({
+  employeeId: z.number().int().positive(),
+});
+
 const PunchCorrectionReviewSchema = z.object({
   decision: z.enum(["approved", "denied"]),
   note: z.string().min(3),
@@ -1356,6 +1360,34 @@ router.get("/punch-corrections/my", authenticateToken, h(async (req, res): Promi
   if (!employeeId) { res.json([]); return; }
   const rows = await punchCorrections.listPunchCorrections({ employeeId });
   res.json(rows);
+}));
+
+router.post("/punch-corrections", authenticateToken, requireRole('ADMIN', 'OWNER'), h(async (req, res): Promise<void> => {
+  const body = AdminPunchCorrectionSubmitSchema.safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
+
+  const user = req.user as SafeUser | undefined;
+  if (!user) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const result = await punchCorrections.submitPunchCorrectionRequest({
+    employeeId: body.data.employeeId,
+    punchLedgerId: body.data.punchLedgerId ?? null,
+    requestType: body.data.requestType,
+    reason: body.data.reason,
+    proposedChanges: body.data.proposedChanges,
+    source: "admin",
+    submittedByUserId: user.id,
+    actorUser: user,
+    actorIp: req.ip ?? null,
+    requireSupervisor: true,
+  });
+
+  if ("error" in result) {
+    res.status(result.statusCode).json({ error: result.error });
+    return;
+  }
+
+  res.status(201).json(result);
 }));
 
 router.get("/punch-corrections", authenticateToken, h(async (req, res): Promise<void> => {

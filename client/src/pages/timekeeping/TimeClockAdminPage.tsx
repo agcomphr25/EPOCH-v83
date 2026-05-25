@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect, Fragment } from 'react';
-import { runCreatePunch, buildAddPunchFetchDep } from '@/lib/addPunchHandler';
 import { runEditPunch, buildEditPunchFetchDep } from '@/lib/editPunchHandler';
 import { runDeletePunch, buildDeletePunchFetchDep } from '@/lib/deletePunchHandler';
 import { AuditTrailPanel } from '@/components/timekeeping/AuditTrailPanel';
@@ -1607,34 +1606,47 @@ export default function TimeClockAdminPage() {
   const [addPunchType, setAddPunchType] = useState('clock_in');
   const [addPunchAt, setAddPunchAt] = useState('');
   const [addPunchCostCode, setAddPunchCostCode] = useState('');
-  const [addPunchNote, setAddPunchNote] = useState('');
+  const [addPunchReason, setAddPunchReason] = useState('');
   const [addPunchDcaaError, setAddPunchDcaaError] = useState<DcaaViolation | null>(null);
 
-  const createPunchMutation = useMutation({
+  const createPunchCorrectionMutation = useMutation({
     mutationFn: (params: {
-      employeeId: string;
+      employeeId: number;
       type: string;
       punchedAt: string;
-      costCode: string;
-      note: string;
-    }) => runCreatePunch(params, buildAddPunchFetchDep()),
+      chargeCodeId: number | null;
+      reason: string;
+    }) => apiRequest('/api/timekeeping/punch-corrections', {
+      method: 'POST',
+      body: JSON.stringify({
+        employeeId: params.employeeId,
+        requestType: 'add_session',
+        reason: params.reason,
+        proposedChanges: {
+          punchType: params.type,
+          laborClass: params.type === 'break_start' || params.type === 'break_end' ? 'BREAK' : 'REGULAR',
+          clockIn: params.punchedAt,
+          ...(params.chargeCodeId != null ? { chargeCodeId: params.chargeCodeId } : {}),
+        },
+      }),
+    }),
     onSuccess: () => {
-      toast({ title: 'Punch created', description: 'The punch has been recorded.' });
+      toast({ title: 'Correction requested', description: 'The missing punch request was sent for supervisor review.' });
       setAddPunchOpen(false);
       setAddPunchEmployeeId('');
       setAddPunchType('clock_in');
       setAddPunchAt('');
       setAddPunchCostCode('');
-      setAddPunchNote('');
+      setAddPunchReason('');
       setAddPunchDcaaError(null);
-      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/punches'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/punch-corrections'] });
       queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/dashboard/summary'] });
     },
     onError: (err: Error & { dcaaViolation?: DcaaViolation }) => {
       if (err.dcaaViolation) {
         setAddPunchDcaaError(err.dcaaViolation);
       } else {
-        toast({ title: 'Error', description: err?.message ?? 'Failed to create punch.', variant: 'destructive' });
+        toast({ title: 'Error', description: err?.message ?? 'Failed to submit correction request.', variant: 'destructive' });
       }
     },
   });
@@ -1646,7 +1658,7 @@ export default function TimeClockAdminPage() {
     setAddPunchEmployeeId('');
     setAddPunchType('clock_in');
     setAddPunchCostCode('');
-    setAddPunchNote('');
+    setAddPunchReason('');
     setAddPunchDcaaError(null);
     setAddPunchOpen(true);
   }
@@ -2922,7 +2934,7 @@ export default function TimeClockAdminPage() {
             </Button>
             <Button size="sm" className="ml-auto" onClick={openAddPunch}>
               <Plus className="h-4 w-4 mr-1" />
-              Add Punch
+              Request Missing Punch
             </Button>
           </div>
 
@@ -4010,15 +4022,15 @@ export default function TimeClockAdminPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Add Punch Dialog */}
+      {/* Missing Punch Request Dialog */}
       <Dialog open={addPunchOpen} onOpenChange={(o) => { if (!o) { setAddPunchOpen(false); setAddPunchDcaaError(null); } }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Add Punch</DialogTitle>
+            <DialogTitle>Request Missing Punch</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <p className="text-sm text-muted-foreground">
-              Admin-created punches are subject to the same DCAA charge code policies as kiosk punches.
+              Admin-created missing punches are submitted as correction requests and require supervisor approval before they are applied.
             </p>
             <div className="space-y-1">
               <Label>Employee <span className="text-red-500">*</span></Label>
@@ -4028,7 +4040,7 @@ export default function TimeClockAdminPage() {
                 </SelectTrigger>
                 <SelectContent>
                   {(employees ?? []).map(e => (
-                    <SelectItem key={e.epochEmployeeId ?? e.id} value={String(e.epochEmployeeId ?? e.employeeNumber ?? e.id)}>
+                    <SelectItem key={e.id} value={String(e.id)}>
                       {e.firstName} {e.lastName}
                       {e.employeeNumber ? ` (${e.employeeNumber})` : ''}
                     </SelectItem>
@@ -4044,9 +4056,7 @@ export default function TimeClockAdminPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="clock_in">Clock In</SelectItem>
-                  <SelectItem value="clock_out">Clock Out</SelectItem>
                   <SelectItem value="break_start">Break Start</SelectItem>
-                  <SelectItem value="break_end">Break End</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -4084,11 +4094,12 @@ export default function TimeClockAdminPage() {
               </p>
             </div>
             <div className="space-y-1">
-              <Label>Note</Label>
-              <Input
-                placeholder="Optional note…"
-                value={addPunchNote}
-                onChange={e => setAddPunchNote(e.target.value)}
+              <Label>Reason <span className="text-red-500">*</span></Label>
+              <Textarea
+                rows={3}
+                placeholder="Explain why this missing punch is needed..."
+                value={addPunchReason}
+                onChange={e => setAddPunchReason(e.target.value)}
               />
             </div>
             {addPunchDcaaError && (
@@ -4110,23 +4121,27 @@ export default function TimeClockAdminPage() {
               disabled={
                 !addPunchEmployeeId ||
                 !addPunchAt ||
-                createPunchMutation.isPending
+                addPunchReason.trim().length < 5 ||
+                createPunchCorrectionMutation.isPending
               }
               onClick={() => {
                 setAddPunchDcaaError(null);
-                createPunchMutation.mutate({
-                  employeeId: addPunchEmployeeId,
+                const selectedChargeCodeId = addPunchCostCode
+                  ? (chargeCodes.find(cc => cc.code === addPunchCostCode)?.id ?? null)
+                  : null;
+                createPunchCorrectionMutation.mutate({
+                  employeeId: Number(addPunchEmployeeId),
                   type: addPunchType,
                   punchedAt: new Date(addPunchAt).toISOString(),
-                  costCode: addPunchCostCode.trim(),
-                  note: addPunchNote.trim(),
+                  chargeCodeId: selectedChargeCodeId,
+                  reason: addPunchReason.trim(),
                 });
               }}
             >
-              {createPunchMutation.isPending ? (
-                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Creating…</>
+              {createPunchCorrectionMutation.isPending ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Submitting...</>
               ) : (
-                <><Plus className="h-4 w-4 mr-1" />Create Punch</>
+                <><Send className="h-4 w-4 mr-1" />Submit Request</>
               )}
             </Button>
           </DialogFooter>

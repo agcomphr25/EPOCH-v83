@@ -1175,6 +1175,7 @@ export default function CuttingOperatorDashboard() {
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/cutting-table-mfg-queue/cutting-table'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table-mfg-queue/built-packets'] });
       queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/fabric-inventory'] });
       setIsProductionDialogOpen(false);
       resetProductionForm();

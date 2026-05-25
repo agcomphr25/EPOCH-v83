@@ -57,6 +57,67 @@ function computeStatus(travelerStatus: string, steps: any[]): string {
 export async function dailyThroughputBoardHandler(req: Request, res: Response): Promise<void> {
   try {
     const { dateStr, isToday } = getNYDate(req.query.date as string | undefined);
+    const projectId = typeof req.query.projectId === 'string' && req.query.projectId.trim()
+      ? req.query.projectId.trim()
+      : null;
+    const poId = typeof req.query.poId === 'string' && /^\d+$/.test(req.query.poId)
+      ? Number(req.query.poId)
+      : null;
+
+    const params: any[] = [dateStr];
+    const scopeConditions: string[] = [];
+
+    if (poId) {
+      params.push(poId);
+      scopeConditions.push(`EXISTS (
+        SELECT 1
+        FROM p2_serialized_items psi
+        WHERE psi.po_id = $${params.length}
+          AND psi.serial_number IS NOT NULL
+          AND t.serial_number IS NOT NULL
+          AND LOWER(TRIM(psi.serial_number)) = LOWER(TRIM(t.serial_number))
+      )`);
+    }
+
+    if (projectId) {
+      params.push(projectId);
+      const projectParam = params.length;
+      scopeConditions.push(`(
+        EXISTS (
+          SELECT 1
+          FROM production_work_orders wo
+          WHERE wo.id = t.production_work_order_id
+            AND wo.project_id = $${projectParam}
+        )
+        OR EXISTS (
+          WITH project_po_link AS (
+            SELECT p.po_id AS po_id
+            FROM projects p
+            WHERE p.id = $${projectParam}
+              AND p.po_id IS NOT NULL
+            UNION
+            SELECT ps.linked_p2_order_id AS po_id
+            FROM project_steps ps
+            WHERE ps.project_id = $${projectParam}
+              AND ps.linked_p2_order_id IS NOT NULL
+            UNION
+            SELECT DISTINCT p2po.p2_po_id AS po_id
+            FROM p2_production_orders p2po
+            WHERE p2po.project_id = $${projectParam}::uuid
+          )
+          SELECT 1
+          FROM p2_serialized_items psi
+          JOIN project_po_link ppl ON ppl.po_id = psi.po_id
+          WHERE psi.serial_number IS NOT NULL
+            AND t.serial_number IS NOT NULL
+            AND LOWER(TRIM(psi.serial_number)) = LOWER(TRIM(t.serial_number))
+        )
+      )`);
+    }
+
+    const scopeSql = scopeConditions.length
+      ? `AND (${scopeConditions.join(' OR ')})`
+      : '';
 
     const travelerRows = await pool.query(
       `SELECT
@@ -73,8 +134,9 @@ export async function dailyThroughputBoardHandler(req: Request, res: Response): 
        JOIN travelers t ON t.id = ts.traveler_id
        WHERE ts.department_name = 'Layup'
          AND (ts.started_at AT TIME ZONE 'America/New_York')::date = $1::date
+         ${scopeSql}
        ORDER BY ts.started_at ASC`,
-      [dateStr]
+      params
     );
 
     const travelerIds = travelerRows.map((r: any) => r.traveler_id);
@@ -358,6 +420,8 @@ export async function dailyThroughputBoardHandler(req: Request, res: Response): 
       businessDate: dateStr,
       date: dateStr,
       isToday,
+      projectId,
+      poId,
       targetSlots: SLOTS_TARGET,
       summary,
       slots: allSlots,

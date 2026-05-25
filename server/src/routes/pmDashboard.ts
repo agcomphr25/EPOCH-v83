@@ -266,8 +266,235 @@ interface SerializedItemAggregate {
   totalCompleted: number;
 }
 
+interface P2PoStatusSummary {
+  id: number;
+  poNumber: string;
+  customerName: string | null;
+  dueDate: string | null;
+  totalItems: number;
+  completedItems: number;
+  inProductionItems: number;
+  pendingItems: number;
+  rawStatus: string;
+  status: 'pending' | 'in_progress' | 'completed';
+}
+
+interface P2SerializedBreakdownRow {
+  id: string;
+  poId: number;
+  poNumber: string | null;
+  poItemId: number | null;
+  serialNumber: string | null;
+  barcode: string | null;
+  travelerBarcode: string | null;
+  partNumber: string | null;
+  partName: string | null;
+  status: string;
+  currentDepartment: string | null;
+  currentStageIndex: number | null;
+  activeTravelerId: string | null;
+  activeTravelerNumber: string | null;
+  activeTravelerStatus: string | null;
+  activeTaskDepartment: string | null;
+  activeTaskStatus: string | null;
+  holdReason: string | null;
+  scrapReason: string | null;
+  completedAt: string | null;
+  updatedAt: string | null;
+}
+
 function normalizePartKey(value: string | null | undefined): string {
   return String(value ?? '').trim().toLowerCase();
+}
+
+function normalizeP2Status(status: unknown): string {
+  return String(status || '').trim().toUpperCase();
+}
+
+async function getProjectLinkedP2PoIds(projectId: string): Promise<number[]> {
+  const rows = await pool.query<{ poId: string }>(`
+    WITH project_po_link AS (
+      SELECT p.po_id AS po_id
+      FROM projects p
+      WHERE p.id = $1 AND p.po_id IS NOT NULL
+      UNION
+      SELECT ps.linked_p2_order_id AS po_id
+      FROM project_steps ps
+      WHERE ps.project_id = $1 AND ps.linked_p2_order_id IS NOT NULL
+      UNION
+      SELECT DISTINCT p2po.p2_po_id AS po_id
+      FROM p2_production_orders p2po
+      WHERE p2po.project_id = $1::uuid
+      UNION
+      SELECT po.id AS po_id
+      FROM projects p
+      JOIN p2_purchase_orders po ON LOWER(TRIM(po.project_name)) IN (
+        LOWER(TRIM(p.project_code)),
+        LOWER(TRIM(p.project_name)),
+        LOWER(TRIM(CONCAT_WS(' - ', NULLIF(p.project_code, ''), NULLIF(p.project_name, ''))))
+      )
+      WHERE p.id = $1
+        AND po.project_name IS NOT NULL
+        AND TRIM(po.project_name) <> ''
+    )
+    SELECT DISTINCT po_id::text AS "poId" FROM project_po_link WHERE po_id IS NOT NULL
+  `, [projectId]);
+
+  return rows
+    .map(row => parseInt(row.poId, 10))
+    .filter(n => Number.isFinite(n));
+}
+
+async function getProjectP2PoStatusSummaries(projectId: string): Promise<P2PoStatusSummary[]> {
+  const linkedPoIds = await getProjectLinkedP2PoIds(projectId);
+  if (!linkedPoIds.length) return [];
+
+  const rows = await pool.query<{
+    id: number;
+    poNumber: string;
+    customerName: string | null;
+    dueDate: string | null;
+    rawStatus: string | null;
+    orderedQty: string;
+    serializedQty: string;
+    completedItems: string;
+    inProductionItems: string;
+  }>(`
+    WITH item_state AS (
+      SELECT
+        psi.*,
+        EXISTS (
+          SELECT 1
+          FROM travelers t
+          WHERE UPPER(COALESCE(t.status, '')) IN ('COMPLETE', 'COMPLETED', 'CLOSED')
+            AND t.serial_number IS NOT NULL
+            AND LOWER(TRIM(t.serial_number)) = LOWER(TRIM(psi.serial_number))
+        ) AS has_completed_traveler
+      FROM p2_serialized_items psi
+      WHERE psi.po_id = ANY($1::int[])
+    ),
+    ordered_qty AS (
+      SELECT po_id, COALESCE(SUM(quantity), 0)::int AS ordered_qty
+      FROM p2_purchase_order_items
+      WHERE po_id = ANY($1::int[])
+      GROUP BY po_id
+    )
+    SELECT
+      po.id,
+      po.po_number AS "poNumber",
+      po.customer_name AS "customerName",
+      po.expected_delivery AS "dueDate",
+      po.status AS "rawStatus",
+      COALESCE(oq.ordered_qty, 0)::text AS "orderedQty",
+      COUNT(psi.id)::text AS "serializedQty",
+      COUNT(*) FILTER (
+        WHERE psi.status = 'COMPLETED' OR psi.has_completed_traveler
+      )::text AS "completedItems",
+      COUNT(*) FILTER (
+        WHERE psi.status = 'ACTIVE'
+          AND NOT psi.has_completed_traveler
+          AND COALESCE(psi.current_department, '') <> ''
+          AND COALESCE(psi.current_department, '') <> 'Pending Layup'
+      )::text AS "inProductionItems"
+    FROM p2_purchase_orders po
+    LEFT JOIN ordered_qty oq ON oq.po_id = po.id
+    LEFT JOIN item_state psi ON psi.po_id = po.id
+    WHERE po.id = ANY($1::int[])
+    GROUP BY po.id, po.po_number, po.customer_name, po.expected_delivery, po.status, oq.ordered_qty
+    ORDER BY po.po_number ASC
+  `, [linkedPoIds]);
+
+  return rows.map((row) => {
+    const rawStatus = normalizeP2Status(row.rawStatus) || 'OPEN';
+    const serializedQty = parseInt(row.serializedQty, 10) || 0;
+    const orderedQty = parseInt(row.orderedQty, 10) || 0;
+    const totalItems = Math.max(orderedQty, serializedQty);
+    const completedItems = parseInt(row.completedItems, 10) || 0;
+    const inProductionItems = parseInt(row.inProductionItems, 10) || 0;
+    const pendingItems = Math.max(0, totalItems - completedItems - inProductionItems);
+    const status: P2PoStatusSummary['status'] =
+      totalItems > 0 && completedItems >= totalItems
+        ? 'completed'
+        : (inProductionItems > 0 || rawStatus === 'IN_PRODUCTION')
+          ? 'in_progress'
+          : 'pending';
+
+    return {
+      id: row.id,
+      poNumber: row.poNumber,
+      customerName: row.customerName,
+      dueDate: row.dueDate,
+      totalItems,
+      completedItems,
+      inProductionItems,
+      pendingItems,
+      rawStatus,
+      status,
+    };
+  });
+}
+
+async function getProjectP2SerializedBreakdown(projectId: string): Promise<P2SerializedBreakdownRow[]> {
+  const linkedPoIds = await getProjectLinkedP2PoIds(projectId);
+  if (!linkedPoIds.length) return [];
+
+  return pool.query<P2SerializedBreakdownRow>(`
+    WITH latest_traveler AS (
+      SELECT DISTINCT ON (LOWER(TRIM(serial_number)))
+        LOWER(TRIM(serial_number)) AS serial_key,
+        id::text AS "activeTravelerId",
+        traveler_number AS "activeTravelerNumber",
+        status AS "activeTravelerStatus"
+      FROM travelers
+      WHERE serial_number IS NOT NULL
+        AND TRIM(serial_number) <> ''
+      ORDER BY LOWER(TRIM(serial_number)), updated_at DESC NULLS LAST, created_at DESC NULLS LAST
+    ),
+    active_step AS (
+      SELECT DISTINCT ON (t.id)
+        t.id AS traveler_id,
+        ts.department_name AS "activeTaskDepartment",
+        ts.status AS "activeTaskStatus"
+      FROM travelers t
+      JOIN traveler_steps ts ON ts.traveler_id = t.id
+      WHERE UPPER(COALESCE(ts.status, '')) IN ('IN_PROGRESS', 'ACTIVE', 'STARTED', 'BLOCKED', 'ON_HOLD', 'HOLD')
+      ORDER BY t.id, ts.step_number ASC
+    )
+    SELECT
+      psi.id::text,
+      psi.po_id AS "poId",
+      psi.po_number AS "poNumber",
+      psi.po_item_id AS "poItemId",
+      psi.serial_number AS "serialNumber",
+      psi.barcode,
+      psi.traveler_barcode AS "travelerBarcode",
+      COALESCE(poi.part_number, psi.part_number) AS "partNumber",
+      COALESCE(poi.part_name, psi.part_name) AS "partName",
+      psi.status,
+      psi.current_department AS "currentDepartment",
+      psi.current_stage_index AS "currentStageIndex",
+      lt."activeTravelerId",
+      lt."activeTravelerNumber",
+      lt."activeTravelerStatus",
+      astep."activeTaskDepartment",
+      astep."activeTaskStatus",
+      psi.hold_reason AS "holdReason",
+      psi.scrap_reason AS "scrapReason",
+      psi.completed_at AS "completedAt",
+      psi.updated_at AS "updatedAt"
+    FROM p2_serialized_items psi
+    LEFT JOIN p2_purchase_order_items poi ON poi.id = psi.po_item_id
+    LEFT JOIN latest_traveler lt ON lt.serial_key = LOWER(TRIM(psi.serial_number))
+    LEFT JOIN active_step astep ON astep.traveler_id::text = lt."activeTravelerId"
+    WHERE psi.po_id = ANY($1::int[])
+      AND COALESCE(UPPER(psi.status), '') NOT IN ('CANCELLED', 'CANCELED')
+    ORDER BY
+      COALESCE(psi.current_stage_index, 0),
+      COALESCE(psi.current_department, 'Pending Layup'),
+      psi.po_number,
+      psi.sequence_number,
+      psi.serial_number
+  `, [linkedPoIds]);
 }
 
 function isWadReleasedForExecution(wad: WadBridgeRow): boolean {
@@ -1268,6 +1495,7 @@ router.get('/:projectId/production', h(async (req, res) => {
   `, [projectId]);
 
   const linkedP2PoCount = parseInt(linkRes[0]?.count ?? '0', 10) || 0;
+  const linkedP2PoStatuses = await getProjectP2PoStatusSummaries(projectId);
 
   // Item-level override: when serialized items exist for the project's linked
   // P2 PO, drive the P2 portion of the production table from p2_serialized_items
@@ -1410,7 +1638,14 @@ router.get('/:projectId/production', h(async (req, res) => {
     };
   });
 
-  res.json({ rows: rowsWithAssignments, linkedP2PoCount });
+  res.json({ rows: rowsWithAssignments, linkedP2PoCount, linkedP2PoStatuses });
+}));
+
+// GET /api/pm-dashboard/:projectId/production/p2-serialized - linked P2 PO item breakdown
+router.get('/:projectId/production/p2-serialized', h(async (req, res) => {
+  const { projectId } = req.params;
+  const items = await getProjectP2SerializedBreakdown(projectId);
+  res.json({ items });
 }));
 
 // GET /api/pm-dashboard/:projectId/production/:workOrderId — drawer detail

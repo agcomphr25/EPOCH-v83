@@ -26,7 +26,7 @@ import {
   ChevronUp, ChevronDown, ArrowUpDown, LayoutDashboard, XCircle, Filter,
   Plus,
 } from 'lucide-react';
-import { format, differenceInDays, differenceInBusinessDays, parseISO } from 'date-fns';
+import { format, differenceInBusinessDays, parseISO } from 'date-fns';
 import { apiRequest } from '@/lib/queryClient';
 
 async function safeFetch<T>(url: string): Promise<T> {
@@ -161,6 +161,66 @@ interface WorkOrderDetail {
     startedAt: string;
     elapsedMinutes: number;
   }[];
+}
+
+interface P2PoStatusSummary {
+  id: number;
+  poNumber: string;
+  customerName: string | null;
+  dueDate: string | null;
+  totalItems: number;
+  completedItems: number;
+  inProductionItems: number;
+  pendingItems: number;
+  rawStatus: string;
+  status: 'pending' | 'in_progress' | 'completed';
+}
+
+interface ProductionResponse {
+  rows: WorkOrderRow[];
+  linkedP2PoCount: number;
+  linkedP2PoStatuses: P2PoStatusSummary[];
+}
+
+interface P2SerializedBreakdownItem {
+  id: string;
+  poId: number;
+  poNumber: string | null;
+  poItemId: number | null;
+  serialNumber: string | null;
+  barcode: string | null;
+  travelerBarcode: string | null;
+  partNumber: string | null;
+  partName: string | null;
+  status: string;
+  currentDepartment: string | null;
+  currentStageIndex: number | null;
+  activeTravelerId: string | null;
+  activeTravelerNumber: string | null;
+  activeTravelerStatus: string | null;
+  activeTaskDepartment: string | null;
+  activeTaskStatus: string | null;
+  holdReason: string | null;
+  scrapReason: string | null;
+  completedAt: string | null;
+  updatedAt: string | null;
+}
+
+interface DailyThroughputBoardData {
+  businessDate: string;
+  date: string;
+  isToday: boolean;
+  targetSlots: number;
+  summary: {
+    target: number;
+    started: number;
+    green: number;
+    inProcess: number;
+    blocked: number;
+    cancelled: number;
+    notStarted: number;
+    overflowCount: number;
+  };
 }
 
 interface LaborSummary {
@@ -360,6 +420,17 @@ const WO_STATUS_COLORS: Record<string, string> = {
   CLOSED: 'bg-gray-200 text-gray-500',
   BLOCKED: 'bg-red-100 text-red-700',
 };
+
+const P2_PO_STATUS_COLORS: Record<P2PoStatusSummary['status'], string> = {
+  pending: 'bg-gray-100 text-gray-700',
+  in_progress: 'bg-blue-100 text-blue-700',
+  completed: 'bg-green-100 text-green-700',
+};
+
+function p2PoStatusLabel(status: P2PoStatusSummary['status']) {
+  if (status === 'in_progress') return 'In Progress';
+  return status.charAt(0).toUpperCase() + status.slice(1);
+}
 
 const CONNECTION_STATUS_COLORS: Record<string, string> = {
   CONNECTED: 'bg-green-100 text-green-700 border-green-200',
@@ -613,22 +684,34 @@ function completionState(row: WorkOrderRow): CompletionFilter {
 function ProductionTab({ projectId }: { projectId: string }) {
   const [, navTo] = useLocation();
   const [selectedWO, setSelectedWO] = useState<WorkOrderRow | null>(null);
+  const [selectedP2Po, setSelectedP2Po] = useState<P2PoStatusSummary | null>(null);
   const [showBlockersOnly, setShowBlockersOnly] = useState(false);
   const [completionFilter, setCompletionFilter] = useState<CompletionFilter>('all');
   const [qtySort, setQtySort] = useState<QtySort>(null);
 
-  const { data: productionResponse, isLoading, isError } = useQuery<{ rows: WorkOrderRow[]; linkedP2PoCount: number }>({
+  const { data: productionResponse, isLoading, isError } = useQuery<ProductionResponse>({
     queryKey: ['/api/pm-dashboard', projectId, 'production'],
-    queryFn: () => safeFetch<{ rows: WorkOrderRow[]; linkedP2PoCount: number }>(`/api/pm-dashboard/${projectId}/production`),
+    queryFn: () => safeFetch<ProductionResponse>(`/api/pm-dashboard/${projectId}/production`),
     enabled: !!projectId,
   });
   const rows = productionResponse?.rows ?? [];
   const linkedP2PoCount = productionResponse?.linkedP2PoCount ?? 0;
+  const linkedP2PoStatuses = productionResponse?.linkedP2PoStatuses ?? [];
 
   const { data: detail, isLoading: detailLoading } = useQuery<WorkOrderDetail>({
     queryKey: ['/api/pm-dashboard', projectId, 'production', selectedWO?.productionWorkOrderId],
     queryFn: () => safeFetch<WorkOrderDetail>(`/api/pm-dashboard/${projectId}/production/${selectedWO!.productionWorkOrderId}`),
     enabled: !!selectedWO && selectedWO.sourceType !== 'p2_production_order',
+  });
+
+  const {
+    data: serializedBreakdown,
+    isLoading: serializedBreakdownLoading,
+    isError: serializedBreakdownError,
+  } = useQuery<{ items: P2SerializedBreakdownItem[] }>({
+    queryKey: ['/api/pm-dashboard', projectId, 'production', 'p2-serialized'],
+    queryFn: () => safeFetch<{ items: P2SerializedBreakdownItem[] }>(`/api/pm-dashboard/${projectId}/production/p2-serialized`),
+    enabled: !!projectId && !!selectedP2Po,
   });
 
   if (isLoading) {
@@ -639,7 +722,7 @@ function ProductionTab({ projectId }: { projectId: string }) {
     return <QueryErrorBanner message="Failed to load production data." />;
   }
 
-  if (!rows.length) {
+  if (!rows.length && linkedP2PoStatuses.length === 0) {
     if (linkedP2PoCount === 0) {
       return (
         <Card className="p-10 text-center" data-testid="empty-no-p2-link">
@@ -688,9 +771,71 @@ function ProductionTab({ projectId }: { projectId: string }) {
 
   const chipBase = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-sm font-medium transition-colors';
   const chipOff = 'bg-background border-border text-muted-foreground hover:text-foreground hover:bg-accent';
+  const selectedSerializedItems = (serializedBreakdown?.items ?? [])
+    .filter(item => !selectedP2Po || item.poId === selectedP2Po.id);
+  const serializedByDepartment = selectedSerializedItems.reduce<Record<string, P2SerializedBreakdownItem[]>>((acc, item) => {
+    const dept = item.currentDepartment || item.activeTaskDepartment || 'Pending Layup';
+    if (!acc[dept]) acc[dept] = [];
+    acc[dept].push(item);
+    return acc;
+  }, {});
+  const serializedDepartments = Object.entries(serializedByDepartment)
+    .sort(([a], [b]) => a.localeCompare(b));
 
   return (
     <>
+      {linkedP2PoStatuses.length > 0 && (
+        <div className="grid gap-3 mb-4">
+          {linkedP2PoStatuses.map((po) => {
+            const pct = po.totalItems > 0 ? Math.round((po.completedItems / po.totalItems) * 100) : 0;
+            return (
+              <Card
+                key={po.id}
+                className="cursor-pointer hover:border-primary/50 transition-colors"
+                onClick={() => setSelectedP2Po(po)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setSelectedP2Po(po);
+                  }
+                }}
+              >
+                <CardContent className="p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-mono text-lg font-semibold">{po.poNumber}</span>
+                        <Badge className={P2_PO_STATUS_COLORS[po.status]}>
+                          {p2PoStatusLabel(po.status)}
+                        </Badge>
+                        <Badge variant="outline">P2 PO Status</Badge>
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {po.customerName || 'Unknown customer'} · Due {fmtDate(po.dueDate)}
+                      </div>
+                    </div>
+                    <div className="min-w-[260px] space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span>{po.completedItems} / {po.totalItems} completed</span>
+                        <span className="font-semibold">{pct}%</span>
+                      </div>
+                      <Progress value={pct} className="h-2" />
+                      <div className="grid grid-cols-3 gap-2 text-center text-xs text-muted-foreground">
+                        <div><span className="block font-semibold text-foreground">{po.inProductionItems}</span>In production</div>
+                        <div><span className="block font-semibold text-foreground">{po.pendingItems}</span>Pending</div>
+                        <div><span className="block font-semibold text-foreground">{po.rawStatus}</span>Raw status</div>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
       {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-2 mb-3">
         <button
@@ -758,7 +903,11 @@ function ProductionTab({ projectId }: { projectId: string }) {
       {displayRows.length === 0 && (
         <Card className="p-10 text-center">
           <CheckCircle className="mx-auto h-10 w-10 text-green-500 mb-3" />
-          <p className="text-muted-foreground">No work orders match the selected filters.</p>
+          <p className="text-muted-foreground">
+            {rows.length === 0
+              ? 'No WAD/project work orders found; use the linked P2 PO status above for serialized production.'
+              : 'No work orders match the selected filters.'}
+          </p>
         </Card>
       )}
 
@@ -936,6 +1085,89 @@ function ProductionTab({ projectId }: { projectId: string }) {
         </Table>
       </div>
       )}
+
+      <Sheet open={!!selectedP2Po} onOpenChange={(open) => !open && setSelectedP2Po(null)}>
+        <SheetContent className="w-[520px] sm:w-[720px] overflow-y-auto">
+          <SheetHeader className="mb-4">
+            <SheetTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5" />
+              {selectedP2Po?.poNumber} serialized production
+              {selectedP2Po && (
+                <Badge className={P2_PO_STATUS_COLORS[selectedP2Po.status]}>
+                  {p2PoStatusLabel(selectedP2Po.status)}
+                </Badge>
+              )}
+            </SheetTitle>
+          </SheetHeader>
+
+          {serializedBreakdownLoading && (
+            <div className="space-y-3">
+              {[1, 2, 3].map(i => <Skeleton key={i} className="h-20 w-full" />)}
+            </div>
+          )}
+
+          {serializedBreakdownError && (
+            <QueryErrorBanner message="Failed to load serialized item breakdown." />
+          )}
+
+          {!serializedBreakdownLoading && !serializedBreakdownError && selectedSerializedItems.length === 0 && (
+            <div className="rounded-md border p-8 text-center text-sm text-muted-foreground">
+              No serialized items are currently tied to this PO.
+            </div>
+          )}
+
+          {!serializedBreakdownLoading && !serializedBreakdownError && serializedDepartments.length > 0 && (
+            <div className="space-y-4">
+              {serializedDepartments.map(([department, items]) => (
+                <div key={department} className="rounded-md border">
+                  <div className="flex items-center justify-between border-b bg-muted/40 px-3 py-2">
+                    <span className="text-sm font-semibold">{department}</span>
+                    <Badge variant="outline">{items.length} item{items.length === 1 ? '' : 's'}</Badge>
+                  </div>
+                  <div className="divide-y">
+                    {items.map((item) => (
+                      <div key={item.id} className="grid gap-2 p-3 text-sm sm:grid-cols-[1.2fr_1fr_1fr]">
+                        <div>
+                          <div className="font-mono font-semibold">
+                            {item.serialNumber || item.barcode || item.id}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {item.partNumber || 'No part'} {item.partName ? `- ${item.partName}` : ''}
+                          </div>
+                        </div>
+                        <div>
+                          <Badge className={WO_STATUS_COLORS[item.status] ?? 'bg-gray-100 text-gray-700'}>
+                            {item.status.replace('_', ' ')}
+                          </Badge>
+                          {(item.holdReason || item.scrapReason) && (
+                            <div className="mt-1 text-xs text-red-700">
+                              {item.holdReason || item.scrapReason}
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {item.activeTravelerNumber && item.activeTravelerId ? (
+                            <Link
+                              to={`/travelers/${item.activeTravelerId}`}
+                              className="font-mono text-blue-600 hover:underline"
+                            >
+                              {item.activeTravelerNumber}
+                            </Link>
+                          ) : (
+                            <span>No active traveler</span>
+                          )}
+                          <div>{item.activeTaskStatus || item.activeTravelerStatus || 'No active task'}</div>
+                          <div>Updated {fmtTime(item.updatedAt)}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
 
       <Sheet open={!!selectedWO} onOpenChange={(open) => !open && setSelectedWO(null)}>
         <SheetContent className="w-[420px] sm:w-[540px] overflow-y-auto">
@@ -1677,9 +1909,9 @@ export default function PMControlCenterPage() {
   });
 
   // Page-level production query — shares cache with ProductionTab, only used for blockers sheet + throughput
-  const { data: productionData, isError: productionError } = useQuery<{ rows: WorkOrderRow[]; linkedP2PoCount: number }>({
+  const { data: productionData, isError: productionError } = useQuery<ProductionResponse>({
     queryKey: ['/api/pm-dashboard', selectedProjectId, 'production'],
-    queryFn: () => safeFetch<{ rows: WorkOrderRow[]; linkedP2PoCount: number }>(`/api/pm-dashboard/${selectedProjectId}/production`),
+    queryFn: () => safeFetch<ProductionResponse>(`/api/pm-dashboard/${selectedProjectId}/production`),
     enabled: !!selectedProjectId,
   });
   const productionRows = productionData?.rows ?? [];
@@ -1694,6 +1926,26 @@ export default function PMControlCenterPage() {
   const blockedWorkOrders = productionRows.filter(r => r.status === 'BLOCKED');
 
   const selectedProject = projects.find(p => String(p.id) === selectedProjectId);
+  const linkedP2PoStatus = productionData?.linkedP2PoStatuses?.[0] ?? null;
+
+  const throughputParams = new URLSearchParams();
+  if (selectedProjectId) throughputParams.set('projectId', selectedProjectId);
+  if (linkedP2PoStatus?.id) throughputParams.set('poId', String(linkedP2PoStatus.id));
+  else if (selectedProject?.poId) throughputParams.set('poId', String(selectedProject.poId));
+
+  const {
+    data: liveThroughput,
+    isLoading: liveThroughputLoading,
+    isError: liveThroughputError,
+  } = useQuery<DailyThroughputBoardData>({
+    queryKey: ['/api/p2/daily-throughput-board', selectedProjectId, linkedP2PoStatus?.id ?? selectedProject?.poId ?? null],
+    queryFn: () => safeFetch<DailyThroughputBoardData>(
+      `/api/p2/daily-throughput-board${throughputParams.toString() ? `?${throughputParams.toString()}` : ''}`
+    ),
+    enabled: !!selectedProjectId,
+    refetchInterval: 45000,
+    staleTime: 30000,
+  });
 
   // Derive lifecycle stage label from project steps
   const lifecycleStageLabel = (() => {
@@ -1718,20 +1970,9 @@ export default function PMControlCenterPage() {
     return deriveStageLabel(selectedProject);
   })();
 
-  // Daily throughput calculation
-  const dailyThroughput = (() => {
-    if (!productionRows.length || !selectedProject?.targetShipDate) return null;
-    const totalRequired = productionRows.reduce((sum, r) => sum + (r.quantityRequired || 0), 0);
-    const totalCompleted = productionRows.reduce((sum, r) => sum + (r.quantityCompleted || 0), 0);
-    const completedToday = productionRows.reduce((sum, r) => sum + (r.quantityCompletedToday || 0), 0);
-    const totalRemaining = Math.max(0, totalRequired - totalCompleted);
-    const daysRemaining = Math.max(1, differenceInBusinessDays(parseISO(selectedProject.targetShipDate), new Date()));
-    // Daily target = total units still needed / business days remaining (Mon-Fri, excl. weekends)
-    const neededPerDay = Math.ceil(totalRemaining / daysRemaining);
-    // Pace: today's actual completions vs. daily target
-    const pacePercent = neededPerDay > 0 ? Math.round((completedToday / neededPerDay) * 100) : 100;
-    return { totalRequired, totalCompleted, completedToday, totalRemaining, daysRemaining, neededPerDay, pacePercent, percentComplete: totalRequired > 0 ? Math.round((totalCompleted / totalRequired) * 100) : 0 };
-  })();
+  const liveThroughputPace = liveThroughput
+    ? Math.round((liveThroughput.summary.green / Math.max(1, liveThroughput.summary.target)) * 100)
+    : 0;
 
   // Detect current user for "Only My Projects" toggle
   const { data: currentUser } = useQuery<{ id: number; name: string; username: string }>({
@@ -2027,7 +2268,7 @@ export default function PMControlCenterPage() {
           )}
 
           {/* Stage + Throughput Row */}
-          {summary && !productionError && (lifecycleStageLabel || dailyThroughput) && (
+          {summary && !productionError && (lifecycleStageLabel || liveThroughput || liveThroughputLoading || liveThroughputError) && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {lifecycleStageLabel && (
                 <KpiCard
@@ -2042,26 +2283,42 @@ export default function PMControlCenterPage() {
                   }
                 />
               )}
-              {dailyThroughput && (
+              {(liveThroughput || liveThroughputLoading || liveThroughputError) && (
                 <Card>
                   <CardContent className="p-4">
                     <div className="flex items-center gap-2 mb-2">
                       <TrendingUp className="h-4 w-4 text-blue-600" />
-                      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Daily Throughput</span>
+                      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Live Daily Throughput</span>
                     </div>
-                    <div className="flex items-end justify-between mb-2">
-                      <div>
-                        <p className="text-lg font-bold">{dailyThroughput.completedToday}<span className="text-sm text-muted-foreground"> / {dailyThroughput.neededPerDay} today's target</span></p>
-                        <p className="text-xs text-muted-foreground">{dailyThroughput.totalCompleted}/{dailyThroughput.totalRequired} total · {dailyThroughput.daysRemaining}d left</p>
+                    {liveThroughputLoading ? (
+                      <div className="space-y-2">
+                        <Skeleton className="h-6 w-40" />
+                        <Skeleton className="h-2 w-full" />
                       </div>
-                      <span className={`text-sm font-semibold ${dailyThroughput.pacePercent >= 100 ? 'text-green-600' : dailyThroughput.pacePercent >= 75 ? 'text-blue-600' : 'text-orange-600'}`}>
-                        {dailyThroughput.pacePercent}% pace
-                      </span>
-                    </div>
-                    <Progress
-                      value={Math.min(100, dailyThroughput.pacePercent)}
-                      className={`h-2 ${dailyThroughput.pacePercent >= 100 ? '[&>div]:bg-green-500' : dailyThroughput.pacePercent >= 75 ? '[&>div]:bg-blue-500' : '[&>div]:bg-orange-500'}`}
-                    />
+                    ) : liveThroughputError || !liveThroughput ? (
+                      <p className="text-sm text-red-600">Live throughput data is unavailable.</p>
+                    ) : (
+                      <>
+                        <div className="flex items-end justify-between mb-2">
+                          <div>
+                            <p className="text-lg font-bold">
+                              {liveThroughput.summary.green}
+                              <span className="text-sm text-muted-foreground"> / {liveThroughput.summary.target} green target</span>
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {liveThroughput.summary.started} started · {liveThroughput.summary.inProcess} in process · {liveThroughput.summary.blocked} blocked · {liveThroughput.date}
+                            </p>
+                          </div>
+                          <span className={`text-sm font-semibold ${liveThroughputPace >= 100 ? 'text-green-600' : liveThroughputPace >= 75 ? 'text-blue-600' : 'text-orange-600'}`}>
+                            {liveThroughputPace}% live pace
+                          </span>
+                        </div>
+                        <Progress
+                          value={Math.min(100, liveThroughputPace)}
+                          className={`h-2 ${liveThroughputPace >= 100 ? '[&>div]:bg-green-500' : liveThroughputPace >= 75 ? '[&>div]:bg-blue-500' : '[&>div]:bg-orange-500'}`}
+                        />
+                      </>
+                    )}
                   </CardContent>
                 </Card>
               )}

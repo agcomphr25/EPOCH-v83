@@ -87,6 +87,47 @@ async function findP1PackingSlipInvoice(shipmentRecordId: string, poNumber: stri
   return rows[0] || null;
 }
 
+async function findP1PackingSlipInvoiceForOrders(poNumber: string, orderIds: string[]) {
+  const usableOrderIds = orderIds.filter(Boolean);
+  if (usableOrderIds.length === 0) return null;
+
+  const rows = rowsOf<{
+    id: string;
+    invoice_number: string;
+    status: string;
+  }>(await pool.query(
+    `SELECT inv.id, inv.invoice_number, inv.status
+     FROM ar_invoices inv
+     WHERE COALESCE(inv.status, '') <> 'VOID'
+       AND EXISTS (
+         SELECT 1
+         FROM ar_invoice_lines line
+         WHERE line.invoice_id = inv.id
+           AND line.dimension_tags->>'source' = 'p1_oem_packing_slip'
+           AND line.dimension_tags->>'poNumber' = $1
+           AND (
+             line.dimension_tags->>'orderId' = ANY($2::text[])
+             OR EXISTS (
+               SELECT 1
+               FROM jsonb_array_elements_text(
+                 CASE
+                   WHEN jsonb_typeof(line.dimension_tags->'orderIds') = 'array'
+                   THEN line.dimension_tags->'orderIds'
+                   ELSE '[]'::jsonb
+                 END
+               ) AS order_id(value)
+               WHERE order_id.value = ANY($2::text[])
+             )
+           )
+       )
+     ORDER BY inv.created_at DESC
+     LIMIT 1`,
+    [poNumber, usableOrderIds]
+  ));
+
+  return rows[0] || null;
+}
+
 async function findReusableP1InvoiceNumber({
   poNumber,
   orderIds,
@@ -1434,12 +1475,26 @@ router.post('/oem-shipments/:id/invoices', authenticateToken, async (req, res) =
       return res.status(404).json({ error: 'No shipment items found for this P1 packing slip.' });
     }
 
+    const shipmentOrderIds = lines.map((line: any) => line.order_id).filter(Boolean);
+    const existingForOrders = await findP1PackingSlipInvoiceForOrders(poNumber, shipmentOrderIds);
+    if (existingForOrders) {
+      await client.query(
+        `UPDATE shipment_records SET invoice_number = $1, updated_at = NOW() WHERE id = $2 AND invoice_number IS NULL`,
+        [existingForOrders.invoice_number, id]
+      );
+      return res.status(200).json({
+        id: existingForOrders.id,
+        invoiceNumber: existingForOrders.invoice_number,
+        status: existingForOrders.status,
+      });
+    }
+
     const first = lines[0];
     let invoiceNumber = first.shipment_invoice_number as string | null;
     if (!invoiceNumber) {
       const reusableInvoiceNumber = await findReusableP1InvoiceNumber({
         poNumber,
-        orderIds: lines.map((line: any) => line.order_id).filter(Boolean),
+        orderIds: shipmentOrderIds,
       });
       if (reusableInvoiceNumber) {
         invoiceNumber = reusableInvoiceNumber;
@@ -1460,7 +1515,33 @@ router.post('/oem-shipments/:id/invoices', authenticateToken, async (req, res) =
     const invoiceDate = toDateOnly(today);
     const dueDate = toDateOnly(addDays(today, 30));
     const customerId = String(first.po_customer_id || first.shipment_customer_id || '0');
-    const subtotal = lines.reduce(
+    const consolidatedLines = Array.from(lines.reduce((map: Map<string, any>, line: any) => {
+      const unitPrice = Number(line.unit_price || 0);
+      const partNumber = line.part_number || null;
+      const description = line.description || line.order_id || poNumber;
+      const key = JSON.stringify([partNumber, description, unitPrice]);
+      const existing = map.get(key);
+      if (existing) {
+        existing.quantity += Number(line.quantity || 0);
+        existing.shipmentItemIds.push(line.shipment_item_id);
+        existing.orderIds.push(line.order_id);
+        existing.p1PoItemIds.push(line.p1_po_item_id);
+      } else {
+        map.set(key, {
+          ...line,
+          part_number: partNumber,
+          description,
+          unit_price: unitPrice,
+          quantity: Number(line.quantity || 0),
+          shipmentItemIds: [line.shipment_item_id],
+          orderIds: [line.order_id],
+          p1PoItemIds: [line.p1_po_item_id],
+        });
+      }
+      return map;
+    }, new Map<string, any>()).values());
+
+    const subtotal = consolidatedLines.reduce(
       (sum: number, line: any) => sum + Number(line.quantity || 0) * Number(line.unit_price || 0),
       0
     );
@@ -1510,17 +1591,17 @@ router.post('/oem-shipments/:id/invoices', authenticateToken, async (req, res) =
     );
 
     const invoice = invoiceResult.rows[0];
-    for (const line of lines) {
+    for (const line of consolidatedLines) {
       const qty = Number(line.quantity || 0);
       const unitPrice = Number(line.unit_price || 0);
       const tags = {
         source: 'p1_oem_packing_slip',
         shipmentRecordId: id,
         shipmentReference: first.reference || null,
-        shipmentItemId: line.shipment_item_id,
+        shipmentItemIds: line.shipmentItemIds,
         poNumber,
-        p1PoItemId: line.p1_po_item_id,
-        orderId: line.order_id,
+        p1PoItemIds: line.p1PoItemIds,
+        orderIds: line.orderIds,
         trackingNumber: first.master_tracking_number || null,
       };
 

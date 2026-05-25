@@ -1304,21 +1304,39 @@ router.post('/:id/void', requirePermission('finance.void_invoice'), async (req: 
     const needsReversal = ['POSTED', 'SENT'].includes(invoice.status);
 
     if (needsReversal) {
-      const allAccounts = await db.select().from(chartOfAccounts);
-      const arAccount = allAccounts.find((a) => a.accountName === 'Accounts Receivable');
-      const revenueAccount = allAccounts.find((a) => a.accountName === 'Revenue — P2 Products');
-
-      const total = parseFloat(invoice.totalAmount);
-      const subtotal = parseFloat(invoice.subtotal);
-      const tax = parseFloat(invoice.taxAmount);
-
-      const taxAccount = tax > 0 ? allAccounts.find((a) => a.accountName === 'Sales Tax Payable') : null;
-
-      if (!arAccount || !revenueAccount) {
-        return res.status(500).json({ error: 'Required chart-of-accounts entries not found' });
+      const [originalEntry] = await db
+        .select()
+        .from(journalEntries)
+        .where(
+          and(
+            eq(journalEntries.transactionType, 'AR_INVOICE'),
+            eq(journalEntries.referenceType, 'ar_invoice'),
+            eq(journalEntries.referenceUuid, id),
+          ),
+        )
+        .limit(1);
+      if (!originalEntry) {
+        return res.status(409).json({ error: 'Cannot void posted invoice: original AR invoice journal entry was not found' });
       }
-      if (tax > 0 && !taxAccount) {
-        return res.status(500).json({ error: 'Sales Tax Payable account not found in chart of accounts' });
+      const [existingReversal] = await db
+        .select()
+        .from(journalEntries)
+        .where(
+          and(
+            eq(journalEntries.transactionType, 'AR_INVOICE_REVERSAL'),
+            eq(journalEntries.referenceType, 'ar_invoice'),
+            eq(journalEntries.referenceUuid, id),
+          ),
+        )
+        .limit(1);
+
+      const effectiveDate = new Date();
+      if (!existingReversal) {
+        await assertPostingAllowedForPeriod({
+          effectiveDate,
+          user: user ? { username: user } : null,
+          postingMode: 'REVERSAL',
+        });
       }
 
       const result = await db.transaction(async (tx) => {
@@ -1328,33 +1346,74 @@ router.post('/:id/void', requirePermission('finance.void_invoice'), async (req: 
           .where(eq(arInvoices.id, id))
           .returning();
 
+        if (existingReversal) {
+          console.log(`[InvoiceService] Invoice ${invoice.invoiceNumber} (${id}) voided by ${user}; reversal journal entry ${existingReversal.id} already exists`);
+          return updated;
+        }
+
+        const originalLines = await tx
+          .select()
+          .from(journalLines)
+          .where(eq(journalLines.journalEntryId, originalEntry.id));
+
+        if (originalLines.length === 0) {
+          throw new Error(`Original AR invoice journal entry ${originalEntry.id} has no journal lines`);
+        }
+
         const [entry] = await tx
           .insert(journalEntries)
           .values({
             transactionType: 'AR_INVOICE_REVERSAL',
             referenceType: 'ar_invoice',
             referenceId: 0,
-            effectiveDate: new Date(),
+            referenceUuid: id,
+            effectiveDate,
             memo: `Reversal — AR Invoice ${invoice.invoiceNumber} — ID: ${id}`,
-            status: 'DRAFT',
+            status: 'POSTED',
+            sourceSystem: 'EPOCH',
+            sourceDocumentType: 'AR_INVOICE_VOID',
+            sourceDocumentNumber: invoice.invoiceNumber,
+            postingMode: 'REVERSAL',
+            postedAt: new Date(),
+            postedBy: user,
+            reversalOfJournalEntryId: originalEntry.id,
             createdBy: user,
           })
           .returning();
 
-        type LineInsert = { journalEntryId: number; accountId: number; debitAmount: number; creditAmount: number };
-        const lines: LineInsert[] = [
-          { journalEntryId: entry.id, accountId: revenueAccount.id, debitAmount: subtotal, creditAmount: 0 },
-          { journalEntryId: entry.id, accountId: arAccount.id, debitAmount: 0, creditAmount: total },
-        ];
-        if (tax > 0) {
-          lines.push({ journalEntryId: entry.id, accountId: taxAccount!.id, debitAmount: tax, creditAmount: 0 });
-        }
-
-        await tx.insert(journalLines).values(lines);
-
-        console.log(`[InvoiceService] Invoice ${invoice.invoiceNumber} (${id}) voided by ${user} — reason: ${voidReason}`);
-        console.log(`[InvoiceService] Reversal journal entry ${entry.id} created for invoice ${invoice.invoiceNumber} — DR Revenue ${subtotal}, CR AR ${total}${tax > 0 ? `, DR Sales Tax ${tax}` : ''}`);
-
+        await tx.insert(journalLines).values(
+          originalLines.map((line: typeof journalLines.$inferSelect) => ({
+            journalEntryId: entry.id,
+            accountId: line.accountId,
+            debitAmount: Number(line.creditAmount ?? 0),
+            creditAmount: Number(line.debitAmount ?? 0),
+            customerId: line.customerId,
+            customerNameSnapshot: line.customerNameSnapshot,
+            customerType: line.customerType,
+            projectId: line.projectId,
+            projectNameSnapshot: line.projectNameSnapshot,
+            contractNumber: line.contractNumber,
+            productionLine: line.productionLine,
+            department: line.department,
+            chargeCodeId: line.chargeCodeId,
+            inventoryItemId: line.inventoryItemId,
+            partNumber: line.partNumber,
+            salespersonUserId: line.salespersonUserId,
+            salespersonNameSnapshot: line.salespersonNameSnapshot,
+            csrUserId: line.csrUserId,
+            csrNameSnapshot: line.csrNameSnapshot,
+            allowability: line.allowability,
+            directIndirect: line.directIndirect,
+            costPool: line.costPool,
+            dimensionTags: {
+              ...(line.dimensionTags as Record<string, unknown>),
+              source: 'ar_invoice_void',
+              reversalOfJournalEntryId: originalEntry.id,
+              voidReason,
+            },
+          })),
+        );
+        console.log(`[InvoiceService] Invoice ${invoice.invoiceNumber} (${id}) voided by ${user}; reversal journal entry ${entry.id} created from original entry ${originalEntry.id}`);
         return updated;
       });
 

@@ -47,11 +47,35 @@ function wrap(text: string, width: number, font: PDFFont, size: number): string[
 function billingAddress(customer: any): string[] {
   if (!customer) return [];
   return [
-    customer.customerName,
-    customer.billingAddress,
-    [customer.billingCity, customer.billingState, customer.billingZip].filter(Boolean).join(', ').replace(', ', ', '),
+    customer.customerName || customer.p1ShipToName,
+    customer.billingAddress || customer.p1ShipToStreet,
+    [customer.billingCity || customer.p1ShipToCity, customer.billingState || customer.p1ShipToState, customer.billingZip || customer.p1ShipToZip].filter(Boolean).join(', '),
     customer.contactEmail,
   ].filter(Boolean);
+}
+
+function shipToAddress(invoice: any): string[] {
+  return [
+    invoice.p1ShipToName || invoice.customerName,
+    invoice.p1ShipToStreet || invoice.billingAddress,
+    invoice.p1ShipToStreet2,
+    [invoice.p1ShipToCity || invoice.billingCity, invoice.p1ShipToState || invoice.billingState, invoice.p1ShipToZip || invoice.billingZip].filter(Boolean).join(', '),
+  ].filter(Boolean);
+}
+
+function consolidateLines(lines: any[]): any[] {
+  const grouped = new Map<string, any>();
+  for (const line of lines) {
+    const key = JSON.stringify([line.partNumber || '', line.description || '', String(line.unitPrice ?? '')]);
+    const existing = grouped.get(key);
+    if (existing) {
+      existing.qty = String(Number(existing.qty || 0) + Number(line.qty || 0));
+      existing.lineTotal = String(Number(existing.lineTotal || 0) + Number(line.lineTotal || 0));
+    } else {
+      grouped.set(key, { ...line });
+    }
+  }
+  return Array.from(grouped.values());
 }
 
 const invoiceSourceSql = () => sql<string>`
@@ -108,6 +132,90 @@ export async function generateArInvoicePdf(invoiceId: string): Promise<Buffer> {
       contactEmail: sql<string | null>`CASE WHEN (${invoiceSourceSql()}) = 'P1' THEN ${customers.email} ELSE ${p2Customers.contactEmail} END`,
       packingSlipNumber: p2PackingSlips.packingSlipNumber,
       lotNumber: p2LotNumbers.lotNumber,
+      p1ShipToName: sql<string | null>`(
+        SELECT sr.ship_to_snapshot->>'name'
+        FROM shipment_records sr
+        WHERE sr.id::text = (
+          SELECT ail.dimension_tags->>'shipmentRecordId'
+          FROM ar_invoice_lines ail
+          WHERE ail.invoice_id = ${arInvoices.id}
+            AND ail.dimension_tags->>'source' = 'p1_oem_packing_slip'
+          LIMIT 1
+        )
+        LIMIT 1
+      )`,
+      p1ShipToStreet: sql<string | null>`(
+        SELECT sr.ship_to_snapshot->>'street'
+        FROM shipment_records sr
+        WHERE sr.id::text = (
+          SELECT ail.dimension_tags->>'shipmentRecordId'
+          FROM ar_invoice_lines ail
+          WHERE ail.invoice_id = ${arInvoices.id}
+            AND ail.dimension_tags->>'source' = 'p1_oem_packing_slip'
+          LIMIT 1
+        )
+        LIMIT 1
+      )`,
+      p1ShipToStreet2: sql<string | null>`(
+        SELECT sr.ship_to_snapshot->>'street2'
+        FROM shipment_records sr
+        WHERE sr.id::text = (
+          SELECT ail.dimension_tags->>'shipmentRecordId'
+          FROM ar_invoice_lines ail
+          WHERE ail.invoice_id = ${arInvoices.id}
+            AND ail.dimension_tags->>'source' = 'p1_oem_packing_slip'
+          LIMIT 1
+        )
+        LIMIT 1
+      )`,
+      p1ShipToCity: sql<string | null>`(
+        SELECT sr.ship_to_snapshot->>'city'
+        FROM shipment_records sr
+        WHERE sr.id::text = (
+          SELECT ail.dimension_tags->>'shipmentRecordId'
+          FROM ar_invoice_lines ail
+          WHERE ail.invoice_id = ${arInvoices.id}
+            AND ail.dimension_tags->>'source' = 'p1_oem_packing_slip'
+          LIMIT 1
+        )
+        LIMIT 1
+      )`,
+      p1ShipToState: sql<string | null>`(
+        SELECT sr.ship_to_snapshot->>'state'
+        FROM shipment_records sr
+        WHERE sr.id::text = (
+          SELECT ail.dimension_tags->>'shipmentRecordId'
+          FROM ar_invoice_lines ail
+          WHERE ail.invoice_id = ${arInvoices.id}
+            AND ail.dimension_tags->>'source' = 'p1_oem_packing_slip'
+          LIMIT 1
+        )
+        LIMIT 1
+      )`,
+      p1ShipToZip: sql<string | null>`(
+        SELECT sr.ship_to_snapshot->>'postalCode'
+        FROM shipment_records sr
+        WHERE sr.id::text = (
+          SELECT ail.dimension_tags->>'shipmentRecordId'
+          FROM ar_invoice_lines ail
+          WHERE ail.invoice_id = ${arInvoices.id}
+            AND ail.dimension_tags->>'source' = 'p1_oem_packing_slip'
+          LIMIT 1
+        )
+        LIMIT 1
+      )`,
+      p1TrackingNumber: sql<string | null>`(
+        SELECT sr.master_tracking_number
+        FROM shipment_records sr
+        WHERE sr.id::text = (
+          SELECT ail.dimension_tags->>'shipmentRecordId'
+          FROM ar_invoice_lines ail
+          WHERE ail.invoice_id = ${arInvoices.id}
+            AND ail.dimension_tags->>'source' = 'p1_oem_packing_slip'
+          LIMIT 1
+        )
+        LIMIT 1
+      )`,
     })
     .from(arInvoices)
     .leftJoin(p2Customers, eq(arInvoices.customerId, p2Customers.customerId))
@@ -120,10 +228,11 @@ export async function generateArInvoicePdf(invoiceId: string): Promise<Buffer> {
 
   if (!invoice) throw new Error(`Invoice ${invoiceId} not found`);
 
-  const lines = await db
+  const rawLines = await db
     .select()
     .from(arInvoiceLines)
     .where(eq(arInvoiceLines.invoiceId, invoiceId));
+  const lines = consolidateLines(rawLines);
 
   const pdf = await PDFDocument.create();
   const font = await pdf.embedFont(StandardFonts.Helvetica);
@@ -148,25 +257,40 @@ export async function generateArInvoicePdf(invoiceId: string): Promise<Buffer> {
   page.drawLine({ start: { x: PAGE.MARGIN, y }, end: { x: PAGE.WIDTH - PAGE.MARGIN, y }, thickness: 1, color: COLOR.LINE });
   y -= 18;
 
+  const isP1Invoice = invoice.invoiceSource === 'P1';
   const mid = PAGE.WIDTH / 2;
-  page.drawText('BILL TO', { x: PAGE.MARGIN, y, size: FONT_SIZE.LABEL, font: bold, color: COLOR.ACCENT });
+  page.drawText(isP1Invoice ? 'SHIP TO' : 'BILL TO', { x: PAGE.MARGIN, y, size: FONT_SIZE.LABEL, font: bold, color: COLOR.ACCENT });
   page.drawText('INVOICE DETAILS', { x: mid + 12, y, size: FONT_SIZE.LABEL, font: bold, color: COLOR.ACCENT });
   y -= 13;
 
   let leftY = y;
-  for (const line of billingAddress(invoice)) {
-    page.drawText(String(line), { x: PAGE.MARGIN, y: leftY, size: FONT_SIZE.BODY, font, color: COLOR.TEXT });
+  const leftLines = isP1Invoice ? shipToAddress(invoice) : billingAddress(invoice);
+  if (isP1Invoice) {
+    const shipBoxHeight = Math.max(44, leftLines.length * 13 + 8);
+    page.drawRectangle({
+      x: PAGE.MARGIN,
+      y: y - shipBoxHeight + 6,
+      width: mid - PAGE.MARGIN - 12,
+      height: shipBoxHeight,
+      borderColor: COLOR.LINE,
+      borderWidth: 1,
+    });
+    leftY -= 6;
+  }
+  for (const line of leftLines) {
+    page.drawText(String(line), { x: PAGE.MARGIN + (isP1Invoice ? 6 : 0), y: leftY, size: FONT_SIZE.BODY, font, color: COLOR.TEXT });
     leftY -= 13;
   }
+  if (isP1Invoice) leftY -= 4;
 
   let rightY = y;
-  const detailRows = [
+  const detailRows: Array<[string, string]> = [
     ['Invoice Date:', date(invoice.invoiceDate)],
     ['Due Date:', date(invoice.dueDate)],
-    ['Terms:', invoice.terms || 'N/A'],
-    ['Customer PO:', invoice.poOverride || invoice.poNumber || invoice.poId || 'N/A'],
-    ['Packing Slip:', invoice.packingSlipNumber || 'N/A'],
-    ['Lot:', invoice.lotNumber || 'N/A'],
+    ['Terms:', String(invoice.terms || 'N/A')],
+    ['Customer PO:', String(invoice.poOverride || invoice.poNumber || invoice.poId || 'N/A')],
+    ['Packing Slip:', String(invoice.packingSlipNumber || (isP1Invoice ? invoice.invoiceNumber : 'N/A'))],
+    ...(isP1Invoice ? [['Tracking #:', String(invoice.p1TrackingNumber || 'N/A')]] : [['Lot:', String(invoice.lotNumber || 'N/A')]]),
   ];
   for (const [label, value] of detailRows) {
     page.drawText(label, { x: mid + 12, y: rightY, size: FONT_SIZE.BODY, font: bold, color: COLOR.MUTED });
@@ -176,9 +300,9 @@ export async function generateArInvoicePdf(invoiceId: string): Promise<Buffer> {
 
   y = Math.min(leftY, rightY) - 15;
   page.drawRectangle({ x: PAGE.MARGIN, y: y - 18, width: PAGE.WIDTH - PAGE.MARGIN * 2, height: 18, color: COLOR.ACCENT });
-  const cols = { part: PAGE.MARGIN + 5, desc: PAGE.MARGIN + 95, qty: PAGE.MARGIN + 350, unit: PAGE.MARGIN + 405, total: PAGE.MARGIN + 475 };
-  page.drawText('Part #', { x: cols.part, y: y - 12, size: FONT_SIZE.TABLE, font: bold, color: COLOR.WHITE });
-  page.drawText('Description', { x: cols.desc, y: y - 12, size: FONT_SIZE.TABLE, font: bold, color: COLOR.WHITE });
+  const cols = { part: PAGE.MARGIN + 5, desc: PAGE.MARGIN + 105, qty: PAGE.MARGIN + 350, unit: PAGE.MARGIN + 405, total: PAGE.MARGIN + 475 };
+  page.drawText(isP1Invoice ? 'PO #' : 'Part #', { x: cols.part, y: y - 12, size: FONT_SIZE.TABLE, font: bold, color: COLOR.WHITE });
+  page.drawText(isP1Invoice ? 'Contents' : 'Description', { x: cols.desc, y: y - 12, size: FONT_SIZE.TABLE, font: bold, color: COLOR.WHITE });
   page.drawText('Qty', { x: cols.qty, y: y - 12, size: FONT_SIZE.TABLE, font: bold, color: COLOR.WHITE });
   page.drawText('Unit', { x: cols.unit, y: y - 12, size: FONT_SIZE.TABLE, font: bold, color: COLOR.WHITE });
   page.drawText('Total', { x: cols.total, y: y - 12, size: FONT_SIZE.TABLE, font: bold, color: COLOR.WHITE });
@@ -192,7 +316,7 @@ export async function generateArInvoicePdf(invoiceId: string): Promise<Buffer> {
       y = PAGE.HEIGHT - PAGE.MARGIN;
     }
     if (idx % 2 === 1) page.drawRectangle({ x: PAGE.MARGIN, y: y - rowHeight + 3, width: PAGE.WIDTH - PAGE.MARGIN * 2, height: rowHeight, color: COLOR.ALT });
-    page.drawText(line.partNumber || '', { x: cols.part, y: y - 8, size: FONT_SIZE.TABLE, font, color: COLOR.TEXT });
+    page.drawText(isP1Invoice ? String(invoice.poOverride || invoice.poNumber || invoice.poId || '') : (line.partNumber || ''), { x: cols.part, y: y - 8, size: FONT_SIZE.TABLE, font, color: COLOR.TEXT });
     descLines.forEach((dl, i) => page.drawText(dl, { x: cols.desc, y: y - 8 - i * 10, size: FONT_SIZE.TABLE, font, color: COLOR.TEXT }));
     page.drawText(String(line.qty), { x: cols.qty, y: y - 8, size: FONT_SIZE.TABLE, font, color: COLOR.TEXT });
     page.drawText(money(line.unitPrice), { x: cols.unit, y: y - 8, size: FONT_SIZE.TABLE, font, color: COLOR.TEXT });

@@ -26,6 +26,88 @@ function parseQueueIdFromBuiltPacketBarcode(barcode: string | null | undefined):
   return Number.isInteger(queueId) ? queueId : null;
 }
 
+async function ensureBuiltPacketsForCompletedQueueRows(): Promise<void> {
+  const cuttingTableDept = supplySourceDashboardToLegacyDept('CUTTING_TABLE')!;
+  const cuttingTableCategories = getDashboardCategories('CUTTING_TABLE');
+  const routingSignal = or(
+    eq(manufacturingQueue.department, cuttingTableDept),
+    inArray(inventoryItems.manufacturedCategory, cuttingTableCategories)
+  );
+
+  const completedRows = await db
+    .select({
+      queue: manufacturingQueue,
+      item: inventoryItems,
+    })
+    .from(manufacturingQueue)
+    .leftJoin(inventoryItems, eq(manufacturingQueue.inventoryItemId, inventoryItems.id))
+    .where(and(
+      routingSignal,
+      or(
+        eq(manufacturingQueue.status, 'COMPLETED'),
+        eq(manufacturingQueue.status, 'IN_PROGRESS')
+      )
+    ))
+    .orderBy(desc(manufacturingQueue.completedAt), desc(manufacturingQueue.updatedAt))
+    .limit(250);
+
+  for (const row of completedRows) {
+    const completedQuantity = row.queue.quantityCompleted || 0;
+    if (completedQuantity <= 0 || !row.item) continue;
+
+    const partNumber = row.item.agPartNumber || 'UNK';
+    const barcodePrefix = `PKT-${partNumber}-${row.queue.id}-%`;
+    const [{ existingCount }] = await db
+      .select({ existingCount: count() })
+      .from(cuttingBuiltPackets)
+      .where(like(cuttingBuiltPackets.barcode, barcodePrefix));
+
+    const missingCount = completedQuantity - existingCount;
+    if (missingCount <= 0) continue;
+
+    let productCategory = await db.query.cuttingProductCategories.findFirst({
+      where: eq(cuttingProductCategories.categoryName, row.item.name || 'Unknown'),
+    });
+
+    if (!productCategory) {
+      const [newCategory] = await db
+        .insert(cuttingProductCategories)
+        .values({
+          categoryName: row.item.name || 'Unknown Packet Type',
+          isActive: true,
+        })
+        .returning();
+      productCategory = newCategory;
+    }
+
+    if (!productCategory) continue;
+
+    const productCategoryId = productCategory.id;
+    const buildDate = row.queue.completedAt || row.queue.updatedAt || new Date();
+    const createdBy = row.queue.completedBy || row.queue.assignedTo || null;
+
+    for (let i = 0; i < missingCount; i++) {
+      const packetNumber = existingCount + i + 1;
+      const barcode = `PKT-${partNumber}-${row.queue.id}-${packetNumber}-${buildDate.getTime()}-${i}`;
+
+      await db
+        .insert(cuttingBuiltPackets)
+        .values({
+          productCategoryId,
+          barcode,
+          packetNumber,
+          buildDate,
+          status: 'AVAILABLE',
+          isMixedFabric: false,
+          fabricSourceCount: 0,
+          notes: row.queue.completionNotes || 'Backfilled from completed cutting queue row',
+          createdBy,
+        })
+        .onConflictDoNothing();
+    }
+  }
+}
+
 // Get manufacturing queue items for cutting table.
 // DEMAND ROUTING: A record belongs to the Cutting Table dashboard when:
 //   (a) manufacturing_queue.department = 'Cutting Table'  — legacy + BOM-exploded records
@@ -1796,6 +1878,8 @@ router.post('/:id/validate-material', async (req: Request, res: Response) => {
 router.get('/built-packets', async (req: Request, res: Response) => {
   try {
     const { limit = '50', offset = '0', status } = req.query;
+
+    await ensureBuiltPacketsForCompletedQueueRows();
 
     const packets = await db
       .select({

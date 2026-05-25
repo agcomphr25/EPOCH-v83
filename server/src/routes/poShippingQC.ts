@@ -71,13 +71,28 @@ async function findP1PackingSlipInvoice(shipmentRecordId: string, poNumber: stri
     `SELECT inv.id, inv.invoice_number, inv.status
      FROM ar_invoices inv
      WHERE COALESCE(inv.status, '') <> 'VOID'
-       AND EXISTS (
-         SELECT 1
-         FROM ar_invoice_lines line
-         WHERE line.invoice_id = inv.id
-           AND line.dimension_tags->>'source' = 'p1_oem_packing_slip'
-           AND line.dimension_tags->>'shipmentRecordId' = $1
-           AND line.dimension_tags->>'poNumber' = $2
+       AND (
+         EXISTS (
+           SELECT 1
+           FROM ar_invoice_lines line
+           WHERE line.invoice_id = inv.id
+             AND line.dimension_tags->>'source' = 'p1_oem_packing_slip'
+             AND line.dimension_tags->>'shipmentRecordId' = $1
+             AND line.dimension_tags->>'poNumber' = $2
+         )
+         OR (
+           inv.po_override = $2
+           AND inv.invoice_number = (
+             SELECT sr.invoice_number
+             FROM shipment_records sr
+             WHERE sr.id::text = $1
+             LIMIT 1
+           )
+           AND (
+             inv.notes ILIKE 'Auto-created from P1 OEM packing slip%'
+             OR inv.internal_notes ILIKE 'Source: P1 OEM shipment%'
+           )
+         )
        )
      ORDER BY inv.created_at DESC
      LIMIT 1`,
@@ -99,26 +114,28 @@ async function findP1PackingSlipInvoiceForOrders(poNumber: string, orderIds: str
     `SELECT inv.id, inv.invoice_number, inv.status
      FROM ar_invoices inv
      WHERE COALESCE(inv.status, '') <> 'VOID'
-       AND EXISTS (
-         SELECT 1
-         FROM ar_invoice_lines line
-         WHERE line.invoice_id = inv.id
-           AND line.dimension_tags->>'source' = 'p1_oem_packing_slip'
-           AND line.dimension_tags->>'poNumber' = $1
-           AND (
-             line.dimension_tags->>'orderId' = ANY($2::text[])
-             OR EXISTS (
-               SELECT 1
-               FROM jsonb_array_elements_text(
-                 CASE
-                   WHEN jsonb_typeof(line.dimension_tags->'orderIds') = 'array'
-                   THEN line.dimension_tags->'orderIds'
-                   ELSE '[]'::jsonb
-                 END
-               ) AS order_id(value)
-               WHERE order_id.value = ANY($2::text[])
+       AND (
+         EXISTS (
+           SELECT 1
+           FROM ar_invoice_lines line
+           WHERE line.invoice_id = inv.id
+             AND line.dimension_tags->>'source' = 'p1_oem_packing_slip'
+             AND line.dimension_tags->>'poNumber' = $1
+             AND (
+               line.dimension_tags->>'orderId' = ANY($2::text[])
+               OR EXISTS (
+                 SELECT 1
+                 FROM jsonb_array_elements_text(
+                   CASE
+                     WHEN jsonb_typeof(line.dimension_tags->'orderIds') = 'array'
+                     THEN line.dimension_tags->'orderIds'
+                     ELSE '[]'::jsonb
+                   END
+                 ) AS order_id(value)
+                 WHERE order_id.value = ANY($2::text[])
+               )
              )
-           )
+         )
        )
      ORDER BY inv.created_at DESC
      LIMIT 1`,
@@ -1032,13 +1049,37 @@ router.get('/oem-shipments', authenticateToken, async (req, res) => {
           SELECT inv.id, inv.invoice_number, inv.status
           FROM ar_invoices inv
           WHERE COALESCE(inv.status, '') <> 'VOID'
-            AND EXISTS (
-              SELECT 1
-              FROM ar_invoice_lines line
-              WHERE line.invoice_id = inv.id
-                AND line.dimension_tags->>'source' = 'p1_oem_packing_slip'
-                AND line.dimension_tags->>'shipmentRecordId' = sr.id::text
-                AND line.dimension_tags->>'poNumber' = COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number)
+            AND (
+              EXISTS (
+                SELECT 1
+                FROM ar_invoice_lines line
+                WHERE line.invoice_id = inv.id
+                  AND line.dimension_tags->>'source' = 'p1_oem_packing_slip'
+                  AND line.dimension_tags->>'poNumber' = COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number)
+                  AND (
+                    line.dimension_tags->>'shipmentRecordId' = sr.id::text
+                    OR line.dimension_tags->>'orderId' = si.order_id
+                    OR EXISTS (
+                      SELECT 1
+                      FROM jsonb_array_elements_text(
+                        CASE
+                          WHEN jsonb_typeof(line.dimension_tags->'orderIds') = 'array'
+                          THEN line.dimension_tags->'orderIds'
+                          ELSE '[]'::jsonb
+                        END
+                      ) AS order_id(value)
+                      WHERE order_id.value = si.order_id
+                    )
+                  )
+              )
+              OR (
+                inv.po_override = COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number)
+                AND inv.invoice_number = sr.invoice_number
+                AND (
+                  inv.notes ILIKE 'Auto-created from P1 OEM packing slip%'
+                  OR inv.internal_notes ILIKE 'Source: P1 OEM shipment%'
+                )
+              )
             )
           ORDER BY inv.created_at DESC
           LIMIT 1

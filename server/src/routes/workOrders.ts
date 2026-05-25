@@ -230,7 +230,7 @@ const WAD_APPROVAL_TASK_SECTION_NAME = 'WAD Approvals';
  * Pre-production Checklist dashboard.
  *
  * Stable lookup: tasks in the "WAD Approvals" section whose `link` matches
- * `/work-orders/<wadId>/wizard?step=11&role=<role>`.
+ * the WAD summary page, with support for older wizard deep-links.
  *
  * Backfill-safe: if the project has no linked preproduction checklist, or
  * the WAD has no assignments and no pre-existing approval tasks, this is a
@@ -290,7 +290,8 @@ async function syncWadApprovalChecklistTasks(params: {
     // Fetch existing tasks for this WAD (if section exists)
     type TaskRow = typeof preproductionChecklistTasks.$inferSelect;
     const existingByRole = new Map<WadApprovalSlot, TaskRow>();
-    const linkPrefix = `/work-orders/${params.wadId}/wizard`;
+    const summaryLinkPrefix = `/work-orders/${params.wadId}/wad-summary`;
+    const legacyWizardLinkPrefix = `/work-orders/${params.wadId}/wizard`;
 
     if (section) {
       const tasks = await db
@@ -298,7 +299,7 @@ async function syncWadApprovalChecklistTasks(params: {
         .from(preproductionChecklistTasks)
         .where(eq(preproductionChecklistTasks.sectionId, section.id));
       for (const t of tasks) {
-        if (!t.link || !t.link.startsWith(linkPrefix)) continue;
+        if (!t.link || (!t.link.startsWith(summaryLinkPrefix) && !t.link.startsWith(legacyWizardLinkPrefix))) continue;
         const m = t.link.match(/[?&]role=([^&]+)/);
         const role = normalizeWadApprovalRole(m ? decodeURIComponent(m[1]) : null);
         if (role) existingByRole.set(role, t);
@@ -321,7 +322,7 @@ async function syncWadApprovalChecklistTasks(params: {
       const matrixEntry = WAD_APPROVAL_MATRIX.find((s) => s.key === role);
       const roleLabel = matrixEntry?.label ?? role;
       const description = `Sign ${roleLabel} approval — WAD ${params.workOrderNumber}`;
-      const link = `${linkPrefix}?step=11&role=${role}`;
+      const link = `${summaryLinkPrefix}?role=${role}`;
       const sortOrder = WAD_APPROVAL_MATRIX.findIndex((s) => s.key === role);
       const matchingApproval = approvals.find(
         (a) => normalizeWadApprovalRole(a.role) === role && a.decision === 'APPROVED',
@@ -3216,16 +3217,28 @@ router.post(
       const [wad] = await db.select().from(productionWorkOrders).where(eq(productionWorkOrders.id, id)).limit(1);
       if (!wad) return res.status(404).json({ error: 'WAD not found' });
 
-      const body = req.body as { role?: string; decision?: 'APPROVED' | 'REJECTED'; comments?: string };
+      const body = req.body as {
+        role?: string;
+        decision?: 'APPROVED' | 'REJECTED';
+        comments?: string | null;
+        signature?: string | null;
+      };
       const role = normalizeWadApprovalRole(body.role);
       const decision = body.decision;
-      const comments = body.comments ?? null;
+      const comments = typeof body.comments === 'string' && body.comments.trim() ? body.comments.trim() : null;
+      const signature = typeof body.signature === 'string' ? body.signature.trim() : '';
 
       if (!role) {
         return res.status(400).json({ error: `role must be one of: ${WAD_APPROVAL_SLOTS.join(', ')}` });
       }
       if (decision !== 'APPROVED' && decision !== 'REJECTED') {
         return res.status(400).json({ error: 'decision must be APPROVED or REJECTED' });
+      }
+      if (signature.length < 2) {
+        return res.status(400).json({ error: 'A typed signature is required to approve or deny a WAD' });
+      }
+      if (decision === 'REJECTED' && !comments) {
+        return res.status(400).json({ error: 'Denial notes are required when rejecting a WAD approval slot' });
       }
 
       // Slot authorization: verify the session user holds a system role permitted to fill this slot.
@@ -3249,7 +3262,7 @@ router.post(
       const existingData = normalizeWizardData(wad.wizardData);
       const existingApprovals = (existingData.approvals as unknown[] ?? []) as Array<{
         role?: string; userId?: number | string | null; displayName?: string; decision?: string;
-        comments?: string | null; timestamp?: string;
+        comments?: string | null; signature?: string | null; signedAt?: string | null; timestamp?: string;
       }>;
       const existingRevisionHistory = Array.isArray(existingData.revisionHistory) ? existingData.revisionHistory : [];
       const currentRevision = getWadRevisionNumber(existingData);
@@ -3260,6 +3273,9 @@ router.post(
         displayName: sessionDisplayName,
         decision,
         comments,
+        signature,
+        signatureMeaning: 'Typed signature confirms the signer reviewed the WAD summary and accepts responsibility for this decision.',
+        signedAt: new Date().toISOString(),
         timestamp: new Date().toISOString(),
       };
 
@@ -3275,6 +3291,8 @@ router.post(
         actorId: sessionUserIdNumber,
         actorName: sessionDisplayName,
         comments,
+        signatureMeaning: newApproval.signatureMeaning,
+        signedAt: newApproval.signedAt,
         timestamp: newApproval.timestamp,
       };
 
@@ -3354,7 +3372,7 @@ router.post(
         action: decision === 'APPROVED' ? 'WAD_APPROVAL_RECORDED' : 'WAD_REJECTION_RECORDED',
         actor: { id: sessionUserIdNumber ?? 0, username: sessionDisplayName },
         reason: comments ?? undefined,
-        meta: { role, decision, allApproved: releaseApproved, matrixApproved: allApproved, missingExceptionRequests, backfill: isBackfill, sessionRole },
+        meta: { role, decision, allApproved: releaseApproved, matrixApproved: allApproved, missingExceptionRequests, backfill: isBackfill, sessionRole, hasSignature: true, signedAt: newApproval.signedAt },
       }).catch((e: Error) => console.warn('[Audit] WAD approval log failed:', e?.message));
 
       await recordAuditEvent({
@@ -3369,6 +3387,9 @@ router.post(
           workOrderNumber: wad.workOrderNumber,
           role,
           decision,
+          hasSignature: true,
+          signatureMeaning: newApproval.signatureMeaning,
+          signedAt: newApproval.signedAt,
           revision: currentRevision,
           revisionStatus: updatedWizardData.revisionStatus,
           matrixApproved: allApproved,
@@ -3394,6 +3415,8 @@ router.post(
               role: a.role,
               decision: a.decision,
               displayName: a.displayName,
+              signedAt: a.signedAt ?? a.timestamp,
+              hasSignature: !!a.signature,
               timestamp: a.timestamp,
             })),
           },

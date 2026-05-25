@@ -75,6 +75,7 @@ const ProductionWorkOrderDetailPage = React.lazy(() => import('./pages/Productio
 const WADWizardPage = React.lazy(() => import('./pages/WADWizardPage'));
 const WADWizardLauncherPage = React.lazy(() => import('./pages/WADWizardLauncherPage'));
 const WADStatusDashboard = React.lazy(() => import('./pages/WADStatusDashboard'));
+const WADSummaryPage = React.lazy(() => import('./pages/WADSummaryPage'));
 const AssetsPage = React.lazy(() => import('./pages/AssetsPage'));
 const AssetDashboardPage = React.lazy(() => import('./pages/AssetDashboardPage'));
 const EmployeePortalPage = React.lazy(() => import('./pages/EmployeePortalPage'));
@@ -844,6 +845,9 @@ function App() {
                   <Route path="/wad-status" component={WADStatusDashboard} />
                   <Route path="/work-orders/:id/wizard">
                     {(params) => <WADWizardPage params={params} />}
+                  </Route>
+                  <Route path="/work-orders/:id/wad-summary">
+                    {(params) => <WADSummaryPage params={params} />}
                   </Route>
                   <Route path="/work-orders/:id">
                     {(params) => <ProductionWorkOrderDetailPage params={params} />}

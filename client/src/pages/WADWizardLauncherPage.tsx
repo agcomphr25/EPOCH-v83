@@ -8,6 +8,7 @@ import {
   AlertTriangle,
   ClipboardList,
   ExternalLink,
+  FileText,
   LayoutDashboard,
   Loader2,
   Search,
@@ -376,6 +377,15 @@ export default function WADWizardLauncherPage() {
                             >
                               <ExternalLink className="h-3.5 w-3.5 mr-1" />
                               View
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => navigate(`/work-orders/${wo.id}/wad-summary`)}
+                              data-testid={`button-view-wad-summary-${wo.id}`}
+                            >
+                              <FileText className="h-3.5 w-3.5 mr-1" />
+                              Summary
                             </Button>
                             <Button
                               size="sm"

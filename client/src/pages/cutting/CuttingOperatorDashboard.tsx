@@ -312,13 +312,15 @@ export default function CuttingOperatorDashboard() {
     queryKey: ['currentUser'],
   });
 
-  const { data: builtPackets = [], isLoading: loadingBuiltPackets, refetch: refetchBuiltPackets } = useQuery<BuiltPacket[]>({
+  const {
+    data: builtPackets = [],
+    isLoading: loadingBuiltPackets,
+    isError: builtPacketsError,
+    error: builtPacketsErrorDetails,
+    refetch: refetchBuiltPackets,
+  } = useQuery<BuiltPacket[]>({
     queryKey: ['/api/cutting-table-mfg-queue/built-packets'],
-    queryFn: async () => {
-      const res = await fetch('/api/cutting-table-mfg-queue/built-packets?limit=50');
-      if (!res.ok) return [];
-      return res.json();
-    },
+    queryFn: () => apiRequest('/api/cutting-table-mfg-queue/built-packets?limit=50'),
   });
 
   const updateFabricSourceMutation = useMutation({
@@ -2360,6 +2362,10 @@ export default function CuttingOperatorDashboard() {
         <CardContent>
           {loadingBuiltPackets ? (
             <div className="text-sm text-muted-foreground py-4 text-center">Loading...</div>
+          ) : builtPacketsError ? (
+            <div className="text-sm text-destructive py-6 text-center">
+              {(builtPacketsErrorDetails as Error)?.message || 'Failed to load made packets.'}
+            </div>
           ) : builtPackets.length === 0 ? (
             <div className="text-sm text-muted-foreground py-6 text-center">No built packets found.</div>
           ) : (

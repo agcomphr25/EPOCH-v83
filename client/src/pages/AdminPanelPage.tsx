@@ -1,11 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import {
   useReactTable,
   getCoreRowModel,
-  getFilteredRowModel,
-  getSortedRowModel,
-  getPaginationRowModel,
   ColumnDef,
   flexRender,
   SortingState,
@@ -81,7 +78,6 @@ interface Order {
   customerName: string;
   modelId: string;
   currentDepartment: string;
-  currentStatus: string; // Display value
   status: string | null; // Raw database value for status
   assignedTechnician: string | null; // Raw database value (username)
   urgency: string | null; // Raw database value (lowercase)
@@ -91,21 +87,79 @@ interface Order {
   fbOrderNumber: string;
 }
 
+interface PaginatedOrdersResponse {
+  orders: Order[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+const ADMIN_ORDER_PAGE_SIZE = 25;
+const ADMIN_ORDER_SORT_BY: Record<string, string> = {
+  orderId: 'orderId',
+  customerName: 'customer',
+  modelId: 'model',
+  currentDepartment: 'department',
+  orderDate: 'orderDate',
+  dueDate: 'dueDate',
+};
+
 export default function AdminPanelPage() {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = useState({});
   const [globalFilter, setGlobalFilter] = useState('');
+  const [pagination, setPagination] = useState({
+    pageIndex: 0,
+    pageSize: ADMIN_ORDER_PAGE_SIZE,
+  });
   const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [editedFields, setEditedFields] = useState<Record<string, any>>({});
   const { toast } = useToast();
 
-  // Fetch orders
-  const { data: orders = [], isLoading } = useQuery<Order[]>({
-    queryKey: ['/api/orders/with-payment-status'],
+  const departmentFilter = (columnFilters.find((filter) => filter.id === 'currentDepartment')?.value as string | undefined) || 'all';
+  const statusFilter = (columnFilters.find((filter) => filter.id === 'status')?.value as string | undefined) || 'all';
+  const primarySort = sorting[0];
+
+  const ordersQueryParams = useMemo(() => {
+    const params = new URLSearchParams({
+      page: String(pagination.pageIndex + 1),
+      limit: String(pagination.pageSize),
+      sortBy: ADMIN_ORDER_SORT_BY[primarySort?.id || ''] || 'orderDate',
+      sortOrder: primarySort?.desc === false ? 'asc' : 'desc',
+    });
+
+    if (globalFilter.trim()) {
+      params.set('search', globalFilter.trim());
+    }
+
+    if (departmentFilter !== 'all') {
+      params.set('department', departmentFilter);
+    }
+
+    if (statusFilter !== 'all') {
+      params.set('status', statusFilter);
+    }
+
+    return params.toString();
+  }, [departmentFilter, globalFilter, pagination.pageIndex, pagination.pageSize, primarySort?.desc, primarySort?.id, statusFilter]);
+
+  // Fetch orders from the full server-side result set, not just the first 100 rows.
+  const { data: ordersResponse, isLoading } = useQuery<PaginatedOrdersResponse>({
+    queryKey: ['/api/orders/with-payment-status/paginated', ordersQueryParams],
+    queryFn: () => apiRequest(`/api/orders/with-payment-status/paginated?${ordersQueryParams}`),
   });
+  const orders = ordersResponse?.orders ?? [];
+  const totalOrders = ordersResponse?.total ?? 0;
+  const totalPages = ordersResponse?.totalPages ?? 0;
+
+  useEffect(() => {
+    setPagination((current) => ({ ...current, pageIndex: 0 }));
+    setRowSelection({});
+  }, [columnFilters, globalFilter, sorting]);
 
   // Fetch reference data for inline editing
   const { data: employees = [] } = useQuery<any[]>({
@@ -149,6 +203,7 @@ export default function AdminPanelPage() {
     onSuccess: async () => {
       // Force refetch instead of just invalidating
       await queryClient.refetchQueries({ queryKey: ['/api/orders/with-payment-status'] });
+      await queryClient.refetchQueries({ queryKey: ['/api/orders/with-payment-status/paginated'] });
       toast({
         title: 'Success',
         description: 'Order field updated successfully',
@@ -287,7 +342,7 @@ export default function AdminPanelPage() {
         },
       },
       {
-        accessorKey: 'currentStatus',
+        accessorKey: 'status',
         header: 'Status',
         cell: ({ row }) => {
           const statusValue = row.original.status; // Use raw database value
@@ -475,42 +530,30 @@ export default function AdminPanelPage() {
   const table = useReactTable({
     data: orders,
     columns,
+    pageCount: Math.max(totalPages, 1),
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
     onGlobalFilterChange: setGlobalFilter,
+    onPaginationChange: setPagination,
     getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    globalFilterFn: (row, columnId, filterValue) => {
-      const search = filterValue.toLowerCase();
-      const orderId = row.getValue('orderId') as string;
-      const fbOrderNumber = row.getValue('fbOrderNumber') as string;
-      const customerName = row.getValue('customerName') as string;
-      
-      return (
-        orderId?.toLowerCase().includes(search) ||
-        fbOrderNumber?.toLowerCase().includes(search) ||
-        customerName?.toLowerCase().includes(search)
-      );
-    },
+    manualFiltering: true,
+    manualPagination: true,
+    manualSorting: true,
     state: {
       sorting,
       columnFilters,
       columnVisibility,
       rowSelection,
       globalFilter,
-    },
-    initialState: {
-      pagination: {
-        pageSize: 25,
-      },
+      pagination,
     },
   });
 
-  const selectedOrders = table.getFilteredSelectedRowModel().rows;
+  const selectedOrders = table.getSelectedRowModel().rows;
+  const firstVisibleOrder = totalOrders === 0 ? 0 : pagination.pageIndex * pagination.pageSize + 1;
+  const lastVisibleOrder = Math.min((pagination.pageIndex + 1) * pagination.pageSize, totalOrders);
 
   return (
     <div className="container mx-auto py-6 space-y-6">
@@ -527,7 +570,7 @@ export default function AdminPanelPage() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search orders by Order ID, FB Number, or Customer..."
+                placeholder="Search by Order ID, FB #, Customer, Customer PO, Customer ID, or Model..."
                 value={globalFilter ?? ''}
                 onChange={(event) => setGlobalFilter(event.target.value)}
                 className="pl-10"
@@ -557,9 +600,9 @@ export default function AdminPanelPage() {
             </Select>
 
             <Select
-              value={(table.getColumn('currentStatus')?.getFilterValue() as string) ?? 'ALL'}
+              value={(table.getColumn('status')?.getFilterValue() as string) ?? 'ALL'}
               onValueChange={(value) =>
-                table.getColumn('currentStatus')?.setFilterValue(value === 'ALL' ? undefined : value)
+                table.getColumn('status')?.setFilterValue(value === 'ALL' ? undefined : value)
               }
             >
               <SelectTrigger className="w-[200px]" data-testid="select-status">
@@ -666,12 +709,7 @@ export default function AdminPanelPage() {
           {/* Pagination */}
           <div className="flex items-center justify-between">
             <div className="text-sm text-muted-foreground">
-              Showing {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1} to{' '}
-              {Math.min(
-                (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
-                table.getFilteredRowModel().rows.length
-              )}{' '}
-              of {table.getFilteredRowModel().rows.length} orders
+              Showing {firstVisibleOrder} to {lastVisibleOrder} of {totalOrders} orders
             </div>
             <div className="flex items-center gap-2">
               <Button
@@ -973,6 +1011,7 @@ export default function AdminPanelPage() {
                       
                       // Force refresh the order list and full order data
                       await queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status'] });
+                      await queryClient.invalidateQueries({ queryKey: ['/api/orders/with-payment-status/paginated'] });
                       await queryClient.invalidateQueries({ queryKey: [`/api/orders/${selectedOrderIdString}`] });
                       
                       setIsPanelOpen(false);

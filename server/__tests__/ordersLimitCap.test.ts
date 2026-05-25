@@ -13,6 +13,7 @@ vi.mock('../db', () => ({
 vi.mock('../storage', () => ({
   storage: {
     getAllOrdersWithPaymentStatus: vi.fn(),
+    getAllOrdersWithPaymentStatusPaginated: vi.fn(),
   },
 }));
 
@@ -37,20 +38,47 @@ describe('GET /with-payment-status — limit clamping', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(storage.getAllOrdersWithPaymentStatus).mockResolvedValue([]);
+    vi.mocked(storage.getAllOrdersWithPaymentStatusPaginated).mockResolvedValue({
+      orders: [],
+      total: 0,
+      page: 1,
+      limit: 25,
+      totalPages: 0,
+    });
   });
 
   it('defaults to DEFAULT_ORDERS_LIMIT when no limit param is provided', async () => {
     await request(app).get('/with-payment-status');
-    expect(vi.mocked(storage.getAllOrdersWithPaymentStatus)).toHaveBeenCalledWith('', DEFAULT_ORDERS_LIMIT);
+    expect(vi.mocked(storage.getAllOrdersWithPaymentStatus)).toHaveBeenCalledWith('', DEFAULT_ORDERS_LIMIT, undefined);
   });
 
   it('passes through a limit below MAX_ORDERS_LIMIT unchanged', async () => {
     await request(app).get('/with-payment-status?limit=50');
-    expect(vi.mocked(storage.getAllOrdersWithPaymentStatus)).toHaveBeenCalledWith('', 50);
+    expect(vi.mocked(storage.getAllOrdersWithPaymentStatus)).toHaveBeenCalledWith('', 50, undefined);
   });
 
   it('clamps a limit that exceeds MAX_ORDERS_LIMIT to MAX_ORDERS_LIMIT', async () => {
     await request(app).get('/with-payment-status?limit=99999');
-    expect(vi.mocked(storage.getAllOrdersWithPaymentStatus)).toHaveBeenCalledWith('', MAX_ORDERS_LIMIT);
+    expect(vi.mocked(storage.getAllOrdersWithPaymentStatus)).toHaveBeenCalledWith('', MAX_ORDERS_LIMIT, undefined);
+  });
+
+  it('passes admin pagination and search filters to the paginated storage path', async () => {
+    await request(app).get('/with-payment-status/paginated?page=3&limit=25&search=AG-123&department=Shipping&status=IN_PROGRESS&sortBy=orderId&sortOrder=asc');
+
+    expect(vi.mocked(storage.getAllOrdersWithPaymentStatusPaginated)).toHaveBeenCalledWith(
+      3,
+      25,
+      {
+        search: 'AG-123',
+        department: 'Shipping',
+        departmentMode: 'include',
+        status: 'IN_PROGRESS',
+        statusMode: 'include',
+        excludeStatuses: undefined,
+        sortBy: 'orderId',
+        sortOrder: 'asc',
+        customerId: undefined,
+      }
+    );
   });
 });

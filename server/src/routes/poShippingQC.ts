@@ -48,6 +48,45 @@ function rowsOf<T = any>(result: any): T[] {
   return Array.isArray(result) ? result : result?.rows || [];
 }
 
+function isGlennAdmin(user: any): boolean {
+  return user?.username === 'glennj' && String(user?.role || '').toUpperCase() === 'ADMIN';
+}
+
+function addDays(date: Date, days: number): Date {
+  const copy = new Date(date);
+  copy.setDate(copy.getDate() + days);
+  return copy;
+}
+
+function toDateOnly(date: Date): string {
+  return date.toISOString().split('T')[0];
+}
+
+async function findP1PackingSlipInvoice(shipmentRecordId: string, poNumber: string) {
+  const rows = rowsOf<{
+    id: string;
+    invoice_number: string;
+    status: string;
+  }>(await pool.query(
+    `SELECT inv.id, inv.invoice_number, inv.status
+     FROM ar_invoices inv
+     WHERE COALESCE(inv.status, '') <> 'VOID'
+       AND EXISTS (
+         SELECT 1
+         FROM ar_invoice_lines line
+         WHERE line.invoice_id = inv.id
+           AND line.dimension_tags->>'source' = 'p1_oem_packing_slip'
+           AND line.dimension_tags->>'shipmentRecordId' = $1
+           AND line.dimension_tags->>'poNumber' = $2
+       )
+     ORDER BY inv.created_at DESC
+     LIMIT 1`,
+    [shipmentRecordId, poNumber]
+  ));
+
+  return rows[0] || null;
+}
+
 async function findReusableP1InvoiceNumber({
   poNumber,
   orderIds,
@@ -937,7 +976,10 @@ router.get('/oem-shipments', authenticateToken, async (req, res) => {
               'hasPackingSlip', si.packing_slip_base64 IS NOT NULL,
               'itemType', COALESCE(poi.item_type, 'stock_model'),
               'unitPrice', CASE WHEN $${paramIndex + 2}::boolean THEN poi.unit_price ELSE NULL END,
-              'lineTotal', CASE WHEN $${paramIndex + 2}::boolean THEN COALESCE(poi.unit_price, 0) * COALESCE(si.quantity, 1) ELSE NULL END
+              'lineTotal', CASE WHEN $${paramIndex + 2}::boolean THEN COALESCE(poi.unit_price, 0) * COALESCE(si.quantity, 1) ELSE NULL END,
+              'invoiceId', inv.id,
+              'invoiceNumber', inv.invoice_number,
+              'invoiceStatus', inv.status
             ) ORDER BY COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number), si.order_id
           ) as items
         FROM shipment_records sr
@@ -945,6 +987,21 @@ router.get('/oem-shipments', authenticateToken, async (req, res) => {
         LEFT JOIN production_orders prod_ord ON si.order_id = prod_ord.order_id
         LEFT JOIN purchase_order_items poi ON poi.id = si.po_item_id
         LEFT JOIN purchase_orders po ON poi.po_id = po.id
+        LEFT JOIN LATERAL (
+          SELECT inv.id, inv.invoice_number, inv.status
+          FROM ar_invoices inv
+          WHERE COALESCE(inv.status, '') <> 'VOID'
+            AND EXISTS (
+              SELECT 1
+              FROM ar_invoice_lines line
+              WHERE line.invoice_id = inv.id
+                AND line.dimension_tags->>'source' = 'p1_oem_packing_slip'
+                AND line.dimension_tags->>'shipmentRecordId' = sr.id::text
+                AND line.dimension_tags->>'poNumber' = COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number)
+            )
+          ORDER BY inv.created_at DESC
+          LIMIT 1
+        ) inv ON true
         WHERE ${conditions.join(' AND ')}
         GROUP BY sr.id
         ORDER BY sr.created_at DESC
@@ -1304,6 +1361,212 @@ router.get('/oem-shipments/packing-slip/:itemId', authenticateToken, async (req,
   } catch (error: any) {
     console.error('❌ Error downloading packing slip:', error);
     res.status(500).json({ _error: 'Failed to download packing slip', details: error.message });
+  }
+});
+
+// POST /api/po-orders/oem-shipments/:id/invoices
+// Create one review AR invoice for a P1 OEM shipment packing slip (shipment + PO group).
+router.post('/oem-shipments/:id/invoices', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    if (!isGlennAdmin(req.user)) {
+      return res.status(403).json({ error: 'Only glennj/admin can create P1 OEM packing slip invoices.' });
+    }
+
+    const { id } = req.params;
+    const { poNumber } = req.body || {};
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(id)) {
+      return res.status(400).json({ error: 'Invalid shipment ID format' });
+    }
+    if (!poNumber || typeof poNumber !== 'string') {
+      return res.status(400).json({ error: 'poNumber is required' });
+    }
+
+    const existing = await findP1PackingSlipInvoice(id, poNumber);
+    if (existing) {
+      return res.status(200).json({
+        id: existing.id,
+        invoiceNumber: existing.invoice_number,
+        status: existing.status,
+      });
+    }
+
+    const lineResult = await client.query(
+      `WITH shipment_lines AS (
+         SELECT
+           sr.id AS shipment_record_id,
+           sr.reference,
+           sr.invoice_number AS shipment_invoice_number,
+           sr.master_tracking_number,
+           sr.shipped_at,
+           sr.created_at AS shipment_created_at,
+           sr.customer_id AS shipment_customer_id,
+           sr.customer_name AS shipment_customer_name,
+           sr.ship_to_snapshot,
+           si.id AS shipment_item_id,
+           si.order_id,
+           si.quantity,
+           si.po_item_id AS p1_po_item_id,
+           COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number) AS po_number,
+           COALESCE(NULLIF(si.description, ''), poi.stock_model_name, poi.item_name, prod_ord.item_name, si.order_id) AS description,
+           COALESCE(poi.item_id, poi.stock_model_id, poi.item_name, prod_ord.item_name, si.order_id) AS part_number,
+           poi.unit_price,
+           po.id AS purchase_order_id,
+           po.customer_id AS po_customer_id,
+           po.customer_name AS po_customer_name
+         FROM shipment_records sr
+         JOIN shipment_items si ON si.shipment_id = sr.id
+         LEFT JOIN production_orders prod_ord ON prod_ord.order_id = si.order_id
+         LEFT JOIN purchase_order_items poi ON poi.id = si.po_item_id
+         LEFT JOIN purchase_orders po ON po.id = poi.po_id
+         WHERE sr.id = $1
+       )
+       SELECT *
+       FROM shipment_lines
+       WHERE po_number = $2
+       ORDER BY order_id, shipment_item_id`,
+      [id, poNumber]
+    );
+
+    const lines = lineResult.rows || [];
+    if (lines.length === 0) {
+      return res.status(404).json({ error: 'No shipment items found for this P1 packing slip.' });
+    }
+
+    const first = lines[0];
+    let invoiceNumber = first.shipment_invoice_number as string | null;
+    if (!invoiceNumber) {
+      const reusableInvoiceNumber = await findReusableP1InvoiceNumber({
+        poNumber,
+        orderIds: lines.map((line: any) => line.order_id).filter(Boolean),
+      });
+      if (reusableInvoiceNumber) {
+        invoiceNumber = reusableInvoiceNumber;
+      } else {
+        const { storage: invoiceStorage } = await import('../../storage');
+        invoiceNumber = await invoiceStorage.getNextInvoiceNumber(
+          String(first.po_customer_id || first.shipment_customer_id || '0'),
+          first.po_customer_name || first.shipment_customer_name || first.ship_to_snapshot?.name || 'P1 OEM Customer'
+        );
+      }
+      await client.query(
+        `UPDATE shipment_records SET invoice_number = $1, updated_at = NOW() WHERE id = $2 AND invoice_number IS NULL`,
+        [invoiceNumber, id]
+      );
+    }
+
+    const today = new Date();
+    const invoiceDate = toDateOnly(today);
+    const dueDate = toDateOnly(addDays(today, 30));
+    const customerId = String(first.po_customer_id || first.shipment_customer_id || '0');
+    const subtotal = lines.reduce(
+      (sum: number, line: any) => sum + Number(line.quantity || 0) * Number(line.unit_price || 0),
+      0
+    );
+    const pricingMismatch = lines.some((line: any) => line.unit_price === null || line.unit_price === undefined);
+
+    await client.query('BEGIN');
+    const invoiceResult = await client.query(
+      `INSERT INTO ar_invoices (
+         customer_id,
+         invoice_number,
+         invoice_date,
+         due_date,
+         terms,
+         po_id,
+         po_override,
+         subtotal,
+         discount_amount,
+         freight_amount,
+         tax_amount,
+         retainage_percent,
+         retainage_amount,
+         total_amount,
+         status,
+         notes,
+         customer_visible_notes,
+         internal_notes,
+         created_by,
+         auto_created,
+         pricing_mismatch,
+         pricing_ambiguous
+       )
+       VALUES ($1, $2, $3, $4, 'NET_30', $5, $6, $7, '0', '0', '0', '0', '0', $7, 'REVIEW', $8, NULL, $9, $10, true, $11, false)
+       RETURNING id, invoice_number, status`,
+      [
+        customerId,
+        invoiceNumber,
+        invoiceDate,
+        dueDate,
+        first.purchase_order_id ? String(first.purchase_order_id) : null,
+        poNumber,
+        subtotal.toFixed(2),
+        `Auto-created from P1 OEM packing slip ${invoiceNumber} for PO ${poNumber}.`,
+        `Source: P1 OEM shipment ${first.reference || id}; tracking ${first.master_tracking_number || 'n/a'}; PO ${poNumber}.`,
+        req.user?.username || 'system',
+        pricingMismatch,
+      ]
+    );
+
+    const invoice = invoiceResult.rows[0];
+    for (const line of lines) {
+      const qty = Number(line.quantity || 0);
+      const unitPrice = Number(line.unit_price || 0);
+      const tags = {
+        source: 'p1_oem_packing_slip',
+        shipmentRecordId: id,
+        shipmentReference: first.reference || null,
+        shipmentItemId: line.shipment_item_id,
+        poNumber,
+        p1PoItemId: line.p1_po_item_id,
+        orderId: line.order_id,
+        trackingNumber: first.master_tracking_number || null,
+      };
+
+      await client.query(
+        `INSERT INTO ar_invoice_lines (
+           invoice_id,
+           inventory_item_id,
+           po_item_id,
+           part_number,
+           production_line,
+           description,
+           qty,
+           unit_price,
+           line_total,
+           dimension_tags
+         )
+         VALUES ($1, NULL, NULL, $2, 'P1', $3, $4, $5, $6, $7::jsonb)`,
+        [
+          invoice.id,
+          line.part_number || null,
+          line.description || line.order_id || poNumber,
+          qty.toString(),
+          unitPrice.toFixed(2),
+          (qty * unitPrice).toFixed(2),
+          JSON.stringify(tags),
+        ]
+      );
+    }
+
+    await client.query('COMMIT');
+    console.log(`[P1InvoiceService] Invoice ${invoice.invoice_number} created from shipment ${id}, PO ${poNumber}`);
+    res.status(201).json({
+      id: invoice.id,
+      invoiceNumber: invoice.invoice_number,
+      status: invoice.status,
+    });
+  } catch (error: any) {
+    try {
+      await client.query('ROLLBACK');
+    } catch {
+      // Ignore rollback errors.
+    }
+    console.error('Failed to create P1 OEM packing slip invoice:', error);
+    res.status(500).json({ error: error.message || 'Failed to create invoice from P1 packing slip' });
+  } finally {
+    client.release();
   }
 });
 

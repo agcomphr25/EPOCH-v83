@@ -59,17 +59,31 @@ type VendorDocumentPath =
   | { type: 'external'; url: string };
 
 function isVendorDocumentScope(pathValue: string): boolean {
-  return (
-    pathValue.includes('/vendor-documents/') ||
-    pathValue.includes('/vendor-approvals/') ||
-    pathValue.startsWith('vendor-documents/') ||
-    pathValue.startsWith('vendor-approvals/')
-  );
+  const parts = pathValue
+    .split(/[/?#]/)[0]
+    .split('/')
+    .filter(Boolean);
+  return parts.includes('vendor-documents') || parts.includes('vendor-approvals');
 }
 
 function normalizeVendorDocumentPath(rawValue: unknown): VendorDocumentPath | null {
-  const value = String(rawValue || '').trim();
-  if (!value) return null;
+  const raw = String(rawValue || '').trim();
+  if (!raw) return null;
+
+  let value = raw;
+  try {
+    value = decodeURIComponent(raw);
+  } catch {
+    value = raw;
+  }
+
+  if (/^https?:\/\//i.test(value) && !value.startsWith('https://storage.googleapis.com/')) {
+    try {
+      value = new URL(value).pathname;
+    } catch {
+      return null;
+    }
+  }
 
   if (value.startsWith('https://storage.googleapis.com/')) {
     try {
@@ -94,7 +108,8 @@ function normalizeVendorDocumentPath(rawValue: unknown): VendorDocumentPath | nu
     return { type: 'external', url: value };
   }
 
-  const normalized = value.startsWith('objects/') ? `/${value}` : value;
+  const pathOnlyValue = value.split(/[?#]/)[0];
+  const normalized = pathOnlyValue.startsWith('objects/') ? `/${pathOnlyValue}` : pathOnlyValue;
   if (normalized.startsWith('/objects/')) {
     return isVendorDocumentScope(normalized)
       ? { type: 'object', path: normalized }

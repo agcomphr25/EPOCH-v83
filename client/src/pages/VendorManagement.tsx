@@ -706,7 +706,21 @@ export default function VendorManagement() {
 
   const getVendorPdfViewUrl = (url: string) => {
     const trimmed = url.trim();
-    const normalized = trimmed.startsWith('objects/') ? `/${trimmed}` : trimmed;
+    let normalized = trimmed.startsWith('objects/') ? `/${trimmed}` : trimmed;
+
+    try {
+      const parsed = new URL(trimmed, window.location.origin);
+      if (parsed.origin === window.location.origin) {
+        normalized = parsed.pathname.startsWith('/objects/') ||
+          parsed.pathname.startsWith('/uploads/vendor-documents/') ||
+          parsed.pathname.startsWith('/uploads/vendor-approvals/')
+          ? parsed.pathname
+          : normalized;
+      }
+    } catch {
+      // Keep the original value when it is not a URL-like path.
+    }
+
     const isVendorStoragePath =
       normalized.startsWith('/objects/') ||
       normalized.startsWith('/uploads/vendor-documents/') ||

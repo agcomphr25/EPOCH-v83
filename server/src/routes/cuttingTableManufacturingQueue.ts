@@ -2000,6 +2000,102 @@ router.get('/built-packets', async (req: Request, res: Response) => {
   }
 });
 
+// Add a fabric source to a built packet by scanning a material roll barcode.
+router.post('/built-packets/:packetId/fabric-sources/scan', async (req: Request, res: Response) => {
+  try {
+    const { packetId } = req.params;
+    const { barcode, quantityUsed = 1 } = req.body;
+    const scannedBarcode = String(barcode || '').trim();
+
+    if (!scannedBarcode) {
+      return res.status(400).json({ error: 'Material barcode is required' });
+    }
+
+    const packet = await db.query.cuttingBuiltPackets.findFirst({
+      where: eq(cuttingBuiltPackets.id, parseInt(packetId)),
+    });
+
+    if (!packet) {
+      return res.status(404).json({ error: 'Built packet not found' });
+    }
+
+    const matchedRoll = await db.query.cuttingFabricInventory.findFirst({
+      where: or(
+        eq(cuttingFabricInventory.barcode, scannedBarcode),
+        eq(cuttingFabricInventory.internalControlNumber, scannedBarcode),
+        eq(cuttingFabricInventory.rollNumber, scannedBarcode)
+      ),
+    });
+
+    if (!matchedRoll) {
+      return res.status(404).json({
+        error: 'Material roll not found',
+        scannedBarcode,
+      });
+    }
+
+    const existingSource = await db.query.cuttingBuiltPacketFabricSources.findFirst({
+      where: and(
+        eq(cuttingBuiltPacketFabricSources.builtPacketId, packet.id),
+        eq(cuttingBuiltPacketFabricSources.fabricInventoryId, matchedRoll.id)
+      ),
+    });
+
+    if (existingSource) {
+      return res.status(409).json({ error: 'This material roll is already attached to the packet' });
+    }
+
+    const currentSourceCount = await db
+      .select({ sourceCount: count() })
+      .from(cuttingBuiltPacketFabricSources)
+      .where(eq(cuttingBuiltPacketFabricSources.builtPacketId, packet.id));
+
+    const [createdSource] = await db
+      .insert(cuttingBuiltPacketFabricSources)
+      .values({
+        builtPacketId: packet.id,
+        fabricInventoryId: matchedRoll.id,
+        fabricType: matchedRoll.fabric || matchedRoll.nickname || null,
+        lotNumber: matchedRoll.lotNumber || null,
+        batchNumber: matchedRoll.batchNumber || null,
+        rollNumber: matchedRoll.rollNumber || null,
+        supplierPartNumber: matchedRoll.supplierPartNumber || null,
+        internalControlNumber: matchedRoll.internalControlNumber || null,
+        expirationDate: matchedRoll.expirationDate || null,
+        quantityUsed: parseInt(String(quantityUsed)) || 1,
+        isPrimary: (currentSourceCount[0]?.sourceCount || 0) === 0,
+      })
+      .returning();
+
+    const newSourceCount = (currentSourceCount[0]?.sourceCount || 0) + 1;
+    await db
+      .update(cuttingBuiltPackets)
+      .set({
+        fabricSourceCount: newSourceCount,
+        isMixedFabric: newSourceCount > 1,
+        updatedAt: new Date(),
+      })
+      .where(eq(cuttingBuiltPackets.id, packet.id));
+
+    res.status(201).json({
+      source: createdSource,
+      roll: {
+        id: matchedRoll.id,
+        barcode: matchedRoll.barcode,
+        fabric: matchedRoll.fabric,
+        nickname: matchedRoll.nickname,
+        lotNumber: matchedRoll.lotNumber,
+        batchNumber: matchedRoll.batchNumber,
+        rollNumber: matchedRoll.rollNumber,
+        internalControlNumber: matchedRoll.internalControlNumber,
+      },
+    });
+  } catch (error) {
+    console.error('Error scanning fabric source for built packet:', error);
+    res.status(500).json({ error: 'Failed to add fabric source from scan' });
+  }
+});
+
 // Update a fabric source for a built packet (e.g. correct lot/roll/batch number)
 router.patch('/built-packets/:packetId/fabric-sources/:sourceId', async (req: Request, res: Response) => {
   try {

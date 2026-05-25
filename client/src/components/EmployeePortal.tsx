@@ -534,6 +534,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
     selectedPunchType: 'clock_in' as PunchEventType,
     clockIn: '',
     clockOut: '',
+    chargeCodeId: 'none',
     reason: '',
   });
   const [, setTick] = useState(0);
@@ -1197,6 +1198,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
           proposedChanges: {
             punchType: punchCorrectionForm.selectedPunchType,
             laborClass: punchCorrectionForm.selectedPunchType === 'break_start' || punchCorrectionForm.selectedPunchType === 'break_end' ? 'BREAK' : 'REGULAR',
+            ...(punchCorrectionForm.chargeCodeId !== 'none' ? { chargeCodeId: Number(punchCorrectionForm.chargeCodeId) } : {}),
             ...(punchCorrectionForm.clockIn ? { clockIn: new Date(punchCorrectionForm.clockIn).toISOString() } : {}),
             ...(punchCorrectionForm.clockOut ? { clockOut: new Date(punchCorrectionForm.clockOut).toISOString() } : {}),
           },
@@ -1210,7 +1212,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
     },
     onSuccess: () => {
       toast({ title: 'Correction submitted', description: 'Your request was sent for supervisor review.' });
-      setPunchCorrectionForm({ requestType: 'edit_session', punchLedgerId: '', selectedPunchType: 'clock_in', clockIn: '', clockOut: '', reason: '' });
+      setPunchCorrectionForm({ requestType: 'edit_session', punchLedgerId: '', selectedPunchType: 'clock_in', clockIn: '', clockOut: '', chargeCodeId: 'none', reason: '' });
       queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/punch-corrections', 'mine'] });
       queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/punches/my/active-shift'] });
     },
@@ -1228,6 +1230,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
       selectedPunchType: punch.type,
       clockIn: punch.type === 'clock_in' || punch.type === 'break_start' ? local : '',
       clockOut: punch.type === 'clock_out' || punch.type === 'break_end' ? local : '',
+      chargeCodeId: 'none',
     }));
   };
 
@@ -1239,6 +1242,7 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
       selectedPunchType: 'clock_in',
       clockIn: '',
       clockOut: '',
+      chargeCodeId: 'none',
     }));
   };
 
@@ -3209,6 +3213,25 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
                             />
                           </div>
                         )}
+                        <div className="space-y-1 sm:col-span-2">
+                          <Label>Charge Code</Label>
+                          <Select
+                            value={punchCorrectionForm.chargeCodeId}
+                            onValueChange={(value) => setPunchCorrectionForm((prev) => ({ ...prev, chargeCodeId: value }))}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder={chargeCodesLoading ? 'Loading charge codes...' : 'Select charge code'} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">No charge code</SelectItem>
+                              {clockInChargeCodes.map((cc) => (
+                                <SelectItem key={cc.id} value={String(cc.id)}>
+                                  {cc.code}{cc.description ? ` - ${cc.description}` : ''}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
                       <div className="space-y-1">
                         <Label>Reason</Label>

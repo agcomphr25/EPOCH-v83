@@ -178,6 +178,7 @@ interface P2PoStatusSummary {
 
 interface ProductionResponse {
   rows: WorkOrderRow[];
+  linkedP2Production?: WorkOrderRow[];
   linkedP2PoCount: number;
   linkedP2PoStatuses: P2PoStatusSummary[];
 }

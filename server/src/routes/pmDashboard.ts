@@ -1638,7 +1638,15 @@ router.get('/:projectId/production', h(async (req, res) => {
     };
   });
 
-  res.json({ rows: rowsWithAssignments, linkedP2PoCount, linkedP2PoStatuses });
+const workOrderRows = rowsWithAssignments.filter(row => row.sourceType !== 'p2_production_order');
+const linkedP2Production = rowsWithAssignments.filter(row => row.sourceType === 'p2_production_order');
+
+res.json({
+  rows: workOrderRows,
+  linkedP2Production,
+  linkedP2PoCount,
+  linkedP2PoStatuses,
+});
 }));
 
 // GET /api/pm-dashboard/:projectId/production/p2-serialized - linked P2 PO item breakdown

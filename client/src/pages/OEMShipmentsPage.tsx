@@ -71,6 +71,7 @@ interface ShipmentItem {
   itemType: 'stock_model' | 'custom_model' | string;
   unitPrice?: number | null;
   lineTotal?: number | null;
+  packingSlipInvoiceNumber?: string | null;
   invoiceId?: string | null;
   invoiceNumber?: string | null;
   invoiceStatus?: string | null;
@@ -224,13 +225,22 @@ export default function OEMShipmentsPage() {
 
   const getPoInvoice = (items: ShipmentItem[]) => {
     const invoiceItem = items.find((item) => item.invoiceId);
+    const packingSlipItem = items.find((item) => item.packingSlipInvoiceNumber);
     return invoiceItem
       ? {
           id: invoiceItem.invoiceId || null,
           invoiceNumber: invoiceItem.invoiceNumber || null,
           status: invoiceItem.invoiceStatus || null,
+          packingSlipInvoiceNumber: invoiceItem.packingSlipInvoiceNumber || packingSlipItem?.packingSlipInvoiceNumber || null,
         }
-      : null;
+      : packingSlipItem
+        ? {
+            id: null,
+            invoiceNumber: null,
+            status: null,
+            packingSlipInvoiceNumber: packingSlipItem.packingSlipInvoiceNumber || null,
+          }
+        : null;
   };
 
   const getShipmentPoGroups = (shipment: Shipment) =>
@@ -867,7 +877,7 @@ export default function OEMShipmentsPage() {
                                   {shipment.invoice_number && (
                                     <div>
                                       <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
-                                        Invoice #
+                                        Shipment Invoice #
                                       </p>
                                       <code className="text-sm font-mono bg-white dark:bg-gray-900 px-2 py-1 rounded border">
                                         {shipment.invoice_number}
@@ -1104,6 +1114,11 @@ export default function OEMShipmentsPage() {
                                                 {invoice?.invoiceNumber && (
                                                   <span className="text-xs text-muted-foreground">
                                                     {invoice.invoiceNumber} {invoice.status ? `- ${invoice.status}` : ''}
+                                                  </span>
+                                                )}
+                                                {!invoice?.invoiceNumber && invoice?.packingSlipInvoiceNumber && (
+                                                  <span className="text-xs text-muted-foreground">
+                                                    Packing slip # {invoice.packingSlipInvoiceNumber}
                                                   </span>
                                                 )}
                                               </div>

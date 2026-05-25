@@ -82,11 +82,39 @@ async function findP1PackingSlipInvoice(shipmentRecordId: string, poNumber: stri
          )
          OR (
            inv.po_override = $2
+           AND inv.invoice_number IN (
+             SELECT pfa.metadata->>'invoiceNumber'
+             FROM p1_fulfillment_attempts pfa
+             WHERE pfa.metadata->>'invoiceNumber' IS NOT NULL
+               AND pfa.shipment_record_id::text = $1
+               AND pfa.metadata->>'poNumber' = $2
+           )
+           AND (
+             inv.notes ILIKE 'Auto-created from P1 OEM packing slip%'
+             OR inv.internal_notes ILIKE 'Source: P1 OEM shipment%'
+           )
+         )
+         OR (
+           inv.po_override = $2
            AND inv.invoice_number = (
              SELECT sr.invoice_number
              FROM shipment_records sr
              WHERE sr.id::text = $1
              LIMIT 1
+           )
+           AND (
+             inv.notes ILIKE 'Auto-created from P1 OEM packing slip%'
+             OR inv.internal_notes ILIKE 'Source: P1 OEM shipment%'
+           )
+         )
+         OR (
+           inv.po_override = $1
+           AND inv.invoice_number IN (
+             SELECT pfa.metadata->>'invoiceNumber'
+             FROM p1_fulfillment_attempts pfa
+             WHERE pfa.metadata->>'invoiceNumber' IS NOT NULL
+               AND pfa.metadata->>'poNumber' = $1
+               AND pfa.order_id = ANY($2::text[])
            )
            AND (
              inv.notes ILIKE 'Auto-created from P1 OEM packing slip%'
@@ -1035,6 +1063,18 @@ router.get('/oem-shipments', authenticateToken, async (req, res) => {
               'itemType', COALESCE(poi.item_type, 'stock_model'),
               'unitPrice', CASE WHEN $${paramIndex + 2}::boolean THEN poi.unit_price ELSE NULL END,
               'lineTotal', CASE WHEN $${paramIndex + 2}::boolean THEN COALESCE(poi.unit_price, 0) * COALESCE(si.quantity, 1) ELSE NULL END,
+              'packingSlipInvoiceNumber', (
+                SELECT pfa.metadata->>'invoiceNumber'
+                FROM p1_fulfillment_attempts pfa
+                WHERE pfa.metadata->>'invoiceNumber' IS NOT NULL
+                  AND pfa.metadata->>'poNumber' = COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number)
+                  AND (
+                    pfa.order_id = si.order_id
+                    OR pfa.shipment_record_id = sr.id
+                  )
+                ORDER BY COALESCE(pfa.completed_at, pfa.updated_at, pfa.created_at) DESC
+                LIMIT 1
+              ),
               'invoiceId', inv.id,
               'invoiceNumber', inv.invoice_number,
               'invoiceStatus', inv.status
@@ -1071,6 +1111,23 @@ router.get('/oem-shipments', authenticateToken, async (req, res) => {
                       WHERE order_id.value = si.order_id
                     )
                   )
+              )
+              OR (
+                inv.po_override = COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number)
+                AND inv.invoice_number IN (
+                  SELECT pfa.metadata->>'invoiceNumber'
+                  FROM p1_fulfillment_attempts pfa
+                  WHERE pfa.metadata->>'invoiceNumber' IS NOT NULL
+                    AND pfa.metadata->>'poNumber' = COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number)
+                    AND (
+                      pfa.order_id = si.order_id
+                      OR pfa.shipment_record_id = sr.id
+                    )
+                )
+                AND (
+                  inv.notes ILIKE 'Auto-created from P1 OEM packing slip%'
+                  OR inv.internal_notes ILIKE 'Source: P1 OEM shipment%'
+                )
               )
               OR (
                 inv.po_override = COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number)

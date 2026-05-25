@@ -1738,11 +1738,27 @@ router.get('/:projectId/labor', h(async (req, res) => {
 
   // Labor used from punch_ledger. PM views include open sessions so supervisors see
   // active WAD time-bank consumption before an employee clocks out.
+  // Some legacy/admin-corrected punches only carry the WAD charge code, so PM scope
+  // also includes punches whose charge code is authored in this project's WAD budget.
   const actualRes = await pool.query<{ actualHours: string }>(`
+    WITH project_charge_codes AS (
+      SELECT DISTINCT NULLIF(TRIM(cc_row->>'chargeCode'), '') AS charge_code
+      FROM production_work_orders wo
+      CROSS JOIN LATERAL jsonb_array_elements(
+        CASE
+          WHEN jsonb_typeof(wo.wizard_data->'step4'->'chargeCodes') = 'array'
+            THEN wo.wizard_data->'step4'->'chargeCodes'
+          ELSE '[]'::jsonb
+        END
+      ) AS cc_row
+      WHERE wo.project_id = $1
+        AND COALESCE(NULLIF(cc_row->>'classification', ''), 'DIRECT') = 'DIRECT'
+    )
     SELECT COALESCE(SUM(
       EXTRACT(EPOCH FROM (COALESCE(pl.clock_out, NOW()) - pl.clock_in)) / 3600.0
     ), 0) AS "actualHours"
     FROM punch_ledger pl
+    LEFT JOIN public.charge_codes lcc ON lcc.id = pl.charge_code_id
     WHERE pl.labor_class = 'REGULAR'
       AND (
         pl.project_id = $1
@@ -1753,13 +1769,30 @@ router.get('/:projectId/labor', h(async (req, res) => {
         OR pl.traveler_id IN (
           SELECT id::text FROM travelers WHERE project_id = $1
         )
+        OR COALESCE(lcc.code, pl.charge_code) IN (
+          SELECT charge_code FROM project_charge_codes WHERE charge_code IS NOT NULL
+        )
       )
   `, [projectId]);
 
   // Open session count from punch_ledger
   const openSessionRes = await pool.query<{ openSessionCount: string }>(`
+    WITH project_charge_codes AS (
+      SELECT DISTINCT NULLIF(TRIM(cc_row->>'chargeCode'), '') AS charge_code
+      FROM production_work_orders wo
+      CROSS JOIN LATERAL jsonb_array_elements(
+        CASE
+          WHEN jsonb_typeof(wo.wizard_data->'step4'->'chargeCodes') = 'array'
+            THEN wo.wizard_data->'step4'->'chargeCodes'
+          ELSE '[]'::jsonb
+        END
+      ) AS cc_row
+      WHERE wo.project_id = $1
+        AND COALESCE(NULLIF(cc_row->>'classification', ''), 'DIRECT') = 'DIRECT'
+    )
     SELECT COUNT(*) AS "openSessionCount"
     FROM punch_ledger pl
+    LEFT JOIN public.charge_codes lcc ON lcc.id = pl.charge_code_id
     WHERE pl.clock_out IS NULL
       AND pl.labor_class = 'REGULAR'
       AND (
@@ -1770,6 +1803,9 @@ router.get('/:projectId/labor', h(async (req, res) => {
         )
         OR pl.traveler_id IN (
           SELECT id::text FROM travelers WHERE project_id = $1
+        )
+        OR COALESCE(lcc.code, pl.charge_code) IN (
+          SELECT charge_code FROM project_charge_codes WHERE charge_code IS NOT NULL
         )
       )
   `, [projectId]);
@@ -1806,7 +1842,8 @@ router.get('/:projectId/labor', h(async (req, res) => {
         AND COALESCE(NULLIF(cc_row->>'classification', ''), 'DIRECT') = 'DIRECT'
     ),
     charge_actuals AS (
-      -- Actual hours per charge code within the project scope
+      -- Actual hours per charge code within the project scope. Include punches
+      -- linked only by WAD charge code so admin/timekeeper corrections roll up.
       SELECT
         COALESCE(lcc.code, pl.charge_code) AS charge_code,
         SUM(EXTRACT(EPOCH FROM (COALESCE(pl.clock_out, NOW()) - pl.clock_in)) / 3600.0) AS actual_hours
@@ -1822,6 +1859,9 @@ router.get('/:projectId/labor', h(async (req, res) => {
           )
           OR pl.traveler_id IN (
             SELECT id::text FROM travelers WHERE project_id = $1
+          )
+          OR COALESCE(lcc.code, pl.charge_code) IN (
+            SELECT charge_code FROM wad_budget_rows WHERE charge_code IS NOT NULL
           )
         )
       GROUP BY COALESCE(lcc.code, pl.charge_code)
@@ -1871,6 +1911,19 @@ router.get('/:projectId/labor', h(async (req, res) => {
 
   // Live open sessions feed from punch_ledger
   const liveRes = await pool.query<LiveSessionRow>(`
+    WITH project_charge_codes AS (
+      SELECT DISTINCT NULLIF(TRIM(cc_row->>'chargeCode'), '') AS charge_code
+      FROM production_work_orders wo
+      CROSS JOIN LATERAL jsonb_array_elements(
+        CASE
+          WHEN jsonb_typeof(wo.wizard_data->'step4'->'chargeCodes') = 'array'
+            THEN wo.wizard_data->'step4'->'chargeCodes'
+          ELSE '[]'::jsonb
+        END
+      ) AS cc_row
+      WHERE wo.project_id = $1
+        AND COALESCE(NULLIF(cc_row->>'classification', ''), 'DIRECT') = 'DIRECT'
+    )
     SELECT
       pl.id AS "sessionId",
       pl.employee_id AS "employeeId",
@@ -1895,6 +1948,9 @@ router.get('/:projectId/labor', h(async (req, res) => {
         )
         OR pl.traveler_id IN (
           SELECT id::text FROM travelers WHERE project_id = $1
+        )
+        OR COALESCE(lcc.code, pl.charge_code) IN (
+          SELECT charge_code FROM project_charge_codes WHERE charge_code IS NOT NULL
         )
       )
     ORDER BY pl.clock_in DESC
@@ -1993,6 +2049,14 @@ router.get('/:projectId/labor', h(async (req, res) => {
         SUM(budgeted_hours) AS budgeted_hours
       FROM wad_budget_rows
       GROUP BY work_order_id
+    ),
+    charge_code_budget AS (
+      SELECT
+        charge_code,
+        SUM(budgeted_hours) AS budgeted_hours
+      FROM wad_budget_rows
+      WHERE charge_code IS NOT NULL
+      GROUP BY charge_code
     )
     SELECT
       pl.clock_in::date::text AS "workDate",
@@ -2002,7 +2066,7 @@ router.get('/:projectId/labor', h(async (req, res) => {
       COALESCE(lcc.code, pl.charge_code) AS "chargeCode",
       wo.work_order_number AS "workOrderNumber",
       t.traveler_number AS "travelerNumber",
-      COALESCE(MAX(wob.budgeted_hours), 0) AS "budgetedHours",
+      COALESCE(MAX(wob.budgeted_hours), MAX(ccb.budgeted_hours), 0) AS "budgetedHours",
       COALESCE(SUM(
         CASE
           WHEN pl.clock_out IS NOT NULL AND pl.labor_class = 'REGULAR'
@@ -2025,6 +2089,8 @@ router.get('/:projectId/labor', h(async (req, res) => {
     LEFT JOIN public.charge_codes lcc ON lcc.id = pl.charge_code_id
     LEFT JOIN work_order_budget wob
       ON wob.work_order_id = COALESCE(pl.production_work_order_id, t.production_work_order_id)
+    LEFT JOIN charge_code_budget ccb
+      ON ccb.charge_code = COALESCE(lcc.code, pl.charge_code)
     WHERE pl.labor_class = 'REGULAR'
       AND (
         pl.project_id = $1
@@ -2034,6 +2100,9 @@ router.get('/:projectId/labor', h(async (req, res) => {
         )
         OR pl.traveler_id IN (
           SELECT id::text FROM travelers WHERE project_id = $1
+        )
+        OR COALESCE(lcc.code, pl.charge_code) IN (
+          SELECT charge_code FROM wad_budget_rows WHERE charge_code IS NOT NULL
         )
       )
     GROUP BY
@@ -2122,6 +2191,19 @@ router.get('/:projectId/labor/entries', h(async (req, res) => {
   const filterSql = filters.length ? `AND ${filters.join(' AND ')}` : '';
 
   const rows = await pool.query<LaborEntryTraceRow>(`
+    WITH project_charge_codes AS (
+      SELECT DISTINCT NULLIF(TRIM(cc_row->>'chargeCode'), '') AS charge_code
+      FROM production_work_orders wo
+      CROSS JOIN LATERAL jsonb_array_elements(
+        CASE
+          WHEN jsonb_typeof(wo.wizard_data->'step4'->'chargeCodes') = 'array'
+            THEN wo.wizard_data->'step4'->'chargeCodes'
+          ELSE '[]'::jsonb
+        END
+      ) AS cc_row
+      WHERE wo.project_id = $1
+        AND COALESCE(NULLIF(cc_row->>'classification', ''), 'DIRECT') = 'DIRECT'
+    )
     SELECT
       pl.id AS "sessionId",
       pl.employee_id AS "employeeId",
@@ -2160,6 +2242,9 @@ router.get('/:projectId/labor/entries', h(async (req, res) => {
         )
         OR pl.traveler_id IN (
           SELECT id::text FROM travelers WHERE project_id = $1
+        )
+        OR COALESCE(lcc.code, pl.charge_code) IN (
+          SELECT charge_code FROM project_charge_codes WHERE charge_code IS NOT NULL
         )
       )
       ${filterSql}

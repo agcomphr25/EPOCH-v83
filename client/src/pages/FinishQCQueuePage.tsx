@@ -17,6 +17,7 @@ import {
   CheckCircle,
 } from 'lucide-react';
 import OrderActionButtons from '@/components/OrderActionButtons';
+import DepartmentOrderNotes from '@/components/DepartmentOrderNotes';
 import { ReturnsRepairsSection } from '@/components/ReturnsRepairsSection';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { isAdminUser } from '@/config/userPermissions';
@@ -383,6 +384,9 @@ export default function FinishQCQueuePage() {
                       repairNotes={repairNotesMap.get(order.orderId)}
                       className={`border-l-green-500 ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
                     />
+                    <div className="px-3 pb-2">
+                      <DepartmentOrderNotes notes={order.notes} />
+                    </div>
                     <div className="flex justify-end px-3 pb-2">
                       <OrderActionButtons
                         orderId={order.orderId}

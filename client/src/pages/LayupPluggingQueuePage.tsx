@@ -26,6 +26,7 @@ import { useUnifiedLayupOrders } from '@/hooks/useUnifiedLayupOrders';
 import KickbackReportModal from '@/components/KickbackReportModal';
 import TicketBadge, { useOrderTicketCounts } from '@/components/TicketBadge';
 import OrderActionButtons from '@/components/OrderActionButtons';
+import DepartmentOrderNotes from '@/components/DepartmentOrderNotes';
 
 export default function LayupPluggingQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
@@ -556,6 +557,8 @@ export default function LayupPluggingQueuePage() {
                             Due: {format(new Date(order.dueDate), 'MMM d, yyyy')}
                           </div>
                         )}
+
+                        <DepartmentOrderNotes notes={order.notes} />
 
                         {hasKickbacks(order.orderId) && (
                           <Badge

@@ -1460,7 +1460,33 @@ router.post('/oem-shipments/:id/invoices', authenticateToken, async (req, res) =
     const invoiceDate = toDateOnly(today);
     const dueDate = toDateOnly(addDays(today, 30));
     const customerId = String(first.po_customer_id || first.shipment_customer_id || '0');
-    const subtotal = lines.reduce(
+    const consolidatedLines = Array.from(lines.reduce((map: Map<string, any>, line: any) => {
+      const unitPrice = Number(line.unit_price || 0);
+      const partNumber = line.part_number || null;
+      const description = line.description || line.order_id || poNumber;
+      const key = JSON.stringify([partNumber, description, unitPrice]);
+      const existing = map.get(key);
+      if (existing) {
+        existing.quantity += Number(line.quantity || 0);
+        existing.shipmentItemIds.push(line.shipment_item_id);
+        existing.orderIds.push(line.order_id);
+        existing.p1PoItemIds.push(line.p1_po_item_id);
+      } else {
+        map.set(key, {
+          ...line,
+          part_number: partNumber,
+          description,
+          unit_price: unitPrice,
+          quantity: Number(line.quantity || 0),
+          shipmentItemIds: [line.shipment_item_id],
+          orderIds: [line.order_id],
+          p1PoItemIds: [line.p1_po_item_id],
+        });
+      }
+      return map;
+    }, new Map<string, any>()).values());
+
+    const subtotal = consolidatedLines.reduce(
       (sum: number, line: any) => sum + Number(line.quantity || 0) * Number(line.unit_price || 0),
       0
     );
@@ -1510,17 +1536,17 @@ router.post('/oem-shipments/:id/invoices', authenticateToken, async (req, res) =
     );
 
     const invoice = invoiceResult.rows[0];
-    for (const line of lines) {
+    for (const line of consolidatedLines) {
       const qty = Number(line.quantity || 0);
       const unitPrice = Number(line.unit_price || 0);
       const tags = {
         source: 'p1_oem_packing_slip',
         shipmentRecordId: id,
         shipmentReference: first.reference || null,
-        shipmentItemId: line.shipment_item_id,
+        shipmentItemIds: line.shipmentItemIds,
         poNumber,
-        p1PoItemId: line.p1_po_item_id,
-        orderId: line.order_id,
+        p1PoItemIds: line.p1PoItemIds,
+        orderIds: line.orderIds,
         trackingNumber: first.master_tracking_number || null,
       };
 

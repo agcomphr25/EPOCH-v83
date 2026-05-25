@@ -87,6 +87,47 @@ async function findP1PackingSlipInvoice(shipmentRecordId: string, poNumber: stri
   return rows[0] || null;
 }
 
+async function findP1PackingSlipInvoiceForOrders(poNumber: string, orderIds: string[]) {
+  const usableOrderIds = orderIds.filter(Boolean);
+  if (usableOrderIds.length === 0) return null;
+
+  const rows = rowsOf<{
+    id: string;
+    invoice_number: string;
+    status: string;
+  }>(await pool.query(
+    `SELECT inv.id, inv.invoice_number, inv.status
+     FROM ar_invoices inv
+     WHERE COALESCE(inv.status, '') <> 'VOID'
+       AND EXISTS (
+         SELECT 1
+         FROM ar_invoice_lines line
+         WHERE line.invoice_id = inv.id
+           AND line.dimension_tags->>'source' = 'p1_oem_packing_slip'
+           AND line.dimension_tags->>'poNumber' = $1
+           AND (
+             line.dimension_tags->>'orderId' = ANY($2::text[])
+             OR EXISTS (
+               SELECT 1
+               FROM jsonb_array_elements_text(
+                 CASE
+                   WHEN jsonb_typeof(line.dimension_tags->'orderIds') = 'array'
+                   THEN line.dimension_tags->'orderIds'
+                   ELSE '[]'::jsonb
+                 END
+               ) AS order_id(value)
+               WHERE order_id.value = ANY($2::text[])
+             )
+           )
+       )
+     ORDER BY inv.created_at DESC
+     LIMIT 1`,
+    [poNumber, usableOrderIds]
+  ));
+
+  return rows[0] || null;
+}
+
 async function findReusableP1InvoiceNumber({
   poNumber,
   orderIds,
@@ -1434,12 +1475,26 @@ router.post('/oem-shipments/:id/invoices', authenticateToken, async (req, res) =
       return res.status(404).json({ error: 'No shipment items found for this P1 packing slip.' });
     }
 
+    const shipmentOrderIds = lines.map((line: any) => line.order_id).filter(Boolean);
+    const existingForOrders = await findP1PackingSlipInvoiceForOrders(poNumber, shipmentOrderIds);
+    if (existingForOrders) {
+      await client.query(
+        `UPDATE shipment_records SET invoice_number = $1, updated_at = NOW() WHERE id = $2 AND invoice_number IS NULL`,
+        [existingForOrders.invoice_number, id]
+      );
+      return res.status(200).json({
+        id: existingForOrders.id,
+        invoiceNumber: existingForOrders.invoice_number,
+        status: existingForOrders.status,
+      });
+    }
+
     const first = lines[0];
     let invoiceNumber = first.shipment_invoice_number as string | null;
     if (!invoiceNumber) {
       const reusableInvoiceNumber = await findReusableP1InvoiceNumber({
         poNumber,
-        orderIds: lines.map((line: any) => line.order_id).filter(Boolean),
+        orderIds: shipmentOrderIds,
       });
       if (reusableInvoiceNumber) {
         invoiceNumber = reusableInvoiceNumber;

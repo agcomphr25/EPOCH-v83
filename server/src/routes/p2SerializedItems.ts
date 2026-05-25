@@ -171,6 +171,12 @@ const finalizeSchema = z.object({
   performedBy: z.string().min(1),
 });
 
+const unfinalizeSchema = z.object({
+  serializedItemIds: z.array(z.string().uuid()).min(1),
+  reason: z.string().trim().min(1).optional(),
+  performedBy: z.string().min(1),
+});
+
 router.post('/finalize', async (req, res) => {
   try {
     const input = finalizeSchema.parse(req.body);
@@ -248,6 +254,70 @@ router.post('/finalize', async (req, res) => {
     return res.json({ success: true, updatedCount: items.length });
   } catch (err: any) {
     return res.status(400).json({ error: err?.message || 'Failed to finalize serialized items' });
+  }
+});
+
+router.post('/unfinalize', async (req, res) => {
+  try {
+    const input = unfinalizeSchema.parse(req.body);
+
+    const items = await db.query.p2SerializedItems.findMany({
+      where: inArray(p2SerializedItems.id, input.serializedItemIds),
+    });
+
+    if (items.length !== input.serializedItemIds.length) {
+      return res.status(404).json({ error: 'One or more serialized items not found' });
+    }
+
+    const alreadyShippedRows = await pool.query<{ serialized_item_ids: string[] | null }>(
+      `SELECT serialized_item_ids FROM p2_lot_numbers WHERE serialized_item_ids IS NOT NULL`
+    );
+    const alreadyShippedIds = new Set<string>(
+      alreadyShippedRows.flatMap((row) => row.serialized_item_ids ?? [])
+    );
+    const alreadyShipped = items.filter((item) => alreadyShippedIds.has(item.id));
+    if (alreadyShipped.length > 0) {
+      return res.status(409).json({
+        error: 'Cannot unfinalize units that are already assigned to a P2 shipment lot',
+        items: alreadyShipped.map((item) => ({ id: item.id, barcode: item.barcode, serialNumber: item.serialNumber })),
+      });
+    }
+
+    const finalizedItems = items.filter((item) => (item as any).finalizedAt);
+    if (finalizedItems.length === 0) {
+      return res.json({ success: true, updatedCount: 0 });
+    }
+
+    await db
+      .update(p2SerializedItems)
+      .set({
+        finalizedAt: null,
+        finalizedBy: null,
+        updatedAt: new Date(),
+      })
+      .where(inArray(p2SerializedItems.id, finalizedItems.map((item) => item.id)));
+
+    for (const item of finalizedItems) {
+      await db.insert(p2SerializedItemEvents).values({
+        serializedItemId: item.id,
+        barcode: item.barcode,
+        eventType: 'NOTE',
+        performedBy: input.performedBy,
+        notes: `Unfinalized identity for correction${input.reason ? `: ${input.reason}` : ''}`,
+        metadata: {
+          previousSku: (item as any).sku ?? null,
+          previousDrawingName: (item as any).drawingName ?? null,
+          previousCustomerSerialNumber: (item as any).customerSerialNumber ?? null,
+          previousFinalizedAt: (item as any).finalizedAt ?? null,
+          previousFinalizedBy: (item as any).finalizedBy ?? null,
+          reason: input.reason ?? null,
+        },
+      });
+    }
+
+    return res.json({ success: true, updatedCount: finalizedItems.length });
+  } catch (err: any) {
+    return res.status(400).json({ error: err?.message || 'Failed to unfinalize serialized items' });
   }
 });
 

@@ -85,6 +85,7 @@ type BuiltPacket = {
   barcode: string;
   packetNumber: number;
   displayPacketNumber: number | null;
+  printedPacketNumber?: number | null;
   buildDate: string;
   status: string;
   isMixedFabric: boolean;
@@ -2444,7 +2445,7 @@ export default function CuttingOperatorDashboard() {
                           const mfgParsed = parseMfgBarcode(packet.barcode);
                           const mfgBarcode = mfgParsed.isMfgFormat
                             ? mfgParsed.raw
-                            : buildMfgBarcode(packet.queueId, packet.sku, packet.displayPacketNumber ?? packet.packetNumber);
+                            : buildMfgBarcode(packet.queueId, packet.sku, packet.printedPacketNumber ?? packet.displayPacketNumber ?? packet.packetNumber);
                           const segments = mfgBarcode ? parseMfgBarcode(mfgBarcode) : null;
                           const isInternalBarcode = !mfgParsed.isMfgFormat;
 

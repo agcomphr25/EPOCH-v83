@@ -19,11 +19,27 @@ function nonZeroInventoryDelta(quantity: number): number {
 }
 
 function parseQueueIdFromBuiltPacketBarcode(barcode: string | null | undefined): number | null {
+  const parsed = parseBuiltPacketBarcode(barcode);
+  return parsed?.queueId ?? null;
+}
+
+function parseBuiltPacketBarcode(barcode: string | null | undefined): { sku: string; queueId: number; packetNumber: number } | null {
   if (!barcode) return null;
   const parts = barcode.split('-');
   if (parts.length < 5 || parts[0] !== 'PKT') return null;
-  const queueId = Number(parts[parts.length - 3]);
-  return Number.isInteger(queueId) ? queueId : null;
+
+  const maybeRepairIndex = parts[parts.length - 1];
+  const maybeTimestamp = parts[parts.length - 2];
+  const hasRepairIndex = /^\d+$/.test(maybeRepairIndex) && /^\d{10,}$/.test(maybeTimestamp);
+  const queueIndex = hasRepairIndex ? parts.length - 4 : parts.length - 3;
+  const packetNumberIndex = hasRepairIndex ? parts.length - 3 : parts.length - 2;
+
+  const queueId = Number(parts[queueIndex]);
+  const packetNumber = Number(parts[packetNumberIndex]);
+  const sku = parts.slice(1, queueIndex).join('-');
+
+  if (!sku || !Number.isInteger(queueId) || !Number.isInteger(packetNumber)) return null;
+  return { sku, queueId, packetNumber };
 }
 
 async function ensureBuiltPacketsForCompletedQueueRows(): Promise<void> {
@@ -1913,18 +1929,19 @@ router.get('/built-packets', async (req: Request, res: Response) => {
     }
 
     const parsedPackets = packets.map(packet => {
-      let sku: string | null = null;
-      let queueId: string | null = null;
+      const parsedBarcode = parseBuiltPacketBarcode(packet.barcode);
+      let sku: string | null = parsedBarcode?.sku ?? null;
+      let queueId: string | null = parsedBarcode ? String(parsedBarcode.queueId) : null;
       try {
         const parts = packet.barcode.split('-');
         if (parts.length >= 5 && parts[0] === 'PKT') {
-          queueId = parts[parts.length - 3];
-          sku = parts.slice(1, parts.length - 3).join('-');
+          queueId = queueId ?? parts[parts.length - 3];
+          sku = sku ?? parts.slice(1, parts.length - 3).join('-');
         }
       } catch {
         // non-standard barcode — leave sku and queueId as null
       }
-      return { ...packet, sku, queueId };
+      return { ...packet, sku, queueId, printedPacketNumber: parsedBarcode?.packetNumber ?? packet.packetNumber };
     });
 
     // Batch-fetch quantityRequested for all referenced queue items so the
@@ -1966,11 +1983,11 @@ router.get('/built-packets', async (req: Request, res: Response) => {
       // Group by derived queueId and assign rank
       const groupedById: Record<string, number[]> = {};
       for (const row of allPacketsForQueues) {
-        let qId: string | null = null;
+        let qId: string | null = parseBuiltPacketBarcode(row.barcode)?.queueId.toString() ?? null;
         try {
           const parts = row.barcode.split('-');
           if (parts.length >= 5 && parts[0] === 'PKT') {
-            qId = parts[parts.length - 3];
+            qId = qId ?? parts[parts.length - 3];
           }
         } catch {}
         if (qId !== null && relevantQueueIds.includes(qId)) {

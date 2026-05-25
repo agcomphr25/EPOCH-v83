@@ -2052,6 +2052,49 @@ router.post('/:id/cancel', async (req: Request, res: Response) => {
   }
 });
 
+// Reactivate canceled traveler
+router.post('/:id/reactivate', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { reactivatedBy } = req.body;
+
+    const traveler = await storage.getTraveler(id);
+    if (!traveler) {
+      return res.status(404).json({ error: 'Traveler not found' });
+    }
+
+    if (traveler.status !== 'CANCELED') {
+      return res.status(400).json({
+        error: 'Only canceled travelers can be reactivated',
+        currentStatus: traveler.status,
+      });
+    }
+
+    const events = await storage.getTravelerEvents(id);
+    const cancellationEvent = events.find((event) => {
+      const details = event.details as any;
+      return details?.to === 'CANCELED' && typeof details?.from === 'string';
+    });
+    const previousStatus = (cancellationEvent?.details as any)?.from;
+    const allowedTargetStatuses = new Set(['DRAFT', 'IN_PROGRESS', 'BLOCKED']);
+    const nextStatus = allowedTargetStatuses.has(previousStatus) ? previousStatus : 'DRAFT';
+
+    const updatedTraveler = await storage.updateTraveler(id, { status: nextStatus });
+
+    await storage.createTravelerEvent({
+      travelerId: id,
+      actor: reactivatedBy || 'system',
+      action: 'STATUS_CHANGED',
+      details: { from: 'CANCELED', to: nextStatus, restoredFrom: previousStatus || null },
+    });
+
+    res.json(updatedTraveler);
+  } catch (error: any) {
+    console.error('Error reactivating traveler:', error);
+    res.status(500).json({ error: 'Failed to reactivate traveler', message: error.message });
+  }
+});
+
 // ============================================================================
 // STEP ENDPOINTS
 // ============================================================================

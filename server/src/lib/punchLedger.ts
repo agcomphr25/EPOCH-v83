@@ -242,15 +242,28 @@ export async function createClosedHistoricalSession(
  * Close an open session (clock-out). Resolves the open row by employeeId.
  * Returns the closed row, or null if no open session was found.
  */
-export async function closeSession(employeeId: number, updatedBy?: number | null, updatedByDisplayName?: string | null): Promise<PunchLedgerEntry | null> {
+export async function closeSession(
+  employeeId: number,
+  updatedBy?: number | null,
+  updatedByDisplayName?: string | null,
+  clockOut?: Date | null,
+): Promise<PunchLedgerEntry | null> {
   const open = await getOpenSession(employeeId);
   if (!open) return null;
 
   const now = new Date();
+  const effectiveClockOut = clockOut ?? now;
+  if (effectiveClockOut <= open.clockIn) {
+    throw Object.assign(
+      new Error(`Clock-out time (${effectiveClockOut.toISOString()}) must be after the session's clock-in (${open.clockIn.toISOString()}).`),
+      { code: 'INVALID_CLOCK_OUT' },
+    );
+  }
+
   const [closed] = await db
     .update(punchLedger)
     .set({
-      clockOut: now,
+      clockOut: effectiveClockOut,
       updatedBy: updatedBy ?? null,
       updatedByDisplayName: updatedByDisplayName ?? null,
       updatedAt: now,

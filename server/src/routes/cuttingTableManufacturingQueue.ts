@@ -206,42 +206,113 @@ router.post('/:id/complete', async (req: Request, res: Response) => {
     if (!currentItem) {
       return res.status(404).json({ error: 'Manufacturing queue item not found' });
     }
-    
-    // Calculate total completed (existing + new)
-    const previousCompleted = currentItem.quantityCompleted || 0;
-    const newTotalCompleted = previousCompleted + quantityCompleted;
-    const quantityRequested = currentItem.quantityRequested;
-    
-    // Determine if this is a full or partial completion
-    const isFullyCompleted = newTotalCompleted >= quantityRequested;
-    
-    // Update the manufacturing queue item
-    const [updated] = await db
-      .update(manufacturingQueue)
-      .set({
-        quantityCompleted: newTotalCompleted,
-        status: isFullyCompleted ? 'COMPLETED' : 'IN_PROGRESS',
-        completedAt: isFullyCompleted ? new Date() : null,
-        fabricLot,
-        fabricBatch,
-        fabricRoll,
-        materialDetails,
-        completionNotes,
-        completedBy,
-        updatedAt: new Date(),
-      })
-      .where(eq(manufacturingQueue.id, parseInt(id)))
-      .returning();
-    
-    if (!updated) {
-      return res.status(404).json({ error: 'Manufacturing queue item not found' });
+
+    const inventoryItem = await db.query.inventoryItems.findFirst({
+      where: eq(inventoryItems.id, currentItem.inventoryItemId),
+    });
+
+    if (!inventoryItem) {
+      return res.status(404).json({ error: 'Inventory item not found' });
     }
+
+    let productCategory = await db.query.cuttingProductCategories.findFirst({
+      where: eq(cuttingProductCategories.categoryName, inventoryItem.name || 'Unknown'),
+    });
+
+    if (!productCategory) {
+      const [newCategory] = await db
+        .insert(cuttingProductCategories)
+        .values({
+          categoryName: inventoryItem.name || 'Unknown Packet Type',
+          isActive: true,
+        })
+        .returning();
+      productCategory = newCategory;
+    }
+
+    if (!productCategory) {
+      return res.status(500).json({ error: 'Failed to resolve packet category' });
+    }
+
+    const productCategoryId = productCategory.id;
+    const barcodePrefix = `PKT-${inventoryItem.agPartNumber}-${id}-%`;
+
+    const { updated, createdPackets, isFullyCompleted, newTotalCompleted } = await db.transaction(async (tx) => {
+      const [lockedItem] = await tx
+        .select({
+          quantityCompleted: manufacturingQueue.quantityCompleted,
+          quantityRequested: manufacturingQueue.quantityRequested,
+        })
+        .from(manufacturingQueue)
+        .where(eq(manufacturingQueue.id, parseInt(id)))
+        .for('update');
+
+      if (!lockedItem) {
+        throw new Error(`Manufacturing queue item ${id} disappeared inside transaction`);
+      }
+
+      const previousCompleted = lockedItem.quantityCompleted || 0;
+      const newTotalCompleted = previousCompleted + quantityCompleted;
+      const isFullyCompleted = newTotalCompleted >= lockedItem.quantityRequested;
+
+      const [{ existingCount }] = await tx
+        .select({ existingCount: count() })
+        .from(cuttingBuiltPackets)
+        .where(like(cuttingBuiltPackets.barcode, barcodePrefix));
+
+      const createdPackets = [];
+      for (let i = 0; i < quantityCompleted; i++) {
+        const packetNumber = existingCount + i + 1;
+        const barcode = `PKT-${inventoryItem.agPartNumber}-${id}-${packetNumber}-${Date.now()}`;
+
+        const [builtPacket] = await tx
+          .insert(cuttingBuiltPackets)
+          .values({
+            productCategoryId,
+            barcode,
+            packetNumber,
+            buildDate: new Date(),
+            status: 'AVAILABLE',
+            isMixedFabric: false,
+            fabricSourceCount: 0,
+            notes: completionNotes || null,
+            createdBy: completedBy || null,
+          })
+          .returning();
+
+        createdPackets.push(builtPacket);
+      }
+
+      const [updated] = await tx
+        .update(manufacturingQueue)
+        .set({
+          quantityCompleted: newTotalCompleted,
+          status: isFullyCompleted ? 'COMPLETED' : 'IN_PROGRESS',
+          completedAt: isFullyCompleted ? new Date() : null,
+          fabricLot,
+          fabricBatch,
+          fabricRoll,
+          materialDetails,
+          completionNotes,
+          completedBy,
+          updatedAt: new Date(),
+        })
+        .where(eq(manufacturingQueue.id, parseInt(id)))
+        .returning();
+
+      if (!updated) {
+        throw new Error(`Manufacturing queue item ${id} was not updated`);
+      }
+
+      return { updated, createdPackets, isFullyCompleted, newTotalCompleted };
+    });
     
     // Return additional info for partial completions
     res.json({
       ...updated,
+      createdPackets,
       isPartialCompletion: !isFullyCompleted,
-      remainingQuantity: isFullyCompleted ? 0 : quantityRequested - newTotalCompleted,
+      remainingQuantity: isFullyCompleted ? 0 : currentItem.quantityRequested - newTotalCompleted,
     });
   } catch (error) {
     console.error('Error completing manufacturing queue item:', error);

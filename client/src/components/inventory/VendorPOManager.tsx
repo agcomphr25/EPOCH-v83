@@ -3149,6 +3149,12 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
       const orderDate = po.createdAt ? new Date(po.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
       const deliveryDate = po.expectedDeliveryDate ? new Date(po.expectedDeliveryDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
       const lineItemTotal = items.reduce((sum, item) => sum + ((Number(item.quantity) || 0) * (Number(item.unitPrice) || 0)), 0);
+      const escapeHtml = (value: unknown) => String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 
       const htmlContent = `
 <!DOCTYPE html>
@@ -3322,6 +3328,17 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
     tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
     tbody tr:nth-child(even) { background-color: #fafafa; }
     tbody td small { color: #777; font-size: 11px; }
+    .line-note {
+      margin-top: 4px;
+      color: #333;
+      font-size: 11px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+    }
+    .line-note strong {
+      color: #111;
+      font-weight: 700;
+    }
 
     /* ── Totals Box ── */
     .totals-box {
@@ -3510,14 +3527,17 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
         const lineTotal = qty * price;
         return '<tr>' +
           '<td>' + item.lineNumber + '</td>' +
-          '<td>' + (item.supplierPartNumber || '-') + '</td>' +
-          '<td>' + (item.description || '-') +
+          '<td>' + escapeHtml(item.supplierPartNumber || '-') + '</td>' +
+          '<td>' + escapeHtml(item.description || '-') +
+            (item.notes
+              ? '<div class="line-note"><strong>Details:</strong> ' + escapeHtml(item.notes) + '</div>'
+              : '') +
             (item.purchaseQty != null && item.purchaseQty > 0 && item.purchaseUnit
-              ? '<br/><small>(' + Number(item.purchaseQty).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + item.purchaseUnit + ' ordered)</small>'
+              ? '<br/><small>(' + Number(item.purchaseQty).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + escapeHtml(item.purchaseUnit) + ' ordered)</small>'
               : '') +
           '</td>' +
           '<td class="num">' + qty.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '</td>' +
-          '<td>' + (item.vendorUnit || item.uom || '-') + '</td>' +
+          '<td>' + escapeHtml(item.vendorUnit || item.uom || '-') + '</td>' +
           '<td class="num">$' + price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '</td>' +
           '<td class="num">$' + lineTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '</td>' +
         '</tr>';

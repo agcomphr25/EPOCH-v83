@@ -1025,7 +1025,15 @@ export default function VendorPOItemSelector({
                         data-testid={`input-edit-description-${item.id}`}
                       />
                     ) : (
-                      item.description || '-'
+                      <div className="space-y-1">
+                        <div>{item.description || '-'}</div>
+                        {item.notes && (
+                          <div className="rounded border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-900 whitespace-pre-wrap">
+                            <span className="font-medium">Details: </span>
+                            {item.notes}
+                          </div>
+                        )}
+                      </div>
                     )}
                   </TableCell>
                   <TableCell>

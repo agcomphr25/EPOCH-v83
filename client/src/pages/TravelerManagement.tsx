@@ -66,6 +66,7 @@ import {
   ExternalLink,
   StickyNote,
   Link2,
+  RotateCcw,
   X,
 } from 'lucide-react';
 import { Link } from 'wouter';
@@ -479,6 +480,29 @@ export default function TravelerManagement() {
     },
   });
 
+  const reactivateMutation = useMutation({
+    mutationFn: (id: string) =>
+      apiRequest(`/api/travelers/${id}/reactivate`, {
+        method: 'POST',
+        body: JSON.stringify({ reactivatedBy: 'system' }),
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    onSuccess: () => {
+      toast({
+        title: 'Traveler Reactivated',
+        description: 'Traveler is available for production workflow again',
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/travelers'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to reactivate traveler',
+        variant: 'destructive',
+      });
+    },
+  });
+
   const blockMutation = useMutation({
     mutationFn: (data: { id: string; reason: string }) =>
       apiRequest(`/api/travelers/${data.id}/block`, {
@@ -706,6 +730,12 @@ export default function TravelerManagement() {
 
   const handleUnblock = (id: string) => {
     unblockMutation.mutate(id);
+  };
+
+  const handleReactivate = (traveler: Traveler) => {
+    if (confirm(`Reactivate traveler ${traveler.travelerNumber}?`)) {
+      reactivateMutation.mutate(traveler.id);
+    }
   };
 
   const handleDelete = (id: string) => {
@@ -1008,6 +1038,12 @@ export default function TravelerManagement() {
                                 <DropdownMenuItem onClick={() => handleUnblock(traveler.id)}>
                                   <ShieldCheck className="h-4 w-4 mr-2" />
                                   Unblock Traveler
+                                </DropdownMenuItem>
+                              )}
+                              {traveler.status === 'CANCELED' && (
+                                <DropdownMenuItem onClick={() => handleReactivate(traveler)}>
+                                  <RotateCcw className="h-4 w-4 mr-2" />
+                                  Reactivate Traveler
                                 </DropdownMenuItem>
                               )}
                               {!isTerminal && (

@@ -126,6 +126,7 @@ export default function InvoiceDetailPage() {
 
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [allocationDialogOpen, setAllocationDialogOpen] = useState(false);
+  const [isPreviewingPdf, setIsPreviewingPdf] = useState(false);
   const [paymentForm, setPaymentForm] = useState<PaymentFormData>(defaultPaymentForm());
   const [createdPaymentId, setCreatedPaymentId] = useState<string | null>(null);
   const [allocations, setAllocations] = useState<AllocationRow[]>([]);
@@ -144,13 +145,13 @@ export default function InvoiceDetailPage() {
   const { data: packingSlipInfo } = useQuery<any>({
     queryKey: ['/api/p2/packing-slips', invoice?.packingSlipId],
     queryFn: () => fetch(`/api/p2/packing-slips/${invoice.packingSlipId}`, { credentials: 'include' }).then(r => r.ok ? r.json() : null),
-    enabled: !!invoice?.packingSlipId,
+    enabled: !!invoice?.packingSlipId && invoice?.invoiceSource !== 'P1',
   });
 
   const { data: lotInfo } = useQuery<any>({
     queryKey: ['/api/p2/lots', invoice?.lotId],
     queryFn: () => fetch(`/api/p2/lots/${invoice.lotId}`, { credentials: 'include' }).then(r => r.ok ? r.json() : null),
-    enabled: !!invoice?.lotId,
+    enabled: !!invoice?.lotId && invoice?.invoiceSource !== 'P1',
   });
 
   const markPaidMutation = useMutation({
@@ -324,6 +325,56 @@ export default function InvoiceDetailPage() {
     allocateMutation.mutate({ paymentId: createdPaymentId, allocations: items });
   };
 
+  const handlePreviewPdf = async () => {
+    if (!id) return;
+
+    setIsPreviewingPdf(true);
+    const previewWindow = window.open('about:blank', '_blank');
+    if (previewWindow) {
+      previewWindow.opener = null;
+    }
+
+    try {
+      const response = await fetch(`/api/ar-invoices/${id}/pdf`, {
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        let message = 'Failed to generate invoice PDF.';
+        try {
+          const errorBody = await response.clone().json();
+          message = errorBody?.error || errorBody?.message || message;
+        } catch {
+          const text = await response.text().catch(() => '');
+          message = text || message;
+        }
+        throw new Error(message);
+      }
+
+      const blob = await response.blob();
+      const pdfUrl = URL.createObjectURL(blob);
+
+      if (!previewWindow) {
+        window.location.assign(pdfUrl);
+        return;
+      }
+
+      previewWindow.location.href = pdfUrl;
+      window.setTimeout(() => URL.revokeObjectURL(pdfUrl), 60000);
+    } catch (error: any) {
+      if (previewWindow && !previewWindow.closed) {
+        previewWindow.close();
+      }
+      toast({
+        title: 'PDF preview failed',
+        description: error?.message || 'The invoice PDF could not be opened.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsPreviewingPdf(false);
+    }
+  };
+
   const updateAllocation = (index: number, value: string) => {
     setAllocations((prev) => {
       const next = [...prev];
@@ -362,6 +413,8 @@ export default function InvoiceDetailPage() {
 
   const lines = invoice.lines || [];
   const payments = invoice.payments || [];
+  const isP1Invoice = invoice.invoiceSource === 'P1';
+  const sourcePoLabel = invoice.poOverride || invoice.poNumber || invoice.poId;
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
@@ -378,10 +431,13 @@ export default function InvoiceDetailPage() {
           <Button variant="outline" onClick={() => setLocation(`/finance/invoices/${id}/edit`)}>
             <Edit className="mr-2 h-4 w-4" /> Edit
           </Button>
-          <Button variant="outline" asChild>
-            <a href={`/api/ar-invoices/${id}/pdf`} target="_blank" rel="noopener noreferrer">
-              <Printer className="mr-2 h-4 w-4" /> Preview PDF
-            </a>
+          <Button variant="outline" onClick={handlePreviewPdf} disabled={isPreviewingPdf}>
+            {isPreviewingPdf ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Printer className="mr-2 h-4 w-4" />
+            )}
+            {isPreviewingPdf ? 'Opening...' : 'Preview PDF'}
           </Button>
           {['DRAFT', 'REVIEW'].includes(invoice.status) && (
             <Button
@@ -490,6 +546,10 @@ export default function InvoiceDetailPage() {
                   <div className="mt-1">{statusBadge(invoice.status)}</div>
                 </div>
                 <div>
+                  <p className="text-sm text-muted-foreground">Source</p>
+                  <p className="font-medium">{isP1Invoice ? 'P1 PO Invoice' : 'P2 PO Invoice'}</p>
+                </div>
+                <div>
                   <p className="text-sm text-muted-foreground">Invoice Date</p>
                   <p className="font-medium">{formatDate(invoice.invoiceDate)}</p>
                 </div>
@@ -515,7 +575,16 @@ export default function InvoiceDetailPage() {
                   <div>
                     <p className="text-sm font-medium mb-2">Source Documents</p>
                     <div className="flex flex-wrap gap-2">
-                      {invoice.packingSlipId && (
+                      {isP1Invoice && (
+                        <Button variant="outline" size="sm" asChild>
+                          <Link href={`/oem-shipments?search=${encodeURIComponent(sourcePoLabel || '')}`}>
+                            <FileText className="h-3.5 w-3.5 mr-1.5" />
+                            P1 OEM Packing Slip{sourcePoLabel ? `: ${sourcePoLabel}` : ''}
+                            <ExternalLink className="h-3 w-3 ml-1.5 opacity-60" />
+                          </Link>
+                        </Button>
+                      )}
+                      {!isP1Invoice && invoice.packingSlipId && (
                         <Button variant="outline" size="sm" asChild>
                           <Link href={`/p2/packing-slip/${invoice.packingSlipId}`}>
                             <FileText className="h-3.5 w-3.5 mr-1.5" />
@@ -524,7 +593,7 @@ export default function InvoiceDetailPage() {
                           </Link>
                         </Button>
                       )}
-                      {invoice.lotId && (
+                      {!isP1Invoice && invoice.lotId && (
                         <Button variant="outline" size="sm" asChild>
                           <Link href={`/p2/shipments/${invoice.lotId}`}>
                             <FileText className="h-3.5 w-3.5 mr-1.5" />
@@ -535,9 +604,12 @@ export default function InvoiceDetailPage() {
                       )}
                       {(invoice.poOverride || invoice.poId) && (
                         <Button variant="outline" size="sm" asChild>
-                          <Link href={`/p2-control-center?tab=pos&search=${encodeURIComponent(invoice.poOverride || invoice.poNumber || '')}`}>
+                          <Link href={isP1Invoice
+                            ? `/oem-shipments?search=${encodeURIComponent(sourcePoLabel || '')}`
+                            : `/p2-control-center?tab=pos&search=${encodeURIComponent(sourcePoLabel || '')}`}
+                          >
                             <FileText className="h-3.5 w-3.5 mr-1.5" />
-                            PO: {invoice.poOverride || invoice.poNumber || invoice.poId}
+                            {isP1Invoice ? 'P1 PO' : 'P2 PO'}: {sourcePoLabel || invoice.poId}
                             <ExternalLink className="h-3 w-3 ml-1.5 opacity-60" />
                           </Link>
                         </Button>

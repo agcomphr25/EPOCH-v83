@@ -719,9 +719,15 @@ export default function VendorManagement() {
       : trimmed;
   };
 
-  // Opens a vendor PDF URL after a HEAD precheck so users get a clear toast
-  // instead of a blank tab when the underlying object is missing / forbidden /
-  // the storage backend is unavailable.
+  const getStoredAuthHeaders = (): HeadersInit => {
+    const storedToken =
+      localStorage.getItem('sessionToken') || localStorage.getItem('jwtToken');
+    return storedToken ? { Authorization: `Bearer ${storedToken}` } : {};
+  };
+
+  // Opens a vendor PDF through the vendor document API. Fetching same-origin
+  // storage paths first lets localStorage-backed sessions view uploaded PDFs even
+  // when the browser does not attach the session cookie to a new tab.
   const openVendorPdf = async (
     url: string | undefined | null,
     label: string = 'document'
@@ -738,13 +744,8 @@ export default function VendorManagement() {
 
     const viewUrl = getVendorPdfViewUrl(trimmed);
 
-    // Only HEAD-precheck same-origin storage paths (`/objects/...`,
-    // `/uploads/...`) through the vendor document API. For full external URLs (e.g. a legacy
-    // `https://storage.googleapis.com/...` value) HEAD is typically blocked
-    // by CORS or unsupported, so a precheck would produce false negatives.
-    // In that case we just open the URL directly and let the browser handle it.
-    const isSameOriginStoragePath =
-      viewUrl.startsWith('/api/vendors/documents/view');
+    // External URLs are left alone so the browser can handle legacy storage links.
+    const isSameOriginStoragePath = viewUrl.startsWith('/api/vendors/documents/view');
 
     const openDirect = () => {
       const win = window.open(viewUrl, '_blank', 'noopener,noreferrer');
@@ -763,27 +764,45 @@ export default function VendorManagement() {
       return;
     }
 
+    const popup = window.open('about:blank', '_blank');
+    if (!popup) {
+      toast({
+        title: 'Pop-up blocked',
+        description:
+          'Your browser blocked the PDF from opening. Please allow pop-ups for this site and try again.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    popup.opener = null;
+
     let res: Response;
     try {
-      res = await fetch(viewUrl, { method: 'HEAD' });
+      res = await fetch(viewUrl, {
+        credentials: 'include',
+        headers: getStoredAuthHeaders(),
+      });
     } catch {
-      // Network error or HEAD unsupported — fall back to direct open so we
-      // don't block a document that might actually load via GET.
-      openDirect();
+      popup.close();
+      toast({
+        title: 'Unable to open document',
+        description: `A network error occurred while trying to open the ${label}. Please try again.`,
+        variant: 'destructive',
+      });
       return;
     }
 
     if (res.ok) {
-      openDirect();
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(
+        blob.type ? blob : new Blob([blob], { type: 'application/pdf' })
+      );
+      popup.location.href = blobUrl;
+      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
       return;
     }
 
-    // HEAD may legitimately be rejected with 405 / 501 by some object stores
-    // even when GET works fine. Don't block the user — try a direct open.
-    if (res.status === 405 || res.status === 501) {
-      openDirect();
-      return;
-    }
+    popup.close();
 
     if (res.status === 404) {
       toast({

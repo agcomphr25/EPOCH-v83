@@ -145,13 +145,13 @@ export default function InvoiceDetailPage() {
   const { data: packingSlipInfo } = useQuery<any>({
     queryKey: ['/api/p2/packing-slips', invoice?.packingSlipId],
     queryFn: () => fetch(`/api/p2/packing-slips/${invoice.packingSlipId}`, { credentials: 'include' }).then(r => r.ok ? r.json() : null),
-    enabled: !!invoice?.packingSlipId,
+    enabled: !!invoice?.packingSlipId && invoice?.invoiceSource !== 'P1',
   });
 
   const { data: lotInfo } = useQuery<any>({
     queryKey: ['/api/p2/lots', invoice?.lotId],
     queryFn: () => fetch(`/api/p2/lots/${invoice.lotId}`, { credentials: 'include' }).then(r => r.ok ? r.json() : null),
-    enabled: !!invoice?.lotId,
+    enabled: !!invoice?.lotId && invoice?.invoiceSource !== 'P1',
   });
 
   const markPaidMutation = useMutation({
@@ -413,6 +413,8 @@ export default function InvoiceDetailPage() {
 
   const lines = invoice.lines || [];
   const payments = invoice.payments || [];
+  const isP1Invoice = invoice.invoiceSource === 'P1';
+  const sourcePoLabel = invoice.poOverride || invoice.poNumber || invoice.poId;
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
@@ -544,6 +546,10 @@ export default function InvoiceDetailPage() {
                   <div className="mt-1">{statusBadge(invoice.status)}</div>
                 </div>
                 <div>
+                  <p className="text-sm text-muted-foreground">Source</p>
+                  <p className="font-medium">{isP1Invoice ? 'P1 PO Invoice' : 'P2 PO Invoice'}</p>
+                </div>
+                <div>
                   <p className="text-sm text-muted-foreground">Invoice Date</p>
                   <p className="font-medium">{formatDate(invoice.invoiceDate)}</p>
                 </div>
@@ -569,7 +575,16 @@ export default function InvoiceDetailPage() {
                   <div>
                     <p className="text-sm font-medium mb-2">Source Documents</p>
                     <div className="flex flex-wrap gap-2">
-                      {invoice.packingSlipId && (
+                      {isP1Invoice && (
+                        <Button variant="outline" size="sm" asChild>
+                          <Link href={`/oem-shipments?search=${encodeURIComponent(sourcePoLabel || '')}`}>
+                            <FileText className="h-3.5 w-3.5 mr-1.5" />
+                            P1 OEM Packing Slip{sourcePoLabel ? `: ${sourcePoLabel}` : ''}
+                            <ExternalLink className="h-3 w-3 ml-1.5 opacity-60" />
+                          </Link>
+                        </Button>
+                      )}
+                      {!isP1Invoice && invoice.packingSlipId && (
                         <Button variant="outline" size="sm" asChild>
                           <Link href={`/p2/packing-slip/${invoice.packingSlipId}`}>
                             <FileText className="h-3.5 w-3.5 mr-1.5" />
@@ -578,7 +593,7 @@ export default function InvoiceDetailPage() {
                           </Link>
                         </Button>
                       )}
-                      {invoice.lotId && (
+                      {!isP1Invoice && invoice.lotId && (
                         <Button variant="outline" size="sm" asChild>
                           <Link href={`/p2/shipments/${invoice.lotId}`}>
                             <FileText className="h-3.5 w-3.5 mr-1.5" />
@@ -589,9 +604,12 @@ export default function InvoiceDetailPage() {
                       )}
                       {(invoice.poOverride || invoice.poId) && (
                         <Button variant="outline" size="sm" asChild>
-                          <Link href={`/p2-control-center?tab=pos&search=${encodeURIComponent(invoice.poOverride || invoice.poNumber || '')}`}>
+                          <Link href={isP1Invoice
+                            ? `/oem-shipments?search=${encodeURIComponent(sourcePoLabel || '')}`
+                            : `/p2-control-center?tab=pos&search=${encodeURIComponent(sourcePoLabel || '')}`}
+                          >
                             <FileText className="h-3.5 w-3.5 mr-1.5" />
-                            PO: {invoice.poOverride || invoice.poNumber || invoice.poId}
+                            {isP1Invoice ? 'P1 PO' : 'P2 PO'}: {sourcePoLabel || invoice.poId}
                             <ExternalLink className="h-3 w-3 ml-1.5 opacity-60" />
                           </Link>
                         </Button>

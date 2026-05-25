@@ -115,23 +115,38 @@ export default function InvoiceFormPage() {
   const [dueDateManuallySet, setDueDateManuallySet] = useState(false);
   const { toast } = useToast();
 
+  const { data: existingInvoice, isLoading: loadingInvoice } = useQuery<any>({
+    queryKey: ['/api/ar-invoices', editId],
+    enabled: isEditing,
+  });
+
+  const invoiceSource = existingInvoice?.invoiceSource === 'P1' ? 'P1' : 'P2';
+
   const { data: customers = [] } = useQuery<any[]>({
-    queryKey: ['/api/p2-customers-bypass'],
+    queryKey: [invoiceSource === 'P1' ? '/api/customers' : '/api/p2-customers-bypass', invoiceSource],
+    queryFn: async () => {
+      const endpoint = invoiceSource === 'P1' ? '/api/customers' : '/api/p2-customers-bypass';
+      const rows = await apiRequest(endpoint);
+      if (invoiceSource === 'P1') {
+        return (rows || []).map((customer: any) => ({
+          customerId: String(customer.id),
+          customerName: customer.name || customer.company || `Customer ${customer.id}`,
+          paymentTerms: 'NET_30',
+        }));
+      }
+      return rows || [];
+    },
+    enabled: !isEditing || !!existingInvoice,
   });
 
   const { data: customerPos = [], isLoading: loadingPos } = useQuery<{ id: number; poNumber: string; status: string }[]>({
-    queryKey: ['/api/ar-invoices/customer-pos', form.customerId],
+    queryKey: ['/api/ar-invoices/customer-pos', form.customerId, invoiceSource],
     queryFn: async () => {
-      const r = await fetch(`/api/ar-invoices/customer-pos?customerId=${encodeURIComponent(form.customerId)}`, { credentials: 'include' });
+      const r = await fetch(`/api/ar-invoices/customer-pos?customerId=${encodeURIComponent(form.customerId)}&source=${invoiceSource}`, { credentials: 'include' });
       if (!r.ok) throw new Error('Failed to load POs');
       return r.json();
     },
     enabled: !!form.customerId,
-  });
-
-  const { data: existingInvoice, isLoading: loadingInvoice } = useQuery<any>({
-    queryKey: ['/api/ar-invoices', editId],
-    enabled: isEditing,
   });
 
   useEffect(() => {

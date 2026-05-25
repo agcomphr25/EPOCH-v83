@@ -1,6 +1,6 @@
 import { PDFDocument, rgb, StandardFonts, type PDFFont } from 'pdf-lib';
 import { db } from '../../db';
-import { arInvoices, arInvoiceLines, p2Customers, p2PurchaseOrders, p2PackingSlips, p2LotNumbers } from '../../schema';
+import { arInvoices, arInvoiceLines, customers, purchaseOrders, p2Customers, p2PurchaseOrders, p2PackingSlips, p2LotNumbers } from '../../schema';
 import { eq, sql } from 'drizzle-orm';
 import { COMPANY_INFO } from '../../../shared/company-config';
 
@@ -54,19 +54,42 @@ function billingAddress(customer: any): string[] {
   ].filter(Boolean);
 }
 
+const invoiceSourceSql = () => sql<string>`
+  CASE WHEN EXISTS (
+    SELECT 1
+    FROM ar_invoice_lines ail
+    WHERE ail.invoice_id = ${arInvoices.id}
+      AND ail.dimension_tags->>'source' = 'p1_oem_packing_slip'
+  ) THEN 'P1' ELSE 'P2' END
+`;
+
 export async function generateArInvoicePdf(invoiceId: string): Promise<Buffer> {
   const [invoice] = await db
     .select({
       id: arInvoices.id,
       customerId: arInvoices.customerId,
-      customerName: p2Customers.customerName,
+      customerName: sql<string | null>`
+        COALESCE(
+          CASE WHEN (${invoiceSourceSql()}) = 'P1' THEN ${customers.name} ELSE ${p2Customers.customerName} END,
+          ${purchaseOrders.customerName},
+          ${p2Customers.customerName}
+        )
+      `,
       invoiceNumber: arInvoices.invoiceNumber,
       invoiceDate: arInvoices.invoiceDate,
       dueDate: arInvoices.dueDate,
       terms: arInvoices.terms,
       poId: arInvoices.poId,
       poOverride: arInvoices.poOverride,
-      poNumber: p2PurchaseOrders.poNumber,
+      poNumber: sql<string | null>`
+        COALESCE(
+          CASE WHEN (${invoiceSourceSql()}) = 'P1' THEN ${purchaseOrders.poNumber} ELSE ${p2PurchaseOrders.poNumber} END,
+          ${arInvoices.poOverride},
+          ${purchaseOrders.poNumber},
+          ${p2PurchaseOrders.poNumber}
+        )
+      `,
+      invoiceSource: invoiceSourceSql(),
       packingSlipId: arInvoices.packingSlipId,
       lotId: arInvoices.lotId,
       subtotal: arInvoices.subtotal,
@@ -78,17 +101,19 @@ export async function generateArInvoicePdf(invoiceId: string): Promise<Buffer> {
       totalAmount: arInvoices.totalAmount,
       customerVisibleNotes: arInvoices.customerVisibleNotes,
       status: arInvoices.status,
-      billingAddress: p2Customers.billingAddress,
-      billingCity: p2Customers.billingCity,
-      billingState: p2Customers.billingState,
-      billingZip: p2Customers.billingZip,
-      contactEmail: p2Customers.contactEmail,
+      billingAddress: sql<string | null>`CASE WHEN (${invoiceSourceSql()}) = 'P1' THEN NULL ELSE ${p2Customers.billingAddress} END`,
+      billingCity: sql<string | null>`CASE WHEN (${invoiceSourceSql()}) = 'P1' THEN NULL ELSE ${p2Customers.billingCity} END`,
+      billingState: sql<string | null>`CASE WHEN (${invoiceSourceSql()}) = 'P1' THEN NULL ELSE ${p2Customers.billingState} END`,
+      billingZip: sql<string | null>`CASE WHEN (${invoiceSourceSql()}) = 'P1' THEN NULL ELSE ${p2Customers.billingZip} END`,
+      contactEmail: sql<string | null>`CASE WHEN (${invoiceSourceSql()}) = 'P1' THEN ${customers.email} ELSE ${p2Customers.contactEmail} END`,
       packingSlipNumber: p2PackingSlips.packingSlipNumber,
       lotNumber: p2LotNumbers.lotNumber,
     })
     .from(arInvoices)
     .leftJoin(p2Customers, eq(arInvoices.customerId, p2Customers.customerId))
     .leftJoin(p2PurchaseOrders, sql`(CASE WHEN ${arInvoices.poId} ~ '^[0-9]+$' THEN ${arInvoices.poId}::integer END) = ${p2PurchaseOrders.id}`)
+    .leftJoin(customers, sql`(CASE WHEN ${arInvoices.customerId} ~ '^[0-9]+$' THEN ${arInvoices.customerId}::integer END) = ${customers.id}`)
+    .leftJoin(purchaseOrders, sql`(CASE WHEN ${arInvoices.poId} ~ '^[0-9]+$' THEN ${arInvoices.poId}::integer END) = ${purchaseOrders.id}`)
     .leftJoin(p2PackingSlips, eq(arInvoices.packingSlipId, p2PackingSlips.id))
     .leftJoin(p2LotNumbers, eq(arInvoices.lotId, p2LotNumbers.id))
     .where(eq(arInvoices.id, invoiceId));

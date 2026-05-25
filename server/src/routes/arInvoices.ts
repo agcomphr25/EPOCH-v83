@@ -6,6 +6,8 @@ import {
   arPaymentAllocations,
   mediaAttachments,
   mediaLibrary,
+  customers,
+  purchaseOrders,
   p2Customers,
   p2CustomerContacts,
   p2LotNumbers,
@@ -76,11 +78,51 @@ const router = Router();
 router.use(authenticateToken);
 router.use(requirePermission('finance.view'));
 
+const invoiceSourceSql = () => sql<string>`
+  CASE WHEN EXISTS (
+    SELECT 1
+    FROM ar_invoice_lines ail
+    WHERE ail.invoice_id = ${arInvoices.id}
+      AND ail.dimension_tags->>'source' = 'p1_oem_packing_slip'
+  ) THEN 'P1' ELSE 'P2' END
+`;
+
+const invoiceCustomerNameSql = () => sql<string | null>`
+  COALESCE(
+    CASE WHEN (${invoiceSourceSql()}) = 'P1' THEN ${customers.name} ELSE ${p2Customers.customerName} END,
+    ${purchaseOrders.customerName},
+    ${p2Customers.customerName}
+  )
+`;
+
+const invoicePoNumberSql = () => sql<string | null>`
+  COALESCE(
+    CASE WHEN (${invoiceSourceSql()}) = 'P1' THEN ${purchaseOrders.poNumber} ELSE ${p2PurchaseOrders.poNumber} END,
+    ${arInvoices.poOverride},
+    ${purchaseOrders.poNumber},
+    ${p2PurchaseOrders.poNumber}
+  )
+`;
+
 router.get('/customer-pos', async (req: Request, res: Response) => {
   try {
-    const { customerId } = req.query;
+    const { customerId, source } = req.query;
     if (!customerId) {
       return res.status(400).json({ error: 'customerId is required' });
+    }
+
+    if (String(source).toUpperCase() === 'P1') {
+      const pos = await db
+        .select({
+          id: purchaseOrders.id,
+          poNumber: purchaseOrders.poNumber,
+          status: purchaseOrders.status,
+        })
+        .from(purchaseOrders)
+        .where(eq(purchaseOrders.customerId, String(customerId)))
+        .orderBy(desc(purchaseOrders.createdAt));
+
+      return res.json(pos);
     }
 
     const pos = await db
@@ -245,7 +287,7 @@ router.get('/', async (req: Request, res: Response) => {
       .select({
         id: arInvoices.id,
         customerId: arInvoices.customerId,
-        customerName: p2Customers.customerName,
+        customerName: invoiceCustomerNameSql(),
         invoiceNumber: arInvoices.invoiceNumber,
         invoiceDate: arInvoices.invoiceDate,
         dueDate: arInvoices.dueDate,
@@ -256,7 +298,8 @@ router.get('/', async (req: Request, res: Response) => {
         terms: arInvoices.terms,
         poId: arInvoices.poId,
         poOverride: arInvoices.poOverride,
-        poNumber: p2PurchaseOrders.poNumber,
+        poNumber: invoicePoNumberSql(),
+        invoiceSource: invoiceSourceSql(),
         notes: arInvoices.notes,
         customerVisibleNotes: arInvoices.customerVisibleNotes,
         internalNotes: arInvoices.internalNotes,
@@ -331,6 +374,8 @@ router.get('/', async (req: Request, res: Response) => {
       .from(arInvoices)
       .leftJoin(p2Customers, eq(arInvoices.customerId, p2Customers.customerId))
       .leftJoin(p2PurchaseOrders, sql`(CASE WHEN ${arInvoices.poId} ~ '^[0-9]+$' THEN ${arInvoices.poId}::integer END) = ${p2PurchaseOrders.id}`)
+      .leftJoin(customers, sql`(CASE WHEN ${arInvoices.customerId} ~ '^[0-9]+$' THEN ${arInvoices.customerId}::integer END) = ${customers.id}`)
+      .leftJoin(purchaseOrders, sql`(CASE WHEN ${arInvoices.poId} ~ '^[0-9]+$' THEN ${arInvoices.poId}::integer END) = ${purchaseOrders.id}`)
       .where(
         and(
           status && status !== 'all' ? eq(arInvoices.status, String(status)) : undefined,
@@ -351,7 +396,7 @@ router.get('/', async (req: Request, res: Response) => {
 const DASHBOARD_INVOICE_SELECT = (invoices: typeof arInvoices, customers: typeof p2Customers, purchaseOrders?: typeof p2PurchaseOrders) => ({
   id: invoices.id,
   customerId: invoices.customerId,
-  customerName: customers.customerName,
+  customerName: invoiceCustomerNameSql(),
   invoiceNumber: invoices.invoiceNumber,
   invoiceDate: invoices.invoiceDate,
   dueDate: invoices.dueDate,
@@ -364,7 +409,8 @@ const DASHBOARD_INVOICE_SELECT = (invoices: typeof arInvoices, customers: typeof
   autoCreated: invoices.autoCreated,
   poId: invoices.poId,
   poOverride: invoices.poOverride,
-  poNumber: purchaseOrders ? purchaseOrders.poNumber : sql<string | null>`null`,
+  poNumber: invoicePoNumberSql(),
+  invoiceSource: invoiceSourceSql(),
   balance: sql<string>`(
     ${invoices.totalAmount}::numeric - COALESCE(
       (
@@ -416,6 +462,8 @@ router.get('/needs-review', async (_req: Request, res: Response) => {
       .from(arInvoices)
       .leftJoin(p2Customers, eq(arInvoices.customerId, p2Customers.customerId))
       .leftJoin(p2PurchaseOrders, sql`(CASE WHEN ${arInvoices.poId} ~ '^[0-9]+$' THEN ${arInvoices.poId}::integer END) = ${p2PurchaseOrders.id}`)
+      .leftJoin(customers, sql`(CASE WHEN ${arInvoices.customerId} ~ '^[0-9]+$' THEN ${arInvoices.customerId}::integer END) = ${customers.id}`)
+      .leftJoin(purchaseOrders, sql`(CASE WHEN ${arInvoices.poId} ~ '^[0-9]+$' THEN ${arInvoices.poId}::integer END) = ${purchaseOrders.id}`)
       .where(
         or(
           inArray(arInvoices.status, ['DRAFT', 'REVIEW']),
@@ -438,6 +486,8 @@ router.get('/unsent', async (_req: Request, res: Response) => {
       .from(arInvoices)
       .leftJoin(p2Customers, eq(arInvoices.customerId, p2Customers.customerId))
       .leftJoin(p2PurchaseOrders, sql`(CASE WHEN ${arInvoices.poId} ~ '^[0-9]+$' THEN ${arInvoices.poId}::integer END) = ${p2PurchaseOrders.id}`)
+      .leftJoin(customers, sql`(CASE WHEN ${arInvoices.customerId} ~ '^[0-9]+$' THEN ${arInvoices.customerId}::integer END) = ${customers.id}`)
+      .leftJoin(purchaseOrders, sql`(CASE WHEN ${arInvoices.poId} ~ '^[0-9]+$' THEN ${arInvoices.poId}::integer END) = ${purchaseOrders.id}`)
       .where(
         and(
           eq(arInvoices.status, 'POSTED'),
@@ -459,6 +509,8 @@ router.get('/disputed', async (_req: Request, res: Response) => {
       .from(arInvoices)
       .leftJoin(p2Customers, eq(arInvoices.customerId, p2Customers.customerId))
       .leftJoin(p2PurchaseOrders, sql`(CASE WHEN ${arInvoices.poId} ~ '^[0-9]+$' THEN ${arInvoices.poId}::integer END) = ${p2PurchaseOrders.id}`)
+      .leftJoin(customers, sql`(CASE WHEN ${arInvoices.customerId} ~ '^[0-9]+$' THEN ${arInvoices.customerId}::integer END) = ${customers.id}`)
+      .leftJoin(purchaseOrders, sql`(CASE WHEN ${arInvoices.poId} ~ '^[0-9]+$' THEN ${arInvoices.poId}::integer END) = ${purchaseOrders.id}`)
       .where(
         and(
           eq(arInvoices.isDisputed, true),
@@ -528,14 +580,15 @@ router.get('/:id', async (req: Request, res: Response) => {
       .select({
         id: arInvoices.id,
         customerId: arInvoices.customerId,
-        customerName: p2Customers.customerName,
+        customerName: invoiceCustomerNameSql(),
         invoiceNumber: arInvoices.invoiceNumber,
         invoiceDate: arInvoices.invoiceDate,
         dueDate: arInvoices.dueDate,
         terms: arInvoices.terms,
         poId: arInvoices.poId,
         poOverride: arInvoices.poOverride,
-        poNumber: p2PurchaseOrders.poNumber,
+        poNumber: invoicePoNumberSql(),
+        invoiceSource: invoiceSourceSql(),
         packingSlipId: arInvoices.packingSlipId,
         lotId: arInvoices.lotId,
         pricingMismatch: arInvoices.pricingMismatch,
@@ -616,6 +669,8 @@ router.get('/:id', async (req: Request, res: Response) => {
       .from(arInvoices)
       .leftJoin(p2Customers, eq(arInvoices.customerId, p2Customers.customerId))
       .leftJoin(p2PurchaseOrders, sql`(CASE WHEN ${arInvoices.poId} ~ '^[0-9]+$' THEN ${arInvoices.poId}::integer END) = ${p2PurchaseOrders.id}`)
+      .leftJoin(customers, sql`(CASE WHEN ${arInvoices.customerId} ~ '^[0-9]+$' THEN ${arInvoices.customerId}::integer END) = ${customers.id}`)
+      .leftJoin(purchaseOrders, sql`(CASE WHEN ${arInvoices.poId} ~ '^[0-9]+$' THEN ${arInvoices.poId}::integer END) = ${purchaseOrders.id}`)
       .where(eq(arInvoices.id, id));
 
     if (!invoice) {

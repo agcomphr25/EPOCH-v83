@@ -126,6 +126,7 @@ export default function InvoiceDetailPage() {
 
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [allocationDialogOpen, setAllocationDialogOpen] = useState(false);
+  const [isPreviewingPdf, setIsPreviewingPdf] = useState(false);
   const [paymentForm, setPaymentForm] = useState<PaymentFormData>(defaultPaymentForm());
   const [createdPaymentId, setCreatedPaymentId] = useState<string | null>(null);
   const [allocations, setAllocations] = useState<AllocationRow[]>([]);
@@ -324,6 +325,56 @@ export default function InvoiceDetailPage() {
     allocateMutation.mutate({ paymentId: createdPaymentId, allocations: items });
   };
 
+  const handlePreviewPdf = async () => {
+    if (!id) return;
+
+    setIsPreviewingPdf(true);
+    const previewWindow = window.open('about:blank', '_blank');
+    if (previewWindow) {
+      previewWindow.opener = null;
+    }
+
+    try {
+      const response = await fetch(`/api/ar-invoices/${id}/pdf`, {
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        let message = 'Failed to generate invoice PDF.';
+        try {
+          const errorBody = await response.clone().json();
+          message = errorBody?.error || errorBody?.message || message;
+        } catch {
+          const text = await response.text().catch(() => '');
+          message = text || message;
+        }
+        throw new Error(message);
+      }
+
+      const blob = await response.blob();
+      const pdfUrl = URL.createObjectURL(blob);
+
+      if (!previewWindow) {
+        window.location.assign(pdfUrl);
+        return;
+      }
+
+      previewWindow.location.href = pdfUrl;
+      window.setTimeout(() => URL.revokeObjectURL(pdfUrl), 60000);
+    } catch (error: any) {
+      if (previewWindow && !previewWindow.closed) {
+        previewWindow.close();
+      }
+      toast({
+        title: 'PDF preview failed',
+        description: error?.message || 'The invoice PDF could not be opened.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsPreviewingPdf(false);
+    }
+  };
+
   const updateAllocation = (index: number, value: string) => {
     setAllocations((prev) => {
       const next = [...prev];
@@ -378,10 +429,13 @@ export default function InvoiceDetailPage() {
           <Button variant="outline" onClick={() => setLocation(`/finance/invoices/${id}/edit`)}>
             <Edit className="mr-2 h-4 w-4" /> Edit
           </Button>
-          <Button variant="outline" asChild>
-            <a href={`/api/ar-invoices/${id}/pdf`} target="_blank" rel="noopener noreferrer">
-              <Printer className="mr-2 h-4 w-4" /> Preview PDF
-            </a>
+          <Button variant="outline" onClick={handlePreviewPdf} disabled={isPreviewingPdf}>
+            {isPreviewingPdf ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Printer className="mr-2 h-4 w-4" />
+            )}
+            {isPreviewingPdf ? 'Opening...' : 'Preview PDF'}
           </Button>
           {['DRAFT', 'REVIEW'].includes(invoice.status) && (
             <Button

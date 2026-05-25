@@ -34,6 +34,7 @@ import { SalesOrderModal } from '@/components/SalesOrderModal';
 import TicketBadge, { useOrderTicketCounts } from '@/components/TicketBadge';
 import KickbackReportModal from '@/components/KickbackReportModal';
 import OrderActionButtons from '@/components/OrderActionButtons';
+import DepartmentOrderNotes from '@/components/DepartmentOrderNotes';
 
 // ── Due-date bucket colours ───────────────────────────────────────────────────
 const BUCKET_STYLES: Record<
@@ -398,6 +399,8 @@ export default function FinishQueuePage() {
             <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
               {getModelDisplayName(order.modelId)}
             </div>
+
+            <DepartmentOrderNotes notes={order.notes} />
 
             {/* Action row */}
             <div className="flex items-center gap-2 flex-wrap">

@@ -34,6 +34,7 @@ import { LinkedOrderIndicator } from '@/components/LinkedOrderIndicator';
 import TicketBadge, { useOrderTicketCounts } from '@/components/TicketBadge';
 import { LinkedOrdersManager } from '@/components/LinkedOrdersManager';
 import KickbackReportModal from '@/components/KickbackReportModal';
+import DepartmentOrderNotes from '@/components/DepartmentOrderNotes';
 
 export default function ShippingQueuePage() {
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
@@ -1466,6 +1467,8 @@ export default function ShippingQueuePage() {
                 </div>
               )}
             </div>
+
+            <DepartmentOrderNotes notes={order.notes} />
 
             {/* Shipping Address */}
             <div className="space-y-1 text-sm">

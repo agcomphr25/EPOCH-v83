@@ -871,6 +871,33 @@ const productionOrdersColumns = {
   itemCode: productionOrders.itemCode,
 };
 
+type P1OrderNoteParts = {
+  productionOrderNotes?: string | null;
+  poItemProductionNotes?: string | null;
+  poItemNotes?: string | null;
+  poNotes?: string | null;
+};
+
+function combineP1OrderNotes(parts: P1OrderNoteParts): string | null {
+  const seen = new Set<string>();
+  const notes = [
+    parts.productionOrderNotes,
+    parts.poItemProductionNotes,
+    parts.poItemNotes,
+    parts.poNotes,
+  ]
+    .map((note) => (note ?? '').trim())
+    .filter((note) => {
+      if (!note) return false;
+      const key = note.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+  return notes.length > 0 ? notes.join('\n\n') : null;
+}
+
 // modify the interface with any CRUD methods
 // you might need
 
@@ -4123,12 +4150,29 @@ export class DatabaseStorage implements IStorage {
     // Get purchase order items for P1 PO item name lookup
     const poItems = await db.select({
       id: purchaseOrderItems.id,
+      poId: purchaseOrderItems.poId,
       itemName: purchaseOrderItems.itemName,
       stockModelId: purchaseOrderItems.stockModelId,
+      productionNotes: purchaseOrderItems.productionNotes,
+      notes: purchaseOrderItems.notes,
     }).from(purchaseOrderItems);
     const poItemMap = new Map(
       poItems.map((poi) => [poi.id.toString(), stockModelMap.get(poi.stockModelId || '') || poi.itemName || poi.id.toString()])
     );
+    const poItemNotesMap = new Map(
+      poItems.map((poi) => [
+        poi.id.toString(),
+        {
+          poId: poi.poId,
+          productionNotes: poi.productionNotes,
+          notes: poi.notes,
+        },
+      ])
+    );
+    const p1PoNotesRows = await db
+      .select({ id: purchaseOrders.id, notes: purchaseOrders.notes })
+      .from(purchaseOrders);
+    const p1PoNotesMap = new Map(p1PoNotesRows.map((po) => [po.id, po.notes]));
 
     // Get P2 purchase order items for P2 PO item name lookup
     const p2PoItems = await db.select({
@@ -4235,6 +4279,13 @@ export class DatabaseStorage implements IStorage {
       // Look up the proper item name — prefer the stock model display name (from specifications.stockModel),
       // then fall back to the FK-based poItemMap lookup, then itemName, then itemId
       const resolvedItemName = stockModelMap.get(derivedModelId) || p2PoItemMap.get(po.p2PoItemId?.toString() || '') || poItemMap.get(po.itemId?.toString() || '') || p2PoItemMap.get(po.itemId?.toString() || '') || po.itemName || po.itemId || 'Unknown Product';
+      const poItemNotes = po.poItemId ? poItemNotesMap.get(String(po.poItemId)) : undefined;
+      const orderNotes = combineP1OrderNotes({
+        productionOrderNotes: po.notes,
+        poItemProductionNotes: poItemNotes?.productionNotes,
+        poItemNotes: poItemNotes?.notes,
+        poNotes: p1PoNotesMap.get(po.poId),
+      });
 
       // If modelId is still numeric or empty, attempt match from resolvedItemName
       if (!derivedModelId || /^\d+$/.test(String(derivedModelId))) {
@@ -4285,7 +4336,11 @@ export class DatabaseStorage implements IStorage {
         features: Object.keys(mappedFeatures).length > 0 ? mappedFeatures : null,
         featureQuantities: null,
         discountCode: null,
-        notes: po.notes,
+        notes: orderNotes,
+        productionOrderNotes: po.notes,
+        poItemProductionNotes: poItemNotes?.productionNotes ?? null,
+        poItemNotes: poItemNotes?.notes ?? null,
+        poNotes: p1PoNotesMap.get(po.poId) ?? null,
         customDiscountType: null,
         customDiscountValue: 0,
         showCustomDiscount: false,
@@ -6081,6 +6136,29 @@ export class DatabaseStorage implements IStorage {
         allStockModels.map((sm) => [sm.id, sm.displayName || sm.name])
       );
 
+      const poItems = await db
+        .select({
+          id: purchaseOrderItems.id,
+          poId: purchaseOrderItems.poId,
+          productionNotes: purchaseOrderItems.productionNotes,
+          notes: purchaseOrderItems.notes,
+        })
+        .from(purchaseOrderItems);
+      const poItemNotesMap = new Map(
+        poItems.map((poi) => [
+          poi.id.toString(),
+          {
+            poId: poi.poId,
+            productionNotes: poi.productionNotes,
+            notes: poi.notes,
+          },
+        ])
+      );
+      const p1PoNotesRows = await db
+        .select({ id: purchaseOrders.id, notes: purchaseOrders.notes })
+        .from(purchaseOrders);
+      const p1PoNotesMap = new Map(p1PoNotesRows.map((po) => [po.id, po.notes]));
+
       // Enrich orders with customer names and stock model display names
       const enrichedOrders = orders.map((order) => ({
         ...order,
@@ -6136,6 +6214,13 @@ export class DatabaseStorage implements IStorage {
             Object.assign(mappedFeatures, parsedSpecs.features);
           }
         }
+        const poItemNotes = po.poItemId ? poItemNotesMap.get(String(po.poItemId)) : undefined;
+        const orderNotes = combineP1OrderNotes({
+          productionOrderNotes: po.notes,
+          poItemProductionNotes: poItemNotes?.productionNotes,
+          poItemNotes: poItemNotes?.notes,
+          poNotes: p1PoNotesMap.get(po.poId),
+        });
         
         return {
           id: po.id,
@@ -6159,7 +6244,11 @@ export class DatabaseStorage implements IStorage {
           features: Object.keys(mappedFeatures).length > 0 ? mappedFeatures : null,
           featureQuantities: null,
         discountCode: null,
-        notes: po.notes,
+        notes: orderNotes,
+        productionOrderNotes: po.notes,
+        poItemProductionNotes: poItemNotes?.productionNotes ?? null,
+        poItemNotes: poItemNotes?.notes ?? null,
+        poNotes: p1PoNotesMap.get(po.poId) ?? null,
         customDiscountType: null,
         customDiscountValue: 0,
         showCustomDiscount: false,

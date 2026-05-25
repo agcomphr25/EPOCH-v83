@@ -71,6 +71,7 @@ import { OrderSearchBox } from '@/components/OrderSearchBox';
 import { SalesOrderModal } from '@/components/SalesOrderModal';
 import TicketBadge, { useOrderTicketCounts } from '@/components/TicketBadge';
 import OrderActionButtons from '@/components/OrderActionButtons';
+import DepartmentOrderNotes from '@/components/DepartmentOrderNotes';
 import { deriveOrderLabels, logBarcodeDebug } from '@/utils/deriveOrderLabels';
 
 // Kickback form validation schema
@@ -999,6 +1000,7 @@ export default function BarcodeQueuePage() {
                             {hasHeavyFill && <Badge variant="outline" className="text-xs border-orange-600 text-orange-700 bg-orange-50 font-semibold">Heavy Fill</Badge>}
                             {hasADL && <Badge variant="outline" className="text-xs border-violet-600 text-violet-700 bg-violet-50 font-semibold">ADL</Badge>}
                           </div>
+                          <DepartmentOrderNotes notes={order.notes} />
                           <div className="flex gap-1 pt-1">
                             <Link href={`/order-entry?draft=${order.orderId}`}>
                               <Button variant="outline" size="sm" className="h-6 w-6 p-0" title="View/Edit Order"><Edit className="h-3 w-3" /></Button>
@@ -1419,6 +1421,8 @@ export default function BarcodeQueuePage() {
                                             </div>
                                           )}
 
+                                          <DepartmentOrderNotes notes={order.notes} />
+
                                           {/* Action Buttons */}
                                           <div className="flex gap-1 pt-2">
                                             <Link
@@ -1703,6 +1707,8 @@ export default function BarcodeQueuePage() {
                                           FB: {order.fbOrderNumber}
                                         </div>
                                       )}
+
+                                      <DepartmentOrderNotes notes={order.notes} />
                                     </div>
                                   </div>
                                 </CardContent>

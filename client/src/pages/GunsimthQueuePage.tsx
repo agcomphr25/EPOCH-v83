@@ -35,6 +35,7 @@ import { SalesOrderModal } from '@/components/SalesOrderModal';
 import { isOrderInDepartment } from '@/lib/departmentUtils';
 import KickbackReportModal from '@/components/KickbackReportModal';
 import OrderActionButtons from '@/components/OrderActionButtons';
+import DepartmentOrderNotes from '@/components/DepartmentOrderNotes';
 
 export default function GunsimthQueuePage() {
   // Multi-select state
@@ -678,6 +679,7 @@ export default function GunsimthQueuePage() {
                                 ))}
                               </div>
                             )}
+                            <DepartmentOrderNotes notes={order.notes} />
                             <OrderActionButtons
                               orderId={order.orderId}
                               onSalesOrderView={handleSalesOrderView}
@@ -771,6 +773,7 @@ export default function GunsimthQueuePage() {
                                 ))}
                               </div>
                             )}
+                            <DepartmentOrderNotes notes={order.notes} />
                             <OrderActionButtons
                               orderId={order.orderId}
                               onSalesOrderView={handleSalesOrderView}
@@ -861,6 +864,7 @@ export default function GunsimthQueuePage() {
                                 ))}
                               </div>
                             )}
+                            <DepartmentOrderNotes notes={order.notes} />
                             <OrderActionButtons
                               orderId={order.orderId}
                               onSalesOrderView={handleSalesOrderView}
@@ -951,6 +955,7 @@ export default function GunsimthQueuePage() {
                                 ))}
                               </div>
                             )}
+                            <DepartmentOrderNotes notes={order.notes} />
                             <OrderActionButtons
                               orderId={order.orderId}
                               onSalesOrderView={handleSalesOrderView}
@@ -1041,6 +1046,7 @@ export default function GunsimthQueuePage() {
                                 ))}
                               </div>
                             )}
+                            <DepartmentOrderNotes notes={order.notes} />
                             <OrderActionButtons
                               orderId={order.orderId}
                               onSalesOrderView={handleSalesOrderView}
@@ -1131,6 +1137,7 @@ export default function GunsimthQueuePage() {
                                 ))}
                               </div>
                             )}
+                            <DepartmentOrderNotes notes={order.notes} />
                             <OrderActionButtons
                               orderId={order.orderId}
                               onSalesOrderView={handleSalesOrderView}
@@ -1219,6 +1226,7 @@ export default function GunsimthQueuePage() {
                                 ))}
                               </div>
                             )}
+                            <DepartmentOrderNotes notes={order.notes} />
                             <OrderActionButtons
                               orderId={order.orderId}
                               onSalesOrderView={handleSalesOrderView}

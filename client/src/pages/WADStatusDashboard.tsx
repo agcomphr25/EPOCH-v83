@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   Clock,
+  FileText,
   FileWarning,
   LayoutDashboard,
   Loader2,
@@ -334,19 +335,32 @@ export default function WADStatusDashboard() {
                           </div>
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button
-                            size="sm"
-                            onClick={() => ensureMutation.mutate(row.projectId)}
-                            disabled={ensureMutation.isPending}
-                            data-testid={`button-author-wad-${row.projectId}`}
-                          >
-                            {ensureMutation.isPending && ensureMutation.variables === row.projectId ? (
-                              <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                            ) : (
-                              <Wand2 className="h-3.5 w-3.5 mr-1" />
+                          <div className="flex justify-end gap-2">
+                            {row.latestPwoId && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => navigate(`/work-orders/${row.latestPwoId}/wad-summary`)}
+                                data-testid={`button-wad-summary-${row.projectId}`}
+                              >
+                                <FileText className="h-3.5 w-3.5 mr-1" />
+                                Summary
+                              </Button>
                             )}
-                            {actionLabel}
-                          </Button>
+                            <Button
+                              size="sm"
+                              onClick={() => ensureMutation.mutate(row.projectId)}
+                              disabled={ensureMutation.isPending}
+                              data-testid={`button-author-wad-${row.projectId}`}
+                            >
+                              {ensureMutation.isPending && ensureMutation.variables === row.projectId ? (
+                                <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                              ) : (
+                                <Wand2 className="h-3.5 w-3.5 mr-1" />
+                              )}
+                              {actionLabel}
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     );

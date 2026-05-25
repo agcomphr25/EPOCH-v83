@@ -118,6 +118,9 @@ interface ApprovalRecord {
   displayName: string;
   decision: 'APPROVED' | 'REJECTED';
   comments: string | null;
+  signature?: string | null;
+  signatureMeaning?: string | null;
+  signedAt?: string | null;
   timestamp: string;
 }
 
@@ -410,7 +413,7 @@ export default function WADWizard({ wadId, onClose, initialStep = null }: WADWiz
   });
 
   const approveMutation = useMutation({
-    mutationFn: async (payload: { role: string; displayName: string; decision: 'APPROVED' | 'REJECTED'; comments?: string }) => {
+    mutationFn: async (payload: { role: string; displayName: string; decision: 'APPROVED' | 'REJECTED'; comments?: string; signature: string }) => {
       return apiRequest(`/api/work-orders/production/${wadId}/wizard/approve`, {
         method: 'POST',
         body: JSON.stringify(payload),
@@ -2334,7 +2337,7 @@ function Step11Approvals({ approvals, assignments, onAssignmentsChange, wadId, a
   wadId: string;
   approveMutation: any;
 }) {
-  const [forms, setForms] = useState<Record<string, { displayName: string; decision: 'APPROVED' | 'REJECTED'; comments: string }>>({});
+  const [forms, setForms] = useState<Record<string, { displayName: string; decision: 'APPROVED' | 'REJECTED'; comments: string; signature: string }>>({});
 
   const { data: employees = [] } = useQuery<Array<{ id: number; name: string; role?: string | null; isActive?: boolean | null }>>({
     queryKey: ['/api/employees'],
@@ -2348,9 +2351,9 @@ function Step11Approvals({ approvals, assignments, onAssignmentsChange, wadId, a
 
   const submit = (role: string) => {
     const f = forms[role];
-    if (!f?.displayName) return;
-    approveMutation.mutate({ role, displayName: f.displayName, decision: f.decision, comments: f.comments });
-    setForms(prev => ({ ...prev, [role]: { displayName: '', decision: 'APPROVED', comments: '' } }));
+    if (!f?.displayName || !f?.signature) return;
+    approveMutation.mutate({ role, displayName: f.displayName, decision: f.decision, comments: f.comments, signature: f.signature });
+    setForms(prev => ({ ...prev, [role]: { displayName: '', decision: 'APPROVED', comments: '', signature: '' } }));
   };
 
   const handleAssign = (roleKey: string, value: string) => {
@@ -2383,7 +2386,7 @@ function Step11Approvals({ approvals, assignments, onAssignmentsChange, wadId, a
       <div className="space-y-3">
         {REQUIRED_APPROVAL_ROLES.map(role => {
           const existing = getApproval(role.key);
-          const f = forms[role.key] ?? { displayName: '', decision: 'APPROVED' as const, comments: '' };
+          const f = forms[role.key] ?? { displayName: '', decision: 'APPROVED' as const, comments: '', signature: '' };
           const assignment = assignments[role.key];
           return (
             <Card key={role.key} className="p-3" data-testid={`card-approval-${role.key}`}>
@@ -2435,7 +2438,8 @@ function Step11Approvals({ approvals, assignments, onAssignmentsChange, wadId, a
               </div>
               {existing ? (
                 <div className="text-xs text-muted-foreground">
-                  Recorded {new Date(existing.timestamp).toLocaleDateString()}
+                  Recorded {new Date(existing.signedAt ?? existing.timestamp).toLocaleDateString()}
+                  {existing.signature && <span> - Signed: {existing.signature}</span>}
                   {existing.comments && <span> · "{existing.comments}"</span>}
                 </div>
               ) : (
@@ -2458,13 +2462,19 @@ function Step11Approvals({ approvals, assignments, onAssignmentsChange, wadId, a
                   <Input
                     value={f.comments}
                     onChange={e => setForm(role.key, { comments: e.target.value })}
-                    placeholder="Comments (optional)"
+                    placeholder={f.decision === 'REJECTED' ? 'Denial notes required' : 'Comments (optional)'}
+                    className="h-8 text-sm"
+                  />
+                  <Input
+                    value={f.signature}
+                    onChange={e => setForm(role.key, { signature: e.target.value })}
+                    placeholder="Typed signature *"
                     className="h-8 text-sm"
                   />
                   <Button
                     size="sm"
                     onClick={() => submit(role.key)}
-                    disabled={!f.displayName || approveMutation.isPending}
+                    disabled={!f.displayName || !f.signature || (f.decision === 'REJECTED' && !f.comments.trim()) || approveMutation.isPending}
                     className={f.decision === 'REJECTED' ? 'bg-red-600 hover:bg-red-700 text-white' : ''}
                     data-testid={`button-record-${role.key}`}
                   >

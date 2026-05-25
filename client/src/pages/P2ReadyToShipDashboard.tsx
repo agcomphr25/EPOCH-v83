@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useCallback } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -30,7 +30,10 @@ import {
   ChevronDown,
   ChevronRight,
   ListChecks,
+  RotateCcw,
 } from 'lucide-react';
+import { apiRequest, queryClient } from '@/lib/queryClient';
+import { useToast } from '@/hooks/use-toast';
 
 type SerializedUnit = {
   id: string;
@@ -71,13 +74,46 @@ type CustomerSummary = {
 
 export default function P2ReadyToShipDashboard() {
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
   const [search, setSearch] = useState('');
   const [expandedPOs, setExpandedPOs] = useState<Set<string>>(new Set());
   const [selectedUnits, setSelectedUnits] = useState<Record<string, Set<string>>>({});
 
+  const { data: currentUser } = useQuery<{ username: string } | null>({
+    queryKey: ['/api/auth/session'],
+  });
+
   const { data: units = [], isLoading, refetch } = useQuery<SerializedUnit[]>({
     queryKey: ['/api/p2/serialized-items/shipping-queue'],
     refetchInterval: 30000,
+  });
+
+  const unfinalizeMutation = useMutation({
+    mutationFn: async ({ unitIds, reason }: { unitIds: string[]; reason?: string }) =>
+      apiRequest('/api/p2/serialized-items/unfinalize', {
+        method: 'POST',
+        body: {
+          serializedItemIds: unitIds,
+          reason,
+          performedBy: currentUser?.username || 'ready-to-ship-dashboard',
+        },
+      }),
+    onSuccess: (result: any) => {
+      toast({
+        title: 'Units unfinalized',
+        description: `${result?.updatedCount ?? 0} unit${result?.updatedCount === 1 ? '' : 's'} moved back to Needs Finalization.`,
+      });
+      setSelectedUnits({});
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/serialized-items/shipping-queue'] });
+      refetch();
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Unable to unfinalize',
+        description: error.message || 'The selected units could not be unfinalized.',
+        variant: 'destructive',
+      });
+    },
   });
 
   // Derive groupings
@@ -152,6 +188,19 @@ export default function P2ReadyToShipDashboard() {
     if (!sel || sel.size === 0) return;
     const ids = Array.from(sel).join(',');
     setLocation(`/p2-control-center?tab=shipping&po=${encodeURIComponent(po.poNumber)}&units=${encodeURIComponent(ids)}`);
+  };
+
+  const handleUnfinalize = (po: POSummary, unitIds: string[]) => {
+    if (unitIds.length === 0) return;
+    const confirmed = window.confirm(
+      `Unfinalize ${unitIds.length} ready unit${unitIds.length === 1 ? '' : 's'} for PO ${po.poNumber}? They will move back to Needs Finalization so the SKU/drawing can be corrected before shipping.`
+    );
+    if (!confirmed) return;
+
+    unfinalizeMutation.mutate({
+      unitIds,
+      reason: `Ready-to-ship correction for PO ${po.poNumber}`,
+    });
   };
 
   const toggleUnit = (poNumber: string, unitId: string) => {
@@ -387,14 +436,30 @@ export default function P2ReadyToShipDashboard() {
                         ) : (
                           <>
                             {po.readyCount > 0 && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-7 text-xs border-blue-300 text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-400 dark:hover:bg-blue-900/20"
-                                onClick={() => handleSelectItems(po.poNumber)}
-                              >
-                                <ListChecks className="h-3 w-3 mr-1" />Select Items
-                              </Button>
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-xs border-amber-300 text-amber-700 hover:bg-amber-50"
+                                  onClick={() => handleUnfinalize(po, po.readyUnits.map((unit) => unit.id))}
+                                  disabled={unfinalizeMutation.isPending}
+                                >
+                                  {unfinalizeMutation.isPending ? (
+                                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                  ) : (
+                                    <RotateCcw className="h-3 w-3 mr-1" />
+                                  )}
+                                  Unfinalize Ready
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-xs border-blue-300 text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                                  onClick={() => handleSelectItems(po.poNumber)}
+                                >
+                                  <ListChecks className="h-3 w-3 mr-1" />Select Items
+                                </Button>
+                              </>
                             )}
                             <Button
                               size="sm"
@@ -481,6 +546,22 @@ export default function P2ReadyToShipDashboard() {
                               {selCount} unit{selCount !== 1 ? 's' : ''} selected
                             </span>
                             <div className="flex items-center gap-2">
+                              {selCount > 0 && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-xs border-amber-300 text-amber-700 hover:bg-amber-50"
+                                  onClick={() => handleUnfinalize(po, Array.from(sel))}
+                                  disabled={unfinalizeMutation.isPending}
+                                >
+                                  {unfinalizeMutation.isPending ? (
+                                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                  ) : (
+                                    <RotateCcw className="h-3 w-3 mr-1" />
+                                  )}
+                                  Unfinalize Selected
+                                </Button>
+                              )}
                               {hasPartialSelection && (
                                 <Button
                                   size="sm"

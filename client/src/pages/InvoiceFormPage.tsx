@@ -121,6 +121,7 @@ export default function InvoiceFormPage() {
   });
 
   const invoiceSource = existingInvoice?.invoiceSource === 'P1' ? 'P1' : 'P2';
+  const isP1Invoice = isEditing && invoiceSource === 'P1';
 
   const { data: customers = [] } = useQuery<any[]>({
     queryKey: [invoiceSource === 'P1' ? '/api/customers' : '/api/p2-customers-bypass', invoiceSource],
@@ -136,7 +137,7 @@ export default function InvoiceFormPage() {
       }
       return rows || [];
     },
-    enabled: !isEditing || !!existingInvoice,
+    enabled: !isP1Invoice && (!isEditing || !!existingInvoice),
   });
 
   const { data: customerPos = [], isLoading: loadingPos } = useQuery<{ id: number; poNumber: string; status: string }[]>({
@@ -146,7 +147,7 @@ export default function InvoiceFormPage() {
       if (!r.ok) throw new Error('Failed to load POs');
       return r.json();
     },
-    enabled: !!form.customerId,
+    enabled: !!form.customerId && !isP1Invoice,
   });
 
   useEffect(() => {
@@ -250,7 +251,7 @@ export default function InvoiceFormPage() {
 
   const saveMutation = useMutation({
     mutationFn: async (data: InvoiceFormData) => {
-      const payload = {
+      const payload: any = {
         customerId: data.customerId,
         invoiceNumber: data.invoiceNumber,
         invoiceDate: data.invoiceDate,
@@ -272,6 +273,13 @@ export default function InvoiceFormPage() {
           unitPrice: l.unitPrice,
         })),
       };
+
+      if (isP1Invoice) {
+        delete payload.customerId;
+        delete payload.poId;
+        delete payload.poOverride;
+        delete payload.lines;
+      }
 
       if (isEditing) {
         return apiRequest(`/api/ar-invoices/${editId}`, {
@@ -353,18 +361,22 @@ export default function InvoiceFormPage() {
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="customerId">Customer *</Label>
-              <Select value={form.customerId} onValueChange={(v) => updateField('customerId', v)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select customer" />
-                </SelectTrigger>
-                <SelectContent>
-                  {customers.map((c: any) => (
-                    <SelectItem key={c.customerId} value={c.customerId}>
-                      {c.customerName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {isP1Invoice ? (
+                <Input value={existingInvoice?.customerName || form.customerId} readOnly className="bg-muted" />
+              ) : (
+                <Select value={form.customerId} onValueChange={(v) => updateField('customerId', v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select customer" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {customers.map((c: any) => (
+                      <SelectItem key={c.customerId} value={c.customerId}>
+                        {c.customerName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -422,10 +434,13 @@ export default function InvoiceFormPage() {
               <Select
                 value={form.poId}
                 onValueChange={(v) => updateField('poId', v === '__none__' ? '' : v)}
-                disabled={!form.customerId}
+                disabled={!form.customerId || isP1Invoice}
               >
                 <SelectTrigger>
                   <SelectValue placeholder={
+                    isP1Invoice
+                      ? (form.poOverride || existingInvoice?.poNumber || 'Source PO locked')
+                      :
                     !form.customerId
                       ? 'Select a customer first'
                       : loadingPos
@@ -451,6 +466,8 @@ export default function InvoiceFormPage() {
                 value={form.poOverride}
                 onChange={(e) => updateField('poOverride', e.target.value)}
                 placeholder="Manual PO number"
+                readOnly={isP1Invoice}
+                className={isP1Invoice ? 'bg-muted' : undefined}
               />
             </div>
 
@@ -540,7 +557,7 @@ export default function InvoiceFormPage() {
         <Card className="mb-6">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Line Items</CardTitle>
-            <Button type="button" variant="outline" size="sm" onClick={addLine}>
+            <Button type="button" variant="outline" size="sm" onClick={addLine} disabled={isP1Invoice}>
               <Plus className="h-4 w-4 mr-1" />
               Add Line
             </Button>
@@ -564,6 +581,8 @@ export default function InvoiceFormPage() {
                         value={line.description}
                         onChange={(e) => updateLine(index, 'description', e.target.value)}
                         placeholder="Item description"
+                        readOnly={isP1Invoice}
+                        className={isP1Invoice ? 'bg-muted' : undefined}
                       />
                     </TableCell>
                     <TableCell>
@@ -573,6 +592,8 @@ export default function InvoiceFormPage() {
                         step="1"
                         value={line.qty}
                         onChange={(e) => updateLine(index, 'qty', e.target.value)}
+                        readOnly={isP1Invoice}
+                        className={isP1Invoice ? 'bg-muted' : undefined}
                       />
                     </TableCell>
                     <TableCell>
@@ -582,6 +603,8 @@ export default function InvoiceFormPage() {
                         step="0.01"
                         value={line.unitPrice}
                         onChange={(e) => updateLine(index, 'unitPrice', e.target.value)}
+                        readOnly={isP1Invoice}
+                        className={isP1Invoice ? 'bg-muted' : undefined}
                       />
                     </TableCell>
                     <TableCell className="text-right font-medium">
@@ -593,7 +616,7 @@ export default function InvoiceFormPage() {
                         variant="ghost"
                         size="icon"
                         onClick={() => removeLine(index)}
-                        disabled={form.lines.length <= 1}
+                        disabled={isP1Invoice || form.lines.length <= 1}
                       >
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>

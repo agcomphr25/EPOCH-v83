@@ -84,7 +84,10 @@ const invoiceSourceSql = () => sql<string>`
     FROM ar_invoice_lines ail
     WHERE ail.invoice_id = ${arInvoices.id}
       AND ail.dimension_tags->>'source' = 'p1_oem_packing_slip'
-  ) THEN 'P1' ELSE 'P2' END
+  )
+    OR ${arInvoices.notes} ILIKE 'Auto-created from P1 OEM packing slip%'
+    OR ${arInvoices.internalNotes} ILIKE 'Source: P1 OEM shipment%'
+  THEN 'P1' ELSE 'P2' END
 `;
 
 const invoiceCustomerNameSql = () => sql<string | null>`
@@ -103,6 +106,21 @@ const invoicePoNumberSql = () => sql<string | null>`
     ${p2PurchaseOrders.poNumber}
   )
 `;
+
+async function isP1PackingSlipInvoice(invoiceId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: arInvoiceLines.id })
+    .from(arInvoiceLines)
+    .where(
+      and(
+        eq(arInvoiceLines.invoiceId, invoiceId),
+        sql`${arInvoiceLines.dimensionTags}->>'source' = 'p1_oem_packing_slip'`,
+      ),
+    )
+    .limit(1);
+
+  return !!row;
+}
 
 router.get('/customer-pos', async (req: Request, res: Response) => {
   try {
@@ -379,6 +397,7 @@ router.get('/', async (req: Request, res: Response) => {
       .where(
         and(
           status && status !== 'all' ? eq(arInvoices.status, String(status)) : undefined,
+          !status || status === 'all' ? not(eq(arInvoices.status, 'VOID')) : undefined,
           customerId ? eq(arInvoices.customerId, String(customerId)) : undefined,
           search ? ilike(arInvoices.invoiceNumber, `%${String(search)}%`) : undefined,
           safePackingSlipId ? eq(arInvoices.packingSlipId, safePackingSlipId) : undefined,
@@ -433,7 +452,8 @@ router.get('/summary-counts', async (_req: Request, res: Response) => {
     const [needsReviewRow, unsentRow, disputedRow] = await Promise.all([
       db.execute(sql`
         SELECT COUNT(*)::int AS count FROM ar_invoices
-        WHERE status IN ('DRAFT','REVIEW') OR pricing_mismatch = true OR pricing_ambiguous = true
+        WHERE status <> 'VOID'
+          AND (status IN ('DRAFT','REVIEW') OR pricing_mismatch = true OR pricing_ambiguous = true)
       `),
       db.execute(sql`
         SELECT COUNT(*)::int AS count FROM ar_invoices
@@ -465,10 +485,13 @@ router.get('/needs-review', async (_req: Request, res: Response) => {
       .leftJoin(customers, sql`(CASE WHEN ${arInvoices.customerId} ~ '^[0-9]+$' THEN ${arInvoices.customerId}::integer END) = ${customers.id}`)
       .leftJoin(purchaseOrders, sql`(CASE WHEN ${arInvoices.poId} ~ '^[0-9]+$' THEN ${arInvoices.poId}::integer END) = ${purchaseOrders.id}`)
       .where(
-        or(
-          inArray(arInvoices.status, ['DRAFT', 'REVIEW']),
-          eq(arInvoices.pricingMismatch, true),
-          eq(arInvoices.pricingAmbiguous, true),
+        and(
+          not(eq(arInvoices.status, 'VOID')),
+          or(
+            inArray(arInvoices.status, ['DRAFT', 'REVIEW']),
+            eq(arInvoices.pricingMismatch, true),
+            eq(arInvoices.pricingAmbiguous, true),
+          ),
         )
       )
       .orderBy(desc(arInvoices.createdAt));
@@ -846,6 +869,11 @@ router.put('/:id', requirePermission('finance.post_invoice'), async (req: Reques
       return res.status(409).json({ error: 'Invoice is locked' });
     }
 
+    const isP1Invoice =
+      (await isP1PackingSlipInvoice(id)) ||
+      String(existing.notes || '').startsWith('Auto-created from P1 OEM packing slip') ||
+      String(existing.internalNotes || '').startsWith('Source: P1 OEM shipment');
+
     const result = await db.transaction(async (tx) => {
       let subtotal = parseFloat(existing.subtotal);
       let discount = parseFloat(discountAmount ?? existing.discountAmount ?? '0');
@@ -853,7 +881,7 @@ router.put('/:id', requirePermission('finance.post_invoice'), async (req: Reques
       let tax = parseFloat(taxAmount ?? existing.taxAmount);
       let retainage = parseFloat(retainageAmount ?? existing.retainageAmount ?? '0');
 
-      if (lines && Array.isArray(lines)) {
+      if (!isP1Invoice && lines && Array.isArray(lines)) {
         await tx.delete(arInvoiceLines).where(eq(arInvoiceLines.invoiceId, id));
 
         const calculatedLines = lines.map((line: any) => {
@@ -899,13 +927,13 @@ router.put('/:id', requirePermission('finance.post_invoice'), async (req: Reques
       const [updated] = await tx
         .update(arInvoices)
         .set({
-          ...(customerId !== undefined && { customerId }),
+          ...(!isP1Invoice && customerId !== undefined && { customerId }),
           ...(invoiceNumber !== undefined && { invoiceNumber }),
           ...(invoiceDate !== undefined && { invoiceDate }),
           ...(dueDate !== undefined && { dueDate: dueDate || null }),
           ...(terms !== undefined && { terms: terms || null }),
-          ...(poId !== undefined && { poId: poId || null }),
-          ...(poOverride !== undefined && { poOverride: poOverride || null }),
+          ...(!isP1Invoice && poId !== undefined && { poId: poId || null }),
+          ...(!isP1Invoice && poOverride !== undefined && { poOverride: poOverride || null }),
           ...(notes !== undefined && { notes: notes || null }),
           ...(customerVisibleNotes !== undefined && { customerVisibleNotes: customerVisibleNotes || null }),
           ...(internalNotes !== undefined && { internalNotes: internalNotes || null }),

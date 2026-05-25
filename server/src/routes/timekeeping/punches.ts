@@ -1226,7 +1226,7 @@ router.post("/punches", authenticateToken, requireRole('ADMIN', 'OWNER'), h(asyn
   let entry;
 
   const clockInTs = punchedAt ? new Date(punchedAt) : undefined;
-  const actorId = actor.id ?? null;
+  const actorEmployeeId = req.user?.employeeId ?? null;
   const actorLabel = actor.email ?? null;
 
   if (type === 'clock_in') {
@@ -1237,18 +1237,58 @@ router.post("/punches", authenticateToken, requireRole('ADMIN', 'OWNER'), h(asyn
       clockIn: clockInTs,
       chargeCodeId: resolvedChargeCodeId ?? null,
       travelerId: travelerId ?? null,
-      createdBy: actorId,
+      createdBy: actorEmployeeId,
       createdByDisplayName: actorLabel,
     });
   } else if (type === 'clock_out') {
-    entry = await ledger.closeSession(resolvedId, actorId, actorLabel);
+    try {
+      entry = await ledger.closeSession(resolvedId, actorEmployeeId, actorLabel, punchTime);
+    } catch (err: any) {
+      if (err?.code === 'INVALID_CLOCK_OUT') {
+        res.status(409).json({ error: err.message });
+        return;
+      }
+      throw err;
+    }
     if (!entry) { res.status(409).json({ error: 'No open session found for this employee' }); return; }
   } else if (type === 'break_start') {
-    await ledger.closeSession(resolvedId, actorId, actorLabel);
-    entry = await ledger.openSession({ employeeId: resolvedId, source: 'PORTAL', laborClass: 'BREAK', clockIn: clockInTs });
+    try {
+      await ledger.closeSession(resolvedId, actorEmployeeId, actorLabel, punchTime);
+    } catch (err: any) {
+      if (err?.code === 'INVALID_CLOCK_OUT') {
+        res.status(409).json({ error: err.message });
+        return;
+      }
+      throw err;
+    }
+    entry = await ledger.openSession({
+      employeeId: resolvedId,
+      source: 'PORTAL',
+      laborClass: 'BREAK',
+      clockIn: clockInTs,
+      createdBy: actorEmployeeId,
+      createdByDisplayName: actorLabel,
+    });
   } else {
-    await ledger.closeSession(resolvedId, actorId, actorLabel);
-    entry = await ledger.openSession({ employeeId: resolvedId, source: 'PORTAL', laborClass: 'REGULAR', clockIn: clockInTs });
+    try {
+      await ledger.closeSession(resolvedId, actorEmployeeId, actorLabel, punchTime);
+    } catch (err: any) {
+      if (err?.code === 'INVALID_CLOCK_OUT') {
+        res.status(409).json({ error: err.message });
+        return;
+      }
+      throw err;
+    }
+    entry = await ledger.openSession({
+      employeeId: resolvedId,
+      source: 'PORTAL',
+      laborClass: 'REGULAR',
+      clockIn: clockInTs,
+      chargeCodeId: resolvedChargeCodeId ?? null,
+      travelerId: travelerId ?? null,
+      createdBy: actorEmployeeId,
+      createdByDisplayName: actorLabel,
+    });
   }
 
   res.status(201).json(entry);

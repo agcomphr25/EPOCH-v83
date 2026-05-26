@@ -422,11 +422,15 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
   };
 
   const handleGenerateCoC = async (poNumber: string, lotId: string) => {
+    const specialProcessesInput = window.prompt('Special Processes for this CoC', 'N/A');
+    if (specialProcessesInput === null) return;
+    const specialProcesses = specialProcessesInput.trim() || 'N/A';
+
     setGeneratingCertFor(lotId);
     try {
       const cert = await apiRequest('/api/p2/certificates', {
         method: 'POST',
-        body: JSON.stringify({ lotId, createdBy: 'shipping' }),
+        body: JSON.stringify({ lotId, createdBy: 'shipping', specialProcesses }),
       });
       setCreatedShipments((prev) => {
         const list = prev[poNumber] ?? [];

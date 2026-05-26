@@ -34,9 +34,11 @@ interface CertificateData {
   specifications?: any;
   materialCertifications?: any;
   processRecords?: any;
+  specialProcesses?: string;
   inspectionSummary?: InspectionSummary;
   traceabilityData?: any;
   qaMgrName?: string;
+  qaMgrTitle?: string;
   qaMgrSignature?: string;
   qaMgrDate?: string;
   status: string;
@@ -88,6 +90,8 @@ export default function P2CertificateViewer() {
 
   const serialNumbers = (certificate.serialNumbers as string[]) || [];
   const inspectionSummary = certificate.inspectionSummary as any;
+  const qaMgrName = certificate.qaMgrName || certificate.approvedBy || '';
+  const qaMgrTitle = certificate.qaMgrTitle || 'Quality Assurance';
 
   return (
     <div className="container mx-auto px-4 py-6 max-w-4xl">
@@ -110,7 +114,7 @@ export default function P2CertificateViewer() {
         <CardContent className="p-8">
           <div className="flex justify-between items-start mb-6">
             <div>
-              <h1 className="text-2xl font-bold">{COMPANY_INFO.name}</h1>
+              <h1 className="text-2xl font-bold">AG Advanced</h1>
               <p className="text-sm text-gray-600">{COMPANY_INFO.streetAddress}</p>
               <p className="text-sm text-gray-600">{COMPANY_INFO.city}, {COMPANY_INFO.state} {COMPANY_INFO.zipCode}</p>
               <p className="text-sm text-gray-600">{COMPANY_INFO.phone}</p>
@@ -128,7 +132,7 @@ export default function P2CertificateViewer() {
 
           <div className="text-center my-8">
             <Award className="h-12 w-12 mx-auto text-blue-600 mb-4" />
-            <h2 className="text-2xl font-bold text-gray-800">CERTIFICATE OF CONFORMANCE</h2>
+            <h2 className="text-2xl font-bold text-gray-800">MANUFACTURER'S CERTIFICATE OF CONFORMANCE</h2>
             <p className="font-mono font-bold text-lg mt-2" data-testid="text-certificate-number">{certificate.certificateNumber}</p>
           </div>
 
@@ -156,12 +160,16 @@ export default function P2CertificateViewer() {
               <h3 className="font-semibold text-gray-500 text-sm mb-3">PRODUCT INFORMATION</h3>
               <div className="space-y-2">
                 <div>
-                  <span className="text-sm text-gray-500">Part Number:</span>
+                  <span className="text-sm text-gray-500">SKU:</span>
                   <p className="font-mono" data-testid="text-part-number">{certificate.partNumber || 'N/A'}</p>
                 </div>
                 <div>
                   <span className="text-sm text-gray-500">Part Name:</span>
                   <p data-testid="text-part-name">{certificate.partName || 'N/A'}</p>
+                </div>
+                <div>
+                  <span className="text-sm text-gray-500">Special Processes:</span>
+                  <p data-testid="text-special-processes">{certificate.specialProcesses || 'N/A'}</p>
                 </div>
                 <div>
                   <span className="text-sm text-gray-500">Quantity:</span>
@@ -242,8 +250,9 @@ export default function P2CertificateViewer() {
                 <div>
                   <span className="text-sm text-gray-500">QA Manager:</span>
                   <div className="border-b border-gray-300 min-h-[2rem] mt-1 flex items-end pb-1">
-                    {certificate.qaMgrName || ''}
+                    {qaMgrName}
                   </div>
+                  <p className="text-sm text-gray-500 mt-1">{qaMgrTitle}</p>
                 </div>
                 {certificate.qaMgrSignature && (
                   <div>

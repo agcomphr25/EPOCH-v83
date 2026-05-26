@@ -555,8 +555,7 @@ import {
   type InsertTicketOrder,
   type TicketActivity,
   type InsertTicketActivity,
-  getSupplySourceDashboard,
-  supplySourceDashboardToLegacyDept,
+  getManufacturingRouteDefinition,
   type ManufacturedCategory,
   // CNC Dashboard types
   type CncScheduleSettings,
@@ -13234,11 +13233,12 @@ export class DatabaseStorage implements IStorage {
               .limit(1);
             const childInvItem = rows[0] ?? null;
 
-            // Trigger BOM explosion when manufacturedCategory is ASSEMBLY or SUB_ASSEMBLY.
+            // Trigger BOM explosion when manufacturedCategory is ASSEMBLY, FINAL_ASSEMBLY, or SUB_ASSEMBLY.
             // itemType === 'MANUFACTURED' is an optional guard — some legacy rows may lack itemType
             // while still having a valid manufacturedCategory, so category is the primary signal.
             const isAssembly =
               childInvItem?.manufacturedCategory === 'ASSEMBLY' ||
+              childInvItem?.manufacturedCategory === 'FINAL_ASSEMBLY' ||
               childInvItem?.manufacturedCategory === 'SUB_ASSEMBLY';
             const isManufactured =
               !childInvItem?.itemType || childInvItem?.itemType === 'MANUFACTURED';
@@ -15812,10 +15812,8 @@ export class DatabaseStorage implements IStorage {
             }
 
             // Derive department: category takes priority; fall back to legacy isPacket/manufacturingDepartment for unmigrated items.
-            const derivedDashboard = getSupplySourceDashboard(part.manufacturedCategory as ManufacturedCategory);
-            const effectiveDepartment = derivedDashboard
-              ? supplySourceDashboardToLegacyDept(derivedDashboard)
-              : (isPacketItem ? 'Cutting Table' : part.manufacturingDepartment);
+            const route = getManufacturingRouteDefinition(part.manufacturedCategory as ManufacturedCategory);
+            const effectiveDepartment = route?.department || (isPacketItem ? 'Cutting Table' : part.manufacturingDepartment);
 
             if (!effectiveDepartment) {
               const skipMsg = `Manufactured part ${line.childPartAgNumber} has no manufacturing department assigned`;
@@ -15905,10 +15903,8 @@ export class DatabaseStorage implements IStorage {
             }
 
             // Derive department: category takes priority; fall back to legacy isPacket/manufacturingDepartment for unmigrated items.
-            const derivedDashboard2 = getSupplySourceDashboard(part?.manufacturedCategory as ManufacturedCategory);
-            const effectiveDepartment = derivedDashboard2
-              ? supplySourceDashboardToLegacyDept(derivedDashboard2)
-              : (isPacketItem ? 'Cutting Table' : (item.firstDept || part?.manufacturingDepartment || null));
+            const route = getManufacturingRouteDefinition(part?.manufacturedCategory as ManufacturedCategory);
+            const effectiveDepartment = route?.department || (isPacketItem ? 'Cutting Table' : (item.firstDept || part?.manufacturingDepartment || null));
 
             if (!effectiveDepartment) {
               const skipMsg = `Part ${itemPartNumber} has no department assigned`;
@@ -15966,10 +15962,8 @@ export class DatabaseStorage implements IStorage {
 
       if (topLevelPart.length > 0 && (topIsManufactured || topIsPacket)) {
         const part = topLevelPart[0];
-        const topDerivedDashboard = getSupplySourceDashboard(part.manufacturedCategory as ManufacturedCategory);
-        const topDepartment = topDerivedDashboard
-          ? supplySourceDashboardToLegacyDept(topDerivedDashboard)
-          : (topIsPacket ? 'Cutting Table' : part.manufacturingDepartment);
+        const topRoute = getManufacturingRouteDefinition(part.manufacturedCategory as ManufacturedCategory);
+        const topDepartment = topRoute?.department || (topIsPacket ? 'Cutting Table' : part.manufacturingDepartment);
         
         if (topDepartment) {
           console.log(`🔧 Top-level item ${poItem.partNumber} is ${topIsPacket ? 'Packet' : 'Manufactured'} (dept: ${topDepartment}) - queuing ${effectiveQuantity} production orders`);

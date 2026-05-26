@@ -196,6 +196,148 @@ async function assertUnitOwnership(receiptId: number, unitId: number): Promise<R
   return unit ?? null;
 }
 
+async function getOpenReceivingProjectTargets(): Promise<Array<{
+  id: string;
+  projectCode: string;
+  projectName: string;
+  status: string;
+  customerName: string | null;
+}>> {
+  const result = await db.execute(sql`
+    SELECT
+      p.id::text AS id,
+      p.project_code AS "projectCode",
+      p.project_name AS "projectName",
+      p.status,
+      p.customer_name_snapshot AS "customerName"
+    FROM projects p
+    WHERE p.status IN ('active', 'won', 'on_hold')
+    ORDER BY p.project_code ASC, p.created_at DESC
+  `);
+  return sqlRows(result);
+}
+
+async function resolveDefaultTargetProjectId(receipt: Receipt, line: ReceiptLine): Promise<string | null> {
+  if (!receipt.vendorPoId) return null;
+
+  const partsRequestResult = await db.execute(sql`
+    SELECT p.id::text AS id
+    FROM parts_requests pr
+    JOIN projects p ON p.id = pr.project_id
+    LEFT JOIN vendor_po_items vpi ON vpi.id = ${line.vendorPoItemId ?? null}
+    WHERE pr.vendor_po_id = ${receipt.vendorPoId}
+      AND pr.project_id IS NOT NULL
+      AND p.status IN ('active', 'won', 'on_hold')
+      AND (
+        ${line.vendorPoItemId ?? null} IS NULL
+        OR pr.ag_part_number = vpi.ag_part_number
+        OR pr.part_number = vpi.ag_part_number
+        OR pr.part_number = vpi.description
+        OR pr.ag_part_number = ${line.agPartNumber ?? null}
+        OR pr.part_number = ${line.agPartNumber ?? null}
+      )
+    ORDER BY pr.updated_at DESC NULLS LAST, pr.request_date DESC NULLS LAST
+    LIMIT 1
+  `);
+  const partsRequestRows = sqlRows<{ id: string }>(partsRequestResult);
+  if (partsRequestRows[0]?.id) return partsRequestRows[0].id;
+
+  const requisitionResult = await db.execute(sql`
+    SELECT p.id::text AS id
+    FROM vendor_pos vpo
+    JOIN purchase_requisitions req ON req.id = vpo.requisition_id
+    JOIN projects p ON p.id::text = req.project_id
+    WHERE vpo.id = ${receipt.vendorPoId}
+      AND req.project_id IS NOT NULL
+      AND p.status IN ('active', 'won', 'on_hold')
+    LIMIT 1
+  `);
+  const requisitionRows = sqlRows<{ id: string }>(requisitionResult);
+  return requisitionRows[0]?.id ?? null;
+}
+
+async function syncProjectReceivedMaterial(unitId: number, user: AuthUser, notes?: string | null): Promise<void> {
+  const result = await db.execute(sql`
+    SELECT
+      ru.id AS "unitId",
+      ru.receipt_id AS "receiptId",
+      ru.target_project_id::text AS "targetProjectId",
+      ru.material_lot_id::text AS "materialLotId",
+      ru.quantity::numeric AS quantity,
+      COALESCE(vpi.purchase_unit_price, vpi.unit_price, ii.unit_cost, 0)::numeric AS "unitCost"
+    FROM received_units ru
+    JOIN receipt_lines rl ON rl.id = ru.receipt_line_id
+    LEFT JOIN vendor_po_items vpi ON vpi.id = rl.vendor_po_item_id
+    LEFT JOIN inventory_items ii ON ii.ag_part_number = rl.ag_part_number
+    WHERE ru.id = ${unitId}
+    LIMIT 1
+  `);
+  const [row] = sqlRows<{
+    unitId: number;
+    receiptId: number;
+    targetProjectId: string | null;
+    materialLotId: string | null;
+    quantity: string;
+    unitCost: string;
+  }>(result);
+
+  if (!row) return;
+
+  if (!row.targetProjectId || !row.materialLotId) {
+    await db.execute(sql`
+      DELETE FROM project_received_materials
+      WHERE received_unit_id = ${unitId}
+        AND status = 'pending_pm_acceptance'
+    `);
+    return;
+  }
+
+  const qty = Number(row.quantity) || 0;
+  const unitCost = Number(row.unitCost) || 0;
+  const extendedCost = qty * unitCost;
+  const displayName = actorName(user);
+
+  await db.execute(sql`
+    INSERT INTO project_received_materials (
+      project_id,
+      received_unit_id,
+      receipt_id,
+      material_lot_id,
+      quantity,
+      unit_cost,
+      extended_cost,
+      status,
+      notes,
+      created_at,
+      updated_at
+    )
+    VALUES (
+      ${row.targetProjectId}::uuid,
+      ${row.unitId},
+      ${row.receiptId},
+      ${row.materialLotId}::uuid,
+      ${String(qty)}::numeric,
+      ${String(unitCost)}::numeric,
+      ${String(extendedCost)}::numeric,
+      'pending_pm_acceptance',
+      ${notes ?? `Assigned from receiving by ${displayName}`},
+      NOW(),
+      NOW()
+    )
+    ON CONFLICT (received_unit_id) DO UPDATE
+      SET project_id = EXCLUDED.project_id,
+          receipt_id = EXCLUDED.receipt_id,
+          material_lot_id = EXCLUDED.material_lot_id,
+          quantity = EXCLUDED.quantity,
+          unit_cost = EXCLUDED.unit_cost,
+          extended_cost = EXCLUDED.extended_cost,
+          status = 'pending_pm_acceptance',
+          notes = EXCLUDED.notes,
+          updated_at = NOW()
+      WHERE project_received_materials.status <> 'accepted'
+  `);
+}
+
 // Auto-import PO lines into the receipt as receipt_lines
 async function importPoLines(receiptId: number, vendorPoId: number): Promise<void> {
   const poItems = await db.select().from(vendorPOItems).where(eq(vendorPOItems.vendorPoId, vendorPoId));
@@ -414,6 +556,15 @@ router.get('/', requireReceivingAccess, async (req: Request, res: Response) => {
 
 // ── POST /api/receipts ─────────────────────────────────────────────────────────
 // Supports resume: if vendorPoId provided and in_progress receipt exists, returns it
+router.get('/project-targets/open', requireReceivingAccess, async (_req: Request, res: Response) => {
+  try {
+    res.json({ data: await getOpenReceivingProjectTargets() });
+  } catch (err: any) {
+    console.error('GET /api/receipts/project-targets/open:', err);
+    res.status(500).json({ error: 'Failed to fetch open project targets' });
+  }
+});
+
 router.post('/', requireReceivingAccess, async (req: Request, res: Response) => {
   try {
     const user = req.user;
@@ -722,6 +873,9 @@ router.post('/:id/lines/:lineId/units', requireReceivingAccess, async (req: Requ
 
     const unitSequence = await getNextUnitSequence(receiptId);
     const barcode = generateUnitBarcode(receipt.receiptNumber, unitSequence);
+    const targetProjectId = req.body.targetProjectId !== undefined
+      ? req.body.targetProjectId
+      : await resolveDefaultTargetProjectId(receipt, line);
 
     const body = insertReceivedUnitSchema.parse({
       ...req.body,
@@ -729,6 +883,7 @@ router.post('/:id/lines/:lineId/units', requireReceivingAccess, async (req: Requ
       receiptLineId: lineId,
       unitSequence,
       barcode,
+      targetProjectId,
     });
     const [unit] = await db.insert(receivedUnits).values(body).returning();
 
@@ -764,6 +919,7 @@ router.post('/:id/lines/:lineId/units', requireReceivingAccess, async (req: Requ
       }
       try {
         await handleAcceptedUnit(unit, receipt, user);
+        await syncProjectReceivedMaterial(unit.id, user, 'Material accepted in receiving and queued for PM review');
       } catch (lotErr: any) {
         // Roll back all disposition metadata so the clerk can retry after fixing catalog data
         await db.update(receivedUnits).set({
@@ -827,7 +983,7 @@ router.patch('/:id/units/:unitId', requireReceivingAccess, async (req: Request, 
     const updates = insertReceivedUnitSchema.partial().parse(req.body);
 
     // Audit traceability-affecting changes (location, freezer, allocation, disposition fields)
-    const auditableKeys: (keyof typeof updates)[] = ['quantity', 'uom', 'unitType', 'location', 'freezerNumber', 'allocatedToType', 'allocatedToId', 'lotNumber', 'batchNumber', 'serialNumber', 'internalControlNumber', 'rollNumber', 'heatLot', 'manufactureDate', 'expirationDate', 'certReference'];
+    const auditableKeys: (keyof typeof updates)[] = ['quantity', 'uom', 'unitType', 'location', 'freezerNumber', 'allocatedToType', 'allocatedToId', 'targetProjectId', 'lotNumber', 'batchNumber', 'serialNumber', 'internalControlNumber', 'rollNumber', 'heatLot', 'manufactureDate', 'expirationDate', 'certReference'];
     const auditableChanges: Record<string, unknown> = {};
     for (const key of auditableKeys) {
       if (key in updates) auditableChanges[key] = updates[key];
@@ -1021,6 +1177,10 @@ router.patch('/:id/units/:unitId', requireReceivingAccess, async (req: Request, 
       await logAudit(receiptId, 'unit_updated', user?.employeeId, actorName(user), { unitId, changes: auditableChanges });
     }
 
+    if ('targetProjectId' in updates) {
+      await syncProjectReceivedMaterial(unitId, user, updates.targetProjectId ? 'Project target assigned from receiving putaway' : 'Project target cleared from receiving putaway');
+    }
+
     res.json(updated);
   } catch (err: any) {
     console.error('PATCH unit:', err);
@@ -1121,6 +1281,7 @@ router.post('/:id/units/:unitId/disposition', requireReceivingAccess, async (req
       if (receipt) {
         try {
           await handleAcceptedUnit(unit, receipt, user);
+          await syncProjectReceivedMaterial(unitId, user, 'Material accepted in receiving and queued for PM review');
         } catch (lotErr: any) {
           // Roll back all disposition metadata so the clerk can retry after fixing catalog data
           await db.update(receivedUnits).set({
@@ -1793,6 +1954,7 @@ router.post('/:id/ensure-units', requireReceivingAccess, async (req: Request, re
 
       const unitSequence = await getNextUnitSequence(receiptId);
       const barcode = generateUnitBarcode(receipt.receiptNumber, unitSequence);
+      const targetProjectId = await resolveDefaultTargetProjectId(receipt, line);
       const body = insertReceivedUnitSchema.parse({
         receiptId,
         receiptLineId: line.id,
@@ -1801,6 +1963,7 @@ router.post('/:id/ensure-units', requireReceivingAccess, async (req: Request, re
         unitType: 'other',
         quantity: String(receivedQty),
         uom: line.uom ?? 'EA',
+        targetProjectId,
       });
       const [unit] = await db.insert(receivedUnits).values(body).returning();
       created.push(unit);
@@ -1883,6 +2046,9 @@ router.post('/:id/lines/:lineId/split', requireReceivingAccess, async (req: Requ
     // Calling getNextUnitSequence inside the loop would return the same MAX+1 every
     // iteration because no units are inserted until the transaction below.
     let nextSequence = await getNextUnitSequence(receiptId);
+    const defaultTargetProjectId = templateFields && Object.prototype.hasOwnProperty.call(templateFields, 'targetProjectId')
+      ? templateFields.targetProjectId
+      : await resolveDefaultTargetProjectId(receipt, line);
     for (let i = 0; i < count; i++) {
       let qtyForUnit: number;
       if (isRollArray) {
@@ -1904,6 +2070,7 @@ router.post('/:id/lines/:lineId/split', requireReceivingAccess, async (req: Requ
         quantity: String(qtyForUnit),
         uom: line.uom ?? 'EA',
         ...(isRollArray && normalizedRollNumbers ? { rollNumber: normalizedRollNumbers[i] } : {}),
+        targetProjectId: defaultTargetProjectId,
       });
       unitBodies.push(body);
     }
@@ -1999,6 +2166,7 @@ router.post('/:id/units/:unitId/clone', requireReceivingAccess, async (req: Requ
       freezerNumber: source.freezerNumber,
       allocatedToType: source.allocatedToType,
       allocatedToId: source.allocatedToId,
+      targetProjectId: source.targetProjectId,
       disposition: 'pending_inspection',
     });
     const [cloned] = await db.insert(receivedUnits).values(body).returning();
@@ -2041,6 +2209,9 @@ router.post('/:id/units/batch-update', requireReceivingAccess, async (req: Reque
         .where(eq(receivedUnits.id, uid))
         .returning();
       if (updated) results.push(updated);
+      if ('targetProjectId' in safeUpdates) {
+        await syncProjectReceivedMaterial(uid, user, safeUpdates.targetProjectId ? 'Project target assigned from receiving putaway' : 'Project target cleared from receiving putaway');
+      }
     }
 
     await logAudit(receiptId, 'batch_unit_update', user?.employeeId, actorName(user), {

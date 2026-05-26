@@ -16469,6 +16469,7 @@ export const receivedUnits = pgTable('received_units', {
   freezerNumber: integer('freezer_number'),
   allocatedToType: text('allocated_to_type'), // work_order | po_demand | stock | quarantine
   allocatedToId: integer('allocated_to_id'),
+  targetProjectId: uuid('target_project_id').references((): AnyPgColumn => projects.id, { onDelete: 'set null' }),
   // Link to material_lots when accepted
   materialLotId: uuid('material_lot_id'),
   createdAt: timestamp('created_at').defaultNow(),
@@ -16477,6 +16478,7 @@ export const receivedUnits = pgTable('received_units', {
   receiptLineIdx: index('received_units_receipt_line_idx').on(table.receiptLineId),
   receiptIdx: index('received_units_receipt_idx').on(table.receiptId),
   barcodeIdx: uniqueIndex('received_units_barcode_idx').on(table.barcode),
+  targetProjectIdx: index('received_units_target_project_idx').on(table.targetProjectId),
 }));
 
 export const insertReceivedUnitSchema = createInsertSchema(receivedUnits).omit({
@@ -16502,6 +16504,41 @@ export const cncSetupPhotos = pgTable('cnc_setup_photos', {
 
 export type ReceivedUnit = typeof receivedUnits.$inferSelect;
 export type InsertReceivedUnit = z.infer<typeof insertReceivedUnitSchema>;
+
+export const projectReceivedMaterials = pgTable('project_received_materials', {
+  id: serial('id').primaryKey(),
+  projectId: uuid('project_id').notNull().references((): AnyPgColumn => projects.id, { onDelete: 'cascade' }),
+  receivedUnitId: integer('received_unit_id').notNull().references(() => receivedUnits.id, { onDelete: 'cascade' }),
+  receiptId: integer('receipt_id').notNull().references(() => receipts.id, { onDelete: 'cascade' }),
+  materialLotId: uuid('material_lot_id').references(() => materialLots.id, { onDelete: 'set null' }),
+  quantity: numeric('quantity').notNull(),
+  unitCost: numeric('unit_cost').notNull().default('0'),
+  extendedCost: numeric('extended_cost').notNull().default('0'),
+  status: text('status').notNull().default('pending_pm_acceptance'),
+  acceptedByUserId: integer('accepted_by_user_id'),
+  acceptedByDisplayName: text('accepted_by_display_name'),
+  acceptedAt: timestamp('accepted_at'),
+  rejectedByUserId: integer('rejected_by_user_id'),
+  rejectedByDisplayName: text('rejected_by_display_name'),
+  rejectedAt: timestamp('rejected_at'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  projectIdx: index('project_received_materials_project_idx').on(table.projectId),
+  receiptIdx: index('project_received_materials_receipt_idx').on(table.receiptId),
+  statusIdx: index('project_received_materials_status_idx').on(table.status),
+  unitUnique: unique('project_received_materials_received_unit_unique').on(table.receivedUnitId),
+}));
+
+export const insertProjectReceivedMaterialSchema = createInsertSchema(projectReceivedMaterials).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ProjectReceivedMaterial = typeof projectReceivedMaterials.$inferSelect;
+export type InsertProjectReceivedMaterial = z.infer<typeof insertProjectReceivedMaterialSchema>;
 
 export const receiptDocuments = pgTable('receipt_documents', {
   id: serial('id').primaryKey(),
@@ -16757,6 +16794,7 @@ export const productionWorkOrders = pgTable('production_work_orders', {
   status: text('status').notNull().default('PLANNED'),
   departmentBudgets: jsonb('department_budgets').default({}).notNull(),
   totalBudgetHours: numeric('total_budget_hours'),
+  materialBudgetAmount: numeric('material_budget_amount').default('0').notNull(),
   startDate: date('start_date'),
   dueDate: date('due_date'),
   warningThreshold: numeric('warning_threshold'),

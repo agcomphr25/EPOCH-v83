@@ -3512,19 +3512,26 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           : null;
         
         // Use actual column names: status (ACTIVE/COMPLETED/SCRAPPED/HOLD) and currentDepartment
-        const completedItems = poItems.length > 0
-          ? poItems.filter((s: any) => s.status === 'COMPLETED').length
-          : Number(legacyStats?.completedQty ?? 0);
-        const inProductionItems = poItems.filter((s: any) => {
+        const serializedCompletedItems = poItems.filter((s: any) => s.status === 'COMPLETED').length;
+        const legacyCompletedItems = Number(legacyStats?.completedQty ?? 0);
+        const completedItems = Math.max(serializedCompletedItems, legacyCompletedItems);
+
+        const serializedInProductionItems = poItems.filter((s: any) => {
           if (s.status !== 'ACTIVE') return false;
           const dept = normalizeP2ControlDepartment(s.currentDepartment || '');
           // In production if past Pending Layup stage
           return dept !== 'Pending Layup' && dept !== '';
-        }).length || (poItems.length > 0 ? 0 : Number(legacyStats?.inProductionQty ?? 0));
+        }).length;
+        const legacyInProductionItems = Number(legacyStats?.inProductionQty ?? 0);
+        const rawInProductionItems = Math.max(serializedInProductionItems, legacyInProductionItems);
 
         // totalItems is the sum of ordered quantities across all line items so that
         // lines without serialized items generated yet are still reflected on the card.
         const totalItems = orderedQtyByPoId.get(po.id) ?? Number(legacyStats?.totalQty ?? poItems.length);
+        const inProductionItems = Math.min(
+          rawInProductionItems,
+          Math.max(0, totalItems - completedItems)
+        );
 
         // pendingItems = everything not yet completed or in-production (including
         // line item quantities that haven't had serialized items generated yet).

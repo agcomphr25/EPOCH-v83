@@ -117,6 +117,73 @@ function auditActor(req: Request) {
 }
 
 // ─── Session auth helper (for PDF routes that use cookie-based sessions) ─────
+function assignedSkuFromSerials(serials: Array<{ sku?: string | null }>): string | null {
+  const skus = Array.from(
+    new Set(
+      serials
+        .map((serial) => serial.sku?.trim())
+        .filter((sku): sku is string => Boolean(sku))
+    )
+  );
+
+  return skus.length > 0 ? skus.join(', ') : null;
+}
+
+async function getAssignedSkuForLot(lotNumberId: string | null | undefined): Promise<string | null> {
+  if (!lotNumberId) return null;
+
+  const [lot] = await db
+    .select({ serializedItemIds: p2LotNumbers.serializedItemIds })
+    .from(p2LotNumbers)
+    .where(eq(p2LotNumbers.id, lotNumberId));
+
+  const serialIds = Array.isArray(lot?.serializedItemIds)
+    ? lot.serializedItemIds.filter((id): id is string => typeof id === 'string' && id.length > 0)
+    : [];
+
+  if (serialIds.length === 0) return null;
+
+  const serials = await db
+    .select({ sku: p2SerializedItems.sku })
+    .from(p2SerializedItems)
+    .where(inArray(p2SerializedItems.id, serialIds));
+
+  return assignedSkuFromSerials(serials);
+}
+
+function getSpecialProcesses(processRecords: unknown): string {
+  if (processRecords && typeof processRecords === 'object') {
+    if (!Array.isArray(processRecords)) {
+      const value = (processRecords as { specialProcesses?: unknown }).specialProcesses;
+      if (typeof value === 'string' && value.trim()) return value.trim();
+    }
+
+    if (Array.isArray(processRecords)) {
+      const values = processRecords
+        .map((record) =>
+          record && typeof record === 'object'
+            ? (record as { process?: unknown; name?: unknown }).process || (record as { name?: unknown }).name
+            : null
+        )
+        .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+        .map((value) => value.trim());
+
+      if (values.length > 0) return Array.from(new Set(values)).join(', ');
+    }
+  }
+
+  return 'N/A';
+}
+
+function getQaMgrTitle(traceabilityData: unknown): string {
+  if (traceabilityData && typeof traceabilityData === 'object' && !Array.isArray(traceabilityData)) {
+    const value = (traceabilityData as { qaMgrTitle?: unknown }).qaMgrTitle;
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+
+  return 'Quality Assurance';
+}
+
 async function getUserFromSession(req: Request): Promise<{ username: string; role: string } | null> {
   const sessionToken = req.cookies?.sessionToken || req.headers.authorization?.replace('Bearer ', '');
   if (!sessionToken) return null;
@@ -951,6 +1018,9 @@ const createCertificateSchema = z.object({
   lotId: z.string().uuid(),
   createdBy: z.string().min(1).default('system'),
   certificationText: z.string().optional(),
+  specialProcesses: z.string().optional(),
+  qaMgrTitle: z.string().optional(),
+  shipDate: z.string().optional(),
 });
 
 router.post('/certificates', authenticateToken, requirePermission('shipping.release_shipment'), async (req: Request, res: Response) => {
@@ -973,6 +1043,7 @@ router.post('/certificates', authenticateToken, requirePermission('shipping.rele
       .select()
       .from(p2SerializedItems)
       .where(inArray(p2SerializedItems.id, serialIds));
+    const assignedSku = assignedSkuFromSerials(serials);
 
     const [customer] = await db
       .select()
@@ -993,7 +1064,7 @@ router.post('/certificates', authenticateToken, requirePermission('shipping.rele
     );
 
     const defaultText =
-      'AG Composites certifies that the items listed herein have been manufactured, inspected, and tested in accordance with the applicable drawings, specifications, and purchase order requirements. All materials used in manufacture conform to applicable specifications. Records are on file and available for review.';
+      'AG Advanced certifies that the items listed herein have been manufactured, inspected, and tested in accordance with the applicable drawings, specifications, and purchase order requirements. All materials used in manufacture conform to applicable specifications. Records are on file and available for review.';
 
     const templateSnapshot = await getApprovedManufacturerCocTemplateSnapshot();
 
@@ -1007,12 +1078,12 @@ router.post('/certificates', authenticateToken, requirePermission('shipping.rele
         customerName: lot.customerName || '',
         customerAddress,
         poNumber: lot.poNumber,
-        partNumber: lot.partNumber,
+        partNumber: assignedSku || lot.partNumber,
         partName: lot.partName,
         quantity: serials.length,
         serialNumbers: serials.map((s) => s.serialNumber),
         manufacturingDate: manufacturingDate as Date,
-        shipDate: new Date(),
+        shipDate: input.shipDate ? new Date(`${input.shipDate}T12:00:00`) : new Date(),
         certificationText: input.certificationText || defaultText,
         templateDocumentId: templateSnapshot.documentId,
         templateDocumentName: templateSnapshot.documentName,
@@ -1020,6 +1091,8 @@ router.post('/certificates', authenticateToken, requirePermission('shipping.rele
         templateVersion: templateSnapshot.version,
         templateVersionDate: templateSnapshot.versionDate as any,
         templateDisplay: templateSnapshot.display,
+        processRecords: { specialProcesses: input.specialProcesses?.trim() || 'N/A' },
+        traceabilityData: { qaMgrTitle: input.qaMgrTitle?.trim() || 'Quality Assurance' },
         status: 'DRAFT',
         createdBy: input.createdBy,
       })
@@ -1049,7 +1122,13 @@ router.get('/certificates/:id', async (req: Request, res: Response) => {
       .from(p2CertificatesOfConformance)
       .where(eq(p2CertificatesOfConformance.id, req.params.id));
     if (!cert) return res.status(404).json({ error: 'Certificate not found' });
-    return res.json(cert);
+    const assignedSku = await getAssignedSkuForLot(cert.lotNumberId);
+    return res.json({
+      ...cert,
+      partNumber: assignedSku || cert.partNumber,
+      specialProcesses: getSpecialProcesses(cert.processRecords),
+      qaMgrTitle: getQaMgrTitle(cert.traceabilityData),
+    });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to fetch certificate' });
   }
@@ -1076,6 +1155,11 @@ router.get('/certificates/:id/pdf', async (req: Request, res: Response) => {
       .from(p2CertificatesOfConformance)
       .where(eq(p2CertificatesOfConformance.id, req.params.id));
     if (!cert) return res.status(404).json({ error: 'Certificate not found' });
+    const assignedSku = await getAssignedSkuForLot(cert.lotNumberId);
+    const displayPartNumber = assignedSku || cert.partNumber || '—';
+    const specialProcesses = getSpecialProcesses(cert.processRecords);
+    const qaMgrName = cert.qaMgrName || cert.approvedBy || '';
+    const qaMgrTitle = getQaMgrTitle(cert.traceabilityData);
 
     const pdfDoc = await PDFDocument.create();
     const page = pdfDoc.addPage([612, 792]);
@@ -1093,7 +1177,7 @@ router.get('/certificates/:id/pdf', async (req: Request, res: Response) => {
     const usableWidth = width - margin * 2;
 
     // ── Header ──
-    page.drawText(COMPANY_INFO.NAME, { x: margin, y, size: 13, font: boldFont, color: black });
+    page.drawText('AG Advanced', { x: margin, y, size: 13, font: boldFont, color: black });
     y -= 14;
     page.drawText(COMPANY_INFO.ADDRESS, { x: margin, y, size: 8.5, font, color: gray });
     y -= 11;
@@ -1113,22 +1197,8 @@ router.get('/certificates/:id/pdf', async (req: Request, res: Response) => {
     });
     y -= 26;
 
-    // Date top-right (cert number is used for association only, not displayed)
-    const certDate = new Date().toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-    page.drawText(`Date: ${certDate}`, {
-      x: width - margin - 160,
-      y: height - margin,
-      size: 8.5,
-      font,
-      color: gray,
-    });
-
     // ── Title ──
-    const titleText = 'CERTIFICATE OF CONFORMANCE';
+    const titleText = "MANUFACTURER'S CERTIFICATE OF CONFORMANCE";
     const titleW = boldFont.widthOfTextAtSize(titleText, 15);
     page.drawText(titleText, {
       x: (width - titleW) / 2,
@@ -1153,10 +1223,10 @@ router.get('/certificates/:id/pdf', async (req: Request, res: Response) => {
 
     const infoRows: [string, string][] = [
       ['Customer:', cert.customerName],
-      ['Ship-To Address:', (cert.customerAddress || '').replace(/\n/g, ', ')],
       ['Purchase Order #:', cert.poNumber || '—'],
-      ['Part Number:', cert.partNumber || '—'],
+      [assignedSku ? 'SKU:' : 'Part Number:', displayPartNumber],
       ['Part Description:', cert.partName || '—'],
+      ['Special Processes:', specialProcesses],
       ['Lot Number:', cert.lotNumber || '—'],
       ['Quantity:', String(cert.quantity)],
     ];
@@ -1277,6 +1347,10 @@ router.get('/certificates/:id/pdf', async (req: Request, res: Response) => {
       color: darkGray,
     });
     page.drawText('Signature', { x: margin, y: sigY - 32, size: 8, font, color: gray });
+    if (qaMgrName) {
+      page.drawText(qaMgrName, { x: margin, y: sigY - 45, size: 8.5, font: boldFont, color: black });
+    }
+    page.drawText(qaMgrTitle, { x: margin, y: sigY - 58, size: 8, font, color: gray });
     page.drawText('Date', { x: margin + 260, y: sigY - 32, size: 8, font, color: gray });
 
     const formNumber = cert.templateDocumentNumber || MANUFACTURER_COC_FALLBACK.documentNumber;

@@ -59,6 +59,76 @@ function generateDocumentNumber(prefix: string): string {
   return `${prefix}-${dateStr}-${randomNum}`;
 }
 
+const DEFAULT_COC_CERTIFICATION_TEXT =
+  'AG Advanced certifies that the items listed herein have been manufactured, inspected, and tested in accordance with the applicable drawings, specifications, and purchase order requirements. All materials used in manufacture conform to applicable specifications. Records are on file and available for review.';
+
+function assignedSkuFromSerials(serials: Array<{ sku?: string | null }>): string | null {
+  const skus = Array.from(
+    new Set(
+      serials
+        .map((serial) => serial.sku?.trim())
+        .filter((sku): sku is string => Boolean(sku))
+    )
+  );
+
+  return skus.length > 0 ? skus.join(', ') : null;
+}
+
+async function getAssignedSkuForLot(lotNumberId: string | null | undefined): Promise<string | null> {
+  if (!lotNumberId) return null;
+
+  const lot = await db.query.p2LotNumbers.findFirst({
+    where: eq(p2LotNumbers.id, lotNumberId),
+    columns: { serializedItemIds: true },
+  });
+
+  const serialIds = Array.isArray(lot?.serializedItemIds)
+    ? lot.serializedItemIds.filter((id): id is string => typeof id === 'string' && id.length > 0)
+    : [];
+
+  if (serialIds.length === 0) return null;
+
+  const serials = await db
+    .select({ sku: p2SerializedItems.sku })
+    .from(p2SerializedItems)
+    .where(inArray(p2SerializedItems.id, serialIds));
+
+  return assignedSkuFromSerials(serials);
+}
+
+function getSpecialProcesses(processRecords: unknown): string {
+  if (processRecords && typeof processRecords === 'object') {
+    if (!Array.isArray(processRecords)) {
+      const value = (processRecords as { specialProcesses?: unknown }).specialProcesses;
+      if (typeof value === 'string' && value.trim()) return value.trim();
+    }
+
+    if (Array.isArray(processRecords)) {
+      const values = processRecords
+        .map((record) =>
+          record && typeof record === 'object'
+            ? (record as { process?: unknown; name?: unknown }).process || (record as { name?: unknown }).name
+            : null
+        )
+        .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+        .map((value) => value.trim());
+
+      if (values.length > 0) return Array.from(new Set(values)).join(', ');
+    }
+  }
+
+  return 'N/A';
+}
+
+function getQaMgrTitle(traceabilityData: unknown): string {
+  if (traceabilityData && typeof traceabilityData === 'object' && !Array.isArray(traceabilityData)) {
+    const value = (traceabilityData as { qaMgrTitle?: unknown }).qaMgrTitle;
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+
+  return 'Quality Assurance';
+}
+
 // GET /api/p2-traveler-viewer/item/:barcode
 // Get comprehensive traveler data for a serialized item
 router.get('/item/:barcode', async (req: Request, res: Response) => {
@@ -1423,9 +1493,27 @@ router.put('/packing-slip/:id', async (req: Request, res: Response) => {
 router.post('/certificate-of-conformance', async (req: Request, res: Response) => {
   try {
     const certificateNumber = req.body.certificateNumber || generateDocumentNumber('COC');
+    const assignedSku = await getAssignedSkuForLot(req.body.lotNumberId);
+    const specialProcesses =
+      typeof req.body.specialProcesses === 'string' && req.body.specialProcesses.trim()
+        ? req.body.specialProcesses.trim()
+        : 'N/A';
+    const qaMgrTitle =
+      typeof req.body.qaMgrTitle === 'string' && req.body.qaMgrTitle.trim()
+        ? req.body.qaMgrTitle.trim()
+        : 'Quality Assurance';
+    const traceabilityData = Array.isArray(req.body.traceabilityData)
+      ? { records: req.body.traceabilityData, qaMgrTitle }
+      : req.body.traceabilityData && typeof req.body.traceabilityData === 'object'
+        ? { ...req.body.traceabilityData, qaMgrTitle }
+        : { qaMgrTitle };
     const validatedData = insertP2CertificateOfConformanceSchema.parse({
       ...req.body,
+      partNumber: assignedSku || req.body.partNumber,
       certificateNumber,
+      certificationText: req.body.certificationText || DEFAULT_COC_CERTIFICATION_TEXT,
+      processRecords: req.body.processRecords ?? { specialProcesses },
+      traceabilityData,
     });
     
     const [certificate] = await db.insert(p2CertificatesOfConformance).values(validatedData).returning();
@@ -1470,7 +1558,13 @@ router.get('/certificate-of-conformance/:id', async (req: Request, res: Response
     if (!certificate) {
       return res.status(404).json({ error: 'Certificate not found' });
     }
-    return res.json(certificate);
+    const assignedSku = await getAssignedSkuForLot(certificate.lotNumberId);
+    return res.json({
+      ...certificate,
+      partNumber: assignedSku || certificate.partNumber,
+      specialProcesses: getSpecialProcesses(certificate.processRecords),
+      qaMgrTitle: getQaMgrTitle(certificate.traceabilityData),
+    });
   } catch (error: any) {
     console.error('Error getting certificate:', error);
     return res.status(500).json({ error: 'Failed to get certificate' });
@@ -1485,6 +1579,24 @@ router.put('/certificate-of-conformance/:id', async (req: Request, res: Response
     const updateData = req.body;
     delete updateData.id;
     delete updateData.createdAt;
+    if (typeof updateData.specialProcesses === 'string') {
+      updateData.processRecords = {
+        ...(updateData.processRecords && typeof updateData.processRecords === 'object' && !Array.isArray(updateData.processRecords)
+          ? updateData.processRecords
+          : {}),
+        specialProcesses: updateData.specialProcesses.trim() || 'N/A',
+      };
+      delete updateData.specialProcesses;
+    }
+    if (typeof updateData.qaMgrTitle === 'string') {
+      updateData.traceabilityData = {
+        ...(updateData.traceabilityData && typeof updateData.traceabilityData === 'object' && !Array.isArray(updateData.traceabilityData)
+          ? updateData.traceabilityData
+          : {}),
+        qaMgrTitle: updateData.qaMgrTitle.trim() || 'Quality Assurance',
+      };
+      delete updateData.qaMgrTitle;
+    }
     updateData.updatedAt = new Date();
 
     const [certificate] = await db
@@ -1685,7 +1797,9 @@ router.post('/generate-from-lot/:lotId', async (req: Request, res: Response) => 
         quantity: serializedItems.length,
         serialNumbers,
         manufacturingDate: lot.manufacturingDate,
-        traceabilityData: allTraceability,
+        certificationText: DEFAULT_COC_CERTIFICATION_TEXT,
+        processRecords: { specialProcesses: 'N/A' },
+        traceabilityData: { records: allTraceability, qaMgrTitle: 'Quality Assurance' },
         inspectionSummary,
         status: 'DRAFT',
         createdBy,

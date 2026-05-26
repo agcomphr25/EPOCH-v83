@@ -1,9 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Tag, Plus, Pencil, Loader2, ChevronUp, ChevronDown, ChevronsUpDown, Search } from 'lucide-react';
+import { Tag, Plus, Pencil, Loader2, ChevronUp, ChevronDown, ChevronsUpDown, Search, Users } from 'lucide-react';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { insertChargeCodeSchema, type ChargeCode } from '@shared/schema';
@@ -38,6 +38,7 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -72,6 +73,22 @@ type AllocationBase = {
   name: string;
 };
 
+type EmployeeOption = {
+  id: number;
+  employeeCode?: string | null;
+  name: string;
+  department?: string | null;
+  jobTitle?: string | null;
+  isActive?: boolean | null;
+};
+
+type ChargeCodeAssignments = {
+  chargeCodeId: number;
+  scope: 'ALL_EMPLOYEES' | 'SELECTED_EMPLOYEES';
+  employeeIds: number[];
+  assignedEmployees: EmployeeOption[];
+};
+
 function defaultValues(code?: ChargeCode): ChargeCodeFormValues {
   return {
     code: code?.code ?? '',
@@ -96,6 +113,25 @@ function ChargeCodeForm({
 }) {
   const { toast } = useToast();
   const isEdit = editTarget !== null;
+  const [assignmentScope, setAssignmentScope] = useState<'ALL_EMPLOYEES' | 'SELECTED_EMPLOYEES'>('ALL_EMPLOYEES');
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<number[]>([]);
+
+  const { data: employees = [] } = useQuery<EmployeeOption[]>({
+    queryKey: ['/api/employees'],
+    enabled: isEdit,
+  });
+
+  const { data: assignments } = useQuery<ChargeCodeAssignments>({
+    queryKey: ['/api/charge-codes', editTarget?.id, 'assignments'],
+    queryFn: () => apiRequest(`/api/charge-codes/${editTarget!.id}/assignments`),
+    enabled: isEdit,
+  });
+
+  useEffect(() => {
+    if (!assignments) return;
+    setAssignmentScope(assignments.scope);
+    setSelectedEmployeeIds(assignments.employeeIds);
+  }, [assignments]);
 
   const form = useForm<ChargeCodeFormValues>({
     resolver: zodResolver(chargeCodeFormSchema),
@@ -128,7 +164,38 @@ function ChargeCodeForm({
     },
   });
 
+  const assignmentMutation = useMutation({
+    mutationFn: () =>
+      apiRequest(`/api/charge-codes/${editTarget!.id}/assignments`, {
+        method: 'PUT',
+        body: {
+          scope: assignmentScope,
+          employeeIds: assignmentScope === 'ALL_EMPLOYEES' ? [] : selectedEmployeeIds,
+        },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/charge-codes', editTarget?.id, 'assignments'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/charge-codes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/kiosk/charge-codes'] });
+      toast({ title: 'Charge code assignments updated' });
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Failed to update assignments', description: err.message, variant: 'destructive' });
+    },
+  });
+
   const isPending = createMutation.isPending || updateMutation.isPending;
+  const activeEmployees = employees
+    .filter((employee) => employee.isActive !== false)
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  function toggleEmployee(employeeId: number) {
+    setSelectedEmployeeIds((current) =>
+      current.includes(employeeId)
+        ? current.filter((id) => id !== employeeId)
+        : [...current, employeeId].sort((a, b) => a - b)
+    );
+  }
 
   function onSubmit(values: ChargeCodeFormValues) {
     const payload = {
@@ -334,6 +401,74 @@ function ChargeCodeForm({
             />
           )}
         </div>
+
+        {isEdit && (
+          <div className="rounded-md border p-3 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <Label className="text-sm font-medium">Employee Access</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Controls which employees see this code in kiosk and portal time cards.
+                  </p>
+                </div>
+              </div>
+              <Badge variant="outline">
+                {assignmentScope === 'ALL_EMPLOYEES' ? 'All employees' : `${selectedEmployeeIds.length} selected`}
+              </Badge>
+            </div>
+
+            <Select
+              value={assignmentScope}
+              onValueChange={(value) => setAssignmentScope(value as 'ALL_EMPLOYEES' | 'SELECTED_EMPLOYEES')}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL_EMPLOYEES">All employees can use this code</SelectItem>
+                <SelectItem value="SELECTED_EMPLOYEES">Only selected employees</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {assignmentScope === 'SELECTED_EMPLOYEES' && (
+              <div className="max-h-48 overflow-y-auto rounded border">
+                {activeEmployees.map((employee) => (
+                  <label
+                    key={employee.id}
+                    className="flex cursor-pointer items-center gap-3 px-3 py-2 text-sm hover:bg-muted/50"
+                  >
+                    <Checkbox
+                      checked={selectedEmployeeIds.includes(employee.id)}
+                      onCheckedChange={() => toggleEmployee(employee.id)}
+                    />
+                    <span className="flex-1">
+                      <span className="font-medium">{employee.name}</span>
+                      <span className="text-muted-foreground">
+                        {employee.employeeCode ? ` · ${employee.employeeCode}` : ''}
+                        {employee.department ? ` · ${employee.department}` : ''}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
+
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => assignmentMutation.mutate()}
+                disabled={assignmentMutation.isPending || (assignmentScope === 'SELECTED_EMPLOYEES' && selectedEmployeeIds.length === 0)}
+              >
+                {assignmentMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Save Access
+              </Button>
+            </div>
+          </div>
+        )}
 
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>

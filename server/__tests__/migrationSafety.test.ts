@@ -253,6 +253,7 @@ const KNOWN_DUPLICATE_PREFIXES = new Set<string>([
   '0134', // 0134_conversational_rfq_risk_sessions.sql vs 0134_knowledge_capture_enrichment.sql vs 0134_project_revisions.sql — three parallel feature tasks (RFQ risk, knowledge capture, project revisions) merged the same window
   '0139', // 0139_p2_production_orders_project_id.sql vs 0139_wad_dashboard_assignment.sql — parallel P2 production-order linkage + WAD dashboard assignment
   '0101', // 0101_audit_tamper_attempts_durable.sql vs 0101_burden_rate_accumulation.sql — parallel audit tamper-attempt hardening + burden rate accumulation workflow
+  '0115', // 0115_receiving_project_material_acceptance.sql vs 0115_vendor_pos_production_line.sql — parallel receiving project material acceptance + vendor PO production line tasks merged in the same window
 ]);
 
 describe('Migration file structure', () => {

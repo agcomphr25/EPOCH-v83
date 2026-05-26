@@ -31,6 +31,68 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 const router = Router();
 
+const MANUFACTURER_COC_TEMPLATE_KEY = 'manufacturer_coc';
+const MANUFACTURER_COC_FALLBACK = {
+  documentId: null as string | null,
+  documentName: "Manufacturer's Certificate of Conformance",
+  documentNumber: 'FO Form 6',
+  version: '2.3',
+  versionDate: '2024-08-14',
+  display: 'Version 2.3 08/14/2024',
+};
+
+function formatControlledVersionDisplay(version: string, versionDate: string | Date | null | undefined): string {
+  if (!versionDate) return `Version ${version}`;
+  const date = versionDate instanceof Date
+    ? versionDate
+    : new Date(String(versionDate).includes('T') ? versionDate : `${versionDate}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return `Version ${version}`;
+  return `Version ${version} ${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}/${date.getFullYear()}`;
+}
+
+async function getApprovedManufacturerCocTemplateSnapshot() {
+  const rows = await pool.query<{
+    id: string;
+    document_name: string;
+    document_number: string;
+    current_version: string;
+    version_date: string | Date | null;
+    effective_date: string | Date | null;
+  }>(
+    `SELECT id, document_name, document_number, current_version, version_date, effective_date
+       FROM controlled_documents
+      WHERE status = 'approved'
+        AND (
+          template_key = $1
+          OR document_number = $2
+          OR lower(document_name) = lower($3)
+        )
+      ORDER BY COALESCE(version_date, effective_date, created_at::date) DESC, updated_at DESC
+      LIMIT 1`,
+    [
+      MANUFACTURER_COC_TEMPLATE_KEY,
+      MANUFACTURER_COC_FALLBACK.documentNumber,
+      MANUFACTURER_COC_FALLBACK.documentName,
+    ]
+  ).catch((error) => {
+    console.warn('Falling back to built-in Manufacturer CoC template metadata:', error);
+    return [];
+  });
+
+  const doc = rows[0];
+  if (!doc) return MANUFACTURER_COC_FALLBACK;
+
+  const versionDate = doc.version_date || doc.effective_date || MANUFACTURER_COC_FALLBACK.versionDate;
+  return {
+    documentId: doc.id,
+    documentName: doc.document_name,
+    documentNumber: doc.document_number,
+    version: doc.current_version,
+    versionDate,
+    display: formatControlledVersionDisplay(doc.current_version, versionDate),
+  };
+}
+
 async function uploadP2EvidenceFile(file: Express.Multer.File, scope: string, entityId?: string): Promise<string> {
   return getFileStorageProvider().uploadBuffer({
     buffer: file.buffer,
@@ -1004,6 +1066,8 @@ router.post('/certificates', authenticateToken, requirePermission('shipping.rele
     const defaultText =
       'AG Advanced certifies that the items listed herein have been manufactured, inspected, and tested in accordance with the applicable drawings, specifications, and purchase order requirements. All materials used in manufacture conform to applicable specifications. Records are on file and available for review.';
 
+    const templateSnapshot = await getApprovedManufacturerCocTemplateSnapshot();
+
     const [cert] = await db
       .insert(p2CertificatesOfConformance)
       .values({
@@ -1021,6 +1085,12 @@ router.post('/certificates', authenticateToken, requirePermission('shipping.rele
         manufacturingDate: manufacturingDate as Date,
         shipDate: input.shipDate ? new Date(`${input.shipDate}T12:00:00`) : new Date(),
         certificationText: input.certificationText || defaultText,
+        templateDocumentId: templateSnapshot.documentId,
+        templateDocumentName: templateSnapshot.documentName,
+        templateDocumentNumber: templateSnapshot.documentNumber,
+        templateVersion: templateSnapshot.version,
+        templateVersionDate: templateSnapshot.versionDate as any,
+        templateDisplay: templateSnapshot.display,
         processRecords: { specialProcesses: input.specialProcesses?.trim() || 'N/A' },
         traceabilityData: { qaMgrTitle: input.qaMgrTitle?.trim() || 'Quality Assurance' },
         status: 'DRAFT',
@@ -1282,6 +1352,29 @@ router.get('/certificates/:id/pdf', async (req: Request, res: Response) => {
     }
     page.drawText(qaMgrTitle, { x: margin, y: sigY - 58, size: 8, font, color: gray });
     page.drawText('Date', { x: margin + 260, y: sigY - 32, size: 8, font, color: gray });
+
+    const formNumber = cert.templateDocumentNumber || MANUFACTURER_COC_FALLBACK.documentNumber;
+    const versionDisplay =
+      cert.templateDisplay ||
+      formatControlledVersionDisplay(
+        cert.templateVersion || MANUFACTURER_COC_FALLBACK.version,
+        cert.templateVersionDate || MANUFACTURER_COC_FALLBACK.versionDate
+      );
+    const versionW = font.widthOfTextAtSize(versionDisplay, 8);
+    page.drawText(formNumber, {
+      x: margin,
+      y: margin - 18,
+      size: 8,
+      font,
+      color: gray,
+    });
+    page.drawText(versionDisplay, {
+      x: width - margin - versionW,
+      y: margin - 18,
+      size: 8,
+      font,
+      color: gray,
+    });
 
     const bytes = await pdfDoc.save();
     res.set('Content-Type', 'application/pdf');

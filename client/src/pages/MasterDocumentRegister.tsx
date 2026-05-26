@@ -43,7 +43,7 @@ import {
   History,
   Upload,
 } from 'lucide-react';
-import type { ControlledDocument } from '@shared/schema';
+import type { ControlledDocument, DocumentVersionHistory } from '@shared/schema';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 
@@ -56,6 +56,7 @@ export default function MasterDocumentRegister() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isApproveDialogOpen, setIsApproveDialogOpen] = useState(false);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [selectedDocument, setSelectedDocument] = useState<ControlledDocument | null>(null);
@@ -71,6 +72,18 @@ export default function MasterDocumentRegister() {
   // Fetch current user session for role-based access
   const { data: session } = useQuery<{ username: string; role: string }>({
     queryKey: ['/api/auth/session'],
+  });
+
+  const { data: versionHistory = [], isLoading: isHistoryLoading } = useQuery<DocumentVersionHistory[]>({
+    queryKey: ['/api/controlled-documents', selectedDocument?.id, 'versions'],
+    enabled: isHistoryDialogOpen && Boolean(selectedDocument?.id),
+    queryFn: async () => {
+      const response = await fetch(`/api/controlled-documents/${selectedDocument?.id}/versions`, {
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error('Failed to fetch version history');
+      return response.json();
+    },
   });
 
   const canCreateEdit = session?.role === 'ADMIN' || session?.role === 'OWNER' || session?.username === 'lauriet';
@@ -159,6 +172,18 @@ export default function MasterDocumentRegister() {
   const formatDate = (dateString: string | null) => {
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString();
+  };
+
+  const formatVersionDisplay = (doc: ControlledDocument) => {
+    const versionDate = (doc as any).versionDate;
+    if (!versionDate) return `Version ${doc.currentVersion}`;
+    const date = String(versionDate).includes('T') ? new Date(versionDate) : new Date(`${versionDate}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return `Version ${doc.currentVersion}`;
+    return `Version ${doc.currentVersion} ${date.toLocaleDateString('en-US', {
+      month: '2-digit',
+      day: '2-digit',
+      year: 'numeric',
+    })}`;
   };
 
   const isPdfDocument = (doc: ControlledDocument) =>
@@ -356,6 +381,11 @@ export default function MasterDocumentRegister() {
     setIsApproveDialogOpen(true);
   };
 
+  const openHistoryDialog = (doc: ControlledDocument) => {
+    setSelectedDocument(doc);
+    setIsHistoryDialogOpen(true);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-7xl mx-auto ml-16">
@@ -511,7 +541,7 @@ export default function MasterDocumentRegister() {
                         </TableCell>
                         <TableCell>{doc.documentType}</TableCell>
                         <TableCell>{doc.department}</TableCell>
-                        <TableCell className="font-mono text-sm">{doc.currentVersion}</TableCell>
+                        <TableCell className="font-mono text-sm">{formatVersionDisplay(doc)}</TableCell>
                         <TableCell>{getStatusBadge(doc)}</TableCell>
                         <TableCell>{formatDate(doc.effectiveDate)}</TableCell>
                         <TableCell>
@@ -565,6 +595,7 @@ export default function MasterDocumentRegister() {
                               variant="ghost"
                               className="h-8 w-8 p-0"
                               title="Version History"
+                              onClick={() => openHistoryDialog(doc)}
                               data-testid={`button-history-${doc.id}`}
                             >
                               <History className="h-4 w-4" />
@@ -684,6 +715,39 @@ export default function MasterDocumentRegister() {
                 name="category"
                 placeholder="e.g., Safety, Quality, Production"
                 data-testid="input-category"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="versionDate">Version Date</Label>
+                <Input
+                  id="versionDate"
+                  name="versionDate"
+                  type="date"
+                  data-testid="input-version-date"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="originationDate">Origination Date</Label>
+                <Input
+                  id="originationDate"
+                  name="originationDate"
+                  type="date"
+                  data-testid="input-origination-date"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="currentVersion">Starting Version</Label>
+              <Input
+                id="currentVersion"
+                name="currentVersion"
+                defaultValue="1.0"
+                placeholder="e.g., 2.3"
+                data-testid="input-current-version"
               />
             </div>
 
@@ -913,6 +977,30 @@ export default function MasterDocumentRegister() {
                 />
               </div>
 
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-versionDate">Version Date</Label>
+                  <Input
+                    id="edit-versionDate"
+                    name="versionDate"
+                    type="date"
+                    defaultValue={(selectedDocument as any).versionDate || ''}
+                    data-testid="input-edit-version-date"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-originationDate">Origination Date</Label>
+                  <Input
+                    id="edit-originationDate"
+                    name="originationDate"
+                    type="date"
+                    defaultValue={(selectedDocument as any).originationDate || ''}
+                    data-testid="input-edit-origination-date"
+                  />
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="edit-description">Description</Label>
                 <Textarea
@@ -1069,6 +1157,65 @@ export default function MasterDocumentRegister() {
                 </Button>
               </DialogFooter>
             </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Version History Dialog */}
+      <Dialog open={isHistoryDialogOpen} onOpenChange={setIsHistoryDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Version History</DialogTitle>
+            <DialogDescription>
+              {selectedDocument
+                ? `${selectedDocument.documentNumber} - ${selectedDocument.documentName}`
+                : 'Controlled document revision history'}
+            </DialogDescription>
+          </DialogHeader>
+
+          {isHistoryLoading ? (
+            <div className="py-8 text-center text-sm text-gray-500">Loading version history...</div>
+          ) : versionHistory.length === 0 ? (
+            <div className="py-8 text-center text-sm text-gray-500">No revision history has been recorded.</div>
+          ) : (
+            <div className="max-h-[60vh] overflow-y-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Version</TableHead>
+                    <TableHead>Change</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead>Approved</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {versionHistory.map((version) => (
+                    <TableRow key={version.id}>
+                      <TableCell className="font-mono">{version.versionNumber}</TableCell>
+                      <TableCell className="max-w-sm whitespace-pre-wrap text-sm">
+                        {version.changeDescription || 'No change note recorded'}
+                      </TableCell>
+                      <TableCell>{version.status}</TableCell>
+                      <TableCell>
+                        <div className="text-sm">{formatDate(version.createdAt as any)}</div>
+                        <div className="text-xs text-gray-500">{version.createdBy}</div>
+                      </TableCell>
+                      <TableCell>
+                        {version.approvedAt ? (
+                          <>
+                            <div className="text-sm">{formatDate(version.approvedAt as any)}</div>
+                            <div className="text-xs text-gray-500">{version.approvedBy}</div>
+                          </>
+                        ) : (
+                          <span className="text-sm text-gray-500">Not approved</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </DialogContent>
       </Dialog>

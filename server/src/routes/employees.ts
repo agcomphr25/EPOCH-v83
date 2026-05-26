@@ -30,6 +30,31 @@ import {
 
 const router = Router();
 
+let chargeCodeAssignmentTableReady: Promise<void> | null = null;
+
+function ensureChargeCodeAssignmentTable(): Promise<void> {
+  if (!chargeCodeAssignmentTableReady) {
+    chargeCodeAssignmentTableReady = (async () => {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS charge_code_employee_assignments (
+          id SERIAL PRIMARY KEY,
+          charge_code_id INTEGER NOT NULL REFERENCES charge_codes(id) ON DELETE CASCADE,
+          employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+          assigned_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          UNIQUE (charge_code_id, employee_id)
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS charge_code_employee_assignments_charge_code_idx ON charge_code_employee_assignments(charge_code_id)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS charge_code_employee_assignments_employee_idx ON charge_code_employee_assignments(employee_id)`);
+    })().catch((error) => {
+      chargeCodeAssignmentTableReady = null;
+      throw error;
+    });
+  }
+  return chargeCodeAssignmentTableReady;
+}
+
 function normalizeEmployeeChargeCodeIds(value: unknown): number[] | null {
   if (!Array.isArray(value)) return null;
   const ids = value
@@ -39,6 +64,7 @@ function normalizeEmployeeChargeCodeIds(value: unknown): number[] | null {
 }
 
 async function getEmployeeAssignedChargeCodes(employeeId: number) {
+  await ensureChargeCodeAssignmentTable();
   return pool.query(
     `SELECT
        cc.id,

@@ -371,11 +371,15 @@ router.post("/kiosk/punches/employee/:employeeId/active-shift", h(async (req, re
     return;
   }
 
-  const openSession = await ledger.getOpenSession(employeeId);
-  const to = new Date();
-  const from = openSession?.clockIn
-    ? new Date(new Date(openSession.clockIn).getTime() - 2 * 60 * 60 * 1000)
-    : new Date(to.getTime() - 18 * 60 * 60 * 1000);
+  const bodyFrom = typeof req.body?.from === "string" ? new Date(req.body.from) : null;
+  const bodyTo = typeof req.body?.to === "string" ? new Date(req.body.to) : null;
+  const now = new Date();
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date(now);
+  todayEnd.setHours(23, 59, 59, 999);
+  const from = bodyFrom && !Number.isNaN(bodyFrom.getTime()) ? bodyFrom : todayStart;
+  const to = bodyTo && !Number.isNaN(bodyTo.getTime()) ? bodyTo : todayEnd;
   const sessions = await ledger.listSessions({ employeeId, from, to });
   res.json({
     employeeId,
@@ -633,6 +637,7 @@ router.post("/kiosk/punch-corrections", h(async (req, res): Promise<void> => {
     source: "kiosk",
     actorUser: null,
     actorIp: req.ip ?? null,
+    requireSupervisor: true,
   });
 
   if ("error" in result) {

@@ -187,6 +187,20 @@ function formatKioskTime(ts: string | null): string {
   return new Date(ts).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 }
 
+function toLocalDateTimeInput(ts: string | Date): string {
+  const date = ts instanceof Date ? ts : new Date(ts);
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
+function todayBoundsIso() {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const end = new Date();
+  end.setHours(23, 59, 59, 999);
+  return { from: start.toISOString(), to: end.toISOString() };
+}
+
 function formatKioskHours(hours: number): string {
   return `${hours.toFixed(2)} hr${Math.abs(hours - 1) < 0.005 ? '' : 's'}`;
 }
@@ -237,6 +251,7 @@ export default function KioskPage() {
     requestType: 'edit_session',
     punchLedgerId: '',
     selectedPunchType: 'clock_in' as PunchEventType,
+    chargeCodeId: 'none',
     clockIn: '',
     clockOut: '',
     reason: '',
@@ -269,7 +284,7 @@ export default function KioskPage() {
     setDcaaViolation(null);
     setCountdown(RESULT_DISPLAY_SEC);
     setLockoutSecondsRemaining(0);
-    setCorrectionForm({ requestType: 'edit_session', punchLedgerId: '', selectedPunchType: 'clock_in', clockIn: '', clockOut: '', reason: '' });
+    setCorrectionForm({ requestType: 'edit_session', punchLedgerId: '', selectedPunchType: 'clock_in', chargeCodeId: 'none', clockIn: '', clockOut: '', reason: '' });
     setActiveShiftPunches([]);
     setCorrectionLoading(false);
     setCertificationReviewLoading(false);
@@ -395,6 +410,17 @@ export default function KioskPage() {
         setChargeCodes(codes);
       }
 
+      const { from, to } = todayBoundsIso();
+      const punchesRes = await fetch(`/api/timekeeping/kiosk/punches/employee/${emp.id}/active-shift`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin, from, to }),
+      });
+      if (punchesRes.ok) {
+        const punchesData = await punchesRes.json();
+        setActiveShiftPunches(Array.isArray(punchesData.punches) ? punchesData.punches as PunchEvent[] : []);
+      }
+
       setStep('confirm');
     } catch {
       setErrorMsg('Network error. Please try again or see an administrator.');
@@ -451,10 +477,11 @@ export default function KioskPage() {
 
   const loadActiveShiftPunches = useCallback(async () => {
     if (!employee) return [];
+    const { from, to } = todayBoundsIso();
     const res = await fetch(`/api/timekeeping/kiosk/punches/employee/${employee.id}/active-shift`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pin }),
+      body: JSON.stringify({ pin, from, to }),
     });
     if (!res.ok) return [];
     const data = await res.json();
@@ -479,7 +506,8 @@ export default function KioskPage() {
       requestType: openEntry?.id ? 'edit_session' : 'add_session',
       punchLedgerId: openEntry?.id ? String(openEntry.id) : '',
       selectedPunchType: 'clock_in',
-      clockIn: openEntry?.clockIn ? new Date(openEntry.clockIn).toISOString().slice(0, 16) : '',
+      chargeCodeId: chargeCodes.find((cc) => cc.code === openEntry?.chargeCode)?.id.toString() ?? 'none',
+      clockIn: openEntry?.clockIn ? toLocalDateTimeInput(openEntry.clockIn) : '',
       clockOut: '',
       reason: '',
     });
@@ -492,20 +520,21 @@ export default function KioskPage() {
     } finally {
       setCorrectionLoading(false);
     }
-  }, [employee, loadActiveShiftPunches, punchStatus, restartIdleTimer]);
+  }, [chargeCodes, employee, loadActiveShiftPunches, punchStatus, restartIdleTimer]);
 
   const selectCorrectionPunch = useCallback((punch: PunchEvent) => {
-    const local = new Date(punch.punchedAt).toISOString().slice(0, 16);
+    const local = toLocalDateTimeInput(punch.punchedAt);
     setCorrectionForm((prev) => ({
       ...prev,
       requestType: 'edit_session',
       punchLedgerId: String(punch.sessionId),
       selectedPunchType: punch.type,
+      chargeCodeId: chargeCodes.find((cc) => cc.code === punch.costCode)?.id.toString() ?? 'none',
       clockIn: punch.type === 'clock_in' || punch.type === 'break_start' ? local : '',
       clockOut: punch.type === 'clock_out' || punch.type === 'break_end' ? local : '',
     }));
     restartIdleTimer();
-  }, [restartIdleTimer]);
+  }, [chargeCodes, restartIdleTimer]);
 
   const startMissingPunchCorrection = useCallback(() => {
     setCorrectionForm((prev) => ({
@@ -513,6 +542,7 @@ export default function KioskPage() {
       requestType: 'add_session',
       punchLedgerId: '',
       selectedPunchType: 'clock_in',
+      chargeCodeId: 'none',
       clockIn: '',
       clockOut: '',
     }));
@@ -541,6 +571,7 @@ export default function KioskPage() {
           proposedChanges: {
             punchType: correctionForm.selectedPunchType,
             laborClass: correctionForm.selectedPunchType === 'break_start' || correctionForm.selectedPunchType === 'break_end' ? 'BREAK' : 'REGULAR',
+            ...(correctionForm.chargeCodeId !== 'none' ? { chargeCodeId: Number(correctionForm.chargeCodeId) } : {}),
             ...(correctionForm.clockIn ? { clockIn: new Date(correctionForm.clockIn).toISOString() } : {}),
             ...(correctionForm.clockOut ? { clockOut: new Date(correctionForm.clockOut).toISOString() } : {}),
           },
@@ -919,6 +950,54 @@ export default function KioskPage() {
             </div>
           )}
 
+          {showPrimaryActions && (
+            <div className="rounded-2xl border bg-white p-4 space-y-3 text-left shadow-sm">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-widest text-gray-400">Today&apos;s Punches</p>
+                  <p className="text-xs text-gray-500">Tap a punch to request a correction.</p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    startMissingPunchCorrection();
+                    setStep('correction');
+                  }}
+                >
+                  Add Missing
+                </Button>
+              </div>
+
+              <div className="space-y-2 max-h-44 overflow-y-auto">
+                {activeShiftPunches.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-gray-200 p-3 text-sm text-gray-500">No punches found for today.</div>
+                ) : (
+                  activeShiftPunches.map((punch) => (
+                    <button
+                      key={`${punch.sessionId}-${punch.type}-${punch.punchedAt}`}
+                      type="button"
+                      onClick={() => {
+                        selectCorrectionPunch(punch);
+                        setStep('correction');
+                      }}
+                      className="w-full rounded-xl border border-gray-200 bg-white p-3 text-left transition-colors hover:bg-gray-50"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-semibold capitalize">{punch.type.replace(/_/g, ' ')}</span>
+                        <span className="text-sm font-medium text-gray-700">
+                          {new Date(punch.punchedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      {punch.costCode && <p className="text-xs text-gray-500 mt-1">CC {punch.costCode}</p>}
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
           {isClockOut && showClockOutCertification && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/40 px-6">
               <div className="w-full max-w-lg rounded-3xl bg-white p-6 text-left shadow-2xl">
@@ -1031,11 +1110,11 @@ export default function KioskPage() {
           <div className="rounded-2xl border bg-white p-4 space-y-3 shadow-sm">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <label className="block text-xs uppercase tracking-widest text-gray-400">Active Shift Punches</label>
+                <label className="block text-xs uppercase tracking-widest text-gray-400">Today&apos;s Punches</label>
                 <p className="text-xs text-gray-500">Tap a punch to edit it.</p>
               </div>
               <Button type="button" variant="outline" size="sm" onClick={startMissingPunchCorrection}>
-                Add
+                Add Missing
               </Button>
             </div>
 
@@ -1043,7 +1122,7 @@ export default function KioskPage() {
               {correctionLoading ? (
                 <div className="rounded-xl border border-gray-200 p-3 text-sm text-gray-500">Loading punches...</div>
               ) : activeShiftPunches.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-gray-200 p-3 text-sm text-gray-500">No punches found for this active shift.</div>
+                <div className="rounded-xl border border-dashed border-gray-200 p-3 text-sm text-gray-500">No punches found for today.</div>
               ) : (
                 activeShiftPunches.map((punch) => {
                   const selected = correctionForm.requestType === 'edit_session' && correctionForm.punchLedgerId === String(punch.sessionId) && correctionForm.selectedPunchType === punch.type;
@@ -1073,7 +1152,17 @@ export default function KioskPage() {
             <select
               value={correctionForm.selectedPunchType}
               onChange={(event) => {
-                setCorrectionForm((prev) => ({ ...prev, selectedPunchType: event.target.value as PunchEventType }));
+                const nextType = event.target.value as PunchEventType;
+                setCorrectionForm((prev) => {
+                  const isEndPunch = nextType === 'clock_out' || nextType === 'break_end';
+                  const movableTime = prev.clockIn || prev.clockOut;
+                  return {
+                    ...prev,
+                    selectedPunchType: nextType,
+                    clockIn: isEndPunch ? (prev.clockIn && prev.clockOut ? prev.clockIn : '') : movableTime,
+                    clockOut: isEndPunch ? movableTime : (prev.clockIn && prev.clockOut ? prev.clockOut : ''),
+                  };
+                });
                 restartIdleTimer();
               }}
               className="w-full rounded-xl border border-gray-200 p-3"
@@ -1088,7 +1177,24 @@ export default function KioskPage() {
               )}
             </select>
 
-            <label className="block text-xs uppercase tracking-widest text-gray-400">Correct Clock In</label>
+            <label className="block text-xs uppercase tracking-widest text-gray-400">Correct Charge Code</label>
+            <select
+              value={correctionForm.chargeCodeId}
+              onChange={(event) => {
+                setCorrectionForm((prev) => ({ ...prev, chargeCodeId: event.target.value }));
+                restartIdleTimer();
+              }}
+              className="w-full rounded-xl border border-gray-200 p-3"
+            >
+              <option value="none">No charge code</option>
+              {chargeCodes.map((cc) => (
+                <option key={cc.id} value={String(cc.id)}>
+                  {cc.code}{cc.description ? ` - ${cc.description}` : ''}
+                </option>
+              ))}
+            </select>
+
+            <label className="block text-xs uppercase tracking-widest text-gray-400">Correct Start Time</label>
             <input
               type="datetime-local"
               value={correctionForm.clockIn}
@@ -1101,7 +1207,7 @@ export default function KioskPage() {
 
             {correctionForm.requestType === 'edit_session' && (
               <>
-                <label className="block text-xs uppercase tracking-widest text-gray-400">Correct Clock Out</label>
+                <label className="block text-xs uppercase tracking-widest text-gray-400">Correct End Time</label>
                 <input
                   type="datetime-local"
                   value={correctionForm.clockOut}

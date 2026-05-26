@@ -6460,6 +6460,12 @@ export const p2CertificatesOfConformance = pgTable('p2_certificates_of_conforman
   processRecords: jsonb('process_records'), // Array of { process, recordId, result }
   inspectionSummary: jsonb('inspection_summary'), // Summary of all inspections
   traceabilityData: jsonb('traceability_data'), // All material traceability data
+  templateDocumentId: uuid('template_document_id').references(() => controlledDocuments.id),
+  templateDocumentName: text('template_document_name'),
+  templateDocumentNumber: text('template_document_number'),
+  templateVersion: text('template_version'),
+  templateVersionDate: date('template_version_date'),
+  templateDisplay: text('template_display'),
   qaMgrName: text('qa_mgr_name'),
   qaMgrSignature: text('qa_mgr_signature'),
   qaMgrDate: timestamp('qa_mgr_date'),
@@ -10083,6 +10089,7 @@ export function mapQueueType(category: import('../shared/utils/supplySourceDashb
 // Controlled Documents - Master Document Register
 export const controlledDocuments = pgTable('controlled_documents', {
   id: uuid('id').defaultRandom().primaryKey(),
+  templateKey: text('template_key'),
   documentNumber: text('document_number').notNull(), // e.g., DOC-001
   documentName: text('document_name').notNull(),
   documentType: text('document_type').notNull(), // SOP, Work Instruction, Form, etc.
@@ -10090,6 +10097,8 @@ export const controlledDocuments = pgTable('controlled_documents', {
   category: text('category'), // Optional additional categorization
   description: text('description'),
   currentVersion: text('current_version').notNull().default('1.0'), // Major.Minor format
+  versionDate: date('version_date'),
+  originationDate: date('origination_date'),
   status: text('status').notNull().default('draft'), // draft, pending, approved, expired
   effectiveDate: date('effective_date'),
   expirationDate: date('expiration_date'),

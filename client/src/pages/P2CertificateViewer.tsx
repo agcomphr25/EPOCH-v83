@@ -8,6 +8,13 @@ import { Printer, ArrowLeft, Award, CheckCircle, Clock, Shield } from 'lucide-re
 import { format } from 'date-fns';
 import { COMPANY_INFO, CERTIFICATE_TEMPLATES } from '@shared/company-config';
 
+const formatTemplateDate = (value?: string) => {
+  if (!value) return '';
+  const date = value.includes('T') ? new Date(value) : new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return '';
+  return format(date, 'MM/dd/yyyy');
+};
+
 interface InspectionSummary {
   totalInspections: number;
   passed: number;
@@ -36,6 +43,11 @@ interface CertificateData {
   processRecords?: any;
   inspectionSummary?: InspectionSummary;
   traceabilityData?: any;
+  templateDocumentName?: string;
+  templateDocumentNumber?: string;
+  templateVersion?: string;
+  templateVersionDate?: string;
+  templateDisplay?: string;
   qaMgrName?: string;
   qaMgrSignature?: string;
   qaMgrDate?: string;
@@ -88,6 +100,12 @@ export default function P2CertificateViewer() {
 
   const serialNumbers = (certificate.serialNumbers as string[]) || [];
   const inspectionSummary = certificate.inspectionSummary as any;
+  const formNumber = certificate.templateDocumentNumber || 'FO Form 6';
+  const versionDisplay =
+    certificate.templateDisplay ||
+    (certificate.templateVersion
+      ? `Version ${certificate.templateVersion}${certificate.templateVersionDate ? ` ${formatTemplateDate(certificate.templateVersionDate)}` : ''}`
+      : 'Version 2.3 08/14/2024');
 
   return (
     <div className="container mx-auto px-4 py-6 max-w-4xl">
@@ -299,6 +317,10 @@ export default function P2CertificateViewer() {
           <div className="mt-8 pt-6 border-t text-center text-xs text-gray-400">
             <p>This certificate is generated in accordance with AS9100 quality management system requirements.</p>
             <p>Document ID: {certificate.id}</p>
+          </div>
+          <div className="mt-4 flex items-center justify-between text-xs text-gray-500">
+            <span>{formNumber}</span>
+            <span>{versionDisplay}</span>
           </div>
         </CardContent>
       </Card>

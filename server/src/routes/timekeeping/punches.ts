@@ -60,20 +60,31 @@ function rowsOf<T = any>(result: any): T[] {
 async function listVisibleChargeCodes(employeeId: number | null, includeDepartment = false) {
   await ensureChargeCodeAssignmentTable();
   const rows = rowsOf(await pool.query(
-    `SELECT
+    `WITH employee_has_explicit_assignments AS (
+       SELECT EXISTS (
+         SELECT 1
+         FROM charge_code_employee_assignments cca
+         WHERE cca.employee_id = $1::int
+       ) AS has_assignments
+     )
+     SELECT
        cc.id,
        cc.code,
        cc.description,
        ${includeDepartment ? 'cc.department,' : ''}
        cc.type
      FROM charge_codes cc
+     CROSS JOIN employee_has_explicit_assignments ehea
      WHERE cc.active = true
        AND (
          $1::int IS NULL
-         OR NOT EXISTS (
-           SELECT 1
-           FROM charge_code_employee_assignments cca_any
-           WHERE cca_any.charge_code_id = cc.id
+         OR (
+           ehea.has_assignments = false
+           AND NOT EXISTS (
+             SELECT 1
+             FROM charge_code_employee_assignments cca_any
+             WHERE cca_any.charge_code_id = cc.id
+           )
          )
          OR EXISTS (
            SELECT 1
@@ -943,12 +954,18 @@ router.get("/punches/my/current", authenticateToken, h(async (req, res): Promise
   const openSession = await ledger.getOpenSession(epochEmployeeId);
   const status = ledger.deriveStatus(openSession);
   const hoursToday = await ledger.computeHoursToday(epochEmployeeId);
+  const openSessionAgeHours = openSession
+    ? Math.max(0, (Date.now() - new Date(openSession.clockIn).getTime()) / 3_600_000)
+    : 0;
+  const openSessionRequiresReview = openSessionAgeHours >= 18;
 
   res.json({
     employeeId: epochEmployeeId,
     status,
     clockedInAt: openSession?.clockIn?.toISOString() ?? null,
     hoursToday,
+    openSessionAgeHours,
+    openSessionRequiresReview,
     openEntry: openSession ?? null,
   });
 }));

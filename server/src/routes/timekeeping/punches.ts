@@ -60,31 +60,20 @@ function rowsOf<T = any>(result: any): T[] {
 async function listVisibleChargeCodes(employeeId: number | null, includeDepartment = false) {
   await ensureChargeCodeAssignmentTable();
   const rows = rowsOf(await pool.query(
-    `WITH employee_has_explicit_assignments AS (
-       SELECT EXISTS (
-         SELECT 1
-         FROM charge_code_employee_assignments cca
-         WHERE cca.employee_id = $1::int
-       ) AS has_assignments
-     )
-     SELECT
+    `SELECT
        cc.id,
        cc.code,
        cc.description,
        ${includeDepartment ? 'cc.department,' : ''}
        cc.type
      FROM charge_codes cc
-     CROSS JOIN employee_has_explicit_assignments ehea
      WHERE cc.active = true
        AND (
          $1::int IS NULL
-         OR (
-           ehea.has_assignments = false
-           AND NOT EXISTS (
-             SELECT 1
-             FROM charge_code_employee_assignments cca_any
-             WHERE cca_any.charge_code_id = cc.id
-           )
+         OR NOT EXISTS (
+           SELECT 1
+           FROM charge_code_employee_assignments cca_any
+           WHERE cca_any.charge_code_id = cc.id
          )
          OR EXISTS (
            SELECT 1

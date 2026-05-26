@@ -6,7 +6,16 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
 import {
   Package,
@@ -114,6 +123,9 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
   const [creatingInvoiceFor, setCreatingInvoiceFor] = useState<string | null>(null);
   const [summaryModalPO, setSummaryModalPO] = useState<string | null>(null);
   const [summaryModalSerials, setSummaryModalSerials] = useState<SerializedUnit[]>([]);
+  const [cocModal, setCocModal] = useState<{ poNumber: string; lotId: string } | null>(null);
+  const [cocSpecialProcesses, setCocSpecialProcesses] = useState('N/A');
+  const [cocShipDate, setCocShipDate] = useState(() => new Date().toISOString().slice(0, 10));
 
   const autoTriggered = useRef(false);
 
@@ -421,16 +433,21 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
     }
   };
 
-  const handleGenerateCoC = async (poNumber: string, lotId: string) => {
-    const specialProcessesInput = window.prompt('Special Processes for this CoC', 'N/A');
-    if (specialProcessesInput === null) return;
-    const specialProcesses = specialProcessesInput.trim() || 'N/A';
+  const openCoCModal = (poNumber: string, lotId: string) => {
+    setCocModal({ poNumber, lotId });
+    setCocSpecialProcesses('N/A');
+    setCocShipDate(new Date().toISOString().slice(0, 10));
+  };
 
+  const handleGenerateCoC = async () => {
+    if (!cocModal) return;
+    const { poNumber, lotId } = cocModal;
+    const specialProcesses = cocSpecialProcesses.trim() || 'N/A';
     setGeneratingCertFor(lotId);
     try {
       const cert = await apiRequest('/api/p2/certificates', {
         method: 'POST',
-        body: JSON.stringify({ lotId, createdBy: 'shipping', specialProcesses }),
+        body: JSON.stringify({ lotId, createdBy: 'shipping', specialProcesses, shipDate: cocShipDate }),
       });
       setCreatedShipments((prev) => {
         const list = prev[poNumber] ?? [];
@@ -441,6 +458,7 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
           ),
         };
       });
+      setCocModal(null);
       toast({ title: 'CoC Generated', description: `Certificate ${cert.certificateNumber} created.` });
     } catch (err: any) {
       toast({ title: 'CoC Failed', description: err?.message || 'Failed to generate certificate', variant: 'destructive' });
@@ -981,7 +999,7 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
                               size="sm" variant="outline"
                               className="border-blue-300 text-blue-700 hover:bg-blue-50"
                               disabled={generatingCertFor === shipment.lotId}
-                              onClick={() => handleGenerateCoC(group.poNumber, shipment.lotId)}
+                              onClick={() => openCoCModal(group.poNumber, shipment.lotId)}
                             >
                               {generatingCertFor === shipment.lotId ? (
                                 <><Loader2 className="w-3 h-3 mr-1 animate-spin" />Generating...</>
@@ -1059,6 +1077,60 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
           })}
         </div>
       )}
+      <Dialog open={!!cocModal} onOpenChange={(open) => !open && setCocModal(null)}>
+        <DialogContent className="sm:max-w-[460px]">
+          <DialogHeader>
+            <DialogTitle>Generate Certificate of Conformance</DialogTitle>
+            <DialogDescription>
+              Confirm the shipping date and any special processes before creating the CoC.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="coc-ship-date">Shipping Date</Label>
+              <Input
+                id="coc-ship-date"
+                type="date"
+                value={cocShipDate}
+                onChange={(event) => setCocShipDate(event.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="coc-special-processes">Special Processes</Label>
+              <Textarea
+                id="coc-special-processes"
+                value={cocSpecialProcesses}
+                onChange={(event) => setCocSpecialProcesses(event.target.value)}
+                placeholder="N/A"
+                rows={3}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setCocModal(null)}
+              disabled={!!cocModal && generatingCertFor === cocModal.lotId}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleGenerateCoC}
+              disabled={!cocShipDate || (!!cocModal && generatingCertFor === cocModal.lotId)}
+            >
+              {!!cocModal && generatingCertFor === cocModal.lotId ? (
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Generating...</>
+              ) : (
+                <><ClipboardCheck className="w-4 h-4 mr-2" />Generate CoC</>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -958,6 +958,7 @@ const createCertificateSchema = z.object({
   certificationText: z.string().optional(),
   specialProcesses: z.string().optional(),
   qaMgrTitle: z.string().optional(),
+  shipDate: z.string().optional(),
 });
 
 router.post('/certificates', authenticateToken, requirePermission('shipping.release_shipment'), async (req: Request, res: Response) => {
@@ -1018,7 +1019,7 @@ router.post('/certificates', authenticateToken, requirePermission('shipping.rele
         quantity: serials.length,
         serialNumbers: serials.map((s) => s.serialNumber),
         manufacturingDate: manufacturingDate as Date,
-        shipDate: new Date(),
+        shipDate: input.shipDate ? new Date(`${input.shipDate}T12:00:00`) : new Date(),
         certificationText: input.certificationText || defaultText,
         processRecords: { specialProcesses: input.specialProcesses?.trim() || 'N/A' },
         traceabilityData: { qaMgrTitle: input.qaMgrTitle?.trim() || 'Quality Assurance' },

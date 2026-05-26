@@ -1759,7 +1759,11 @@ async function promoteTravelerToInProgress(
 
   // WAD gate: traveler's linked production work order must be RELEASED or IN_PROGRESS.
   if (traveler.productionWorkOrderId) {
-    const wad = await storage.getWorkOrderById(traveler.productionWorkOrderId);
+    const [wad] = await db
+      .select({ id: productionWorkOrders.id, status: productionWorkOrders.status })
+      .from(productionWorkOrders)
+      .where(eq(productionWorkOrders.id, traveler.productionWorkOrderId))
+      .limit(1);
     if (!wad) {
       return {
         ok: false,
@@ -1811,7 +1815,11 @@ async function promoteTravelerToInProgress(
 
   // Auto-transition the WAD from RELEASED → IN_PROGRESS on first traveler start
   if (traveler.productionWorkOrderId) {
-    const wad = await storage.getWorkOrderById(traveler.productionWorkOrderId);
+    const [wad] = await db
+      .select({ id: productionWorkOrders.id, status: productionWorkOrders.status })
+      .from(productionWorkOrders)
+      .where(eq(productionWorkOrders.id, traveler.productionWorkOrderId))
+      .limit(1);
     if (wad && wad.status === 'RELEASED') {
       await storage.updateWorkOrderStatus(wad.id, 'IN_PROGRESS');
       console.log(`[Travelers] WAD ${wad.id} transitioned to IN_PROGRESS on first traveler start`);

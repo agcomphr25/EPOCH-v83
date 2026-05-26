@@ -1054,12 +1054,15 @@ ${materialBudgetExpression}
     WHERE project_id = $1
   `, [projectId]);
 
-  const acceptedReceivedMaterialRes = await pool.query<{ acceptedMaterialCost: string }>(`
-    SELECT COALESCE(SUM(extended_cost), 0) AS "acceptedMaterialCost"
-    FROM project_received_materials
-    WHERE project_id = $1
-      AND status = 'accepted'
-  `, [projectId]);
+  const hasProjectReceivedMaterials = await publicTableExists('project_received_materials');
+  const acceptedReceivedMaterialCost = hasProjectReceivedMaterials
+    ? parseFloat((await pool.query<{ acceptedMaterialCost: string }>(`
+        SELECT COALESCE(SUM(extended_cost), 0) AS "acceptedMaterialCost"
+        FROM project_received_materials
+        WHERE project_id = $1
+          AND status = 'accepted'
+      `, [projectId]))[0]?.acceptedMaterialCost) || 0
+    : 0;
 
   // Quantity-based production percent
   const qtyProgressRes = await pool.query<{ totalRequired: string; totalCompleted: string }>(`
@@ -1273,7 +1276,7 @@ ${materialBudgetExpression}
     (parseFloat(partsRequestMaterialRes[0]?.committedMaterialCost) || 0);
   const consumedMaterialCost =
     (parseFloat(consumedRes[0].consumedMaterialCost) || 0) +
-    (parseFloat(acceptedReceivedMaterialRes[0]?.acceptedMaterialCost) || 0);
+    acceptedReceivedMaterialCost;
   const plannedMaterialCost = parseFloat(wadMaterialBudgetRes[0]?.plannedMaterialCost) || 0;
   const remainingMaterialBudget = plannedMaterialCost - committedMaterialCost - consumedMaterialCost;
 
@@ -2381,13 +2384,16 @@ ${materialBudgetExpression}
     ) parts_request_sub
   `, [projectId, ORDERED_PARTS_REQUEST_STATUSES]);
 
-  const projectReceivedSummaryRes = await pool.query<ProjectReceivedMaterialSummaryRow>(`
-    SELECT
-      COALESCE(SUM(extended_cost) FILTER (WHERE status = 'pending_pm_acceptance'), 0) AS "pendingReceivedCost",
-      COALESCE(SUM(extended_cost) FILTER (WHERE status = 'accepted'), 0) AS "acceptedReceivedCost"
-    FROM project_received_materials
-    WHERE project_id = $1
-  `, [projectId]);
+  const hasProjectReceivedMaterials = await publicTableExists('project_received_materials');
+  const projectReceivedSummaryRes = hasProjectReceivedMaterials
+    ? await pool.query<ProjectReceivedMaterialSummaryRow>(`
+        SELECT
+          COALESCE(SUM(extended_cost) FILTER (WHERE status = 'pending_pm_acceptance'), 0) AS "pendingReceivedCost",
+          COALESCE(SUM(extended_cost) FILTER (WHERE status = 'accepted'), 0) AS "acceptedReceivedCost"
+        FROM project_received_materials
+        WHERE project_id = $1
+      `, [projectId])
+    : [{ pendingReceivedCost: '0', acceptedReceivedCost: '0' }];
 
   const rowsRes = await pool.query<MaterialItemRow>(`
     SELECT
@@ -2471,39 +2477,41 @@ ${materialBudgetExpression}
     ORDER BY pr.request_date DESC
   `, [projectId, ORDERED_PARTS_REQUEST_STATUSES]);
 
-  const projectReceivedRowsRes = await pool.query<ProjectReceivedMaterialRow>(`
-    SELECT
-      ('PRM-' || prm.id::text) AS "inventoryItemId",
-      COALESCE(ii.ag_part_number, rl.ag_part_number, '') AS "itemCode",
-      COALESCE(ii.name, rl.description, '') AS "itemName",
-      COALESCE(ru.lot_number, ml.lot_number) AS "lotNumber",
-      COALESCE(ru.internal_control_number, ml.internal_control_number) AS "internalControlNumber",
-      prm.quantity::numeric AS "qtyRequired",
-      CASE WHEN prm.status = 'pending_pm_acceptance' THEN prm.quantity::numeric ELSE 0::numeric END AS "qtyAllocated",
-      CASE WHEN prm.status = 'accepted' THEN prm.quantity::numeric ELSE 0::numeric END AS "qtyIssued",
-      prm.unit_cost::numeric AS "unitCost",
-      CASE WHEN prm.status = 'pending_pm_acceptance' THEN prm.extended_cost::numeric ELSE 0::numeric END AS "committedCost",
-      CASE WHEN prm.status = 'accepted' THEN prm.extended_cost::numeric ELSE 0::numeric END AS "consumedCost",
-      CASE
-        WHEN prm.status = 'pending_pm_acceptance' THEN 'PENDING_PM_ACCEPTANCE'
-        WHEN prm.status = 'accepted' THEN 'RECEIVED_ACCEPTED'
-        ELSE 'RECEIVED_REJECTED'
-      END AS "status",
-      prm.id AS "projectReceivedMaterialId",
-      r.receipt_number AS "receiptNumber",
-      ru.barcode AS "receivedUnitBarcode"
-    FROM project_received_materials prm
-    JOIN received_units ru ON ru.id = prm.received_unit_id
-    JOIN receipts r ON r.id = prm.receipt_id
-    JOIN receipt_lines rl ON rl.id = ru.receipt_line_id
-    LEFT JOIN material_lots ml ON ml.id = prm.material_lot_id
-    LEFT JOIN inventory_items ii ON ii.id = ml.inventory_item_id
-    WHERE prm.project_id = $1
-      AND prm.status IN ('pending_pm_acceptance', 'accepted')
-    ORDER BY
-      CASE WHEN prm.status = 'pending_pm_acceptance' THEN 0 ELSE 1 END,
-      prm.created_at DESC
-  `, [projectId]);
+  const projectReceivedRowsRes = hasProjectReceivedMaterials
+    ? await pool.query<ProjectReceivedMaterialRow>(`
+        SELECT
+          ('PRM-' || prm.id::text) AS "inventoryItemId",
+          COALESCE(ii.ag_part_number, rl.ag_part_number, '') AS "itemCode",
+          COALESCE(ii.name, rl.description, '') AS "itemName",
+          COALESCE(ru.lot_number, ml.lot_number) AS "lotNumber",
+          COALESCE(ru.internal_control_number, ml.internal_control_number) AS "internalControlNumber",
+          prm.quantity::numeric AS "qtyRequired",
+          CASE WHEN prm.status = 'pending_pm_acceptance' THEN prm.quantity::numeric ELSE 0::numeric END AS "qtyAllocated",
+          CASE WHEN prm.status = 'accepted' THEN prm.quantity::numeric ELSE 0::numeric END AS "qtyIssued",
+          prm.unit_cost::numeric AS "unitCost",
+          CASE WHEN prm.status = 'pending_pm_acceptance' THEN prm.extended_cost::numeric ELSE 0::numeric END AS "committedCost",
+          CASE WHEN prm.status = 'accepted' THEN prm.extended_cost::numeric ELSE 0::numeric END AS "consumedCost",
+          CASE
+            WHEN prm.status = 'pending_pm_acceptance' THEN 'PENDING_PM_ACCEPTANCE'
+            WHEN prm.status = 'accepted' THEN 'RECEIVED_ACCEPTED'
+            ELSE 'RECEIVED_REJECTED'
+          END AS "status",
+          prm.id AS "projectReceivedMaterialId",
+          r.receipt_number AS "receiptNumber",
+          ru.barcode AS "receivedUnitBarcode"
+        FROM project_received_materials prm
+        JOIN received_units ru ON ru.id = prm.received_unit_id
+        JOIN receipts r ON r.id = prm.receipt_id
+        JOIN receipt_lines rl ON rl.id = ru.receipt_line_id
+        LEFT JOIN material_lots ml ON ml.id = prm.material_lot_id
+        LEFT JOIN inventory_items ii ON ii.id = ml.inventory_item_id
+        WHERE prm.project_id = $1
+          AND prm.status IN ('pending_pm_acceptance', 'accepted')
+        ORDER BY
+          CASE WHEN prm.status = 'pending_pm_acceptance' THEN 0 ELSE 1 END,
+          prm.created_at DESC
+      `, [projectId])
+    : [];
 
   const plannedCost = parseFloat(budgetRes[0]?.plannedCost) || 0;
   const committedCost = parseFloat(summaryRes[0]?.committedCost) || 0;
@@ -2534,6 +2542,11 @@ router.patch('/:projectId/materials/received/:receivedMaterialId', h(async (req,
 
   if (!['accept', 'reject'].includes(action)) {
     res.status(400).json({ error: 'action must be accept or reject' });
+    return;
+  }
+
+  if (!(await publicTableExists('project_received_materials'))) {
+    res.status(404).json({ error: 'Pending received material not found for this project' });
     return;
   }
 

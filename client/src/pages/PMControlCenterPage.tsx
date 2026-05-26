@@ -833,12 +833,6 @@ function ProductionTab({ projectId }: { projectId: string }) {
   const serializedOtherItems = selectedSerializedItems
     .filter(item => serializedStatusGroup(item) === 'other')
     .sort((a, b) => (a.serialNumber || a.barcode || a.id).localeCompare(b.serialNumber || b.barcode || b.id));
-  const serializedAccordionDefaults = [
-    serializedCompleteItems.length > 0 ? 'complete' : null,
-    serializedInProgressDepartments.length > 0 ? 'in-progress' : null,
-    serializedOtherItems.length > 0 ? 'other' : null,
-  ].filter(Boolean) as string[];
-
   function renderSerializedItem(item: P2SerializedBreakdownItem) {
     return (
       <div key={item.id} className="grid gap-2 p-3 text-sm sm:grid-cols-[1.2fr_1fr_1fr]">
@@ -1213,7 +1207,7 @@ function ProductionTab({ projectId }: { projectId: string }) {
           )}
 
           {!serializedBreakdownLoading && !serializedBreakdownError && selectedSerializedItems.length > 0 && (
-            <Accordion type="multiple" defaultValue={serializedAccordionDefaults} className="space-y-3">
+            <Accordion type="multiple" className="space-y-3">
               {serializedCompleteItems.length > 0 && (
                 <AccordionItem value="complete" className="rounded-md border px-3">
                   <AccordionTrigger className="py-3 hover:no-underline">
@@ -1245,7 +1239,6 @@ function ProductionTab({ projectId }: { projectId: string }) {
                   <AccordionContent className="pb-3">
                     <Accordion
                       type="multiple"
-                      defaultValue={serializedInProgressDepartments.map(([department]) => `dept-${department}`)}
                       className="space-y-2"
                     >
                       {serializedInProgressDepartments.map(([department, items]) => (

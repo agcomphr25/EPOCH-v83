@@ -1,6 +1,6 @@
 import { storage } from '../../storage';
 import { db } from '../../db';
-import { calibrationAssets, calibrationUseLogs, travelerAuthorizations, travelerMaterialConsumption } from '../../schema';
+import { calibrationAssets, calibrationUseLogs, productionWorkOrders, travelerAuthorizations, travelerMaterialConsumption } from '../../schema';
 import { eq, and, inArray } from 'drizzle-orm';
 
 export interface GateResult {
@@ -74,13 +74,21 @@ export function buildTrainingGateErrorBody(
  * @param wadId  UUID of the production_work_orders row
  */
 export async function evaluateWadReleaseGate(wadId: string): Promise<GateResult> {
-  const wad = await storage.getWorkOrderById(wadId);
+  const [wad] = await db
+    .select({
+      id: productionWorkOrders.id,
+      status: productionWorkOrders.status,
+      wadStatus: productionWorkOrders.wadStatus,
+    })
+    .from(productionWorkOrders)
+    .where(eq(productionWorkOrders.id, wadId))
+    .limit(1);
   if (!wad) {
     return { allowed: false, reason: 'The linked production work order could not be found.' };
   }
 
   const status = String(wad.status || '').trim().toUpperCase();
-  const wadStatus = String((wad as any).wadStatus || '').trim().toUpperCase();
+  const wadStatus = String(wad.wadStatus || '').trim().toUpperCase();
 
   if (status === 'RELEASED' || status === 'IN_PROGRESS') {
     return { allowed: true };

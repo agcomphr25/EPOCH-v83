@@ -68,6 +68,68 @@ function uploadReceiptDocument(req: Request, res: Response, next: NextFunction) 
 // Applied to all mutating endpoints at the route level for defence-in-depth beyond global auth.
 const requireReceivingAccess = requireRole('ADMIN', 'EMPLOYEE', 'OWNER');
 
+let receivingProjectMaterialSchemaReady: Promise<void> | null = null;
+
+async function ensureReceivingProjectMaterialSchema(): Promise<void> {
+  if (!receivingProjectMaterialSchemaReady) {
+    receivingProjectMaterialSchemaReady = (async () => {
+      await db.execute(sql`
+        ALTER TABLE received_units
+          ADD COLUMN IF NOT EXISTS target_project_id UUID REFERENCES projects(id) ON DELETE SET NULL
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS received_units_target_project_idx
+          ON received_units(target_project_id)
+      `);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS project_received_materials (
+          id SERIAL PRIMARY KEY,
+          project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+          received_unit_id INTEGER NOT NULL REFERENCES received_units(id) ON DELETE CASCADE,
+          receipt_id INTEGER NOT NULL REFERENCES receipts(id) ON DELETE CASCADE,
+          material_lot_id UUID REFERENCES material_lots(id) ON DELETE SET NULL,
+          quantity NUMERIC NOT NULL DEFAULT 0,
+          unit_cost NUMERIC NOT NULL DEFAULT 0,
+          extended_cost NUMERIC NOT NULL DEFAULT 0,
+          status TEXT NOT NULL DEFAULT 'pending_pm_acceptance',
+          accepted_by_user_id INTEGER,
+          accepted_by_display_name TEXT,
+          accepted_at TIMESTAMP,
+          rejected_by_user_id INTEGER,
+          rejected_by_display_name TEXT,
+          rejected_at TIMESTAMP,
+          notes TEXT,
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW(),
+          UNIQUE(received_unit_id)
+        )
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS project_received_materials_project_idx
+          ON project_received_materials(project_id)
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS project_received_materials_status_idx
+          ON project_received_materials(status)
+      `);
+    })().catch((err) => {
+      receivingProjectMaterialSchemaReady = null;
+      throw err;
+    });
+  }
+  await receivingProjectMaterialSchemaReady;
+}
+
+router.use(async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    await ensureReceivingProjectMaterialSchema();
+    next();
+  } catch (err: any) {
+    console.error('Receiving project material schema guard failed:', err);
+    res.status(500).json({ error: 'Receiving project material schema is not ready' });
+  }
+});
+
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 /** Type-safe row extractor for raw SQL results (Drizzle returns { rows: unknown[] } or the rows directly) */

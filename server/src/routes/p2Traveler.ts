@@ -526,7 +526,7 @@ async function findProductionWorkOrderForSerializedItem(params: {
   }
 
   const [workOrder] = await db
-    .select()
+    .select({ id: productionWorkOrders.id })
     .from(productionWorkOrders)
     .where(and(...whereParts))
     .orderBy(desc(productionWorkOrders.createdAt))

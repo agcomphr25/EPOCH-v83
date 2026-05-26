@@ -5,8 +5,7 @@ import {
   boms,
   bomRevisions,
   bomLines,
-  getSupplySourceDashboard,
-  supplySourceDashboardToLegacyDept,
+  getManufacturingRouteDefinition,
   insertManufacturingQueueSchema,
   type ManufacturedCategory,
   type ManufacturingQueue,
@@ -44,10 +43,17 @@ export async function autoPopulateManufacturingQueue(
       where: eq(inventoryItems.agPartNumber, params.inventoryPartNumber),
     });
 
-    // Only proceed if item is manufactured and has a manufacturing department
+    const route = getManufacturingRouteDefinition(inventoryItem?.manufacturedCategory as ManufacturedCategory | null);
+    const department = route?.department || inventoryItem?.manufacturingDepartment;
+    const queueType = route?.queueType ?? null;
+    const isManufactured =
+      inventoryItem?.itemType === 'MANUFACTURED' ||
+      inventoryItem?.type === 'Manufactured';
+
+    // Only proceed if item is manufactured and has a routable department
     if (!inventoryItem ||
-        inventoryItem.type !== 'Manufactured' ||
-        !inventoryItem.manufacturingDepartment) {
+        !isManufactured ||
+        !department) {
       return null;
     }
 
@@ -113,13 +119,14 @@ export async function autoPopulateManufacturingQueue(
       vendorPoItemId: params.vendorPoItemId ?? null,
       p2PoId: params.p2PoId || null,
       p2PoItemId: params.p2PoItemId || null,
-      department: inventoryItem.manufacturingDepartment,
+      department,
       quantityRequested: params.quantity,
       quantityCompleted: 0,
       status: 'PENDING',
       priority: 50,
       dueDate: params.dueDate || null,
       assignedTo: null,
+      queueType,
       notes,
     });
 
@@ -130,7 +137,7 @@ export async function autoPopulateManufacturingQueue(
 
     const poType = params.vendorPoId ? 'Vendor' : 'P2';
     const poId = params.vendorPoId || params.p2PoId;
-    console.log(`✅ Auto-created manufacturing queue entry for ${inventoryItem.agPartNumber} in ${inventoryItem.manufacturingDepartment} (Queue ID: ${newQueueItem.id}, ${poType} PO #${poId})`);
+    console.log(`✅ Auto-created manufacturing queue entry for ${inventoryItem.agPartNumber} in ${department} (Queue ID: ${newQueueItem.id}, ${poType} PO #${poId})`);
 
     // Auto-generate allocation requirements from routing (best-effort, non-blocking)
     generateRequirementsFromRouting(newQueueItem.id).catch(err =>
@@ -258,8 +265,15 @@ export async function explodeBOMForManufacturing(params: {
         where: eq(inventoryItems.agPartNumber, component.childPartNumber),
       });
 
+      const route = getManufacturingRouteDefinition(inventoryItem?.manufacturedCategory as ManufacturedCategory | null);
+      const department = route?.department || inventoryItem?.manufacturingDepartment;
+      const queueType = route?.queueType ?? null;
+      const isManufactured =
+        inventoryItem?.itemType === 'MANUFACTURED' ||
+        inventoryItem?.type === 'Manufactured';
+
       // Only create queue entries for manufactured components
-      if (inventoryItem?.type === 'Manufactured' && inventoryItem.manufacturingDepartment) {
+      if (inventoryItem && isManufactured && department) {
         const requiredQty = params.quantity * parseFloat(component.qtyPer);
 
         // Check for duplicates
@@ -284,12 +298,13 @@ export async function explodeBOMForManufacturing(params: {
           inventoryItemId: inventoryItem.id,
           p2PoId: params.p2PoId,
           p2PoItemId: params.p2PoItemId,
-          department: inventoryItem.manufacturingDepartment,
+          department,
           quantityRequested: requiredQty,
           quantityCompleted: 0,
           status: 'PENDING',
           priority: 50,
           dueDate: params.dueDate || null,
+          queueType,
           notes: `Auto-generated from P2 PO #${params.p2PoId} BOM explosion for ${params.partNumber} (${params.quantity} units × ${component.qtyPer} per unit)`,
         });
 
@@ -300,7 +315,7 @@ export async function explodeBOMForManufacturing(params: {
 
         createdQueueItems.push(newQueueItem);
 
-        console.log(`✅ BOM explosion: Created queue entry for ${component.childPartNumber} in ${inventoryItem.manufacturingDepartment} (Qty: ${requiredQty}, Queue ID: ${newQueueItem.id})`);
+        console.log(`✅ BOM explosion: Created queue entry for ${component.childPartNumber} in ${department} (Qty: ${requiredQty}, Queue ID: ${newQueueItem.id})`);
 
         // Auto-generate allocation requirements from routing (best-effort, non-blocking)
         generateRequirementsFromRouting(newQueueItem.id).catch(err =>
@@ -327,16 +342,19 @@ export async function explodeBOMForManufacturing(params: {
  *   inventory item (ASSEMBLY | SUB_ASSEMBLY)
  *     → BOM explosion (boms → bom_revisions[isReleased=true] → bom_lines)
  *     → demand record inserted into manufacturing_queue
- *         - department derived from child.manufacturedCategory via getSupplySourceDashboard()
+ *         - department and queueType derived from child.manufacturedCategory
  *         - parentProductionOrderId links back to the triggering order (traceable)
  *         - notes contain parentPartNumber and context for human readability
  *     → dashboard query reads manufacturing_queue.department
- *         - Cutting Table dashboard: department = 'Cutting Table'  (PACKET | KIT)
- *         - CNC queue:              department = 'CNC'             (MACHINED_PART)
- *         - Assembly queue:         department = 'Assembly'        (ASSEMBLY | SUB_ASSEMBLY)
- *         - Core queue:             department = 'Cores'           (CORE)
+ *         - Cutting Table demand: department = 'Cutting Table' (PACKET)
+ *         - Kitting queue:        department = 'Kitting'       (KIT)
+ *         - CNC queue:            department = 'CNC'           (MACHINED_PART)
+ *         - Core queue:           department = 'Core'          (CORE)
+ *         - Sub Assembly queue:   department = 'Sub Assembly'  (SUB_ASSEMBLY)
+ *         - Assembly queue:       department = 'Assembly'      (ASSEMBLY | FINAL_ASSEMBLY)
+ *         - Layup queue:          department = 'Layup'         (COMPOSITE)
  *
- * Recursion: if a child item is ASSEMBLY or SUB_ASSEMBLY and has its own released BOM,
+ * Recursion: if a child item is ASSEMBLY, FINAL_ASSEMBLY, or SUB_ASSEMBLY and has its own released BOM,
  * explodeBomDemand is called recursively for that child (depth-first).
  * Purchased items and items without BOMs are leaf nodes — no further explosion.
  *
@@ -415,10 +433,9 @@ export async function explodeBomDemand(
       }
 
       const category = childItem.manufacturedCategory as ManufacturedCategory | null;
-      const dashboard = getSupplySourceDashboard(category);
-      const legacyDept = supplySourceDashboardToLegacyDept(dashboard);
+      const route = getManufacturingRouteDefinition(category);
 
-      if (!legacyDept) {
+      if (!route?.department) {
         const fallbackDept = childItem.manufacturingDepartment;
         if (!fallbackDept) {
           console.warn(`⚠️ Cannot determine department for ${line.childPartNumber} (no category, no manufacturingDepartment) — skipping`);
@@ -426,7 +443,8 @@ export async function explodeBomDemand(
         }
       }
 
-      const department = legacyDept || childItem.manufacturingDepartment!;
+      const department = route?.department || childItem.manufacturingDepartment!;
+      const queueType = route?.queueType ?? null;
       const requiredQty = qty * parseFloat(line.qtyPer || '1');
 
       const queueData = insertManufacturingQueueSchema.parse({
@@ -437,12 +455,14 @@ export async function explodeBomDemand(
         status: 'PENDING',
         priority: 50,
         parentProductionOrderId: productionOrderId,
+        queueType,
         notes: JSON.stringify({
           source: 'BOM_EXPLOSION',
           parentPartNumber,
           childPartNumber: line.childPartNumber,
           qtyPer: line.qtyPer,
-          supplySourceDashboard: dashboard,
+          manufacturingDashboard: route?.dashboard ?? null,
+          manufacturingSwimlane: route?.swimlane ?? null,
         }),
       });
 
@@ -459,7 +479,7 @@ export async function explodeBomDemand(
         console.warn(`[explodeBomDemand] requirement generation failed for queue ${newItem.id}:`, err.message)
       );
 
-      if (category === 'ASSEMBLY' || category === 'SUB_ASSEMBLY') {
+      if (category === 'ASSEMBLY' || category === 'FINAL_ASSEMBLY' || category === 'SUB_ASSEMBLY') {
         const childCreated = await explodeBomDemand(
           line.childPartNumber,
           requiredQty,

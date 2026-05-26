@@ -1982,10 +1982,11 @@ async function initializeBackgroundServices() {
         await db.execute(sqlInvClass`
           DO $$ BEGIN
             IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'inventory_manufactured_category') THEN
-              CREATE TYPE inventory_manufactured_category AS ENUM ('PACKET', 'KIT', 'MACHINED_PART', 'CORE', 'SUB_ASSEMBLY', 'ASSEMBLY');
+              CREATE TYPE inventory_manufactured_category AS ENUM ('PACKET', 'KIT', 'MACHINED_PART', 'CORE', 'SUB_ASSEMBLY', 'ASSEMBLY', 'FINAL_ASSEMBLY', 'COMPOSITE', 'COMPONENT');
             END IF;
           END $$
         `);
+        await db.execute(sqlInvClass`ALTER TYPE inventory_manufactured_category ADD VALUE IF NOT EXISTS 'FINAL_ASSEMBLY'`);
         await db.execute(sqlInvClass`
           DO $$ BEGIN
             IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'inventory_manufacturing_level') THEN

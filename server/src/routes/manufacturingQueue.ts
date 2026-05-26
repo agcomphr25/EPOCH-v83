@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db, pool } from '../../db';
-import { manufacturingQueue, inventoryItems, supplySourceDashboardToLegacyDept, getDashboardCategories } from '../../schema';
+import { manufacturingQueue, inventoryItems, supplySourceDashboardToLegacyDept, getDashboardCategories, getManufacturingCategoriesForDepartment } from '../../schema';
 import type { SupplySourceDashboard } from '../../schema';
 import { eq, and, or, desc, inArray } from 'drizzle-orm';
 import { insertManufacturingQueueSchema } from '../../schema';
@@ -22,9 +22,9 @@ router.get('/', async (req, res) => {
     const { department, status, dashboard, queueType } = req.query;
 
     // Resolve routing signal — additive OR of dept and category matches
-    let routingSignal: ReturnType<typeof eq> | ReturnType<typeof or> | undefined;
+    let routingSignal: ReturnType<typeof eq> | ReturnType<typeof or> | ReturnType<typeof inArray> | undefined;
 
-    const VALID_DASHBOARDS: SupplySourceDashboard[] = ['CUTTING_TABLE', 'CNC', 'CORE', 'ASSEMBLY'];
+    const VALID_DASHBOARDS: SupplySourceDashboard[] = ['CUTTING_TABLE', 'KITTING', 'CNC', 'CORE', 'SUB_ASSEMBLY', 'ASSEMBLY', 'FINAL_ASSEMBLY', 'LAYUP'];
 
     if (dashboard && typeof dashboard === 'string') {
       // Strict validation — reject unknown dashboard values
@@ -35,15 +35,16 @@ router.get('/', async (req, res) => {
       const legacyDept = supplySourceDashboardToLegacyDept(dash);
       const categories = getDashboardCategories(dash);
       if (legacyDept) {
-        routingSignal = categories.length > 0
+        routingSignal = dash === 'FINAL_ASSEMBLY' && categories.length > 0
+          ? inArray(inventoryItems.manufacturedCategory, categories)
+          : categories.length > 0
           ? or(eq(manufacturingQueue.department, legacyDept), inArray(inventoryItems.manufacturedCategory, categories))
           : eq(manufacturingQueue.department, legacyDept);
       }
     } else if (department && typeof department === 'string') {
       // Legacy dept param — also match by category for this dept via getDashboardCategories
       // Reverse-lookup from legacy dept name to dashboard, then get categories
-      const matchedDash = VALID_DASHBOARDS.find(d => supplySourceDashboardToLegacyDept(d) === department);
-      const categories = matchedDash ? getDashboardCategories(matchedDash) : [];
+      const categories = getManufacturingCategoriesForDepartment(department);
       routingSignal = categories.length > 0
         ? or(eq(manufacturingQueue.department, department), inArray(inventoryItems.manufacturedCategory, categories))
         : eq(manufacturingQueue.department, department);
@@ -58,8 +59,7 @@ router.get('/', async (req, res) => {
       : undefined;
 
     const filters = [routingSignal, statusFilter, queueTypeFilter].filter(Boolean);
-    const whereClause = filters.length > 1 ? and(...(filters as [ReturnType<typeof eq>, ...ReturnType<typeof eq>[]]))
-      : filters[0];
+    const whereClause = filters.length > 1 ? and(...(filters as any)) : filters[0];
 
     const baseQuery = db
       .select({
@@ -153,7 +153,7 @@ router.get('/', async (req, res) => {
 //   (a) manufacturing_queue.department matches the legacy dept name for this dashboard, OR
 //   (b) inventoryItems.manufacturedCategory is in the category set for this dashboard
 // Using both conditions ensures both legacy records and BOM-exploded records appear.
-// Valid dashboard values: CUTTING_TABLE | CNC | ASSEMBLY | CORE
+// Valid dashboard values: CUTTING_TABLE | KITTING | CNC | CORE | SUB_ASSEMBLY | ASSEMBLY | FINAL_ASSEMBLY | LAYUP
 router.get('/by-dashboard/:dashboard', async (req, res) => {
   try {
     const dashboard = req.params.dashboard as SupplySourceDashboard;
@@ -165,7 +165,9 @@ router.get('/by-dashboard/:dashboard', async (req, res) => {
     const categories = getDashboardCategories(dashboard);
 
     // Additive routing signal: dept match OR category match
-    const routingSignal = categories.length > 0
+    const routingSignal = dashboard === 'FINAL_ASSEMBLY' && categories.length > 0
+      ? inArray(inventoryItems.manufacturedCategory, categories)
+      : categories.length > 0
       ? or(
           eq(manufacturingQueue.department, legacyDept),
           inArray(inventoryItems.manufacturedCategory, categories)
@@ -423,8 +425,9 @@ router.post('/:id/generate-requirements', async (req, res) => {
 });
 
 // POST /api/manufacturing-queue/:id/release
-// Formally releases a KIT, LAYUP, CORE, SUB_ASSEMBLY, or ASSEMBLY queue item, setting status = RELEASED and recording releasedAt.
-// Requires: queueType = KIT | LAYUP | CORE | SUB_ASSEMBLY | ASSEMBLY, readinessStatus = READY, status not already IN_PROGRESS/COMPLETED/RELEASED/CANCELLED.
+// Formally releases a routable queue item, setting status = RELEASED and recording releasedAt.
+// Requires: queueType = CUTTING_TABLE | KIT | CNC | LAYUP | CORE | SUB_ASSEMBLY | ASSEMBLY | FINAL_ASSEMBLY,
+// readinessStatus = READY, status not already IN_PROGRESS/COMPLETED/RELEASED/CANCELLED.
 router.post('/:id/release', async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
@@ -446,8 +449,8 @@ router.post('/:id/release', async (req, res) => {
     if (!item) {
       return res.status(404).json({ error: 'Manufacturing queue item not found' });
     }
-    if (item.queueType !== 'KIT' && item.queueType !== 'LAYUP' && item.queueType !== 'CORE' && item.queueType !== 'SUB_ASSEMBLY' && item.queueType !== 'ASSEMBLY') {
-      return res.status(400).json({ error: 'Only KIT, LAYUP, CORE, SUB_ASSEMBLY, or ASSEMBLY queue items can be released' });
+    if (item.queueType !== 'CUTTING_TABLE' && item.queueType !== 'KIT' && item.queueType !== 'CNC' && item.queueType !== 'LAYUP' && item.queueType !== 'CORE' && item.queueType !== 'SUB_ASSEMBLY' && item.queueType !== 'ASSEMBLY' && item.queueType !== 'FINAL_ASSEMBLY') {
+      return res.status(400).json({ error: 'Only CUTTING_TABLE, KIT, CNC, LAYUP, CORE, SUB_ASSEMBLY, ASSEMBLY, or FINAL_ASSEMBLY queue items can be released' });
     }
     if (item.readinessStatus !== 'READY') {
       return res.status(400).json({ error: `${item.queueType} must be READY before it can be released` });

@@ -39,6 +39,7 @@ import {
 import { sql, relations } from 'drizzle-orm';
 import { createInsertSchema } from 'drizzle-zod';
 import { z } from 'zod';
+import { getManufacturingRouteDefinition as resolveManufacturingRouteDefinition } from '../shared/utils/manufacturingRouting';
 
 // Order Department Types Reference Table (separate from order_departments tracking table)
 export const inventoryDepartments = pgTable('inventory_departments', {
@@ -619,12 +620,19 @@ export const formSubmissions = pgTable('form_submissions', {
 
 // Inventory Item Type Enums
 export const inventoryItemTypeEnum = pgEnum('inventory_item_type', ['PURCHASED', 'MANUFACTURED']);
-export const inventoryManufacturedCategoryEnum = pgEnum('inventory_manufactured_category', ['PACKET', 'KIT', 'MACHINED_PART', 'CORE', 'SUB_ASSEMBLY', 'ASSEMBLY', 'COMPOSITE', 'COMPONENT']);
+export const inventoryManufacturedCategoryEnum = pgEnum('inventory_manufactured_category', ['PACKET', 'KIT', 'MACHINED_PART', 'CORE', 'SUB_ASSEMBLY', 'ASSEMBLY', 'FINAL_ASSEMBLY', 'COMPOSITE', 'COMPONENT']);
 export const inventoryManufacturingLevelEnum = pgEnum('inventory_manufacturing_level', ['COMPONENT', 'INTERMEDIATE', 'FINAL']);
 
-// Supply source dashboard mapping — re-exported from canonical shared utility
-export type { ManufacturedCategory, SupplySourceDashboard } from '../shared/utils/supplySourceDashboard';
-export { getSupplySourceDashboard, supplySourceDashboardToLegacyDept, getDashboardCategories } from '../shared/utils/supplySourceDashboard';
+// Manufacturing routing mapping — re-exported from canonical shared utility
+export type { ManufacturedCategory, ManufacturingQueueType, ManufacturingSwimlane, SupplySourceDashboard } from '../shared/utils/manufacturingRouting';
+export {
+  getManufacturingCategoriesForDashboard,
+  getManufacturingCategoriesForDepartment,
+  getManufacturingRouteDefinition,
+  getSupplySourceDashboard,
+  supplySourceDashboardToLegacyDept,
+  getDashboardCategories,
+} from '../shared/utils/supplySourceDashboard';
 
 // Inventory Management Tables
 export const inventoryItems = pgTable('inventory_items', {
@@ -698,7 +706,7 @@ export const inventoryItems = pgTable('inventory_items', {
   // Formal item type classification (replaces loose text `type` field)
   itemType: inventoryItemTypeEnum('item_type'), // PURCHASED | MANUFACTURED
   // Manufactured items only — category determines production routing
-  manufacturedCategory: inventoryManufacturedCategoryEnum('manufactured_category'), // PACKET | KIT | MACHINED_PART | CORE | SUB_ASSEMBLY | ASSEMBLY
+  manufacturedCategory: inventoryManufacturedCategoryEnum('manufactured_category'), // PACKET | KIT | MACHINED_PART | CORE | SUB_ASSEMBLY | ASSEMBLY | FINAL_ASSEMBLY | COMPOSITE | COMPONENT
   // Manufactured items only — production level independent of category
   manufacturingLevel: inventoryManufacturingLevelEnum('manufacturing_level'), // COMPONENT | INTERMEDIATE | FINAL
   // Machined parts only — type of machine required to produce the part
@@ -2446,7 +2454,7 @@ export const insertInventoryItemSchema = createInsertSchema(inventoryItems)
     utilizedInServices: z.boolean().default(false),
     isActive: z.boolean().default(true),
     itemType: z.enum(['PURCHASED', 'MANUFACTURED']).optional().nullable(),
-    manufacturedCategory: z.enum(['PACKET', 'KIT', 'MACHINED_PART', 'CORE', 'SUB_ASSEMBLY', 'ASSEMBLY', 'COMPOSITE', 'COMPONENT']).optional().nullable(),
+    manufacturedCategory: z.enum(['PACKET', 'KIT', 'MACHINED_PART', 'CORE', 'SUB_ASSEMBLY', 'ASSEMBLY', 'FINAL_ASSEMBLY', 'COMPOSITE', 'COMPONENT']).optional().nullable(),
     manufacturingLevel: z.enum(['COMPONENT', 'INTERMEDIATE', 'FINAL']).optional().nullable(),
     machineType: z.enum(['CNC Mill 3rd Axis', 'CNC Mill 4th Axis', 'Lathe']).optional().nullable(),
     shelfLifeControlled: z.boolean().default(false),
@@ -9716,7 +9724,7 @@ export const manufacturingQueue = pgTable('manufacturing_queue', {
   p2PoItemId: integer('p2_po_item_id'), // Reference to P2 PO item
   // BOM explosion lineage — set when this record is created by explodeBomDemand
   parentProductionOrderId: text('parent_production_order_id'), // Production order that triggered this demand (FK to production_orders.order_id)
-  department: text('department').notNull(), // CNC, Cutting Table, Cores, or Assembly — derived via getSupplySourceDashboard()
+  department: text('department').notNull(), // Derived from manufactured category routing
   quantityRequested: integer('quantity_requested').notNull().default(1),
   quantityCompleted: integer('quantity_completed').default(0),
   priority: integer('priority').default(50), // 1-100, lower = higher priority
@@ -9738,7 +9746,7 @@ export const manufacturingQueue = pgTable('manufacturing_queue', {
   sourceId: text('source_id'), // Source identifier (e.g. PO number, order ID) that generated this entry
   sourceType: text('source_type'), // Source type (e.g. 'vendor_po', 'production_order', 'manual')
   // Readiness tracking fields (added for queue readiness engine)
-  queueType: text('queue_type'), // LAYUP | CORE | SUB_ASSEMBLY | ASSEMBLY | KIT
+  queueType: text('queue_type'), // CUTTING_TABLE | KIT | CNC | CORE | SUB_ASSEMBLY | ASSEMBLY | FINAL_ASSEMBLY | LAYUP
   readinessStatus: text('readiness_status').default('NOT_READY'), // NOT_READY | PARTIAL | READY | BLOCKED
   percentReady: numeric('percent_ready').default('0'),
   blockedReason: text('blocked_reason'),
@@ -10063,22 +10071,13 @@ export const insertAllocationRequirementSchema = createInsertSchema(allocationRe
 export type AllocationRequirement = typeof allocationRequirements.$inferSelect;
 export type InsertAllocationRequirement = z.infer<typeof insertAllocationRequirementSchema>;
 
-// mapQueueType — maps manufacturedCategory to { queueType, department } pairs
-export type QueueType = 'LAYUP' | 'CORE' | 'SUB_ASSEMBLY' | 'ASSEMBLY' | 'KIT';
+// mapQueueType — compatibility wrapper around the canonical manufactured category routing map.
+export type QueueType = import('../shared/utils/manufacturingRouting').ManufacturingQueueType;
 
 export function mapQueueType(category: import('../shared/utils/supplySourceDashboard').ManufacturedCategory | null): { queueType: QueueType; department: string } | null {
-  if (!category) return null;
-  if (category === 'COMPONENT') return null;
-  const mapping: Record<string, { queueType: QueueType; department: string }> = {
-    PACKET: { queueType: 'LAYUP', department: 'Cutting Table' },
-    KIT: { queueType: 'KIT', department: 'Kitting' },
-    MACHINED_PART: { queueType: 'ASSEMBLY', department: 'CNC' },
-    CORE: { queueType: 'CORE', department: 'Cores' },
-    SUB_ASSEMBLY: { queueType: 'SUB_ASSEMBLY', department: 'Assembly' },
-    ASSEMBLY: { queueType: 'ASSEMBLY', department: 'Assembly' },
-    COMPOSITE: { queueType: 'LAYUP', department: 'Cutting Table' },
-  };
-  return mapping[category] ?? null;
+  const route = resolveManufacturingRouteDefinition(category);
+  if (!route?.queueType || !route.department) return null;
+  return { queueType: route.queueType, department: route.department };
 }
 
 // Controlled Documents - Master Document Register

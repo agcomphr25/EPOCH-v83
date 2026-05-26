@@ -872,7 +872,7 @@ router.post('/items/:id/routing', async (req: Request, res: Response) => {
     const inferredRoutingType = (() => {
       if (routingType) return routingType;
       const cat = (item as any).manufacturedCategory;
-      if (cat === 'ASSEMBLY') return 'ASSEMBLY';
+      if (cat === 'ASSEMBLY' || cat === 'FINAL_ASSEMBLY') return 'ASSEMBLY';
       if (cat === 'SUB_ASSEMBLY') return 'SUB_ASSEMBLY';
       if (cat === 'MACHINED_PART') return 'CNC';
       if (cat === 'KIT') return 'KIT';

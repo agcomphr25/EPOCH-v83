@@ -34,7 +34,7 @@ export async function evaluateQueueReadiness(queueId: number): Promise<Readiness
     .where(eq(manufacturingQueue.id, queueId))
     .limit(1);
 
-  const isLayup = queueRow?.queueType === 'LAYUP';
+  const isLayup = queueRow?.queueType === 'LAYUP' || queueRow?.queueType === 'CUTTING_TABLE';
 
   const requirements = await db
     .select()

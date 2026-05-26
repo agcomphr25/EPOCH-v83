@@ -204,9 +204,9 @@ export default function AssemblyQueue() {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const { data: rawItems = [], isLoading } = useQuery<AssemblyQueueItem[]>({
-    queryKey: ['/api/manufacturing-queue', 'ASSEMBLY', selectedStatus],
+    queryKey: ['/api/manufacturing-queue', 'ASSEMBLY_TREE', selectedStatus],
     queryFn: () => {
-      const params = new URLSearchParams({ queueType: 'ASSEMBLY' });
+      const params = new URLSearchParams({ department: 'Assembly' });
       if (selectedStatus && selectedStatus !== 'ALL') params.append('status', selectedStatus);
       return apiRequest(`/api/manufacturing-queue?${params.toString()}`);
     },
@@ -342,6 +342,7 @@ export default function AssemblyQueue() {
                       <TableHead className="dark:text-gray-300">Work Order</TableHead>
                       <TableHead className="dark:text-gray-300">Part Number</TableHead>
                       <TableHead className="dark:text-gray-300">Item Name</TableHead>
+                      <TableHead className="dark:text-gray-300">Swimlane</TableHead>
                       <TableHead className="dark:text-gray-300">Department</TableHead>
                       <TableHead className="dark:text-gray-300">Readiness</TableHead>
                       <TableHead className="dark:text-gray-300">Quantity</TableHead>
@@ -382,8 +383,9 @@ export default function AssemblyQueue() {
                           {item.inventoryItem?.name ?? 'Unknown'}
                         </TableCell>
                         <TableCell className="dark:text-gray-300">
-                          {item.department}
+                          {item.queueType === 'FINAL_ASSEMBLY' ? 'Final Assembly' : 'Assembly'}
                         </TableCell>
+                        <TableCell className="dark:text-gray-300">{item.department}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">
                             <ReadinessBadge status={item.readinessStatus} percent={item.percentReady} />

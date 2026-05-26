@@ -145,6 +145,16 @@ function assignmentForDepartment(rawDepartment: string | null | undefined): Work
     };
   }
 
+  if (normalized.includes('finalassembly') || normalized.includes('finalassy')) {
+    return {
+      dashboardType: 'FINAL_ASSEMBLY',
+      queueType: 'FINAL_ASSEMBLY',
+      assignedDepartment: 'Assembly',
+      assignedDashboardRoute: '/assembly-queue',
+      dashboardLabel: 'Final Assembly Swimlane',
+    };
+  }
+
   if (normalized.includes('assembly') || normalized === 'assy') {
     return {
       dashboardType: 'ASSEMBLY',

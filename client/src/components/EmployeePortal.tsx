@@ -293,6 +293,17 @@ function formatElapsed(iso: string) {
   return `${hrs}h ${mins}m`;
 }
 
+function formatPunchDateTime(iso: string) {
+  const date = new Date(iso);
+  const sameDay = date.toDateString() === new Date().toDateString();
+  return date.toLocaleString(undefined, {
+    month: sameDay ? undefined : 'short',
+    day: sameDay ? undefined : 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 function fileSizeLabel(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
@@ -433,6 +444,8 @@ interface MyPunchStatus {
   lastPunch?: { type: string; punchedAt: string } | null;
   clockedInAt: string | null;
   hoursToday: number;
+  openSessionAgeHours?: number;
+  openSessionRequiresReview?: boolean;
   openEntry?: Record<string, unknown> | null;
 }
 
@@ -1237,18 +1250,6 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
     }));
   };
 
-  const startMissingPunchCorrection = () => {
-    setPunchCorrectionForm((prev) => ({
-      ...prev,
-      requestType: 'add_session',
-      punchLedgerId: '',
-      selectedPunchType: 'clock_in',
-      clockIn: '',
-      clockOut: '',
-      chargeCodeId: 'none',
-    }));
-  };
-
   useEffect(() => {
     if (punchStatus?.status !== 'clocked_in') {
       setDailyPunchOutConfirmed(false);
@@ -1922,9 +1923,15 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
         {!punchStatusLoading && (() => {
           if (punchStatus?.status === 'clocked_in' && punchStatus.clockedInAt) {
             return (
-              <span className="inline-flex items-center gap-2 rounded-full bg-green-100 text-green-800 border border-green-300 px-4 py-1.5 text-sm font-medium">
-                <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-                Clocked In &middot; {formatElapsed(punchStatus.clockedInAt)}
+              <span className={`inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-sm font-medium ${
+                punchStatus.openSessionRequiresReview
+                  ? 'bg-amber-100 text-amber-900 border-amber-300'
+                  : 'bg-green-100 text-green-800 border-green-300'
+              }`}>
+                <span className={`h-2 w-2 rounded-full ${punchStatus.openSessionRequiresReview ? 'bg-amber-500' : 'bg-green-500 animate-pulse'}`} />
+                {punchStatus.openSessionRequiresReview
+                  ? `Open punch needs review - ${formatPunchDateTime(punchStatus.clockedInAt)}`
+                  : `Clocked In - ${formatElapsed(punchStatus.clockedInAt)}`}
               </span>
             );
           }
@@ -2979,10 +2986,15 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
 
                       {punchStatus.status !== 'clocked_out' && punchStatus.clockedInAt && (
                         <p className="text-sm text-muted-foreground">
-                          Since {new Date(punchStatus.clockedInAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                          Since {formatPunchDateTime(punchStatus.clockedInAt)}
                           {' · '}
-                          {punchStatus.hoursToday.toFixed(2)} hrs today
+                          {(punchStatus.openSessionAgeHours ?? punchStatus.hoursToday).toFixed(2)} hrs open
                         </p>
+                      )}
+                      {punchStatus.openSessionRequiresReview && punchStatus.clockedInAt && (
+                        <div className="mt-4 mx-auto max-w-xl rounded-md border border-amber-300 bg-amber-50 p-3 text-left text-sm text-amber-900">
+                          This punch has been open since {formatPunchDateTime(punchStatus.clockedInAt)}. It probably needs a punch correction or supervisor review before the displayed hours should be trusted.
+                        </div>
                       )}
                       {punchStatus.status === 'clocked_out' && punchStatus.hoursToday > 0 && (
                         <p className="text-sm text-muted-foreground">
@@ -3136,14 +3148,11 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
                       </div>
                       <div className="grid gap-3 sm:grid-cols-2">
                         <div className="sm:col-span-2 space-y-2">
-                          <div className="flex items-center justify-between gap-3">
+                          <div>
                             <div>
                               <Label className="uppercase tracking-widest text-muted-foreground">Active Shift Punches</Label>
                               <p className="text-xs text-muted-foreground">Tap a punch to edit it.</p>
                             </div>
-                            <Button type="button" variant="outline" size="sm" onClick={startMissingPunchCorrection}>
-                              Add
-                            </Button>
                           </div>
                           <div className="rounded-md border bg-white max-h-52 overflow-y-auto">
                             {activeShiftPunchesLoading ? (

@@ -2306,7 +2306,7 @@ export default function EmployeeDetail() {
                       Charge Codes
                     </CardTitle>
                     <CardDescription>
-                      Assigned codes are the restricted codes this employee can use in the kiosk and employee portal.
+                      When codes are checked here, the employee portal and kiosk show only this assigned set.
                     </CardDescription>
                   </div>
                   <Button
@@ -2319,7 +2319,7 @@ export default function EmployeeDetail() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
-                    Codes with no employee restrictions remain available to everyone. Checking a code here adds this employee to that code's selected-employee access list.
+                    Leaving this list empty means the employee can use charge codes that are open to all employees. Once at least one code is checked, the checked codes become this employee's exact time-card list.
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     {activeChargeCodes.map((code) => (

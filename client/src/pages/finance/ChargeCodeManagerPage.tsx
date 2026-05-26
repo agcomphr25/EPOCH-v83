@@ -3,7 +3,17 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Tag, Plus, Pencil, Loader2, ChevronUp, ChevronDown, ChevronsUpDown, Search, Users } from 'lucide-react';
+import {
+  Tag,
+  Plus,
+  Pencil,
+  Loader2,
+  ChevronUp,
+  ChevronDown,
+  ChevronsUpDown,
+  Search,
+  Users,
+} from 'lucide-react';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { insertChargeCodeSchema, type ChargeCode } from '@shared/schema';
@@ -50,7 +60,16 @@ import {
 const chargeCodeFormSchema = insertChargeCodeSchema.extend({
   code: z.string().min(1, 'Code is required'),
   type: z.enum(['DIRECT', 'OVERHEAD', 'G_AND_A', 'IR_AND_D', 'B_AND_P']),
-  costHandling: z.enum(['DIRECT_CONTRACT', 'IRAD', 'BID_PROPOSAL', 'FRINGE', 'OVERHEAD', 'G_AND_A', 'UNALLOWABLE', 'OTHER']),
+  costHandling: z.enum([
+    'DIRECT_CONTRACT',
+    'IRAD',
+    'BID_PROPOSAL',
+    'FRINGE',
+    'OVERHEAD',
+    'G_AND_A',
+    'UNALLOWABLE',
+    'OTHER',
+  ]),
   maxHoursPerDay: z.string().optional(),
   active: z.boolean().optional(),
 });
@@ -94,12 +113,15 @@ function defaultValues(code?: ChargeCode): ChargeCodeFormValues {
     code: code?.code ?? '',
     description: code?.description ?? '',
     type: (code?.type as ChargeCodeType) ?? 'DIRECT',
-    costHandling: (code?.costHandling as ChargeCodeFormValues['costHandling']) ?? 'DIRECT_CONTRACT',
+    costHandling:
+      (code?.costHandling as ChargeCodeFormValues['costHandling']) ??
+      'DIRECT_CONTRACT',
     department: code?.department ?? '',
     contractReference: code?.contractReference ?? '',
     billable: code?.billable ?? true,
     requiresApproval: code?.requiresApproval ?? false,
-    maxHoursPerDay: code?.maxHoursPerDay != null ? String(code.maxHoursPerDay) : '',
+    maxHoursPerDay:
+      code?.maxHoursPerDay != null ? String(code.maxHoursPerDay) : '',
     active: code?.active ?? true,
   };
 }
@@ -113,19 +135,23 @@ function ChargeCodeForm({
 }) {
   const { toast } = useToast();
   const isEdit = editTarget !== null;
-  const [assignmentScope, setAssignmentScope] = useState<'ALL_EMPLOYEES' | 'SELECTED_EMPLOYEES'>('ALL_EMPLOYEES');
+  const [assignmentScope, setAssignmentScope] = useState<
+    'ALL_EMPLOYEES' | 'SELECTED_EMPLOYEES'
+  >('ALL_EMPLOYEES');
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<number[]>([]);
 
   const { data: employees = [] } = useQuery<EmployeeOption[]>({
     queryKey: ['/api/employees'],
-    enabled: isEdit,
+    enabled: true,
   });
 
-  const { data: assignments } = useQuery<ChargeCodeAssignments>({
-    queryKey: ['/api/charge-codes', editTarget?.id, 'assignments'],
-    queryFn: () => apiRequest(`/api/charge-codes/${editTarget!.id}/assignments`),
-    enabled: isEdit,
-  });
+  const { data: assignments, isLoading: assignmentsLoading } =
+    useQuery<ChargeCodeAssignments>({
+      queryKey: ['/api/charge-codes', editTarget?.id, 'assignments'],
+      queryFn: () =>
+        apiRequest(`/api/charge-codes/${editTarget!.id}/assignments`),
+      enabled: isEdit,
+    });
 
   useEffect(() => {
     if (!assignments) return;
@@ -138,49 +164,100 @@ function ChargeCodeForm({
     defaultValues: defaultValues(editTarget ?? undefined),
   });
 
+  async function saveAssignments(chargeCodeId: number) {
+    return apiRequest(`/api/charge-codes/${chargeCodeId}/assignments`, {
+      method: 'PUT',
+      body: {
+        scope: assignmentScope,
+        employeeIds:
+          assignmentScope === 'ALL_EMPLOYEES' ? [] : selectedEmployeeIds,
+      },
+    });
+  }
+
   const createMutation = useMutation({
-    mutationFn: (data: object) =>
-      apiRequest('/api/charge-codes', { method: 'POST', body: data }),
+    mutationFn: async (data: object) => {
+      const created: ChargeCode = await apiRequest('/api/charge-codes', {
+        method: 'POST',
+        body: data,
+      });
+      if (assignmentScope === 'SELECTED_EMPLOYEES') {
+        await saveAssignments(created.id);
+      }
+      return created;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/charge-codes'] });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/timekeeping/charge-codes'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/timekeeping/kiosk/charge-codes'],
+      });
       toast({ title: 'Charge code created successfully' });
       onClose();
     },
     onError: (err: Error) => {
-      toast({ title: 'Failed to create charge code', description: err.message, variant: 'destructive' });
+      toast({
+        title: 'Failed to create charge code',
+        description: err.message,
+        variant: 'destructive',
+      });
     },
   });
 
   const updateMutation = useMutation({
-    mutationFn: (data: object) =>
-      apiRequest(`/api/charge-codes/${editTarget!.id}`, { method: 'PATCH', body: data }),
+    mutationFn: async (data: object) => {
+      const updated = await apiRequest(`/api/charge-codes/${editTarget!.id}`, {
+        method: 'PATCH',
+        body: data,
+      });
+      await saveAssignments(editTarget!.id);
+      return updated;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/charge-codes'] });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/charge-codes', editTarget?.id, 'assignments'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/timekeeping/charge-codes'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/timekeeping/kiosk/charge-codes'],
+      });
       toast({ title: 'Charge code updated successfully' });
       onClose();
     },
     onError: (err: Error) => {
-      toast({ title: 'Failed to update charge code', description: err.message, variant: 'destructive' });
+      toast({
+        title: 'Failed to update charge code',
+        description: err.message,
+        variant: 'destructive',
+      });
     },
   });
 
   const assignmentMutation = useMutation({
-    mutationFn: () =>
-      apiRequest(`/api/charge-codes/${editTarget!.id}/assignments`, {
-        method: 'PUT',
-        body: {
-          scope: assignmentScope,
-          employeeIds: assignmentScope === 'ALL_EMPLOYEES' ? [] : selectedEmployeeIds,
-        },
-      }),
+    mutationFn: () => saveAssignments(editTarget!.id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/charge-codes', editTarget?.id, 'assignments'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/charge-codes'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/kiosk/charge-codes'] });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/charge-codes', editTarget?.id, 'assignments'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/timekeeping/charge-codes'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['/api/timekeeping/kiosk/charge-codes'],
+      });
       toast({ title: 'Charge code assignments updated' });
     },
     onError: (err: Error) => {
-      toast({ title: 'Failed to update assignments', description: err.message, variant: 'destructive' });
+      toast({
+        title: 'Failed to update assignments',
+        description: err.message,
+        variant: 'destructive',
+      });
     },
   });
 
@@ -207,7 +284,9 @@ function ChargeCodeForm({
       contractReference: values.contractReference || null,
       billable: values.billable,
       requiresApproval: values.requiresApproval,
-      maxHoursPerDay: values.maxHoursPerDay ? parseFloat(values.maxHoursPerDay) : null,
+      maxHoursPerDay: values.maxHoursPerDay
+        ? parseFloat(values.maxHoursPerDay)
+        : null,
       active: values.active,
     };
 
@@ -220,28 +299,58 @@ function ChargeCodeForm({
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <FormField
-            control={form.control}
-            name="code"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Code *</FormLabel>
-                <FormControl>
-                  <Input placeholder="e.g. DIR-001" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+      <form
+        onSubmit={form.handleSubmit(onSubmit)}
+        className="flex max-h-[calc(90vh-5rem)] flex-col"
+      >
+        <div className="space-y-4 overflow-y-auto px-1 pb-4">
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="code"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Code *</FormLabel>
+                  <FormControl>
+                    <Input placeholder="e.g. DIR-001" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="type"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Type *</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="DIRECT">Direct</SelectItem>
+                      <SelectItem value="OVERHEAD">Overhead</SelectItem>
+                      <SelectItem value="G_AND_A">G&A</SelectItem>
+                      <SelectItem value="IR_AND_D">IR&amp;D</SelectItem>
+                      <SelectItem value="B_AND_P">B&amp;P</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
 
           <FormField
             control={form.control}
-            name="type"
+            name="costHandling"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Type *</FormLabel>
+                <FormLabel>DCAA Handling *</FormLabel>
                 <Select value={field.value} onValueChange={field.onChange}>
                   <FormControl>
                     <SelectTrigger>
@@ -249,186 +358,196 @@ function ChargeCodeForm({
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    <SelectItem value="DIRECT">Direct</SelectItem>
+                    <SelectItem value="DIRECT_CONTRACT">
+                      Direct Contract
+                    </SelectItem>
+                    <SelectItem value="IRAD">IR&amp;D</SelectItem>
+                    <SelectItem value="BID_PROPOSAL">B&amp;P</SelectItem>
+                    <SelectItem value="FRINGE">Fringe</SelectItem>
                     <SelectItem value="OVERHEAD">Overhead</SelectItem>
-                    <SelectItem value="G_AND_A">G&A</SelectItem>
-                    <SelectItem value="IR_AND_D">IR&amp;D</SelectItem>
-                    <SelectItem value="B_AND_P">B&amp;P</SelectItem>
+                    <SelectItem value="G_AND_A">G&amp;A</SelectItem>
+                    <SelectItem value="UNALLOWABLE">Unallowable</SelectItem>
+                    <SelectItem value="OTHER">Other</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormMessage />
               </FormItem>
             )}
           />
-        </div>
 
-        <FormField
-          control={form.control}
-          name="costHandling"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>DCAA Handling *</FormLabel>
-              <Select value={field.value} onValueChange={field.onChange}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  <SelectItem value="DIRECT_CONTRACT">Direct Contract</SelectItem>
-                  <SelectItem value="IRAD">IR&amp;D</SelectItem>
-                  <SelectItem value="BID_PROPOSAL">B&amp;P</SelectItem>
-                  <SelectItem value="FRINGE">Fringe</SelectItem>
-                  <SelectItem value="OVERHEAD">Overhead</SelectItem>
-                  <SelectItem value="G_AND_A">G&amp;A</SelectItem>
-                  <SelectItem value="UNALLOWABLE">Unallowable</SelectItem>
-                  <SelectItem value="OTHER">Other</SelectItem>
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <FormField
-          control={form.control}
-          name="description"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Description</FormLabel>
-              <FormControl>
-                <Textarea
-                  placeholder="Brief description of this charge code"
-                  rows={2}
-                  {...field}
-                  value={field.value ?? ''}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-
-        <div className="grid grid-cols-2 gap-4">
           <FormField
             control={form.control}
-            name="department"
+            name="description"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Department</FormLabel>
+                <FormLabel>Description</FormLabel>
                 <FormControl>
-                  <Input placeholder="e.g. Engineering" {...field} value={field.value ?? ''} />
+                  <Textarea
+                    placeholder="Brief description of this charge code"
+                    rows={2}
+                    {...field}
+                    value={field.value ?? ''}
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
 
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="department"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Department</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="e.g. Engineering"
+                      {...field}
+                      value={field.value ?? ''}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="contractReference"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Contract Reference</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="e.g. FA8650-22-C-1234"
+                      {...field}
+                      value={field.value ?? ''}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
           <FormField
             control={form.control}
-            name="contractReference"
+            name="maxHoursPerDay"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Contract Reference</FormLabel>
+                <FormLabel>Max Hours / Day</FormLabel>
                 <FormControl>
-                  <Input placeholder="e.g. FA8650-22-C-1234" {...field} value={field.value ?? ''} />
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    placeholder="Leave blank for no limit"
+                    {...field}
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
-        </div>
 
-        <FormField
-          control={form.control}
-          name="maxHoursPerDay"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Max Hours / Day</FormLabel>
-              <FormControl>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.5"
-                  placeholder="Leave blank for no limit"
-                  {...field}
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+          <div className="flex flex-wrap gap-6">
+            <FormField
+              control={form.control}
+              name="billable"
+              render={({ field }) => (
+                <FormItem className="flex items-center gap-2 space-y-0">
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                  <FormLabel className="cursor-pointer">
+                    Direct Billable
+                  </FormLabel>
+                </FormItem>
+              )}
+            />
 
-        <div className="flex flex-wrap gap-6">
-          <FormField
-            control={form.control}
-            name="billable"
-            render={({ field }) => (
-              <FormItem className="flex items-center gap-2 space-y-0">
-                <FormControl>
-                  <Switch checked={field.value} onCheckedChange={field.onChange} />
-                </FormControl>
-                <FormLabel className="cursor-pointer">Direct Billable</FormLabel>
-              </FormItem>
-            )}
-          />
+            <FormField
+              control={form.control}
+              name="requiresApproval"
+              render={({ field }) => (
+                <FormItem className="flex items-center gap-2 space-y-0">
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                  <FormLabel className="cursor-pointer">
+                    Requires Approval
+                  </FormLabel>
+                </FormItem>
+              )}
+            />
 
-          <FormField
-            control={form.control}
-            name="requiresApproval"
-            render={({ field }) => (
-              <FormItem className="flex items-center gap-2 space-y-0">
-                <FormControl>
-                  <Switch checked={field.value} onCheckedChange={field.onChange} />
-                </FormControl>
-                <FormLabel className="cursor-pointer">Requires Approval</FormLabel>
-              </FormItem>
-            )}
-          />
-
-          {isEdit && (
             <FormField
               control={form.control}
               name="active"
               render={({ field }) => (
                 <FormItem className="flex items-center gap-2 space-y-0">
                   <FormControl>
-                    <Switch checked={field.value} onCheckedChange={field.onChange} />
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
                   </FormControl>
                   <FormLabel className="cursor-pointer">Active</FormLabel>
                 </FormItem>
               )}
             />
-          )}
-        </div>
+          </div>
 
-        {isEdit && (
           <div className="rounded-md border p-3 space-y-3">
+            {!isEdit && (
+              <p className="text-xs text-muted-foreground">
+                Access settings will be applied when the charge code is created.
+              </p>
+            )}
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <Users className="h-4 w-4 text-muted-foreground" />
                 <div>
                   <Label className="text-sm font-medium">Employee Access</Label>
                   <p className="text-xs text-muted-foreground">
-                    Controls which employees see this code in kiosk and portal time cards.
+                    Controls which employees see this code in kiosk and portal
+                    time cards.
                   </p>
                 </div>
               </div>
               <Badge variant="outline">
-                {assignmentScope === 'ALL_EMPLOYEES' ? 'All employees' : `${selectedEmployeeIds.length} selected`}
+                {assignmentScope === 'ALL_EMPLOYEES'
+                  ? 'All employees'
+                  : `${selectedEmployeeIds.length} selected`}
               </Badge>
             </div>
 
             <Select
               value={assignmentScope}
-              onValueChange={(value) => setAssignmentScope(value as 'ALL_EMPLOYEES' | 'SELECTED_EMPLOYEES')}
+              onValueChange={(value) =>
+                setAssignmentScope(
+                  value as 'ALL_EMPLOYEES' | 'SELECTED_EMPLOYEES'
+                )
+              }
             >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="ALL_EMPLOYEES">All employees can use this code</SelectItem>
-                <SelectItem value="SELECTED_EMPLOYEES">Only selected employees</SelectItem>
+                <SelectItem value="ALL_EMPLOYEES">
+                  All employees can use this code
+                </SelectItem>
+                <SelectItem value="SELECTED_EMPLOYEES">
+                  Only selected employees
+                </SelectItem>
               </SelectContent>
             </Select>
 
@@ -446,8 +565,10 @@ function ChargeCodeForm({
                     <span className="flex-1">
                       <span className="font-medium">{employee.name}</span>
                       <span className="text-muted-foreground">
-                        {employee.employeeCode ? ` · ${employee.employeeCode}` : ''}
-                        {employee.department ? ` · ${employee.department}` : ''}
+                        {employee.employeeCode
+                          ? ` - ${employee.employeeCode}`
+                          : ''}
+                        {employee.department ? ` - ${employee.department}` : ''}
                       </span>
                     </span>
                   </label>
@@ -455,26 +576,48 @@ function ChargeCodeForm({
               </div>
             )}
 
-            <div className="flex justify-end">
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => assignmentMutation.mutate()}
-                disabled={assignmentMutation.isPending || (assignmentScope === 'SELECTED_EMPLOYEES' && selectedEmployeeIds.length === 0)}
-              >
-                {assignmentMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Save Access
-              </Button>
-            </div>
+            {isEdit && (
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => assignmentMutation.mutate()}
+                  disabled={
+                    assignmentMutation.isPending ||
+                    assignmentsLoading ||
+                    (assignmentScope === 'SELECTED_EMPLOYEES' &&
+                      selectedEmployeeIds.length === 0)
+                  }
+                >
+                  {assignmentMutation.isPending && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )}
+                  Save Access
+                </Button>
+              </div>
+            )}
           </div>
-        )}
+        </div>
 
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>
+        <DialogFooter className="border-t bg-background px-1 pt-4">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onClose}
+            disabled={isPending}
+          >
             Cancel
           </Button>
-          <Button type="submit" disabled={isPending}>
+          <Button
+            type="submit"
+            disabled={
+              isPending ||
+              assignmentsLoading ||
+              (assignmentScope === 'SELECTED_EMPLOYEES' &&
+                selectedEmployeeIds.length === 0)
+            }
+          >
             {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {isEdit ? 'Save Changes' : 'Create Charge Code'}
           </Button>
@@ -484,14 +627,37 @@ function ChargeCodeForm({
   );
 }
 
-type SortColumn = 'code' | 'description' | 'type' | 'costHandling' | 'pool' | 'poolType' | 'allocationBase' | 'department' | 'billable' | 'active';
+type SortColumn =
+  | 'code'
+  | 'description'
+  | 'type'
+  | 'costHandling'
+  | 'pool'
+  | 'poolType'
+  | 'allocationBase'
+  | 'department'
+  | 'billable'
+  | 'active';
 type SortDirection = 'asc' | 'desc';
 
-function SortIcon({ column, sortColumn, sortDirection }: { column: SortColumn; sortColumn: SortColumn | null; sortDirection: SortDirection }) {
-  if (sortColumn !== column) return <ChevronsUpDown className="ml-1 h-3.5 w-3.5 text-muted-foreground/60 inline-block" />;
-  return sortDirection === 'asc'
-    ? <ChevronUp className="ml-1 h-3.5 w-3.5 inline-block" />
-    : <ChevronDown className="ml-1 h-3.5 w-3.5 inline-block" />;
+function SortIcon({
+  column,
+  sortColumn,
+  sortDirection,
+}: {
+  column: SortColumn;
+  sortColumn: SortColumn | null;
+  sortDirection: SortDirection;
+}) {
+  if (sortColumn !== column)
+    return (
+      <ChevronsUpDown className="ml-1 h-3.5 w-3.5 text-muted-foreground/60 inline-block" />
+    );
+  return sortDirection === 'asc' ? (
+    <ChevronUp className="ml-1 h-3.5 w-3.5 inline-block" />
+  ) : (
+    <ChevronDown className="ml-1 h-3.5 w-3.5 inline-block" />
+  );
 }
 
 function normalizePoolKey(value?: string | null) {
@@ -507,11 +673,19 @@ function poolCandidates(code: ChargeCode) {
 
   for (const value of [code.type, code.costHandling]) {
     const normalized = normalizePoolKey(value);
-    if (normalized === 'B_AND_P' || normalized === 'BID_PROPOSAL' || normalized === 'BNP') {
+    if (
+      normalized === 'B_AND_P' ||
+      normalized === 'BID_PROPOSAL' ||
+      normalized === 'BNP'
+    ) {
       candidates.add('B_AND_P');
       candidates.add('BID_PROPOSAL');
       candidates.add('BNP');
-    } else if (normalized === 'IR_AND_D' || normalized === 'IRAD' || normalized === 'IRD') {
+    } else if (
+      normalized === 'IR_AND_D' ||
+      normalized === 'IRAD' ||
+      normalized === 'IRD'
+    ) {
       candidates.add('IR_AND_D');
       candidates.add('IRAD');
       candidates.add('IRD');
@@ -527,10 +701,18 @@ function poolCandidates(code: ChargeCode) {
 }
 
 function fallbackPoolContext(candidates: Set<string>) {
-  if (candidates.has('B_AND_P') || candidates.has('BID_PROPOSAL') || candidates.has('BNP')) {
+  if (
+    candidates.has('B_AND_P') ||
+    candidates.has('BID_PROPOSAL') ||
+    candidates.has('BNP')
+  ) {
     return { pool: 'B&P Pool', poolType: 'B&P', allocationBase: '-' };
   }
-  if (candidates.has('IR_AND_D') || candidates.has('IRAD') || candidates.has('IRD')) {
+  if (
+    candidates.has('IR_AND_D') ||
+    candidates.has('IRAD') ||
+    candidates.has('IRD')
+  ) {
     return { pool: 'IR&D Pool', poolType: 'IR&D', allocationBase: '-' };
   }
   if (candidates.has('FRINGE')) {
@@ -545,7 +727,11 @@ function fallbackPoolContext(candidates: Set<string>) {
   return { pool: '-', poolType: '-', allocationBase: '-' };
 }
 
-function resolvePoolContext(code: ChargeCode, pools: IndirectCostPool[], bases: AllocationBase[]) {
+function resolvePoolContext(
+  code: ChargeCode,
+  pools: IndirectCostPool[],
+  bases: AllocationBase[]
+) {
   const candidates = poolCandidates(code);
   const pool = pools.find((p) => {
     const values = [p.code, p.name, p.poolType].map(normalizePoolKey);
@@ -613,14 +799,23 @@ export default function ChargeCodeManagerPage() {
         if (sortColumn === 'billable' || sortColumn === 'active') {
           aVal = a[sortColumn];
           bVal = b[sortColumn];
-          const cmp = (aVal === bVal ? 0 : aVal ? -1 : 1);
+          const cmp = aVal === bVal ? 0 : aVal ? -1 : 1;
           return sortDirection === 'asc' ? cmp : -cmp;
-        } else if (sortColumn === 'pool' || sortColumn === 'poolType' || sortColumn === 'allocationBase') {
+        } else if (
+          sortColumn === 'pool' ||
+          sortColumn === 'poolType' ||
+          sortColumn === 'allocationBase'
+        ) {
           const aPool = resolvePoolContext(a, pools, bases);
           const bPool = resolvePoolContext(b, pools, bases);
           aVal = aPool[sortColumn];
           bVal = bPool[sortColumn];
-          const cmp = aVal.toLowerCase() < bVal.toLowerCase() ? -1 : aVal.toLowerCase() > bVal.toLowerCase() ? 1 : 0;
+          const cmp =
+            aVal.toLowerCase() < bVal.toLowerCase()
+              ? -1
+              : aVal.toLowerCase() > bVal.toLowerCase()
+                ? 1
+                : 0;
           return sortDirection === 'asc' ? cmp : -cmp;
         } else {
           aVal = (a[sortColumn] ?? '').toString().toLowerCase();
@@ -632,7 +827,15 @@ export default function ChargeCodeManagerPage() {
     }
 
     return list;
-  }, [chargeCodes, showInactive, searchQuery, sortColumn, sortDirection, pools, bases]);
+  }, [
+    chargeCodes,
+    showInactive,
+    searchQuery,
+    sortColumn,
+    sortDirection,
+    pools,
+    bases,
+  ]);
 
   function openCreate() {
     setEditTarget(null);
@@ -675,7 +878,8 @@ export default function ChargeCodeManagerPage() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Charge Codes</h1>
             <p className="text-sm text-muted-foreground">
-              Manage the charge code registry used for labor cost allocation and DCAA compliance.
+              Manage the charge code registry used for labor cost allocation and
+              DCAA compliance.
             </p>
           </div>
         </div>
@@ -732,7 +936,11 @@ export default function ChargeCodeManagerPage() {
                   onClick={() => handleSort(key)}
                 >
                   {label}
-                  <SortIcon column={key} sortColumn={sortColumn} sortDirection={sortDirection} />
+                  <SortIcon
+                    column={key}
+                    sortColumn={sortColumn}
+                    sortDirection={sortDirection}
+                  />
                 </TableHead>
               ))}
               <TableHead className="w-12" />
@@ -751,74 +959,94 @@ export default function ChargeCodeManagerPage() {
               ))
             ) : displayed.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={11} className="text-center text-muted-foreground py-10">
+                <TableCell
+                  colSpan={11}
+                  className="text-center text-muted-foreground py-10"
+                >
                   {chargeCodes?.length === 0
                     ? 'No charge codes found. Create one to get started.'
                     : searchQuery.trim()
-                    ? 'No charge codes match your search.'
-                    : 'No active charge codes. Enable "Show inactive" to see all.'}
+                      ? 'No charge codes match your search.'
+                      : 'No active charge codes. Enable "Show inactive" to see all.'}
                 </TableCell>
               </TableRow>
             ) : (
               displayed.map((code) => {
                 const poolContext = resolvePoolContext(code, pools, bases);
                 return (
-                <TableRow
-                  key={code.id}
-                  className={`cursor-pointer hover:bg-muted/50 transition-colors ${
-                    !code.active ? 'opacity-50' : ''
-                  }`}
-                  onClick={() => openEdit(code)}
-                >
-                  <TableCell className="font-mono font-medium">{code.code}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
-                    {code.description ?? '—'}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{typeLabel[code.type] ?? code.type}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">
-                      {handlingLabel[code.costHandling] ?? code.costHandling ?? 'Direct Contract'}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-sm max-w-[220px] truncate" title={poolContext.pool}>
-                    {poolContext.pool}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">{poolContext.poolType}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{poolContext.allocationBase}</Badge>
-                  </TableCell>
-                  <TableCell className="text-sm">{code.department ?? '—'}</TableCell>
-                  <TableCell>
-                    {code.billable ? (
-                      <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Yes</Badge>
-                    ) : (
-                      <Badge variant="secondary">No</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {code.active ? (
-                      <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">Active</Badge>
-                    ) : (
-                      <Badge variant="secondary">Inactive</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openEdit(code);
-                      }}
+                  <TableRow
+                    key={code.id}
+                    className={`cursor-pointer hover:bg-muted/50 transition-colors ${
+                      !code.active ? 'opacity-50' : ''
+                    }`}
+                    onClick={() => openEdit(code)}
+                  >
+                    <TableCell className="font-mono font-medium">
+                      {code.code}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
+                      {code.description ?? '—'}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline">
+                        {typeLabel[code.type] ?? code.type}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">
+                        {handlingLabel[code.costHandling] ??
+                          code.costHandling ??
+                          'Direct Contract'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell
+                      className="text-sm max-w-[220px] truncate"
+                      title={poolContext.pool}
                     >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
+                      {poolContext.pool}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">{poolContext.poolType}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline">
+                        {poolContext.allocationBase}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {code.department ?? '—'}
+                    </TableCell>
+                    <TableCell>
+                      {code.billable ? (
+                        <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
+                          Yes
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary">No</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {code.active ? (
+                        <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">
+                          Active
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary">Inactive</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openEdit(code);
+                        }}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
                 );
               })
             )}
@@ -827,8 +1055,8 @@ export default function ChargeCodeManagerPage() {
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={(open) => !open && closeDialog()}>
-        <DialogContent className="max-w-lg max-h-[calc(100vh-2rem)] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-hidden">
+          <DialogHeader className="pb-2">
             <DialogTitle>
               {editTarget ? `Edit: ${editTarget.code}` : 'Add Charge Code'}
             </DialogTitle>

@@ -40,6 +40,7 @@ export async function ensureProductionWorkflowReadSchema(): Promise<void> {
             ALTER TABLE public.production_work_orders
               ADD COLUMN IF NOT EXISTS department_budgets jsonb DEFAULT '{}'::jsonb,
               ADD COLUMN IF NOT EXISTS total_budget_hours numeric,
+              ADD COLUMN IF NOT EXISTS material_budget_amount numeric NOT NULL DEFAULT 0,
               ADD COLUMN IF NOT EXISTS start_date date,
               ADD COLUMN IF NOT EXISTS due_date date,
               ADD COLUMN IF NOT EXISTS warning_threshold numeric,

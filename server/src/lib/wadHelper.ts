@@ -87,6 +87,36 @@ export interface EnsureWadResult {
   seedData: WadSeedData | null;
 }
 
+const productionWorkOrderReadColumns = {
+  id: productionWorkOrders.id,
+  workOrderNumber: productionWorkOrders.workOrderNumber,
+  projectId: productionWorkOrders.projectId,
+  partNumber: productionWorkOrders.partNumber,
+  description: productionWorkOrders.description,
+  quantity: productionWorkOrders.quantity,
+  status: productionWorkOrders.status,
+  departmentBudgets: productionWorkOrders.departmentBudgets,
+  totalBudgetHours: productionWorkOrders.totalBudgetHours,
+  startDate: productionWorkOrders.startDate,
+  dueDate: productionWorkOrders.dueDate,
+  warningThreshold: productionWorkOrders.warningThreshold,
+  blockedThreshold: productionWorkOrders.blockedThreshold,
+  defaultChargeCodeId: productionWorkOrders.defaultChargeCodeId,
+  dashboardType: productionWorkOrders.dashboardType,
+  queueType: productionWorkOrders.queueType,
+  assignedDepartment: productionWorkOrders.assignedDepartment,
+  assignedDashboardRoute: productionWorkOrders.assignedDashboardRoute,
+  manufacturingQueueId: productionWorkOrders.manufacturingQueueId,
+  wadStatus: productionWorkOrders.wadStatus,
+  wizardData: productionWorkOrders.wizardData,
+  createdAt: productionWorkOrders.createdAt,
+  updatedAt: productionWorkOrders.updatedAt,
+};
+
+function withDefaultMaterialBudgetAmount(row: Record<string, unknown>): ProductionWorkOrder {
+  return { ...row, materialBudgetAmount: '0' } as ProductionWorkOrder;
+}
+
 /**
  * Ensures a project has at least one Production Work Order (WAD).
  *
@@ -195,14 +225,14 @@ export async function ensureProjectHasWADFromCanonicalSources(
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${projectId}))`);
 
     const existingRows = await tx
-      .select()
+      .select(productionWorkOrderReadColumns)
       .from(productionWorkOrders)
       .where(eq(productionWorkOrders.projectId, projectId))
       .orderBy(desc(productionWorkOrders.createdAt));
     if (existingRows.length > 0) {
       const target =
         existingRows.find((w) => w.wadStatus !== 'APPROVED') ?? existingRows[0];
-      return { workOrder: target, created: false, seedData: null };
+      return { workOrder: withDefaultMaterialBudgetAmount(target), created: false, seedData: null };
     }
 
     const [project] = await tx.select().from(projects).where(eq(projects.id, projectId)).limit(1);

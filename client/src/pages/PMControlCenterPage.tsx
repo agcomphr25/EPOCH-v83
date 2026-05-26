@@ -17,6 +17,9 @@ import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
 } from '@/components/ui/sheet';
 import {
+  Accordion, AccordionContent, AccordionItem, AccordionTrigger,
+} from '@/components/ui/accordion';
+import {
   Switch,
 } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -205,6 +208,42 @@ interface P2SerializedBreakdownItem {
   scrapReason: string | null;
   completedAt: string | null;
   updatedAt: string | null;
+}
+
+type SerializedStatusGroup = 'complete' | 'in_progress' | 'other';
+
+function serializedStatusGroup(item: P2SerializedBreakdownItem): SerializedStatusGroup {
+  const rawStatus = String(item.status || '').trim().toUpperCase();
+  const travelerStatus = String(item.activeTravelerStatus || '').trim().toUpperCase();
+  const taskStatus = String(item.activeTaskStatus || '').trim().toUpperCase();
+
+  if (
+    item.completedAt ||
+    rawStatus === 'COMPLETED' ||
+    rawStatus === 'COMPLETE' ||
+    rawStatus === 'FULFILLED' ||
+    rawStatus === 'SHIPPED' ||
+    travelerStatus === 'COMPLETED'
+  ) {
+    return 'complete';
+  }
+
+  if (
+    rawStatus === 'IN_PROGRESS' ||
+    rawStatus === 'IN PROGRESS' ||
+    travelerStatus === 'IN_PROGRESS' ||
+    taskStatus === 'IN_PROGRESS' ||
+    item.currentDepartment ||
+    item.activeTaskDepartment
+  ) {
+    return 'in_progress';
+  }
+
+  return 'other';
+}
+
+function serializedDepartment(item: P2SerializedBreakdownItem): string {
+  return item.currentDepartment || item.activeTaskDepartment || 'Unassigned Department';
 }
 
 interface DailyThroughputBoardData {
@@ -774,14 +813,70 @@ function ProductionTab({ projectId }: { projectId: string }) {
   const chipOff = 'bg-background border-border text-muted-foreground hover:text-foreground hover:bg-accent';
   const selectedSerializedItems = (serializedBreakdown?.items ?? [])
     .filter(item => !selectedP2Po || item.poId === selectedP2Po.id);
-  const serializedByDepartment = selectedSerializedItems.reduce<Record<string, P2SerializedBreakdownItem[]>>((acc, item) => {
-    const dept = item.currentDepartment || item.activeTaskDepartment || 'Pending Layup';
-    if (!acc[dept]) acc[dept] = [];
-    acc[dept].push(item);
-    return acc;
-  }, {});
-  const serializedDepartments = Object.entries(serializedByDepartment)
+  const serializedCompleteItems = selectedSerializedItems
+    .filter(item => serializedStatusGroup(item) === 'complete')
+    .sort((a, b) => (a.completedAt || a.updatedAt || '').localeCompare(b.completedAt || b.updatedAt || ''));
+  const serializedInProgressByDepartment = selectedSerializedItems
+    .filter(item => serializedStatusGroup(item) === 'in_progress')
+    .reduce<Record<string, P2SerializedBreakdownItem[]>>((acc, item) => {
+      const dept = serializedDepartment(item);
+      if (!acc[dept]) acc[dept] = [];
+      acc[dept].push(item);
+      return acc;
+    }, {});
+  const serializedInProgressDepartments = Object.entries(serializedInProgressByDepartment)
+    .map(([department, items]) => [
+      department,
+      [...items].sort((a, b) => serializedDepartment(a).localeCompare(serializedDepartment(b)) || (a.serialNumber || a.barcode || a.id).localeCompare(b.serialNumber || b.barcode || b.id)),
+    ] as const)
     .sort(([a], [b]) => a.localeCompare(b));
+  const serializedOtherItems = selectedSerializedItems
+    .filter(item => serializedStatusGroup(item) === 'other')
+    .sort((a, b) => (a.serialNumber || a.barcode || a.id).localeCompare(b.serialNumber || b.barcode || b.id));
+  const serializedAccordionDefaults = [
+    serializedCompleteItems.length > 0 ? 'complete' : null,
+    serializedInProgressDepartments.length > 0 ? 'in-progress' : null,
+    serializedOtherItems.length > 0 ? 'other' : null,
+  ].filter(Boolean) as string[];
+
+  function renderSerializedItem(item: P2SerializedBreakdownItem) {
+    return (
+      <div key={item.id} className="grid gap-2 p-3 text-sm sm:grid-cols-[1.2fr_1fr_1fr]">
+        <div>
+          <div className="font-mono font-semibold">
+            {item.serialNumber || item.barcode || item.id}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {item.partNumber || 'No part'} {item.partName ? `- ${item.partName}` : ''}
+          </div>
+        </div>
+        <div>
+          <Badge className={WO_STATUS_COLORS[item.status] ?? 'bg-gray-100 text-gray-700'}>
+            {item.status.replace('_', ' ')}
+          </Badge>
+          {(item.holdReason || item.scrapReason) && (
+            <div className="mt-1 text-xs text-red-700">
+              {item.holdReason || item.scrapReason}
+            </div>
+          )}
+        </div>
+        <div className="text-xs text-muted-foreground">
+          {item.activeTravelerNumber && item.activeTravelerId ? (
+            <Link
+              to={`/travelers/${item.activeTravelerId}`}
+              className="font-mono text-blue-600 hover:underline"
+            >
+              {item.activeTravelerNumber}
+            </Link>
+          ) : (
+            <span>No active traveler</span>
+          )}
+          <div>{item.activeTaskStatus || item.activeTravelerStatus || 'No active task'}</div>
+          <div>Updated {fmtTime(item.updatedAt)}</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -1117,55 +1212,79 @@ function ProductionTab({ projectId }: { projectId: string }) {
             </div>
           )}
 
-          {!serializedBreakdownLoading && !serializedBreakdownError && serializedDepartments.length > 0 && (
-            <div className="space-y-4">
-              {serializedDepartments.map(([department, items]) => (
-                <div key={department} className="rounded-md border">
-                  <div className="flex items-center justify-between border-b bg-muted/40 px-3 py-2">
-                    <span className="text-sm font-semibold">{department}</span>
-                    <Badge variant="outline">{items.length} item{items.length === 1 ? '' : 's'}</Badge>
-                  </div>
-                  <div className="divide-y">
-                    {items.map((item) => (
-                      <div key={item.id} className="grid gap-2 p-3 text-sm sm:grid-cols-[1.2fr_1fr_1fr]">
-                        <div>
-                          <div className="font-mono font-semibold">
-                            {item.serialNumber || item.barcode || item.id}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {item.partNumber || 'No part'} {item.partName ? `- ${item.partName}` : ''}
-                          </div>
-                        </div>
-                        <div>
-                          <Badge className={WO_STATUS_COLORS[item.status] ?? 'bg-gray-100 text-gray-700'}>
-                            {item.status.replace('_', ' ')}
-                          </Badge>
-                          {(item.holdReason || item.scrapReason) && (
-                            <div className="mt-1 text-xs text-red-700">
-                              {item.holdReason || item.scrapReason}
+          {!serializedBreakdownLoading && !serializedBreakdownError && selectedSerializedItems.length > 0 && (
+            <Accordion type="multiple" defaultValue={serializedAccordionDefaults} className="space-y-3">
+              {serializedCompleteItems.length > 0 && (
+                <AccordionItem value="complete" className="rounded-md border px-3">
+                  <AccordionTrigger className="py-3 hover:no-underline">
+                    <span className="flex items-center gap-2 text-sm font-semibold">
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                      Complete
+                      <Badge variant="outline">{serializedCompleteItems.length} order{serializedCompleteItems.length === 1 ? '' : 's'}</Badge>
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent className="pb-3">
+                    <div className="divide-y rounded-md border">
+                      {serializedCompleteItems.map(renderSerializedItem)}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              )}
+
+              {serializedInProgressDepartments.length > 0 && (
+                <AccordionItem value="in-progress" className="rounded-md border px-3">
+                  <AccordionTrigger className="py-3 hover:no-underline">
+                    <span className="flex items-center gap-2 text-sm font-semibold">
+                      <Clock className="h-4 w-4 text-yellow-600" />
+                      In Progress
+                      <Badge variant="outline">
+                        {serializedInProgressDepartments.reduce((sum, [, items]) => sum + items.length, 0)} order{serializedInProgressDepartments.reduce((sum, [, items]) => sum + items.length, 0) === 1 ? '' : 's'}
+                      </Badge>
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent className="pb-3">
+                    <Accordion
+                      type="multiple"
+                      defaultValue={serializedInProgressDepartments.map(([department]) => `dept-${department}`)}
+                      className="space-y-2"
+                    >
+                      {serializedInProgressDepartments.map(([department, items]) => (
+                        <AccordionItem key={department} value={`dept-${department}`} className="rounded-md border px-3">
+                          <AccordionTrigger className="py-2 hover:no-underline">
+                            <span className="flex items-center gap-2 text-sm font-semibold">
+                              {department}
+                              <Badge variant="outline">{items.length} order{items.length === 1 ? '' : 's'}</Badge>
+                            </span>
+                          </AccordionTrigger>
+                          <AccordionContent className="pb-3">
+                            <div className="divide-y rounded-md border">
+                              {items.map(renderSerializedItem)}
                             </div>
-                          )}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {item.activeTravelerNumber && item.activeTravelerId ? (
-                            <Link
-                              to={`/travelers/${item.activeTravelerId}`}
-                              className="font-mono text-blue-600 hover:underline"
-                            >
-                              {item.activeTravelerNumber}
-                            </Link>
-                          ) : (
-                            <span>No active traveler</span>
-                          )}
-                          <div>{item.activeTaskStatus || item.activeTravelerStatus || 'No active task'}</div>
-                          <div>Updated {fmtTime(item.updatedAt)}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
+                          </AccordionContent>
+                        </AccordionItem>
+                      ))}
+                    </Accordion>
+                  </AccordionContent>
+                </AccordionItem>
+              )}
+
+              {serializedOtherItems.length > 0 && (
+                <AccordionItem value="other" className="rounded-md border px-3">
+                  <AccordionTrigger className="py-3 hover:no-underline">
+                    <span className="flex items-center gap-2 text-sm font-semibold">
+                      <HelpCircle className="h-4 w-4 text-muted-foreground" />
+                      Other Status
+                      <Badge variant="outline">{serializedOtherItems.length} order{serializedOtherItems.length === 1 ? '' : 's'}</Badge>
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent className="pb-3">
+                    <div className="divide-y rounded-md border">
+                      {serializedOtherItems.map(renderSerializedItem)}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              )}
+            </Accordion>
           )}
         </SheetContent>
       </Sheet>

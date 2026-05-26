@@ -188,6 +188,15 @@ interface ReceivedUnit {
   allocatedToType?: string;
   allocatedToId?: number;
   materialLotId?: string;
+  targetProjectId?: string | null;
+}
+
+interface ReceivingProjectTarget {
+  id: string;
+  projectCode: string;
+  projectName: string;
+  status: string;
+  customerName?: string | null;
 }
 
 interface ReceiptDocument {
@@ -2666,14 +2675,14 @@ export function PutawayStep({ receipt, onComplete, onUpdate }: {
   const queryClient = useQueryClient();
 
   const NONE_SENTINEL = '__none__';
+  const LEAVE_OPEN_SENTINEL = '__leave_open__';
 
   const [batchLocation, setBatchLocation] = useState('');
   const [batchFreezer, setBatchFreezer] = useState('');
   const [batchStorageType, setBatchStorageType] = useState<(typeof STORAGE_TYPES)[number]>('conex');
   const [batchStorageIdentifier, setBatchStorageIdentifier] = useState('');
   const [batchStorageNote, setBatchStorageNote] = useState('');
-  const [batchAllocType, setBatchAllocType] = useState('stock');
-  const [batchAllocId, setBatchAllocId] = useState('');
+  const [batchTargetProjectId, setBatchTargetProjectId] = useState(NONE_SENTINEL);
   const [batchPending, setBatchPending] = useState(false);
   const [selectedDeptId, setSelectedDeptId] = useState(
     receipt.departmentId ? String(receipt.departmentId) : NONE_SENTINEL,
@@ -2683,6 +2692,14 @@ export function PutawayStep({ receipt, onComplete, onUpdate }: {
   const { data: departments = [] } = useQuery<InventoryDepartment[]>({
     queryKey: ['/api/inventory/departments'],
   });
+
+  const { data: projectTargetsResponse } = useQuery<{ data: ReceivingProjectTarget[] }>({
+    queryKey: ['/api/receipts/project-targets/open'],
+  });
+  const projectTargets = projectTargetsResponse?.data ?? [];
+
+  const renderProjectTargetLabel = (project: ReceivingProjectTarget) =>
+    `${project.projectCode} - ${project.projectName}${project.customerName ? ` (${project.customerName})` : ''}`;
 
   const applyDeptDefaults = async (dept: InventoryDepartment | null, newLocation: string | null, newFreezer: number | null, silent = false) => {
     if (!dept || (newLocation == null && newFreezer == null)) return;
@@ -2755,19 +2772,23 @@ export function PutawayStep({ receipt, onComplete, onUpdate }: {
 
   const handleBatchAssign = async () => {
     const structuredLocation = buildStorageLocation(batchStorageType, batchStorageIdentifier, batchStorageNote);
-    if (!batchLocation && !structuredLocation && !batchFreezer && !batchAllocId) {
+    if (!batchLocation && !structuredLocation && !batchFreezer && batchTargetProjectId === NONE_SENTINEL) {
       toast.error('Enter at least one field to batch-assign');
       return;
     }
     setBatchPending(true);
-    const updates: Record<string, any> = { allocatedToType: batchAllocType };
+    const updates: Record<string, any> = {};
     if (structuredLocation || batchLocation) updates.location = structuredLocation || batchLocation;
     if (batchStorageType === 'freezer' && batchStorageIdentifier) {
       updates.freezerNumber = parseInt(batchStorageIdentifier, 10);
     } else if (batchFreezer) {
       updates.freezerNumber = parseInt(batchFreezer, 10);
     }
-    if (batchAllocId) updates.allocatedToId = parseInt(batchAllocId, 10);
+    if (batchTargetProjectId !== NONE_SENTINEL) {
+      updates.targetProjectId = batchTargetProjectId === LEAVE_OPEN_SENTINEL ? null : batchTargetProjectId;
+      updates.allocatedToType = batchTargetProjectId === LEAVE_OPEN_SENTINEL ? 'stock' : 'project';
+      updates.allocatedToId = null;
+    }
     try {
       await Promise.all(units.map(u =>
         apiRequest(`/api/receipts/${receipt.id}/units/${u.id}`, {
@@ -2872,21 +2893,20 @@ export function PutawayStep({ receipt, onComplete, onUpdate }: {
               <Label className="text-xs">Freezer #</Label>
               <Input className="h-7 text-xs mt-0.5" type="number" min={1} value={batchFreezer} onChange={e => setBatchFreezer(e.target.value)} placeholder="1–5" />
             </div>
-            <div>
-              <Label className="text-xs">Allocation Type</Label>
-              <Select value={batchAllocType} onValueChange={setBatchAllocType}>
-                <SelectTrigger className="h-7 text-xs mt-0.5"><SelectValue /></SelectTrigger>
+            <div className="col-span-2">
+              <Label className="text-xs">Target Project</Label>
+              <Select value={batchTargetProjectId} onValueChange={setBatchTargetProjectId}>
+                <SelectTrigger className="h-7 text-xs mt-0.5"><SelectValue placeholder="No batch project change" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="stock">Stock</SelectItem>
-                  <SelectItem value="work_order">Work Order</SelectItem>
-                  <SelectItem value="po_demand">PO Demand</SelectItem>
-                  <SelectItem value="quarantine">Quarantine</SelectItem>
+                  <SelectItem value={NONE_SENTINEL}>No batch project change</SelectItem>
+                  <SelectItem value={LEAVE_OPEN_SENTINEL}>Leave open</SelectItem>
+                  {projectTargets.map(project => (
+                    <SelectItem key={project.id} value={project.id}>
+                      {renderProjectTargetLabel(project)}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
-            </div>
-            <div>
-              <Label className="text-xs">Target ID <span className="text-gray-400">(WO/PO #)</span></Label>
-              <Input className="h-7 text-xs mt-0.5" type="number" value={batchAllocId} onChange={e => setBatchAllocId(e.target.value)} placeholder="Optional" />
             </div>
           </div>
           <Button size="sm" variant="outline" className="w-full h-7 text-xs" onClick={handleBatchAssign} disabled={batchPending}>
@@ -2938,37 +2958,31 @@ export function PutawayStep({ receipt, onComplete, onUpdate }: {
                 }}
               />
             </div>
-            <div>
-              <Label className="text-xs">Allocation</Label>
+            <div className="col-span-2">
+              <Label className="text-xs">Target Project</Label>
               <Select
-                defaultValue={unit.allocatedToType ?? 'stock'}
-                onValueChange={v => updateUnitMutation.mutate({ unitId: unit.id, updates: { allocatedToType: v } })}
+                value={unit.targetProjectId ?? LEAVE_OPEN_SENTINEL}
+                onValueChange={v => updateUnitMutation.mutate({
+                  unitId: unit.id,
+                  updates: {
+                    targetProjectId: v === LEAVE_OPEN_SENTINEL ? null : v,
+                    allocatedToType: v === LEAVE_OPEN_SENTINEL ? 'stock' : 'project',
+                    allocatedToId: null,
+                  },
+                })}
               >
                 <SelectTrigger className="h-7 text-xs mt-0.5">
-                  <SelectValue />
+                  <SelectValue placeholder="Leave open" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="stock">Stock</SelectItem>
-                  <SelectItem value="work_order">Work Order</SelectItem>
-                  <SelectItem value="po_demand">PO Demand</SelectItem>
-                  <SelectItem value="quarantine">Quarantine</SelectItem>
+                  <SelectItem value={LEAVE_OPEN_SENTINEL}>Leave open</SelectItem>
+                  {projectTargets.map(project => (
+                    <SelectItem key={project.id} value={project.id}>
+                      {renderProjectTargetLabel(project)}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
-            </div>
-            <div>
-              <Label className="text-xs">Target ID <span className="text-gray-400">(WO/PO #)</span></Label>
-              <Input
-                className="h-7 text-xs mt-0.5"
-                type="number"
-                defaultValue={unit.allocatedToId ?? ''}
-                placeholder="Optional"
-                onBlur={e => {
-                  const val = e.target.value ? parseInt(e.target.value, 10) : null;
-                  if (val !== (unit.allocatedToId ?? null)) {
-                    updateUnitMutation.mutate({ unitId: unit.id, updates: { allocatedToId: val } });
-                  }
-                }}
-              />
             </div>
           </div>
         </div>

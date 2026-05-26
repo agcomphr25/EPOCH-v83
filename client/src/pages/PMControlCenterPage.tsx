@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation, Link } from 'wouter';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -315,14 +315,19 @@ interface MaterialSummary {
   committedCost: number;
   consumedCost: number;
   remainingCost: number;
+  pendingReceivedCost?: number;
+  acceptedReceivedCost?: number;
 }
 
 interface MaterialRow {
   inventoryItemId: string;
+  projectReceivedMaterialId?: number;
   itemCode: string;
   itemName: string;
   lotNumber: string | null;
   internalControlNumber: string | null;
+  receiptNumber?: string | null;
+  receivedUnitBarcode?: string | null;
   qtyRequired: number;
   qtyAllocated: number;
   qtyIssued: number;
@@ -484,8 +489,11 @@ const MATERIAL_STATUS_COLORS: Record<string, string> = {
   ON_HOLD: 'bg-orange-100 text-orange-700',
   PARTIAL: 'bg-yellow-100 text-yellow-700',
   ALLOCATED: 'bg-blue-100 text-blue-700',
+  PENDING_PM_ACCEPTANCE: 'bg-blue-100 text-blue-700',
   FULLY_ALLOCATED: 'bg-green-100 text-green-700',
   FULLY_ISSUED: 'bg-green-100 text-green-700',
+  RECEIVED_ACCEPTED: 'bg-green-100 text-green-700',
+  RECEIVED_REJECTED: 'bg-gray-100 text-gray-600',
 };
 
 const MATERIAL_STATUS_ORDER: Record<string, number> = {
@@ -493,9 +501,12 @@ const MATERIAL_STATUS_ORDER: Record<string, number> = {
   SHORT: 1,
   ON_HOLD: 2,
   PARTIAL: 3,
+  PENDING_PM_ACCEPTANCE: 4,
   ALLOCATED: 4,
   FULLY_ALLOCATED: 5,
   FULLY_ISSUED: 6,
+  RECEIVED_ACCEPTED: 7,
+  RECEIVED_REJECTED: 8,
 };
 
 function CertBadge({ status }: { status: string }) {
@@ -1661,6 +1672,7 @@ type SortDir = 'asc' | 'desc';
 
 function MaterialBudgetTab({ projectId }: { projectId: string }) {
   const [, navTo] = useLocation();
+  const queryClient = useQueryClient();
   const [sortField, setSortField] = useState<SortField>('status');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
 
@@ -1668,6 +1680,25 @@ function MaterialBudgetTab({ projectId }: { projectId: string }) {
     queryKey: ['/api/pm-dashboard', projectId, 'materials'],
     queryFn: () => safeFetch<MaterialData>(`/api/pm-dashboard/${projectId}/materials`),
     enabled: !!projectId,
+  });
+
+  const receivedMaterialMutation = useMutation({
+    mutationFn: async ({ id, action }: { id: number; action: 'accept' | 'reject' }) => {
+      const res = await fetch(`/api/pm-dashboard/${projectId}/materials/received/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || body.message || 'Failed to update received material');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/pm-dashboard', projectId, 'materials'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/pm-dashboard', projectId, 'summary'] });
+    },
   });
 
   if (isLoading) {
@@ -1731,6 +1762,7 @@ function MaterialBudgetTab({ projectId }: { projectId: string }) {
           icon={<TrendingUp className="h-4 w-4" />}
           label="Committed"
           value={fmtCurrency(summary.committedCost)}
+          sub={summary.pendingReceivedCost ? `${fmtCurrency(summary.pendingReceivedCost)} pending receipt` : undefined}
           colorClass="text-purple-600"
         />
         <KpiCard
@@ -1799,6 +1831,7 @@ function MaterialBudgetTab({ projectId }: { projectId: string }) {
                       Consumed <SortIcon field="consumedCost" />
                     </button>
                   </TableHead>
+                  <TableHead className="text-right">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1814,7 +1847,9 @@ function MaterialBudgetTab({ projectId }: { projectId: string }) {
                     <TableCell className="text-xs text-muted-foreground">
                       {row.lotNumber && <div className="font-mono">{row.lotNumber}</div>}
                       {row.internalControlNumber && <div className="text-xs opacity-70">{row.internalControlNumber}</div>}
-                      {!row.lotNumber && !row.internalControlNumber && '—'}
+                      {row.receiptNumber && <div className="text-xs opacity-70">Receipt {row.receiptNumber}</div>}
+                      {row.receivedUnitBarcode && <div className="text-xs opacity-70">{row.receivedUnitBarcode}</div>}
+                      {!row.lotNumber && !row.internalControlNumber && !row.receiptNumber && !row.receivedUnitBarcode && '—'}
                     </TableCell>
                     <TableCell className="text-right text-sm">{row.qtyRequired > 0 ? row.qtyRequired : '—'}</TableCell>
                     <TableCell className="text-right text-sm">{row.qtyAllocated > 0 ? row.qtyAllocated : '—'}</TableCell>
@@ -1822,6 +1857,34 @@ function MaterialBudgetTab({ projectId }: { projectId: string }) {
                     <TableCell className="text-right text-sm">{row.unitCost > 0 ? fmtCurrency(row.unitCost) : '—'}</TableCell>
                     <TableCell className="text-right text-sm">{row.committedCost > 0 ? fmtCurrency(row.committedCost) : '—'}</TableCell>
                     <TableCell className="text-right text-sm">{row.consumedCost > 0 ? fmtCurrency(row.consumedCost) : '—'}</TableCell>
+                    <TableCell className="text-right">
+                      {row.status === 'PENDING_PM_ACCEPTANCE' && row.projectReceivedMaterialId ? (
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 px-2"
+                            disabled={receivedMaterialMutation.isPending}
+                            onClick={() => receivedMaterialMutation.mutate({ id: row.projectReceivedMaterialId!, action: 'accept' })}
+                          >
+                            <CheckCircle className="h-3 w-3 mr-1" />
+                            Accept
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 px-2"
+                            disabled={receivedMaterialMutation.isPending}
+                            onClick={() => receivedMaterialMutation.mutate({ id: row.projectReceivedMaterialId!, action: 'reject' })}
+                          >
+                            <XCircle className="h-3 w-3 mr-1" />
+                            Reject
+                          </Button>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

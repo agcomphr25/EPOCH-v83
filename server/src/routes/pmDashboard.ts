@@ -248,6 +248,41 @@ async function publicTableExists(tableName: string): Promise<boolean> {
   return rows[0]?.exists === true;
 }
 
+let hasProductionWorkOrderMaterialBudgetColumn: boolean | null = null;
+
+async function getProductionWorkOrderMaterialBudgetExpression() {
+  if (hasProductionWorkOrderMaterialBudgetColumn === null) {
+    const rows = await pool.query<{ exists: boolean }>(
+      `
+        SELECT EXISTS (
+          SELECT 1
+          FROM information_schema.columns
+          WHERE table_schema = current_schema()
+            AND table_name = 'production_work_orders'
+            AND column_name = 'material_budget_amount'
+        ) AS "exists"
+      `,
+    );
+
+    hasProductionWorkOrderMaterialBudgetColumn = rows[0]?.exists === true;
+  }
+
+  if (hasProductionWorkOrderMaterialBudgetColumn) {
+    return `
+        NULLIF(material_budget_amount::numeric, 0),
+        NULLIF(wizard_data->>'materialBudgetAmount', '')::numeric,
+        NULLIF(wizard_data->>'materialBudget', '')::numeric,
+        0
+    `;
+  }
+
+  return `
+        NULLIF(wizard_data->>'materialBudgetAmount', '')::numeric,
+        NULLIF(wizard_data->>'materialBudget', '')::numeric,
+        0
+  `;
+}
+
 function canTraceProjectLabor(user: { username?: string | null; role?: string | null } | undefined): boolean {
   const username = String(user?.username ?? '').trim().toLowerCase();
   const role = String(user?.role ?? '').trim().toUpperCase();
@@ -1008,13 +1043,11 @@ router.get('/:projectId/summary', h(async (req, res) => {
       AND status = ANY($2::text[])
   `, [projectId, ORDERED_PARTS_REQUEST_STATUSES]);
 
+  const materialBudgetExpression = await getProductionWorkOrderMaterialBudgetExpression();
   const wadMaterialBudgetRes = await pool.query<{ plannedMaterialCost: string }>(`
     SELECT COALESCE(SUM(
       COALESCE(
-        NULLIF(material_budget_amount::numeric, 0),
-        NULLIF(wizard_data->>'materialBudgetAmount', '')::numeric,
-        NULLIF(wizard_data->>'materialBudget', '')::numeric,
-        0
+${materialBudgetExpression}
       )
     ), 0) AS "plannedMaterialCost"
     FROM production_work_orders
@@ -2300,13 +2333,11 @@ router.get('/:projectId/labor/entries', h(async (req, res) => {
 router.get('/:projectId/materials', h(async (req, res) => {
   const { projectId } = req.params;
 
+  const materialBudgetExpression = await getProductionWorkOrderMaterialBudgetExpression();
   const budgetRes = await pool.query<MaterialBudgetAmountRow>(`
     SELECT COALESCE(SUM(
       COALESCE(
-        NULLIF(material_budget_amount::numeric, 0),
-        NULLIF(wizard_data->>'materialBudgetAmount', '')::numeric,
-        NULLIF(wizard_data->>'materialBudget', '')::numeric,
-        0
+${materialBudgetExpression}
       )
     ), 0) AS "plannedCost"
     FROM production_work_orders

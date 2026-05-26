@@ -89,7 +89,11 @@ export async function buildChargeContextFromTraveler(
   }
 
   const [wad] = await db
-    .select()
+    .select({
+      id: productionWorkOrders.id,
+      workOrderNumber: productionWorkOrders.workOrderNumber,
+      projectId: productionWorkOrders.projectId,
+    })
     .from(productionWorkOrders)
     .where(eq(productionWorkOrders.id, traveler.productionWorkOrderId))
     .limit(1);

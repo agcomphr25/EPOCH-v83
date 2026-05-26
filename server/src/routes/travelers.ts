@@ -1365,7 +1365,7 @@ router.post('/', async (req: Request, res: Response) => {
 
     if (validatedData.productionWorkOrderId) {
       const [wad] = await db
-        .select()
+        .select({ id: productionWorkOrders.id })
         .from(productionWorkOrders)
         .where(eq(productionWorkOrders.id, validatedData.productionWorkOrderId));
       if (!wad) {
@@ -1485,7 +1485,7 @@ router.post('/from-part-number/:partNumber', async (req: Request, res: Response)
         return res.status(400).json({ error: 'productionWorkOrderId must be a valid UUID' });
       }
       const [wad] = await db
-        .select()
+        .select({ id: productionWorkOrders.id })
         .from(productionWorkOrders)
         .where(eq(productionWorkOrders.id, productionWorkOrderId));
       if (!wad) {
@@ -1586,7 +1586,7 @@ router.post('/from-routing/:partRoutingId', async (req: Request, res: Response) 
         return res.status(400).json({ error: 'productionWorkOrderId must be a valid UUID' });
       }
       const [wad] = await db
-        .select()
+        .select({ id: productionWorkOrders.id })
         .from(productionWorkOrders)
         .where(eq(productionWorkOrders.id, productionWorkOrderId));
       if (!wad) {

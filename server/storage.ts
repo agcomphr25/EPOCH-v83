@@ -871,6 +871,36 @@ const productionOrdersColumns = {
   itemCode: productionOrders.itemCode,
 };
 
+const productionWorkOrderReadColumns = {
+  id: productionWorkOrders.id,
+  workOrderNumber: productionWorkOrders.workOrderNumber,
+  projectId: productionWorkOrders.projectId,
+  partNumber: productionWorkOrders.partNumber,
+  description: productionWorkOrders.description,
+  quantity: productionWorkOrders.quantity,
+  status: productionWorkOrders.status,
+  departmentBudgets: productionWorkOrders.departmentBudgets,
+  totalBudgetHours: productionWorkOrders.totalBudgetHours,
+  startDate: productionWorkOrders.startDate,
+  dueDate: productionWorkOrders.dueDate,
+  warningThreshold: productionWorkOrders.warningThreshold,
+  blockedThreshold: productionWorkOrders.blockedThreshold,
+  defaultChargeCodeId: productionWorkOrders.defaultChargeCodeId,
+  dashboardType: productionWorkOrders.dashboardType,
+  queueType: productionWorkOrders.queueType,
+  assignedDepartment: productionWorkOrders.assignedDepartment,
+  assignedDashboardRoute: productionWorkOrders.assignedDashboardRoute,
+  manufacturingQueueId: productionWorkOrders.manufacturingQueueId,
+  wadStatus: productionWorkOrders.wadStatus,
+  wizardData: productionWorkOrders.wizardData,
+  createdAt: productionWorkOrders.createdAt,
+  updatedAt: productionWorkOrders.updatedAt,
+};
+
+function withDefaultMaterialBudgetAmount<T extends Record<string, unknown>>(row: T | undefined): (T & { materialBudgetAmount: string }) | undefined {
+  return row ? ({ ...row, materialBudgetAmount: '0' } as T & { materialBudgetAmount: string }) : undefined;
+}
+
 type P1OrderNoteParts = {
   productionOrderNotes?: string | null;
   poItemProductionNotes?: string | null;
@@ -18454,11 +18484,11 @@ export class DatabaseStorage implements IStorage {
       .limit(1);
     if (!traveler?.productionWorkOrderId) return undefined;
     const [wad] = await db
-      .select()
+      .select(productionWorkOrderReadColumns)
       .from(productionWorkOrders)
       .where(eq(productionWorkOrders.id, traveler.productionWorkOrderId))
       .limit(1);
-    return wad;
+    return withDefaultMaterialBudgetAmount(wad) as ProductionWorkOrder | undefined;
   }
 
   async createTimeClockEntryWithChargeContext(data: InsertTimeClockEntry): Promise<TimeClockEntry> {
@@ -20129,7 +20159,7 @@ export class DatabaseStorage implements IStorage {
     }
 
     const [wad] = await db
-      .select()
+      .select({ id: productionWorkOrders.id })
       .from(productionWorkOrders)
       .where(eq(productionWorkOrders.id, workOrderId));
     if (!wad) {
@@ -20163,15 +20193,15 @@ export class DatabaseStorage implements IStorage {
 
   async getProductionWorkOrderWithProject(id: string): Promise<ProductionWorkOrder | undefined> {
     const [wad] = await db
-      .select()
+      .select(productionWorkOrderReadColumns)
       .from(productionWorkOrders)
       .where(eq(productionWorkOrders.id, id));
-    return wad ?? undefined;
+    return withDefaultMaterialBudgetAmount(wad) as ProductionWorkOrder | undefined;
   }
 
   async findRoutingForProductionWorkOrder(wadId: string): Promise<PartRouting | undefined> {
     const [wad] = await db
-      .select()
+      .select({ partNumber: productionWorkOrders.partNumber })
       .from(productionWorkOrders)
       .where(eq(productionWorkOrders.id, wadId));
     if (!wad) return undefined;
@@ -20180,7 +20210,12 @@ export class DatabaseStorage implements IStorage {
 
   async createTravelerFromProductionWorkOrder(wadId: string, createdBy: string): Promise<Traveler> {
     const [wad] = await db
-      .select()
+      .select({
+        id: productionWorkOrders.id,
+        workOrderNumber: productionWorkOrders.workOrderNumber,
+        partNumber: productionWorkOrders.partNumber,
+        quantity: productionWorkOrders.quantity,
+      })
       .from(productionWorkOrders)
       .where(eq(productionWorkOrders.id, wadId));
     if (!wad) {
@@ -26226,31 +26261,36 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllProductionWorkOrders(): Promise<ProductionWorkOrder[]> {
-    return await db
-      .select()
+    const rows = await db
+      .select(productionWorkOrderReadColumns)
       .from(productionWorkOrders)
       .orderBy(desc(productionWorkOrders.createdAt));
+    return rows.map((row) => withDefaultMaterialBudgetAmount(row)!) as ProductionWorkOrder[];
   }
 
   async getWorkOrdersByProject(projectId: string): Promise<ProductionWorkOrder[]> {
-    return await db
-      .select()
+    const rows = await db
+      .select(productionWorkOrderReadColumns)
       .from(productionWorkOrders)
       .where(eq(productionWorkOrders.projectId, projectId))
       .orderBy(desc(productionWorkOrders.createdAt));
+    return rows.map((row) => withDefaultMaterialBudgetAmount(row)!) as ProductionWorkOrder[];
   }
 
   async getWorkOrderById(id: string): Promise<ProductionWorkOrder | undefined> {
     const [row] = await db
-      .select()
+      .select(productionWorkOrderReadColumns)
       .from(productionWorkOrders)
       .where(eq(productionWorkOrders.id, id));
-    return row || undefined;
+    return withDefaultMaterialBudgetAmount(row) as ProductionWorkOrder | undefined;
   }
 
   async checkWorkOrderMaterialAvailability(workOrderId: string): Promise<boolean> {
     const [wad] = await db
-      .select()
+      .select({
+        partNumber: productionWorkOrders.partNumber,
+        quantity: productionWorkOrders.quantity,
+      })
       .from(productionWorkOrders)
       .where(eq(productionWorkOrders.id, workOrderId))
       .limit(1);
@@ -26294,7 +26334,10 @@ export class DatabaseStorage implements IStorage {
 
   async getMaterialShortageDetail(workOrderId: string): Promise<string | null> {
     const [wad] = await db
-      .select()
+      .select({
+        partNumber: productionWorkOrders.partNumber,
+        quantity: productionWorkOrders.quantity,
+      })
       .from(productionWorkOrders)
       .where(eq(productionWorkOrders.id, workOrderId))
       .limit(1);
@@ -26337,7 +26380,7 @@ export class DatabaseStorage implements IStorage {
 
   async checkWorkOrderTrainingCoverage(workOrderId: string): Promise<boolean> {
     const [wad] = await db
-      .select()
+      .select({ partNumber: productionWorkOrders.partNumber })
       .from(productionWorkOrders)
       .where(eq(productionWorkOrders.id, workOrderId))
       .limit(1);
@@ -26401,8 +26444,8 @@ export class DatabaseStorage implements IStorage {
       .update(productionWorkOrders)
       .set({ status, updatedAt: new Date() })
       .where(eq(productionWorkOrders.id, workOrderId))
-      .returning();
-    return updated;
+      .returning(productionWorkOrderReadColumns);
+    return withDefaultMaterialBudgetAmount(updated) as ProductionWorkOrder;
   }
 
   // ── Estimating – RFQs ────────────────────────────────────────────────────────

@@ -32,6 +32,16 @@ import {
 import { verifyInventoryLedgerHashesByIds } from './inventoryTransactionLedgerService';
 import { resolveTravelerBarcode } from '../helpers/travelerBarcodeResolver';
 
+const productionWorkOrderTraceColumns = {
+  id: productionWorkOrders.id,
+  workOrderNumber: productionWorkOrders.workOrderNumber,
+  projectId: productionWorkOrders.projectId,
+  partNumber: productionWorkOrders.partNumber,
+  quantity: productionWorkOrders.quantity,
+  status: productionWorkOrders.status,
+  wadStatus: productionWorkOrders.wadStatus,
+};
+
 // ─────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────
@@ -488,7 +498,7 @@ async function resolveSearch(input: TraceabilitySearchInput): Promise<ResolvedSe
   switch (input.key) {
     case 'lotIcn': {
       const [lot] = await db
-        .select()
+        .select(productionWorkOrderTraceColumns)
         .from(materialLots)
         .where(eq(materialLots.internalControlNumber, value))
         .limit(1);
@@ -512,7 +522,7 @@ async function resolveSearch(input: TraceabilitySearchInput): Promise<ResolvedSe
       // Case-insensitive match on traveler_number; UUID match for direct id;
       // barcode-helper fallback for printable scan payloads (Task #183).
       let [trav] = await db
-        .select()
+        .select(productionWorkOrderTraceColumns)
         .from(travelers)
         .where(
           or(
@@ -555,7 +565,7 @@ async function resolveSearch(input: TraceabilitySearchInput): Promise<ResolvedSe
 
     case 'workOrder': {
       const [wo] = await db
-        .select()
+        .select(productionWorkOrderTraceColumns)
         .from(productionWorkOrders)
         .where(or(eq(productionWorkOrders.workOrderNumber, value), eq(productionWorkOrders.id, value)))
         .limit(1);
@@ -771,7 +781,7 @@ async function loadJoinDictionaries(rows: InventoryTransactionLedger[]): Promise
     itemIds.length ? db.select().from(inventoryItems).where(inArray(inventoryItems.id, itemIds)) : Promise.resolve([]),
     travelerIds.length ? db.select().from(travelers).where(inArray(travelers.id, travelerIds)) : Promise.resolve([]),
     stepIds.length ? db.select().from(travelerSteps).where(inArray(travelerSteps.id, stepIds)) : Promise.resolve([]),
-    woIds.length ? db.select().from(productionWorkOrders).where(inArray(productionWorkOrders.id, woIds)) : Promise.resolve([]),
+    woIds.length ? db.select(productionWorkOrderTraceColumns).from(productionWorkOrders).where(inArray(productionWorkOrders.id, woIds)) : Promise.resolve([]),
     ccIds.length ? db.select().from(chargeCodes).where(inArray(chargeCodes.id, ccIds)) : Promise.resolve([]),
     projIds.length ? db.select().from(projects).where(inArray(projects.id, projIds)) : Promise.resolve([]),
   ]);
@@ -781,7 +791,7 @@ async function loadJoinDictionaries(rows: InventoryTransactionLedger[]): Promise
     itemById: new Map(items.map((i) => [i.id, i])),
     travById: new Map(travs.map((t) => [t.id, t])),
     stepById: new Map(steps.map((s) => [s.id, s])),
-    woById: new Map(wos.map((w) => [w.id, w])),
+    woById: new Map(wos.map((w) => [w.id, w as typeof productionWorkOrders.$inferSelect])),
     ccById: new Map(ccs.map((c) => [c.id, c])),
     projById: new Map(projs.map((p) => [p.id, p])),
   };

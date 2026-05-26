@@ -8,7 +8,7 @@ import {
   ListPunchesQueryParams,
   KioskPunchBody,
 } from "../../lib/timekeeping-zod";
-import { db as nativeDb } from "../../../db";
+import { db as nativeDb, pool } from "../../../db";
 import { chargeCodes, employees, auditEvents, users, kioskPinRateLimits } from "../../../schema";
 import { salariedTimesheetAuditTable } from "../../schema/timekeeping";
 import bcrypt from "bcryptjs";
@@ -27,6 +27,40 @@ import { notificationManager } from "../../services/notificationManager";
 import * as punchCorrections from "../../services/timekeeping/punchCorrections.service";
 
 const router: IRouter = Router();
+
+function rowsOf<T = any>(result: any): T[] {
+  return Array.isArray(result) ? result : result?.rows || [];
+}
+
+async function listVisibleChargeCodes(employeeId: number | null, includeDepartment = false) {
+  const rows = rowsOf(await pool.query(
+    `SELECT
+       cc.id,
+       cc.code,
+       cc.description,
+       ${includeDepartment ? 'cc.department,' : ''}
+       cc.type
+     FROM charge_codes cc
+     WHERE cc.active = true
+       AND (
+         $1::int IS NULL
+         OR NOT EXISTS (
+           SELECT 1
+           FROM charge_code_employee_assignments cca_any
+           WHERE cca_any.charge_code_id = cc.id
+         )
+         OR EXISTS (
+           SELECT 1
+           FROM charge_code_employee_assignments cca_emp
+           WHERE cca_emp.charge_code_id = cc.id
+             AND cca_emp.employee_id = $1::int
+         )
+       )
+     ORDER BY cc.code`,
+    [employeeId]
+  ));
+  return rows;
+}
 
 const PunchCorrectionChangesSchema = z.object({
   clockIn: z.string().datetime().nullable().optional(),
@@ -586,16 +620,9 @@ router.post("/kiosk/punch-corrections", h(async (req, res): Promise<void> => {
 // GET /api/timekeeping/kiosk/charge-codes — returns active charge codes for kiosk dropdown.
 // Intentionally public (no auth required — kiosk terminal is unauthenticated at HTTP level).
 router.get("/kiosk/charge-codes", h(async (req, res): Promise<void> => {
-  const codes = await nativeDb
-    .select({
-      id: chargeCodes.id,
-      code: chargeCodes.code,
-      description: chargeCodes.description,
-      type: chargeCodes.type,
-    })
-    .from(chargeCodes)
-    .where(eq(chargeCodes.active, true))
-    .orderBy(chargeCodes.code);
+  const rawEmployeeId = typeof req.query.employeeId === 'string' ? Number(req.query.employeeId) : null;
+  const employeeId = Number.isInteger(rawEmployeeId) && rawEmployeeId > 0 ? rawEmployeeId : null;
+  const codes = await listVisibleChargeCodes(employeeId);
   res.json(codes);
 }));
 
@@ -1668,17 +1695,17 @@ router.delete("/punches/:id", authenticateToken, requireRole('ADMIN', 'OWNER'), 
 // ---------------------------------------------------------------------------
 
 router.get("/charge-codes", authenticateToken, h(async (req, res): Promise<void> => {
-  const codes = await nativeDb
-    .select({
-      id: chargeCodes.id,
-      code: chargeCodes.code,
-      description: chargeCodes.description,
-      department: chargeCodes.department,
-      type: chargeCodes.type,
-    })
-    .from(chargeCodes)
-    .where(eq(chargeCodes.active, true))
-    .orderBy(chargeCodes.code);
+  const queryEmployeeId = typeof req.query.employeeId === 'string' ? Number(req.query.employeeId) : NaN;
+  const shouldUseSessionEmployee = (req as any).portalEmployeeId != null || String(req.user?.role || '').toUpperCase() === 'EMPLOYEE';
+  const userEmployeeId = Number(
+    Number.isInteger(queryEmployeeId) && queryEmployeeId > 0
+      ? queryEmployeeId
+      : shouldUseSessionEmployee
+        ? ((req as any).portalEmployeeId ?? req.user?.employeeId ?? NaN)
+        : NaN
+  );
+  const employeeId = Number.isInteger(userEmployeeId) && userEmployeeId > 0 ? userEmployeeId : null;
+  const codes = await listVisibleChargeCodes(employeeId, true);
   res.json(codes);
 }));
 

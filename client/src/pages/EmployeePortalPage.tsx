@@ -91,5 +91,5 @@ export default function EmployeePortalPage() {
     );
   }
 
-  return <EmployeePortal employeeId={employee.employeeCode} />;
+  return <EmployeePortal employeeId={employee.employeeCode} epochEmployeeId={employee.id} />;
 }

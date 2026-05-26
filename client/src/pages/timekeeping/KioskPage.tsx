@@ -389,7 +389,7 @@ export default function KioskPage() {
       setShowClockOutCertification(false);
 
       // Load charge codes
-      const codesRes = await fetch('/api/timekeeping/kiosk/charge-codes');
+      const codesRes = await fetch(`/api/timekeeping/kiosk/charge-codes?employeeId=${encodeURIComponent(String(emp.id))}`);
       if (codesRes.ok) {
         const codes: ChargeCode[] = await codesRes.json();
         setChargeCodes(codes);

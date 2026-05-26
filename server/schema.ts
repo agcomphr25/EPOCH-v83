@@ -5918,6 +5918,20 @@ export const insertChargeCodeSchema = createInsertSchema(chargeCodes).omit({
 export type InsertChargeCode = z.infer<typeof insertChargeCodeSchema>;
 export type ChargeCode = typeof chargeCodes.$inferSelect;
 
+export const chargeCodeEmployeeAssignments = pgTable('charge_code_employee_assignments', {
+  id: serial('id').primaryKey(),
+  chargeCodeId: integer('charge_code_id').notNull().references(() => chargeCodes.id, { onDelete: 'cascade' }),
+  employeeId: integer('employee_id').notNull().references(() => employees.id, { onDelete: 'cascade' }),
+  assignedByUserId: integer('assigned_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  assignedAt: timestamp('assigned_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  uniqueChargeCodeEmployee: unique().on(table.chargeCodeId, table.employeeId),
+  chargeCodeIdx: index('charge_code_employee_assignments_charge_code_idx').on(table.chargeCodeId),
+  employeeIdx: index('charge_code_employee_assignments_employee_idx').on(table.employeeId),
+}));
+
+export type ChargeCodeEmployeeAssignment = typeof chargeCodeEmployeeAssignments.$inferSelect;
+
 // ============================================================================
 // TRAVELER SYSTEM - AS9100 Digital Travelers (Execution Records)
 // ============================================================================

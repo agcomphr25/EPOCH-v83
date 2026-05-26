@@ -422,6 +422,7 @@ function TimeOffStatusBadge({ status }: { status: string }) {
 
 interface EmployeePortalProps {
   employeeId: string;
+  epochEmployeeId?: number;
 }
 
 type PunchStatus = 'clocked_in' | 'clocked_out' | 'on_break';
@@ -509,7 +510,7 @@ function portalFormFetch(url: string, formData: FormData) {
   });
 }
 
-export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
+export default function EmployeePortal({ employeeId, epochEmployeeId }: EmployeePortalProps) {
   const [activeTab, setActiveTab] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     const tab = params.get('tab');
@@ -844,9 +845,10 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
   });
 
   const { data: salariedChargeCodes = [], isLoading: salariedChargeCodesLoading } = useQuery<ChargeCode[]>({
-    queryKey: ['/api/timekeeping/charge-codes', 'salaried-entry'],
+    queryKey: ['/api/timekeeping/charge-codes', 'salaried-entry', epochEmployeeId ?? employeeId],
     queryFn: async () => {
-      const res = await portalFetch('/api/timekeeping/charge-codes');
+      const employeeParam = epochEmployeeId != null ? `?employeeId=${encodeURIComponent(String(epochEmployeeId))}` : '';
+      const res = await portalFetch(`/api/timekeeping/charge-codes${employeeParam}`);
       if (!res.ok) throw new Error('Failed to fetch charge codes');
       return res.json();
     },
@@ -1121,9 +1123,10 @@ export default function EmployeePortal({ employeeId }: EmployeePortalProps) {
   });
 
   const { data: clockInChargeCodes = [], isLoading: chargeCodesLoading } = useQuery<ChargeCode[]>({
-    queryKey: ['/api/timekeeping/kiosk/charge-codes'],
+    queryKey: ['/api/timekeeping/kiosk/charge-codes', epochEmployeeId ?? employeeId],
     queryFn: async () => {
-      const res = await portalFetch('/api/timekeeping/kiosk/charge-codes');
+      const employeeParam = epochEmployeeId != null ? String(epochEmployeeId) : employeeId;
+      const res = await portalFetch(`/api/timekeeping/kiosk/charge-codes?employeeId=${encodeURIComponent(employeeParam)}`);
       if (!res.ok) throw new Error('Failed to fetch charge codes');
       return res.json();
     },

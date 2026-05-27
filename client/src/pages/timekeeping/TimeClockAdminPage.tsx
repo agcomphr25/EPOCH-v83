@@ -487,6 +487,18 @@ function punchTypeLabel(t: string) {
   return map[t] ?? t;
 }
 
+function punchSourceLabel(source: string | null | undefined) {
+  const key = String(source ?? '').toUpperCase();
+  const map: Record<string, string> = {
+    ADMIN: 'HR Created',
+    KIOSK: 'Kiosk',
+    PORTAL: 'Employee Portal',
+    TIMETRAKGO_IMPORT: 'TimeTrakGO',
+    TRAVELER: 'Traveler',
+  };
+  return map[key] ?? (source || '-');
+}
+
 /** Computes the current bi-weekly pay period (anchored 2024-01-01, same as server). */
 function getCurrentPayPeriod(): { start: string; end: string } {
   const ANCHOR = Date.UTC(2024, 0, 1);
@@ -1569,7 +1581,7 @@ export default function TimeClockAdminPage() {
         empName,
         punchTypeLabel(punch.type),
         fmtTime(punch.punchedAt),
-        punch.source,
+        punchSourceLabel(punch.source),
         punch.costCode,
         punch.reviewReason,
         punch.editNote,
@@ -3006,7 +3018,7 @@ export default function TimeClockAdminPage() {
                             {fmtTime(p.punchedAt)}
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground capitalize">
-                            {p.source}
+                            {punchSourceLabel(p.source)}
                             {p.costCode && <span className="ml-1 text-xs">({p.costCode})</span>}
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
@@ -3169,7 +3181,7 @@ export default function TimeClockAdminPage() {
                             {fmtTime(p.punchedAt)}
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground capitalize">
-                            {p.source}
+                            {punchSourceLabel(p.source)}
                             {p.costCode && <span className="ml-1 text-xs">({p.costCode})</span>}
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground max-w-xs truncate">

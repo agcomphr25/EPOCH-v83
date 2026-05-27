@@ -25,7 +25,7 @@ import {
 
 export type { PunchLedgerEntry };
 
-export type PunchSource = 'KIOSK' | 'TRAVELER' | 'PORTAL' | 'TIMETRAKGO_IMPORT';
+export type PunchSource = 'KIOSK' | 'TRAVELER' | 'PORTAL' | 'TIMETRAKGO_IMPORT' | 'ADMIN';
 export type LaborClass = 'REGULAR' | 'BREAK';
 export type LedgerStatus = 'clocked_out' | 'clocked_in' | 'on_break';
 

@@ -499,6 +499,14 @@ function punchSourceLabel(source: string | null | undefined) {
   return map[key] ?? (source || '-');
 }
 
+function dateInputStartIso(value: string) {
+  return new Date(`${value}T00:00:00`).toISOString();
+}
+
+function dateInputEndIso(value: string) {
+  return new Date(`${value}T23:59:59.999`).toISOString();
+}
+
 /** Computes the current bi-weekly pay period (anchored 2024-01-01, same as server). */
 function getCurrentPayPeriod(): { start: string; end: string } {
   const ANCHOR = Date.UTC(2024, 0, 1);
@@ -1543,7 +1551,10 @@ export default function TimeClockAdminPage() {
   const { data: punches, isLoading: punchesLoading, refetch: refetchPunches } = useQuery<Punch[]>({
     queryKey: ['/api/timekeeping/punches', punchFrom, punchTo, punchEmployeeId],
     queryFn: async () => {
-      const params = new URLSearchParams({ from: punchFrom, to: punchTo });
+      const params = new URLSearchParams({
+        from: dateInputStartIso(punchFrom),
+        to: dateInputEndIso(punchTo),
+      });
       if (punchEmployeeId) params.set('employeeId', punchEmployeeId);
       const res = await fetch(
         `/api/timekeeping/punches?${params.toString()}`,

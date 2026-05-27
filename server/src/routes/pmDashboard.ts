@@ -213,10 +213,14 @@ interface ProjectReceivedMaterialSummaryRow {
 
 interface MaterialItemRow {
   inventoryItemId: string;
+  partsRequestId?: number;
   itemCode: string;
   itemName: string;
   lotNumber: string | null;
   internalControlNumber: string | null;
+  requestedBy?: string | null;
+  requestDate?: string | null;
+  expectedDelivery?: string | null;
   qtyRequired: string;
   qtyAllocated: string;
   qtyIssued: string;
@@ -238,6 +242,19 @@ const ORDERED_PARTS_REQUEST_STATUSES = [
   'RECEIVED',
   'RECEIVED_PARTIAL',
   'DELIVERED_TO_DEPT',
+];
+
+const PROJECT_PARTS_REQUEST_VISIBLE_STATUSES = [
+  'PENDING',
+  'PENDING_OWNER_APPROVAL',
+  'APPROVED',
+  'ORDERED',
+  'ORDERED_PARTIAL',
+  'RECEIVED',
+  'RECEIVED_PARTIAL',
+  'DELIVERED_TO_DEPT',
+  'REJECTED',
+  'CANCEL_REQUESTED',
 ];
 
 async function publicTableExists(tableName: string): Promise<boolean> {
@@ -2497,10 +2514,14 @@ ${materialBudgetExpression}
   const partsRequestRowsRes = await pool.query<MaterialItemRow>(`
     SELECT
       ('PR-' || pr.id::text) AS "inventoryItemId",
+      pr.id AS "partsRequestId",
       pr.part_number AS "itemCode",
       pr.part_name AS "itemName",
       NULL::text AS "lotNumber",
       NULL::text AS "internalControlNumber",
+      pr.requested_by AS "requestedBy",
+      pr.request_date AS "requestDate",
+      pr.expected_delivery AS "expectedDelivery",
       pr.quantity::numeric AS "qtyRequired",
       CASE
         WHEN pr.status IN ('ORDERED', 'ORDERED_PARTIAL') THEN pr.quantity::numeric
@@ -2511,7 +2532,11 @@ ${materialBudgetExpression}
         ELSE 0::numeric
       END AS "qtyIssued",
       COALESCE(pr.estimated_cost, 0)::numeric AS "unitCost",
-      (pr.quantity * COALESCE(pr.estimated_cost, 0))::numeric AS "committedCost",
+      CASE
+        WHEN pr.status IN ('ORDERED', 'ORDERED_PARTIAL', 'RECEIVED', 'RECEIVED_PARTIAL', 'DELIVERED_TO_DEPT')
+          THEN (pr.quantity * COALESCE(pr.estimated_cost, 0))::numeric
+        ELSE 0::numeric
+      END AS "committedCost",
       CASE
         WHEN pr.status IN ('RECEIVED', 'RECEIVED_PARTIAL', 'DELIVERED_TO_DEPT')
           THEN (pr.quantity * COALESCE(pr.estimated_cost, 0))::numeric
@@ -2523,7 +2548,7 @@ ${materialBudgetExpression}
       AND pr.is_active = true
       AND pr.status = ANY($2::text[])
     ORDER BY pr.request_date DESC
-  `, [projectId, ORDERED_PARTS_REQUEST_STATUSES]);
+  `, [projectId, PROJECT_PARTS_REQUEST_VISIBLE_STATUSES]);
 
   const projectReceivedRowsRes = hasProjectReceivedMaterials
     ? await pool.query<ProjectReceivedMaterialRow>(`

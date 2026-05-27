@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation, Link } from 'wouter';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -7,6 +7,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -360,6 +365,7 @@ interface MaterialSummary {
 
 interface MaterialRow {
   inventoryItemId: string;
+  partsRequestId?: number;
   projectReceivedMaterialId?: number;
   itemCode: string;
   itemName: string;
@@ -367,6 +373,9 @@ interface MaterialRow {
   internalControlNumber: string | null;
   receiptNumber?: string | null;
   receivedUnitBarcode?: string | null;
+  requestedBy?: string | null;
+  requestDate?: string | null;
+  expectedDelivery?: string | null;
   qtyRequired: number;
   qtyAllocated: number;
   qtyIssued: number;
@@ -379,6 +388,24 @@ interface MaterialRow {
 interface MaterialData {
   summary: MaterialSummary;
   rows: MaterialRow[];
+}
+
+interface SessionUser {
+  id: number;
+  username: string;
+  firstName?: string;
+  lastName?: string;
+  role?: string;
+}
+
+interface MaterialRequestForm {
+  partNumber: string;
+  partName: string;
+  quantity: string;
+  urgency: string;
+  estimatedCost: string;
+  reason: string;
+  expectedDelivery: string;
 }
 
 interface ProgramAssemblyWidgetRow {
@@ -443,6 +470,15 @@ function fmtTime(iso: string | null) {
 
 function fmtCurrency(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(n);
+}
+
+function getDefaultRequestor(user: SessionUser | null | undefined): string {
+  if (!user) return '';
+  const fullName = [user.firstName, user.lastName]
+    .filter((s) => typeof s === 'string' && s.trim().length > 0)
+    .join(' ')
+    .trim();
+  return user.username || fullName || '';
 }
 
 function readProjectParam(params: URLSearchParams) {
@@ -533,6 +569,16 @@ const MATERIAL_STATUS_COLORS: Record<string, string> = {
   FULLY_ISSUED: 'bg-green-100 text-green-700',
   RECEIVED_ACCEPTED: 'bg-green-100 text-green-700',
   RECEIVED_REJECTED: 'bg-gray-100 text-gray-600',
+  PART_REQUEST_PENDING: 'bg-gray-100 text-gray-700',
+  PART_REQUEST_PENDING_OWNER_APPROVAL: 'bg-orange-100 text-orange-700',
+  PART_REQUEST_APPROVED: 'bg-blue-100 text-blue-700',
+  PART_REQUEST_ORDERED: 'bg-indigo-100 text-indigo-700',
+  PART_REQUEST_ORDERED_PARTIAL: 'bg-indigo-100 text-indigo-700',
+  PART_REQUEST_RECEIVED: 'bg-green-100 text-green-700',
+  PART_REQUEST_RECEIVED_PARTIAL: 'bg-green-100 text-green-700',
+  PART_REQUEST_DELIVERED_TO_DEPT: 'bg-green-100 text-green-700',
+  PART_REQUEST_REJECTED: 'bg-red-100 text-red-700',
+  PART_REQUEST_CANCEL_REQUESTED: 'bg-orange-100 text-orange-700',
 };
 
 const MATERIAL_STATUS_ORDER: Record<string, number> = {
@@ -546,7 +592,21 @@ const MATERIAL_STATUS_ORDER: Record<string, number> = {
   FULLY_ISSUED: 6,
   RECEIVED_ACCEPTED: 7,
   RECEIVED_REJECTED: 8,
+  PART_REQUEST_PENDING: 9,
+  PART_REQUEST_PENDING_OWNER_APPROVAL: 10,
+  PART_REQUEST_APPROVED: 11,
+  PART_REQUEST_ORDERED: 12,
+  PART_REQUEST_ORDERED_PARTIAL: 13,
+  PART_REQUEST_RECEIVED: 14,
+  PART_REQUEST_RECEIVED_PARTIAL: 15,
+  PART_REQUEST_DELIVERED_TO_DEPT: 16,
+  PART_REQUEST_REJECTED: 17,
+  PART_REQUEST_CANCEL_REQUESTED: 18,
 };
+
+function materialStatusLabel(status: string) {
+  return status.replace(/^PART_REQUEST_/, 'REQUEST ').replace(/_/g, ' ');
+}
 
 function CertBadge({ status }: { status: string }) {
   if (status === 'Valid') return (
@@ -1783,10 +1843,23 @@ type SortField = 'status' | 'itemCode' | 'qtyRequired' | 'qtyAllocated' | 'qtyIs
 type SortDir = 'asc' | 'desc';
 
 function MaterialBudgetTab({ projectId }: { projectId: string }) {
-  const [, navTo] = useLocation();
   const queryClient = useQueryClient();
   const [sortField, setSortField] = useState<SortField>('status');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [isRequestOpen, setIsRequestOpen] = useState(false);
+  const [requestForm, setRequestForm] = useState<MaterialRequestForm>({
+    partNumber: '',
+    partName: '',
+    quantity: '',
+    urgency: 'MEDIUM',
+    estimatedCost: '',
+    reason: '',
+    expectedDelivery: '',
+  });
+
+  const { data: sessionUser } = useQuery<SessionUser | null>({
+    queryKey: ['/api/auth/session'],
+  });
 
   const { data, isLoading, isError } = useQuery<MaterialData>({
     queryKey: ['/api/pm-dashboard', projectId, 'materials'],
@@ -1810,6 +1883,54 @@ function MaterialBudgetTab({ projectId }: { projectId: string }) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/pm-dashboard', projectId, 'materials'] });
       queryClient.invalidateQueries({ queryKey: ['/api/pm-dashboard', projectId, 'summary'] });
+    },
+  });
+
+  const resetRequestForm = () => {
+    setRequestForm({
+      partNumber: '',
+      partName: '',
+      quantity: '',
+      urgency: 'MEDIUM',
+      estimatedCost: '',
+      reason: '',
+      expectedDelivery: '',
+    });
+  };
+
+  const partsRequestMutation = useMutation({
+    mutationFn: async () => {
+      const requestedBy = getDefaultRequestor(sessionUser);
+      if (!requestedBy) {
+        throw new Error('Unable to identify the current user for the request.');
+      }
+
+      return apiRequest('/api/inventory/parts-requests', {
+        method: 'POST',
+        body: {
+          partNumber: requestForm.partNumber.trim(),
+          partName: requestForm.partName.trim(),
+          requestedBy,
+          productionLine: null,
+          projectId,
+          department: null,
+          quantity: Number.parseInt(requestForm.quantity, 10),
+          urgency: requestForm.urgency,
+          estimatedCost: requestForm.estimatedCost
+            ? Number.parseFloat(requestForm.estimatedCost)
+            : null,
+          reason: requestForm.reason.trim() || null,
+          expectedDelivery: requestForm.expectedDelivery || null,
+          status: 'PENDING',
+        },
+      });
+    },
+    onSuccess: () => {
+      setIsRequestOpen(false);
+      resetRequestForm();
+      queryClient.invalidateQueries({ queryKey: ['/api/pm-dashboard', projectId, 'materials'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/pm-dashboard', projectId, 'summary'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests'] });
     },
   });
 
@@ -1851,17 +1972,148 @@ function MaterialBudgetTab({ projectId }: { projectId: string }) {
     return sortDir === 'asc' ? <ChevronUp className="h-3 w-3 ml-1" /> : <ChevronDown className="h-3 w-3 ml-1" />;
   };
 
+  const handleRequestFieldChange = (
+    field: keyof MaterialRequestForm,
+    value: string,
+  ) => {
+    setRequestForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleCreatePartsRequest = (event: FormEvent) => {
+    event.preventDefault();
+    const quantity = Number.parseInt(requestForm.quantity, 10);
+    if (!requestForm.partNumber.trim() || !requestForm.partName.trim()) {
+      return;
+    }
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      return;
+    }
+    partsRequestMutation.mutate();
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-end">
         <Button
           size="sm"
-          onClick={() => navTo(`/inventory/parts-request?projectId=${encodeURIComponent(projectId)}&create=1`)}
+          onClick={() => setIsRequestOpen(true)}
         >
           <Plus className="h-4 w-4 mr-2" />
           New Parts Request
         </Button>
       </div>
+
+      <Dialog open={isRequestOpen} onOpenChange={setIsRequestOpen}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Request Project Material</DialogTitle>
+          </DialogHeader>
+          <form className="space-y-4" onSubmit={handleCreatePartsRequest}>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="pm-part-number">Part number</Label>
+                <Input
+                  id="pm-part-number"
+                  value={requestForm.partNumber}
+                  onChange={(e) => handleRequestFieldChange('partNumber', e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="pm-quantity">Quantity</Label>
+                <Input
+                  id="pm-quantity"
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={requestForm.quantity}
+                  onChange={(e) => handleRequestFieldChange('quantity', e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="pm-part-name">Item name</Label>
+              <Input
+                id="pm-part-name"
+                value={requestForm.partName}
+                onChange={(e) => handleRequestFieldChange('partName', e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="space-y-2">
+                <Label>Urgency</Label>
+                <Select
+                  value={requestForm.urgency}
+                  onValueChange={(value) => handleRequestFieldChange('urgency', value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="LOW">Low</SelectItem>
+                    <SelectItem value="MEDIUM">Medium</SelectItem>
+                    <SelectItem value="HIGH">High</SelectItem>
+                    <SelectItem value="CRITICAL">Critical</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="pm-estimated-cost">Est. unit cost</Label>
+                <Input
+                  id="pm-estimated-cost"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={requestForm.estimatedCost}
+                  onChange={(e) => handleRequestFieldChange('estimatedCost', e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="pm-expected-delivery">Need by</Label>
+                <Input
+                  id="pm-expected-delivery"
+                  type="date"
+                  value={requestForm.expectedDelivery}
+                  onChange={(e) => handleRequestFieldChange('expectedDelivery', e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="pm-request-reason">Reason</Label>
+              <Textarea
+                id="pm-request-reason"
+                value={requestForm.reason}
+                onChange={(e) => handleRequestFieldChange('reason', e.target.value)}
+                rows={3}
+              />
+            </div>
+
+            {partsRequestMutation.error instanceof Error && (
+              <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                {partsRequestMutation.error.message}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsRequestOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={partsRequestMutation.isPending}>
+                Submit Request
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard
@@ -1951,7 +2203,7 @@ function MaterialBudgetTab({ projectId }: { projectId: string }) {
                   <TableRow key={`${row.inventoryItemId}-${idx}`}>
                     <TableCell>
                       <Badge className={MATERIAL_STATUS_COLORS[row.status] ?? 'bg-gray-100 text-gray-600'}>
-                        {row.status.replace(/_/g, ' ')}
+                        {materialStatusLabel(row.status)}
                       </Badge>
                     </TableCell>
                     <TableCell className="font-mono text-sm font-medium">{row.itemCode || '—'}</TableCell>
@@ -1961,7 +2213,11 @@ function MaterialBudgetTab({ projectId }: { projectId: string }) {
                       {row.internalControlNumber && <div className="text-xs opacity-70">{row.internalControlNumber}</div>}
                       {row.receiptNumber && <div className="text-xs opacity-70">Receipt {row.receiptNumber}</div>}
                       {row.receivedUnitBarcode && <div className="text-xs opacity-70">{row.receivedUnitBarcode}</div>}
-                      {!row.lotNumber && !row.internalControlNumber && !row.receiptNumber && !row.receivedUnitBarcode && '—'}
+                      {row.partsRequestId && <div className="font-mono">Request #{row.partsRequestId}</div>}
+                      {row.requestedBy && <div className="text-xs opacity-70">By {row.requestedBy}</div>}
+                      {row.requestDate && <div className="text-xs opacity-70">Requested {fmtDate(row.requestDate)}</div>}
+                      {row.expectedDelivery && <div className="text-xs opacity-70">Need by {fmtDate(row.expectedDelivery)}</div>}
+                      {!row.lotNumber && !row.internalControlNumber && !row.receiptNumber && !row.receivedUnitBarcode && !row.partsRequestId && '—'}
                     </TableCell>
                     <TableCell className="text-right text-sm">{row.qtyRequired > 0 ? row.qtyRequired : '—'}</TableCell>
                     <TableCell className="text-right text-sm">{row.qtyAllocated > 0 ? row.qtyAllocated : '—'}</TableCell>

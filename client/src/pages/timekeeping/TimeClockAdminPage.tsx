@@ -4050,7 +4050,9 @@ export default function TimeClockAdminPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="clock_in">Clock In</SelectItem>
+                  <SelectItem value="clock_out">Clock Out</SelectItem>
                   <SelectItem value="break_start">Break Start</SelectItem>
+                  <SelectItem value="break_end">Break End</SelectItem>
                 </SelectContent>
               </Select>
             </div>

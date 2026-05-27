@@ -15,12 +15,35 @@ vi.mock('../db', () => ({
 vi.mock('../storage', () => ({
   storage: {
     listCuttingDocuments: vi.fn<() => Promise<CuttingDocument[]>>(),
+    getCuttingDocument: vi.fn<(id: number) => Promise<CuttingDocument | undefined>>(),
     createCuttingDocument: vi.fn<(data: unknown) => Promise<CuttingDocument>>(),
     deleteCuttingDocument: vi.fn<(id: number) => Promise<CuttingDocument | undefined>>(),
   },
 }));
 
+const downloadObject = vi.fn();
+const uploadBuffer = vi.fn();
+const deleteObject = vi.fn();
+const setPublicReadPolicy = vi.fn();
+
+vi.mock('../src/services/fileStorageProvider', () => ({
+  getFileStorageProvider: vi.fn(() => ({
+    uploadBuffer,
+  })),
+  getFileStorageProviderForObjectPath: vi.fn(() => ({
+    deleteObject,
+    downloadObject,
+    setPublicReadPolicy,
+  })),
+  getStorageErrorResponse: vi.fn((error: any) => ({
+    status: error?.status || 500,
+    reason: error?.reason || 'storage_error',
+    message: error?.message || 'Storage error',
+  })),
+}));
+
 vi.mock('../replit_integrations/object_storage/objectStorage', () => ({
+  ObjectNotFoundError: class ObjectNotFoundError extends Error {},
   ObjectStorageService: vi.fn().mockImplementation(() => ({
     trySetObjectEntityAclPolicy: vi.fn().mockResolvedValue(undefined),
     deleteByStoragePath: vi.fn().mockResolvedValue(undefined),
@@ -193,6 +216,57 @@ describe('POST /api/cutting-documents', () => {
     expect(res.status).toBe(201);
     expect(res.body.id).toBe(99);
     expect(storage.createCuttingDocument).toHaveBeenCalledOnce();
+  });
+});
+
+describe('GET /api/cutting-documents/:id/download', () => {
+  let app: express.Express;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    app = express();
+    app.use(express.json());
+    const router = (await import('../src/routes/cuttingDocuments')).default;
+    app.use('/api/cutting-documents', router);
+  });
+
+  afterEach(() => {
+    vi.resetModules();
+  });
+
+  it('redirects Media Library-backed cutting documents through the media download route', async () => {
+    vi.mocked(storage.getCuttingDocument).mockResolvedValue(
+      makeCuttingDocument({ id: 7, fileUrl: '/api/media/abc-123/download' }),
+    );
+
+    const res = await request(app).get('/api/cutting-documents/7/download');
+
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe('/api/media/abc-123/download');
+    expect(downloadObject).not.toHaveBeenCalled();
+  });
+
+  it('streams legacy object-storage documents through the server route', async () => {
+    vi.mocked(storage.getCuttingDocument).mockResolvedValue(
+      makeCuttingDocument({ id: 8, fileUrl: 'objects/cutting-docs/legacy.pdf' }),
+    );
+    downloadObject.mockImplementationOnce(async (_path: string, res: any) => {
+      res.end('pdf-bytes');
+    });
+
+    const res = await request(app).get('/api/cutting-documents/8/download');
+
+    expect(res.status).toBe(200);
+    expect(downloadObject).toHaveBeenCalledWith('/objects/cutting-docs/legacy.pdf', expect.anything());
+  });
+
+  it('returns 404 when the cutting document record does not exist', async () => {
+    vi.mocked(storage.getCuttingDocument).mockResolvedValue(undefined);
+
+    const res = await request(app).get('/api/cutting-documents/999/download');
+
+    expect(res.status).toBe(404);
+    expect(res.body.error).toMatch(/not found/i);
   });
 });
 

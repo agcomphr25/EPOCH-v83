@@ -66,11 +66,17 @@ function fileTypeBadge(mimeType: string): string {
   return (parts[1] || parts[0]).toUpperCase().slice(0, 6);
 }
 
+function getDocumentViewUrl(doc: CuttingDocument): string {
+  return `/api/cutting-documents/${doc.id}/download`;
+}
+
 function DocumentPreview({ doc }: { doc: CuttingDocument }) {
+  const viewUrl = getDocumentViewUrl(doc);
+
   if (doc.mimeType === "application/pdf") {
     return (
       <iframe
-        src={doc.fileUrl}
+        src={viewUrl}
         title={doc.displayName}
         className="w-full rounded border"
         style={{ height: "72vh", minHeight: 400 }}
@@ -81,7 +87,7 @@ function DocumentPreview({ doc }: { doc: CuttingDocument }) {
     return (
       <div className="flex items-center justify-center bg-muted/30 rounded border" style={{ minHeight: 400 }}>
         <img
-          src={doc.fileUrl}
+          src={viewUrl}
           alt={doc.displayName}
           className="max-w-full max-h-[72vh] object-contain rounded"
         />
@@ -98,8 +104,10 @@ function DocumentPreview({ doc }: { doc: CuttingDocument }) {
 }
 
 function handlePrint(doc: CuttingDocument) {
+  const viewUrl = getDocumentViewUrl(doc);
+
   if (doc.mimeType === "application/pdf") {
-    const pw = window.open(doc.fileUrl, "_blank");
+    const pw = window.open(viewUrl, "_blank");
     if (pw) {
       pw.onload = () => {
         try { pw.print(); } catch { pw.focus(); }
@@ -121,14 +129,14 @@ function handlePrint(doc: CuttingDocument) {
           </style>
         </head>
         <body>
-          <img src="${doc.fileUrl}" onload="window.print()" />
+          <img src="${viewUrl}" onload="window.print()" />
         </body>
       </html>
     `);
     pw.document.close();
     return;
   }
-  window.open(doc.fileUrl, "_blank");
+  window.open(viewUrl, "_blank");
 }
 
 export default function CuttingDocuments() {
@@ -315,7 +323,7 @@ export default function CuttingDocuments() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => window.open(previewDoc.fileUrl, "_blank", "noopener,noreferrer")}
+                    onClick={() => window.open(getDocumentViewUrl(previewDoc), "_blank", "noopener,noreferrer")}
                     data-testid="button-preview-open"
                     title="Open in new tab"
                   >

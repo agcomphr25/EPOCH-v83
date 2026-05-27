@@ -12,6 +12,7 @@ import {
   getFileStorageProviderForObjectPath,
   getStorageErrorResponse,
 } from '../services/fileStorageProvider';
+import { registerMediaLibraryFile } from '../services/mediaLibraryService';
 
 const router = Router();
 
@@ -108,7 +109,7 @@ router.post('/complete-upload', async (req, res) => {
       // Continue even if ACL fails - file is still accessible
     }
 
-    const [newMedia] = await db.insert(mediaLibrary).values({
+    const newMedia = await registerMediaLibraryFile({
       filename: filename,
       storagePath: objectPath, // Store the cloud object path
       mimeType: mimeType || 'application/octet-stream',
@@ -120,7 +121,7 @@ router.post('/complete-upload', async (req, res) => {
       notes: notes || null,
       tags: parsedTags,
       category: category || 'other',
-    }).returning();
+    });
 
     res.json(newMedia);
   } catch (error) {

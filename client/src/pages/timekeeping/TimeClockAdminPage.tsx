@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, Fragment } from 'react';
 import { runEditPunch, buildEditPunchFetchDep } from '@/lib/editPunchHandler';
 import { runDeletePunch, buildDeletePunchFetchDep } from '@/lib/deletePunchHandler';
+import { runCreatePunch, buildAddPunchFetchDep } from '@/lib/addPunchHandler';
 import { AuditTrailPanel } from '@/components/timekeeping/AuditTrailPanel';
 import { ComplianceExceptionDashboard } from '@/components/timekeeping/ComplianceExceptionDashboard';
 import { useQuery, useMutation } from '@tanstack/react-query';
@@ -1609,29 +1610,22 @@ export default function TimeClockAdminPage() {
   const [addPunchReason, setAddPunchReason] = useState('');
   const [addPunchDcaaError, setAddPunchDcaaError] = useState<DcaaViolation | null>(null);
 
-  const createPunchCorrectionMutation = useMutation({
+  const createPunchMutation = useMutation({
     mutationFn: (params: {
       employeeId: number;
       type: string;
       punchedAt: string;
-      chargeCodeId: number | null;
+      costCode: string;
       reason: string;
-    }) => apiRequest('/api/timekeeping/punch-corrections', {
-      method: 'POST',
-      body: JSON.stringify({
-        employeeId: params.employeeId,
-        requestType: 'add_session',
-        reason: params.reason,
-        proposedChanges: {
-          punchType: params.type,
-          laborClass: params.type === 'break_start' || params.type === 'break_end' ? 'BREAK' : 'REGULAR',
-          clockIn: params.punchedAt,
-          ...(params.chargeCodeId != null ? { chargeCodeId: params.chargeCodeId } : {}),
-        },
-      }),
-    }),
+    }) => runCreatePunch({
+      employeeId: String(params.employeeId),
+      type: params.type,
+      punchedAt: params.punchedAt,
+      costCode: params.costCode,
+      note: params.reason,
+    }, buildAddPunchFetchDep()),
     onSuccess: () => {
-      toast({ title: 'Correction requested', description: 'The missing punch request was sent for supervisor review.' });
+      toast({ title: 'Punch added', description: 'The missing punch was added to the time clock ledger.' });
       setAddPunchOpen(false);
       setAddPunchEmployeeId('');
       setAddPunchType('clock_in');
@@ -1639,7 +1633,7 @@ export default function TimeClockAdminPage() {
       setAddPunchCostCode('');
       setAddPunchReason('');
       setAddPunchDcaaError(null);
-      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/punch-corrections'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/punches'] });
       queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/dashboard/summary'] });
     },
     onError: (err: Error & { dcaaViolation?: DcaaViolation }) => {
@@ -4030,7 +4024,7 @@ export default function TimeClockAdminPage() {
           </DialogHeader>
           <div className="space-y-4 py-2">
             <p className="text-sm text-muted-foreground">
-              Admin-created missing punches are submitted as correction requests and require supervisor approval before they are applied.
+              Payroll admins can add missing punches directly for reconciliation. The completed timesheet remains subject to the normal review and approval flow.
             </p>
             <div className="space-y-1">
               <Label>Employee <span className="text-red-500">*</span></Label>
@@ -4122,26 +4116,23 @@ export default function TimeClockAdminPage() {
                 !addPunchEmployeeId ||
                 !addPunchAt ||
                 addPunchReason.trim().length < 5 ||
-                createPunchCorrectionMutation.isPending
+                createPunchMutation.isPending
               }
               onClick={() => {
                 setAddPunchDcaaError(null);
-                const selectedChargeCodeId = addPunchCostCode
-                  ? (chargeCodes.find(cc => cc.code === addPunchCostCode)?.id ?? null)
-                  : null;
-                createPunchCorrectionMutation.mutate({
+                createPunchMutation.mutate({
                   employeeId: Number(addPunchEmployeeId),
                   type: addPunchType,
                   punchedAt: new Date(addPunchAt).toISOString(),
-                  chargeCodeId: selectedChargeCodeId,
+                  costCode: addPunchCostCode,
                   reason: addPunchReason.trim(),
                 });
               }}
             >
-              {createPunchCorrectionMutation.isPending ? (
-                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Submitting...</>
+              {createPunchMutation.isPending ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Adding...</>
               ) : (
-                <><Send className="h-4 w-4 mr-1" />Submit Request</>
+                <><Plus className="h-4 w-4 mr-1" />Add Punch</>
               )}
             </Button>
           </DialogFooter>

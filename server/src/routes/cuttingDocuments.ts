@@ -3,14 +3,14 @@ import { randomUUID } from 'crypto';
 import fs from 'fs/promises';
 import multer from 'multer';
 import path from 'path';
-import { db } from '../../db';
 import { storage } from '../../storage';
-import { insertCuttingDocumentSchema, mediaLibrary } from '../../schema';
+import { insertCuttingDocumentSchema } from '../../schema';
 import {
   getFileStorageProvider,
   getFileStorageProviderForObjectPath,
   getStorageErrorResponse,
 } from '../services/fileStorageProvider';
+import { registerMediaLibraryFile } from '../services/mediaLibraryService';
 
 const router = Router();
 const upload = multer({
@@ -67,7 +67,7 @@ async function createMediaLibraryDocument(input: {
   file: Express.Multer.File;
   user?: any;
 }) {
-  const [media] = await db.insert(mediaLibrary).values({
+  return registerMediaLibraryFile({
     filename: input.file.originalname || 'cutting-document',
     storagePath: input.fileUrl,
     mimeType: input.file.mimetype || 'application/octet-stream',
@@ -77,9 +77,7 @@ async function createMediaLibraryDocument(input: {
     title: input.file.originalname || 'Cutting document',
     notes: 'Cutting table reference document',
     category: 'document',
-  }).returning();
-
-  return media;
+  });
 }
 
 router.get('/', async (req, res) => {

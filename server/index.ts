@@ -3874,7 +3874,7 @@ async function initializeBackgroundServices() {
           { key: 'finance.view', description: 'Read AR invoices, payments, aging reports, and customer summaries', category: 'finance' },
           { key: 'finance.post_invoice', description: 'Post an AR invoice to the general ledger', category: 'finance' },
           { key: 'finance.void_invoice', description: 'Void an AR invoice', category: 'finance' },
-          { key: 'finance.manage_payments', description: 'Record and delete AR payments', category: 'finance' },
+          { key: 'finance.manage_payments', description: 'Record, update, and void AR/P1 customer payments', category: 'finance' },
           { key: 'finance.accounting_admin', description: 'Post or adjust entries in migration or soft-closed accounting periods', category: 'finance' },
 
           // Inventory
@@ -4329,7 +4329,7 @@ async function initializeBackgroundServices() {
           );
           if (darlenebRows.length > 0) {
             const darlenebId = darlenebRows[0].id;
-            const darlenebCaps = ['finance.manage_payments', 'finance.accounting_admin'];
+            const darlenebCaps = ['finance.manage_payments'];
             for (const capKey of darlenebCaps) {
               await pool.query(
                 `INSERT INTO perm_user_overrides (user_id, capability_id, effect)
@@ -4340,14 +4340,7 @@ async function initializeBackgroundServices() {
                 [darlenebId, capKey]
               );
             }
-            await pool.query(
-              `INSERT INTO accounting_admin_users (username, active, granted_by)
-               VALUES ('darleneb', TRUE, 'startup_capability_seed')
-               ON CONFLICT (username) DO UPDATE
-               SET active = TRUE,
-                   granted_by = EXCLUDED.granted_by`
-            );
-            console.log('✅ Granted finance.manage_payments + finance.accounting_admin user-level overrides to darleneb');
+            console.log('✅ Granted finance.manage_payments user-level override to darleneb');
           } else {
             console.warn('⚠️ darleneb user not found - finance user-level overrides not seeded');
           }

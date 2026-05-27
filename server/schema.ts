@@ -526,7 +526,7 @@ export const payments = pgTable('payments', {
   notes: text('notes'), // Optional notes for the payment
   processingFee: real('processing_fee'), // Optional wire/bank processing fee (nullable)
   batchId: integer('batch_id').references(() => bulkPaymentBatches.id),
-  status: text('status').default('posted').notNull(), // posted, voided, reversal
+  status: text('status').default('posted').notNull(), // posted, pending_accounting_approval, voided, reversal
   voidedAt: timestamp('voided_at'),
   voidedBy: text('voided_by'),
   voidReason: text('void_reason'),

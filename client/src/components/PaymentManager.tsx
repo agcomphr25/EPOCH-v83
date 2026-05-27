@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { Plus, Edit2, Trash2, CreditCard, Zap } from 'lucide-react';
+import { Plus, Edit2, Trash2, CreditCard, Zap, CheckCircle2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import { usePermissions } from '@/hooks/usePermissions';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import CreditCardPayment, { CustomerInfo, CustomerAddress } from './CreditCardPayment';
 
@@ -58,6 +59,7 @@ export default function PaymentManager({
   onSaveForPayment,
 }: PaymentManagerProps) {
   const { toast } = useToast();
+  const { can } = usePermissions();
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showLivePaymentModal, setShowLivePaymentModal] = useState(false);
   const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
@@ -103,7 +105,14 @@ export default function PaymentManager({
   const payments: Payment[] = Array.isArray(rawPayments) ? rawPayments : [];
 
   // Calculate totals
-  const totalPaid = payments.reduce(
+  const postedPayments = payments.filter(
+    (payment: Payment) =>
+      payment.status !== 'voided' &&
+      payment.status !== 'reversal' &&
+      payment.status !== 'pending_accounting_approval' &&
+      payment.paymentType !== 'payment_reversal'
+  );
+  const totalPaid = postedPayments.reduce(
     (sum: number, payment: Payment) => sum + payment.paymentAmount,
     0
   );
@@ -117,10 +126,12 @@ export default function PaymentManager({
         method: 'POST',
         body: data,
       }),
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       toast({
-        title: 'Payment Added',
-        description: 'Payment has been successfully recorded.',
+        title: data?.accountingApprovalRequired ? 'Payment Pending Approval' : 'Payment Added',
+        description: data?.accountingApprovalRequired
+          ? 'Payment was recorded and is waiting for accounting approval before posting.'
+          : 'Payment has been successfully recorded.',
       });
       refetch();
       resetForm();
@@ -142,10 +153,12 @@ export default function PaymentManager({
         method: 'PUT',
         body: data,
       }),
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       toast({
-        title: 'Payment Updated',
-        description: 'Payment has been successfully updated.',
+        title: data?.accountingApprovalRequired ? 'Payment Pending Approval' : 'Payment Updated',
+        description: data?.accountingApprovalRequired
+          ? 'Payment was updated and is waiting for accounting approval before posting.'
+          : 'Payment has been successfully updated.',
       });
       refetch();
       resetForm();
@@ -183,6 +196,28 @@ export default function PaymentManager({
     },
   });
 
+  const approveAccountingMutation = useMutation({
+    mutationFn: ({ id, note }: { id: number; note?: string }) =>
+      apiRequest(`/api/orders/payments/${id}/approve-accounting`, {
+        method: 'POST',
+        body: { note: note || null },
+      }),
+    onSuccess: () => {
+      toast({
+        title: 'Payment Approved',
+        description: 'The accounting journal entry has been posted.',
+      });
+      refetch();
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to approve payment accounting.',
+        variant: 'destructive',
+      });
+    },
+  });
+
   const resetForm = () => {
     setPaymentType('');
     setPaymentAmount('');
@@ -215,6 +250,13 @@ export default function PaymentManager({
     const reason = window.prompt('Enter a reason for voiding this payment. The original payment will remain in the audit trail.');
     if (reason?.trim()) {
       deletePaymentMutation.mutate({ id, reason: reason.trim() });
+    }
+  };
+
+  const handleApproveAccounting = (id: number) => {
+    const note = window.prompt('Optional approval note for the accounting audit trail:');
+    if (note !== null) {
+      approveAccountingMutation.mutate({ id, note: note.trim() });
     }
   };
 
@@ -382,6 +424,9 @@ export default function PaymentManager({
                 {payment.status === 'voided' && (
                   <div className="mb-1 text-xs font-medium text-destructive">VOIDED</div>
                 )}
+                {payment.status === 'pending_accounting_approval' && (
+                  <div className="mb-1 text-xs font-medium text-amber-700">PENDING ACCOUNTING APPROVAL</div>
+                )}
                 <div className="flex justify-between items-center">
                   <div className="flex items-center gap-2">
                     <span className="font-medium">
@@ -392,6 +437,17 @@ export default function PaymentManager({
                     </span>
                   </div>
                   <div className="flex gap-1">
+                    {payment.status === 'pending_accounting_approval' && can('finance.accounting_admin') && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleApproveAccounting(payment.id)}
+                        title="Approve accounting posting"
+                        disabled={approveAccountingMutation.isPending}
+                      >
+                        <CheckCircle2 className="h-3 w-3" />
+                      </Button>
+                    )}
                     <Button
                       variant="outline"
                       size="sm"

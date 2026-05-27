@@ -4915,7 +4915,7 @@ export class DatabaseStorage implements IStorage {
           totalPayments: sql<number>`COALESCE(SUM(${payments.paymentAmount}), 0)`,
         })
         .from(payments)
-        .where(eq(payments.orderId, orderId));
+        .where(and(eq(payments.orderId, orderId), eq(payments.status, 'posted')));
       
       const paymentTotal = paymentResult.length > 0 ? Number(paymentResult[0].totalPayments) : 0;
 
@@ -5348,7 +5348,7 @@ export class DatabaseStorage implements IStorage {
               totalPaid: sql<number>`COALESCE(SUM(${payments.paymentAmount}), 0)`,
             })
             .from(payments)
-            .where(eq(payments.orderId, order.orderId))
+            .where(and(eq(payments.orderId, order.orderId), eq(payments.status, 'posted')))
             .groupBy(payments.orderId);
 
           const totalPaid =
@@ -5428,7 +5428,7 @@ export class DatabaseStorage implements IStorage {
               totalPaid: sql<number>`COALESCE(SUM(${payments.paymentAmount}), 0)`,
             })
             .from(payments)
-            .where(eq(payments.orderId, order.orderId))
+            .where(and(eq(payments.orderId, order.orderId), eq(payments.status, 'posted')))
             .groupBy(payments.orderId);
 
           const totalPaid =
@@ -5629,6 +5629,7 @@ export class DatabaseStorage implements IStorage {
         totalPayments: sql<number>`COALESCE(SUM(${payments.paymentAmount}), 0)`,
       })
       .from(payments)
+      .where(eq(payments.status, 'posted'))
       .groupBy(payments.orderId);
 
     // Create payment map for fast lookup
@@ -5788,6 +5789,7 @@ export class DatabaseStorage implements IStorage {
         totalPayments: sql<number>`COALESCE(SUM(${payments.paymentAmount}), 0)`,
       })
       .from(payments)
+      .where(eq(payments.status, 'posted'))
       .groupBy(payments.orderId);
 
     const paymentMap = new Map(
@@ -6009,6 +6011,7 @@ export class DatabaseStorage implements IStorage {
         totalPayments: sql<number>`COALESCE(SUM(${payments.paymentAmount}), 0)`,
       })
       .from(payments)
+      .where(eq(payments.status, 'posted'))
       .groupBy(payments.orderId);
 
     // Create payment map for fast lookup

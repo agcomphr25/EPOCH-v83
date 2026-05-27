@@ -248,6 +248,54 @@ async function publicTableExists(tableName: string): Promise<boolean> {
   return rows[0]?.exists === true;
 }
 
+async function publicColumnsExist(tableName: string, columnNames: string[]): Promise<boolean> {
+  if (columnNames.length === 0) return true;
+
+  const rows = await pool.query<{ columnName: string }>(
+    `
+      SELECT column_name AS "columnName"
+      FROM information_schema.columns
+      WHERE table_schema = current_schema()
+        AND table_name = $1
+        AND column_name = ANY($2::text[])
+    `,
+    [tableName, columnNames],
+  );
+
+  const found = new Set(rows.map((row) => row.columnName));
+  return columnNames.every((columnName) => found.has(columnName));
+}
+
+async function canReadProjectReceivedMaterials(): Promise<boolean> {
+  return (
+    await publicTableExists('project_received_materials') &&
+    await publicTableExists('received_units') &&
+    await publicTableExists('receipts') &&
+    await publicTableExists('receipt_lines') &&
+    await publicColumnsExist('project_received_materials', [
+      'id',
+      'project_id',
+      'received_unit_id',
+      'receipt_id',
+      'material_lot_id',
+      'quantity',
+      'unit_cost',
+      'extended_cost',
+      'status',
+      'created_at',
+    ]) &&
+    await publicColumnsExist('received_units', [
+      'id',
+      'receipt_line_id',
+      'lot_number',
+      'internal_control_number',
+      'barcode',
+    ]) &&
+    await publicColumnsExist('receipts', ['id', 'receipt_number']) &&
+    await publicColumnsExist('receipt_lines', ['id', 'ag_part_number', 'description'])
+  );
+}
+
 let hasProductionWorkOrderMaterialBudgetColumn: boolean | null = null;
 
 async function getProductionWorkOrderMaterialBudgetExpression() {
@@ -1054,7 +1102,7 @@ ${materialBudgetExpression}
     WHERE project_id = $1
   `, [projectId]);
 
-  const hasProjectReceivedMaterials = await publicTableExists('project_received_materials');
+  const hasProjectReceivedMaterials = await canReadProjectReceivedMaterials();
   const acceptedReceivedMaterialCost = hasProjectReceivedMaterials
     ? parseFloat((await pool.query<{ acceptedMaterialCost: string }>(`
         SELECT COALESCE(SUM(extended_cost), 0) AS "acceptedMaterialCost"
@@ -2384,7 +2432,7 @@ ${materialBudgetExpression}
     ) parts_request_sub
   `, [projectId, ORDERED_PARTS_REQUEST_STATUSES]);
 
-  const hasProjectReceivedMaterials = await publicTableExists('project_received_materials');
+  const hasProjectReceivedMaterials = await canReadProjectReceivedMaterials();
   const projectReceivedSummaryRes = hasProjectReceivedMaterials
     ? await pool.query<ProjectReceivedMaterialSummaryRow>(`
         SELECT
@@ -2483,7 +2531,7 @@ ${materialBudgetExpression}
           ('PRM-' || prm.id::text) AS "inventoryItemId",
           COALESCE(ii.ag_part_number, rl.ag_part_number, '') AS "itemCode",
           COALESCE(ii.name, rl.description, '') AS "itemName",
-          COALESCE(ru.lot_number, ml.lot_number) AS "lotNumber",
+          COALESCE(ru.lot_number, ml.supplier_lot_number) AS "lotNumber",
           COALESCE(ru.internal_control_number, ml.internal_control_number) AS "internalControlNumber",
           prm.quantity::numeric AS "qtyRequired",
           CASE WHEN prm.status = 'pending_pm_acceptance' THEN prm.quantity::numeric ELSE 0::numeric END AS "qtyAllocated",
@@ -2545,7 +2593,19 @@ router.patch('/:projectId/materials/received/:receivedMaterialId', h(async (req,
     return;
   }
 
-  if (!(await publicTableExists('project_received_materials'))) {
+  if (!(await publicTableExists('project_received_materials')) || !(await publicColumnsExist('project_received_materials', [
+    'id',
+    'project_id',
+    'status',
+    'accepted_by_user_id',
+    'accepted_by_display_name',
+    'accepted_at',
+    'rejected_by_user_id',
+    'rejected_by_display_name',
+    'rejected_at',
+    'notes',
+    'updated_at',
+  ]))) {
     res.status(404).json({ error: 'Pending received material not found for this project' });
     return;
   }

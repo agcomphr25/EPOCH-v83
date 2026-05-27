@@ -3874,7 +3874,8 @@ async function initializeBackgroundServices() {
           { key: 'finance.view', description: 'Read AR invoices, payments, aging reports, and customer summaries', category: 'finance' },
           { key: 'finance.post_invoice', description: 'Post an AR invoice to the general ledger', category: 'finance' },
           { key: 'finance.void_invoice', description: 'Void an AR invoice', category: 'finance' },
-          { key: 'finance.manage_payments', description: 'Record and delete AR payments', category: 'finance' },
+          { key: 'finance.manage_payments', description: 'Record, update, and void AR/P1 customer payments', category: 'finance' },
+          { key: 'finance.accounting_admin', description: 'Post or adjust entries in migration or soft-closed accounting periods', category: 'finance' },
 
           // Inventory
           { key: 'inventory.adjust', description: 'Update and delete inventory items and balances', category: 'inventory' },
@@ -4319,6 +4320,32 @@ async function initializeBackgroundServices() {
           }
         } catch (overrideErr: any) {
           console.warn('⚠️ faleeshah override seed skipped:', overrideErr.message);
+        }
+
+        // User-level finance overrides for darleneb.
+        try {
+          const darlenebRows = await pool.query(
+            `SELECT id FROM users WHERE lower(username) = 'darleneb' LIMIT 1`
+          );
+          if (darlenebRows.length > 0) {
+            const darlenebId = darlenebRows[0].id;
+            const darlenebCaps = ['finance.manage_payments'];
+            for (const capKey of darlenebCaps) {
+              await pool.query(
+                `INSERT INTO perm_user_overrides (user_id, capability_id, effect)
+                 SELECT $1, pc.id, 'allow'
+                 FROM perm_capabilities pc
+                 WHERE pc.key = $2
+                 ON CONFLICT (user_id, capability_id) DO UPDATE SET effect = EXCLUDED.effect`,
+                [darlenebId, capKey]
+              );
+            }
+            console.log('✅ Granted finance.manage_payments user-level override to darleneb');
+          } else {
+            console.warn('⚠️ darleneb user not found - finance user-level overrides not seeded');
+          }
+        } catch (overrideErr: any) {
+          console.warn('⚠️ darleneb finance override seed skipped:', overrideErr.message);
         }
 
         console.log('✅ Seeded EPOCH capability keys and assigned to ADMIN/OWNER/FLOOR_OPERATOR/SUPERVISOR/MANAGER/DOCUMENT_MANAGER/HR/VP roles');

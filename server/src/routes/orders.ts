@@ -4,7 +4,7 @@ import { DEFAULT_ORDERS_LIMIT, MAX_ORDERS_LIMIT } from '../constants/orders';
 import { db } from '../../db';
 import { pool } from '../../db';
 import { payments, allOrders, orders, customerAddresses, communicationLogs } from '../../../shared/schema';
-import { journalEntries } from '../../schema';
+import { journalEntries, journalLines } from '../../schema';
 import { eq, sql, desc, and, or } from 'drizzle-orm';
 import { storage } from '../../storage';
 import { generateP1OrderId } from '../../utils/orderIdGenerator';
@@ -35,6 +35,8 @@ import {
   createOrUpdateP1PaymentJournalEntry,
   reverseP1PaymentJournalEntry,
 } from '../services/p1PaymentPostingService';
+import { getOrCreateAccountingPeriod } from '../services/accountingPeriodService';
+import { isAccountingAdminUser } from '../middleware/requireAccountingAdmin';
 import {
   normalizeNotificationMethods,
   sendCustomerNotification,
@@ -44,6 +46,38 @@ import {
 import { generateOrderPdf, PdfIntent } from '../../services/orderPdfService';
 
 const router = Router();
+
+async function requiresP1PaymentAccountingApproval(paymentDate: Date, user: any): Promise<{ required: boolean; period: any }> {
+  const period = await getOrCreateAccountingPeriod(paymentDate);
+  const status = String(period.status).toUpperCase();
+  if (status === 'FINAL_LOCKED' || status === 'HARD_CLOSED') {
+    const err: any = new Error(`Accounting period ${period.periodYear}-${String(period.periodMonth).padStart(2, '0')} is ${status}.`);
+    err.statusCode = 423;
+    throw err;
+  }
+  if (status === 'SOFT_CLOSED' || status === 'MIGRATION') {
+    return { required: !(await isAccountingAdminUser(user)), period };
+  }
+  return { required: false, period };
+}
+
+async function deleteDraftP1PaymentJournalEntry(tx: any, paymentId: number) {
+  const [existingJournal] = await tx
+    .select({ id: journalEntries.id })
+    .from(journalEntries)
+    .where(
+      and(
+        eq(journalEntries.referenceId, paymentId),
+        eq(journalEntries.referenceType, 'p1_payment'),
+        eq(journalEntries.transactionType, 'P1_CUSTOMER_PAYMENT'),
+      )
+    )
+    .limit(1);
+  if (existingJournal) {
+    await tx.delete(journalLines).where(eq(journalLines.journalEntryId, existingJournal.id));
+    await tx.delete(journalEntries).where(eq(journalEntries.id, existingJournal.id));
+  }
+}
 
 async function getExportedPaymentJournalStatus(paymentId: number) {
   const [existingJournal] = await db
@@ -428,7 +462,7 @@ router.get('/customer/:customerId', async (req: Request, res: Response) => {
             total: sql`SUM(${payments.paymentAmount})`.as('total'),
           })
           .from(payments)
-          .where(eq(payments.orderId, order.orderId));
+          .where(and(eq(payments.orderId, order.orderId), eq(payments.status, 'posted')));
 
         const paymentTotal = Number(paymentResults[0]?.total || 0);
 
@@ -2113,7 +2147,7 @@ router.get('/:orderId/payments', async (req: Request, res: Response) => {
 });
 
 // Add a new payment to an order
-router.post('/:orderId/payments', async (req: Request, res: Response) => {
+router.post('/:orderId/payments', requirePermission('finance.manage_payments'), async (req: Request, res: Response) => {
   try {
     const orderId = req.params.orderId;
     console.log('Creating payment for order:', orderId);
@@ -2122,9 +2156,18 @@ router.post('/:orderId/payments', async (req: Request, res: Response) => {
     const paymentData = insertPaymentSchema.parse({ ...req.body, orderId });
     console.log('Validated payment data:', paymentData);
 
+    const approval = await requiresP1PaymentAccountingApproval(paymentData.paymentDate, (req as any).user);
     const newPayment = await db.transaction(async (tx) => {
-      const [payment] = await tx.insert(payments).values(paymentData).returning();
-      await createOrUpdateP1PaymentJournalEntry(payment.id, (req as any).user, tx);
+      const [payment] = await tx
+        .insert(payments)
+        .values({
+          ...paymentData,
+          status: approval.required ? 'pending_accounting_approval' : 'posted',
+        })
+        .returning();
+      if (!approval.required) {
+        await createOrUpdateP1PaymentJournalEntry(payment.id, (req as any).user, tx);
+      }
       return payment;
     });
     console.log('Payment created successfully:', newPayment);
@@ -2133,21 +2176,32 @@ router.post('/:orderId/payments', async (req: Request, res: Response) => {
       await auditService.logEvent({
         entityType: 'p1_order',
         entityId: orderId,
-        action: 'PAYMENT_ADDED',
+        action: approval.required ? 'PAYMENT_ADDED_PENDING_ACCOUNTING_APPROVAL' : 'PAYMENT_ADDED',
         actor: { username: (req as any).user?.username || (req as any).user?.role || 'system' },
-        meta: { payment: newPayment },
+        meta: {
+          payment: newPayment,
+          accountingApprovalRequired: approval.required,
+          accountingPeriod: {
+            year: approval.period.periodYear,
+            month: approval.period.periodMonth,
+            status: approval.period.status,
+          },
+        },
       });
     } catch (auditError) {
       console.error('[Audit] Failed to log payment creation:', auditError);
       return res.status(500).json({ error: 'Payment was created but audit logging failed. Contact an administrator.' });
     }
 
-    res.status(201).json(newPayment);
+    res.status(201).json({
+      ...newPayment,
+      accountingApprovalRequired: approval.required,
+    });
   } catch (error) {
     console.error('Create payment error:', error);
     console.error('Error details:', (error as Error).message);
     res
-      .status(400)
+      .status((error as any).statusCode || 400)
       .json({
         error: 'Failed to create payment',
         details: (error as any).message,
@@ -2156,7 +2210,7 @@ router.post('/:orderId/payments', async (req: Request, res: Response) => {
 });
 
 // Update a payment
-router.put('/payments/:paymentId', async (req: Request, res: Response) => {
+router.put('/payments/:paymentId', requirePermission('finance.manage_payments'), async (req: Request, res: Response) => {
   try {
     const paymentId = parseInt(req.params.paymentId);
 
@@ -2169,21 +2223,49 @@ router.put('/payments/:paymentId', async (req: Request, res: Response) => {
     }
 
     const paymentData = insertPaymentSchema.parse(req.body);
+    const approval = await requiresP1PaymentAccountingApproval(paymentData.paymentDate, (req as any).user);
     const updatedPayment = await db.transaction(async (tx) => {
       const [payment] = await tx
         .update(payments)
-        .set({ ...paymentData, updatedAt: new Date() })
+        .set({
+          ...paymentData,
+          status: approval.required ? 'pending_accounting_approval' : 'posted',
+          updatedAt: new Date(),
+        })
         .where(eq(payments.id, paymentId))
         .returning();
-      await createOrUpdateP1PaymentJournalEntry(payment.id, (req as any).user, tx);
+      if (!approval.required) {
+        await createOrUpdateP1PaymentJournalEntry(payment.id, (req as any).user, tx);
+      } else {
+        await deleteDraftP1PaymentJournalEntry(tx, payment.id);
+      }
       return payment;
     });
 
-    res.json(updatedPayment);
+    await auditService.logEvent({
+      entityType: 'p1_order',
+      entityId: updatedPayment.orderId,
+      action: approval.required ? 'PAYMENT_UPDATED_PENDING_ACCOUNTING_APPROVAL' : 'PAYMENT_UPDATED',
+      actor: { username: (req as any).user?.username || (req as any).user?.role || 'system' },
+      meta: {
+        payment: updatedPayment,
+        accountingApprovalRequired: approval.required,
+        accountingPeriod: {
+          year: approval.period.periodYear,
+          month: approval.period.periodMonth,
+          status: approval.period.status,
+        },
+      },
+    });
+
+    res.json({
+      ...updatedPayment,
+      accountingApprovalRequired: approval.required,
+    });
   } catch (error) {
     console.error('Update payment error:', error);
     res
-      .status(400)
+      .status((error as any).statusCode || 400)
       .json({
         error: 'Failed to update payment',
         details: (error as any).message,
@@ -2191,8 +2273,75 @@ router.put('/payments/:paymentId', async (req: Request, res: Response) => {
   }
 });
 
+// Approve a controlled-period payment and post its accounting journal entry.
+router.post('/payments/:paymentId/approve-accounting', requirePermission('finance.accounting_admin'), async (req: Request, res: Response) => {
+  try {
+    const paymentId = parseInt(req.params.paymentId);
+    const approvalNote = typeof req.body?.note === 'string' ? req.body.note.trim() : '';
+    const user = (req as any).user;
+
+    if (isNaN(paymentId)) {
+      return res.status(400).json({ error: 'Invalid payment ID' });
+    }
+
+    const result = await db.transaction(async (tx) => {
+      const [existingPayment] = await tx
+        .select()
+        .from(payments)
+        .where(eq(payments.id, paymentId))
+        .limit(1);
+
+      if (!existingPayment) {
+        const err: any = new Error('Payment not found');
+        err.statusCode = 404;
+        throw err;
+      }
+      if (existingPayment.status !== 'pending_accounting_approval') {
+        const err: any = new Error('Payment is not pending accounting approval');
+        err.statusCode = 409;
+        throw err;
+      }
+
+      const [payment] = await tx
+        .update(payments)
+        .set({
+          status: 'posted',
+          notes: approvalNote
+            ? [existingPayment.notes, `Accounting approval: ${approvalNote}`].filter(Boolean).join('\n')
+            : existingPayment.notes,
+          updatedAt: new Date(),
+        })
+        .where(eq(payments.id, paymentId))
+        .returning();
+
+      const journalResult = await createOrUpdateP1PaymentJournalEntry(payment.id, user, tx);
+      return { payment, journalResult };
+    });
+
+    await auditService.logEvent({
+      entityType: 'p1_order',
+      entityId: result.payment.orderId,
+      action: 'PAYMENT_ACCOUNTING_APPROVED',
+      actor: { username: user?.username || user?.role || 'system' },
+      meta: {
+        paymentId,
+        approvalNote: approvalNote || null,
+        journalResult: result.journalResult,
+      },
+    });
+
+    res.json({ success: true, ...result });
+  } catch (error: any) {
+    console.error('Approve payment accounting error:', error);
+    res.status(error.statusCode || 400).json({
+      error: 'Failed to approve payment accounting',
+      details: error.message,
+    });
+  }
+});
+
 // Void a payment. The original row is preserved and a reversal row offsets it.
-router.delete('/payments/:paymentId', async (req: Request, res: Response) => {
+router.delete('/payments/:paymentId', requirePermission('finance.manage_payments'), async (req: Request, res: Response) => {
   try {
     const paymentId = parseInt(req.params.paymentId);
     const voidReason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
@@ -2261,6 +2410,11 @@ router.delete('/payments/:paymentId', async (req: Request, res: Response) => {
         .where(eq(payments.id, paymentId))
         .returning();
 
+      if (existingPayment.status === 'pending_accounting_approval') {
+        await deleteDraftP1PaymentJournalEntry(tx, paymentId);
+        return { voidedPayment, reversal: null, journalReversal: null };
+      }
+
       const [reversal] = await tx
         .insert(payments)
         .values({
@@ -2290,7 +2444,7 @@ router.delete('/payments/:paymentId', async (req: Request, res: Response) => {
         reason: voidReason,
         meta: {
           paymentId,
-          reversalPaymentId: result.reversal.id,
+          reversalPaymentId: result.reversal?.id ?? null,
           originalPayment: existingPayment,
         },
       });
@@ -2298,8 +2452,8 @@ router.delete('/payments/:paymentId', async (req: Request, res: Response) => {
       console.error('[Audit] Failed to log payment void:', auditError);
       return res.status(500).json({ error: 'Payment was reversed but audit logging failed. Contact an administrator.' });
     }
-    console.log(`Successfully voided payment ID: ${paymentId} with reversal ${result.reversal.id}`);
-    res.json({ success: true, message: 'Payment voided with reversal', ...result });
+    console.log(`Successfully voided payment ID: ${paymentId}`);
+    res.json({ success: true, message: result.reversal ? 'Payment voided with reversal' : 'Pending payment voided', ...result });
   } catch (error) {
     console.error('Void payment error:', error);
     console.error('Error details:', {
@@ -2318,7 +2472,7 @@ router.delete('/payments/:paymentId', async (req: Request, res: Response) => {
 // NOTE: Currently accepts orderTotal from client for payment completion logic.
 // In production, this should be verified server-side using calculateOrderTotal
 // to prevent integrity issues. For now, this is acceptable as an internal CSR tool.
-router.post('/bulk-payment', async (req: Request, res: Response) => {
+router.post('/bulk-payment', requirePermission('finance.manage_payments'), async (req: Request, res: Response) => {
   try {
     const { payments: paymentItems } = req.body;
     
@@ -2351,15 +2505,24 @@ router.post('/bulk-payment', async (req: Request, res: Response) => {
           notes: item.notes || null,
         });
 
+        const approval = await requiresP1PaymentAccountingApproval(paymentData.paymentDate, (req as any).user);
         const newPayment = await db.transaction(async (tx) => {
-          const [payment] = await tx.insert(payments).values(paymentData).returning();
-          await createOrUpdateP1PaymentJournalEntry(payment.id, (req as any).user, tx);
+          const [payment] = await tx
+            .insert(payments)
+            .values({
+              ...paymentData,
+              status: approval.required ? 'pending_accounting_approval' : 'posted',
+            })
+            .returning();
+          if (!approval.required) {
+            await createOrUpdateP1PaymentJournalEntry(payment.id, (req as any).user, tx);
+          }
           return payment;
         });
 
         const allPayments = await storage.getPaymentsByOrderId(orderId);
         const totalPaid = allPayments.reduce(
-          (sum: number, p: any) => sum + p.paymentAmount,
+          (sum: number, p: any) => p.status === 'posted' ? sum + p.paymentAmount : sum,
           0
         );
 

@@ -756,6 +756,11 @@ router.post("/kiosk/punch", optionalAuth, h(async (req, res): Promise<void> => {
     else action = "clock_out";
   }
 
+  if ((action === "clock_in" || action === "break_end") && chargeCodeId == null) {
+    res.status(422).json({ error: "A charge code is required before clocking in." });
+    return;
+  }
+
   if (action === "clock_out" && dailyCertificationConfirmed !== true) {
     res.status(400).json({
       error: "Daily employee certification is required when punching out for the day.",
@@ -839,16 +844,37 @@ router.post("/kiosk/punch", optionalAuth, h(async (req, res): Promise<void> => {
         return;
       }
       entry = await ledger.closeSession(resolvedEmployeeId);
-      const dailyCertification = await certifyDailyTimeOnPunchOut(
-        resolvedEmployeeId,
-        entry?.clockOut ?? new Date(),
-        actorFromUser(req.user ?? null, req.ip ?? null),
-        { certificationConfirmed: true, source: "kiosk_punch_out" },
-      );
-      if (dailyCertification && "error" in dailyCertification) {
-        res.status(dailyCertification.statusCode).json({
-          error: dailyCertification.error,
+      try {
+        const dailyCertification = await certifyDailyTimeOnPunchOut(
+          resolvedEmployeeId,
+          entry?.clockOut ?? new Date(),
+          actorFromUser(req.user ?? null, req.ip ?? null),
+          { certificationConfirmed: true, source: "kiosk_punch_out" },
+        );
+        if (dailyCertification && "error" in dailyCertification) {
+          res.status(202).json({
+            entry,
+            action,
+            employeeId: resolvedEmployeeId,
+            message: `Goodbye, ${firstName}! You have clocked out, but the daily certification could not be recorded. Please notify your supervisor.`,
+            dailyCertificationRecorded: false,
+            certificationError: dailyCertification.error,
+            punchRecorded: true,
+            status: "clocked_out",
+          });
+          return;
+        }
+      } catch (error) {
+        console.error("[timekeeping] kiosk punch-out certification failed after punch was recorded", error);
+        res.status(202).json({
+          entry,
+          action,
+          employeeId: resolvedEmployeeId,
+          message: `Goodbye, ${firstName}! You have clocked out, but the daily certification could not be recorded. Please notify your supervisor.`,
+          dailyCertificationRecorded: false,
+          certificationError: error instanceof Error ? error.message : "Daily certification failed after punch-out.",
           punchRecorded: true,
+          status: "clocked_out",
         });
         return;
       }
@@ -1059,6 +1085,11 @@ router.post("/punches/my", authenticateToken, h(async (req, res): Promise<void> 
   const openSession = await ledger.getOpenSession(epochEmployeeId);
   const currentStatus = ledger.deriveStatus(openSession);
 
+  if ((type === "clock_in" || type === "break_end") && chargeCodeId == null) {
+    res.status(422).json({ error: "A charge code is required before clocking in." });
+    return;
+  }
+
   let entry;
 
   switch (type as string) {
@@ -1119,15 +1150,30 @@ router.post("/punches/my", authenticateToken, h(async (req, res): Promise<void> 
         return;
       }
       entry = await ledger.closeSession(epochEmployeeId);
-      const dailyCertification = await certifyDailyTimeOnPunchOut(
-        epochEmployeeId,
-        entry?.clockOut ?? new Date(),
-        actorFromUser(req.user ?? null, req.ip ?? null),
-        { certificationConfirmed: true, source: "portal_punch_out" },
-      );
-      if (dailyCertification && "error" in dailyCertification) {
-        res.status(dailyCertification.statusCode).json({
-          error: dailyCertification.error,
+      try {
+        const dailyCertification = await certifyDailyTimeOnPunchOut(
+          epochEmployeeId,
+          entry?.clockOut ?? new Date(),
+          actorFromUser(req.user ?? null, req.ip ?? null),
+          { certificationConfirmed: true, source: "portal_punch_out" },
+        );
+        if (dailyCertification && "error" in dailyCertification) {
+          res.status(202).json({
+            entry,
+            type,
+            dailyCertificationRecorded: false,
+            certificationError: dailyCertification.error,
+            punchRecorded: true,
+          });
+          return;
+        }
+      } catch (error) {
+        console.error("[timekeeping] portal punch-out certification failed after punch was recorded", error);
+        res.status(202).json({
+          entry,
+          type,
+          dailyCertificationRecorded: false,
+          certificationError: error instanceof Error ? error.message : "Daily certification failed after punch-out.",
           punchRecorded: true,
         });
         return;

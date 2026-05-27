@@ -95,7 +95,7 @@ function ChargeCodePicker({ chargeCodes, value, onChange, onInteraction }: Charg
   return (
     <div className="space-y-2 text-left">
       <label className="text-xs uppercase tracking-widest text-gray-400 block">
-        Charge Code <span className="text-gray-300 normal-case">(optional)</span>
+        Charge Code
       </label>
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
@@ -108,15 +108,6 @@ function ChargeCodePicker({ chargeCodes, value, onChange, onInteraction }: Charg
         />
       </div>
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden max-h-56 overflow-y-auto">
-        {value && (
-          <button
-            type="button"
-            onClick={() => { onChange(''); onInteraction(); }}
-            className="w-full text-left px-4 py-3 text-sm text-gray-400 border-b border-gray-100 hover:bg-gray-50 active:bg-gray-100"
-          >
-            — No charge code —
-          </button>
-        )}
         {filtered.length === 0 && (
           <p className="px-4 py-3 text-sm text-gray-400">No matching codes</p>
         )}
@@ -177,7 +168,7 @@ function getActionMeta(status: string): ActionMeta {
 }
 
 const IDLE_TIMEOUT_MS = 45_000;
-const RESULT_DISPLAY_SEC = 5;
+const RESULT_DISPLAY_SEC = 8;
 const PIN_LENGTH = 4;
 
 const PIN_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'backspace', '0', 'submit'];
@@ -245,13 +236,14 @@ export default function KioskPage() {
   const [errorMsg, setErrorMsg] = useState('');
   const [dcaaViolation, setDcaaViolation] = useState<DcaaPolicyViolation | null>(null);
   const [countdown, setCountdown] = useState(RESULT_DISPLAY_SEC);
+  const [idleCountdown, setIdleCountdown] = useState(Math.ceil(IDLE_TIMEOUT_MS / 1000));
   const [lockoutSecondsRemaining, setLockoutSecondsRemaining] = useState(0);
   const [certificationReviewLoading, setCertificationReviewLoading] = useState(false);
   const [correctionForm, setCorrectionForm] = useState({
     requestType: 'edit_session',
     punchLedgerId: '',
     selectedPunchType: 'clock_in' as PunchEventType,
-    chargeCodeId: 'none',
+    chargeCodeId: '',
     clockIn: '',
     clockOut: '',
     reason: '',
@@ -283,8 +275,9 @@ export default function KioskPage() {
     setErrorMsg('');
     setDcaaViolation(null);
     setCountdown(RESULT_DISPLAY_SEC);
+    setIdleCountdown(Math.ceil(IDLE_TIMEOUT_MS / 1000));
     setLockoutSecondsRemaining(0);
-    setCorrectionForm({ requestType: 'edit_session', punchLedgerId: '', selectedPunchType: 'clock_in', chargeCodeId: 'none', clockIn: '', clockOut: '', reason: '' });
+    setCorrectionForm({ requestType: 'edit_session', punchLedgerId: '', selectedPunchType: 'clock_in', chargeCodeId: '', clockIn: '', clockOut: '', reason: '' });
     setActiveShiftPunches([]);
     setCorrectionLoading(false);
     setCertificationReviewLoading(false);
@@ -295,13 +288,20 @@ export default function KioskPage() {
 
   const restartIdleTimer = useCallback(() => {
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    setIdleCountdown(Math.ceil(IDLE_TIMEOUT_MS / 1000));
     idleTimerRef.current = setTimeout(resetToIdle, IDLE_TIMEOUT_MS);
   }, [resetToIdle]);
 
   useEffect(() => {
     if (step !== 'idle' && step !== 'success' && step !== 'error' && step !== 'locked-out') {
       restartIdleTimer();
-      return () => { if (idleTimerRef.current) clearTimeout(idleTimerRef.current); };
+      const iv = setInterval(() => {
+        setIdleCountdown((prev) => Math.max(0, prev - 1));
+      }, 1000);
+      return () => {
+        if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+        clearInterval(iv);
+      };
     }
   }, [step, restartIdleTimer]);
 
@@ -506,7 +506,7 @@ export default function KioskPage() {
       requestType: openEntry?.id ? 'edit_session' : 'add_session',
       punchLedgerId: openEntry?.id ? String(openEntry.id) : '',
       selectedPunchType: 'clock_in',
-      chargeCodeId: chargeCodes.find((cc) => cc.code === openEntry?.chargeCode)?.id.toString() ?? 'none',
+      chargeCodeId: chargeCodes.find((cc) => cc.code === openEntry?.chargeCode)?.id.toString() ?? '',
       clockIn: openEntry?.clockIn ? toLocalDateTimeInput(openEntry.clockIn) : '',
       clockOut: '',
       reason: '',
@@ -529,7 +529,7 @@ export default function KioskPage() {
       requestType: 'edit_session',
       punchLedgerId: String(punch.sessionId),
       selectedPunchType: punch.type,
-      chargeCodeId: chargeCodes.find((cc) => cc.code === punch.costCode)?.id.toString() ?? 'none',
+      chargeCodeId: chargeCodes.find((cc) => cc.code === punch.costCode)?.id.toString() ?? '',
       clockIn: punch.type === 'clock_in' || punch.type === 'break_start' ? local : '',
       clockOut: punch.type === 'clock_out' || punch.type === 'break_end' ? local : '',
     }));
@@ -542,7 +542,7 @@ export default function KioskPage() {
       requestType: 'add_session',
       punchLedgerId: '',
       selectedPunchType: 'clock_in',
-      chargeCodeId: 'none',
+      chargeCodeId: '',
       clockIn: '',
       clockOut: '',
     }));
@@ -571,7 +571,7 @@ export default function KioskPage() {
           proposedChanges: {
             punchType: correctionForm.selectedPunchType,
             laborClass: correctionForm.selectedPunchType === 'break_start' || correctionForm.selectedPunchType === 'break_end' ? 'BREAK' : 'REGULAR',
-            ...(correctionForm.chargeCodeId !== 'none' ? { chargeCodeId: Number(correctionForm.chargeCodeId) } : {}),
+            ...(correctionForm.chargeCodeId ? { chargeCodeId: Number(correctionForm.chargeCodeId) } : {}),
             ...(correctionForm.clockIn ? { clockIn: new Date(correctionForm.clockIn).toISOString() } : {}),
             ...(correctionForm.clockOut ? { clockOut: new Date(correctionForm.clockOut).toISOString() } : {}),
           },
@@ -871,7 +871,9 @@ export default function KioskPage() {
     const isOnBreak = punchStatus.status === 'on_break';
     const isClockOut = meta.action === 'clock_out';
     const showPrimaryActions = !showClockOutCertification;
-    const showChargeCodePicker = (isClockIn || isOnBreak) && chargeCodes.length > 0;
+    const requiresChargeCode = isClockIn || isOnBreak;
+    const hasRequiredChargeCode = !requiresChargeCode || !!selectedChargeCode;
+    const showChargeCodePicker = requiresChargeCode && chargeCodes.length > 0;
     const shiftRows = buildShiftRows(activeShiftPunches);
     return (
       <div className="min-h-screen bg-gray-50 text-gray-900 flex flex-col items-center justify-center px-8">
@@ -901,6 +903,16 @@ export default function KioskPage() {
               onInteraction={restartIdleTimer}
             />
           )}
+          {requiresChargeCode && chargeCodes.length === 0 && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+              No charge codes are available. Please see a supervisor before clocking in.
+            </div>
+          )}
+          {requiresChargeCode && chargeCodes.length > 0 && !selectedChargeCode && (
+            <p className="text-sm font-medium text-amber-700">
+              Select a charge code before clocking in.
+            </p>
+          )}
 
           {showPrimaryActions && (
             <div className="space-y-3">
@@ -908,6 +920,7 @@ export default function KioskPage() {
                 <Button
                   size="lg"
                   onClick={() => handleConfirm('clock_in')}
+                  disabled={!hasRequiredChargeCode}
                   className="w-full h-16 text-xl font-bold bg-blue-600 hover:bg-blue-700 rounded-2xl text-white gap-3"
                 >
                   <LogIn className="h-6 w-6" />
@@ -941,6 +954,7 @@ export default function KioskPage() {
                 <Button
                   size="lg"
                   onClick={() => handleConfirm('break_end')}
+                  disabled={!hasRequiredChargeCode}
                   className="w-full h-16 text-xl font-bold bg-amber-600 hover:bg-amber-700 rounded-2xl text-white gap-3"
                 >
                   <Play className="h-6 w-6" />
@@ -1099,12 +1113,14 @@ export default function KioskPage() {
   }
 
   if (step === 'correction' && employee) {
+    const correctionNeedsChargeCode = correctionForm.selectedPunchType === 'clock_in' || correctionForm.selectedPunchType === 'break_end';
     return (
       <div className="min-h-screen bg-gray-50 text-gray-900 flex flex-col items-center justify-center px-8">
         <div className="w-full max-w-sm space-y-4">
           <div className="text-center">
             <p className="text-2xl font-bold">Request Punch Correction</p>
             <p className="text-sm text-gray-500">{employee.firstName} {employee.lastName}</p>
+            <p className="mt-1 text-xs text-gray-400">This screen resets after inactivity in {idleCountdown}s.</p>
           </div>
 
           <div className="rounded-2xl border bg-white p-4 space-y-3 shadow-sm">
@@ -1186,13 +1202,16 @@ export default function KioskPage() {
               }}
               className="w-full rounded-xl border border-gray-200 p-3"
             >
-              <option value="none">No charge code</option>
+              <option value="">Select charge code</option>
               {chargeCodes.map((cc) => (
                 <option key={cc.id} value={String(cc.id)}>
                   {cc.code}{cc.description ? ` - ${cc.description}` : ''}
                 </option>
               ))}
             </select>
+            {correctionNeedsChargeCode && !correctionForm.chargeCodeId && (
+              <p className="text-xs font-medium text-amber-700">A charge code is required for clock-in punches.</p>
+            )}
 
             <label className="block text-xs uppercase tracking-widest text-gray-400">Correct Start Time</label>
             <input
@@ -1235,7 +1254,7 @@ export default function KioskPage() {
 
           <Button
             onClick={submitCorrectionRequest}
-            disabled={correctionForm.reason.trim().length < 5 || (correctionForm.requestType === 'add_session' && !correctionForm.clockIn) || (correctionForm.requestType === 'edit_session' && !correctionForm.punchLedgerId)}
+            disabled={correctionForm.reason.trim().length < 5 || (correctionForm.requestType === 'add_session' && !correctionForm.clockIn) || (correctionForm.requestType === 'edit_session' && !correctionForm.punchLedgerId) || (correctionNeedsChargeCode && !correctionForm.chargeCodeId)}
             className="w-full h-14 rounded-2xl"
           >
             Submit for Approval

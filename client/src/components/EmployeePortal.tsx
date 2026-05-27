@@ -60,6 +60,7 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
+  Edit,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -532,9 +533,10 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
   });
   const [expenseForm, setExpenseForm] = useState<ExpenseForm>(() => makeExpenseForm());
   const [expenseFiles, setExpenseFiles] = useState<File[]>([]);
-  const [selectedClockInChargeCode, setSelectedClockInChargeCode] = useState('none');
+  const [selectedClockInChargeCode, setSelectedClockInChargeCode] = useState('');
   const [dailyPunchOutConfirmed, setDailyPunchOutConfirmed] = useState(false);
   const [showDailyPunchOutCertification, setShowDailyPunchOutCertification] = useState(false);
+  const [showPunchCorrectionForm, setShowPunchCorrectionForm] = useState(false);
   const [timeOffForm, setTimeOffForm] = useState({
     startDate: '',
     endDate: '',
@@ -548,7 +550,7 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
     selectedPunchType: 'clock_in' as PunchEventType,
     clockIn: '',
     clockOut: '',
-    chargeCodeId: 'none',
+    chargeCodeId: '',
     reason: '',
   });
   const [, setTick] = useState(0);
@@ -1179,7 +1181,7 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
       return res.json();
     },
     onSuccess: () => {
-      setSelectedClockInChargeCode('none');
+      setSelectedClockInChargeCode('');
       setDailyPunchOutConfirmed(false);
       setShowDailyPunchOutCertification(false);
       queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/punches/my/current'] });
@@ -1214,7 +1216,7 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
           proposedChanges: {
             punchType: punchCorrectionForm.selectedPunchType,
             laborClass: punchCorrectionForm.selectedPunchType === 'break_start' || punchCorrectionForm.selectedPunchType === 'break_end' ? 'BREAK' : 'REGULAR',
-            ...(punchCorrectionForm.chargeCodeId !== 'none' ? { chargeCodeId: Number(punchCorrectionForm.chargeCodeId) } : {}),
+            ...(punchCorrectionForm.chargeCodeId ? { chargeCodeId: Number(punchCorrectionForm.chargeCodeId) } : {}),
             ...(punchCorrectionForm.clockIn ? { clockIn: new Date(punchCorrectionForm.clockIn).toISOString() } : {}),
             ...(punchCorrectionForm.clockOut ? { clockOut: new Date(punchCorrectionForm.clockOut).toISOString() } : {}),
           },
@@ -1228,7 +1230,8 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
     },
     onSuccess: () => {
       toast({ title: 'Correction submitted', description: 'Your request was sent for supervisor review.' });
-      setPunchCorrectionForm({ requestType: 'edit_session', punchLedgerId: '', selectedPunchType: 'clock_in', clockIn: '', clockOut: '', chargeCodeId: 'none', reason: '' });
+      setPunchCorrectionForm({ requestType: 'edit_session', punchLedgerId: '', selectedPunchType: 'clock_in', clockIn: '', clockOut: '', chargeCodeId: '', reason: '' });
+      setShowPunchCorrectionForm(false);
       queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/punch-corrections', 'mine'] });
       queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/punches/my/active-shift'] });
     },
@@ -1246,7 +1249,7 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
       selectedPunchType: punch.type,
       clockIn: punch.type === 'clock_in' || punch.type === 'break_start' ? local : '',
       clockOut: punch.type === 'clock_out' || punch.type === 'break_end' ? local : '',
-      chargeCodeId: 'none',
+      chargeCodeId: clockInChargeCodes.find((cc) => cc.code === punch.costCode)?.id.toString() ?? '',
     }));
   };
 
@@ -3003,7 +3006,7 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
                       )}
                     </div>
 
-                    {punchStatus.status === 'clocked_out' && (
+                    {(punchStatus.status === 'clocked_out' || punchStatus.status === 'on_break') && (
                       <div className="mx-auto max-w-xl rounded-lg border bg-white p-4 space-y-2">
                         <Label htmlFor="portal-clock-in-charge-code">Charge code</Label>
                         <Select
@@ -3015,7 +3018,6 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
                             <SelectValue placeholder={chargeCodesLoading ? 'Loading charge codes...' : 'Select charge code'} />
                           </SelectTrigger>
                           <SelectContent className="max-h-72">
-                            <SelectItem value="none">No charge code</SelectItem>
                             {Object.keys(chargeCodesByType).sort().map((type) => (
                               <SelectGroup key={type}>
                                 <SelectLabel>{CHARGE_CODE_TYPE_LABELS[type] ?? type}</SelectLabel>
@@ -3029,7 +3031,7 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
                           </SelectContent>
                         </Select>
                         <p className="text-xs text-muted-foreground">
-                          These are the same active charge codes available on the kiosk.
+                          A charge code is required before clocking in.
                         </p>
                       </div>
                     )}
@@ -3040,10 +3042,10 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
                         <Button
                           size="lg"
                           className="bg-green-600 hover:bg-green-700 text-white gap-2 px-8"
-                          disabled={punchMutation.isPending}
+                          disabled={punchMutation.isPending || !selectedClockInChargeCode}
                           onClick={() => punchMutation.mutate({
                             type: 'clock_in',
-                            costCode: selectedClockInChargeCode === 'none' ? undefined : selectedClockInChargeCode,
+                            costCode: selectedClockInChargeCode,
                           })}
                         >
                           <LogIn className="h-5 w-5" />
@@ -3110,8 +3112,8 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
                         <Button
                           size="lg"
                           className="bg-amber-600 hover:bg-amber-700 text-white gap-2 px-8"
-                          disabled={punchMutation.isPending}
-                          onClick={() => punchMutation.mutate({ type: 'break_end' })}
+                          disabled={punchMutation.isPending || !selectedClockInChargeCode}
+                          onClick={() => punchMutation.mutate({ type: 'break_end', costCode: selectedClockInChargeCode })}
                         >
                           <Play className="h-5 w-5" />
                           {punchMutation.isPending ? 'Recording…' : 'End Break'}
@@ -3139,6 +3141,19 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
                       </div>
                     )}
 
+                    {!showPunchCorrectionForm ? (
+                      <div className="mt-6 text-center">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="gap-2"
+                          onClick={() => setShowPunchCorrectionForm(true)}
+                        >
+                          <Edit className="h-4 w-4" />
+                          Request Punch Correction
+                        </Button>
+                      </div>
+                    ) : (
                     <div className="mt-6 rounded-lg border bg-muted/20 p-4 text-left space-y-3">
                       <div>
                         <h3 className="text-sm font-semibold text-gray-900">Request Punch Correction</h3>
@@ -3235,7 +3250,6 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
                               <SelectValue placeholder={chargeCodesLoading ? 'Loading charge codes...' : 'Select charge code'} />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="none">No charge code</SelectItem>
                               {clockInChargeCodes.map((cc) => (
                                 <SelectItem key={cc.id} value={String(cc.id)}>
                                   {cc.code}{cc.description ? ` - ${cc.description}` : ''}
@@ -3262,12 +3276,22 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
                           punchCorrectionMutation.isPending ||
                           punchCorrectionForm.reason.trim().length < 5 ||
                           (punchCorrectionForm.requestType === 'add_session' && !punchCorrectionForm.clockIn) ||
-                          (punchCorrectionForm.requestType === 'edit_session' && !punchCorrectionForm.punchLedgerId)
+                          (punchCorrectionForm.requestType === 'edit_session' && !punchCorrectionForm.punchLedgerId) ||
+                          ((punchCorrectionForm.selectedPunchType === 'clock_in' || punchCorrectionForm.selectedPunchType === 'break_end') && !punchCorrectionForm.chargeCodeId)
                         }
                       >
                         {punchCorrectionMutation.isPending ? 'Submitting...' : 'Submit Correction Request'}
                       </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setShowPunchCorrectionForm(false)}
+                      >
+                        Cancel
+                      </Button>
                     </div>
+                    )}
                   </div>
                 )}
               </CardContent>
@@ -3285,7 +3309,7 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
                 Timesheets
               </CardTitle>
               <CardDescription>
-                Review daily sign-offs, certify pay periods, and view historical timesheets.
+                Review daily sign-offs, prepare pay periods, and view historical timesheets.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -3428,14 +3452,14 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
               {runningTimesheet && !runningTimesheet.persistedTimesheet && (
                 <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-md border border-blue-200 bg-white p-3">
                   <p className="text-sm text-blue-900">
-                    When the period is ready, create the draft record so it appears in Needs Certification.
+                    When the period is ready, create the draft record so it can move through review.
                   </p>
                   <Button
                     size="sm"
                     onClick={() => prepareTimesheetMutation.mutate()}
                     disabled={prepareTimesheetMutation.isPending || runningTimesheet.totalHours <= 0}
                   >
-                    {prepareTimesheetMutation.isPending ? 'Preparing...' : 'Prepare for Certification'}
+                    {prepareTimesheetMutation.isPending ? 'Preparing...' : 'Prepare Period'}
                   </Button>
                 </div>
               )}

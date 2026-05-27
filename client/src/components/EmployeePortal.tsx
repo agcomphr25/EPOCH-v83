@@ -762,6 +762,7 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
   const [salariedEntryOpen, setSalariedEntryOpen] = useState(false);
   const [salariedCertReviewId, setSalariedCertReviewId] = useState<number | null>(null);
   const [salariedCertConfirmedId, setSalariedCertConfirmedId] = useState<number | null>(null);
+  const [salariedSubmitReason, setSalariedSubmitReason] = useState('');
   const selectedPayPeriod = getPayPeriodForDate(selectedPayPeriodStart);
   const selectedPayPeriodLabel = formatPayPeriodLabel(selectedPayPeriod.start, selectedPayPeriod.end);
   const isCurrentPayPeriod = selectedPayPeriod.start === currentPayPeriod.start;
@@ -1035,9 +1036,12 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
 
   const certifySalariedMutation = useMutation({
     mutationFn: async (timesheetId: number) => {
+      if (salariedSubmitReason.trim().length < 5) {
+        throw new Error('Enter a submission reason of at least 5 characters.');
+      }
       const res = await portalFetch(`/api/timekeeping/salaried-timesheet/my/certify/${timesheetId}`, {
         method: 'POST',
-        body: JSON.stringify({ certificationConfirmed: true }),
+        body: JSON.stringify({ certificationConfirmed: true, reason: salariedSubmitReason.trim() }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -1049,6 +1053,7 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
       toast({ title: 'Timesheet submitted', description: 'Your weekly timesheet is pending supervisor approval.' });
       setSalariedCertReviewId(null);
       setSalariedCertConfirmedId(null);
+      setSalariedSubmitReason('');
       refetchSalariedTimesheet();
       queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/my-tasks'] });
     },
@@ -1845,7 +1850,16 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
                     <Checkbox checked={salariedCertConfirmedId === salariedTimesheet.timesheet.id} onCheckedChange={(checked) => setSalariedCertConfirmedId(checked ? salariedTimesheet.timesheet.id : null)} className="mt-0.5 border-amber-500 data-[state=checked]:bg-amber-500" />
                     <span className="text-sm text-gray-800 font-medium leading-snug">I have reviewed this weekly timesheet and certify that it is complete and accurate.</span>
                   </label>
-                  <Button type="button" size="sm" disabled={salariedCertConfirmedId !== salariedTimesheet.timesheet.id || certifySalariedMutation.isPending} onClick={() => certifySalariedMutation.mutate(salariedTimesheet.timesheet.id)} className="bg-amber-600 hover:bg-amber-700 text-white">
+                  <div className="space-y-1">
+                    <Label>Submission Reason <span className="text-red-600">*</span></Label>
+                    <Textarea
+                      rows={3}
+                      value={salariedSubmitReason}
+                      onChange={(event) => setSalariedSubmitReason(event.target.value)}
+                      placeholder="Briefly explain why this timesheet is ready for supervisor review."
+                    />
+                  </div>
+                  <Button type="button" size="sm" disabled={salariedCertConfirmedId !== salariedTimesheet.timesheet.id || certifySalariedMutation.isPending || salariedSubmitReason.trim().length < 5} onClick={() => certifySalariedMutation.mutate(salariedTimesheet.timesheet.id)} className="bg-amber-600 hover:bg-amber-700 text-white">
                     {certifySalariedMutation.isPending ? 'Submitting...' : 'Submit to Supervisor'}
                   </Button>
                 </>
@@ -3350,7 +3364,7 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
                         </div>
                       </div>
                       <div className="space-y-1">
-                        <Label>Reason</Label>
+                        <Label>Reason <span className="text-red-600">*</span></Label>
                         <Textarea
                           rows={3}
                           value={punchCorrectionForm.reason}

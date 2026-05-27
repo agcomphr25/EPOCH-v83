@@ -562,9 +562,9 @@ export async function certifyTimesheetDay(
   const timesheet = await getTimesheet(timesheetId);
   if (!timesheet) return { error: "Timesheet not found", statusCode: 404 };
 
-  if (!isEditable(timesheet.status)) {
+  if (timesheet.status !== "draft" && timesheet.status !== "submitted") {
     return {
-      error: `Only draft timesheets can receive daily certifications (current status: ${timesheet.status})`,
+      error: `Only draft or supervisor-pending timesheets can receive daily certifications (current status: ${timesheet.status})`,
       statusCode: 409,
     };
   }

@@ -9,10 +9,10 @@ import {
   KioskPunchBody,
 } from "../../lib/timekeeping-zod";
 import { db as nativeDb, pool } from "../../../db";
-import { chargeCodes, employees, auditEvents, users, kioskPinRateLimits } from "../../../schema";
+import { chargeCodes, employees, auditEvents, users, kioskPinRateLimits, punchLedger } from "../../../schema";
 import { salariedTimesheetAuditTable } from "../../schema/timekeeping";
 import bcrypt from "bcryptjs";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc, isNull, lt, ne } from "drizzle-orm";
 import { z } from "zod";
 import { actorFromUser, logAction } from "../../services/timekeeping/audit.service";
 import type { SafeUser } from "../../services/timekeeping/audit.service";
@@ -756,6 +756,11 @@ router.post("/kiosk/punch", optionalAuth, h(async (req, res): Promise<void> => {
     else action = "clock_out";
   }
 
+  if ((action === "clock_in" || action === "break_end") && chargeCodeId == null) {
+    res.status(422).json({ error: "A charge code is required before clocking in." });
+    return;
+  }
+
   if (action === "clock_out" && dailyCertificationConfirmed !== true) {
     res.status(400).json({
       error: "Daily employee certification is required when punching out for the day.",
@@ -839,16 +844,37 @@ router.post("/kiosk/punch", optionalAuth, h(async (req, res): Promise<void> => {
         return;
       }
       entry = await ledger.closeSession(resolvedEmployeeId);
-      const dailyCertification = await certifyDailyTimeOnPunchOut(
-        resolvedEmployeeId,
-        entry?.clockOut ?? new Date(),
-        actorFromUser(req.user ?? null, req.ip ?? null),
-        { certificationConfirmed: true, source: "kiosk_punch_out" },
-      );
-      if (dailyCertification && "error" in dailyCertification) {
-        res.status(dailyCertification.statusCode).json({
-          error: dailyCertification.error,
+      try {
+        const dailyCertification = await certifyDailyTimeOnPunchOut(
+          resolvedEmployeeId,
+          entry?.clockOut ?? new Date(),
+          actorFromUser(req.user ?? null, req.ip ?? null),
+          { certificationConfirmed: true, source: "kiosk_punch_out" },
+        );
+        if (dailyCertification && "error" in dailyCertification) {
+          res.status(202).json({
+            entry,
+            action,
+            employeeId: resolvedEmployeeId,
+            message: `Goodbye, ${firstName}! You have clocked out, but the daily certification could not be recorded. Please notify your supervisor.`,
+            dailyCertificationRecorded: false,
+            certificationError: dailyCertification.error,
+            punchRecorded: true,
+            status: "clocked_out",
+          });
+          return;
+        }
+      } catch (error) {
+        console.error("[timekeeping] kiosk punch-out certification failed after punch was recorded", error);
+        res.status(202).json({
+          entry,
+          action,
+          employeeId: resolvedEmployeeId,
+          message: `Goodbye, ${firstName}! You have clocked out, but the daily certification could not be recorded. Please notify your supervisor.`,
+          dailyCertificationRecorded: false,
+          certificationError: error instanceof Error ? error.message : "Daily certification failed after punch-out.",
           punchRecorded: true,
+          status: "clocked_out",
         });
         return;
       }
@@ -1059,6 +1085,11 @@ router.post("/punches/my", authenticateToken, h(async (req, res): Promise<void> 
   const openSession = await ledger.getOpenSession(epochEmployeeId);
   const currentStatus = ledger.deriveStatus(openSession);
 
+  if ((type === "clock_in" || type === "break_end") && chargeCodeId == null) {
+    res.status(422).json({ error: "A charge code is required before clocking in." });
+    return;
+  }
+
   let entry;
 
   switch (type as string) {
@@ -1119,15 +1150,30 @@ router.post("/punches/my", authenticateToken, h(async (req, res): Promise<void> 
         return;
       }
       entry = await ledger.closeSession(epochEmployeeId);
-      const dailyCertification = await certifyDailyTimeOnPunchOut(
-        epochEmployeeId,
-        entry?.clockOut ?? new Date(),
-        actorFromUser(req.user ?? null, req.ip ?? null),
-        { certificationConfirmed: true, source: "portal_punch_out" },
-      );
-      if (dailyCertification && "error" in dailyCertification) {
-        res.status(dailyCertification.statusCode).json({
-          error: dailyCertification.error,
+      try {
+        const dailyCertification = await certifyDailyTimeOnPunchOut(
+          epochEmployeeId,
+          entry?.clockOut ?? new Date(),
+          actorFromUser(req.user ?? null, req.ip ?? null),
+          { certificationConfirmed: true, source: "portal_punch_out" },
+        );
+        if (dailyCertification && "error" in dailyCertification) {
+          res.status(202).json({
+            entry,
+            type,
+            dailyCertificationRecorded: false,
+            certificationError: dailyCertification.error,
+            punchRecorded: true,
+          });
+          return;
+        }
+      } catch (error) {
+        console.error("[timekeeping] portal punch-out certification failed after punch was recorded", error);
+        res.status(202).json({
+          entry,
+          type,
+          dailyCertificationRecorded: false,
+          certificationError: error instanceof Error ? error.message : "Daily certification failed after punch-out.",
           punchRecorded: true,
         });
         return;
@@ -1190,6 +1236,25 @@ router.post("/punches/my", authenticateToken, h(async (req, res): Promise<void> 
 // Zod schemas for admin punch_ledger routes
 const AdminPunchIdParams = z.object({ id: z.coerce.number().int().positive() });
 
+function mergePunchEditNote(existingNote: string, which: 'clockIn' | 'clockOut', editNote: string): string {
+  const otherField = which === 'clockIn' ? 'clockOut' : 'clockIn';
+  const otherMatch = existingNote.match(new RegExp(`\\[${otherField}\\]\\s([^|]+?)(?:\\s*\\|\\||$)`));
+  const otherPart = otherMatch ? `[${otherField}] ${otherMatch[1].trim()}` : null;
+  const thisPart = `[${which}] ${editNote}`;
+  return otherPart
+    ? (which === 'clockIn' ? `${thisPart} || ${otherPart}` : `${otherPart} || ${thisPart}`)
+    : thisPart;
+}
+
+function punchTypeLabelForError(type: 'clock_in' | 'clock_out' | 'break_start' | 'break_end'): string {
+  return {
+    clock_in: 'Clock In',
+    clock_out: 'Clock Out',
+    break_start: 'Break Start',
+    break_end: 'Break End',
+  }[type];
+}
+
 const AdminCreatePunchBody = z.object({
   employeeId: z.string(), // public.employees.id (numeric string) or employee code
   type: z.enum(['clock_in', 'clock_out', 'break_start', 'break_end']),
@@ -1202,6 +1267,7 @@ const AdminCreatePunchBody = z.object({
 
 const AdminUpdatePunchBody = z.object({
   which: z.enum(['clockIn', 'clockOut']),
+  punchType: z.enum(['clock_in', 'clock_out', 'break_start', 'break_end']).optional(),
   punchedAt: z.string().datetime({ message: "punchedAt must be an ISO-8601 datetime" }),
   chargeCodeId: z.number().int().optional().nullable(),
   travelerId: z.string().optional().nullable(),
@@ -1587,6 +1653,86 @@ const handleAdminPunchUpdate = h(async (req: Request, res: Response): Promise<vo
 
   const resolvedChargeCodeId = body.data.chargeCodeId !== undefined ? body.data.chargeCodeId : undefined;
   const ts = new Date(body.data.punchedAt);
+  const requestedPunchType = body.data.punchType;
+  const requestedLaborClass =
+    requestedPunchType === 'break_start' || requestedPunchType === 'break_end'
+      ? 'BREAK'
+      : requestedPunchType
+        ? 'REGULAR'
+        : undefined;
+
+  if (
+    requestedPunchType &&
+    body.data.which === 'clockOut' &&
+    !existing.clockOut &&
+    (requestedPunchType === 'clock_out' || requestedPunchType === 'break_end') &&
+    existing.source === 'ADMIN'
+  ) {
+    const [targetSession] = await nativeDb
+      .select()
+      .from(punchLedger)
+      .where(and(
+        eq(punchLedger.employeeId, existing.employeeId),
+        ne(punchLedger.id, existing.id),
+        eq(punchLedger.laborClass, requestedLaborClass ?? 'REGULAR'),
+        lt(punchLedger.clockIn, ts),
+        isNull(punchLedger.clockOut),
+      ))
+      .orderBy(desc(punchLedger.clockIn))
+      .limit(1);
+
+    if (!targetSession) {
+      res.status(409).json({
+        error: `Cannot convert this punch to ${punchTypeLabelForError(requestedPunchType)} because no open ${requestedLaborClass === 'BREAK' ? 'break' : 'work'} session was found before that time.`,
+      });
+      return;
+    }
+
+    const corrected = await storage.updatePunchLedgerEntry(targetSession.id, {
+      clockOut: ts,
+      ...(resolvedChargeCodeId !== undefined ? { chargeCodeId: resolvedChargeCodeId } : {}),
+      ...(body.data.travelerId !== undefined ? { travelerId: body.data.travelerId ?? null } : {}),
+      isEdited: true,
+      editNote: mergePunchEditNote(targetSession.editNote ?? '', 'clockOut', body.data.editNote),
+      updatedBy: (req.user as { employeeId?: number | null } | undefined)?.employeeId ?? null,
+      updatedByDisplayName: actor.email ?? null,
+    });
+
+    await storage.deletePunchLedgerEntry(existing.id);
+
+    await nativeDb.insert(auditEvents).values({
+      entityType: 'time_entry',
+      entityId: String(targetSession.id),
+      action: 'ENTRY_UPDATED',
+      actorId: actor.id ?? null,
+      actorName: actor.email ?? null,
+      actorRole: actor.role ?? null,
+      reason: body.data.editNote,
+      fieldsChanged: {
+        convertedPunchType: { from: existing.laborClass === 'BREAK' ? 'break_start' : 'clock_in', to: requestedPunchType },
+        clockOut: { from: targetSession.clockOut, to: body.data.punchedAt },
+        removedMistakenPunchLedgerId: { from: existing.id, to: null },
+      },
+      meta: {
+        source: 'punch_ledger',
+        correctionRoute: '/api/timekeeping/punches/:id',
+        conversion: 'admin_start_event_to_existing_session_end',
+      },
+      ipAddress: req.ip ?? null,
+      userAgent: req.headers['user-agent'] ?? null,
+    });
+
+    if (corrected) {
+      try {
+        await dualWriteUpdateAllocation(corrected);
+      } catch (err) {
+        console.warn('[dualWrite] Failed to update labor_allocations after admin punch type conversion', err);
+      }
+    }
+
+    res.json(corrected ?? targetSession);
+    return;
+  }
 
   // Guard: clock-out must not be set to a time before the session's clock-in.
   if (body.data.which === 'clockOut' && existing.clockIn && ts <= existing.clockIn) {
@@ -1602,19 +1748,13 @@ const handleAdminPunchUpdate = h(async (req: Request, res: Response): Promise<vo
     ? { clockIn: ts }
     : { clockOut: ts };
 
-  const otherField = body.data.which === 'clockIn' ? 'clockOut' : 'clockIn';
-  const existingNote = existing.editNote ?? '';
-  const otherMatch = existingNote.match(new RegExp(`\\[${otherField}\\]\\s([^|]+?)(?:\\s*\\|\\||$)`));
-  const otherPart = otherMatch ? `[${otherField}] ${otherMatch[1].trim()}` : null;
-  const thisPart = `[${body.data.which}] ${body.data.editNote}`;
-  const mergedEditNote = otherPart
-    ? (body.data.which === 'clockIn' ? `${thisPart} || ${otherPart}` : `${otherPart} || ${thisPart}`)
-    : thisPart;
+  const mergedEditNote = mergePunchEditNote(existing.editNote ?? '', body.data.which, body.data.editNote);
 
-  const updated = await storage.updatePunchLedgerEntry(p.data.id, {
+  let updated = await storage.updatePunchLedgerEntry(p.data.id, {
     ...timestampPatch,
     ...(resolvedChargeCodeId !== undefined ? { chargeCodeId: resolvedChargeCodeId } : {}),
     ...(body.data.travelerId !== undefined ? { travelerId: body.data.travelerId ?? null } : {}),
+    ...(requestedLaborClass !== undefined ? { laborClass: requestedLaborClass } : {}),
     isEdited: true,
     editNote: mergedEditNote,
     updatedBy: (req.user as { employeeId?: number | null } | undefined)?.employeeId ?? null,
@@ -1633,6 +1773,10 @@ const handleAdminPunchUpdate = h(async (req: Request, res: Response): Promise<vo
   }
   if (body.data.travelerId !== undefined) {
     fieldsChanged.travelerId = { from: existing.travelerId, to: body.data.travelerId ?? null };
+  }
+  if (requestedLaborClass && requestedLaborClass !== existing.laborClass) {
+    fieldsChanged.laborClass = { from: existing.laborClass, to: requestedLaborClass };
+    fieldsChanged.punchType = { from: existing.laborClass === 'BREAK' ? (body.data.which === 'clockIn' ? 'break_start' : 'break_end') : (body.data.which === 'clockIn' ? 'clock_in' : 'clock_out'), to: requestedPunchType };
   }
   await nativeDb.insert(auditEvents).values({
     entityType: 'time_entry',

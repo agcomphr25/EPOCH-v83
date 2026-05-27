@@ -487,6 +487,10 @@ function punchTypeLabel(t: string) {
   return map[t] ?? t;
 }
 
+function punchTypeUsesChargeCode(t: string) {
+  return t === 'clock_in' || t === 'break_end';
+}
+
 function punchSourceLabel(source: string | null | undefined) {
   const key = String(source ?? '').toUpperCase();
   const map: Record<string, string> = {
@@ -1756,6 +1760,7 @@ export default function TimeClockAdminPage() {
   const [editPayDate, setEditPayDate] = useState('');
   const [editPunchTime, setEditPunchTime] = useState('');
   const [editPunchAmPm, setEditPunchAmPm] = useState<'AM' | 'PM'>('AM');
+  const [editPunchType, setEditPunchType] = useState<Punch['type']>('clock_in');
   const [editNote, setEditNote] = useState('');
   const [editCostCode, setEditCostCode] = useState('');
 
@@ -1780,7 +1785,7 @@ export default function TimeClockAdminPage() {
   });
 
   const updatePunchMutation = useMutation({
-    mutationFn: ({ id, punchType, punchedAt, note, chargeCodeId }: { id: number; punchType: Punch['type']; punchedAt: string; note: string; chargeCodeId: number | null }) =>
+    mutationFn: ({ id, punchType, punchedAt, note, chargeCodeId }: { id: number; punchType: Punch['type']; punchedAt: string; note: string; chargeCodeId?: number | null }) =>
       runEditPunch({ id, punchType, punchedAt, note, chargeCodeId }, buildEditPunchFetchDep()),
     onSuccess: () => {
       toast({ title: 'Punch updated', description: 'The punch has been corrected.' });
@@ -1790,6 +1795,7 @@ export default function TimeClockAdminPage() {
       setEditPayDate('');
       setEditPunchTime('');
       setEditPunchAmPm('AM');
+      setEditPunchType('clock_in');
       setEditNote('');
       setEditCostCode('');
       queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/punches'] });
@@ -1819,6 +1825,7 @@ export default function TimeClockAdminPage() {
     setEditPayDate(dateStr);
     setEditPunchTime(timeStr);
     setEditPunchAmPm(ampm);
+    setEditPunchType(p.type);
     setEditNote('');
     setEditCostCode(p.costCode ?? '');
   }
@@ -4088,6 +4095,7 @@ export default function TimeClockAdminPage() {
                 onChange={e => setAddPunchAt(e.target.value)}
               />
             </div>
+            {punchTypeUsesChargeCode(addPunchType) && (
             <div className="space-y-1">
               <Label>Charge Code</Label>
               <Select value={addPunchCostCode || '__none__'} onValueChange={(v) => { setAddPunchCostCode(v === '__none__' ? '' : v); setAddPunchDcaaError(null); }}>
@@ -4113,6 +4121,7 @@ export default function TimeClockAdminPage() {
                 Required for clock-in punches on charge-code-tracked projects. DCAA policy is enforced.
               </p>
             </div>
+            )}
             <div className="space-y-1">
               <Label>Reason <span className="text-red-500">*</span></Label>
               <Textarea
@@ -4150,7 +4159,7 @@ export default function TimeClockAdminPage() {
                   employeeId: Number(addPunchEmployeeId),
                   type: addPunchType,
                   punchedAt: new Date(addPunchAt).toISOString(),
-                  costCode: addPunchCostCode,
+                  costCode: punchTypeUsesChargeCode(addPunchType) ? addPunchCostCode : '',
                   reason: addPunchReason.trim(),
                 });
               }}
@@ -4407,11 +4416,11 @@ export default function TimeClockAdminPage() {
       </Dialog>
 
       {/* Edit Punch Dialog */}
-      <Dialog open={!!editPunch} onOpenChange={(o) => { if (!o) { setEditPunch(null); setEditEmployeeName(''); setEditPunchDate(''); setEditPayDate(''); setEditPunchTime(''); setEditPunchAmPm('AM'); setEditNote(''); setEditCostCode(''); } }}>
+      <Dialog open={!!editPunch} onOpenChange={(o) => { if (!o) { setEditPunch(null); setEditEmployeeName(''); setEditPunchDate(''); setEditPayDate(''); setEditPunchTime(''); setEditPunchAmPm('AM'); setEditPunchType('clock_in'); setEditNote(''); setEditCostCode(''); } }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {editPunch?.type === 'clock_out' ? 'Clock-Out' : editPunch?.type === 'break_end' ? 'Break End' : editPunch?.type === 'break_start' ? 'Break Start' : 'Clock-In'}
+              {punchTypeLabel(editPunchType)}
               {editEmployeeName ? ` — ${editEmployeeName}` : ''}
             </DialogTitle>
           </DialogHeader>
@@ -4419,6 +4428,21 @@ export default function TimeClockAdminPage() {
             <p className="text-sm text-muted-foreground">
               An edit note is required for all punch corrections (DCAA audit trail). If you change the charge code, it must be in the active registry.
             </p>
+
+            <div className="space-y-1">
+              <Label>Punch Type</Label>
+              <Select value={editPunchType} onValueChange={(v) => setEditPunchType(v as Punch['type'])}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="clock_in">Clock In</SelectItem>
+                  <SelectItem value="clock_out">Clock Out</SelectItem>
+                  <SelectItem value="break_start">Break Start</SelectItem>
+                  <SelectItem value="break_end">Break End</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
             {/* Punch Date */}
             <div className="space-y-1">
@@ -4479,6 +4503,7 @@ export default function TimeClockAdminPage() {
             </div>
 
             {/* Charge Code */}
+            {punchTypeUsesChargeCode(editPunchType) && (
             <div className="space-y-1">
               <Label>Charge Code</Label>
               <Select value={editCostCode || '__none__'} onValueChange={(v) => setEditCostCode(v === '__none__' ? '' : v)}>
@@ -4502,6 +4527,7 @@ export default function TimeClockAdminPage() {
               </Select>
               <p className="text-xs text-muted-foreground">Only active charge codes are shown. Inactive codes will be rejected.</p>
             </div>
+            )}
 
             {/* Edit Note */}
             <div className="space-y-1">
@@ -4516,7 +4542,7 @@ export default function TimeClockAdminPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setEditPunch(null); setEditEmployeeName(''); setEditPunchDate(''); setEditPayDate(''); setEditPunchTime(''); setEditPunchAmPm('AM'); setEditNote(''); setEditCostCode(''); }}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setEditPunch(null); setEditEmployeeName(''); setEditPunchDate(''); setEditPayDate(''); setEditPunchTime(''); setEditPunchAmPm('AM'); setEditPunchType('clock_in'); setEditNote(''); setEditCostCode(''); }}>Cancel</Button>
             <Button
               disabled={!editNote.trim() || !editPunchDate || !editPunchTime || !editPayDate || updatePunchMutation.isPending}
               onClick={() => {
@@ -4538,16 +4564,18 @@ export default function TimeClockAdminPage() {
                   if (hours !== 12) hours += 12;
                 }
                 const combinedIso = new Date(`${editPunchDate}T${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:00`).toISOString();
-                const resolvedChargeCodeId = editCostCode
-                  ? (chargeCodes.find(cc => cc.code === editCostCode)?.id ?? null)
-                  : null;
+                const resolvedChargeCodeId = editPunchType === 'break_start'
+                  ? null
+                  : punchTypeUsesChargeCode(editPunchType)
+                  ? (editCostCode ? (chargeCodes.find(cc => cc.code === editCostCode)?.id ?? null) : null)
+                  : undefined;
                 let finalNote = editNote.trim();
                 if (editPayDate && editPayDate !== editPunchDate) {
                   finalNote = `${finalNote}\nPay Date: ${editPayDate}`;
                 }
                 updatePunchMutation.mutate({
                   id: editPunch.id,
-                  punchType: editPunch.type,
+                  punchType: editPunchType,
                   punchedAt: combinedIso,
                   note: finalNote,
                   chargeCodeId: resolvedChargeCodeId,

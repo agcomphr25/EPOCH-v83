@@ -16,7 +16,7 @@
 import { db } from '../../db';
 import { punchLedger, employees, chargeCodes } from '../../schema';
 import type { PunchLedgerEntry, InsertPunchLedger } from '../../schema';
-import { type SQL, eq, and, isNull, gte, lte, desc, sql } from 'drizzle-orm';
+import { type SQL, eq, and, isNull, gte, lte, desc, sql, or } from 'drizzle-orm';
 import { laborAllocationsEnabled } from './featureFlags';
 import {
   openAllocation,
@@ -88,6 +88,7 @@ export interface ListSessionsParams {
   employeeId?: number;
   from?: Date;
   to?: Date;
+  includeOverlapping?: boolean;
   openOnly?: boolean;
   limit?: number;
   offset?: number;
@@ -385,11 +386,20 @@ export async function listSessions(params: ListSessionsParams): Promise<PunchLed
   if (params.openOnly) {
     conditions.push(isNull(punchLedger.clockOut));
   }
-  if (params.from) {
-    conditions.push(gte(punchLedger.clockIn, params.from));
-  }
-  if (params.to) {
-    conditions.push(lte(punchLedger.clockIn, params.to));
+  if (params.includeOverlapping && (params.from || params.to)) {
+    if (params.to) {
+      conditions.push(lte(punchLedger.clockIn, params.to));
+    }
+    if (params.from) {
+      conditions.push(or(gte(punchLedger.clockOut, params.from), isNull(punchLedger.clockOut))!);
+    }
+  } else {
+    if (params.from) {
+      conditions.push(gte(punchLedger.clockIn, params.from));
+    }
+    if (params.to) {
+      conditions.push(lte(punchLedger.clockIn, params.to));
+    }
   }
 
   return db

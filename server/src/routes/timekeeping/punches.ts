@@ -380,7 +380,11 @@ router.post("/kiosk/punches/employee/:employeeId/active-shift", h(async (req, re
   todayEnd.setHours(23, 59, 59, 999);
   const from = bodyFrom && !Number.isNaN(bodyFrom.getTime()) ? bodyFrom : todayStart;
   const to = bodyTo && !Number.isNaN(bodyTo.getTime()) ? bodyTo : todayEnd;
-  const sessions = await ledger.listSessions({ employeeId, from, to });
+  const sessions = await ledger.listSessions({ employeeId, from, to, includeOverlapping: true });
+  const openSession = await ledger.getOpenSession(employeeId);
+  if (openSession && !sessions.some((session: any) => session.id === openSession.id)) {
+    sessions.unshift(openSession);
+  }
   res.json({
     employeeId,
     from: from.toISOString(),

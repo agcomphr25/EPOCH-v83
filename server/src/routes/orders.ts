@@ -2113,7 +2113,7 @@ router.get('/:orderId/payments', async (req: Request, res: Response) => {
 });
 
 // Add a new payment to an order
-router.post('/:orderId/payments', async (req: Request, res: Response) => {
+router.post('/:orderId/payments', requirePermission('finance.manage_payments'), async (req: Request, res: Response) => {
   try {
     const orderId = req.params.orderId;
     console.log('Creating payment for order:', orderId);
@@ -2156,7 +2156,7 @@ router.post('/:orderId/payments', async (req: Request, res: Response) => {
 });
 
 // Update a payment
-router.put('/payments/:paymentId', async (req: Request, res: Response) => {
+router.put('/payments/:paymentId', requirePermission('finance.manage_payments'), async (req: Request, res: Response) => {
   try {
     const paymentId = parseInt(req.params.paymentId);
 
@@ -2192,7 +2192,7 @@ router.put('/payments/:paymentId', async (req: Request, res: Response) => {
 });
 
 // Void a payment. The original row is preserved and a reversal row offsets it.
-router.delete('/payments/:paymentId', async (req: Request, res: Response) => {
+router.delete('/payments/:paymentId', requirePermission('finance.manage_payments'), async (req: Request, res: Response) => {
   try {
     const paymentId = parseInt(req.params.paymentId);
     const voidReason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';

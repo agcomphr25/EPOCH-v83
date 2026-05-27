@@ -16,6 +16,7 @@ import { chargeCard, voidTransaction, isConfigured as isAcceptBlueConfigured } f
 import { auditService } from '../services/auditService';
 import { createOrUpdateP1PaymentJournalEntry } from '../services/p1PaymentPostingService';
 import { authenticateToken, requireRole } from '../../middleware/auth';
+import { requirePermission } from '../../middleware/requirePermission';
 
 const router = Router();
 
@@ -513,7 +514,7 @@ const batchPaymentSchema = z.object({
     .min(1),
 });
 
-router.post('/batch', async (req, res) => {
+router.post('/batch', requirePermission('finance.manage_payments'), async (req, res) => {
   try {
     const batchData = batchPaymentSchema.parse(req.body);
 
@@ -692,7 +693,7 @@ const bulkLivePaymentSchema = z.object({
     .min(1, 'At least one order must be selected'),
 });
 
-router.post('/bulk-live', async (req, res) => {
+router.post('/bulk-live', requirePermission('finance.manage_payments'), async (req, res) => {
   try {
     console.log('🔄 Bulk live payment request received');
     const paymentData = bulkLivePaymentSchema.parse(req.body);

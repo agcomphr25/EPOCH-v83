@@ -279,6 +279,8 @@ const ROLE_ROUTE_ACCESS: Record<string, string[]> = {
  */
 const ROUTE_CAPABILITY_ACCESS: Record<string, string> = {
   '/time-clock-admin': 'timekeeping.time_clock_admin.access',
+  '/finance/bulk-payment': 'finance.manage_payments',
+  '/finance/bulk-payment-history': 'finance.view',
 };
 
 const API_TO_FRONTEND_ROUTE_MAPPING: Record<string, string[]> = {

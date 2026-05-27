@@ -256,6 +256,9 @@ export const REQUIRED_CAPABILITY_KEYS: readonly string[] = [
  *   Routes:     POST /api/ar-payments/
  *               POST /api/ar-payments/:id/allocate
  *               DELETE /api/ar-payments/:id
+ *               POST /api/orders/bulk-payment
+ *               POST /api/payments/batch
+ *               POST /api/payments/bulk-live
  *   Seeded to:  ADMIN, OWNER, MANAGER
  *
  * inventory.adjust

@@ -1899,7 +1899,7 @@ export type InsertLaborBudgetOverride = z.infer<typeof insertLaborBudgetOverride
 // ── UNIFIED PUNCH LEDGER (Task #1186) ─────────────────────────────────────────
 // Single source of truth for ALL labor events: Kiosk, Traveler scan, Portal.
 // Replaces the dual-system: public.time_clock_entries + timekeeping.punches.
-// source enum: KIOSK | TRAVELER | PORTAL | TIMETRAKGO_IMPORT
+// source enum: KIOSK | TRAVELER | PORTAL | TIMETRAKGO_IMPORT | ADMIN
 // laborClass: REGULAR | BREAK
 // ─────────────────────────────────────────────────────────────────────────────
 export const punchLedger = pgTable('punch_ledger', {
@@ -1913,7 +1913,7 @@ export const punchLedger = pgTable('punch_ledger', {
   clockOut: timestamp('clock_out', { withTimezone: true }),
 
   // Capture source
-  source: text('source').notNull().default('KIOSK'), // KIOSK | TRAVELER | PORTAL | TIMETRAKGO_IMPORT
+  source: text('source').notNull().default('KIOSK'), // KIOSK | TRAVELER | PORTAL | TIMETRAKGO_IMPORT | ADMIN
 
   // Labor attribution (nullable FKs — no free-text charge codes)
   travelerId: text('traveler_id').references((): AnyPgColumn => travelers.id),

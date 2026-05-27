@@ -3973,6 +3973,7 @@ export class DatabaseStorage implements IStorage {
         customerPO: allOrders.customerPO,
         fbOrderNumber: allOrders.fbOrderNumber,
         agrOrderDetails: allOrders.agrOrderDetails,
+        isFlattop: allOrders.isFlattop,
         isCustomOrder: allOrders.isCustomOrder,
         modelId: allOrders.modelId,
         handedness: allOrders.handedness,
@@ -4063,7 +4064,7 @@ export class DatabaseStorage implements IStorage {
       customer: customerMap.get(order.customerId || '') || 'Unknown Customer',
       // Add product field for frontend compatibility
       product: order.modelId || 'Unknown Product',
-      isFlattop: false, // Add missing field
+      isFlattop: order.isFlattop || false,
     })) as any;
   }
 

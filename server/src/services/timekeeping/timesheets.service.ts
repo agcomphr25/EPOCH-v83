@@ -80,6 +80,7 @@ export interface RunningTimesheetView {
   periodStart: string;
   periodEnd: string;
   generatedAt: string;
+  normalHoursLimit: number;
   totalHours: number;
   regularHours: number;
   overtimeHours: number;
@@ -144,6 +145,8 @@ export async function getRunningTimesheetForEmployee(
   const periodStartDate = midnightInTZ(periodStart, tz);
   const nextDayAfterEnd = addDays(periodEnd, 1);
   const periodEndDate = new Date(midnightInTZ(nextDayAfterEnd, tz).getTime() - 1);
+  const periodDayCount = Math.max(1, Math.round((new Date(`${periodEnd}T12:00:00Z`).getTime() - new Date(`${periodStart}T12:00:00Z`).getTime()) / 86_400_000) + 1);
+  const normalHoursLimit = roundHours((settings.standardWorkWeekHours || settings.overtimeThresholdWeekly) * (periodDayCount / 7));
   const now = new Date();
 
   const sessions = await db
@@ -251,6 +254,7 @@ export async function getRunningTimesheetForEmployee(
     periodStart,
     periodEnd,
     generatedAt: now.toISOString(),
+    normalHoursLimit,
     totalHours,
     regularHours,
     overtimeHours: roundHours(overtimeHours),

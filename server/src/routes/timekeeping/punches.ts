@@ -16,7 +16,7 @@ import { eq, and, desc, isNull, lt, ne } from "drizzle-orm";
 import { z } from "zod";
 import { actorFromUser, logAction } from "../../services/timekeeping/audit.service";
 import type { SafeUser } from "../../services/timekeeping/audit.service";
-import { certifyDailyTimeOnPunchOut, findFinalizedTimesheetForPunch, isInFinalizedTimesheetPeriod, findPayrollApprovedSalariedTimesheetForPunch } from "../../services/timekeeping/timesheets.service";
+import { certifyDailyTimeOnPunchOut, findFinalizedTimesheetForPunch, getRunningTimesheetForEmployee, isInFinalizedTimesheetPeriod, findPayrollApprovedSalariedTimesheetForPunch } from "../../services/timekeeping/timesheets.service";
 import { checkActivePTOForEmployee } from "../../services/timekeeping/timeoff.service";
 import { authenticateToken, requireRole, optionalAuth } from "../../../middleware/auth";
 import * as ledger from "../../lib/punchLedger";
@@ -27,6 +27,105 @@ import { notificationManager } from "../../services/notificationManager";
 import * as punchCorrections from "../../services/timekeeping/punchCorrections.service";
 
 const router: IRouter = Router();
+
+type NormalHoursProgress = {
+  periodStart: string;
+  periodEnd: string;
+  normalHoursLimit: number;
+  totalHours: number;
+  normalHours: number;
+  overtimeHours: number;
+  remainingNormalHours: number;
+  percentOfNormal: number;
+  warningLevel: "none" | "watch" | "near" | "over";
+  message: string | null;
+};
+
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+const PAY_PERIOD_ANCHOR_UTC = Date.UTC(2024, 0, 1);
+const PAY_PERIOD_DAYS = 14;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function ymdFromUtc(utcMs: number): string {
+  const date = new Date(utcMs);
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+}
+
+function getCurrentPayPeriod(value: Date = new Date()): { start: string; end: string } {
+  const inputUTC = Date.UTC(value.getFullYear(), value.getMonth(), value.getDate());
+  const daysSinceAnchor = Math.round((inputUTC - PAY_PERIOD_ANCHOR_UTC) / DAY_MS);
+  const periodIndex = Math.floor(daysSinceAnchor / PAY_PERIOD_DAYS);
+  const startUTC = PAY_PERIOD_ANCHOR_UTC + periodIndex * PAY_PERIOD_DAYS * DAY_MS;
+  return {
+    start: ymdFromUtc(startUTC),
+    end: ymdFromUtc(startUTC + (PAY_PERIOD_DAYS - 1) * DAY_MS),
+  };
+}
+
+function buildNormalHoursProgress(running: Awaited<ReturnType<typeof getRunningTimesheetForEmployee>>): NormalHoursProgress {
+  const normalHoursLimit = Math.max(0.01, Number(running.normalHoursLimit || 40));
+  const totalHours = round2(running.totalHours);
+  const normalHours = round2(Math.min(totalHours, normalHoursLimit));
+  const overtimeHours = round2(Math.max(0, totalHours - normalHoursLimit));
+  const remainingNormalHours = round2(Math.max(0, normalHoursLimit - totalHours));
+  const percentOfNormal = Math.min(100, Math.round((totalHours / normalHoursLimit) * 100));
+  const warningLevel =
+    totalHours >= normalHoursLimit ? "over"
+      : totalHours >= normalHoursLimit * 0.975 ? "near"
+        : totalHours >= normalHoursLimit * 0.9 ? "near"
+          : totalHours >= normalHoursLimit * 0.8 ? "watch"
+            : "none";
+  const message =
+    warningLevel === "over"
+      ? `You are ${round2(totalHours - normalHoursLimit).toFixed(2)} hours over normal hours for this pay period.`
+      : warningLevel === "near"
+        ? `You have ${remainingNormalHours.toFixed(2)} normal hours remaining this pay period.`
+        : warningLevel === "watch"
+          ? `You are at ${normalHours.toFixed(2)} of ${normalHoursLimit.toFixed(2)} normal hours this pay period.`
+          : null;
+
+  return {
+    periodStart: running.periodStart,
+    periodEnd: running.periodEnd,
+    normalHoursLimit: round2(normalHoursLimit),
+    totalHours,
+    normalHours,
+    overtimeHours,
+    remainingNormalHours,
+    percentOfNormal,
+    warningLevel,
+    message,
+  };
+}
+
+async function getNormalHoursProgress(employeeId: number): Promise<NormalHoursProgress> {
+  const period = getCurrentPayPeriod();
+  return buildNormalHoursProgress(await getRunningTimesheetForEmployee(employeeId, period.start, period.end));
+}
+
+async function notifyNormalHoursThresholdCrossing(employeeId: number, employeeName: string, before: NormalHoursProgress | null, after: NormalHoursProgress) {
+  const rank = { none: 0, watch: 1, near: 2, over: 3 } as const;
+  const crossedWarning = rank[after.warningLevel] > rank[before?.warningLevel ?? "none"] && after.warningLevel !== "none";
+  if (!crossedWarning) return;
+
+  const adminRows = await nativeDb
+    .select({ id: users.id })
+    .from(users)
+    .where(and(eq(users.isActive, true), ne(users.role, "EMPLOYEE")));
+  const targetUserIds = adminRows.map((row) => row.id);
+  if (targetUserIds.length === 0) return;
+
+  notificationManager.sendToUsers(targetUserIds, {
+    type: "timekeeping_normal_hours_threshold",
+    title: after.warningLevel === "over" ? "Normal hours exceeded" : "Employee nearing normal hours",
+    message: `${employeeName} is at ${after.totalHours.toFixed(2)} of ${after.normalHoursLimit.toFixed(2)} normal hours for the current pay period.`,
+    data: { employeeId, employeeName, periodProgress: after },
+    timestamp: new Date().toISOString(),
+  });
+}
 
 let chargeCodeAssignmentTableReady: Promise<void> | null = null;
 
@@ -340,12 +439,14 @@ router.get("/kiosk/punches/employee/:employeeId/current", h(async (req, res): Pr
   const openSession = await ledger.getOpenSession(id);
   const status = ledger.deriveStatus(openSession);
   const hoursToday = await ledger.computeHoursToday(id);
+  const periodProgress = await getNormalHoursProgress(id);
 
   res.json({
     employeeId: id,
     status,
     clockedInAt: openSession?.clockIn?.toISOString() ?? null,
     hoursToday,
+    periodProgress,
     openEntry: openSession ?? null,
   });
 }));
@@ -556,6 +657,7 @@ router.post("/kiosk/identify", h(async (req, res): Promise<void> => {
       const openSession = await ledger.getOpenSession(emp.id);
       const status = ledger.deriveStatus(openSession);
       const hoursToday = await ledger.computeHoursToday(emp.id);
+      const periodProgress = await getNormalHoursProgress(emp.id);
 
       res.json({
         id: emp.id,
@@ -567,6 +669,7 @@ router.post("/kiosk/identify", h(async (req, res): Promise<void> => {
           status,
           clockedInAt: openSession?.clockIn?.toISOString() ?? null,
           hoursToday,
+          periodProgress,
         },
       });
       return;
@@ -747,6 +850,7 @@ router.post("/kiosk/punch", optionalAuth, h(async (req, res): Promise<void> => {
   // Determine the action to take
   const openSession = await ledger.getOpenSession(resolvedEmployeeId);
   const currentStatus = ledger.deriveStatus(openSession);
+  const periodProgressBefore = await getNormalHoursProgress(resolvedEmployeeId);
 
   // Resolve action: use requestedAction if provided, otherwise infer from status.
   let action = requestedAction;
@@ -852,11 +956,14 @@ router.post("/kiosk/punch", optionalAuth, h(async (req, res): Promise<void> => {
           { certificationConfirmed: true, source: "kiosk_punch_out" },
         );
         if (dailyCertification && "error" in dailyCertification) {
+          const periodProgress = await getNormalHoursProgress(resolvedEmployeeId);
+          await notifyNormalHoursThresholdCrossing(resolvedEmployeeId, `${firstName} ${lastName}`.trim(), periodProgressBefore, periodProgress);
           res.status(202).json({
             entry,
             action,
             employeeId: resolvedEmployeeId,
             message: `Goodbye, ${firstName}! You have clocked out, but the daily certification could not be recorded. Please notify your supervisor.`,
+            periodProgress,
             dailyCertificationRecorded: false,
             certificationError: dailyCertification.error,
             punchRecorded: true,
@@ -866,11 +973,14 @@ router.post("/kiosk/punch", optionalAuth, h(async (req, res): Promise<void> => {
         }
       } catch (error) {
         console.error("[timekeeping] kiosk punch-out certification failed after punch was recorded", error);
+        const periodProgress = await getNormalHoursProgress(resolvedEmployeeId);
+        await notifyNormalHoursThresholdCrossing(resolvedEmployeeId, `${firstName} ${lastName}`.trim(), periodProgressBefore, periodProgress);
         res.status(202).json({
           entry,
           action,
           employeeId: resolvedEmployeeId,
           message: `Goodbye, ${firstName}! You have clocked out, but the daily certification could not be recorded. Please notify your supervisor.`,
+          periodProgress,
           dailyCertificationRecorded: false,
           certificationError: error instanceof Error ? error.message : "Daily certification failed after punch-out.",
           punchRecorded: true,
@@ -951,11 +1061,20 @@ router.post("/kiosk/punch", optionalAuth, h(async (req, res): Promise<void> => {
     timestamp: new Date().toISOString(),
   });
 
+  const periodProgress = await getNormalHoursProgress(resolvedEmployeeId);
+  await notifyNormalHoursThresholdCrossing(
+    resolvedEmployeeId,
+    `${firstName} ${lastName}`.trim(),
+    periodProgressBefore,
+    periodProgress,
+  );
+
   res.status(201).json({
     entry,
     action,
     employeeId: resolvedEmployeeId,
     message,
+    periodProgress,
     dailyCertificationRecorded: action === "clock_out",
     status: ledger.deriveStatus(action === "clock_out" ? null : entry),
   });
@@ -982,6 +1101,7 @@ router.get("/punches/my/current", authenticateToken, h(async (req, res): Promise
   const openSession = await ledger.getOpenSession(epochEmployeeId);
   const status = ledger.deriveStatus(openSession);
   const hoursToday = await ledger.computeHoursToday(epochEmployeeId);
+  const periodProgress = await getNormalHoursProgress(epochEmployeeId);
   const openSessionAgeHours = openSession
     ? Math.max(0, (Date.now() - new Date(openSession.clockIn).getTime()) / 3_600_000)
     : 0;
@@ -992,6 +1112,7 @@ router.get("/punches/my/current", authenticateToken, h(async (req, res): Promise
     status,
     clockedInAt: openSession?.clockIn?.toISOString() ?? null,
     hoursToday,
+    periodProgress,
     openSessionAgeHours,
     openSessionRequiresReview,
     openEntry: openSession ?? null,
@@ -1084,6 +1205,7 @@ router.post("/punches/my", authenticateToken, h(async (req, res): Promise<void> 
 
   const openSession = await ledger.getOpenSession(epochEmployeeId);
   const currentStatus = ledger.deriveStatus(openSession);
+  const periodProgressBefore = await getNormalHoursProgress(epochEmployeeId);
 
   if ((type === "clock_in" || type === "break_end") && chargeCodeId == null) {
     res.status(422).json({ error: "A charge code is required before clocking in." });
@@ -1158,9 +1280,12 @@ router.post("/punches/my", authenticateToken, h(async (req, res): Promise<void> 
           { certificationConfirmed: true, source: "portal_punch_out" },
         );
         if (dailyCertification && "error" in dailyCertification) {
+          const periodProgress = await getNormalHoursProgress(epochEmployeeId);
+          await notifyNormalHoursThresholdCrossing(epochEmployeeId, req.user?.username ?? `Employee ${epochEmployeeId}`, periodProgressBefore, periodProgress);
           res.status(202).json({
             entry,
             type,
+            periodProgress,
             dailyCertificationRecorded: false,
             certificationError: dailyCertification.error,
             punchRecorded: true,
@@ -1169,9 +1294,12 @@ router.post("/punches/my", authenticateToken, h(async (req, res): Promise<void> 
         }
       } catch (error) {
         console.error("[timekeeping] portal punch-out certification failed after punch was recorded", error);
+        const periodProgress = await getNormalHoursProgress(epochEmployeeId);
+        await notifyNormalHoursThresholdCrossing(epochEmployeeId, req.user?.username ?? `Employee ${epochEmployeeId}`, periodProgressBefore, periodProgress);
         res.status(202).json({
           entry,
           type,
+          periodProgress,
           dailyCertificationRecorded: false,
           certificationError: error instanceof Error ? error.message : "Daily certification failed after punch-out.",
           punchRecorded: true,
@@ -1223,7 +1351,15 @@ router.post("/punches/my", authenticateToken, h(async (req, res): Promise<void> 
     timestamp: new Date().toISOString(),
   });
 
-  res.status(201).json({ entry, type, dailyCertificationRecorded: type === "clock_out" });
+  const periodProgress = await getNormalHoursProgress(epochEmployeeId);
+  await notifyNormalHoursThresholdCrossing(
+    epochEmployeeId,
+    req.user?.username ?? `Employee ${epochEmployeeId}`,
+    periodProgressBefore,
+    periodProgress,
+  );
+
+  res.status(201).json({ entry, type, periodProgress, dailyCertificationRecorded: type === "clock_out" });
 }));
 
 // ---------------------------------------------------------------------------

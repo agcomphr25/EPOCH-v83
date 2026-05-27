@@ -116,6 +116,7 @@ type RunningTimesheet = {
   periodStart: string;
   periodEnd: string;
   generatedAt: string;
+  normalHoursLimit: number;
   totalHours: number;
   regularHours: number;
   overtimeHours: number;
@@ -123,6 +124,19 @@ type RunningTimesheet = {
   hasOpenSession: boolean;
   persistedTimesheet: HourlyTimesheet | null;
   days: RunningTimesheetDay[];
+};
+
+type NormalHoursProgress = {
+  periodStart: string;
+  periodEnd: string;
+  normalHoursLimit: number;
+  totalHours: number;
+  normalHours: number;
+  overtimeHours: number;
+  remainingNormalHours: number;
+  percentOfNormal: number;
+  warningLevel: 'none' | 'watch' | 'near' | 'over';
+  message: string | null;
 };
 
 type DailySignOffStatus = {
@@ -372,6 +386,70 @@ function formatPayPeriodLabel(start: string, end: string): string {
   return `${startDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} - ${endDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`;
 }
 
+function buildNormalHoursProgress(timesheet?: RunningTimesheet | null): NormalHoursProgress | null {
+  if (!timesheet) return null;
+  const limit = Math.max(0.01, timesheet.normalHoursLimit || 40);
+  const totalHours = Math.round(timesheet.totalHours * 100) / 100;
+  const remainingNormalHours = Math.round(Math.max(0, limit - totalHours) * 100) / 100;
+  const warningLevel: NormalHoursProgress['warningLevel'] =
+    totalHours >= limit ? 'over'
+      : totalHours >= limit * 0.9 ? 'near'
+        : totalHours >= limit * 0.8 ? 'watch'
+          : 'none';
+  const message = warningLevel === 'over'
+    ? `You are ${(totalHours - limit).toFixed(2)} hours over normal hours for this pay period.`
+    : warningLevel === 'near'
+      ? `You have ${remainingNormalHours.toFixed(2)} normal hours remaining this pay period.`
+      : warningLevel === 'watch'
+        ? `You are at ${totalHours.toFixed(2)} of ${limit.toFixed(2)} normal hours this pay period.`
+        : null;
+
+  return {
+    periodStart: timesheet.periodStart,
+    periodEnd: timesheet.periodEnd,
+    normalHoursLimit: Math.round(limit * 100) / 100,
+    totalHours,
+    normalHours: Math.round(Math.min(totalHours, limit) * 100) / 100,
+    overtimeHours: Math.round(Math.max(0, totalHours - limit) * 100) / 100,
+    remainingNormalHours,
+    percentOfNormal: Math.min(100, Math.round((totalHours / limit) * 100)),
+    warningLevel,
+    message,
+  };
+}
+
+function NormalHoursProgressCard({ progress }: { progress?: NormalHoursProgress | null }) {
+  if (!progress) return null;
+  const color = progress.warningLevel === 'over'
+    ? 'bg-red-500'
+    : progress.warningLevel === 'near'
+      ? 'bg-amber-500'
+      : 'bg-blue-500';
+  return (
+    <div className="rounded-lg border bg-white p-4 space-y-3">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div>
+          <p className="text-xs uppercase tracking-widest text-muted-foreground">Pay Period Normal Hours</p>
+          <p className="text-lg font-semibold text-gray-900">
+            {progress.normalHours.toFixed(2)} / {progress.normalHoursLimit.toFixed(2)} hours
+          </p>
+        </div>
+        <Badge variant={progress.warningLevel === 'over' ? 'destructive' : progress.warningLevel === 'none' ? 'outline' : 'secondary'}>
+          {progress.remainingNormalHours.toFixed(2)} normal hours left
+        </Badge>
+      </div>
+      <div className="h-3 overflow-hidden rounded-full bg-muted">
+        <div className={`h-full rounded-full ${color}`} style={{ width: `${Math.min(100, progress.percentOfNormal)}%` }} />
+      </div>
+      {progress.message && (
+        <p className={`text-sm font-medium ${progress.warningLevel === 'over' ? 'text-red-700' : 'text-amber-700'}`}>
+          {progress.message}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function emptySalariedLineForm(date: string): SalariedLineForm {
   return {
     id: null,
@@ -445,6 +523,7 @@ interface MyPunchStatus {
   lastPunch?: { type: string; punchedAt: string } | null;
   clockedInAt: string | null;
   hoursToday: number;
+  periodProgress?: NormalHoursProgress | null;
   openSessionAgeHours?: number;
   openSessionRequiresReview?: boolean;
   openEntry?: Record<string, unknown> | null;
@@ -734,6 +813,7 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
     enabled: activeTab === 'my-timesheets' && !!currentUser && !isSalariedEmployee,
     refetchInterval: 30000,
   });
+  const normalHoursProgress = buildNormalHoursProgress(runningTimesheet);
 
   const {
     data: dailySignOffStatus,
@@ -1180,7 +1260,13 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
       }
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data: { type?: string; periodProgress?: NormalHoursProgress | null }) => {
+      if (data.type === 'clock_out' && data.periodProgress) {
+        toast({
+          title: 'Clock out recorded',
+          description: `${data.periodProgress.normalHours.toFixed(2)} of ${data.periodProgress.normalHoursLimit.toFixed(2)} normal hours used this pay period. ${data.periodProgress.remainingNormalHours.toFixed(2)} normal hours remaining.`,
+        });
+      }
       setSelectedClockInChargeCode('');
       setDailyPunchOutConfirmed(false);
       setShowDailyPunchOutCertification(false);
@@ -3006,6 +3092,10 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
                       )}
                     </div>
 
+                    <div className="mx-auto max-w-xl">
+                      <NormalHoursProgressCard progress={punchStatus.periodProgress} />
+                    </div>
+
                     {(punchStatus.status === 'clocked_out' || punchStatus.status === 'on_break') && (
                       <div className="mx-auto max-w-xl rounded-lg border bg-white p-4 space-y-2">
                         <Label htmlFor="portal-clock-in-charge-code">Charge code</Label>
@@ -3380,6 +3470,7 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
                     )}
                   </div>
                 </div>
+                <NormalHoursProgressCard progress={normalHoursProgress} />
 
                 {runningTimesheetLoading ? (
                   <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">

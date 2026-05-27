@@ -1599,6 +1599,7 @@ export interface IStorage {
     clockOut?: Date | null;
     chargeCodeId?: number | null;
     travelerId?: string | null;
+    laborClass?: string;
     isEdited?: boolean;
     editNote?: string | null;
     updatedBy?: number | null;
@@ -8651,6 +8652,7 @@ export class DatabaseStorage implements IStorage {
         ...(updates.clockOut !== undefined ? { clockOut: updates.clockOut } : {}),
         ...(updates.chargeCodeId !== undefined ? { chargeCodeId: updates.chargeCodeId, chargeCode: derivedChargeCode ?? null } : {}),
         ...(updates.travelerId !== undefined ? { travelerId: updates.travelerId } : {}),
+        ...(updates.laborClass !== undefined ? { laborClass: updates.laborClass } : {}),
         ...(updates.isEdited !== undefined ? { isEdited: updates.isEdited } : {}),
         ...(updates.editNote !== undefined ? { editNote: updates.editNote } : {}),
         ...(updates.updatedBy !== undefined ? { updatedBy: updates.updatedBy } : {}),

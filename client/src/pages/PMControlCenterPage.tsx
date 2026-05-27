@@ -2124,7 +2124,7 @@ function MaterialBudgetTab({ projectId }: { projectId: string }) {
         />
         <KpiCard
           icon={<TrendingUp className="h-4 w-4" />}
-          label="Committed"
+          label="Approved Received"
           value={fmtCurrency(summary.committedCost)}
           sub={summary.pendingReceivedCost ? `${fmtCurrency(summary.pendingReceivedCost)} pending receipt` : undefined}
           colorClass="text-purple-600"
@@ -2667,7 +2667,7 @@ export default function PMControlCenterPage() {
                 icon={<Package className="h-4 w-4" />}
                 label="Material Cost"
                 value={fmtCurrency(summary.consumedMaterialCost)}
-                sub={`${fmtCurrency(summary.committedMaterialCost)} committed`}
+                sub={`${fmtCurrency(summary.committedMaterialCost)} approved received`}
                 colorClass="text-indigo-600"
               />
               <KpiCard

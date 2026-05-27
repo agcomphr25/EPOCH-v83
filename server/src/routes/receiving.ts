@@ -326,7 +326,17 @@ async function syncProjectReceivedMaterial(unitId: number, user: AuthUser, notes
       ru.target_project_id::text AS "targetProjectId",
       ru.material_lot_id::text AS "materialLotId",
       ru.quantity::numeric AS quantity,
-      COALESCE(vpi.purchase_unit_price, vpi.unit_price, ii.unit_cost, 0)::numeric AS "unitCost"
+      COALESCE(
+        NULLIF(vpi.purchase_unit_price, 0),
+        CASE
+          WHEN NULLIF(vpi.conversion_factor, 0) IS NOT NULL AND NULLIF(vpi.unit_price, 0) IS NOT NULL
+            THEN vpi.unit_price / vpi.conversion_factor
+          ELSE NULL
+        END,
+        NULLIF(vpi.unit_price, 0),
+        ii.unit_cost,
+        0
+      )::numeric AS "unitCost"
     FROM received_units ru
     JOIN receipt_lines rl ON rl.id = ru.receipt_line_id
     LEFT JOIN vendor_po_items vpi ON vpi.id = rl.vendor_po_item_id

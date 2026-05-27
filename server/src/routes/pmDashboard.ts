@@ -72,11 +72,6 @@ interface LaborActualRow {
   actualLaborHours: string;
 }
 
-interface MaterialCostRow {
-  committedMaterialCost: string;
-  plannedMaterialCost: string;
-}
-
 interface ConsumedCostRow {
   consumedMaterialCost: string;
 }
@@ -196,9 +191,7 @@ interface CertRow {
   expiresDate: string | null;
 }
 
-interface MaterialSummaryRow {
-  plannedCost: string;
-  committedCost: string;
+interface MaterialConsumedCostRow {
   consumedCost: string;
 }
 
@@ -289,6 +282,7 @@ async function canReadProjectReceivedMaterials(): Promise<boolean> {
     await publicTableExists('received_units') &&
     await publicTableExists('receipts') &&
     await publicTableExists('receipt_lines') &&
+    await publicTableExists('vendor_po_items') &&
     await publicColumnsExist('project_received_materials', [
       'id',
       'project_id',
@@ -309,7 +303,13 @@ async function canReadProjectReceivedMaterials(): Promise<boolean> {
       'barcode',
     ]) &&
     await publicColumnsExist('receipts', ['id', 'receipt_number']) &&
-    await publicColumnsExist('receipt_lines', ['id', 'ag_part_number', 'description'])
+    await publicColumnsExist('receipt_lines', ['id', 'vendor_po_item_id', 'ag_part_number', 'description']) &&
+    await publicColumnsExist('vendor_po_items', [
+      'id',
+      'purchase_unit_price',
+      'unit_price',
+      'conversion_factor',
+    ])
   );
 }
 
@@ -335,6 +335,7 @@ async function getProductionWorkOrderMaterialBudgetExpression() {
   if (hasProductionWorkOrderMaterialBudgetColumn) {
     return `
         NULLIF(material_budget_amount::numeric, 0),
+        NULLIF(wizard_data->'step5'->>'materialSpendCap', '')::numeric,
         NULLIF(wizard_data->>'materialBudgetAmount', '')::numeric,
         NULLIF(wizard_data->>'materialBudget', '')::numeric,
         0
@@ -342,6 +343,7 @@ async function getProductionWorkOrderMaterialBudgetExpression() {
   }
 
   return `
+        NULLIF(wizard_data->'step5'->>'materialSpendCap', '')::numeric,
         NULLIF(wizard_data->>'materialBudgetAmount', '')::numeric,
         NULLIF(wizard_data->>'materialBudget', '')::numeric,
         0
@@ -1072,24 +1074,6 @@ router.get('/:projectId/summary', h(async (req, res) => {
       )
   `, [projectId]);
 
-  const materialRes = await pool.query<MaterialCostRow>(`
-    SELECT
-      COALESCE(SUM(mlr.quantity_reserved * COALESCE(ii.unit_cost, 0)), 0) AS "committedMaterialCost",
-      (
-        SELECT COALESCE(SUM(
-          COALESCE(NULLIF(wo.wizard_data->'step5'->>'materialSpendCap', '')::numeric, 0)
-        ), 0)
-        FROM production_work_orders wo
-        WHERE wo.project_id = $1
-      ) AS "plannedMaterialCost"
-    FROM material_lot_reservations mlr
-    JOIN material_lots ml ON ml.id = mlr.material_lot_id
-    LEFT JOIN inventory_items ii ON ii.id = ml.inventory_item_id
-    WHERE mlr.traveler_id::text IN (
-      SELECT id::text FROM travelers WHERE project_id = $1
-    )
-  `, [projectId]);
-
   const consumedRes = await pool.query<ConsumedCostRow>(`
     SELECT COALESCE(SUM(COALESCE(tmc.qty_used, tmc.quantity_used, 0) * COALESCE(ii.unit_cost, 0)), 0) AS "consumedMaterialCost"
     FROM traveler_material_consumption tmc
@@ -1099,14 +1083,6 @@ router.get('/:projectId/summary', h(async (req, res) => {
       SELECT id::text FROM travelers WHERE project_id = $1
     )
   `, [projectId]);
-
-  const partsRequestMaterialRes = await pool.query<{ committedMaterialCost: string }>(`
-    SELECT COALESCE(SUM(quantity * COALESCE(estimated_cost, 0)), 0) AS "committedMaterialCost"
-    FROM parts_requests
-    WHERE project_id = $1
-      AND is_active = true
-      AND status = ANY($2::text[])
-  `, [projectId, ORDERED_PARTS_REQUEST_STATUSES]);
 
   const materialBudgetExpression = await getProductionWorkOrderMaterialBudgetExpression();
   const wadMaterialBudgetRes = await pool.query<{ plannedMaterialCost: string }>(`
@@ -1122,10 +1098,27 @@ ${materialBudgetExpression}
   const hasProjectReceivedMaterials = await canReadProjectReceivedMaterials();
   const acceptedReceivedMaterialCost = hasProjectReceivedMaterials
     ? parseFloat((await pool.query<{ acceptedMaterialCost: string }>(`
-        SELECT COALESCE(SUM(extended_cost), 0) AS "acceptedMaterialCost"
-        FROM project_received_materials
-        WHERE project_id = $1
-          AND status = 'accepted'
+        SELECT COALESCE(SUM(
+          COALESCE(
+            NULLIF(prm.extended_cost, 0),
+            CASE
+              WHEN NULLIF(vpi.purchase_unit_price, 0) IS NOT NULL
+                THEN prm.quantity * vpi.purchase_unit_price
+              WHEN NULLIF(vpi.conversion_factor, 0) IS NOT NULL AND NULLIF(vpi.unit_price, 0) IS NOT NULL
+                THEN (prm.quantity / vpi.conversion_factor) * vpi.unit_price
+              WHEN NULLIF(vpi.unit_price, 0) IS NOT NULL
+                THEN prm.quantity * vpi.unit_price
+              ELSE prm.quantity * COALESCE(NULLIF(prm.unit_cost, 0), 0)
+            END,
+            0
+          )
+        ), 0) AS "acceptedMaterialCost"
+        FROM project_received_materials prm
+        JOIN received_units ru ON ru.id = prm.received_unit_id
+        JOIN receipt_lines rl ON rl.id = ru.receipt_line_id
+        LEFT JOIN vendor_po_items vpi ON vpi.id = rl.vendor_po_item_id
+        WHERE prm.project_id = $1
+          AND prm.status = 'accepted'
       `, [projectId]))[0]?.acceptedMaterialCost) || 0
     : 0;
 
@@ -1336,14 +1329,10 @@ ${materialBudgetExpression}
   const actualLaborHours = parseFloat(laborActualRes[0].actualLaborHours) || 0;
   const laborRemainingHours = budgetedLaborHours - actualLaborHours;
 
-  const committedMaterialCost =
-    (parseFloat(materialRes[0].committedMaterialCost) || 0) +
-    (parseFloat(partsRequestMaterialRes[0]?.committedMaterialCost) || 0);
-  const consumedMaterialCost =
-    (parseFloat(consumedRes[0].consumedMaterialCost) || 0) +
-    acceptedReceivedMaterialCost;
+  const committedMaterialCost = acceptedReceivedMaterialCost;
+  const consumedMaterialCost = parseFloat(consumedRes[0].consumedMaterialCost) || 0;
   const plannedMaterialCost = parseFloat(wadMaterialBudgetRes[0]?.plannedMaterialCost) || 0;
-  const remainingMaterialBudget = plannedMaterialCost - committedMaterialCost - consumedMaterialCost;
+  const remainingMaterialBudget = plannedMaterialCost - acceptedReceivedMaterialCost;
 
   res.json({
     ...projRes[0],
@@ -2412,51 +2401,46 @@ ${materialBudgetExpression}
     WHERE project_id = $1
   `, [projectId]);
 
-  const summaryRes = await pool.query<MaterialSummaryRow>(`
+  const summaryRes = await pool.query<MaterialConsumedCostRow>(`
     SELECT
-      COALESCE(wad_budget_sub.planned, 0) AS "plannedCost",
-      COALESCE(committed_sub.committed, 0) + COALESCE(parts_request_sub.committed, 0) AS "committedCost",
-      COALESCE(consumed_sub.consumed, 0) AS "consumedCost"
-    FROM (
-      SELECT SUM(COALESCE(NULLIF(wo.wizard_data->'step5'->>'materialSpendCap', '')::numeric, 0)) AS planned
-      FROM production_work_orders wo
-      WHERE wo.project_id = $1
-    ) wad_budget_sub,
-    (
-      SELECT SUM(mlr.quantity_reserved * COALESCE(ii.unit_cost, 0)) AS committed
-      FROM material_lot_reservations mlr
-      JOIN material_lots ml ON ml.id = mlr.material_lot_id
-      LEFT JOIN inventory_items ii ON ii.id = ml.inventory_item_id
-      WHERE mlr.traveler_id::text IN (
-        SELECT id::text FROM travelers WHERE project_id = $1
-      )
-    ) committed_sub,
-    (
-      SELECT SUM(COALESCE(tmc.qty_used, tmc.quantity_used, 0) * COALESCE(ii.unit_cost, 0)) AS consumed
+      COALESCE(SUM(COALESCE(tmc.qty_used, tmc.quantity_used, 0) * COALESCE(ii.unit_cost, 0)), 0) AS "consumedCost"
       FROM traveler_material_consumption tmc
       JOIN material_lots ml ON ml.id = tmc.material_lot_id
       LEFT JOIN inventory_items ii ON ii.id = ml.inventory_item_id
       WHERE tmc.traveler_id::text IN (
         SELECT id::text FROM travelers WHERE project_id = $1
       )
-    ) consumed_sub,
-    (
-      SELECT SUM(quantity * COALESCE(estimated_cost, 0)) AS committed
-      FROM parts_requests
-      WHERE project_id = $1
-        AND is_active = true
-        AND status = ANY($2::text[])
-    ) parts_request_sub
-  `, [projectId, ORDERED_PARTS_REQUEST_STATUSES]);
+  `, [projectId]);
 
   const hasProjectReceivedMaterials = await canReadProjectReceivedMaterials();
   const projectReceivedSummaryRes = hasProjectReceivedMaterials
     ? await pool.query<ProjectReceivedMaterialSummaryRow>(`
+        WITH received_costs AS (
+          SELECT
+            prm.status,
+            COALESCE(
+              NULLIF(prm.extended_cost, 0),
+              CASE
+                WHEN NULLIF(vpi.purchase_unit_price, 0) IS NOT NULL
+                  THEN prm.quantity * vpi.purchase_unit_price
+                WHEN NULLIF(vpi.conversion_factor, 0) IS NOT NULL AND NULLIF(vpi.unit_price, 0) IS NOT NULL
+                  THEN (prm.quantity / vpi.conversion_factor) * vpi.unit_price
+                WHEN NULLIF(vpi.unit_price, 0) IS NOT NULL
+                  THEN prm.quantity * vpi.unit_price
+                ELSE prm.quantity * COALESCE(NULLIF(prm.unit_cost, 0), 0)
+              END,
+              0
+            ) AS effective_extended_cost
+          FROM project_received_materials prm
+          JOIN received_units ru ON ru.id = prm.received_unit_id
+          JOIN receipt_lines rl ON rl.id = ru.receipt_line_id
+          LEFT JOIN vendor_po_items vpi ON vpi.id = rl.vendor_po_item_id
+          WHERE prm.project_id = $1
+        )
         SELECT
-          COALESCE(SUM(extended_cost) FILTER (WHERE status = 'pending_pm_acceptance'), 0) AS "pendingReceivedCost",
-          COALESCE(SUM(extended_cost) FILTER (WHERE status = 'accepted'), 0) AS "acceptedReceivedCost"
-        FROM project_received_materials
-        WHERE project_id = $1
+          COALESCE(SUM(effective_extended_cost) FILTER (WHERE status = 'pending_pm_acceptance'), 0) AS "pendingReceivedCost",
+          COALESCE(SUM(effective_extended_cost) FILTER (WHERE status = 'accepted'), 0) AS "acceptedReceivedCost"
+        FROM received_costs
       `, [projectId])
     : [{ pendingReceivedCost: '0', acceptedReceivedCost: '0' }];
 
@@ -2559,11 +2543,14 @@ ${materialBudgetExpression}
           COALESCE(ru.lot_number, ml.supplier_lot_number) AS "lotNumber",
           COALESCE(ru.internal_control_number, ml.internal_control_number) AS "internalControlNumber",
           prm.quantity::numeric AS "qtyRequired",
-          CASE WHEN prm.status = 'pending_pm_acceptance' THEN prm.quantity::numeric ELSE 0::numeric END AS "qtyAllocated",
-          CASE WHEN prm.status = 'accepted' THEN prm.quantity::numeric ELSE 0::numeric END AS "qtyIssued",
-          prm.unit_cost::numeric AS "unitCost",
-          CASE WHEN prm.status = 'pending_pm_acceptance' THEN prm.extended_cost::numeric ELSE 0::numeric END AS "committedCost",
-          CASE WHEN prm.status = 'accepted' THEN prm.extended_cost::numeric ELSE 0::numeric END AS "consumedCost",
+          CASE WHEN prm.status IN ('pending_pm_acceptance', 'accepted') THEN prm.quantity::numeric ELSE 0::numeric END AS "qtyAllocated",
+          0::numeric AS "qtyIssued",
+          CASE
+            WHEN prm.quantity::numeric <> 0 THEN cost.effective_extended_cost / prm.quantity::numeric
+            ELSE cost.effective_extended_cost
+          END AS "unitCost",
+          CASE WHEN prm.status IN ('pending_pm_acceptance', 'accepted') THEN cost.effective_extended_cost ELSE 0::numeric END AS "committedCost",
+          0::numeric AS "consumedCost",
           CASE
             WHEN prm.status = 'pending_pm_acceptance' THEN 'PENDING_PM_ACCEPTANCE'
             WHEN prm.status = 'accepted' THEN 'RECEIVED_ACCEPTED'
@@ -2578,6 +2565,22 @@ ${materialBudgetExpression}
         JOIN receipt_lines rl ON rl.id = ru.receipt_line_id
         LEFT JOIN material_lots ml ON ml.id = prm.material_lot_id
         LEFT JOIN inventory_items ii ON ii.id = ml.inventory_item_id
+        LEFT JOIN vendor_po_items vpi ON vpi.id = rl.vendor_po_item_id
+        CROSS JOIN LATERAL (
+          SELECT COALESCE(
+            NULLIF(prm.extended_cost, 0),
+            CASE
+              WHEN NULLIF(vpi.purchase_unit_price, 0) IS NOT NULL
+                THEN prm.quantity * vpi.purchase_unit_price
+              WHEN NULLIF(vpi.conversion_factor, 0) IS NOT NULL AND NULLIF(vpi.unit_price, 0) IS NOT NULL
+                THEN (prm.quantity / vpi.conversion_factor) * vpi.unit_price
+              WHEN NULLIF(vpi.unit_price, 0) IS NOT NULL
+                THEN prm.quantity * vpi.unit_price
+              ELSE prm.quantity * COALESCE(NULLIF(prm.unit_cost, 0), 0)
+            END,
+            0
+          ) AS effective_extended_cost
+        ) cost
         WHERE prm.project_id = $1
           AND prm.status IN ('pending_pm_acceptance', 'accepted')
         ORDER BY
@@ -2586,11 +2589,11 @@ ${materialBudgetExpression}
       `, [projectId])
     : [];
 
-  const plannedCost = parseFloat(budgetRes[0]?.plannedCost) || 0;
-  const committedCost = parseFloat(summaryRes[0]?.committedCost) || 0;
   const pendingReceivedCost = parseFloat(projectReceivedSummaryRes[0]?.pendingReceivedCost) || 0;
   const acceptedReceivedCost = parseFloat(projectReceivedSummaryRes[0]?.acceptedReceivedCost) || 0;
-  const consumedCost = (parseFloat(summaryRes[0]?.consumedCost) || 0) + acceptedReceivedCost;
+  const plannedCost = parseFloat(budgetRes[0]?.plannedCost) || 0;
+  const committedCost = acceptedReceivedCost;
+  const consumedCost = parseFloat(summaryRes[0]?.consumedCost) || 0;
 
   res.json({
     summary: {
@@ -2599,7 +2602,7 @@ ${materialBudgetExpression}
       consumedCost,
       pendingReceivedCost,
       acceptedReceivedCost,
-      remainingCost: plannedCost - committedCost - consumedCost,
+      remainingCost: plannedCost - acceptedReceivedCost,
     },
     rows: [...projectReceivedRowsRes, ...rowsRes, ...partsRequestRowsRes],
   });

@@ -1154,6 +1154,7 @@ export default function TimeClockAdminPage() {
     employeeName(employeeByTimekeepingId[employeeId], employeeId);
   const employeeNameFromEpochId = (employeeId: number): string =>
     employeeName(employeeByEpochId[employeeId], employeeId);
+  const employeesLinkedToEpoch = (employees ?? []).filter(e => e.epochEmployeeId != null);
 
   const {
     data: unapprovedGroups,
@@ -3979,8 +3980,8 @@ export default function TimeClockAdminPage() {
                   <SelectValue placeholder="Select employee…" />
                 </SelectTrigger>
                 <SelectContent>
-                  {(employees ?? []).map(e => (
-                    <SelectItem key={e.id} value={String(e.id)}>
+                  {employeesLinkedToEpoch.map(e => (
+                    <SelectItem key={e.epochEmployeeId} value={String(e.epochEmployeeId)}>
                       {e.firstName} {e.lastName}
                       {e.employeeNumber ? ` (${e.employeeNumber})` : ''}
                     </SelectItem>
@@ -4056,8 +4057,8 @@ export default function TimeClockAdminPage() {
                   <SelectValue placeholder="Select employee…" />
                 </SelectTrigger>
                 <SelectContent>
-                  {(employees ?? []).map(e => (
-                    <SelectItem key={e.id} value={String(e.id)}>
+                  {employeesLinkedToEpoch.map(e => (
+                    <SelectItem key={e.epochEmployeeId} value={String(e.epochEmployeeId)}>
                       {e.firstName} {e.lastName}
                       {e.employeeNumber ? ` (${e.employeeNumber})` : ''}
                     </SelectItem>

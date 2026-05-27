@@ -279,6 +279,10 @@ function sessionsToPunchEvents(sessions: any[]): PunchSessionEvent[] {
         outNote = rawNote;
       }
     }
+    const inSource = inNote?.startsWith("HR Created:") ? "ADMIN" : s.source;
+    const outSource = outNote?.startsWith("HR Created:") ? "ADMIN" : s.source;
+    if (inNote?.startsWith("HR Created:")) inNote = inNote.replace(/^HR Created:\s*/, "");
+    if (outNote?.startsWith("HR Created:")) outNote = outNote.replace(/^HR Created:\s*/, "");
 
     events.push({
       id: s.id,
@@ -286,7 +290,7 @@ function sessionsToPunchEvents(sessions: any[]): PunchSessionEvent[] {
       employeeId: s.employeeId,
       type: inType,
       punchedAt: (s.clockIn instanceof Date ? s.clockIn : new Date(s.clockIn)).toISOString(),
-      source: s.source,
+      source: inSource,
       isEdited: inEdited,
       editNote: inNote,
       costCode: s.chargeCode ?? null,
@@ -303,7 +307,7 @@ function sessionsToPunchEvents(sessions: any[]): PunchSessionEvent[] {
         employeeId: s.employeeId,
         type: outType,
         punchedAt: (s.clockOut instanceof Date ? s.clockOut : new Date(s.clockOut)).toISOString(),
-        source: s.source,
+        source: outSource,
         isEdited: outEdited,
         editNote: outNote,
         costCode: s.chargeCode ?? null,
@@ -1300,11 +1304,12 @@ router.post("/punches", authenticateToken, requireRole('ADMIN', 'OWNER'), h(asyn
   const clockInTs = punchedAt ? new Date(punchedAt) : undefined;
   const actorEmployeeId = req.user?.employeeId ?? null;
   const actorLabel = actor.email ?? null;
+  const adminNoteField = type === 'clock_out' || type === 'break_end' ? 'clockOut' : 'clockIn';
 
   if (type === 'clock_in') {
     entry = await ledger.openSession({
       employeeId: resolvedId,
-      source: 'PORTAL',
+      source: 'ADMIN',
       laborClass: 'REGULAR',
       clockIn: clockInTs,
       chargeCodeId: resolvedChargeCodeId ?? null,
@@ -1335,7 +1340,7 @@ router.post("/punches", authenticateToken, requireRole('ADMIN', 'OWNER'), h(asyn
     }
     entry = await ledger.openSession({
       employeeId: resolvedId,
-      source: 'PORTAL',
+      source: 'ADMIN',
       laborClass: 'BREAK',
       clockIn: clockInTs,
       createdBy: actorEmployeeId,
@@ -1353,7 +1358,7 @@ router.post("/punches", authenticateToken, requireRole('ADMIN', 'OWNER'), h(asyn
     }
     entry = await ledger.openSession({
       employeeId: resolvedId,
-      source: 'PORTAL',
+      source: 'ADMIN',
       laborClass: 'REGULAR',
       clockIn: clockInTs,
       chargeCodeId: resolvedChargeCodeId ?? null,
@@ -1367,7 +1372,7 @@ router.post("/punches", authenticateToken, requireRole('ADMIN', 'OWNER'), h(asyn
   if (trimmedNote && entry?.id) {
     const annotated = await storage.updatePunchLedgerEntry(entry.id, {
       isEdited: true,
-      editNote: trimmedNote,
+      editNote: `[${adminNoteField}] HR Created: ${trimmedNote}`,
       updatedBy: actorEmployeeId,
       updatedByDisplayName: actorLabel,
     });

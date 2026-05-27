@@ -487,6 +487,26 @@ function punchTypeLabel(t: string) {
   return map[t] ?? t;
 }
 
+function punchSourceLabel(source: string | null | undefined) {
+  const key = String(source ?? '').toUpperCase();
+  const map: Record<string, string> = {
+    ADMIN: 'HR Created',
+    KIOSK: 'Kiosk',
+    PORTAL: 'Employee Portal',
+    TIMETRAKGO_IMPORT: 'TimeTrakGO',
+    TRAVELER: 'Traveler',
+  };
+  return map[key] ?? (source || '-');
+}
+
+function dateInputStartIso(value: string) {
+  return new Date(`${value}T00:00:00`).toISOString();
+}
+
+function dateInputEndIso(value: string) {
+  return new Date(`${value}T23:59:59.999`).toISOString();
+}
+
 /** Computes the current bi-weekly pay period (anchored 2024-01-01, same as server). */
 function getCurrentPayPeriod(): { start: string; end: string } {
   const ANCHOR = Date.UTC(2024, 0, 1);
@@ -1134,6 +1154,7 @@ export default function TimeClockAdminPage() {
     employeeName(employeeByTimekeepingId[employeeId], employeeId);
   const employeeNameFromEpochId = (employeeId: number): string =>
     employeeName(employeeByEpochId[employeeId], employeeId);
+  const employeesLinkedToEpoch = (employees ?? []).filter(e => e.epochEmployeeId != null);
 
   const {
     data: unapprovedGroups,
@@ -1531,7 +1552,10 @@ export default function TimeClockAdminPage() {
   const { data: punches, isLoading: punchesLoading, refetch: refetchPunches } = useQuery<Punch[]>({
     queryKey: ['/api/timekeeping/punches', punchFrom, punchTo, punchEmployeeId],
     queryFn: async () => {
-      const params = new URLSearchParams({ from: punchFrom, to: punchTo });
+      const params = new URLSearchParams({
+        from: dateInputStartIso(punchFrom),
+        to: dateInputEndIso(punchTo),
+      });
       if (punchEmployeeId) params.set('employeeId', punchEmployeeId);
       const res = await fetch(
         `/api/timekeeping/punches?${params.toString()}`,
@@ -1569,7 +1593,7 @@ export default function TimeClockAdminPage() {
         empName,
         punchTypeLabel(punch.type),
         fmtTime(punch.punchedAt),
-        punch.source,
+        punchSourceLabel(punch.source),
         punch.costCode,
         punch.reviewReason,
         punch.editNote,
@@ -3006,7 +3030,7 @@ export default function TimeClockAdminPage() {
                             {fmtTime(p.punchedAt)}
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground capitalize">
-                            {p.source}
+                            {punchSourceLabel(p.source)}
                             {p.costCode && <span className="ml-1 text-xs">({p.costCode})</span>}
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
@@ -3169,7 +3193,7 @@ export default function TimeClockAdminPage() {
                             {fmtTime(p.punchedAt)}
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground capitalize">
-                            {p.source}
+                            {punchSourceLabel(p.source)}
                             {p.costCode && <span className="ml-1 text-xs">({p.costCode})</span>}
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
@@ -3956,8 +3980,8 @@ export default function TimeClockAdminPage() {
                   <SelectValue placeholder="Select employee…" />
                 </SelectTrigger>
                 <SelectContent>
-                  {(employees ?? []).map(e => (
-                    <SelectItem key={e.id} value={String(e.id)}>
+                  {employeesLinkedToEpoch.map(e => (
+                    <SelectItem key={e.epochEmployeeId} value={String(e.epochEmployeeId)}>
                       {e.firstName} {e.lastName}
                       {e.employeeNumber ? ` (${e.employeeNumber})` : ''}
                     </SelectItem>
@@ -4033,8 +4057,8 @@ export default function TimeClockAdminPage() {
                   <SelectValue placeholder="Select employee…" />
                 </SelectTrigger>
                 <SelectContent>
-                  {(employees ?? []).map(e => (
-                    <SelectItem key={e.id} value={String(e.id)}>
+                  {employeesLinkedToEpoch.map(e => (
+                    <SelectItem key={e.epochEmployeeId} value={String(e.epochEmployeeId)}>
                       {e.firstName} {e.lastName}
                       {e.employeeNumber ? ` (${e.employeeNumber})` : ''}
                     </SelectItem>
@@ -4050,7 +4074,9 @@ export default function TimeClockAdminPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="clock_in">Clock In</SelectItem>
+                  <SelectItem value="clock_out">Clock Out</SelectItem>
                   <SelectItem value="break_start">Break Start</SelectItem>
+                  <SelectItem value="break_end">Break End</SelectItem>
                 </SelectContent>
               </Select>
             </div>

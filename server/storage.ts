@@ -3167,6 +3167,7 @@ export interface IStorage {
 
   // Cutting documents
   listCuttingDocuments(): Promise<CuttingDocument[]>;
+  getCuttingDocument(id: number): Promise<CuttingDocument | undefined>;
   createCuttingDocument(data: InsertCuttingDocument): Promise<CuttingDocument>;
   deleteCuttingDocument(id: number): Promise<CuttingDocument | undefined>;
 
@@ -27316,6 +27317,11 @@ export class DatabaseStorage implements IStorage {
 
   async listCuttingDocuments(): Promise<CuttingDocument[]> {
     return db.select().from(cuttingDocuments).orderBy(desc(cuttingDocuments.uploadedAt));
+  }
+
+  async getCuttingDocument(id: number): Promise<CuttingDocument | undefined> {
+    const [row] = await db.select().from(cuttingDocuments).where(eq(cuttingDocuments.id, id));
+    return row ?? undefined;
   }
 
   async createCuttingDocument(data: InsertCuttingDocument): Promise<CuttingDocument> {

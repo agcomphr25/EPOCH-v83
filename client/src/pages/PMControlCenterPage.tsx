@@ -1,4 +1,4 @@
-import { useState, useEffect, type FormEvent } from 'react';
+import { useState, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation, Link } from 'wouter';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -8,10 +8,6 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-} from '@/components/ui/dialog';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -390,24 +386,6 @@ interface MaterialData {
   rows: MaterialRow[];
 }
 
-interface SessionUser {
-  id: number;
-  username: string;
-  firstName?: string;
-  lastName?: string;
-  role?: string;
-}
-
-interface MaterialRequestForm {
-  partNumber: string;
-  partName: string;
-  quantity: string;
-  urgency: string;
-  estimatedCost: string;
-  reason: string;
-  expectedDelivery: string;
-}
-
 interface ProgramAssemblyWidgetRow {
   id: string;
   assemblyCode: string;
@@ -470,15 +448,6 @@ function fmtTime(iso: string | null) {
 
 function fmtCurrency(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(n);
-}
-
-function getDefaultRequestor(user: SessionUser | null | undefined): string {
-  if (!user) return '';
-  const fullName = [user.firstName, user.lastName]
-    .filter((s) => typeof s === 'string' && s.trim().length > 0)
-    .join(' ')
-    .trim();
-  return user.username || fullName || '';
 }
 
 function readProjectParam(params: URLSearchParams) {
@@ -1843,23 +1812,10 @@ type SortField = 'status' | 'itemCode' | 'qtyRequired' | 'qtyAllocated' | 'qtyIs
 type SortDir = 'asc' | 'desc';
 
 function MaterialBudgetTab({ projectId }: { projectId: string }) {
+  const [, navTo] = useLocation();
   const queryClient = useQueryClient();
   const [sortField, setSortField] = useState<SortField>('status');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
-  const [isRequestOpen, setIsRequestOpen] = useState(false);
-  const [requestForm, setRequestForm] = useState<MaterialRequestForm>({
-    partNumber: '',
-    partName: '',
-    quantity: '',
-    urgency: 'MEDIUM',
-    estimatedCost: '',
-    reason: '',
-    expectedDelivery: '',
-  });
-
-  const { data: sessionUser } = useQuery<SessionUser | null>({
-    queryKey: ['/api/auth/session'],
-  });
 
   const { data, isLoading, isError } = useQuery<MaterialData>({
     queryKey: ['/api/pm-dashboard', projectId, 'materials'],
@@ -1883,54 +1839,6 @@ function MaterialBudgetTab({ projectId }: { projectId: string }) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/pm-dashboard', projectId, 'materials'] });
       queryClient.invalidateQueries({ queryKey: ['/api/pm-dashboard', projectId, 'summary'] });
-    },
-  });
-
-  const resetRequestForm = () => {
-    setRequestForm({
-      partNumber: '',
-      partName: '',
-      quantity: '',
-      urgency: 'MEDIUM',
-      estimatedCost: '',
-      reason: '',
-      expectedDelivery: '',
-    });
-  };
-
-  const partsRequestMutation = useMutation({
-    mutationFn: async () => {
-      const requestedBy = getDefaultRequestor(sessionUser);
-      if (!requestedBy) {
-        throw new Error('Unable to identify the current user for the request.');
-      }
-
-      return apiRequest('/api/inventory/parts-requests', {
-        method: 'POST',
-        body: {
-          partNumber: requestForm.partNumber.trim(),
-          partName: requestForm.partName.trim(),
-          requestedBy,
-          productionLine: null,
-          projectId,
-          department: null,
-          quantity: Number.parseInt(requestForm.quantity, 10),
-          urgency: requestForm.urgency,
-          estimatedCost: requestForm.estimatedCost
-            ? Number.parseFloat(requestForm.estimatedCost)
-            : null,
-          reason: requestForm.reason.trim() || null,
-          expectedDelivery: requestForm.expectedDelivery || null,
-          status: 'PENDING',
-        },
-      });
-    },
-    onSuccess: () => {
-      setIsRequestOpen(false);
-      resetRequestForm();
-      queryClient.invalidateQueries({ queryKey: ['/api/pm-dashboard', projectId, 'materials'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/pm-dashboard', projectId, 'summary'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests'] });
     },
   });
 
@@ -1972,148 +1880,17 @@ function MaterialBudgetTab({ projectId }: { projectId: string }) {
     return sortDir === 'asc' ? <ChevronUp className="h-3 w-3 ml-1" /> : <ChevronDown className="h-3 w-3 ml-1" />;
   };
 
-  const handleRequestFieldChange = (
-    field: keyof MaterialRequestForm,
-    value: string,
-  ) => {
-    setRequestForm((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const handleCreatePartsRequest = (event: FormEvent) => {
-    event.preventDefault();
-    const quantity = Number.parseInt(requestForm.quantity, 10);
-    if (!requestForm.partNumber.trim() || !requestForm.partName.trim()) {
-      return;
-    }
-    if (!Number.isFinite(quantity) || quantity <= 0) {
-      return;
-    }
-    partsRequestMutation.mutate();
-  };
-
   return (
     <div className="space-y-6">
       <div className="flex justify-end">
         <Button
           size="sm"
-          onClick={() => setIsRequestOpen(true)}
+          onClick={() => navTo(`/inventory/parts-request?projectId=${encodeURIComponent(projectId)}&create=1`)}
         >
           <Plus className="h-4 w-4 mr-2" />
           New Parts Request
         </Button>
       </div>
-
-      <Dialog open={isRequestOpen} onOpenChange={setIsRequestOpen}>
-        <DialogContent className="sm:max-w-xl">
-          <DialogHeader>
-            <DialogTitle>Request Project Material</DialogTitle>
-          </DialogHeader>
-          <form className="space-y-4" onSubmit={handleCreatePartsRequest}>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="pm-part-number">Part number</Label>
-                <Input
-                  id="pm-part-number"
-                  value={requestForm.partNumber}
-                  onChange={(e) => handleRequestFieldChange('partNumber', e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="pm-quantity">Quantity</Label>
-                <Input
-                  id="pm-quantity"
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={requestForm.quantity}
-                  onChange={(e) => handleRequestFieldChange('quantity', e.target.value)}
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="pm-part-name">Item name</Label>
-              <Input
-                id="pm-part-name"
-                value={requestForm.partName}
-                onChange={(e) => handleRequestFieldChange('partName', e.target.value)}
-                required
-              />
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="space-y-2">
-                <Label>Urgency</Label>
-                <Select
-                  value={requestForm.urgency}
-                  onValueChange={(value) => handleRequestFieldChange('urgency', value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="LOW">Low</SelectItem>
-                    <SelectItem value="MEDIUM">Medium</SelectItem>
-                    <SelectItem value="HIGH">High</SelectItem>
-                    <SelectItem value="CRITICAL">Critical</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="pm-estimated-cost">Est. unit cost</Label>
-                <Input
-                  id="pm-estimated-cost"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={requestForm.estimatedCost}
-                  onChange={(e) => handleRequestFieldChange('estimatedCost', e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="pm-expected-delivery">Need by</Label>
-                <Input
-                  id="pm-expected-delivery"
-                  type="date"
-                  value={requestForm.expectedDelivery}
-                  onChange={(e) => handleRequestFieldChange('expectedDelivery', e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="pm-request-reason">Reason</Label>
-              <Textarea
-                id="pm-request-reason"
-                value={requestForm.reason}
-                onChange={(e) => handleRequestFieldChange('reason', e.target.value)}
-                rows={3}
-              />
-            </div>
-
-            {partsRequestMutation.error instanceof Error && (
-              <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-                {partsRequestMutation.error.message}
-              </div>
-            )}
-
-            <div className="flex justify-end gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsRequestOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={partsRequestMutation.isPending}>
-                Submit Request
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard

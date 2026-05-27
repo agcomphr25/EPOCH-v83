@@ -1259,7 +1259,7 @@ router.post("/punches", authenticateToken, requireRole('ADMIN', 'OWNER'), h(asyn
   const body = AdminCreatePunchBody.safeParse(req.body);
   if (!body.success) { res.status(400).json({ error: body.error.message }); return; }
 
-  const { employeeId: rawEmpId, type, punchedAt, costCode, travelerId } = body.data;
+  const { employeeId: rawEmpId, type, punchedAt, costCode, travelerId, note } = body.data;
   const actor = actorFromUser(req.user ?? null, req.ip ?? null);
 
   // Resolve to public.employees.id integer
@@ -1363,6 +1363,17 @@ router.post("/punches", authenticateToken, requireRole('ADMIN', 'OWNER'), h(asyn
     });
   }
 
+  const trimmedNote = note?.trim();
+  if (trimmedNote && entry?.id) {
+    const annotated = await storage.updatePunchLedgerEntry(entry.id, {
+      isEdited: true,
+      editNote: trimmedNote,
+      updatedBy: actorEmployeeId,
+      updatedByDisplayName: actorLabel,
+    });
+    entry = annotated ?? entry;
+  }
+
   res.status(201).json(entry);
 }));
 
@@ -1447,7 +1458,7 @@ router.post("/punch-corrections", authenticateToken, requireRole('ADMIN', 'OWNER
     submittedByUserId: user.id,
     actorUser: user,
     actorIp: req.ip ?? null,
-    requireSupervisor: true,
+    requireSupervisor: false,
   });
 
   if ("error" in result) {

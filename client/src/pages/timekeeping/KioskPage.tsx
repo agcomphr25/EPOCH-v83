@@ -22,7 +22,21 @@ interface PunchStatus {
   status: string;
   clockedInAt: string | null;
   hoursToday: number;
+  periodProgress?: NormalHoursProgress | null;
   openEntry?: { id?: number; clockIn?: string; clockOut?: string | null; chargeCode?: string | null } | null;
+}
+
+interface NormalHoursProgress {
+  periodStart: string;
+  periodEnd: string;
+  normalHoursLimit: number;
+  totalHours: number;
+  normalHours: number;
+  overtimeHours: number;
+  remainingNormalHours: number;
+  percentOfNormal: number;
+  warningLevel: 'none' | 'watch' | 'near' | 'over';
+  message: string | null;
 }
 
 interface ChargeCode {
@@ -196,6 +210,36 @@ function formatKioskHours(hours: number): string {
   return `${hours.toFixed(2)} hr${Math.abs(hours - 1) < 0.005 ? '' : 's'}`;
 }
 
+function NormalHoursProgressCard({ progress, compact = false }: { progress?: NormalHoursProgress | null; compact?: boolean }) {
+  if (!progress) return null;
+  const color = progress.warningLevel === 'over'
+    ? 'bg-red-500'
+    : progress.warningLevel === 'near'
+      ? 'bg-amber-500'
+      : 'bg-blue-500';
+  return (
+    <div className={`rounded-2xl border bg-white p-4 text-left shadow-sm ${compact ? 'space-y-2' : 'space-y-3'}`}>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-widest text-gray-400">Pay Period Normal Hours</p>
+          <p className="text-lg font-semibold text-gray-900">
+            {progress.normalHours.toFixed(2)} / {progress.normalHoursLimit.toFixed(2)}h
+          </p>
+        </div>
+        <p className="text-sm font-medium text-gray-500">{progress.remainingNormalHours.toFixed(2)}h left</p>
+      </div>
+      <div className="h-3 overflow-hidden rounded-full bg-gray-100">
+        <div className={`h-full rounded-full ${color}`} style={{ width: `${Math.min(100, progress.percentOfNormal)}%` }} />
+      </div>
+      {progress.message && (
+        <p className={`text-sm font-medium ${progress.warningLevel === 'over' ? 'text-red-700' : 'text-amber-700'}`}>
+          {progress.message}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function buildShiftRows(punches: PunchEvent[]): ShiftRow[] {
   const rows = new Map<number, ShiftRow>();
 
@@ -233,6 +277,7 @@ export default function KioskPage() {
   const [dailyCertificationConfirmed, setDailyCertificationConfirmed] = useState(false);
   const [showClockOutCertification, setShowClockOutCertification] = useState(false);
   const [resultMsg, setResultMsg] = useState('');
+  const [resultProgress, setResultProgress] = useState<NormalHoursProgress | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
   const [dcaaViolation, setDcaaViolation] = useState<DcaaPolicyViolation | null>(null);
   const [countdown, setCountdown] = useState(RESULT_DISPLAY_SEC);
@@ -272,6 +317,7 @@ export default function KioskPage() {
     setDailyCertificationConfirmed(false);
     setShowClockOutCertification(false);
     setResultMsg('');
+    setResultProgress(null);
     setErrorMsg('');
     setDcaaViolation(null);
     setCountdown(RESULT_DISPLAY_SEC);
@@ -468,6 +514,7 @@ export default function KioskPage() {
       }
 
       setResultMsg(data.message ?? 'Punch recorded successfully!');
+      setResultProgress(data.periodProgress ?? null);
       setStep('success');
     } catch {
       setErrorMsg('Network error. Punch was not recorded.');
@@ -707,6 +754,9 @@ export default function KioskPage() {
       >
         <CheckCircle className="h-24 w-24 text-green-500 mb-6" />
         <p className="text-3xl font-bold text-green-700 mb-3 max-w-sm">{resultMsg}</p>
+        <div className="mb-5 w-full max-w-sm">
+          <NormalHoursProgressCard progress={resultProgress} compact />
+        </div>
         <p className="text-gray-400">Tap to dismiss · resets in {countdown}s</p>
       </div>
     );
@@ -913,6 +963,8 @@ export default function KioskPage() {
               Select a charge code before clocking in.
             </p>
           )}
+
+          <NormalHoursProgressCard progress={punchStatus.periodProgress} compact />
 
           {showPrimaryActions && (
             <div className="space-y-3">

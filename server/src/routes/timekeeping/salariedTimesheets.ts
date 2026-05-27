@@ -288,6 +288,7 @@ const DCAA_CERTIFICATION_VERSION = 1;
 
 const certifyBodySchema = z.object({
   certificationConfirmed: z.literal(true),
+  reason: z.string().trim().min(5, "A submission reason of at least 5 characters is required.").max(2000),
 });
 
 const supervisorApproveBodySchema = z.object({
@@ -363,11 +364,13 @@ router.post(
 
     const bodyParsed = certifyBodySchema.safeParse(req.body);
     if (!bodyParsed.success) {
+      const flat = bodyParsed.error.flatten();
       res.status(400).json({
-        error: "certificationConfirmed must be explicitly true. The employee must check the certification checkbox before submitting.",
+        error: flat.fieldErrors.reason?.[0] ?? "certificationConfirmed must be explicitly true. The employee must check the certification checkbox before submitting.",
       });
       return;
     }
+    const submissionReason = bodyParsed.data.reason.trim();
 
     const ts = await loadTimesheet(id, res);
     if (!ts) return;
@@ -456,6 +459,7 @@ router.post(
         certifiedAt: updated?.certifiedAt,
         certificationStatement: DCAA_CERTIFICATION_STATEMENT,
         certificationVersion: DCAA_CERTIFICATION_VERSION,
+        submissionReason,
         certifiedByUserId: userId,
         supervisorEmployeeId,
         periodStart: ts.periodStart,
@@ -1337,11 +1341,13 @@ router.post(
 
     const bodyParsed = certifyBodySchema.safeParse(req.body);
     if (!bodyParsed.success) {
+      const flat = bodyParsed.error.flatten();
       res.status(400).json({
-        error: "certificationConfirmed must be explicitly true. Please check the certification checkbox before submitting.",
+        error: flat.fieldErrors.reason?.[0] ?? "certificationConfirmed must be explicitly true. Please check the certification checkbox before submitting.",
       });
       return;
     }
+    const submissionReason = bodyParsed.data.reason.trim();
 
     const ts = await loadTimesheet(timesheetId, res);
     if (!ts) return;
@@ -1405,6 +1411,7 @@ router.post(
         certifiedAt: updated?.certifiedAt,
         certificationStatement: DCAA_CERTIFICATION_STATEMENT,
         certificationVersion: DCAA_CERTIFICATION_VERSION,
+        submissionReason,
         certifiedByEmployeeId: epochEmployeeId,
         supervisorEmployeeId,
         periodStart: ts.periodStart,
@@ -1440,11 +1447,13 @@ router.post(
 
     const bodyParsed = certifyBodySchema.safeParse(req.body);
     if (!bodyParsed.success) {
+      const flat = bodyParsed.error.flatten();
       res.status(400).json({
-        error: "certificationConfirmed must be explicitly true. Please check the certification checkbox before submitting.",
+        error: flat.fieldErrors.reason?.[0] ?? "certificationConfirmed must be explicitly true. Please check the certification checkbox before submitting.",
       });
       return;
     }
+    const submissionReason = bodyParsed.data.reason.trim();
 
     const ts = await loadTimesheet(timesheetId, res);
     if (!ts) return;
@@ -1508,6 +1517,7 @@ router.post(
         certifiedAt: updated?.certifiedAt,
         certificationStatement: DCAA_CERTIFICATION_STATEMENT,
         certificationVersion: DCAA_CERTIFICATION_VERSION,
+        submissionReason,
         certifiedByEmployeeId: emp.employeeId,
         supervisorEmployeeId,
         periodStart: ts.periodStart,

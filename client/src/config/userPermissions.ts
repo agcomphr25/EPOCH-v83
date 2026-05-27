@@ -20,6 +20,8 @@ export const CAPABILITY_GATED_ROUTES: Record<string, string | string[]> = {
   ],
   '/orders-list': 'orders.view_list',
   '/time-clock-admin': 'timekeeping.time_clock_admin.access',
+  '/finance/bulk-payment': 'finance.manage_payments',
+  '/finance/bulk-payment-history': 'finance.view',
   '/inventory/cycle-counts': 'inventory.cycleCount.view',
 };
 

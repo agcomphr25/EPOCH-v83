@@ -254,9 +254,12 @@ function buildCustomerAddress(customer: {
     customer.shippingContactName,
     customer.shippingAddress,
     customer.shippingAddress2,
-    [customer.shippingCity, customer.shippingState, customer.shippingZip]
+    [
+      [customer.shippingCity, customer.shippingState].filter(Boolean).join(', '),
+      customer.shippingZip,
+    ]
       .filter(Boolean)
-      .join(', '),
+      .join(' '),
   ]
     .filter(Boolean)
     .join('\n');
@@ -542,8 +545,8 @@ router.post('/packing-slips', authenticateToken, requirePermission('shipping.rel
 
     const lineItems = Object.values(byPart).map((group) => ({
       poItemId: group[0].poItemId,
-      partNumber: group[0].partNumber,
-      partName: group[0].partName,
+      partNumber: assignedSkuFromSerials(group) || group[0].sku || group[0].partNumber,
+      partName: group[0].drawingName || group[0].partName,
       quantity: group.length,
       serialNumbers: group.map((s) => s.serialNumber),
       lotNumber: lot.lotNumber,
@@ -817,9 +820,45 @@ router.get('/packing-slips/:id/pdf', async (req: Request, res: Response) => {
 
     // Map slip DB record to PackingSlipData
     const lineItems = (slip.lineItems as any[]) || [];
+    const lineItemSerialNumbers = Array.from(
+      new Set(
+        lineItems.flatMap((item) =>
+          Array.isArray(item.serialNumbers)
+            ? item.serialNumbers.filter((serial: unknown): serial is string => typeof serial === 'string' && serial.trim().length > 0)
+            : []
+        )
+      )
+    );
+    type PackingSlipSerialIdentity = {
+      serial_number: string;
+      sku: string | null;
+      drawing_name: string | null;
+    };
+    const serialRows: PackingSlipSerialIdentity[] = lineItemSerialNumbers.length > 0
+      ? await pool.query<PackingSlipSerialIdentity>(
+          `SELECT serial_number, sku, drawing_name
+             FROM p2_serialized_items
+            WHERE serial_number = ANY($1::text[])`,
+          [lineItemSerialNumbers]
+        )
+      : [];
+    const serialIdentityByNumber = new Map<string, PackingSlipSerialIdentity>(
+      serialRows.map((row) => [row.serial_number, row])
+    );
+
     const slipItems: PackingSlipItem[] = lineItems.map((item) => ({
-      partNumber: item.partNumber || '',
-      description: item.partName || item.partNumber || 'N/A',
+      partNumber: assignedSkuFromSerials(
+        (Array.isArray(item.serialNumbers) ? item.serialNumbers : [])
+          .map((serialNumber: string) => serialIdentityByNumber.get(serialNumber))
+          .filter((row: unknown): row is { sku: string | null } => Boolean(row))
+      ) || item.sku || item.partNumber || '',
+      description: Array.from(
+        new Set(
+          (Array.isArray(item.serialNumbers) ? item.serialNumbers : [])
+            .map((serialNumber: string) => serialIdentityByNumber.get(serialNumber)?.drawing_name?.trim())
+            .filter((drawingName: unknown): drawingName is string => typeof drawingName === 'string' && drawingName.length > 0)
+        )
+      ).join(', ') || item.drawingName || item.partName || item.partNumber || 'N/A',
       quantity: item.quantity ?? (Array.isArray(item.serialNumbers) ? item.serialNumbers.length : 1),
       serialNumbers: Array.isArray(item.serialNumbers) ? item.serialNumbers : [],
       lotNumber: item.lotNumber || slip.lotNumber || undefined,
@@ -828,7 +867,14 @@ router.get('/packing-slips/:id/pdf', async (req: Request, res: Response) => {
     // Parse the stored customerAddress string into structured fields where possible,
     // preserving rawLines as a fallback for addresses that don't match a standard pattern.
     const rawAddress = slip.customerAddress || '';
-    const addrLines = rawAddress.split('\n').filter((l: string) => l && l !== slip.customerName);
+    const addrLines = rawAddress
+      .split('\n')
+      .map((line: string) => line.trim())
+      .filter((line: string, index: number, lines: string[]) =>
+        line.length > 0 &&
+        line.toLowerCase() !== (slip.customerName || '').trim().toLowerCase() &&
+        lines.findIndex((candidate) => candidate.toLowerCase() === line.toLowerCase()) === index
+      );
     let structuredAddress: PackingSlipData['customerAddress'];
     if (addrLines.length > 0) {
       const lastLine = addrLines[addrLines.length - 1];

@@ -781,7 +781,7 @@ export default function TravelerManagement() {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="sticky top-0 z-30 -mx-6 flex items-center justify-between border-b bg-background/95 px-6 py-4 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/80">
         <div>
           <h1 className="text-3xl font-bold" data-testid="page-title">Traveler Management</h1>
           <p className="text-muted-foreground">
@@ -902,16 +902,16 @@ export default function TravelerManagement() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Traveler #</TableHead>
-                <TableHead>Part Number</TableHead>
-                <TableHead>Part Name</TableHead>
-                <TableHead>Serial Number</TableHead>
-                <TableHead>Work Order</TableHead>
-                <TableHead>Lot #</TableHead>
-                <TableHead>Qty</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead className="sticky top-[85px] z-20 bg-background shadow-sm">Traveler #</TableHead>
+                <TableHead className="sticky top-[85px] z-20 bg-background shadow-sm">Part Number</TableHead>
+                <TableHead className="sticky top-[85px] z-20 bg-background shadow-sm">Part Name</TableHead>
+                <TableHead className="sticky top-[85px] z-20 bg-background shadow-sm">Serial Number</TableHead>
+                <TableHead className="sticky top-[85px] z-20 bg-background shadow-sm">Work Order</TableHead>
+                <TableHead className="sticky top-[85px] z-20 bg-background shadow-sm">Lot #</TableHead>
+                <TableHead className="sticky top-[85px] z-20 bg-background shadow-sm">Qty</TableHead>
+                <TableHead className="sticky top-[85px] z-20 bg-background shadow-sm">Status</TableHead>
+                <TableHead className="sticky top-[85px] z-20 bg-background shadow-sm">Created</TableHead>
+                <TableHead className="sticky top-[85px] z-20 bg-background text-right shadow-sm">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

@@ -665,7 +665,7 @@ function operationTypeToTravelerTaskType(operationType: string | null | undefine
   }
 }
 
-function operationTypeToTravelerPhase(operationType: string | null | undefined) {
+function operationTypeToTravelerPhase(operationType: string | null | undefined): 'START' | 'WORK' | 'FINISH' {
   switch (operationType) {
     case 'SETUP':
     case 'MATERIAL':
@@ -681,6 +681,90 @@ function operationTypeToTravelerPhase(operationType: string | null | undefined) 
 function normalizeTravelerTaskPhase(phase: string | null | undefined): 'START' | 'WORK' | 'FINISH' {
   const normalized = (phase || '').toUpperCase();
   return normalized === 'START' || normalized === 'WORK' || normalized === 'FINISH' ? normalized : 'WORK';
+}
+
+function getRoutingOperationTravelerPhase(
+  operation: { operationType?: string | null; instructionPack?: unknown }
+): 'START' | 'WORK' | 'FINISH' {
+  const pack = (operation.instructionPack || {}) as Record<string, unknown>;
+  const explicitPhase = normalizeTravelerTaskPhase(
+    (pack.taskPhase || pack.phase || pack.qcPhase || pack.workPhase) as string | null | undefined,
+  );
+  if (pack.taskPhase || pack.phase || pack.qcPhase || pack.workPhase) return explicitPhase;
+  return operationTypeToTravelerPhase(operation.operationType);
+}
+
+function sanitizeTravelerFieldKey(value: string) {
+  return String(value || '')
+    .replace(/[^a-zA-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .toLowerCase() || 'check';
+}
+
+function normalizeQcStandards(raw: any): any[] {
+  if (!Array.isArray(raw)) return [];
+  const standards = raw
+    .map((standard: any) => ({
+      standard: standard.standard || standard.standardName || standard.name || standard.title || standard.characteristic || standard.checkpoint || '',
+      tolerance: standard.tolerance || standard.acceptanceTolerance || standard.nominalTolerance || '',
+      requirement: standard.requirement || standard.specification || standard.acceptanceCriteria || standard.criteria || standard.nominal || '',
+      hardQcStop: standard.hardQcStop || standard.hardStop || false,
+      referenceLink: standard.referenceLink || standard.referenceUrl || standard.documentUrl || '',
+    }))
+    .filter((standard) => standard.standard || standard.tolerance || standard.requirement);
+
+  const seen = new Set<string>();
+  return standards.filter((standard) => {
+    const key = qcStandardKey(standard);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function getRoutingOperationQcFields(params: {
+  operation: any;
+  routing: typeof partRoutings.$inferSelect;
+  taskPhase: 'START' | 'WORK' | 'FINISH';
+}) {
+  const { operation, routing, taskPhase } = params;
+  const pack = (operation.instructionPack || {}) as any;
+  const packStandards = normalizeQcStandards(
+    pack.qcStandards ||
+    pack.qcRequirements ||
+    pack.qualityChecks ||
+    pack.inspectionRequirements ||
+    pack.checkpoints,
+  );
+
+  const departmentConfig = ((routing.departmentConfig || {}) as Record<string, any>)[operation.departmentName] || {};
+  const phaseStandards = taskPhase === 'START'
+    ? normalizeQcStandards(departmentConfig.startQcStandards)
+    : taskPhase === 'FINISH'
+      ? normalizeQcStandards(departmentConfig.finishQcStandards)
+      : normalizeQcStandards(departmentConfig.qcStandards);
+  const fallbackStandards = taskPhase === 'FINISH'
+    ? normalizeQcStandards(departmentConfig.qcStandards)
+    : [];
+
+  const standards = packStandards.length > 0
+    ? packStandards
+    : phaseStandards.length > 0
+      ? phaseStandards
+      : fallbackStandards;
+
+  return standards.map((standard: any) => ({
+    fieldKey: `qc_${operation.id}_${sanitizeTravelerFieldKey(standard.standard || operation.operationName)}`,
+    fieldLabel: standard.standard || operation.operationName || 'QC Check',
+    fieldType: 'yes_no',
+    required: true,
+    validation: {
+      tolerance: standard.tolerance || '',
+      requirement: standard.requirement || '',
+      ...(standard.hardQcStop ? { hardQcStop: true } : {}),
+      ...(standard.referenceLink ? { referenceLink: standard.referenceLink } : {}),
+    },
+  }));
 }
 
 function getEnabledTravelerTaskPhases(departmentConfig: any): Set<'START' | 'WORK' | 'FINISH'> {
@@ -833,6 +917,7 @@ async function createTravelerTaskWithFieldsIfMissing(params: {
   stepId: string;
   enabledPhases: Set<'START' | 'WORK' | 'FINISH'>;
   existingTaskKeys: Set<string>;
+  existingTasksByKey?: Map<string, any>;
   task: any;
   fields?: any[];
 }) {
@@ -840,7 +925,31 @@ async function createTravelerTaskWithFieldsIfMissing(params: {
   if (!params.enabledPhases.has(phase)) return false;
 
   const key = travelerTaskKey({ ...params.task, taskPhase: phase });
-  if (params.existingTaskKeys.has(key)) return false;
+  if (params.existingTaskKeys.has(key)) {
+    const existingTask = params.existingTasksByKey?.get(key);
+    if (!existingTask || !params.fields?.length) return false;
+
+    const existingFields = await storage.getTravelerTaskFields(existingTask.id);
+    const existingFieldKeys = new Set(
+      existingFields.map((field) => String(field.fieldKey || '').trim().toLowerCase()).filter(Boolean),
+    );
+    let addedField = false;
+    for (const field of dedupeTravelerFieldsByKey(params.fields)) {
+      const fieldKey = String(field.fieldKey || '').trim().toLowerCase();
+      if (!fieldKey || existingFieldKeys.has(fieldKey)) continue;
+      await storage.createTravelerTaskField({
+        travelerTaskId: existingTask.id,
+        fieldKey: field.fieldKey,
+        fieldLabel: field.fieldLabel,
+        fieldType: field.fieldType || 'text',
+        required: field.required ?? false,
+        validation: field.validation || null,
+      } as any);
+      existingFieldKeys.add(fieldKey);
+      addedField = true;
+    }
+    return addedField;
+  }
   params.existingTaskKeys.add(key);
 
   const created = await storage.createTravelerTask({
@@ -849,6 +958,7 @@ async function createTravelerTaskWithFieldsIfMissing(params: {
     taskPhase: phase,
     status: params.task.status || 'NOT_STARTED',
   } as any);
+  params.existingTasksByKey?.set(key, created);
 
   for (const field of dedupeTravelerFieldsByKey(params.fields || [])) {
     await storage.createTravelerTaskField({
@@ -872,6 +982,7 @@ async function backfillDepartmentConfiguredTravelerTasks(params: {
   const { stepId, departmentName, routing } = params;
   const tasks = await storage.getTravelerTasks(stepId);
   const existingTaskKeys = new Set(tasks.map((task) => travelerTaskKey(task)));
+  const existingTasksByKey = new Map(tasks.map((task) => [travelerTaskKey(task), task]));
   const departmentConfigByName = (routing.departmentConfig || {}) as Record<string, any>;
   const departmentConfig = departmentConfigByName[departmentName] || {};
   const traceabilityConfig = (routing.traceabilityConfig || {}) as Record<string, string[]>;
@@ -886,6 +997,7 @@ async function backfillDepartmentConfiguredTravelerTasks(params: {
       stepId,
       enabledPhases,
       existingTaskKeys,
+      existingTasksByKey,
       task: {
         required: true,
         sortOrder: sortOrder++,
@@ -1019,9 +1131,7 @@ async function backfillDepartmentConfiguredTravelerTasks(params: {
   const qcTaskConfigs = [
     { standards: departmentConfig.startQcStandards || [], phase: 'START', title: 'Incoming QC Inspection' },
     {
-      standards: (departmentConfig.startQcStandards?.length > 0 || departmentConfig.finishQcStandards?.length > 0)
-        ? []
-        : (departmentConfig.qcStandards || []),
+      standards: departmentConfig.qcStandards || [],
       phase: 'WORK',
       title: 'Quality Control Checks',
     },
@@ -1251,15 +1361,22 @@ async function ensureExistingTravelerHasRoutingDetails(params: {
       let sortOrder = 0;
       const tasks = await storage.getTravelerTasks(step.id);
       const existingTaskKeys = new Set(tasks.map((task) => travelerTaskKey(task)));
+      const existingTasksByKey = new Map(tasks.map((task) => [travelerTaskKey(task), task]));
       for (const op of groupOps) {
         const instructionPack = op.instructionPack as any;
+        const taskPhase = getRoutingOperationTravelerPhase(op);
+        const taskType = operationTypeToTravelerTaskType(op.operationType) as any;
+        const operationFields = taskType === 'QC'
+          ? getRoutingOperationQcFields({ operation: op, routing, taskPhase })
+          : [];
         const created = await createTravelerTaskWithFieldsIfMissing({
           stepId: step.id,
           enabledPhases: new Set<'START' | 'WORK' | 'FINISH'>(['START', 'WORK', 'FINISH']),
           existingTaskKeys,
+          existingTasksByKey,
           task: {
-            taskType: operationTypeToTravelerTaskType(op.operationType) as any,
-            taskPhase: operationTypeToTravelerPhase(op.operationType) as any,
+            taskType,
+            taskPhase,
             title: op.operationName,
             instructions: instructionPack?.specialNotes || op.operationName,
             required: true,
@@ -1271,6 +1388,7 @@ async function ensureExistingTravelerHasRoutingDetails(params: {
             instructionPack,
             status: 'NOT_STARTED',
           },
+          fields: operationFields,
         });
         if (created) repaired = true;
       }

@@ -156,10 +156,10 @@ export default function DARLENEBTestDashboard() {
               <CardContent className="p-4 text-center">
                 <XCircle className="w-8 h-8 text-red-600 mx-auto mb-3" />
                 <h3 className={`text-sm font-semibold ${isDarkMode ? 'text-gray-100' : 'text-gray-900'}`}>
-                  Nonconforming Tracker
+                  P1 Nonconforming
                 </h3>
                 <p className={`text-xs mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                  Track quality issues
+                  Track P1 dispositions
                 </p>
               </CardContent>
             </Card>

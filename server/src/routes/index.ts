@@ -2929,36 +2929,57 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   async function applyTravelerStateToP2Items(items: any[]): Promise<any[]> {
     if (!items.length) return items;
 
+    const getSerializedKeys = (item: any) => [
+      item.serialNumber,
+      item.serial_number,
+      item.barcode,
+      item.travelerBarcode,
+      item.traveler_barcode,
+    ]
+      .map((value) => String(value ?? '').trim().toLowerCase())
+      .filter(Boolean);
+
     const serials = [...new Set(
-      items
-        .map((item: any) => String(item.serialNumber ?? item.serial_number ?? '').trim())
-        .filter(Boolean)
-        .map((serial: string) => serial.toLowerCase())
+      items.flatMap(getSerializedKeys)
     )];
     if (!serials.length) return items;
 
     const { pool: dbPool } = await import('../../db');
     const travelerStateRows = await dbPool.query(
-      `SELECT DISTINCT ON (LOWER(TRIM(t.serial_number)))
-         LOWER(TRIM(t.serial_number)) AS serial,
+      `WITH traveler_keys AS (
+         SELECT
+           LOWER(TRIM(key_value)) AS serial,
+           t.status,
+           t.traveler_number,
+           t.updated_at,
+           active_step.department_name,
+           active_step.started_at
+         FROM travelers t
+         LEFT JOIN LATERAL (
+           SELECT ts.department_name, ts.started_at
+           FROM traveler_steps ts
+           WHERE ts.traveler_id = t.id
+             AND UPPER(ts.status) IN ('IN_PROGRESS', 'ACTIVE', 'STARTED')
+           ORDER BY ts.step_number ASC
+           LIMIT 1
+         ) active_step ON true
+         CROSS JOIN LATERAL (
+           VALUES (t.serial_number), (t.lot_number)
+         ) AS key_values(key_value)
+         WHERE key_value IS NOT NULL
+           AND TRIM(key_value) <> ''
+           AND LOWER(TRIM(key_value)) = ANY($1::text[])
+           AND UPPER(t.status) IN ('IN_PROGRESS', 'COMPLETED')
+       )
+       SELECT DISTINCT ON (serial)
+         serial,
          t.status,
          t.traveler_number AS "travelerNumber",
          t.updated_at AS "updatedAt",
-         active_step.department_name AS "activeDepartment",
-         active_step.started_at AS "startedAt"
-       FROM travelers t
-       LEFT JOIN LATERAL (
-         SELECT ts.department_name, ts.started_at
-         FROM traveler_steps ts
-         WHERE ts.traveler_id = t.id
-           AND UPPER(ts.status) IN ('IN_PROGRESS', 'ACTIVE', 'STARTED')
-         ORDER BY ts.step_number ASC
-         LIMIT 1
-       ) active_step ON true
-       WHERE t.serial_number IS NOT NULL
-         AND LOWER(TRIM(t.serial_number)) = ANY($1::text[])
-         AND UPPER(t.status) IN ('IN_PROGRESS', 'COMPLETED')
-       ORDER BY LOWER(TRIM(t.serial_number)),
+         t.department_name AS "activeDepartment",
+         t.started_at AS "startedAt"
+       FROM traveler_keys t
+       ORDER BY serial,
          CASE WHEN UPPER(t.status) = 'IN_PROGRESS' THEN 0 ELSE 1 END,
          t.updated_at DESC NULLS LAST`,
       [serials]
@@ -2969,8 +2990,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     );
 
     return items.map((item: any) => {
-      const key = String(item.serialNumber ?? item.serial_number ?? '').trim().toLowerCase();
-      const travelerState = key ? travelerBySerial.get(key) : null;
+      const travelerState = getSerializedKeys(item)
+        .map((key) => travelerBySerial.get(key))
+        .find(Boolean);
       if (!travelerState) return item;
 
       const travelerStatus = String(travelerState.status || '').toUpperCase();
@@ -3776,7 +3798,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         }
       };
       
-      // Keep P2 Control Center as the visible source for WIP and finished units.
+      // Keep this tab focused on active WIP; completed/off-system units roll up
+      // through PO status instead of remaining in the production queue.
       let allItems: any[] = [];
       try {
         allItems = await applyTravelerStateToP2Items(
@@ -3785,7 +3808,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       } catch (error) {
         console.warn('P2 Production Queue optional serialized item lookup skipped:', error);
       }
-      const visibleStatuses = new Set(['ACTIVE', 'COMPLETED']);
+      const visibleStatuses = new Set(['ACTIVE']);
       const items = (allItems || []).filter((item: any) => visibleStatuses.has(item.status));
       const legacyProductionRows: any[] = [];
       const legacyProjectProductionRows = await optionalP2Rows(
@@ -4002,7 +4025,15 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       );
       const legacyProductionControlRows = p2ControlRows(legacyProductionRows).filter((row: any) => {
         const key = row.poId && row.poItemId ? `${row.poId}:${row.poItemId}` : null;
-        return !key || !serializedPoItemKeys.has(key);
+        const normalizedStatus = String(row.status || '').toUpperCase();
+        const quantity = Math.max(1, Number(row.quantity || 1));
+        const manufactured = Number(row.quantityManufactured || 0);
+        const isComplete = ['COMPLETED', 'CLOSED'].includes(normalizedStatus) || manufactured >= quantity;
+        return (!key || !serializedPoItemKeys.has(key)) && !isComplete;
+      });
+      const activeLegacyProjectProductionRows = legacyProjectProductionRows.filter((row: any) => {
+        const normalizedStatus = String(row.status || '').toUpperCase();
+        return !['COMPLETE', 'COMPLETED', 'CLOSED'].includes(normalizedStatus);
       });
 
       const itemIds = items.map((item: any) => item.id).filter(Boolean);
@@ -4048,7 +4079,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           : (normalizeP2ControlDepartment(row.department) || 'Pending Layup');
         departmentsSet.add(displayDepartment);
       });
-      legacyProjectProductionRows.forEach((row: any) => {
+      activeLegacyProjectProductionRows.forEach((row: any) => {
         const displayDepartment = ['COMPLETE', 'COMPLETED', 'CLOSED'].includes(String(row.status || '').toUpperCase())
           ? 'Completed'
           : (normalizeP2ControlDepartment(row.activeDepartment || row.currentTravelerStep || row.assignedDepartment || row.queueType || row.dashboardType) || 'Pending Layup');
@@ -4201,7 +4232,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         });
       });
 
-      legacyProjectProductionRows.forEach((row: any) => {
+      activeLegacyProjectProductionRows.forEach((row: any) => {
         const normalizedStatus = String(row.status || '').toUpperCase();
         const dept = ['COMPLETE', 'COMPLETED', 'CLOSED'].includes(normalizedStatus)
           ? 'Completed'

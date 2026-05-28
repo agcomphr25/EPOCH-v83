@@ -748,7 +748,6 @@ router.post("/kiosk/punch-corrections", h(async (req, res): Promise<void> => {
     source: "kiosk",
     actorUser: null,
     actorIp: req.ip ?? null,
-    requireSupervisor: true,
   });
 
   if ("error" in result) {

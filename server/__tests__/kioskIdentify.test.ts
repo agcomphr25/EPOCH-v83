@@ -41,6 +41,15 @@ vi.mock('../src/services/timekeeping/timeoff.service', () => ({
   checkActivePTOForEmployee: vi.fn().mockResolvedValue(null),
 }));
 
+vi.mock('../src/services/timekeeping/punchCorrections.service', () => ({
+  submitPunchCorrectionRequest: vi.fn().mockResolvedValue({
+    id: 31,
+    employeeId: 7,
+    status: 'pending_hr',
+    source: 'kiosk',
+  }),
+}));
+
 vi.mock('../src/helpers/travelerBarcodeResolver', () => ({
   resolveTravelerBarcode: vi.fn(),
 }));
@@ -75,6 +84,7 @@ vi.mock('../db', () => ({
 import { db as nativeDb } from '../db';
 import bcrypt from 'bcryptjs';
 import * as ledger from '../src/lib/punchLedger';
+import * as punchCorrections from '../src/services/timekeeping/punchCorrections.service';
 import timekeepingRouter from '../src/routes/timekeeping/punches';
 
 function makeSelectChain(result: unknown[]) {
@@ -278,5 +288,52 @@ describe('POST /api/timekeeping/kiosk/identify', () => {
       .expect(200);
 
     expect(res.body.timekeeperPin).toBeUndefined();
+  });
+});
+
+describe('POST /api/timekeeping/kiosk/punch-corrections', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(punchCorrections.submitPunchCorrectionRequest).mockResolvedValue({
+      id: 31,
+      employeeId: 7,
+      status: 'pending_hr',
+      source: 'kiosk',
+    } as never);
+  });
+
+  it('submits without forcing a supervisor requirement', async () => {
+    vi.mocked(nativeDb.select).mockReturnValue(
+      makeSelectChain([ACTIVE_EMP_WITH_PIN]) as ReturnType<typeof nativeDb.select>,
+    );
+    vi.mocked(bcrypt.compare).mockResolvedValue(true as never);
+
+    const app = buildApp();
+    const res = await request(app)
+      .post('/api/timekeeping/kiosk/punch-corrections')
+      .send({
+        employeeId: 7,
+        pin: '1234',
+        requestType: 'add_session',
+        reason: 'Forgot to clock in',
+        proposedChanges: {
+          clockIn: '2026-05-27T13:00:00.000Z',
+          laborClass: 'REGULAR',
+          punchType: 'clock_in',
+        },
+      })
+      .expect(201);
+
+    expect(res.body.status).toBe('pending_hr');
+    expect(punchCorrections.submitPunchCorrectionRequest).toHaveBeenCalledWith(
+      expect.not.objectContaining({ requireSupervisor: true }),
+    );
+    expect(punchCorrections.submitPunchCorrectionRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        employeeId: 7,
+        source: 'kiosk',
+        actorUser: null,
+      }),
+    );
   });
 });

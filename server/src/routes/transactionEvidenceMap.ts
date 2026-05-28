@@ -1,4 +1,10 @@
-import { Router, type Request, type Response, type NextFunction } from 'express';
+import {
+  Router,
+  type Request,
+  type Response,
+  type NextFunction,
+} from 'express';
+
 import { pool } from '../../db';
 import { authenticateToken } from '../../middleware/auth';
 import { recordAuditEvent } from '../services/auditLedgerService';
@@ -8,7 +14,14 @@ type EvidenceNodeType =
   | 'period'
   | 'work_order'
   | 'employee'
+  | 'labor_session'
   | 'labor_cost'
+  | 'material_budget'
+  | 'material_lot'
+  | 'material_consumption'
+  | 'material_receipt'
+  | 'material_request'
+  | 'inventory_ledger'
   | 'payroll'
   | 'billing'
   | 'journal'
@@ -88,12 +101,166 @@ type InvoiceEvidence = {
   journal_effective_date: string | null;
 };
 
+type WorkOrderEvidence = {
+  id: string;
+  work_order_number: string;
+  part_number: string | null;
+  status: string | null;
+  wad_status: string | null;
+  material_spend_cap: string | null;
+};
+
+type LiveLaborEvidence = {
+  session_id: number;
+  employee_id: number;
+  employee_code: string | null;
+  employee_name: string | null;
+  department: string | null;
+  job_title: string | null;
+  clock_in: string;
+  clock_out: string | null;
+  hours: string;
+  source: string | null;
+  labor_class: string | null;
+  operation: string | null;
+  charge_code: string | null;
+  production_work_order_id: string | null;
+  work_order_number: string | null;
+  traveler_id: string | null;
+  traveler_number: string | null;
+  approval_status: string | null;
+  is_edited: boolean | null;
+  timesheet_id: number | null;
+  timesheet_status: string | null;
+  labor_cost_record_id: number | null;
+};
+
+type MaterialConsumptionEvidence = {
+  id: string;
+  traveler_id: string;
+  traveler_number: string | null;
+  production_work_order_id: string | null;
+  work_order_number: string | null;
+  traveler_step_id: string | null;
+  step_number: number | null;
+  department_name: string | null;
+  traveler_task_id: string | null;
+  task_title: string | null;
+  material_lot_id: string;
+  internal_control_number: string;
+  material_part_number: string;
+  material_name: string;
+  qty_used: string;
+  unit_of_measure: string;
+  validation_status: string;
+  validation_details: Record<string, unknown> | null;
+  scanned_by: string;
+  scanned_at: string | null;
+  badge_scan: string | null;
+  was_override: boolean | null;
+  override_approved_by: string | null;
+  override_reason: string | null;
+  received_unit_id: number | null;
+  received_unit_barcode: string | null;
+  notes: string | null;
+  unit_cost: string | null;
+  consumed_cost: string | null;
+};
+
+type MaterialReservationEvidence = {
+  id: number;
+  material_lot_id: string;
+  traveler_id: string | null;
+  traveler_number: string | null;
+  production_work_order_id: string | null;
+  work_order_number: string | null;
+  internal_control_number: string | null;
+  material_part_number: string | null;
+  material_name: string | null;
+  quantity_reserved: string;
+  unit_of_measure: string;
+  status: string;
+  intended_routing_step_id: string | null;
+  created_by: string;
+  created_at: string | null;
+  unit_cost: string | null;
+  committed_cost: string | null;
+};
+
+type ProjectReceivedMaterialEvidence = {
+  id: number;
+  material_lot_id: string | null;
+  received_unit_id: number;
+  received_unit_barcode: string | null;
+  receipt_id: number;
+  receipt_number: string | null;
+  item_code: string | null;
+  item_name: string | null;
+  lot_number: string | null;
+  internal_control_number: string | null;
+  quantity: string;
+  unit_cost: string;
+  extended_cost: string;
+  status: string;
+  accepted_by_display_name: string | null;
+  accepted_at: string | null;
+  notes: string | null;
+  created_at: string | null;
+};
+
+type PartRequestEvidence = {
+  id: number;
+  part_number: string;
+  part_name: string;
+  requested_by: string;
+  department: string | null;
+  quantity: number;
+  estimated_cost: number | null;
+  status: string;
+  request_date: string | null;
+  vendor_po_id: number | null;
+  reason: string | null;
+};
+
+type InventoryLedgerEvidence = {
+  id: string;
+  transaction_number: string;
+  transaction_type: string;
+  ag_part_number: string;
+  lot_id: string | null;
+  quantity_delta: string;
+  quantity_before: string;
+  quantity_after: string;
+  unit_of_measure: string;
+  performed_by_display_name: string;
+  source_module: string;
+  source_record_id: string | null;
+  event_hash: string;
+  created_at: string;
+  project_id: string | null;
+  production_work_order_id: string | null;
+  traveler_id: string | null;
+};
+
 const router = Router();
+const MATERIAL_PART_REQUEST_STATUSES = [
+  'APPROVED',
+  'ORDERED',
+  'ORDERED_PARTIAL',
+  'RECEIVED',
+  'RECEIVED_PARTIAL',
+  'DELIVERED_TO_DEPT',
+];
 
 function requireGlennj(req: Request, res: Response, next: NextFunction) {
-  const username = (req.user?.username ?? '').trim().toLowerCase().replace(/^@/, '');
+  const username = (req.user?.username ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/^@/, '');
   if (username !== 'glennj') {
-    return res.status(403).json({ error: 'Transaction evidence map is currently restricted to glennj.' });
+    return res.status(403).json({
+      error: 'Transaction evidence map is currently restricted to glennj.',
+    });
   }
   return next();
 }
@@ -109,7 +276,12 @@ function parsePeriod(req: Request) {
 
   const year = Number(req.query.periodYear);
   const month = Number(req.query.periodMonth);
-  if (Number.isInteger(year) && Number.isInteger(month) && month >= 1 && month <= 12) {
+  if (
+    Number.isInteger(year) &&
+    Number.isInteger(month) &&
+    month >= 1 &&
+    month <= 12
+  ) {
     return { year, month, label: `${year}-${String(month).padStart(2, '0')}` };
   }
 
@@ -118,7 +290,10 @@ function parsePeriod(req: Request) {
 
 function money(value: unknown) {
   const numberValue = Number(value ?? 0);
-  return numberValue.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+  return numberValue.toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'USD',
+  });
 }
 
 function hours(value: unknown) {
@@ -133,64 +308,71 @@ function addEdge(edges: EvidenceEdge[], edge: EvidenceEdge) {
   if (!edges.some((existing) => existing.id === edge.id)) edges.push(edge);
 }
 
-router.get('/transaction-evidence-map', authenticateToken, requireGlennj, async (req: Request, res: Response) => {
-  const projectId = typeof req.query.projectId === 'string' ? req.query.projectId : '';
-  const period = parsePeriod(req);
+router.get(
+  '/transaction-evidence-map',
+  authenticateToken,
+  requireGlennj,
+  async (req: Request, res: Response) => {
+    const projectId =
+      typeof req.query.projectId === 'string' ? req.query.projectId : '';
+    const period = parsePeriod(req);
 
-  if (!projectId) return res.status(400).json({ error: 'projectId is required' });
-  if (!period) return res.status(400).json({ error: 'period must be YYYY-MM' });
+    if (!projectId)
+      return res.status(400).json({ error: 'projectId is required' });
+    if (!period)
+      return res.status(400).json({ error: 'period must be YYYY-MM' });
 
-  try {
-    const projectRows = await pool.query<{
-      id: string;
-      project_code: string;
-      project_name: string;
-      customer_id: string;
-      customer_name_snapshot: string | null;
-      status: string | null;
-      po_id: number | null;
-      default_charge_code_id: number | null;
-      created_at: string | null;
-    }>(
-      `SELECT id, project_code, project_name, customer_id, customer_name_snapshot, status,
+    try {
+      const projectRows = await pool.query<{
+        id: string;
+        project_code: string;
+        project_name: string;
+        customer_id: string;
+        customer_name_snapshot: string | null;
+        status: string | null;
+        po_id: number | null;
+        default_charge_code_id: number | null;
+        created_at: string | null;
+      }>(
+        `SELECT id, project_code, project_name, customer_id, customer_name_snapshot, status,
               po_id, default_charge_code_id, created_at
        FROM projects
        WHERE id = $1::uuid
        LIMIT 1`,
-      [projectId],
-    );
-    const project = projectRows[0];
-    if (!project) return res.status(404).json({ error: 'Project not found' });
+        [projectId]
+      );
+      const project = projectRows[0];
+      if (!project) return res.status(404).json({ error: 'Project not found' });
 
-    const laborRows = await pool.query<{
-      id: number;
-      epoch_employee_id: number | null;
-      employee_code: string | null;
-      employee_name: string | null;
-      department: string | null;
-      job_title: string | null;
-      canonical_id: string | null;
-      source_punch_canonical_id: string | null;
-      clock_in: string;
-      clock_out: string;
-      hours_worked: string;
-      rate_used: string;
-      dollar_cost: string;
-      cost_type: string;
-      rate_source: string;
-      charge_code_id: number | null;
-      charge_code: string | null;
-      charge_code_description: string | null;
-      production_work_order_id: string | null;
-      work_order_number: string | null;
-      traveler_id: string | null;
-      journal_entry_id: number | null;
-      journal_status: string | null;
-      journal_memo: string | null;
-      journal_effective_date: string | null;
-      payroll_batch_ids: number[] | null;
-    }>(
-      `WITH payroll_batches AS (
+      const laborRows = await pool.query<{
+        id: number;
+        epoch_employee_id: number | null;
+        employee_code: string | null;
+        employee_name: string | null;
+        department: string | null;
+        job_title: string | null;
+        canonical_id: string | null;
+        source_punch_canonical_id: string | null;
+        clock_in: string;
+        clock_out: string;
+        hours_worked: string;
+        rate_used: string;
+        dollar_cost: string;
+        cost_type: string;
+        rate_source: string;
+        charge_code_id: number | null;
+        charge_code: string | null;
+        charge_code_description: string | null;
+        production_work_order_id: string | null;
+        work_order_number: string | null;
+        traveler_id: string | null;
+        journal_entry_id: number | null;
+        journal_status: string | null;
+        journal_memo: string | null;
+        journal_effective_date: string | null;
+        payroll_batch_ids: number[] | null;
+      }>(
+        `WITH payroll_batches AS (
          SELECT
            jsonb_array_elements_text(source_timesheet_ids)::int AS timesheet_id,
            array_agg(id ORDER BY revision_number) AS batch_ids
@@ -236,17 +418,309 @@ router.get('/transaction-evidence-map', authenticateToken, requireGlennj, async 
        WHERE lcr.project_id = $1::uuid
          AND lcr.period_year = $2
          AND lcr.period_month = $3
-       ORDER BY lcr.clock_in ASC, e.name NULLS LAST, lcr.id ASC`,
-      [projectId, period.year, period.month],
-    );
+      ORDER BY lcr.clock_in ASC, e.name NULLS LAST, lcr.id ASC`,
+        [projectId, period.year, period.month]
+      );
 
-    const journalIds = Array.from(new Set(laborRows.map((r) => r.journal_entry_id).filter((id): id is number => id != null)));
-    const laborRecordIds = laborRows.map((r) => String(r.id));
-    const workOrderIds = Array.from(new Set(laborRows.map((r) => r.production_work_order_id).filter((id): id is string => !!id)));
-    const employeeIds = Array.from(new Set(laborRows.map((r) => r.epoch_employee_id).filter((id): id is number => id != null)));
+      const projectWorkOrders = await pool.query<WorkOrderEvidence>(
+        `SELECT
+         id::text,
+         work_order_number,
+         part_number,
+         status,
+         wad_status,
+         NULLIF(wizard_data->'step5'->>'materialSpendCap', '') AS material_spend_cap
+       FROM production_work_orders
+       WHERE project_id = $1::uuid
+       ORDER BY work_order_number`,
+        [projectId]
+      );
 
-    const invoiceRows = await pool.query<InvoiceEvidence>(
-      `SELECT
+      const journalIds = Array.from(
+        new Set(
+          laborRows
+            .map((r) => r.journal_entry_id)
+            .filter((id): id is number => id != null)
+        )
+      );
+      const laborRecordIds = laborRows.map((r) => String(r.id));
+      const workOrderIds = Array.from(
+        new Set([
+          ...projectWorkOrders.map((row) => row.id),
+          ...laborRows
+            .map((r) => r.production_work_order_id)
+            .filter((id): id is string => !!id),
+        ])
+      );
+
+      const liveLaborRows = await pool.query<LiveLaborEvidence>(
+        `WITH project_charge_codes AS (
+         SELECT DISTINCT NULLIF(TRIM(cc_row->>'chargeCode'), '') AS charge_code
+         FROM production_work_orders wo
+         CROSS JOIN LATERAL jsonb_array_elements(
+           CASE
+             WHEN jsonb_typeof(wo.wizard_data->'step4'->'chargeCodes') = 'array'
+               THEN wo.wizard_data->'step4'->'chargeCodes'
+             ELSE '[]'::jsonb
+           END
+         ) AS cc_row
+         WHERE wo.project_id = $1::uuid
+           AND COALESCE(NULLIF(cc_row->>'classification', ''), 'DIRECT') = 'DIRECT'
+       )
+       SELECT
+         pl.id AS session_id,
+         pl.employee_id,
+         e.employee_code,
+         e.name AS employee_name,
+         COALESCE(pl.department, e.department) AS department,
+         e.job_title,
+         pl.clock_in,
+         pl.clock_out,
+         ROUND(EXTRACT(EPOCH FROM (COALESCE(pl.clock_out, NOW()) - pl.clock_in)) / 3600.0, 4)::text AS hours,
+         pl.source,
+         pl.labor_class,
+         pl.operation,
+         COALESCE(lcc.code, pl.charge_code) AS charge_code,
+         COALESCE(pl.production_work_order_id, t.production_work_order_id)::text AS production_work_order_id,
+         wo.work_order_number,
+         pl.traveler_id,
+         t.traveler_number,
+         pl.approval_status,
+         pl.is_edited,
+         ts.id AS timesheet_id,
+         ts.status AS timesheet_status,
+         lcr.id AS labor_cost_record_id
+       FROM punch_ledger pl
+       JOIN employees e ON e.id = pl.employee_id
+       LEFT JOIN public.charge_codes lcc ON lcc.id = pl.charge_code_id
+       LEFT JOIN travelers t ON t.id::text = pl.traveler_id
+       LEFT JOIN production_work_orders wo ON wo.id = COALESCE(pl.production_work_order_id, t.production_work_order_id)
+       LEFT JOIN timekeeping.timesheets ts
+         ON ts.employee_id = pl.employee_id
+        AND pl.clock_in::date BETWEEN ts.period_start::date AND ts.period_end::date
+       LEFT JOIN LATERAL (
+         SELECT id
+         FROM labor_cost_records lcr_match
+         WHERE lcr_match.source_punch_canonical_id = ('pl-' || pl.id::text)
+            OR lcr_match.canonical_id = ('pl-' || pl.id::text)
+         ORDER BY id DESC
+         LIMIT 1
+       ) lcr ON true
+       WHERE pl.labor_class = 'REGULAR'
+         AND pl.clock_in >= make_date($2::int, $3::int, 1)
+         AND pl.clock_in < (make_date($2::int, $3::int, 1) + interval '1 month')
+         AND (
+           pl.project_id = $1::uuid
+           OR pl.production_work_order_id IN (SELECT id FROM production_work_orders WHERE project_id = $1::uuid)
+           OR pl.traveler_id IN (SELECT id::text FROM travelers WHERE project_id = $1::uuid)
+           OR COALESCE(lcc.code, pl.charge_code) IN (
+             SELECT charge_code FROM project_charge_codes WHERE charge_code IS NOT NULL
+           )
+         )
+       ORDER BY pl.clock_in ASC, e.name ASC, pl.id ASC`,
+        [projectId, period.year, period.month]
+      );
+
+      const materialBudgetRows = projectWorkOrders.filter(
+        (row) => Number(row.material_spend_cap ?? 0) > 0
+      );
+
+      const materialReservationRows = await pool
+        .query<MaterialReservationEvidence>(
+          `SELECT
+         mlr.id,
+         mlr.material_lot_id::text,
+         mlr.traveler_id::text,
+         t.traveler_number,
+         t.production_work_order_id::text,
+         wo.work_order_number,
+         ml.internal_control_number,
+         COALESCE(ii.ag_part_number, ml.material_part_number) AS material_part_number,
+         COALESCE(ii.name, ml.material_name) AS material_name,
+         mlr.quantity_reserved,
+         mlr.unit_of_measure,
+         mlr.status,
+         mlr.intended_routing_step_id,
+         mlr.created_by,
+         mlr.created_at,
+         COALESCE(ii.unit_cost, 0)::text AS unit_cost,
+         (mlr.quantity_reserved * COALESCE(ii.unit_cost, 0))::text AS committed_cost
+       FROM material_lot_reservations mlr
+       JOIN material_lots ml ON ml.id = mlr.material_lot_id
+       LEFT JOIN inventory_items ii ON ii.id = ml.inventory_item_id
+       LEFT JOIN travelers t ON t.id::text = mlr.traveler_id::text
+       LEFT JOIN production_work_orders wo ON wo.id = t.production_work_order_id
+       WHERE mlr.traveler_id::text IN (SELECT id::text FROM travelers WHERE project_id = $1::uuid)
+       ORDER BY mlr.created_at DESC, mlr.id DESC
+       LIMIT 250`,
+          [projectId]
+        )
+        .catch(() => []);
+
+      const materialConsumptionRows = await pool
+        .query<MaterialConsumptionEvidence>(
+          `SELECT
+         tmc.id::text,
+         tmc.traveler_id::text,
+         t.traveler_number,
+         t.production_work_order_id::text,
+         wo.work_order_number,
+         tmc.traveler_step_id::text,
+         ts.step_number,
+         ts.department_name,
+         tmc.traveler_task_id::text,
+         tt.title AS task_title,
+         tmc.material_lot_id::text,
+         tmc.internal_control_number,
+         tmc.material_part_number,
+         tmc.material_name,
+         COALESCE(tmc.qty_used, tmc.quantity_used, 0)::text AS qty_used,
+         tmc.unit_of_measure,
+         tmc.validation_status,
+         tmc.validation_details,
+         tmc.scanned_by,
+         tmc.scanned_at,
+         tmc.badge_scan,
+         tmc.was_override,
+         tmc.override_approved_by,
+         tmc.override_reason,
+         tmc.received_unit_id,
+         ru.barcode AS received_unit_barcode,
+         tmc.notes,
+         COALESCE(ii.unit_cost, 0)::text AS unit_cost,
+         (COALESCE(tmc.qty_used, tmc.quantity_used, 0) * COALESCE(ii.unit_cost, 0))::text AS consumed_cost
+       FROM traveler_material_consumption tmc
+       JOIN travelers t ON t.id::text = tmc.traveler_id::text
+       LEFT JOIN production_work_orders wo ON wo.id = t.production_work_order_id
+       LEFT JOIN traveler_steps ts ON ts.id::text = tmc.traveler_step_id::text
+       LEFT JOIN traveler_tasks tt ON tt.id::text = tmc.traveler_task_id::text
+       LEFT JOIN material_lots ml ON ml.id = tmc.material_lot_id
+       LEFT JOIN inventory_items ii ON ii.id = ml.inventory_item_id
+       LEFT JOIN received_units ru ON ru.id = tmc.received_unit_id
+       WHERE t.project_id = $1::uuid
+         AND COALESCE(tmc.scanned_at, tmc.created_at) >= make_date($2::int, $3::int, 1)
+         AND COALESCE(tmc.scanned_at, tmc.created_at) < (make_date($2::int, $3::int, 1) + interval '1 month')
+       ORDER BY COALESCE(tmc.scanned_at, tmc.created_at) DESC, tmc.id DESC
+       LIMIT 250`,
+          [projectId, period.year, period.month]
+        )
+        .catch(() => []);
+
+      const projectReceivedMaterialRows = await pool
+        .query<ProjectReceivedMaterialEvidence>(
+          `SELECT
+         prm.id,
+         prm.material_lot_id::text,
+         prm.received_unit_id,
+         ru.barcode AS received_unit_barcode,
+         prm.receipt_id,
+         r.receipt_number,
+         COALESCE(ii.ag_part_number, rl.ag_part_number) AS item_code,
+         COALESCE(ii.name, rl.description) AS item_name,
+         COALESCE(ru.lot_number, ml.supplier_lot_number) AS lot_number,
+         COALESCE(ru.internal_control_number, ml.internal_control_number) AS internal_control_number,
+         prm.quantity,
+         prm.unit_cost,
+         prm.extended_cost,
+         prm.status,
+         prm.accepted_by_display_name,
+         prm.accepted_at,
+         prm.notes,
+         prm.created_at
+       FROM project_received_materials prm
+       JOIN received_units ru ON ru.id = prm.received_unit_id
+       JOIN receipts r ON r.id = prm.receipt_id
+       JOIN receipt_lines rl ON rl.id = ru.receipt_line_id
+       LEFT JOIN material_lots ml ON ml.id = prm.material_lot_id
+       LEFT JOIN inventory_items ii ON ii.id = ml.inventory_item_id
+       WHERE prm.project_id = $1::uuid
+         AND COALESCE(prm.accepted_at, prm.created_at) >= make_date($2::int, $3::int, 1)
+         AND COALESCE(prm.accepted_at, prm.created_at) < (make_date($2::int, $3::int, 1) + interval '1 month')
+         AND prm.status IN ('pending_pm_acceptance', 'accepted')
+       ORDER BY COALESCE(prm.accepted_at, prm.created_at) DESC, prm.id DESC
+       LIMIT 250`,
+          [projectId, period.year, period.month]
+        )
+        .catch(() => []);
+
+      const partRequestRows = await pool
+        .query<PartRequestEvidence>(
+          `SELECT
+         id,
+         part_number,
+         part_name,
+         requested_by,
+         department,
+         quantity,
+         estimated_cost,
+         status,
+         request_date,
+         vendor_po_id,
+         reason
+       FROM parts_requests
+       WHERE project_id = $1::uuid
+         AND is_active = true
+         AND status = ANY($2::text[])
+       ORDER BY request_date DESC, id DESC
+       LIMIT 250`,
+          [projectId, MATERIAL_PART_REQUEST_STATUSES]
+        )
+        .catch(() => []);
+
+      const inventoryLedgerRows = await pool
+        .query<InventoryLedgerEvidence>(
+          `SELECT
+         id::text,
+         transaction_number,
+         transaction_type,
+         ag_part_number,
+         lot_id::text,
+         quantity_delta,
+         quantity_before,
+         quantity_after,
+         unit_of_measure,
+         performed_by_display_name,
+         source_module,
+         source_record_id,
+         event_hash,
+         created_at,
+         project_id::text,
+         production_work_order_id::text,
+         traveler_id::text
+       FROM inventory_transaction_ledger
+       WHERE created_at >= make_date($2::int, $3::int, 1)
+         AND created_at < (make_date($2::int, $3::int, 1) + interval '1 month')
+         AND (
+           project_id = $1::uuid
+           OR production_work_order_id IN (SELECT id FROM production_work_orders WHERE project_id = $1::uuid)
+           OR traveler_id IN (SELECT id::text FROM travelers WHERE project_id = $1::uuid)
+           OR source_record_id = ANY($4::text[])
+         )
+       ORDER BY created_at DESC
+       LIMIT 250`,
+          [
+            projectId,
+            period.year,
+            period.month,
+            materialConsumptionRows.map((row) => row.id),
+          ]
+        )
+        .catch(() => []);
+
+      const employeeIds = Array.from(
+        new Set([
+          ...laborRows
+            .map((r) => r.epoch_employee_id)
+            .filter((id): id is number => id != null),
+          ...liveLaborRows
+            .map((r) => r.employee_id)
+            .filter((id): id is number => id != null),
+        ])
+      );
+
+      const invoiceRows = await pool
+        .query<InvoiceEvidence>(
+          `SELECT
          inv.id::text,
          inv.invoice_number,
          inv.invoice_date::text,
@@ -294,57 +768,62 @@ router.get('/transaction-evidence-map', authenticateToken, requireGlennj, async 
          OR ($3::int IS NOT NULL AND slip_lot.po_id = $3::int)
        GROUP BY inv.id, c.customer_name, inv_lot.po_id, slip_lot.po_id, je.id, je.status, je.memo, je.effective_date
        ORDER BY inv.invoice_date DESC, inv.invoice_number DESC`,
-      [projectId, project.project_code, project.po_id, workOrderIds],
-    ).catch(() => []);
+          [projectId, project.project_code, project.po_id, workOrderIds]
+        )
+        .catch(() => []);
 
-    const invoiceIds = invoiceRows.map((row) => row.id);
-    const invoiceJournalIds = invoiceRows
-      .map((row) => row.journal_entry_id)
-      .filter((id): id is number => id != null);
-    const allJournalIds = Array.from(new Set([...journalIds, ...invoiceJournalIds]));
+      const invoiceIds = invoiceRows.map((row) => row.id);
+      const invoiceJournalIds = invoiceRows
+        .map((row) => row.journal_entry_id)
+        .filter((id): id is number => id != null);
+      const allJournalIds = Array.from(
+        new Set([...journalIds, ...invoiceJournalIds])
+      );
 
-    const journalLines: JournalLineEvidence[] = allJournalIds.length
-      ? await pool.query<JournalLineEvidence>(
-          `SELECT jl.journal_entry_id, coa.account_name, coa.account_number,
+      const journalLines: JournalLineEvidence[] = allJournalIds.length
+        ? await pool.query<JournalLineEvidence>(
+            `SELECT jl.journal_entry_id, coa.account_name, coa.account_number,
                   jl.debit_amount, jl.credit_amount, jl.allowability,
                   jl.direct_indirect, jl.cost_pool
            FROM journal_lines jl
            LEFT JOIN chart_of_accounts coa ON coa.id = jl.account_id
            WHERE jl.journal_entry_id = ANY($1::int[])
            ORDER BY jl.journal_entry_id, jl.id`,
-          [allJournalIds],
-        )
-      : [];
+            [allJournalIds]
+          )
+        : [];
 
-    const projectDocs = await pool.query<{
-      id: number;
-      label: string | null;
-      original_file_name: string;
-      mime_type: string | null;
-      file_size: number | null;
-      created_at: string | null;
-    }>(
-      `SELECT id, label, original_file_name, mime_type, file_size, created_at
+      const projectDocs = await pool
+        .query<{
+          id: number;
+          label: string | null;
+          original_file_name: string;
+          mime_type: string | null;
+          file_size: number | null;
+          created_at: string | null;
+        }>(
+          `SELECT id, label, original_file_name, mime_type, file_size, created_at
        FROM project_documents
        WHERE project_id = $1::uuid
        ORDER BY created_at DESC`,
-      [projectId],
-    ).catch(() => []);
+          [projectId]
+        )
+        .catch(() => []);
 
-    const auditRows = await pool.query<{
-      id: number;
-      action: string;
-      subject_type: string | null;
-      subject_id: string | null;
-      entity_type: string | null;
-      entity_id: string | null;
-      actor_name: string | null;
-      row_hash: string | null;
-      sequence_number: number | null;
-      occurred_at: string | null;
-      created_at: string | null;
-    }>(
-      `SELECT id, action, subject_type, subject_id, entity_type, entity_id, actor_name,
+      const auditRows = await pool.query<{
+        id: number;
+        action: string;
+        subject_type: string | null;
+        subject_id: string | null;
+        entity_type: string | null;
+        entity_id: string | null;
+        actor_name: string | null;
+        row_hash: string | null;
+        sequence_number: number | null;
+        occurred_at: string | null;
+        created_at: string | null;
+      }>(
+        `SELECT id, action, subject_type, subject_id, entity_type, entity_id, actor_name,
               row_hash, sequence_number, occurred_at, created_at
        FROM audit_events
        WHERE
@@ -361,393 +840,975 @@ router.get('/transaction-evidence-map', authenticateToken, requireGlennj, async 
          OR (actor_id = ANY($5::int[]) AND action IN ('DAILY_CERTIFIED', 'DAILY_SUPERVISOR_APPROVED', 'TIME_CERTIFIED_ADMIN'))
        ORDER BY COALESCE(occurred_at, created_at) DESC
        LIMIT 250`,
-      [projectId, laborRecordIds, allJournalIds.map(String), workOrderIds, employeeIds, invoiceIds],
-    );
+        [
+          projectId,
+          laborRecordIds,
+          allJournalIds.map(String),
+          workOrderIds,
+          employeeIds,
+          invoiceIds,
+        ]
+      );
 
-    const linesByJournal = new Map<number, JournalLineEvidence[]>();
-    for (const line of journalLines) {
-      const bucket = linesByJournal.get(line.journal_entry_id) ?? [];
-      bucket.push(line);
-      linesByJournal.set(line.journal_entry_id, bucket);
-    }
+      const linesByJournal = new Map<number, JournalLineEvidence[]>();
+      for (const line of journalLines) {
+        const bucket = linesByJournal.get(line.journal_entry_id) ?? [];
+        bucket.push(line);
+        linesByJournal.set(line.journal_entry_id, bucket);
+      }
 
-    const nodes = new Map<string, EvidenceNode>();
-    const edges: EvidenceEdge[] = [];
+      const liveLaborHours = liveLaborRows.reduce(
+        (sum, row) => sum + Number(row.hours ?? 0),
+        0
+      );
+      const materialConsumedCost = materialConsumptionRows.reduce(
+        (sum, row) => sum + Number(row.consumed_cost ?? 0),
+        0
+      );
+      const materialCommittedCost = materialReservationRows.reduce(
+        (sum, row) => sum + Number(row.committed_cost ?? 0),
+        0
+      );
+      const materialReceivedCost = projectReceivedMaterialRows.reduce(
+        (sum, row) => sum + Number(row.extended_cost ?? 0),
+        0
+      );
 
-    addNode(nodes, {
-      id: `project:${project.id}`,
-      type: 'project',
-      label: project.project_code,
-      subtitle: project.project_name,
-      status: 'ok',
-      metrics: {
-        customer: project.customer_name_snapshot ?? project.customer_id,
-        status: project.status,
-      },
-      details: project,
-      links: [{ label: 'Open project', href: `/projects/${project.id}`, kind: 'app' }],
-      missingEvidence: projectDocs.length ? [] : ['No project-level documents are attached.'],
-    });
+      const nodes = new Map<string, EvidenceNode>();
+      const edges: EvidenceEdge[] = [];
 
-    addNode(nodes, {
-      id: `period:${period.label}`,
-      type: 'period',
-      label: period.label,
-      subtitle: 'Payroll / accounting period',
-      status: laborRows.length ? 'ok' : 'missing',
-      metrics: {
-        laborRecords: laborRows.length,
-        laborDollars: money(laborRows.reduce((sum, row) => sum + Number(row.dollar_cost ?? 0), 0)),
-        hours: hours(laborRows.reduce((sum, row) => sum + Number(row.hours_worked ?? 0), 0)),
-      },
-      missingEvidence: laborRows.length ? [] : ['No labor cost records found for this project and period.'],
-    });
-    addEdge(edges, {
-      id: `project:${project.id}->period:${period.label}`,
-      from: `project:${project.id}`,
-      to: `period:${period.label}`,
-      label: 'selected period',
-      status: laborRows.length ? 'ok' : 'missing',
-    });
-
-    for (const doc of projectDocs) {
-      const docId = `document:project:${doc.id}`;
       addNode(nodes, {
-        id: docId,
-        type: 'document',
-        label: doc.label || doc.original_file_name,
-        subtitle: doc.mime_type,
+        id: `project:${project.id}`,
+        type: 'project',
+        label: project.project_code,
+        subtitle: project.project_name,
         status: 'ok',
-        details: doc,
-        links: [{ label: 'Open evidence', href: `/api/projects/${project.id}/documents/${doc.id}/file`, kind: 'api' }],
+        metrics: {
+          customer: project.customer_name_snapshot ?? project.customer_id,
+          status: project.status,
+        },
+        details: project,
+        links: [
+          {
+            label: 'Open project',
+            href: `/projects/${project.id}`,
+            kind: 'app',
+          },
+        ],
+        missingEvidence: projectDocs.length
+          ? []
+          : ['No project-level documents are attached.'],
+      });
+
+      addNode(nodes, {
+        id: `period:${period.label}`,
+        type: 'period',
+        label: period.label,
+        subtitle: 'Payroll / accounting period',
+        status:
+          laborRows.length ||
+          liveLaborRows.length ||
+          materialConsumptionRows.length
+            ? 'ok'
+            : 'missing',
+        metrics: {
+          laborRecords: laborRows.length,
+          liveLaborSessions: liveLaborRows.length,
+          laborDollars: money(
+            laborRows.reduce(
+              (sum, row) => sum + Number(row.dollar_cost ?? 0),
+              0
+            )
+          ),
+          costedHours: hours(
+            laborRows.reduce(
+              (sum, row) => sum + Number(row.hours_worked ?? 0),
+              0
+            )
+          ),
+          liveHours: hours(liveLaborHours),
+          materialConsumed: money(materialConsumedCost),
+        },
+        missingEvidence: [
+          laborRows.length
+            ? null
+            : 'No labor cost records found for this project and period.',
+          liveLaborRows.length
+            ? null
+            : 'No live punch-ledger labor found for this project and period.',
+        ].filter((item): item is string => !!item),
       });
       addEdge(edges, {
-        id: `project:${project.id}->${docId}`,
+        id: `project:${project.id}->period:${period.label}`,
         from: `project:${project.id}`,
-        to: docId,
-        label: 'attached document',
-        status: 'ok',
+        to: `period:${period.label}`,
+        label: 'selected period',
+        status:
+          laborRows.length ||
+          liveLaborRows.length ||
+          materialConsumptionRows.length
+            ? 'ok'
+            : 'missing',
       });
-    }
 
-    for (const row of laborRows) {
-      if (row.production_work_order_id) {
-        const workOrderId = `work_order:${row.production_work_order_id}`;
+      for (const doc of projectDocs) {
+        const docId = `document:project:${doc.id}`;
+        addNode(nodes, {
+          id: docId,
+          type: 'document',
+          label: doc.label || doc.original_file_name,
+          subtitle: doc.mime_type,
+          status: 'ok',
+          details: doc,
+          links: [
+            {
+              label: 'Open evidence',
+              href: `/api/projects/${project.id}/documents/${doc.id}/file`,
+              kind: 'api',
+            },
+          ],
+        });
+        addEdge(edges, {
+          id: `project:${project.id}->${docId}`,
+          from: `project:${project.id}`,
+          to: docId,
+          label: 'attached document',
+          status: 'ok',
+        });
+      }
+
+      for (const wad of projectWorkOrders) {
+        const workOrderId = `work_order:${wad.id}`;
         addNode(nodes, {
           id: workOrderId,
           type: 'work_order',
-          label: row.work_order_number || 'WAD',
-          subtitle: row.production_work_order_id,
-          status: 'ok',
-          details: {
-            productionWorkOrderId: row.production_work_order_id,
-            travelerId: row.traveler_id,
-          },
+          label: wad.work_order_number || 'WAD',
+          subtitle: [wad.part_number, wad.wad_status ?? wad.status]
+            .filter(Boolean)
+            .join(' | '),
+          status:
+            wad.wad_status === 'APPROVED' || wad.status ? 'ok' : 'warning',
+          details: wad,
+          links: [
+            {
+              label: 'Open WAD summary',
+              href: `/work-orders/${wad.id}/wad-summary`,
+              kind: 'app',
+            },
+          ],
         });
         addEdge(edges, {
-          id: `period:${period.label}->${workOrderId}`,
-          from: `period:${period.label}`,
+          id: `project:${project.id}->${workOrderId}`,
+          from: `project:${project.id}`,
           to: workOrderId,
-          label: 'WAD labor',
+          label: 'WAD',
           status: 'ok',
         });
       }
 
-      const employeeId = row.epoch_employee_id ? `employee:${row.epoch_employee_id}` : `employee:unknown:${row.id}`;
-      addNode(nodes, {
-        id: employeeId,
-        type: 'employee',
-        label: row.employee_name || 'Unknown employee',
-        subtitle: [row.employee_code, row.department, row.job_title].filter(Boolean).join(' | '),
-        status: 'sensitive',
-        sensitivity: 'employee_rate',
-        metrics: {
-          rateUsed: money(row.rate_used),
-          rateSource: row.rate_source,
-        },
-        details: {
-          employeeId: row.epoch_employee_id,
-          employeeCode: row.employee_code,
-          department: row.department,
-          jobTitle: row.job_title,
-        },
-      });
+      for (const row of liveLaborRows) {
+        const employeeId = `employee:${row.employee_id}`;
+        const laborSessionId = `labor_session:${row.session_id}`;
+        const workOrderId = row.production_work_order_id
+          ? `work_order:${row.production_work_order_id}`
+          : null;
+        const sessionMissing = [
+          row.labor_cost_record_id
+            ? null
+            : 'No labor cost record has been created for this punch yet.',
+          row.timesheet_id
+            ? null
+            : 'No matching timesheet found for this punch date.',
+          row.charge_code ? null : 'No charge code captured on the punch.',
+        ].filter((item): item is string => !!item);
 
-      const laborId = `labor:${row.id}`;
-      const laborMissing = [
-        row.journal_entry_id ? null : 'No linked journal entry.',
-        row.source_punch_canonical_id || row.canonical_id ? null : 'No source punch/timesheet canonical id.',
-        row.charge_code_id ? null : 'No charge code.',
-      ].filter((item): item is string => !!item);
-      addNode(nodes, {
-        id: laborId,
-        type: 'labor_cost',
-        label: `Labor cost #${row.id}`,
-        subtitle: `${hours(row.hours_worked)} hrs | ${money(row.dollar_cost)} | ${row.cost_type}`,
-        status: laborMissing.length ? 'warning' : 'ok',
-        sensitivity: 'employee_rate',
-        metrics: {
-          hours: Number(row.hours_worked),
-          rateUsed: money(row.rate_used),
-          dollarCost: money(row.dollar_cost),
-          costType: row.cost_type,
-          chargeCode: row.charge_code,
-        },
-        details: row,
-        missingEvidence: laborMissing,
-      });
-
-      addEdge(edges, {
-        id: `${employeeId}->${laborId}`,
-        from: employeeId,
-        to: laborId,
-        label: 'worked',
-        status: laborMissing.length ? 'warning' : 'ok',
-      });
-
-      addEdge(edges, {
-        id: `${row.production_work_order_id ? `work_order:${row.production_work_order_id}` : `period:${period.label}`}->${laborId}`,
-        from: row.production_work_order_id ? `work_order:${row.production_work_order_id}` : `period:${period.label}`,
-        to: laborId,
-        label: 'costed to',
-        status: laborMissing.length ? 'warning' : 'ok',
-      });
-
-      for (const batchId of row.payroll_batch_ids ?? []) {
-        const payrollId = `payroll:${batchId}`;
         addNode(nodes, {
-          id: payrollId,
-          type: 'payroll',
-          label: `Payroll batch #${batchId}`,
-          subtitle: 'Export evidence',
-          status: 'ok',
-          links: [{ label: 'Open payroll export', href: `/api/timekeeping/admin/payroll/batches/${batchId}/download?evidenceOnly=true`, kind: 'api' }],
-        });
-        addEdge(edges, {
-          id: `${laborId}->${payrollId}`,
-          from: laborId,
-          to: payrollId,
-          label: 'exported in',
-          status: 'ok',
-        });
-      }
-
-      if (row.journal_entry_id) {
-        const journalId = `journal:${row.journal_entry_id}`;
-        const linkedLines = linesByJournal.get(row.journal_entry_id) ?? [];
-        addNode(nodes, {
-          id: journalId,
-          type: 'journal',
-          label: `Journal entry #${row.journal_entry_id}`,
-          subtitle: row.journal_status || 'Unknown status',
-          status: row.journal_status === 'POSTED' ? 'ok' : 'warning',
+          id: employeeId,
+          type: 'employee',
+          label: row.employee_name || 'Unknown employee',
+          subtitle: [row.employee_code, row.department, row.job_title]
+            .filter(Boolean)
+            .join(' | '),
+          status: 'sensitive',
+          sensitivity: 'employee_rate',
           metrics: {
-            status: row.journal_status,
-            debitTotal: money(linkedLines.reduce((sum, line) => sum + Number(line.debit_amount ?? 0), 0)),
-            creditTotal: money(linkedLines.reduce((sum, line) => sum + Number(line.credit_amount ?? 0), 0)),
+            liveHours: Number(row.hours),
+            sessions: 1,
           },
           details: {
-            memo: row.journal_memo,
-            effectiveDate: row.journal_effective_date,
-            lines: linkedLines,
+            employeeId: row.employee_id,
+            employeeCode: row.employee_code,
+            department: row.department,
+            jobTitle: row.job_title,
           },
-          missingEvidence: row.journal_status === 'POSTED' ? [] : ['Journal entry is not POSTED.'],
+        });
+
+        addNode(nodes, {
+          id: laborSessionId,
+          type: 'labor_session',
+          label: `Punch session #${row.session_id}`,
+          subtitle: `${hours(row.hours)} hrs | ${row.charge_code ?? 'no charge code'} | ${row.work_order_number ?? row.traveler_number ?? 'project labor'}`,
+          status: sessionMissing.length ? 'warning' : 'ok',
+          metrics: {
+            hours: Number(row.hours),
+            chargeCode: row.charge_code,
+            laborCostRecord: row.labor_cost_record_id,
+            timesheet: row.timesheet_id,
+          },
+          details: row,
+          missingEvidence: sessionMissing,
+        });
+
+        addEdge(edges, {
+          id: `${employeeId}->${laborSessionId}`,
+          from: employeeId,
+          to: laborSessionId,
+          label: 'worked session',
+          status: sessionMissing.length ? 'warning' : 'ok',
         });
         addEdge(edges, {
-          id: `${laborId}->${journalId}`,
-          from: laborId,
-          to: journalId,
-          label: 'posted to GL',
-          status: row.journal_status === 'POSTED' ? 'ok' : 'warning',
+          id: `${workOrderId ?? `period:${period.label}`}->${laborSessionId}`,
+          from: workOrderId ?? `period:${period.label}`,
+          to: laborSessionId,
+          label: 'time charged',
+          status: sessionMissing.length ? 'warning' : 'ok',
+        });
+        if (row.labor_cost_record_id) {
+          addEdge(edges, {
+            id: `${laborSessionId}->labor:${row.labor_cost_record_id}`,
+            from: laborSessionId,
+            to: `labor:${row.labor_cost_record_id}`,
+            label: 'costed as',
+            status: 'ok',
+          });
+        }
+      }
+
+      for (const row of materialBudgetRows) {
+        const budgetId = `material_budget:${row.id}`;
+        addNode(nodes, {
+          id: budgetId,
+          type: 'material_budget',
+          label: `${row.work_order_number} material budget`,
+          subtitle: `${money(row.material_spend_cap)} authorized spend cap`,
+          status: 'ok',
+          metrics: {
+            plannedSpendCap: money(row.material_spend_cap),
+          },
+          details: row,
+        });
+        addEdge(edges, {
+          id: `work_order:${row.id}->${budgetId}`,
+          from: `work_order:${row.id}`,
+          to: budgetId,
+          label: 'material budget',
+          status: 'ok',
         });
       }
-    }
 
-    for (const invoice of invoiceRows) {
-      const invoiceId = `billing:${invoice.id}`;
-      const invoiceMissing = [
-        invoice.status ? null : 'Invoice status is missing.',
-      ].filter((item): item is string => !!item);
+      for (const row of materialReservationRows) {
+        const lotId = `material_lot:${row.material_lot_id}`;
+        const reservationId = `material_request:reservation:${row.id}`;
+        const workOrderId = row.production_work_order_id
+          ? `work_order:${row.production_work_order_id}`
+          : `project:${project.id}`;
+        const reservationMissing = [
+          row.internal_control_number
+            ? null
+            : 'Reservation has no ICN evidence.',
+          row.status === 'active' || row.status === 'fulfilled'
+            ? null
+            : `Reservation status is ${row.status}.`,
+        ].filter((item): item is string => !!item);
 
-      addNode(nodes, {
-        id: invoiceId,
-        type: 'billing',
-        label: `Invoice ${invoice.invoice_number}`,
-        subtitle: `${invoice.status} | ${money(invoice.billed_project_total)} billed to this project`,
-        status: invoiceMissing.length ? 'warning' : 'ok',
-        metrics: {
-          invoiceStatus: invoice.status,
-          projectBilled: money(invoice.billed_project_total),
-          invoiceTotal: money(invoice.total_amount),
-          lineCount: invoice.line_count,
-        },
-        details: {
-          invoiceId: invoice.id,
-          invoiceNumber: invoice.invoice_number,
-          invoiceDate: invoice.invoice_date,
-          dueDate: invoice.due_date,
-          status: invoice.status,
-          customerId: invoice.customer_id,
-          customerName: invoice.customer_name,
-          packingSlipId: invoice.packing_slip_id,
-          lotId: invoice.lot_id,
-          createdBy: invoice.created_by,
-          createdAt: invoice.created_at,
-          postedAt: invoice.posted_at,
-          postedBy: invoice.posted_by,
-          sentAt: invoice.sent_at,
-          matchedProjectIds: invoice.matched_project_ids,
-          invoicePoId: invoice.invoice_po_id,
-          invoicePoOverride: invoice.invoice_po_override,
-          lotPoId: invoice.lot_po_id,
-          packingSlipPoId: invoice.packing_slip_po_id,
-          lineDescriptions: invoice.line_descriptions,
-        },
-        links: [{ label: 'Open invoice', href: `/finance/invoices/${invoice.id}`, kind: 'app' }],
-        missingEvidence: invoiceMissing,
-      });
-      addEdge(edges, {
-        id: `project:${project.id}->${invoiceId}`,
-        from: `project:${project.id}`,
-        to: invoiceId,
-        label: 'customer billing',
-        status: invoiceMissing.length ? 'warning' : 'ok',
-      });
-
-      if (invoice.journal_entry_id) {
-        const journalId = `journal:${invoice.journal_entry_id}`;
-        const linkedLines = linesByJournal.get(invoice.journal_entry_id) ?? [];
         addNode(nodes, {
-          id: journalId,
-          type: 'journal',
-          label: `Journal entry #${invoice.journal_entry_id}`,
-          subtitle: invoice.journal_status || 'Unknown status',
-          status: invoice.journal_status === 'POSTED' ? 'ok' : 'warning',
+          id: lotId,
+          type: 'material_lot',
+          label:
+            row.internal_control_number ||
+            row.material_part_number ||
+            `Lot ${row.material_lot_id}`,
+          subtitle: [row.material_part_number, row.material_name]
+            .filter(Boolean)
+            .join(' | '),
+          status: row.internal_control_number ? 'ok' : 'warning',
           metrics: {
-            status: invoice.journal_status,
-            debitTotal: money(linkedLines.reduce((sum, line) => sum + Number(line.debit_amount ?? 0), 0)),
-            creditTotal: money(linkedLines.reduce((sum, line) => sum + Number(line.credit_amount ?? 0), 0)),
+            committedCost: money(row.committed_cost),
+            reservedQty: Number(row.quantity_reserved),
+          },
+          details: row,
+          missingEvidence: row.internal_control_number
+            ? []
+            : ['Material lot is missing an internal control number.'],
+        });
+
+        addNode(nodes, {
+          id: reservationId,
+          type: 'material_request',
+          label: `Reservation #${row.id}`,
+          subtitle: `${hours(row.quantity_reserved)} ${row.unit_of_measure} | ${row.status}`,
+          status: reservationMissing.length ? 'warning' : 'ok',
+          metrics: {
+            quantityReserved: Number(row.quantity_reserved),
+            committedCost: money(row.committed_cost),
+          },
+          details: row,
+          missingEvidence: reservationMissing,
+        });
+
+        addEdge(edges, {
+          id: `${workOrderId}->${reservationId}`,
+          from: workOrderId,
+          to: reservationId,
+          label: 'reserved material',
+          status: reservationMissing.length ? 'warning' : 'ok',
+        });
+        addEdge(edges, {
+          id: `${reservationId}->${lotId}`,
+          from: reservationId,
+          to: lotId,
+          label: 'reserved lot',
+          status: row.internal_control_number ? 'ok' : 'warning',
+        });
+      }
+
+      for (const row of projectReceivedMaterialRows) {
+        const receiptId = `material_receipt:${row.id}`;
+        const lotId = row.material_lot_id
+          ? `material_lot:${row.material_lot_id}`
+          : null;
+        const receiptMissing = [
+          row.status === 'accepted'
+            ? null
+            : 'Received material is pending PM acceptance.',
+          row.internal_control_number ? null : 'Received unit has no ICN.',
+        ].filter((item): item is string => !!item);
+
+        if (lotId) {
+          addNode(nodes, {
+            id: lotId,
+            type: 'material_lot',
+            label:
+              row.internal_control_number ||
+              row.item_code ||
+              `Lot ${row.material_lot_id}`,
+            subtitle: [row.item_code, row.item_name, row.lot_number]
+              .filter(Boolean)
+              .join(' | '),
+            status: row.internal_control_number ? 'ok' : 'warning',
+            details: row,
+            missingEvidence: row.internal_control_number
+              ? []
+              : ['Material lot is missing an internal control number.'],
+          });
+        }
+
+        addNode(nodes, {
+          id: receiptId,
+          type: 'material_receipt',
+          label: row.receipt_number || `Received material #${row.id}`,
+          subtitle: `${row.status} | ${money(row.extended_cost)} | ${row.item_code ?? 'item'}`,
+          status: receiptMissing.length ? 'warning' : 'ok',
+          metrics: {
+            quantity: Number(row.quantity),
+            extendedCost: money(row.extended_cost),
+            status: row.status,
+          },
+          details: row,
+          missingEvidence: receiptMissing,
+        });
+        addEdge(edges, {
+          id: `project:${project.id}->${receiptId}`,
+          from: `project:${project.id}`,
+          to: receiptId,
+          label: 'received material',
+          status: receiptMissing.length ? 'warning' : 'ok',
+        });
+        if (lotId) {
+          addEdge(edges, {
+            id: `${receiptId}->${lotId}`,
+            from: receiptId,
+            to: lotId,
+            label: 'accepted as lot',
+            status: row.status === 'accepted' ? 'ok' : 'warning',
+          });
+        }
+      }
+
+      for (const row of materialConsumptionRows) {
+        const lotId = `material_lot:${row.material_lot_id}`;
+        const consumptionId = `material_consumption:${row.id}`;
+        const workOrderId = row.production_work_order_id
+          ? `work_order:${row.production_work_order_id}`
+          : `project:${project.id}`;
+        const consumptionMissing = [
+          row.internal_control_number ? null : 'Consumption has no ICN.',
+          row.received_unit_id
+            ? null
+            : 'Consumption is not linked to a received unit.',
+          row.validation_status === 'VALID'
+            ? null
+            : `Material validation status was ${row.validation_status}.`,
+          row.was_override && !row.override_approved_by
+            ? 'Override consumption has no approver recorded.'
+            : null,
+        ].filter((item): item is string => !!item);
+
+        addNode(nodes, {
+          id: lotId,
+          type: 'material_lot',
+          label: row.internal_control_number || row.material_part_number,
+          subtitle: [row.material_part_number, row.material_name]
+            .filter(Boolean)
+            .join(' | '),
+          status: row.internal_control_number ? 'ok' : 'warning',
+          metrics: {
+            consumedCost: money(row.consumed_cost),
+            consumedQty: Number(row.qty_used),
           },
           details: {
-            memo: invoice.journal_memo,
-            effectiveDate: invoice.journal_effective_date,
-            sourceInvoice: invoice.invoice_number,
-            lines: linkedLines,
+            materialLotId: row.material_lot_id,
+            internalControlNumber: row.internal_control_number,
+            materialPartNumber: row.material_part_number,
+            materialName: row.material_name,
+            receivedUnitId: row.received_unit_id,
+            receivedUnitBarcode: row.received_unit_barcode,
           },
-          missingEvidence: invoice.journal_status === 'POSTED' ? [] : ['Invoice journal entry is not POSTED.'],
+          missingEvidence: row.internal_control_number
+            ? []
+            : ['Material lot is missing an internal control number.'],
         });
-        addEdge(edges, {
-          id: `${invoiceId}->${journalId}`,
-          from: invoiceId,
-          to: journalId,
-          label: 'posted to AR',
-          status: invoice.journal_status === 'POSTED' ? 'ok' : 'warning',
-        });
-      } else {
+
         addNode(nodes, {
-          id: `missing:invoice-journal:${invoice.id}`,
-          type: 'missing',
-          label: `Invoice ${invoice.invoice_number} not posted`,
-          subtitle: 'No AR journal entry found for this invoice',
-          status: 'missing',
-          missingEvidence: ['Invoice exists but has no linked AR journal entry.'],
+          id: consumptionId,
+          type: 'material_consumption',
+          label: `Consumed ${row.material_part_number}`,
+          subtitle: `${hours(row.qty_used)} ${row.unit_of_measure} | ${row.validation_status} | ${row.scanned_by}`,
+          status: consumptionMissing.length ? 'warning' : 'ok',
+          metrics: {
+            quantityUsed: Number(row.qty_used),
+            consumedCost: money(row.consumed_cost),
+            validation: row.validation_status,
+          },
+          details: row,
+          missingEvidence: consumptionMissing,
         });
         addEdge(edges, {
-          id: `${invoiceId}->missing:invoice-journal:${invoice.id}`,
-          from: invoiceId,
-          to: `missing:invoice-journal:${invoice.id}`,
-          label: 'posting evidence missing',
-          status: 'missing',
+          id: `${workOrderId}->${consumptionId}`,
+          from: workOrderId,
+          to: consumptionId,
+          label: 'material consumed',
+          status: consumptionMissing.length ? 'warning' : 'ok',
+        });
+        addEdge(edges, {
+          id: `${lotId}->${consumptionId}`,
+          from: lotId,
+          to: consumptionId,
+          label: 'issued to traveler',
+          status: consumptionMissing.length ? 'warning' : 'ok',
         });
       }
-    }
 
-    for (const audit of auditRows) {
-      const auditId = `audit:${audit.id}`;
-      addNode(nodes, {
-        id: auditId,
-        type: 'audit',
-        label: audit.action,
-        subtitle: `Seq ${audit.sequence_number ?? 'n/a'} | ${audit.actor_name ?? 'system'}`,
-        status: audit.row_hash ? 'ok' : 'warning',
-        metrics: {
-          sequence: audit.sequence_number,
-          hash: audit.row_hash ? `${audit.row_hash.slice(0, 12)}...` : null,
-        },
-        details: audit,
-        links: [{ label: 'Open audit ledger', href: `/admin/audit-ledger?subjectType=${encodeURIComponent(audit.subject_type ?? audit.entity_type ?? '')}&subjectId=${encodeURIComponent(audit.subject_id ?? audit.entity_id ?? '')}`, kind: 'app' }],
-      });
+      for (const row of partRequestRows) {
+        const requestId = `material_request:parts:${row.id}`;
+        const requestMissing = [
+          row.vendor_po_id
+            ? null
+            : 'Parts request is not linked to a vendor PO.',
+          row.estimated_cost != null
+            ? null
+            : 'Parts request has no estimated cost.',
+        ].filter((item): item is string => !!item);
 
-      let parentId = `project:${project.id}`;
-      if (audit.subject_type?.includes('journal') && audit.subject_id) parentId = `journal:${audit.subject_id}`;
-      if (audit.entity_type?.includes('journal') && audit.entity_id) parentId = `journal:${audit.entity_id}`;
-      if (audit.subject_type?.includes('ar_invoice') && audit.subject_id) parentId = `billing:${audit.subject_id}`;
-      if (audit.entity_type?.includes('ar_invoice') && audit.entity_id) parentId = `billing:${audit.entity_id}`;
-      if (audit.subject_type?.includes('labor') && audit.subject_id) parentId = `labor:${audit.subject_id}`;
-      if (audit.entity_type?.includes('labor') && audit.entity_id) parentId = `labor:${audit.entity_id}`;
-      if (audit.subject_type?.includes('production_work_order') && audit.subject_id) parentId = `work_order:${audit.subject_id}`;
-      if (audit.entity_type?.includes('production_work_order') && audit.entity_id) parentId = `work_order:${audit.entity_id}`;
-
-      if (nodes.has(parentId)) {
+        addNode(nodes, {
+          id: requestId,
+          type: 'material_request',
+          label: `Parts request #${row.id}`,
+          subtitle: `${row.part_number} | ${row.status} | qty ${row.quantity}`,
+          status: requestMissing.length ? 'warning' : 'ok',
+          metrics: {
+            quantity: row.quantity,
+            estimatedCost:
+              row.estimated_cost == null
+                ? null
+                : money(row.estimated_cost * row.quantity),
+            status: row.status,
+          },
+          details: row,
+          missingEvidence: requestMissing,
+        });
         addEdge(edges, {
-          id: `${parentId}->${auditId}`,
-          from: parentId,
-          to: auditId,
-          label: 'audit event',
+          id: `project:${project.id}->${requestId}`,
+          from: `project:${project.id}`,
+          to: requestId,
+          label: 'parts request',
+          status: requestMissing.length ? 'warning' : 'ok',
+        });
+      }
+
+      for (const row of inventoryLedgerRows) {
+        const ledgerId = `inventory_ledger:${row.id}`;
+        const targetId =
+          row.source_record_id &&
+          nodes.has(`material_consumption:${row.source_record_id}`)
+            ? `material_consumption:${row.source_record_id}`
+            : row.production_work_order_id &&
+                nodes.has(`work_order:${row.production_work_order_id}`)
+              ? `work_order:${row.production_work_order_id}`
+              : `project:${project.id}`;
+
+        addNode(nodes, {
+          id: ledgerId,
+          type: 'inventory_ledger',
+          label: row.transaction_number,
+          subtitle: `${row.transaction_type} | ${row.ag_part_number} | ${row.quantity_delta} ${row.unit_of_measure}`,
+          status: row.event_hash ? 'ok' : 'warning',
+          metrics: {
+            quantityDelta: Number(row.quantity_delta),
+            hash: row.event_hash ? `${row.event_hash.slice(0, 12)}...` : null,
+          },
+          details: row,
+          missingEvidence: row.event_hash
+            ? []
+            : ['Inventory ledger event hash is missing.'],
+        });
+        addEdge(edges, {
+          id: `${targetId}->${ledgerId}`,
+          from: targetId,
+          to: ledgerId,
+          label: 'inventory ledger',
+          status: row.event_hash ? 'ok' : 'warning',
+        });
+      }
+
+      for (const row of laborRows) {
+        if (row.production_work_order_id) {
+          const workOrderId = `work_order:${row.production_work_order_id}`;
+          addNode(nodes, {
+            id: workOrderId,
+            type: 'work_order',
+            label: row.work_order_number || 'WAD',
+            subtitle: row.production_work_order_id,
+            status: 'ok',
+            details: {
+              productionWorkOrderId: row.production_work_order_id,
+              travelerId: row.traveler_id,
+            },
+          });
+          addEdge(edges, {
+            id: `period:${period.label}->${workOrderId}`,
+            from: `period:${period.label}`,
+            to: workOrderId,
+            label: 'WAD labor',
+            status: 'ok',
+          });
+        }
+
+        const employeeId = row.epoch_employee_id
+          ? `employee:${row.epoch_employee_id}`
+          : `employee:unknown:${row.id}`;
+        addNode(nodes, {
+          id: employeeId,
+          type: 'employee',
+          label: row.employee_name || 'Unknown employee',
+          subtitle: [row.employee_code, row.department, row.job_title]
+            .filter(Boolean)
+            .join(' | '),
+          status: 'sensitive',
+          sensitivity: 'employee_rate',
+          metrics: {
+            rateUsed: money(row.rate_used),
+            rateSource: row.rate_source,
+          },
+          details: {
+            employeeId: row.epoch_employee_id,
+            employeeCode: row.employee_code,
+            department: row.department,
+            jobTitle: row.job_title,
+          },
+        });
+
+        const laborId = `labor:${row.id}`;
+        const laborMissing = [
+          row.journal_entry_id ? null : 'No linked journal entry.',
+          row.source_punch_canonical_id || row.canonical_id
+            ? null
+            : 'No source punch/timesheet canonical id.',
+          row.charge_code_id ? null : 'No charge code.',
+        ].filter((item): item is string => !!item);
+        addNode(nodes, {
+          id: laborId,
+          type: 'labor_cost',
+          label: `Labor cost #${row.id}`,
+          subtitle: `${hours(row.hours_worked)} hrs | ${money(row.dollar_cost)} | ${row.cost_type}`,
+          status: laborMissing.length ? 'warning' : 'ok',
+          sensitivity: 'employee_rate',
+          metrics: {
+            hours: Number(row.hours_worked),
+            rateUsed: money(row.rate_used),
+            dollarCost: money(row.dollar_cost),
+            costType: row.cost_type,
+            chargeCode: row.charge_code,
+          },
+          details: row,
+          missingEvidence: laborMissing,
+        });
+
+        addEdge(edges, {
+          id: `${employeeId}->${laborId}`,
+          from: employeeId,
+          to: laborId,
+          label: 'worked',
+          status: laborMissing.length ? 'warning' : 'ok',
+        });
+
+        addEdge(edges, {
+          id: `${row.production_work_order_id ? `work_order:${row.production_work_order_id}` : `period:${period.label}`}->${laborId}`,
+          from: row.production_work_order_id
+            ? `work_order:${row.production_work_order_id}`
+            : `period:${period.label}`,
+          to: laborId,
+          label: 'costed to',
+          status: laborMissing.length ? 'warning' : 'ok',
+        });
+
+        for (const batchId of row.payroll_batch_ids ?? []) {
+          const payrollId = `payroll:${batchId}`;
+          addNode(nodes, {
+            id: payrollId,
+            type: 'payroll',
+            label: `Payroll batch #${batchId}`,
+            subtitle: 'Export evidence',
+            status: 'ok',
+            links: [
+              {
+                label: 'Open payroll export',
+                href: `/api/timekeeping/admin/payroll/batches/${batchId}/download?evidenceOnly=true`,
+                kind: 'api',
+              },
+            ],
+          });
+          addEdge(edges, {
+            id: `${laborId}->${payrollId}`,
+            from: laborId,
+            to: payrollId,
+            label: 'exported in',
+            status: 'ok',
+          });
+        }
+
+        if (row.journal_entry_id) {
+          const journalId = `journal:${row.journal_entry_id}`;
+          const linkedLines = linesByJournal.get(row.journal_entry_id) ?? [];
+          addNode(nodes, {
+            id: journalId,
+            type: 'journal',
+            label: `Journal entry #${row.journal_entry_id}`,
+            subtitle: row.journal_status || 'Unknown status',
+            status: row.journal_status === 'POSTED' ? 'ok' : 'warning',
+            metrics: {
+              status: row.journal_status,
+              debitTotal: money(
+                linkedLines.reduce(
+                  (sum, line) => sum + Number(line.debit_amount ?? 0),
+                  0
+                )
+              ),
+              creditTotal: money(
+                linkedLines.reduce(
+                  (sum, line) => sum + Number(line.credit_amount ?? 0),
+                  0
+                )
+              ),
+            },
+            details: {
+              memo: row.journal_memo,
+              effectiveDate: row.journal_effective_date,
+              lines: linkedLines,
+            },
+            missingEvidence:
+              row.journal_status === 'POSTED'
+                ? []
+                : ['Journal entry is not POSTED.'],
+          });
+          addEdge(edges, {
+            id: `${laborId}->${journalId}`,
+            from: laborId,
+            to: journalId,
+            label: 'posted to GL',
+            status: row.journal_status === 'POSTED' ? 'ok' : 'warning',
+          });
+        }
+      }
+
+      for (const invoice of invoiceRows) {
+        const invoiceId = `billing:${invoice.id}`;
+        const invoiceMissing = [
+          invoice.status ? null : 'Invoice status is missing.',
+        ].filter((item): item is string => !!item);
+
+        addNode(nodes, {
+          id: invoiceId,
+          type: 'billing',
+          label: `Invoice ${invoice.invoice_number}`,
+          subtitle: `${invoice.status} | ${money(invoice.billed_project_total)} billed to this project`,
+          status: invoiceMissing.length ? 'warning' : 'ok',
+          metrics: {
+            invoiceStatus: invoice.status,
+            projectBilled: money(invoice.billed_project_total),
+            invoiceTotal: money(invoice.total_amount),
+            lineCount: invoice.line_count,
+          },
+          details: {
+            invoiceId: invoice.id,
+            invoiceNumber: invoice.invoice_number,
+            invoiceDate: invoice.invoice_date,
+            dueDate: invoice.due_date,
+            status: invoice.status,
+            customerId: invoice.customer_id,
+            customerName: invoice.customer_name,
+            packingSlipId: invoice.packing_slip_id,
+            lotId: invoice.lot_id,
+            createdBy: invoice.created_by,
+            createdAt: invoice.created_at,
+            postedAt: invoice.posted_at,
+            postedBy: invoice.posted_by,
+            sentAt: invoice.sent_at,
+            matchedProjectIds: invoice.matched_project_ids,
+            invoicePoId: invoice.invoice_po_id,
+            invoicePoOverride: invoice.invoice_po_override,
+            lotPoId: invoice.lot_po_id,
+            packingSlipPoId: invoice.packing_slip_po_id,
+            lineDescriptions: invoice.line_descriptions,
+          },
+          links: [
+            {
+              label: 'Open invoice',
+              href: `/finance/invoices/${invoice.id}`,
+              kind: 'app',
+            },
+          ],
+          missingEvidence: invoiceMissing,
+        });
+        addEdge(edges, {
+          id: `project:${project.id}->${invoiceId}`,
+          from: `project:${project.id}`,
+          to: invoiceId,
+          label: 'customer billing',
+          status: invoiceMissing.length ? 'warning' : 'ok',
+        });
+
+        if (invoice.journal_entry_id) {
+          const journalId = `journal:${invoice.journal_entry_id}`;
+          const linkedLines =
+            linesByJournal.get(invoice.journal_entry_id) ?? [];
+          addNode(nodes, {
+            id: journalId,
+            type: 'journal',
+            label: `Journal entry #${invoice.journal_entry_id}`,
+            subtitle: invoice.journal_status || 'Unknown status',
+            status: invoice.journal_status === 'POSTED' ? 'ok' : 'warning',
+            metrics: {
+              status: invoice.journal_status,
+              debitTotal: money(
+                linkedLines.reduce(
+                  (sum, line) => sum + Number(line.debit_amount ?? 0),
+                  0
+                )
+              ),
+              creditTotal: money(
+                linkedLines.reduce(
+                  (sum, line) => sum + Number(line.credit_amount ?? 0),
+                  0
+                )
+              ),
+            },
+            details: {
+              memo: invoice.journal_memo,
+              effectiveDate: invoice.journal_effective_date,
+              sourceInvoice: invoice.invoice_number,
+              lines: linkedLines,
+            },
+            missingEvidence:
+              invoice.journal_status === 'POSTED'
+                ? []
+                : ['Invoice journal entry is not POSTED.'],
+          });
+          addEdge(edges, {
+            id: `${invoiceId}->${journalId}`,
+            from: invoiceId,
+            to: journalId,
+            label: 'posted to AR',
+            status: invoice.journal_status === 'POSTED' ? 'ok' : 'warning',
+          });
+        } else {
+          addNode(nodes, {
+            id: `missing:invoice-journal:${invoice.id}`,
+            type: 'missing',
+            label: `Invoice ${invoice.invoice_number} not posted`,
+            subtitle: 'No AR journal entry found for this invoice',
+            status: 'missing',
+            missingEvidence: [
+              'Invoice exists but has no linked AR journal entry.',
+            ],
+          });
+          addEdge(edges, {
+            id: `${invoiceId}->missing:invoice-journal:${invoice.id}`,
+            from: invoiceId,
+            to: `missing:invoice-journal:${invoice.id}`,
+            label: 'posting evidence missing',
+            status: 'missing',
+          });
+        }
+      }
+
+      for (const audit of auditRows) {
+        const auditId = `audit:${audit.id}`;
+        addNode(nodes, {
+          id: auditId,
+          type: 'audit',
+          label: audit.action,
+          subtitle: `Seq ${audit.sequence_number ?? 'n/a'} | ${audit.actor_name ?? 'system'}`,
           status: audit.row_hash ? 'ok' : 'warning',
+          metrics: {
+            sequence: audit.sequence_number,
+            hash: audit.row_hash ? `${audit.row_hash.slice(0, 12)}...` : null,
+          },
+          details: audit,
+          links: [
+            {
+              label: 'Open audit ledger',
+              href: `/admin/audit-ledger?subjectType=${encodeURIComponent(audit.subject_type ?? audit.entity_type ?? '')}&subjectId=${encodeURIComponent(audit.subject_id ?? audit.entity_id ?? '')}`,
+              kind: 'app',
+            },
+          ],
         });
+
+        let parentId = `project:${project.id}`;
+        if (audit.subject_type?.includes('journal') && audit.subject_id)
+          parentId = `journal:${audit.subject_id}`;
+        if (audit.entity_type?.includes('journal') && audit.entity_id)
+          parentId = `journal:${audit.entity_id}`;
+        if (audit.subject_type?.includes('ar_invoice') && audit.subject_id)
+          parentId = `billing:${audit.subject_id}`;
+        if (audit.entity_type?.includes('ar_invoice') && audit.entity_id)
+          parentId = `billing:${audit.entity_id}`;
+        if (audit.subject_type?.includes('labor') && audit.subject_id)
+          parentId = `labor:${audit.subject_id}`;
+        if (audit.entity_type?.includes('labor') && audit.entity_id)
+          parentId = `labor:${audit.entity_id}`;
+        if (
+          audit.subject_type?.includes('production_work_order') &&
+          audit.subject_id
+        )
+          parentId = `work_order:${audit.subject_id}`;
+        if (
+          audit.entity_type?.includes('production_work_order') &&
+          audit.entity_id
+        )
+          parentId = `work_order:${audit.entity_id}`;
+
+        if (nodes.has(parentId)) {
+          addEdge(edges, {
+            id: `${parentId}->${auditId}`,
+            from: parentId,
+            to: auditId,
+            label: 'audit event',
+            status: audit.row_hash ? 'ok' : 'warning',
+          });
+        }
       }
+
+      const totalHours = laborRows.reduce(
+        (sum, row) => sum + Number(row.hours_worked ?? 0),
+        0
+      );
+      const totalLaborDollars = laborRows.reduce(
+        (sum, row) => sum + Number(row.dollar_cost ?? 0),
+        0
+      );
+      const materialNodeCount =
+        materialBudgetRows.length +
+        materialReservationRows.length +
+        materialConsumptionRows.length +
+        projectReceivedMaterialRows.length +
+        partRequestRows.length +
+        inventoryLedgerRows.length;
+      const missingEvidence = Array.from(nodes.values()).flatMap((node) =>
+        (node.missingEvidence ?? []).map((message) => ({
+          nodeId: node.id,
+          nodeLabel: node.label,
+          message,
+        }))
+      );
+
+      await recordAuditEvent({
+        eventType: 'TRANSACTION_EVIDENCE_MAP_VIEWED',
+        subjectType: 'project',
+        subjectId: project.id,
+        sourceService: 'transactionEvidenceMap.route',
+        actor: {
+          id: req.user?.id,
+          username: req.user?.username,
+          role: req.user?.role,
+        },
+        payload: {
+          projectId: project.id,
+          period: period.label,
+          nodeCount: nodes.size,
+          edgeCount: edges.length,
+          laborRecordCount: laborRows.length,
+          liveLaborSessionCount: liveLaborRows.length,
+          materialEvidenceCount: materialNodeCount,
+          materialConsumptionCount: materialConsumptionRows.length,
+          materialConsumedCost,
+          materialCommittedCost,
+          materialReceivedCost,
+          totalHours,
+          liveLaborHours,
+          totalLaborDollars,
+        },
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent') ?? null,
+      }).catch((err) =>
+        console.error('[transaction-evidence-map] audit write failed', err)
+      );
+
+      return res.json({
+        generatedAt: new Date().toISOString(),
+        project,
+        period,
+        summary: {
+          laborRecordCount: laborRows.length,
+          liveLaborSessionCount: liveLaborRows.length,
+          employeeCount: employeeIds.length,
+          workOrderCount: workOrderIds.length,
+          materialEvidenceCount: materialNodeCount,
+          materialConsumptionCount: materialConsumptionRows.length,
+          materialConsumedCost: Number(materialConsumedCost.toFixed(2)),
+          materialCommittedCost: Number(materialCommittedCost.toFixed(2)),
+          materialReceivedCost: Number(materialReceivedCost.toFixed(2)),
+          journalEntryCount: allJournalIds.length,
+          customerInvoiceCount: invoiceRows.length,
+          documentCount: projectDocs.length,
+          auditEventCount: auditRows.length,
+          totalHours: Number(totalHours.toFixed(4)),
+          liveLaborHours: Number(liveLaborHours.toFixed(4)),
+          totalLaborDollars: Number(totalLaborDollars.toFixed(2)),
+          missingEvidenceCount: missingEvidence.length,
+        },
+        nodes: Array.from(nodes.values()),
+        edges,
+        missingEvidence,
+      });
+    } catch (err) {
+      console.error('[transaction-evidence-map] failed', err);
+      return res.status(500).json({
+        error:
+          err instanceof Error ? err.message : 'Failed to build evidence map',
+      });
     }
-
-    const totalHours = laborRows.reduce((sum, row) => sum + Number(row.hours_worked ?? 0), 0);
-    const totalLaborDollars = laborRows.reduce((sum, row) => sum + Number(row.dollar_cost ?? 0), 0);
-    const missingEvidence = Array.from(nodes.values()).flatMap((node) =>
-      (node.missingEvidence ?? []).map((message) => ({ nodeId: node.id, nodeLabel: node.label, message })),
-    );
-
-    await recordAuditEvent({
-      eventType: 'TRANSACTION_EVIDENCE_MAP_VIEWED',
-      subjectType: 'project',
-      subjectId: project.id,
-      sourceService: 'transactionEvidenceMap.route',
-      actor: { id: req.user?.id, username: req.user?.username, role: req.user?.role },
-      payload: {
-        projectId: project.id,
-        period: period.label,
-        nodeCount: nodes.size,
-        edgeCount: edges.length,
-        laborRecordCount: laborRows.length,
-        totalHours,
-        totalLaborDollars,
-      },
-      ipAddress: req.ip,
-      userAgent: req.get('user-agent') ?? null,
-    }).catch((err) => console.error('[transaction-evidence-map] audit write failed', err));
-
-    return res.json({
-      generatedAt: new Date().toISOString(),
-      project,
-      period,
-      summary: {
-        laborRecordCount: laborRows.length,
-        employeeCount: employeeIds.length,
-        workOrderCount: workOrderIds.length,
-        journalEntryCount: allJournalIds.length,
-        customerInvoiceCount: invoiceRows.length,
-        documentCount: projectDocs.length,
-        auditEventCount: auditRows.length,
-        totalHours: Number(totalHours.toFixed(4)),
-        totalLaborDollars: Number(totalLaborDollars.toFixed(2)),
-        missingEvidenceCount: missingEvidence.length,
-      },
-      nodes: Array.from(nodes.values()),
-      edges,
-      missingEvidence,
-    });
-  } catch (err) {
-    console.error('[transaction-evidence-map] failed', err);
-    return res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to build evidence map' });
   }
-});
+);
 
 export default router;

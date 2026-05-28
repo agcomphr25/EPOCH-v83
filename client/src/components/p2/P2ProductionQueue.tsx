@@ -248,9 +248,9 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
         : variables.status === 'SCRAPPED'
           ? variables.rmaRequired
             ? data?.replacementItem?.serialNumber
-              ? `Item marked NCR/scrapped. RMA replacement ${data.replacementItem.serialNumber} was added for scheduling.`
-              : 'Item marked NCR/scrapped. The RMA replacement request was recorded.'
-            : 'Item marked NCR/scrapped and moved to the P2 nonconforming tab for disposition.'
+              ? `NCR opened. Replacement ${data.replacementItem.serialNumber} was added for scheduling, and the original item moved to open nonconforming.`
+              : 'NCR opened. The original item moved to open nonconforming for disposition.'
+            : 'NCR opened. The item moved out of production and into open nonconforming for disposition.'
           : `Item status changed to ${variables.status}`;
       toast({
         title: 'Status Updated',
@@ -1378,7 +1378,7 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
               Mark Item NCR / Scrap
             </DialogTitle>
             <DialogDescription>
-              This removes the item from active production and sends it to the P2 nonconforming tab for disposition.
+              This removes the original item from active production and sends it to open nonconforming for disposition.
             </DialogDescription>
           </DialogHeader>
           
@@ -1409,7 +1409,7 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                     <span>
                       <span className="block font-medium">Yes, create RMA replacement</span>
                       <span className="block text-xs text-muted-foreground">
-                        Add a schedulable replacement using this serial number with an rma-XX suffix.
+                        Add a schedulable replacement and keep the original item in open nonconforming.
                       </span>
                     </span>
                   </Label>
@@ -1418,7 +1418,7 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                     <span>
                       <span className="block font-medium">No, disposition only</span>
                       <span className="block text-xs text-muted-foreground">
-                        Move this item to P2 nonconforming so Quality can file the disposition.
+                        Move this item out of production so Quality can file the disposition.
                       </span>
                     </span>
                   </Label>
@@ -1453,7 +1453,7 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
               ) : (
                 <XCircle className="h-4 w-4 mr-2" />
               )}
-              {scrapRequiresRma ? 'Mark NCR & Create RMA Item' : 'Mark NCR for Disposition'}
+              {scrapRequiresRma ? 'Open NCR & Create Replacement' : 'Open NCR for Disposition'}
             </Button>
           </DialogFooter>
         </DialogContent>

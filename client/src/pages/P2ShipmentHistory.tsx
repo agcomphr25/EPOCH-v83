@@ -15,6 +15,7 @@ import {
   Loader2,
   Truck,
   Receipt,
+  Ban,
 } from 'lucide-react';
 
 interface ShipmentRow {
@@ -43,6 +44,7 @@ function statusColor(status: string) {
     case 'SHIPPED':  return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
     case 'CLOSED':   return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
     case 'OPEN':     return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
+    case 'VOID':     return 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300';
     default:         return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200';
   }
 }
@@ -54,14 +56,15 @@ function fmt(ts: string | null) {
 
 export default function P2ShipmentHistory() {
   const [search, setSearch] = useState('');
+  const [showVoided, setShowVoided] = useState(false);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const qc = useQueryClient();
 
   const { data: rows = [], isLoading } = useQuery<ShipmentRow[]>({
-    queryKey: ['/api/p2/shipments'],
+    queryKey: ['/api/p2/shipments', { includeVoid: showVoided }],
     queryFn: async () => {
-      const r = await fetch('/api/p2/shipments', { credentials: 'include' });
+      const r = await fetch(`/api/p2/shipments${showVoided ? '?includeVoid=true' : ''}`, { credentials: 'include' });
       if (!r.ok) throw new Error('Failed to load');
       return r.json();
     },
@@ -96,6 +99,39 @@ export default function P2ShipmentHistory() {
     },
   });
 
+  const voidShipmentMutation = useMutation({
+    mutationFn: async ({ row, reason }: { row: ShipmentRow; reason: string }) =>
+      apiRequest(`/api/p2/shipments/${row.id}/void`, {
+        method: 'POST',
+        body: { reason },
+      }),
+    onSuccess: (_result, variables) => {
+      toast({
+        title: 'Shipment voided',
+        description: `${variables.row.lot_number} was voided. Finalized units are available to regroup.`,
+      });
+      qc.invalidateQueries({ queryKey: ['/api/p2/shipments'] });
+      qc.invalidateQueries({ queryKey: ['/api/p2/lots/existing-shipments'] });
+      qc.invalidateQueries({ queryKey: ['/api/p2/serialized-items/shipping-queue'] });
+      qc.invalidateQueries({ predicate: (query) =>
+        Array.isArray(query.queryKey) && query.queryKey[0] === '/api/ar-invoices'
+      });
+    },
+    onError: (err: any) => {
+      toast({
+        title: 'Void failed',
+        description: err?.message || 'Shipment could not be voided.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const handleVoidShipment = (row: ShipmentRow) => {
+    const reason = window.prompt(`Reason for voiding lot ${row.lot_number}? Finalized units will be released for regrouping.`);
+    if (!reason || !reason.trim()) return;
+    voidShipmentMutation.mutate({ row, reason: reason.trim() });
+  };
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return rows;
@@ -114,6 +150,7 @@ export default function P2ShipmentHistory() {
     shipped: rows.filter(r => r.status === 'SHIPPED').length,
     open: rows.filter(r => r.status === 'OPEN').length,
     closed: rows.filter(r => r.status === 'CLOSED').length,
+    voided: rows.filter(r => r.status === 'VOID').length,
   }), [rows]);
 
   return (
@@ -150,11 +187,17 @@ export default function P2ShipmentHistory() {
           <Badge className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
             {counts.open} Open
           </Badge>
+          {showVoided && (
+            <Badge className="bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+              {counts.voided} Void
+            </Badge>
+          )}
         </div>
       </div>
 
       {/* Search */}
-      <div className="relative max-w-sm">
+      <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
+        <div className="relative max-w-sm flex-1">
         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
         <Input
           placeholder="Search lot, packing slip #, PO, customer, tracking…"
@@ -162,6 +205,10 @@ export default function P2ShipmentHistory() {
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
+        </div>
+        <Button variant="outline" size="sm" onClick={() => setShowVoided((v) => !v)}>
+          {showVoided ? 'Hide Voided' : 'Show Voided'}
+        </Button>
       </div>
 
       {/* Table */}
@@ -263,6 +310,22 @@ export default function P2ShipmentHistory() {
                               Create Invoice
                             </Button>
                           ) : null}
+                          {row.status !== 'VOID' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 px-2 text-xs border-red-300 text-red-700 hover:bg-red-50"
+                              onClick={() => handleVoidShipment(row)}
+                              disabled={voidShipmentMutation.isPending}
+                            >
+                              {voidShipmentMutation.isPending && voidShipmentMutation.variables?.row.id === row.id ? (
+                                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                              ) : (
+                                <Ban className="h-3 w-3 mr-1" />
+                              )}
+                              Void
+                            </Button>
+                          )}
                           <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" asChild>
                             <Link to={`/p2/shipments/${row.id}`}>
                               <ExternalLink className="h-3 w-3 mr-1" />

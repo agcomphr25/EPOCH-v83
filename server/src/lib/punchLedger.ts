@@ -288,12 +288,18 @@ export async function closeSession(
 /**
  * Close a specific open session by its ID. Used when the caller already has the entry.
  */
-export async function closeSessionById(entryId: number, updatedBy?: number | null, updatedByDisplayName?: string | null): Promise<PunchLedgerEntry | null> {
+export async function closeSessionById(
+  entryId: number,
+  updatedBy?: number | null,
+  updatedByDisplayName?: string | null,
+  clockOut?: Date | null,
+): Promise<PunchLedgerEntry | null> {
   const now = new Date();
+  const effectiveClockOut = clockOut ?? now;
   const [closed] = await db
     .update(punchLedger)
     .set({
-      clockOut: now,
+      clockOut: effectiveClockOut,
       updatedBy: updatedBy ?? null,
       updatedByDisplayName: updatedByDisplayName ?? null,
       updatedAt: now,

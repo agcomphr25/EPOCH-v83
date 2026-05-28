@@ -63,7 +63,10 @@ router.get('/shipping-queue', async (req, res) => {
     // Build a set of all serial IDs already assigned to a lot.
     // pg automatically parses the JSONB column into a JS array of strings.
     const lotRows = await pool.query<{ serialized_item_ids: string[] | null }>(
-      `SELECT serialized_item_ids FROM p2_lot_numbers WHERE serialized_item_ids IS NOT NULL`
+      `SELECT serialized_item_ids
+         FROM p2_lot_numbers
+        WHERE serialized_item_ids IS NOT NULL
+          AND COALESCE(status, '') <> 'VOID'`
     );
     const shippedIds = new Set<string>(
       lotRows.flatMap((r) => r.serialized_item_ids ?? [])
@@ -177,6 +180,14 @@ const unfinalizeSchema = z.object({
   performedBy: z.string().min(1),
 });
 
+const correctFinalizedIdentitySchema = z.object({
+  serializedItemIds: z.array(z.string().uuid()).min(1),
+  sku: z.string().trim().min(1),
+  drawingName: z.string().trim().min(1),
+  reason: z.string().trim().min(1),
+  performedBy: z.string().min(1),
+});
+
 router.post('/finalize', async (req, res) => {
   try {
     const input = finalizeSchema.parse(req.body);
@@ -270,7 +281,10 @@ router.post('/unfinalize', async (req, res) => {
     }
 
     const alreadyShippedRows = await pool.query<{ serialized_item_ids: string[] | null }>(
-      `SELECT serialized_item_ids FROM p2_lot_numbers WHERE serialized_item_ids IS NOT NULL`
+      `SELECT serialized_item_ids
+         FROM p2_lot_numbers
+        WHERE serialized_item_ids IS NOT NULL
+          AND COALESCE(status, '') <> 'VOID'`
     );
     const alreadyShippedIds = new Set<string>(
       alreadyShippedRows.flatMap((row) => row.serialized_item_ids ?? [])
@@ -318,6 +332,77 @@ router.post('/unfinalize', async (req, res) => {
     return res.json({ success: true, updatedCount: finalizedItems.length });
   } catch (err: any) {
     return res.status(400).json({ error: err?.message || 'Failed to unfinalize serialized items' });
+  }
+});
+
+router.post('/correct-finalized-identity', async (req, res) => {
+  try {
+    const input = correctFinalizedIdentitySchema.parse(req.body);
+
+    const items = await db.query.p2SerializedItems.findMany({
+      where: inArray(p2SerializedItems.id, input.serializedItemIds),
+    });
+
+    if (items.length !== input.serializedItemIds.length) {
+      return res.status(404).json({ error: 'One or more serialized items not found' });
+    }
+
+    const alreadyShippedRows = await pool.query<{ serialized_item_ids: string[] | null }>(
+      `SELECT serialized_item_ids
+         FROM p2_lot_numbers
+        WHERE serialized_item_ids IS NOT NULL
+          AND COALESCE(status, '') <> 'VOID'`
+    );
+    const alreadyShippedIds = new Set<string>(
+      alreadyShippedRows.flatMap((row) => row.serialized_item_ids ?? [])
+    );
+    const alreadyShipped = items.filter((item) => alreadyShippedIds.has(item.id));
+    if (alreadyShipped.length > 0) {
+      return res.status(409).json({
+        error: 'Cannot correct SKU/drawing for units that are already assigned to a P2 shipment lot',
+        items: alreadyShipped.map((item) => ({ id: item.id, barcode: item.barcode, serialNumber: item.serialNumber })),
+      });
+    }
+
+    const notFinalized = items.filter((item) => !(item as any).finalizedAt);
+    if (notFinalized.length > 0) {
+      return res.status(409).json({
+        error: 'Only finalized units can be corrected here. Finalize unfinished units first.',
+        items: notFinalized.map((item) => ({ id: item.id, barcode: item.barcode, serialNumber: item.serialNumber })),
+      });
+    }
+
+    await db
+      .update(p2SerializedItems)
+      .set({
+        sku: input.sku,
+        drawingName: input.drawingName,
+        updatedAt: new Date(),
+      })
+      .where(inArray(p2SerializedItems.id, items.map((item) => item.id)));
+
+    for (const item of items) {
+      await db.insert(p2SerializedItemEvents).values({
+        serializedItemId: item.id,
+        barcode: item.barcode,
+        eventType: 'NOTE',
+        performedBy: input.performedBy,
+        notes: `Corrected finalized SKU/drawing: ${input.reason}`,
+        metadata: {
+          previousSku: (item as any).sku ?? null,
+          previousDrawingName: (item as any).drawingName ?? null,
+          newSku: input.sku,
+          newDrawingName: input.drawingName,
+          reason: input.reason,
+          finalizedAt: (item as any).finalizedAt ?? null,
+          finalizedBy: (item as any).finalizedBy ?? null,
+        },
+      });
+    }
+
+    return res.json({ success: true, updatedCount: items.length });
+  } catch (err: any) {
+    return res.status(400).json({ error: err?.message || 'Failed to correct finalized SKU/drawing' });
   }
 });
 

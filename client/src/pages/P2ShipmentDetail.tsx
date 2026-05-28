@@ -28,6 +28,7 @@ import {
   ShieldAlert,
   History,
   AlertTriangle,
+  Ban,
 } from 'lucide-react';
 import OverrideShippingDataModal from '@/components/p2/OverrideShippingDataModal';
 
@@ -155,6 +156,7 @@ interface CurrentUser {
 function statusColor(status: string) {
   switch (status?.toUpperCase()) {
     case 'SHIPPED': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
+    case 'VOID': return 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300';
     case 'CLOSED': return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
     case 'OPEN': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
     case 'FINALIZED': return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
@@ -336,6 +338,38 @@ export default function P2ShipmentDetail() {
     }),
   });
 
+  const voidShipmentMutation = useMutation({
+    mutationFn: (reason: string) =>
+      apiRequest(`/api/p2/shipments/${lotId}/void`, {
+        method: 'POST',
+        body: { reason },
+      }),
+    onSuccess: (result: any) => {
+      toast({
+        title: 'Shipment voided',
+        description: `${result?.lotNumber || 'Shipment'} was voided. Finalized serials are available to regroup.`,
+      });
+      qc.invalidateQueries({ queryKey: ['/api/p2/shipments', lotId] });
+      qc.invalidateQueries({ queryKey: ['/api/p2/shipments'] });
+      qc.invalidateQueries({ queryKey: ['/api/p2/lots/existing-shipments'] });
+      qc.invalidateQueries({ queryKey: ['/api/p2/serialized-items/shipping-queue'] });
+      qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === '/api/ar-invoices' });
+      refetch();
+      refetchAuditLog();
+    },
+    onError: (err: any) => toast({
+      title: 'Void failed',
+      description: err?.message || 'Shipment could not be voided.',
+      variant: 'destructive',
+    }),
+  });
+
+  const handleVoidShipment = () => {
+    const reason = window.prompt('Reason for voiding this shipment? Finalized serials will be released for regrouping.');
+    if (!reason || !reason.trim()) return;
+    voidShipmentMutation.mutate(reason.trim());
+  };
+
   async function handleBolUpload(file: File) {
     setUploading(true);
     try {
@@ -430,6 +464,7 @@ export default function P2ShipmentDetail() {
 
   const { lot, packingSlip, certificate, serializedItems, invoice } = data;
   const isShipped = lot.status === 'SHIPPED';
+  const isVoid = lot.status === 'VOID';
 
   return (
     <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-5">
@@ -473,7 +508,7 @@ export default function P2ShipmentDetail() {
             </div>
 
             <div className="flex flex-col sm:flex-row gap-2 shrink-0">
-              {!isShipped && (
+              {!isShipped && !isVoid && (
                 <Button
                   size="sm"
                   className="bg-green-600 hover:bg-green-700 text-white"
@@ -486,6 +521,22 @@ export default function P2ShipmentDetail() {
                     <CheckCircle2 className="h-4 w-4 mr-1" />
                   )}
                   Mark as Shipped
+                </Button>
+              )}
+              {canOverride && !isVoid && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-red-300 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/30"
+                  onClick={handleVoidShipment}
+                  disabled={voidShipmentMutation.isPending}
+                >
+                  {voidShipmentMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                  ) : (
+                    <Ban className="h-4 w-4 mr-1" />
+                  )}
+                  Void Shipment
                 </Button>
               )}
               {canOverride && (

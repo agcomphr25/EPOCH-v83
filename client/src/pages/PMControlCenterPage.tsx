@@ -180,11 +180,19 @@ interface P2PoStatusSummary {
   status: 'pending' | 'in_progress' | 'completed';
 }
 
+interface P2NcrMetrics {
+  totalSerializedItems: number;
+  openNcrCount: number;
+  finalScrapCount: number;
+  finalScrapRatePercent: number;
+}
+
 interface ProductionResponse {
   rows: WorkOrderRow[];
   linkedP2Production?: WorkOrderRow[];
   linkedP2PoCount: number;
   linkedP2PoStatuses: P2PoStatusSummary[];
+  p2NcrMetrics?: P2NcrMetrics;
 }
 
 interface P2SerializedBreakdownItem {
@@ -777,6 +785,7 @@ function ProductionTab({ projectId }: { projectId: string }) {
   const rows = productionResponse?.rows ?? [];
   const linkedP2PoCount = productionResponse?.linkedP2PoCount ?? 0;
   const linkedP2PoStatuses = productionResponse?.linkedP2PoStatuses ?? [];
+  const p2NcrMetrics = productionResponse?.p2NcrMetrics;
 
   const { data: detail, isLoading: detailLoading } = useQuery<WorkOrderDetail>({
     queryKey: ['/api/pm-dashboard', projectId, 'production', selectedWO?.productionWorkOrderId],
@@ -914,6 +923,49 @@ function ProductionTab({ projectId }: { projectId: string }) {
 
   return (
     <>
+      {p2NcrMetrics && p2NcrMetrics.totalSerializedItems > 0 && (
+        <div className="mb-4 grid gap-3 sm:grid-cols-3">
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-medium uppercase text-muted-foreground">Open NCR</p>
+                  <p className="text-2xl font-semibold">{p2NcrMetrics.openNcrCount}</p>
+                </div>
+                <ShieldAlert className="h-5 w-5 text-orange-500" />
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">Items awaiting disposition</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-medium uppercase text-muted-foreground">Final Scrap</p>
+                  <p className="text-2xl font-semibold">{p2NcrMetrics.finalScrapCount}</p>
+                </div>
+                <XCircle className="h-5 w-5 text-red-500" />
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">Dispositioned as scrap/trash</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-medium uppercase text-muted-foreground">Scrap Rate</p>
+                  <p className="text-2xl font-semibold">{p2NcrMetrics.finalScrapRatePercent.toFixed(2)}%</p>
+                </div>
+                <TrendingUp className="h-5 w-5 text-red-500" />
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {p2NcrMetrics.finalScrapCount} of {p2NcrMetrics.totalSerializedItems} serialized items
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {linkedP2PoStatuses.length > 0 && (
         <div className="grid gap-3 mb-4">
           {linkedP2PoStatuses.map((po) => {

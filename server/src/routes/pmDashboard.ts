@@ -116,6 +116,13 @@ interface ProductionRow {
   productionConnectionDetail?: string | null;
 }
 
+interface P2NcrMetrics {
+  totalSerializedItems: number;
+  openNcrCount: number;
+  finalScrapCount: number;
+  finalScrapRatePercent: number;
+}
+
 interface WadBridgeRow {
   id: string;
   workOrderNumber: string;
@@ -612,6 +619,70 @@ async function getProjectP2SerializedBreakdown(projectId: string): Promise<P2Ser
       psi.sequence_number,
       psi.serial_number
   `, [linkedPoIds]);
+}
+
+async function getProjectP2NcrMetrics(projectId: string): Promise<P2NcrMetrics> {
+  const linkedPoIds = await getProjectLinkedP2PoIds(projectId);
+  if (!linkedPoIds.length) {
+    return {
+      totalSerializedItems: 0,
+      openNcrCount: 0,
+      finalScrapCount: 0,
+      finalScrapRatePercent: 0,
+    };
+  }
+
+  const rows = await pool.query<{
+    totalSerializedItems: string;
+    openNcrCount: string;
+    finalScrapCount: string;
+  }>(`
+    WITH linked_items AS (
+      SELECT psi.id, psi.status
+      FROM p2_serialized_items psi
+      WHERE psi.po_id = ANY($1::int[])
+        AND COALESCE(UPPER(psi.status), '') NOT IN ('CANCELLED', 'CANCELED')
+    ),
+    resolved_dispositions AS (
+      SELECT DISTINCT ON (ncr.serialized_item_id)
+        ncr.serialized_item_id,
+        ncr.disposition_type
+      FROM p2_nonconforming_dispositions ncr
+      JOIN linked_items li ON li.id = ncr.serialized_item_id
+      WHERE ncr.resolved = true
+      ORDER BY ncr.serialized_item_id, COALESCE(ncr.resolved_at, ncr.created_at) DESC, ncr.id DESC
+    )
+    SELECT
+      COUNT(li.id)::text AS "totalSerializedItems",
+      COUNT(li.id) FILTER (
+        WHERE UPPER(COALESCE(li.status, '')) = 'SCRAPPED'
+          AND NOT EXISTS (
+            SELECT 1
+            FROM resolved_dispositions rd
+            WHERE rd.serialized_item_id = li.id
+          )
+      )::text AS "openNcrCount",
+      COUNT(*) FILTER (
+        WHERE LOWER(COALESCE(rd.disposition_type, '')) = 'scrap'
+      )::text AS "finalScrapCount"
+    FROM linked_items li
+    LEFT JOIN resolved_dispositions rd ON rd.serialized_item_id = li.id
+  `, [linkedPoIds]);
+
+  const row = rows[0];
+  const totalSerializedItems = parseInt(row?.totalSerializedItems ?? '0', 10) || 0;
+  const openNcrCount = parseInt(row?.openNcrCount ?? '0', 10) || 0;
+  const finalScrapCount = parseInt(row?.finalScrapCount ?? '0', 10) || 0;
+  const finalScrapRatePercent = totalSerializedItems > 0
+    ? Math.round((finalScrapCount / totalSerializedItems) * 10000) / 100
+    : 0;
+
+  return {
+    totalSerializedItems,
+    openNcrCount,
+    finalScrapCount,
+    finalScrapRatePercent,
+  };
 }
 
 function isWadReleasedForExecution(wad: WadBridgeRow): boolean {
@@ -1623,6 +1694,7 @@ router.get('/:projectId/production', h(async (req, res) => {
 
   const linkedP2PoCount = parseInt(linkRes[0]?.count ?? '0', 10) || 0;
   const linkedP2PoStatuses = await getProjectP2PoStatusSummaries(projectId);
+  const p2NcrMetrics = await getProjectP2NcrMetrics(projectId);
 
   // Item-level override: when serialized items exist for the project's linked
   // P2 PO, drive the P2 portion of the production table from p2_serialized_items
@@ -1773,6 +1845,7 @@ res.json({
   linkedP2Production,
   linkedP2PoCount,
   linkedP2PoStatuses,
+  p2NcrMetrics,
 });
 }));
 

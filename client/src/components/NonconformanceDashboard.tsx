@@ -106,10 +106,10 @@ export default function NonconformanceDashboard() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">
-            Nonconforming Item Tracking
+            P1 Nonconforming Item Tracking
           </h1>
           <p className="text-gray-600">
-            Track and manage quality issues and dispositions
+            Track P1 stock-line nonconforming items and dispositions
           </p>
         </div>
         <Button
@@ -122,7 +122,7 @@ export default function NonconformanceDashboard() {
       </div>
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4">
             <div className="text-2xl font-bold text-blue-600">
@@ -159,14 +159,6 @@ export default function NonconformanceDashboard() {
               {records.length}
             </div>
             <div className="text-sm text-gray-600">Total Records</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-bold text-slate-700">
-              {records.filter((r) => r.capaRequired).length}
-            </div>
-            <div className="text-sm text-gray-600">CAPA Required</div>
           </CardContent>
         </Card>
       </div>
@@ -279,7 +271,7 @@ export default function NonconformanceDashboard() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <FileText className="w-4 h-4" />
-            Nonconformance Records ({records.length})
+            P1 Nonconforming Records ({records.length})
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -310,8 +302,6 @@ export default function NonconformanceDashboard() {
                     <th className="text-left p-2 font-medium">Issue Cause</th>
                     <th className="text-left p-2 font-medium">Mfr Defect</th>
                     <th className="text-left p-2 font-medium">Disposition</th>
-                    <th className="text-left p-2 font-medium">CAPA</th>
-                    <th className="text-left p-2 font-medium">Effectiveness</th>
                     <th className="text-left p-2 font-medium">Status</th>
                     <th className="text-left p-2 font-medium">Tracking</th>
                     <th className="text-left p-2 font-medium">Progress</th>
@@ -349,21 +339,6 @@ export default function NonconformanceDashboard() {
                           )}
                         </td>
                         <td className="p-2">{record.disposition}</td>
-                        <td className="p-2">
-                          {record.capaRequired ? (
-                            <Badge variant="secondary" className="text-xs">Required</Badge>
-                          ) : (
-                            <span className="text-gray-400 text-xs">Not required</span>
-                          )}
-                        </td>
-                        <td className="p-2">
-                          <Badge
-                            variant={record.effectivenessStatus === 'effective' ? 'default' : 'secondary'}
-                            className="text-xs"
-                          >
-                            {record.effectivenessStatus || 'not_started'}
-                          </Badge>
-                        </td>
                         <td className="p-2">
                           <Badge
                             variant={

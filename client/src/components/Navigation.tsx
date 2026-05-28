@@ -567,9 +567,9 @@ export default function Navigation() {
     },
     {
       path: '/nonconformance',
-      label: 'Nonconforming Tracker',
+      label: 'P1 Nonconforming',
       icon: XCircle,
-      description: 'Track and manage quality issues and dispositions',
+      description: 'Track P1 stock-line nonconforming items and dispositions',
     },
     {
       path: '/rts',

@@ -41,6 +41,24 @@ const MANUFACTURER_COC_FALLBACK = {
   display: 'Version 2.3 08/14/2024',
 };
 
+let p2CertificateTemplateMetadataSchemaReady: Promise<void> | null = null;
+
+function ensureP2CertificateTemplateMetadataSchema(): Promise<void> {
+  if (!p2CertificateTemplateMetadataSchemaReady) {
+    p2CertificateTemplateMetadataSchemaReady = pool.query(`
+      ALTER TABLE p2_certificates_of_conformance
+        ADD COLUMN IF NOT EXISTS template_document_id uuid,
+        ADD COLUMN IF NOT EXISTS template_document_name text,
+        ADD COLUMN IF NOT EXISTS template_document_number text,
+        ADD COLUMN IF NOT EXISTS template_version text,
+        ADD COLUMN IF NOT EXISTS template_version_date date,
+        ADD COLUMN IF NOT EXISTS template_display text
+    `).then(() => undefined);
+  }
+
+  return p2CertificateTemplateMetadataSchemaReady;
+}
+
 function formatControlledVersionDisplay(version: string, versionDate: string | Date | null | undefined): string {
   if (!versionDate) return `Version ${version}`;
   const date = versionDate instanceof Date
@@ -1081,6 +1099,7 @@ const createCertificateSchema = z.object({
 router.post('/certificates', authenticateToken, requirePermission('shipping.release_shipment'), async (req: Request, res: Response) => {
   try {
     const input = createCertificateSchema.parse(req.body);
+    await ensureP2CertificateTemplateMetadataSchema();
 
     const [lot] = await db
       .select()
@@ -1190,8 +1209,20 @@ router.post('/certificates', authenticateToken, requirePermission('shipping.rele
   } catch (err: any) {
     if (err instanceof z.ZodError)
       return res.status(400).json({ error: err.errors[0].message });
-    console.error('Create certificate error:', err);
-    return res.status(500).json({ error: 'Failed to create certificate' });
+    console.error('Create certificate error:', {
+      message: err?.message,
+      code: err?.code,
+      detail: err?.detail,
+      column: err?.column,
+      constraint: err?.constraint,
+    });
+    return res.status(500).json({
+      error: err?.message || 'Failed to create certificate',
+      code: err?.code,
+      detail: err?.detail,
+      column: err?.column,
+      constraint: err?.constraint,
+    });
   }
 });
 

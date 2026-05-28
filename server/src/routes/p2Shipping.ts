@@ -1159,11 +1159,17 @@ router.post('/certificates', authenticateToken, requirePermission('shipping.rele
       lot.manufacturingDate ||
       new Date();
 
-    const certNumber = await generateSequentialId(
-      'COC',
-      'p2_certificates_of_conformance',
-      'certificate_number'
+    const certNumberRows = await pool.query<{ certificate_number: string }>(
+      `SELECT certificate_number
+         FROM p2_certificates_of_conformance
+        WHERE certificate_number = $1
+           OR certificate_number LIKE $2
+        ORDER BY certificate_number DESC`,
+      [lot.lotNumber, `${lot.lotNumber}-%`]
     );
+    const certNumber = certNumberRows.length === 0
+      ? lot.lotNumber
+      : `${lot.lotNumber}-${String(certNumberRows.length + 1).padStart(2, '0')}`;
 
     const defaultText =
       'AG Advanced certifies that the items listed herein have been manufactured, inspected, and tested in accordance with the applicable drawings, specifications, and purchase order requirements. All materials used in manufacture conform to applicable specifications. Records are on file and available for review.';

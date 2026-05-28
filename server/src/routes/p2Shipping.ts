@@ -1783,11 +1783,11 @@ router.post('/shipments/:lotId/void', authenticateToken, requirePermission('ship
       await client.query(
         `UPDATE p2_lot_numbers
             SET status = 'VOID',
-                closed_at = COALESCE(closed_at, $1),
-                closed_by = COALESCE(closed_by, $2),
-                notes = CONCAT_WS(E'\n', NULLIF(notes, ''), $3),
+                closed_at = COALESCE(closed_at, $1::timestamp),
+                closed_by = COALESCE(closed_by, $2::text),
+                notes = CONCAT_WS(E'\n', NULLIF(notes, ''), $3::text),
                 updated_at = NOW()
-          WHERE id = $4`,
+          WHERE id = $4::uuid`,
         [now.toISOString(), actor, `VOIDED: ${input.reason}`, lot.id]
       );
 
@@ -1795,9 +1795,9 @@ router.post('/shipments/:lotId/void', authenticateToken, requirePermission('ship
         await client.query(
           `UPDATE p2_packing_slips
               SET status = 'VOID',
-                  notes = CONCAT_WS(E'\n', NULLIF(notes, ''), $1),
+                  notes = CONCAT_WS(E'\n', NULLIF(notes, ''), $1::text),
                   updated_at = NOW()
-            WHERE id = $2`,
+            WHERE id = $2::uuid`,
           [`VOIDED: ${input.reason}`, lot.packing_slip_id]
         );
       }
@@ -1806,9 +1806,9 @@ router.post('/shipments/:lotId/void', authenticateToken, requirePermission('ship
         await client.query(
           `UPDATE p2_certificates_of_conformance
               SET status = 'VOID',
-                  notes = CONCAT_WS(E'\n', NULLIF(notes, ''), $1),
+                  notes = CONCAT_WS(E'\n', NULLIF(notes, ''), $1::text),
                   updated_at = NOW()
-            WHERE id = $2`,
+            WHERE id = $2::uuid`,
           [`VOIDED: ${input.reason}`, lot.certificate_id]
         );
       }
@@ -1820,11 +1820,11 @@ router.post('/shipments/:lotId/void', authenticateToken, requirePermission('ship
         await client.query(
           `UPDATE ar_invoices
               SET status = 'VOID',
-                  voided_at = $1,
-                  voided_by = $2,
-                  void_reason = $3,
+                  voided_at = $1::timestamp,
+                  voided_by = $2::text,
+                  void_reason = $3::text,
                   updated_at = NOW()
-            WHERE id = $4`,
+            WHERE id = $4::uuid`,
           [now.toISOString(), actor, `Shipment ${lot.lot_number} voided: ${input.reason}`, invoice.id]
         );
       }
@@ -1842,7 +1842,7 @@ router.post('/shipments/:lotId/void', authenticateToken, requirePermission('ship
         await client.query(
           `INSERT INTO p2_shipping_audit_log
              (entity_type, entity_id, field_name, old_value, new_value, changed_by, reason)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+           VALUES ($1::text, $2::text, $3::text, $4::text, $5::text, $6::text, $7::text)`,
           [entityType, entityId, fieldName, oldValue, newValue, actor, input.reason]
         );
       }

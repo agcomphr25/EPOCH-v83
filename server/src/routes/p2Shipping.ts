@@ -1310,11 +1310,11 @@ router.get('/certificates/:id/pdf', async (req: Request, res: Response) => {
     const usableWidth = width - margin * 2;
 
     // ── Header ──
-    page.drawText('AG Advanced', { x: margin, y, size: 13, font: boldFont, color: black });
+    page.drawText('AG Advanced Technologies', { x: margin, y, size: 13, font: boldFont, color: black });
     y -= 14;
     page.drawText(COMPANY_INFO.ADDRESS, { x: margin, y, size: 8.5, font, color: gray });
     y -= 11;
-    page.drawText(`${COMPANY_INFO.PHONE}  |  ${COMPANY_INFO.EMAIL}`, {
+    page.drawText(`${COMPANY_INFO.PHONE}  |  glenn@agadvanced.com`, {
       x: margin,
       y,
       size: 8.5,
@@ -1483,7 +1483,13 @@ router.get('/certificates/:id/pdf', async (req: Request, res: Response) => {
     if (qaMgrName) {
       page.drawText(qaMgrName, { x: margin, y: sigY - 45, size: 8.5, font: boldFont, color: black });
     }
-    page.drawText(qaMgrTitle, { x: margin, y: sigY - 58, size: 8, font, color: gray });
+    page.drawText('Title', { x: margin, y: sigY - 58, size: 8, font, color: gray });
+    page.drawLine({
+      start: { x: margin + 25, y: sigY - 55 },
+      end: { x: margin + 210, y: sigY - 55 },
+      thickness: 0.5,
+      color: darkGray,
+    });
     page.drawText('Date', { x: margin + 260, y: sigY - 32, size: 8, font, color: gray });
 
     const formNumber = cert.templateDocumentNumber || MANUFACTURER_COC_FALLBACK.documentNumber;

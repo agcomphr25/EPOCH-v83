@@ -19701,9 +19701,8 @@ export class DatabaseStorage implements IStorage {
 
       // Phase-separated QC Standards - create separate QC tasks per phase
       const startQcStandards = deptConfig.startQcStandards || [];
+      const workQcStandards = deptConfig.qcStandards || [];
       const finishQcStandards = deptConfig.finishQcStandards || [];
-      const hasPhaseQcStandards = startQcStandards.length > 0 || finishQcStandards.length > 0;
-      const workQcStandards = hasPhaseQcStandards ? [] : (deptConfig.qcStandards || []);
 
       const qcPhaseConfigs = [
         { standards: startQcStandards, phase: 'START' as const, title: 'Incoming QC Inspection', instructions: 'Complete START phase quality control verifications' },
@@ -20287,6 +20286,17 @@ export class DatabaseStorage implements IStorage {
         default: return 'WORK';
       }
     };
+    const normalizeExplicitPhase = (value: any): 'START' | 'WORK' | 'FINISH' | null => {
+      const normalized = String(value || '').trim().toUpperCase();
+      return normalized === 'START' || normalized === 'WORK' || normalized === 'FINISH'
+        ? normalized
+        : null;
+    };
+    const operationTaskPhase = (op: RoutingOperation): 'START' | 'WORK' | 'FINISH' => {
+      const pack = (op.instructionPack || {}) as any;
+      return normalizeExplicitPhase(pack.taskPhase || pack.phase || pack.qcPhase || pack.workPhase)
+        || operationTypeToPhase(op.operationType) as 'START' | 'WORK' | 'FINISH';
+    };
     const sanitizeFieldKey = (value: string) =>
       String(value || '')
         .replace(/[^a-zA-Z0-9]+/g, '_')
@@ -20336,7 +20346,7 @@ export class DatabaseStorage implements IStorage {
       const fallbackStandards =
         taskPhase === 'FINISH'
           ? normalizeQcStandards(deptConfig.qcStandards)
-          : normalizeQcStandards(deptConfig.finishQcStandards);
+          : [];
       if (fallbackStandards.length > 0) return fallbackStandards;
 
       if (pack.specialNotes) {
@@ -20401,7 +20411,7 @@ export class DatabaseStorage implements IStorage {
       let sortOrder = 0;
       for (const op of groupOps) {
         const taskType = operationTypeToTaskType(op.operationType);
-        const taskPhase = operationTypeToPhase(op.operationType);
+        const taskPhase = operationTaskPhase(op);
         const instPack = (op.instructionPack || {}) as any;
         const operationDetails = [
           instPack?.specialNotes,

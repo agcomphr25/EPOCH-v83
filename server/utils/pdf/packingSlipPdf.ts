@@ -49,7 +49,7 @@ export async function generatePackingSlipPdf(data: PackingSlipData): Promise<Buf
   });
   y -= LINE_HEIGHTS.COMPACT;
 
-  page.drawText(`Phone: ${COMPANY_INFO.PHONE} | Email: ${COMPANY_INFO.EMAIL}`, {
+  page.drawText(`Phone: ${COMPANY_INFO.PHONE} | Email: glenn@agadvanced.com`, {
     x: margin,
     y,
     size: FONT_SIZES.BODY_SMALL,

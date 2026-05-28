@@ -34,6 +34,7 @@ import {
   Zap,
   ExternalLink,
   Receipt,
+  Ban,
 } from 'lucide-react';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
@@ -506,6 +507,42 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
     } finally {
       setCreatingInvoiceFor(null);
     }
+  };
+
+  const voidShipmentMutation = useMutation({
+    mutationFn: async ({ poNumber, shipment, reason }: { poNumber: string; shipment: CreatedShipment; reason: string }) => {
+      return apiRequest(`/api/p2/shipments/${shipment.lotId}/void`, {
+        method: 'POST',
+        body: { reason },
+      });
+    },
+    onSuccess: (_result, variables) => {
+      setCreatedShipments((prev) => ({
+        ...prev,
+        [variables.poNumber]: (prev[variables.poNumber] ?? []).filter((s) => s.lotId !== variables.shipment.lotId),
+      }));
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/serialized-items/shipping-queue'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/lots/existing-shipments'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/shipments'] });
+      queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === '/api/ar-invoices' });
+      toast({
+        title: 'Shipment voided',
+        description: `${variables.shipment.lotNumber} was voided. Finalized units are available to regroup.`,
+      });
+    },
+    onError: (err: any) => {
+      toast({
+        title: 'Void failed',
+        description: err?.message || 'Shipment could not be voided.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const handleVoidShipment = (poNumber: string, shipment: CreatedShipment) => {
+    const reason = window.prompt(`Reason for voiding lot ${shipment.lotNumber}? Finalized units will be released for regrouping.`);
+    if (!reason || !reason.trim()) return;
+    voidShipmentMutation.mutate({ poNumber, shipment, reason: reason.trim() });
   };
 
   const summary = useMemo(() => {
@@ -1032,6 +1069,19 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
                               )}
                             </Button>
                           )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-red-300 text-red-700 hover:bg-red-50"
+                            disabled={voidShipmentMutation.isPending && voidShipmentMutation.variables?.shipment.lotId === shipment.lotId}
+                            onClick={() => handleVoidShipment(group.poNumber, shipment)}
+                          >
+                            {voidShipmentMutation.isPending && voidShipmentMutation.variables?.shipment.lotId === shipment.lotId ? (
+                              <><Loader2 className="w-3 h-3 mr-1 animate-spin" />Voiding...</>
+                            ) : (
+                              <><Ban className="w-3 h-3 mr-1" />Void</>
+                            )}
+                          </Button>
                         </div>
                         <div className="flex flex-wrap items-center gap-2 text-xs">
                           {shipment.invoiceId ? (

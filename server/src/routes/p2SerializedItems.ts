@@ -63,7 +63,10 @@ router.get('/shipping-queue', async (req, res) => {
     // Build a set of all serial IDs already assigned to a lot.
     // pg automatically parses the JSONB column into a JS array of strings.
     const lotRows = await pool.query<{ serialized_item_ids: string[] | null }>(
-      `SELECT serialized_item_ids FROM p2_lot_numbers WHERE serialized_item_ids IS NOT NULL`
+      `SELECT serialized_item_ids
+         FROM p2_lot_numbers
+        WHERE serialized_item_ids IS NOT NULL
+          AND COALESCE(status, '') <> 'VOID'`
     );
     const shippedIds = new Set<string>(
       lotRows.flatMap((r) => r.serialized_item_ids ?? [])
@@ -278,7 +281,10 @@ router.post('/unfinalize', async (req, res) => {
     }
 
     const alreadyShippedRows = await pool.query<{ serialized_item_ids: string[] | null }>(
-      `SELECT serialized_item_ids FROM p2_lot_numbers WHERE serialized_item_ids IS NOT NULL`
+      `SELECT serialized_item_ids
+         FROM p2_lot_numbers
+        WHERE serialized_item_ids IS NOT NULL
+          AND COALESCE(status, '') <> 'VOID'`
     );
     const alreadyShippedIds = new Set<string>(
       alreadyShippedRows.flatMap((row) => row.serialized_item_ids ?? [])
@@ -342,7 +348,10 @@ router.post('/correct-finalized-identity', async (req, res) => {
     }
 
     const alreadyShippedRows = await pool.query<{ serialized_item_ids: string[] | null }>(
-      `SELECT serialized_item_ids FROM p2_lot_numbers WHERE serialized_item_ids IS NOT NULL`
+      `SELECT serialized_item_ids
+         FROM p2_lot_numbers
+        WHERE serialized_item_ids IS NOT NULL
+          AND COALESCE(status, '') <> 'VOID'`
     );
     const alreadyShippedIds = new Set<string>(
       alreadyShippedRows.flatMap((row) => row.serialized_item_ids ?? [])

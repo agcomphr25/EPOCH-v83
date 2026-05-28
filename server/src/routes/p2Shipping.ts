@@ -288,6 +288,10 @@ const createLotSchema = z.object({
   createdBy: z.string().min(1).default('system'),
 });
 
+const voidShipmentSchema = z.object({
+  reason: z.string().trim().min(1, 'Void reason is required'),
+});
+
 router.post('/lots', authenticateToken, requirePermission('shipping.release_shipment'), async (req: Request, res: Response) => {
   try {
     const input = createLotSchema.parse(req.body);
@@ -320,7 +324,10 @@ router.post('/lots', authenticateToken, requirePermission('shipping.release_ship
 
     // Guard: serial reuse — reject if any serial already exists in another lot
     const existingLots = await pool.query<{ id: string; lot_number: string }>(
-      `SELECT id, lot_number FROM p2_lot_numbers WHERE serialized_item_ids ?| $1::text[]`,
+      `SELECT id, lot_number
+         FROM p2_lot_numbers
+        WHERE serialized_item_ids ?| $1::text[]
+          AND COALESCE(status, '') <> 'VOID'`,
       [input.serialIds]
     );
     if (existingLots.length > 0) {
@@ -427,7 +434,9 @@ router.get('/lots/existing-shipments', async (req: Request, res: Response) => {
         FROM journal_lines
         WHERE journal_entry_id = je.id
       ) jlc ON true
-      WHERE l.po_id IS NOT NULL AND l.packing_slip_id IS NOT NULL
+      WHERE l.po_id IS NOT NULL
+        AND l.packing_slip_id IS NOT NULL
+        AND COALESCE(l.status, '') <> 'VOID'
       ORDER BY l.created_at DESC
     `);
     return res.json(rows);
@@ -1396,6 +1405,7 @@ router.get('/certificates/:id/pdf', async (req: Request, res: Response) => {
 // GET /api/p2/shipments — all lots with packing slip link, newest first
 router.get('/shipments', async (req: Request, res: Response) => {
   try {
+    const includeVoid = String(req.query.includeVoid ?? '').toLowerCase() === 'true';
     const rows = await pool.query(
       `SELECT
          l.id,
@@ -1425,8 +1435,10 @@ router.get('/shipments', async (req: Request, res: Response) => {
          ORDER BY created_at DESC
          LIMIT 1
        ) inv ON true
+       WHERE ($1::boolean = true OR COALESCE(l.status, '') <> 'VOID')
        ORDER BY l.created_at DESC
-       LIMIT 500`
+       LIMIT 500`,
+      [includeVoid]
     );
     return res.json(rows);
   } catch (err: any) {
@@ -1699,6 +1711,164 @@ router.patch('/shipments/:lotId', authenticateToken, requirePermission('shipping
   } catch (err: any) {
     console.error('Shipment update error:', err);
     return res.status(500).json({ error: 'Failed to update shipment' });
+  }
+});
+
+// POST /api/p2/shipments/:lotId/void — void a shipment lot and release its finalized serials for regrouping.
+router.post('/shipments/:lotId/void', authenticateToken, requirePermission('shipping.release_shipment'), async (req: Request, res: Response) => {
+  try {
+    const { lotId } = req.params;
+    const input = voidShipmentSchema.parse(req.body);
+    const actor = auditActor(req).username || req.body?.voidedBy || 'system';
+
+    const client = await pgPool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const lotRows = await client.query<{
+        id: string;
+        lot_number: string;
+        status: string;
+        packing_slip_id: string | null;
+        certificate_id: string | null;
+        serialized_item_ids: string[] | null;
+      }>(
+        `SELECT id, lot_number, status, packing_slip_id, certificate_id, serialized_item_ids
+           FROM p2_lot_numbers
+          WHERE id::text = $1 OR lot_number = $1
+          FOR UPDATE`,
+        [lotId]
+      );
+
+      if (lotRows.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Shipment lot not found' });
+      }
+
+      const lot = lotRows.rows[0];
+      if (lot.status === 'VOID') {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: 'Shipment is already void' });
+      }
+
+      const invoiceRows = await client.query<{
+        id: string;
+        invoice_number: string;
+        status: string;
+      }>(
+        `SELECT id, invoice_number, status
+           FROM ar_invoices
+          WHERE lot_id = $1
+             OR ($2::uuid IS NOT NULL AND packing_slip_id = $2::uuid)
+          FOR UPDATE`,
+        [lot.id, lot.packing_slip_id]
+      );
+
+      const blockedInvoices = invoiceRows.rows.filter((invoice) =>
+        ['POSTED', 'SENT', 'PAID'].includes(invoice.status)
+      );
+      if (blockedInvoices.length > 0) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          error: 'Shipment has posted, sent, or paid invoices. Void those invoices through finance first so reversals are handled.',
+          invoices: blockedInvoices.map((invoice) => ({
+            id: invoice.id,
+            invoiceNumber: invoice.invoice_number,
+            status: invoice.status,
+          })),
+        });
+      }
+
+      const now = new Date();
+      await client.query(
+        `UPDATE p2_lot_numbers
+            SET status = 'VOID',
+                closed_at = COALESCE(closed_at, $1),
+                closed_by = COALESCE(closed_by, $2),
+                notes = CONCAT_WS(E'\n', NULLIF(notes, ''), $3),
+                updated_at = NOW()
+          WHERE id = $4`,
+        [now.toISOString(), actor, `VOIDED: ${input.reason}`, lot.id]
+      );
+
+      if (lot.packing_slip_id) {
+        await client.query(
+          `UPDATE p2_packing_slips
+              SET status = 'VOID',
+                  notes = CONCAT_WS(E'\n', NULLIF(notes, ''), $1),
+                  updated_at = NOW()
+            WHERE id = $2`,
+          [`VOIDED: ${input.reason}`, lot.packing_slip_id]
+        );
+      }
+
+      if (lot.certificate_id) {
+        await client.query(
+          `UPDATE p2_certificates_of_conformance
+              SET status = 'VOID',
+                  notes = CONCAT_WS(E'\n', NULLIF(notes, ''), $1),
+                  updated_at = NOW()
+            WHERE id = $2`,
+          [`VOIDED: ${input.reason}`, lot.certificate_id]
+        );
+      }
+
+      const voidableInvoices = invoiceRows.rows.filter((invoice) =>
+        ['DRAFT', 'REVIEW'].includes(invoice.status)
+      );
+      for (const invoice of voidableInvoices) {
+        await client.query(
+          `UPDATE ar_invoices
+              SET status = 'VOID',
+                  voided_at = $1,
+                  voided_by = $2,
+                  void_reason = $3,
+                  updated_at = NOW()
+            WHERE id = $4`,
+          [now.toISOString(), actor, `Shipment ${lot.lot_number} voided: ${input.reason}`, invoice.id]
+        );
+      }
+
+      const auditRows: Array<[string, string, string, string | null, string | null]> = [
+        ['lot_number', lot.id, 'status', lot.status, 'VOID'],
+      ];
+      if (lot.packing_slip_id) auditRows.push(['packing_slip', lot.packing_slip_id, 'status', null, 'VOID']);
+      if (lot.certificate_id) auditRows.push(['certificate', lot.certificate_id, 'status', null, 'VOID']);
+      for (const invoice of voidableInvoices) {
+        auditRows.push(['ar_invoice', invoice.id, 'status', invoice.status, 'VOID']);
+      }
+
+      for (const [entityType, entityId, fieldName, oldValue, newValue] of auditRows) {
+        await client.query(
+          `INSERT INTO p2_shipping_audit_log
+             (entity_type, entity_id, field_name, old_value, new_value, changed_by, reason)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [entityType, entityId, fieldName, oldValue, newValue, actor, input.reason]
+        );
+      }
+
+      await client.query('COMMIT');
+      return res.json({
+        success: true,
+        lotId: lot.id,
+        lotNumber: lot.lot_number,
+        releasedSerializedItemIds: Array.isArray(lot.serialized_item_ids) ? lot.serialized_item_ids : [],
+        voidedInvoices: voidableInvoices.map((invoice) => ({
+          id: invoice.id,
+          invoiceNumber: invoice.invoice_number,
+          previousStatus: invoice.status,
+        })),
+      });
+    } catch (txErr) {
+      await client.query('ROLLBACK');
+      throw txErr;
+    } finally {
+      client.release();
+    }
+  } catch (err: any) {
+    if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors[0].message });
+    console.error('Void shipment error:', { message: err?.message, code: err?.code });
+    return res.status(500).json({ error: 'Failed to void shipment' });
   }
 });
 

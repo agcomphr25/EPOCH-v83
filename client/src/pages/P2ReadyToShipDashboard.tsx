@@ -349,6 +349,10 @@ export default function P2ReadyToShipDashboard() {
           <ExternalLink className="h-4 w-4 mr-2" />
           Shipping Tab
         </Button>
+        <Button variant="outline" size="sm" onClick={() => setLocation('/p2/shipments')}>
+          <ListChecks className="h-4 w-4 mr-2" />
+          Shipment History
+        </Button>
       </div>
 
       {/* Summary cards */}

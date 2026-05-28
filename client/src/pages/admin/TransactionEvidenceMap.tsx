@@ -10,19 +10,27 @@ import {
   ListTree,
   Loader2,
   Network,
+  Package,
   PanelRightOpen,
   RefreshCw,
   Search,
   ShieldCheck,
   UserRound,
 } from 'lucide-react';
+
 import EdriSubNav from '@/components/EdriSubNav';
 import { apiRequest } from '@/lib/queryClient';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   Sheet,
   SheetContent,
@@ -38,7 +46,14 @@ type EvidenceNodeType =
   | 'period'
   | 'work_order'
   | 'employee'
+  | 'labor_session'
   | 'labor_cost'
+  | 'material_budget'
+  | 'material_lot'
+  | 'material_consumption'
+  | 'material_receipt'
+  | 'material_request'
+  | 'inventory_ledger'
   | 'payroll'
   | 'billing'
   | 'journal'
@@ -81,19 +96,30 @@ interface EvidenceMapResponse {
   };
   summary: {
     laborRecordCount: number;
+    liveLaborSessionCount?: number;
     employeeCount: number;
     workOrderCount: number;
+    materialEvidenceCount?: number;
+    materialConsumptionCount?: number;
+    materialConsumedCost?: number;
+    materialCommittedCost?: number;
+    materialReceivedCost?: number;
     journalEntryCount: number;
     customerInvoiceCount?: number;
     documentCount: number;
     auditEventCount: number;
     totalHours: number;
+    liveLaborHours?: number;
     totalLaborDollars: number;
     missingEvidenceCount: number;
   };
   nodes: EvidenceNode[];
   edges: EvidenceEdge[];
-  missingEvidence: Array<{ nodeId: string; nodeLabel: string; message: string }>;
+  missingEvidence: Array<{
+    nodeId: string;
+    nodeLabel: string;
+    message: string;
+  }>;
 }
 
 interface ProjectOption {
@@ -113,25 +139,79 @@ const branchDefs: Array<{
   subtitle: string;
   types: EvidenceNodeType[];
 }> = [
-  { key: 'work_order', label: 'What job was charged?', subtitle: 'Work orders and WAD links', types: ['work_order'] },
-  { key: 'employee', label: 'Who worked?', subtitle: 'Employee names and rates used', types: ['employee'] },
-  { key: 'labor_cost', label: 'What did it cost?', subtitle: 'Hours, rate source, and dollars', types: ['labor_cost'] },
-  { key: 'payroll', label: 'Was it sent to payroll?', subtitle: 'Payroll export evidence', types: ['payroll'] },
-  { key: 'billing', label: 'Customer billing', subtitle: 'Invoices created against this project', types: ['billing'] },
-  { key: 'journal', label: 'Was it posted to the books?', subtitle: 'GL journal entry and debit/credit lines', types: ['journal'] },
-  { key: 'audit', label: 'Who touched it?', subtitle: 'Audit trail and approvals', types: ['audit'] },
-  { key: 'document', label: 'What proof is attached?', subtitle: 'Files, packets, and missing support', types: ['document', 'missing'] },
+  {
+    key: 'work_order',
+    label: 'What job was charged?',
+    subtitle: 'Work orders and WAD links',
+    types: ['work_order'],
+  },
+  {
+    key: 'employee',
+    label: 'Who worked?',
+    subtitle: 'Employees and live punch sessions',
+    types: ['employee', 'labor_session'],
+  },
+  {
+    key: 'labor_cost',
+    label: 'What did it cost?',
+    subtitle: 'Hours, rate source, and dollars',
+    types: ['labor_cost'],
+  },
+  {
+    key: 'material',
+    label: 'What material was used?',
+    subtitle: 'Budgets, lots, ICNs, receipts, and consumed quantities',
+    types: [
+      'material_budget',
+      'material_lot',
+      'material_consumption',
+      'material_receipt',
+      'material_request',
+      'inventory_ledger',
+    ],
+  },
+  {
+    key: 'payroll',
+    label: 'Was it sent to payroll?',
+    subtitle: 'Payroll export evidence',
+    types: ['payroll'],
+  },
+  {
+    key: 'billing',
+    label: 'Customer billing',
+    subtitle: 'Invoices created against this project',
+    types: ['billing'],
+  },
+  {
+    key: 'journal',
+    label: 'Was it posted to the books?',
+    subtitle: 'GL journal entry and debit/credit lines',
+    types: ['journal'],
+  },
+  {
+    key: 'audit',
+    label: 'Who touched it?',
+    subtitle: 'Audit trail and approvals',
+    types: ['audit'],
+  },
+  {
+    key: 'document',
+    label: 'What proof is attached?',
+    subtitle: 'Files, packets, and missing support',
+    types: ['document', 'missing'],
+  },
 ];
 
 const branchLayout: Record<string, { x: number; y: number }> = {
   work_order: { x: 430, y: 250 },
   employee: { x: 360, y: 470 },
   labor_cost: { x: 430, y: 690 },
-  payroll: { x: 720, y: 920 },
+  material: { x: 720, y: 920 },
+  payroll: { x: 1080, y: 920 },
   billing: { x: 1180, y: 250 },
   journal: { x: 1470, y: 470 },
   audit: { x: 1470, y: 690 },
-  document: { x: 1180, y: 920 },
+  document: { x: 1450, y: 920 },
 };
 
 function currentPeriod() {
@@ -140,7 +220,10 @@ function currentPeriod() {
 }
 
 function money(value: number) {
-  return value.toLocaleString(undefined, { style: 'currency', currency: 'USD' });
+  return value.toLocaleString(undefined, {
+    style: 'currency',
+    currency: 'USD',
+  });
 }
 
 function projectCode(project: ProjectOption) {
@@ -152,7 +235,8 @@ function projectName(project: ProjectOption) {
 }
 
 function statusClass(status: EvidenceNodeStatus) {
-  if (status === 'ok') return 'border-emerald-300 bg-emerald-50 text-emerald-950';
+  if (status === 'ok')
+    return 'border-emerald-300 bg-emerald-50 text-emerald-950';
   if (status === 'sensitive') return 'border-blue-300 bg-blue-50 text-blue-950';
   if (status === 'missing') return 'border-red-300 bg-red-50 text-red-950';
   return 'border-amber-300 bg-amber-50 text-amber-950';
@@ -161,7 +245,14 @@ function statusClass(status: EvidenceNodeStatus) {
 function typeLabel(type: EvidenceNodeType) {
   if (type === 'work_order') return 'Work orders';
   if (type === 'employee') return 'Employees';
+  if (type === 'labor_session') return 'Punch sessions';
   if (type === 'labor_cost') return 'Labor costs';
+  if (type === 'material_budget') return 'Material budgets';
+  if (type === 'material_lot') return 'Material lots';
+  if (type === 'material_consumption') return 'Material consumption';
+  if (type === 'material_receipt') return 'Material receipts';
+  if (type === 'material_request') return 'Material requests';
+  if (type === 'inventory_ledger') return 'Inventory ledger';
   if (type === 'payroll') return 'Payroll exports';
   if (type === 'billing') return 'Customer invoices';
   if (type === 'journal') return 'Journal entries';
@@ -176,10 +267,18 @@ function branchCountLabel(count: number) {
   return `${count} item${count === 1 ? '' : 's'}`;
 }
 
-function summarizeBranch(nodes: EvidenceNode[], branch: (typeof branchDefs)[number]) {
+function summarizeBranch(
+  nodes: EvidenceNode[],
+  branch: (typeof branchDefs)[number]
+) {
   const status = nodes.length ? branchStatus(nodes) : 'missing';
-  const missingCount = nodes.reduce((sum, node) => sum + (node.missingEvidence?.length ?? 0), 0);
-  const sensitiveCount = nodes.filter((node) => node.status === 'sensitive').length;
+  const missingCount = nodes.reduce(
+    (sum, node) => sum + (node.missingEvidence?.length ?? 0),
+    0
+  );
+  const sensitiveCount = nodes.filter(
+    (node) => node.status === 'sensitive'
+  ).length;
   const warningCount = nodes.filter((node) => node.status === 'warning').length;
   const subtitleParts = [
     branchCountLabel(nodes.length),
@@ -194,12 +293,23 @@ function summarizeBranch(nodes: EvidenceNode[], branch: (typeof branchDefs)[numb
     label: nodes.length ? typeLabel(branch.types[0]) : 'No records found',
     subtitle: subtitleParts.join(' | ') || branch.subtitle,
     status,
-    missingEvidence: nodes.length ? [] : [`No ${branch.label.toLowerCase()} evidence found.`],
+    missingEvidence: nodes.length
+      ? []
+      : [`No ${branch.label.toLowerCase()} evidence found.`],
   } satisfies EvidenceNode;
 }
 
 function typeIcon(type: EvidenceNodeType) {
   if (type === 'employee') return UserRound;
+  if (
+    type === 'material_budget' ||
+    type === 'material_lot' ||
+    type === 'material_consumption' ||
+    type === 'material_receipt' ||
+    type === 'material_request' ||
+    type === 'inventory_ledger'
+  )
+    return Package;
   if (type === 'journal') return Landmark;
   if (type === 'billing') return FileText;
   if (type === 'audit') return ShieldCheck;
@@ -217,7 +327,8 @@ function branchStatus(nodes: EvidenceNode[]): EvidenceNodeStatus {
 
 function StatusBadge({ status }: { status: EvidenceNodeStatus }) {
   if (status === 'ok') return <Badge className="bg-emerald-600">OK</Badge>;
-  if (status === 'sensitive') return <Badge className="bg-blue-600">Sensitive</Badge>;
+  if (status === 'sensitive')
+    return <Badge className="bg-blue-600">Sensitive</Badge>;
   if (status === 'missing') return <Badge variant="destructive">Missing</Badge>;
   return <Badge variant="secondary">Review</Badge>;
 }
@@ -246,7 +357,9 @@ function MindMapNode({
       onClick={onClick}
       disabled={!onClick}
       className={`absolute rounded-md border px-3 py-2 text-left shadow-sm transition ${
-        onClick ? 'cursor-pointer hover:border-primary/60 hover:shadow-md' : 'cursor-default'
+        onClick
+          ? 'cursor-pointer hover:border-primary/60 hover:shadow-md'
+          : 'cursor-default'
       } ${statusClass(node.status)} ${selected ? 'ring-2 ring-primary ring-offset-2' : ''}`}
       style={{
         left: x - width / 2,
@@ -255,11 +368,19 @@ function MindMapNode({
       }}
     >
       <div className="flex items-start gap-2">
-        <Icon className={`${branch ? 'h-5 w-5' : 'h-4 w-4'} mt-0.5 flex-shrink-0`} />
+        <Icon
+          className={`${branch ? 'h-5 w-5' : 'h-4 w-4'} mt-0.5 flex-shrink-0`}
+        />
         <div className="min-w-0">
-          <div className={`${branch ? 'text-sm' : 'text-xs'} truncate font-semibold`}>{node.label}</div>
+          <div
+            className={`${branch ? 'text-sm' : 'text-xs'} truncate font-semibold`}
+          >
+            {node.label}
+          </div>
           {node.subtitle && (
-            <div className={`${branch ? 'text-xs' : 'text-[11px]'} mt-0.5 line-clamp-2 opacity-75`}>
+            <div
+              className={`${branch ? 'text-xs' : 'text-[11px]'} mt-0.5 line-clamp-2 opacity-75`}
+            >
               {node.subtitle}
             </div>
           )}
@@ -268,7 +389,8 @@ function MindMapNode({
       {node.missingEvidence?.length ? (
         <div className="mt-1 flex items-center gap-1 text-[11px] font-medium">
           <AlertTriangle className="h-3 w-3" />
-          {node.missingEvidence.length} gap{node.missingEvidence.length === 1 ? '' : 's'}
+          {node.missingEvidence.length} gap
+          {node.missingEvidence.length === 1 ? '' : 's'}
         </div>
       ) : null}
     </button>
@@ -291,7 +413,7 @@ function MindMapCanvas({
     id: `mind-center:${data.project.id}:${data.period.label}`,
     type: 'project',
     label: `${data.project.project_code} / ${data.period.label}`,
-    subtitle: `${data.project.project_name} | ${data.summary.laborRecordCount} labor records | ${money(data.summary.totalLaborDollars)}`,
+    subtitle: `${data.project.project_name} | ${data.summary.liveLaborSessionCount ?? 0} sessions | ${data.summary.materialConsumptionCount ?? 0} material draws`,
     status: data.summary.missingEvidenceCount ? 'warning' : 'ok',
   };
 
@@ -309,11 +431,29 @@ function MindMapCanvas({
 
   return (
     <div className="overflow-auto rounded-md border bg-[#f8fafc] p-3">
-      <div className="relative" style={{ width: canvas.width, height: canvas.height }}>
-        <svg className="absolute inset-0 h-full w-full" viewBox={`0 0 ${canvas.width} ${canvas.height}`} aria-hidden="true">
+      <div
+        className="relative"
+        style={{ width: canvas.width, height: canvas.height }}
+      >
+        <svg
+          className="absolute inset-0 h-full w-full"
+          viewBox={`0 0 ${canvas.width} ${canvas.height}`}
+          aria-hidden="true"
+        >
           <defs>
-            <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
-              <feDropShadow dx="0" dy="1.5" stdDeviation="2" floodOpacity="0.16" />
+            <filter
+              id="softShadow"
+              x="-20%"
+              y="-20%"
+              width="140%"
+              height="140%"
+            >
+              <feDropShadow
+                dx="0"
+                dy="1.5"
+                stdDeviation="2"
+                floodOpacity="0.16"
+              />
             </filter>
           </defs>
           {branches.map((branch) => (
@@ -323,7 +463,13 @@ function MindMapCanvas({
               y1={center.y}
               x2={branch.point.x}
               y2={branch.point.y}
-              className={branch.status === 'missing' ? 'stroke-red-300' : branch.status === 'warning' ? 'stroke-amber-300' : 'stroke-slate-300'}
+              className={
+                branch.status === 'missing'
+                  ? 'stroke-red-300'
+                  : branch.status === 'warning'
+                    ? 'stroke-amber-300'
+                    : 'stroke-slate-300'
+              }
               strokeWidth={3}
               strokeLinecap="round"
             />
@@ -339,7 +485,14 @@ function MindMapCanvas({
           />
         </svg>
 
-        <MindMapNode node={centerNode} selected={false} x={center.x} y={center.y} width={460} branch />
+        <MindMapNode
+          node={centerNode}
+          selected={false}
+          x={center.x}
+          y={center.y}
+          width={460}
+          branch
+        />
 
         {branches.map((branch) => (
           <MindMapNode
@@ -359,7 +512,6 @@ function MindMapCanvas({
             onClick={() => onSelectBranch(branch.key)}
           />
         ))}
-
       </div>
     </div>
   );
@@ -386,15 +538,15 @@ function FlowMapCanvas({
 
   return (
     <div className="overflow-auto rounded-md border bg-[#f8fafc] p-4">
-      <div className="flex min-w-[1680px] items-stretch gap-4">
-        <div
-          className="w-72 flex-shrink-0 rounded-md border border-emerald-300 bg-white p-4 text-left shadow-sm"
-        >
+      <div className="flex min-w-[1980px] items-stretch gap-4">
+        <div className="w-72 flex-shrink-0 rounded-md border border-emerald-300 bg-white p-4 text-left shadow-sm">
           <div className="flex items-center gap-2 text-sm font-semibold text-emerald-950">
             <Network className="h-5 w-5" />
             {data.project.project_code}
           </div>
-          <div className="mt-2 text-xs text-muted-foreground">{data.project.project_name}</div>
+          <div className="mt-2 text-xs text-muted-foreground">
+            {data.project.project_name}
+          </div>
           <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
             <div className="rounded border bg-muted/40 p-2">
               <div className="text-muted-foreground">Period</div>
@@ -402,7 +554,15 @@ function FlowMapCanvas({
             </div>
             <div className="rounded border bg-muted/40 p-2">
               <div className="text-muted-foreground">Labor</div>
-              <div className="font-semibold">{money(data.summary.totalLaborDollars)}</div>
+              <div className="font-semibold">
+                {money(data.summary.totalLaborDollars)}
+              </div>
+            </div>
+            <div className="rounded border bg-muted/40 p-2">
+              <div className="text-muted-foreground">Material</div>
+              <div className="font-semibold">
+                {money(data.summary.materialConsumedCost ?? 0)}
+              </div>
             </div>
           </div>
         </div>
@@ -414,7 +574,9 @@ function FlowMapCanvas({
               type="button"
               onClick={() => onSelectBranch(branch.key)}
               className={`w-60 flex-shrink-0 rounded-md border p-3 text-left shadow-sm transition-colors hover:border-primary/60 hover:bg-white ${
-                selectedBranchKey === branch.key ? 'ring-2 ring-primary ring-offset-2' : ''
+                selectedBranchKey === branch.key
+                  ? 'ring-2 ring-primary ring-offset-2'
+                  : ''
               } ${statusClass(branch.status)}`}
             >
               <div className="flex items-start gap-2">
@@ -424,7 +586,9 @@ function FlowMapCanvas({
                 })()}
                 <div className="min-w-0">
                   <div className="text-sm font-semibold">{branch.label}</div>
-                  <div className="mt-1 text-xs opacity-75">{branch.summary.subtitle}</div>
+                  <div className="mt-1 text-xs opacity-75">
+                    {branch.summary.subtitle}
+                  </div>
                 </div>
               </div>
             </button>
@@ -436,7 +600,8 @@ function FlowMapCanvas({
 }
 
 function DetailValue({ value }: { value: unknown }) {
-  if (value == null || value === '') return <span className="text-muted-foreground">-</span>;
+  if (value == null || value === '')
+    return <span className="text-muted-foreground">-</span>;
   if (Array.isArray(value) || typeof value === 'object') {
     return (
       <pre className="max-h-64 overflow-auto rounded-md bg-muted p-3 text-xs">
@@ -453,10 +618,14 @@ export default function TransactionEvidenceMap() {
   const [search, setSearch] = useState('');
   const [mapViewMode, setMapViewMode] = useState<MapViewMode>('radial');
   const [pathsOpen, setPathsOpen] = useState(false);
-  const [selectedBranchKey, setSelectedBranchKey] = useState<string | null>(null);
+  const [selectedBranchKey, setSelectedBranchKey] = useState<string | null>(
+    null
+  );
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 
-  const { data: projects = [], isLoading: projectsLoading } = useQuery<ProjectOption[]>({
+  const { data: projects = [], isLoading: projectsLoading } = useQuery<
+    ProjectOption[]
+  >({
     queryKey: ['/api/projects'],
     queryFn: () => apiRequest('/api/projects'),
   });
@@ -465,32 +634,38 @@ export default function TransactionEvidenceMap() {
     ? `/api/edri/transaction-evidence-map?projectId=${encodeURIComponent(projectId)}&period=${encodeURIComponent(period)}`
     : '';
 
-  const {
-    data,
-    isLoading,
-    isFetching,
-    error,
-    refetch,
-  } = useQuery<EvidenceMapResponse>({
-    queryKey: ['transaction-evidence-map', projectId, period],
-    queryFn: () => apiRequest(mapUrl),
-    enabled: !!projectId && !!period,
-  });
+  const { data, isLoading, isFetching, error, refetch } =
+    useQuery<EvidenceMapResponse>({
+      queryKey: ['transaction-evidence-map', projectId, period],
+      queryFn: () => apiRequest(mapUrl),
+      enabled: !!projectId && !!period,
+    });
 
   const filteredProjects = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return projects.slice(0, 50);
     return projects
-      .filter((project) => `${projectCode(project)} ${projectName(project)}`.toLowerCase().includes(q))
+      .filter((project) =>
+        `${projectCode(project)} ${projectName(project)}`
+          .toLowerCase()
+          .includes(q)
+      )
       .slice(0, 50);
   }, [projects, search]);
 
-  const selectedNode = data?.nodes.find((node) => node.id === selectedNodeId) ?? null;
-  const selectedBranch = selectedBranchKey ? branchDefs.find((branch) => branch.key === selectedBranchKey) ?? null : null;
-  const selectedBranchNodes = selectedBranch && data
-    ? data.nodes.filter((node) => selectedBranch.types.includes(node.type))
-    : [];
-  const nodeById = useMemo(() => new Map((data?.nodes ?? []).map((node) => [node.id, node])), [data?.nodes]);
+  const selectedNode =
+    data?.nodes.find((node) => node.id === selectedNodeId) ?? null;
+  const selectedBranch = selectedBranchKey
+    ? (branchDefs.find((branch) => branch.key === selectedBranchKey) ?? null)
+    : null;
+  const selectedBranchNodes =
+    selectedBranch && data
+      ? data.nodes.filter((node) => selectedBranch.types.includes(node.type))
+      : [];
+  const nodeById = useMemo(
+    () => new Map((data?.nodes ?? []).map((node) => [node.id, node])),
+    [data?.nodes]
+  );
 
   return (
     <div className="space-y-5 p-6">
@@ -500,14 +675,23 @@ export default function TransactionEvidenceMap() {
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold">
             <Network className="h-6 w-6 text-primary" />
-            Project Labor Evidence Map
+            Project Transaction Evidence Map
           </h1>
           <p className="text-sm text-muted-foreground">
-            Follow one project-period claim outward to the people, costs, payroll, books, audit trail, and proof behind it.
+            Follow one project-period claim outward to the people, material,
+            costs, payroll, books, audit trail, and proof behind it.
           </p>
         </div>
-        <Button variant="outline" onClick={() => refetch()} disabled={!projectId || isFetching}>
-          {isFetching ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+        <Button
+          variant="outline"
+          onClick={() => refetch()}
+          disabled={!projectId || isFetching}
+        >
+          {isFetching ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <RefreshCw className="mr-2 h-4 w-4" />
+          )}
           Refresh
         </Button>
       </div>
@@ -526,13 +710,20 @@ export default function TransactionEvidenceMap() {
                 className="pl-9"
               />
             </div>
-            <Select value={projectId || undefined} onValueChange={(value) => {
-              setProjectId(value);
-              setSelectedNodeId(null);
-              setSelectedBranchKey(null);
-            }}>
+            <Select
+              value={projectId || undefined}
+              onValueChange={(value) => {
+                setProjectId(value);
+                setSelectedNodeId(null);
+                setSelectedBranchKey(null);
+              }}
+            >
               <SelectTrigger className="min-w-[280px]">
-                <SelectValue placeholder={projectsLoading ? 'Loading projects...' : 'Select project'} />
+                <SelectValue
+                  placeholder={
+                    projectsLoading ? 'Loading projects...' : 'Select project'
+                  }
+                />
               </SelectTrigger>
               <SelectContent>
                 {filteredProjects.map((project) => (
@@ -580,42 +771,98 @@ export default function TransactionEvidenceMap() {
 
       {data && (
         <>
-          <div className="grid gap-3 md:grid-cols-4 lg:grid-cols-8">
+          <div className="grid gap-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-12">
             <div className="rounded-md border p-3">
               <div className="text-xs text-muted-foreground">Labor records</div>
-              <div className="text-xl font-semibold">{data.summary.laborRecordCount}</div>
+              <div className="text-xl font-semibold">
+                {data.summary.laborRecordCount}
+              </div>
+            </div>
+            <div className="rounded-md border p-3">
+              <div className="text-xs text-muted-foreground">Live sessions</div>
+              <div className="text-xl font-semibold">
+                {data.summary.liveLaborSessionCount ?? 0}
+              </div>
             </div>
             <div className="rounded-md border p-3">
               <div className="text-xs text-muted-foreground">Employees</div>
-              <div className="text-xl font-semibold">{data.summary.employeeCount}</div>
+              <div className="text-xl font-semibold">
+                {data.summary.employeeCount}
+              </div>
             </div>
             <div className="rounded-md border p-3">
-              <div className="text-xs text-muted-foreground">Hours</div>
-              <div className="text-xl font-semibold">{data.summary.totalHours.toFixed(2)}</div>
+              <div className="text-xs text-muted-foreground">Costed hours</div>
+              <div className="text-xl font-semibold">
+                {data.summary.totalHours.toFixed(2)}
+              </div>
+            </div>
+            <div className="rounded-md border p-3">
+              <div className="text-xs text-muted-foreground">Live hours</div>
+              <div className="text-xl font-semibold">
+                {(data.summary.liveLaborHours ?? 0).toFixed(2)}
+              </div>
             </div>
             <div className="rounded-md border p-3">
               <div className="text-xs text-muted-foreground">Labor dollars</div>
-              <div className="text-xl font-semibold">{money(data.summary.totalLaborDollars)}</div>
+              <div className="text-xl font-semibold">
+                {money(data.summary.totalLaborDollars)}
+              </div>
             </div>
             <div className="rounded-md border p-3">
-              <div className="text-xs text-muted-foreground">Journal entries</div>
-              <div className="text-xl font-semibold">{data.summary.journalEntryCount}</div>
+              <div className="text-xs text-muted-foreground">
+                Material items
+              </div>
+              <div className="text-xl font-semibold">
+                {data.summary.materialEvidenceCount ?? 0}
+              </div>
             </div>
             <div className="rounded-md border p-3">
-              <div className="text-xs text-muted-foreground">Customer invoices</div>
-              <div className="text-xl font-semibold">{data.summary.customerInvoiceCount ?? 0}</div>
+              <div className="text-xs text-muted-foreground">
+                Material draws
+              </div>
+              <div className="text-xl font-semibold">
+                {data.summary.materialConsumptionCount ?? 0}
+              </div>
+            </div>
+            <div className="rounded-md border p-3">
+              <div className="text-xs text-muted-foreground">Material cost</div>
+              <div className="text-xl font-semibold">
+                {money(data.summary.materialConsumedCost ?? 0)}
+              </div>
+            </div>
+            <div className="rounded-md border p-3">
+              <div className="text-xs text-muted-foreground">
+                Journal entries
+              </div>
+              <div className="text-xl font-semibold">
+                {data.summary.journalEntryCount}
+              </div>
+            </div>
+            <div className="rounded-md border p-3">
+              <div className="text-xs text-muted-foreground">
+                Customer invoices
+              </div>
+              <div className="text-xl font-semibold">
+                {data.summary.customerInvoiceCount ?? 0}
+              </div>
             </div>
             <div className="rounded-md border p-3">
               <div className="text-xs text-muted-foreground">Documents</div>
-              <div className="text-xl font-semibold">{data.summary.documentCount}</div>
+              <div className="text-xl font-semibold">
+                {data.summary.documentCount}
+              </div>
             </div>
             <div className="rounded-md border p-3">
               <div className="text-xs text-muted-foreground">Audit events</div>
-              <div className="text-xl font-semibold">{data.summary.auditEventCount}</div>
+              <div className="text-xl font-semibold">
+                {data.summary.auditEventCount}
+              </div>
             </div>
             <div className="rounded-md border p-3">
               <div className="text-xs text-muted-foreground">Missing</div>
-              <div className="text-xl font-semibold">{data.summary.missingEvidenceCount}</div>
+              <div className="text-xl font-semibold">
+                {data.summary.missingEvidenceCount}
+              </div>
             </div>
           </div>
 
@@ -624,7 +871,8 @@ export default function TransactionEvidenceMap() {
               <div>
                 <h2 className="font-semibold">Evidence Map</h2>
                 <p className="text-xs text-muted-foreground">
-                  Summary-first view. Click a branch to expand the underlying records.
+                  Summary-first view. Click a branch to expand the underlying
+                  records.
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -650,7 +898,13 @@ export default function TransactionEvidenceMap() {
                     Left to right
                   </Button>
                 </div>
-                <Button type="button" variant="outline" size="sm" className="gap-2" onClick={() => setPathsOpen(true)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  onClick={() => setPathsOpen(true)}
+                >
                   <PanelRightOpen className="h-4 w-4" />
                   Evidence Paths
                 </Button>
@@ -658,9 +912,17 @@ export default function TransactionEvidenceMap() {
             </div>
 
             {mapViewMode === 'radial' ? (
-              <MindMapCanvas data={data} selectedBranchKey={selectedBranchKey} onSelectBranch={setSelectedBranchKey} />
+              <MindMapCanvas
+                data={data}
+                selectedBranchKey={selectedBranchKey}
+                onSelectBranch={setSelectedBranchKey}
+              />
             ) : (
-              <FlowMapCanvas data={data} selectedBranchKey={selectedBranchKey} onSelectBranch={setSelectedBranchKey} />
+              <FlowMapCanvas
+                data={data}
+                selectedBranchKey={selectedBranchKey}
+                onSelectBranch={setSelectedBranchKey}
+              />
             )}
           </div>
 
@@ -690,9 +952,13 @@ export default function TransactionEvidenceMap() {
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               Evidence Paths
-              <StatusBadge status={data?.summary.missingEvidenceCount ? 'warning' : 'ok'} />
+              <StatusBadge
+                status={data?.summary.missingEvidenceCount ? 'warning' : 'ok'}
+              />
             </SheetTitle>
-            <SheetDescription>{data?.edges.length ?? 0} relationships in this map</SheetDescription>
+            <SheetDescription>
+              {data?.edges.length ?? 0} relationships in this map
+            </SheetDescription>
           </SheetHeader>
           <div className="mt-5 space-y-2">
             {(data?.edges ?? []).map((edge) => {
@@ -722,24 +988,37 @@ export default function TransactionEvidenceMap() {
         </SheetContent>
       </Sheet>
 
-      <Sheet open={!!selectedBranch} onOpenChange={(open) => !open && setSelectedBranchKey(null)}>
+      <Sheet
+        open={!!selectedBranch}
+        onOpenChange={(open) => !open && setSelectedBranchKey(null)}
+      >
         <SheetContent className="w-full overflow-auto sm:max-w-2xl">
           {selectedBranch && (
             <>
               <SheetHeader>
                 <SheetTitle className="flex items-center gap-2">
                   {selectedBranch.label}
-                  <StatusBadge status={selectedBranchNodes.length ? branchStatus(selectedBranchNodes) : 'missing'} />
+                  <StatusBadge
+                    status={
+                      selectedBranchNodes.length
+                        ? branchStatus(selectedBranchNodes)
+                        : 'missing'
+                    }
+                  />
                 </SheetTitle>
                 <SheetDescription>
-                  {selectedBranchNodes.length} record{selectedBranchNodes.length === 1 ? '' : 's'} | {selectedBranch.subtitle}
+                  {selectedBranchNodes.length} record
+                  {selectedBranchNodes.length === 1 ? '' : 's'} |{' '}
+                  {selectedBranch.subtitle}
                 </SheetDescription>
               </SheetHeader>
 
               <div className="mt-5 space-y-3">
                 {selectedBranch.key === 'audit' && (
                   <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-950">
-                    Audit log records are tucked here so the map stays readable. Open a record for hash, actor, sequence, and linked ledger details.
+                    Audit log records are tucked here so the map stays readable.
+                    Open a record for hash, actor, sequence, and linked ledger
+                    details.
                   </div>
                 )}
 
@@ -764,9 +1043,13 @@ export default function TransactionEvidenceMap() {
                           <div className="flex min-w-0 items-start gap-2">
                             <Icon className="mt-0.5 h-4 w-4 flex-shrink-0 text-muted-foreground" />
                             <div className="min-w-0">
-                              <div className="truncate text-sm font-semibold">{node.label}</div>
+                              <div className="truncate text-sm font-semibold">
+                                {node.label}
+                              </div>
                               {node.subtitle && (
-                                <div className="mt-1 text-xs text-muted-foreground">{node.subtitle}</div>
+                                <div className="mt-1 text-xs text-muted-foreground">
+                                  {node.subtitle}
+                                </div>
                               )}
                             </div>
                           </div>
@@ -774,18 +1057,28 @@ export default function TransactionEvidenceMap() {
                         </div>
                         {node.metrics && (
                           <div className="mt-3 grid gap-2 text-xs sm:grid-cols-3">
-                            {Object.entries(node.metrics).slice(0, 3).map(([key, value]) => (
-                              <div key={key} className="rounded border bg-muted/40 p-2">
-                                <div className="text-muted-foreground">{key}</div>
-                                <div className="truncate font-medium">{String(value ?? '-')}</div>
-                              </div>
-                            ))}
+                            {Object.entries(node.metrics)
+                              .slice(0, 3)
+                              .map(([key, value]) => (
+                                <div
+                                  key={key}
+                                  className="rounded border bg-muted/40 p-2"
+                                >
+                                  <div className="text-muted-foreground">
+                                    {key}
+                                  </div>
+                                  <div className="truncate font-medium">
+                                    {String(value ?? '-')}
+                                  </div>
+                                </div>
+                              ))}
                           </div>
                         )}
                         {node.missingEvidence?.length ? (
                           <div className="mt-2 flex items-center gap-1 text-xs font-medium text-amber-700">
                             <AlertTriangle className="h-3 w-3" />
-                            {node.missingEvidence.length} gap{node.missingEvidence.length === 1 ? '' : 's'}
+                            {node.missingEvidence.length} gap
+                            {node.missingEvidence.length === 1 ? '' : 's'}
                           </div>
                         ) : null}
                       </button>
@@ -798,7 +1091,10 @@ export default function TransactionEvidenceMap() {
         </SheetContent>
       </Sheet>
 
-      <Sheet open={!!selectedNode} onOpenChange={(open) => !open && setSelectedNodeId(null)}>
+      <Sheet
+        open={!!selectedNode}
+        onOpenChange={(open) => !open && setSelectedNodeId(null)}
+      >
         <SheetContent className="w-full overflow-auto sm:max-w-xl">
           {selectedNode && (
             <>
@@ -807,7 +1103,10 @@ export default function TransactionEvidenceMap() {
                   {selectedNode.label}
                   <StatusBadge status={selectedNode.status} />
                 </SheetTitle>
-                <SheetDescription>{selectedNode.subtitle || selectedNode.type.replaceAll('_', ' ')}</SheetDescription>
+                <SheetDescription>
+                  {selectedNode.subtitle ||
+                    selectedNode.type.replaceAll('_', ' ')}
+                </SheetDescription>
               </SheetHeader>
 
               <div className="mt-5 space-y-5">
@@ -831,7 +1130,9 @@ export default function TransactionEvidenceMap() {
 
                 {selectedNode.missingEvidence?.length ? (
                   <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
-                    <h3 className="mb-2 font-semibold">Missing or Weak Evidence</h3>
+                    <h3 className="mb-2 font-semibold">
+                      Missing or Weak Evidence
+                    </h3>
                     <ul className="space-y-1">
                       {selectedNode.missingEvidence.map((item) => (
                         <li key={item}>- {item}</li>
@@ -844,26 +1145,41 @@ export default function TransactionEvidenceMap() {
                   <div>
                     <h3 className="mb-2 text-sm font-semibold">Metrics</h3>
                     <div className="grid grid-cols-2 gap-2 text-sm">
-                      {Object.entries(selectedNode.metrics).map(([key, value]) => (
-                        <div key={key} className="rounded-md border p-2">
-                          <div className="text-xs text-muted-foreground">{key}</div>
-                          <div className="font-medium">{String(value ?? '-')}</div>
-                        </div>
-                      ))}
+                      {Object.entries(selectedNode.metrics).map(
+                        ([key, value]) => (
+                          <div key={key} className="rounded-md border p-2">
+                            <div className="text-xs text-muted-foreground">
+                              {key}
+                            </div>
+                            <div className="font-medium">
+                              {String(value ?? '-')}
+                            </div>
+                          </div>
+                        )
+                      )}
                     </div>
                   </div>
                 )}
 
                 {selectedNode.details && (
                   <div>
-                    <h3 className="mb-2 text-sm font-semibold">Source Record</h3>
+                    <h3 className="mb-2 text-sm font-semibold">
+                      Source Record
+                    </h3>
                     <div className="space-y-2 text-sm">
-                      {Object.entries(selectedNode.details).map(([key, value]) => (
-                        <div key={key} className="grid gap-1 rounded-md border p-2">
-                          <div className="text-xs text-muted-foreground">{key}</div>
-                          <DetailValue value={value} />
-                        </div>
-                      ))}
+                      {Object.entries(selectedNode.details).map(
+                        ([key, value]) => (
+                          <div
+                            key={key}
+                            className="grid gap-1 rounded-md border p-2"
+                          >
+                            <div className="text-xs text-muted-foreground">
+                              {key}
+                            </div>
+                            <DetailValue value={value} />
+                          </div>
+                        )
+                      )}
                     </div>
                   </div>
                 )}

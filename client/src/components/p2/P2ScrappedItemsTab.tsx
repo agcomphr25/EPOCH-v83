@@ -134,6 +134,7 @@ function DispositionDialog({
       apiRequest('/api/p2/nonconforming-dispositions', { method: 'POST', body: JSON.stringify(data) }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/p2/serialized-items/scrapped'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/serialized-items/closed-ncr'] });
       queryClient.invalidateQueries({ queryKey: ['/api/p2/rmas'] });
       toast({ title: 'Disposition filed', description: 'The disposition report has been submitted.' });
       onSuccess();
@@ -304,6 +305,7 @@ function RmaRow({ rma, onUpdated }: { rma: Rma; onUpdated: () => void }) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/p2/rmas'] });
       queryClient.invalidateQueries({ queryKey: ['/api/p2/serialized-items/scrapped'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/serialized-items/closed-ncr'] });
       onUpdated();
     },
     onError: (err: any) => {
@@ -505,6 +507,15 @@ export default function P2NonconformingTab({ selectedPOIds = [] }: { selectedPOI
     ? openNcrItemsRaw.filter((item) => item.poId !== null && selectedPOIds.includes(item.poId))
     : openNcrItemsRaw;
 
+  const { data: closedNcrItemsRaw = [], isLoading: closedNcrLoading } = useQuery<ScrappedItem[]>({
+    queryKey: ['/api/p2/serialized-items/closed-ncr'],
+    refetchInterval: 60000,
+  });
+
+  const closedNcrItems = selectedPOIds.length > 0
+    ? closedNcrItemsRaw.filter((item) => item.poId !== null && selectedPOIds.includes(item.poId))
+    : closedNcrItemsRaw;
+
   const { data: rmasRaw = [], refetch: refetchRmas } = useQuery<Rma[]>({
     queryKey: ['/api/p2/rmas'],
     refetchInterval: 60000,
@@ -578,6 +589,13 @@ export default function P2NonconformingTab({ selectedPOIds = [] }: { selectedPOI
               <Badge variant="outline" className="ml-1 text-xs px-1.5 bg-orange-100 text-orange-700 border-orange-300">
                 {activeRmas.length} active
               </Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="closed" className="flex items-center gap-2">
+            <CheckCircle className="h-4 w-4" />
+            Closed NCR
+            {closedNcrItems.length > 0 && (
+              <Badge variant="secondary" className="ml-1 text-xs px-1.5">{closedNcrItems.length}</Badge>
             )}
           </TabsTrigger>
         </TabsList>
@@ -701,6 +719,74 @@ export default function P2NonconformingTab({ selectedPOIds = [] }: { selectedPOI
                           </TableRow>
                         );
                       })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="closed">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <CheckCircle className="h-5 w-5 text-green-600" />
+                  Closed NCR
+                  <Badge variant="secondary" className="ml-2">{closedNcrItems.length}</Badge>
+                </CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {closedNcrLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : closedNcrItems.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <CheckCircle className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                  <p className="font-medium">No closed NCR records</p>
+                  <p className="text-sm">Completed dispositions will appear here</p>
+                </div>
+              ) : (
+                <div className="rounded-md border overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Serial Number</TableHead>
+                        <TableHead>Part Number</TableHead>
+                        <TableHead>PO Number</TableHead>
+                        <TableHead>Customer</TableHead>
+                        <TableHead>Final Disposition</TableHead>
+                        <TableHead>Reason</TableHead>
+                        <TableHead>Authorized By</TableHead>
+                        <TableHead>Closed At</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {closedNcrItems.map((item) => (
+                        <TableRow key={`${item.id}-${item.disposition?.id || 'closed'}`}>
+                          <TableCell className="font-mono font-medium">{item.serialNumber}</TableCell>
+                          <TableCell className="font-mono text-sm">{item.partNumber}</TableCell>
+                          <TableCell className="font-medium">{item.poNumber}</TableCell>
+                          <TableCell>{item.customerName}</TableCell>
+                          <TableCell>
+                            <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs border-0">
+                              {item.disposition?.dispositionType || 'Resolved'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="max-w-[220px] truncate" title={item.disposition?.reasonOther || QUALITY_LABEL}>
+                            {item.disposition?.reasonType === REASON_OTHER
+                              ? item.disposition?.reasonOther || 'Other'
+                              : QUALITY_LABEL}
+                          </TableCell>
+                          <TableCell>{item.disposition?.authorization || '-'}</TableCell>
+                          <TableCell className="text-sm whitespace-nowrap">
+                            {formatDateTime(item.disposition?.resolvedAt || item.disposition?.createdAt || null)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
                     </TableBody>
                   </Table>
                 </div>

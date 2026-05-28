@@ -499,6 +499,38 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     }
   });
 
+  // P2 Serialized Items - closed NCR history
+  app.get('/api/p2/serialized-items/closed-ncr', async (req, res) => {
+    try {
+      const { db } = await import('../../db');
+      const { p2SerializedItems, p2NonconformingDispositions } = await import('../../schema');
+      const { eq, desc } = await import('drizzle-orm');
+
+      const rows = await db
+        .select({
+          item: p2SerializedItems,
+          disposition: p2NonconformingDispositions,
+        })
+        .from(p2NonconformingDispositions)
+        .innerJoin(
+          p2SerializedItems,
+          eq(p2NonconformingDispositions.serializedItemId, p2SerializedItems.id),
+        )
+        .where(eq(p2NonconformingDispositions.resolved, true))
+        .orderBy(
+          desc(p2NonconformingDispositions.resolvedAt),
+          desc(p2NonconformingDispositions.createdAt),
+        );
+
+      res.json(rows.map((row: any) => ({
+        ...row.item,
+        disposition: row.disposition,
+      })));
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Failed to fetch closed NCR items' });
+    }
+  });
+
   // P2 Nonconforming Dispositions - GET all dispositions for an item
   app.get('/api/p2/nonconforming-dispositions/:serializedItemId', async (req, res) => {
     try {

@@ -1107,9 +1107,37 @@ router.post('/certificates', authenticateToken, requirePermission('shipping.rele
       .where(eq(p2LotNumbers.id, input.lotId));
     if (!lot) return res.status(404).json({ error: 'Lot not found' });
 
-    // Guard: one certificate per lot
-    if (lot.certificateId) {
-      return res.status(409).json({ error: 'Certificate already exists for this lot' });
+    // Idempotency guard: one certificate per lot. If the certificate already
+    // exists but the lot link/UI cache is stale, return the existing CoC.
+    const existingCertRows = await pool.query<{
+      id: string;
+      certificate_number: string;
+    }>(
+      `SELECT id, certificate_number
+         FROM p2_certificates_of_conformance
+        WHERE id = COALESCE($1::uuid, '00000000-0000-0000-0000-000000000000'::uuid)
+           OR lot_number_id = $2::uuid
+        ORDER BY created_at DESC
+        LIMIT 1`,
+      [lot.certificateId, lot.id]
+    );
+    if (existingCertRows.length > 0) {
+      const existingCert = existingCertRows[0];
+      if (lot.certificateId !== existingCert.id) {
+        await pool.query(
+          `UPDATE p2_lot_numbers
+              SET certificate_id = $1::uuid,
+                  updated_at = NOW()
+            WHERE id = $2::uuid`,
+          [existingCert.id, lot.id]
+        );
+      }
+
+      return res.status(200).json({
+        id: existingCert.id,
+        certificateNumber: existingCert.certificate_number,
+        alreadyExists: true,
+      });
     }
 
     const serialIds = (lot.serializedItemIds as string[]) || [];

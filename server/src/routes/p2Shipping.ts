@@ -1746,12 +1746,13 @@ router.post('/shipments/:lotId/void', authenticateToken, requirePermission('ship
       }
 
       const lot = lotRows.rows[0];
-      if (lot.status === 'VOID') {
-        await client.query('ROLLBACK');
-        return res.status(409).json({ error: 'Shipment is already void' });
-      }
+      const wasAlreadyVoid = lot.status === 'VOID';
 
-      const invoiceRows = await client.query<{
+      const invoiceRows = wasAlreadyVoid ? { rows: [] as Array<{
+        id: string;
+        invoice_number: string;
+        status: string;
+      }> } : await client.query<{
         id: string;
         invoice_number: string;
         status: string;
@@ -1780,18 +1781,80 @@ router.post('/shipments/:lotId/void', authenticateToken, requirePermission('ship
       }
 
       const now = new Date();
-      await client.query(
-        `UPDATE p2_lot_numbers
-            SET status = 'VOID',
-                closed_at = COALESCE(closed_at, $1::timestamp),
-                closed_by = COALESCE(closed_by, $2::text),
-                notes = CONCAT_WS(E'\n', NULLIF(notes, ''), $3::text),
-                updated_at = NOW()
-          WHERE id = $4::uuid`,
-        [now.toISOString(), actor, `VOIDED: ${input.reason}`, lot.id]
-      );
+      const serializedItemIds = Array.isArray(lot.serialized_item_ids)
+        ? lot.serialized_item_ids.filter((id): id is string => typeof id === 'string' && id.length > 0)
+        : [];
 
-      if (lot.packing_slip_id) {
+      const finalizedSerialRows = serializedItemIds.length > 0
+        ? await client.query<{
+            id: string;
+            barcode: string;
+            sku: string | null;
+            drawing_name: string | null;
+            customer_serial_number: string | null;
+            finalized_at: string | Date | null;
+            finalized_by: string | null;
+          }>(
+            `SELECT id, barcode, sku, drawing_name, customer_serial_number, finalized_at, finalized_by
+               FROM p2_serialized_items
+              WHERE id = ANY($1::uuid[])
+                AND finalized_at IS NOT NULL
+              FOR UPDATE`,
+            [serializedItemIds]
+          )
+        : { rows: [] };
+
+      if (finalizedSerialRows.rows.length > 0) {
+        const finalizedIds = finalizedSerialRows.rows.map((item) => item.id);
+        await client.query(
+          `UPDATE p2_serialized_items
+              SET finalized_at = NULL,
+                  finalized_by = NULL,
+                  updated_at = NOW()
+            WHERE id = ANY($1::uuid[])`,
+          [finalizedIds]
+        );
+
+        for (const item of finalizedSerialRows.rows) {
+          await client.query(
+            `INSERT INTO p2_serialized_item_events
+               (serialized_item_id, barcode, event_type, performed_by, notes, metadata)
+             VALUES ($1::uuid, $2::text, 'NOTE', $3::text, $4::text, $5::jsonb)`,
+            [
+              item.id,
+              item.barcode,
+              actor,
+              `Unfinalized because shipment ${lot.lot_number} was voided: ${input.reason}`,
+              JSON.stringify({
+                lotId: lot.id,
+                lotNumber: lot.lot_number,
+                previousSku: item.sku,
+                previousDrawingName: item.drawing_name,
+                previousCustomerSerialNumber: item.customer_serial_number,
+                previousFinalizedAt: item.finalized_at,
+                previousFinalizedBy: item.finalized_by,
+                reason: input.reason,
+                alreadyVoidShipment: wasAlreadyVoid,
+              }),
+            ]
+          );
+        }
+      }
+
+      if (!wasAlreadyVoid) {
+        await client.query(
+          `UPDATE p2_lot_numbers
+              SET status = 'VOID',
+                  closed_at = COALESCE(closed_at, $1::timestamp),
+                  closed_by = COALESCE(closed_by, $2::text),
+                  notes = CONCAT_WS(E'\n', NULLIF(notes, ''), $3::text),
+                  updated_at = NOW()
+            WHERE id = $4::uuid`,
+          [now.toISOString(), actor, `VOIDED: ${input.reason}`, lot.id]
+        );
+      }
+
+      if (!wasAlreadyVoid && lot.packing_slip_id) {
         await client.query(
           `UPDATE p2_packing_slips
               SET status = 'VOID',
@@ -1802,7 +1865,7 @@ router.post('/shipments/:lotId/void', authenticateToken, requirePermission('ship
         );
       }
 
-      if (lot.certificate_id) {
+      if (!wasAlreadyVoid && lot.certificate_id) {
         await client.query(
           `UPDATE p2_certificates_of_conformance
               SET status = 'VOID',
@@ -1813,7 +1876,7 @@ router.post('/shipments/:lotId/void', authenticateToken, requirePermission('ship
         );
       }
 
-      const voidableInvoices = invoiceRows.rows.filter((invoice) =>
+      const voidableInvoices = wasAlreadyVoid ? [] : invoiceRows.rows.filter((invoice) =>
         ['DRAFT', 'REVIEW'].includes(invoice.status)
       );
       for (const invoice of voidableInvoices) {
@@ -1829,11 +1892,14 @@ router.post('/shipments/:lotId/void', authenticateToken, requirePermission('ship
         );
       }
 
-      const auditRows: Array<[string, string, string, string | null, string | null]> = [
-        ['lot_number', lot.id, 'status', lot.status, 'VOID'],
-      ];
-      if (lot.packing_slip_id) auditRows.push(['packing_slip', lot.packing_slip_id, 'status', null, 'VOID']);
-      if (lot.certificate_id) auditRows.push(['certificate', lot.certificate_id, 'status', null, 'VOID']);
+      const auditRows: Array<[string, string, string, string | null, string | null]> = wasAlreadyVoid
+        ? []
+        : [['lot_number', lot.id, 'status', lot.status, 'VOID']];
+      if (!wasAlreadyVoid && lot.packing_slip_id) auditRows.push(['packing_slip', lot.packing_slip_id, 'status', null, 'VOID']);
+      if (!wasAlreadyVoid && lot.certificate_id) auditRows.push(['certificate', lot.certificate_id, 'status', null, 'VOID']);
+      for (const item of finalizedSerialRows.rows) {
+        auditRows.push(['serialized_item', item.id, 'finalized_at', item.finalized_at ? String(item.finalized_at) : null, null]);
+      }
       for (const invoice of voidableInvoices) {
         auditRows.push(['ar_invoice', invoice.id, 'status', invoice.status, 'VOID']);
       }
@@ -1853,6 +1919,8 @@ router.post('/shipments/:lotId/void', authenticateToken, requirePermission('ship
         lotId: lot.id,
         lotNumber: lot.lot_number,
         releasedSerializedItemIds: Array.isArray(lot.serialized_item_ids) ? lot.serialized_item_ids : [],
+        unfinalizedSerializedItemIds: finalizedSerialRows.rows.map((item) => item.id),
+        wasAlreadyVoid,
         voidedInvoices: voidableInvoices.map((invoice) => ({
           id: invoice.id,
           invoiceNumber: invoice.invoice_number,

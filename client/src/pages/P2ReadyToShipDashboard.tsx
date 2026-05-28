@@ -6,6 +6,16 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   Table,
   TableBody,
@@ -31,6 +41,7 @@ import {
   ChevronRight,
   ListChecks,
   RotateCcw,
+  Pencil,
 } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
@@ -78,6 +89,13 @@ export default function P2ReadyToShipDashboard() {
   const [search, setSearch] = useState('');
   const [expandedPOs, setExpandedPOs] = useState<Set<string>>(new Set());
   const [selectedUnits, setSelectedUnits] = useState<Record<string, Set<string>>>({});
+  const [correctionDraft, setCorrectionDraft] = useState<{
+    poNumber: string;
+    unitIds: string[];
+    sku: string;
+    drawingName: string;
+    reason: string;
+  } | null>(null);
 
   const { data: currentUser } = useQuery<{ username: string } | null>({
     queryKey: ['/api/auth/session'],
@@ -111,6 +129,37 @@ export default function P2ReadyToShipDashboard() {
       toast({
         title: 'Unable to unfinalize',
         description: error.message || 'The selected units could not be unfinalized.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const correctIdentityMutation = useMutation({
+    mutationFn: async (data: { unitIds: string[]; sku: string; drawingName: string; reason: string }) =>
+      apiRequest('/api/p2/serialized-items/correct-finalized-identity', {
+        method: 'POST',
+        body: {
+          serializedItemIds: data.unitIds,
+          sku: data.sku,
+          drawingName: data.drawingName,
+          reason: data.reason,
+          performedBy: currentUser?.username || 'ready-to-ship-dashboard',
+        },
+      }),
+    onSuccess: (result: any) => {
+      toast({
+        title: 'SKU/drawing corrected',
+        description: `${result?.updatedCount ?? 0} finalized unit${result?.updatedCount === 1 ? '' : 's'} updated and kept ready to ship.`,
+      });
+      setCorrectionDraft(null);
+      setSelectedUnits({});
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/serialized-items/shipping-queue'] });
+      refetch();
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Unable to correct SKU/drawing',
+        description: error.message || 'The selected units could not be corrected.',
         variant: 'destructive',
       });
     },
@@ -200,6 +249,41 @@ export default function P2ReadyToShipDashboard() {
     unfinalizeMutation.mutate({
       unitIds,
       reason: `Ready-to-ship correction for PO ${po.poNumber}`,
+    });
+  };
+
+  const openCorrection = (po: POSummary, unitIds: string[]) => {
+    const selected = po.readyUnits.filter((unit) => unitIds.includes(unit.id));
+    if (selected.length === 0) return;
+    const uniqueSkus = new Set(selected.map((unit) => unit.sku || '').filter(Boolean));
+    const uniqueDrawings = new Set(selected.map((unit) => unit.drawingName || '').filter(Boolean));
+    setCorrectionDraft({
+      poNumber: po.poNumber,
+      unitIds,
+      sku: uniqueSkus.size === 1 ? Array.from(uniqueSkus)[0] : '',
+      drawingName: uniqueDrawings.size === 1 ? Array.from(uniqueDrawings)[0] : '',
+      reason: '',
+    });
+  };
+
+  const submitCorrection = () => {
+    if (!correctionDraft) return;
+    const sku = correctionDraft.sku.trim();
+    const drawingName = correctionDraft.drawingName.trim();
+    const reason = correctionDraft.reason.trim();
+    if (!sku || !drawingName || !reason) {
+      toast({
+        title: 'Correction details required',
+        description: 'SKU, drawing, and correction reason are required.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    correctIdentityMutation.mutate({
+      unitIds: correctionDraft.unitIds,
+      sku,
+      drawingName,
+      reason,
     });
   };
 
@@ -358,6 +442,14 @@ export default function P2ReadyToShipDashboard() {
                 const selCount = allReadyIds.filter((id) => sel.has(id)).length;
                 const allSelected = allReadyIds.length > 0 && allReadyIds.every((id) => sel.has(id));
                 const hasPartialSelection = selCount > 0 && selCount < po.readyUnits.length;
+                const readyIdentityGroups = po.readyUnits.reduce<Record<string, { sku: string; drawingName: string; units: SerializedUnit[] }>>((acc, unit) => {
+                  const sku = unit.sku || 'Missing SKU';
+                  const drawingName = unit.drawingName || 'Missing drawing';
+                  const key = `${sku}||${drawingName}`;
+                  if (!acc[key]) acc[key] = { sku, drawingName, units: [] };
+                  acc[key].units.push(unit);
+                  return acc;
+                }, {});
 
                 const mainRow = (
                   <TableRow
@@ -494,12 +586,53 @@ export default function P2ReadyToShipDashboard() {
                           <span className="text-xs font-medium text-green-800 dark:text-green-300">
                             {allSelected ? 'Deselect All' : 'Select All'}
                           </span>
-                          {selCount > 0 && (
-                            <Badge className="ml-auto bg-blue-100 text-blue-700 border-blue-300 text-xs">
-                              {selCount} of {po.readyUnits.length} selected
-                            </Badge>
-                          )}
+                            {selCount > 0 && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs border-blue-300 text-blue-700 hover:bg-blue-50"
+                                onClick={() => openCorrection(po, Array.from(sel))}
+                                disabled={correctIdentityMutation.isPending}
+                              >
+                                <Pencil className="h-3 w-3 mr-1" />
+                                Correct SKU/Drawing
+                              </Button>
+                            )}
+                            {selCount > 0 && (
+                              <Badge className="ml-auto bg-blue-100 text-blue-700 border-blue-300 text-xs">
+                                {selCount} of {po.readyUnits.length} selected
+                              </Badge>
+                            )}
                         </div>
+
+                        {Object.values(readyIdentityGroups).length > 0 && (
+                          <div className="space-y-2 border-b border-green-200 bg-white px-3 py-2 dark:border-green-800 dark:bg-background">
+                            <div className="text-xs font-medium text-muted-foreground">Assigned SKU / drawing groups</div>
+                            <div className="flex flex-wrap gap-2">
+                              {Object.values(readyIdentityGroups).map((group) => {
+                                const groupIds = group.units.map((unit) => unit.id);
+                                return (
+                                  <div key={`${group.sku}-${group.drawingName}`} className="flex items-center gap-2 rounded-md border bg-muted/20 px-2 py-1">
+                                    <div className="min-w-0">
+                                      <div className="max-w-[280px] truncate font-mono text-xs font-semibold" title={group.sku}>{group.sku}</div>
+                                      <div className="max-w-[280px] truncate text-[11px] text-muted-foreground" title={group.drawingName}>{group.drawingName}</div>
+                                    </div>
+                                    <Badge variant="secondary" className="text-[11px]">{group.units.length}</Badge>
+                                    <Button size="sm" variant="ghost" className="h-6 px-2 text-[11px]" onClick={() => setSelectedUnits((prev) => ({ ...prev, [po.poNumber]: new Set(groupIds) }))}>
+                                      Select
+                                    </Button>
+                                    <Button size="sm" variant="ghost" className="h-6 px-2 text-[11px] text-blue-700 hover:text-blue-800" onClick={() => openCorrection(po, groupIds)}>
+                                      Correct
+                                    </Button>
+                                    <Button size="sm" variant="ghost" className="h-6 px-2 text-[11px] text-amber-700 hover:text-amber-800" onClick={() => handleUnfinalize(po, groupIds)}>
+                                      Unfinalize
+                                    </Button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
 
                         {/* Unit rows */}
                         <table className="w-full text-xs">
@@ -508,8 +641,9 @@ export default function P2ReadyToShipDashboard() {
                               <th className="px-3 py-1.5 w-8 text-center"></th>
                               <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">Barcode</th>
                               <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">Serial #</th>
-                              <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">Part Number</th>
-                              <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">Part Name</th>
+                              <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">Assigned SKU</th>
+                              <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">Drawing</th>
+                              <th className="px-3 py-1.5 text-left font-medium text-muted-foreground">AG Part #</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y">
@@ -531,8 +665,9 @@ export default function P2ReadyToShipDashboard() {
                                   </td>
                                   <td className="px-3 py-2 font-mono">{unit.barcode}</td>
                                   <td className="px-3 py-2 font-mono">{unit.serialNumber}</td>
-                                  <td className="px-3 py-2">{unit.partNumber}</td>
-                                  <td className="px-3 py-2 text-muted-foreground">{unit.partName}</td>
+                                  <td className="px-3 py-2 font-mono font-medium">{unit.sku || <span className="text-muted-foreground italic">Missing SKU</span>}</td>
+                                  <td className="px-3 py-2">{unit.drawingName || <span className="text-muted-foreground italic">Missing drawing</span>}</td>
+                                  <td className="px-3 py-2 text-muted-foreground">{unit.partNumber}</td>
                                 </tr>
                               );
                             })}
@@ -546,6 +681,18 @@ export default function P2ReadyToShipDashboard() {
                               {selCount} unit{selCount !== 1 ? 's' : ''} selected
                             </span>
                             <div className="flex items-center gap-2">
+                              {selCount > 0 && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-xs border-blue-300 text-blue-700 hover:bg-blue-50"
+                                  onClick={() => openCorrection(po, Array.from(sel))}
+                                  disabled={correctIdentityMutation.isPending}
+                                >
+                                  <Pencil className="h-3 w-3 mr-1" />
+                                  Correct SKU/Drawing
+                                </Button>
+                              )}
                               {selCount > 0 && (
                                 <Button
                                   size="sm"
@@ -632,6 +779,64 @@ export default function P2ReadyToShipDashboard() {
           </div>
         </Card>
       )}
+
+      <Dialog open={!!correctionDraft} onOpenChange={(open) => !open && setCorrectionDraft(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Correct SKU / Drawing</DialogTitle>
+            <DialogDescription>
+              Update finalized identity for {correctionDraft?.unitIds.length ?? 0} ready-to-ship unit{correctionDraft?.unitIds.length === 1 ? '' : 's'} on PO {correctionDraft?.poNumber}. Units already assigned to a shipment lot are protected.
+            </DialogDescription>
+          </DialogHeader>
+          {correctionDraft && (
+            <div className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-1">
+                  <Label htmlFor="correct-sku">Assigned SKU *</Label>
+                  <Input
+                    id="correct-sku"
+                    value={correctionDraft.sku}
+                    onChange={(event) => setCorrectionDraft((draft) => draft ? { ...draft, sku: event.target.value } : draft)}
+                    placeholder="Enter corrected SKU"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="correct-drawing">Drawing *</Label>
+                  <Input
+                    id="correct-drawing"
+                    value={correctionDraft.drawingName}
+                    onChange={(event) => setCorrectionDraft((draft) => draft ? { ...draft, drawingName: event.target.value } : draft)}
+                    placeholder="Enter corrected drawing"
+                  />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="correct-reason">Correction reason *</Label>
+                <Textarea
+                  id="correct-reason"
+                  value={correctionDraft.reason}
+                  onChange={(event) => setCorrectionDraft((draft) => draft ? { ...draft, reason: event.target.value } : draft)}
+                  placeholder="Explain why this finalized SKU/drawing is being corrected..."
+                  rows={3}
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCorrectionDraft(null)} disabled={correctIdentityMutation.isPending}>
+              Cancel
+            </Button>
+            <Button onClick={submitCorrection} disabled={correctIdentityMutation.isPending || !correctionDraft?.sku.trim() || !correctionDraft?.drawingName.trim() || !correctionDraft?.reason.trim()}>
+              {correctIdentityMutation.isPending ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Pencil className="h-4 w-4 mr-2" />
+              )}
+              Save Correction
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

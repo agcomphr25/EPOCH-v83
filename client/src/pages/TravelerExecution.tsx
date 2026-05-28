@@ -1301,8 +1301,39 @@ export default function TravelerExecution() {
     });
   };
 
+  const collectCurrentTaskFieldValues = (task: TravelerTask) => {
+    const merged: Record<string, string> = { ...(fieldValues[task.id] || {}) };
+
+    for (const field of task.fields) {
+      const fieldInput = document.getElementById(`field-${task.id}-${field.fieldKey}`) as HTMLInputElement | null;
+      const textareaInput = document.getElementById(`ta-${task.id}-${field.fieldKey}`) as HTMLTextAreaElement | null;
+      const inventoryInput = document.getElementById(`inv-${task.id}-${field.fieldKey}`) as HTMLInputElement | null;
+      const qcResultInput = document.getElementById(`qc-result-${task.id}-${field.fieldKey}`) as HTMLInputElement | null;
+      const checkboxInput = document.getElementById(field.id) as HTMLInputElement | null;
+
+      const currentValue =
+        fieldInput?.value ??
+        textareaInput?.value ??
+        inventoryInput?.value;
+
+      if (currentValue !== undefined) {
+        merged[field.fieldKey] = currentValue;
+      }
+
+      if (qcResultInput?.value !== undefined) {
+        merged[`${field.fieldKey}_result`] = qcResultInput.value;
+      }
+
+      if (checkboxInput?.type === 'checkbox') {
+        merged[field.fieldKey] = checkboxInput.checked ? 'yes' : 'no';
+      }
+    }
+
+    return merged;
+  };
+
   const handleCompleteTask = (task: TravelerTask, toleranceApproval?: { approvedBy: string; notes: string }) => {
-    const taskFieldVals = fieldValues[task.id] || {};
+    const taskFieldVals = collectCurrentTaskFieldValues(task);
     const traceLabelMap: Record<string, string> = {
       internalControlNumber: 'Internal Control Number',
       supplier: 'Supplier',

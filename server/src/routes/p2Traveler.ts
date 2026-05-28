@@ -2223,6 +2223,9 @@ router.post('/complete-task', async (req: Request, res: Response) => {
       employeeCode,
       barcode,
       notes,
+      traceabilityData,
+      customData,
+      qcResults,
     } = req.body;
 
     let completeDisplayName = employeeCode || 'unknown';
@@ -2303,6 +2306,119 @@ router.post('/complete-task', async (req: Request, res: Response) => {
     }
 
     const routing = await findActiveRoutingForSerializedItem(serializedItem);
+
+    const incomingTraceabilityData = Array.isArray(traceabilityData)
+      ? traceabilityData.filter((item: any) => getTraceValue(item))
+      : [];
+
+    if (incomingTraceabilityData.length > 0 || customData || (Array.isArray(qcResults) && qcResults.length > 0)) {
+      const traceUpdate: any = { updatedAt: new Date() };
+
+      if (incomingTraceabilityData.length > 0) {
+        const {
+          expandedTraceability,
+          packetTraceRecords,
+          consumedPackets,
+        } = await expandAndConsumePacketTraceability({
+          traceabilityData: incomingTraceabilityData,
+          serializedItem,
+          department: workTask.department,
+          recordedBy: completeDisplayName,
+          workTaskId: workTask.id,
+        });
+
+        traceUpdate.traceabilityData = expandedTraceability;
+
+        await db.delete(p2SerializedItemTraceability)
+          .where(and(
+            eq(p2SerializedItemTraceability.serializedItemId, serializedItem.id),
+            eq(p2SerializedItemTraceability.department, workTask.department)
+          ));
+
+        const traceabilityRecords = expandedTraceability.map((item: any) => ({
+          serializedItemId: serializedItem.id,
+          department: workTask.department,
+          inventoryPartId: item.builtPacketId ? String(item.builtPacketId) : (item.inventoryPartId || null),
+          inventoryPartNumber: item.inventoryPartNumber || null,
+          traceabilityType: item.type,
+          traceabilityLabel: item.label,
+          traceabilityValue: item.value,
+          recordedBy: completeDisplayName,
+        }));
+
+        await db.insert(p2SerializedItemTraceability).values([
+          ...traceabilityRecords,
+          ...packetTraceRecords,
+        ]);
+
+        if (consumedPackets.length > 0) {
+          await db.insert(p2SerializedItemEvents).values({
+            serializedItemId: serializedItem.id,
+            barcode: serializedItem.barcode,
+            eventType: 'NOTE',
+            performedBy: completeDisplayName,
+            notes: `Material traceability auto-saved on task completion in ${workTask.department}`,
+            metadata: { taskId: workTask.id, action: 'complete_task_traceability_autosave', consumedPackets },
+          });
+        }
+      }
+
+      if (customData && Object.keys(customData).length > 0) {
+        traceUpdate.customData = customData;
+
+        const existingCustom = await db.query.p2SerializedItemCustomData.findFirst({
+          where: and(
+            eq(p2SerializedItemCustomData.serializedItemId, serializedItem.id),
+            eq(p2SerializedItemCustomData.department, workTask.department)
+          ),
+        });
+
+        if (existingCustom) {
+          const merged = { ...((existingCustom.customData as any) || {}), ...customData };
+          if ((existingCustom.customData as any)?.qcResults) {
+            merged.qcResults = (existingCustom.customData as any).qcResults;
+          }
+          await db.update(p2SerializedItemCustomData)
+            .set({ customData: merged, recordedBy: completeDisplayName })
+            .where(eq(p2SerializedItemCustomData.id, existingCustom.id));
+        } else {
+          await db.insert(p2SerializedItemCustomData).values({
+            serializedItemId: serializedItem.id,
+            department: workTask.department,
+            customData,
+            recordedBy: completeDisplayName,
+          });
+        }
+      }
+
+      if (Array.isArray(qcResults) && qcResults.length > 0) {
+        const existingQc = await db.query.p2SerializedItemCustomData.findFirst({
+          where: and(
+            eq(p2SerializedItemCustomData.serializedItemId, serializedItem.id),
+            eq(p2SerializedItemCustomData.department, workTask.department),
+            sql`(custom_data->>'qcResults') IS NOT NULL`
+          ),
+        });
+
+        if (existingQc) {
+          const merged = { ...((existingQc.customData as any) || {}), qcResults };
+          await db.update(p2SerializedItemCustomData)
+            .set({ customData: merged, recordedBy: completeDisplayName })
+            .where(eq(p2SerializedItemCustomData.id, existingQc.id));
+        } else {
+          await db.insert(p2SerializedItemCustomData).values({
+            serializedItemId: serializedItem.id,
+            department: workTask.department,
+            customData: { qcResults },
+            recordedBy: completeDisplayName,
+          });
+        }
+      }
+
+      await db.update(p2WorkTasks)
+        .set(traceUpdate)
+        .where(eq(p2WorkTasks.id, workTask.id));
+    }
 
     const departmentSequence = routing?.departmentSequence
       ? (routing.departmentSequence as string[])

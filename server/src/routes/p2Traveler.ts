@@ -672,7 +672,7 @@ function operationTypeToTravelerPhase(operationType: string | null | undefined):
       return 'START';
     case 'QC':
     case 'INSPECT':
-      return 'FINISH';
+      return 'WORK';
     default:
       return 'WORK';
   }
@@ -765,6 +765,60 @@ function getRoutingOperationQcFields(params: {
       ...(standard.referenceLink ? { referenceLink: standard.referenceLink } : {}),
     },
   }));
+}
+
+function getRoutingOperationEvidenceFields(operation: any) {
+  const baseKey = `routing_op_${operation.id}`;
+  const fields = [
+    {
+      fieldKey: `${baseKey}_complete`,
+      fieldLabel: `Completed: ${operation.operationName}`,
+      fieldType: 'yes_no',
+      required: true,
+    },
+    {
+      fieldKey: `${baseKey}_department`,
+      fieldLabel: 'Routing Department',
+      fieldType: 'text',
+      required: false,
+      validation: { readonly: true, value: operation.departmentName },
+    },
+    {
+      fieldKey: `${baseKey}_operation_type`,
+      fieldLabel: 'Operation Type',
+      fieldType: 'text',
+      required: false,
+      validation: { readonly: true, value: operation.operationType },
+    },
+  ];
+
+  if (operation.workCenter) {
+    fields.push({
+      fieldKey: `${baseKey}_work_center`,
+      fieldLabel: 'Work Center',
+      fieldType: 'text',
+      required: false,
+      validation: { readonly: true, value: operation.workCenter },
+    });
+  }
+
+  if (operation.estimatedMinutes) {
+    fields.push({
+      fieldKey: `${baseKey}_estimated_minutes`,
+      fieldLabel: 'Estimated Minutes',
+      fieldType: 'number',
+      required: false,
+      validation: { readonly: true, value: String(operation.estimatedMinutes) },
+    });
+    fields.push({
+      fieldKey: `${baseKey}_actual_minutes`,
+      fieldLabel: 'Actual Minutes',
+      fieldType: 'number',
+      required: false,
+    });
+  }
+
+  return fields;
 }
 
 function getEnabledTravelerTaskPhases(departmentConfig: any): Set<'START' | 'WORK' | 'FINISH'> {
@@ -1062,6 +1116,37 @@ async function backfillDepartmentConfiguredTravelerTasks(params: {
       title: 'Material Traceability',
       instructions: 'Record required material traceability before work continues.',
     }, traceFields);
+  }
+
+  const routingMaterials = Array.isArray(departmentConfig.materials) ? departmentConfig.materials : [];
+  for (const [index, material] of routingMaterials.entries()) {
+    const taskPhase = normalizeTravelerTaskPhase(material.traceabilityPhase || 'START');
+    const materialLabel = material.partName || material.partNumber || `Material ${index + 1}`;
+    await addTask({
+      taskType: 'TRACE',
+      taskPhase,
+      title: routingMaterials.length > 1 ? `Material Traceability - ${material.partNumber || materialLabel}` : 'Material Traceability',
+      instructions: `Select ${materialLabel} from inventory. Fields will auto-fill.`,
+    }, [
+      {
+        fieldKey: 'material_internal_control_number',
+        fieldLabel: 'Material Internal Control Number (Select from Inventory)',
+        fieldType: 'inventory_select',
+        required: true,
+        validation: {
+          source: 'fabric_inventory',
+          valueKey: 'internalControlNumber',
+          picker: { type: 'FABRIC_INVENTORY' },
+        },
+      },
+      {
+        fieldKey: 'material_expiration_date',
+        fieldLabel: 'Expiration Date (Auto)',
+        fieldType: 'date',
+        required: true,
+        validation: { readonly: true, source: 'fabric_inventory', valueKey: 'expirationDate' },
+      },
+    ]);
   }
 
   const startCustomFields = dedupeCustomFieldsAcrossPhases(
@@ -1367,8 +1452,11 @@ async function ensureExistingTravelerHasRoutingDetails(params: {
         const taskPhase = getRoutingOperationTravelerPhase(op);
         const taskType = operationTypeToTravelerTaskType(op.operationType) as any;
         const operationFields = taskType === 'QC'
-          ? getRoutingOperationQcFields({ operation: op, routing, taskPhase })
-          : [];
+          ? [
+              ...getRoutingOperationEvidenceFields(op),
+              ...getRoutingOperationQcFields({ operation: op, routing, taskPhase }),
+            ]
+          : getRoutingOperationEvidenceFields(op);
         const created = await createTravelerTaskWithFieldsIfMissing({
           stepId: step.id,
           enabledPhases: new Set<'START' | 'WORK' | 'FINISH'>(['START', 'WORK', 'FINISH']),

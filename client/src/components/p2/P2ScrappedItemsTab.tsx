@@ -496,21 +496,21 @@ export default function P2NonconformingTab({ selectedPOIds = [] }: { selectedPOI
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedItem, setSelectedItem] = useState<ScrappedItem | null>(null);
 
-  const { data: scrappedItemsRaw = [], isLoading, isError, error, refetch: refetchItems } = useQuery<ScrappedItem[]>({
+  const { data: openNcrItemsRaw = [], isLoading, isError, error, refetch: refetchItems } = useQuery<ScrappedItem[]>({
     queryKey: ['/api/p2/serialized-items/scrapped'],
     refetchInterval: 60000,
   });
 
-  const scrappedItems = selectedPOIds.length > 0
-    ? scrappedItemsRaw.filter((item) => item.poId !== null && selectedPOIds.includes(item.poId))
-    : scrappedItemsRaw;
+  const openNcrItems = selectedPOIds.length > 0
+    ? openNcrItemsRaw.filter((item) => item.poId !== null && selectedPOIds.includes(item.poId))
+    : openNcrItemsRaw;
 
   const { data: rmasRaw = [], refetch: refetchRmas } = useQuery<Rma[]>({
     queryKey: ['/api/p2/rmas'],
     refetchInterval: 60000,
   });
 
-  const filtered = scrappedItems.filter((item) => {
+  const filtered = openNcrItems.filter((item) => {
     if (!searchTerm) return true;
     const term = searchTerm.toLowerCase();
     return (
@@ -524,7 +524,7 @@ export default function P2NonconformingTab({ selectedPOIds = [] }: { selectedPOI
     );
   });
 
-  const pendingCount = scrappedItems.filter((i) => !i.disposition).length;
+  const needsDispositionCount = openNcrItems.filter((i) => !i.disposition).length;
   const openRmaCount = rmasRaw.filter((r) => r.rma.status === 'open').length;
   const activeRmas = rmasRaw.filter((r) => r.rma.status === 'open' || r.rma.status === 'shipped');
 
@@ -567,8 +567,8 @@ export default function P2NonconformingTab({ selectedPOIds = [] }: { selectedPOI
           <TabsTrigger value="items" className="flex items-center gap-2">
             <AlertTriangle className="h-4 w-4" />
             Nonconforming Items
-            {pendingCount > 0 && (
-              <Badge variant="destructive" className="ml-1 text-xs px-1.5">{pendingCount}</Badge>
+            {needsDispositionCount > 0 && (
+              <Badge variant="destructive" className="ml-1 text-xs px-1.5">{needsDispositionCount}</Badge>
             )}
           </TabsTrigger>
           <TabsTrigger value="rmas" className="flex items-center gap-2">
@@ -588,11 +588,11 @@ export default function P2NonconformingTab({ selectedPOIds = [] }: { selectedPOI
               <div className="flex items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
                   <AlertTriangle className="h-5 w-5 text-orange-500" />
-                  Nonconforming P2 Items
-                  <Badge variant="secondary" className="ml-2">{scrappedItems.length}</Badge>
-                  {pendingCount > 0 && (
+                  Open Nonconforming P2 Items
+                  <Badge variant="secondary" className="ml-2">{openNcrItems.length}</Badge>
+                  {needsDispositionCount > 0 && (
                     <Badge variant="destructive" className="ml-1">
-                      {pendingCount} need attention
+                      {needsDispositionCount} need disposition
                     </Badge>
                   )}
                 </CardTitle>
@@ -611,10 +611,10 @@ export default function P2NonconformingTab({ selectedPOIds = [] }: { selectedPOI
               {filtered.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
                   <AlertTriangle className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                  {scrappedItems.length === 0 ? (
+                  {openNcrItems.length === 0 ? (
                     <>
-                      <p className="font-medium">No nonconforming items</p>
-                      <p className="text-sm">Items flagged as nonconforming will appear here</p>
+                      <p className="font-medium">No open nonconforming items</p>
+                      <p className="text-sm">Items opened as NCR will appear here until disposition is complete</p>
                     </>
                   ) : (
                     <>

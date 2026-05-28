@@ -458,7 +458,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   // P2 Production Queue routes
   app.use('/api/p2-production-queue', p2ProductionQueueRoutes);
   
-  // P2 Serialized Items - scrapped/nonconforming list (inline to avoid router mount ordering issues)
+  // P2 Serialized Items - open nonconforming list (inline to avoid router mount ordering issues)
   app.get('/api/p2/serialized-items/scrapped', async (req, res) => {
     try {
       const { db } = await import('../../db');
@@ -469,23 +469,33 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         orderBy: (t: any, { desc: d }: any) => [d(t.scrapAt)],
       });
 
-      // Enrich with disposition info
+      // Enrich with the latest disposition and return only open NCR items.
+      // The serialized item status is still SCRAPPED for compatibility, but
+      // operationally this endpoint is the open nonconforming attention queue.
       const itemIds = units.map((u: any) => u.id);
       let dispositions: any[] = [];
       if (itemIds.length > 0) {
         dispositions = await db
           .select()
           .from(p2NonconformingDispositions)
-          .where(inArray(p2NonconformingDispositions.serializedItemId, itemIds));
+          .where(inArray(p2NonconformingDispositions.serializedItemId, itemIds))
+          .orderBy(desc(p2NonconformingDispositions.createdAt));
       }
-      const dispositionMap = new Map(dispositions.map((d: any) => [d.serializedItemId, d]));
-      const enriched = units.map((u: any) => ({
-        ...u,
-        disposition: dispositionMap.get(u.id) || null,
-      }));
+      const dispositionMap = new Map();
+      dispositions.forEach((d: any) => {
+        if (!dispositionMap.has(d.serializedItemId)) {
+          dispositionMap.set(d.serializedItemId, d);
+        }
+      });
+      const enriched = units
+        .map((u: any) => ({
+          ...u,
+          disposition: dispositionMap.get(u.id) || null,
+        }))
+        .filter((u: any) => !u.disposition || u.disposition.resolved !== true);
       res.json(enriched);
     } catch (err: any) {
-      res.status(500).json({ error: err?.message || 'Failed to fetch scrapped items' });
+      res.status(500).json({ error: err?.message || 'Failed to fetch open nonconforming items' });
     }
   });
 
@@ -4439,7 +4449,10 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         updateFields.holdAt = null;
       }
 
-      // SCRAPPED transitions are atomic. If an RMA is required, the status
+      // SCRAPPED transitions are atomic. In this P2 flow, SCRAPPED means the
+      // original serial has left active production and entered open NCR.
+      // Final trash/scrap is recorded later by the disposition workflow.
+      // If an RMA is required, the status
       // update, trace events, and parent PO line qty bump all commit or roll
       // back together. If not, the item simply becomes P2 nonconforming and
       // waits for disposition in the P2 Control Center tab.
@@ -4627,7 +4640,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         return res.json({
           success: true,
           message: replacementItem
-            ? `Item scrapped and RMA replacement ${replacementItem.serialNumber} generated for scheduling`
+            ? `NCR opened and RMA replacement ${replacementItem.serialNumber} generated for scheduling`
             : `Item status updated to ${status}`,
           travelerCreated: false,
           linkedTravelerFound: false,

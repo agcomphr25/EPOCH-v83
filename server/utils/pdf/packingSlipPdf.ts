@@ -1,6 +1,5 @@
 import { PDFDocument, PDFPage, StandardFonts, rgb } from 'pdf-lib';
 import {
-  drawStandardHeader,
   drawTableHeader,
   getMargins,
   wrapText,
@@ -8,6 +7,7 @@ import {
   FONT_SIZES,
   SPACING,
   LINE_HEIGHTS,
+  COMPANY_INFO,
 } from './pdfConfig';
 import type { PackingSlipData } from './types';
 
@@ -29,7 +29,34 @@ export async function generatePackingSlipPdf(data: PackingSlipData): Promise<Buf
 
   let page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
 
-  let y = await drawStandardHeader(page, pdfDoc, font, boldFont, PAGE_HEIGHT - margin, margin);
+  let y = PAGE_HEIGHT - margin;
+
+  page.drawText('AG Advanced Technologies', {
+    x: margin,
+    y,
+    size: FONT_SIZES.TITLE_SMALL,
+    font: boldFont,
+    color: COLORS.TEXT_PRIMARY,
+  });
+  y -= LINE_HEIGHTS.SECTION;
+
+  page.drawText(COMPANY_INFO.ADDRESS, {
+    x: margin,
+    y,
+    size: FONT_SIZES.BODY_SMALL,
+    font,
+    color: COLORS.TEXT_SECONDARY,
+  });
+  y -= LINE_HEIGHTS.COMPACT;
+
+  page.drawText(`Phone: ${COMPANY_INFO.PHONE} | Email: ${COMPANY_INFO.EMAIL}`, {
+    x: margin,
+    y,
+    size: FONT_SIZES.BODY_SMALL,
+    font,
+    color: COLORS.TEXT_SECONDARY,
+  });
+  y -= SPACING.SECTION_GAP_SMALL;
 
   // ── Document title (right side) ──
   const titleText = 'PACKING SLIP';

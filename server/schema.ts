@@ -1660,6 +1660,7 @@ export const users = pgTable('users', {
   lastName: text('last_name'),
   email: text('email'),
   canOverridePrices: boolean('can_override_prices').default(false),
+  isFinishTechnician: boolean('is_finish_technician').default(false),
   isActive: boolean('is_active').default(true),
   lastLogin: timestamp('last_login'),
   failedLoginAttempts: integer('failed_login_attempts').default(0),

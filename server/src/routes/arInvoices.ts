@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import { db } from '../../db';
 import {
   arInvoices,
@@ -22,7 +23,7 @@ import { authenticateToken } from '../../middleware/auth';
 import { requirePermission } from '../../middleware/requirePermission';
 import { generateArInvoicePdf } from '../../utils/pdf/arInvoicePdf';
 import { sendEmailViaSendGrid } from '../../utils/sendgrid';
-import { createInvoiceFromPackingSlip } from '../services/invoiceFromPackingSlip';
+import { buildInvoicePreviewFromPackingSlip, createInvoiceFromPackingSlip } from '../services/invoiceFromPackingSlip';
 import { assertPostingAllowedForPeriod } from '../services/accountingPeriodService';
 import { getFileStorageProviderForObjectPath } from '../services/fileStorageProvider';
 
@@ -42,6 +43,26 @@ const REQUIRED_P2_INVOICE_COLUMNS = [
   'ar_invoice_lines.po_item_id',
   'ar_invoice_lines.part_number',
 ];
+
+const invoicePreviewLineSchema = z.object({
+  poItemId: z.number().nullable().optional(),
+  partNumber: z.string().nullable().optional(),
+  description: z.string().trim().min(1, 'Line description is required'),
+  qty: z.coerce.number().positive('Line quantity must be greater than zero'),
+  unitPrice: z.coerce.number().min(0, 'Unit price cannot be negative'),
+});
+
+const invoicePreviewOverrideSchema = z.object({
+  invoiceDate: z.string().trim().optional(),
+  dueDate: z.string().trim().optional(),
+  terms: z.string().trim().optional(),
+  poOverride: z.string().nullable().optional(),
+  freightAmount: z.coerce.number().min(0).optional(),
+  taxAmount: z.coerce.number().min(0).optional(),
+  discountAmount: z.coerce.number().min(0).optional(),
+  customerVisibleNotes: z.string().nullable().optional(),
+  lines: z.array(invoicePreviewLineSchema).optional(),
+});
 
 async function getMissingP2InvoiceColumns(): Promise<string[]> {
   const result = await db.execute(sql`
@@ -548,16 +569,22 @@ router.get('/disputed', async (_req: Request, res: Response) => {
   }
 });
 
-router.post('/from-packing-slip/:packingSlipId', requirePermission('finance.post_invoice'), async (req: Request, res: Response) => {
+async function getPackingSlipLotLink(packingSlipId: string) {
+  const [slip] = await db
+    .select({ id: p2PackingSlips.id, lotNumberId: p2PackingSlips.lotNumberId })
+    .from(p2PackingSlips)
+    .where(eq(p2PackingSlips.id, packingSlipId));
+
+  if (!slip) return { error: 'Packing slip not found' as const, status: 404 as const };
+  if (!slip.lotNumberId) return { error: 'Packing slip is not linked to a lot' as const, status: 422 as const };
+  return { slip };
+}
+
+router.get('/from-packing-slip/:packingSlipId/preview', requirePermission('finance.post_invoice'), async (req: Request, res: Response) => {
   try {
     const { packingSlipId } = req.params;
-    const [slip] = await db
-      .select({ id: p2PackingSlips.id, lotNumberId: p2PackingSlips.lotNumberId })
-      .from(p2PackingSlips)
-      .where(eq(p2PackingSlips.id, packingSlipId));
-
-    if (!slip) return res.status(404).json({ error: 'Packing slip not found' });
-    if (!slip.lotNumberId) return res.status(422).json({ error: 'Packing slip is not linked to a lot' });
+    const link = await getPackingSlipLotLink(packingSlipId);
+    if ('error' in link) return res.status(link.status).json({ error: link.error });
 
     const missingColumns = await getMissingP2InvoiceColumns();
     if (missingColumns.length > 0) {
@@ -567,7 +594,31 @@ router.post('/from-packing-slip/:packingSlipId', requirePermission('finance.post
       });
     }
 
-    await createInvoiceFromPackingSlip(packingSlipId, slip.lotNumberId);
+    const preview = await buildInvoicePreviewFromPackingSlip(packingSlipId, link.slip.lotNumberId);
+    res.json(preview);
+  } catch (error) {
+    console.error('Failed to preview invoice from packing slip:', error);
+    const message = error instanceof Error ? error.message : 'Failed to preview invoice from packing slip';
+    res.status(500).json({ error: message });
+  }
+});
+
+router.post('/from-packing-slip/:packingSlipId', requirePermission('finance.post_invoice'), async (req: Request, res: Response) => {
+  try {
+    const { packingSlipId } = req.params;
+    const link = await getPackingSlipLotLink(packingSlipId);
+    if ('error' in link) return res.status(link.status).json({ error: link.error });
+
+    const missingColumns = await getMissingP2InvoiceColumns();
+    if (missingColumns.length > 0) {
+      return res.status(500).json({
+        error: `Invoice database migration is not applied. Missing columns: ${missingColumns.join(', ')}`,
+        missingColumns,
+      });
+    }
+
+    const overrides = invoicePreviewOverrideSchema.parse(req.body || {});
+    await createInvoiceFromPackingSlip(packingSlipId, link.slip.lotNumberId, overrides);
 
     const [invoice] = await db
       .select({ id: arInvoices.id, invoiceNumber: arInvoices.invoiceNumber, status: arInvoices.status })
@@ -576,6 +627,9 @@ router.post('/from-packing-slip/:packingSlipId', requirePermission('finance.post
 
     res.status(201).json(invoice);
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: error.errors[0]?.message || 'Invalid invoice preview data', issues: error.errors });
+    }
     console.error('Failed to create invoice from packing slip:', error);
     const message = error instanceof Error ? error.message : 'Failed to create invoice from packing slip';
     res.status(500).json({ error: message });

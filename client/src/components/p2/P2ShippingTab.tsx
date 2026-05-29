@@ -39,6 +39,7 @@ import {
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import ShipmentSummaryModal from './ShipmentSummaryModal';
+import P2InvoicePreviewButton from './P2InvoicePreviewButton';
 
 type SerializedUnit = {
   id: string;
@@ -121,7 +122,6 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
   const [createdShipments, setCreatedShipments] = useState<Record<string, CreatedShipment[]>>({});
   const [creatingShipmentFor, setCreatingShipmentFor] = useState<string | null>(null);
   const [generatingCertFor, setGeneratingCertFor] = useState<string | null>(null);
-  const [creatingInvoiceFor, setCreatingInvoiceFor] = useState<string | null>(null);
   const [summaryModalPO, setSummaryModalPO] = useState<string | null>(null);
   const [summaryModalSerials, setSummaryModalSerials] = useState<SerializedUnit[]>([]);
   const [cocModal, setCocModal] = useState<{ poNumber: string; lotId: string } | null>(null);
@@ -468,45 +468,25 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
     }
   };
 
-  const handleCreateInvoice = async (poNumber: string, shipment: CreatedShipment) => {
-    setCreatingInvoiceFor(shipment.slipId);
-    try {
-      const invoice = await apiRequest(`/api/ar-invoices/from-packing-slip/${shipment.slipId}`, {
-        method: 'POST',
-      });
-      setCreatedShipments((prev) => {
-        const list = prev[poNumber] ?? [];
-        return {
-          ...prev,
-          [poNumber]: list.map((s) =>
-            s.slipId === shipment.slipId
-              ? {
-                  ...s,
-                  invoiceId: invoice?.id,
-                  invoiceNumber: invoice?.invoiceNumber,
-                  invoiceStatus: invoice?.status,
-                }
-              : s
-          ),
-        };
-      });
-      queryClient.invalidateQueries({ queryKey: ['/api/p2/lots/existing-shipments'] });
-      queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === '/api/ar-invoices' });
-      toast({
-        title: 'Invoice ready for review',
-        description: invoice?.invoiceNumber
-          ? `Invoice ${invoice.invoiceNumber} was created from packing slip ${shipment.slipNumber}.`
-          : `Invoice was created from packing slip ${shipment.slipNumber}.`,
-      });
-    } catch (err: any) {
-      toast({
-        title: 'Invoice creation failed',
-        description: err?.message || 'Unable to create invoice from this packing slip.',
-        variant: 'destructive',
-      });
-    } finally {
-      setCreatingInvoiceFor(null);
-    }
+  const handleInvoiceCreated = (poNumber: string, shipment: CreatedShipment, invoice: any) => {
+    setCreatedShipments((prev) => {
+      const list = prev[poNumber] ?? [];
+      return {
+        ...prev,
+        [poNumber]: list.map((s) =>
+          s.slipId === shipment.slipId
+            ? {
+                ...s,
+                invoiceId: invoice?.id,
+                invoiceNumber: invoice?.invoiceNumber,
+                invoiceStatus: invoice?.status,
+              }
+            : s
+        ),
+      };
+    });
+    queryClient.invalidateQueries({ queryKey: ['/api/p2/lots/existing-shipments'] });
+    queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === '/api/ar-invoices' });
   };
 
   const voidShipmentMutation = useMutation({
@@ -1055,19 +1035,13 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
                               <Receipt className="w-3 h-3 mr-1" />Invoice {shipment.invoiceNumber}
                             </Button>
                           ) : (
-                            <Button
+                            <P2InvoicePreviewButton
+                              packingSlipId={shipment.slipId}
                               size="sm"
                               variant="outline"
                               className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
-                              disabled={creatingInvoiceFor === shipment.slipId}
-                              onClick={() => handleCreateInvoice(group.poNumber, shipment)}
-                            >
-                              {creatingInvoiceFor === shipment.slipId ? (
-                                <><Loader2 className="w-3 h-3 mr-1 animate-spin" />Creating...</>
-                              ) : (
-                                <><Receipt className="w-3 h-3 mr-1" />Create Invoice</>
-                              )}
-                            </Button>
+                              onCreated={(invoice) => handleInvoiceCreated(group.poNumber, shipment, invoice)}
+                            />
                           )}
                           <Button
                             size="sm"

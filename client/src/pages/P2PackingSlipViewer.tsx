@@ -15,6 +15,7 @@ import { format } from 'date-fns';
 import { COMPANY_INFO } from '@shared/company-config';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
+import P2InvoicePreviewButton from '@/components/p2/P2InvoicePreviewButton';
 
 interface PackingSlipLineItem {
   partNumber: string;
@@ -155,24 +156,13 @@ export default function P2PackingSlipViewer() {
     },
   });
 
-  const createInvoiceMutation = useMutation({
-    mutationFn: async () => {
-      return apiRequest(`/api/ar-invoices/from-packing-slip/${packingSlipId}`, {
-        method: 'POST',
-      });
-    },
-    onSuccess: (invoice: any) => {
-      qc.invalidateQueries({ predicate: (query) =>
-        Array.isArray(query.queryKey) && query.queryKey[0] === '/api/ar-invoices'
-      });
-      qc.invalidateQueries({ queryKey: ['/api/p2/packing-slips', packingSlipId] });
-      toast({ title: 'Invoice ready for review', description: `Invoice ${invoice?.invoiceNumber || ''} was created from this packing slip.` });
-      if (invoice?.id) setLocation(`/finance/invoices/${invoice.id}`);
-    },
-    onError: (err: any) => {
-      toast({ title: 'Invoice creation failed', description: err.message || 'Unable to create invoice.', variant: 'destructive' });
-    },
-  });
+  const handleInvoiceCreated = (invoice: any) => {
+    qc.invalidateQueries({ predicate: (query) =>
+      Array.isArray(query.queryKey) && query.queryKey[0] === '/api/ar-invoices'
+    });
+    qc.invalidateQueries({ queryKey: ['/api/p2/packing-slips', packingSlipId] });
+    if (invoice?.id) setLocation(`/finance/invoices/${invoice.id}`);
+  };
 
   const handleStartEdit = () => {
     if (!packingSlip) return;
@@ -292,18 +282,11 @@ export default function P2PackingSlipViewer() {
               View Invoice
             </Button>
           ) : (
-            <Button
+            <P2InvoicePreviewButton
+              packingSlipId={packingSlipId}
               variant="outline"
-              onClick={() => createInvoiceMutation.mutate()}
-              disabled={createInvoiceMutation.isPending}
-            >
-              {createInvoiceMutation.isPending ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Receipt className="h-4 w-4 mr-2" />
-              )}
-              Create Invoice
-            </Button>
+              onCreated={handleInvoiceCreated}
+            />
           )}
           <Button variant="outline" onClick={handlePrint} data-testid="button-print">
             <Printer className="h-4 w-4 mr-2" />
@@ -349,7 +332,7 @@ export default function P2PackingSlipViewer() {
                   </div>
                 ) : (
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Use Create Invoice to generate a review invoice from the packing slip lines.
+                    Use Preview Invoice to review and edit the invoice before creating it.
                   </p>
                 )}
               </div>
@@ -361,19 +344,12 @@ export default function P2PackingSlipViewer() {
                 </Link>
               </Button>
             ) : (
-              <Button
+              <P2InvoicePreviewButton
+                packingSlipId={packingSlipId}
                 size="sm"
                 variant="outline"
-                onClick={() => createInvoiceMutation.mutate()}
-                disabled={createInvoiceMutation.isPending}
-              >
-                {createInvoiceMutation.isPending ? (
-                  <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                ) : (
-                  <Receipt className="h-3.5 w-3.5 mr-1" />
-                )}
-                Create Invoice
-              </Button>
+                onCreated={handleInvoiceCreated}
+              />
             )}
           </div>
         </CardContent>

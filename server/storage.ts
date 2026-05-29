@@ -3168,6 +3168,7 @@ export interface IStorage {
 
   // Cutting documents
   listCuttingDocuments(): Promise<CuttingDocument[]>;
+  getCuttingDocument(id: number): Promise<CuttingDocument | undefined>;
   createCuttingDocument(data: InsertCuttingDocument): Promise<CuttingDocument>;
   deleteCuttingDocument(id: number): Promise<CuttingDocument | undefined>;
 
@@ -19462,6 +19463,9 @@ export class DatabaseStorage implements IStorage {
     const departmentSequence = routing.departmentSequence as string[];
     const traceabilityConfig = routing.traceabilityConfig as Record<string, string[]>;
     const departmentConfig = (routing.departmentConfig || {}) as Record<string, any>;
+    const routingHasExplicitMaterials = Object.values(departmentConfig).some(
+      (config: any) => Array.isArray(config?.materials) && config.materials.length > 0,
+    );
 
     let stepCounter = 0;
     for (let i = 0; i < departmentSequence.length; i++) {
@@ -19491,18 +19495,19 @@ export class DatabaseStorage implements IStorage {
       // ===== POLICY-DRIVEN MATERIAL TRACEABILITY =====
       const tracePolicy = this._getTracePolicyForDepartment(deptName);
       const routingMaterials = deptConfig.materials || [];
-      if (tracePolicy.enabled) {
-        if (routingMaterials.length > 1) {
+      if (tracePolicy.enabled && (!routingHasExplicitMaterials || routingMaterials.length > 0)) {
+        if (routingMaterials.length > 0) {
           for (let matIdx = 0; matIdx < routingMaterials.length; matIdx++) {
             const mat = routingMaterials[matIdx];
             const matLabel = mat.partName || mat.partNumber || `Material ${matIdx + 1}`;
             const matShort = mat.partNumber ? `#${mat.partNumber}` : `Material ${matIdx + 1}`;
             const perMatFields = this._buildTraceFields(tracePolicy.capture);
+            const traceTaskPhase = this._normalizePhase(mat.traceabilityPhase || tracePolicy.phase);
             if (perMatFields.length > 0) {
               const matTraceTask = await this._createTaskIfAllowed({
                 travelerStepId: step.id,
                 taskType: 'TRACE',
-                taskPhase: tracePolicy.phase,
+                taskPhase: traceTaskPhase,
                 title: `Material Traceability — ${matShort}`,
                 instructions: `Select ${matLabel} from inventory. Fields will auto-fill.`,
                 required: true,
@@ -19700,9 +19705,8 @@ export class DatabaseStorage implements IStorage {
 
       // Phase-separated QC Standards - create separate QC tasks per phase
       const startQcStandards = deptConfig.startQcStandards || [];
+      const workQcStandards = deptConfig.qcStandards || [];
       const finishQcStandards = deptConfig.finishQcStandards || [];
-      const hasPhaseQcStandards = startQcStandards.length > 0 || finishQcStandards.length > 0;
-      const workQcStandards = hasPhaseQcStandards ? [] : (deptConfig.qcStandards || []);
 
       const qcPhaseConfigs = [
         { standards: startQcStandards, phase: 'START' as const, title: 'Incoming QC Inspection', instructions: 'Complete START phase quality control verifications' },
@@ -19804,6 +19808,25 @@ export class DatabaseStorage implements IStorage {
           requiresSignature: false,
           requiresCertification: false,
           instructionPack: routingInstructionPack,
+          status: 'NOT_STARTED',
+        }, enabledPhases, createdTaskKeys);
+      }
+
+      // Explicit WORK checks from routing template
+      for (const check of deptConfig.workChecks || []) {
+        await this._createTaskIfAllowed({
+          travelerStepId: step.id,
+          taskType: check.taskType || 'CHECK',
+          taskPhase: 'WORK',
+          title: check.title,
+          instructions: check.instructions || `Complete: ${check.title}`,
+          required: check.required !== false,
+          sortOrder: sortOrder++,
+          timePolicy: check.timePolicy || 'AUTO_ON_COMPLETE',
+          requiresSignature: check.requiresSignature || false,
+          signatureRole: check.requiresSignature ? (check.signatureRole || 'OPERATOR') : null,
+          requiresCertification: check.requiresCertification || false,
+          instructionPack: check.instructionPack || null,
           status: 'NOT_STARTED',
         }, enabledPhases, createdTaskKeys);
       }
@@ -20281,10 +20304,21 @@ export class DatabaseStorage implements IStorage {
       switch (t) {
         case 'SETUP': return 'START';
         case 'MATERIAL': return 'START';
-        case 'QC': return 'FINISH';
-        case 'INSPECT': return 'FINISH';
+        case 'QC': return 'WORK';
+        case 'INSPECT': return 'WORK';
         default: return 'WORK';
       }
+    };
+    const normalizeExplicitPhase = (value: any): 'START' | 'WORK' | 'FINISH' | null => {
+      const normalized = String(value || '').trim().toUpperCase();
+      return normalized === 'START' || normalized === 'WORK' || normalized === 'FINISH'
+        ? normalized
+        : null;
+    };
+    const operationTaskPhase = (op: RoutingOperation): 'START' | 'WORK' | 'FINISH' => {
+      const pack = (op.instructionPack || {}) as any;
+      return normalizeExplicitPhase(pack.taskPhase || pack.phase || pack.qcPhase || pack.workPhase)
+        || operationTypeToPhase(op.operationType) as 'START' | 'WORK' | 'FINISH';
     };
     const sanitizeFieldKey = (value: string) =>
       String(value || '')
@@ -20335,7 +20369,7 @@ export class DatabaseStorage implements IStorage {
       const fallbackStandards =
         taskPhase === 'FINISH'
           ? normalizeQcStandards(deptConfig.qcStandards)
-          : normalizeQcStandards(deptConfig.finishQcStandards);
+          : [];
       if (fallbackStandards.length > 0) return fallbackStandards;
 
       if (pack.specialNotes) {
@@ -20348,6 +20382,64 @@ export class DatabaseStorage implements IStorage {
         }];
       }
       return [];
+    };
+    const buildOperationEvidenceFields = (op: RoutingOperation) => {
+      const baseKey = `routing_op_${op.id}`;
+      const fields: Array<{
+        fieldKey: string;
+        fieldLabel: string;
+        fieldType: string;
+        required: boolean;
+        validation?: any;
+      }> = [
+        {
+          fieldKey: `${baseKey}_complete`,
+          fieldLabel: `Completed: ${op.operationName}`,
+          fieldType: 'yes_no',
+          required: true,
+        },
+        {
+          fieldKey: `${baseKey}_department`,
+          fieldLabel: 'Routing Department',
+          fieldType: 'text',
+          required: false,
+          validation: { readonly: true, value: op.departmentName },
+        },
+        {
+          fieldKey: `${baseKey}_operation_type`,
+          fieldLabel: 'Operation Type',
+          fieldType: 'text',
+          required: false,
+          validation: { readonly: true, value: op.operationType },
+        },
+      ];
+
+      if (op.workCenter) {
+        fields.push({
+          fieldKey: `${baseKey}_work_center`,
+          fieldLabel: 'Work Center',
+          fieldType: 'text',
+          required: false,
+          validation: { readonly: true, value: op.workCenter },
+        });
+      }
+      if (op.estimatedMinutes) {
+        fields.push({
+          fieldKey: `${baseKey}_estimated_minutes`,
+          fieldLabel: 'Estimated Minutes',
+          fieldType: 'number',
+          required: false,
+          validation: { readonly: true, value: String(op.estimatedMinutes) },
+        });
+        fields.push({
+          fieldKey: `${baseKey}_actual_minutes`,
+          fieldLabel: 'Actual Minutes',
+          fieldType: 'number',
+          required: false,
+        });
+      }
+
+      return fields;
     };
 
     const departmentSequence = Array.isArray(routing.departmentSequence)
@@ -20400,7 +20492,7 @@ export class DatabaseStorage implements IStorage {
       let sortOrder = 0;
       for (const op of groupOps) {
         const taskType = operationTypeToTaskType(op.operationType);
-        const taskPhase = operationTypeToPhase(op.operationType);
+        const taskPhase = operationTaskPhase(op);
         const instPack = (op.instructionPack || {}) as any;
         const operationDetails = [
           instPack?.specialNotes,
@@ -20453,9 +20545,9 @@ export class DatabaseStorage implements IStorage {
 
         if (taskType === 'QC') {
           const qcStandards = getOperationQcStandards(op, taskPhase);
-          for (const qc of qcStandards) {
-            await this.createTravelerTaskField({
-              travelerTaskId: task.id,
+          const fields = [
+            ...buildOperationEvidenceFields(op),
+            ...qcStandards.map((qc) => ({
               fieldKey: `qc_${op.id}_${sanitizeFieldKey(qc.standard || op.operationName)}`,
               fieldLabel: qc.standard || op.operationName,
               fieldType: 'yes_no',
@@ -20466,6 +20558,27 @@ export class DatabaseStorage implements IStorage {
                 ...(qc.hardQcStop ? { hardQcStop: true } : {}),
                 ...(qc.referenceLink ? { referenceLink: qc.referenceLink } : {}),
               },
+            })),
+          ];
+          for (const field of this._dedupeFieldsByKey(fields)) {
+            await this.createTravelerTaskField({
+              travelerTaskId: task.id,
+              fieldKey: field.fieldKey,
+              fieldLabel: field.fieldLabel,
+              fieldType: field.fieldType,
+              required: field.required,
+              validation: field.validation,
+            });
+          }
+        } else {
+          for (const field of buildOperationEvidenceFields(op)) {
+            await this.createTravelerTaskField({
+              travelerTaskId: task.id,
+              fieldKey: field.fieldKey,
+              fieldLabel: field.fieldLabel,
+              fieldType: field.fieldType,
+              required: field.required,
+              validation: field.validation,
             });
           }
         }
@@ -27318,6 +27431,11 @@ export class DatabaseStorage implements IStorage {
 
   async listCuttingDocuments(): Promise<CuttingDocument[]> {
     return db.select().from(cuttingDocuments).orderBy(desc(cuttingDocuments.uploadedAt));
+  }
+
+  async getCuttingDocument(id: number): Promise<CuttingDocument | undefined> {
+    const [row] = await db.select().from(cuttingDocuments).where(eq(cuttingDocuments.id, id));
+    return row ?? undefined;
   }
 
   async createCuttingDocument(data: InsertCuttingDocument): Promise<CuttingDocument> {

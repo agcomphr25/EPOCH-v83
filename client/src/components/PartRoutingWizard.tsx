@@ -663,10 +663,10 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
   const handleSave = () => {
     if (!selectedItem) return;
 
-    // Build traceabilityConfig from departmentConfig materials' requiredFields
-    // Preserve existing config when editing, only update departments that have materials configured
-    const existingTraceabilityConfig = editRouting?.traceabilityConfig || {};
-    const traceabilityConfig: Record<string, string[]> = { ...existingTraceabilityConfig };
+    // Build traceabilityConfig from current material assignments only.
+    // Preserving old department keys makes material prompts appear on steps
+    // after the user has moved or removed the material in routing.
+    const traceabilityConfig: Record<string, string[]> = {};
     
     selectedDepartments.forEach(dept => {
       const config = departmentConfig[dept];
@@ -676,18 +676,9 @@ export default function PartRoutingWizard({ open, onOpenChange, editRouting, poI
         config.materials.forEach(material => {
           material.requiredFields?.forEach(field => allFields.add(field));
         });
-        traceabilityConfig[dept] = Array.from(allFields);
-      } else if (!existingTraceabilityConfig[dept]) {
-        // Only set empty array for new departments that don't have existing config
-        traceabilityConfig[dept] = [];
-      }
-      // If department exists in existing config and no new materials, preserve existing
-    });
-    
-    // Remove departments no longer in sequence
-    Object.keys(traceabilityConfig).forEach(dept => {
-      if (!selectedDepartments.includes(dept)) {
-        delete traceabilityConfig[dept];
+        if (allFields.size > 0) {
+          traceabilityConfig[dept] = Array.from(allFields);
+        }
       }
     });
 

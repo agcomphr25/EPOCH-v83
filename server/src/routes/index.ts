@@ -54,6 +54,7 @@ import communicationsRoutes from './communications';
 import marketingRoutes from './marketing';
 import internalMessagesRoutes from './internalMessages';
 import nonconformanceRoutes from '../../routes/nonconformance';
+import nonConformingItemsRoutes from './nonConformingItems';
 import paymentsRoutes from './payments';
 import algorithmicSchedulerRoutes from './algorithmicScheduler';
 import productionQueueRoutes from './productionQueue';
@@ -458,7 +459,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   // P2 Production Queue routes
   app.use('/api/p2-production-queue', p2ProductionQueueRoutes);
   
-  // P2 Serialized Items - scrapped/nonconforming list (inline to avoid router mount ordering issues)
+  // P2 Serialized Items - open nonconforming list (inline to avoid router mount ordering issues)
   app.get('/api/p2/serialized-items/scrapped', async (req, res) => {
     try {
       const { db } = await import('../../db');
@@ -469,23 +470,33 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         orderBy: (t: any, { desc: d }: any) => [d(t.scrapAt)],
       });
 
-      // Enrich with disposition info
+      // Enrich with the latest disposition and return only open NCR items.
+      // The serialized item status is still SCRAPPED for compatibility, but
+      // operationally this endpoint is the open nonconforming attention queue.
       const itemIds = units.map((u: any) => u.id);
       let dispositions: any[] = [];
       if (itemIds.length > 0) {
         dispositions = await db
           .select()
           .from(p2NonconformingDispositions)
-          .where(inArray(p2NonconformingDispositions.serializedItemId, itemIds));
+          .where(inArray(p2NonconformingDispositions.serializedItemId, itemIds))
+          .orderBy(desc(p2NonconformingDispositions.createdAt));
       }
-      const dispositionMap = new Map(dispositions.map((d: any) => [d.serializedItemId, d]));
-      const enriched = units.map((u: any) => ({
-        ...u,
-        disposition: dispositionMap.get(u.id) || null,
-      }));
+      const dispositionMap = new Map();
+      dispositions.forEach((d: any) => {
+        if (!dispositionMap.has(d.serializedItemId)) {
+          dispositionMap.set(d.serializedItemId, d);
+        }
+      });
+      const enriched = units
+        .map((u: any) => ({
+          ...u,
+          disposition: dispositionMap.get(u.id) || null,
+        }))
+        .filter((u: any) => !u.disposition || u.disposition.resolved !== true);
       res.json(enriched);
     } catch (err: any) {
-      res.status(500).json({ error: err?.message || 'Failed to fetch scrapped items' });
+      res.status(500).json({ error: err?.message || 'Failed to fetch open nonconforming items' });
     }
   });
 
@@ -514,12 +525,17 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         p2NonconformingDispositions,
         p2Rmas,
         p2SerializedItems,
+        p2SerializedItemEvents,
+        travelers,
+        travelerSteps,
         p2PurchaseOrders,
         inventoryItems,
         inventoryBalances,
+        inventoryTransactions,
         insertP2NonconformingDispositionSchema,
+        P2_DEPARTMENT_STAGES,
       } = await import('../../schema');
-      const { eq } = await import('drizzle-orm');
+      const { eq, sql } = await import('drizzle-orm');
 
       const parsed = insertP2NonconformingDispositionSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -527,6 +543,23 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       }
 
       const data = parsed.data;
+      const useAsIsDestination = req.body?.useAsIsDestination === 'production'
+        ? 'production'
+        : 'inventory';
+      const returnProjectId = typeof req.body?.returnProjectId === 'string' && req.body.returnProjectId.trim()
+        ? req.body.returnProjectId.trim()
+        : null;
+      const returnDepartment = typeof req.body?.returnDepartment === 'string' && req.body.returnDepartment.trim()
+        ? req.body.returnDepartment.trim()
+        : null;
+
+      if (data.dispositionType === 'Use as Is' && useAsIsDestination === 'production') {
+        if (!returnProjectId || !returnDepartment) {
+          return res.status(400).json({
+            error: 'Use as Is return-to-production requires project and department',
+          });
+        }
+      }
 
       // Resolve instantly for dispositions that don't require further action
       // Use as Is → inventory added, then resolved; Repair → stays open until RMA complete
@@ -570,7 +603,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           }
         }
       } else if (data.dispositionType === 'Use as Is') {
-        // Add item to inventory bank
+        // Use as Is can either capture the serial as inventory-on-hand or
+        // return it to production at the selected project/department.
         try {
           const [item] = await db
             .select()
@@ -578,63 +612,189 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
             .where(eq(p2SerializedItems.id, data.serializedItemId))
             .limit(1);
           if (item) {
-            // Check if inventory item exists for this part number
-            const [invItem] = await db
-              .select()
-              .from(inventoryItems)
-              .where(eq(inventoryItems.agPartNumber, item.partNumber))
-              .limit(1);
-            // Ensure an inventory_items record exists for this part
-            const effectiveInvItem = invItem || await db
-              .insert(inventoryItems)
-              .values({
-                agPartNumber: item.partNumber,
-                name: item.partName || item.partNumber,
-                source: 'P2 Nonconforming (Use as Is)',
-                notes: `Created by nonconforming disposition for S/N ${data.serialNumber}`,
-                isActive: true,
-                createdAt: new Date(),
-                updatedAt: new Date(),
-              })
-              .returning()
-              .then(([r]) => r);
+            const metadata = (item.metadata as Record<string, unknown> | null) || {};
 
-            if (effectiveInvItem) {
-              // Upsert inventory balance in WAREHOUSE-MAIN location
-              const [existingBalance] = await db
+            if (useAsIsDestination === 'inventory') {
+              // Check if inventory item exists for this part number
+              const [invItem] = await db
                 .select()
-                .from(inventoryBalances)
-                .where(eq(inventoryBalances.agPartNumber, item.partNumber))
+                .from(inventoryItems)
+                .where(eq(inventoryItems.agPartNumber, item.partNumber))
                 .limit(1);
-              if (existingBalance) {
+              // Ensure an inventory_items record exists for this part
+              const effectiveInvItem = invItem || await db
+                .insert(inventoryItems)
+                .values({
+                  agPartNumber: item.partNumber,
+                  name: item.partName || item.partNumber,
+                  source: 'P2 Nonconforming (Use as Is)',
+                  notes: `Created by nonconforming disposition for S/N ${data.serialNumber}`,
+                  isActive: true,
+                  createdAt: new Date(),
+                  updatedAt: new Date(),
+                })
+                .returning()
+                .then(([r]) => r);
+
+              if (effectiveInvItem) {
+                // Upsert inventory balance in WAREHOUSE-MAIN location
+                const [existingBalance] = await db
+                  .select()
+                  .from(inventoryBalances)
+                  .where(eq(inventoryBalances.agPartNumber, item.partNumber))
+                  .limit(1);
+                if (existingBalance) {
+                  await db
+                    .update(inventoryBalances)
+                    .set({
+                      quantityOnHand: existingBalance.quantityOnHand + 1,
+                      quantityAvailable: existingBalance.quantityAvailable + 1,
+                      updatedAt: new Date(),
+                    })
+                    .where(eq(inventoryBalances.id, existingBalance.id));
+                } else {
+                  await db
+                    .insert(inventoryBalances)
+                    .values({
+                      agPartNumber: item.partNumber,
+                      locationId: 'WAREHOUSE-MAIN',
+                      quantityOnHand: 1,
+                      quantityAllocated: 0,
+                      quantityAvailable: 1,
+                      createdAt: new Date(),
+                      updatedAt: new Date(),
+                    });
+                }
+
                 await db
-                  .update(inventoryBalances)
+                  .update(inventoryItems)
                   .set({
-                    quantityOnHand: existingBalance.quantityOnHand + 1,
-                    quantityAvailable: existingBalance.quantityAvailable + 1,
+                    quantityInStock: sql`COALESCE(${inventoryItems.quantityInStock}, 0) + 1`,
+                    onHand: sql`COALESCE(${inventoryItems.onHand}, 0) + 1`,
+                    available: sql`COALESCE(${inventoryItems.available}, 0) + 1`,
+                    lastUpdated: new Date(),
                     updatedAt: new Date(),
                   })
-                  .where(eq(inventoryBalances.id, existingBalance.id));
-              } else {
-                await db
-                  .insert(inventoryBalances)
-                  .values({
-                    agPartNumber: item.partNumber,
-                    locationId: 'WAREHOUSE-MAIN',
-                    quantityOnHand: 1,
-                    quantityAllocated: 0,
-                    quantityAvailable: 1,
-                    createdAt: new Date(),
-                    updatedAt: new Date(),
-                  });
+                  .where(eq(inventoryItems.id, effectiveInvItem.id));
+
+                await db.insert(inventoryTransactions).values({
+                  agPartNumber: item.partNumber,
+                  transactionType: 'return',
+                  quantity: 1,
+                  unitOfMeasure: 'EA',
+                  fromLocation: 'P2 Nonconforming',
+                  toLocation: 'WAREHOUSE-MAIN',
+                  referenceType: 'P2_NCR_USE_AS_IS',
+                  referenceId: String(disposition.id),
+                  notes: `Use As Is inventory capture for serialized item ${item.serialNumber}`,
+                  performedBy: data.authorization,
+                  metadata: {
+                    serializedItemId: item.id,
+                    serialNumber: item.serialNumber,
+                    travelerBarcode: item.travelerBarcode,
+                    dispositionId: disposition.id,
+                    poId: item.poId,
+                    poNumber: item.poNumber,
+                    reasonType: data.reasonType,
+                    reasonOther: data.reasonOther,
+                  },
+                });
               }
+
+              await db.update(p2SerializedItems)
+                .set({
+                  status: 'COMPLETED',
+                  currentDepartment: 'Inventory',
+                  metadata: {
+                    ...metadata,
+                    useAsIsDisposition: {
+                      destination: 'inventory',
+                      dispositionId: disposition.id,
+                      inventoryPartNumber: item.partNumber,
+                      locationId: 'WAREHOUSE-MAIN',
+                      reasonType: data.reasonType,
+                      reasonOther: data.reasonOther,
+                      recordedAt: new Date().toISOString(),
+                    },
+                  },
+                  updatedAt: new Date(),
+                })
+                .where(eq(p2SerializedItems.id, item.id));
+
+              await db.insert(p2SerializedItemEvents).values({
+                serializedItemId: item.id,
+                barcode: item.barcode,
+                eventType: 'NCR_USE_AS_IS_INVENTORY',
+                fromDepartment: item.currentDepartment,
+                toDepartment: 'Inventory',
+                toStageIndex: item.currentStageIndex,
+                performedBy: data.authorization,
+                notes: `Use As Is disposition sent to inventory under ${item.partNumber}`,
+                metadata: {
+                  dispositionId: disposition.id,
+                  serialNumber: item.serialNumber,
+                  travelerBarcode: item.travelerBarcode,
+                  locationId: 'WAREHOUSE-MAIN',
+                  reasonType: data.reasonType,
+                  reasonOther: data.reasonOther,
+                },
+              });
+            } else {
+              const p2Stages = ['Pending Layup', ...P2_DEPARTMENT_STAGES] as string[];
+              const nextDepartment = returnDepartment || 'Pending Layup';
+              const stageIndex = Math.max(0, p2Stages.indexOf(nextDepartment));
+
+              await db.update(p2SerializedItems)
+                .set({
+                  status: 'ACTIVE',
+                  currentDepartment: nextDepartment,
+                  currentStageIndex: stageIndex,
+                  scrapReason: null,
+                  scrapBy: null,
+                  scrapAt: null,
+                  metadata: {
+                    ...metadata,
+                    useAsIsDisposition: {
+                      destination: 'production',
+                      dispositionId: disposition.id,
+                      returnProjectId,
+                      returnDepartment: nextDepartment,
+                      reasonType: data.reasonType,
+                      reasonOther: data.reasonOther,
+                      recordedAt: new Date().toISOString(),
+                    },
+                  },
+                  updatedAt: new Date(),
+                })
+                .where(eq(p2SerializedItems.id, item.id));
+
+              await db.insert(p2SerializedItemEvents).values({
+                serializedItemId: item.id,
+                barcode: item.barcode,
+                eventType: 'NCR_USE_AS_IS_PRODUCTION',
+                fromDepartment: item.currentDepartment,
+                fromStageIndex: item.currentStageIndex,
+                toDepartment: nextDepartment,
+                toStageIndex: stageIndex,
+                performedBy: data.authorization,
+                notes: `Use As Is disposition returned to production at ${nextDepartment}`,
+                metadata: {
+                  dispositionId: disposition.id,
+                  serialNumber: item.serialNumber,
+                  travelerBarcode: item.travelerBarcode,
+                  returnProjectId,
+                  returnDepartment: nextDepartment,
+                  reasonType: data.reasonType,
+                  reasonOther: data.reasonOther,
+                },
+              });
             }
           }
         } catch (e) {
-          console.error('Failed to add item to inventory bank:', e);
+          console.error('Failed to apply Use as Is disposition:', e);
         }
       } else if (data.dispositionType === 'Repair') {
-        // Create an open RMA record
+        // Create an open repair RMA and return the original serial to a Repair queue.
         try {
           const now = new Date();
           const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
@@ -650,7 +810,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           }
           const rmaNumber = `RMA-P2-${dateStr}-${maxSeq + 1}`;
 
-          await db
+          const [rma] = await db
             .insert(p2Rmas)
             .values({
               dispositionId: disposition.id,
@@ -660,7 +820,86 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
               traceableMaterials: [],
               createdAt: new Date(),
               updatedAt: new Date(),
+            })
+            .returning();
+
+          const [item] = await db
+            .select()
+            .from(p2SerializedItems)
+            .where(eq(p2SerializedItems.id, data.serializedItemId))
+            .limit(1);
+
+          if (item) {
+            const metadata = (item.metadata as Record<string, unknown> | null) || {};
+            const [activeTraveler] = item.serialNumber
+              ? await db
+                  .select()
+                  .from(travelers)
+                  .where(eq(travelers.serialNumber, item.serialNumber))
+                  .orderBy(sql`${travelers.updatedAt} DESC NULLS LAST`, sql`${travelers.createdAt} DESC NULLS LAST`)
+                  .limit(1)
+              : [];
+
+            await db.update(p2SerializedItems)
+              .set({
+                status: 'ACTIVE',
+                currentDepartment: 'Repair',
+                metadata: {
+                  ...metadata,
+                  repairDisposition: {
+                    dispositionId: disposition.id,
+                    rmaId: rma.id,
+                    rmaNumber,
+                    reasonType: data.reasonType,
+                    reasonOther: data.reasonOther,
+                    routedAt: new Date().toISOString(),
+                  },
+                },
+                updatedAt: new Date(),
+              })
+              .where(eq(p2SerializedItems.id, item.id));
+
+            let repairStepId: string | null = null;
+            if (activeTraveler) {
+              const [maxStepRow] = await db
+                .select({ maxStep: sql<number>`COALESCE(MAX(${travelerSteps.stepNumber}), 0)` })
+                .from(travelerSteps)
+                .where(eq(travelerSteps.travelerId, activeTraveler.id));
+              const nextStepNumber = Number(maxStepRow?.maxStep || 0) + 1;
+              const [repairStep] = await db.insert(travelerSteps)
+                .values({
+                  travelerId: activeTraveler.id,
+                  departmentName: 'Repair',
+                  stepNumber: nextStepNumber,
+                  status: 'NOT_STARTED',
+                  notes: `Repair step created from NCR disposition ${disposition.id} / ${rmaNumber}`,
+                })
+                .returning({ id: travelerSteps.id });
+              repairStepId = repairStep?.id ?? null;
+            }
+
+            await db.insert(p2SerializedItemEvents).values({
+              serializedItemId: item.id,
+              barcode: item.barcode,
+              eventType: 'NCR_DISPOSITION_REPAIR',
+              fromDepartment: item.currentDepartment,
+              fromStageIndex: item.currentStageIndex,
+              toDepartment: 'Repair',
+              toStageIndex: item.currentStageIndex,
+              performedBy: data.authorization,
+              notes: `Repair disposition opened as ${rmaNumber}`,
+              metadata: {
+                dispositionId: disposition.id,
+                rmaId: rma.id,
+                rmaNumber,
+                travelerId: activeTraveler?.id ?? null,
+                travelerNumber: activeTraveler?.travelerNumber ?? null,
+                repairStepId,
+                reasonType: data.reasonType,
+                reasonOther: data.reasonOther,
+              },
             });
+          }
         } catch (e) {
           console.error('Failed to create RMA for disposition:', e);
         }
@@ -717,8 +956,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   app.patch('/api/p2/rmas/:id', async (req, res) => {
     try {
       const { db } = await import('../../db');
-      const { p2Rmas } = await import('../../schema');
-      const { eq } = await import('drizzle-orm');
+      const { p2Rmas, p2SerializedItems, p2SerializedItemEvents, inventoryTransactions, travelers, travelerSteps } = await import('../../schema');
+      const { and, eq, sql } = await import('drizzle-orm');
       const { traceableMaterials, status, notes } = req.body;
 
       const updateData: any = { updatedAt: new Date() };
@@ -734,12 +973,130 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         updateData.status = status;
       }
 
+      const [existingRma] = await db
+        .select()
+        .from(p2Rmas)
+        .where(eq(p2Rmas.id, parseInt(req.params.id)))
+        .limit(1);
+      if (!existingRma) return res.status(404).json({ error: 'RMA not found' });
+
       const [updated] = await db
         .update(p2Rmas)
         .set(updateData)
         .where(eq(p2Rmas.id, parseInt(req.params.id)))
         .returning();
       if (!updated) return res.status(404).json({ error: 'RMA not found' });
+
+      if (traceableMaterials !== undefined) {
+        const [item] = await db
+          .select()
+          .from(p2SerializedItems)
+          .where(eq(p2SerializedItems.id, updated.serializedItemId))
+          .limit(1);
+
+        if (item) {
+          const [activeTraveler] = item.serialNumber
+            ? await db
+                .select()
+                .from(travelers)
+                .where(eq(travelers.serialNumber, item.serialNumber))
+                .orderBy(sql`${travelers.updatedAt} DESC NULLS LAST`, sql`${travelers.createdAt} DESC NULLS LAST`)
+                .limit(1)
+            : [];
+          const [repairStep] = activeTraveler
+            ? await db
+                .select()
+                .from(travelerSteps)
+                .where(and(eq(travelerSteps.travelerId, activeTraveler.id), eq(travelerSteps.departmentName, 'Repair')))
+                .orderBy(sql`${travelerSteps.stepNumber} DESC`)
+                .limit(1)
+            : [];
+          const materialSummary = (traceableMaterials as Array<{ name?: string; partNumber?: string; lot?: string; qty?: string }>)
+            .map((material) => {
+              const label = [material.partNumber, material.name].filter(Boolean).join(' - ');
+              return [label, material.lot ? `lot ${material.lot}` : null, material.qty ? `qty ${material.qty}` : null]
+                .filter(Boolean)
+                .join(', ');
+            })
+            .filter(Boolean)
+            .join('; ');
+
+          if (repairStep && materialSummary) {
+            const existingNotes = String(repairStep.notes || '')
+              .split('\n')
+              .filter((line) => !line.startsWith('Repair materials:'))
+              .join('\n')
+              .trim();
+            await db.update(travelerSteps)
+              .set({
+                notes: [existingNotes, `Repair materials: ${materialSummary}`].filter(Boolean).join('\n'),
+              })
+              .where(eq(travelerSteps.id, repairStep.id));
+          }
+
+          await db.insert(p2SerializedItemEvents).values({
+            serializedItemId: item.id,
+            barcode: item.barcode,
+            eventType: 'NCR_REPAIR_MATERIAL_USED',
+            toDepartment: 'Repair',
+            toStageIndex: item.currentStageIndex,
+            performedBy: 'Repair',
+            notes: `Repair material traceability updated for RMA ${updated.rmaNumber}`,
+            metadata: {
+              rmaId: updated.id,
+              rmaNumber: updated.rmaNumber,
+              traceableMaterials,
+            },
+          });
+
+          const previousMaterials = Array.isArray(existingRma.traceableMaterials)
+            ? existingRma.traceableMaterials as Array<{ name?: string; partNumber?: string; lot?: string; qty?: string }>
+            : [];
+          const previousKeys = new Set(previousMaterials.map((material) =>
+            [
+              String(material.partNumber || '').trim(),
+              String(material.name || '').trim(),
+              String(material.lot || '').trim(),
+              String(material.qty || '').trim(),
+            ].join('|')
+          ));
+
+          for (const material of traceableMaterials as Array<{ name?: string; partNumber?: string; lot?: string; qty?: string }>) {
+            const partNumber = String(material.partNumber || '').trim();
+            if (!partNumber) continue;
+            const materialKey = [
+              partNumber,
+              String(material.name || '').trim(),
+              String(material.lot || '').trim(),
+              String(material.qty || '').trim(),
+            ].join('|');
+            if (previousKeys.has(materialKey)) continue;
+            const quantity = Number(material.qty || 0);
+            await db.insert(inventoryTransactions).values({
+              agPartNumber: partNumber,
+              transactionType: 'issue',
+              quantity: Number.isFinite(quantity) && quantity > 0 ? -quantity : 0,
+              unitOfMeasure: 'EA',
+              fromLocation: 'Inventory',
+              toLocation: 'P2 Repair',
+              referenceType: 'P2_NCR_REPAIR',
+              referenceId: String(updated.id),
+              notes: `Repair material used for ${item.serialNumber}: ${material.name || partNumber}`,
+              performedBy: 'Repair',
+              metadata: {
+                rmaId: updated.id,
+                rmaNumber: updated.rmaNumber,
+                serializedItemId: item.id,
+                serialNumber: item.serialNumber,
+                materialName: material.name || null,
+                materialPartNumber: partNumber,
+                lot: material.lot || null,
+                qty: material.qty || null,
+              },
+            });
+          }
+        }
+      }
 
       // When RMA is marked complete, resolve the linked disposition
       if (status === 'complete' && updated.dispositionId) {
@@ -1008,6 +1365,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // Nonconformance tracking routes
   app.use('/api/nonconformance', nonconformanceRoutes);
+  app.use('/api/non-conforming-items', nonConformingItemsRoutes);
 
   // Payment processing routes
   app.use('/api/payments', paymentsRoutes);
@@ -2929,36 +3287,57 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   async function applyTravelerStateToP2Items(items: any[]): Promise<any[]> {
     if (!items.length) return items;
 
+    const getSerializedKeys = (item: any) => [
+      item.serialNumber,
+      item.serial_number,
+      item.barcode,
+      item.travelerBarcode,
+      item.traveler_barcode,
+    ]
+      .map((value) => String(value ?? '').trim().toLowerCase())
+      .filter(Boolean);
+
     const serials = [...new Set(
-      items
-        .map((item: any) => String(item.serialNumber ?? item.serial_number ?? '').trim())
-        .filter(Boolean)
-        .map((serial: string) => serial.toLowerCase())
+      items.flatMap(getSerializedKeys)
     )];
     if (!serials.length) return items;
 
     const { pool: dbPool } = await import('../../db');
     const travelerStateRows = await dbPool.query(
-      `SELECT DISTINCT ON (LOWER(TRIM(t.serial_number)))
-         LOWER(TRIM(t.serial_number)) AS serial,
+      `WITH traveler_keys AS (
+         SELECT
+           LOWER(TRIM(key_value)) AS serial,
+           t.status,
+           t.traveler_number,
+           t.updated_at,
+           active_step.department_name,
+           active_step.started_at
+         FROM travelers t
+         LEFT JOIN LATERAL (
+           SELECT ts.department_name, ts.started_at
+           FROM traveler_steps ts
+           WHERE ts.traveler_id = t.id
+             AND UPPER(ts.status) IN ('IN_PROGRESS', 'ACTIVE', 'STARTED')
+           ORDER BY ts.step_number ASC
+           LIMIT 1
+         ) active_step ON true
+         CROSS JOIN LATERAL (
+           VALUES (t.serial_number), (t.lot_number)
+         ) AS key_values(key_value)
+         WHERE key_value IS NOT NULL
+           AND TRIM(key_value) <> ''
+           AND LOWER(TRIM(key_value)) = ANY($1::text[])
+           AND UPPER(t.status) IN ('IN_PROGRESS', 'COMPLETED')
+       )
+       SELECT DISTINCT ON (serial)
+         serial,
          t.status,
          t.traveler_number AS "travelerNumber",
          t.updated_at AS "updatedAt",
-         active_step.department_name AS "activeDepartment",
-         active_step.started_at AS "startedAt"
-       FROM travelers t
-       LEFT JOIN LATERAL (
-         SELECT ts.department_name, ts.started_at
-         FROM traveler_steps ts
-         WHERE ts.traveler_id = t.id
-           AND UPPER(ts.status) IN ('IN_PROGRESS', 'ACTIVE', 'STARTED')
-         ORDER BY ts.step_number ASC
-         LIMIT 1
-       ) active_step ON true
-       WHERE t.serial_number IS NOT NULL
-         AND LOWER(TRIM(t.serial_number)) = ANY($1::text[])
-         AND UPPER(t.status) IN ('IN_PROGRESS', 'COMPLETED')
-       ORDER BY LOWER(TRIM(t.serial_number)),
+         t.department_name AS "activeDepartment",
+         t.started_at AS "startedAt"
+       FROM traveler_keys t
+       ORDER BY serial,
          CASE WHEN UPPER(t.status) = 'IN_PROGRESS' THEN 0 ELSE 1 END,
          t.updated_at DESC NULLS LAST`,
       [serials]
@@ -2969,8 +3348,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     );
 
     return items.map((item: any) => {
-      const key = String(item.serialNumber ?? item.serial_number ?? '').trim().toLowerCase();
-      const travelerState = key ? travelerBySerial.get(key) : null;
+      const travelerState = getSerializedKeys(item)
+        .map((key) => travelerBySerial.get(key))
+        .find(Boolean);
       if (!travelerState) return item;
 
       const travelerStatus = String(travelerState.status || '').toUpperCase();
@@ -3776,7 +4156,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         }
       };
       
-      // Keep P2 Control Center as the visible source for WIP and finished units.
+      // Keep this tab focused on active WIP; completed/off-system units roll up
+      // through PO status instead of remaining in the production queue.
       let allItems: any[] = [];
       try {
         allItems = await applyTravelerStateToP2Items(
@@ -3785,7 +4166,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       } catch (error) {
         console.warn('P2 Production Queue optional serialized item lookup skipped:', error);
       }
-      const visibleStatuses = new Set(['ACTIVE', 'COMPLETED']);
+      const visibleStatuses = new Set(['ACTIVE']);
       const items = (allItems || []).filter((item: any) => visibleStatuses.has(item.status));
       const legacyProductionRows: any[] = [];
       const legacyProjectProductionRows = await optionalP2Rows(
@@ -4002,7 +4383,15 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       );
       const legacyProductionControlRows = p2ControlRows(legacyProductionRows).filter((row: any) => {
         const key = row.poId && row.poItemId ? `${row.poId}:${row.poItemId}` : null;
-        return !key || !serializedPoItemKeys.has(key);
+        const normalizedStatus = String(row.status || '').toUpperCase();
+        const quantity = Math.max(1, Number(row.quantity || 1));
+        const manufactured = Number(row.quantityManufactured || 0);
+        const isComplete = ['COMPLETED', 'CLOSED'].includes(normalizedStatus) || manufactured >= quantity;
+        return (!key || !serializedPoItemKeys.has(key)) && !isComplete;
+      });
+      const activeLegacyProjectProductionRows = legacyProjectProductionRows.filter((row: any) => {
+        const normalizedStatus = String(row.status || '').toUpperCase();
+        return !['COMPLETE', 'COMPLETED', 'CLOSED'].includes(normalizedStatus);
       });
 
       const itemIds = items.map((item: any) => item.id).filter(Boolean);
@@ -4048,7 +4437,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           : (normalizeP2ControlDepartment(row.department) || 'Pending Layup');
         departmentsSet.add(displayDepartment);
       });
-      legacyProjectProductionRows.forEach((row: any) => {
+      activeLegacyProjectProductionRows.forEach((row: any) => {
         const displayDepartment = ['COMPLETE', 'COMPLETED', 'CLOSED'].includes(String(row.status || '').toUpperCase())
           ? 'Completed'
           : (normalizeP2ControlDepartment(row.activeDepartment || row.currentTravelerStep || row.assignedDepartment || row.queueType || row.dashboardType) || 'Pending Layup');
@@ -4068,6 +4457,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         'CNC',
         'Finish',
         'Paint',
+        'Repair',
         'Final QC',
         'Shipping',
         'Completed'
@@ -4201,7 +4591,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         });
       });
 
-      legacyProjectProductionRows.forEach((row: any) => {
+      activeLegacyProjectProductionRows.forEach((row: any) => {
         const normalizedStatus = String(row.status || '').toUpperCase();
         const dept = ['COMPLETE', 'COMPLETED', 'CLOSED'].includes(normalizedStatus)
           ? 'Completed'
@@ -4349,6 +4739,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         performedBy: z.string().optional().default('System'),
         notes: z.string().optional().default(''),
         linkedTravelerId: z.string().optional(),
+        rmaRequired: z.boolean().optional().default(false),
       });
       
       const validationResult = updateStatusSchema.safeParse(req.body);
@@ -4359,11 +4750,11 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         });
       }
       
-      const { status, reason, performedBy, notes, linkedTravelerId } = validationResult.data;
+      const { status, reason, performedBy, notes, linkedTravelerId, rmaRequired } = validationResult.data;
       
       const { db } = await import('../../db');
       const { p2SerializedItems, p2SerializedItemEvents, travelers, auditEvents } = await import('../../schema');
-      const { eq, desc } = await import('drizzle-orm');
+      const { eq, desc, sql } = await import('drizzle-orm');
 
       
       const [item] = await db.select().from(p2SerializedItems).where(eq(p2SerializedItems.id, itemId)).limit(1);
@@ -4407,12 +4798,13 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         updateFields.holdAt = null;
       }
 
-      // SCRAPPED transitions are atomic: the status update, scrap/cycle events,
-      // and the parent PO line qty bump (which generates the new replacement
-      // unit via the qty-sync flow) all commit or roll back together. Any
-      // failure in the qty bump rolls back the scrap state so the system
-      // never ends up with a SCRAPPED item that has no replacement, or vice
-      // versa.
+      // SCRAPPED transitions are atomic. In this P2 flow, SCRAPPED means the
+      // original serial has left active production and entered open NCR.
+      // Final trash/scrap is recorded later by the disposition workflow.
+      // If an RMA is required, the status
+      // update, trace events, and parent PO line qty bump all commit or roll
+      // back together. If not, the item simply becomes P2 nonconforming and
+      // waits for disposition in the P2 Control Center tab.
       const isFirstScrapTransition = status === 'SCRAPPED' && item.status !== 'SCRAPPED';
       if (isFirstScrapTransition) {
         const { storage } = await import('../../storage');
@@ -4441,7 +4833,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
               eventType: 'SCRAP',
               performedBy: performedBy || 'System',
               notes: [reason, notes].filter(Boolean).join(' — ') || `Status changed to ${status}`,
-              metadata: { previousStatus: item.status, newStatus: status, linkedTravelerId: linkedTravelerId || null },
+              metadata: { previousStatus: item.status, newStatus: status, linkedTravelerId: linkedTravelerId || null, rmaRequired },
             });
 
             await tx.insert(p2SerializedItemEvents).values({
@@ -4452,6 +4844,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
               notes: `Production cycle scrapped — ${reason}`,
               metadata: {
                 reason,
+                rmaRequired,
                 travelerId: activeTraveler?.id ?? null,
                 travelerNumber: activeTraveler?.travelerNumber ?? null,
                 serialNumber: item.serialNumber,
@@ -4471,83 +4864,107 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
                   serialNumber: item.serialNumber,
                   serializedItemId: itemId,
                   barcode: item.barcode,
+                  rmaRequired,
                 },
               });
             }
 
-            // Use a relative qty bump (+1) so locking happens entirely
-            // inside updateP2PoItemWithQtySync (PO row first, then PO item
-            // row). Pre-locking the PO item here would invert that order
-            // and risk a deadlock against concurrent normal PO qty edits.
-            const reqUser = (req as Express.Request & {
-              user?: { username?: string; email?: string; role?: string };
-            }).user;
-            const actor = {
-              username: reqUser?.username || reqUser?.email || performedBy || 'system',
-              role: reqUser?.role || 'SYSTEM',
-              ipAddress: req.ip,
-              userAgent: req.get('user-agent') || null,
-            };
-            const syncResult = await storage.updateP2PoItemWithQtySync(
-              item.poId,
-              item.poItemId,
-              { quantityDelta: 1 },
-              actor,
-              tx,
-            );
-            if (syncResult.sync?.direction === 'increase' && syncResult.sync.serializedItemsAdded > 0) {
-              const [createdReplacement] = await tx
-                .select()
-                .from(p2SerializedItems)
-                .where(and(
-                  eq(p2SerializedItems.poItemId, item.poItemId),
-                  eq(p2SerializedItems.status, 'ACTIVE'),
-                  ne(p2SerializedItems.id, itemId),
-                ))
-                .orderBy(desc(p2SerializedItems.sequenceNumber), desc(p2SerializedItems.createdAt))
-                .limit(1);
+            if (rmaRequired) {
+              // Use a relative qty bump (+1) so locking happens entirely
+              // inside updateP2PoItemWithQtySync (PO row first, then PO item
+              // row). Pre-locking the PO item here would invert that order
+              // and risk a deadlock against concurrent normal PO qty edits.
+              const reqUser = (req as Express.Request & {
+                user?: { username?: string; email?: string; role?: string };
+              }).user;
+              const actor = {
+                username: reqUser?.username || reqUser?.email || performedBy || 'system',
+                role: reqUser?.role || 'SYSTEM',
+                ipAddress: req.ip,
+                userAgent: req.get('user-agent') || null,
+              };
+              const syncResult = await storage.updateP2PoItemWithQtySync(
+                item.poId,
+                item.poItemId,
+                { quantityDelta: 1 },
+                actor,
+                tx,
+              );
+              if (syncResult.sync?.direction === 'increase' && syncResult.sync.serializedItemsAdded > 0) {
+                const [createdReplacement] = await tx
+                  .select()
+                  .from(p2SerializedItems)
+                  .where(and(
+                    eq(p2SerializedItems.poItemId, item.poItemId),
+                    eq(p2SerializedItems.status, 'ACTIVE'),
+                    ne(p2SerializedItems.id, itemId),
+                  ))
+                  .orderBy(desc(p2SerializedItems.sequenceNumber), desc(p2SerializedItems.createdAt))
+                  .limit(1);
 
-              if (createdReplacement) {
-                const replacementMetadata = {
-                  ...((createdReplacement.metadata as Record<string, unknown> | null) || {}),
-                  isReplacement: true,
-                  replacementForSerializedItemId: item.id,
-                  replacementForSerialNumber: item.serialNumber,
-                  replacementForBarcode: item.barcode,
-                  replacementReason: reason,
-                  generatedFromScrapAt: new Date().toISOString(),
-                };
+                if (createdReplacement) {
+                  const rootSerial = String(item.serialNumber || item.barcode).replace(/-rma-\d+$/i, '');
+                  const rmaPrefix = `${rootSerial}-rma-`;
+                  const rmaRowsResult = await tx.execute(sql`
+                    SELECT serial_number AS "serialNumber"
+                    FROM ${p2SerializedItems}
+                    WHERE lower(serial_number) LIKE ${`${rmaPrefix.toLowerCase()}%`}
+                  `);
+                  const rmaRows = (Array.isArray(rmaRowsResult) ? rmaRowsResult : (rmaRowsResult.rows ?? [])) as Array<{ serialNumber: string }>;
+                  const maxRmaSequence = rmaRows.reduce((maxSeq, row) => {
+                    const suffix = String(row.serialNumber || '').slice(rmaPrefix.length);
+                    const parsed = /^\d+$/.test(suffix) ? Number(suffix) : 0;
+                    return Math.max(maxSeq, parsed);
+                  }, 0);
+                  const rmaSerialNumber = `${rmaPrefix}${String(maxRmaSequence + 1).padStart(2, '0')}`;
+                  const replacementMetadata = {
+                    ...((createdReplacement.metadata as Record<string, unknown> | null) || {}),
+                    isReplacement: true,
+                    replacementForSerializedItemId: item.id,
+                    replacementForSerialNumber: item.serialNumber,
+                    replacementForBarcode: item.barcode,
+                    replacementReason: reason,
+                    rmaRequired: true,
+                    rmaReplacementSerialNumber: rmaSerialNumber,
+                    generatedFromScrapAt: new Date().toISOString(),
+                  };
 
-                const [updatedReplacement] = await tx
-                  .update(p2SerializedItems)
-                  .set({
-                    metadata: replacementMetadata,
-                    notes: [
-                      createdReplacement.notes,
-                      `Replacement generated for scrapped serial ${item.serialNumber}`,
-                    ].filter(Boolean).join('\n'),
-                    updatedAt: new Date(),
-                  })
-                  .where(eq(p2SerializedItems.id, createdReplacement.id))
-                  .returning();
+                  const [updatedReplacement] = await tx
+                    .update(p2SerializedItems)
+                    .set({
+                      serialNumber: rmaSerialNumber,
+                      barcode: rmaSerialNumber,
+                      travelerBarcode: rmaSerialNumber,
+                      metadata: replacementMetadata,
+                      notes: [
+                        createdReplacement.notes,
+                        `RMA replacement generated for scrapped serial ${item.serialNumber}`,
+                      ].filter(Boolean).join('\n'),
+                      updatedAt: new Date(),
+                    })
+                    .where(eq(p2SerializedItems.id, createdReplacement.id))
+                    .returning();
 
-                replacementItem = updatedReplacement ?? createdReplacement;
+                  replacementItem = updatedReplacement ?? createdReplacement;
 
-                await tx.insert(p2SerializedItemEvents).values({
-                  serializedItemId: createdReplacement.id,
-                  barcode: createdReplacement.barcode,
-                  eventType: 'REPLACEMENT_GENERATED',
-                  toDepartment: createdReplacement.currentDepartment,
-                  toStageIndex: createdReplacement.currentStageIndex,
-                  performedBy: performedBy || 'System',
-                  notes: `Replacement generated for scrapped serial ${item.serialNumber}`,
-                  metadata: {
-                    scrappedSerializedItemId: item.id,
-                    scrappedSerialNumber: item.serialNumber,
-                    scrappedBarcode: item.barcode,
-                    scrapReason: reason,
-                  },
-                });
+                  await tx.insert(p2SerializedItemEvents).values({
+                    serializedItemId: createdReplacement.id,
+                    barcode: rmaSerialNumber,
+                    eventType: 'REPLACEMENT_GENERATED',
+                    toDepartment: createdReplacement.currentDepartment,
+                    toStageIndex: createdReplacement.currentStageIndex,
+                    performedBy: performedBy || 'System',
+                    notes: `RMA replacement ${rmaSerialNumber} generated for scrapped serial ${item.serialNumber}`,
+                    metadata: {
+                      scrappedSerializedItemId: item.id,
+                      scrappedSerialNumber: item.serialNumber,
+                      scrappedBarcode: item.barcode,
+                      replacementSerialNumber: rmaSerialNumber,
+                      rmaRequired: true,
+                      scrapReason: reason,
+                    },
+                  });
+                }
               }
             }
           });
@@ -4572,10 +4989,11 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         return res.json({
           success: true,
           message: replacementItem
-            ? `Item scrapped and replacement ${replacementItem.serialNumber} generated for scheduling`
+            ? `NCR opened and RMA replacement ${replacementItem.serialNumber} generated for scheduling`
             : `Item status updated to ${status}`,
           travelerCreated: false,
           linkedTravelerFound: false,
+          rmaRequired,
           replacementCreated: !!replacementItem,
           replacementItem,
         });

@@ -15,6 +15,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
   Accordion,
   AccordionContent,
@@ -169,6 +171,7 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
   const [selectedItem, setSelectedItem] = useState<QueueItem | null>(null);
   const [holdReason, setHoldReason] = useState('');
   const [scrapReason, setScrapReason] = useState('');
+  const [scrapRequiresRma, setScrapRequiresRma] = useState<boolean | null>(null);
   const [offSystemNotes, setOffSystemNotes] = useState('');
   const [offSystemLinkedTraveler, setOffSystemLinkedTraveler] = useState('');
   const [expandedDepartments, setExpandedDepartments] = useState<string[]>([]);
@@ -233,19 +236,21 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
   });
 
   const updateStatusMutation = useMutation({
-    mutationFn: async ({ itemId, status, reason, notes, linkedTravelerId }: { itemId: string; status: string; reason: string; notes?: string; linkedTravelerId?: string }) => {
+    mutationFn: async ({ itemId, status, reason, notes, linkedTravelerId, rmaRequired }: { itemId: string; status: string; reason: string; notes?: string; linkedTravelerId?: string; rmaRequired?: boolean }) => {
       return apiRequest(`/api/p2/control-center/item-status/${itemId}`, {
         method: 'PATCH',
-        body: JSON.stringify({ status, reason, notes, linkedTravelerId, performedBy: 'Supervisor' }),
+        body: JSON.stringify({ status, reason, notes, linkedTravelerId, rmaRequired, performedBy: 'Supervisor' }),
       });
     },
     onSuccess: (data: any, variables) => {
       const desc = variables.status === 'COMPLETED'
         ? 'Item marked as completed (off-system production) and added to traveler management'
         : variables.status === 'SCRAPPED'
-          ? data?.replacementItem?.serialNumber
-            ? `Item marked NCR/scrapped. Replacement ${data.replacementItem.serialNumber} was added for scheduling.`
-            : 'Item marked NCR/scrapped. A new unit was added to the PO and will appear in scheduling.'
+          ? variables.rmaRequired
+            ? data?.replacementItem?.serialNumber
+              ? `NCR opened. Replacement ${data.replacementItem.serialNumber} was added for scheduling, and the original item moved to open nonconforming.`
+              : 'NCR opened. The original item moved to open nonconforming for disposition.'
+            : 'NCR opened. The item moved out of production and into open nonconforming for disposition.'
           : `Item status changed to ${variables.status}`;
       toast({
         title: 'Status Updated',
@@ -262,6 +267,7 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
       setSelectedItem(null);
       setHoldReason('');
       setScrapReason('');
+      setScrapRequiresRma(null);
       setOffSystemNotes('');
       setOffSystemLinkedTraveler('');
     },
@@ -369,6 +375,7 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
 
   const openScrapDialog = (item: QueueItem) => {
     setSelectedItem(item);
+    setScrapRequiresRma(null);
     setShowScrapDialog(true);
   };
 
@@ -400,11 +407,12 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
   };
 
   const confirmScrap = () => {
-    if (selectedItem && scrapReason.trim()) {
+    if (selectedItem && scrapReason.trim() && scrapRequiresRma !== null) {
       updateStatusMutation.mutate({
         itemId: selectedItem.id,
         status: 'SCRAPPED',
         reason: scrapReason,
+        rmaRequired: scrapRequiresRma,
       });
     }
   };
@@ -417,6 +425,7 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
       'CNC': 'bg-orange-50 dark:bg-orange-950 border-orange-300',
       'Finish': 'bg-amber-50 dark:bg-amber-950 border-amber-300',
       'Paint': 'bg-green-50 dark:bg-green-950 border-green-300',
+      'Repair': 'bg-rose-50 dark:bg-rose-950 border-rose-300',
       'Final QC': 'bg-emerald-50 dark:bg-emerald-950 border-emerald-300',
       'Shipping': 'bg-cyan-50 dark:bg-cyan-950 border-cyan-300',
     };
@@ -1370,7 +1379,7 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
               Mark Item NCR / Scrap
             </DialogTitle>
             <DialogDescription>
-              This removes the NCR item from active production and creates a linked replacement item in the P2 queue.
+              This removes the original item from active production and sends it to open nonconforming for disposition.
             </DialogDescription>
           </DialogHeader>
           
@@ -1379,7 +1388,7 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
               <div className="bg-red-50 dark:bg-red-950 p-3 rounded-lg border border-red-200">
                 <div className="flex items-center gap-2 text-red-700 dark:text-red-400">
                   <AlertTriangle className="h-4 w-4" />
-                  <span className="font-medium">NCR replacement required</span>
+                  <span className="font-medium">P2 NCR disposition required</span>
                 </div>
                 <div className="mt-2">
                   <div className="font-medium">{selectedItem.barcode}</div>
@@ -1387,6 +1396,34 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                     {selectedItem.partNumber} - {selectedItem.partName}
                   </div>
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Is an RMA required? *</Label>
+                <RadioGroup
+                  value={scrapRequiresRma === null ? '' : scrapRequiresRma ? 'yes' : 'no'}
+                  onValueChange={(value) => setScrapRequiresRma(value === 'yes')}
+                  className="grid gap-2"
+                >
+                  <Label className="flex cursor-pointer items-start gap-3 rounded-md border p-3">
+                    <RadioGroupItem value="yes" className="mt-0.5" />
+                    <span>
+                      <span className="block font-medium">Yes, create RMA replacement</span>
+                      <span className="block text-xs text-muted-foreground">
+                        Add a schedulable replacement and keep the original item in open nonconforming.
+                      </span>
+                    </span>
+                  </Label>
+                  <Label className="flex cursor-pointer items-start gap-3 rounded-md border p-3">
+                    <RadioGroupItem value="no" className="mt-0.5" />
+                    <span>
+                      <span className="block font-medium">No, disposition only</span>
+                      <span className="block text-xs text-muted-foreground">
+                        Move this item out of production so Quality can file the disposition.
+                      </span>
+                    </span>
+                  </Label>
+                </RadioGroup>
               </div>
               
               <div>
@@ -1408,7 +1445,7 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
             </Button>
             <Button 
               onClick={confirmScrap}
-              disabled={!scrapReason.trim() || updateStatusMutation.isPending}
+              disabled={!scrapReason.trim() || scrapRequiresRma === null || updateStatusMutation.isPending}
               variant="destructive"
               data-testid="button-confirm-scrap"
             >
@@ -1417,7 +1454,7 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
               ) : (
                 <XCircle className="h-4 w-4 mr-2" />
               )}
-              Mark NCR & Create Replacement
+              {scrapRequiresRma ? 'Open NCR & Create Replacement' : 'Open NCR for Disposition'}
             </Button>
           </DialogFooter>
         </DialogContent>

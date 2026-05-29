@@ -328,8 +328,14 @@ function StepSection({ step, defaultExpanded = false }: { step: TravelerStep; de
           )}
 
           {step.notes && (
-            <div className="bg-muted/30 rounded-lg p-3 text-sm">
-              <strong>Notes:</strong> {step.notes}
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 shadow-sm">
+              <div className="flex items-start gap-2">
+                <FileText className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-700" />
+                <div>
+                  <div className="font-semibold text-amber-900">Process Notes</div>
+                  <p className="mt-1 whitespace-pre-wrap leading-relaxed">{step.notes}</p>
+                </div>
+              </div>
             </div>
           )}
 
@@ -369,7 +375,12 @@ function StepSection({ step, defaultExpanded = false }: { step: TravelerStep; de
                       <div className="text-xs text-muted-foreground">
                         {sig.meaning} · {format(new Date(sig.signedAt), 'MMM d, yyyy h:mm a')}
                       </div>
-                      {sig.notes && <div className="text-xs text-muted-foreground">{sig.notes}</div>}
+                      {sig.notes && (
+                        <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-950">
+                          <span className="font-semibold text-amber-900">Notes: </span>
+                          <span className="whitespace-pre-wrap">{sig.notes}</span>
+                        </div>
+                      )}
                     </div>
                     {sig.signatureData && (
                       <div className="bg-white dark:bg-gray-800 border rounded p-1">

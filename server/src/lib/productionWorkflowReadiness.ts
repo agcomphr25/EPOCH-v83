@@ -176,6 +176,36 @@ export async function ensureProductionWorkflowReadSchema(): Promise<void> {
             WHERE quantity_used IS NULL AND qty_used IS NOT NULL;
           END IF;
 
+          IF to_regclass('public.received_units') IS NOT NULL THEN
+            ALTER TABLE public.received_units
+              ADD COLUMN IF NOT EXISTS target_project_id uuid,
+              ADD COLUMN IF NOT EXISTS material_lot_id uuid,
+              ADD COLUMN IF NOT EXISTS lot_number text,
+              ADD COLUMN IF NOT EXISTS internal_control_number text,
+              ADD COLUMN IF NOT EXISTS barcode text;
+          END IF;
+
+          IF to_regclass('public.project_received_materials') IS NOT NULL THEN
+            ALTER TABLE public.project_received_materials
+              ADD COLUMN IF NOT EXISTS project_id uuid,
+              ADD COLUMN IF NOT EXISTS received_unit_id integer,
+              ADD COLUMN IF NOT EXISTS receipt_id integer,
+              ADD COLUMN IF NOT EXISTS material_lot_id uuid,
+              ADD COLUMN IF NOT EXISTS quantity numeric NOT NULL DEFAULT 0,
+              ADD COLUMN IF NOT EXISTS unit_cost numeric NOT NULL DEFAULT 0,
+              ADD COLUMN IF NOT EXISTS extended_cost numeric NOT NULL DEFAULT 0,
+              ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'pending_pm_acceptance',
+              ADD COLUMN IF NOT EXISTS accepted_by_user_id integer,
+              ADD COLUMN IF NOT EXISTS accepted_by_display_name text,
+              ADD COLUMN IF NOT EXISTS accepted_at timestamp,
+              ADD COLUMN IF NOT EXISTS rejected_by_user_id integer,
+              ADD COLUMN IF NOT EXISTS rejected_by_display_name text,
+              ADD COLUMN IF NOT EXISTS rejected_at timestamp,
+              ADD COLUMN IF NOT EXISTS notes text,
+              ADD COLUMN IF NOT EXISTS created_at timestamp DEFAULT now(),
+              ADD COLUMN IF NOT EXISTS updated_at timestamp DEFAULT now();
+          END IF;
+
           IF to_regclass('public.routing_operations') IS NOT NULL THEN
             ALTER TABLE public.routing_operations
               ADD COLUMN IF NOT EXISTS required_calibration_asset_tags text[] NOT NULL DEFAULT ARRAY[]::text[];

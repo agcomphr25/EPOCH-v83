@@ -193,17 +193,27 @@ interface TravelerWithDetails {
   events: TravelerEvent[];
 }
 
-const addGeneratedTraceFieldAliases = (values: Record<string, string>) => ({
-  ...values,
-  trace_internalcontrolnumber: values.internalControlNumber || values.material_internal_control_number || values.material_icn || '',
-  trace_supplier: values.supplier || '',
-  trace_inventorypartnumber: values.inventoryPartNumber || values.material_part_number || '',
-  trace_batchlotnumber: values.batchLotNumber || values.material_batch_number || values.material_lot || '',
-  trace_manufacturer: values.manufacturer || values.material_brand || '',
-  trace_rollnumber: values.rollNumber || '',
-  trace_expirationdate: values.expirationDate || values.material_expiration_date || '',
-  trace_receiveddate: values.receivedDate || '',
-});
+const firstTraceValue = (...values: Array<string | undefined | null>) =>
+  values.map((value) => String(value ?? '').trim()).find(Boolean) || '';
+
+const addGeneratedTraceFieldAliases = (values: Record<string, string>) => {
+  const supplier = firstTraceValue(values.supplier, values.material_supplier);
+  const manufacturer = firstTraceValue(values.manufacturer, values.material_brand, supplier);
+
+  return {
+    ...values,
+    manufacturer,
+    material_brand: firstTraceValue(values.material_brand, manufacturer),
+    trace_internalcontrolnumber: firstTraceValue(values.internalControlNumber, values.material_internal_control_number, values.material_icn),
+    trace_supplier: supplier,
+    trace_inventorypartnumber: firstTraceValue(values.inventoryPartNumber, values.material_part_number),
+    trace_batchlotnumber: firstTraceValue(values.batchLotNumber, values.material_batch_number, values.material_lot),
+    trace_manufacturer: manufacturer,
+    trace_rollnumber: firstTraceValue(values.rollNumber),
+    trace_expirationdate: firstTraceValue(values.expirationDate, values.material_expiration_date),
+    trace_receiveddate: firstTraceValue(values.receivedDate),
+  };
+};
 
 const STEP_STATUS_COLORS: Record<string, string> = {
   NOT_STARTED: 'bg-gray-100 text-gray-800 border-gray-300',
@@ -1301,8 +1311,88 @@ export default function TravelerExecution() {
     });
   };
 
+  const collectCurrentTaskFieldValues = (task: TravelerTask) => {
+    const merged: Record<string, string> = { ...(fieldValues[task.id] || {}) };
+
+    for (const field of task.fields) {
+      const fieldInput = document.getElementById(`field-${task.id}-${field.fieldKey}`) as HTMLInputElement | null;
+      const textareaInput = document.getElementById(`ta-${task.id}-${field.fieldKey}`) as HTMLTextAreaElement | null;
+      const inventoryInput = document.getElementById(`inv-${task.id}-${field.fieldKey}`) as HTMLInputElement | null;
+      const qcResultInput = document.getElementById(`qc-result-${task.id}-${field.fieldKey}`) as HTMLInputElement | null;
+      const checkboxInput = document.getElementById(field.id) as HTMLInputElement | null;
+
+      const currentValue =
+        fieldInput?.value ??
+        textareaInput?.value ??
+        inventoryInput?.value;
+
+      if (currentValue !== undefined) {
+        merged[field.fieldKey] = currentValue;
+      }
+
+      if (qcResultInput?.value !== undefined) {
+        merged[`${field.fieldKey}_result`] = qcResultInput.value;
+      }
+
+      if (checkboxInput?.type === 'checkbox') {
+        merged[field.fieldKey] = checkboxInput.checked ? 'yes' : 'no';
+      }
+    }
+
+    return merged;
+  };
+
+  const appendTraceValue = (existing: string | undefined, incoming: string | undefined) => {
+    const nextValue = String(incoming ?? '').trim();
+    if (!nextValue) return existing || '';
+    const values = String(existing ?? '')
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean);
+    if (!values.includes(nextValue)) values.push(nextValue);
+    return values.join(', ');
+  };
+
+  const handleTraceMaterialCaptured = (
+    task: TravelerTask,
+    traceFieldVals: Record<string, string>,
+    traceFieldValidations?: Record<string, any>
+  ) => {
+    setFieldValues((prev) => {
+      const current = prev[task.id] || {};
+      const merged = { ...current };
+      for (const [key, value] of Object.entries(traceFieldVals)) {
+        merged[key] = appendTraceValue(current[key], value);
+      }
+      return { ...prev, [task.id]: merged };
+    });
+
+    if (traceFieldValidations && Object.keys(traceFieldValidations).length > 0) {
+      setPickerValidations((prev) => ({
+        ...prev,
+        [task.id]: {
+          ...(prev[task.id] || {}),
+          ...traceFieldValidations,
+        },
+      }));
+    }
+
+    const captured =
+      traceFieldVals.material_internal_control_number ||
+      traceFieldVals.internalControlNumber ||
+      traceFieldVals.material_icn ||
+      traceFieldVals.packetBarcode ||
+      traceFieldVals.packet_barcode ||
+      'material';
+
+    toast({
+      title: 'Material captured',
+      description: `${captured} added. Add another material or complete the traceability task.`,
+    });
+  };
+
   const handleCompleteTask = (task: TravelerTask, toleranceApproval?: { approvedBy: string; notes: string }) => {
-    const taskFieldVals = fieldValues[task.id] || {};
+    const taskFieldVals = collectCurrentTaskFieldValues(task);
     const traceLabelMap: Record<string, string> = {
       internalControlNumber: 'Internal Control Number',
       supplier: 'Supplier',
@@ -2783,11 +2873,12 @@ export default function TravelerExecution() {
                                         })()}
 
                                         {(task.taskType === 'TRACE' || task.taskType === 'TRACEABILITY') && !fieldInputDisabled ? (
-                                          <MaterialScanner
-                                            travelerId={traveler.id}
-                                            travelerStepId={currentStep.id}
-                                            allowFreeTextEntry={true}
-                                            onMaterialConsumed={(result) => {
+                                          <div className="space-y-3">
+                                            <MaterialScanner
+                                              travelerId={traveler.id}
+                                              travelerStepId={currentStep.id}
+                                              allowFreeTextEntry={true}
+                                              onMaterialConsumed={(result) => {
                                               const taskFieldKeys = new Set(
                                                 task.fields.map((f) => f.fieldKey)
                                               );
@@ -2833,11 +2924,7 @@ export default function TravelerExecution() {
                                                 for (const key of Object.keys(traceFieldVals)) {
                                                   manualFieldValidations[key] = manualValidation;
                                                 }
-                                                completeTaskMutation.mutate({ 
-                                                  taskId: task.id, 
-                                                  fieldVals: traceFieldVals,
-                                                  fieldValidations: manualFieldValidations,
-                                                });
+                                                handleTraceMaterialCaptured(task, traceFieldVals, manualFieldValidations);
                                                 return;
                                               }
                                               const consumption = result?.consumption;
@@ -2926,11 +3013,7 @@ export default function TravelerExecution() {
                                                   for (const key of Object.keys(traceFieldVals)) {
                                                     traceFieldValidations[key] = inventoryValidation;
                                                   }
-                                                  completeTaskMutation.mutate({
-                                                    taskId: task.id,
-                                                    fieldVals: traceFieldVals,
-                                                    fieldValidations: traceFieldValidations,
-                                                  });
+                                                  handleTraceMaterialCaptured(task, traceFieldVals, traceFieldValidations);
                                                 }, 0);
                                                 return;
                                               }
@@ -2977,13 +3060,59 @@ export default function TravelerExecution() {
                                               for (const key of Object.keys(traceFieldVals)) {
                                                 traceFieldValidations[key] = inventoryValidation;
                                               }
-                                              completeTaskMutation.mutate({ 
-                                                taskId: task.id, 
-                                                fieldVals: traceFieldVals,
-                                                fieldValidations: traceFieldValidations,
-                                              });
-                                            }}
-                                          />
+                                              handleTraceMaterialCaptured(task, traceFieldVals, traceFieldValidations);
+                                              }}
+                                            />
+                                            {(() => {
+                                              const currentTraceValues = collectCurrentTaskFieldValues(task);
+                                              const capturedMaterials =
+                                                currentTraceValues.material_internal_control_number ||
+                                                currentTraceValues.internalControlNumber ||
+                                                currentTraceValues.material_icn ||
+                                                currentTraceValues.packetBarcode ||
+                                                currentTraceValues.packet_barcode ||
+                                                '';
+                                              const capturedList = capturedMaterials
+                                                .split(',')
+                                                .map((value) => value.trim())
+                                                .filter(Boolean);
+                                              if (capturedList.length === 0) return null;
+
+                                              return (
+                                                <div className="rounded-lg border border-blue-200 bg-blue-50/60 p-3 space-y-3">
+                                                  <div className="flex items-start justify-between gap-3">
+                                                    <div>
+                                                      <p className="text-sm font-medium text-blue-900">Captured Materials</p>
+                                                      <p className="text-xs text-blue-700">Scan or enter another material, then complete the traceability task when all materials are captured.</p>
+                                                    </div>
+                                                    <Badge variant="outline" className="border-blue-300 text-blue-800">
+                                                      {capturedList.length}
+                                                    </Badge>
+                                                  </div>
+                                                  <div className="flex flex-wrap gap-2">
+                                                    {capturedList.map((material, index) => (
+                                                      <Badge key={`${material}-${index}`} variant="secondary" className="bg-white text-blue-900 border border-blue-200">
+                                                        {material}
+                                                      </Badge>
+                                                    ))}
+                                                  </div>
+                                                  <Button
+                                                    size="sm"
+                                                    onClick={() => handleCompleteTask(task)}
+                                                    disabled={completeTaskMutation.isPending}
+                                                    data-testid={`button-complete-trace-task-${task.id}`}
+                                                  >
+                                                    {completeTaskMutation.isPending ? (
+                                                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                                    ) : (
+                                                      <CheckCircle className="h-4 w-4 mr-2" />
+                                                    )}
+                                                    Complete Traceability
+                                                  </Button>
+                                                </div>
+                                              );
+                                            })()}
+                                          </div>
                                         ) : (
                                           <>
                                             {task.taskType === 'QC' && task.fields.length === 0 && getRoutingQcStandardsForTask(task, currentStep.departmentName).length > 0 && (

@@ -1,12 +1,16 @@
 import { Router } from 'express';
+
 import { pool, db } from '../../db';
 import { authenticateToken } from '../../middleware/auth';
 import { createShipment, ShipTo } from '../utils/upsShipping';
 import { auditUpdateOrders } from '../services/orderAuditWrapper';
 import { auditService } from '../services/auditService';
 import { generatePoPackingSlipPdf } from '../../utils/pdf/packingSlipPdf';
-import type { PackingSlipData, PackingSlipItem } from '../../utils/pdf/types';
-import { groupItemsByDescription, resolvePackingSlipDescription } from '../helpers/packingSlipHelper';
+import type { PackingSlipData } from '../../utils/pdf/types';
+import {
+  groupItemsByDescription,
+  resolvePackingSlipDescription,
+} from '../helpers/packingSlipHelper';
 import {
   createOrUpdateP1ShipmentRevenueFromShipmentRecord,
   reverseP1ShipmentRevenueDraftOrEntry,
@@ -17,7 +21,11 @@ const router = Router();
 // Auto-close a PO when all non-cancelled production orders are SHIPPED
 async function autoClosePOIfFullyShipped(poId: number): Promise<void> {
   try {
-    const rows = await pool.query<{ total: string; shipped: string; cancelled: string }>(
+    const rows = await pool.query<{
+      total: string;
+      shipped: string;
+      cancelled: string;
+    }>(
       `SELECT
          COUNT(*) AS total,
          COUNT(*) FILTER (WHERE production_status = 'SHIPPED') AS shipped,
@@ -37,7 +45,9 @@ async function autoClosePOIfFullyShipped(poId: number): Promise<void> {
         `UPDATE purchase_orders SET status = 'CLOSED' WHERE id = $1 AND status = 'OPEN'`,
         [poId]
       );
-      console.log(`✅ PO id=${poId} auto-closed — all ${active} active order(s) shipped`);
+      console.log(
+        `✅ PO id=${poId} auto-closed — all ${active} active order(s) shipped`
+      );
     }
   } catch (err: any) {
     console.warn(`⚠️ Auto-close check for PO ${poId} failed: ${err.message}`);
@@ -49,7 +59,10 @@ function rowsOf<T = any>(result: any): T[] {
 }
 
 function isGlennAdmin(user: any): boolean {
-  return user?.username === 'glennj' && String(user?.role || '').toUpperCase() === 'ADMIN';
+  return (
+    user?.username === 'glennj' &&
+    String(user?.role || '').toUpperCase() === 'ADMIN'
+  );
 }
 
 function addDays(date: Date, days: number): Date {
@@ -62,13 +75,47 @@ function toDateOnly(date: Date): string {
   return date.toISOString().split('T')[0];
 }
 
-async function findP1PackingSlipInvoice(shipmentRecordId: string, poNumber: string) {
+let p1FulfillmentAttemptsTableAvailable: boolean | null = null;
+
+async function hasP1FulfillmentAttemptsTable(): Promise<boolean> {
+  if (p1FulfillmentAttemptsTableAvailable != null) {
+    return p1FulfillmentAttemptsTableAvailable;
+  }
+
+  try {
+    const rows = rowsOf<{ table_exists: boolean }>(
+      await pool.query(
+        `SELECT EXISTS (
+           SELECT 1
+           FROM information_schema.tables
+           WHERE table_schema = 'public'
+             AND table_name = 'p1_fulfillment_attempts'
+         ) AS table_exists`
+      )
+    );
+    p1FulfillmentAttemptsTableAvailable = Boolean(rows[0]?.table_exists);
+  } catch (err: any) {
+    console.warn(
+      `Could not inspect P1 fulfillment artifact table: ${err.message}`
+    );
+    p1FulfillmentAttemptsTableAvailable = false;
+  }
+
+  return p1FulfillmentAttemptsTableAvailable;
+}
+
+async function findP1PackingSlipInvoice(
+  shipmentRecordId: string,
+  poNumber: string
+) {
+  const includeArtifactHistory = await hasP1FulfillmentAttemptsTable();
   const rows = rowsOf<{
     id: string;
     invoice_number: string;
     status: string;
-  }>(await pool.query(
-    `SELECT inv.id, inv.invoice_number, inv.status
+  }>(
+    await pool.query(
+      `SELECT inv.id, inv.invoice_number, inv.status
      FROM ar_invoices inv
      WHERE COALESCE(inv.status, '') <> 'VOID'
        AND (
@@ -80,7 +127,9 @@ async function findP1PackingSlipInvoice(shipmentRecordId: string, poNumber: stri
              AND line.dimension_tags->>'shipmentRecordId' = $1
              AND line.dimension_tags->>'poNumber' = $2
          )
-         OR (
+         ${
+           includeArtifactHistory
+             ? `OR (
            inv.po_override = $2
            AND inv.invoice_number IN (
              SELECT pfa.metadata->>'invoiceNumber'
@@ -93,7 +142,9 @@ async function findP1PackingSlipInvoice(shipmentRecordId: string, poNumber: stri
              inv.notes ILIKE 'Auto-created from P1 OEM packing slip%'
              OR inv.internal_notes ILIKE 'Source: P1 OEM shipment%'
            )
-         )
+         )`
+             : ''
+         }
          OR (
            inv.po_override = $2
            AND inv.invoice_number = (
@@ -110,13 +161,17 @@ async function findP1PackingSlipInvoice(shipmentRecordId: string, poNumber: stri
        )
      ORDER BY inv.created_at DESC
      LIMIT 1`,
-    [shipmentRecordId, poNumber]
-  ));
+      [shipmentRecordId, poNumber]
+    )
+  );
 
   return rows[0] || null;
 }
 
-async function findP1PackingSlipInvoiceForOrders(poNumber: string, orderIds: string[]) {
+async function findP1PackingSlipInvoiceForOrders(
+  poNumber: string,
+  orderIds: string[]
+) {
   const usableOrderIds = orderIds.filter(Boolean);
   if (usableOrderIds.length === 0) return null;
 
@@ -124,8 +179,9 @@ async function findP1PackingSlipInvoiceForOrders(poNumber: string, orderIds: str
     id: string;
     invoice_number: string;
     status: string;
-  }>(await pool.query(
-    `SELECT inv.id, inv.invoice_number, inv.status
+  }>(
+    await pool.query(
+      `SELECT inv.id, inv.invoice_number, inv.status
      FROM ar_invoices inv
      WHERE COALESCE(inv.status, '') <> 'VOID'
        AND (
@@ -153,8 +209,9 @@ async function findP1PackingSlipInvoiceForOrders(poNumber: string, orderIds: str
        )
      ORDER BY inv.created_at DESC
      LIMIT 1`,
-    [poNumber, usableOrderIds]
-  ));
+      [poNumber, usableOrderIds]
+    )
+  );
 
   return rows[0] || null;
 }
@@ -167,8 +224,9 @@ async function findReusableP1InvoiceNumber({
   orderIds: string[];
 }): Promise<string | null> {
   try {
-    const activeShipmentRows = rowsOf<{ invoice_number: string }>(await pool.query(
-      `SELECT sr.invoice_number
+    const activeShipmentRows = rowsOf<{ invoice_number: string }>(
+      await pool.query(
+        `SELECT sr.invoice_number
        FROM shipment_records sr
        JOIN shipment_items si ON si.shipment_id = sr.id
        WHERE sr.invoice_number IS NOT NULL
@@ -178,19 +236,27 @@ async function findReusableP1InvoiceNumber({
          )
        ORDER BY sr.created_at DESC
        LIMIT 1`,
-      [poNumber, orderIds]
-    ));
+        [poNumber, orderIds]
+      )
+    );
 
     if (activeShipmentRows[0]?.invoice_number) {
       return activeShipmentRows[0].invoice_number;
     }
   } catch (err: any) {
-    console.warn(`⚠️ Could not search active P1 shipment invoice history for PO ${poNumber}: ${err.message}`);
+    console.warn(
+      `⚠️ Could not search active P1 shipment invoice history for PO ${poNumber}: ${err.message}`
+    );
   }
 
   try {
-    const attemptRows = rowsOf<{ invoice_number: string }>(await pool.query(
-      `SELECT metadata->>'invoiceNumber' AS invoice_number
+    if (!(await hasP1FulfillmentAttemptsTable())) {
+      return null;
+    }
+
+    const attemptRows = rowsOf<{ invoice_number: string }>(
+      await pool.query(
+        `SELECT metadata->>'invoiceNumber' AS invoice_number
        FROM p1_fulfillment_attempts
        WHERE metadata->>'invoiceNumber' IS NOT NULL
          AND (
@@ -199,14 +265,17 @@ async function findReusableP1InvoiceNumber({
          )
        ORDER BY COALESCE(completed_at, updated_at, created_at) DESC
        LIMIT 1`,
-      [poNumber, orderIds]
-    ));
+        [poNumber, orderIds]
+      )
+    );
 
     if (attemptRows[0]?.invoice_number) {
       return attemptRows[0].invoice_number;
     }
   } catch (err: any) {
-    console.warn(`⚠️ Could not search P1 fulfillment artifact history for PO ${poNumber}: ${err.message}`);
+    console.warn(
+      `⚠️ Could not search P1 fulfillment artifact history for PO ${poNumber}: ${err.message}`
+    );
   }
 
   return null;
@@ -226,6 +295,7 @@ async function recordP1FulfillmentArtifacts({
   shipmentRecordId: string | null;
 }): Promise<void> {
   if (!invoiceNumber || orderIds.length === 0) return;
+  if (!(await hasP1FulfillmentAttemptsTable())) return;
 
   try {
     for (const orderId of orderIds) {
@@ -257,7 +327,9 @@ async function recordP1FulfillmentArtifacts({
       );
     }
   } catch (err: any) {
-    console.warn(`⚠️ Could not record reusable P1 fulfillment artifacts for PO ${poNumber}: ${err.message}`);
+    console.warn(
+      `⚠️ Could not record reusable P1 fulfillment artifacts for PO ${poNumber}: ${err.message}`
+    );
   }
 }
 
@@ -269,15 +341,16 @@ router.get('/shipping-qc', authenticateToken, async (req, res) => {
     const { storage } = await import('../../storage');
 
     const customers = await storage.getPOOrdersInShippingQC();
-    
+
     const totalItems = customers.reduce(
       (total, customer) =>
-        total +
-        customer.pos.reduce((sum, po) => sum + po.items.length, 0),
+        total + customer.pos.reduce((sum, po) => sum + po.items.length, 0),
       0
     );
-    
-    console.log(`📊 Found ${totalItems} PO items in Shipping QC across ${customers.length} customers`);
+
+    console.log(
+      `📊 Found ${totalItems} PO items in Shipping QC across ${customers.length} customers`
+    );
 
     res.json(customers);
   } catch (error: any) {
@@ -296,15 +369,20 @@ router.get('/all-p1-with-status', authenticateToken, async (req, res) => {
     const { storage } = await import('../../storage');
 
     const customers = await storage.getAllP1POOrdersWithStatus();
-    
-    const totalPOs = customers.reduce((sum, customer) => sum + customer.pos.length, 0);
+
+    const totalPOs = customers.reduce(
+      (sum, customer) => sum + customer.pos.length,
+      0
+    );
     const totalItems = customers.reduce(
       (sum, customer) =>
         sum + customer.pos.reduce((poSum, po) => poSum + po.items.length, 0),
       0
     );
-    
-    console.log(`📊 Found ${totalItems} PO items across ${totalPOs} POs from ${customers.length} customers`);
+
+    console.log(
+      `📊 Found ${totalItems} PO items across ${totalPOs} POs from ${customers.length} customers`
+    );
 
     res.json(customers);
   } catch (error: any) {
@@ -329,7 +407,9 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
       return res.status(400).json({ _error: 'orderIds array is required' });
     }
 
-    console.log(`📄 Generating packing slips for ${orderIds.length} PO items...`);
+    console.log(
+      `📄 Generating packing slips for ${orderIds.length} PO items...`
+    );
     const { storage } = await import('../../storage');
 
     // Fetch order details - handle both Order IDs and poItemId-unitNumber format
@@ -337,30 +417,32 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
       orderIds.map(async (itemKey) => {
         let order: any = null;
         let poItem: any = null;
-        
+
         // Check if this is in poItemId-unitNumber format (e.g., "92-1")
         const match = itemKey.match(/^(\d+)-(\d+)$/);
-        
+
         if (match) {
           // Format: poItemId-unitNumber
           const poItemId = parseInt(match[1]);
           const unitNumber = parseInt(match[2]);
-          console.log(`🔍 Looking up by PO item ID ${poItemId}, unit ${unitNumber}`);
-          
+          console.log(
+            `🔍 Looking up by PO item ID ${poItemId}, unit ${unitNumber}`
+          );
+
           // Get PO item directly
           poItem = await storage.getPurchaseOrderItem(poItemId);
           if (!poItem) {
             console.warn(`⚠️ PO item ${poItemId} not found`);
             return null;
           }
-          
+
           // Get PO to access customer information
           const tempPo = await storage.getPurchaseOrder(poItem.poId);
           if (!tempPo) {
             console.warn(`⚠️ PO ${poItem.poId} not found`);
             return null;
           }
-          
+
           // For PO items without orderIds, create a minimal order object for packing slip generation
           // Customer info comes from the PO, not the PO item
           order = {
@@ -462,7 +544,9 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
           existingInvoiceNumber = sr.invoice_number || null;
         }
       } catch (shipErr: any) {
-        console.warn(`⚠️ Could not fetch shipment data for PO ${poNumber}: ${shipErr.message}`);
+        console.warn(
+          `⚠️ Could not fetch shipment data for PO ${poNumber}: ${shipErr.message}`
+        );
       }
 
       // Resolve invoice number for the PDF — reuse if already stored, otherwise generate a new one.
@@ -472,7 +556,9 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
       let newlyGeneratedInvoice = false;
       if (existingInvoiceNumber) {
         invoiceNumber = existingInvoiceNumber;
-        console.log(`♻️ Reusing existing invoice number ${invoiceNumber} for PO ${poNumber}`);
+        console.log(
+          `♻️ Reusing existing invoice number ${invoiceNumber} for PO ${poNumber}`
+        );
       } else {
         const reusableInvoiceNumber = await findReusableP1InvoiceNumber({
           poNumber,
@@ -483,14 +569,18 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
 
         if (reusableInvoiceNumber) {
           invoiceNumber = reusableInvoiceNumber;
-          console.log(`♻️ Reusing historical invoice number ${invoiceNumber} for PO ${poNumber}`);
+          console.log(
+            `♻️ Reusing historical invoice number ${invoiceNumber} for PO ${poNumber}`
+          );
         } else {
           invoiceNumber = await storage.getNextInvoiceNumber(
             String(customerId || '0'),
             customerName
           );
           newlyGeneratedInvoice = true;
-          console.log(`🆕 Generated new invoice number ${invoiceNumber} for PO ${poNumber}`);
+          console.log(
+            `🆕 Generated new invoice number ${invoiceNumber} for PO ${poNumber}`
+          );
         }
       }
 
@@ -504,7 +594,11 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
       const slipData: PackingSlipData = {
         packingSlipNumber: invoiceNumber,
         poNumber,
-        date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        date: new Date().toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        }),
         customerName,
         customerAddress: customerAddress
           ? {
@@ -550,14 +644,18 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
 
       // Persist packing slip to each matched shipment_item exactly once
       if (matchedItemIds.size === 0) {
-        console.error(`WARNING: Packing slip generated without persistence — no matching shipment_items found for PO ${poNumber}`);
+        console.error(
+          `WARNING: Packing slip generated without persistence — no matching shipment_items found for PO ${poNumber}`
+        );
       }
       for (const itemId of matchedItemIds) {
         await pool.query(
           `UPDATE shipment_items SET packing_slip_base64 = $1 WHERE id = $2`,
           [pdfBase64, itemId]
         );
-        console.log(`✅ Packing slip persisted to shipment_item id=${itemId} (poNumber=${poNumber})`);
+        console.log(
+          `✅ Packing slip persisted to shipment_item id=${itemId} (poNumber=${poNumber})`
+        );
       }
 
       // Persist invoice_number to shipment_records now that we have the full item context.
@@ -568,7 +666,8 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
           if (!shipmentRecordId) {
             // Fallback: resolve shipment_record via order_id if PO-based lookup missed
             for (const item of items) {
-              const fallbackOrderId = item.order?.orderId || item.order?.order_id;
+              const fallbackOrderId =
+                item.order?.orderId || item.order?.order_id;
               if (!fallbackOrderId) continue;
               const fallbackRows = await pool.query(
                 `SELECT sr.id FROM shipment_records sr
@@ -589,22 +688,33 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
               [invoiceNumber, shipmentRecordId]
             );
             if (saveResult.length > 0) {
-              console.log(`💾 Saved invoice number ${invoiceNumber} to shipment_record id=${shipmentRecordId}`);
+              console.log(
+                `💾 Saved invoice number ${invoiceNumber} to shipment_record id=${shipmentRecordId}`
+              );
             } else {
               // Concurrent write won; read back the winning value so the PDF and DB agree
               const reRead = await pool.query(
                 `SELECT invoice_number FROM shipment_records WHERE id = $1`,
                 [shipmentRecordId]
               );
-              if (reRead[0]?.invoice_number && reRead[0].invoice_number !== invoiceNumber) {
-                console.log(`♻️ Concurrent write detected — DB has ${reRead[0].invoice_number}, PDF used ${invoiceNumber} for PO ${poNumber}`);
+              if (
+                reRead[0]?.invoice_number &&
+                reRead[0].invoice_number !== invoiceNumber
+              ) {
+                console.log(
+                  `♻️ Concurrent write detected — DB has ${reRead[0].invoice_number}, PDF used ${invoiceNumber} for PO ${poNumber}`
+                );
               }
             }
           } else {
-            console.warn(`⚠️ Could not find shipment_record for PO ${poNumber} — invoice number ${invoiceNumber} not persisted`);
+            console.warn(
+              `⚠️ Could not find shipment_record for PO ${poNumber} — invoice number ${invoiceNumber} not persisted`
+            );
           }
         } catch (saveErr: any) {
-          console.warn(`⚠️ Could not persist invoice number to shipment_record for PO ${poNumber}: ${saveErr.message}`);
+          console.warn(
+            `⚠️ Could not persist invoice number to shipment_record for PO ${poNumber}: ${saveErr.message}`
+          );
         }
       }
 
@@ -624,7 +734,10 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
     });
   } catch (error: any) {
     console.error('❌ Error generating packing slips:', error);
-    res.status(500).json({ _error: 'Failed to generate packing slips', details: error.message });
+    res.status(500).json({
+      _error: 'Failed to generate packing slips',
+      details: error.message,
+    });
   }
 });
 
@@ -654,7 +767,7 @@ router.post('/progress-to-shipping', async (req, res) => {
         if (!order && /^\d+-\d+$/.test(orderId)) {
           order = await storage.getProductionOrderByOrderId(`PO-${orderId}`);
         }
-        
+
         // Validate order exists
         if (!order) {
           results.failed.push({ orderId, reason: 'Order not found' });
@@ -668,7 +781,9 @@ router.post('/progress-to-shipping', async (req, res) => {
             orderId,
             reason: `Order is in ${order.currentDepartment}, not Shipping QC`,
           });
-          console.warn(`⚠️ ${orderId}: Wrong department (${order.currentDepartment})`);
+          console.warn(
+            `⚠️ ${orderId}: Wrong department (${order.currentDepartment})`
+          );
           continue;
         }
 
@@ -677,7 +792,11 @@ router.post('/progress-to-shipping', async (req, res) => {
           currentDepartment: 'Shipping',
         });
 
-        await auditService.closeDepartmentTransition(orderId, undefined, 'completed');
+        await auditService.closeDepartmentTransition(
+          orderId,
+          undefined,
+          'completed'
+        );
         await auditService.recordDepartmentEntry({
           entityType: 'p1_order',
           entityId: orderId,
@@ -694,7 +813,10 @@ router.post('/progress-to-shipping', async (req, res) => {
 
     console.log(`✅ Successfully progressed ${results.success.length} items`);
     if (results.failed.length > 0) {
-      console.warn(`⚠️ Failed to progress ${results.failed.length} items:`, results.failed);
+      console.warn(
+        `⚠️ Failed to progress ${results.failed.length} items:`,
+        results.failed
+      );
     }
 
     // Always return 200 with success/failed arrays (never throw)
@@ -705,7 +827,9 @@ router.post('/progress-to-shipping', async (req, res) => {
     });
   } catch (error: any) {
     console.error('❌ Error progressing PO orders:', error);
-    res.status(500).json({ _error: 'Failed to progress orders', details: error.message });
+    res
+      .status(500)
+      .json({ _error: 'Failed to progress orders', details: error.message });
   }
 });
 
@@ -720,7 +844,9 @@ router.post('/smart-progress', async (req, res) => {
       return res.status(400).json({ _error: 'orderIds array is required' });
     }
 
-    console.log(`🔄 Smart progressing ${orderIds.length} PO items from Barcode...`);
+    console.log(
+      `🔄 Smart progressing ${orderIds.length} PO items from Barcode...`
+    );
     const { storage } = await import('../../storage');
 
     const results = {
@@ -746,7 +872,9 @@ router.post('/smart-progress', async (req, res) => {
             orderId,
             reason: `Order is in ${order.currentDepartment}, not Barcode`,
           });
-          console.warn(`⚠️ ${orderId}: Wrong department (${order.currentDepartment})`);
+          console.warn(
+            `⚠️ ${orderId}: Wrong department (${order.currentDepartment})`
+          );
           continue;
         }
 
@@ -784,7 +912,10 @@ router.post('/smart-progress', async (req, res) => {
       `✅ Smart progression complete: ${results.toShippingQC.length} to Shipping QC, ${results.toCNC.length} to CNC`
     );
     if (results.failed.length > 0) {
-      console.warn(`⚠️ Failed to progress ${results.failed.length} items:`, results.failed);
+      console.warn(
+        `⚠️ Failed to progress ${results.failed.length} items:`,
+        results.failed
+      );
     }
 
     // Always return 200 with success/failed arrays
@@ -796,7 +927,9 @@ router.post('/smart-progress', async (req, res) => {
     });
   } catch (error: any) {
     console.error('❌ Error in smart progression:', error);
-    res.status(500).json({ _error: 'Failed to progress orders', details: error.message });
+    res
+      .status(500)
+      .json({ _error: 'Failed to progress orders', details: error.message });
   }
 });
 
@@ -814,7 +947,9 @@ router.post('/progress-to-department', async (req, res) => {
       return res.status(400).json({ _error: 'toDepartment is required' });
     }
 
-    console.log(`🔄 Progressing ${orderIds.length} PO items to ${toDepartment}...`);
+    console.log(
+      `🔄 Progressing ${orderIds.length} PO items to ${toDepartment}...`
+    );
     const { storage } = await import('../../storage');
 
     const results = {
@@ -839,7 +974,9 @@ router.post('/progress-to-department', async (req, res) => {
             orderId,
             reason: `Order is in ${order.currentDepartment}, not Barcode`,
           });
-          console.warn(`⚠️ ${orderId}: Wrong department (${order.currentDepartment})`);
+          console.warn(
+            `⚠️ ${orderId}: Wrong department (${order.currentDepartment})`
+          );
           continue;
         }
 
@@ -859,7 +996,10 @@ router.post('/progress-to-department', async (req, res) => {
       `✅ Progression complete: ${results.success.length} to ${toDepartment}`
     );
     if (results.failed.length > 0) {
-      console.warn(`⚠️ Failed to progress ${results.failed.length} items:`, results.failed);
+      console.warn(
+        `⚠️ Failed to progress ${results.failed.length} items:`,
+        results.failed
+      );
     }
 
     // Always return 200 with success/failed arrays
@@ -870,7 +1010,9 @@ router.post('/progress-to-department', async (req, res) => {
     });
   } catch (error: any) {
     console.error('❌ Error progressing PO orders:', error);
-    res.status(500).json({ _error: 'Failed to progress orders', details: error.message });
+    res
+      .status(500)
+      .json({ _error: 'Failed to progress orders', details: error.message });
   }
 });
 
@@ -912,16 +1054,18 @@ router.get('/oem-shipments', authenticateToken, async (req, res) => {
     `);
     const tableInfo = (tableCheck.rows || tableCheck)[0] || {};
     const tableExists = tableInfo.table_exists || false;
-    const fulfillmentAttemptsTableExists = tableInfo.fulfillment_attempts_table_exists || false;
+    const fulfillmentAttemptsTableExists =
+      tableInfo.fulfillment_attempts_table_exists || false;
 
     if (!tableExists) {
       // Fallback: Query shipped items from production_orders instead
-      console.log('📦 shipment_records table not found, using fallback query from production_orders');
-      
-      const { storage } = await import('../../storage');
-      
+      console.log(
+        '📦 shipment_records table not found, using fallback query from production_orders'
+      );
+
       // Get shipped production orders grouped by PO
-      const shippedOrders = await pool.query(`
+      const shippedOrders = await pool.query(
+        `
         SELECT 
           po.po_number,
           po.customer_id,
@@ -942,23 +1086,30 @@ router.get('/oem-shipments', authenticateToken, async (req, res) => {
         GROUP BY po.po_number, po.customer_id, po.customer_name, po.shipped_at
         ORDER BY po.shipped_at DESC NULLS LAST
         LIMIT $${customerName ? '2' : '1'} OFFSET $${customerName ? '3' : '2'}
-      `, customerName 
-        ? [customerName, parseInt(limit as string, 10), parseInt(offset as string, 10)]
-        : [parseInt(limit as string, 10), parseInt(offset as string, 10)]
+      `,
+        customerName
+          ? [
+              customerName,
+              parseInt(limit as string, 10),
+              parseInt(offset as string, 10),
+            ]
+          : [parseInt(limit as string, 10), parseInt(offset as string, 10)]
       );
-      
-      const shipments = (shippedOrders.rows || shippedOrders).map((row: any) => ({
-        id: `fallback-${row.po_number}`,
-        customer_id: row.customer_id,
-        customer_name: row.customer_name,
-        master_tracking_number: 'N/A (Legacy)',
-        created_at: row.shipped_at,
-        items: row.items,
-        item_count: parseInt(row.item_count),
-        po_count: 1,
-        has_shipping_label: false,
-      }));
-      
+
+      const shipments = (shippedOrders.rows || shippedOrders).map(
+        (row: any) => ({
+          id: `fallback-${row.po_number}`,
+          customer_id: row.customer_id,
+          customer_name: row.customer_name,
+          master_tracking_number: 'N/A (Legacy)',
+          created_at: row.shipped_at,
+          items: row.items,
+          item_count: parseInt(row.item_count),
+          po_count: 1,
+          has_shipping_label: false,
+        })
+      );
+
       return res.json({
         shipments,
         pagination: {
@@ -1166,7 +1317,10 @@ router.get('/oem-shipments', authenticateToken, async (req, res) => {
       WHERE ${conditions.join(' AND ')}
     `;
     const countResult = await pool.query(countQuery, countParams);
-    const total = parseInt((countResult.rows || countResult)[0]?.total || '0', 10);
+    const total = parseInt(
+      (countResult.rows || countResult)[0]?.total || '0',
+      10
+    );
 
     console.log(`📊 Found ${shipments.length} shipments (total: ${total})`);
 
@@ -1181,7 +1335,10 @@ router.get('/oem-shipments', authenticateToken, async (req, res) => {
     });
   } catch (error: any) {
     console.error('❌ Error fetching OEM shipments:', error);
-    res.status(500).json({ _error: 'Failed to fetch OEM shipments', details: error.message });
+    res.status(500).json({
+      _error: 'Failed to fetch OEM shipments',
+      details: error.message,
+    });
   }
 });
 
@@ -1217,7 +1374,10 @@ router.get('/oem-shipments/stats', async (req, res) => {
       JOIN shipment_items si ON si.shipment_id = sr.id
       LEFT JOIN purchase_order_items poi ON poi.id = si.po_item_id
     `);
-    const row = (Array.isArray(statsResult) ? statsResult : statsResult.rows || statsResult)[0] || {};
+    const row =
+      (Array.isArray(statsResult)
+        ? statsResult
+        : statsResult.rows || statsResult)[0] || {};
     res.json({
       stocksThisWeek: parseInt(row.stocks_this_week || '0', 10),
       accessoriesThisWeek: parseInt(row.accessories_this_week || '0', 10),
@@ -1228,7 +1388,9 @@ router.get('/oem-shipments/stats', async (req, res) => {
     });
   } catch (error: any) {
     console.error('❌ Error fetching OEM shipment stats:', error);
-    res.status(500).json({ error: 'Failed to fetch stats', details: error.message });
+    res
+      .status(500)
+      .json({ error: 'Failed to fetch stats', details: error.message });
   }
 });
 
@@ -1240,7 +1402,8 @@ router.get('/oem-shipments/:id/label', authenticateToken, async (req, res) => {
     console.log(`📄 Downloading shipping label for shipment ${id}...`);
 
     // Validate UUID format
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(id)) {
       return res.status(400).json({ _error: 'Invalid shipment ID format' });
     }
@@ -1276,24 +1439,31 @@ router.get('/oem-shipments/:id/label', authenticateToken, async (req, res) => {
     console.log(`✅ Shipping label downloaded: ${filename}`);
   } catch (error: any) {
     console.error('❌ Error downloading shipping label:', error);
-    res.status(500).json({ _error: 'Failed to download shipping label', details: error.message });
+    res.status(500).json({
+      _error: 'Failed to download shipping label',
+      details: error.message,
+    });
   }
 });
 
 // GET /api/po-orders/oem-shipments/packing-slip/:itemId
 // Download packing slip for a specific shipment item
-router.get('/oem-shipments/packing-slip/:itemId', authenticateToken, async (req, res) => {
-  try {
-    const { itemId } = req.params;
-    console.log(`📄 Downloading packing slip for shipment item ${itemId}...`);
+router.get(
+  '/oem-shipments/packing-slip/:itemId',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const { itemId } = req.params;
+      console.log(`📄 Downloading packing slip for shipment item ${itemId}...`);
 
-    // Validate UUID format
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(itemId)) {
-      return res.status(400).json({ _error: 'Invalid item ID format' });
-    }
+      // Validate UUID format
+      const uuidRegex =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(itemId)) {
+        return res.status(400).json({ _error: 'Invalid item ID format' });
+      }
 
-    const query = `
+      const query = `
       SELECT 
         si.id,
         si.packing_slip_base64,
@@ -1315,41 +1485,49 @@ router.get('/oem-shipments/packing-slip/:itemId', authenticateToken, async (req,
       WHERE si.id = $1
     `;
 
-    const result = await pool.query(query, [itemId]);
-    const item = (result.rows || result)[0];
+      const result = await pool.query(query, [itemId]);
+      const item = (result.rows || result)[0];
 
-    if (!item) {
-      return res.status(404).json({ _error: 'Shipment item not found' });
-    }
+      if (!item) {
+        return res.status(404).json({ _error: 'Shipment item not found' });
+      }
 
-    let packingSlipBase64: string = item.packing_slip_base64;
+      let packingSlipBase64: string = item.packing_slip_base64;
 
-    if (packingSlipBase64 && item.shipment_invoice_number) {
-      console.log(`📄 Packing slip exists — serving stored PDF (no-op reuse) for itemId=${itemId}, invoice=${item.shipment_invoice_number}`);
-    } else if (packingSlipBase64) {
-      console.log(`📄 Packing slip exists (no stored invoice #) — serving stored PDF for itemId=${itemId}`);
-    }
+      if (packingSlipBase64 && item.shipment_invoice_number) {
+        console.log(
+          `📄 Packing slip exists — serving stored PDF (no-op reuse) for itemId=${itemId}, invoice=${item.shipment_invoice_number}`
+        );
+      } else if (packingSlipBase64) {
+        console.log(
+          `📄 Packing slip exists (no stored invoice #) — serving stored PDF for itemId=${itemId}`
+        );
+      }
 
-    if (!packingSlipBase64) {
-      console.log(`⚙️ Packing slip missing — regenerating for item: ${itemId}`);
-      try {
-        const shipTo = item.ship_to_snapshot || {};
-        const customerName = (shipTo.name as string) || 'N/A';
-        if (!customerName || customerName === 'N/A') {
-          console.warn(`⚠️ Packing slip regeneration: customerName is empty for itemId=${itemId}`);
-        }
-        const customerAddress = {
-          street: (shipTo.street as string) || 'N/A',
-          street2: (shipTo.street2 as string) || undefined,
-          city: (shipTo.city as string) || 'N/A',
-          state: (shipTo.state as string) || 'N/A',
-          zip: (shipTo.postalCode as string) || 'N/A',
-        };
+      if (!packingSlipBase64) {
+        console.log(
+          `⚙️ Packing slip missing — regenerating for item: ${itemId}`
+        );
+        try {
+          const shipTo = item.ship_to_snapshot || {};
+          const customerName = (shipTo.name as string) || 'N/A';
+          if (!customerName || customerName === 'N/A') {
+            console.warn(
+              `⚠️ Packing slip regeneration: customerName is empty for itemId=${itemId}`
+            );
+          }
+          const customerAddress = {
+            street: (shipTo.street as string) || 'N/A',
+            street2: (shipTo.street2 as string) || undefined,
+            city: (shipTo.city as string) || 'N/A',
+            state: (shipTo.state as string) || 'N/A',
+            zip: (shipTo.postalCode as string) || 'N/A',
+          };
 
-        const poNumberForSlip = item.po_number || '';
+          const poNumberForSlip = item.po_number || '';
 
-        // Fetch all items for this PO within the same shipment to compute aggregated fields
-        const siblingQuery = `
+          // Fetch all items for this PO within the same shipment to compute aggregated fields
+          const siblingQuery = `
           SELECT
             si.id,
             si.order_id,
@@ -1366,173 +1544,219 @@ router.get('/oem-shipments/packing-slip/:itemId', authenticateToken, async (req,
           )
           AND si.po_number = $2
         `;
-        const siblingResult = await pool.query(siblingQuery, [itemId, poNumberForSlip]);
-        const siblingRows: any[] = (siblingResult.rows || siblingResult) as any[];
+          const siblingResult = await pool.query(siblingQuery, [
+            itemId,
+            poNumberForSlip,
+          ]);
+          const siblingRows: any[] = (siblingResult.rows ||
+            siblingResult) as any[];
 
-        // Aggregate quantity across all items in this PO group
-        const totalQty = siblingRows.reduce((sum, r) => sum + (r.quantity || 1), 0);
+          // Aggregate quantity across all items in this PO group
+          const totalQty = siblingRows.reduce(
+            (sum, r) => sum + (r.quantity || 1),
+            0
+          );
 
-        // Derive sticker range from order_id suffix (e.g. FA001-3 → unit 3)
-        const unitNumbers: number[] = siblingRows.map((r) => {
-          if (!r.order_id) return 1;
-          const m = String(r.order_id).match(/-(\d+)$/);
-          return m ? parseInt(m[1]) : 1;
-        });
-        const minUnit = Math.min(...unitNumbers);
-        const maxUnit = Math.max(...unitNumbers);
-        const stickerRange =
-          unitNumbers.length === 0
-            ? ''
-            : minUnit === maxUnit
-            ? String(minUnit)
-            : `${minUnit}-${maxUnit}`;
-
-        const firstSibling = siblingRows[0] || item;
-
-        // Use shipment reference from query result (sr.reference)
-        const shipmentRef = firstSibling.shipment_reference || undefined;
-
-        const { storage: slipStorage } = await import('../../storage');
-
-        // Resolve invoice number: reuse stored value, or generate + persist a new one
-        let invoiceNumber: string;
-        if (item.shipment_invoice_number) {
-          invoiceNumber = item.shipment_invoice_number;
-          console.log(`♻️ Reusing stored invoice number ${invoiceNumber} for itemId=${itemId}`);
-        } else {
-          const reusableInvoiceNumber = await findReusableP1InvoiceNumber({
-            poNumber: poNumberForSlip,
-            orderIds: siblingRows.map((r) => r.order_id).filter(Boolean),
+          // Derive sticker range from order_id suffix (e.g. FA001-3 → unit 3)
+          const unitNumbers: number[] = siblingRows.map((r) => {
+            if (!r.order_id) return 1;
+            const m = String(r.order_id).match(/-(\d+)$/);
+            return m ? parseInt(m[1]) : 1;
           });
+          const minUnit = Math.min(...unitNumbers);
+          const maxUnit = Math.max(...unitNumbers);
+          const stickerRange =
+            unitNumbers.length === 0
+              ? ''
+              : minUnit === maxUnit
+                ? String(minUnit)
+                : `${minUnit}-${maxUnit}`;
 
-          if (reusableInvoiceNumber) {
-            invoiceNumber = reusableInvoiceNumber;
-            console.log(`♻️ Reusing historical invoice number ${invoiceNumber} for itemId=${itemId}`);
+          const firstSibling = siblingRows[0] || item;
+
+          // Use shipment reference from query result (sr.reference)
+          const shipmentRef = firstSibling.shipment_reference || undefined;
+
+          const { storage: slipStorage } = await import('../../storage');
+
+          // Resolve invoice number: reuse stored value, or generate + persist a new one
+          let invoiceNumber: string;
+          if (item.shipment_invoice_number) {
+            invoiceNumber = item.shipment_invoice_number;
+            console.log(
+              `♻️ Reusing stored invoice number ${invoiceNumber} for itemId=${itemId}`
+            );
           } else {
-            invoiceNumber = await slipStorage.getNextInvoiceNumber('0', customerName);
-            console.log(`🆕 Generated new invoice number ${invoiceNumber} for itemId=${itemId}`);
-          }
-          if (item.shipment_record_id) {
-            try {
-              const saveResult = await pool.query(
-                `UPDATE shipment_records SET invoice_number = $1 WHERE id = $2 AND invoice_number IS NULL RETURNING invoice_number`,
-                [invoiceNumber, item.shipment_record_id]
+            const reusableInvoiceNumber = await findReusableP1InvoiceNumber({
+              poNumber: poNumberForSlip,
+              orderIds: siblingRows.map((r) => r.order_id).filter(Boolean),
+            });
+
+            if (reusableInvoiceNumber) {
+              invoiceNumber = reusableInvoiceNumber;
+              console.log(
+                `♻️ Reusing historical invoice number ${invoiceNumber} for itemId=${itemId}`
               );
-              if (saveResult.length > 0) {
-                console.log(`💾 Saved invoice number ${invoiceNumber} to shipment_record id=${item.shipment_record_id}`);
-              } else {
-                const reRead = await pool.query(
-                  `SELECT invoice_number FROM shipment_records WHERE id = $1`,
-                  [item.shipment_record_id]
+            } else {
+              invoiceNumber = await slipStorage.getNextInvoiceNumber(
+                '0',
+                customerName
+              );
+              console.log(
+                `🆕 Generated new invoice number ${invoiceNumber} for itemId=${itemId}`
+              );
+            }
+            if (item.shipment_record_id) {
+              try {
+                const saveResult = await pool.query(
+                  `UPDATE shipment_records SET invoice_number = $1 WHERE id = $2 AND invoice_number IS NULL RETURNING invoice_number`,
+                  [invoiceNumber, item.shipment_record_id]
                 );
-                if (reRead[0]?.invoice_number) {
-                  invoiceNumber = reRead[0].invoice_number;
-                  console.log(`♻️ Concurrent write detected — using pre-existing invoice number ${invoiceNumber} for itemId=${itemId}`);
+                if (saveResult.length > 0) {
+                  console.log(
+                    `💾 Saved invoice number ${invoiceNumber} to shipment_record id=${item.shipment_record_id}`
+                  );
+                } else {
+                  const reRead = await pool.query(
+                    `SELECT invoice_number FROM shipment_records WHERE id = $1`,
+                    [item.shipment_record_id]
+                  );
+                  if (reRead[0]?.invoice_number) {
+                    invoiceNumber = reRead[0].invoice_number;
+                    console.log(
+                      `♻️ Concurrent write detected — using pre-existing invoice number ${invoiceNumber} for itemId=${itemId}`
+                    );
+                  }
                 }
+              } catch (saveErr: any) {
+                console.warn(
+                  `⚠️ Could not save invoice number to shipment_record: ${saveErr.message}`
+                );
               }
-            } catch (saveErr: any) {
-              console.warn(`⚠️ Could not save invoice number to shipment_record: ${saveErr.message}`);
             }
           }
-        }
 
-        const slipItems = groupItemsByDescription(
-          siblingRows.map((r) => ({
-            poItem: {
-              stockModelName: r.poi_stock_model_name ?? null,
-              itemName: r.poi_item_name ?? null,
-              stockModelId: r.poi_stock_model_id ?? null,
-            },
-            order: { orderId: r.order_id ?? null },
-            quantity: r.quantity ?? 1,
-          })),
-          { partNumber: poNumberForSlip, shipmentNumber: shipmentRef }
-        );
-
-        console.log(
-          `📋 Packing slip regen — customerName: "${customerName}", poNumber: "${poNumberForSlip}", invoice: "${invoiceNumber}", qty: ${totalQty}, stickerRange: "${stickerRange}", shipmentRef: "${shipmentRef}"`
-        );
-
-        const slipData: PackingSlipData = {
-          packingSlipNumber: invoiceNumber,
-          poNumber: poNumberForSlip,
-          date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-          customerName,
-          customerAddress,
-          trackingNumber: item.tracking_number || '',
-          totalQuantity: totalQty,
-          shipmentNumber: shipmentRef,
-          items: slipItems,
-        };
-        const pdfBuffer = await generatePoPackingSlipPdf(slipData);
-        packingSlipBase64 = pdfBuffer.toString('base64');
-
-        // Persist to all sibling items in this PO group so future fetches don't regenerate
-        const siblingIds = siblingRows.map((r) => r.id).filter(Boolean);
-        if (siblingIds.length > 1) {
-          await pool.query(
-            `UPDATE shipment_items SET packing_slip_base64 = $1 WHERE id = ANY($2::uuid[])`,
-            [packingSlipBase64, siblingIds]
+          const slipItems = groupItemsByDescription(
+            siblingRows.map((r) => ({
+              poItem: {
+                stockModelName: r.poi_stock_model_name ?? null,
+                itemName: r.poi_item_name ?? null,
+                stockModelId: r.poi_stock_model_id ?? null,
+              },
+              order: { orderId: r.order_id ?? null },
+              quantity: r.quantity ?? 1,
+            })),
+            { partNumber: poNumberForSlip, shipmentNumber: shipmentRef }
           );
-          console.log(`✅ Packing slip persisted to ${siblingIds.length} sibling item(s) for PO ${poNumberForSlip}`);
-        } else {
-          await pool.query(
-            `UPDATE shipment_items SET packing_slip_base64 = $1 WHERE id = $2`,
-            [packingSlipBase64, itemId]
+
+          console.log(
+            `📋 Packing slip regen — customerName: "${customerName}", poNumber: "${poNumberForSlip}", invoice: "${invoiceNumber}", qty: ${totalQty}, stickerRange: "${stickerRange}", shipmentRef: "${shipmentRef}"`
           );
-          console.log(`✅ Packing slip regenerated and persisted: ${itemId}`);
+
+          const slipData: PackingSlipData = {
+            packingSlipNumber: invoiceNumber,
+            poNumber: poNumberForSlip,
+            date: new Date().toLocaleDateString('en-US', {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric',
+            }),
+            customerName,
+            customerAddress,
+            trackingNumber: item.tracking_number || '',
+            totalQuantity: totalQty,
+            shipmentNumber: shipmentRef,
+            items: slipItems,
+          };
+          const pdfBuffer = await generatePoPackingSlipPdf(slipData);
+          packingSlipBase64 = pdfBuffer.toString('base64');
+
+          // Persist to all sibling items in this PO group so future fetches don't regenerate
+          const siblingIds = siblingRows.map((r) => r.id).filter(Boolean);
+          if (siblingIds.length > 1) {
+            await pool.query(
+              `UPDATE shipment_items SET packing_slip_base64 = $1 WHERE id = ANY($2::uuid[])`,
+              [packingSlipBase64, siblingIds]
+            );
+            console.log(
+              `✅ Packing slip persisted to ${siblingIds.length} sibling item(s) for PO ${poNumberForSlip}`
+            );
+          } else {
+            await pool.query(
+              `UPDATE shipment_items SET packing_slip_base64 = $1 WHERE id = $2`,
+              [packingSlipBase64, itemId]
+            );
+            console.log(`✅ Packing slip regenerated and persisted: ${itemId}`);
+          }
+        } catch (regenErr: any) {
+          console.error(
+            `❌ Packing slip regeneration failed for item ${itemId}:`,
+            regenErr.message
+          );
+          return res.status(404).json({
+            _error: 'Packing slip not available and could not be regenerated',
+          });
         }
-      } catch (regenErr: any) {
-        console.error(`❌ Packing slip regeneration failed for item ${itemId}:`, regenErr.message);
-        return res.status(404).json({ _error: 'Packing slip not available and could not be regenerated' });
       }
+
+      // Decode base64 and send as PDF
+      const slipBuffer = Buffer.from(packingSlipBase64, 'base64');
+      const filename = `packing-slip-PO${item.po_number}-${item.order_id}.pdf`;
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="${filename}"`
+      );
+      res.send(slipBuffer);
+
+      console.log(`✅ Packing slip downloaded: ${filename}`);
+    } catch (error: any) {
+      console.error('❌ Error downloading packing slip:', error);
+      res.status(500).json({
+        _error: 'Failed to download packing slip',
+        details: error.message,
+      });
     }
-
-    // Decode base64 and send as PDF
-    const slipBuffer = Buffer.from(packingSlipBase64, 'base64');
-    const filename = `packing-slip-PO${item.po_number}-${item.order_id}.pdf`;
-
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.send(slipBuffer);
-
-    console.log(`✅ Packing slip downloaded: ${filename}`);
-  } catch (error: any) {
-    console.error('❌ Error downloading packing slip:', error);
-    res.status(500).json({ _error: 'Failed to download packing slip', details: error.message });
   }
-});
+);
 
 // POST /api/po-orders/oem-shipments/:id/invoices
 // Create one review AR invoice for a P1 OEM shipment packing slip (shipment + PO group).
-router.post('/oem-shipments/:id/invoices', authenticateToken, async (req, res) => {
-  const client = await pool.connect();
-  try {
-    if (!isGlennAdmin(req.user)) {
-      return res.status(403).json({ error: 'Only glennj/admin can create P1 OEM packing slip invoices.' });
-    }
+router.post(
+  '/oem-shipments/:id/invoices',
+  authenticateToken,
+  async (req, res) => {
+    const client = await pool.connect();
+    try {
+      if (!isGlennAdmin(req.user)) {
+        return res.status(403).json({
+          error: 'Only glennj/admin can create P1 OEM packing slip invoices.',
+        });
+      }
 
-    const { id } = req.params;
-    const { poNumber } = req.body || {};
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(id)) {
-      return res.status(400).json({ error: 'Invalid shipment ID format' });
-    }
-    if (!poNumber || typeof poNumber !== 'string') {
-      return res.status(400).json({ error: 'poNumber is required' });
-    }
+      const { id } = req.params;
+      const { poNumber } = req.body || {};
+      const uuidRegex =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(id)) {
+        return res.status(400).json({ error: 'Invalid shipment ID format' });
+      }
+      if (!poNumber || typeof poNumber !== 'string') {
+        return res.status(400).json({ error: 'poNumber is required' });
+      }
 
-    const existing = await findP1PackingSlipInvoice(id, poNumber);
-    if (existing) {
-      return res.status(200).json({
-        id: existing.id,
-        invoiceNumber: existing.invoice_number,
-        status: existing.status,
-      });
-    }
+      const existing = await findP1PackingSlipInvoice(id, poNumber);
+      if (existing) {
+        return res.status(200).json({
+          id: existing.id,
+          invoiceNumber: existing.invoice_number,
+          status: existing.status,
+        });
+      }
 
-    const lineResult = await client.query(
-      `WITH shipment_lines AS (
+      const lineResult = await client.query(
+        `WITH shipment_lines AS (
          SELECT
            sr.id AS shipment_record_id,
            sr.reference,
@@ -1565,89 +1789,108 @@ router.post('/oem-shipments/:id/invoices', authenticateToken, async (req, res) =
        FROM shipment_lines
        WHERE po_number = $2
        ORDER BY order_id, shipment_item_id`,
-      [id, poNumber]
-    );
-
-    const lines = lineResult.rows || [];
-    if (lines.length === 0) {
-      return res.status(404).json({ error: 'No shipment items found for this P1 packing slip.' });
-    }
-
-    const shipmentOrderIds = lines.map((line: any) => line.order_id).filter(Boolean);
-    const existingForOrders = await findP1PackingSlipInvoiceForOrders(poNumber, shipmentOrderIds);
-    if (existingForOrders) {
-      await client.query(
-        `UPDATE shipment_records SET invoice_number = $1, updated_at = NOW() WHERE id = $2 AND invoice_number IS NULL`,
-        [existingForOrders.invoice_number, id]
+        [id, poNumber]
       );
-      return res.status(200).json({
-        id: existingForOrders.id,
-        invoiceNumber: existingForOrders.invoice_number,
-        status: existingForOrders.status,
-      });
-    }
 
-    const first = lines[0];
-    let invoiceNumber = first.shipment_invoice_number as string | null;
-    if (!invoiceNumber) {
-      const reusableInvoiceNumber = await findReusableP1InvoiceNumber({
-        poNumber,
-        orderIds: shipmentOrderIds,
-      });
-      if (reusableInvoiceNumber) {
-        invoiceNumber = reusableInvoiceNumber;
-      } else {
-        const { storage: invoiceStorage } = await import('../../storage');
-        invoiceNumber = await invoiceStorage.getNextInvoiceNumber(
-          String(first.po_customer_id || first.shipment_customer_id || '0'),
-          first.po_customer_name || first.shipment_customer_name || first.ship_to_snapshot?.name || 'P1 OEM Customer'
-        );
+      const lines = lineResult.rows || [];
+      if (lines.length === 0) {
+        return res
+          .status(404)
+          .json({ error: 'No shipment items found for this P1 packing slip.' });
       }
-      await client.query(
-        `UPDATE shipment_records SET invoice_number = $1, updated_at = NOW() WHERE id = $2 AND invoice_number IS NULL`,
-        [invoiceNumber, id]
-      );
-    }
 
-    const today = new Date();
-    const invoiceDate = toDateOnly(today);
-    const dueDate = toDateOnly(addDays(today, 30));
-    const customerId = String(first.po_customer_id || first.shipment_customer_id || '0');
-    const consolidatedLines = Array.from(lines.reduce((map: Map<string, any>, line: any) => {
-      const unitPrice = Number(line.unit_price || 0);
-      const partNumber = line.part_number || null;
-      const description = line.description || line.order_id || poNumber;
-      const key = JSON.stringify([partNumber, description, unitPrice]);
-      const existing = map.get(key);
-      if (existing) {
-        existing.quantity += Number(line.quantity || 0);
-        existing.shipmentItemIds.push(line.shipment_item_id);
-        existing.orderIds.push(line.order_id);
-        existing.p1PoItemIds.push(line.p1_po_item_id);
-      } else {
-        map.set(key, {
-          ...line,
-          part_number: partNumber,
-          description,
-          unit_price: unitPrice,
-          quantity: Number(line.quantity || 0),
-          shipmentItemIds: [line.shipment_item_id],
-          orderIds: [line.order_id],
-          p1PoItemIds: [line.p1_po_item_id],
+      const shipmentOrderIds = lines
+        .map((line: any) => line.order_id)
+        .filter(Boolean);
+      const existingForOrders = await findP1PackingSlipInvoiceForOrders(
+        poNumber,
+        shipmentOrderIds
+      );
+      if (existingForOrders) {
+        await client.query(
+          `UPDATE shipment_records SET invoice_number = $1, updated_at = NOW() WHERE id = $2 AND invoice_number IS NULL`,
+          [existingForOrders.invoice_number, id]
+        );
+        return res.status(200).json({
+          id: existingForOrders.id,
+          invoiceNumber: existingForOrders.invoice_number,
+          status: existingForOrders.status,
         });
       }
-      return map;
-    }, new Map<string, any>()).values());
 
-    const subtotal = consolidatedLines.reduce(
-      (sum: number, line: any) => sum + Number(line.quantity || 0) * Number(line.unit_price || 0),
-      0
-    );
-    const pricingMismatch = lines.some((line: any) => line.unit_price === null || line.unit_price === undefined);
+      const first = lines[0];
+      let invoiceNumber = first.shipment_invoice_number as string | null;
+      if (!invoiceNumber) {
+        const reusableInvoiceNumber = await findReusableP1InvoiceNumber({
+          poNumber,
+          orderIds: shipmentOrderIds,
+        });
+        if (reusableInvoiceNumber) {
+          invoiceNumber = reusableInvoiceNumber;
+        } else {
+          const { storage: invoiceStorage } = await import('../../storage');
+          invoiceNumber = await invoiceStorage.getNextInvoiceNumber(
+            String(first.po_customer_id || first.shipment_customer_id || '0'),
+            first.po_customer_name ||
+              first.shipment_customer_name ||
+              first.ship_to_snapshot?.name ||
+              'P1 OEM Customer'
+          );
+        }
+        await client.query(
+          `UPDATE shipment_records SET invoice_number = $1, updated_at = NOW() WHERE id = $2 AND invoice_number IS NULL`,
+          [invoiceNumber, id]
+        );
+      }
 
-    await client.query('BEGIN');
-    const invoiceResult = await client.query(
-      `INSERT INTO ar_invoices (
+      const today = new Date();
+      const invoiceDate = toDateOnly(today);
+      const dueDate = toDateOnly(addDays(today, 30));
+      const customerId = String(
+        first.po_customer_id || first.shipment_customer_id || '0'
+      );
+      const consolidatedLines = Array.from(
+        lines
+          .reduce((map: Map<string, any>, line: any) => {
+            const unitPrice = Number(line.unit_price || 0);
+            const partNumber = line.part_number || null;
+            const description = line.description || line.order_id || poNumber;
+            const key = JSON.stringify([partNumber, description, unitPrice]);
+            const existing = map.get(key);
+            if (existing) {
+              existing.quantity += Number(line.quantity || 0);
+              existing.shipmentItemIds.push(line.shipment_item_id);
+              existing.orderIds.push(line.order_id);
+              existing.p1PoItemIds.push(line.p1_po_item_id);
+            } else {
+              map.set(key, {
+                ...line,
+                part_number: partNumber,
+                description,
+                unit_price: unitPrice,
+                quantity: Number(line.quantity || 0),
+                shipmentItemIds: [line.shipment_item_id],
+                orderIds: [line.order_id],
+                p1PoItemIds: [line.p1_po_item_id],
+              });
+            }
+            return map;
+          }, new Map<string, any>())
+          .values()
+      );
+
+      const subtotal = consolidatedLines.reduce(
+        (sum: number, line: any) =>
+          sum + Number(line.quantity || 0) * Number(line.unit_price || 0),
+        0
+      );
+      const pricingMismatch = lines.some(
+        (line: any) => line.unit_price === null || line.unit_price === undefined
+      );
+
+      await client.query('BEGIN');
+      const invoiceResult = await client.query(
+        `INSERT INTO ar_invoices (
          customer_id,
          invoice_number,
          invoice_date,
@@ -1673,38 +1916,38 @@ router.post('/oem-shipments/:id/invoices', authenticateToken, async (req, res) =
        )
        VALUES ($1, $2, $3, $4, 'NET_30', $5, $6, $7, '0', '0', '0', '0', '0', $7, 'REVIEW', $8, NULL, $9, $10, true, $11, false)
        RETURNING id, invoice_number, status`,
-      [
-        customerId,
-        invoiceNumber,
-        invoiceDate,
-        dueDate,
-        first.purchase_order_id ? String(first.purchase_order_id) : null,
-        poNumber,
-        subtotal.toFixed(2),
-        `Auto-created from P1 OEM packing slip ${invoiceNumber} for PO ${poNumber}.`,
-        `Source: P1 OEM shipment ${first.reference || id}; tracking ${first.master_tracking_number || 'n/a'}; PO ${poNumber}.`,
-        req.user?.username || 'system',
-        pricingMismatch,
-      ]
-    );
+        [
+          customerId,
+          invoiceNumber,
+          invoiceDate,
+          dueDate,
+          first.purchase_order_id ? String(first.purchase_order_id) : null,
+          poNumber,
+          subtotal.toFixed(2),
+          `Auto-created from P1 OEM packing slip ${invoiceNumber} for PO ${poNumber}.`,
+          `Source: P1 OEM shipment ${first.reference || id}; tracking ${first.master_tracking_number || 'n/a'}; PO ${poNumber}.`,
+          req.user?.username || 'system',
+          pricingMismatch,
+        ]
+      );
 
-    const invoice = invoiceResult.rows[0];
-    for (const line of consolidatedLines) {
-      const qty = Number(line.quantity || 0);
-      const unitPrice = Number(line.unit_price || 0);
-      const tags = {
-        source: 'p1_oem_packing_slip',
-        shipmentRecordId: id,
-        shipmentReference: first.reference || null,
-        shipmentItemIds: line.shipmentItemIds,
-        poNumber,
-        p1PoItemIds: line.p1PoItemIds,
-        orderIds: line.orderIds,
-        trackingNumber: first.master_tracking_number || null,
-      };
+      const invoice = invoiceResult.rows[0];
+      for (const line of consolidatedLines) {
+        const qty = Number(line.quantity || 0);
+        const unitPrice = Number(line.unit_price || 0);
+        const tags = {
+          source: 'p1_oem_packing_slip',
+          shipmentRecordId: id,
+          shipmentReference: first.reference || null,
+          shipmentItemIds: line.shipmentItemIds,
+          poNumber,
+          p1PoItemIds: line.p1PoItemIds,
+          orderIds: line.orderIds,
+          trackingNumber: first.master_tracking_number || null,
+        };
 
-      await client.query(
-        `INSERT INTO ar_invoice_lines (
+        await client.query(
+          `INSERT INTO ar_invoice_lines (
            invoice_id,
            inventory_item_id,
            po_item_id,
@@ -1717,101 +1960,129 @@ router.post('/oem-shipments/:id/invoices', authenticateToken, async (req, res) =
            dimension_tags
          )
          VALUES ($1, NULL, NULL, $2, 'P1', $3, $4, $5, $6, $7::jsonb)`,
-        [
-          invoice.id,
-          line.part_number || null,
-          line.description || line.order_id || poNumber,
-          qty.toString(),
-          unitPrice.toFixed(2),
-          (qty * unitPrice).toFixed(2),
-          JSON.stringify(tags),
-        ]
-      );
-    }
+          [
+            invoice.id,
+            line.part_number || null,
+            line.description || line.order_id || poNumber,
+            qty.toString(),
+            unitPrice.toFixed(2),
+            (qty * unitPrice).toFixed(2),
+            JSON.stringify(tags),
+          ]
+        );
+      }
 
-    await client.query('COMMIT');
-    console.log(`[P1InvoiceService] Invoice ${invoice.invoice_number} created from shipment ${id}, PO ${poNumber}`);
-    res.status(201).json({
-      id: invoice.id,
-      invoiceNumber: invoice.invoice_number,
-      status: invoice.status,
-    });
-  } catch (error: any) {
-    try {
-      await client.query('ROLLBACK');
-    } catch {
-      // Ignore rollback errors.
+      await client.query('COMMIT');
+      console.log(
+        `[P1InvoiceService] Invoice ${invoice.invoice_number} created from shipment ${id}, PO ${poNumber}`
+      );
+      res.status(201).json({
+        id: invoice.id,
+        invoiceNumber: invoice.invoice_number,
+        status: invoice.status,
+      });
+    } catch (error: any) {
+      try {
+        await client.query('ROLLBACK');
+      } catch {
+        // Ignore rollback errors.
+      }
+      console.error('Failed to create P1 OEM packing slip invoice:', error);
+      res.status(500).json({
+        error: error.message || 'Failed to create invoice from P1 packing slip',
+      });
+    } finally {
+      client.release();
     }
-    console.error('Failed to create P1 OEM packing slip invoice:', error);
-    res.status(500).json({ error: error.message || 'Failed to create invoice from P1 packing slip' });
-  } finally {
-    client.release();
   }
-});
+);
 
 // PATCH /api/po-orders/oem-shipments/:id/tracking
 // Update tracking number for a specific shipment
-router.patch('/oem-shipments/:id/tracking', authenticateToken, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { trackingNumber } = req.body;
-    
-    console.log(`📝 Updating tracking number for shipment ${id} to: ${trackingNumber}`);
+router.patch(
+  '/oem-shipments/:id/tracking',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { trackingNumber } = req.body;
 
-    // Validate UUID format
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(id)) {
-      return res.status(400).json({ _error: 'Invalid shipment ID format' });
-    }
+      console.log(
+        `📝 Updating tracking number for shipment ${id} to: ${trackingNumber}`
+      );
 
-    if (!trackingNumber || typeof trackingNumber !== 'string' || trackingNumber.trim().length === 0) {
-      return res.status(400).json({ _error: 'Tracking number is required' });
-    }
+      // Validate UUID format
+      const uuidRegex =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(id)) {
+        return res.status(400).json({ _error: 'Invalid shipment ID format' });
+      }
 
-    const query = `
+      if (
+        !trackingNumber ||
+        typeof trackingNumber !== 'string' ||
+        trackingNumber.trim().length === 0
+      ) {
+        return res.status(400).json({ _error: 'Tracking number is required' });
+      }
+
+      const query = `
       UPDATE shipment_records
       SET master_tracking_number = $1
       WHERE id = $2
       RETURNING id, master_tracking_number
     `;
 
-    const result = await pool.query(query, [trackingNumber.trim(), id]);
-    const updated = (result.rows || result)[0];
+      const result = await pool.query(query, [trackingNumber.trim(), id]);
+      const updated = (result.rows || result)[0];
 
-    if (!updated) {
-      return res.status(404).json({ _error: 'Shipment not found' });
+      if (!updated) {
+        return res.status(404).json({ _error: 'Shipment not found' });
+      }
+
+      console.log(`✅ Tracking number updated successfully for shipment ${id}`);
+      res.json({
+        success: true,
+        shipmentId: updated.id,
+        trackingNumber: updated.master_tracking_number,
+      });
+    } catch (error: any) {
+      console.error('❌ Error updating tracking number:', error);
+      res.status(500).json({
+        _error: 'Failed to update tracking number',
+        details: error.message,
+      });
     }
-
-    console.log(`✅ Tracking number updated successfully for shipment ${id}`);
-    res.json({ 
-      success: true, 
-      shipmentId: updated.id,
-      trackingNumber: updated.master_tracking_number 
-    });
-  } catch (error: any) {
-    console.error('❌ Error updating tracking number:', error);
-    res.status(500).json({ _error: 'Failed to update tracking number', details: error.message });
   }
-});
+);
 
 // POST /api/po-orders/oem-shipments/:id/items
 // Add items to an existing shipment (admin correction feature)
 router.post('/oem-shipments/:id/items', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { poItemId, orderId, quantity = 1, description = '', poNumber = '' } = req.body;
-    
+    const {
+      poItemId,
+      orderId,
+      quantity = 1,
+      description = '',
+      poNumber = '',
+    } = req.body;
+
     console.log(`📦 Adding item to shipment ${id}: ${orderId}`);
 
     // Validate UUID format for shipment ID
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(id)) {
       return res.status(400).json({ _error: 'Invalid shipment ID format' });
     }
 
     // Validate required fields
     if (!poItemId || !orderId) {
-      return res.status(400).json({ _error: 'poItemId and orderId are required' });
+      return res
+        .status(400)
+        .json({ _error: 'poItemId and orderId are required' });
     }
 
     // Check if shipment exists
@@ -1819,7 +2090,7 @@ router.post('/oem-shipments/:id/items', authenticateToken, async (req, res) => {
       'SELECT id FROM shipment_records WHERE id = $1',
       [id]
     );
-    
+
     if ((shipmentCheck.rows || shipmentCheck).length === 0) {
       return res.status(404).json({ _error: 'Shipment not found' });
     }
@@ -1829,9 +2100,11 @@ router.post('/oem-shipments/:id/items', authenticateToken, async (req, res) => {
       'SELECT id FROM shipment_items WHERE shipment_id = $1 AND order_id = $2',
       [id, orderId]
     );
-    
+
     if ((existingCheck.rows || existingCheck).length > 0) {
-      return res.status(400).json({ _error: `Item ${orderId} already exists in this shipment` });
+      return res
+        .status(400)
+        .json({ _error: `Item ${orderId} already exists in this shipment` });
     }
 
     // Insert the new shipment item
@@ -1841,29 +2114,42 @@ router.post('/oem-shipments/:id/items', authenticateToken, async (req, res) => {
       RETURNING id, shipment_id, po_item_id, order_id, quantity
     `;
 
-    const result = await pool.query(insertQuery, [id, poItemId, orderId, quantity, description, poNumber]);
+    const result = await pool.query(insertQuery, [
+      id,
+      poItemId,
+      orderId,
+      quantity,
+      description,
+      poNumber,
+    ]);
     const newItem = (result.rows || result)[0];
 
     console.log(`✅ Item ${orderId} added to shipment ${id}`);
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       item: newItem,
-      message: `Item ${orderId} added to shipment successfully`
+      message: `Item ${orderId} added to shipment successfully`,
     });
   } catch (error: any) {
     console.error('❌ Error adding item to shipment:', error);
-    res.status(500).json({ _error: 'Failed to add item to shipment', details: error.message });
+    res.status(500).json({
+      _error: 'Failed to add item to shipment',
+      details: error.message,
+    });
   }
 });
 
 // POST /api/po-orders/oem-shipments/cleanup-duplicates
 // Remove FULFILLED-* shipments where the same orders already have real tracking numbers
-router.post('/oem-shipments/cleanup-duplicates', authenticateToken, async (req, res) => {
-  try {
-    console.log('🧹 Starting duplicate shipment cleanup...');
-    
-    // Find and delete FULFILLED-* shipments where orders also exist with real tracking
-    const result = await pool.query(`
+router.post(
+  '/oem-shipments/cleanup-duplicates',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      console.log('🧹 Starting duplicate shipment cleanup...');
+
+      // Find and delete FULFILLED-* shipments where orders also exist with real tracking
+      const result = await pool.query(`
       WITH order_shipments AS (
         SELECT 
           si.order_id,
@@ -1889,42 +2175,54 @@ router.post('/oem-shipments/cleanup-duplicates', authenticateToken, async (req, 
       WHERE id IN (SELECT shipment_id FROM fulfilled_shipments_to_delete)
       RETURNING id, master_tracking_number
     `);
-    
-    const deletedShipments = result.rows || result || [];
-    console.log(`✅ Cleaned up ${deletedShipments.length} duplicate FULFILLED-* shipments`);
-    
-    res.json({
-      success: true,
-      deletedCount: deletedShipments.length,
-      deletedShipments: deletedShipments.map((s: any) => ({
-        id: s.id,
-        trackingNumber: s.master_tracking_number
-      }))
-    });
-  } catch (error: any) {
-    console.error('❌ Error cleaning up duplicate shipments:', error);
-    res.status(500).json({ _error: 'Failed to cleanup duplicates', details: error.message });
+
+      const deletedShipments = result.rows || result || [];
+      console.log(
+        `✅ Cleaned up ${deletedShipments.length} duplicate FULFILLED-* shipments`
+      );
+
+      res.json({
+        success: true,
+        deletedCount: deletedShipments.length,
+        deletedShipments: deletedShipments.map((s: any) => ({
+          id: s.id,
+          trackingNumber: s.master_tracking_number,
+        })),
+      });
+    } catch (error: any) {
+      console.error('❌ Error cleaning up duplicate shipments:', error);
+      res.status(500).json({
+        _error: 'Failed to cleanup duplicates',
+        details: error.message,
+      });
+    }
   }
-});
+);
 
 // POST /api/po-orders/oem-shipments/:id/return-to-qc
 // Return all items from a shipment back to Shipping QC for reprinting/editing
-router.post('/oem-shipments/:id/return-to-qc', authenticateToken, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { reason } = req.body;
-    
-    console.log(`🔄 Returning shipment ${id} to Shipping QC. Reason: ${reason || 'Not specified'}`);
+router.post(
+  '/oem-shipments/:id/return-to-qc',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { reason } = req.body;
 
-    // Validate UUID format
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(id)) {
-      return res.status(400).json({ _error: 'Invalid shipment ID format' });
-    }
+      console.log(
+        `🔄 Returning shipment ${id} to Shipping QC. Reason: ${reason || 'Not specified'}`
+      );
 
-    // Get all items in this shipment
-    const itemsResult = await pool.query(
-      `SELECT
+      // Validate UUID format
+      const uuidRegex =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(id)) {
+        return res.status(400).json({ _error: 'Invalid shipment ID format' });
+      }
+
+      // Get all items in this shipment
+      const itemsResult = await pool.query(
+        `SELECT
          si.order_id,
          si.po_number,
          sr.invoice_number,
@@ -1932,74 +2230,87 @@ router.post('/oem-shipments/:id/return-to-qc', authenticateToken, async (req, re
        FROM shipment_items si
        JOIN shipment_records sr ON sr.id = si.shipment_id
        WHERE si.shipment_id = $1`,
-      [id]
-    );
-    const items = itemsResult.rows || itemsResult;
+        [id]
+      );
+      const items = itemsResult.rows || itemsResult;
 
-    if (items.length === 0) {
-      return res.status(404).json({ _error: 'Shipment not found or has no items' });
-    }
+      if (items.length === 0) {
+        return res
+          .status(404)
+          .json({ _error: 'Shipment not found or has no items' });
+      }
 
-    const orderIds = items.map((item: any) => item.order_id);
-    console.log(`🔄 Regressing ${orderIds.length} orders back to Shipping QC: ${orderIds.join(', ')}`);
+      const orderIds = items.map((item: any) => item.order_id);
+      console.log(
+        `🔄 Regressing ${orderIds.length} orders back to Shipping QC: ${orderIds.join(', ')}`
+      );
 
-    const artifactGroups = new Map<string, { invoiceNumber: string; trackingNumber: string; orderIds: string[] }>();
-    for (const item of items) {
-      if (!item.invoice_number || !item.po_number) continue;
-      if (!artifactGroups.has(item.po_number)) {
-        artifactGroups.set(item.po_number, {
-          invoiceNumber: item.invoice_number,
-          trackingNumber: item.master_tracking_number || '',
-          orderIds: [],
+      const artifactGroups = new Map<
+        string,
+        { invoiceNumber: string; trackingNumber: string; orderIds: string[] }
+      >();
+      for (const item of items) {
+        if (!item.invoice_number || !item.po_number) continue;
+        if (!artifactGroups.has(item.po_number)) {
+          artifactGroups.set(item.po_number, {
+            invoiceNumber: item.invoice_number,
+            trackingNumber: item.master_tracking_number || '',
+            orderIds: [],
+          });
+        }
+        artifactGroups.get(item.po_number)!.orderIds.push(item.order_id);
+      }
+
+      for (const [poNumber, artifact] of artifactGroups.entries()) {
+        await recordP1FulfillmentArtifacts({
+          orderIds: artifact.orderIds,
+          poNumber,
+          invoiceNumber: artifact.invoiceNumber,
+          trackingNumber: artifact.trackingNumber,
+          shipmentRecordId: id,
         });
       }
-      artifactGroups.get(item.po_number)!.orderIds.push(item.order_id);
-    }
 
-    for (const [poNumber, artifact] of artifactGroups.entries()) {
-      await recordP1FulfillmentArtifacts({
-        orderIds: artifact.orderIds,
-        poNumber,
-        invoiceNumber: artifact.invoiceNumber,
-        trackingNumber: artifact.trackingNumber,
-        shipmentRecordId: id,
-      });
-    }
-
-    // Parse order IDs to extract PO item IDs
-    // Format is "PO-{poItemId}-{unitNumber}" e.g., "PO-93-1"
-    const poItemIds: number[] = [];
-    for (const orderId of orderIds) {
-      const match = orderId.match(/^PO-(\d+)-\d+$/);
-      if (match) {
-        poItemIds.push(parseInt(match[1], 10));
+      // Parse order IDs to extract PO item IDs
+      // Format is "PO-{poItemId}-{unitNumber}" e.g., "PO-93-1"
+      const poItemIds: number[] = [];
+      for (const orderId of orderIds) {
+        const match = orderId.match(/^PO-(\d+)-\d+$/);
+        if (match) {
+          poItemIds.push(parseInt(match[1], 10));
+        }
       }
-    }
-    const uniquePoItemIds = [...new Set(poItemIds)];
-    console.log(`🔄 Extracted PO item IDs: ${uniquePoItemIds.join(', ')}`);
+      const uniquePoItemIds = [...new Set(poItemIds)];
+      console.log(`🔄 Extracted PO item IDs: ${uniquePoItemIds.join(', ')}`);
 
-    let totalUpdated = 0;
+      let totalUpdated = 0;
 
-    // Update purchase_order_items.stock_status back to null (ready for shipping QC).
-    // The explicit return-to-QC action is itself the business authorization to reverse any
-    // prior shipped status, so we clear stock_status unconditionally for all items in this
-    // shipment — including metal accessories that have no production order and whose Shipping
-    // QC visibility depends entirely on stock_status being NULL.
-    if (uniquePoItemIds.length > 0) {
-      const poItemResult = await pool.query(`
+      // Update purchase_order_items.stock_status back to null (ready for shipping QC).
+      // The explicit return-to-QC action is itself the business authorization to reverse any
+      // prior shipped status, so we clear stock_status unconditionally for all items in this
+      // shipment — including metal accessories that have no production order and whose Shipping
+      // QC visibility depends entirely on stock_status being NULL.
+      if (uniquePoItemIds.length > 0) {
+        const poItemResult = await pool.query(
+          `
         UPDATE purchase_order_items 
         SET stock_status = NULL,
             updated_at = NOW()
         WHERE id = ANY($1::int[])
         RETURNING id, stock_status
-      `, [uniquePoItemIds]);
-      const poItemsUpdated = poItemResult.rows || poItemResult;
-      console.log(`✅ Updated ${poItemsUpdated.length} purchase_order_items to null stock_status`);
-      totalUpdated += poItemsUpdated.length;
-    }
+      `,
+          [uniquePoItemIds]
+        );
+        const poItemsUpdated = poItemResult.rows || poItemResult;
+        console.log(
+          `✅ Updated ${poItemsUpdated.length} purchase_order_items to null stock_status`
+        );
+        totalUpdated += poItemsUpdated.length;
+      }
 
-    // Also try to update production_orders if they exist
-    const updateResult = await pool.query(`
+      // Also try to update production_orders if they exist
+      const updateResult = await pool.query(
+        `
       UPDATE production_orders 
       SET production_status = 'QC_PASSED',
           current_department = 'Shipping QC',
@@ -2009,68 +2320,85 @@ router.post('/oem-shipments/:id/return-to-qc', authenticateToken, async (req, re
           updated_at = NOW()
       WHERE order_id = ANY($1::text[])
       RETURNING order_id, production_status, current_department
-    `, [orderIds]);
-
-    const updated = updateResult.rows || updateResult;
-    if (updated.length > 0) {
-      console.log(`✅ Updated ${updated.length} production orders to Shipping QC`);
-      totalUpdated += updated.length;
-    }
-
-    // Also update all_orders if they exist there
-    await auditUpdateOrders({
-      db: pool,
-      orderIds,
-      changes: {
-        current_department: 'Shipping QC',
-        status: 'IN_PROGRESS',
-      },
-      source: 'RETURN_TO_QC',
-      user: (req as any).user,
-      reason: (req as any).body?.reason || 'Return to QC',
-      ip: req.ip,
-      userAgent: req.headers['user-agent'] as string | null,
-    });
-
-    try {
-      await reverseP1ShipmentRevenueDraftOrEntry(
-        'p1_shipment_record',
-        id,
-        reason || 'Shipment returned to Shipping QC',
-        req.user,
+    `,
+        [orderIds]
       );
-    } catch (revenueErr: any) {
-      console.error(`Failed to reverse P1 PO shipment revenue draft for ${id}:`, revenueErr.message);
-    }
 
-    // Delete shipment_items so they don't appear in OEM Shipments anymore
-    const deleteItemsResult = await pool.query(`
+      const updated = updateResult.rows || updateResult;
+      if (updated.length > 0) {
+        console.log(
+          `✅ Updated ${updated.length} production orders to Shipping QC`
+        );
+        totalUpdated += updated.length;
+      }
+
+      // Also update all_orders if they exist there
+      await auditUpdateOrders({
+        db: pool,
+        orderIds,
+        changes: {
+          current_department: 'Shipping QC',
+          status: 'IN_PROGRESS',
+        },
+        source: 'RETURN_TO_QC',
+        user: (req as any).user,
+        reason: (req as any).body?.reason || 'Return to QC',
+        ip: req.ip,
+        userAgent: req.headers['user-agent'] as string | null,
+      });
+
+      try {
+        await reverseP1ShipmentRevenueDraftOrEntry(
+          'p1_shipment_record',
+          id,
+          reason || 'Shipment returned to Shipping QC',
+          req.user
+        );
+      } catch (revenueErr: any) {
+        console.error(
+          `Failed to reverse P1 PO shipment revenue draft for ${id}:`,
+          revenueErr.message
+        );
+      }
+
+      // Delete shipment_items so they don't appear in OEM Shipments anymore
+      const deleteItemsResult = await pool.query(
+        `
       DELETE FROM shipment_items 
       WHERE shipment_id = $1
       RETURNING id
-    `, [id]);
-    const deletedItems = deleteItemsResult.rows || deleteItemsResult;
-    console.log(`🗑️ Deleted ${deletedItems.length} shipment_items`);
+    `,
+        [id]
+      );
+      const deletedItems = deleteItemsResult.rows || deleteItemsResult;
+      console.log(`🗑️ Deleted ${deletedItems.length} shipment_items`);
 
-    // Delete the shipment record since it's now empty
-    await pool.query(`
+      // Delete the shipment record since it's now empty
+      await pool.query(
+        `
       DELETE FROM shipment_records 
       WHERE id = $1
-    `, [id]);
-    console.log(`🗑️ Deleted shipment record ${id}`);
+    `,
+        [id]
+      );
+      console.log(`🗑️ Deleted shipment record ${id}`);
 
-    res.json({
-      success: true,
-      message: `Returned ${totalUpdated} items to Shipping QC`,
-      orderIds: orderIds,
-      poItemIds: uniquePoItemIds,
-      updatedCount: totalUpdated,
-    });
-  } catch (error: any) {
-    console.error('❌ Error returning shipment to QC:', error);
-    res.status(500).json({ _error: 'Failed to return shipment to QC', details: error.message });
+      res.json({
+        success: true,
+        message: `Returned ${totalUpdated} items to Shipping QC`,
+        orderIds: orderIds,
+        poItemIds: uniquePoItemIds,
+        updatedCount: totalUpdated,
+      });
+    } catch (error: any) {
+      console.error('❌ Error returning shipment to QC:', error);
+      res.status(500).json({
+        _error: 'Failed to return shipment to QC',
+        details: error.message,
+      });
+    }
   }
-});
+);
 
 // POST /api/po-orders/toggle-fulfilled
 // Mark PO item(s) as fulfilled (shipped through another system) or unfulfilled
@@ -2081,7 +2409,7 @@ router.post('/toggle-fulfilled', authenticateToken, async (req, res) => {
     // Support both single orderId and batch orderIds
     const { orderId, orderIds, isFulfilled, fulfilled } = req.body;
     const shouldFulfill = isFulfilled ?? fulfilled ?? true;
-    
+
     // Normalize to array of order IDs
     let idsToProcess: string[] = [];
     if (orderIds && Array.isArray(orderIds)) {
@@ -2091,16 +2419,20 @@ router.post('/toggle-fulfilled', authenticateToken, async (req, res) => {
     }
 
     if (idsToProcess.length === 0) {
-      return res.status(400).json({ _error: 'orderId or orderIds is required' });
+      return res
+        .status(400)
+        .json({ _error: 'orderId or orderIds is required' });
     }
 
-    console.log(`📦 ${shouldFulfill ? 'Marking' : 'Unmarking'} ${idsToProcess.length} item(s) as fulfilled...`);
+    console.log(
+      `📦 ${shouldFulfill ? 'Marking' : 'Unmarking'} ${idsToProcess.length} item(s) as fulfilled...`
+    );
 
     const { storage } = await import('../../storage');
     const results: any[] = [];
     const shippedAt = new Date();
     const shippedPoIds = new Set<number>();
-    
+
     for (const id of idsToProcess) {
       // Check if this is a PO item (non-stock/metal accessory) or a production order
       if (id.startsWith('PO-') && id.includes('-')) {
@@ -2113,8 +2445,10 @@ router.post('/toggle-fulfilled', authenticateToken, async (req, res) => {
             await storage.updatePurchaseOrderItem(poItemId, {
               stockStatus: shouldFulfill ? 'SHIPPED' : 'IN_STOCK',
             });
-            console.log(`✅ PO Item ${poItemId} marked as ${shouldFulfill ? 'SHIPPED' : 'IN_STOCK'}`);
-            
+            console.log(
+              `✅ PO Item ${poItemId} marked as ${shouldFulfill ? 'SHIPPED' : 'IN_STOCK'}`
+            );
+
             results.push({
               orderId: id,
               success: true,
@@ -2124,7 +2458,7 @@ router.post('/toggle-fulfilled', authenticateToken, async (req, res) => {
           }
         }
       }
-      
+
       // Try to find as production order
       const order = await storage.getProductionOrderByOrderId(id);
 
@@ -2171,9 +2505,16 @@ router.post('/toggle-fulfilled', authenticateToken, async (req, res) => {
   } catch (error: any) {
     console.error('❌ Error toggling fulfilled status:', error);
     if (error?.name === 'TransitionValidationError') {
-      return res.status(422).json({ _error: error.message, code: error.code, context: error.context });
+      return res.status(422).json({
+        _error: error.message,
+        code: error.code,
+        context: error.context,
+      });
     }
-    res.status(500).json({ _error: 'Failed to update fulfilled status', details: error.message });
+    res.status(500).json({
+      _error: 'Failed to update fulfilled status',
+      details: error.message,
+    });
   }
 });
 
@@ -2182,9 +2523,11 @@ router.post('/toggle-fulfilled', authenticateToken, async (req, res) => {
 router.get('/fulfilled-items', authenticateToken, async (req, res) => {
   try {
     const { customerName } = req.query;
-    
-    console.log(`🔍 Fetching fulfilled items${customerName ? ` for customer: ${customerName}` : ''}...`);
-    
+
+    console.log(
+      `🔍 Fetching fulfilled items${customerName ? ` for customer: ${customerName}` : ''}...`
+    );
+
     // Query production_orders for fulfilled items
     let query = `
       SELECT 
@@ -2205,20 +2548,20 @@ router.get('/fulfilled-items', authenticateToken, async (req, res) => {
       JOIN purchase_orders po ON poi.po_id = po.id
       WHERE (prod.production_status = 'Shipped' OR prod.is_fulfilled = true)
     `;
-    
+
     const params: any[] = [];
     if (customerName) {
       query += ` AND po.customer_name ILIKE $1`;
       params.push(`%${customerName}%`);
     }
-    
+
     query += ` ORDER BY po.customer_name, po.po_number, prod.order_id`;
-    
+
     const result = await pool.query(query, params);
     const items = result.rows || result || [];
-    
+
     console.log(`📊 Found ${items.length} fulfilled items`);
-    
+
     res.json({
       success: true,
       count: items.length,
@@ -2239,7 +2582,10 @@ router.get('/fulfilled-items', authenticateToken, async (req, res) => {
     });
   } catch (error: any) {
     console.error('❌ Error fetching fulfilled items:', error);
-    res.status(500).json({ _error: 'Failed to fetch fulfilled items', details: error.message });
+    res.status(500).json({
+      _error: 'Failed to fetch fulfilled items',
+      details: error.message,
+    });
   }
 });
 
@@ -2248,15 +2594,16 @@ router.get('/fulfilled-items', authenticateToken, async (req, res) => {
 router.post('/reset-fulfilled', authenticateToken, async (req, res) => {
   try {
     const { orderIds, customerName, poNumber } = req.body;
-    
+
     if (!orderIds && !customerName && !poNumber) {
-      return res.status(400).json({ 
-        _error: 'Provide orderIds array, customerName, or poNumber to reset fulfilled items' 
+      return res.status(400).json({
+        _error:
+          'Provide orderIds array, customerName, or poNumber to reset fulfilled items',
       });
     }
-    
+
     console.log(`🔄 Resetting fulfilled status...`);
-    
+
     let updateQuery = `
       UPDATE production_orders 
       SET 
@@ -2268,9 +2615,9 @@ router.post('/reset-fulfilled', authenticateToken, async (req, res) => {
         updated_at = NOW()
       WHERE (production_status = 'Shipped' OR is_fulfilled = true)
     `;
-    
+
     const params: any[] = [];
-    
+
     if (orderIds && Array.isArray(orderIds) && orderIds.length > 0) {
       updateQuery += ` AND order_id = ANY($1::text[])`;
       params.push(orderIds);
@@ -2291,7 +2638,7 @@ router.post('/reset-fulfilled', authenticateToken, async (req, res) => {
           JOIN purchase_orders po ON poi.po_id = po.id
           WHERE 1=1
       `;
-      
+
       if (customerName) {
         params.push(`%${customerName}%`);
         updateQuery += ` AND po.customer_name ILIKE $${params.length}`;
@@ -2300,17 +2647,17 @@ router.post('/reset-fulfilled', authenticateToken, async (req, res) => {
         params.push(poNumber);
         updateQuery += ` AND po.po_number = $${params.length}`;
       }
-      
+
       updateQuery += `)`;
     }
-    
+
     updateQuery += ` RETURNING order_id, production_status`;
-    
+
     const result = await pool.query(updateQuery, params);
     const resetItems = result.rows || result || [];
-    
+
     console.log(`✅ Reset ${resetItems.length} items to Shipping QC`);
-    
+
     res.json({
       success: true,
       resetCount: resetItems.length,
@@ -2318,7 +2665,10 @@ router.post('/reset-fulfilled', authenticateToken, async (req, res) => {
     });
   } catch (error: any) {
     console.error('❌ Error resetting fulfilled status:', error);
-    res.status(500).json({ _error: 'Failed to reset fulfilled status', details: error.message });
+    res.status(500).json({
+      _error: 'Failed to reset fulfilled status',
+      details: error.message,
+    });
   }
 });
 
@@ -2339,22 +2689,33 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
       thirdPartyPostalCode,
       thirdPartyCountryCode,
     } = req.body;
-    
+
     // Use weightLbs from frontend if provided, otherwise fall back to weightPerItemLbs
-    const totalPackageWeight = weightLbs ? parseFloat(weightLbs) : weightPerItemLbs;
+    const totalPackageWeight = weightLbs
+      ? parseFloat(weightLbs)
+      : weightPerItemLbs;
 
     // Validate billing third-party requirements
     if (billingOption === 'third-party') {
-      if (!thirdPartyAccountNumber || !thirdPartyPostalCode || !thirdPartyCountryCode) {
+      if (
+        !thirdPartyAccountNumber ||
+        !thirdPartyPostalCode ||
+        !thirdPartyCountryCode
+      ) {
         return res.status(400).json({
-          _error: 'Third-party billing requires accountNumber, postalCode, and countryCode',
+          _error:
+            'Third-party billing requires accountNumber, postalCode, and countryCode',
         });
       }
     }
 
     // Normalize payload to items format
-    let normalizedItems: Array<{ poItemId: number; orderId: string; quantity: number }>;
-    
+    let normalizedItems: Array<{
+      poItemId: number;
+      orderId: string;
+      quantity: number;
+    }>;
+
     if (items && Array.isArray(items)) {
       // New format from ShipmentDialog
       normalizedItems = items;
@@ -2375,14 +2736,18 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
       );
       normalizedItems = legacyOrders;
     } else {
-      return res.status(400).json({ _error: 'Either items array or orderIds array is required' });
+      return res
+        .status(400)
+        .json({ _error: 'Either items array or orderIds array is required' });
     }
 
     if (normalizedItems.length === 0) {
       return res.status(400).json({ _error: 'No items to ship' });
     }
 
-    console.log(`📦 Processing shipment for ${normalizedItems.length} items...`);
+    console.log(
+      `📦 Processing shipment for ${normalizedItems.length} items...`
+    );
     const { storage } = await import('../../storage');
 
     // 1. VALIDATE: Fetch all orders and ensure they exist + are ready to ship
@@ -2392,54 +2757,73 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
         // Check if this is a synthetic orderId (format: PO-{poItemId}-{unitNumber})
         // These are non-stock items that bypass production
         const syntheticMatch = item.orderId?.match(/^PO-(\d+)-(\d+)$/);
-        
+
         // Also handle case where there's no orderId but we have a poItemId
         const hasNoOrderId = !item.orderId && item.poItemId;
-        
+
         if (syntheticMatch || hasNoOrderId) {
           // Non-stock item: lookup directly by poItemId
-          const poItemId = syntheticMatch ? parseInt(syntheticMatch[1]) : item.poItemId;
+          const poItemId = syntheticMatch
+            ? parseInt(syntheticMatch[1])
+            : item.poItemId;
           const unitNumber = syntheticMatch ? parseInt(syntheticMatch[2]) : 1;
-          
-          console.log(`📦 Processing non-stock item: poItemId=${poItemId}, unit=${unitNumber}`);
-          
+
+          console.log(
+            `📦 Processing non-stock item: poItemId=${poItemId}, unit=${unitNumber}`
+          );
+
           const poItem = await storage.getPurchaseOrderItem(poItemId);
           if (!poItem) {
             throw new Error(`PO item ${poItemId} not found`);
           }
-          
+
           // Check if already shipped (skip in dev mode)
           const isDevModeItem = process.env.NODE_ENV === 'development';
-          if ((poItem.stockStatus === 'SHIPPED' || poItem.stockStatus === 'FULFILLED') && !isDevModeItem) {
+          if (
+            (poItem.stockStatus === 'SHIPPED' ||
+              poItem.stockStatus === 'FULFILLED') &&
+            !isDevModeItem
+          ) {
             throw new Error(`PO item ${poItemId} has already been shipped`);
           }
-          if ((poItem.stockStatus === 'SHIPPED' || poItem.stockStatus === 'FULFILLED') && isDevModeItem) {
-            console.log(`🧪 DEV MODE: Allowing re-shipment of already shipped PO item ${poItemId}`);
+          if (
+            (poItem.stockStatus === 'SHIPPED' ||
+              poItem.stockStatus === 'FULFILLED') &&
+            isDevModeItem
+          ) {
+            console.log(
+              `🧪 DEV MODE: Allowing re-shipment of already shipped PO item ${poItemId}`
+            );
           }
-          
+
           const po = await storage.getPurchaseOrder(poItem.poId);
           if (!po) {
             throw new Error(`PO ${poItem.poId} not found`);
           }
-          
+
           const customerId = parseInt(po.customerId);
           let customer: any = null;
           if (!isNaN(customerId)) {
             try {
               customer = await storage.getCustomer(customerId);
             } catch (dbError: any) {
-              console.warn(`Database error fetching customer ${customerId}:`, dbError.message);
+              console.warn(
+                `Database error fetching customer ${customerId}:`,
+                dbError.message
+              );
             }
           }
           // Fallback to PO customer info if customer not found
           if (!customer) {
-            console.warn(`Customer ${po.customerId} not found, using PO customer data`);
+            console.warn(
+              `Customer ${po.customerId} not found, using PO customer data`
+            );
             customer = {
               id: customerId || 0,
               name: po.customerName || 'Unknown Customer',
             };
           }
-          
+
           // Create a synthetic order object for non-stock items
           const syntheticOrder = {
             id: null, // No production order
@@ -2452,8 +2836,14 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
             productionStatus: 'PENDING',
             isNonStock: true, // Flag to identify non-stock items
           };
-          
-          return { order: syntheticOrder, poItem, po, customer, quantity: item.quantity };
+
+          return {
+            order: syntheticOrder,
+            poItem,
+            po,
+            customer,
+            quantity: item.quantity,
+          };
         } else {
           // Regular production order
           const order = await storage.getProductionOrderByOrderId(item.orderId);
@@ -2466,7 +2856,9 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
             throw new Error(`Order ${item.orderId} has already been shipped`);
           }
           if (order.productionStatus === 'SHIPPED' && isDevMode) {
-            console.log(`🧪 DEV MODE: Allowing re-shipment of already shipped order ${item.orderId}`);
+            console.log(
+              `🧪 DEV MODE: Allowing re-shipment of already shipped order ${item.orderId}`
+            );
           }
 
           // Get PO item details
@@ -2491,27 +2883,42 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
             try {
               customer = await storage.getCustomer(customerId);
             } catch (dbError: any) {
-              console.warn(`Database error fetching customer ${customerId}:`, dbError.message);
+              console.warn(
+                `Database error fetching customer ${customerId}:`,
+                dbError.message
+              );
             }
           }
           // Fallback to PO customer info if customer not found
           if (!customer) {
-            console.warn(`Customer ${order.customerId} not found, using PO customer data`);
+            console.warn(
+              `Customer ${order.customerId} not found, using PO customer data`
+            );
             customer = {
               id: customerId || 0,
               name: po.customerName || 'Unknown Customer',
             };
           }
 
-          return { order: { ...order, isNonStock: false }, poItem, po, customer, quantity: item.quantity };
+          return {
+            order: { ...order, isNonStock: false },
+            poItem,
+            po,
+            customer,
+            quantity: item.quantity,
+          };
         }
       })
     );
 
     // 2. VALIDATE: Ensure all orders from same customer (by normalized name, since same customer can have multiple IDs/name variations)
-    const customerNames = orderDetails.map(d => d.customer?.name || d.po.customerName);
-    const uniqueCustomerIds = new Set(orderDetails.map(d => d.order.customerId));
-    
+    const customerNames = orderDetails.map(
+      (d) => d.customer?.name || d.po.customerName
+    );
+    const uniqueCustomerIds = new Set(
+      orderDetails.map((d) => d.order.customerId)
+    );
+
     // Normalize customer names for comparison (lowercase, remove LLC/Inc/Corp suffixes, trim)
     const normalizeCustomerName = (name: string): string => {
       return name
@@ -2520,10 +2927,10 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
         .replace(/\s+/g, ' ')
         .trim();
     };
-    
+
     const normalizedNames = new Set(customerNames.map(normalizeCustomerName));
     const uniqueCustomerNames = new Set(customerNames);
-    
+
     // Allow if normalized customer names match (even if exact names/IDs differ)
     if (normalizedNames.size > 1) {
       return res.status(400).json({
@@ -2532,10 +2939,12 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
         customerIds: Array.from(uniqueCustomerIds),
       });
     }
-    
+
     // Log warning if same customer has multiple IDs or name variations
     if (uniqueCustomerIds.size > 1 || uniqueCustomerNames.size > 1) {
-      console.warn(`⚠️ Customer has variations - Names: ${Array.from(uniqueCustomerNames).join(', ')}, IDs: ${Array.from(uniqueCustomerIds).join(', ')}`);
+      console.warn(
+        `⚠️ Customer has variations - Names: ${Array.from(uniqueCustomerNames).join(', ')}, IDs: ${Array.from(uniqueCustomerIds).join(', ')}`
+      );
     }
 
     // 2b. FINALIZATION GATE — block shipment if any serialized units missing SKU/drawing
@@ -2545,7 +2954,8 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
 
       for (const detail of orderDetails) {
         const poId = detail.order?.poId ?? (detail.order as any)?.po_id;
-        const poItemId = detail.order?.poItemId ?? (detail.order as any)?.po_item_id;
+        const poItemId =
+          detail.order?.poItemId ?? (detail.order as any)?.po_item_id;
 
         if (!poId || !poItemId) continue;
 
@@ -2559,18 +2969,24 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
 
         if (units.length === 0) continue;
 
-        const shippableUnits = units.filter(u => !!(u as any).completedAt);
+        const shippableUnits = units.filter((u) => !!(u as any).completedAt);
         if (shippableUnits.length === 0) continue;
 
-        const notFinalized = shippableUnits.filter(u => !(u as any).finalizedAt || !(u as any).sku || !(u as any).drawingName);
+        const notFinalized = shippableUnits.filter(
+          (u) =>
+            !(u as any).finalizedAt ||
+            !(u as any).sku ||
+            !(u as any).drawingName
+        );
 
         if (notFinalized.length > 0) {
           return res.status(403).json({
-            error: 'Cannot ship: some units are not finalized (SKU/Drawing required)',
+            error:
+              'Cannot ship: some units are not finalized (SKU/Drawing required)',
             guard: 'FINALIZATION_REQUIRED',
             poId,
             poItemId,
-            missing: notFinalized.map(u => ({
+            missing: notFinalized.map((u) => ({
               id: u.id,
               barcode: u.barcode,
               serialNumber: u.serialNumber,
@@ -2593,7 +3009,9 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
       poGroups.get(poNumber)!.push(detail);
     });
 
-    console.log(`📊 Grouped ${orderDetails.length} items into ${poGroups.size} PO(s)`);
+    console.log(
+      `📊 Grouped ${orderDetails.length} items into ${poGroups.size} PO(s)`
+    );
     console.log(`📋 PO Numbers: ${Array.from(poGroups.keys()).join(', ')}`);
 
     // 4. USE TOTAL WEIGHT FROM FRONTEND (or calculate from default)
@@ -2612,18 +3030,22 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
     const firstCustomer = orderDetails[0].customer;
     let addresses: any[] = [];
     try {
-      addresses = await storage.getCustomerAddresses(orderDetails[0].order.customerId);
+      addresses = await storage.getCustomerAddresses(
+        orderDetails[0].order.customerId
+      );
     } catch (addrError: any) {
       console.error('Error fetching customer addresses:', addrError.message);
     }
     let primaryAddress = addresses[0];
 
     const isDev = process.env.NODE_ENV === 'development';
-    
+
     if (!primaryAddress) {
       if (isDev) {
         // Use test address in development mode
-        console.log(`🧪 DEV MODE: Using test shipping address for ${firstCustomer.name}`);
+        console.log(
+          `🧪 DEV MODE: Using test shipping address for ${firstCustomer.name}`
+        );
         primaryAddress = {
           street: '123 Test Street',
           street2: '',
@@ -2659,20 +3081,28 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
     // 7. GENERATE UPS SHIPPING LABEL
     let trackingNumber: string;
     let labelBase64: string;
-    
+
     // Use UPS_ENV to determine whether to call UPS API
     // If UPS_ENV is set to 'production' or 'sandbox', use real UPS
     // Otherwise, generate test tracking numbers
-    const useRealUps = process.env.UPS_ENV === 'production' || process.env.UPS_ENV === 'sandbox';
-    const hasUpsCredentials = process.env.UPS_CLIENT_ID && process.env.UPS_CLIENT_SECRET && process.env.UPS_ACCOUNT_NUMBER;
-    
+    const useRealUps =
+      process.env.UPS_ENV === 'production' || process.env.UPS_ENV === 'sandbox';
+    const hasUpsCredentials =
+      process.env.UPS_CLIENT_ID &&
+      process.env.UPS_CLIENT_SECRET &&
+      process.env.UPS_ACCOUNT_NUMBER;
+
     if (!useRealUps || !hasUpsCredentials) {
       // Generate test tracking number when UPS is not configured
       const crypto = await import('crypto');
       trackingNumber = `TEST-${crypto.randomUUID().substring(0, 8).toUpperCase()}`;
       labelBase64 = '';
-      console.log(`🧪 TEST MODE: Generated test tracking number: ${trackingNumber}`);
-      console.log(`   UPS_ENV=${process.env.UPS_ENV || 'not set'}, hasCredentials=${hasUpsCredentials}`);
+      console.log(
+        `🧪 TEST MODE: Generated test tracking number: ${trackingNumber}`
+      );
+      console.log(
+        `   UPS_ENV=${process.env.UPS_ENV || 'not set'}, hasCredentials=${hasUpsCredentials}`
+      );
     } else {
       // In production, use real UPS API
       try {
@@ -2700,17 +3130,17 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
         return res.status(502).json({
           _error: 'UPS shipping label generation failed',
           details: upsError.message,
-          suggestion: 'Check UPS credentials and try again, or process manually',
+          suggestion:
+            'Check UPS credentials and try again, or process manually',
         });
       }
     }
 
     // 8. PERSIST SHIPMENT TO DATABASE (skip when using test tracking numbers)
-    let shipmentId: string;
     const shippedAt = new Date();
     const crypto = await import('crypto');
-    shipmentId = crypto.randomUUID();
-    
+    const shipmentId = crypto.randomUUID();
+
     // Skip database persistence if using test mode (no real UPS)
     const skipDbPersistence = !useRealUps || !hasUpsCredentials;
 
@@ -2722,7 +3152,10 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
     for (const [groupPoNumber, groupItems] of poGroups.entries()) {
       try {
         const groupCustomerId = groupItems[0].po.customerId;
-        const groupCustomerName = groupItems[0].po.customerName || firstCustomer?.name || 'Unknown Customer';
+        const groupCustomerName =
+          groupItems[0].po.customerName ||
+          firstCustomer?.name ||
+          'Unknown Customer';
 
         let groupCustomerAddress = null;
         try {
@@ -2730,7 +3163,9 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
             ? await storage.getCustomerDefaultAddress(String(groupCustomerId))
             : null;
         } catch (addrErr: any) {
-          console.warn(`⚠️ Could not fetch customer address for PO ${groupPoNumber}: ${addrErr.message}`);
+          console.warn(
+            `⚠️ Could not fetch customer address for PO ${groupPoNumber}: ${addrErr.message}`
+          );
         }
 
         const reusableInvoiceNumber = await findReusableP1InvoiceNumber({
@@ -2740,16 +3175,22 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
             .filter(Boolean),
         });
 
-        const invoiceNumber = reusableInvoiceNumber || (await storage.getNextInvoiceNumber(
-          String(groupCustomerId || '0'),
-          groupCustomerName
-        ));
+        const invoiceNumber =
+          reusableInvoiceNumber ||
+          (await storage.getNextInvoiceNumber(
+            String(groupCustomerId || '0'),
+            groupCustomerName
+          ));
         poInvoiceMap.set(groupPoNumber, invoiceNumber);
 
         if (reusableInvoiceNumber) {
-          console.log(`♻️ Reusing historical invoice number ${invoiceNumber} for PO ${groupPoNumber}`);
+          console.log(
+            `♻️ Reusing historical invoice number ${invoiceNumber} for PO ${groupPoNumber}`
+          );
         } else {
-          console.log(`🆕 Generated new invoice number ${invoiceNumber} for PO ${groupPoNumber}`);
+          console.log(
+            `🆕 Generated new invoice number ${invoiceNumber} for PO ${groupPoNumber}`
+          );
         }
 
         const slipItems = groupItemsByDescription(groupItems, {
@@ -2760,7 +3201,11 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
         const slipData: PackingSlipData = {
           packingSlipNumber: invoiceNumber,
           poNumber: groupPoNumber,
-          date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          date: new Date().toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+          }),
           customerName: groupCustomerName,
           customerAddress: groupCustomerAddress
             ? {
@@ -2772,30 +3217,45 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
               }
             : undefined,
           trackingNumber: trackingNumber,
-          totalQuantity: groupItems.reduce((sum, gi) => sum + (gi.quantity || 1), 0),
+          totalQuantity: groupItems.reduce(
+            (sum, gi) => sum + (gi.quantity || 1),
+            0
+          ),
           shipmentNumber: referenceNumber || undefined,
           items: slipItems,
         };
 
         const pdfBuffer = await generatePoPackingSlipPdf(slipData);
         poSlipMap.set(groupPoNumber, pdfBuffer.toString('base64'));
-        console.log(`✅ Packing slip generated for PO ${groupPoNumber} (invoice: ${invoiceNumber})`);
+        console.log(
+          `✅ Packing slip generated for PO ${groupPoNumber} (invoice: ${invoiceNumber})`
+        );
       } catch (slipErr: any) {
-        console.error(`❌ Packing slip generation failed for PO ${groupPoNumber}: ${slipErr.message}`, slipErr.stack);
+        console.error(
+          `❌ Packing slip generation failed for PO ${groupPoNumber}: ${slipErr.message}`,
+          slipErr.stack
+        );
         poSlipMap.set(groupPoNumber, null);
-        failedPackingSlips.push({ poNumber: groupPoNumber, reason: slipErr.message });
+        failedPackingSlips.push({
+          poNumber: groupPoNumber,
+          reason: slipErr.message,
+        });
       }
     }
 
     if (skipDbPersistence) {
-      console.log(`🧪 TEST MODE: Skipping shipment record persistence (shipmentId: ${shipmentId})`);
+      console.log(
+        `🧪 TEST MODE: Skipping shipment record persistence (shipmentId: ${shipmentId})`
+      );
     } else {
       try {
         // Map billingOption to billType enum
-        const billType: 'SENDER' | 'RECEIVER' | 'THIRD_PARTY' = 
-          billingOption === 'prepaid' ? 'SENDER' :
-          billingOption === 'collect' ? 'RECEIVER' :
-          'THIRD_PARTY';
+        const billType: 'SENDER' | 'RECEIVER' | 'THIRD_PARTY' =
+          billingOption === 'prepaid'
+            ? 'SENDER'
+            : billingOption === 'collect'
+              ? 'RECEIVER'
+              : 'THIRD_PARTY';
 
         const shipmentRecord = {
           id: shipmentId,
@@ -2817,7 +3277,10 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
           customerState: primaryAddress?.state || shipTo.state || '',
           customerZip: primaryAddress?.zipCode || shipTo.postalCode || '',
           shippingLabelBase64: labelBase64 || null,
-          invoiceNumber: poInvoiceMap.size === 1 ? Array.from(poInvoiceMap.values())[0] : null,
+          invoiceNumber:
+            poInvoiceMap.size === 1
+              ? Array.from(poInvoiceMap.values())[0]
+              : null,
           shipFromSnapshot: {
             name: process.env.SHIP_FROM_NAME || 'AG Composites',
             street: process.env.SHIP_FROM_ADDRESS1 || '',
@@ -2837,19 +3300,39 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
           },
           totalWeightLbs: String(totalWeight),
           documents: [
-            labelBase64 ? { type: 'label', fileName: `Label-${trackingNumber}.gif`, mime: 'image/gif', storagePath: '', bytes: labelBase64.length } : null,
+            labelBase64
+              ? {
+                  type: 'label',
+                  fileName: `Label-${trackingNumber}.gif`,
+                  mime: 'image/gif',
+                  storagePath: '',
+                  bytes: labelBase64.length,
+                }
+              : null,
           ].filter(Boolean),
           notificationMetadata: {},
         };
 
         const shipmentItemsData = orderDetails.map((detail) => {
-          const itemPoNumber = detail.po?.poNumber || detail.po?.po_number || detail.order?.poNumber || detail.order?.po_number || '';
+          const itemPoNumber =
+            detail.po?.poNumber ||
+            detail.po?.po_number ||
+            detail.order?.poNumber ||
+            detail.order?.po_number ||
+            '';
           const itemDescription = resolvePackingSlipDescription({
-            stockModelName: detail.poItem?.stockModelName || detail.poItem?.stock_model_name,
-            itemName: detail.order.itemName || detail.order.item_name || detail.poItem?.itemName || detail.poItem?.item_name,
-            stockModelId: detail.poItem?.stockModelId || detail.poItem?.stock_model_id,
+            stockModelName:
+              detail.poItem?.stockModelName || detail.poItem?.stock_model_name,
+            itemName:
+              detail.order.itemName ||
+              detail.order.item_name ||
+              detail.poItem?.itemName ||
+              detail.poItem?.item_name,
+            stockModelId:
+              detail.poItem?.stockModelId || detail.poItem?.stock_model_id,
           });
-          const itemOrderId = detail.order.orderId || detail.order.order_id || '';
+          const itemOrderId =
+            detail.order.orderId || detail.order.order_id || '';
           const packingSlipBase64 = poSlipMap.get(itemPoNumber) || undefined;
 
           return {
@@ -2871,26 +3354,43 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
         console.log(`✅ Shipment persisted to database: ${shipmentId}`);
 
         try {
-          await createOrUpdateP1ShipmentRevenueFromShipmentRecord(createdShipment.id, req.user);
+          await createOrUpdateP1ShipmentRevenueFromShipmentRecord(
+            createdShipment.id,
+            req.user
+          );
         } catch (revenueErr: any) {
-          console.error(`Failed to create P1 PO shipment revenue draft for ${createdShipment.id}:`, revenueErr.message);
+          console.error(
+            `Failed to create P1 PO shipment revenue draft for ${createdShipment.id}:`,
+            revenueErr.message
+          );
         }
 
         // Verify packing slips were persisted for all items
-        const verifyResult = await pool.query<{ id: string; packing_slip_base64: string | null }>(
+        const verifyResult = await pool.query<{
+          id: string;
+          packing_slip_base64: string | null;
+        }>(
           `SELECT id, packing_slip_base64 FROM shipment_items WHERE shipment_id = $1`,
           [createdShipment.id]
         );
-        const verifyRows: { id: string; packing_slip_base64: string | null }[] = (verifyResult as any).rows ?? (verifyResult as any);
-        const missingSlips = verifyRows.filter(r => !r.packing_slip_base64);
+        const verifyRows: { id: string; packing_slip_base64: string | null }[] =
+          (verifyResult as any).rows ?? (verifyResult as any);
+        const missingSlips = verifyRows.filter((r) => !r.packing_slip_base64);
         if (missingSlips.length > 0) {
-          const missingIds = missingSlips.map(r => r.id).join(', ');
-          console.warn(`⚠️ Packing slip missing on shipment_items after persist: ids=[${missingIds}]`);
+          const missingIds = missingSlips.map((r) => r.id).join(', ');
+          console.warn(
+            `⚠️ Packing slip missing on shipment_items after persist: ids=[${missingIds}]`
+          );
         } else {
-          console.log(`✅ Verified packing_slip_base64 present on all ${verifyRows.length} shipment_item(s)`);
+          console.log(
+            `✅ Verified packing_slip_base64 present on all ${verifyRows.length} shipment_item(s)`
+          );
         }
 
-        for (const [artifactPoNumber, invoiceNumber] of poInvoiceMap.entries()) {
+        for (const [
+          artifactPoNumber,
+          invoiceNumber,
+        ] of poInvoiceMap.entries()) {
           const artifactOrderIds = shipmentItemsData
             .filter((item) => item.poNumber === artifactPoNumber)
             .map((item) => item.orderId)
@@ -2918,7 +3418,9 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
           await storage.updatePurchaseOrderItem(detail.order.poItemId, {
             stockStatus: 'SHIPPED',
           });
-          console.log(`✅ PO Item ${detail.order.poItemId} marked as SHIPPED (non-stock)`);
+          console.log(
+            `✅ PO Item ${detail.order.poItemId} marked as SHIPPED (non-stock)`
+          );
         } else if (detail.order.id) {
           await storage.updateProductionOrder(detail.order.id, {
             productionStatus: 'SHIPPED',
@@ -2929,7 +3431,10 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
           if (poId) mainShipPoIds.add(Number(poId));
         }
       } catch (updateError: any) {
-        console.error(`⚠️ Failed to update order ${detail.order.orderId}:`, updateError.message);
+        console.error(
+          `⚠️ Failed to update order ${detail.order.orderId}:`,
+          updateError.message
+        );
       }
     }
 
@@ -2939,7 +3444,11 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
     }
 
     // 10. BUILD PACKING SLIP RESPONSE (reuse PDFs already generated in step 8)
-    const packingSlips: Array<{ poNumber: string; filename: string; data: string }> = [];
+    const packingSlips: Array<{
+      poNumber: string;
+      filename: string;
+      data: string;
+    }> = [];
 
     for (const [poNumber, slipBase64] of poSlipMap.entries()) {
       if (slipBase64) {
@@ -2951,7 +3460,9 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
       }
     }
 
-    console.log(`📄 Generated ${packingSlips.length} packing slip(s)${failedPackingSlips.length > 0 ? `, ${failedPackingSlips.length} failed` : ''}`);
+    console.log(
+      `📄 Generated ${packingSlips.length} packing slip(s)${failedPackingSlips.length > 0 ? `, ${failedPackingSlips.length} failed` : ''}`
+    );
 
     // Return comprehensive response (production orders already updated in persistence block)
     res.json({
@@ -2964,7 +3475,8 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
         data: labelBase64,
       },
       packingSlips,
-      failedPackingSlips: failedPackingSlips.length > 0 ? failedPackingSlips : undefined,
+      failedPackingSlips:
+        failedPackingSlips.length > 0 ? failedPackingSlips : undefined,
       itemsShipped: orderDetails.length,
       poNumbers: Array.from(poGroups.keys()),
       totalWeight: totalWeight,

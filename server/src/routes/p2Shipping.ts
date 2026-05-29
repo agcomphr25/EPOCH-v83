@@ -367,6 +367,25 @@ router.post('/material-transfer/pdf', authenticateToken, requirePermission('ship
   }
 });
 
+async function ensureP2VoidShipmentSchema(client: Pick<typeof pgPool, 'query'>): Promise<void> {
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS p2_shipping_audit_log (
+      id          SERIAL PRIMARY KEY,
+      entity_type TEXT NOT NULL,
+      entity_id   TEXT NOT NULL,
+      field_name  TEXT NOT NULL,
+      old_value   TEXT,
+      new_value   TEXT,
+      changed_by  TEXT NOT NULL,
+      changed_at  TIMESTAMP NOT NULL DEFAULT NOW(),
+      reason      TEXT NOT NULL
+    )
+  `);
+  await client.query(`ALTER TABLE ar_invoices ADD COLUMN IF NOT EXISTS voided_at TIMESTAMP`);
+  await client.query(`ALTER TABLE ar_invoices ADD COLUMN IF NOT EXISTS voided_by TEXT`);
+  await client.query(`ALTER TABLE ar_invoices ADD COLUMN IF NOT EXISTS void_reason TEXT`);
+}
+
 router.post('/lots', authenticateToken, requirePermission('shipping.release_shipment'), async (req: Request, res: Response) => {
   try {
     const input = createLotSchema.parse(req.body);
@@ -1351,11 +1370,11 @@ router.get('/certificates/:id/pdf', async (req: Request, res: Response) => {
     const usableWidth = width - margin * 2;
 
     // ── Header ──
-    page.drawText('AG Advanced', { x: margin, y, size: 13, font: boldFont, color: black });
+    page.drawText('AG Advanced Technologies', { x: margin, y, size: 13, font: boldFont, color: black });
     y -= 14;
     page.drawText(COMPANY_INFO.ADDRESS, { x: margin, y, size: 8.5, font, color: gray });
     y -= 11;
-    page.drawText(`${COMPANY_INFO.PHONE}  |  ${COMPANY_INFO.EMAIL}`, {
+    page.drawText(`${COMPANY_INFO.PHONE}  |  glenn@agadvanced.com`, {
       x: margin,
       y,
       size: 8.5,
@@ -1524,7 +1543,13 @@ router.get('/certificates/:id/pdf', async (req: Request, res: Response) => {
     if (qaMgrName) {
       page.drawText(qaMgrName, { x: margin, y: sigY - 45, size: 8.5, font: boldFont, color: black });
     }
-    page.drawText(qaMgrTitle, { x: margin, y: sigY - 58, size: 8, font, color: gray });
+    page.drawText('Title', { x: margin, y: sigY - 58, size: 8, font, color: gray });
+    page.drawLine({
+      start: { x: margin + 25, y: sigY - 55 },
+      end: { x: margin + 210, y: sigY - 55 },
+      thickness: 0.5,
+      color: darkGray,
+    });
     page.drawText('Date', { x: margin + 260, y: sigY - 32, size: 8, font, color: gray });
 
     const formNumber = cert.templateDocumentNumber || MANUFACTURER_COC_FALLBACK.documentNumber;
@@ -1888,6 +1913,7 @@ router.post('/shipments/:lotId/void', authenticateToken, requirePermission('ship
 
     const client = await pgPool.connect();
     try {
+      await ensureP2VoidShipmentSchema(client);
       await client.query('BEGIN');
 
       const lotRows = await client.query<{
@@ -2101,7 +2127,7 @@ router.post('/shipments/:lotId/void', authenticateToken, requirePermission('ship
   } catch (err: any) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors[0].message });
     console.error('Void shipment error:', { message: err?.message, code: err?.code });
-    return res.status(500).json({ error: 'Failed to void shipment' });
+    return res.status(500).json({ error: err?.message || 'Failed to void shipment' });
   }
 });
 

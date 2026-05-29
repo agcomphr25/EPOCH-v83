@@ -3,8 +3,9 @@ import { randomUUID } from 'crypto';
 import fs from 'fs/promises';
 import multer from 'multer';
 import path from 'path';
+import { db } from '../../db';
 import { storage } from '../../storage';
-import { insertCuttingDocumentSchema } from '../../schema';
+import { insertCuttingDocumentSchema, mediaLibrary } from '../../schema';
 import {
   getFileStorageProvider,
   getFileStorageProviderForObjectPath,
@@ -41,6 +42,44 @@ async function deleteLocalCuttingDocument(fileUrl: string) {
   if (!fileUrl.startsWith('/uploads/cutting-documents/')) return;
   const fileName = path.basename(fileUrl);
   await fs.unlink(path.join(localUploadDir, fileName));
+}
+
+function isObjectStoragePath(fileUrl: string) {
+  return fileUrl.startsWith('/objects/') || fileUrl.startsWith('objects/');
+}
+
+function normalizeObjectStoragePath(fileUrl: string) {
+  return fileUrl.startsWith('objects/') ? `/${fileUrl}` : fileUrl;
+}
+
+function resolveLocalCuttingDocumentPath(fileUrl: string) {
+  if (!fileUrl.startsWith('/uploads/cutting-documents/')) return null;
+  const fileName = path.basename(fileUrl);
+  return path.join(localUploadDir, fileName);
+}
+
+function isMediaLibraryDownloadPath(fileUrl: string) {
+  return /^\/api\/media\/[^/]+\/download(?:\?.*)?$/.test(fileUrl);
+}
+
+async function createMediaLibraryDocument(input: {
+  fileUrl: string;
+  file: Express.Multer.File;
+  user?: any;
+}) {
+  const [media] = await db.insert(mediaLibrary).values({
+    filename: input.file.originalname || 'cutting-document',
+    storagePath: input.fileUrl,
+    mimeType: input.file.mimetype || 'application/octet-stream',
+    fileSize: input.file.size,
+    capturedById: input.user?.id || null,
+    capturedByName: input.user?.username || 'Unknown',
+    title: input.file.originalname || 'Cutting document',
+    notes: 'Cutting table reference document',
+    category: 'document',
+  }).returning();
+
+  return media;
 }
 
 router.get('/', async (req, res) => {
@@ -120,9 +159,16 @@ router.post('/upload', (req, res) => {
         fileUrl = await saveLocalCuttingDocument(file);
       }
 
+      const media = await createMediaLibraryDocument({
+        fileUrl,
+        file,
+        user: (req as any).user,
+      });
+      const mediaDownloadUrl = `/api/media/${media.id}/download`;
+
       const parsed = insertCuttingDocumentSchema.safeParse({
         displayName: req.body.displayName || file.originalname || 'Cutting document',
-        fileUrl,
+        fileUrl: mediaDownloadUrl,
         originalFilename: file.originalname || 'cutting-document',
         mimeType: file.mimetype || 'application/octet-stream',
         fileSize: file.size,
@@ -152,6 +198,60 @@ router.post('/upload', (req, res) => {
       });
     }
   });
+});
+
+router.get('/:id/download', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid document ID' });
+    }
+
+    const doc = await storage.getCuttingDocument(id);
+    if (!doc) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    if (isMediaLibraryDownloadPath(doc.fileUrl)) {
+      return res.redirect(doc.fileUrl);
+    }
+
+    const disposition = req.query.download === 'true' ? 'attachment' : 'inline';
+    res.setHeader(
+      'Content-Disposition',
+      `${disposition}; filename="${encodeURIComponent(doc.originalFilename)}"`,
+    );
+    res.setHeader('Content-Type', doc.mimeType || 'application/octet-stream');
+
+    if (isObjectStoragePath(doc.fileUrl)) {
+      const normalizedPath = normalizeObjectStoragePath(doc.fileUrl);
+      try {
+        return await getFileStorageProviderForObjectPath(normalizedPath).downloadObject(normalizedPath, res);
+      } catch (storageError) {
+        console.error('[CuttingDocuments] Failed to retrieve document from object storage:', storageError);
+        const { status } = getStorageErrorResponse(storageError);
+        if (status === 404 || (storageError as any)?.name === 'ObjectNotFoundError') {
+          return res.status(404).json({ error: 'Document file not found in storage' });
+        }
+        return res.status(502).json({ error: 'Failed to retrieve document from storage' });
+      }
+    }
+
+    const localPath = resolveLocalCuttingDocumentPath(doc.fileUrl);
+    if (localPath) {
+      try {
+        await fs.access(localPath);
+        return res.sendFile(localPath);
+      } catch {
+        return res.status(404).json({ error: 'Document file not found on server' });
+      }
+    }
+
+    return res.status(404).json({ error: 'Document file not available' });
+  } catch (error) {
+    console.error('Error downloading cutting document:', error);
+    res.status(500).json({ error: 'Failed to download cutting document' });
+  }
 });
 
 router.delete('/:id', async (req, res) => {

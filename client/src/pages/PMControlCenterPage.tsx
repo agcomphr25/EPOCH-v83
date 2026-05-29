@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
+import { Input } from '@/components/ui/input';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -179,11 +180,19 @@ interface P2PoStatusSummary {
   status: 'pending' | 'in_progress' | 'completed';
 }
 
+interface P2NcrMetrics {
+  totalSerializedItems: number;
+  openNcrCount: number;
+  finalScrapCount: number;
+  finalScrapRatePercent: number;
+}
+
 interface ProductionResponse {
   rows: WorkOrderRow[];
   linkedP2Production?: WorkOrderRow[];
   linkedP2PoCount: number;
   linkedP2PoStatuses: P2PoStatusSummary[];
+  p2NcrMetrics?: P2NcrMetrics;
 }
 
 interface P2SerializedBreakdownItem {
@@ -360,6 +369,7 @@ interface MaterialSummary {
 
 interface MaterialRow {
   inventoryItemId: string;
+  partsRequestId?: number;
   projectReceivedMaterialId?: number;
   itemCode: string;
   itemName: string;
@@ -367,6 +377,9 @@ interface MaterialRow {
   internalControlNumber: string | null;
   receiptNumber?: string | null;
   receivedUnitBarcode?: string | null;
+  requestedBy?: string | null;
+  requestDate?: string | null;
+  expectedDelivery?: string | null;
   qtyRequired: number;
   qtyAllocated: number;
   qtyIssued: number;
@@ -533,6 +546,16 @@ const MATERIAL_STATUS_COLORS: Record<string, string> = {
   FULLY_ISSUED: 'bg-green-100 text-green-700',
   RECEIVED_ACCEPTED: 'bg-green-100 text-green-700',
   RECEIVED_REJECTED: 'bg-gray-100 text-gray-600',
+  PART_REQUEST_PENDING: 'bg-gray-100 text-gray-700',
+  PART_REQUEST_PENDING_OWNER_APPROVAL: 'bg-orange-100 text-orange-700',
+  PART_REQUEST_APPROVED: 'bg-blue-100 text-blue-700',
+  PART_REQUEST_ORDERED: 'bg-indigo-100 text-indigo-700',
+  PART_REQUEST_ORDERED_PARTIAL: 'bg-indigo-100 text-indigo-700',
+  PART_REQUEST_RECEIVED: 'bg-green-100 text-green-700',
+  PART_REQUEST_RECEIVED_PARTIAL: 'bg-green-100 text-green-700',
+  PART_REQUEST_DELIVERED_TO_DEPT: 'bg-green-100 text-green-700',
+  PART_REQUEST_REJECTED: 'bg-red-100 text-red-700',
+  PART_REQUEST_CANCEL_REQUESTED: 'bg-orange-100 text-orange-700',
 };
 
 const MATERIAL_STATUS_ORDER: Record<string, number> = {
@@ -546,7 +569,21 @@ const MATERIAL_STATUS_ORDER: Record<string, number> = {
   FULLY_ISSUED: 6,
   RECEIVED_ACCEPTED: 7,
   RECEIVED_REJECTED: 8,
+  PART_REQUEST_PENDING: 9,
+  PART_REQUEST_PENDING_OWNER_APPROVAL: 10,
+  PART_REQUEST_APPROVED: 11,
+  PART_REQUEST_ORDERED: 12,
+  PART_REQUEST_ORDERED_PARTIAL: 13,
+  PART_REQUEST_RECEIVED: 14,
+  PART_REQUEST_RECEIVED_PARTIAL: 15,
+  PART_REQUEST_DELIVERED_TO_DEPT: 16,
+  PART_REQUEST_REJECTED: 17,
+  PART_REQUEST_CANCEL_REQUESTED: 18,
 };
+
+function materialStatusLabel(status: string) {
+  return status.replace(/^PART_REQUEST_/, 'REQUEST ').replace(/_/g, ' ');
+}
 
 function CertBadge({ status }: { status: string }) {
   if (status === 'Valid') return (
@@ -748,6 +785,7 @@ function ProductionTab({ projectId }: { projectId: string }) {
   const rows = productionResponse?.rows ?? [];
   const linkedP2PoCount = productionResponse?.linkedP2PoCount ?? 0;
   const linkedP2PoStatuses = productionResponse?.linkedP2PoStatuses ?? [];
+  const p2NcrMetrics = productionResponse?.p2NcrMetrics;
 
   const { data: detail, isLoading: detailLoading } = useQuery<WorkOrderDetail>({
     queryKey: ['/api/pm-dashboard', projectId, 'production', selectedWO?.productionWorkOrderId],
@@ -885,6 +923,49 @@ function ProductionTab({ projectId }: { projectId: string }) {
 
   return (
     <>
+      {p2NcrMetrics && p2NcrMetrics.totalSerializedItems > 0 && (
+        <div className="mb-4 grid gap-3 sm:grid-cols-3">
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-medium uppercase text-muted-foreground">Open NCR</p>
+                  <p className="text-2xl font-semibold">{p2NcrMetrics.openNcrCount}</p>
+                </div>
+                <ShieldAlert className="h-5 w-5 text-orange-500" />
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">Items awaiting disposition</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-medium uppercase text-muted-foreground">Final Scrap</p>
+                  <p className="text-2xl font-semibold">{p2NcrMetrics.finalScrapCount}</p>
+                </div>
+                <XCircle className="h-5 w-5 text-red-500" />
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">Dispositioned as scrap/trash</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-medium uppercase text-muted-foreground">Scrap Rate</p>
+                  <p className="text-2xl font-semibold">{p2NcrMetrics.finalScrapRatePercent.toFixed(2)}%</p>
+                </div>
+                <TrendingUp className="h-5 w-5 text-red-500" />
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {p2NcrMetrics.finalScrapCount} of {p2NcrMetrics.totalSerializedItems} serialized items
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {linkedP2PoStatuses.length > 0 && (
         <div className="grid gap-3 mb-4">
           {linkedP2PoStatuses.map((po) => {
@@ -1872,7 +1953,7 @@ function MaterialBudgetTab({ projectId }: { projectId: string }) {
         />
         <KpiCard
           icon={<TrendingUp className="h-4 w-4" />}
-          label="Committed"
+          label="Approved Received"
           value={fmtCurrency(summary.committedCost)}
           sub={summary.pendingReceivedCost ? `${fmtCurrency(summary.pendingReceivedCost)} pending receipt` : undefined}
           colorClass="text-purple-600"
@@ -1951,7 +2032,7 @@ function MaterialBudgetTab({ projectId }: { projectId: string }) {
                   <TableRow key={`${row.inventoryItemId}-${idx}`}>
                     <TableCell>
                       <Badge className={MATERIAL_STATUS_COLORS[row.status] ?? 'bg-gray-100 text-gray-600'}>
-                        {row.status.replace(/_/g, ' ')}
+                        {materialStatusLabel(row.status)}
                       </Badge>
                     </TableCell>
                     <TableCell className="font-mono text-sm font-medium">{row.itemCode || '—'}</TableCell>
@@ -1961,7 +2042,11 @@ function MaterialBudgetTab({ projectId }: { projectId: string }) {
                       {row.internalControlNumber && <div className="text-xs opacity-70">{row.internalControlNumber}</div>}
                       {row.receiptNumber && <div className="text-xs opacity-70">Receipt {row.receiptNumber}</div>}
                       {row.receivedUnitBarcode && <div className="text-xs opacity-70">{row.receivedUnitBarcode}</div>}
-                      {!row.lotNumber && !row.internalControlNumber && !row.receiptNumber && !row.receivedUnitBarcode && '—'}
+                      {row.partsRequestId && <div className="font-mono">Request #{row.partsRequestId}</div>}
+                      {row.requestedBy && <div className="text-xs opacity-70">By {row.requestedBy}</div>}
+                      {row.requestDate && <div className="text-xs opacity-70">Requested {fmtDate(row.requestDate)}</div>}
+                      {row.expectedDelivery && <div className="text-xs opacity-70">Need by {fmtDate(row.expectedDelivery)}</div>}
+                      {!row.lotNumber && !row.internalControlNumber && !row.receiptNumber && !row.receivedUnitBarcode && !row.partsRequestId && '—'}
                     </TableCell>
                     <TableCell className="text-right text-sm">{row.qtyRequired > 0 ? row.qtyRequired : '—'}</TableCell>
                     <TableCell className="text-right text-sm">{row.qtyAllocated > 0 ? row.qtyAllocated : '—'}</TableCell>
@@ -2411,7 +2496,7 @@ export default function PMControlCenterPage() {
                 icon={<Package className="h-4 w-4" />}
                 label="Material Cost"
                 value={fmtCurrency(summary.consumedMaterialCost)}
-                sub={`${fmtCurrency(summary.committedMaterialCost)} committed`}
+                sub={`${fmtCurrency(summary.committedMaterialCost)} approved received`}
                 colorClass="text-indigo-600"
               />
               <KpiCard

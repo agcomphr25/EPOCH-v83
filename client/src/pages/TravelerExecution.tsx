@@ -193,17 +193,27 @@ interface TravelerWithDetails {
   events: TravelerEvent[];
 }
 
-const addGeneratedTraceFieldAliases = (values: Record<string, string>) => ({
-  ...values,
-  trace_internalcontrolnumber: values.internalControlNumber || values.material_internal_control_number || values.material_icn || '',
-  trace_supplier: values.supplier || '',
-  trace_inventorypartnumber: values.inventoryPartNumber || values.material_part_number || '',
-  trace_batchlotnumber: values.batchLotNumber || values.material_batch_number || values.material_lot || '',
-  trace_manufacturer: values.manufacturer || values.material_brand || '',
-  trace_rollnumber: values.rollNumber || '',
-  trace_expirationdate: values.expirationDate || values.material_expiration_date || '',
-  trace_receiveddate: values.receivedDate || '',
-});
+const firstTraceValue = (...values: Array<string | undefined | null>) =>
+  values.map((value) => String(value ?? '').trim()).find(Boolean) || '';
+
+const addGeneratedTraceFieldAliases = (values: Record<string, string>) => {
+  const supplier = firstTraceValue(values.supplier, values.material_supplier);
+  const manufacturer = firstTraceValue(values.manufacturer, values.material_brand, supplier);
+
+  return {
+    ...values,
+    manufacturer,
+    material_brand: firstTraceValue(values.material_brand, manufacturer),
+    trace_internalcontrolnumber: firstTraceValue(values.internalControlNumber, values.material_internal_control_number, values.material_icn),
+    trace_supplier: supplier,
+    trace_inventorypartnumber: firstTraceValue(values.inventoryPartNumber, values.material_part_number),
+    trace_batchlotnumber: firstTraceValue(values.batchLotNumber, values.material_batch_number, values.material_lot),
+    trace_manufacturer: manufacturer,
+    trace_rollnumber: firstTraceValue(values.rollNumber),
+    trace_expirationdate: firstTraceValue(values.expirationDate, values.material_expiration_date),
+    trace_receiveddate: firstTraceValue(values.receivedDate),
+  };
+};
 
 const STEP_STATUS_COLORS: Record<string, string> = {
   NOT_STARTED: 'bg-gray-100 text-gray-800 border-gray-300',

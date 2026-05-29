@@ -500,6 +500,38 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     }
   });
 
+  // P2 Serialized Items - closed NCR history
+  app.get('/api/p2/serialized-items/closed-ncr', async (req, res) => {
+    try {
+      const { db } = await import('../../db');
+      const { p2SerializedItems, p2NonconformingDispositions } = await import('../../schema');
+      const { eq, desc } = await import('drizzle-orm');
+
+      const rows = await db
+        .select({
+          item: p2SerializedItems,
+          disposition: p2NonconformingDispositions,
+        })
+        .from(p2NonconformingDispositions)
+        .innerJoin(
+          p2SerializedItems,
+          eq(p2NonconformingDispositions.serializedItemId, p2SerializedItems.id),
+        )
+        .where(eq(p2NonconformingDispositions.resolved, true))
+        .orderBy(
+          desc(p2NonconformingDispositions.resolvedAt),
+          desc(p2NonconformingDispositions.createdAt),
+        );
+
+      res.json(rows.map((row: any) => ({
+        ...row.item,
+        disposition: row.disposition,
+      })));
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Failed to fetch closed NCR items' });
+    }
+  });
+
   // P2 Nonconforming Dispositions - GET all dispositions for an item
   app.get('/api/p2/nonconforming-dispositions/:serializedItemId', async (req, res) => {
     try {
@@ -3308,6 +3340,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
          SELECT
            LOWER(TRIM(key_value)) AS serial,
            t.status,
+           t.off_system_completion_link IS NOT NULL AS is_off_system_completion,
            t.traveler_number,
            t.updated_at,
            active_step.department_name,
@@ -3332,12 +3365,14 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
        SELECT DISTINCT ON (serial)
          serial,
          t.status,
+         t.is_off_system_completion AS "isOffSystemCompletion",
          t.traveler_number AS "travelerNumber",
          t.updated_at AS "updatedAt",
          t.department_name AS "activeDepartment",
          t.started_at AS "startedAt"
        FROM traveler_keys t
        ORDER BY serial,
+         CASE WHEN UPPER(t.status) = 'COMPLETED' AND t.is_off_system_completion THEN 0 ELSE 1 END,
          CASE WHEN UPPER(t.status) = 'IN_PROGRESS' THEN 0 ELSE 1 END,
          t.updated_at DESC NULLS LAST`,
       [serials]
@@ -4382,6 +4417,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           .filter(Boolean)
       );
       const legacyProductionControlRows = p2ControlRows(legacyProductionRows).filter((row: any) => {
+        if (row.poId) return false;
         const key = row.poId && row.poItemId ? `${row.poId}:${row.poItemId}` : null;
         const normalizedStatus = String(row.status || '').toUpperCase();
         const quantity = Math.max(1, Number(row.quantity || 1));
@@ -4390,6 +4426,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         return (!key || !serializedPoItemKeys.has(key)) && !isComplete;
       });
       const activeLegacyProjectProductionRows = legacyProjectProductionRows.filter((row: any) => {
+        if (row.poId) return false;
         const normalizedStatus = String(row.status || '').toUpperCase();
         return !['COMPLETE', 'COMPLETED', 'CLOSED'].includes(normalizedStatus);
       });
@@ -4677,7 +4714,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
             + legacyProductionControlRows.filter((row: any) =>
               !['COMPLETED', 'CLOSED'].includes(String(row.status || '').toUpperCase())
             ).length
-            + legacyProjectProductionRows.filter((row: any) =>
+            + activeLegacyProjectProductionRows.filter((row: any) =>
               !['COMPLETE', 'COMPLETED', 'CLOSED'].includes(String(row.status || '').toUpperCase())
             ).length,
           totalInProgress: p2ControlRows(activeTasks).length
@@ -4687,7 +4724,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
             + legacyProductionControlRows.filter((row: any) =>
               String(row.status || '').toUpperCase() === 'IN_PROGRESS'
             ).length
-            + legacyProjectProductionRows.filter((row: any) =>
+            + activeLegacyProjectProductionRows.filter((row: any) =>
               ['IN_PROGRESS', 'ACTIVE', 'STARTED', 'RELEASED'].includes(String(row.status || '').toUpperCase())
               || !!row.activeDepartment
             ).length,

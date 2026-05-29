@@ -19463,6 +19463,9 @@ export class DatabaseStorage implements IStorage {
     const departmentSequence = routing.departmentSequence as string[];
     const traceabilityConfig = routing.traceabilityConfig as Record<string, string[]>;
     const departmentConfig = (routing.departmentConfig || {}) as Record<string, any>;
+    const routingHasExplicitMaterials = Object.values(departmentConfig).some(
+      (config: any) => Array.isArray(config?.materials) && config.materials.length > 0,
+    );
 
     let stepCounter = 0;
     for (let i = 0; i < departmentSequence.length; i++) {
@@ -19492,7 +19495,7 @@ export class DatabaseStorage implements IStorage {
       // ===== POLICY-DRIVEN MATERIAL TRACEABILITY =====
       const tracePolicy = this._getTracePolicyForDepartment(deptName);
       const routingMaterials = deptConfig.materials || [];
-      if (tracePolicy.enabled) {
+      if (tracePolicy.enabled && (!routingHasExplicitMaterials || routingMaterials.length > 0)) {
         if (routingMaterials.length > 0) {
           for (let matIdx = 0; matIdx < routingMaterials.length; matIdx++) {
             const mat = routingMaterials[matIdx];

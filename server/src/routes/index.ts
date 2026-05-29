@@ -54,6 +54,7 @@ import communicationsRoutes from './communications';
 import marketingRoutes from './marketing';
 import internalMessagesRoutes from './internalMessages';
 import nonconformanceRoutes from '../../routes/nonconformance';
+import nonConformingItemsRoutes from './nonConformingItems';
 import paymentsRoutes from './payments';
 import algorithmicSchedulerRoutes from './algorithmicScheduler';
 import productionQueueRoutes from './productionQueue';
@@ -1018,6 +1019,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // Nonconformance tracking routes
   app.use('/api/nonconformance', nonconformanceRoutes);
+  app.use('/api/non-conforming-items', nonConformingItemsRoutes);
 
   // Payment processing routes
   app.use('/api/payments', paymentsRoutes);

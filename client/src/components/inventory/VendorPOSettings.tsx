@@ -319,13 +319,13 @@ export default function VendorPOSettings() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="contact-email">Contact Email</Label>
+                  <Label htmlFor="contact-email">Vendor PO Return Email</Label>
                   <Input
                     id="contact-email"
                     type="email"
                     value={contactEmail}
                     onChange={(e) => setContactEmail(e.target.value)}
-                    placeholder="purchasing@company.com"
+                    placeholder="glenn@agadvanced.com"
                     data-testid="input-contact-email"
                   />
                 </div>

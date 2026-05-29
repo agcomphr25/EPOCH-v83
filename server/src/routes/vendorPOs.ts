@@ -15,6 +15,7 @@ import { generateMagicLink, peekMagicLink, validateMagicLink, createVendorConfir
 import { sendCommunication } from '../../communication/send';
 import { db } from '../../db';
 import { sql } from 'drizzle-orm';
+import { appendUniqueEmail, resolveVendorPoReturnEmail } from '../../utils/vendorPoContact';
 import {
   getVendorQualificationBlockers,
   emitProcurementLedgerEvent,
@@ -545,7 +546,7 @@ function rowsFromDbResult<T>(result: unknown): T[] {
  *  - If no valid selections → fall back to primaryEmail as `to`.
  *  - If primary is in the selection → use primaryEmail as `to`, rest go to CC.
  *  - If primary is NOT in the selection → first validated entry is `to`, rest go to CC.
- *  - standardCc entries (laurie@, issuing user email) are merged into CC, deduped.
+ *  - standardCc entries (Vendor PO return contact, issuing user email) are merged into CC, deduped.
  */
 function deriveToAndCc(
   rawRecipients: unknown,
@@ -572,6 +573,13 @@ function deriveToAndCc(
   }
 
   return { to, cc };
+}
+
+async function getVendorPoEmailRouting(userEmail?: string | null): Promise<{ returnEmail: string; cc: string[] }> {
+  const settings = await storage.getVendorPOSettings();
+  const returnEmail = resolveVendorPoReturnEmail(settings);
+  const cc = appendUniqueEmail(appendUniqueEmail([], returnEmail), userEmail);
+  return { returnEmail, cc };
 }
 
 // Query params schema for list vendor POs
@@ -758,12 +766,16 @@ router.get('/settings', async (req: Request, res: Response) => {
     if (!settings) {
       // Return default settings if none exist
       return res.json({
+        contactEmail: resolveVendorPoReturnEmail(),
         termsAndConditions: '',
         paymentTerms: '',
         shippingInstructions: '',
       });
     }
-    res.json(settings);
+    res.json({
+      ...settings,
+      contactEmail: resolveVendorPoReturnEmail(settings),
+    });
   } catch (error) {
     console.error('Get vendor PO settings error:', error);
     res.status(500).json({ error: 'Failed to retrieve vendor PO settings' });
@@ -1890,11 +1902,12 @@ router.post('/:id/send-rfq', async (req: Request, res: Response) => {
 
     const { recipients: rawRecipients, printOnly } = req.body ?? {};
     const allowedEmails = await getAllowedVendorEmails(vendorPO.vendorId);
+    const { returnEmail: rfqReplyTo, cc: rfqStandardCc } = await getVendorPoEmailRouting((req as any).user?.email);
     const { to: rfqTo, cc: rfqCc } = deriveToAndCc(
       rawRecipients,
       vendor.email,
       allowedEmails,
-      ['laurie.tandy@agadvanced.com']
+      rfqStandardCc
     );
 
     const shouldPrintOnly =
@@ -1963,6 +1976,7 @@ router.post('/:id/send-rfq', async (req: Request, res: Response) => {
       context: rfqContext,
       to: rfqTo,
       cc: rfqCc,
+      replyTo: rfqReplyTo,
       triggeredBy: String((req as any).user?.id ?? (req as any).user?.username ?? 'unknown'),
       capabilityRequired: 'send_vendor_rfq',
       orderId: String(id),
@@ -2442,12 +2456,9 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
     });
     const link = createVendorConfirmFrontendUrl(confirmToken);
 
-    // Build standard CC list: always include laurie.tandy@agadvanced.com + issuing user's email
-    const standardCc: string[] = ['laurie.tandy@agadvanced.com'];
+    // Build standard email routing from Vendor PO settings plus the issuing user's email.
     const issuingUserEmail = (req as any).user?.email as string | undefined;
-    if (issuingUserEmail && !standardCc.map((c) => c.toLowerCase()).includes(issuingUserEmail.toLowerCase())) {
-      standardCc.push(issuingUserEmail);
-    }
+    const { returnEmail: issueReplyTo, cc: standardCc } = await getVendorPoEmailRouting(issuingUserEmail);
 
     // Derive authoritative to/cc from selected recipients (validated against vendor's allowed emails)
     const allowedEmails = await getAllowedVendorEmails(vendorPO.vendorId);
@@ -2473,6 +2484,7 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
       context: issueContext,
       to: issueToEmail,
       cc: issueCcList,
+      replyTo: issueReplyTo,
       triggeredBy: performedBy,
       capabilityRequired: 'issue_vendor_po',
       orderId: String(id),
@@ -2749,11 +2761,8 @@ router.post('/:id/resend', async (req: Request, res: Response) => {
 
     const poNumber = vendorPO.poNumber;
 
-    const standardResendCc: string[] = ['laurie.tandy@agadvanced.com'];
     const resendingUserEmail = (req as any).user?.email as string | undefined;
-    if (resendingUserEmail && !standardResendCc.map((c) => c.toLowerCase()).includes(resendingUserEmail.toLowerCase())) {
-      standardResendCc.push(resendingUserEmail);
-    }
+    const { returnEmail: resendReplyTo, cc: standardResendCc } = await getVendorPoEmailRouting(resendingUserEmail);
 
     const resendAllowedEmails = await getAllowedVendorEmails(vendorPO.vendorId);
     const { to: resendToEmail, cc: resendCcList } = deriveToAndCc(
@@ -2778,6 +2787,7 @@ router.post('/:id/resend', async (req: Request, res: Response) => {
       context: resendContext,
       to: resendToEmail,
       cc: resendCcList,
+      replyTo: resendReplyTo,
       triggeredBy: String((req as any).user?.id ?? (req as any).user?.username ?? 'unknown'),
       capabilityRequired: 'resend_vendor_po',
       orderId: String(id),

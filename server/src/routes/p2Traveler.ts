@@ -1114,6 +1114,9 @@ async function backfillDepartmentConfiguredTravelerTasks(params: {
   const departmentConfigByName = (routing.departmentConfig || {}) as Record<string, any>;
   const departmentConfig = departmentConfigByName[departmentName] || {};
   const traceabilityConfig = (routing.traceabilityConfig || {}) as Record<string, string[]>;
+  const routingHasExplicitMaterials = Object.values(departmentConfigByName).some(
+    (config: any) => Array.isArray(config?.materials) && config.materials.length > 0,
+  );
   const enabledPhases = getEnabledTravelerTaskPhases(departmentConfig);
   const createdCustomFieldKeys = new Set<string>();
   const createdQcStandardKeys = new Set<string>();
@@ -1174,15 +1177,18 @@ async function backfillDepartmentConfiguredTravelerTasks(params: {
     });
   }
 
+  const routingMaterials = Array.isArray(departmentConfig.materials) ? departmentConfig.materials : [];
   const nonMaterialTraceFields = new Set(['operator', 'timestamp']);
-  const traceFields = (traceabilityConfig[departmentName] || [])
-    .filter((field: string) => !nonMaterialTraceFields.has(field))
-    .map((field: string) => ({
-      fieldKey: `trace_${field.replace(/\s+/g, '_').toLowerCase()}`,
-      fieldLabel: field.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase()),
-      fieldType: 'text',
-      required: true,
-    }));
+  const traceFields = routingHasExplicitMaterials
+    ? []
+    : (traceabilityConfig[departmentName] || [])
+      .filter((field: string) => !nonMaterialTraceFields.has(field))
+      .map((field: string) => ({
+        fieldKey: `trace_${field.replace(/\s+/g, '_').toLowerCase()}`,
+        fieldLabel: field.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase()),
+        fieldType: 'text',
+        required: true,
+      }));
   if (traceFields.length > 0) {
     await addTask({
       taskType: 'TRACE',
@@ -1192,7 +1198,6 @@ async function backfillDepartmentConfiguredTravelerTasks(params: {
     }, traceFields);
   }
 
-  const routingMaterials = Array.isArray(departmentConfig.materials) ? departmentConfig.materials : [];
   for (const [index, material] of routingMaterials.entries()) {
     const taskPhase = normalizeTravelerTaskPhase(material.traceabilityPhase || 'START');
     const materialLabel = material.partName || material.partNumber || `Material ${index + 1}`;

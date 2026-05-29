@@ -87,7 +87,16 @@ interface TraceableMaterial {
   qty: string;
 }
 
+interface ProjectOption {
+  id: string;
+  projectCode: string;
+  projectName: string;
+  poId: number | null;
+  poNumber: string | null;
+}
+
 const DISPOSITION_TYPES = ['Scrap', 'Repair', 'Use as Is', 'Use for Reference', 'Return to Vendor'] as const;
+const USE_AS_IS_DEPARTMENTS = ['Pending Layup', 'Layup', 'Assemble/Disassembly', 'CNC', 'Finish', 'Paint', 'Final QC'] as const;
 const REASON_QUALITY = 'quality';
 const REASON_OTHER = 'other';
 const QUALITY_LABEL = 'Quality does not meet customer tolerances/requirements';
@@ -127,7 +136,15 @@ function DispositionDialog({
   const [dispositionDate, setDispositionDate] = useState(today);
   const [reasonType, setReasonType] = useState<string>(REASON_QUALITY);
   const [reasonOther, setReasonOther] = useState('');
+  const [useAsIsDestination, setUseAsIsDestination] = useState<'inventory' | 'production'>('inventory');
+  const [returnProjectId, setReturnProjectId] = useState('');
+  const [returnDepartment, setReturnDepartment] = useState('');
   const [notes, setNotes] = useState('');
+
+  const { data: projects = [] } = useQuery<ProjectOption[]>({
+    queryKey: ['/api/pm-dashboard/projects'],
+    enabled: dispositionType === 'Use as Is' && useAsIsDestination === 'production',
+  });
 
   const createMutation = useMutation({
     mutationFn: (data: object) =>
@@ -135,6 +152,9 @@ function DispositionDialog({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/p2/serialized-items/scrapped'] });
       queryClient.invalidateQueries({ queryKey: ['/api/p2/rmas'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/production-queue'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/scheduling-list'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/po-statuses'] });
       toast({ title: 'Disposition filed', description: 'The disposition report has been submitted.' });
       onSuccess();
     },
@@ -157,6 +177,16 @@ function DispositionDialog({
       toast({ title: 'Missing field', description: 'Please describe the reason.', variant: 'destructive' });
       return;
     }
+    if (dispositionType === 'Use as Is' && useAsIsDestination === 'production') {
+      if (!returnProjectId) {
+        toast({ title: 'Missing field', description: 'Please select a return project.', variant: 'destructive' });
+        return;
+      }
+      if (!returnDepartment) {
+        toast({ title: 'Missing field', description: 'Please select a return department.', variant: 'destructive' });
+        return;
+      }
+    }
     createMutation.mutate({
       serializedItemId: item.id,
       dispositionType,
@@ -168,6 +198,9 @@ function DispositionDialog({
       dispositionDate,
       reasonType,
       reasonOther: reasonType === REASON_OTHER ? reasonOther.trim() : null,
+      useAsIsDestination,
+      returnProjectId: useAsIsDestination === 'production' ? returnProjectId : null,
+      returnDepartment: useAsIsDestination === 'production' ? returnDepartment : null,
       notes: notes.trim() || null,
     });
   };
@@ -200,7 +233,15 @@ function DispositionDialog({
 
           <div>
             <Label htmlFor="dispositionType">Disposition *</Label>
-            <Select value={dispositionType} onValueChange={setDispositionType}>
+            <Select
+              value={dispositionType}
+              onValueChange={(value) => {
+                setDispositionType(value);
+                setUseAsIsDestination('inventory');
+                setReturnProjectId('');
+                setReturnDepartment('');
+              }}
+            >
               <SelectTrigger id="dispositionType">
                 <SelectValue placeholder="Select disposition..." />
               </SelectTrigger>
@@ -211,6 +252,81 @@ function DispositionDialog({
               </SelectContent>
             </Select>
           </div>
+
+          {dispositionType === 'Use as Is' && (
+            <div className="space-y-3 rounded-md border p-3">
+              <Label>Use As Is Destination *</Label>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <label className="flex cursor-pointer items-start gap-2 rounded-md border p-3">
+                  <input
+                    type="radio"
+                    name="useAsIsDestination"
+                    value="inventory"
+                    checked={useAsIsDestination === 'inventory'}
+                    onChange={() => {
+                      setUseAsIsDestination('inventory');
+                      setReturnProjectId('');
+                      setReturnDepartment('');
+                    }}
+                  />
+                  <span>
+                    <span className="block text-sm font-medium">Send to inventory</span>
+                    <span className="block text-xs text-muted-foreground">
+                      Capture this serial as on hand under its part number.
+                    </span>
+                  </span>
+                </label>
+                <label className="flex cursor-pointer items-start gap-2 rounded-md border p-3">
+                  <input
+                    type="radio"
+                    name="useAsIsDestination"
+                    value="production"
+                    checked={useAsIsDestination === 'production'}
+                    onChange={() => setUseAsIsDestination('production')}
+                  />
+                  <span>
+                    <span className="block text-sm font-medium">Return to production</span>
+                    <span className="block text-xs text-muted-foreground">
+                      Reactivate this serial at a selected project and department.
+                    </span>
+                  </span>
+                </label>
+              </div>
+
+              {useAsIsDestination === 'production' && (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <Label htmlFor="returnProjectId">Project *</Label>
+                    <Select value={returnProjectId} onValueChange={setReturnProjectId}>
+                      <SelectTrigger id="returnProjectId">
+                        <SelectValue placeholder="Select project..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {projects.map((project) => (
+                          <SelectItem key={project.id} value={project.id}>
+                            {project.projectCode} - {project.projectName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="returnDepartment">Department *</Label>
+                    <Select value={returnDepartment} onValueChange={setReturnDepartment}>
+                      <SelectTrigger id="returnDepartment">
+                        <SelectValue placeholder="Select department..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {USE_AS_IS_DEPARTMENTS.map((department) => (
+                          <SelectItem key={department} value={department}>{department}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           <div>
             <Label htmlFor="authorization">Authorization *</Label>

@@ -524,12 +524,15 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         p2NonconformingDispositions,
         p2Rmas,
         p2SerializedItems,
+        p2SerializedItemEvents,
         p2PurchaseOrders,
         inventoryItems,
         inventoryBalances,
+        inventoryTransactions,
         insertP2NonconformingDispositionSchema,
+        P2_DEPARTMENT_STAGES,
       } = await import('../../schema');
-      const { eq } = await import('drizzle-orm');
+      const { eq, sql } = await import('drizzle-orm');
 
       const parsed = insertP2NonconformingDispositionSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -537,6 +540,23 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       }
 
       const data = parsed.data;
+      const useAsIsDestination = req.body?.useAsIsDestination === 'production'
+        ? 'production'
+        : 'inventory';
+      const returnProjectId = typeof req.body?.returnProjectId === 'string' && req.body.returnProjectId.trim()
+        ? req.body.returnProjectId.trim()
+        : null;
+      const returnDepartment = typeof req.body?.returnDepartment === 'string' && req.body.returnDepartment.trim()
+        ? req.body.returnDepartment.trim()
+        : null;
+
+      if (data.dispositionType === 'Use as Is' && useAsIsDestination === 'production') {
+        if (!returnProjectId || !returnDepartment) {
+          return res.status(400).json({
+            error: 'Use as Is return-to-production requires project and department',
+          });
+        }
+      }
 
       // Resolve instantly for dispositions that don't require further action
       // Use as Is → inventory added, then resolved; Repair → stays open until RMA complete
@@ -580,7 +600,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           }
         }
       } else if (data.dispositionType === 'Use as Is') {
-        // Add item to inventory bank
+        // Use as Is can either capture the serial as inventory-on-hand or
+        // return it to production at the selected project/department.
         try {
           const [item] = await db
             .select()
@@ -588,60 +609,186 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
             .where(eq(p2SerializedItems.id, data.serializedItemId))
             .limit(1);
           if (item) {
-            // Check if inventory item exists for this part number
-            const [invItem] = await db
-              .select()
-              .from(inventoryItems)
-              .where(eq(inventoryItems.agPartNumber, item.partNumber))
-              .limit(1);
-            // Ensure an inventory_items record exists for this part
-            const effectiveInvItem = invItem || await db
-              .insert(inventoryItems)
-              .values({
-                agPartNumber: item.partNumber,
-                name: item.partName || item.partNumber,
-                source: 'P2 Nonconforming (Use as Is)',
-                notes: `Created by nonconforming disposition for S/N ${data.serialNumber}`,
-                isActive: true,
-                createdAt: new Date(),
-                updatedAt: new Date(),
-              })
-              .returning()
-              .then(([r]) => r);
+            const metadata = (item.metadata as Record<string, unknown> | null) || {};
 
-            if (effectiveInvItem) {
-              // Upsert inventory balance in WAREHOUSE-MAIN location
-              const [existingBalance] = await db
+            if (useAsIsDestination === 'inventory') {
+              // Check if inventory item exists for this part number
+              const [invItem] = await db
                 .select()
-                .from(inventoryBalances)
-                .where(eq(inventoryBalances.agPartNumber, item.partNumber))
+                .from(inventoryItems)
+                .where(eq(inventoryItems.agPartNumber, item.partNumber))
                 .limit(1);
-              if (existingBalance) {
+              // Ensure an inventory_items record exists for this part
+              const effectiveInvItem = invItem || await db
+                .insert(inventoryItems)
+                .values({
+                  agPartNumber: item.partNumber,
+                  name: item.partName || item.partNumber,
+                  source: 'P2 Nonconforming (Use as Is)',
+                  notes: `Created by nonconforming disposition for S/N ${data.serialNumber}`,
+                  isActive: true,
+                  createdAt: new Date(),
+                  updatedAt: new Date(),
+                })
+                .returning()
+                .then(([r]) => r);
+
+              if (effectiveInvItem) {
+                // Upsert inventory balance in WAREHOUSE-MAIN location
+                const [existingBalance] = await db
+                  .select()
+                  .from(inventoryBalances)
+                  .where(eq(inventoryBalances.agPartNumber, item.partNumber))
+                  .limit(1);
+                if (existingBalance) {
+                  await db
+                    .update(inventoryBalances)
+                    .set({
+                      quantityOnHand: existingBalance.quantityOnHand + 1,
+                      quantityAvailable: existingBalance.quantityAvailable + 1,
+                      updatedAt: new Date(),
+                    })
+                    .where(eq(inventoryBalances.id, existingBalance.id));
+                } else {
+                  await db
+                    .insert(inventoryBalances)
+                    .values({
+                      agPartNumber: item.partNumber,
+                      locationId: 'WAREHOUSE-MAIN',
+                      quantityOnHand: 1,
+                      quantityAllocated: 0,
+                      quantityAvailable: 1,
+                      createdAt: new Date(),
+                      updatedAt: new Date(),
+                    });
+                }
+
                 await db
-                  .update(inventoryBalances)
+                  .update(inventoryItems)
                   .set({
-                    quantityOnHand: existingBalance.quantityOnHand + 1,
-                    quantityAvailable: existingBalance.quantityAvailable + 1,
+                    quantityInStock: sql`COALESCE(${inventoryItems.quantityInStock}, 0) + 1`,
+                    onHand: sql`COALESCE(${inventoryItems.onHand}, 0) + 1`,
+                    available: sql`COALESCE(${inventoryItems.available}, 0) + 1`,
+                    lastUpdated: new Date(),
                     updatedAt: new Date(),
                   })
-                  .where(eq(inventoryBalances.id, existingBalance.id));
-              } else {
-                await db
-                  .insert(inventoryBalances)
-                  .values({
-                    agPartNumber: item.partNumber,
-                    locationId: 'WAREHOUSE-MAIN',
-                    quantityOnHand: 1,
-                    quantityAllocated: 0,
-                    quantityAvailable: 1,
-                    createdAt: new Date(),
-                    updatedAt: new Date(),
-                  });
+                  .where(eq(inventoryItems.id, effectiveInvItem.id));
+
+                await db.insert(inventoryTransactions).values({
+                  agPartNumber: item.partNumber,
+                  transactionType: 'return',
+                  quantity: 1,
+                  unitOfMeasure: 'EA',
+                  fromLocation: 'P2 Nonconforming',
+                  toLocation: 'WAREHOUSE-MAIN',
+                  referenceType: 'P2_NCR_USE_AS_IS',
+                  referenceId: String(disposition.id),
+                  notes: `Use As Is inventory capture for serialized item ${item.serialNumber}`,
+                  performedBy: data.authorization,
+                  metadata: {
+                    serializedItemId: item.id,
+                    serialNumber: item.serialNumber,
+                    travelerBarcode: item.travelerBarcode,
+                    dispositionId: disposition.id,
+                    poId: item.poId,
+                    poNumber: item.poNumber,
+                    reasonType: data.reasonType,
+                    reasonOther: data.reasonOther,
+                  },
+                });
               }
+
+              await db.update(p2SerializedItems)
+                .set({
+                  status: 'COMPLETED',
+                  currentDepartment: 'Inventory',
+                  metadata: {
+                    ...metadata,
+                    useAsIsDisposition: {
+                      destination: 'inventory',
+                      dispositionId: disposition.id,
+                      inventoryPartNumber: item.partNumber,
+                      locationId: 'WAREHOUSE-MAIN',
+                      reasonType: data.reasonType,
+                      reasonOther: data.reasonOther,
+                      recordedAt: new Date().toISOString(),
+                    },
+                  },
+                  updatedAt: new Date(),
+                })
+                .where(eq(p2SerializedItems.id, item.id));
+
+              await db.insert(p2SerializedItemEvents).values({
+                serializedItemId: item.id,
+                barcode: item.barcode,
+                eventType: 'NCR_USE_AS_IS_INVENTORY',
+                fromDepartment: item.currentDepartment,
+                toDepartment: 'Inventory',
+                toStageIndex: item.currentStageIndex,
+                performedBy: data.authorization,
+                notes: `Use As Is disposition sent to inventory under ${item.partNumber}`,
+                metadata: {
+                  dispositionId: disposition.id,
+                  serialNumber: item.serialNumber,
+                  travelerBarcode: item.travelerBarcode,
+                  locationId: 'WAREHOUSE-MAIN',
+                  reasonType: data.reasonType,
+                  reasonOther: data.reasonOther,
+                },
+              });
+            } else {
+              const p2Stages = ['Pending Layup', ...P2_DEPARTMENT_STAGES] as string[];
+              const nextDepartment = returnDepartment || 'Pending Layup';
+              const stageIndex = Math.max(0, p2Stages.indexOf(nextDepartment));
+
+              await db.update(p2SerializedItems)
+                .set({
+                  status: 'ACTIVE',
+                  currentDepartment: nextDepartment,
+                  currentStageIndex: stageIndex,
+                  scrapReason: null,
+                  scrapBy: null,
+                  scrapAt: null,
+                  metadata: {
+                    ...metadata,
+                    useAsIsDisposition: {
+                      destination: 'production',
+                      dispositionId: disposition.id,
+                      returnProjectId,
+                      returnDepartment: nextDepartment,
+                      reasonType: data.reasonType,
+                      reasonOther: data.reasonOther,
+                      recordedAt: new Date().toISOString(),
+                    },
+                  },
+                  updatedAt: new Date(),
+                })
+                .where(eq(p2SerializedItems.id, item.id));
+
+              await db.insert(p2SerializedItemEvents).values({
+                serializedItemId: item.id,
+                barcode: item.barcode,
+                eventType: 'NCR_USE_AS_IS_PRODUCTION',
+                fromDepartment: item.currentDepartment,
+                fromStageIndex: item.currentStageIndex,
+                toDepartment: nextDepartment,
+                toStageIndex: stageIndex,
+                performedBy: data.authorization,
+                notes: `Use As Is disposition returned to production at ${nextDepartment}`,
+                metadata: {
+                  dispositionId: disposition.id,
+                  serialNumber: item.serialNumber,
+                  travelerBarcode: item.travelerBarcode,
+                  returnProjectId,
+                  returnDepartment: nextDepartment,
+                  reasonType: data.reasonType,
+                  reasonOther: data.reasonOther,
+                },
+              });
             }
           }
         } catch (e) {
-          console.error('Failed to add item to inventory bank:', e);
+          console.error('Failed to apply Use as Is disposition:', e);
         }
       } else if (data.dispositionType === 'Repair') {
         // Create an open RMA record

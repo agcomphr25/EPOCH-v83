@@ -100,13 +100,9 @@ export async function submitPTORequest(
     }
   );
 
-  if (initialStatus === "pending_supervisor") {
-    const { notifyPTOApprovalNeeded } = await import("./approvalNotifications.service");
-    void notifyPTOApprovalNeeded(row!.id);
-  } else if (initialStatus === "pending_hr") {
-    const { notifyPTOHrAdminNeeded } = await import("./approvalNotifications.service");
-    void notifyPTOHrAdminNeeded(row!.id, "Employee has no supervisor assigned; routed directly to HR/Admin.");
-  }
+  // PTO submission notifications are temporarily disabled while the approval
+  // notification path is being reviewed. The request still lands in the PTO
+  // command center and follows the normal approval workflow.
 
   return row!;
 }

@@ -17,6 +17,7 @@ import {
   Receipt,
   Ban,
 } from 'lucide-react';
+import P2InvoicePreviewButton from '@/components/p2/P2InvoicePreviewButton';
 
 interface ShipmentRow {
   id: string;
@@ -70,34 +71,13 @@ export default function P2ShipmentHistory() {
     },
   });
 
-  const createInvoiceMutation = useMutation({
-    mutationFn: async (row: ShipmentRow) => {
-      if (!row.packing_slip_id) throw new Error('No packing slip is linked to this shipment.');
-      return apiRequest(`/api/ar-invoices/from-packing-slip/${row.packing_slip_id}`, {
-        method: 'POST',
-      });
-    },
-    onSuccess: (invoice: any) => {
-      toast({
-        title: 'Invoice ready for review',
-        description: invoice?.invoiceNumber
-          ? `Invoice ${invoice.invoiceNumber} was created from this packing slip.`
-          : 'Invoice was created from this packing slip.',
-      });
-      qc.invalidateQueries({ queryKey: ['/api/p2/shipments'] });
-      qc.invalidateQueries({ predicate: (query) =>
-        Array.isArray(query.queryKey) && query.queryKey[0] === '/api/ar-invoices'
-      });
-      if (invoice?.id) setLocation(`/finance/invoices/${invoice.id}`);
-    },
-    onError: (err: any) => {
-      toast({
-        title: 'Invoice creation failed',
-        description: err.message || 'Unable to create invoice from this packing slip.',
-        variant: 'destructive',
-      });
-    },
-  });
+  const handleInvoiceCreated = (invoice: any) => {
+    qc.invalidateQueries({ queryKey: ['/api/p2/shipments'] });
+    qc.invalidateQueries({ predicate: (query) =>
+      Array.isArray(query.queryKey) && query.queryKey[0] === '/api/ar-invoices'
+    });
+    if (invoice?.id) setLocation(`/finance/invoices/${invoice.id}`);
+  };
 
   const voidShipmentMutation = useMutation({
     mutationFn: async ({ row, reason }: { row: ShipmentRow; reason: string }) =>
@@ -240,9 +220,6 @@ export default function P2ShipmentHistory() {
                 </thead>
                 <tbody className="divide-y divide-border">
                   {filtered.map(row => {
-                    const isCreatingInvoice =
-                      createInvoiceMutation.isPending && createInvoiceMutation.variables?.id === row.id;
-
                     return (
                     <tr key={row.id} className="hover:bg-muted/30 transition-colors">
                       <td className="px-4 py-3 font-mono font-medium text-xs">
@@ -295,20 +272,13 @@ export default function P2ShipmentHistory() {
                               </Link>
                             </Button>
                           ) : row.packing_slip_id ? (
-                            <Button
+                            <P2InvoicePreviewButton
+                              packingSlipId={row.packing_slip_id}
                               size="sm"
                               variant="outline"
                               className="h-7 px-2 text-xs"
-                              onClick={() => createInvoiceMutation.mutate(row)}
-                              disabled={createInvoiceMutation.isPending}
-                            >
-                              {isCreatingInvoice ? (
-                                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                              ) : (
-                                <Receipt className="h-3 w-3 mr-1" />
-                              )}
-                              Create Invoice
-                            </Button>
+                              onCreated={handleInvoiceCreated}
+                            />
                           ) : null}
                           {row.status !== 'VOID' && (
                             <Button

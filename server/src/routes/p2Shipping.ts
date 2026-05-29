@@ -14,6 +14,7 @@ import { authenticateToken, requireRole } from '../../middleware/auth';
 import { requirePermission } from '../../middleware/requirePermission';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { generatePackingSlipPdf } from '../../utils/pdf/packingSlipPdf';
+import { generateMaterialTransferPdf } from '../../utils/pdf/materialTransferPdf';
 import type { PackingSlipData, PackingSlipItem } from '../../utils/pdf/types';
 import { COMPANY_INFO } from '../../utils/pdf/pdfConfig';
 import {
@@ -30,6 +31,34 @@ import {
 const upload = multer({ storage: multer.memoryStorage() });
 
 const router = Router();
+
+const materialTransferItemSchema = z.object({
+  quantity: z.coerce.number().positive('Quantity must be greater than zero'),
+  description: z.string().trim().min(1, 'Description is required'),
+  partNumber: z.string().trim().optional().default(''),
+  serialNumber: z.string().trim().optional().default(''),
+  customerAssetId: z.string().trim().optional().default(''),
+  condition: z.string().trim().optional().default(''),
+  notes: z.string().trim().optional().default(''),
+});
+
+const materialTransferPdfSchema = z.object({
+  formNumber: z.string().trim().optional().default(''),
+  transferDate: z.string().trim().min(1, 'Transfer date is required'),
+  customerName: z.string().trim().min(1, 'Customer name is required'),
+  customerContact: z.string().trim().optional().default(''),
+  customerPhone: z.string().trim().optional().default(''),
+  customerEmail: z.string().trim().optional().default(''),
+  shipToAddress: z.string().trim().min(1, 'Ship-to address is required'),
+  returnReason: z.string().trim().min(1, 'Reason for transfer is required'),
+  carrier: z.string().trim().optional().default(''),
+  trackingNumber: z.string().trim().optional().default(''),
+  freightTerms: z.string().trim().optional().default('Prepaid'),
+  preparedBy: z.string().trim().min(1, 'Prepared by is required'),
+  authorizedBy: z.string().trim().optional().default(''),
+  notes: z.string().trim().optional().default(''),
+  items: z.array(materialTransferItemSchema).min(1, 'At least one item is required'),
+});
 
 const MANUFACTURER_COC_TEMPLATE_KEY = 'manufacturer_coc';
 const MANUFACTURER_COC_FALLBACK = {
@@ -311,6 +340,31 @@ const createLotSchema = z.object({
 
 const voidShipmentSchema = z.object({
   reason: z.string().trim().min(1, 'Void reason is required'),
+});
+
+// ============================================================
+// POST /api/p2/material-transfer/pdf - Generate manual material transfer form
+// ============================================================
+router.post('/material-transfer/pdf', authenticateToken, requirePermission('shipping.release_shipment'), async (req: Request, res: Response) => {
+  try {
+    const input = materialTransferPdfSchema.parse(req.body);
+    const pdf = await generateMaterialTransferPdf(input);
+    const safeFormNumber = (input.formNumber || `MTF-${input.transferDate}`)
+      .replace(/[^A-Za-z0-9._-]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 80) || 'material-transfer-form';
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${safeFormNumber}.pdf"`);
+    res.setHeader('Cache-Control', 'no-store');
+    return res.send(pdf);
+  } catch (err: any) {
+    if (err?.issues) {
+      return res.status(400).json({ error: 'Invalid material transfer form data', issues: err.issues });
+    }
+    console.error('Material transfer PDF error:', err);
+    return res.status(500).json({ error: 'Failed to generate material transfer form' });
+  }
 });
 
 async function ensureP2VoidShipmentSchema(client: Pick<typeof pgPool, 'query'>): Promise<void> {
@@ -1178,11 +1232,17 @@ router.post('/certificates', authenticateToken, requirePermission('shipping.rele
       lot.manufacturingDate ||
       new Date();
 
-    const certNumber = await generateSequentialId(
-      'COC',
-      'p2_certificates_of_conformance',
-      'certificate_number'
+    const certNumberRows = await pool.query<{ certificate_number: string }>(
+      `SELECT certificate_number
+         FROM p2_certificates_of_conformance
+        WHERE certificate_number = $1
+           OR certificate_number LIKE $2
+        ORDER BY certificate_number DESC`,
+      [lot.lotNumber, `${lot.lotNumber}-%`]
     );
+    const certNumber = certNumberRows.length === 0
+      ? lot.lotNumber
+      : `${lot.lotNumber}-${String(certNumberRows.length + 1).padStart(2, '0')}`;
 
     const defaultText =
       'AG Advanced certifies that the items listed herein have been manufactured, inspected, and tested in accordance with the applicable drawings, specifications, and purchase order requirements. All materials used in manufacture conform to applicable specifications. Records are on file and available for review.';

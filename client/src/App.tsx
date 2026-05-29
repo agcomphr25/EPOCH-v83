@@ -148,6 +148,7 @@ const P2CertificateViewer = React.lazy(() => import('./pages/P2CertificateViewer
 const P2RmaDetailPage = React.lazy(() => import('./pages/P2RmaDetailPage'));
 const P2ShipmentDetail = React.lazy(() => import('./pages/P2ShipmentDetail'));
 const P2ShipmentHistory = React.lazy(() => import('./pages/P2ShipmentHistory'));
+const P2MaterialTransferForm = React.lazy(() => import('./pages/P2MaterialTransferForm'));
 const P2TestReportViewer = React.lazy(() => import('./pages/P2TestReportViewer'));
 const P2ReadyToShipDashboard = React.lazy(() => import('./pages/P2ReadyToShipDashboard'));
 const POProductsPage = React.lazy(() => import('./pages/POProductsPage'));
@@ -1160,6 +1161,7 @@ function App() {
                   <Route path="/p2/certificate/:id" component={P2CertificateViewer} />
                   <Route path="/p2/shipments" component={P2ShipmentHistory} />
                   <Route path="/p2/shipments/:lotId" component={P2ShipmentDetail} />
+                  <Route path="/p2/material-transfer" component={P2MaterialTransferForm} />
                   <Route path="/p2/ready-to-ship" component={P2ReadyToShipDashboard} />
                   <Route path="/p2/test-report/:id" component={P2TestReportViewer} />
                   <Route path="/p2-production-queue"><Redirect to="/p2-control-center" /></Route>

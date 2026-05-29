@@ -71,7 +71,7 @@ interface Rma {
     serializedItemId: string;
     rmaNumber: string;
     status: string;
-    traceableMaterials: { name: string; lot: string; qty: string }[];
+    traceableMaterials: TraceableMaterial[];
     shippedAt: string | null;
     completedAt: string | null;
     notes: string | null;
@@ -82,9 +82,16 @@ interface Rma {
 }
 
 interface TraceableMaterial {
+  partNumber?: string;
   name: string;
   lot: string;
   qty: string;
+}
+
+interface InventoryItemOption {
+  agPartNumber: string;
+  name: string;
+  purchaseUnit?: string | null;
 }
 
 interface ProjectOption {
@@ -414,6 +421,11 @@ function RmaRow({ rma, onUpdated }: { rma: Rma; onUpdated: () => void }) {
   );
   const [newMaterial, setNewMaterial] = useState<TraceableMaterial>({ name: '', lot: '', qty: '' });
 
+  const { data: inventoryItems = [] } = useQuery<InventoryItemOption[]>({
+    queryKey: ['/api/inventory/items/part-numbers'],
+    enabled: expanded && rma.rma.status === 'open',
+  });
+
   const updateMutation = useMutation({
     mutationFn: (data: object) =>
       apiRequest(`/api/p2/rmas/${rma.rma.id}`, { method: 'PATCH', body: JSON.stringify(data) }),
@@ -428,11 +440,20 @@ function RmaRow({ rma, onUpdated }: { rma: Rma; onUpdated: () => void }) {
   });
 
   const addMaterial = () => {
-    if (!newMaterial.name.trim()) return;
+    if (!newMaterial.partNumber && !newMaterial.name.trim()) return;
     const updated = [...materials, { ...newMaterial }];
     setMaterials(updated);
-    setNewMaterial({ name: '', lot: '', qty: '' });
+    setNewMaterial({ partNumber: undefined, name: '', lot: '', qty: '' });
     updateMutation.mutate({ traceableMaterials: updated });
+  };
+
+  const selectMaterial = (partNumber: string) => {
+    const item = inventoryItems.find((option) => option.agPartNumber === partNumber);
+    setNewMaterial({
+      ...newMaterial,
+      partNumber,
+      name: item?.name || newMaterial.name,
+    });
   };
 
   const removeMaterial = (idx: number) => {
@@ -505,6 +526,7 @@ function RmaRow({ rma, onUpdated }: { rma: Rma; onUpdated: () => void }) {
               <Table className="mb-2">
                 <TableHeader>
                   <TableRow>
+                    <TableHead>Part #</TableHead>
                     <TableHead>Material</TableHead>
                     <TableHead>Lot #</TableHead>
                     <TableHead>Qty</TableHead>
@@ -514,6 +536,7 @@ function RmaRow({ rma, onUpdated }: { rma: Rma; onUpdated: () => void }) {
                 <TableBody>
                   {materials.map((m, idx) => (
                     <TableRow key={idx}>
+                      <TableCell className="font-mono text-sm">{m.partNumber || 'â€”'}</TableCell>
                       <TableCell className="text-sm">{m.name}</TableCell>
                       <TableCell className="font-mono text-sm">{m.lot}</TableCell>
                       <TableCell className="text-sm">{m.qty}</TableCell>
@@ -536,13 +559,19 @@ function RmaRow({ rma, onUpdated }: { rma: Rma; onUpdated: () => void }) {
             {rma.rma.status === 'open' && (
               <div className="flex gap-2 items-end">
                 <div className="flex-1">
-                  <Label className="text-xs">Material Name</Label>
-                  <Input
-                    placeholder="Material..."
-                    value={newMaterial.name}
-                    onChange={(e) => setNewMaterial({ ...newMaterial, name: e.target.value })}
-                    className="h-8 text-sm"
-                  />
+                  <Label className="text-xs">Inventory Item</Label>
+                  <Select value={newMaterial.partNumber || ''} onValueChange={selectMaterial}>
+                    <SelectTrigger className="h-8 text-sm">
+                      <SelectValue placeholder="Select item..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {inventoryItems.map((item) => (
+                        <SelectItem key={item.agPartNumber} value={item.agPartNumber}>
+                          {item.agPartNumber} - {item.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="w-28">
                   <Label className="text-xs">Lot #</Label>

@@ -425,6 +425,7 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
       'CNC': 'bg-orange-50 dark:bg-orange-950 border-orange-300',
       'Finish': 'bg-amber-50 dark:bg-amber-950 border-amber-300',
       'Paint': 'bg-green-50 dark:bg-green-950 border-green-300',
+      'Repair': 'bg-rose-50 dark:bg-rose-950 border-rose-300',
       'Final QC': 'bg-emerald-50 dark:bg-emerald-950 border-emerald-300',
       'Shipping': 'bg-cyan-50 dark:bg-cyan-950 border-cyan-300',
     };

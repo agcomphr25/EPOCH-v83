@@ -11226,16 +11226,37 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       
       console.log('📊 Querying Finish QC report from', startDate, 'to', endDate);
       
-      // Get all Finish Technicians from employees table (regardless of whether they've completed orders)
+      // Get all Finish Technicians from employees and explicitly marked user accounts.
       // Defensive helper: pool.query returns rows[] directly, but handle QueryResult too
       const getRows = (r: any) => Array.isArray(r) ? r : (r?.rows ?? []);
       
       const finishTechniciansResult = await pool.query(
-        `SELECT id, name, employee_code
-        FROM employees
-        WHERE is_finish_technician = true
-          AND is_active = true
-        ORDER BY name`
+        `WITH finish_technicians AS (
+          SELECT
+            id::text as id,
+            name,
+            employee_code,
+            'employee' as source
+          FROM employees
+          WHERE is_finish_technician = true
+            AND is_active = true
+
+          UNION ALL
+
+          SELECT
+            ('user:' || u.id::text) as id,
+            COALESCE(NULLIF(TRIM(CONCAT_WS(' ', u.first_name, u.last_name)), ''), u.username) as name,
+            u.username as employee_code,
+            'user' as source
+          FROM users u
+          LEFT JOIN employees e ON u.employee_id = e.id
+          WHERE u.is_finish_technician = true
+            AND u.is_active = true
+            AND NOT COALESCE(e.is_finish_technician = true AND e.is_active = true, false)
+        )
+        SELECT DISTINCT ON (LOWER(name)) id, name, employee_code, source
+        FROM finish_technicians
+        ORDER BY LOWER(name), source`
       );
       const finishTechnicians = getRows(finishTechniciansResult);
       

@@ -161,7 +161,7 @@ router.get('/', async (req, res) => {
         u.password_changed_at as "passwordChangedAt",
         u.locked_until as "lockedUntil",
         u.can_create_vendor_pos as "canCreateVendorPOs",
-        e.is_finish_technician as "isFinishTechnician",
+        COALESCE(e.is_finish_technician, u.is_finish_technician, false) as "isFinishTechnician",
         e.name as "employeeDisplayName"
       FROM users u
       LEFT JOIN employees e ON u.employee_id = e.id
@@ -220,11 +220,12 @@ router.post('/', requirePermission('admin.manage_users'), async (req, res) => {
         role, 
         employee_id, 
         can_override_prices, 
+        is_finish_technician,
         is_active,
         password_changed_at,
         failed_login_attempts
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), 0)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), 0)
       RETURNING 
         id,
         username,
@@ -233,6 +234,7 @@ router.post('/', requirePermission('admin.manage_users'), async (req, res) => {
         role,
         employee_id as "employeeId",
         can_override_prices as "canOverridePrices",
+        is_finish_technician as "isFinishTechnician",
         is_active as "isActive"
     `,
       [
@@ -243,6 +245,7 @@ router.post('/', requirePermission('admin.manage_users'), async (req, res) => {
         role || 'EMPLOYEE',
         employeeId,
         canOverridePrices || false,
+        isFinishTechnician || false,
         isActive !== false,
       ]
     );
@@ -336,6 +339,10 @@ router.put('/:id', requirePermission('admin.manage_users'), async (req, res) => 
       updates.push(`is_active = $${paramCount++}`);
       values.push(isActive);
     }
+    if (isFinishTechnician !== undefined) {
+      updates.push(`is_finish_technician = $${paramCount++}`);
+      values.push(isFinishTechnician);
+    }
 
     updates.push(`updated_at = NOW()`);
     values.push(id);
@@ -353,6 +360,7 @@ router.put('/:id', requirePermission('admin.manage_users'), async (req, res) => 
         role,
         employee_id as "employeeId",
         can_override_prices as "canOverridePrices",
+        is_finish_technician as "isFinishTechnician",
         is_active as "isActive"
     `,
       values

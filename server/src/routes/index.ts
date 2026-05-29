@@ -526,6 +526,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         p2Rmas,
         p2SerializedItems,
         p2SerializedItemEvents,
+        travelers,
+        travelerSteps,
         p2PurchaseOrders,
         inventoryItems,
         inventoryBalances,
@@ -792,7 +794,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           console.error('Failed to apply Use as Is disposition:', e);
         }
       } else if (data.dispositionType === 'Repair') {
-        // Create an open RMA record
+        // Create an open repair RMA and return the original serial to a Repair queue.
         try {
           const now = new Date();
           const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
@@ -808,7 +810,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           }
           const rmaNumber = `RMA-P2-${dateStr}-${maxSeq + 1}`;
 
-          await db
+          const [rma] = await db
             .insert(p2Rmas)
             .values({
               dispositionId: disposition.id,
@@ -818,7 +820,86 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
               traceableMaterials: [],
               createdAt: new Date(),
               updatedAt: new Date(),
+            })
+            .returning();
+
+          const [item] = await db
+            .select()
+            .from(p2SerializedItems)
+            .where(eq(p2SerializedItems.id, data.serializedItemId))
+            .limit(1);
+
+          if (item) {
+            const metadata = (item.metadata as Record<string, unknown> | null) || {};
+            const [activeTraveler] = item.serialNumber
+              ? await db
+                  .select()
+                  .from(travelers)
+                  .where(eq(travelers.serialNumber, item.serialNumber))
+                  .orderBy(sql`${travelers.updatedAt} DESC NULLS LAST`, sql`${travelers.createdAt} DESC NULLS LAST`)
+                  .limit(1)
+              : [];
+
+            await db.update(p2SerializedItems)
+              .set({
+                status: 'ACTIVE',
+                currentDepartment: 'Repair',
+                metadata: {
+                  ...metadata,
+                  repairDisposition: {
+                    dispositionId: disposition.id,
+                    rmaId: rma.id,
+                    rmaNumber,
+                    reasonType: data.reasonType,
+                    reasonOther: data.reasonOther,
+                    routedAt: new Date().toISOString(),
+                  },
+                },
+                updatedAt: new Date(),
+              })
+              .where(eq(p2SerializedItems.id, item.id));
+
+            let repairStepId: string | null = null;
+            if (activeTraveler) {
+              const [maxStepRow] = await db
+                .select({ maxStep: sql<number>`COALESCE(MAX(${travelerSteps.stepNumber}), 0)` })
+                .from(travelerSteps)
+                .where(eq(travelerSteps.travelerId, activeTraveler.id));
+              const nextStepNumber = Number(maxStepRow?.maxStep || 0) + 1;
+              const [repairStep] = await db.insert(travelerSteps)
+                .values({
+                  travelerId: activeTraveler.id,
+                  departmentName: 'Repair',
+                  stepNumber: nextStepNumber,
+                  status: 'NOT_STARTED',
+                  notes: `Repair step created from NCR disposition ${disposition.id} / ${rmaNumber}`,
+                })
+                .returning({ id: travelerSteps.id });
+              repairStepId = repairStep?.id ?? null;
+            }
+
+            await db.insert(p2SerializedItemEvents).values({
+              serializedItemId: item.id,
+              barcode: item.barcode,
+              eventType: 'NCR_DISPOSITION_REPAIR',
+              fromDepartment: item.currentDepartment,
+              fromStageIndex: item.currentStageIndex,
+              toDepartment: 'Repair',
+              toStageIndex: item.currentStageIndex,
+              performedBy: data.authorization,
+              notes: `Repair disposition opened as ${rmaNumber}`,
+              metadata: {
+                dispositionId: disposition.id,
+                rmaId: rma.id,
+                rmaNumber,
+                travelerId: activeTraveler?.id ?? null,
+                travelerNumber: activeTraveler?.travelerNumber ?? null,
+                repairStepId,
+                reasonType: data.reasonType,
+                reasonOther: data.reasonOther,
+              },
             });
+          }
         } catch (e) {
           console.error('Failed to create RMA for disposition:', e);
         }
@@ -875,8 +956,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   app.patch('/api/p2/rmas/:id', async (req, res) => {
     try {
       const { db } = await import('../../db');
-      const { p2Rmas } = await import('../../schema');
-      const { eq } = await import('drizzle-orm');
+      const { p2Rmas, p2SerializedItems, p2SerializedItemEvents, inventoryTransactions, travelers, travelerSteps } = await import('../../schema');
+      const { and, eq, sql } = await import('drizzle-orm');
       const { traceableMaterials, status, notes } = req.body;
 
       const updateData: any = { updatedAt: new Date() };
@@ -892,12 +973,130 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         updateData.status = status;
       }
 
+      const [existingRma] = await db
+        .select()
+        .from(p2Rmas)
+        .where(eq(p2Rmas.id, parseInt(req.params.id)))
+        .limit(1);
+      if (!existingRma) return res.status(404).json({ error: 'RMA not found' });
+
       const [updated] = await db
         .update(p2Rmas)
         .set(updateData)
         .where(eq(p2Rmas.id, parseInt(req.params.id)))
         .returning();
       if (!updated) return res.status(404).json({ error: 'RMA not found' });
+
+      if (traceableMaterials !== undefined) {
+        const [item] = await db
+          .select()
+          .from(p2SerializedItems)
+          .where(eq(p2SerializedItems.id, updated.serializedItemId))
+          .limit(1);
+
+        if (item) {
+          const [activeTraveler] = item.serialNumber
+            ? await db
+                .select()
+                .from(travelers)
+                .where(eq(travelers.serialNumber, item.serialNumber))
+                .orderBy(sql`${travelers.updatedAt} DESC NULLS LAST`, sql`${travelers.createdAt} DESC NULLS LAST`)
+                .limit(1)
+            : [];
+          const [repairStep] = activeTraveler
+            ? await db
+                .select()
+                .from(travelerSteps)
+                .where(and(eq(travelerSteps.travelerId, activeTraveler.id), eq(travelerSteps.departmentName, 'Repair')))
+                .orderBy(sql`${travelerSteps.stepNumber} DESC`)
+                .limit(1)
+            : [];
+          const materialSummary = (traceableMaterials as Array<{ name?: string; partNumber?: string; lot?: string; qty?: string }>)
+            .map((material) => {
+              const label = [material.partNumber, material.name].filter(Boolean).join(' - ');
+              return [label, material.lot ? `lot ${material.lot}` : null, material.qty ? `qty ${material.qty}` : null]
+                .filter(Boolean)
+                .join(', ');
+            })
+            .filter(Boolean)
+            .join('; ');
+
+          if (repairStep && materialSummary) {
+            const existingNotes = String(repairStep.notes || '')
+              .split('\n')
+              .filter((line) => !line.startsWith('Repair materials:'))
+              .join('\n')
+              .trim();
+            await db.update(travelerSteps)
+              .set({
+                notes: [existingNotes, `Repair materials: ${materialSummary}`].filter(Boolean).join('\n'),
+              })
+              .where(eq(travelerSteps.id, repairStep.id));
+          }
+
+          await db.insert(p2SerializedItemEvents).values({
+            serializedItemId: item.id,
+            barcode: item.barcode,
+            eventType: 'NCR_REPAIR_MATERIAL_USED',
+            toDepartment: 'Repair',
+            toStageIndex: item.currentStageIndex,
+            performedBy: 'Repair',
+            notes: `Repair material traceability updated for RMA ${updated.rmaNumber}`,
+            metadata: {
+              rmaId: updated.id,
+              rmaNumber: updated.rmaNumber,
+              traceableMaterials,
+            },
+          });
+
+          const previousMaterials = Array.isArray(existingRma.traceableMaterials)
+            ? existingRma.traceableMaterials as Array<{ name?: string; partNumber?: string; lot?: string; qty?: string }>
+            : [];
+          const previousKeys = new Set(previousMaterials.map((material) =>
+            [
+              String(material.partNumber || '').trim(),
+              String(material.name || '').trim(),
+              String(material.lot || '').trim(),
+              String(material.qty || '').trim(),
+            ].join('|')
+          ));
+
+          for (const material of traceableMaterials as Array<{ name?: string; partNumber?: string; lot?: string; qty?: string }>) {
+            const partNumber = String(material.partNumber || '').trim();
+            if (!partNumber) continue;
+            const materialKey = [
+              partNumber,
+              String(material.name || '').trim(),
+              String(material.lot || '').trim(),
+              String(material.qty || '').trim(),
+            ].join('|');
+            if (previousKeys.has(materialKey)) continue;
+            const quantity = Number(material.qty || 0);
+            await db.insert(inventoryTransactions).values({
+              agPartNumber: partNumber,
+              transactionType: 'issue',
+              quantity: Number.isFinite(quantity) && quantity > 0 ? -quantity : 0,
+              unitOfMeasure: 'EA',
+              fromLocation: 'Inventory',
+              toLocation: 'P2 Repair',
+              referenceType: 'P2_NCR_REPAIR',
+              referenceId: String(updated.id),
+              notes: `Repair material used for ${item.serialNumber}: ${material.name || partNumber}`,
+              performedBy: 'Repair',
+              metadata: {
+                rmaId: updated.id,
+                rmaNumber: updated.rmaNumber,
+                serializedItemId: item.id,
+                serialNumber: item.serialNumber,
+                materialName: material.name || null,
+                materialPartNumber: partNumber,
+                lot: material.lot || null,
+                qty: material.qty || null,
+              },
+            });
+          }
+        }
+      }
 
       // When RMA is marked complete, resolve the linked disposition
       if (status === 'complete' && updated.dispositionId) {
@@ -4258,6 +4457,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         'CNC',
         'Finish',
         'Paint',
+        'Repair',
         'Final QC',
         'Shipping',
         'Completed'

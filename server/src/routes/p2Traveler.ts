@@ -207,6 +207,80 @@ function isPacketTraceItem(item: any): boolean {
   return Boolean(item?.builtPacketId || item?.packetBarcode || type.includes('packet'));
 }
 
+function traceabilityRecordKey(item: {
+  inventoryPartId?: string | null;
+  traceabilityType?: string | null;
+  traceabilityLabel?: string | null;
+  traceabilityValue?: string | null;
+}) {
+  return [
+    item.inventoryPartId || '',
+    item.traceabilityType || '',
+    item.traceabilityLabel || '',
+    item.traceabilityValue || '',
+  ].join('|');
+}
+
+function traceabilityItemKey(item: any) {
+  return traceabilityRecordKey({
+    inventoryPartId: item?.builtPacketId ? String(item.builtPacketId) : (item?.inventoryPartId || null),
+    traceabilityType: item?.type || null,
+    traceabilityLabel: item?.label || null,
+    traceabilityValue: item?.value || null,
+  });
+}
+
+function mergeTraceabilityItems(existing: any[], incoming: any[]) {
+  const merged: any[] = [];
+  const seen = new Set<string>();
+
+  for (const item of [...existing, ...incoming]) {
+    if (!item || !getTraceValue(item)) continue;
+    const key = traceabilityItemKey(item);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(item);
+  }
+
+  return merged;
+}
+
+async function insertMissingP2TraceabilityRecords(params: {
+  serializedItemId: string;
+  department: string;
+  records: Array<typeof p2SerializedItemTraceability.$inferInsert>;
+}) {
+  const { serializedItemId, department, records } = params;
+  if (records.length === 0) return 0;
+
+  const existingRecords = await db
+    .select({
+      inventoryPartId: p2SerializedItemTraceability.inventoryPartId,
+      traceabilityType: p2SerializedItemTraceability.traceabilityType,
+      traceabilityLabel: p2SerializedItemTraceability.traceabilityLabel,
+      traceabilityValue: p2SerializedItemTraceability.traceabilityValue,
+    })
+    .from(p2SerializedItemTraceability)
+    .where(and(
+      eq(p2SerializedItemTraceability.serializedItemId, serializedItemId),
+      eq(p2SerializedItemTraceability.department, department),
+    ));
+
+  const existingKeys = new Set(existingRecords.map(traceabilityRecordKey));
+  const missingRecords = records.filter((record) => {
+    const key = traceabilityRecordKey(record);
+    if (existingKeys.has(key)) return false;
+    existingKeys.add(key);
+    return true;
+  });
+
+  if (missingRecords.length > 0) {
+    await db.insert(p2SerializedItemTraceability).values(missingRecords);
+  }
+
+  return missingRecords.length;
+}
+
 async function expandAndConsumePacketTraceability(params: {
   traceabilityData: any[];
   serializedItem: typeof p2SerializedItems.$inferSelect;
@@ -2066,6 +2140,10 @@ router.post('/start-task', async (req: Request, res: Response) => {
       });
     }
 
+    const incomingTraceabilityData = Array.isArray(traceabilityData)
+      ? traceabilityData.filter((item: any) => getTraceValue(item))
+      : [];
+
     // Check if part is available (not already in progress by another tech in same department)
     const existingTask = await db.query.p2WorkTasks.findFirst({
       where: and(
@@ -2102,6 +2180,63 @@ router.post('/start-task', async (req: Request, res: Response) => {
       if (!resumedPunch.ok) {
         return res.status(resumedPunch.status).json(resumedPunch.body);
       }
+
+      if (incomingTraceabilityData.length > 0) {
+        const {
+          expandedTraceability,
+          packetTraceRecords,
+          consumedPackets,
+        } = await expandAndConsumePacketTraceability({
+          traceabilityData: incomingTraceabilityData,
+          serializedItem,
+          department,
+          recordedBy: displayName,
+          workTaskId: existingTask.id,
+        });
+
+        const existingTraceability = Array.isArray(existingTask.traceabilityData)
+          ? existingTask.traceabilityData
+          : [];
+        const mergedTraceability = mergeTraceabilityItems(existingTraceability, expandedTraceability);
+
+        await db
+          .update(p2WorkTasks)
+          .set({ traceabilityData: mergedTraceability, updatedAt: new Date() })
+          .where(eq(p2WorkTasks.id, existingTask.id));
+        (existingTask as any).traceabilityData = mergedTraceability;
+
+        const traceabilityRecords = expandedTraceability.map((item: any) => ({
+          serializedItemId,
+          department,
+          inventoryPartId: item.builtPacketId ? String(item.builtPacketId) : (item.inventoryPartId || null),
+          inventoryPartNumber: item.inventoryPartNumber || null,
+          traceabilityType: item.type,
+          traceabilityLabel: item.label,
+          traceabilityValue: item.value,
+          recordedBy: displayName,
+        }));
+
+        const insertedTraceabilityCount = await insertMissingP2TraceabilityRecords({
+          serializedItemId,
+          department,
+          records: [
+            ...traceabilityRecords,
+            ...packetTraceRecords,
+          ],
+        });
+
+        if (consumedPackets.length > 0 && insertedTraceabilityCount > 0) {
+          await db.insert(p2SerializedItemEvents).values({
+            serializedItemId,
+            barcode: serializedItem.barcode,
+            eventType: 'NOTE',
+            performedBy: displayName,
+            notes: `Material traceability saved while resuming ${department}`,
+            metadata: { taskId: existingTask.id, action: 'resume_task_traceability_save', consumedPackets },
+          });
+        }
+      }
+
       return res.json({
         success: true,
         workTask: existingTask,
@@ -2156,10 +2291,6 @@ router.post('/start-task', async (req: Request, res: Response) => {
     if (!startPunch.ok) {
       return res.status(startPunch.status).json(startPunch.body);
     }
-
-    const incomingTraceabilityData = Array.isArray(traceabilityData)
-      ? traceabilityData.filter((item: any) => getTraceValue(item))
-      : [];
 
     // Validate input - pull denormalized fields from serialized item (use DB values as source of truth)
     const resolvedPartName = partName || serializedItem.partName || serializedItem.partNumber || 'Unknown';

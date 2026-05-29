@@ -325,7 +325,7 @@ export default function VendorPOSettings() {
                     type="email"
                     value={contactEmail}
                     onChange={(e) => setContactEmail(e.target.value)}
-                    placeholder="glenn@agcomposites.com"
+                    placeholder="glenn@agadvanced.com"
                     data-testid="input-contact-email"
                   />
                 </div>

@@ -1,4 +1,4 @@
-export const DEFAULT_VENDOR_PO_RETURN_EMAIL = 'glenn@agcomposites.com';
+export const DEFAULT_VENDOR_PO_RETURN_EMAIL = 'glenn@agadvanced.com';
 
 export function resolveVendorPoReturnEmail(settings?: { contactEmail?: string | null }): string {
   const configuredEmail = settings?.contactEmail?.trim();

@@ -679,7 +679,7 @@ export default function GunsimthQueuePage() {
                                 ))}
                               </div>
                             )}
-                            <DepartmentOrderNotes notes={order.notes} />
+                            <DepartmentOrderNotes notes={order.notes} departmentNotes={(order as any).departmentNotes} currentDepartment={order.currentDepartment} />
                             <OrderActionButtons
                               orderId={order.orderId}
                               onSalesOrderView={handleSalesOrderView}
@@ -773,7 +773,7 @@ export default function GunsimthQueuePage() {
                                 ))}
                               </div>
                             )}
-                            <DepartmentOrderNotes notes={order.notes} />
+                            <DepartmentOrderNotes notes={order.notes} departmentNotes={(order as any).departmentNotes} currentDepartment={order.currentDepartment} />
                             <OrderActionButtons
                               orderId={order.orderId}
                               onSalesOrderView={handleSalesOrderView}
@@ -864,7 +864,7 @@ export default function GunsimthQueuePage() {
                                 ))}
                               </div>
                             )}
-                            <DepartmentOrderNotes notes={order.notes} />
+                            <DepartmentOrderNotes notes={order.notes} departmentNotes={(order as any).departmentNotes} currentDepartment={order.currentDepartment} />
                             <OrderActionButtons
                               orderId={order.orderId}
                               onSalesOrderView={handleSalesOrderView}
@@ -955,7 +955,7 @@ export default function GunsimthQueuePage() {
                                 ))}
                               </div>
                             )}
-                            <DepartmentOrderNotes notes={order.notes} />
+                            <DepartmentOrderNotes notes={order.notes} departmentNotes={(order as any).departmentNotes} currentDepartment={order.currentDepartment} />
                             <OrderActionButtons
                               orderId={order.orderId}
                               onSalesOrderView={handleSalesOrderView}
@@ -1046,7 +1046,7 @@ export default function GunsimthQueuePage() {
                                 ))}
                               </div>
                             )}
-                            <DepartmentOrderNotes notes={order.notes} />
+                            <DepartmentOrderNotes notes={order.notes} departmentNotes={(order as any).departmentNotes} currentDepartment={order.currentDepartment} />
                             <OrderActionButtons
                               orderId={order.orderId}
                               onSalesOrderView={handleSalesOrderView}
@@ -1137,7 +1137,7 @@ export default function GunsimthQueuePage() {
                                 ))}
                               </div>
                             )}
-                            <DepartmentOrderNotes notes={order.notes} />
+                            <DepartmentOrderNotes notes={order.notes} departmentNotes={(order as any).departmentNotes} currentDepartment={order.currentDepartment} />
                             <OrderActionButtons
                               orderId={order.orderId}
                               onSalesOrderView={handleSalesOrderView}
@@ -1226,7 +1226,7 @@ export default function GunsimthQueuePage() {
                                 ))}
                               </div>
                             )}
-                            <DepartmentOrderNotes notes={order.notes} />
+                            <DepartmentOrderNotes notes={order.notes} departmentNotes={(order as any).departmentNotes} currentDepartment={order.currentDepartment} />
                             <OrderActionButtons
                               orderId={order.orderId}
                               onSalesOrderView={handleSalesOrderView}

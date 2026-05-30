@@ -1311,7 +1311,7 @@ export default function CNCQueuePage() {
                               : 'READY FOR FINISH'}
                           </div>
 
-                          <DepartmentOrderNotes notes={order.notes} />
+                          <DepartmentOrderNotes notes={order.notes} departmentNotes={(order as any).departmentNotes} currentDepartment={order.currentDepartment} />
                         </div>
                       </div>
                     </div>

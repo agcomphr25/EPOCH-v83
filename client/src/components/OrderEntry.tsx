@@ -147,6 +147,7 @@ interface OrderDraftData {
   shipping: number;
   isCustomOrder: boolean;
   notes: string;
+  departmentNotes: DepartmentNoteEntry[];
   miscItems: MiscItem[];
   otherOptionsQuantities: Record<string, number>;
   specialShipping: { international: boolean; nextDayAir: boolean; billToReceiver: boolean };
@@ -157,6 +158,12 @@ interface OrderDraftData {
   altShipToEmail: string;
   altShipToPhone: string;
   altShipToAddress: { street: string; city: string; state: string; zipCode: string; country: string };
+}
+
+interface DepartmentNoteEntry {
+  id: string;
+  text: string;
+  departments: string[];
 }
 
 const TIKKA_BARREL_OPTIONS = [
@@ -174,6 +181,39 @@ const consoleStyleOptions: { value: ConsoleStyleMode; label: string }[] = [
   { value: 'industrial', label: 'Workbench' },
   { value: 'retro', label: 'Retro' },
 ];
+
+const P1_NOTE_DEPARTMENTS = [
+  'Barcode',
+  'Layup/Plugging',
+  'CNC',
+  'Gunsmith',
+  'Finish',
+  'Finish QC',
+  'Paint',
+  'QC/Shipping',
+  'Shipping',
+] as const;
+
+const ALL_DEPARTMENTS_VALUE = 'ALL';
+
+function normalizeDepartmentNotes(value: unknown): DepartmentNoteEntry[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry, index) => {
+      if (!entry || typeof entry !== 'object') return null;
+      const raw = entry as { id?: unknown; text?: unknown; departments?: unknown };
+      const text = typeof raw.text === 'string' ? raw.text : '';
+      const departments = Array.isArray(raw.departments)
+        ? raw.departments.filter((dept): dept is string => typeof dept === 'string')
+        : [];
+      return {
+        id: typeof raw.id === 'string' ? raw.id : `note-${Date.now()}-${index}`,
+        text,
+        departments,
+      };
+    })
+    .filter((entry): entry is DepartmentNoteEntry => entry !== null);
+}
 
 export default function OrderEntry() {
   console.log('OrderEntry component rendering...');
@@ -279,6 +319,7 @@ export default function OrderEntry() {
   const [shipping, setShipping] = useState(36.95);
   const [isCustomOrder, setIsCustomOrder] = useState(false);
   const [notes, setNotes] = useState('');
+  const [departmentNotes, setDepartmentNotes] = useState<DepartmentNoteEntry[]>([]);
   const [isVerified, setIsVerified] = useState(false);
 
   // Payment state - simplified for multiple payments
@@ -368,6 +409,7 @@ export default function OrderEntry() {
       shipping,
       isCustomOrder,
       notes,
+      departmentNotes,
       miscItems,
       otherOptionsQuantities,
       specialShipping,
@@ -393,7 +435,7 @@ export default function OrderEntry() {
   }, [isNewOrderMode, orderDraftChecked, hasOrderDraft]);
 
   const hasUnsavedOrderChanges = isNewOrderMode && (
-    !!customer || !!modelId || Object.keys(features).length > 0 || !!customerPO || !!notes || miscItems.length > 0
+    !!customer || !!modelId || Object.keys(features).length > 0 || !!customerPO || !!notes || departmentNotes.length > 0 || miscItems.length > 0
   );
 
   useUnsavedChangesWarning(hasUnsavedOrderChanges);
@@ -416,6 +458,7 @@ export default function OrderEntry() {
       if (draft.shipping !== undefined) setShipping(draft.shipping);
       if (draft.isCustomOrder) setIsCustomOrder(true);
       if (draft.notes) setNotes(draft.notes);
+      if (draft.departmentNotes) setDepartmentNotes(normalizeDepartmentNotes(draft.departmentNotes));
       if (draft.miscItems?.length > 0) setMiscItems(draft.miscItems);
       if (draft.otherOptionsQuantities) setOtherOptionsQuantities(draft.otherOptionsQuantities);
       if (draft.specialShipping) setSpecialShipping(draft.specialShipping);
@@ -1235,6 +1278,45 @@ export default function OrderEntry() {
   // Show warning when notes mention discounts but no structured discount is applied
   const showDiscountWarning = hasDiscountTextInNotes && !hasStructuredDiscount;
 
+  const addDepartmentNote = () => {
+    setDepartmentNotes((current) => [
+      ...current,
+      { id: `note-${Date.now()}`, text: '', departments: [] },
+    ]);
+  };
+
+  const updateDepartmentNote = (
+    id: string,
+    updates: Partial<Pick<DepartmentNoteEntry, 'text' | 'departments'>>
+  ) => {
+    setDepartmentNotes((current) =>
+      current.map((note) => (note.id === id ? { ...note, ...updates } : note))
+    );
+  };
+
+  const removeDepartmentNote = (id: string) => {
+    setDepartmentNotes((current) => current.filter((note) => note.id !== id));
+  };
+
+  const toggleDepartmentNoteTarget = (
+    note: DepartmentNoteEntry,
+    department: string,
+    checked: boolean
+  ) => {
+    if (department === ALL_DEPARTMENTS_VALUE) {
+      updateDepartmentNote(note.id, {
+        departments: checked ? [ALL_DEPARTMENTS_VALUE] : [],
+      });
+      return;
+    }
+
+    const withoutAll = note.departments.filter((dept) => dept !== ALL_DEPARTMENTS_VALUE);
+    const nextDepartments = checked
+      ? [...withoutAll, department]
+      : withoutAll.filter((dept) => dept !== department);
+    updateDepartmentNote(note.id, { departments: nextDepartments });
+  };
+
   // Helper function to format currency with commas
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -1546,11 +1628,13 @@ export default function OrderEntry() {
         setModelId('');
         setFeatures({});
         setNotes('');
+        setDepartmentNotes([]);
         setMiscItems([]);
       } else {
         setModelId(order.modelId || '');
         setFeatures(order.features || {});
         setNotes(order.notes || '');
+        setDepartmentNotes(normalizeDepartmentNotes(order.departmentNotes));
         // Load miscellaneous items from features if present
         const featuresObj = order.features || {};
         if (featuresObj.miscItems && Array.isArray(featuresObj.miscItems)) {
@@ -1789,10 +1873,12 @@ export default function OrderEntry() {
         const notesFromFeatures = featuresObj.specialInstructions || '';
         const finalNotes = notesFromField || notesFromFeatures;
         setNotes(finalNotes);
+        setDepartmentNotes(normalizeDepartmentNotes(order.departmentNotes));
         console.log('✅ Loading notes:', {
           notesFromField,
           notesFromFeatures,
           finalNotes,
+          departmentNotes: order.departmentNotes,
         });
 
         // Load other options quantities from featureQuantities field
@@ -2681,6 +2767,9 @@ export default function OrderEntry() {
         status: saveAsDraft ? 'DRAFT' : 'FINALIZED',
         isCustomOrder: isCustomOrder ? 'yes' : 'no',
         notes,
+        departmentNotes: departmentNotes
+          .map((note) => ({ ...note, text: note.text.trim() }))
+          .filter((note) => note.text.length > 0),
         discountCode,
         discountType,
         discountValue,
@@ -2874,6 +2963,7 @@ export default function OrderEntry() {
     setShipping(36.95);
     setIsCustomOrder(false);
     setNotes('');
+    setDepartmentNotes([]);
     setErrors({});
     setDiscountDetails(null);
     setIsEditMode(false);
@@ -2950,6 +3040,9 @@ export default function OrderEntry() {
         status: 'PENDING_PAYMENT',
         isCustomOrder: isCustomOrder ? 'yes' : 'no',
         notes,
+        departmentNotes: departmentNotes
+          .map((note) => ({ ...note, text: note.text.trim() }))
+          .filter((note) => note.text.length > 0),
         discountCode,
         discountType,
         discountValue,
@@ -5729,6 +5822,70 @@ export default function OrderEntry() {
                       </div>
                     </div>
                   )}
+
+                  <div className="mt-4 space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <Label className="text-sm font-medium">Department Notes</Label>
+                      <Button type="button" variant="outline" size="sm" onClick={addDepartmentNote}>
+                        Add Department Note
+                      </Button>
+                    </div>
+
+                    {departmentNotes.map((note, index) => {
+                      const allSelected = note.departments.includes(ALL_DEPARTMENTS_VALUE);
+                      return (
+                        <div key={note.id} className="rounded-md border border-gray-200 bg-gray-50 p-3 space-y-3 dark:border-gray-700 dark:bg-gray-900/40">
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                              Note {index + 1}
+                            </span>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => removeDepartmentNote(note.id)}
+                            >
+                              Remove
+                            </Button>
+                          </div>
+                          <Textarea
+                            value={note.text}
+                            onChange={(e) => updateDepartmentNote(note.id, { text: e.target.value })}
+                            placeholder="Add a note for selected departments..."
+                            rows={2}
+                          />
+                          <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-5">
+                            <label className="flex items-center gap-2 text-sm">
+                              <Checkbox
+                                checked={allSelected}
+                                onCheckedChange={(checked) =>
+                                  toggleDepartmentNoteTarget(note, ALL_DEPARTMENTS_VALUE, checked === true)
+                                }
+                              />
+                              All departments
+                            </label>
+                            {P1_NOTE_DEPARTMENTS.map((department) => (
+                              <label key={department} className="flex items-center gap-2 text-sm">
+                                <Checkbox
+                                  checked={!allSelected && note.departments.includes(department)}
+                                  disabled={allSelected}
+                                  onCheckedChange={(checked) =>
+                                    toggleDepartmentNoteTarget(note, department, checked === true)
+                                  }
+                                />
+                                {department}
+                              </label>
+                            ))}
+                          </div>
+                          {note.departments.length === 0 && (
+                            <p className="text-xs text-gray-500">
+                              No department selected. This note is saved on the order but will not show on department queue cards.
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 {/* Miscellaneous Items */}

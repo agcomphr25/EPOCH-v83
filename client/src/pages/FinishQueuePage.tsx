@@ -400,7 +400,7 @@ export default function FinishQueuePage() {
               {getModelDisplayName(order.modelId)}
             </div>
 
-            <DepartmentOrderNotes notes={order.notes} />
+            <DepartmentOrderNotes notes={order.notes} departmentNotes={(order as any).departmentNotes} currentDepartment={order.currentDepartment} />
 
             {/* Action row */}
             <div className="flex items-center gap-2 flex-wrap">

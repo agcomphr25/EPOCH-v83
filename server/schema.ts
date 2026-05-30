@@ -113,6 +113,7 @@ export const allOrders = pgTable('all_orders', {
   discountValue: numeric('discount_value'),
   discountAppliesTo: text('discount_applies_to'),
   notes: text('notes'), // Order notes/special instructions
+  departmentNotes: jsonb('department_notes').$type<Array<{ id?: string; text: string; departments: string[] }>>().default(sql`'[]'::jsonb`),
   customDiscountType: text('custom_discount_type').default('percent'),
   customDiscountValue: real('custom_discount_value').default(0),
   showCustomDiscount: boolean('show_custom_discount').default(false),
@@ -13024,6 +13025,7 @@ export const orderDrafts = pgTable('order_drafts', {
   qcCompletedAt: timestamp('qc_completed_at'),
   shippingCompletedAt: timestamp('shipping_completed_at'),
   notes: text('notes'),
+  departmentNotes: jsonb('department_notes').$type<Array<{ id?: string; text: string; departments: string[] }>>().default(sql`'[]'::jsonb`),
   isPaid: boolean('is_paid'),
   paymentType: text('payment_type'),
   paymentAmount: real('payment_amount'),

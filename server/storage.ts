@@ -907,6 +907,32 @@ type P1OrderNoteParts = {
   poNotes?: string | null;
 };
 
+type P1DepartmentNote = {
+  id?: string;
+  text: string;
+  departments: string[];
+};
+
+function normalizeP1DepartmentNotes(value: unknown): P1DepartmentNote[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object') return null;
+      const raw = entry as { id?: unknown; text?: unknown; departments?: unknown };
+      const text = typeof raw.text === 'string' ? raw.text.trim() : '';
+      if (!text) return null;
+      const departments = Array.isArray(raw.departments)
+        ? raw.departments.filter((dept): dept is string => typeof dept === 'string' && dept.trim().length > 0)
+        : [];
+      return {
+        id: typeof raw.id === 'string' ? raw.id : undefined,
+        text,
+        departments,
+      };
+    })
+    .filter((entry): entry is P1DepartmentNote => entry !== null);
+}
+
 function combineP1OrderNotes(parts: P1OrderNoteParts): string | null {
   const seen = new Set<string>();
   const notes = [
@@ -3984,6 +4010,7 @@ export class DatabaseStorage implements IStorage {
         featureQuantities: allOrders.featureQuantities,
         discountCode: allOrders.discountCode,
         notes: allOrders.notes,
+        departmentNotes: allOrders.departmentNotes,
         customDiscountType: allOrders.customDiscountType,
         customDiscountValue: allOrders.customDiscountValue,
         showCustomDiscount: allOrders.showCustomDiscount,
@@ -4090,6 +4117,7 @@ export class DatabaseStorage implements IStorage {
         featureQuantities: allOrders.featureQuantities,
         discountCode: allOrders.discountCode,
         notes: allOrders.notes,
+        departmentNotes: allOrders.departmentNotes,
         customDiscountType: allOrders.customDiscountType,
         customDiscountValue: allOrders.customDiscountValue,
         showCustomDiscount: allOrders.showCustomDiscount,
@@ -5542,6 +5570,7 @@ export class DatabaseStorage implements IStorage {
         featureQuantities: allOrders.featureQuantities,
         discountCode: allOrders.discountCode,
         notes: allOrders.notes,
+        departmentNotes: allOrders.departmentNotes,
         customDiscountType: allOrders.customDiscountType,
         customDiscountValue: allOrders.customDiscountValue,
         showCustomDiscount: allOrders.showCustomDiscount,
@@ -5710,6 +5739,7 @@ export class DatabaseStorage implements IStorage {
         featureQuantities: allOrders.featureQuantities,
         discountCode: allOrders.discountCode,
         notes: allOrders.notes,
+        departmentNotes: allOrders.departmentNotes,
         customDiscountType: allOrders.customDiscountType,
         customDiscountValue: allOrders.customDiscountValue,
         showCustomDiscount: allOrders.showCustomDiscount,
@@ -6083,6 +6113,7 @@ export class DatabaseStorage implements IStorage {
           featureQuantities: allOrders.featureQuantities,
           discountCode: allOrders.discountCode,
           notes: allOrders.notes,
+          departmentNotes: allOrders.departmentNotes,
           customDiscountType: allOrders.customDiscountType,
           customDiscountValue: allOrders.customDiscountValue,
           showCustomDiscount: allOrders.showCustomDiscount,
@@ -14736,6 +14767,8 @@ export class DatabaseStorage implements IStorage {
           shankLength: scrapOrder.shankLength,
           features: scrapOrder.features,
           featureQuantities: scrapOrder.featureQuantities,
+          notes: scrapOrder.notes,
+          departmentNotes: normalizeP1DepartmentNotes((scrapOrder as any).departmentNotes),
           status: 'ACTIVE',
           currentDepartment: 'Layup', // Reset to start of pipeline
           isReplacement: true,
@@ -21918,6 +21951,7 @@ export class DatabaseStorage implements IStorage {
       discountValue: (orderData.discountValue !== '' && orderData.discountValue != null) ? Number(orderData.discountValue) : null,
       discountAppliesTo: orderData.discountAppliesTo,
       notes: orderData.notes || '',
+      departmentNotes: normalizeP1DepartmentNotes((orderData as any).departmentNotes),
       customDiscountType: orderData.customDiscountType || 'percent',
       customDiscountValue: (orderData.customDiscountValue !== '' && orderData.customDiscountValue != null) ? Number(orderData.customDiscountValue) : 0,
       showCustomDiscount: orderData.showCustomDiscount || false,
@@ -22110,6 +22144,7 @@ export class DatabaseStorage implements IStorage {
       featureQuantities: draft.featureQuantities,
       discountCode: draft.discountCode,
       notes: draft.notes,
+      departmentNotes: normalizeP1DepartmentNotes((draft as any).departmentNotes),
       customDiscountType: draft.customDiscountType,
       customDiscountValue: draft.customDiscountValue,
       showCustomDiscount: draft.showCustomDiscount,

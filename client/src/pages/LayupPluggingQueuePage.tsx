@@ -558,7 +558,7 @@ export default function LayupPluggingQueuePage() {
                           </div>
                         )}
 
-                        <DepartmentOrderNotes notes={order.notes} />
+                        <DepartmentOrderNotes notes={order.notes} departmentNotes={(order as any).departmentNotes} currentDepartment={order.currentDepartment} />
 
                         {hasKickbacks(order.orderId) && (
                           <Badge

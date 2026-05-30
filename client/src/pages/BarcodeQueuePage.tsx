@@ -1019,7 +1019,7 @@ export default function BarcodeQueuePage() {
                             {hasHeavyFill && <Badge variant="outline" className="text-xs border-orange-600 text-orange-700 bg-orange-50 font-semibold">Heavy Fill</Badge>}
                             {hasADL && <Badge variant="outline" className="text-xs border-violet-600 text-violet-700 bg-violet-50 font-semibold">ADL</Badge>}
                           </div>
-                          <DepartmentOrderNotes notes={order.notes} />
+                          <DepartmentOrderNotes notes={order.notes} departmentNotes={(order as any).departmentNotes} currentDepartment={order.currentDepartment} />
                           <div className="flex gap-1 pt-1">
                             <Link href={`/order-entry?draft=${order.orderId}`}>
                               <Button variant="outline" size="sm" className="h-6 w-6 p-0" title="View/Edit Order"><Edit className="h-3 w-3" /></Button>
@@ -1451,7 +1451,7 @@ export default function BarcodeQueuePage() {
                                             </div>
                                           )}
 
-                                          <DepartmentOrderNotes notes={order.notes} />
+                                          <DepartmentOrderNotes notes={order.notes} departmentNotes={(order as any).departmentNotes} currentDepartment={order.currentDepartment} />
 
                                           {/* Action Buttons */}
                                           <div className="flex gap-1 pt-2">
@@ -1747,7 +1747,7 @@ export default function BarcodeQueuePage() {
                                         </div>
                                       )}
 
-                                      <DepartmentOrderNotes notes={order.notes} />
+                                      <DepartmentOrderNotes notes={order.notes} departmentNotes={(order as any).departmentNotes} currentDepartment={order.currentDepartment} />
                                     </div>
                                   </div>
                                 </CardContent>

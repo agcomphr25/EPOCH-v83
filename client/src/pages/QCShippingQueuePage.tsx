@@ -1129,7 +1129,7 @@ export default function QCShippingQueuePage() {
         </div>
 
         <div className="mb-2">
-          <DepartmentOrderNotes notes={order.notes} />
+          <DepartmentOrderNotes notes={order.notes} departmentNotes={(order as any).departmentNotes} currentDepartment={order.currentDepartment} />
         </div>
 
         {/* Action Buttons */}

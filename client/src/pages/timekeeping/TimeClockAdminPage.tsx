@@ -200,6 +200,35 @@ interface TimeOffRequest {
   employeeLastName: string | null;
 }
 
+type WeeklyPtoHours = {
+  mon: number;
+  tue: number;
+  wed: number;
+  thu: number;
+  fri: number;
+  sat: number;
+  sun: number;
+};
+
+interface PtoBalanceSummary {
+  employeeId: number;
+  availableHours: number;
+  pendingReservedHours: number;
+  approvedReservedHours: number;
+  currentBalanceHours: number;
+  hasSchedule: boolean;
+  schedule: WeeklyPtoHours | null;
+  lastEventAt: string | null;
+  recentEvents: Array<{
+    id: number;
+    eventType: string;
+    hours: number;
+    note: string | null;
+    timeOffRequestId: number | null;
+    createdAt: string;
+  }>;
+}
+
 interface EmployeeRecord {
   id: number;
   epochEmployeeId?: number | null;
@@ -1708,6 +1737,36 @@ export default function TimeClockAdminPage() {
   const [toOnBehalfUnit, setToOnBehalfUnit] = useState('full_day');
   const [toOnBehalfHours, setToOnBehalfHours] = useState('');
   const [toOnBehalfNote, setToOnBehalfNote] = useState('');
+  const [ptoSetupOpen, setPtoSetupOpen] = useState(false);
+  const [ptoSetupEmployeeId, setPtoSetupEmployeeId] = useState('');
+  const [ptoAdjustmentHours, setPtoAdjustmentHours] = useState('');
+  const [ptoAdjustmentNote, setPtoAdjustmentNote] = useState('');
+  const [ptoScheduleNote, setPtoScheduleNote] = useState('');
+  const [ptoWeeklyHours, setPtoWeeklyHours] = useState<WeeklyPtoHours>({
+    mon: 8,
+    tue: 8,
+    wed: 8,
+    thu: 8,
+    fri: 8,
+    sat: 0,
+    sun: 0,
+  });
+
+  const { data: ptoSetupBalance, isLoading: ptoSetupLoading } = useQuery<PtoBalanceSummary>({
+    queryKey: ['/api/timekeeping/time-off', ptoSetupEmployeeId, 'balance'],
+    queryFn: async () => {
+      const res = await fetch(`/api/timekeeping/time-off/${ptoSetupEmployeeId}/balance`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to load PTO balance');
+      return res.json();
+    },
+    enabled: ptoSetupOpen && !!ptoSetupEmployeeId,
+  });
+
+  useEffect(() => {
+    if (ptoSetupBalance?.schedule) {
+      setPtoWeeklyHours(ptoSetupBalance.schedule);
+    }
+  }, [ptoSetupBalance?.employeeId, ptoSetupBalance?.schedule]);
 
   const reviewTimeOffMutation = useMutation({
     mutationFn: ({ id, decision, stage, note }: { id: number; decision: string; stage: string; note: string }) =>
@@ -1748,6 +1807,49 @@ export default function TimeClockAdminPage() {
       queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/time-off'] });
     },
     onError: (err: Error) => toast({ title: 'Submission failed', description: err.message, variant: 'destructive' }),
+  });
+
+  const savePtoAdjustmentMutation = useMutation({
+    mutationFn: () => {
+      const hours = Number(ptoAdjustmentHours);
+      if (!ptoSetupEmployeeId || !Number.isFinite(hours) || hours === 0) {
+        throw new Error('Enter a non-zero balance adjustment.');
+      }
+      return apiRequest(`/api/timekeeping/time-off/${ptoSetupEmployeeId}/balance-adjustment`, {
+        method: 'POST',
+        body: JSON.stringify({
+          hours,
+          note: ptoAdjustmentNote.trim() || undefined,
+        }),
+      });
+    },
+    onSuccess: () => {
+      toast({ title: 'PTO balance updated', description: 'The employee PTO balance was adjusted.' });
+      setPtoAdjustmentHours('');
+      setPtoAdjustmentNote('');
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/time-off', ptoSetupEmployeeId, 'balance'] });
+    },
+    onError: (err: Error) => toast({ title: 'Balance update failed', description: err.message, variant: 'destructive' }),
+  });
+
+  const savePtoScheduleMutation = useMutation({
+    mutationFn: () => {
+      if (!ptoSetupEmployeeId) throw new Error('Select an employee.');
+      return apiRequest(`/api/timekeeping/time-off/${ptoSetupEmployeeId}/schedule`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          weeklyHours: ptoWeeklyHours,
+          effectiveStart: new Date().toISOString().slice(0, 10),
+          note: ptoScheduleNote.trim() || undefined,
+        }),
+      });
+    },
+    onSuccess: () => {
+      toast({ title: 'PTO schedule saved', description: 'Future PTO requests will use this weekly schedule.' });
+      setPtoScheduleNote('');
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/time-off', ptoSetupEmployeeId, 'balance'] });
+    },
+    onError: (err: Error) => toast({ title: 'Schedule update failed', description: err.message, variant: 'destructive' }),
   });
 
   const { data: chargeCodes = [] } = useQuery<{ id: number; code: string; description: string | null; department: string | null }[]>({
@@ -3278,6 +3380,9 @@ export default function TimeClockAdminPage() {
             <Button size="sm" variant="default" onClick={() => setToOnBehalfOpen(true)}>
               <Plus className="h-4 w-4 mr-1" />Submit On Behalf
             </Button>
+            <Button size="sm" variant="outline" onClick={() => setPtoSetupOpen(true)}>
+              <Settings className="h-4 w-4 mr-1" />PTO Setup
+            </Button>
           </div>
 
           <Card>
@@ -3297,6 +3402,7 @@ export default function TimeClockAdminPage() {
                       <TableHead>Employee</TableHead>
                       <TableHead>Dates</TableHead>
                       <TableHead>Type</TableHead>
+                      <TableHead>Hours</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Employee Note</TableHead>
                       <TableHead>Admin Note</TableHead>
@@ -3318,6 +3424,9 @@ export default function TimeClockAdminPage() {
                             <Badge variant="outline" className="capitalize text-xs">
                               {req.leaveType.toUpperCase()}
                             </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {req.requestedHours != null ? `${Number(req.requestedHours).toFixed(2)}h` : '—'}
                           </TableCell>
                           <TableCell>
                             <StatusBadge status={req.status} />
@@ -4170,6 +4279,128 @@ export default function TimeClockAdminPage() {
                 <><Plus className="h-4 w-4 mr-1" />Add Punch</>
               )}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* PTO Balance and Schedule Setup Dialog */}
+      <Dialog open={ptoSetupOpen} onOpenChange={(o) => { if (!o) setPtoSetupOpen(false); }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>PTO Setup</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1">
+              <Label>Employee</Label>
+              <Select value={ptoSetupEmployeeId} onValueChange={setPtoSetupEmployeeId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select employee..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {(employees ?? []).map((e) => (
+                    <SelectItem key={e.epochEmployeeId ?? e.id} value={String(e.epochEmployeeId ?? e.id)}>
+                      {e.firstName} {e.lastName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="rounded-md border bg-slate-50 p-3">
+                <p className="text-xs text-muted-foreground">Available</p>
+                <p className="text-xl font-semibold">
+                  {ptoSetupLoading ? '...' : `${(ptoSetupBalance?.availableHours ?? 0).toFixed(2)}h`}
+                </p>
+              </div>
+              <div className="rounded-md border bg-slate-50 p-3">
+                <p className="text-xs text-muted-foreground">Pending Reserved</p>
+                <p className="text-xl font-semibold">{(ptoSetupBalance?.pendingReservedHours ?? 0).toFixed(2)}h</p>
+              </div>
+              <div className="rounded-md border bg-slate-50 p-3">
+                <p className="text-xs text-muted-foreground">Approved Used</p>
+                <p className="text-xl font-semibold">{(ptoSetupBalance?.approvedReservedHours ?? 0).toFixed(2)}h</p>
+              </div>
+            </div>
+
+            <div className="rounded-md border p-3 space-y-3">
+              <div>
+                <p className="text-sm font-medium">Weekly PTO Schedule</p>
+                <p className="text-xs text-muted-foreground">Used to calculate full-day, half-day, and multi-day request hours.</p>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+                {(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as Array<keyof WeeklyPtoHours>).map((day) => (
+                  <div key={day} className="space-y-1">
+                    <Label className="capitalize">{day}</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      max="24"
+                      step="0.25"
+                      value={ptoWeeklyHours[day]}
+                      onChange={(event) => {
+                        const value = Number(event.target.value);
+                        setPtoWeeklyHours((prev) => ({
+                          ...prev,
+                          [day]: Number.isFinite(value) ? value : 0,
+                        }));
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+              <Textarea
+                placeholder="Schedule note..."
+                value={ptoScheduleNote}
+                onChange={(event) => setPtoScheduleNote(event.target.value)}
+                rows={2}
+                className="resize-none"
+              />
+              <Button
+                size="sm"
+                disabled={!ptoSetupEmployeeId || savePtoScheduleMutation.isPending}
+                onClick={() => savePtoScheduleMutation.mutate()}
+              >
+                {savePtoScheduleMutation.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving...</> : 'Save Schedule'}
+              </Button>
+            </div>
+
+            <div className="rounded-md border p-3 space-y-3">
+              <div>
+                <p className="text-sm font-medium">Balance Adjustment</p>
+                <p className="text-xs text-muted-foreground">Use this for transition balances now; later accruals can post here automatically.</p>
+              </div>
+              <div className="grid gap-3 md:grid-cols-[160px_1fr]">
+                <div className="space-y-1">
+                  <Label>Hours</Label>
+                  <Input
+                    type="number"
+                    step="0.25"
+                    placeholder="e.g. 40"
+                    value={ptoAdjustmentHours}
+                    onChange={(event) => setPtoAdjustmentHours(event.target.value)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Note</Label>
+                  <Input
+                    placeholder="Opening balance, correction, etc."
+                    value={ptoAdjustmentNote}
+                    onChange={(event) => setPtoAdjustmentNote(event.target.value)}
+                  />
+                </div>
+              </div>
+              <Button
+                size="sm"
+                disabled={!ptoSetupEmployeeId || !ptoAdjustmentHours || savePtoAdjustmentMutation.isPending}
+                onClick={() => savePtoAdjustmentMutation.mutate()}
+              >
+                {savePtoAdjustmentMutation.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Applying...</> : 'Apply Adjustment'}
+              </Button>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPtoSetupOpen(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

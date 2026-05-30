@@ -173,6 +173,7 @@ const safeFiles = [
   '0132_daily_time_certifications.sql',
   '0133_voice_notes_persistence.sql',
   '0134_conversational_rfq_risk_sessions.sql',
+  '0135_pto_balances_and_schedules.sql',
   'investigation_308_order_duplication.sql',
 ];
 

@@ -164,6 +164,35 @@ type TimeOffRequest = {
   createdAt?: string | Date | null;
 };
 
+type WeeklyPtoHours = {
+  mon: number;
+  tue: number;
+  wed: number;
+  thu: number;
+  fri: number;
+  sat: number;
+  sun: number;
+};
+
+type PtoBalanceSummary = {
+  employeeId: number;
+  availableHours: number;
+  pendingReservedHours: number;
+  approvedReservedHours: number;
+  currentBalanceHours: number;
+  hasSchedule: boolean;
+  schedule: WeeklyPtoHours | null;
+  lastEventAt: string | null;
+  recentEvents: Array<{
+    id: number;
+    eventType: string;
+    hours: number;
+    note: string | null;
+    timeOffRequestId: number | null;
+    createdAt: string;
+  }>;
+};
+
 type WorkSession = {
   id: number;
   employeeId: string;
@@ -317,6 +346,44 @@ function formatPunchDateTime(iso: string) {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+const PTO_DAY_KEYS: Array<keyof WeeklyPtoHours> = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+
+function parseDateOnlyUtc(value: string): Date | null {
+  const [year, month, day] = value.split('-').map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+function addUtcDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next;
+}
+
+function estimatePtoRequestHours(
+  form: { startDate: string; endDate: string; requestUnit: string; requestedHours: string },
+  schedule?: WeeklyPtoHours | null,
+): number | null {
+  if (!form.startDate || !form.endDate || !schedule || form.startDate > form.endDate) return null;
+  if (form.requestUnit === 'hourly') {
+    const hours = Number(form.requestedHours);
+    return Number.isFinite(hours) && hours > 0 ? Math.round(hours * 100) / 100 : null;
+  }
+  const start = parseDateOnlyUtc(form.startDate);
+  const end = parseDateOnlyUtc(form.endDate);
+  if (!start || !end || start > end) return null;
+  let total = 0;
+  for (let d = start; d <= end; d = addUtcDays(d, 1)) {
+    const scheduled = Number(schedule[PTO_DAY_KEYS[d.getUTCDay()]] ?? 0);
+    total += form.requestUnit === 'half_day' ? scheduled / 2 : scheduled;
+  }
+  return Math.round(total * 100) / 100;
+}
+
+function formatPtoEventType(eventType: string): string {
+  return eventType.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function fileSizeLabel(bytes: number) {
@@ -1075,6 +1142,27 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
     enabled: !!currentUser?.employeeId,
   });
 
+  const {
+    data: ptoBalance,
+    isLoading: ptoBalanceLoading,
+  } = useQuery<PtoBalanceSummary>({
+    queryKey: ['/api/timekeeping/time-off/my/balance'],
+    queryFn: async () => {
+      const res = await portalFetch('/api/timekeeping/time-off/my/balance');
+      if (!res.ok) throw new Error('Failed to fetch PTO balance');
+      return res.json();
+    },
+    enabled: activeTab === 'time-off' && !!currentUser?.employeeId,
+  });
+
+  const estimatedPtoHours = estimatePtoRequestHours(timeOffForm, ptoBalance?.schedule);
+  const remainingPtoAfterRequest =
+    estimatedPtoHours == null || !ptoBalance ? null : Math.round((ptoBalance.availableHours - estimatedPtoHours) * 100) / 100;
+  const ptoRequestBlocked =
+    !!ptoBalance &&
+    estimatedPtoHours != null &&
+    estimatedPtoHours > ptoBalance.availableHours;
+
   const submitTimeOffMutation = useMutation({
     mutationFn: async () => {
       if (!timeOffForm.startDate || !timeOffForm.endDate) {
@@ -1120,6 +1208,7 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
         employeeNote: '',
       });
       queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/time-off/my'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/time-off/my/balance'] });
       queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/time-off'] });
       queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/pto-command-center/summary'] });
       queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/pto-command-center/pipeline'] });
@@ -1146,6 +1235,7 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
     onSuccess: () => {
       toast({ title: 'PTO cancelled', description: 'Your pending request has been cancelled.' });
       queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/time-off/my'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/time-off/my/balance'] });
       queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/time-off'] });
       queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/pto-command-center/summary'] });
       queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/pto-command-center/pipeline'] });
@@ -2272,6 +2362,54 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                <div className="rounded-lg border bg-slate-50 p-4 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                    <div>
+                      <p className="text-xs uppercase text-muted-foreground">Available PTO</p>
+                      <p className="text-2xl font-semibold text-gray-900">
+                        {ptoBalanceLoading ? '...' : `${(ptoBalance?.availableHours ?? 0).toFixed(2)}h`}
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 text-sm sm:text-right">
+                      <div>
+                        <p className="text-xs text-muted-foreground">This Request</p>
+                        <p className="font-medium">{estimatedPtoHours == null ? '--' : `${estimatedPtoHours.toFixed(2)}h`}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Remaining</p>
+                        <p className={`font-medium ${remainingPtoAfterRequest != null && remainingPtoAfterRequest < 0 ? 'text-red-700' : 'text-gray-900'}`}>
+                          {remainingPtoAfterRequest == null ? '--' : `${remainingPtoAfterRequest.toFixed(2)}h`}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  {ptoBalance && !ptoBalance.hasSchedule && (
+                    <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                      PTO setup is still needed before requests can be submitted.
+                    </p>
+                  )}
+                  {ptoRequestBlocked && (
+                    <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                      This request is over your currently available PTO balance.
+                    </p>
+                  )}
+                  {!!ptoBalance?.recentEvents?.length && (
+                    <details className="text-sm">
+                      <summary className="cursor-pointer text-muted-foreground">Balance history</summary>
+                      <div className="mt-2 space-y-2">
+                        {ptoBalance.recentEvents.slice(0, 6).map((event) => (
+                          <div key={event.id} className="flex items-center justify-between gap-3 rounded border bg-white px-3 py-2">
+                            <span className="truncate">{formatPtoEventType(event.eventType)}</span>
+                            <span className={event.hours < 0 ? 'text-red-700' : 'text-green-700'}>
+                              {event.hours > 0 ? '+' : ''}{event.hours.toFixed(2)}h
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+                </div>
+
                 <div className="space-y-2">
                   <Label>Request Type</Label>
                   <Select
@@ -2361,9 +2499,14 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
                   className="w-full gap-2"
                   disabled={
                     submitTimeOffMutation.isPending ||
+                    ptoBalanceLoading ||
+                    !ptoBalance?.hasSchedule ||
                     !timeOffForm.startDate ||
                     !timeOffForm.endDate ||
                     timeOffForm.startDate > timeOffForm.endDate ||
+                    estimatedPtoHours == null ||
+                    estimatedPtoHours <= 0 ||
+                    ptoRequestBlocked ||
                     (timeOffForm.requestUnit === 'hourly' && (!timeOffForm.requestedHours || Number(timeOffForm.requestedHours) <= 0))
                   }
                   onClick={() => submitTimeOffMutation.mutate()}

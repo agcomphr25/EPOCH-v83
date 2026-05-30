@@ -8,6 +8,12 @@ import { logAction, actorFromUser } from "./audit.service";
 import type { SafeUser } from "./audit.service";
 import { syncPTOAfterApproval } from "./salariedTimesheet.service";
 import type { TxClient } from "./salariedTimesheet.service";
+import {
+  calculatePtoRequestHours,
+  getPtoBalanceSummary,
+  reservePtoForRequest,
+  restorePtoForRequest,
+} from "./ptoBalance.service";
 
 type MiniClient = {
   select: typeof db.select;
@@ -51,6 +57,19 @@ export async function submitPTORequest(
   }
 ): Promise<TimeOffRequest> {
   const { actorUser, actorIp, ...insertData } = data;
+  const ptoHours = await calculatePtoRequestHours({
+    employeeId: insertData.employeeId,
+    startDate: insertData.startDate,
+    endDate: insertData.endDate,
+    requestUnit: insertData.requestUnit ?? "full_day",
+    requestedHours: insertData.requestedHours ?? null,
+  });
+  const balance = await getPtoBalanceSummary(insertData.employeeId);
+  if (ptoHours.hours > balance.availableHours) {
+    throw new Error(
+      `Insufficient PTO balance. Request uses ${ptoHours.hours.toFixed(2)} hours; available balance is ${balance.availableHours.toFixed(2)} hours.`
+    );
+  }
 
   // Determine initial status: pending_supervisor if employee has a supervisor, else pending_hr
   let initialStatus = "pending_supervisor";
@@ -77,10 +96,18 @@ export async function submitPTORequest(
     .values({
       ...insertData,
       leaveType: "pto",
+      requestedHours: ptoHours.hours,
       status: initialStatus,
       supervisorId: supervisorId ?? undefined,
     })
     .returning();
+
+  await reservePtoForRequest({
+    employeeId: insertData.employeeId,
+    requestId: row!.id,
+    hours: ptoHours.hours,
+    actorUserId: insertData.submittedByUserId ?? actorUser?.id ?? null,
+  });
 
   await logAction(
     {
@@ -182,6 +209,15 @@ async function _supervisorDecision(
     actor: actorFromUser(actorUser, actorIp),
   });
 
+  if (decision === "denied") {
+    await restorePtoForRequest({
+      employeeId: req.employeeId,
+      requestId: req.id,
+      reason: "rejected",
+      actorUserId: reviewerUserId,
+    });
+  }
+
   const { notifyPTOEmployeeStatus, notifyPTOHrAdminNeeded } = await import("./approvalNotifications.service");
   if (decision === "approved") {
     void notifyPTOEmployeeStatus(
@@ -237,6 +273,15 @@ async function _hrDecision(
     newValues: { status: nextStatus, hrDecision: decision, hrNote: note ?? null },
     actor: actorFromUser(actorUser, actorIp),
   });
+
+  if (decision === "denied") {
+    await restorePtoForRequest({
+      employeeId: req.employeeId,
+      requestId: req.id,
+      reason: "rejected",
+      actorUserId: reviewerUserId,
+    });
+  }
 
   const { notifyPTOEmployeeStatus } = await import("./approvalNotifications.service");
   if (decision === "approved") {
@@ -332,6 +377,15 @@ async function _vpDecision(
 
     return u!;
   });
+
+  if (decision === "denied") {
+    await restorePtoForRequest({
+      employeeId: req.employeeId,
+      requestId: req.id,
+      reason: "rejected",
+      actorUserId: reviewerUserId,
+    });
+  }
 
   const { notifyPTOEmployeeStatus } = await import("./approvalNotifications.service");
   if (decision === "approved") {
@@ -432,6 +486,14 @@ export async function reviewTimeOffRequest(
       console.info(`[timeoff] Hourly PTO request ${updated.id} approved — payroll sync deferred (hourly path)`);
     }
   }
+  if (decision === "denied") {
+    await restorePtoForRequest({
+      employeeId: updated.employeeId,
+      requestId: updated.id,
+      reason: "rejected",
+      actorUserId: actorUser?.id ?? null,
+    });
+  }
 
   return updated;
 }
@@ -473,32 +535,16 @@ export async function createLeaveEntriesForApprovedPTO(
   }
 
   const tkEmpId = tkEmployee[0]!.id;
-  const hoursPerDay = 8;
+  const calculated = await calculatePtoRequestHours({
+    employeeId: request.employeeId,
+    startDate: request.startDate,
+    endDate: request.endDate,
+    requestUnit: request.requestUnit ?? "full_day",
+    requestedHours: request.requestedHours ?? null,
+  });
 
   // Build the list of dates covered by this request
-  const dates: string[] = [];
-  if (request.requestUnit === "hourly" && request.partialDayDate) {
-    dates.push(request.partialDayDate);
-  } else if (request.requestUnit === "half_day" && request.partialDayDate) {
-    dates.push(request.partialDayDate);
-  } else {
-    // full_day or multi_day: enumerate all dates between startDate and endDate
-    const start = new Date(request.startDate);
-    const end = new Date(request.endDate);
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      const iso = d.toISOString().slice(0, 10);
-      dates.push(iso);
-    }
-  }
-
-  for (const date of dates) {
-    let hours = hoursPerDay;
-    if (request.requestUnit === "hourly" && request.requestedHours != null) {
-      hours = request.requestedHours;
-    } else if (request.requestUnit === "half_day") {
-      hours = hoursPerDay / 2;
-    }
-
+  for (const { date, hours } of calculated.days) {
     // Duplicate guard: check if a non-voided leave entry already exists for this employee/date/leaveType
     const existing = await client
       .select({ id: leaveEntriesTable.id })
@@ -675,7 +721,7 @@ export async function adminCancelTimeOffRequest(
   reason: string,
   actorIp: string | null
 ): Promise<{ request: TimeOffRequest; reversalTriggered: boolean } | null> {
-  return await db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     const txClient = tx as unknown as TxClient;
 
     const [existing] = await txClient
@@ -730,6 +776,17 @@ export async function adminCancelTimeOffRequest(
 
     return { request: updated!, reversalTriggered: wasApproved };
   });
+
+  if (result) {
+    await restorePtoForRequest({
+      employeeId: result.request.employeeId,
+      requestId,
+      reason: "cancelled",
+      actorUserId: actorUser.id,
+    });
+  }
+
+  return result;
 }
 
 // ---------------------------------------------------------------------------

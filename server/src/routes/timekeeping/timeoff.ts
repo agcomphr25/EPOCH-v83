@@ -3,6 +3,13 @@ import { z } from "zod";
 import { authenticateToken, authenticatePortalToken, requireRole } from "../../../middleware/auth";
 import { requirePermission } from "../../../middleware/requirePermission";
 import * as svc from "../../services/timekeeping/timeoff.service";
+import {
+  addManualPtoBalanceEvent,
+  getPtoBalanceSummary,
+  restorePtoForRequest,
+  setPtoSchedule,
+  normalizeWeeklyHours,
+} from "../../services/timekeeping/ptoBalance.service";
 import { actorFromUser, logAction } from "../../services/timekeeping/audit.service";
 import type { SafeUser } from "../../services/timekeeping/audit.service";
 
@@ -10,7 +17,10 @@ function h(fn: (req: Request, res: Response, next: NextFunction) => Promise<void
   return (req, res, next) => fn(req, res, next).catch((err) => {
     console.error("[timekeeping/timeoff]", err?.message ?? err);
     if (!res.headersSent) {
-      const status = err?.message?.includes("required") || err?.message?.includes("not at") ? 400 : 500;
+      const message = String(err?.message ?? "");
+      const status = message.includes("required") || message.includes("not at") || message.includes("Insufficient PTO") || message.includes("PTO schedule") || message.includes("Selected dates")
+        ? 400
+        : 500;
       res.status(status).json({ error: err?.message ?? "Internal server error" });
     }
   });
@@ -100,6 +110,25 @@ const StageReviewSchema = z.object({
   adminNote: z.string().max(2000).optional(),
 });
 
+const PtoBalanceAdjustmentSchema = z.object({
+  hours: z.number(),
+  note: z.string().max(1000).optional(),
+});
+
+const WeeklyPtoScheduleSchema = z.object({
+  weeklyHours: z.object({
+    mon: z.number().min(0).max(24),
+    tue: z.number().min(0).max(24),
+    wed: z.number().min(0).max(24),
+    thu: z.number().min(0).max(24),
+    fri: z.number().min(0).max(24),
+    sat: z.number().min(0).max(24),
+    sun: z.number().min(0).max(24),
+  }),
+  effectiveStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  note: z.string().max(1000).optional(),
+});
+
 // ---------------------------------------------------------------------------
 // Logged-in employee portal — submit/read own PTO
 // ---------------------------------------------------------------------------
@@ -146,6 +175,18 @@ router.get(
 
     const requests = await svc.getTimeOffRequestsByEmployee(employeeId);
     res.json(requests);
+  })
+);
+
+router.get(
+  "/time-off/my/balance",
+  authenticateToken,
+  h(async (req, res): Promise<void> => {
+    const employeeId = req.user?.employeeId ?? null;
+    if (!employeeId) { res.status(403).json({ error: "Your account is not linked to an employee record" }); return; }
+
+    const summary = await getPtoBalanceSummary(employeeId, { includeEvents: true });
+    res.json(summary);
   })
 );
 
@@ -228,6 +269,59 @@ router.get(
     const endDateFilter = typeof req.query.endDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.query.endDate) ? req.query.endDate : undefined;
     const requests = await svc.getAllTimeOffRequests(statusFilter, employeeIdFilter, startDateFilter, endDateFilter);
     res.json(requests);
+  })
+);
+
+router.get(
+  "/time-off/:employeeId/balance",
+  authenticateToken,
+  requirePermission("timekeeping.pto.view_all"),
+  h(async (req, res): Promise<void> => {
+    const employeeId = parseInt(req.params.employeeId, 10);
+    if (isNaN(employeeId)) { res.status(400).json({ error: "Invalid employee ID" }); return; }
+    const summary = await getPtoBalanceSummary(employeeId, { includeEvents: true });
+    res.json(summary);
+  })
+);
+
+router.post(
+  "/time-off/:employeeId/balance-adjustment",
+  authenticateToken,
+  requirePermission("timekeeping.pto.view_all"),
+  h(async (req, res): Promise<void> => {
+    const employeeId = parseInt(req.params.employeeId, 10);
+    if (isNaN(employeeId)) { res.status(400).json({ error: "Invalid employee ID" }); return; }
+    const parse = PtoBalanceAdjustmentSchema.safeParse(req.body);
+    if (!parse.success) { res.status(400).json({ error: parse.error.message }); return; }
+    const user = req.user as SafeUser | undefined;
+    const summary = await addManualPtoBalanceEvent({
+      employeeId,
+      hours: parse.data.hours,
+      note: parse.data.note,
+      actorUserId: user?.id ?? null,
+    });
+    res.json(summary);
+  })
+);
+
+router.put(
+  "/time-off/:employeeId/schedule",
+  authenticateToken,
+  requirePermission("timekeeping.pto.view_all"),
+  h(async (req, res): Promise<void> => {
+    const employeeId = parseInt(req.params.employeeId, 10);
+    if (isNaN(employeeId)) { res.status(400).json({ error: "Invalid employee ID" }); return; }
+    const parse = WeeklyPtoScheduleSchema.safeParse(req.body);
+    if (!parse.success) { res.status(400).json({ error: parse.error.message }); return; }
+    const user = req.user as SafeUser | undefined;
+    const schedule = await setPtoSchedule({
+      employeeId,
+      weeklyHours: normalizeWeeklyHours(parse.data.weeklyHours),
+      effectiveStart: parse.data.effectiveStart,
+      note: parse.data.note,
+      actorUserId: user?.id ?? null,
+    });
+    res.json({ employeeId, schedule });
   })
 );
 
@@ -496,6 +590,13 @@ router.post(
       oldValues: { status: existing.status },
       newValues: { status: "cancelled", cancelledBy: user.id, reason: reason || null, cancelledAt: now.toISOString() },
       actor: actorFromUser(user, req.ip ?? null),
+    });
+
+    await restorePtoForRequest({
+      employeeId: existing.employeeId,
+      requestId: id,
+      reason: "cancelled",
+      actorUserId: user.id,
     });
 
     res.json(updated);

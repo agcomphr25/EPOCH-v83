@@ -385,7 +385,7 @@ export default function FinishQCQueuePage() {
                       className={`border-l-green-500 ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
                     />
                     <div className="px-3 pb-2">
-                      <DepartmentOrderNotes notes={order.notes} />
+                      <DepartmentOrderNotes notes={order.notes} departmentNotes={(order as any).departmentNotes} currentDepartment={order.currentDepartment} />
                     </div>
                     <div className="flex justify-end px-3 pb-2">
                       <OrderActionButtons

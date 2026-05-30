@@ -1468,7 +1468,7 @@ export default function ShippingQueuePage() {
               )}
             </div>
 
-            <DepartmentOrderNotes notes={order.notes} />
+            <DepartmentOrderNotes notes={order.notes} departmentNotes={(order as any).departmentNotes} currentDepartment={order.currentDepartment} />
 
             {/* Shipping Address */}
             <div className="space-y-1 text-sm">

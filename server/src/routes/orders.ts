@@ -1392,6 +1392,7 @@ router.post('/pending-payment', async (req: Request, res: Response) => {
       modelId: parsed.modelId || '',
       features: parsed.features || {},
       notes: parsed.notes || '',
+      departmentNotes: Array.isArray((parsed as any).departmentNotes) ? (parsed as any).departmentNotes : [],
       shipping: parsed.shipping ?? 0,
     };
 
@@ -1574,6 +1575,7 @@ router.post('/duplicate/:orderId', async (req: Request, res: Response) => {
         notes: count > 1 
           ? `${original.notes || ''}\n\n🟩 DUPLICATED FROM ${orderId} (${i + 1}/${count})`
           : original.notes,
+        departmentNotes: original.departmentNotes || [],
 
         // Drop timestamps from previous workflow
         layupCompletedAt: null,
@@ -2041,6 +2043,7 @@ router.post('/:id/move-to-draft', async (req: Request, res: Response) => {
       features: currentOrder.features as Record<string, any> | null,
       handedness: currentOrder.handedness,
       notes: currentOrder.notes,
+      departmentNotes: currentOrder.departmentNotes || [],
       status: 'DRAFT',
       currentDepartment: currentOrder.currentDepartment || 'Draft',
       paymentAmount: currentOrder.paymentAmount,

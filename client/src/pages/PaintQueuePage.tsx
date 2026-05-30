@@ -619,7 +619,7 @@ export default function PaintQueuePage() {
                             })()}
                           </div>
 
-                          <DepartmentOrderNotes notes={order.notes} />
+                          <DepartmentOrderNotes notes={order.notes} departmentNotes={(order as any).departmentNotes} currentDepartment={order.currentDepartment} />
 
                           {/* Action Buttons */}
                           <OrderActionButtons

@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS non_conforming_items (
   issue_cause TEXT NOT NULL,
   manufacturer_defect BOOLEAN NOT NULL DEFAULT FALSE,
   disposition TEXT NOT NULL,
-  authorization TEXT NOT NULL,
+  "authorization" TEXT NOT NULL,
   serial_tag_number TEXT,
   disposition_date DATE,
   corrective_action_notes TEXT,

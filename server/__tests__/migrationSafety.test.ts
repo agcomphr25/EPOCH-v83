@@ -254,6 +254,7 @@ const KNOWN_DUPLICATE_PREFIXES = new Set<string>([
   '0139', // 0139_p2_production_orders_project_id.sql vs 0139_wad_dashboard_assignment.sql — parallel P2 production-order linkage + WAD dashboard assignment
   '0101', // 0101_audit_tamper_attempts_durable.sql vs 0101_burden_rate_accumulation.sql — parallel audit tamper-attempt hardening + burden rate accumulation workflow
   '0115', // 0115_receiving_project_material_acceptance.sql vs 0115_vendor_pos_production_line.sql — parallel receiving project material acceptance + vendor PO production line tasks merged in the same window
+  '0135', // 0135_p2_po_contract_review_role.sql vs 0135_pto_balances_and_schedules.sql — parallel P2 contract review role + PTO balances/schedules feature work merged in the same window
 ]);
 
 describe('Migration file structure', () => {
@@ -633,6 +634,11 @@ const EXEMPT_FROM_RETIRED_COLUMN_CHECK: Record<string, string> = {
     'All CREATE TYPE statements use IF NOT EXISTS guards. No column renames or ' +
     'drops. Net-new tables only: proteus_prompts, proteus_prompt_variables, ' +
     'proteus_prompt_executions, proteus_prompt_results, proteus_prompt_tags. Safe.',
+  '0153_user_finish_technician_flag.sql':
+    'All first_name/last_name references here target public.users, not ' +
+    'timekeeping.employees. The timekeeping.employees columns were renamed by ' +
+    '0049, but public.users always had and still has first_name/last_name columns ' +
+    'that were never renamed. Same pattern as 0080_link_users_to_employees.sql.',
 };
 
 /**

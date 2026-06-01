@@ -309,18 +309,47 @@ function addEdge(edges: EvidenceEdge[], edge: EvidenceEdge) {
 }
 
 router.get(
+  '/transaction-evidence-map/projects',
+  authenticateToken,
+  requireGlennj,
+  async (_req: Request, res: Response) => {
+    try {
+      const rows = await pool.query<{
+        id: string;
+        project_code: string | null;
+        project_name: string | null;
+        customer_name_snapshot: string | null;
+        status: string | null;
+      }>(
+        `SELECT id::text, project_code, project_name, customer_name_snapshot, status
+         FROM projects
+         WHERE status = 'active'
+         ORDER BY project_code NULLS LAST, project_name NULLS LAST
+         LIMIT 500`
+      );
+      return res.json(rows);
+    } catch (err) {
+      console.error('[transaction-evidence-map/projects] failed', err);
+      return res.status(500).json({ error: 'Failed to load active projects' });
+    }
+  }
+);
+
+router.get(
   '/transaction-evidence-map',
   authenticateToken,
   requireGlennj,
   async (req: Request, res: Response) => {
     const projectId =
       typeof req.query.projectId === 'string' ? req.query.projectId : '';
-    const period = parsePeriod(req);
+    const period = parsePeriod(req) ?? {
+      year: null,
+      month: null,
+      label: 'All time',
+    };
 
     if (!projectId)
       return res.status(400).json({ error: 'projectId is required' });
-    if (!period)
-      return res.status(400).json({ error: 'period must be YYYY-MM' });
 
     try {
       const projectRows = await pool.query<{
@@ -372,7 +401,19 @@ router.get(
         journal_effective_date: string | null;
         payroll_batch_ids: number[] | null;
       }>(
-        `WITH payroll_batches AS (
+        `WITH project_charge_codes AS (
+         SELECT DISTINCT NULLIF(TRIM(cc_row->>'chargeCode'), '') AS charge_code
+         FROM production_work_orders wo
+         CROSS JOIN LATERAL jsonb_array_elements(
+           CASE
+             WHEN jsonb_typeof(wo.wizard_data->'step4'->'chargeCodes') = 'array'
+               THEN wo.wizard_data->'step4'->'chargeCodes'
+             ELSE '[]'::jsonb
+           END
+         ) AS cc_row
+         WHERE wo.project_id = $1::uuid
+       ),
+       payroll_batches AS (
          SELECT
            jsonb_array_elements_text(source_timesheet_ids)::int AS timesheet_id,
            array_agg(id ORDER BY revision_number) AS batch_ids
@@ -415,11 +456,15 @@ router.get(
        LEFT JOIN timekeeping.salaried_timesheet_lines stl
          ON lcr.canonical_id = ('stl-' || stl.timesheet_id || '-' || stl.id)
        LEFT JOIN payroll_batches pb ON pb.timesheet_id = stl.timesheet_id
-       WHERE lcr.project_id = $1::uuid
-         AND lcr.period_year = $2
-         AND lcr.period_month = $3
+       WHERE (
+         lcr.project_id = $1::uuid
+         OR lcr.production_work_order_id::text IN (SELECT id::text FROM production_work_orders WHERE project_id = $1::uuid)
+         OR lcr.traveler_id::text IN (SELECT id::text FROM travelers WHERE project_id = $1::uuid)
+         OR cc.code IN (SELECT charge_code FROM project_charge_codes WHERE charge_code IS NOT NULL)
+         OR lcr.charge_code_id = (SELECT default_charge_code_id FROM projects WHERE id = $1::uuid)
+       )
       ORDER BY lcr.clock_in ASC, e.name NULLS LAST, lcr.id ASC`,
-        [projectId, period.year, period.month]
+        [projectId]
       );
 
       const projectWorkOrders = await pool.query<WorkOrderEvidence>(
@@ -507,8 +552,6 @@ router.get(
          LIMIT 1
        ) lcr ON true
        WHERE pl.labor_class = 'REGULAR'
-         AND pl.clock_in >= make_date($2::int, $3::int, 1)
-         AND pl.clock_in < (make_date($2::int, $3::int, 1) + interval '1 month')
          AND (
            pl.project_id = $1::uuid
            OR pl.production_work_order_id IN (SELECT id FROM production_work_orders WHERE project_id = $1::uuid)
@@ -518,7 +561,7 @@ router.get(
            )
          )
        ORDER BY pl.clock_in ASC, e.name ASC, pl.id ASC`,
-        [projectId, period.year, period.month]
+        [projectId]
       );
 
       const materialBudgetRows = projectWorkOrders.filter(
@@ -598,11 +641,9 @@ router.get(
        LEFT JOIN inventory_items ii ON ii.id = ml.inventory_item_id
        LEFT JOIN received_units ru ON ru.id = tmc.received_unit_id
        WHERE t.project_id = $1::uuid
-         AND COALESCE(tmc.scanned_at, tmc.created_at) >= make_date($2::int, $3::int, 1)
-         AND COALESCE(tmc.scanned_at, tmc.created_at) < (make_date($2::int, $3::int, 1) + interval '1 month')
        ORDER BY COALESCE(tmc.scanned_at, tmc.created_at) DESC, tmc.id DESC
        LIMIT 250`,
-          [projectId, period.year, period.month]
+          [projectId]
         )
         .catch(() => []);
 
@@ -634,12 +675,10 @@ router.get(
        LEFT JOIN material_lots ml ON ml.id = prm.material_lot_id
        LEFT JOIN inventory_items ii ON ii.id = ml.inventory_item_id
        WHERE prm.project_id = $1::uuid
-         AND COALESCE(prm.accepted_at, prm.created_at) >= make_date($2::int, $3::int, 1)
-         AND COALESCE(prm.accepted_at, prm.created_at) < (make_date($2::int, $3::int, 1) + interval '1 month')
          AND prm.status IN ('pending_pm_acceptance', 'accepted')
        ORDER BY COALESCE(prm.accepted_at, prm.created_at) DESC, prm.id DESC
        LIMIT 250`,
-          [projectId, period.year, period.month]
+          [projectId]
         )
         .catch(() => []);
 
@@ -688,20 +727,16 @@ router.get(
          production_work_order_id::text,
          traveler_id::text
        FROM inventory_transaction_ledger
-       WHERE created_at >= make_date($2::int, $3::int, 1)
-         AND created_at < (make_date($2::int, $3::int, 1) + interval '1 month')
-         AND (
+       WHERE (
            project_id = $1::uuid
            OR production_work_order_id IN (SELECT id FROM production_work_orders WHERE project_id = $1::uuid)
            OR traveler_id IN (SELECT id::text FROM travelers WHERE project_id = $1::uuid)
-           OR source_record_id = ANY($4::text[])
+           OR source_record_id = ANY($2::text[])
          )
        ORDER BY created_at DESC
        LIMIT 250`,
           [
             projectId,
-            period.year,
-            period.month,
             materialConsumptionRows.map((row) => row.id),
           ]
         )
@@ -873,6 +908,30 @@ router.get(
         (sum, row) => sum + Number(row.extended_cost ?? 0),
         0
       );
+      const employeeEvidence = new Map<
+        number,
+        {
+          livePunches: LiveLaborEvidence[];
+          postedLaborCosts: typeof laborRows;
+        }
+      >();
+      for (const row of liveLaborRows) {
+        const bucket = employeeEvidence.get(row.employee_id) ?? {
+          livePunches: [],
+          postedLaborCosts: [],
+        };
+        bucket.livePunches.push(row);
+        employeeEvidence.set(row.employee_id, bucket);
+      }
+      for (const row of laborRows) {
+        if (!row.epoch_employee_id) continue;
+        const bucket = employeeEvidence.get(row.epoch_employee_id) ?? {
+          livePunches: [],
+          postedLaborCosts: [],
+        };
+        bucket.postedLaborCosts.push(row);
+        employeeEvidence.set(row.epoch_employee_id, bucket);
+      }
 
       const nodes = new Map<string, EvidenceNode>();
       const edges: EvidenceEdge[] = [];
@@ -904,7 +963,7 @@ router.get(
         id: `period:${period.label}`,
         type: 'period',
         label: period.label,
-        subtitle: 'Payroll / accounting period',
+        subtitle: 'Project traceability scope',
         status:
           laborRows.length ||
           liveLaborRows.length ||
@@ -932,17 +991,17 @@ router.get(
         missingEvidence: [
           laborRows.length
             ? null
-            : 'No labor cost records found for this project and period.',
+            : 'No posted labor cost records found for this project.',
           liveLaborRows.length
             ? null
-            : 'No live punch-ledger labor found for this project and period.',
+            : 'No punch-ledger labor found for this project.',
         ].filter((item): item is string => !!item),
       });
       addEdge(edges, {
         id: `project:${project.id}->period:${period.label}`,
         from: `project:${project.id}`,
         to: `period:${period.label}`,
-        label: 'selected period',
+        label: 'evidence scope',
         status:
           laborRows.length ||
           liveLaborRows.length ||
@@ -1008,6 +1067,7 @@ router.get(
 
       for (const row of liveLaborRows) {
         const employeeId = `employee:${row.employee_id}`;
+        const aggregate = employeeEvidence.get(row.employee_id);
         const laborSessionId = `labor_session:${row.session_id}`;
         const workOrderId = row.production_work_order_id
           ? `work_order:${row.production_work_order_id}`
@@ -1032,14 +1092,28 @@ router.get(
           status: 'sensitive',
           sensitivity: 'employee_rate',
           metrics: {
-            liveHours: Number(row.hours),
-            sessions: 1,
+            liveHours: Number(
+              (aggregate?.livePunches ?? []).reduce(
+                (sum, punch) => sum + Number(punch.hours ?? 0),
+                0
+              ).toFixed(4)
+            ),
+            sessions: aggregate?.livePunches.length ?? 1,
+            postedLaborRecords: aggregate?.postedLaborCosts.length ?? 0,
+            postedLaborHours: Number(
+              (aggregate?.postedLaborCosts ?? []).reduce(
+                (sum, labor) => sum + Number(labor.hours_worked ?? 0),
+                0
+              ).toFixed(4)
+            ),
           },
           details: {
             employeeId: row.employee_id,
             employeeCode: row.employee_code,
             department: row.department,
             jobTitle: row.job_title,
+            projectPunches: aggregate?.livePunches ?? [row],
+            postedLaborCosts: aggregate?.postedLaborCosts ?? [],
           },
         });
 
@@ -1407,6 +1481,9 @@ router.get(
         const employeeId = row.epoch_employee_id
           ? `employee:${row.epoch_employee_id}`
           : `employee:unknown:${row.id}`;
+        const aggregate = row.epoch_employee_id
+          ? employeeEvidence.get(row.epoch_employee_id)
+          : null;
         addNode(nodes, {
           id: employeeId,
           type: 'employee',
@@ -1417,14 +1494,28 @@ router.get(
           status: 'sensitive',
           sensitivity: 'employee_rate',
           metrics: {
-            rateUsed: money(row.rate_used),
-            rateSource: row.rate_source,
+            liveHours: Number(
+              (aggregate?.livePunches ?? []).reduce(
+                (sum, punch) => sum + Number(punch.hours ?? 0),
+                0
+              ).toFixed(4)
+            ),
+            sessions: aggregate?.livePunches.length ?? 0,
+            postedLaborRecords: aggregate?.postedLaborCosts.length ?? 1,
+            postedLaborHours: Number(
+              (aggregate?.postedLaborCosts ?? [row]).reduce(
+                (sum, labor) => sum + Number(labor.hours_worked ?? 0),
+                0
+              ).toFixed(4)
+            ),
           },
           details: {
             employeeId: row.epoch_employee_id,
             employeeCode: row.employee_code,
             department: row.department,
             jobTitle: row.job_title,
+            projectPunches: aggregate?.livePunches ?? [],
+            postedLaborCosts: aggregate?.postedLaborCosts ?? [row],
           },
         });
 

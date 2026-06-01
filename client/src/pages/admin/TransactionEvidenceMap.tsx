@@ -90,8 +90,8 @@ interface EvidenceMapResponse {
     project_name: string;
   };
   period: {
-    year: number;
-    month: number;
+    year: number | null;
+    month: number | null;
     label: string;
   };
   summary: {
@@ -172,8 +172,8 @@ const branchDefs: Array<{
   },
   {
     key: 'payroll',
-    label: 'Was it sent to payroll?',
-    subtitle: 'Payroll export evidence',
+    label: 'Labor / Timekeeping Evidence',
+    subtitle: 'Payroll export evidence when present',
     types: ['payroll'],
   },
   {
@@ -213,11 +213,6 @@ const branchLayout: Record<string, { x: number; y: number }> = {
   audit: { x: 1470, y: 690 },
   document: { x: 1450, y: 920 },
 };
-
-function currentPeriod() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-}
 
 function money(value: number) {
   return value.toLocaleString(undefined, {
@@ -410,9 +405,9 @@ function MindMapCanvas({
   const center = { x: 950, y: 620 };
 
   const centerNode: EvidenceNode = {
-    id: `mind-center:${data.project.id}:${data.period.label}`,
+    id: `mind-center:${data.project.id}`,
     type: 'project',
-    label: `${data.project.project_code} / ${data.period.label}`,
+    label: data.project.project_code,
     subtitle: `${data.project.project_name} | ${data.summary.liveLaborSessionCount ?? 0} sessions | ${data.summary.materialConsumptionCount ?? 0} material draws`,
     status: data.summary.missingEvidenceCount ? 'warning' : 'ok',
   };
@@ -549,8 +544,8 @@ function FlowMapCanvas({
           </div>
           <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
             <div className="rounded border bg-muted/40 p-2">
-              <div className="text-muted-foreground">Period</div>
-              <div className="font-mono font-semibold">{data.period.label}</div>
+              <div className="text-muted-foreground">Scope</div>
+              <div className="font-semibold">All time</div>
             </div>
             <div className="rounded border bg-muted/40 p-2">
               <div className="text-muted-foreground">Labor</div>
@@ -614,7 +609,6 @@ function DetailValue({ value }: { value: unknown }) {
 
 export default function TransactionEvidenceMap() {
   const [projectId, setProjectId] = useState('');
-  const [period, setPeriod] = useState(currentPeriod());
   const [search, setSearch] = useState('');
   const [mapViewMode, setMapViewMode] = useState<MapViewMode>('radial');
   const [pathsOpen, setPathsOpen] = useState(false);
@@ -626,25 +620,26 @@ export default function TransactionEvidenceMap() {
   const { data: projects = [], isLoading: projectsLoading } = useQuery<
     ProjectOption[]
   >({
-    queryKey: ['/api/projects'],
-    queryFn: () => apiRequest('/api/projects'),
+    queryKey: ['/api/edri/transaction-evidence-map/projects'],
+    queryFn: () => apiRequest('/api/edri/transaction-evidence-map/projects'),
   });
 
   const mapUrl = projectId
-    ? `/api/edri/transaction-evidence-map?projectId=${encodeURIComponent(projectId)}&period=${encodeURIComponent(period)}`
+    ? `/api/edri/transaction-evidence-map?projectId=${encodeURIComponent(projectId)}`
     : '';
 
   const { data, isLoading, isFetching, error, refetch } =
     useQuery<EvidenceMapResponse>({
-      queryKey: ['transaction-evidence-map', projectId, period],
+      queryKey: ['transaction-evidence-map', projectId],
       queryFn: () => apiRequest(mapUrl),
-      enabled: !!projectId && !!period,
+      enabled: !!projectId,
     });
 
   const filteredProjects = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return projects.slice(0, 50);
-    return projects
+    const activeProjects = projects.filter((project) => project.status === 'active');
+    if (!q) return activeProjects.slice(0, 50);
+    return activeProjects
       .filter((project) =>
         `${projectCode(project)} ${projectName(project)}`
           .toLowerCase()
@@ -678,8 +673,8 @@ export default function TransactionEvidenceMap() {
             Project Transaction Evidence Map
           </h1>
           <p className="text-sm text-muted-foreground">
-            Follow one project-period claim outward to the people, material,
-            costs, payroll, books, audit trail, and proof behind it.
+            Follow one active project outward to the people, punches, materials,
+            costs, books, audit trail, and proof behind it.
           </p>
         </div>
         <Button
@@ -696,7 +691,7 @@ export default function TransactionEvidenceMap() {
         </Button>
       </div>
 
-      <div className="grid gap-4 rounded-md border bg-background p-4 lg:grid-cols-[1fr_220px]">
+      <div className="rounded-md border bg-background p-4">
         <div className="space-y-2">
           <Label htmlFor="projectSearch">Project</Label>
           <div className="flex gap-2">
@@ -735,19 +730,6 @@ export default function TransactionEvidenceMap() {
             </Select>
           </div>
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="period">Payroll period</Label>
-          <Input
-            id="period"
-            type="month"
-            value={period}
-            onChange={(event) => {
-              setPeriod(event.target.value);
-              setSelectedNodeId(null);
-              setSelectedBranchKey(null);
-            }}
-          />
-        </div>
       </div>
 
       {error && (
@@ -758,7 +740,7 @@ export default function TransactionEvidenceMap() {
 
       {!projectId && (
         <div className="rounded-md border border-dashed p-10 text-center text-muted-foreground">
-          Select a project and payroll period to build the evidence map.
+          Select an active project to build its all-time transaction evidence map.
         </div>
       )}
 

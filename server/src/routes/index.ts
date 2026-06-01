@@ -4796,7 +4796,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       
       const { db } = await import('../../db');
       const { p2SerializedItems, p2SerializedItemEvents, travelers, auditEvents } = await import('../../schema');
-      const { eq, desc, sql } = await import('drizzle-orm');
+      const { and, eq, desc, ne, sql } = await import('drizzle-orm');
 
       
       const [item] = await db.select().from(p2SerializedItems).where(eq(p2SerializedItems.id, itemId)).limit(1);
@@ -4912,102 +4912,89 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
             }
 
             if (rmaRequired) {
-              // Use a relative qty bump (+1) so locking happens entirely
-              // inside updateP2PoItemWithQtySync (PO row first, then PO item
-              // row). Pre-locking the PO item here would invert that order
-              // and risk a deadlock against concurrent normal PO qty edits.
-              const reqUser = (req as Express.Request & {
-                user?: { username?: string; email?: string; role?: string };
-              }).user;
-              const actor = {
-                username: reqUser?.username || reqUser?.email || performedBy || 'system',
-                role: reqUser?.role || 'SYSTEM',
-                ipAddress: req.ip,
-                userAgent: req.get('user-agent') || null,
+              const rootSerial = String(item.serialNumber || item.barcode).replace(/-rma-\d+$/i, '');
+              const rmaPrefix = `${rootSerial}-rma-`;
+              const rmaRowsResult = await tx.execute(sql`
+                SELECT serial_number AS "serialNumber"
+                FROM ${p2SerializedItems}
+                WHERE lower(serial_number) LIKE ${`${rmaPrefix.toLowerCase()}%`}
+              `);
+              const rmaRows = (Array.isArray(rmaRowsResult) ? rmaRowsResult : (rmaRowsResult.rows ?? [])) as Array<{ serialNumber: string }>;
+              const maxRmaSequence = rmaRows.reduce((maxSeq, row) => {
+                const suffix = String(row.serialNumber || '').slice(rmaPrefix.length);
+                const parsed = /^\d+$/.test(suffix) ? Number(suffix) : 0;
+                return Math.max(maxSeq, parsed);
+              }, 0);
+              const rmaSerialNumber = `${rmaPrefix}${String(maxRmaSequence + 1).padStart(2, '0')}`;
+
+              const maxSequenceResult = await tx.execute(sql`
+                SELECT COALESCE(MAX(sequence_number), 0) + 1 AS "nextSequence"
+                FROM ${p2SerializedItems}
+                WHERE po_item_id = ${item.poItemId}
+              `);
+              const maxSequenceRows = (Array.isArray(maxSequenceResult) ? maxSequenceResult : (maxSequenceResult.rows ?? [])) as Array<{ nextSequence: number | string }>;
+              const nextSequence = Number(maxSequenceRows[0]?.nextSequence || 1);
+              const replacementMetadata = {
+                isReplacement: true,
+                replacementForSerializedItemId: item.id,
+                replacementForSerialNumber: item.serialNumber,
+                replacementForBarcode: item.barcode,
+                replacementReason: reason,
+                rmaRequired: true,
+                rmaReplacementSerialNumber: rmaSerialNumber,
+                generatedFromScrapAt: new Date().toISOString(),
+                generatedWithoutPoQuantityIncrease: true,
               };
-              const syncResult = await storage.updateP2PoItemWithQtySync(
-                item.poId,
-                item.poItemId,
-                { quantityDelta: 1 },
-                actor,
-                tx,
-              );
-              if (syncResult.sync?.direction === 'increase' && syncResult.sync.serializedItemsAdded > 0) {
-                const [createdReplacement] = await tx
-                  .select()
-                  .from(p2SerializedItems)
-                  .where(and(
-                    eq(p2SerializedItems.poItemId, item.poItemId),
-                    eq(p2SerializedItems.status, 'ACTIVE'),
-                    ne(p2SerializedItems.id, itemId),
-                  ))
-                  .orderBy(desc(p2SerializedItems.sequenceNumber), desc(p2SerializedItems.createdAt))
-                  .limit(1);
 
-                if (createdReplacement) {
-                  const rootSerial = String(item.serialNumber || item.barcode).replace(/-rma-\d+$/i, '');
-                  const rmaPrefix = `${rootSerial}-rma-`;
-                  const rmaRowsResult = await tx.execute(sql`
-                    SELECT serial_number AS "serialNumber"
-                    FROM ${p2SerializedItems}
-                    WHERE lower(serial_number) LIKE ${`${rmaPrefix.toLowerCase()}%`}
-                  `);
-                  const rmaRows = (Array.isArray(rmaRowsResult) ? rmaRowsResult : (rmaRowsResult.rows ?? [])) as Array<{ serialNumber: string }>;
-                  const maxRmaSequence = rmaRows.reduce((maxSeq, row) => {
-                    const suffix = String(row.serialNumber || '').slice(rmaPrefix.length);
-                    const parsed = /^\d+$/.test(suffix) ? Number(suffix) : 0;
-                    return Math.max(maxSeq, parsed);
-                  }, 0);
-                  const rmaSerialNumber = `${rmaPrefix}${String(maxRmaSequence + 1).padStart(2, '0')}`;
-                  const replacementMetadata = {
-                    ...((createdReplacement.metadata as Record<string, unknown> | null) || {}),
-                    isReplacement: true,
-                    replacementForSerializedItemId: item.id,
-                    replacementForSerialNumber: item.serialNumber,
-                    replacementForBarcode: item.barcode,
-                    replacementReason: reason,
-                    rmaRequired: true,
-                    rmaReplacementSerialNumber: rmaSerialNumber,
-                    generatedFromScrapAt: new Date().toISOString(),
-                  };
+              const [createdReplacement] = await tx
+                .insert(p2SerializedItems)
+                .values({
+                  serialNumber: rmaSerialNumber,
+                  barcode: rmaSerialNumber,
+                  travelerBarcode: rmaSerialNumber,
+                  poId: item.poId,
+                  poItemId: item.poItemId,
+                  poNumber: item.poNumber,
+                  partNumber: item.partNumber,
+                  partName: item.partName,
+                  customerId: item.customerId,
+                  customerName: item.customerName,
+                  sequenceNumber: nextSequence,
+                  currentDepartment: 'Pending Layup',
+                  currentStageIndex: 0,
+                  status: 'ACTIVE',
+                  metadata: replacementMetadata,
+                  partRoutingId: item.partRoutingId,
+                  partRoutingRevision: item.partRoutingRevision,
+                  sku: item.sku,
+                  drawingName: item.drawingName,
+                  buildFamilyKey: item.buildFamilyKey,
+                  notes: `RMA replacement generated for scrapped serial ${item.serialNumber}`,
+                  createdAt: new Date(),
+                  updatedAt: new Date(),
+                })
+                .returning();
 
-                  const [updatedReplacement] = await tx
-                    .update(p2SerializedItems)
-                    .set({
-                      serialNumber: rmaSerialNumber,
-                      barcode: rmaSerialNumber,
-                      travelerBarcode: rmaSerialNumber,
-                      metadata: replacementMetadata,
-                      notes: [
-                        createdReplacement.notes,
-                        `RMA replacement generated for scrapped serial ${item.serialNumber}`,
-                      ].filter(Boolean).join('\n'),
-                      updatedAt: new Date(),
-                    })
-                    .where(eq(p2SerializedItems.id, createdReplacement.id))
-                    .returning();
+              replacementItem = createdReplacement;
 
-                  replacementItem = updatedReplacement ?? createdReplacement;
-
-                  await tx.insert(p2SerializedItemEvents).values({
-                    serializedItemId: createdReplacement.id,
-                    barcode: rmaSerialNumber,
-                    eventType: 'REPLACEMENT_GENERATED',
-                    toDepartment: createdReplacement.currentDepartment,
-                    toStageIndex: createdReplacement.currentStageIndex,
-                    performedBy: performedBy || 'System',
-                    notes: `RMA replacement ${rmaSerialNumber} generated for scrapped serial ${item.serialNumber}`,
-                    metadata: {
-                      scrappedSerializedItemId: item.id,
-                      scrappedSerialNumber: item.serialNumber,
-                      scrappedBarcode: item.barcode,
-                      replacementSerialNumber: rmaSerialNumber,
-                      rmaRequired: true,
-                      scrapReason: reason,
-                    },
-                  });
-                }
-              }
+              await tx.insert(p2SerializedItemEvents).values({
+                serializedItemId: createdReplacement.id,
+                barcode: rmaSerialNumber,
+                eventType: 'REPLACEMENT_GENERATED',
+                toDepartment: createdReplacement.currentDepartment,
+                toStageIndex: createdReplacement.currentStageIndex,
+                performedBy: performedBy || 'System',
+                notes: `RMA replacement ${rmaSerialNumber} generated for scrapped serial ${item.serialNumber}`,
+                metadata: {
+                  scrappedSerializedItemId: item.id,
+                  scrappedSerialNumber: item.serialNumber,
+                  scrappedBarcode: item.barcode,
+                  replacementSerialNumber: rmaSerialNumber,
+                  rmaRequired: true,
+                  scrapReason: reason,
+                  generatedWithoutPoQuantityIncrease: true,
+                },
+              });
             }
           });
         } catch (scrapErr: unknown) {

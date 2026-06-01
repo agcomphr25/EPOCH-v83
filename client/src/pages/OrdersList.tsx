@@ -1213,6 +1213,12 @@ export default function OrdersList() {
     }
 
     if (error) {
+      const errorDetails = [
+        error instanceof Error ? error.message : String(error),
+        (error as any)?.status ? `Status: ${(error as any).status}` : '',
+        (error as any)?.responseData?.details ? `Details: ${(error as any).responseData.details}` : '',
+      ].filter(Boolean).join(' | ');
+
       return (
         <div className="container mx-auto p-6">
           <Card>
@@ -1220,6 +1226,11 @@ export default function OrdersList() {
               <div className="text-center text-red-600">
                 Error loading orders. Please try again later.
               </div>
+              {errorDetails && (
+                <div className="mt-3 rounded-md bg-red-50 p-3 text-center font-mono text-xs text-red-700">
+                  {errorDetails}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

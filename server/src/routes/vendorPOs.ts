@@ -1352,16 +1352,6 @@ router.post('/:id/items', async (req: Request, res: Response) => {
       vendorPoId,
     });
 
-    // Invalidate compliance review BEFORE creating the item so that if invalidation
-    // fails the item insertion never commits (fail-safe).
-    const actorId = (req as any).user?.id as number | undefined;
-    await storage.invalidateVendorPoComplianceReview(
-      vendorPoId,
-      'Line item added after compliance review',
-      actorId,
-      { changedField: 'lineItems', action: 'added' },
-    );
-
     await requireP2LineTraceability(vendorPoId, data as Record<string, unknown>);
     await requireP2ComplianceBeforeProjectAllocation(vendorPoId, data);
 

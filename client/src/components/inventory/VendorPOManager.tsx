@@ -2264,7 +2264,7 @@ function ComplianceReviewModal({
         toast.success(`Auto-selected optional statements: ${toastLines.join(', ')}`);
       }
 
-      toast.success('Compliance review approved. Proceeding to issue PO.');
+      toast.success('Compliance review saved. P2 line-item linking is now available.');
       onComplianceApproved();
       onClose();
     },
@@ -2495,7 +2495,7 @@ function ComplianceReviewModal({
             ) : (!form.secondPartyComplete || !form.vendorApproved) ? (
               <><ShieldAlert className="w-4 h-4 mr-2" />Save Blocked Review</>
             ) : (
-              <><ShieldCheck className="w-4 h-4 mr-2" />Save Review & Issue PO</>
+              <><ShieldCheck className="w-4 h-4 mr-2" />Save Review</>
             )}
           </Button>
         </DialogFooter>
@@ -2977,16 +2977,14 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
 
   const handleComplianceApproved = () => {
     if (!compliancePoId) return;
-    // Find the PO in the list to ensure selectedVendorPO is set
-    const poFromList = (vendorPOs as VendorPO[] | undefined)?.find((p) => p.id === compliancePoId);
-    if (poFromList) setSelectedVendorPO(poFromList);
-    // Now proceed to show the email/issue dialog
-    setNoEmailMode(false);
-    setNoEmailReason('');
-    setNoEmailConfirmed(false);
-    setPendingStatus('Sent');
-    setShowStatusChangeDialog(true);
-    loadRecipientsForPO(compliancePoId);
+    queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', compliancePoId, 'issue-readiness'] });
+    if (selectedVendorPO?.id === compliancePoId) {
+      setSelectedVendorPO({
+        ...selectedVendorPO,
+        complianceStatus: 'Reviewed',
+      });
+    }
   };
 
   const handleAutoSelectOptionals = async (newIds: number[]) => {

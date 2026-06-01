@@ -109,6 +109,7 @@ async function findP1PackingSlipInvoice(
   poNumber: string
 ) {
   const includeArtifactHistory = await hasP1FulfillmentAttemptsTable();
+  const shipmentPoCount = await getP1ShipmentPoCount(shipmentRecordId);
   const rows = rowsOf<{
     id: string;
     invoice_number: string;
@@ -145,7 +146,9 @@ async function findP1PackingSlipInvoice(
          )`
              : ''
          }
-         OR (
+         ${
+           shipmentPoCount <= 1
+             ? `OR (
            inv.po_override = $2
            AND inv.invoice_number = (
              SELECT sr.invoice_number
@@ -157,7 +160,9 @@ async function findP1PackingSlipInvoice(
              inv.notes ILIKE 'Auto-created from P1 OEM packing slip%'
              OR inv.internal_notes ILIKE 'Source: P1 OEM shipment%'
            )
-         )
+         )`
+             : ''
+         }
        )
      ORDER BY inv.created_at DESC
      LIMIT 1`,
@@ -253,6 +258,29 @@ async function findReusableP1InvoiceNumber({
   }
 
   return null;
+}
+
+async function getP1ShipmentPoCount(shipmentRecordId: string): Promise<number> {
+  try {
+    const rows = rowsOf<{ po_count: number | string }>(
+      await pool.query(
+        `SELECT COUNT(DISTINCT COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number))::int AS po_count
+         FROM shipment_items si
+         LEFT JOIN production_orders prod_ord ON prod_ord.order_id = si.order_id
+         LEFT JOIN purchase_order_items poi ON poi.id = si.po_item_id
+         LEFT JOIN purchase_orders po ON po.id = poi.po_id
+         WHERE si.shipment_id = $1`,
+        [shipmentRecordId]
+      )
+    );
+
+    return Number(rows[0]?.po_count || 0);
+  } catch (err: any) {
+    console.warn(
+      `Could not count P1 shipment POs for shipment ${shipmentRecordId}: ${err.message}`
+    );
+    return 0;
+  }
 }
 
 async function buildP1PackingSlipInvoiceDraft(
@@ -636,6 +664,7 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
       let trackingNumber: string | undefined;
       let existingInvoiceNumber: string | null = null;
       let shipmentRecordId: string | null = null;
+      let shipmentPoCount = 0;
 
       try {
         const shipmentRows = await pool.query(
@@ -652,7 +681,11 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
           shipmentRecordId = sr.id || null;
           shipmentNumber = sr.reference || undefined;
           trackingNumber = sr.master_tracking_number || undefined;
-          existingInvoiceNumber = sr.invoice_number || null;
+          shipmentPoCount = shipmentRecordId
+            ? await getP1ShipmentPoCount(shipmentRecordId)
+            : 0;
+          existingInvoiceNumber =
+            shipmentPoCount <= 1 ? sr.invoice_number || null : null;
         }
       } catch (shipErr: any) {
         console.warn(
@@ -772,7 +805,7 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
       // Persist invoice_number to shipment_records now that we have the full item context.
       // If the initial PO-based lookup found a shipment_record, use that id; otherwise find
       // the record via a fresh join so order_id-matched shipments are also covered.
-      if (newlyGeneratedInvoice) {
+      if (newlyGeneratedInvoice && shipmentPoCount <= 1) {
         try {
           if (!shipmentRecordId) {
             // Fallback: resolve shipment_record via order_id if PO-based lookup missed
@@ -789,11 +822,14 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
               );
               if (fallbackRows.length > 0) {
                 shipmentRecordId = fallbackRows[0].id || null;
+                shipmentPoCount = shipmentRecordId
+                  ? await getP1ShipmentPoCount(shipmentRecordId)
+                  : 0;
                 break;
               }
             }
           }
-          if (shipmentRecordId) {
+          if (shipmentRecordId && shipmentPoCount <= 1) {
             const saveResult = await pool.query(
               `UPDATE shipment_records SET invoice_number = $1 WHERE id = $2 AND invoice_number IS NULL RETURNING invoice_number`,
               [invoiceNumber, shipmentRecordId]
@@ -1355,10 +1391,10 @@ router.get('/oem-shipments', authenticateToken, async (req, res) => {
               'itemType', COALESCE(poi.item_type, 'stock_model'),
               'unitPrice', CASE WHEN $${paramIndex + 2}::boolean THEN poi.unit_price ELSE NULL END,
               'lineTotal', CASE WHEN $${paramIndex + 2}::boolean THEN COALESCE(poi.unit_price, 0) * COALESCE(si.quantity, 1) ELSE NULL END,
-              'packingSlipInvoiceNumber', COALESCE(${packingSlipInvoiceNumberSql}, sr.invoice_number),
-              'invoiceId', COALESCE(inv.id, shipment_inv.id),
-              'invoiceNumber', COALESCE(inv.invoice_number, shipment_inv.invoice_number),
-              'invoiceStatus', COALESCE(inv.status, shipment_inv.status)
+              'packingSlipInvoiceNumber', ${packingSlipInvoiceNumberSql},
+              'invoiceId', inv.id,
+              'invoiceNumber', inv.invoice_number,
+              'invoiceStatus', inv.status
             ) ORDER BY COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number), si.order_id
           ) as items
         FROM shipment_records sr
@@ -1701,10 +1737,13 @@ router.get(
           const shipmentRef = firstSibling.shipment_reference || undefined;
 
           const { storage: slipStorage } = await import('../../storage');
+          const shipmentPoCount = item.shipment_record_id
+            ? await getP1ShipmentPoCount(item.shipment_record_id)
+            : 0;
 
           // Resolve invoice number: reuse stored value, or generate + persist a new one
           let invoiceNumber: string;
-          if (item.shipment_invoice_number) {
+          if (shipmentPoCount <= 1 && item.shipment_invoice_number) {
             invoiceNumber = item.shipment_invoice_number;
             console.log(
               `♻️ Reusing stored invoice number ${invoiceNumber} for itemId=${itemId}`
@@ -1729,7 +1768,7 @@ router.get(
                 `🆕 Generated new invoice number ${invoiceNumber} for itemId=${itemId}`
               );
             }
-            if (item.shipment_record_id) {
+            if (item.shipment_record_id && shipmentPoCount <= 1) {
               try {
                 const saveResult = await pool.query(
                   `UPDATE shipment_records SET invoice_number = $1 WHERE id = $2 AND invoice_number IS NULL RETURNING invoice_number`,

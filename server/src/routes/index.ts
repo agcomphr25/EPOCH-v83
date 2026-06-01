@@ -5870,8 +5870,6 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const { inspectionId } = req.params;
       const { serializedItemId, rejectedBy, rejectedByName } = req.body;
 
-      const { storage } = await import('../../storage');
-      
       // Log the rejection
       console.log('Tolerance deviation rejected:', {
         inspectionId,
@@ -5880,17 +5878,70 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         rejectedByName
       });
 
-      // Flag the item for rework by updating its status
+      // Move the serialized item into the same nonconforming/disposition flow
+      // used by P2 Control Center scrap. The open disposition queue reads
+      // p2_serialized_items.status = SCRAPPED, while production only shows ACTIVE.
       if (serializedItemId) {
-        await storage.updateP2SerializedItem(serializedItemId, {
-          productionStatus: 'HOLD',
-          notes: `Tolerance deviation rejected by ${rejectedByName} on ${new Date().toISOString()} - requires rework or scrap`
+        const { db } = await import('../../db');
+        const { p2SerializedItems, p2SerializedItemEvents } = await import('../../schema');
+        const { eq } = await import('drizzle-orm');
+
+        const [item] = await db
+          .select()
+          .from(p2SerializedItems)
+          .where(eq(p2SerializedItems.id, serializedItemId))
+          .limit(1);
+
+        if (!item) {
+          return res.status(404).json({ error: 'Serialized item not found' });
+        }
+
+        const now = new Date();
+        const actor = rejectedByName || rejectedBy || 'System';
+        const reason = 'Tolerance deviation rejected - NCR/Scrap disposition required';
+        const existingMetadata =
+          item.metadata && typeof item.metadata === 'object' && !Array.isArray(item.metadata)
+            ? item.metadata
+            : {};
+
+        await db.update(p2SerializedItems)
+          .set({
+            status: 'SCRAPPED',
+            scrapReason: reason,
+            scrapBy: actor,
+            scrapAt: now,
+            notes: `Tolerance deviation rejected by ${actor} on ${now.toISOString()} - requires NCR/Scrap disposition`,
+            metadata: {
+              ...existingMetadata,
+              hasToleranceDeviation: true,
+              toleranceDeviationRejected: true,
+              toleranceDeviationRejectedAt: now.toISOString(),
+              toleranceDeviationRejectedBy: actor,
+              finalInspectionId: inspectionId,
+            },
+            updatedAt: now,
+          })
+          .where(eq(p2SerializedItems.id, serializedItemId));
+
+        await db.insert(p2SerializedItemEvents).values({
+          serializedItemId,
+          barcode: item.barcode,
+          eventType: 'SCRAP',
+          performedBy: actor,
+          notes: reason,
+          metadata: {
+            source: 'final-inspection-reject-deviation',
+            inspectionId,
+            previousStatus: item.status,
+            newStatus: 'SCRAPPED',
+            dispositionRequired: true,
+          },
         });
       }
 
       res.json({ 
         success: true, 
-        message: 'Tolerance deviation rejected - item flagged for rework',
+        message: 'Tolerance deviation rejected - item moved to NCR/Scrap open disposition',
         inspectionId,
         rejectedBy: rejectedByName,
         rejectedAt: new Date().toISOString()

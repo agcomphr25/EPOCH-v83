@@ -1244,7 +1244,7 @@ router.get('/oem-shipments', authenticateToken, async (req, res) => {
               'itemType', COALESCE(poi.item_type, 'stock_model'),
               'unitPrice', CASE WHEN $${paramIndex + 2}::boolean THEN poi.unit_price ELSE NULL END,
               'lineTotal', CASE WHEN $${paramIndex + 2}::boolean THEN COALESCE(poi.unit_price, 0) * COALESCE(si.quantity, 1) ELSE NULL END,
-              'packingSlipInvoiceNumber', ${packingSlipInvoiceNumberSql},
+              'packingSlipInvoiceNumber', COALESCE(${packingSlipInvoiceNumberSql}, sr.invoice_number),
               'invoiceId', COALESCE(inv.id, shipment_inv.id),
               'invoiceNumber', COALESCE(inv.invoice_number, shipment_inv.invoice_number),
               'invoiceStatus', COALESCE(inv.status, shipment_inv.status)

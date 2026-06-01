@@ -637,9 +637,8 @@ export default function TransactionEvidenceMap() {
 
   const filteredProjects = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const activeProjects = projects.filter((project) => project.status === 'active');
-    if (!q) return activeProjects.slice(0, 50);
-    return activeProjects
+    if (!q) return projects.slice(0, 50);
+    return projects
       .filter((project) =>
         `${projectCode(project)} ${projectName(project)}`
           .toLowerCase()

@@ -316,14 +316,23 @@ router.get(
     try {
       const rows = await pool.query<{
         id: string;
+        projectCode: string | null;
+        projectName: string | null;
         project_code: string | null;
         project_name: string | null;
         customer_name_snapshot: string | null;
         status: string | null;
       }>(
-        `SELECT id::text, project_code, project_name, customer_name_snapshot, status
+        `SELECT
+           id::text,
+           project_code AS "projectCode",
+           project_name AS "projectName",
+           project_code,
+           project_name,
+           customer_name_snapshot,
+           status
          FROM projects
-         WHERE status = 'active'
+         WHERE COALESCE(status, 'active') NOT IN ('cancelled', 'completed', 'inactive', 'lost')
          ORDER BY project_code NULLS LAST, project_name NULLS LAST
          LIMIT 500`
       );

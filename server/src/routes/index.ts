@@ -3383,6 +3383,11 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     );
 
     return items.map((item: any) => {
+      const serializedStatus = String(item.status || item.productionStatus || item.production_status || '').toUpperCase();
+      if (serializedStatus && serializedStatus !== 'ACTIVE') {
+        return item;
+      }
+
       const travelerState = getSerializedKeys(item)
         .map((key) => travelerBySerial.get(key))
         .find(Boolean);

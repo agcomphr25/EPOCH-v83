@@ -267,9 +267,12 @@ router.post('/', requireDocumentEditor, upload.single('file'), async (req: Reque
     });
 
     res.status(201).json(newDoc);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error creating document:', error);
-    res.status(500).json({ error: 'Failed to create document' });
+    res.status(500).json({
+      error: 'Failed to create document',
+      details: error?.message || String(error),
+    });
   }
 });
 

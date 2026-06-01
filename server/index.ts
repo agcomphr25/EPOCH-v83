@@ -545,6 +545,35 @@ async function initializeBackgroundServices() {
 
       try {
         await pool.query(`
+          ALTER TABLE controlled_documents
+            ADD COLUMN IF NOT EXISTS template_key text,
+            ADD COLUMN IF NOT EXISTS version_date date,
+            ADD COLUMN IF NOT EXISTS origination_date date,
+            ADD COLUMN IF NOT EXISTS classification text NOT NULL DEFAULT 'internal',
+            ADD COLUMN IF NOT EXISTS cui_category text,
+            ADD COLUMN IF NOT EXISTS itar_category text,
+            ADD COLUMN IF NOT EXISTS export_control_jurisdiction text,
+            ADD COLUMN IF NOT EXISTS customer_id text,
+            ADD COLUMN IF NOT EXISTS contract_artifact_type text,
+            ADD COLUMN IF NOT EXISTS access_rule text NOT NULL DEFAULT 'authenticated',
+            ADD COLUMN IF NOT EXISTS mfa_required boolean NOT NULL DEFAULT false,
+            ADD COLUMN IF NOT EXISTS download_tracking_required boolean NOT NULL DEFAULT true
+        `);
+        await pool.query(`
+          ALTER TABLE document_version_history
+            ADD COLUMN IF NOT EXISTS expiration_date date
+        `);
+        await pool.query(`
+          CREATE INDEX IF NOT EXISTS idx_controlled_documents_template_key
+          ON controlled_documents(template_key)
+        `);
+        console.log('Controlled documents schema guard complete');
+      } catch (controlledDocumentsSchemaErr: any) {
+        console.error('Controlled documents schema guard failed:', controlledDocumentsSchemaErr?.message || controlledDocumentsSchemaErr);
+      }
+
+      try {
+        await pool.query(`
           ALTER TABLE all_orders
             ADD COLUMN IF NOT EXISTS department_notes jsonb DEFAULT '[]'::jsonb
         `);

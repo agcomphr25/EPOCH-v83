@@ -389,10 +389,21 @@ router.get('/p2-lots', authenticateToken, async (req: Request, res: Response) =>
         l.quantity,
         l.created_at,
         COALESCE(NULLIF(TRIM(po.project_name), ''), 'Unassigned Project') AS project_name,
-        ps.packing_slip_number
+        ps.packing_slip_number,
+        sku_summary.sku,
+        sku_summary.sku_count
       FROM p2_lot_numbers l
       LEFT JOIN p2_purchase_orders po ON po.id = l.po_id
       LEFT JOIN p2_packing_slips ps ON ps.id = l.packing_slip_id
+      LEFT JOIN LATERAL (
+        SELECT
+          MIN(NULLIF(TRIM(si.sku), '')) AS sku,
+          COUNT(DISTINCT NULLIF(TRIM(si.sku), ''))::int AS sku_count
+        FROM p2_serialized_items si
+        WHERE si.id::text IN (
+          SELECT jsonb_array_elements_text(COALESCE(l.serialized_item_ids, '[]'::jsonb))
+        )
+      ) sku_summary ON true
       WHERE (l.lot_type = 'SHIPPING' OR l.packing_slip_id IS NOT NULL)
         AND COALESCE(NULLIF(TRIM(po.project_name), ''), 'Unassigned Project') = $1
       ORDER BY l.created_at DESC
@@ -406,6 +417,8 @@ router.get('/p2-lots', authenticateToken, async (req: Request, res: Response) =>
       customerName: row.customer_name,
       partNumber: row.part_number,
       partName: row.part_name,
+      sku: row.sku,
+      skuCount: row.sku_count,
       quantity: row.quantity,
       projectName: row.project_name,
       packingSlipNumber: row.packing_slip_number,
@@ -472,14 +485,11 @@ async function buildP2LabelItems(lotId: string): Promise<LabelItem[]> {
     itemIds
   );
 
-  const lotSku = serialRows.find((row) => row.sku)?.sku
-    || serialRows.find((row) => row.part_number)?.part_number
-    || lot.part_number
-    || '';
+  const finalizedSku = serialRows.find((row) => row.sku)?.sku || '';
 
   return serialRows.map((row) => ({
     mode: 'P2',
-    sku: row.sku || lotSku,
+    sku: row.sku || finalizedSku,
     serialNumber: row.serial_number,
     lotNumber: lot.lot_number,
   }));

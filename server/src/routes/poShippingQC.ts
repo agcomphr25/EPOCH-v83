@@ -801,6 +801,15 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
           `✅ Packing slip persisted to shipment_item id=${itemId} (poNumber=${poNumber})`
         );
       }
+      await recordP1FulfillmentArtifacts({
+        orderIds: items
+          .map((item) => item.order?.orderId || item.order?.order_id)
+          .filter(Boolean),
+        poNumber,
+        invoiceNumber,
+        trackingNumber: trackingNumber || '',
+        shipmentRecordId,
+      });
 
       // Persist invoice_number to shipment_records now that we have the full item context.
       // If the initial PO-based lookup found a shipment_record, use that id; otherwise find
@@ -1850,6 +1859,13 @@ router.get(
             );
             console.log(`✅ Packing slip regenerated and persisted: ${itemId}`);
           }
+          await recordP1FulfillmentArtifacts({
+            orderIds: siblingRows.map((r) => r.order_id).filter(Boolean),
+            poNumber: poNumberForSlip,
+            invoiceNumber,
+            trackingNumber: item.tracking_number || '',
+            shipmentRecordId: item.shipment_record_id || null,
+          });
         } catch (regenErr: any) {
           console.error(
             `❌ Packing slip regeneration failed for item ${itemId}:`,

@@ -415,6 +415,25 @@ async function main() {
       ON timekeeping.punch_correction_requests(supervisor_id)
   `, 'Ensure punch_correction_requests supervisor index');
 
+  await runSql(`
+    ALTER TABLE all_orders
+      ADD COLUMN IF NOT EXISTS department_notes jsonb DEFAULT '[]'::jsonb
+  `, 'Ensure all_orders.department_notes column');
+  await runSql(`
+    ALTER TABLE order_drafts
+      ADD COLUMN IF NOT EXISTS department_notes jsonb DEFAULT '[]'::jsonb
+  `, 'Ensure order_drafts.department_notes column');
+  await runSql(`
+    UPDATE all_orders
+    SET department_notes = '[]'::jsonb
+    WHERE department_notes IS NULL
+  `, 'Backfill all_orders.department_notes default');
+  await runSql(`
+    UPDATE order_drafts
+    SET department_notes = '[]'::jsonb
+    WHERE department_notes IS NULL
+  `, 'Backfill order_drafts.department_notes default');
+
   // ------------------------------------------------------------------
   // STEP 4: Quick verification — report remaining integer→uuid mismatches
   // ------------------------------------------------------------------

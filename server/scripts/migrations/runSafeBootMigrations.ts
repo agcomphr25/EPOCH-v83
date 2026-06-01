@@ -175,6 +175,18 @@ const safeFiles = [
   '0134_conversational_rfq_risk_sessions.sql',
   '0135_pto_balances_and_schedules.sql',
   '0142_punch_correction_requests.sql',
+  '0143_internal_messages_nullable_sender.sql',
+  '0144_rename_10300_customer_payment_clearing.sql',
+  '0145_timetrakgo_import_punch_source.sql',
+  '0146_final_assembly_manufactured_category.sql',
+  '0147_controlled_document_template_metadata.sql',
+  '0148_darleneb_payment_permissions.sql',
+  '0149_p1_payment_accounting_approval_workflow.sql',
+  '0150_admin_punch_source.sql',
+  '0151_non_conforming_items.sql',
+  '0152_vendor_po_return_email.sql',
+  '0153_user_finish_technician_flag.sql',
+  '0154_p1_department_notes.sql',
   'investigation_308_order_duplication.sql',
 ];
 

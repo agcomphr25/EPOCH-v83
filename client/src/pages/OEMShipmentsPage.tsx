@@ -99,6 +99,9 @@ interface Shipment {
   stock_count: number;
   accessory_count: number;
   po_count: number;
+  shipmentInvoiceId?: string | null;
+  shipmentInvoiceNumber?: string | null;
+  shipmentInvoiceStatus?: string | null;
   items: ShipmentItem[];
 }
 
@@ -223,7 +226,7 @@ export default function OEMShipmentsPage() {
       0
     );
 
-  const getPoInvoice = (items: ShipmentItem[]) => {
+  const getPoInvoice = (items: ShipmentItem[], shipment?: Shipment) => {
     const invoiceItem = items.find((item) => item.invoiceId);
     const packingSlipItem = items.find((item) => item.packingSlipInvoiceNumber);
     return invoiceItem
@@ -233,6 +236,13 @@ export default function OEMShipmentsPage() {
           status: invoiceItem.invoiceStatus || null,
           packingSlipInvoiceNumber: invoiceItem.packingSlipInvoiceNumber || packingSlipItem?.packingSlipInvoiceNumber || null,
         }
+      : shipment?.shipmentInvoiceId
+        ? {
+            id: shipment.shipmentInvoiceId || null,
+            invoiceNumber: shipment.shipmentInvoiceNumber || shipment.invoice_number || null,
+            status: shipment.shipmentInvoiceStatus || null,
+            packingSlipInvoiceNumber: packingSlipItem?.packingSlipInvoiceNumber || shipment.invoice_number || null,
+          }
       : packingSlipItem
         ? {
             id: null,
@@ -285,9 +295,10 @@ export default function OEMShipmentsPage() {
     shipmentId: string | number,
     poNumber: string,
     items: ShipmentItem[],
+    shipment?: Shipment,
     size: 'sm' = 'sm'
   ) => {
-    const invoice = getPoInvoice(items);
+    const invoice = getPoInvoice(items, shipment);
     const isCreating =
       createInvoiceMutation.isPending &&
       createInvoiceMutation.variables?.shipmentId === String(shipmentId) &&
@@ -879,9 +890,19 @@ export default function OEMShipmentsPage() {
                                       <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
                                         Shipment Invoice #
                                       </p>
-                                      <code className="text-sm font-mono bg-white dark:bg-gray-900 px-2 py-1 rounded border">
-                                        {shipment.invoice_number}
-                                      </code>
+                                      {shipment.shipmentInvoiceId ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => setLocation(`/finance/invoices/${shipment.shipmentInvoiceId}`)}
+                                          className="text-sm font-mono bg-white dark:bg-gray-900 px-2 py-1 rounded border text-blue-700 hover:bg-blue-50 hover:underline"
+                                        >
+                                          {shipment.shipmentInvoiceNumber || shipment.invoice_number}
+                                        </button>
+                                      ) : (
+                                        <code className="text-sm font-mono bg-white dark:bg-gray-900 px-2 py-1 rounded border">
+                                          {shipment.invoice_number}
+                                        </code>
+                                      )}
                                     </div>
                                   )}
                                   <div>
@@ -1074,7 +1095,7 @@ export default function OEMShipmentsPage() {
                                   if (poGroups.length === 0 || !isGlennAdmin) return null;
                                   if (poGroups.length === 1) {
                                     const [poNumber, items] = poGroups[0];
-                                    return renderInvoiceButton(shipment.id, poNumber, items);
+                                    return renderInvoiceButton(shipment.id, poNumber, items, shipment);
                                   }
                                   return (
                                     <DropdownMenu>
@@ -1087,7 +1108,7 @@ export default function OEMShipmentsPage() {
                                       </DropdownMenuTrigger>
                                       <DropdownMenuContent align="end">
                                         {poGroups.map(([poNumber, items]) => {
-                                          const invoice = getPoInvoice(items);
+                                          const invoice = getPoInvoice(items, shipment);
                                           const isCreating =
                                             createInvoiceMutation.isPending &&
                                             createInvoiceMutation.variables?.shipmentId === String(shipment.id) &&
@@ -1186,7 +1207,8 @@ export default function OEMShipmentsPage() {
                                             {renderInvoiceButton(
                                               shipment.id,
                                               item.poNumber,
-                                              shipment.items.filter((poItem) => poItem.poNumber === item.poNumber)
+                                              shipment.items.filter((poItem) => poItem.poNumber === item.poNumber),
+                                              shipment
                                             )}
                                           </td>
                                         )}

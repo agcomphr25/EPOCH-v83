@@ -1222,6 +1222,9 @@ router.get('/oem-shipments', authenticateToken, async (req, res) => {
           sr.bill_type,
           sr.reference,
           sr.invoice_number,
+          MAX(shipment_inv.id::text) as "shipmentInvoiceId",
+          MAX(shipment_inv.invoice_number) as "shipmentInvoiceNumber",
+          MAX(shipment_inv.status) as "shipmentInvoiceStatus",
           sr.created_at,
           sr.created_by,
           sr.shipping_label_base64 IS NOT NULL as has_shipping_label,
@@ -1242,9 +1245,9 @@ router.get('/oem-shipments', authenticateToken, async (req, res) => {
               'unitPrice', CASE WHEN $${paramIndex + 2}::boolean THEN poi.unit_price ELSE NULL END,
               'lineTotal', CASE WHEN $${paramIndex + 2}::boolean THEN COALESCE(poi.unit_price, 0) * COALESCE(si.quantity, 1) ELSE NULL END,
               'packingSlipInvoiceNumber', ${packingSlipInvoiceNumberSql},
-              'invoiceId', inv.id,
-              'invoiceNumber', inv.invoice_number,
-              'invoiceStatus', inv.status
+              'invoiceId', COALESCE(inv.id, shipment_inv.id),
+              'invoiceNumber', COALESCE(inv.invoice_number, shipment_inv.invoice_number),
+              'invoiceStatus', COALESCE(inv.status, shipment_inv.status)
             ) ORDER BY COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number), si.order_id
           ) as items
         FROM shipment_records sr
@@ -1252,6 +1255,15 @@ router.get('/oem-shipments', authenticateToken, async (req, res) => {
         LEFT JOIN production_orders prod_ord ON si.order_id = prod_ord.order_id
         LEFT JOIN purchase_order_items poi ON poi.id = si.po_item_id
         LEFT JOIN purchase_orders po ON poi.po_id = po.id
+        LEFT JOIN LATERAL (
+          SELECT inv.id, inv.invoice_number, inv.status
+          FROM ar_invoices inv
+          WHERE COALESCE(inv.status, '') <> 'VOID'
+            AND sr.invoice_number IS NOT NULL
+            AND inv.invoice_number = sr.invoice_number
+          ORDER BY inv.created_at DESC
+          LIMIT 1
+        ) shipment_inv ON true
         LEFT JOIN LATERAL (
           SELECT inv.id, inv.invoice_number, inv.status
           FROM ar_invoices inv

@@ -502,6 +502,30 @@ async function initializeBackgroundServices() {
       // Safe boot migrations are intentionally not run during normal server startup.
       // Run them before deploy or manually with: npm run maintenance:safe-migrations
 
+      try {
+        await pool.query(`
+          ALTER TABLE all_orders
+            ADD COLUMN IF NOT EXISTS department_notes jsonb DEFAULT '[]'::jsonb
+        `);
+        await pool.query(`
+          ALTER TABLE order_drafts
+            ADD COLUMN IF NOT EXISTS department_notes jsonb DEFAULT '[]'::jsonb
+        `);
+        await pool.query(`
+          UPDATE all_orders
+          SET department_notes = '[]'::jsonb
+          WHERE department_notes IS NULL
+        `);
+        await pool.query(`
+          UPDATE order_drafts
+          SET department_notes = '[]'::jsonb
+          WHERE department_notes IS NULL
+        `);
+        console.log('P1 department notes schema guard complete');
+      } catch (departmentNotesSchemaErr: any) {
+        console.error('P1 department notes schema guard failed:', departmentNotesSchemaErr?.message || departmentNotesSchemaErr);
+      }
+
       const runHistoricalBootRepairs = shouldRunHistoricalBootRepairs();
       const runLegacyStartupDbMaintenance = shouldRunLegacyStartupDbMaintenance();
       if (runHistoricalBootRepairs) {

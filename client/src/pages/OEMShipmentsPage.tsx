@@ -232,7 +232,7 @@ export default function OEMShipmentsPage() {
       0
     );
 
-  const getPoInvoice = (items: ShipmentItem[], shipment?: Shipment) => {
+  const getPoInvoice = (items: ShipmentItem[], _shipment?: Shipment) => {
     const invoiceItem = items.find((item) => item.invoiceId);
     const packingSlipItem = items.find((item) => item.packingSlipInvoiceNumber);
     return invoiceItem
@@ -242,20 +242,6 @@ export default function OEMShipmentsPage() {
           status: invoiceItem.invoiceStatus || null,
           packingSlipInvoiceNumber: invoiceItem.packingSlipInvoiceNumber || packingSlipItem?.packingSlipInvoiceNumber || null,
         }
-      : shipment?.shipmentInvoiceId
-        ? {
-            id: shipment.shipmentInvoiceId || null,
-            invoiceNumber: shipment.shipmentInvoiceNumber || shipment.invoice_number || null,
-            status: shipment.shipmentInvoiceStatus || null,
-            packingSlipInvoiceNumber: packingSlipItem?.packingSlipInvoiceNumber || shipment.invoice_number || null,
-          }
-      : shipment?.invoice_number
-        ? {
-            id: null,
-            invoiceNumber: null,
-            status: null,
-            packingSlipInvoiceNumber: packingSlipItem?.packingSlipInvoiceNumber || shipment.invoice_number || null,
-          }
       : packingSlipItem
         ? {
             id: null,

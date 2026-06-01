@@ -6392,6 +6392,12 @@ export const p2LotNumbers = pgTable('p2_lot_numbers', {
   packingSlipId: uuid('packing_slip_id'), // Reference to packing slip if generated
   certificateId: uuid('certificate_id'), // Reference to certificate of conformance
   notes: text('notes'),
+  trackingNumber: text('tracking_number'),
+  carrier: text('carrier'),
+  billOfLadingUrl: text('bill_of_lading_url'),
+  lotValidationReportUrl: text('lot_validation_report_url'),
+  packingSlipUploadUrl: text('packing_slip_upload_url'),
+  certificateUploadUrl: text('certificate_upload_url'),
   createdBy: text('created_by').notNull(),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),

@@ -33,6 +33,8 @@ import {
 import OverrideShippingDataModal from '@/components/p2/OverrideShippingDataModal';
 import P2InvoicePreviewButton from '@/components/p2/P2InvoicePreviewButton';
 
+const BILL_OF_LADING_TEMPLATE_URL = '/forms/bill-of-lading-template.pdf';
+
 interface ShipmentLot {
   id: string;
   lot_number: string;
@@ -835,6 +837,11 @@ export default function P2ShipmentDetail() {
                   </a>
                 </Button>
               )}
+              <Button variant="outline" size="sm" asChild>
+                <a href={BILL_OF_LADING_TEMPLATE_URL} target="_blank" rel="noopener noreferrer" download>
+                  <FileText className="h-3.5 w-3.5 mr-1" /> Blank Form
+                </a>
+              </Button>
               <input
                 ref={fileInputRef}
                 type="file"

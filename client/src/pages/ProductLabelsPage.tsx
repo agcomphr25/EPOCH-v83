@@ -63,6 +63,8 @@ interface P2LotOption {
   customerName: string | null;
   partNumber: string | null;
   partName: string | null;
+  sku: string | null;
+  skuCount: number | null;
   quantity: number | null;
   projectName: string;
   packingSlipNumber: string | null;
@@ -581,7 +583,7 @@ export default function ProductLabelsPage() {
                   <SelectContent>
                     {p2Lots.map((lot) => (
                       <SelectItem key={lot.id} value={lot.id}>
-                        {lot.lotNumber} - {lot.partNumber || 'SKU pending'} ({lot.quantity || 0})
+                        {lot.lotNumber} - {lot.sku || 'SKU pending'} ({lot.quantity || 0})
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -600,7 +602,10 @@ export default function ProductLabelsPage() {
                       </div>
                       <div>
                         <div className="text-xs text-muted-foreground">SKU</div>
-                        <div className="font-mono font-medium">{selectedLot.partNumber || 'Finalized SKU'}</div>
+                        <div className="font-mono font-medium">{selectedLot.sku || 'SKU pending'}</div>
+                        {selectedLot.skuCount && selectedLot.skuCount > 1 ? (
+                          <div className="text-xs text-amber-600">Multiple SKUs in this lot</div>
+                        ) : null}
                       </div>
                       <div>
                         <div className="text-xs text-muted-foreground">PO</div>

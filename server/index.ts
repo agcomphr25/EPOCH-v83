@@ -504,6 +504,47 @@ async function initializeBackgroundServices() {
 
       try {
         await pool.query(`
+          ALTER TABLE users
+            ADD COLUMN IF NOT EXISTS is_finish_technician boolean DEFAULT false
+        `);
+        await pool.query(`
+          UPDATE users
+          SET is_finish_technician = false
+          WHERE is_finish_technician IS NULL
+        `);
+        await pool.query(`
+          ALTER TABLE user_sessions
+            ADD COLUMN IF NOT EXISTS username text,
+            ADD COLUMN IF NOT EXISTS last_activity_at timestamp,
+            ADD COLUMN IF NOT EXISTS ip_address text,
+            ADD COLUMN IF NOT EXISTS user_agent text,
+            ADD COLUMN IF NOT EXISTS device_fingerprint text,
+            ADD COLUMN IF NOT EXISTS mfa_verified_at timestamptz,
+            ADD COLUMN IF NOT EXISTS security_policy_version text DEFAULT 'cmmc-itar-v1',
+            ADD COLUMN IF NOT EXISTS last_credential_verified_at timestamptz
+        `);
+        await pool.query(`
+          UPDATE user_sessions us
+          SET username = COALESCE(NULLIF(us.username, ''), u.username, 'user-' || us.user_id::text)
+          FROM users u
+          WHERE us.user_id = u.id
+            AND (us.username IS NULL OR us.username = '')
+        `);
+        await pool.query(`
+          UPDATE user_sessions
+          SET username = COALESCE(NULLIF(username, ''), 'unknown'),
+              last_activity_at = COALESCE(last_activity_at, created_at, NOW())
+          WHERE username IS NULL
+             OR username = ''
+             OR last_activity_at IS NULL
+        `);
+        console.log('Authentication schema guard complete');
+      } catch (authSchemaErr: any) {
+        console.error('Authentication schema guard failed:', authSchemaErr?.message || authSchemaErr);
+      }
+
+      try {
+        await pool.query(`
           ALTER TABLE all_orders
             ADD COLUMN IF NOT EXISTS department_notes jsonb DEFAULT '[]'::jsonb
         `);

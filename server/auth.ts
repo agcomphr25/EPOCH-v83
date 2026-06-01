@@ -117,9 +117,14 @@ export class AuthService {
     const sessionToken = this.generateSessionToken();
     const expiresAt = new Date(Date.now() + SESSION_TIMEOUT);
     const deviceFingerprint = buildDeviceFingerprint(ipAddress, userAgent);
+    const [sessionUser] = await db
+      .select({ username: users.username })
+      .from(users)
+      .where(eq(users.id, userId));
 
     await db.insert(userSessions).values({
       userId,
+      username: sessionUser?.username ?? `user-${userId}`,
       sessionToken,
       employeeId,
       userType,

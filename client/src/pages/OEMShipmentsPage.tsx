@@ -243,6 +243,13 @@ export default function OEMShipmentsPage() {
             status: shipment.shipmentInvoiceStatus || null,
             packingSlipInvoiceNumber: packingSlipItem?.packingSlipInvoiceNumber || shipment.invoice_number || null,
           }
+      : shipment?.invoice_number
+        ? {
+            id: null,
+            invoiceNumber: null,
+            status: null,
+            packingSlipInvoiceNumber: packingSlipItem?.packingSlipInvoiceNumber || shipment.invoice_number || null,
+          }
       : packingSlipItem
         ? {
             id: null,
@@ -330,7 +337,7 @@ export default function OEMShipmentsPage() {
         ) : (
           <Receipt className="h-3 w-3 mr-1" />
         )}
-        Create Invoice
+        {invoice?.packingSlipInvoiceNumber ? 'Create AR Invoice' : 'Create Invoice'}
       </Button>
     );
   };

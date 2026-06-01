@@ -150,6 +150,12 @@ export default function OEMShipmentsPage() {
   const [addItemPoItemId, setAddItemPoItemId] = useState('');
   const [addItemOrderId, setAddItemOrderId] = useState('');
   const [addItemPoNumber, setAddItemPoNumber] = useState('');
+  const [invoicePreview, setInvoicePreview] = useState<any | null>(null);
+  const [invoicePreviewRequest, setInvoicePreviewRequest] = useState<{
+    shipmentId: string;
+    poNumber: string;
+  } | null>(null);
+  const [invoicePreviewOpen, setInvoicePreviewOpen] = useState(false);
   const limit = 20;
 
   // Fetch shipments with filters
@@ -277,6 +283,9 @@ export default function OEMShipmentsPage() {
       });
     },
     onSuccess: (invoice: any) => {
+      setInvoicePreviewOpen(false);
+      setInvoicePreview(null);
+      setInvoicePreviewRequest(null);
       toast({
         title: 'Invoice ready for review',
         description: invoice?.invoiceNumber
@@ -293,6 +302,31 @@ export default function OEMShipmentsPage() {
       toast({
         title: 'Invoice creation failed',
         description: error.message || 'Unable to create invoice from this P1 packing slip.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const previewInvoiceMutation = useMutation({
+    mutationFn: async ({ shipmentId, poNumber }: { shipmentId: string; poNumber: string }) => {
+      return await apiRequest(`/api/po-orders/oem-shipments/${shipmentId}/invoices/preview`, {
+        method: 'POST',
+        body: { poNumber },
+      });
+    },
+    onSuccess: (preview: any, variables) => {
+      if (preview?.exists && preview?.id) {
+        setLocation(`/finance/invoices/${preview.id}`);
+        return;
+      }
+      setInvoicePreview(preview);
+      setInvoicePreviewRequest(variables);
+      setInvoicePreviewOpen(true);
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Invoice preview failed',
+        description: error.message || 'Unable to preview invoice from this P1 packing slip.',
         variant: 'destructive',
       });
     },
@@ -329,15 +363,19 @@ export default function OEMShipmentsPage() {
       <Button
         size={size}
         variant="outline"
-        onClick={() => createInvoiceMutation.mutate({ shipmentId: String(shipmentId), poNumber })}
-        disabled={!isGlennAdmin || createInvoiceMutation.isPending}
+        onClick={() => previewInvoiceMutation.mutate({ shipmentId: String(shipmentId), poNumber })}
+        disabled={!isGlennAdmin || createInvoiceMutation.isPending || previewInvoiceMutation.isPending}
       >
-        {isCreating ? (
+        {isCreating || (
+          previewInvoiceMutation.isPending &&
+          previewInvoiceMutation.variables?.shipmentId === String(shipmentId) &&
+          previewInvoiceMutation.variables?.poNumber === poNumber
+        ) ? (
           <Loader2 className="h-3 w-3 mr-1 animate-spin" />
         ) : (
           <Receipt className="h-3 w-3 mr-1" />
         )}
-        {invoice?.packingSlipInvoiceNumber ? 'Create AR Invoice' : 'Create Invoice'}
+        Preview Invoice
       </Button>
     );
   };
@@ -892,26 +930,6 @@ export default function OEMShipmentsPage() {
                                 </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3">
-                                  {shipment.invoice_number && (
-                                    <div>
-                                      <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
-                                        Shipment Invoice #
-                                      </p>
-                                      {shipment.shipmentInvoiceId ? (
-                                        <button
-                                          type="button"
-                                          onClick={() => setLocation(`/finance/invoices/${shipment.shipmentInvoiceId}`)}
-                                          className="text-sm font-mono bg-white dark:bg-gray-900 px-2 py-1 rounded border text-blue-700 hover:bg-blue-50 hover:underline"
-                                        >
-                                          {shipment.shipmentInvoiceNumber || shipment.invoice_number}
-                                        </button>
-                                      ) : (
-                                        <code className="text-sm font-mono bg-white dark:bg-gray-900 px-2 py-1 rounded border">
-                                          {shipment.invoice_number}
-                                        </code>
-                                      )}
-                                    </div>
-                                  )}
                                   <div>
                                     <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
                                       Tracking Number
@@ -1127,18 +1145,25 @@ export default function OEMShipmentsPage() {
                                                 if (invoice?.id) {
                                                   setLocation(`/finance/invoices/${invoice.id}`);
                                                 } else {
-                                                  createInvoiceMutation.mutate({ shipmentId: String(shipment.id), poNumber });
+                                                  previewInvoiceMutation.mutate({ shipmentId: String(shipment.id), poNumber });
                                                 }
                                               }}
-                                              disabled={createInvoiceMutation.isPending && !isCreating}
+                                              disabled={
+                                                (createInvoiceMutation.isPending && !isCreating) ||
+                                                previewInvoiceMutation.isPending
+                                              }
                                             >
-                                              {isCreating ? (
+                                              {isCreating || (
+                                                previewInvoiceMutation.isPending &&
+                                                previewInvoiceMutation.variables?.shipmentId === String(shipment.id) &&
+                                                previewInvoiceMutation.variables?.poNumber === poNumber
+                                              ) ? (
                                                 <Loader2 className="h-3 w-3 mr-2 animate-spin" />
                                               ) : (
                                                 <Receipt className="h-3 w-3 mr-2" />
                                               )}
                                               <div className="flex flex-col">
-                                                <span>{invoice?.id ? 'View' : 'Create'} invoice for PO {poNumber}</span>
+                                                <span>{invoice?.id ? 'View' : 'Preview'} invoice for PO {poNumber}</span>
                                                 {invoice?.invoiceNumber && (
                                                   <span className="text-xs text-muted-foreground">
                                                     {invoice.invoiceNumber} {invoice.status ? `- ${invoice.status}` : ''}
@@ -1668,6 +1693,111 @@ export default function OEMShipmentsPage() {
           </div>
         </div>
       )}
+
+      <Dialog open={invoicePreviewOpen} onOpenChange={setInvoicePreviewOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Preview P1 Packing Slip Invoice</DialogTitle>
+            <DialogDescription>
+              Review the invoice generated from this PO-specific packing slip before creating it.
+            </DialogDescription>
+          </DialogHeader>
+
+          {invoicePreview && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-sm">
+                <div>
+                  <p className="text-xs text-muted-foreground">Invoice #</p>
+                  <p className="font-mono font-semibold">{invoicePreview.invoiceNumber}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">PO</p>
+                  <p className="font-semibold">{invoicePreview.poNumber}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Customer</p>
+                  <p className="font-semibold">{invoicePreview.customerName || 'P1 OEM Customer'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Total</p>
+                  <p className="font-semibold">{formatCurrency(Number(invoicePreview.totalAmount || 0))}</p>
+                </div>
+              </div>
+
+              {invoicePreview.pricingMismatch && (
+                <div className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                  One or more lines are missing unit pricing. The invoice will be created for review.
+                </div>
+              )}
+
+              <div className="border rounded-lg overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-100 dark:bg-gray-800">
+                    <tr>
+                      <th className="text-left p-3 font-semibold">Part</th>
+                      <th className="text-left p-3 font-semibold">Description</th>
+                      <th className="text-center p-3 font-semibold">Qty</th>
+                      <th className="text-right p-3 font-semibold">Unit Price</th>
+                      <th className="text-right p-3 font-semibold">Line Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(invoicePreview.lines || []).map((line: any, index: number) => (
+                      <tr key={`${line.description}-${index}`} className="border-t">
+                        <td className="p-3 font-mono text-xs">{line.partNumber || '-'}</td>
+                        <td className="p-3">
+                          <div>{line.description}</div>
+                          {line.orderIds?.length > 0 && (
+                            <div className="text-xs text-muted-foreground">
+                              {line.orderIds.join(', ')}
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-3 text-center">{line.quantity}</td>
+                        <td className="p-3 text-right">{formatCurrency(Number(line.unitPrice || 0))}</td>
+                        <td className="p-3 text-right font-medium">{formatCurrency(Number(line.lineTotal || 0))}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setInvoicePreviewOpen(false);
+                setInvoicePreview(null);
+                setInvoicePreviewRequest(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (invoicePreviewRequest) {
+                  createInvoiceMutation.mutate(invoicePreviewRequest);
+                }
+              }}
+              disabled={!invoicePreviewRequest || createInvoiceMutation.isPending}
+            >
+              {createInvoiceMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <Receipt className="h-4 w-4 mr-2" />
+                  Create Invoice
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Add Item Dialog */}
       <Dialog open={addItemDialogOpen} onOpenChange={setAddItemDialogOpen}>

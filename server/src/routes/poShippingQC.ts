@@ -224,32 +224,6 @@ async function findReusableP1InvoiceNumber({
   orderIds: string[];
 }): Promise<string | null> {
   try {
-    const activeShipmentRows = rowsOf<{ invoice_number: string }>(
-      await pool.query(
-        `SELECT sr.invoice_number
-       FROM shipment_records sr
-       JOIN shipment_items si ON si.shipment_id = sr.id
-       WHERE sr.invoice_number IS NOT NULL
-         AND (
-           si.po_number = $1
-           OR si.order_id = ANY($2::text[])
-         )
-       ORDER BY sr.created_at DESC
-       LIMIT 1`,
-        [poNumber, orderIds]
-      )
-    );
-
-    if (activeShipmentRows[0]?.invoice_number) {
-      return activeShipmentRows[0].invoice_number;
-    }
-  } catch (err: any) {
-    console.warn(
-      `⚠️ Could not search active P1 shipment invoice history for PO ${poNumber}: ${err.message}`
-    );
-  }
-
-  try {
     if (!(await hasP1FulfillmentAttemptsTable())) {
       return null;
     }
@@ -279,6 +253,143 @@ async function findReusableP1InvoiceNumber({
   }
 
   return null;
+}
+
+async function buildP1PackingSlipInvoiceDraft(
+  shipmentRecordId: string,
+  poNumber: string
+) {
+  const lineResult = await pool.query(
+    `WITH shipment_lines AS (
+       SELECT
+         sr.id AS shipment_record_id,
+         sr.reference,
+         sr.invoice_number AS shipment_invoice_number,
+         sr.master_tracking_number,
+         sr.shipped_at,
+         sr.created_at AS shipment_created_at,
+         sr.customer_id AS shipment_customer_id,
+         sr.customer_name AS shipment_customer_name,
+         sr.ship_to_snapshot,
+         si.id AS shipment_item_id,
+         si.order_id,
+         si.quantity,
+         si.po_item_id AS p1_po_item_id,
+         COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number) AS po_number,
+         COALESCE(NULLIF(si.description, ''), poi.stock_model_name, poi.item_name, prod_ord.item_name, si.order_id) AS description,
+         COALESCE(poi.item_id, poi.stock_model_id, poi.item_name, prod_ord.item_name, si.order_id) AS part_number,
+         poi.unit_price,
+         po.id AS purchase_order_id,
+         po.customer_id AS po_customer_id,
+         po.customer_name AS po_customer_name
+       FROM shipment_records sr
+       JOIN shipment_items si ON si.shipment_id = sr.id
+       LEFT JOIN production_orders prod_ord ON prod_ord.order_id = si.order_id
+       LEFT JOIN purchase_order_items poi ON poi.id = si.po_item_id
+       LEFT JOIN purchase_orders po ON po.id = poi.po_id
+       WHERE sr.id = $1
+     )
+     SELECT *
+     FROM shipment_lines
+     WHERE po_number = $2
+     ORDER BY order_id, shipment_item_id`,
+    [shipmentRecordId, poNumber]
+  );
+
+  const lines = rowsOf<any>(lineResult);
+  if (lines.length === 0) {
+    throw new Error('No shipment items found for this P1 packing slip.');
+  }
+
+  const shipmentOrderIds = lines.map((line: any) => line.order_id).filter(Boolean);
+  const existingForShipment = await findP1PackingSlipInvoice(
+    shipmentRecordId,
+    poNumber
+  );
+  if (existingForShipment) {
+    return {
+      existingInvoice: existingForShipment,
+      invoiceNumber: existingForShipment.invoice_number,
+      lines,
+      consolidatedLines: [],
+      subtotal: 0,
+      pricingMismatch: false,
+      first: lines[0],
+    };
+  }
+
+  const existingForOrders = await findP1PackingSlipInvoiceForOrders(
+    poNumber,
+    shipmentOrderIds
+  );
+  if (existingForOrders) {
+    return {
+      existingInvoice: existingForOrders,
+      invoiceNumber: existingForOrders.invoice_number,
+      lines,
+      consolidatedLines: [],
+      subtotal: 0,
+      pricingMismatch: false,
+      first: lines[0],
+    };
+  }
+
+  const first = lines[0];
+  const reusableInvoiceNumber = await findReusableP1InvoiceNumber({
+    poNumber,
+    orderIds: shipmentOrderIds,
+  });
+  const invoiceNumber =
+    reusableInvoiceNumber || null;
+
+  const consolidatedLines = Array.from(
+    lines
+      .reduce((map: Map<string, any>, line: any) => {
+        const unitPrice = Number(line.unit_price || 0);
+        const partNumber = line.part_number || null;
+        const description = line.description || line.order_id || poNumber;
+        const key = JSON.stringify([partNumber, description, unitPrice]);
+        const existing = map.get(key);
+        if (existing) {
+          existing.quantity += Number(line.quantity || 0);
+          existing.shipmentItemIds.push(line.shipment_item_id);
+          existing.orderIds.push(line.order_id);
+          existing.p1PoItemIds.push(line.p1_po_item_id);
+        } else {
+          map.set(key, {
+            ...line,
+            part_number: partNumber,
+            description,
+            unit_price: unitPrice,
+            quantity: Number(line.quantity || 0),
+            shipmentItemIds: [line.shipment_item_id],
+            orderIds: [line.order_id],
+            p1PoItemIds: [line.p1_po_item_id],
+          });
+        }
+        return map;
+      }, new Map<string, any>())
+      .values()
+  );
+
+  const subtotal = consolidatedLines.reduce(
+    (sum: number, line: any) =>
+      sum + Number(line.quantity || 0) * Number(line.unit_price || 0),
+    0
+  );
+  const pricingMismatch = lines.some(
+    (line: any) => line.unit_price === null || line.unit_price === undefined
+  );
+
+  return {
+    existingInvoice: null,
+    invoiceNumber,
+    lines,
+    consolidatedLines,
+    subtotal,
+    pricingMismatch,
+    first,
+  };
 }
 
 async function recordP1FulfillmentArtifacts({
@@ -1736,6 +1847,81 @@ router.get(
 // POST /api/po-orders/oem-shipments/:id/invoices
 // Create one review AR invoice for a P1 OEM shipment packing slip (shipment + PO group).
 router.post(
+  '/oem-shipments/:id/invoices/preview',
+  authenticateToken,
+  async (req, res) => {
+    try {
+      if (!isGlennAdmin(req.user)) {
+        return res.status(403).json({
+          error: 'Only glennj/admin can preview P1 OEM packing slip invoices.',
+        });
+      }
+
+      const { id } = req.params;
+      const { poNumber } = req.body || {};
+      const uuidRegex =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(id)) {
+        return res.status(400).json({ error: 'Invalid shipment ID format' });
+      }
+      if (!poNumber || typeof poNumber !== 'string') {
+        return res.status(400).json({ error: 'poNumber is required' });
+      }
+
+      const draft = await buildP1PackingSlipInvoiceDraft(id, poNumber);
+      if (draft.existingInvoice) {
+        return res.json({
+          exists: true,
+          id: draft.existingInvoice.id,
+          invoiceNumber: draft.existingInvoice.invoice_number,
+          status: draft.existingInvoice.status,
+          poNumber,
+          lines: [],
+          subtotal: '0.00',
+          totalAmount: '0.00',
+          pricingMismatch: false,
+        });
+      }
+
+      const first = draft.first;
+      const invoiceNumber = draft.invoiceNumber || '(new number will be assigned)';
+      res.json({
+        exists: false,
+        invoiceNumber,
+        poNumber,
+        customerName:
+          first.po_customer_name ||
+          first.shipment_customer_name ||
+          first.ship_to_snapshot?.name ||
+          'P1 OEM Customer',
+        trackingNumber: first.master_tracking_number || null,
+        shipmentReference: first.reference || null,
+        lines: draft.consolidatedLines.map((line: any) => {
+          const qty = Number(line.quantity || 0);
+          const unitPrice = Number(line.unit_price || 0);
+          return {
+            partNumber: line.part_number || null,
+            description: line.description || line.order_id || poNumber,
+            quantity: qty,
+            unitPrice: unitPrice.toFixed(2),
+            lineTotal: (qty * unitPrice).toFixed(2),
+            orderIds: line.orderIds,
+          };
+        }),
+        subtotal: draft.subtotal.toFixed(2),
+        totalAmount: draft.subtotal.toFixed(2),
+        pricingMismatch: draft.pricingMismatch,
+      });
+    } catch (error: any) {
+      console.error('Failed to preview P1 OEM packing slip invoice:', error);
+      res.status(500).json({
+        error: error.message || 'Failed to preview invoice from P1 packing slip',
+      });
+    }
+  }
+);
+
+router.post(
   '/oem-shipments/:id/invoices',
   authenticateToken,
   async (req, res) => {
@@ -1758,100 +1944,27 @@ router.post(
         return res.status(400).json({ error: 'poNumber is required' });
       }
 
-      const existing = await findP1PackingSlipInvoice(id, poNumber);
-      if (existing) {
+      const draft = await buildP1PackingSlipInvoiceDraft(id, poNumber);
+      if (draft.existingInvoice) {
         return res.status(200).json({
-          id: existing.id,
-          invoiceNumber: existing.invoice_number,
-          status: existing.status,
+          id: draft.existingInvoice.id,
+          invoiceNumber: draft.existingInvoice.invoice_number,
+          status: draft.existingInvoice.status,
         });
       }
 
-      const lineResult = await client.query(
-        `WITH shipment_lines AS (
-         SELECT
-           sr.id AS shipment_record_id,
-           sr.reference,
-           sr.invoice_number AS shipment_invoice_number,
-           sr.master_tracking_number,
-           sr.shipped_at,
-           sr.created_at AS shipment_created_at,
-           sr.customer_id AS shipment_customer_id,
-           sr.customer_name AS shipment_customer_name,
-           sr.ship_to_snapshot,
-           si.id AS shipment_item_id,
-           si.order_id,
-           si.quantity,
-           si.po_item_id AS p1_po_item_id,
-           COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number) AS po_number,
-           COALESCE(NULLIF(si.description, ''), poi.stock_model_name, poi.item_name, prod_ord.item_name, si.order_id) AS description,
-           COALESCE(poi.item_id, poi.stock_model_id, poi.item_name, prod_ord.item_name, si.order_id) AS part_number,
-           poi.unit_price,
-           po.id AS purchase_order_id,
-           po.customer_id AS po_customer_id,
-           po.customer_name AS po_customer_name
-         FROM shipment_records sr
-         JOIN shipment_items si ON si.shipment_id = sr.id
-         LEFT JOIN production_orders prod_ord ON prod_ord.order_id = si.order_id
-         LEFT JOIN purchase_order_items poi ON poi.id = si.po_item_id
-         LEFT JOIN purchase_orders po ON po.id = poi.po_id
-         WHERE sr.id = $1
-       )
-       SELECT *
-       FROM shipment_lines
-       WHERE po_number = $2
-       ORDER BY order_id, shipment_item_id`,
-        [id, poNumber]
-      );
-
-      const lines = lineResult.rows || [];
-      if (lines.length === 0) {
-        return res
-          .status(404)
-          .json({ error: 'No shipment items found for this P1 packing slip.' });
-      }
-
-      const shipmentOrderIds = lines
-        .map((line: any) => line.order_id)
-        .filter(Boolean);
-      const existingForOrders = await findP1PackingSlipInvoiceForOrders(
-        poNumber,
-        shipmentOrderIds
-      );
-      if (existingForOrders) {
-        await client.query(
-          `UPDATE shipment_records SET invoice_number = $1, updated_at = NOW() WHERE id = $2 AND invoice_number IS NULL`,
-          [existingForOrders.invoice_number, id]
-        );
-        return res.status(200).json({
-          id: existingForOrders.id,
-          invoiceNumber: existingForOrders.invoice_number,
-          status: existingForOrders.status,
-        });
-      }
-
-      const first = lines[0];
-      let invoiceNumber = first.shipment_invoice_number as string | null;
+      const lines = draft.lines;
+      const shipmentOrderIds = lines.map((line: any) => line.order_id).filter(Boolean);
+      const first = draft.first;
+      let invoiceNumber = draft.invoiceNumber as string | null;
       if (!invoiceNumber) {
-        const reusableInvoiceNumber = await findReusableP1InvoiceNumber({
-          poNumber,
-          orderIds: shipmentOrderIds,
-        });
-        if (reusableInvoiceNumber) {
-          invoiceNumber = reusableInvoiceNumber;
-        } else {
-          const { storage: invoiceStorage } = await import('../../storage');
-          invoiceNumber = await invoiceStorage.getNextInvoiceNumber(
-            String(first.po_customer_id || first.shipment_customer_id || '0'),
-            first.po_customer_name ||
-              first.shipment_customer_name ||
-              first.ship_to_snapshot?.name ||
-              'P1 OEM Customer'
-          );
-        }
-        await client.query(
-          `UPDATE shipment_records SET invoice_number = $1, updated_at = NOW() WHERE id = $2 AND invoice_number IS NULL`,
-          [invoiceNumber, id]
+        const { storage: invoiceStorage } = await import('../../storage');
+        invoiceNumber = await invoiceStorage.getNextInvoiceNumber(
+          String(first.po_customer_id || first.shipment_customer_id || '0'),
+          first.po_customer_name ||
+            first.shipment_customer_name ||
+            first.ship_to_snapshot?.name ||
+            'P1 OEM Customer'
         );
       }
 
@@ -1861,44 +1974,9 @@ router.post(
       const customerId = String(
         first.po_customer_id || first.shipment_customer_id || '0'
       );
-      const consolidatedLines = Array.from(
-        lines
-          .reduce((map: Map<string, any>, line: any) => {
-            const unitPrice = Number(line.unit_price || 0);
-            const partNumber = line.part_number || null;
-            const description = line.description || line.order_id || poNumber;
-            const key = JSON.stringify([partNumber, description, unitPrice]);
-            const existing = map.get(key);
-            if (existing) {
-              existing.quantity += Number(line.quantity || 0);
-              existing.shipmentItemIds.push(line.shipment_item_id);
-              existing.orderIds.push(line.order_id);
-              existing.p1PoItemIds.push(line.p1_po_item_id);
-            } else {
-              map.set(key, {
-                ...line,
-                part_number: partNumber,
-                description,
-                unit_price: unitPrice,
-                quantity: Number(line.quantity || 0),
-                shipmentItemIds: [line.shipment_item_id],
-                orderIds: [line.order_id],
-                p1PoItemIds: [line.p1_po_item_id],
-              });
-            }
-            return map;
-          }, new Map<string, any>())
-          .values()
-      );
-
-      const subtotal = consolidatedLines.reduce(
-        (sum: number, line: any) =>
-          sum + Number(line.quantity || 0) * Number(line.unit_price || 0),
-        0
-      );
-      const pricingMismatch = lines.some(
-        (line: any) => line.unit_price === null || line.unit_price === undefined
-      );
+      const consolidatedLines = draft.consolidatedLines;
+      const subtotal = draft.subtotal;
+      const pricingMismatch = draft.pricingMismatch;
 
       await client.query('BEGIN');
       const invoiceResult = await client.query(
@@ -1985,6 +2063,13 @@ router.post(
       }
 
       await client.query('COMMIT');
+      await recordP1FulfillmentArtifacts({
+        orderIds: shipmentOrderIds,
+        poNumber,
+        invoiceNumber: invoice.invoice_number,
+        trackingNumber: first.master_tracking_number || '',
+        shipmentRecordId: id,
+      });
       console.log(
         `[P1InvoiceService] Invoice ${invoice.invoice_number} created from shipment ${id}, PO ${poNumber}`
       );

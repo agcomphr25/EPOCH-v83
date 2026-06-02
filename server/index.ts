@@ -1307,11 +1307,108 @@ async function initializeBackgroundServices() {
       }
 
       // -----------------------------------------------------------------------
-      // BLOCKER 2 PHASE A — Indirect Code → Charge Code Unification
+      // PUNCH CORRECTION REQUESTS - kiosk / portal / admin correction queue
+      // Canonical DDL lives in migrations/0142 and drift repair in 0155. This
+      // boot-time safety net keeps kiosk correction submissions from failing on
+      // environments where those migrations were skipped during publish.
+      // -----------------------------------------------------------------------
+      try {
+        await pool.query(`CREATE SCHEMA IF NOT EXISTS timekeeping`);
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS timekeeping.punch_correction_requests (
+            id SERIAL PRIMARY KEY,
+            employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+            punch_ledger_id INTEGER,
+            request_type TEXT NOT NULL,
+            source TEXT NOT NULL DEFAULT 'employee_portal',
+            status TEXT NOT NULL DEFAULT 'pending_supervisor',
+            reason TEXT NOT NULL,
+            original_snapshot JSONB,
+            proposed_changes JSONB NOT NULL,
+            supervisor_id INTEGER,
+            supervisor_decision TEXT,
+            supervisor_note TEXT,
+            supervisor_reviewed_at TIMESTAMPTZ,
+            supervisor_reviewed_by INTEGER,
+            hr_decision TEXT,
+            hr_note TEXT,
+            hr_reviewed_at TIMESTAMPTZ,
+            hr_reviewed_by INTEGER,
+            applied_at TIMESTAMPTZ,
+            applied_by INTEGER,
+            after_snapshot JSONB,
+            submitted_by_user_id INTEGER,
+            submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )
+        `);
+        await pool.query(`
+          CREATE INDEX IF NOT EXISTS idx_punch_correction_requests_employee_id
+            ON timekeeping.punch_correction_requests(employee_id)
+        `);
+        await pool.query(`
+          CREATE INDEX IF NOT EXISTS idx_punch_correction_requests_punch_ledger_id
+            ON timekeeping.punch_correction_requests(punch_ledger_id)
+        `);
+        await pool.query(`
+          CREATE INDEX IF NOT EXISTS idx_punch_correction_requests_status
+            ON timekeeping.punch_correction_requests(status)
+        `);
+        await pool.query(`
+          CREATE INDEX IF NOT EXISTS idx_punch_correction_requests_supervisor_id
+            ON timekeeping.punch_correction_requests(supervisor_id)
+        `);
+        await pool.query(`
+          ALTER TABLE timekeeping.punch_correction_requests
+            ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'employee_portal'
+        `);
+        await pool.query(`
+          ALTER TABLE timekeeping.punch_correction_requests
+            ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'pending_supervisor'
+        `);
+        await pool.query(`
+          ALTER TABLE timekeeping.punch_correction_requests
+            ADD COLUMN IF NOT EXISTS submitted_by_user_id INTEGER
+        `);
+        await pool.query(`
+          ALTER TABLE timekeeping.punch_correction_requests
+            ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        `);
+        await pool.query(`
+          ALTER TABLE timekeeping.punch_correction_requests
+            DROP CONSTRAINT IF EXISTS punch_correction_requests_source_check;
+          ALTER TABLE timekeeping.punch_correction_requests
+            DROP CONSTRAINT IF EXISTS chk_punch_correction_source;
+          ALTER TABLE timekeeping.punch_correction_requests
+            ADD CONSTRAINT chk_punch_correction_source
+              CHECK (source IN ('employee_portal', 'kiosk', 'admin'))
+        `);
+        await pool.query(`
+          ALTER TABLE timekeeping.punch_correction_requests
+            DROP CONSTRAINT IF EXISTS chk_punch_correction_request_type;
+          ALTER TABLE timekeeping.punch_correction_requests
+            ADD CONSTRAINT chk_punch_correction_request_type
+              CHECK (request_type IN ('edit_session', 'add_session', 'delete_session'))
+        `);
+        await pool.query(`
+          ALTER TABLE timekeeping.punch_correction_requests
+            DROP CONSTRAINT IF EXISTS chk_punch_correction_status;
+          ALTER TABLE timekeeping.punch_correction_requests
+            ADD CONSTRAINT chk_punch_correction_status
+              CHECK (status IN ('pending_supervisor', 'pending_hr', 'approved', 'rejected', 'cancelled'))
+        `);
+        console.log('punch_correction_requests table ensured (timekeeping schema)');
+      } catch (punchCorrectionErr: any) {
+        console.error('punch_correction_requests migration failed:', punchCorrectionErr.message);
+      }
+
+      // -----------------------------------------------------------------------
+      // BLOCKER 2 PHASE A - Indirect Code to Charge Code Unification
       // Seeds public.charge_codes indirect pool entries, adds charge_code_id
       // mapping to timekeeping.indirect_codes, and reconciles the live DB
       // salaried_timesheet_lines columns with the Drizzle schema.
-      // All operations are idempotent.  Feature flag stays FALSE.
+      // All operations are idempotent. Feature flag stays FALSE.
       // -----------------------------------------------------------------------
       try {
         // Step 1: Seed indirect labor pool entries in public.charge_codes

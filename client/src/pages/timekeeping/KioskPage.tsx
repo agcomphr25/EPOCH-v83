@@ -1276,7 +1276,12 @@ export default function KioskPage() {
               </>
             )}
 
-            <label className="block text-xs uppercase tracking-widest text-gray-400">Reason</label>
+            <div>
+              <label className="block text-xs uppercase tracking-widest text-gray-400">Reason</label>
+              <p className="mt-1 text-xs font-medium text-gray-600">
+                Required - enter at least 5 characters explaining why this correction is needed.
+              </p>
+            </div>
             <textarea
               value={correctionForm.reason}
               onChange={(event) => {
@@ -1284,7 +1289,7 @@ export default function KioskPage() {
                 restartIdleTimer();
               }}
               rows={3}
-              placeholder="Explain what needs to be fixed..."
+              placeholder="Required: explain what needs to be fixed..."
               className="w-full rounded-xl border border-gray-200 p-3"
             />
           </div>

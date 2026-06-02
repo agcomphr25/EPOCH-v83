@@ -129,10 +129,66 @@ export type CreateSessionInput = {
 
 export async function createSession(input: CreateSessionInput, actor: Actor): Promise<SessionWithLines> {
   if (!input.location?.trim()) throw httpErr(400, 'location is required');
+  const countType = input.countType ?? 'CYCLE';
 
   const policy = input.variancePolicyId
     ? await db.select().from(cycleCountVariancePolicies).where(eq(cycleCountVariancePolicies.id, input.variancePolicyId)).then(r => r[0] ?? null)
     : await getDefaultVariancePolicy();
+
+  type SeedLine = {
+    lotId: string | null;
+    agPartNumber: string;
+    materialName: string | null;
+    expectedQty: number;
+    inventoryItemId: number | null;
+  };
+
+  const byPart = new Map<string, SeedLine>();
+
+  if (countType === 'FULL') {
+    const trimmedPartFilter = input.partFilter?.trim();
+    const itemWhere = trimmedPartFilter
+      ? and(sql`${inventoryItems.isActive} IS NOT FALSE`, eq(inventoryItems.agPartNumber, trimmedPartFilter))
+      : sql`${inventoryItems.isActive} IS NOT FALSE`;
+    const balanceWhere = input.location !== 'ALL'
+      ? eq(inventoryBalances.locationId, input.location)
+      : undefined;
+
+    const balanceRows = await db
+      .select({
+        agPartNumber: inventoryBalances.agPartNumber,
+        quantityOnHand: sql<string>`COALESCE(SUM(${inventoryBalances.quantityOnHand}), 0)`,
+      })
+      .from(inventoryBalances)
+      .where(balanceWhere)
+      .groupBy(inventoryBalances.agPartNumber);
+    const balanceByPart = new Map(balanceRows.map(row => [row.agPartNumber, toNum(row.quantityOnHand)]));
+
+    const itemRows = await db
+      .select({
+        id: inventoryItems.id,
+        agPartNumber: inventoryItems.agPartNumber,
+        name: inventoryItems.name,
+        onHand: inventoryItems.onHand,
+        quantityInStock: inventoryItems.quantityInStock,
+        available: inventoryItems.available,
+      })
+      .from(inventoryItems)
+      .where(itemWhere)
+      .orderBy(asc(inventoryItems.agPartNumber));
+
+    for (const item of itemRows) {
+      const balanceQty = balanceByPart.get(item.agPartNumber);
+      const legacyQty = toNum(item.onHand ?? item.quantityInStock ?? item.available ?? 0);
+      byPart.set(item.agPartNumber, {
+        lotId: null,
+        agPartNumber: item.agPartNumber,
+        materialName: item.name,
+        expectedQty: balanceQty ?? (input.location === 'ALL' ? legacyQty : 0),
+        inventoryItemId: item.id,
+      });
+    }
+  } else {
 
   // Pre-populate expected quantities from material_lots (active lots only) at the
   // requested location, optionally filtered by part number prefix.
@@ -158,7 +214,6 @@ export async function createSession(input: CreateSessionInput, actor: Actor): Pr
     .orderBy(asc(materialLots.materialPartNumber), desc(materialLots.remainingQty));
 
   // Group by part — keep first (largest) lot id as canonical
-  const byPart = new Map<string, { lotId: string; agPartNumber: string; materialName: string; expectedQty: number; inventoryItemId: number }>();
   for (const l of lotRows) {
     const k = l.agPartNumber;
     const cur = byPart.get(k);
@@ -175,12 +230,13 @@ export async function createSession(input: CreateSessionInput, actor: Actor): Pr
       });
     }
   }
+  }
 
   return await db.transaction(async (tx) => {
     const [session] = await tx.insert(cycleCountSessions).values({
       sessionNumber: makeSessionNumber(),
       status: input.scheduledFor ? 'SCHEDULED' : 'IN_PROGRESS',
-      countType: input.countType ?? 'CYCLE',
+      countType,
       location: input.location,
       partFilter: input.partFilter ?? null,
       scheduledFor: input.scheduledFor ?? null,

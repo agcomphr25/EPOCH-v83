@@ -159,6 +159,25 @@ interface P2ProductionQueueProps {
   selectedPONumbers?: string[];
 }
 
+const STANDARD_DEPARTMENT_ORDER = [
+  'Pending Layup',
+  'Layup',
+  'Assemble/Disassembly',
+  'CNC',
+  'Finish',
+  'Paint',
+  'Final QC',
+  'Shipping',
+];
+
+const isDepartmentAfterLayup = (departmentName: string) => {
+  const departmentIndex = STANDARD_DEPARTMENT_ORDER.indexOf(departmentName);
+  if (departmentIndex === -1) {
+    return departmentName !== 'Pending Layup' && departmentName !== 'Layup';
+  }
+  return departmentIndex > STANDARD_DEPARTMENT_ORDER.indexOf('Layup');
+};
+
 export default function P2ProductionQueue({ selectedPONumbers = [] }: P2ProductionQueueProps) {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -755,7 +774,10 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
             onValueChange={setExpandedDepartments}
             className="space-y-2"
           >
-            {queueData?.departments.map((dept) => (
+            {queueData?.departments.map((dept) => {
+              const isReprintDepartment = isDepartmentAfterLayup(dept.name);
+
+              return (
               <AccordionItem 
                 key={dept.name} 
                 value={dept.name}
@@ -768,6 +790,12 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                       <Badge variant="secondary" className="ml-2">
                         {dept.totalItems} items
                       </Badge>
+                      {isReprintDepartment && (
+                        <Badge variant="outline" className="gap-1 bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950 dark:text-amber-200 dark:border-amber-800">
+                          <Printer className="h-3 w-3" />
+                          Reprint Barcode
+                        </Badge>
+                      )}
                       {dept.inProgress > 0 && (
                         <Badge variant="default" className="bg-green-600">
                           <Play className="h-3 w-3 mr-1" />
@@ -930,7 +958,7 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                                       }}
                                     >
                                       <Printer className="h-3 w-3 mr-1" />
-                                      Print
+                                      {isReprintDepartment ? 'Reprint' : 'Print'}
                                     </Button>
                                   </div>
                                 </div>
@@ -1185,7 +1213,8 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                   })()}
                 </AccordionContent>
               </AccordionItem>
-            ))}
+              );
+            })}
           </Accordion>
         </CardContent>
       </Card>

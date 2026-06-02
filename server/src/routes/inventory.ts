@@ -29,6 +29,9 @@ import {
   getSupplySourceDashboard,
   type ManufacturedCategory,
   type InventoryItem,
+  p2NonconformingDispositions,
+  p2SerializedItems,
+  travelers,
 } from '@shared/schema';
 
 function withSupplySourceDashboard(item: InventoryItem) {
@@ -36,6 +39,12 @@ function withSupplySourceDashboard(item: InventoryItem) {
     ...item,
     supplySourceDashboard: getSupplySourceDashboard(item.manufacturedCategory as ManufacturedCategory),
   };
+}
+
+function isServiceInventoryItem(item: InventoryItem | undefined): boolean {
+  if (!item) return false;
+  const looseType = (item.type || '').trim().toLowerCase();
+  return item.utilizedInServices === true || looseType === 'service' || looseType === 'services';
 }
 
 import { storage } from '../../storage';
@@ -3109,12 +3118,64 @@ router.get('/restock-signals', async (req: Request, res: Response) => {
 router.get('/inventory/balances', async (req: Request, res: Response) => {
   try {
     const balances = await storage.getAllInventoryBalances();
+    const items = await storage.getAllInventoryItems();
+    const itemMap = new Map(items.map((item) => [item.agPartNumber, item]));
+    const nonServiceBalances = balances.filter((balance) => !isServiceInventoryItem(itemMap.get(balance.agPartNumber)));
+
+    const ncrInventorySerialRows = await db
+      .select({
+        agPartNumber: p2SerializedItems.partNumber,
+        id: p2SerializedItems.id,
+        serialNumber: p2SerializedItems.serialNumber,
+        barcode: p2SerializedItems.barcode,
+        travelerBarcode: p2SerializedItems.travelerBarcode,
+        travelerId: travelers.id,
+        travelerNumber: travelers.travelerNumber,
+        dispositionId: p2NonconformingDispositions.id,
+        dispositionType: p2NonconformingDispositions.dispositionType,
+      })
+      .from(p2NonconformingDispositions)
+      .innerJoin(
+        p2SerializedItems,
+        eq(p2NonconformingDispositions.serializedItemId, p2SerializedItems.id)
+      )
+      .leftJoin(
+        travelers,
+        eq(travelers.serialNumber, p2SerializedItems.serialNumber)
+      )
+      .where(eq(p2NonconformingDispositions.dispositionType, 'Use as Is'))
+      .orderBy(p2SerializedItems.partNumber, p2SerializedItems.serialNumber, desc(travelers.createdAt));
+
+    const serializedItemsByPart = new Map<string, EnrichedInventoryBalance['serializedItems']>();
+    const seenSerials = new Set<string>();
+
+    for (const row of ncrInventorySerialRows) {
+      const key = `${row.agPartNumber}:${row.id}`;
+      if (seenSerials.has(key)) continue;
+      seenSerials.add(key);
+
+      const options = serializedItemsByPart.get(row.agPartNumber) || [];
+      options.push({
+        id: row.id,
+        serialNumber: row.serialNumber,
+        barcode: row.barcode,
+        travelerBarcode: row.travelerBarcode,
+        travelerId: row.travelerId,
+        travelerNumber: row.travelerNumber,
+        dispositionId: row.dispositionId,
+        dispositionType: row.dispositionType,
+      });
+      serializedItemsByPart.set(row.agPartNumber, options);
+    }
     
     // Enrich balances with department metadata
-    const enrichedBalances: EnrichedInventoryBalance[] = balances.map((balance) => {
+    const enrichedBalances: EnrichedInventoryBalance[] = nonServiceBalances.map((balance) => {
       const deptInfo = DEPARTMENT_LOCATION_MAP[balance.locationId];
+      const item = itemMap.get(balance.agPartNumber);
       return {
         ...balance,
+        partName: item?.name,
+        serializedItems: serializedItemsByPart.get(balance.agPartNumber) || [],
         departmentMeta: deptInfo ? {
           departmentId: deptInfo.departmentId,
           departmentName: deptInfo.departmentName,

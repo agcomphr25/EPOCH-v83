@@ -3780,9 +3780,21 @@ export type DepartmentBalanceBreakdown = {
   locations: string[];
 };
 
+export type InventorySerializedItemOption = {
+  id: string;
+  serialNumber: string;
+  barcode: string;
+  travelerBarcode?: string | null;
+  travelerId?: string | null;
+  travelerNumber?: string | null;
+  dispositionId?: number | null;
+  dispositionType?: string | null;
+};
+
 export type EnrichedInventoryBalance = typeof inventoryBalances.$inferSelect & {
   partName?: string;
   departmentMeta?: DepartmentBalanceMeta;
+  serializedItems?: InventorySerializedItemOption[];
 };
 
 export type InventoryBalanceWithDepartments = {

@@ -36,10 +36,11 @@ interface POStatus {
   dueDate: string;
   totalItems: number;
   completedItems: number;
+  scheduledItems: number;
   inProductionItems: number;
   pendingItems: number;
   hasBOMsNeeded: boolean;
-  status: 'pending' | 'in_progress' | 'completed';
+  status: 'pending' | 'scheduled' | 'in_progress' | 'completed';
   rawStatus?: string;
   projectId?: string | null;
   projectCode?: string | null;
@@ -94,6 +95,8 @@ export default function P2StatusDashboard({ onStartBOM, onViewPO, selectedPOIds 
         return <CheckCircle className="h-4 w-4 text-green-600" />;
       case 'in_progress':
         return <Factory className="h-4 w-4 text-blue-600" />;
+      case 'scheduled':
+        return <Clock className="h-4 w-4 text-green-600" />;
       default:
         return <Clock className="h-4 w-4 text-amber-600" />;
     }
@@ -102,6 +105,7 @@ export default function P2StatusDashboard({ onStartBOM, onViewPO, selectedPOIds 
   const getStatusBadge = (status: string) => {
     const config: Record<string, { variant: 'default' | 'secondary' | 'outline'; label: string }> = {
       pending: { variant: 'outline', label: 'Pending' },
+      scheduled: { variant: 'outline', label: 'Scheduled' },
       in_progress: { variant: 'default', label: 'In Progress' },
       completed: { variant: 'secondary', label: 'Completed' },
     };
@@ -339,6 +343,12 @@ export default function P2StatusDashboard({ onStartBOM, onViewPO, selectedPOIds 
                             <span className="flex items-center gap-1 text-blue-600">
                               <Factory className="h-3 w-3" />
                               {po.inProductionItems} in production
+                            </span>
+                          )}
+                          {po.scheduledItems > 0 && (
+                            <span className="flex items-center gap-1 text-green-600">
+                              <Clock className="h-3 w-3" />
+                              {po.scheduledItems} scheduled
                             </span>
                           )}
                           {po.pendingItems > 0 && (

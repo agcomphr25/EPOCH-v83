@@ -540,15 +540,21 @@ export default function Navigation() {
   const estimatingItems: NavItemDef[] = [
     {
       path: '/estimating',
-      label: 'RFQs',
+      label: 'ROM Builder',
       icon: FileSearch,
-      description: 'View and manage Requests for Quotation',
+      description: 'View and manage ROM estimates',
     },
     {
       path: '/rfq-builder',
       label: 'Cost Builder',
       icon: Calculator,
       description: 'BOM-driven cost estimation with overhead rates and margins',
+    },
+    {
+      path: '/estimating/bom-drafts',
+      label: 'Draft BOM Builder',
+      icon: FileSpreadsheet,
+      description: 'Create reusable draft BOMs and sourcing picklists',
     },
   ];
 
@@ -1939,7 +1945,7 @@ export default function Navigation() {
               </div>
             )}
 
-            {/* Estimating Dropdown */}
+            {/* Design Dropdown */}
             {filteredEstimatingItems.length > 0 && (
               <div className="relative">
                 <Button
@@ -1957,7 +1963,7 @@ export default function Navigation() {
                   }
                 >
                   <Calculator className="h-4 w-4" />
-                  Estimating
+                  Design
                   {estimatingExpanded ? (
                     <ChevronDown className="h-4 w-4" />
                   ) : (

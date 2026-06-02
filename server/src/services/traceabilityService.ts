@@ -17,11 +17,14 @@ import { and, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
 import { db } from '../../db';
 import {
   chargeCodes,
+  cuttingFabricInventory,
   employees,
   inventoryItems,
   inventoryTransactionLedger,
   materialLots,
   nonconformanceRecords,
+  p2SerializedItems,
+  p2SerializedItemTraceability,
   productionWorkOrders,
   projects,
   travelers,
@@ -32,22 +35,14 @@ import {
 import { verifyInventoryLedgerHashesByIds } from './inventoryTransactionLedgerService';
 import { resolveTravelerBarcode } from '../helpers/travelerBarcodeResolver';
 
-const productionWorkOrderTraceColumns = {
-  id: productionWorkOrders.id,
-  workOrderNumber: productionWorkOrders.workOrderNumber,
-  projectId: productionWorkOrders.projectId,
-  partNumber: productionWorkOrders.partNumber,
-  quantity: productionWorkOrders.quantity,
-  status: productionWorkOrders.status,
-  wadStatus: productionWorkOrders.wadStatus,
-};
-
 // ─────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────
 
 export type TraceabilitySearchKey =
   | 'lotIcn'
+  | 'rollNumber'
+  | 'serializedItemNumber'
   | 'travelerNumber'
   | 'workOrder'
   | 'chargeCode'
@@ -58,6 +53,8 @@ export type TraceabilitySearchKey =
 
 export const TRACEABILITY_SEARCH_KEYS: readonly TraceabilitySearchKey[] = [
   'lotIcn',
+  'rollNumber',
+  'serializedItemNumber',
   'travelerNumber',
   'workOrder',
   'chargeCode',
@@ -191,6 +188,8 @@ export interface TraceabilityChain {
   edges: TraceabilityEdge[];
   branches: TraceabilityBranch[];
   genealogy: TraceabilityGenealogyStage[];
+  travelerCaptures: TravelerMaterialCapture[];
+  expiringMaterials: ExpiringMaterial[];
   ncrs: Array<{
     id: number;
     rmaNumber: string | null;
@@ -201,6 +200,53 @@ export interface TraceabilityChain {
     href: string;
   }>;
   generatedAt: string;
+}
+
+export interface TravelerMaterialCapture {
+  id: string;
+  source: 'p2_serialized_item_traceability' | 'p2_work_tasks.traceability_data';
+  serializedItemId: string;
+  serialNumber: string;
+  barcode: string;
+  travelerBarcode: string | null;
+  poNumber: string;
+  partNumber: string;
+  partName: string;
+  status: string;
+  currentDepartment: string;
+  department: string;
+  travelerId: string | null;
+  travelerNumber: string | null;
+  travelerStatus: string | null;
+  workOrderNumber: string | null;
+  projectName: string | null;
+  inventoryPartNumber: string | null;
+  traceabilityType: string;
+  traceabilityLabel: string;
+  traceabilityValue: string;
+  recordedBy: string;
+  recordedAt: string;
+  materialIcn: string | null;
+  materialRollNumber: string | null;
+  materialExpirationDate: string | null;
+  materialStatus: string | null;
+  materialLocation: string | null;
+  href: string;
+}
+
+export interface ExpiringMaterial {
+  id: string;
+  source: 'material_lots' | 'cutting_fabric_inventory';
+  internalControlNumber: string | null;
+  rollNumber: string | null;
+  materialPartNumber: string | null;
+  materialName: string | null;
+  status: string | null;
+  location: string | null;
+  expirationDate: string;
+  daysUntilExpiration: number;
+  quantityRemaining: string | null;
+  href: string | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -498,9 +544,9 @@ async function resolveSearch(input: TraceabilitySearchInput): Promise<ResolvedSe
   switch (input.key) {
     case 'lotIcn': {
       const [lot] = await db
-        .select(productionWorkOrderTraceColumns)
+        .select()
         .from(materialLots)
-        .where(eq(materialLots.internalControlNumber, value))
+        .where(sql`LOWER(${materialLots.internalControlNumber}) = LOWER(${value})`)
         .limit(1);
       if (!lot) {
         return { label: `Lot ICN: ${value}`, matchedEntities: [], ledgerCondition: sql`FALSE`, notFound: true };
@@ -518,11 +564,71 @@ async function resolveSearch(input: TraceabilitySearchInput): Promise<ResolvedSe
       };
     }
 
+    case 'rollNumber': {
+      const [fabric] = await db
+        .select()
+        .from(cuttingFabricInventory)
+        .where(
+          or(
+            sql`LOWER(COALESCE(${cuttingFabricInventory.rollNumber}, '')) = LOWER(${value})`,
+            sql`LOWER(COALESCE(${cuttingFabricInventory.internalControlNumber}, '')) = LOWER(${value})`,
+            sql`LOWER(COALESCE(${cuttingFabricInventory.lotNumber}, '')) = LOWER(${value})`,
+            sql`LOWER(COALESCE(${cuttingFabricInventory.batchNumber}, '')) = LOWER(${value})`,
+            sql`LOWER(COALESCE(${cuttingFabricInventory.barcode}, '')) = LOWER(${value})`,
+          ),
+        )
+        .limit(1);
+      if (!fabric) {
+        return { label: `Roll #: ${value}`, matchedEntities: [], ledgerCondition: undefined, notFound: true };
+      }
+      return {
+        label: `Roll ${fabric.rollNumber ?? value}`,
+        detail: `${fabric.fabric ?? fabric.nickname ?? fabric.fabricPartNumber ?? 'Fabric'}${fabric.internalControlNumber ? ` - ICN ${fabric.internalControlNumber}` : ''}`,
+        matchedEntities: [{
+          kind: 'fabricRoll',
+          id: fabric.id,
+          label: fabric.rollNumber ?? fabric.internalControlNumber ?? value,
+          href: fabric.internalControlNumber
+            ? `/inventory/traceability?key=lotIcn&value=${encodeURIComponent(fabric.internalControlNumber)}`
+            : null,
+        }],
+        ledgerCondition: undefined,
+      };
+    }
+
+    case 'serializedItemNumber': {
+      const [item] = await db
+        .select()
+        .from(p2SerializedItems)
+        .where(
+          or(
+            sql`LOWER(${p2SerializedItems.serialNumber}) = LOWER(${value})`,
+            sql`LOWER(${p2SerializedItems.barcode}) = LOWER(${value})`,
+            sql`LOWER(COALESCE(${p2SerializedItems.travelerBarcode}, '')) = LOWER(${value})`,
+          ),
+        )
+        .limit(1);
+      if (!item) {
+        return { label: `Serialized item: ${value}`, matchedEntities: [], ledgerCondition: undefined, notFound: true };
+      }
+      return {
+        label: `Serialized item ${item.serialNumber}`,
+        detail: `${item.partNumber} - ${item.partName} - ${item.currentDepartment} - ${item.status}`,
+        matchedEntities: [{
+          kind: 'serializedItem',
+          id: item.id,
+          label: item.serialNumber,
+          href: `/p2-traveler-viewer?barcode=${encodeURIComponent(item.barcode)}`,
+        }],
+        ledgerCondition: undefined,
+      };
+    }
+
     case 'travelerNumber': {
       // Case-insensitive match on traveler_number; UUID match for direct id;
       // barcode-helper fallback for printable scan payloads (Task #183).
       let [trav] = await db
-        .select(productionWorkOrderTraceColumns)
+        .select()
         .from(travelers)
         .where(
           or(
@@ -565,7 +671,7 @@ async function resolveSearch(input: TraceabilitySearchInput): Promise<ResolvedSe
 
     case 'workOrder': {
       const [wo] = await db
-        .select(productionWorkOrderTraceColumns)
+        .select()
         .from(productionWorkOrders)
         .where(or(eq(productionWorkOrders.workOrderNumber, value), eq(productionWorkOrders.id, value)))
         .limit(1);
@@ -781,7 +887,7 @@ async function loadJoinDictionaries(rows: InventoryTransactionLedger[]): Promise
     itemIds.length ? db.select().from(inventoryItems).where(inArray(inventoryItems.id, itemIds)) : Promise.resolve([]),
     travelerIds.length ? db.select().from(travelers).where(inArray(travelers.id, travelerIds)) : Promise.resolve([]),
     stepIds.length ? db.select().from(travelerSteps).where(inArray(travelerSteps.id, stepIds)) : Promise.resolve([]),
-    woIds.length ? db.select(productionWorkOrderTraceColumns).from(productionWorkOrders).where(inArray(productionWorkOrders.id, woIds)) : Promise.resolve([]),
+    woIds.length ? db.select().from(productionWorkOrders).where(inArray(productionWorkOrders.id, woIds)) : Promise.resolve([]),
     ccIds.length ? db.select().from(chargeCodes).where(inArray(chargeCodes.id, ccIds)) : Promise.resolve([]),
     projIds.length ? db.select().from(projects).where(inArray(projects.id, projIds)) : Promise.resolve([]),
   ]);
@@ -791,7 +897,7 @@ async function loadJoinDictionaries(rows: InventoryTransactionLedger[]): Promise
     itemById: new Map(items.map((i) => [i.id, i])),
     travById: new Map(travs.map((t) => [t.id, t])),
     stepById: new Map(steps.map((s) => [s.id, s])),
-    woById: new Map(wos.map((w) => [w.id, w as typeof productionWorkOrders.$inferSelect])),
+    woById: new Map(wos.map((w) => [w.id, w])),
     ccById: new Map(ccs.map((c) => [c.id, c])),
     projById: new Map(projs.map((p) => [p.id, p])),
   };
@@ -878,6 +984,347 @@ async function loadRelatedNcrs(
     status: r.status,
     dispositionDate: safeStr(r.dispositionDate),
     href: '/nonconformance',
+  }));
+}
+
+function rowsFromExecute<T>(result: unknown): T[] {
+  if (Array.isArray(result)) return result as T[];
+  const maybeRows = (result as { rows?: T[] } | null)?.rows;
+  return Array.isArray(maybeRows) ? maybeRows : [];
+}
+
+function normalizeDbDate(value: unknown): string | null {
+  if (!value) return null;
+  if (value instanceof Date) return value.toISOString();
+  const d = new Date(String(value));
+  return Number.isNaN(d.getTime()) ? String(value) : d.toISOString();
+}
+
+function daysUntil(dateValue: unknown): number {
+  const d = new Date(String(dateValue));
+  if (Number.isNaN(d.getTime())) return 0;
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  d.setHours(0, 0, 0, 0);
+  return Math.ceil((d.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+async function loadTravelerMaterialCaptures(input: TraceabilitySearchInput): Promise<TravelerMaterialCapture[]> {
+  const value = input.value.trim();
+  if (!value) return [];
+
+  const directRows = await db
+    .select({
+      id: p2SerializedItemTraceability.id,
+      serializedItemId: p2SerializedItems.id,
+      serialNumber: p2SerializedItems.serialNumber,
+      barcode: p2SerializedItems.barcode,
+      travelerBarcode: p2SerializedItems.travelerBarcode,
+      poNumber: p2SerializedItems.poNumber,
+      partNumber: p2SerializedItems.partNumber,
+      partName: p2SerializedItems.partName,
+      status: p2SerializedItems.status,
+      currentDepartment: p2SerializedItems.currentDepartment,
+      department: p2SerializedItemTraceability.department,
+      inventoryPartNumber: p2SerializedItemTraceability.inventoryPartNumber,
+      traceabilityType: p2SerializedItemTraceability.traceabilityType,
+      traceabilityLabel: p2SerializedItemTraceability.traceabilityLabel,
+      traceabilityValue: p2SerializedItemTraceability.traceabilityValue,
+      recordedBy: p2SerializedItemTraceability.recordedBy,
+      recordedAt: p2SerializedItemTraceability.createdAt,
+      travelerId: travelers.id,
+      travelerNumber: travelers.travelerNumber,
+      travelerStatus: travelers.status,
+      workOrderNumber: productionWorkOrders.workOrderNumber,
+      projectName: projects.projectName,
+      materialLotIcn: materialLots.internalControlNumber,
+      materialLotExpiration: materialLots.expirationDate,
+      materialLotStatus: materialLots.status,
+      materialLotLocation: materialLots.storageLocation,
+      fabricIcn: cuttingFabricInventory.internalControlNumber,
+      fabricRollNumber: cuttingFabricInventory.rollNumber,
+      fabricExpiration: cuttingFabricInventory.expirationDate,
+      fabricStatus: cuttingFabricInventory.status,
+      fabricLocation: cuttingFabricInventory.location,
+    })
+    .from(p2SerializedItemTraceability)
+    .innerJoin(p2SerializedItems, eq(p2SerializedItemTraceability.serializedItemId, p2SerializedItems.id))
+    .leftJoin(travelers, eq(travelers.serialNumber, p2SerializedItems.serialNumber))
+    .leftJoin(productionWorkOrders, eq(productionWorkOrders.id, travelers.productionWorkOrderId))
+    .leftJoin(projects, eq(projects.id, travelers.projectId))
+    .leftJoin(materialLots, eq(materialLots.internalControlNumber, p2SerializedItemTraceability.traceabilityValue))
+    .leftJoin(
+      cuttingFabricInventory,
+      or(
+        eq(cuttingFabricInventory.internalControlNumber, p2SerializedItemTraceability.traceabilityValue),
+        eq(cuttingFabricInventory.rollNumber, p2SerializedItemTraceability.traceabilityValue),
+        eq(cuttingFabricInventory.lotNumber, p2SerializedItemTraceability.traceabilityValue),
+        eq(cuttingFabricInventory.batchNumber, p2SerializedItemTraceability.traceabilityValue),
+        eq(cuttingFabricInventory.barcode, p2SerializedItemTraceability.traceabilityValue),
+      ),
+    )
+    .where(
+      or(
+        sql`LOWER(${p2SerializedItemTraceability.traceabilityValue}) = LOWER(${value})`,
+        sql`LOWER(COALESCE(${p2SerializedItemTraceability.inventoryPartNumber}, '')) = LOWER(${value})`,
+        sql`LOWER(${p2SerializedItems.serialNumber}) = LOWER(${value})`,
+        sql`LOWER(${p2SerializedItems.barcode}) = LOWER(${value})`,
+        sql`LOWER(COALESCE(${p2SerializedItems.travelerBarcode}, '')) = LOWER(${value})`,
+        sql`LOWER(COALESCE(${travelers.travelerNumber}, '')) = LOWER(${value})`,
+        sql`LOWER(COALESCE(${materialLots.internalControlNumber}, '')) = LOWER(${value})`,
+        sql`LOWER(COALESCE(${cuttingFabricInventory.internalControlNumber}, '')) = LOWER(${value})`,
+        sql`LOWER(COALESCE(${cuttingFabricInventory.rollNumber}, '')) = LOWER(${value})`,
+        sql`LOWER(COALESCE(${cuttingFabricInventory.barcode}, '')) = LOWER(${value})`,
+      ),
+    )
+    .limit(200);
+
+  type WorkTaskCaptureRow = {
+    id: string;
+    serialized_item_id: string;
+    serial_number: string;
+    barcode: string;
+    traveler_barcode: string | null;
+    po_number: string;
+    part_number: string;
+    part_name: string;
+    status: string;
+    current_department: string;
+    department: string;
+    inventory_part_number: string | null;
+    traceability_type: string | null;
+    traceability_label: string | null;
+    traceability_value: string | null;
+    recorded_by: string;
+    recorded_at: Date | string;
+    traveler_id: string | null;
+    traveler_number: string | null;
+    traveler_status: string | null;
+    work_order_number: string | null;
+    project_name: string | null;
+    material_lot_icn: string | null;
+    material_lot_expiration: Date | string | null;
+    material_lot_status: string | null;
+    material_lot_location: string | null;
+    fabric_icn: string | null;
+    fabric_roll_number: string | null;
+    fabric_expiration: Date | string | null;
+    fabric_status: string | null;
+    fabric_location: string | null;
+  };
+
+  const workTaskResult = await db.execute(sql`
+    SELECT
+      concat(wt.id::text, ':', entry.ordinality::text) AS id,
+      si.id::text AS serialized_item_id,
+      si.serial_number,
+      si.barcode,
+      si.traveler_barcode,
+      si.po_number,
+      si.part_number,
+      si.part_name,
+      si.status,
+      si.current_department,
+      wt.department,
+      NULLIF(COALESCE(entry.item->>'partNumber', entry.item->>'inventoryPartNumber'), '') AS inventory_part_number,
+      NULLIF(COALESCE(entry.item->>'type', entry.item->>'traceabilityType'), '') AS traceability_type,
+      NULLIF(COALESCE(entry.item->>'label', entry.item->>'traceabilityLabel'), '') AS traceability_label,
+      NULLIF(COALESCE(entry.item->>'value', entry.item->>'traceabilityValue'), '') AS traceability_value,
+      wt.employee_name AS recorded_by,
+      COALESCE(wt.completed_at, wt.started_at, wt.created_at) AS recorded_at,
+      tr.id::text AS traveler_id,
+      tr.traveler_number,
+      tr.status AS traveler_status,
+      pwo.work_order_number,
+      p.project_name,
+      ml.internal_control_number AS material_lot_icn,
+      ml.expiration_date AS material_lot_expiration,
+      ml.status AS material_lot_status,
+      ml.storage_location AS material_lot_location,
+      cfi.internal_control_number AS fabric_icn,
+      cfi.roll_number AS fabric_roll_number,
+      cfi.expiration_date AS fabric_expiration,
+      cfi.status AS fabric_status,
+      cfi.location AS fabric_location
+    FROM p2_work_tasks wt
+    JOIN p2_serialized_items si ON si.id = wt.serialized_item_id
+    LEFT JOIN travelers tr ON tr.serial_number = si.serial_number
+    LEFT JOIN production_work_orders pwo ON pwo.id = tr.production_work_order_id
+    LEFT JOIN projects p ON p.id = tr.project_id
+    CROSS JOIN LATERAL jsonb_array_elements(COALESCE(wt.traceability_data, '[]'::jsonb)) WITH ORDINALITY AS entry(item, ordinality)
+    LEFT JOIN material_lots ml ON lower(ml.internal_control_number) = lower(NULLIF(COALESCE(entry.item->>'value', entry.item->>'traceabilityValue'), ''))
+    LEFT JOIN cutting_fabric_inventory cfi ON lower(COALESCE(entry.item->>'value', entry.item->>'traceabilityValue', '')) IN (
+      lower(COALESCE(cfi.internal_control_number, '')),
+      lower(COALESCE(cfi.roll_number, '')),
+      lower(COALESCE(cfi.lot_number, '')),
+      lower(COALESCE(cfi.batch_number, '')),
+      lower(COALESCE(cfi.barcode, ''))
+    )
+    WHERE
+      lower(COALESCE(entry.item->>'value', entry.item->>'traceabilityValue', '')) = lower(${value})
+      OR lower(COALESCE(entry.item->>'partNumber', entry.item->>'inventoryPartNumber', '')) = lower(${value})
+      OR lower(si.serial_number) = lower(${value})
+      OR lower(si.barcode) = lower(${value})
+      OR lower(COALESCE(si.traveler_barcode, '')) = lower(${value})
+      OR lower(COALESCE(tr.traveler_number, '')) = lower(${value})
+      OR lower(COALESCE(ml.internal_control_number, '')) = lower(${value})
+      OR lower(COALESCE(cfi.internal_control_number, '')) = lower(${value})
+      OR lower(COALESCE(cfi.roll_number, '')) = lower(${value})
+      OR lower(COALESCE(cfi.barcode, '')) = lower(${value})
+    LIMIT 200
+  `);
+
+  const workTaskRows = rowsFromExecute<WorkTaskCaptureRow>(workTaskResult);
+  const captures = new Map<string, TravelerMaterialCapture>();
+
+  for (const row of directRows) {
+    const materialIcn = row.materialLotIcn ?? row.fabricIcn ?? null;
+    const materialExpirationDate = normalizeDbDate(row.materialLotExpiration ?? row.fabricExpiration);
+    captures.set(`direct:${row.id}`, {
+      id: row.id,
+      source: 'p2_serialized_item_traceability',
+      serializedItemId: row.serializedItemId,
+      serialNumber: row.serialNumber,
+      barcode: row.barcode,
+      travelerBarcode: row.travelerBarcode ?? null,
+      poNumber: row.poNumber,
+      partNumber: row.partNumber,
+      partName: row.partName,
+      status: row.status,
+      currentDepartment: row.currentDepartment,
+      department: row.department,
+      travelerId: row.travelerId ?? null,
+      travelerNumber: row.travelerNumber ?? null,
+      travelerStatus: row.travelerStatus ?? null,
+      workOrderNumber: row.workOrderNumber ?? null,
+      projectName: row.projectName ?? null,
+      inventoryPartNumber: row.inventoryPartNumber ?? null,
+      traceabilityType: row.traceabilityType,
+      traceabilityLabel: row.traceabilityLabel,
+      traceabilityValue: row.traceabilityValue,
+      recordedBy: row.recordedBy,
+      recordedAt: normalizeDbDate(row.recordedAt) ?? '',
+      materialIcn,
+      materialRollNumber: row.fabricRollNumber ?? null,
+      materialExpirationDate,
+      materialStatus: row.materialLotStatus ?? row.fabricStatus ?? null,
+      materialLocation: row.materialLotLocation ?? row.fabricLocation ?? null,
+      href: `/p2-traveler-viewer?barcode=${encodeURIComponent(row.barcode)}`,
+    });
+  }
+
+  for (const row of workTaskRows) {
+    if (!row.traceability_value) continue;
+    const materialIcn = row.material_lot_icn ?? row.fabric_icn ?? null;
+    const materialExpirationDate = normalizeDbDate(row.material_lot_expiration ?? row.fabric_expiration);
+    captures.set(`work:${row.id}`, {
+      id: row.id,
+      source: 'p2_work_tasks.traceability_data',
+      serializedItemId: row.serialized_item_id,
+      serialNumber: row.serial_number,
+      barcode: row.barcode,
+      travelerBarcode: row.traveler_barcode ?? null,
+      poNumber: row.po_number,
+      partNumber: row.part_number,
+      partName: row.part_name,
+      status: row.status,
+      currentDepartment: row.current_department,
+      department: row.department,
+      travelerId: row.traveler_id ?? null,
+      travelerNumber: row.traveler_number ?? null,
+      travelerStatus: row.traveler_status ?? null,
+      workOrderNumber: row.work_order_number ?? null,
+      projectName: row.project_name ?? null,
+      inventoryPartNumber: row.inventory_part_number ?? null,
+      traceabilityType: row.traceability_type ?? 'material',
+      traceabilityLabel: row.traceability_label ?? 'Material Traceability',
+      traceabilityValue: row.traceability_value,
+      recordedBy: row.recorded_by,
+      recordedAt: normalizeDbDate(row.recorded_at) ?? '',
+      materialIcn,
+      materialRollNumber: row.fabric_roll_number ?? null,
+      materialExpirationDate,
+      materialStatus: row.material_lot_status ?? row.fabric_status ?? null,
+      materialLocation: row.material_lot_location ?? row.fabric_location ?? null,
+      href: `/p2-traveler-viewer?barcode=${encodeURIComponent(row.barcode)}`,
+    });
+  }
+
+  return Array.from(captures.values()).sort((a, b) => b.recordedAt.localeCompare(a.recordedAt));
+}
+
+async function loadExpiringMaterials(days = 30): Promise<ExpiringMaterial[]> {
+  const result = await db.execute(sql`
+    SELECT * FROM (
+      SELECT
+        ml.id::text AS id,
+        'material_lots' AS source,
+        ml.internal_control_number,
+        NULL::text AS roll_number,
+        ml.material_part_number,
+        ml.material_name,
+        ml.status,
+        ml.storage_location AS location,
+        ml.expiration_date,
+        CEIL(EXTRACT(EPOCH FROM (ml.expiration_date::timestamp - CURRENT_DATE::timestamp)) / 86400)::int AS days_until_expiration,
+        ml.remaining_qty::text AS quantity_remaining
+      FROM material_lots ml
+      WHERE ml.expiration_date IS NOT NULL
+        AND ml.expiration_date >= CURRENT_DATE
+        AND ml.expiration_date <= CURRENT_DATE + (${days}::int * INTERVAL '1 day')
+        AND ml.remaining_qty::numeric > 0
+        AND ml.status NOT IN ('CONSUMED', 'REJECTED', 'SCRAPPED')
+      UNION ALL
+      SELECT
+        cfi.id::text AS id,
+        'cutting_fabric_inventory' AS source,
+        cfi.internal_control_number,
+        cfi.roll_number,
+        cfi.fabric_part_number AS material_part_number,
+        COALESCE(cfi.fabric, cfi.nickname) AS material_name,
+        cfi.status,
+        cfi.location,
+        cfi.expiration_date::timestamp AS expiration_date,
+        CEIL(EXTRACT(EPOCH FROM (cfi.expiration_date::timestamp - CURRENT_DATE::timestamp)) / 86400)::int AS days_until_expiration,
+        cfi.quantity_in_stock::text AS quantity_remaining
+      FROM cutting_fabric_inventory cfi
+      WHERE cfi.expiration_date IS NOT NULL
+        AND cfi.expiration_date >= CURRENT_DATE
+        AND cfi.expiration_date <= CURRENT_DATE + (${days}::int * INTERVAL '1 day')
+        AND COALESCE(cfi.quantity_in_stock, 0) > 0
+        AND COALESCE(cfi.status, 'active') != 'depleted'
+    ) expiring
+    ORDER BY expiring.expiration_date ASC, expiring.internal_control_number ASC NULLS LAST
+    LIMIT 25
+  `);
+
+  return rowsFromExecute<{
+    id: string;
+    source: 'material_lots' | 'cutting_fabric_inventory';
+    internal_control_number: string | null;
+    roll_number: string | null;
+    material_part_number: string | null;
+    material_name: string | null;
+    status: string | null;
+    location: string | null;
+    expiration_date: Date | string;
+    days_until_expiration: number | null;
+    quantity_remaining: string | null;
+  }>(result).map((row) => ({
+    id: row.id,
+    source: row.source,
+    internalControlNumber: row.internal_control_number,
+    rollNumber: row.roll_number,
+    materialPartNumber: row.material_part_number,
+    materialName: row.material_name,
+    status: row.status,
+    location: row.location,
+    expirationDate: normalizeDbDate(row.expiration_date) ?? String(row.expiration_date),
+    daysUntilExpiration: row.days_until_expiration ?? daysUntil(row.expiration_date),
+    quantityRemaining: row.quantity_remaining,
+    href: row.internal_control_number
+      ? `/inventory/traceability?key=lotIcn&value=${encodeURIComponent(row.internal_control_number)}`
+      : null,
   }));
 }
 
@@ -969,7 +1416,11 @@ export async function buildTraceabilityChain(
   const nodes = rows.map((r) => nodeFromLedgerRow(r, dicts));
   const { edges, branches } = buildBranchesAndEdges(nodes);
   const genealogy = buildGenealogy(nodes);
-  const ncrs = await loadRelatedNcrs(rows);
+  const [ncrs, travelerCaptures, expiringMaterials] = await Promise.all([
+    loadRelatedNcrs(rows),
+    loadTravelerMaterialCaptures(input),
+    loadExpiringMaterials(),
+  ]);
 
   return {
     query: input,
@@ -983,6 +1434,8 @@ export async function buildTraceabilityChain(
     edges,
     branches,
     genealogy,
+    travelerCaptures,
+    expiringMaterials,
     ncrs,
     generatedAt: new Date().toISOString(),
   };
@@ -1046,6 +1499,8 @@ export async function buildChainFromEntryIds(
     edges,
     branches,
     genealogy,
+    travelerCaptures: [],
+    expiringMaterials: [],
     ncrs,
     generatedAt: new Date().toISOString(),
   };

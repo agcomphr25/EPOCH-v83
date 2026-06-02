@@ -59,6 +59,26 @@ function stripImmutableDueDate<T extends Record<string, any>>(updates: T): T {
   return sanitized as T;
 }
 
+const READY_FOR_SHIPPING_STATUSES = new Set([
+  'ready for shipping',
+  'ready_for_shipping',
+  'ready-to-ship',
+  'ready to ship',
+]);
+
+function shouldResetReadyForShippingToInProgress(
+  currentDepartment: string | null | undefined,
+  targetDepartment: string | null | undefined,
+  currentStatus: string | null | undefined
+): boolean {
+  if (currentDepartment !== 'Shipping' || !targetDepartment || targetDepartment === 'Shipping') {
+    return false;
+  }
+
+  const normalizedStatus = String(currentStatus || '').trim().toLowerCase();
+  return READY_FOR_SHIPPING_STATUSES.has(normalizedStatus);
+}
+
 async function requiresP1PaymentAccountingApproval(paymentDate: Date, user: any): Promise<{ required: boolean; period: any }> {
   const period = await getOrCreateAccountingPeriod(paymentDate);
   const status = String(period.status).toUpperCase();
@@ -2865,6 +2885,15 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
       console.log(`📦 Marking order as FULFILLED with no department`);
     } else {
       updateData.currentDepartment = targetDepartment;
+      if (
+        shouldResetReadyForShippingToInProgress(
+          existingOrder.currentDepartment,
+          targetDepartment,
+          existingOrder.status
+        )
+      ) {
+        updateData.status = 'IN_PROGRESS';
+      }
     }
 
     // Build actor from authenticated user
@@ -2922,6 +2951,13 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
             after: targetDepartment ?? null,
             label: 'Current Department',
           };
+          if (updateData.status && updateData.status !== existingOrder.status) {
+            fieldDiff['status'] = {
+              before: existingOrder.status ?? null,
+              after: updateData.status,
+              label: 'Order Status',
+            };
+          }
         }
 
         await tx.insert(orderActivityEvents).values({
@@ -3814,21 +3850,35 @@ router.patch(
       }
     }
 
+    const shouldResetStatusToInProgress = shouldResetReadyForShippingToInProgress(
+      previousDepartment,
+      department,
+      existingOrder?.status ?? existingOrder?.productionStatus
+    );
+
     // Try to find and update the order
     let updatedOrder;
     let orderType = '';
 
     try {
-      updatedOrder = await storage.updateFinalizedOrder(orderId, {
+      const finalizedUpdates: any = {
         currentDepartment: department,
-      });
+      };
+      if (shouldResetStatusToInProgress) {
+        finalizedUpdates.status = 'IN_PROGRESS';
+      }
+      updatedOrder = await storage.updateFinalizedOrder(orderId, finalizedUpdates);
       orderType = 'finalized';
       console.log(`✅ Updated finalized order ${orderId} to ${department}`);
     } catch (finalizedError) {
       try {
-        updatedOrder = await storage.updateOrderDraft(orderId, {
+        const draftUpdates: any = {
           currentDepartment: department,
-        });
+        };
+        if (shouldResetStatusToInProgress) {
+          draftUpdates.status = 'IN_PROGRESS';
+        }
+        updatedOrder = await storage.updateOrderDraft(orderId, draftUpdates);
         orderType = 'draft';
         console.log(`✅ Updated draft order ${orderId} to ${department}`);
       } catch (draftError) {
@@ -3838,7 +3888,7 @@ router.patch(
           if (productionOrder) {
             const { pool } = await import('../../db');
             await pool.query(
-              'UPDATE production_orders SET current_department = $1 WHERE order_id = $2',
+              'UPDATE production_orders SET current_department = $1, updated_at = NOW() WHERE order_id = $2',
               [department, orderId]
             );
             updatedOrder = { ...productionOrder, currentDepartment: department };

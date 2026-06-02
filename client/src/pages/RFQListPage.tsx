@@ -40,9 +40,9 @@ export default function RFQListPage() {
 
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">RFQs</h1>
+            <h1 className="text-3xl font-bold text-gray-900">ROM Builder</h1>
             <p className="text-gray-500 mt-1">
-              The RFQ workspace is being added here. This page will manage incoming RFQs, draft estimating records, and quote status.
+              Build and manage rough order of magnitude estimates from incoming RFQs, draft estimating records, and quote status.
             </p>
           </div>
           <Button onClick={openNewRfq} className="flex items-center gap-2">
@@ -53,7 +53,7 @@ export default function RFQListPage() {
 
         {isLoading ? (
           <Card>
-            <CardContent className="py-10 text-center text-gray-400">Loading RFQs…</CardContent>
+            <CardContent className="py-10 text-center text-gray-400">Loading ROM estimates…</CardContent>
           </Card>
         ) : rfqs.length === 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -82,10 +82,10 @@ export default function RFQListPage() {
                   <Calculator className="h-8 w-8 text-green-500" />
                 </div>
                 <div>
-                  <p className="font-semibold text-gray-800 text-lg">Open Cost Builder</p>
+                  <p className="font-semibold text-gray-800 text-lg">Open ROM Builder</p>
                   <p className="text-sm text-gray-500 mt-1">Build and review multi-part cost estimates</p>
                 </div>
-                <Button variant="outline" className="mt-2">Go to Cost Builder</Button>
+                <Button variant="outline" className="mt-2">Go to ROM Builder</Button>
               </CardContent>
             </Card>
           </div>
@@ -94,7 +94,7 @@ export default function RFQListPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-gray-800">
                 <FileSearch className="h-5 w-5 text-blue-500" />
-                All RFQs ({rfqs.length})
+                ROM Estimates ({rfqs.length})
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">

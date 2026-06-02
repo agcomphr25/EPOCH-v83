@@ -500,20 +500,15 @@ export async function notifyPunchCorrectionHrAdminNeeded(requestId: number, reas
   const row = await getPunchCorrectionNotificationRow(requestId);
   if (!row) return;
 
-  const recipients = await findHrAdminRecipients();
-  if (recipients.length === 0) return;
-
-  const suffix = reason ? `\nRouting note: ${reason}` : "";
-  await Promise.all(
-    recipients.map((recipient) =>
-      insertInternalInboxMessage({
-        recipient,
-        subject: `Time punch correction #${row.id} needs HR/Admin approval`,
-        message: `${formatPunchCorrectionSummary(row)}\n\nStatus: ${row.status}${suffix}\nReview: /time-clock-admin?tab=corrections`,
-        isUrgent: !row.supervisor_id,
-      }),
-    ),
-  );
+  // HR/Admin punch correction fallback is reviewed from Time Clock Admin's
+  // Corrections queue. Do not create Internal Communication Board messages
+  // here; those look like employee-facing broadcast messages in the inbox.
+  console.info("[timekeeping approvals] punch correction routed to HR/Admin review queue", {
+    requestId: row.id,
+    status: row.status,
+    reason: reason ?? null,
+    reviewUrl: "/time-clock-admin?tab=corrections",
+  });
 }
 
 export async function notifyPunchCorrectionEmployeeStatus(requestId: number, subject: string, statusMessage: string): Promise<void> {

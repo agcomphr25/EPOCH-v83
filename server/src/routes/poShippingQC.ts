@@ -225,10 +225,12 @@ async function findReusableP1InvoiceNumber({
   poNumber,
   orderIds,
   shipmentRecordId,
+  includeBroadHistory = true,
 }: {
   poNumber: string;
   orderIds: string[];
   shipmentRecordId?: string | null;
+  includeBroadHistory?: boolean;
 }): Promise<string | null> {
   try {
     if (!(await hasP1FulfillmentAttemptsTable())) {
@@ -252,6 +254,10 @@ async function findReusableP1InvoiceNumber({
       if (exactShipmentRows[0]?.invoice_number) {
         return exactShipmentRows[0].invoice_number;
       }
+    }
+
+    if (!includeBroadHistory) {
+      return null;
     }
 
     const attemptRows = rowsOf<{ invoice_number: string }>(
@@ -281,6 +287,63 @@ async function findReusableP1InvoiceNumber({
   return null;
 }
 
+function extractP1InvoiceNumberFromPdfText(text: string): string | null {
+  const normalized = text.replace(/\s+/g, ' ').trim();
+  const invoiceLabelMatch = normalized.match(/Invoice\s*#\s*([A-Z0-9-]+)/i);
+  if (invoiceLabelMatch?.[1]) return invoiceLabelMatch[1];
+
+  const packingSlipLabelMatch = normalized.match(/Packing\s+Slip\s*#\s*([A-Z0-9-]+)/i);
+  if (packingSlipLabelMatch?.[1]) return packingSlipLabelMatch[1];
+
+  return null;
+}
+
+async function findP1PackingSlipNumberFromStoredPdf({
+  shipmentRecordId,
+  poNumber,
+}: {
+  shipmentRecordId: string | null;
+  poNumber: string;
+}): Promise<string | null> {
+  if (!shipmentRecordId) return null;
+
+  try {
+    const pdfRows = rowsOf<{ packing_slip_base64: string | null }>(
+      await pool.query(
+        `SELECT si.packing_slip_base64
+         FROM shipment_items si
+         LEFT JOIN production_orders prod_ord ON prod_ord.order_id = si.order_id
+         LEFT JOIN purchase_order_items poi ON poi.id = si.po_item_id
+         LEFT JOIN purchase_orders po ON po.id = poi.po_id
+         WHERE si.shipment_id = $1
+           AND si.packing_slip_base64 IS NOT NULL
+           AND COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number) = $2
+         ORDER BY si.created_at DESC
+         LIMIT 1`,
+        [shipmentRecordId, poNumber]
+      )
+    );
+    const packingSlipBase64 = pdfRows[0]?.packing_slip_base64;
+    if (!packingSlipBase64) return null;
+
+    const { PDFParse } = await import('pdf-parse/node');
+    const parser = new PDFParse({
+      data: new Uint8Array(Buffer.from(packingSlipBase64, 'base64')),
+      verbosity: 0,
+    });
+    const parsed = await parser.getText();
+    await parser.destroy();
+
+    const invoiceNumber = extractP1InvoiceNumberFromPdfText(parsed.text || '');
+    return invoiceNumber && /^[A-Z0-9-]+$/.test(invoiceNumber) ? invoiceNumber : null;
+  } catch (err: any) {
+    console.warn(
+      `Could not extract P1 packing slip invoice number for shipment ${shipmentRecordId}, PO ${poNumber}: ${err.message}`
+    );
+    return null;
+  }
+}
+
 async function resolveP1PackingSlipInvoiceNumber({
   shipmentRecordId,
   shipmentPoCount,
@@ -298,14 +361,25 @@ async function resolveP1PackingSlipInvoiceNumber({
     poNumber,
     orderIds,
     shipmentRecordId,
+    includeBroadHistory: false,
   });
   if (reusableInvoiceNumber) return reusableInvoiceNumber;
+
+  const storedPdfInvoiceNumber = await findP1PackingSlipNumberFromStoredPdf({
+    shipmentRecordId,
+    poNumber,
+  });
+  if (storedPdfInvoiceNumber) return storedPdfInvoiceNumber;
 
   if (shipmentPoCount <= 1 && shipmentInvoiceNumber) {
     return shipmentInvoiceNumber;
   }
 
-  return null;
+  return findReusableP1InvoiceNumber({
+    poNumber,
+    orderIds,
+    includeBroadHistory: true,
+  });
 }
 
 async function getP1ShipmentPoCount(shipmentRecordId: string): Promise<number> {

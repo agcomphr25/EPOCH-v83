@@ -17,6 +17,8 @@ const COLOR = {
 
 const TOTALS_BLOCK_HEIGHT = 116;
 const NOTES_HEADER_HEIGHT = 28;
+const AMOUNT_DUE_BAR_HEIGHT = 20;
+const AMOUNT_DUE_BAR_GAP = 6;
 
 function money(value: unknown): string {
   const num = Number(value || 0);
@@ -354,10 +356,11 @@ export async function generateArInvoicePdf(invoiceId: string): Promise<Buffer> {
     page.drawText(String(value), { x: totalsX + 110, y, size: FONT_SIZE.BODY, font, color: COLOR.TEXT });
     y -= 14;
   }
-  page.drawRectangle({ x: totalsX - 5, y: y - 2, width: 195, height: 20, color: COLOR.ACCENT });
-  page.drawText('AMOUNT DUE:', { x: totalsX, y: y + 4, size: FONT_SIZE.SECTION, font: bold, color: COLOR.WHITE });
-  page.drawText(money(invoice.totalAmount), { x: totalsX + 110, y: y + 4, size: FONT_SIZE.SECTION, font: bold, color: COLOR.WHITE });
-  y -= 34;
+  y -= AMOUNT_DUE_BAR_GAP;
+  page.drawRectangle({ x: totalsX - 5, y: y - AMOUNT_DUE_BAR_HEIGHT, width: 195, height: AMOUNT_DUE_BAR_HEIGHT, color: COLOR.ACCENT });
+  page.drawText('AMOUNT DUE:', { x: totalsX, y: y - 14, size: FONT_SIZE.SECTION, font: bold, color: COLOR.WHITE });
+  page.drawText(money(invoice.totalAmount), { x: totalsX + 110, y: y - 14, size: FONT_SIZE.SECTION, font: bold, color: COLOR.WHITE });
+  y -= AMOUNT_DUE_BAR_HEIGHT + 14;
 
   if (invoice.customerVisibleNotes) {
     ensureSpace(NOTES_HEADER_HEIGHT);

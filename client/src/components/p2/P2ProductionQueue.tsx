@@ -159,6 +159,25 @@ interface P2ProductionQueueProps {
   selectedPONumbers?: string[];
 }
 
+const STANDARD_DEPARTMENT_ORDER = [
+  'Pending Layup',
+  'Layup',
+  'Assemble/Disassembly',
+  'CNC',
+  'Finish',
+  'Paint',
+  'Final QC',
+  'Shipping',
+];
+
+const isDepartmentAfterLayup = (departmentName: string) => {
+  const departmentIndex = STANDARD_DEPARTMENT_ORDER.indexOf(departmentName);
+  if (departmentIndex === -1) {
+    return departmentName !== 'Pending Layup' && departmentName !== 'Layup';
+  }
+  return departmentIndex > STANDARD_DEPARTMENT_ORDER.indexOf('Layup');
+};
+
 export default function P2ProductionQueue({ selectedPONumbers = [] }: P2ProductionQueueProps) {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -628,6 +647,13 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
     }
   };
 
+  const handlePrintItemLabel = (item: QueueItem) => {
+    const printed = printAveryLabels([item], `P2 ${item.currentDepartment} ${item.serialNumber || item.barcode} Label`);
+    if (printed && item.serialNumber) {
+      stampPrintMutation.mutate([item.serialNumber]);
+    }
+  };
+
   if (isLoading) {
     return (
       <Card>
@@ -755,7 +781,10 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
             onValueChange={setExpandedDepartments}
             className="space-y-2"
           >
-            {queueData?.departments.map((dept) => (
+            {queueData?.departments.map((dept) => {
+              const isReprintDepartment = isDepartmentAfterLayup(dept.name);
+
+              return (
               <AccordionItem 
                 key={dept.name} 
                 value={dept.name}
@@ -1111,6 +1140,18 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                                                 <Eye className="h-4 w-4" />
                                               </Button>
                                             )}
+                                            {isReprintDepartment && item.barcode && !item.isLegacyProductionOrder && !item.isLegacyProjectWorkOrder && (
+                                              <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => handlePrintItemLabel(item)}
+                                                className="text-amber-600 hover:text-amber-700"
+                                                title="Reprint Barcode"
+                                                data-testid={`button-reprint-barcode-${item.id}`}
+                                              >
+                                                <Printer className="h-4 w-4" />
+                                              </Button>
+                                            )}
                                             {item.isLegacyProjectWorkOrder && item.projectId && (
                                               <Button
                                                 variant="ghost"
@@ -1185,7 +1226,8 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                   })()}
                 </AccordionContent>
               </AccordionItem>
-            ))}
+              );
+            })}
           </Accordion>
         </CardContent>
       </Card>

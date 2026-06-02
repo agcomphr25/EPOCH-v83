@@ -546,7 +546,7 @@ async function resolveSearch(input: TraceabilitySearchInput): Promise<ResolvedSe
       const [lot] = await db
         .select()
         .from(materialLots)
-        .where(eq(materialLots.internalControlNumber, value))
+        .where(sql`LOWER(${materialLots.internalControlNumber}) = LOWER(${value})`)
         .limit(1);
       if (!lot) {
         return { label: `Lot ICN: ${value}`, matchedEntities: [], ledgerCondition: sql`FALSE`, notFound: true };
@@ -570,11 +570,11 @@ async function resolveSearch(input: TraceabilitySearchInput): Promise<ResolvedSe
         .from(cuttingFabricInventory)
         .where(
           or(
-            eq(cuttingFabricInventory.rollNumber, value),
-            eq(cuttingFabricInventory.internalControlNumber, value),
-            eq(cuttingFabricInventory.lotNumber, value),
-            eq(cuttingFabricInventory.batchNumber, value),
-            eq(cuttingFabricInventory.barcode, value),
+            sql`LOWER(COALESCE(${cuttingFabricInventory.rollNumber}, '')) = LOWER(${value})`,
+            sql`LOWER(COALESCE(${cuttingFabricInventory.internalControlNumber}, '')) = LOWER(${value})`,
+            sql`LOWER(COALESCE(${cuttingFabricInventory.lotNumber}, '')) = LOWER(${value})`,
+            sql`LOWER(COALESCE(${cuttingFabricInventory.batchNumber}, '')) = LOWER(${value})`,
+            sql`LOWER(COALESCE(${cuttingFabricInventory.barcode}, '')) = LOWER(${value})`,
           ),
         )
         .limit(1);
@@ -602,9 +602,9 @@ async function resolveSearch(input: TraceabilitySearchInput): Promise<ResolvedSe
         .from(p2SerializedItems)
         .where(
           or(
-            eq(p2SerializedItems.serialNumber, value),
-            eq(p2SerializedItems.barcode, value),
-            eq(p2SerializedItems.travelerBarcode, value),
+            sql`LOWER(${p2SerializedItems.serialNumber}) = LOWER(${value})`,
+            sql`LOWER(${p2SerializedItems.barcode}) = LOWER(${value})`,
+            sql`LOWER(COALESCE(${p2SerializedItems.travelerBarcode}, '')) = LOWER(${value})`,
           ),
         )
         .limit(1);
@@ -1065,16 +1065,16 @@ async function loadTravelerMaterialCaptures(input: TraceabilitySearchInput): Pro
     )
     .where(
       or(
-        eq(p2SerializedItemTraceability.traceabilityValue, value),
-        eq(p2SerializedItemTraceability.inventoryPartNumber, value),
-        eq(p2SerializedItems.serialNumber, value),
-        eq(p2SerializedItems.barcode, value),
-        eq(p2SerializedItems.travelerBarcode, value),
-        eq(travelers.travelerNumber, value),
-        eq(materialLots.internalControlNumber, value),
-        eq(cuttingFabricInventory.internalControlNumber, value),
-        eq(cuttingFabricInventory.rollNumber, value),
-        eq(cuttingFabricInventory.barcode, value),
+        sql`LOWER(${p2SerializedItemTraceability.traceabilityValue}) = LOWER(${value})`,
+        sql`LOWER(COALESCE(${p2SerializedItemTraceability.inventoryPartNumber}, '')) = LOWER(${value})`,
+        sql`LOWER(${p2SerializedItems.serialNumber}) = LOWER(${value})`,
+        sql`LOWER(${p2SerializedItems.barcode}) = LOWER(${value})`,
+        sql`LOWER(COALESCE(${p2SerializedItems.travelerBarcode}, '')) = LOWER(${value})`,
+        sql`LOWER(COALESCE(${travelers.travelerNumber}, '')) = LOWER(${value})`,
+        sql`LOWER(COALESCE(${materialLots.internalControlNumber}, '')) = LOWER(${value})`,
+        sql`LOWER(COALESCE(${cuttingFabricInventory.internalControlNumber}, '')) = LOWER(${value})`,
+        sql`LOWER(COALESCE(${cuttingFabricInventory.rollNumber}, '')) = LOWER(${value})`,
+        sql`LOWER(COALESCE(${cuttingFabricInventory.barcode}, '')) = LOWER(${value})`,
       ),
     )
     .limit(200);

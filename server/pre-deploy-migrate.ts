@@ -414,6 +414,45 @@ async function main() {
     CREATE INDEX IF NOT EXISTS idx_punch_correction_requests_supervisor_id
       ON timekeeping.punch_correction_requests(supervisor_id)
   `, 'Ensure punch_correction_requests supervisor index');
+  await runSql(`
+    ALTER TABLE timekeeping.punch_correction_requests
+      ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'employee_portal'
+  `, 'Ensure punch_correction_requests source column');
+  await runSql(`
+    ALTER TABLE timekeeping.punch_correction_requests
+      ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'pending_supervisor'
+  `, 'Ensure punch_correction_requests status column');
+  await runSql(`
+    ALTER TABLE timekeeping.punch_correction_requests
+      ADD COLUMN IF NOT EXISTS submitted_by_user_id INTEGER
+  `, 'Ensure punch_correction_requests submitted_by_user_id column');
+  await runSql(`
+    ALTER TABLE timekeeping.punch_correction_requests
+      ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  `, 'Ensure punch_correction_requests submitted_at column');
+  await runSql(`
+    ALTER TABLE timekeeping.punch_correction_requests
+      DROP CONSTRAINT IF EXISTS punch_correction_requests_source_check;
+    ALTER TABLE timekeeping.punch_correction_requests
+      DROP CONSTRAINT IF EXISTS chk_punch_correction_source;
+    ALTER TABLE timekeeping.punch_correction_requests
+      ADD CONSTRAINT chk_punch_correction_source
+        CHECK (source IN ('employee_portal', 'kiosk', 'admin'))
+  `, 'Ensure punch_correction_requests source constraint');
+  await runSql(`
+    ALTER TABLE timekeeping.punch_correction_requests
+      DROP CONSTRAINT IF EXISTS chk_punch_correction_request_type;
+    ALTER TABLE timekeeping.punch_correction_requests
+      ADD CONSTRAINT chk_punch_correction_request_type
+        CHECK (request_type IN ('edit_session', 'add_session', 'delete_session'))
+  `, 'Ensure punch_correction_requests request type constraint');
+  await runSql(`
+    ALTER TABLE timekeeping.punch_correction_requests
+      DROP CONSTRAINT IF EXISTS chk_punch_correction_status;
+    ALTER TABLE timekeeping.punch_correction_requests
+      ADD CONSTRAINT chk_punch_correction_status
+        CHECK (status IN ('pending_supervisor', 'pending_hr', 'approved', 'rejected', 'cancelled'))
+  `, 'Ensure punch_correction_requests status constraint');
 
   await runSql(`
     ALTER TABLE all_orders

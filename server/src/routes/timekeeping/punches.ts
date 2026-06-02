@@ -329,6 +329,41 @@ function h(fn: (req: Request, res: Response, next: NextFunction) => Promise<void
   });
 }
 
+function formatPunchCorrectionDbError(err: any): { statusCode: number; error: string } {
+  const constraint = typeof err?.constraint === "string" ? err.constraint : null;
+  const detail = typeof err?.detail === "string" ? err.detail : null;
+
+  if (err?.code === "23514") {
+    return {
+      statusCode: 422,
+      error: `Punch correction could not be submitted because a database rule rejected it${constraint ? ` (${constraint})` : ""}.${detail ? ` ${detail}` : ""}`,
+    };
+  }
+
+  if (err?.code === "23503") {
+    return {
+      statusCode: 422,
+      error: `Punch correction references a record that does not exist${constraint ? ` (${constraint})` : ""}.${detail ? ` ${detail}` : ""}`,
+    };
+  }
+
+  if (err?.code === "42703") {
+    return {
+      statusCode: 500,
+      error: `Punch correction database schema is missing a required column${err?.column ? ` (${err.column})` : ""}.`,
+    };
+  }
+
+  if (err?.code === "42P01") {
+    return {
+      statusCode: 500,
+      error: "Punch correction database table is missing.",
+    };
+  }
+
+  return { statusCode: 500, error: "Internal server error" };
+}
+
 type PunchSessionEvent = {
   id: number;
   sessionId: number;
@@ -739,16 +774,31 @@ router.post("/kiosk/punch-corrections", h(async (req, res): Promise<void> => {
     return;
   }
 
-  const result = await punchCorrections.submitPunchCorrectionRequest({
-    employeeId,
-    punchLedgerId: punchLedgerId ?? null,
-    requestType,
-    reason,
-    proposedChanges,
-    source: "kiosk",
-    actorUser: null,
-    actorIp: req.ip ?? null,
-  });
+  let result: Awaited<ReturnType<typeof punchCorrections.submitPunchCorrectionRequest>>;
+  try {
+    result = await punchCorrections.submitPunchCorrectionRequest({
+      employeeId,
+      punchLedgerId: punchLedgerId ?? null,
+      requestType,
+      reason,
+      proposedChanges,
+      source: "kiosk",
+      actorUser: null,
+      actorIp: req.ip ?? null,
+    });
+  } catch (err: any) {
+    console.error("[kiosk/punch-corrections] submit failed", {
+      code: err?.code,
+      constraint: err?.constraint,
+      table: err?.table,
+      column: err?.column,
+      detail: err?.detail,
+      message: err?.message,
+    });
+    const formatted = formatPunchCorrectionDbError(err);
+    res.status(formatted.statusCode).json({ error: formatted.error });
+    return;
+  }
 
   if ("error" in result) {
     res.status(result.statusCode).json({ error: result.error });

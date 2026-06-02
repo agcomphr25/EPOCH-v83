@@ -8,6 +8,7 @@ import {
   mediaAttachments,
   mediaLibrary,
   customers,
+  customerContacts,
   purchaseOrders,
   p2Customers,
   p2CustomerContacts,
@@ -1199,20 +1200,132 @@ router.post('/:id/post', requirePermission('finance.post_invoice'), async (req: 
   }
 });
 
-async function getInvoiceRecipients(customerId: string, explicitTo?: string): Promise<string | null> {
-  if (explicitTo) return explicitTo;
-  const [customer] = await db
-    .select({ id: p2Customers.id, email: p2Customers.contactEmail })
-    .from(p2Customers)
-    .where(eq(p2Customers.customerId, customerId));
-  if (customer?.email) return customer.email;
-  if (!customer?.id) return null;
+type InvoiceEmailRecipient = {
+  name: string;
+  email: string;
+  type: 'primary' | 'additional' | 'contact';
+};
 
-  const [primaryContact] = await db
-    .select({ email: p2CustomerContacts.email })
-    .from(p2CustomerContacts)
-    .where(and(eq(p2CustomerContacts.customerId, customer.id), eq(p2CustomerContacts.isPrimary, true)));
-  return primaryContact?.email || null;
+function appendRecipient(recipients: InvoiceEmailRecipient[], recipient: InvoiceEmailRecipient) {
+  const email = recipient.email?.trim();
+  if (!email) return;
+  if (recipients.some((r) => r.email.trim().toLowerCase() === email.toLowerCase())) return;
+  recipients.push({ ...recipient, email });
+}
+
+function filterAllowedRecipients(raw: unknown, allowed: Set<string>): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((email): email is string => typeof email === 'string')
+    .map((email) => email.trim().toLowerCase())
+    .filter((email) => allowed.has(email));
+}
+
+function deriveInvoiceToAndCc(rawRecipients: unknown, recipients: InvoiceEmailRecipient[]): { to: string | null; cc: string[] } {
+  const primary = recipients.find((recipient) => recipient.type === 'primary') ?? recipients[0];
+  if (!primary) return { to: null, cc: [] };
+
+  const allowed = new Set(recipients.map((recipient) => recipient.email.trim().toLowerCase()));
+  const validated = filterAllowedRecipients(rawRecipients, allowed);
+  const primaryNorm = primary.email.trim().toLowerCase();
+
+  if (validated.length === 0) return { to: primary.email, cc: [] };
+
+  const to = validated.includes(primaryNorm) ? primary.email : validated[0];
+  const toNorm = to.trim().toLowerCase();
+  const cc = validated.filter((email) => email !== toNorm);
+  return { to, cc };
+}
+
+async function getInvoiceEmailRecipients(invoice: typeof arInvoices.$inferSelect): Promise<InvoiceEmailRecipient[]> {
+  const recipients: InvoiceEmailRecipient[] = [];
+
+  const isP1 = await isP1Invoice(invoice);
+  if (isP1) {
+    const [customer] = await db
+      .select({ id: customers.id, name: customers.name, email: customers.email, contact: customers.contact })
+      .from(customers)
+      .where(sql`(CASE WHEN ${invoice.customerId} ~ '^[0-9]+$' THEN ${invoice.customerId}::integer END) = ${customers.id}`);
+
+    if (customer?.id) {
+      const contacts = await db
+        .select({
+          name: customerContacts.name,
+          email: customerContacts.email,
+          phone: customerContacts.phone,
+          isPrimary: customerContacts.isPrimary,
+        })
+        .from(customerContacts)
+        .where(and(
+          eq(customerContacts.customerId, customer.id),
+          eq(customerContacts.active, true),
+          eq(customerContacts.receivesInvoices, true),
+        ))
+        .orderBy(desc(customerContacts.isPrimary), customerContacts.name);
+
+      for (const contact of contacts) {
+        if (contact.email) {
+          appendRecipient(recipients, {
+            name: contact.name,
+            email: contact.email,
+            type: contact.isPrimary && recipients.length === 0 ? 'primary' : 'contact',
+          });
+        }
+      }
+    }
+
+    if (customer?.email) {
+      appendRecipient(recipients, {
+        name: customer.contact || customer.name,
+        email: customer.email,
+        type: recipients.length === 0 ? 'primary' : 'additional',
+      });
+    }
+  }
+
+  const [p2Customer] = await db
+    .select({ id: p2Customers.id, name: p2Customers.customerName, email: p2Customers.contactEmail })
+    .from(p2Customers)
+    .where(eq(p2Customers.customerId, invoice.customerId));
+
+  if (p2Customer?.email) {
+    appendRecipient(recipients, {
+      name: p2Customer.name,
+      email: p2Customer.email,
+      type: recipients.length === 0 ? 'primary' : 'additional',
+    });
+  }
+
+  if (p2Customer?.id) {
+    const contacts = await db
+      .select({ name: p2CustomerContacts.name, email: p2CustomerContacts.email, isPrimary: p2CustomerContacts.isPrimary })
+      .from(p2CustomerContacts)
+      .where(eq(p2CustomerContacts.customerId, p2Customer.id));
+
+    for (const contact of contacts) {
+      if (contact.email) {
+        appendRecipient(recipients, {
+          name: contact.name,
+          email: contact.email,
+          type: contact.isPrimary && recipients.length === 0 ? 'primary' : 'contact',
+        });
+      }
+    }
+  }
+
+  return recipients;
+}
+
+async function isP1Invoice(invoice: typeof arInvoices.$inferSelect): Promise<boolean> {
+  if (invoice.notes?.includes('Auto-created from P1 OEM packing slip')) return true;
+  if (invoice.internalNotes?.includes('Source: P1 OEM shipment')) return true;
+
+  const [line] = await db
+    .select({ id: arInvoiceLines.id })
+    .from(arInvoiceLines)
+    .where(and(eq(arInvoiceLines.invoiceId, invoice.id), sql`${arInvoiceLines.dimensionTags}->>'source' = 'p1_oem_packing_slip'`))
+    .limit(1);
+  return !!line;
 }
 
 async function getMediaEmailAttachments(entityRefs: Array<{ entityType: string; entityId: string }>) {
@@ -1279,11 +1392,27 @@ async function getLotFileAttachments(lotId: string | null) {
   return attachments;
 }
 
+router.get('/:id/email-recipients', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const [invoice] = await db.select().from(arInvoices).where(eq(arInvoices.id, id));
+    if (!invoice) {
+      return res.status(404).json({ error: 'Invoice not found' });
+    }
+
+    const recipients = await getInvoiceEmailRecipients(invoice);
+    res.json(recipients);
+  } catch (error) {
+    console.error('Failed to retrieve invoice email recipients:', error);
+    res.status(500).json({ error: 'Failed to retrieve invoice email recipients' });
+  }
+});
+
 router.post('/:id/send', requirePermission('finance.post_invoice'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const user = (req as any).user?.username || null;
-    const { to: explicitTo, cc, customerMessage } = req.body || {};
+    const { recipients: selectedRecipients, customerMessage } = req.body || {};
 
     const [invoice] = await db.select().from(arInvoices).where(eq(arInvoices.id, id));
     if (!invoice) {
@@ -1296,7 +1425,9 @@ router.post('/:id/send', requirePermission('finance.post_invoice'), async (req: 
       return res.status(409).json({ error: 'Invoice pricing must be resolved before sending' });
     }
 
-    const to = await getInvoiceRecipients(invoice.customerId, explicitTo);
+    const isP1 = await isP1Invoice(invoice);
+    const availableRecipients = await getInvoiceEmailRecipients(invoice);
+    const { to, cc } = deriveInvoiceToAndCc(selectedRecipients, availableRecipients);
     if (!to) {
       return res.status(422).json({ error: 'No customer email found. Add a customer contact email or provide a recipient.' });
     }
@@ -1331,6 +1462,7 @@ router.post('/:id/send', requirePermission('finance.post_invoice'), async (req: 
     const result = await sendEmailViaSendGrid({
       to,
       cc,
+      fromName: isP1 ? 'AG Composites' : undefined,
       subject: `Invoice ${invoice.invoiceNumber}`,
       text,
       html: `<p>Please find attached invoice <strong>${invoice.invoiceNumber}</strong>.</p>${customerMessage || invoice.customerVisibleNotes ? `<p>${String(customerMessage || invoice.customerVisibleNotes).replace(/\n/g, '<br/>')}</p>` : ''}<p><strong>Amount due:</strong> $${Number(invoice.totalAmount || 0).toFixed(2)}</p>${invoice.dueDate ? `<p><strong>Due date:</strong> ${invoice.dueDate}</p>` : ''}`,

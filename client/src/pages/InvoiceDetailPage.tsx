@@ -19,6 +19,7 @@ import {
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -118,6 +119,74 @@ interface AllocationRow {
   applyAmount: string;
 }
 
+type EmailRecipient = {
+  name: string;
+  email: string;
+  type: 'primary' | 'additional' | 'contact';
+};
+
+function RecipientPickerList({
+  recipients,
+  selected,
+  onChange,
+  isLoading,
+}: {
+  recipients: EmailRecipient[];
+  selected: string[];
+  onChange: (emails: string[]) => void;
+  isLoading: boolean;
+}) {
+  const toggle = (email: string) => {
+    if (selected.includes(email)) {
+      onChange(selected.filter((item) => item !== email));
+    } else {
+      onChange([...selected, email]);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 py-3 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Loading recipients...
+      </div>
+    );
+  }
+
+  if (recipients.length === 0) {
+    return <div className="py-2 text-sm text-muted-foreground italic">No customer email recipients found.</div>;
+  }
+
+  return (
+    <div className="space-y-2 py-1">
+      {recipients.map((recipient) => (
+        <div
+          key={recipient.email}
+          className="flex cursor-pointer items-start gap-3 rounded-lg border p-2.5 transition-colors hover:bg-muted/40"
+          onClick={() => toggle(recipient.email)}
+        >
+          <Checkbox
+            id={`invoice-recipient-${recipient.email}`}
+            checked={selected.includes(recipient.email)}
+            onCheckedChange={() => toggle(recipient.email)}
+            onClick={(event) => event.stopPropagation()}
+            className="mt-0.5"
+          />
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-medium">{recipient.name}</div>
+            <div className="truncate text-xs text-muted-foreground">{recipient.email}</div>
+          </div>
+          {recipient.type === 'primary' && (
+            <span className="mt-0.5 shrink-0 rounded bg-blue-100 px-1.5 py-0.5 text-xs text-blue-700">
+              Primary
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function InvoiceDetailPage() {
   const [, setLocation] = useLocation();
   const [matched, params] = useRoute('/finance/invoices/:id');
@@ -130,6 +199,10 @@ export default function InvoiceDetailPage() {
   const [paymentForm, setPaymentForm] = useState<PaymentFormData>(defaultPaymentForm());
   const [createdPaymentId, setCreatedPaymentId] = useState<string | null>(null);
   const [allocations, setAllocations] = useState<AllocationRow[]>([]);
+  const [sendDialogOpen, setSendDialogOpen] = useState(false);
+  const [dialogRecipients, setDialogRecipients] = useState<EmailRecipient[]>([]);
+  const [selectedRecipients, setSelectedRecipients] = useState<string[]>([]);
+  const [isLoadingRecipients, setIsLoadingRecipients] = useState(false);
 
   const { data: invoice, isLoading } = useQuery<any>({
     queryKey: ['/api/ar-invoices', id],
@@ -185,17 +258,51 @@ export default function InvoiceDetailPage() {
   });
 
   const sendInvoiceMutation = useMutation({
-    mutationFn: () => apiRequest(`/api/ar-invoices/${id}/send`, { method: 'POST', body: {} }),
+    mutationFn: (recipients: string[]) =>
+      apiRequest(`/api/ar-invoices/${id}/send`, {
+        method: 'POST',
+        body: { recipients },
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ predicate: (query) =>
         Array.isArray(query.queryKey) && query.queryKey[0] === '/api/ar-invoices'
       });
+      setSendDialogOpen(false);
       toast({ title: 'Invoice sent', description: 'SendGrid delivery was accepted and tracked.' });
     },
     onError: (error: any) => {
       toast({ title: 'Send failed', description: error.message, variant: 'destructive' });
     },
   });
+
+  const loadInvoiceRecipients = async () => {
+    if (!id) return;
+    setIsLoadingRecipients(true);
+    setDialogRecipients([]);
+    setSelectedRecipients([]);
+    try {
+      const raw: EmailRecipient[] = await apiRequest(`/api/ar-invoices/${id}/email-recipients`);
+      const seen = new Set<string>();
+      const recipients = raw.filter((recipient) => {
+        const key = recipient.email.trim().toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      setDialogRecipients(recipients);
+      const primary = recipients.find((recipient) => recipient.type === 'primary');
+      setSelectedRecipients(primary ? [primary.email] : recipients.slice(0, 1).map((recipient) => recipient.email));
+    } catch (error: any) {
+      toast({ title: 'Recipients unavailable', description: error.message, variant: 'destructive' });
+    } finally {
+      setIsLoadingRecipients(false);
+    }
+  };
+
+  const handleOpenSendDialog = () => {
+    setSendDialogOpen(true);
+    loadInvoiceRecipients();
+  };
 
   const createPaymentMutation = useMutation({
     mutationFn: async (data: PaymentFormData) => {
@@ -452,7 +559,7 @@ export default function InvoiceDetailPage() {
           )}
           {['REVIEW', 'POSTED'].includes(invoice.status) && (
             <Button
-              onClick={() => sendInvoiceMutation.mutate()}
+              onClick={handleOpenSendDialog}
               disabled={sendInvoiceMutation.isPending || invoice.pricingMismatch || invoice.pricingAmbiguous}
               title={invoice.pricingMismatch || invoice.pricingAmbiguous ? 'Resolve pricing before sending' : 'Send invoice'}
             >
@@ -894,6 +1001,38 @@ export default function InvoiceDetailPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <Dialog open={sendDialogOpen} onOpenChange={setSendDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Send Invoice</DialogTitle>
+            <DialogDescription>
+              Select the recipients for invoice {invoice.invoiceNumber}. The primary recipient is sent directly when selected; other selected recipients are copied.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Email Recipients</Label>
+            <RecipientPickerList
+              recipients={dialogRecipients}
+              selected={selectedRecipients}
+              onChange={setSelectedRecipients}
+              isLoading={isLoadingRecipients}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSendDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => sendInvoiceMutation.mutate(selectedRecipients)}
+              disabled={sendInvoiceMutation.isPending || isLoadingRecipients || selectedRecipients.length === 0}
+            >
+              {sendInvoiceMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Send Invoice
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
         <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">

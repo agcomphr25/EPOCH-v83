@@ -188,6 +188,7 @@ const safeFiles = [
   '0153_user_finish_technician_flag.sql',
   '0154_p1_department_notes.sql',
   '0155_repair_punch_correction_request_constraints.sql',
+  '0156_p1_customer_contacts.sql',
   'investigation_308_order_duplication.sql',
 ];
 

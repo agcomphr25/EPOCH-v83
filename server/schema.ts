@@ -3566,6 +3566,25 @@ export const customerAddresses = pgTable('customer_addresses', {
   updatedAt: timestamp('updated_at'),
 });
 
+export const customerContacts = pgTable('customer_contacts', {
+  id: serial('id').primaryKey(),
+  customerId: integer('customer_id')
+    .notNull()
+    .references(() => customers.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  title: text('title'),
+  email: text('email'),
+  phone: text('phone'),
+  isPrimary: boolean('is_primary').notNull().default(false),
+  receivesInvoices: boolean('receives_invoices').notNull().default(true),
+  receivesShippingNotifications: boolean('receives_shipping_notifications').notNull().default(false),
+  receivesOrderConfirmations: boolean('receives_order_confirmations').notNull().default(false),
+  notes: text('notes'),
+  active: boolean('active').notNull().default(true),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
 // Vendors table for supplier management
 export const vendors = pgTable('vendors', {
   id: serial('id').primaryKey(),
@@ -4250,6 +4269,34 @@ export const insertCustomerSchema = createInsertSchema(customers)
     preferredCommunicationMethod: z.array(z.enum(['email', 'sms'])).optional(),
     notes: z.string().optional(),
     isActive: z.boolean().default(true),
+  });
+
+export const insertCustomerContactSchema = createInsertSchema(customerContacts)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    customerId: z.coerce.number().int().positive(),
+    name: z.string().trim().min(1, 'Contact name is required'),
+    title: z.string().optional().nullable(),
+    email: z
+      .string()
+      .optional()
+      .nullable()
+      .transform((val) => (val === '' ? null : val))
+      .refine(
+        (email) => !email || z.string().email().safeParse(email).success,
+        { message: 'Invalid email format' }
+      ),
+    phone: z.string().optional().nullable(),
+    isPrimary: z.boolean().default(false),
+    receivesInvoices: z.boolean().default(true),
+    receivesShippingNotifications: z.boolean().default(false),
+    receivesOrderConfirmations: z.boolean().default(false),
+    notes: z.string().optional().nullable(),
+    active: z.boolean().default(true),
   });
 
 export const insertVendorSchema = createInsertSchema(vendors)
@@ -4944,6 +4991,8 @@ export const insertNonconformanceRecordSchema = createInsertSchema(
 // Types for Module 8
 export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
 export type Customer = typeof customers.$inferSelect;
+export type CustomerContact = typeof customerContacts.$inferSelect;
+export type InsertCustomerContact = z.infer<typeof insertCustomerContactSchema>;
 export type InsertCustomerAddress = z.infer<typeof insertCustomerAddressSchema>;
 export type CustomerAddress = typeof customerAddresses.$inferSelect;
 export type InsertCommunicationLog = z.infer<

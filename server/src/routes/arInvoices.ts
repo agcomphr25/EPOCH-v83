@@ -8,6 +8,7 @@ import {
   mediaAttachments,
   mediaLibrary,
   customers,
+  customerContacts,
   purchaseOrders,
   p2Customers,
   p2CustomerContacts,
@@ -1242,15 +1243,42 @@ async function getInvoiceEmailRecipients(invoice: typeof arInvoices.$inferSelect
   const isP1 = await isP1Invoice(invoice);
   if (isP1) {
     const [customer] = await db
-      .select({ name: customers.name, email: customers.email, contact: customers.contact })
+      .select({ id: customers.id, name: customers.name, email: customers.email, contact: customers.contact })
       .from(customers)
       .where(sql`(CASE WHEN ${invoice.customerId} ~ '^[0-9]+$' THEN ${invoice.customerId}::integer END) = ${customers.id}`);
+
+    if (customer?.id) {
+      const contacts = await db
+        .select({
+          name: customerContacts.name,
+          email: customerContacts.email,
+          phone: customerContacts.phone,
+          isPrimary: customerContacts.isPrimary,
+        })
+        .from(customerContacts)
+        .where(and(
+          eq(customerContacts.customerId, customer.id),
+          eq(customerContacts.active, true),
+          eq(customerContacts.receivesInvoices, true),
+        ))
+        .orderBy(desc(customerContacts.isPrimary), customerContacts.name);
+
+      for (const contact of contacts) {
+        if (contact.email) {
+          appendRecipient(recipients, {
+            name: contact.name,
+            email: contact.email,
+            type: contact.isPrimary && recipients.length === 0 ? 'primary' : 'contact',
+          });
+        }
+      }
+    }
 
     if (customer?.email) {
       appendRecipient(recipients, {
         name: customer.contact || customer.name,
         email: customer.email,
-        type: 'primary',
+        type: recipients.length === 0 ? 'primary' : 'additional',
       });
     }
   }

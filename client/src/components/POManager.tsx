@@ -96,6 +96,7 @@ import POItemsManager from './POItemsManager';
 import AddressInput from './AddressInput';
 import { type AddressData } from '@/utils/addressUtils';
 import { format as formatDate } from 'date-fns';
+import { formatDateOnly } from '@shared/utils/dateNormalization';
 
 // Component to display PO quantity
 function POQuantityDisplay({ poId }: { poId: number }) {
@@ -1052,11 +1053,11 @@ function POCard({
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div>
             <span className="font-medium">PO Date:</span>{' '}
-            {new Date(po.poDate).toLocaleDateString()}
+            {formatDateOnly(po.poDate)}
           </div>
           <div>
             <span className="font-medium">Expected Delivery:</span>{' '}
-            {new Date(po.expectedDelivery).toLocaleDateString()}
+            {formatDateOnly(po.expectedDelivery)}
           </div>
         </div>
         {po.notes && (
@@ -2089,7 +2090,7 @@ export default function POManager() {
                           >
                             <div className="font-medium">Week {week.week}</div>
                             <div className="text-sm text-gray-600 dark:text-gray-400">
-                              Due: {new Date(week.dueDate).toLocaleDateString()}
+                              Due: {formatDateOnly(week.dueDate)}
                             </div>
                             <div className="text-sm">
                               Complete: {week.itemsToComplete} items

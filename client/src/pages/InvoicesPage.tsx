@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
-import { format } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -54,6 +53,7 @@ import {
 } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
+import { formatDateOnly } from '@shared/utils/dateNormalization';
 
 type Invoice = {
   id: string;
@@ -338,14 +338,10 @@ function FlatInvoiceTable({
               {getPoDisplay(invoice) ?? '—'}
             </TableCell>
             <TableCell className="text-sm">
-              {invoice.invoiceDate
-                ? format(new Date(invoice.invoiceDate), 'MM/dd/yyyy')
-                : '—'}
+              {formatDateOnly(invoice.invoiceDate)}
             </TableCell>
             <TableCell className="text-sm">
-              {invoice.dueDate
-                ? format(new Date(invoice.dueDate), 'MM/dd/yyyy')
-                : '—'}
+              {formatDateOnly(invoice.dueDate)}
             </TableCell>
             <TableCell className="text-right font-medium">
               {formatCurrency(invoice.totalAmount)}
@@ -729,14 +725,10 @@ export default function InvoicesPage() {
                                           {getPoDisplay(invoice) ?? '—'}
                                         </TableCell>
                                         <TableCell>
-                                          {invoice.invoiceDate
-                                            ? format(new Date(invoice.invoiceDate), 'MM/dd/yyyy')
-                                            : '—'}
+                                          {formatDateOnly(invoice.invoiceDate)}
                                         </TableCell>
                                         <TableCell>
-                                          {invoice.dueDate
-                                            ? format(new Date(invoice.dueDate), 'MM/dd/yyyy')
-                                            : '—'}
+                                          {formatDateOnly(invoice.dueDate)}
                                         </TableCell>
                                         <TableCell className="text-right font-medium">
                                           {formatCurrency(invoice.totalAmount)}

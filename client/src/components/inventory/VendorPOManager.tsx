@@ -95,6 +95,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { getResendConfirmationKey, getSendRFQInvalidationKeys } from '@/lib/vendorPOInvalidation';
+import { formatDateOnly, formatDateOnlyMedium } from '@shared/utils/dateNormalization';
 
 // Helper function to format numbers with commas
 function formatNumber(value: number | undefined | null, decimals: number = 2): string {
@@ -188,8 +189,7 @@ function RecipientPickerList({
 
 function formatReadinessDate(value: unknown): string {
   if (!value) return 'None recorded';
-  const date = new Date(String(value));
-  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString();
+  return formatDateOnly(String(value));
 }
 
 function IssueReadinessCard({
@@ -3144,8 +3144,8 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
       const docTitle = isRFQ ? 'REQUEST FOR QUOTE' : 'PURCHASE ORDER';
       const accentColor = isRFQ ? '#e67e22' : '#1a3a5c';
       const formattedPONumber = po.poNumber ? po.poNumber.replace('VPO-', '') : '';
-      const orderDate = po.createdAt ? new Date(po.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
-      const deliveryDate = po.expectedDeliveryDate ? new Date(po.expectedDeliveryDate).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
+      const orderDate = po.createdAt ? formatDateOnlyMedium(po.createdAt) : 'N/A';
+      const deliveryDate = po.expectedDeliveryDate ? formatDateOnlyMedium(po.expectedDeliveryDate) : 'N/A';
       const lineItemTotal = items.reduce((sum, item) => sum + ((Number(item.quantity) || 0) * (Number(item.unitPrice) || 0)), 0);
       const escapeHtml = (value: unknown) => String(value ?? '')
         .replace(/&/g, '&amp;')

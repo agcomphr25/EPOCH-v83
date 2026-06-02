@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useRoute, useLocation, Link } from 'wouter';
-import { format } from 'date-fns';
 import {
   ArrowLeft,
   Edit,
@@ -52,6 +51,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import MediaAttachmentPicker from '@/components/MediaAttachmentPicker';
+import { formatDateOnly } from '@shared/utils/dateNormalization';
 
 const PAYMENT_METHODS = [
   { value: 'ACH', label: 'ACH' },
@@ -87,7 +87,7 @@ function formatCurrency(val: string | number | null | undefined) {
 function formatDate(val: string | null | undefined) {
   if (!val) return '—';
   try {
-    return format(new Date(val), 'MM/dd/yyyy');
+    return formatDateOnly(val);
   } catch {
     return val;
   }

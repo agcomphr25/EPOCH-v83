@@ -3936,11 +3936,17 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         const legacyCompletedItems = Number(legacyStats?.completedQty ?? 0);
         const completedItems = Math.max(serializedCompletedItems, legacyCompletedItems);
 
+        const scheduledItems = poItems.filter((s: any) => {
+          if (s.status !== 'ACTIVE') return false;
+          const dept = normalizeP2ControlDepartment(s.currentDepartment || '');
+          return dept === 'Layup';
+        }).length;
+
         const serializedInProductionItems = poItems.filter((s: any) => {
           if (s.status !== 'ACTIVE') return false;
           const dept = normalizeP2ControlDepartment(s.currentDepartment || '');
-          // In production if past Pending Layup stage
-          return dept !== 'Pending Layup' && dept !== '';
+          // Scheduled Layup work is not floor production yet.
+          return dept !== 'Pending Layup' && dept !== 'Layup' && dept !== '';
         }).length;
         const legacyInProductionItems = Number(legacyStats?.inProductionQty ?? 0);
         const rawInProductionItems = Math.max(serializedInProductionItems, legacyInProductionItems);
@@ -3955,7 +3961,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
         // pendingItems = everything not yet completed or in-production (including
         // line item quantities that haven't had serialized items generated yet).
-        const pendingItems = Math.max(0, totalItems - completedItems - inProductionItems);
+        const pendingItems = Math.max(0, totalItems - completedItems - scheduledItems - inProductionItems);
         
         const rawStatus = normalizeP2Status(po.status) || 'OPEN';
 
@@ -3972,6 +3978,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           dueDate: po.expectedDelivery,
           totalItems,
           completedItems,
+          scheduledItems,
           inProductionItems,
           pendingItems,
           hasBOMsNeeded: !po.bomConfigured,
@@ -3980,8 +3987,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           projectName: linkedProject?.projectName ?? po.projectName ?? null,
           ...wadContext,
           rawStatus,
-          status: completedItems === totalItems && totalItems > 0 ? 'completed' : 
-                  (inProductionItems > 0 || rawStatus === 'IN_PRODUCTION') ? 'in_progress' : 'pending'
+          status: completedItems === totalItems && totalItems > 0 ? 'completed' :
+                  inProductionItems > 0 ? 'in_progress' :
+                  scheduledItems > 0 ? 'scheduled' : 'pending'
         };
       });
       
@@ -4029,6 +4037,22 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           serializedByPoItemId.set(poItemId, []);
         }
         serializedByPoItemId.get(poItemId)!.push(item);
+      }
+
+      for (const poItem of poItems) {
+        const poItemId = Number(poItem.poItemId);
+        const orderedQuantity = Number(poItem.orderedQuantity) || 0;
+        const existingItems = serializedByPoItemId.get(poItemId) ?? [];
+        const missingCount = Math.max(0, orderedQuantity - existingItems.length);
+
+        if (missingCount === 0) continue;
+
+        // Historical POs can have ordered quantity that outruns generated
+        // serialized units, which makes pending work disappear from Schedule.
+        const createdItems = await storage.addP2SerializedItemsForPoItem(poItemId, missingCount);
+        if (createdItems.length > 0) {
+          serializedByPoItemId.set(poItemId, [...existingItems, ...createdItems]);
+        }
       }
 
       const sortBySequence = (a: any, b: any) =>

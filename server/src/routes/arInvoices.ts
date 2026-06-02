@@ -16,6 +16,7 @@ import {
   p2PackingSlips,
   p2PurchaseOrders,
   chartOfAccounts,
+  productionLineAccountingMap,
   journalEntries,
   journalLines,
 } from '../../schema';
@@ -28,6 +29,10 @@ import { buildInvoicePreviewFromPackingSlip, createInvoiceFromPackingSlip } from
 import { assertPostingAllowedForPeriod } from '../services/accountingPeriodService';
 import { getFileStorageProviderForObjectPath } from '../services/fileStorageProvider';
 import { recordAuditEvent } from '../services/auditLedgerService';
+import {
+  buildRevenueDimensionTags,
+  resolveRevenueAccountForProductionLine,
+} from '../services/productionLineAccounting';
 
 const LOCKED_STATUSES = ['POSTED', 'SENT', 'VOID', 'PAID'];
 
@@ -854,25 +859,31 @@ router.post('/', requirePermission('finance.post_invoice'), async (req: Request,
         })
         .returning();
 
-      const lineInserts = calculatedLines.map((line: any) => ({
-        invoiceId: invoice.id,
-        inventoryItemId: line.inventoryItemId || null,
-        poItemId: line.poItemId || null,
-        partNumber: line.partNumber || null,
-        productionLine: line.productionLine || 'MIGRATION_REVIEW',
-        projectId: line.projectId || null,
-        projectNameSnapshot: line.projectNameSnapshot || null,
-        salespersonUserId: line.salespersonUserId || null,
-        salespersonNameSnapshot: line.salespersonNameSnapshot || null,
-        csrUserId: line.csrUserId || null,
-        csrNameSnapshot: line.csrNameSnapshot || null,
-        customerType: line.customerType || null,
-        dimensionTags: line.dimensionTags || {},
-        description: line.description,
-        qty: line.qty,
-        unitPrice: line.unitPrice,
-        lineTotal: line.lineTotal,
-      }));
+      const lineInserts = calculatedLines.map((line: any) => {
+        const productionLine = line.productionLine || 'MIGRATION_REVIEW';
+        return {
+          invoiceId: invoice.id,
+          inventoryItemId: line.inventoryItemId || null,
+          poItemId: line.poItemId || null,
+          partNumber: line.partNumber || null,
+          productionLine,
+          projectId: line.projectId || null,
+          projectNameSnapshot: line.projectNameSnapshot || null,
+          salespersonUserId: line.salespersonUserId || null,
+          salespersonNameSnapshot: line.salespersonNameSnapshot || null,
+          csrUserId: line.csrUserId || null,
+          csrNameSnapshot: line.csrNameSnapshot || null,
+          customerType: line.customerType || null,
+          dimensionTags: {
+            ...(line.dimensionTags || {}),
+            ...buildRevenueDimensionTags(productionLine),
+          },
+          description: line.description,
+          qty: line.qty,
+          unitPrice: line.unitPrice,
+          lineTotal: line.lineTotal,
+        };
+      });
 
       const insertedLines = await tx
         .insert(arInvoiceLines)
@@ -943,12 +954,13 @@ router.put('/:id', requirePermission('finance.post_invoice'), async (req: Reques
         const calculatedLines = lines.map((line: any) => {
           const qty = parseFloat(line.qty) || 0;
           const unitPrice = parseFloat(line.unitPrice) || 0;
+          const productionLine = line.productionLine || 'MIGRATION_REVIEW';
           return {
             invoiceId: id,
             inventoryItemId: line.inventoryItemId || null,
             poItemId: line.poItemId || null,
             partNumber: line.partNumber || null,
-            productionLine: line.productionLine || 'MIGRATION_REVIEW',
+            productionLine,
             projectId: line.projectId || null,
             projectNameSnapshot: line.projectNameSnapshot || null,
             salespersonUserId: line.salespersonUserId || null,
@@ -956,7 +968,10 @@ router.put('/:id', requirePermission('finance.post_invoice'), async (req: Reques
             csrUserId: line.csrUserId || null,
             csrNameSnapshot: line.csrNameSnapshot || null,
             customerType: line.customerType || null,
-            dimensionTags: line.dimensionTags || {},
+            dimensionTags: {
+              ...(line.dimensionTags || {}),
+              ...buildRevenueDimensionTags(productionLine),
+            },
             description: line.description,
             qty: qty.toString(),
             unitPrice: unitPrice.toString(),
@@ -1056,6 +1071,10 @@ router.post('/:id/post', requirePermission('finance.post_invoice'), async (req: 
     const retainage = parseFloat(invoice.retainageAmount ?? '0') || 0;
 
     const allAccounts = await db.select().from(chartOfAccounts);
+    const revenueMaps = await db
+      .select()
+      .from(productionLineAccountingMap)
+      .where(eq(productionLineAccountingMap.active, true));
     const arAccount = allAccounts.find((a) => a.accountName === 'Accounts Receivable');
     const accountByNumber = (accountNumber: string) => allAccounts.find((a) => a.accountNumber === accountNumber);
     const arAccountV2 = accountByNumber('11000') ?? arAccount;
@@ -1150,13 +1169,20 @@ router.post('/:id/post', requirePermission('finance.post_invoice'), async (req: 
         lines.push({ ...commonDimensions, journalEntryId: entry.id, accountId: retainageAccount!.id, debitAmount: retainage, creditAmount: 0 });
       }
       for (const line of invoiceLines) {
+        const lineProductionLine = line.productionLine || 'MIGRATION_REVIEW';
+        const lineRevenueAccount = resolveRevenueAccountForProductionLine({
+          productionLine: lineProductionLine,
+          accounts: allAccounts,
+          revenueMaps,
+          fallbackRevenueAccount: revenueAccountV2,
+        });
         lines.push({
           ...commonDimensions,
           journalEntryId: entry.id,
-          accountId: revenueAccountV2.id,
+          accountId: lineRevenueAccount.id,
           debitAmount: 0,
           creditAmount: parseFloat(String(line.lineTotal)) || 0,
-          productionLine: line.productionLine || 'MIGRATION_REVIEW',
+          productionLine: lineProductionLine,
           projectId: line.projectId,
           projectNameSnapshot: line.projectNameSnapshot,
           salespersonUserId: line.salespersonUserId,
@@ -1168,8 +1194,11 @@ router.post('/:id/post', requirePermission('finance.post_invoice'), async (req: 
           partNumber: line.partNumber,
           dimensionTags: {
             ...commonDimensions.dimensionTags,
+            ...(line.dimensionTags && typeof line.dimensionTags === 'object' ? line.dimensionTags : {}),
             arInvoiceLineId: line.id,
             lineDescription: line.description,
+            revenueAccountNumber: lineRevenueAccount.accountNumber,
+            revenueAccountName: lineRevenueAccount.accountName,
           },
         });
       }

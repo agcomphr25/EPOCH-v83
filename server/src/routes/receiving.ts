@@ -1965,9 +1965,9 @@ async function handleAcceptedUnit(unit: ReceivedUnit, receipt: Receipt, user: Au
 }
 
 // ── Helper: determine whether a receipt line strictly requires per-unit traceability ──
-// Lines whose part config marks serial / roll / lot as "required" must be explicitly
+// Lines whose part config marks serial / roll as "required" must be explicitly
 // split by the receiver — they cannot be auto-promoted to a single bulk unit because
-// each physical unit needs its own serial / roll / lot identifier.
+// each physical unit needs its own serial / roll identifier.
 async function lineRequiresStrictSplit(line: ReceiptLine): Promise<{ requires: boolean; fields: string[] }> {
   if (!line.agPartNumber) return { requires: false, fields: [] };
   const [invItem] = await db.select({ traceabilityFieldConfig: inventoryItems.traceabilityFieldConfig })
@@ -1976,7 +1976,7 @@ async function lineRequiresStrictSplit(line: ReceiptLine): Promise<{ requires: b
     .limit(1);
   const cfg = invItem?.traceabilityFieldConfig as Record<string, string> | null | undefined;
   if (!cfg) return { requires: false, fields: [] };
-  const STRICT_KEYS = ['serialNumber', 'rollNumber', 'lotNumber'] as const;
+  const STRICT_KEYS = ['serialNumber', 'rollNumber'] as const;
   const fields = STRICT_KEYS.filter(f => (cfg[f] ?? 'optional') === 'required');
   return { requires: fields.length > 0, fields };
 }
@@ -1984,7 +1984,7 @@ async function lineRequiresStrictSplit(line: ReceiptLine): Promise<{ requires: b
 // ── POST /api/receipts/:id/ensure-units ──────────────────────────────────────
 // Idempotently promote each receipt line that has receivedQty > 0 and zero existing
 // units into a single default received_units record so it shows up in Disposition.
-// Lines whose part config strictly requires per-unit traceability (serial / roll / lot)
+// Lines whose part config strictly requires per-unit traceability (serial / roll)
 // are skipped and reported back so the UI can prompt the receiver to split them.
 router.post('/:id/ensure-units', requireReceivingAccess, async (req: Request, res: Response) => {
   try {

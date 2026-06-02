@@ -1749,7 +1749,7 @@ function UnitSplittingStep({ receipt, onNext, onUpdate }: {
         }
       }));
       if (cancelled) return;
-      const STRICT_KEYS = ['serialNumber', 'rollNumber', 'lotNumber'] as const;
+      const STRICT_KEYS = ['serialNumber', 'rollNumber'] as const;
       const next: Record<number, { strict: boolean; fields: string[] }> = {};
       for (const line of lines) {
         const cfg = line.agPartNumber ? cfgByPart[line.agPartNumber] : null;
@@ -1768,7 +1768,6 @@ function UnitSplittingStep({ receipt, onNext, onUpdate }: {
   const STRICT_FIELD_LABELS: Record<string, string> = {
     serialNumber: 'Serial #',
     rollNumber: 'Roll #',
-    lotNumber: 'Lot #',
   };
   const pendingLines = lines.filter(l => {
     const qty = parseFloat(String(l.receivedQty ?? '0'));

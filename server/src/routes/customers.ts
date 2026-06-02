@@ -48,6 +48,29 @@ function parsePositiveInt(value: string): number | null {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
+function sendCustomerContactDatabaseError(res: Response, error: unknown, action: string): boolean {
+  const dbError = error as { code?: string; message?: string };
+
+  if (dbError.code === '42P01') {
+    res.status(503).json({
+      error: 'Customer contacts are not available yet. Run the latest database migrations, then try again.',
+      detail: 'Missing customer_contacts table',
+    });
+    return true;
+  }
+
+  if (dbError.code === '23503') {
+    res.status(404).json({ error: 'Customer not found for this contact' });
+    return true;
+  }
+
+  console.error(`${action} customer contact database error:`, {
+    code: dbError.code,
+    message: dbError.message,
+  });
+  return false;
+}
+
 // P2 Customers Management - Bypass route (must be before parameterized routes)
 // SECURITY: softAuth enforces authentication in production
 router.get('/p2-customers-bypass', softAuth, async (req: Request, res: Response) => {
@@ -1019,6 +1042,7 @@ router.get('/:id/contacts', softAuth, async (req: Request, res: Response) => {
     res.json(contacts);
   } catch (error) {
     console.error('Get customer contacts error:', error);
+    if (sendCustomerContactDatabaseError(res, error, 'Get')) return;
     res.status(500).json({ error: 'Failed to fetch customer contacts' });
   }
 });
@@ -1052,6 +1076,7 @@ router.post('/:id/contacts', softAuth, async (req: Request, res: Response) => {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: error.errors[0]?.message || 'Invalid contact data', issues: error.errors });
     }
+    if (sendCustomerContactDatabaseError(res, error, 'Create')) return;
     res.status(500).json({ error: 'Failed to create customer contact' });
   }
 });
@@ -1091,6 +1116,7 @@ router.put('/:id/contacts/:contactId', softAuth, async (req: Request, res: Respo
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: error.errors[0]?.message || 'Invalid contact data', issues: error.errors });
     }
+    if (sendCustomerContactDatabaseError(res, error, 'Update')) return;
     res.status(500).json({ error: 'Failed to update customer contact' });
   }
 });
@@ -1115,6 +1141,7 @@ router.delete('/:id/contacts/:contactId', softAuth, async (req: Request, res: Re
     res.status(204).end();
   } catch (error) {
     console.error('Delete customer contact error:', error);
+    if (sendCustomerContactDatabaseError(res, error, 'Delete')) return;
     res.status(500).json({ error: 'Failed to delete customer contact' });
   }
 });

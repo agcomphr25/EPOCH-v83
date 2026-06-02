@@ -10659,6 +10659,7 @@ export class DatabaseStorage implements IStorage {
     // Task #229 — also write a `RECEIVE` row to inventory_transaction_ledger so
     // PO receipts surface in the Material Traceability Viewer / Inventory Ledger.
     let derivedPoStatus: string = 'Sent';
+    let receiptAccrualJournal: any = null;
     await db.transaction(async (tx) => {
       // The route/UI sends `receivedQuantity` as the PER-ACTION amount being
       // received in this call (e.g. `expectedQuantity - alreadyReceived` in
@@ -10677,7 +10678,7 @@ export class DatabaseStorage implements IStorage {
         .update(vendorPOItems)
         .set({
           receivedQuantity: newCumulative,
-          receivedDate,
+          receivedDate: receivedDate.toISOString().slice(0, 10),
           updatedAt: new Date(),
         })
         .where(eq(vendorPOItems.id, poLineItemId));
@@ -10979,6 +10980,18 @@ export class DatabaseStorage implements IStorage {
         .update(vendorPOs)
         .set({ status: derivedPoStatus, updatedAt: new Date() })
         .where(eq(vendorPOs.id, poLineItem.vendorPoId));
+
+      const { createOrUpdateVendorPOReceiptAccrualJournalEntry } = await import(
+        './src/services/vendorPOReceiptAccountingService.js'
+      );
+      receiptAccrualJournal = await createOrUpdateVendorPOReceiptAccrualJournalEntry({
+        poLineItemId,
+        receivedQuantity,
+        receivedDate,
+        cumulativeReceivedQuantity: newCumulative,
+        createdBy,
+        notes: notes ?? null,
+      }, tx);
     });
     console.log(`📦 PO ${poLineItem.vendorPoId} status set to "${derivedPoStatus}"`);
 
@@ -11205,8 +11218,9 @@ export class DatabaseStorage implements IStorage {
           // - expirationDate: Expiration Date column
           const purchaseUnitNormSingle = (inventoryItem.purchaseUnit || '').toLowerCase().trim();
           const sqMeterUnitsSingle = ['sq m', 'sqm', 'square meters', 'm2', 'm²'];
-          const sqMetersPerRollSingle = sqMeterUnitsSingle.includes(purchaseUnitNormSingle) && inventoryItem.purchaseQuantity > 0
-            ? String(inventoryItem.purchaseQuantity)
+          const purchaseQuantitySingle = Number(inventoryItem.purchaseQuantity ?? 0);
+          const sqMetersPerRollSingle = sqMeterUnitsSingle.includes(purchaseUnitNormSingle) && purchaseQuantitySingle > 0
+            ? String(purchaseQuantitySingle)
             : undefined;
           const fabricRecord = await db
             .insert(cuttingFabricInventory)
@@ -11270,6 +11284,9 @@ export class DatabaseStorage implements IStorage {
         isPL2Item: inventoryItem?.utilizedInPL2 ?? false,
         productionLines: productionLines || undefined,
       } : null,
+      accounting: {
+        inventoryReceiptAccrual: receiptAccrualJournal,
+      },
     };
   }
 

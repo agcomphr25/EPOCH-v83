@@ -17,7 +17,7 @@ The live API version is exposed at `GET /api/accounting/event-matrix` for users 
 | Priority | Event | GAAP risk | First action |
 | --- | --- | --- | --- |
 | 1 | Vendor bill recorded | AP, expenses, and inventory are incomplete. | Add vendor bill/AP posting from PO, receipt, and vendor invoice match. |
-| 2 | Inventory received | Inventory can exist operationally without financial value. | Decide whether receipt accrual posts immediately or waits for vendor bill match. |
+| 2 | Inventory received | Inventory can exist operationally without financial value. | Receipt accrual now posts `Dr Inventory - Raw Materials / Cr GRNI - Received Not Invoiced`; next step is vendor invoice matching to clear GRNI to AP. |
 | 3 | Inventory issued to production | WIP/COGS cannot be trusted without material cost movement. | Add item valuation and debit WIP or direct materials on issue/consumption. |
 | 4 | Opening balance migration | Statement opening balances cannot tie out. | Add controlled QBO opening balance import with batch id and tie-out evidence. |
 
@@ -30,6 +30,7 @@ The live API version is exposed at `GET /api/accounting/event-matrix` for users 
 | Modern AR payment received | `AR_PAYMENT` / `ar_payment` | `server/src/services/arPaymentPostingService.ts`; DR `Customer Payment Clearing`, CR `Accounts Receivable` |
 | P1 customer payment received | `P1_CUSTOMER_PAYMENT` / `p1_payment` | `server/src/services/p1PaymentPostingService.ts`; DR `Customer Payment Clearing`, CR `Customer Deposits`; tagged with P1 production line and customer type |
 | Labor cost posted | `LABOR_COST` / `labor_posting_run` | `server/src/services/laborPostingService.ts` |
+| Inventory received from vendor PO | `INVENTORY_RECEIPT_ACCRUAL` / `vendor_po_receipt` | `server/src/services/vendorPOReceiptAccountingService.ts`; DR `Inventory - Raw Materials`, CR `GRNI - Received Not Invoiced`; keyed by PO line and cumulative receipt quantity |
 
 ## Known Partial Coverage
 

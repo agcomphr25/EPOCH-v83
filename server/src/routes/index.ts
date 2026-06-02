@@ -962,8 +962,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     }
   });
 
-  // P2 RMAs - GET all open RMAs
-  app.get('/api/p2/rmas', async (req, res) => {
+  // P2 Nonconforming RMAs - production repair RMAs from P2 NCR dispositions.
+  // Keep this path separate from /api/p2/rmas, which is used for customer shipping RMAs.
+  app.get('/api/p2/nonconforming-rmas', async (req, res) => {
     try {
       const { db } = await import('../../db');
       const { p2Rmas, p2NonconformingDispositions, p2SerializedItems } = await import('../../schema');
@@ -984,8 +985,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     }
   });
 
-  // P2 RMAs - PATCH add materials and/or mark shipped/complete
-  app.patch('/api/p2/rmas/:id', async (req, res) => {
+  // P2 Nonconforming RMAs - PATCH add materials and/or mark shipped/complete
+  app.patch('/api/p2/nonconforming-rmas/:id', async (req, res) => {
     try {
       const { db } = await import('../../db');
       const { p2Rmas, p2SerializedItems, p2SerializedItemEvents, inventoryTransactions, travelers, travelerSteps } = await import('../../schema');

@@ -340,6 +340,7 @@ const QuickNotesPage = React.lazy(() => import('./pages/QuickNotesPage'));
 const ImprovementNotesDashboard = React.lazy(() => import('./pages/ImprovementNotesDashboard'));
 const RFQListPage = React.lazy(() => import('./pages/RFQListPage'));
 const RFQBuilderPage = React.lazy(() => import('./pages/RFQBuilderPage'));
+const DraftBOMBuilderPage = React.lazy(() => import('./pages/DraftBOMBuilderPage'));
 const SystemAuditsPage = React.lazy(() => import('./pages/SystemAuditsPage'));
 const AuditLedgerPage = React.lazy(() => import('./pages/AuditLedgerPage'));
 const InventoryAnomalyDashboard = React.lazy(() => import('./pages/InventoryAnomalyDashboard'));
@@ -645,6 +646,7 @@ function App() {
                   <Route path="/quick-notes" component={QuickNotesPage} />
                   <Route path="/improvement-notes" component={ImprovementNotesDashboard} />
                   <Route path="/estimating" component={RFQListPage} />
+                  <Route path="/estimating/bom-drafts" component={DraftBOMBuilderPage} />
                   <Route path="/rfq-builder" component={RFQBuilderPage} />
                   <Route path="/rfq-builder/:id" component={RFQBuilderPage} />
                   <Route path="/analytics" component={AnalyticsDashboard} />

@@ -31,6 +31,7 @@ import {
   Undo2,
   Ban,
   FileText,
+  Mail,
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 
@@ -82,7 +83,7 @@ interface AuditFullData {
 }
 
 interface AuditDrawerProps {
-  entityType: 'p1_order' | 'p2_order' | 'p2_serialized_item' | 'p2_project';
+  entityType: 'p1_order' | 'p2_order' | 'p2_serialized_item' | 'p2_project' | 'ar_invoice';
   entityId: string;
   trigger?: React.ReactNode;
 }
@@ -101,6 +102,9 @@ const actionIcons: Record<string, any> = {
   CREDIT_APPLIED: DollarSign,
   CREDIT_MEMO_UPDATED: FileText,
   CREDIT_MEMO_CANCELLED: Ban,
+  INVOICE_SEND_ATTEMPTED: Mail,
+  INVOICE_SENT: Mail,
+  INVOICE_SEND_FAILED: AlertCircle,
   REFUND_REQUESTED: Undo2,
   REFUND_APPROVED: CheckCircle,
   REFUND_REJECTED: XCircle,
@@ -124,6 +128,9 @@ const actionColors: Record<string, string> = {
   CREDIT_APPLIED: 'bg-teal-100 text-teal-700 border-teal-300',
   CREDIT_MEMO_UPDATED: 'bg-teal-100 text-teal-700 border-teal-300',
   CREDIT_MEMO_CANCELLED: 'bg-red-100 text-red-700 border-red-300',
+  INVOICE_SEND_ATTEMPTED: 'bg-blue-100 text-blue-700 border-blue-300',
+  INVOICE_SENT: 'bg-green-100 text-green-700 border-green-300',
+  INVOICE_SEND_FAILED: 'bg-red-100 text-red-700 border-red-300',
   REFUND_REQUESTED: 'bg-amber-100 text-amber-700 border-amber-300',
   REFUND_APPROVED: 'bg-green-100 text-green-700 border-green-300',
   REFUND_REJECTED: 'bg-red-100 text-red-700 border-red-300',
@@ -163,6 +170,7 @@ export default function AuditDrawer({ entityType, entityId, trigger }: AuditDraw
   const transitions = data?.transitions || [];
   const scrapCycles = data?.scrapCycles || [];
   const timeSummary = data?.timeSummary || {};
+  const showProductionTabs = entityType !== 'ar_invoice';
 
   const totalTimeMinutes = Object.values(timeSummary).reduce((a, b) => a + b, 0);
 
@@ -188,10 +196,10 @@ export default function AuditDrawer({ entityType, entityId, trigger }: AuditDraw
         </SheetHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-6">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className={`grid w-full ${showProductionTabs ? 'grid-cols-3' : 'grid-cols-1'}`}>
             <TabsTrigger value="timeline">Timeline</TabsTrigger>
-            <TabsTrigger value="departments">Departments</TabsTrigger>
-            <TabsTrigger value="cycles">Scrap Cycles</TabsTrigger>
+            {showProductionTabs && <TabsTrigger value="departments">Departments</TabsTrigger>}
+            {showProductionTabs && <TabsTrigger value="cycles">Scrap Cycles</TabsTrigger>}
           </TabsList>
 
           <TabsContent value="timeline" className="mt-4">
@@ -299,6 +307,26 @@ export default function AuditDrawer({ entityType, entityId, trigger }: AuditDraw
                                   {event.meta.reason && (
                                     <div className="text-xs text-muted-foreground">
                                       Reason: {event.meta.reason}
+                                    </div>
+                                  )}
+                                  {event.meta.to && (
+                                    <div className="text-xs text-muted-foreground">
+                                      To: {String(event.meta.to)}
+                                    </div>
+                                  )}
+                                  {Array.isArray(event.meta.cc) && event.meta.cc.length > 0 && (
+                                    <div className="text-xs text-muted-foreground">
+                                      CC: {event.meta.cc.join(', ')}
+                                    </div>
+                                  )}
+                                  {event.meta.providerMessageId && (
+                                    <div className="text-xs text-muted-foreground">
+                                      Provider ID: {String(event.meta.providerMessageId)}
+                                    </div>
+                                  )}
+                                  {event.meta.error && (
+                                    <div className="text-xs text-red-600">
+                                      Error: {String(event.meta.error)}
                                     </div>
                                   )}
                                   {event.meta.rejectionReason && (

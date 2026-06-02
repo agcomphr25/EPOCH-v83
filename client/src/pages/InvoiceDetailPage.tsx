@@ -15,6 +15,7 @@ import {
   RotateCcw,
   Send,
   Printer,
+  History,
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -52,6 +53,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import MediaAttachmentPicker from '@/components/MediaAttachmentPicker';
+import AuditDrawer from '@/components/AuditDrawer';
 import { formatDateOnly } from '@shared/utils/dateNormalization';
 
 const PAYMENT_METHODS = [
@@ -546,6 +548,16 @@ export default function InvoiceDetailPage() {
             )}
             {isPreviewingPdf ? 'Opening...' : 'Preview PDF'}
           </Button>
+          <AuditDrawer
+            entityType="ar_invoice"
+            entityId={invoice.id}
+            trigger={
+              <Button variant="outline">
+                <History className="mr-2 h-4 w-4" />
+                Audit
+              </Button>
+            }
+          />
           {['DRAFT', 'REVIEW'].includes(invoice.status) && (
             <Button
               variant="outline"

@@ -13,6 +13,7 @@ import NotFound from './pages/not-found';
 import AccessDenied from './pages/AccessDenied';
 import RouteGuard from './components/auth/RouteGuard';
 import SessionExpiryListener from './components/SessionExpiryListener';
+import ErrorBoundary from './components/ErrorBoundary';
 // ── Lazy page imports (route-level code splitting) ──────────────────────────
 const Dashboard = React.lazy(() => import('./pages/Dashboard'));
 const OrderManagement = React.lazy(() => import('./pages/OrderManagement'));
@@ -536,6 +537,11 @@ function Redirect({ to }: { to: string }) {
   return null;
 }
 
+function RouteErrorBoundary({ children }: { children: React.ReactNode }) {
+  const [location] = useLocation();
+  return <ErrorBoundary key={location}>{children}</ErrorBoundary>;
+}
+
 function App() {
   console.log('App component is rendering...');
   console.log('Environment:', import.meta.env.MODE);
@@ -545,6 +551,14 @@ function App() {
   const [error, setError] = React.useState<Error | null>(null);
 
   React.useEffect(() => {
+    const handlePreloadError = () => {
+      const reloadKey = 'epoch:vite-preload-reloaded';
+      const lastReloadedAt = Number(sessionStorage.getItem(reloadKey) || 0);
+      if (Date.now() - lastReloadedAt < 10_000) return;
+      sessionStorage.setItem(reloadKey, String(Date.now()));
+      window.location.reload();
+    };
+
     const handleError = (event: ErrorEvent) => {
       console.error('Global error caught:', event.error);
       setError(event.error);
@@ -555,10 +569,12 @@ function App() {
       setError(new Error(event.reason));
     };
 
+    window.addEventListener('vite:preloadError', handlePreloadError);
     window.addEventListener('error', handleError);
     window.addEventListener('unhandledrejection', handleUnhandledRejection);
 
     return () => {
+      window.removeEventListener('vite:preloadError', handlePreloadError);
       window.removeEventListener('error', handleError);
       window.removeEventListener(
         'unhandledrejection',
@@ -602,9 +618,10 @@ function App() {
               <ConditionalOfflineIndicator />
               <PolicyAcknowledgmentGate />
               <ConditionalMainWrapper>
-                <RouteGuard>
-                  <React.Suspense fallback={<div className="flex items-center justify-center min-h-[60vh]"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" /></div>}>
-                  <Switch>
+                <RouteErrorBoundary>
+                  <RouteGuard>
+                    <React.Suspense fallback={<div className="flex items-center justify-center min-h-[60vh]"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" /></div>}>
+                    <Switch>
                     <Route path="/" component={RootRedirect} />
                     <Route path="/access-denied" component={AccessDenied} />
                   <Route path="/order-management" component={OrderManagement} />
@@ -1458,9 +1475,10 @@ function App() {
 
                     {/* Catch-all route for 404 */}
                     <Route component={NotFound} />
-                  </Switch>
-                  </React.Suspense>
-                </RouteGuard>
+                    </Switch>
+                    </React.Suspense>
+                  </RouteGuard>
+                </RouteErrorBoundary>
               </ConditionalMainWrapper>
             </div>
             <Toaster />

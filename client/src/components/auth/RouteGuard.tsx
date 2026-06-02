@@ -4,6 +4,7 @@ import { useLocation } from 'wouter';
 import { hasRouteAccess, hasFullAccess, getRequiredCapability } from '@/config/userPermissions';
 import { getDashboardRoute } from '@/config/dashboardMapping';
 import AccessDenied from '@/pages/AccessDenied';
+import { Button } from '@/components/ui/button';
 
 interface RouteGuardProps {
   children: React.ReactNode;
@@ -204,7 +205,31 @@ export default function RouteGuard({ children }: RouteGuardProps) {
 
   // Auth resolved — unauthenticated: render nothing while the useEffect redirects
   if (!currentUser) {
-    return null;
+    const redirectTarget = `${location}${window.location.search || ''}`;
+
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <div className="max-w-md rounded-lg border bg-white p-6 text-center shadow-sm">
+          <h1 className="text-lg font-semibold text-gray-900">Sign-in Required</h1>
+          <p className="mt-2 text-sm text-gray-600">
+            Your session needs to be refreshed before this page can load.
+          </p>
+          <div className="mt-4 flex justify-center gap-2">
+            <Button
+              type="button"
+              onClick={() =>
+                setLocation(`/login?redirect=${encodeURIComponent(redirectTarget)}`)
+              }
+            >
+              Go to Login
+            </Button>
+            <Button type="button" variant="outline" onClick={() => window.location.reload()}>
+              Refresh
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   // Authenticated — check route-level permissions (including capability-gated routes)

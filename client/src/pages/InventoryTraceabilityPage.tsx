@@ -40,6 +40,7 @@ import {
 type TraceabilitySearchKey =
   | 'lotIcn'
   | 'rollNumber'
+  | 'serializedItemNumber'
   | 'travelerNumber'
   | 'workOrder'
   | 'chargeCode'
@@ -51,6 +52,7 @@ type TraceabilitySearchKey =
 const SEARCH_KEYS: Array<{ value: TraceabilitySearchKey; label: string; placeholder: string }> = [
   { value: 'lotIcn', label: 'Material ICN', placeholder: 'ICN-MAT-20251223-000184' },
   { value: 'rollNumber', label: 'Roll #', placeholder: 'ROLL-001 or fabric ICN' },
+  { value: 'serializedItemNumber', label: 'Serialized Item #', placeholder: 'serial number, item barcode, or traveler barcode' },
   { value: 'travelerNumber', label: 'Traveler #', placeholder: 'TRV-000123' },
   { value: 'workOrder', label: 'WAD / Work Order #', placeholder: 'WO-000456' },
   { value: 'chargeCode', label: 'Charge Code', placeholder: 'DLM-100' },

@@ -42,6 +42,7 @@ import { resolveTravelerBarcode } from '../helpers/travelerBarcodeResolver';
 export type TraceabilitySearchKey =
   | 'lotIcn'
   | 'rollNumber'
+  | 'serializedItemNumber'
   | 'travelerNumber'
   | 'workOrder'
   | 'chargeCode'
@@ -53,6 +54,7 @@ export type TraceabilitySearchKey =
 export const TRACEABILITY_SEARCH_KEYS: readonly TraceabilitySearchKey[] = [
   'lotIcn',
   'rollNumber',
+  'serializedItemNumber',
   'travelerNumber',
   'workOrder',
   'chargeCode',
@@ -589,6 +591,34 @@ async function resolveSearch(input: TraceabilitySearchInput): Promise<ResolvedSe
           href: fabric.internalControlNumber
             ? `/inventory/traceability?key=lotIcn&value=${encodeURIComponent(fabric.internalControlNumber)}`
             : null,
+        }],
+        ledgerCondition: undefined,
+      };
+    }
+
+    case 'serializedItemNumber': {
+      const [item] = await db
+        .select()
+        .from(p2SerializedItems)
+        .where(
+          or(
+            eq(p2SerializedItems.serialNumber, value),
+            eq(p2SerializedItems.barcode, value),
+            eq(p2SerializedItems.travelerBarcode, value),
+          ),
+        )
+        .limit(1);
+      if (!item) {
+        return { label: `Serialized item: ${value}`, matchedEntities: [], ledgerCondition: undefined, notFound: true };
+      }
+      return {
+        label: `Serialized item ${item.serialNumber}`,
+        detail: `${item.partNumber} - ${item.partName} - ${item.currentDepartment} - ${item.status}`,
+        matchedEntities: [{
+          kind: 'serializedItem',
+          id: item.id,
+          label: item.serialNumber,
+          href: `/p2-traveler-viewer?barcode=${encodeURIComponent(item.barcode)}`,
         }],
         ledgerCondition: undefined,
       };

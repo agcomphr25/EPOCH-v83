@@ -647,6 +647,13 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
     }
   };
 
+  const handlePrintItemLabel = (item: QueueItem) => {
+    const printed = printAveryLabels([item], `P2 ${item.currentDepartment} ${item.serialNumber || item.barcode} Label`);
+    if (printed && item.serialNumber) {
+      stampPrintMutation.mutate([item.serialNumber]);
+    }
+  };
+
   if (isLoading) {
     return (
       <Card>
@@ -790,12 +797,6 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                       <Badge variant="secondary" className="ml-2">
                         {dept.totalItems} items
                       </Badge>
-                      {isReprintDepartment && (
-                        <Badge variant="outline" className="gap-1 bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950 dark:text-amber-200 dark:border-amber-800">
-                          <Printer className="h-3 w-3" />
-                          Reprint Barcode
-                        </Badge>
-                      )}
                       {dept.inProgress > 0 && (
                         <Badge variant="default" className="bg-green-600">
                           <Play className="h-3 w-3 mr-1" />
@@ -958,7 +959,7 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                                       }}
                                     >
                                       <Printer className="h-3 w-3 mr-1" />
-                                      {isReprintDepartment ? 'Reprint' : 'Print'}
+                                      Print
                                     </Button>
                                   </div>
                                 </div>
@@ -1137,6 +1138,18 @@ export default function P2ProductionQueue({ selectedPONumbers = [] }: P2Producti
                                                 data-testid={`button-view-${item.id}`}
                                               >
                                                 <Eye className="h-4 w-4" />
+                                              </Button>
+                                            )}
+                                            {isReprintDepartment && item.barcode && !item.isLegacyProductionOrder && !item.isLegacyProjectWorkOrder && (
+                                              <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => handlePrintItemLabel(item)}
+                                                className="text-amber-600 hover:text-amber-700"
+                                                title="Reprint Barcode"
+                                                data-testid={`button-reprint-barcode-${item.id}`}
+                                              >
+                                                <Printer className="h-4 w-4" />
                                               </Button>
                                             )}
                                             {item.isLegacyProjectWorkOrder && item.projectId && (

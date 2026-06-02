@@ -61,6 +61,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Edit,
+  Plus,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -1432,6 +1433,31 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
       clockOut: punch.type === 'clock_out' || punch.type === 'break_end' ? local : '',
       chargeCodeId: clockInChargeCodes.find((cc) => cc.code === punch.costCode)?.id.toString() ?? '',
     }));
+  };
+
+  const startMissingPunchCorrection = () => {
+    setPunchCorrectionForm((prev) => ({
+      ...prev,
+      requestType: 'add_session',
+      punchLedgerId: '',
+      selectedPunchType: 'clock_in',
+      clockIn: '',
+      clockOut: '',
+      chargeCodeId: '',
+    }));
+  };
+
+  const updatePunchCorrectionType = (value: PunchEventType) => {
+    setPunchCorrectionForm((prev) => {
+      const isEndPunch = value === 'clock_out' || value === 'break_end';
+      const movableTime = prev.clockIn || prev.clockOut;
+      return {
+        ...prev,
+        selectedPunchType: value,
+        clockIn: isEndPunch ? '' : movableTime,
+        clockOut: isEndPunch ? movableTime : '',
+      };
+    });
   };
 
   useEffect(() => {
@@ -3410,11 +3436,21 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
                       </div>
                       <div className="grid gap-3 sm:grid-cols-2">
                         <div className="sm:col-span-2 space-y-2">
-                          <div>
+                          <div className="flex flex-wrap items-start justify-between gap-3">
                             <div>
                               <Label className="uppercase tracking-widest text-muted-foreground">Active Shift Punches</Label>
                               <p className="text-xs text-muted-foreground">Tap a punch to edit it.</p>
                             </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="gap-2"
+                              onClick={startMissingPunchCorrection}
+                            >
+                              <Plus className="h-4 w-4" />
+                              Add Missing
+                            </Button>
                           </div>
                           <div className="rounded-md border bg-white max-h-52 overflow-y-auto">
                             {activeShiftPunchesLoading ? (
@@ -3452,7 +3488,7 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
                           <Label>{punchCorrectionForm.requestType === 'add_session' ? 'Missing Punch Type' : 'Correct Punch Type'}</Label>
                           <Select
                             value={punchCorrectionForm.selectedPunchType}
-                            onValueChange={(value) => setPunchCorrectionForm((prev) => ({ ...prev, selectedPunchType: value as PunchEventType }))}
+                            onValueChange={(value) => updatePunchCorrectionType(value as PunchEventType)}
                           >
                             <SelectTrigger>
                               <SelectValue />
@@ -3469,14 +3505,32 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
                             </SelectContent>
                           </Select>
                         </div>
-                        <div className="space-y-1">
-                          <Label>Correct Clock In</Label>
-                          <Input
-                            type="datetime-local"
-                            value={punchCorrectionForm.clockIn}
-                            onChange={(event) => setPunchCorrectionForm((prev) => ({ ...prev, clockIn: event.target.value }))}
-                          />
-                        </div>
+                        {punchCorrectionForm.requestType === 'add_session' ? (
+                          <div className="space-y-1">
+                            <Label>Missing Punch Time</Label>
+                            <Input
+                              type="datetime-local"
+                              value={punchCorrectionForm.selectedPunchType === 'clock_out' || punchCorrectionForm.selectedPunchType === 'break_end' ? punchCorrectionForm.clockOut : punchCorrectionForm.clockIn}
+                              onChange={(event) => {
+                                const value = event.target.value;
+                                setPunchCorrectionForm((prev) => (
+                                  prev.selectedPunchType === 'clock_out' || prev.selectedPunchType === 'break_end'
+                                    ? { ...prev, clockOut: value, clockIn: '' }
+                                    : { ...prev, clockIn: value, clockOut: '' }
+                                ));
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          <div className="space-y-1">
+                            <Label>Correct Clock In</Label>
+                            <Input
+                              type="datetime-local"
+                              value={punchCorrectionForm.clockIn}
+                              onChange={(event) => setPunchCorrectionForm((prev) => ({ ...prev, clockIn: event.target.value }))}
+                            />
+                          </div>
+                        )}
                         {punchCorrectionForm.requestType === 'edit_session' && (
                           <div className="space-y-1">
                             <Label>Correct Clock Out</Label>
@@ -3508,11 +3562,14 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
                       </div>
                       <div className="space-y-1">
                         <Label>Reason <span className="text-red-600">*</span></Label>
+                        <p className="text-xs font-medium text-muted-foreground">
+                          Required - enter at least 5 characters explaining why this correction is needed.
+                        </p>
                         <Textarea
                           rows={3}
                           value={punchCorrectionForm.reason}
                           onChange={(event) => setPunchCorrectionForm((prev) => ({ ...prev, reason: event.target.value }))}
-                          placeholder="Explain what needs to be fixed..."
+                          placeholder="Required: explain what needs to be fixed..."
                         />
                       </div>
                       <Button

@@ -62,6 +62,8 @@ import {
   FilePen,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   History,
   Settings,
 } from 'lucide-react';
@@ -540,22 +542,44 @@ function dateInputEndIso(value: string) {
   return new Date(`${value}T23:59:59.999`).toISOString();
 }
 
+const BIWEEKLY_PAY_PERIOD_DAYS = 14;
+
+function formatUtcDateInput(date: Date) {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
+}
+
+function shiftDateInput(value: string, days: number) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return value;
+  const [, year, month, day] = match;
+  const next = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+  next.setUTCDate(next.getUTCDate() + days);
+  return formatUtcDateInput(next);
+}
+
+function shiftPayPeriodRange(start: string, end: string, periods: -1 | 1) {
+  const days = periods * BIWEEKLY_PAY_PERIOD_DAYS;
+  return {
+    start: shiftDateInput(start, days),
+    end: shiftDateInput(end, days),
+  };
+}
+
 /** Computes the current bi-weekly pay period (anchored 2024-01-01, same as server). */
 function getCurrentPayPeriod(): { start: string; end: string } {
   const ANCHOR = Date.UTC(2024, 0, 1);
   const DAY_MS = 24 * 60 * 60 * 1000;
-  const PERIOD_DAYS = 14;
   const now = new Date();
   const inputUTC = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
   const daysSinceAnchor = Math.round((inputUTC - ANCHOR) / DAY_MS);
-  const periodIndex = Math.floor(daysSinceAnchor / PERIOD_DAYS);
-  const startUTC = ANCHOR + periodIndex * PERIOD_DAYS * DAY_MS;
-  const endUTC = startUTC + (PERIOD_DAYS - 1) * DAY_MS;
+  const periodIndex = Math.floor(daysSinceAnchor / BIWEEKLY_PAY_PERIOD_DAYS);
+  const startUTC = ANCHOR + periodIndex * BIWEEKLY_PAY_PERIOD_DAYS * DAY_MS;
+  const endUTC = startUTC + (BIWEEKLY_PAY_PERIOD_DAYS - 1) * DAY_MS;
   const startDate = new Date(startUTC);
   const endDate = new Date(endUTC);
   return {
-    start: `${startDate.getUTCFullYear()}-${String(startDate.getUTCMonth() + 1).padStart(2, '0')}-${String(startDate.getUTCDate()).padStart(2, '0')}`,
-    end: `${endDate.getUTCFullYear()}-${String(endDate.getUTCMonth() + 1).padStart(2, '0')}-${String(endDate.getUTCDate()).padStart(2, '0')}`,
+    start: formatUtcDateInput(startDate),
+    end: formatUtcDateInput(endDate),
   };
 }
 
@@ -694,6 +718,11 @@ function PayrollReviewPanel({
   const hourlyRows = batch?.hourly ?? [];
   const selectedHourly = hourlyRows.find((row) => row.employeeId === selectedHourlyId) ?? hourlyRows.find((row) => row.issues.length > 0) ?? hourlyRows[0];
   const salariedRows = batch?.salaried ?? [];
+  const shiftPeriod = (periods: -1 | 1) => {
+    const next = shiftPayPeriodRange(periodStart, periodEnd, periods);
+    onPeriodStartChange(next.start);
+    onPeriodEndChange(next.end);
+  };
 
   useEffect(() => {
     if (!selectedHourly && selectedHourlyId != null) setSelectedHourlyId(null);
@@ -723,6 +752,16 @@ function PayrollReviewPanel({
           <p className="text-sm text-muted-foreground">Biweekly batch review before HR/payroll lock and export.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => shiftPeriod(-1)}
+            className="mt-5"
+          >
+            <ChevronLeft className="h-4 w-4 mr-1" />
+            Prev Pay Period
+          </Button>
           <div className="space-y-1">
             <Label className="text-xs text-muted-foreground">Period start</Label>
             <Input type="date" value={periodStart} onChange={(e) => onPeriodStartChange(e.target.value)} className="h-9 w-36" />
@@ -731,6 +770,16 @@ function PayrollReviewPanel({
             <Label className="text-xs text-muted-foreground">Period end</Label>
             <Input type="date" value={periodEnd} onChange={(e) => onPeriodEndChange(e.target.value)} className="h-9 w-36" />
           </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => shiftPeriod(1)}
+            className="mt-5"
+          >
+            Next Pay Period
+            <ChevronRight className="h-4 w-4 ml-1" />
+          </Button>
           <Button variant="outline" size="sm" onClick={onRefresh} disabled={loading} className="mt-5">
             <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
             Refresh
@@ -1124,6 +1173,11 @@ export default function TimeClockAdminPage() {
     const { end } = getCurrentPayPeriod();
     return end;
   });
+  const shiftHoursPeriod = (periods: -1 | 1) => {
+    const next = shiftPayPeriodRange(hoursFrom, hoursTo, periods);
+    setHoursFrom(next.start);
+    setHoursTo(next.end);
+  };
 
   const {
     data: payrollReview,
@@ -1577,6 +1631,11 @@ export default function TimeClockAdminPage() {
     const queryTo = initialTimeClockQueryParam('to');
     return /^\d{4}-\d{2}-\d{2}$/.test(queryTo) ? queryTo : new Date().toISOString().slice(0, 10);
   });
+  const shiftPunchPeriod = (periods: -1 | 1) => {
+    const next = shiftPayPeriodRange(punchFrom, punchTo, periods);
+    setPunchFrom(next.start);
+    setPunchTo(next.end);
+  };
   const [punchEmployeeId] = useState(() => {
     const value = initialTimeClockQueryParam('employeeId');
     return /^\d+$/.test(value) ? value : '';
@@ -2399,6 +2458,17 @@ export default function TimeClockAdminPage() {
                   </CardTitle>
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <CalendarRange className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="h-7 w-7"
+                      title="Previous pay period"
+                      aria-label="Previous pay period"
+                      onClick={() => shiftHoursPeriod(-1)}
+                    >
+                      <ChevronLeft className="h-3.5 w-3.5" />
+                    </Button>
                     <Input
                       type="date"
                       value={hoursFrom}
@@ -2412,6 +2482,17 @@ export default function TimeClockAdminPage() {
                       onChange={e => setHoursTo(e.target.value)}
                       className="w-32 h-7 text-xs"
                     />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="h-7 w-7"
+                      title="Next pay period"
+                      aria-label="Next pay period"
+                      onClick={() => shiftHoursPeriod(1)}
+                    >
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </Button>
                   </div>
                 </div>
               </CardHeader>
@@ -3039,6 +3120,10 @@ export default function TimeClockAdminPage() {
         {/* ── PUNCH REVIEW TAB ── */}
         <TabsContent value="punches" className="space-y-4">
           <div className="flex items-center gap-3 flex-wrap">
+            <Button type="button" size="sm" variant="outline" onClick={() => shiftPunchPeriod(-1)}>
+              <ChevronLeft className="h-4 w-4 mr-1" />
+              Prev Pay Period
+            </Button>
             <div className="flex items-center gap-2">
               <CalendarRange className="h-4 w-4 text-muted-foreground" />
               <Input
@@ -3055,6 +3140,10 @@ export default function TimeClockAdminPage() {
                 className="w-40"
               />
             </div>
+            <Button type="button" size="sm" variant="outline" onClick={() => shiftPunchPeriod(1)}>
+              Next Pay Period
+              <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
             <Button size="sm" variant="outline" onClick={() => refetchPunches()}>
               <RefreshCw className="h-4 w-4 mr-2" />
               Load

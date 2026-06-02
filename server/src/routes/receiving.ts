@@ -282,40 +282,51 @@ async function getOpenReceivingProjectTargets(): Promise<Array<{
 async function resolveDefaultTargetProjectId(receipt: Receipt, line: ReceiptLine): Promise<string | null> {
   if (!receipt.vendorPoId) return null;
 
-  const partsRequestResult = await db.execute(sql`
-    SELECT p.id::text AS id
-    FROM parts_requests pr
-    JOIN projects p ON p.id = pr.project_id
-    LEFT JOIN vendor_po_items vpi ON vpi.id = ${line.vendorPoItemId ?? null}
-    WHERE pr.vendor_po_id = ${receipt.vendorPoId}
-      AND pr.project_id IS NOT NULL
-      AND p.status IN ('active', 'won', 'on_hold')
-      AND (
-        ${line.vendorPoItemId ?? null} IS NULL
-        OR pr.ag_part_number = vpi.ag_part_number
-        OR pr.part_number = vpi.ag_part_number
-        OR pr.part_number = vpi.description
-        OR pr.ag_part_number = ${line.agPartNumber ?? null}
-        OR pr.part_number = ${line.agPartNumber ?? null}
-      )
-    ORDER BY pr.updated_at DESC NULLS LAST, pr.request_date DESC NULLS LAST
-    LIMIT 1
-  `);
-  const partsRequestRows = sqlRows<{ id: string }>(partsRequestResult);
-  if (partsRequestRows[0]?.id) return partsRequestRows[0].id;
+  try {
+    const partsRequestResult = await db.execute(sql`
+      SELECT p.id::text AS id
+      FROM parts_requests pr
+      JOIN projects p ON p.id = pr.project_id
+      LEFT JOIN vendor_po_items vpi ON vpi.id = ${line.vendorPoItemId ?? null}
+      WHERE pr.vendor_po_id = ${receipt.vendorPoId}
+        AND pr.project_id IS NOT NULL
+        AND p.status IN ('active', 'won', 'on_hold')
+        AND (
+          ${line.vendorPoItemId ?? null} IS NULL
+          OR pr.ag_part_number = vpi.ag_part_number
+          OR pr.part_number = vpi.ag_part_number
+          OR pr.part_number = vpi.description
+          OR pr.ag_part_number = ${line.agPartNumber ?? null}
+          OR pr.part_number = ${line.agPartNumber ?? null}
+        )
+      ORDER BY pr.updated_at DESC NULLS LAST, pr.request_date DESC NULLS LAST
+      LIMIT 1
+    `);
+    const partsRequestRows = sqlRows<{ id: string }>(partsRequestResult);
+    if (partsRequestRows[0]?.id) return partsRequestRows[0].id;
 
-  const requisitionResult = await db.execute(sql`
-    SELECT p.id::text AS id
-    FROM vendor_pos vpo
-    JOIN purchase_requisitions req ON req.id = vpo.requisition_id
-    JOIN projects p ON p.id::text = req.project_id
-    WHERE vpo.id = ${receipt.vendorPoId}
-      AND req.project_id IS NOT NULL
-      AND p.status IN ('active', 'won', 'on_hold')
-    LIMIT 1
-  `);
-  const requisitionRows = sqlRows<{ id: string }>(requisitionResult);
-  return requisitionRows[0]?.id ?? null;
+    const requisitionResult = await db.execute(sql`
+      SELECT p.id::text AS id
+      FROM vendor_pos vpo
+      JOIN purchase_requisitions req ON req.id = vpo.requisition_id
+      JOIN projects p ON p.id::text = req.project_id
+      WHERE vpo.id = ${receipt.vendorPoId}
+        AND req.project_id IS NOT NULL
+        AND p.status IN ('active', 'won', 'on_hold')
+      LIMIT 1
+    `);
+    const requisitionRows = sqlRows<{ id: string }>(requisitionResult);
+    return requisitionRows[0]?.id ?? null;
+  } catch (err: any) {
+    console.warn('Receiving target project inference skipped:', {
+      receiptId: receipt.id,
+      vendorPoId: receipt.vendorPoId,
+      lineId: line.id,
+      vendorPoItemId: line.vendorPoItemId,
+      message: err?.message ?? String(err),
+    });
+    return null;
+  }
 }
 
 async function syncProjectReceivedMaterial(unitId: number, user: AuthUser, notes?: string | null): Promise<void> {
@@ -1965,9 +1976,9 @@ async function handleAcceptedUnit(unit: ReceivedUnit, receipt: Receipt, user: Au
 }
 
 // ── Helper: determine whether a receipt line strictly requires per-unit traceability ──
-// Lines whose part config marks serial / roll / lot as "required" must be explicitly
+// Lines whose part config marks serial / roll as "required" must be explicitly
 // split by the receiver — they cannot be auto-promoted to a single bulk unit because
-// each physical unit needs its own serial / roll / lot identifier.
+// each physical unit needs its own serial / roll identifier.
 async function lineRequiresStrictSplit(line: ReceiptLine): Promise<{ requires: boolean; fields: string[] }> {
   if (!line.agPartNumber) return { requires: false, fields: [] };
   const [invItem] = await db.select({ traceabilityFieldConfig: inventoryItems.traceabilityFieldConfig })
@@ -1976,7 +1987,7 @@ async function lineRequiresStrictSplit(line: ReceiptLine): Promise<{ requires: b
     .limit(1);
   const cfg = invItem?.traceabilityFieldConfig as Record<string, string> | null | undefined;
   if (!cfg) return { requires: false, fields: [] };
-  const STRICT_KEYS = ['serialNumber', 'rollNumber', 'lotNumber'] as const;
+  const STRICT_KEYS = ['serialNumber', 'rollNumber'] as const;
   const fields = STRICT_KEYS.filter(f => (cfg[f] ?? 'optional') === 'required');
   return { requires: fields.length > 0, fields };
 }
@@ -1984,7 +1995,7 @@ async function lineRequiresStrictSplit(line: ReceiptLine): Promise<{ requires: b
 // ── POST /api/receipts/:id/ensure-units ──────────────────────────────────────
 // Idempotently promote each receipt line that has receivedQty > 0 and zero existing
 // units into a single default received_units record so it shows up in Disposition.
-// Lines whose part config strictly requires per-unit traceability (serial / roll / lot)
+// Lines whose part config strictly requires per-unit traceability (serial / roll)
 // are skipped and reported back so the UI can prompt the receiver to split them.
 router.post('/:id/ensure-units', requireReceivingAccess, async (req: Request, res: Response) => {
   try {

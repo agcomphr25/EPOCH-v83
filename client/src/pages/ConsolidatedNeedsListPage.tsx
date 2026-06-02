@@ -90,6 +90,7 @@ type PartsRequest = {
   deliveredToDepartment?: string;
   receivedByDepartment?: string;
   vendorId?: number;
+  vendorPoId?: number | null;
   orderMethod?: 'PO' | 'WEBSITE';
   vendorPartNumber?: string;
   productUrl?: string;
@@ -140,6 +141,9 @@ export default function ConsolidatedNeedsListPage() {
   const [selectedOrderMethod, setSelectedOrderMethod] = useState<'PO' | 'WEBSITE'>('PO');
   const [batchQuantities, setBatchQuantities] = useState<Record<number, number>>({});
   const [batchNotes, setBatchNotes] = useState('');
+  const [batchPurchasingCategory, setBatchPurchasingCategory] = useState<'P1' | 'P2' | 'GENERAL' | 'R_AND_D'>('GENERAL');
+  const [batchExpectedDelivery, setBatchExpectedDelivery] = useState('');
+  const [batchShipVia, setBatchShipVia] = useState('');
   const [isCreateBatchDialogOpen, setIsCreateBatchDialogOpen] = useState(false);
   const [batchVendorGroup, setBatchVendorGroup] = useState<VendorGroup | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
@@ -225,39 +229,42 @@ export default function ConsolidatedNeedsListPage() {
     },
   });
 
-  // Create order batch mutation
+  // Create Vendor PO draft mutation
   const createBatchMutation = useMutation({
     mutationFn: async (data: {
-      vendorId: number | null;
-      vendorName: string;
-      orderMethod: string | null;
       requestIds: number[];
+      purchasingCategory: 'P1' | 'P2' | 'GENERAL' | 'R_AND_D';
       quantities: Record<number, number>;
-      createdBy: string;
+      expectedDeliveryDate?: string | null;
+      shipVia?: string | null;
       notes?: string;
     }) => {
-      return apiRequest('/api/inventory/parts-requests/batches', {
+      return apiRequest('/api/inventory/parts-requests/create-vendor-po-draft', {
         method: 'POST',
         body: JSON.stringify(data),
       });
     },
-    onSuccess: () => {
+    onSuccess: (result: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests/batches'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
       toast({
-        title: 'Order Batch Created',
-        description: 'Selected parts have been added to an order batch.',
+        title: 'Vendor PO Draft Created',
+        description: result?.vendorPO?.id
+          ? `Draft Vendor PO #${result.vendorPO.id} was created. RFQ and PO numbers will follow the existing workflow.`
+          : 'Selected parts were linked to a draft Vendor PO.',
       });
       setIsCreateBatchDialogOpen(false);
       setBatchVendorGroup(null);
       setBatchQuantities({});
       setBatchNotes('');
+      setBatchExpectedDelivery('');
+      setBatchShipVia('');
       setSelectedVendorRequests(new Set());
     },
-    onError: () => {
+    onError: (error: any) => {
       toast({
         title: 'Error',
-        description: 'Failed to create order batch.',
+        description: error?.message || 'Failed to create Vendor PO draft.',
         variant: 'destructive',
       });
     },
@@ -284,11 +291,27 @@ export default function ConsolidatedNeedsListPage() {
   });
 
   const openCreateBatchDialog = (vendorGroup: VendorGroup) => {
-    const approvedRequests = vendorGroup.requests.filter(r => r.status === 'APPROVED');
+    if (vendorGroup.orderMethod === 'WEBSITE') {
+      toast({
+        title: 'Website Order',
+        description: 'Website-order requests are visible here, but cannot be used to create a Vendor PO.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (!vendorGroup.vendorId) {
+      toast({
+        title: 'Vendor Required',
+        description: 'Assign a vendor before creating a Vendor PO draft.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    const approvedRequests = vendorGroup.requests.filter(r => r.status === 'APPROVED' && !r.vendorPoId && r.orderMethod !== 'WEBSITE');
     if (approvedRequests.length === 0) {
       toast({
         title: 'No Approved Requests',
-        description: 'There are no approved requests in this vendor group to create a batch from.',
+        description: 'There are no approved, PO-orderable requests in this vendor group.',
         variant: 'destructive',
       });
       return;
@@ -301,19 +324,18 @@ export default function ConsolidatedNeedsListPage() {
   };
 
   const handleCreateBatch = () => {
-    if (!batchVendorGroup || !user) return;
+    if (!batchVendorGroup) return;
     const requestIds = Object.keys(batchQuantities).map(Number).filter(id => batchQuantities[id] > 0);
     if (requestIds.length === 0) {
       toast({ title: 'No Items Selected', description: 'Set quantities for at least one item.', variant: 'destructive' });
       return;
     }
     createBatchMutation.mutate({
-      vendorId: batchVendorGroup.vendorId,
-      vendorName: batchVendorGroup.vendorName,
-      orderMethod: batchVendorGroup.orderMethod,
       requestIds,
+      purchasingCategory: batchPurchasingCategory,
       quantities: batchQuantities,
-      createdBy: `${user.firstName} ${user.lastName}`,
+      expectedDeliveryDate: batchExpectedDelivery || null,
+      shipVia: batchShipVia || null,
       notes: batchNotes || undefined,
     });
   };
@@ -652,7 +674,7 @@ export default function ConsolidatedNeedsListPage() {
 
   const selectAllInVendor = (vendorGroup: VendorGroup) => {
     const approvedIds = vendorGroup.requests
-      .filter(r => r.status === 'APPROVED')
+      .filter(r => r.status === 'APPROVED' && r.orderMethod !== 'WEBSITE' && !r.vendorPoId)
       .map(r => r.id);
     setSelectedVendorRequests(new Set(approvedIds));
   };
@@ -884,6 +906,7 @@ export default function ConsolidatedNeedsListPage() {
                 variant="default"
                 onClick={() => setIsBulkOrderDialogOpen(true)}
                 data-testid="button-bulk-mark-ordered"
+                className="hidden"
               >
                 <ShoppingCart className="w-4 h-4 mr-1" />
                 Mark Ordered
@@ -921,8 +944,9 @@ export default function ConsolidatedNeedsListPage() {
         {filteredVendorGroups.map((vendorGroup) => {
           const vendorKey = vendorGroup.key;
           const isExpanded = expandedVendors.has(vendorKey);
-          const approvedCount = vendorGroup.requests.filter(r => r.status === 'APPROVED').length;
+          const approvedCount = vendorGroup.requests.filter(r => r.status === 'APPROVED' && !r.vendorPoId && r.orderMethod !== 'WEBSITE').length;
           const hasHighUrgency = vendorGroup.requests.some(r => r.urgency === 'HIGH' || r.urgency === 'CRITICAL');
+          const isWebsiteGroup = vendorGroup.orderMethod === 'WEBSITE';
 
           return (
             <Card key={vendorKey} className={`${hasHighUrgency ? 'border-orange-300 dark:border-orange-700' : ''}`}>
@@ -958,7 +982,7 @@ export default function ConsolidatedNeedsListPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     {/* Quick Actions */}
-                    {approvedCount > 0 && (
+                    {approvedCount > 0 && !isWebsiteGroup && (
                       <>
                         <Button
                           size="sm"
@@ -967,7 +991,7 @@ export default function ConsolidatedNeedsListPage() {
                           data-testid={`button-create-batch-${vendorKey}`}
                         >
                           <ShoppingCart className="w-4 h-4 mr-1" />
-                          Create Order Batch ({approvedCount})
+                          Create Vendor PO Draft ({approvedCount})
                         </Button>
                         <Button
                           size="sm"
@@ -998,16 +1022,20 @@ export default function ConsolidatedNeedsListPage() {
                       <tr>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 w-10">
                           <Checkbox
-                            checked={vendorGroup.requests.every(r => selectedVendorRequests.has(r.id))}
+                            checked={
+                              vendorGroup.requests.filter(r => r.status === 'APPROVED' && r.orderMethod !== 'WEBSITE' && !r.vendorPoId).length > 0
+                              && vendorGroup.requests.filter(r => r.status === 'APPROVED' && r.orderMethod !== 'WEBSITE' && !r.vendorPoId).every(r => selectedVendorRequests.has(r.id))
+                            }
                             onCheckedChange={(checked) => {
+                              const selectable = vendorGroup.requests.filter(r => r.status === 'APPROVED' && r.orderMethod !== 'WEBSITE' && !r.vendorPoId);
                               if (checked) {
                                 setSelectedVendorRequests(new Set([
                                   ...Array.from(selectedVendorRequests),
-                                  ...vendorGroup.requests.map(r => r.id)
+                                  ...selectable.map(r => r.id)
                                 ]));
                               } else {
                                 const newSet = new Set(selectedVendorRequests);
-                                vendorGroup.requests.forEach(r => newSet.delete(r.id));
+                                selectable.forEach(r => newSet.delete(r.id));
                                 setSelectedVendorRequests(newSet);
                               }
                             }}
@@ -1026,12 +1054,15 @@ export default function ConsolidatedNeedsListPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
-                      {vendorGroup.requests.map((request) => (
+                      {vendorGroup.requests.map((request) => {
+                        const selectableForPo = request.status === 'APPROVED' && request.orderMethod !== 'WEBSITE' && !request.vendorPoId;
+                        return (
                         <tr key={request.id} className="bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800">
                           <td className="px-3 py-2">
                             <Checkbox
                               checked={selectedVendorRequests.has(request.id)}
                               onCheckedChange={() => toggleRequestSelection(request.id)}
+                              disabled={!selectableForPo}
                               data-testid={`checkbox-request-${request.id}`}
                             />
                           </td>
@@ -1059,11 +1090,21 @@ export default function ConsolidatedNeedsListPage() {
                           <td className="px-3 py-2 text-sm text-gray-900 dark:text-gray-100">{request.department}</td>
                           <td className="px-3 py-2 text-sm text-gray-900 dark:text-gray-100">{request.requestedBy}</td>
                           <td className="px-3 py-2">{getUrgencyBadge(request.urgency)}</td>
-                          <td className="px-3 py-2">{getStatusBadge(request.status)}</td>
+                          <td className="px-3 py-2">
+                            <div className="flex flex-col gap-1">
+                              {getStatusBadge(request.status)}
+                              {request.orderMethod === 'WEBSITE' && (
+                                <Badge className="bg-teal-100 text-teal-800 w-fit">Website order</Badge>
+                              )}
+                              {request.vendorPoId && (
+                                <Badge variant="outline" className="w-fit">Linked to Vendor PO #{request.vendorPoId}</Badge>
+                              )}
+                            </div>
+                          </td>
                           <td className="px-3 py-2 text-right">
-                            {request.status === 'APPROVED' && (
-                              <Button size="sm" variant="default" onClick={() => handleAction(request, 'order')} data-testid={`button-order-${request.id}`}>
-                                Order
+                            {selectableForPo && (
+                              <Button size="sm" variant="default" onClick={() => toggleRequestSelection(request.id)} data-testid={`button-select-request-${request.id}`}>
+                                {selectedVendorRequests.has(request.id) ? 'Selected' : 'Select'}
                               </Button>
                             )}
                             {request.status === 'ORDERED' && (
@@ -1088,7 +1129,8 @@ export default function ConsolidatedNeedsListPage() {
                             )}
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </CardContent>
@@ -1447,19 +1489,52 @@ export default function ConsolidatedNeedsListPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Create Order Batch Dialog */}
+      {/* Create Vendor PO Draft Dialog */}
       <Dialog open={isCreateBatchDialogOpen} onOpenChange={setIsCreateBatchDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Create Order Batch</DialogTitle>
+            <DialogTitle>Create Vendor PO Draft</DialogTitle>
             <DialogDescription>
-              {batchVendorGroup ? `Create an order batch for ${batchVendorGroup.vendorName}. Adjust quantities as needed.` : 'Select items for the batch.'}
+              {batchVendorGroup ? `Create a draft Vendor PO for ${batchVendorGroup.vendorName}. RFQ and PO numbers stay controlled by the existing workflow.` : 'Select items for the draft.'}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 mt-4">
             {batchVendorGroup && (
               <>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Purchasing Category</label>
+                    <Select value={batchPurchasingCategory} onValueChange={(value) => setBatchPurchasingCategory(value as typeof batchPurchasingCategory)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="P1">P1</SelectItem>
+                        <SelectItem value="P2">P2</SelectItem>
+                        <SelectItem value="GENERAL">G&A / General</SelectItem>
+                        <SelectItem value="R_AND_D">R&D</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Expected Delivery</label>
+                    <Input
+                      type="date"
+                      value={batchExpectedDelivery}
+                      onChange={(e) => setBatchExpectedDelivery(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Ship Via</label>
+                    <Input
+                      value={batchShipVia}
+                      onChange={(e) => setBatchShipVia(e.target.value)}
+                      placeholder="UPS, FedEx, vendor truck..."
+                    />
+                  </div>
+                </div>
+
                 <div className="max-h-80 overflow-y-auto border rounded-lg">
                   <table className="w-full">
                     <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0">
@@ -1472,7 +1547,7 @@ export default function ConsolidatedNeedsListPage() {
                     </thead>
                     <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                       {batchVendorGroup.requests
-                        .filter(r => r.status === 'APPROVED')
+                        .filter(r => r.status === 'APPROVED' && r.orderMethod !== 'WEBSITE' && !r.vendorPoId)
                         .map(request => (
                           <tr key={request.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
                             <td className="px-3 py-2">
@@ -1485,7 +1560,6 @@ export default function ConsolidatedNeedsListPage() {
                               <Input
                                 type="number"
                                 min="0"
-                                max={request.quantity}
                                 value={batchQuantities[request.id] ?? request.quantity}
                                 onChange={(e) => {
                                   const val = parseInt(e.target.value) || 0;
@@ -1518,7 +1592,7 @@ export default function ConsolidatedNeedsListPage() {
                     onClick={handleCreateBatch}
                     disabled={createBatchMutation.isPending}
                   >
-                    {createBatchMutation.isPending ? 'Creating...' : 'Create Order Batch'}
+                    {createBatchMutation.isPending ? 'Creating...' : 'Create Vendor PO Draft'}
                   </Button>
                 </div>
               </>

@@ -13,7 +13,7 @@ import { storage } from '../../storage';
 import { requirePermission } from '../../middleware/requirePermission';
 import { generateMagicLink, peekMagicLink, validateMagicLink, createVendorConfirmFrontendUrl } from '../../utils/magicLink';
 import { sendCommunication } from '../../communication/send';
-import { db } from '../../db';
+import { db, queryRows } from '../../db';
 import { sql } from 'drizzle-orm';
 import { appendUniqueEmail, resolveVendorPoReturnEmail } from '../../utils/vendorPoContact';
 import {
@@ -28,6 +28,98 @@ const router = Router();
 // Temporary operational override: purchasing leadership is transitioning, so
 // vendor PO issuance must not be blocked by procurement/compliance gates.
 const VENDOR_PO_ISSUE_GATES_DEACTIVATED = true;
+
+async function markLinkedPartsRequestsOrdered(vendorPoId: number, actor: string) {
+  const updated = await queryRows<{ id: number; status: string }>(
+    `
+    UPDATE parts_requests
+       SET status = 'ORDERED',
+           order_date = COALESCE(order_date, NOW()),
+           qty_ordered = GREATEST(COALESCE(qty_ordered, 0), quantity),
+           updated_at = NOW()
+     WHERE vendor_po_id = $1
+       AND status = 'APPROVED'
+     RETURNING id, status
+    `,
+    [vendorPoId]
+  );
+
+  if (updated.length === 0) return;
+
+  await queryRows(
+    `
+    INSERT INTO parts_request_status_history (parts_request_id, from_status, to_status, changed_by, reason)
+    SELECT unnest($1::int[]), 'APPROVED', 'ORDERED', $2, $3
+    `,
+    [
+      updated.map((row) => row.id),
+      actor,
+      `Linked Vendor PO #${vendorPoId} was issued.`,
+    ]
+  );
+}
+
+async function markLinkedPartsRequestsReceivedForPo(vendorPoId: number, actor: string) {
+  const updated = await queryRows<{ id: number; previous_status: string; next_status: string }>(
+    `
+    WITH po_totals AS (
+      SELECT
+        pr.id,
+        pr.status AS previous_status,
+        pr.quantity,
+        COALESCE(SUM(vpi.received_quantity), 0)::float AS received_qty
+      FROM parts_requests pr
+      JOIN vendor_po_items vpi
+        ON vpi.vendor_po_id = pr.vendor_po_id
+       AND (
+         (pr.ag_part_number IS NOT NULL AND vpi.ag_part_number = pr.ag_part_number)
+         OR (pr.ag_part_number IS NULL AND vpi.description = pr.part_name)
+       )
+      WHERE pr.vendor_po_id = $1
+        AND pr.status IN ('ORDERED', 'ORDERED_PARTIAL', 'RECEIVED_PARTIAL')
+      GROUP BY pr.id, pr.status, pr.quantity
+    ),
+    next_values AS (
+      SELECT
+        id,
+        previous_status,
+        LEAST(quantity, FLOOR(received_qty)::int) AS qty_received,
+        CASE
+          WHEN received_qty >= quantity THEN 'RECEIVED'
+          WHEN received_qty > 0 THEN 'RECEIVED_PARTIAL'
+          ELSE previous_status
+        END AS next_status
+      FROM po_totals
+      WHERE received_qty > 0
+    )
+    UPDATE parts_requests pr
+       SET qty_received = next_values.qty_received,
+           status = next_values.next_status,
+           actual_delivery = CASE WHEN next_values.next_status = 'RECEIVED' THEN CURRENT_DATE ELSE pr.actual_delivery END,
+           updated_at = NOW()
+      FROM next_values
+     WHERE pr.id = next_values.id
+       AND pr.status <> next_values.next_status
+    RETURNING pr.id, next_values.previous_status, next_values.next_status
+    `,
+    [vendorPoId]
+  );
+
+  if (updated.length === 0) return;
+
+  await queryRows(
+    `
+    INSERT INTO parts_request_status_history (parts_request_id, from_status, to_status, changed_by, reason)
+    SELECT id, previous_status, next_status, $2, $3
+      FROM jsonb_to_recordset($1::jsonb) AS x(id int, previous_status text, next_status text)
+    `,
+    [
+      JSON.stringify(updated),
+      actor,
+      `Linked Vendor PO #${vendorPoId} receipt updated the parts request automatically.`,
+    ]
+  );
+}
 
 let vendorPOReadSchemaReady: Promise<void> | null = null;
 
@@ -1526,6 +1618,12 @@ router.post('/items/:itemId/receive', async (req: Request, res: Response) => {
       units,
     });
 
+    const receivedItem = await storage.getVendorPOItemById(itemId);
+    if (receivedItem?.vendorPoId) {
+      const actor = String((req as any).user?.username ?? createdBy ?? 'unknown');
+      await markLinkedPartsRequestsReceivedForPo(receivedItem.vendorPoId, actor);
+    }
+
     res.json(result);
   } catch (error) {
     console.error('Record PO receipt error:', error);
@@ -2315,6 +2413,7 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
         performedBy,
         performedByEmail,
       });
+      await markLinkedPartsRequestsOrdered(id, performedBy);
 
       console.log(`[VendorPOIssuedNoEmail] PO ${poNumber} issued WITHOUT email by ${performedBy} — reason: ${trimmedReason}`);
 
@@ -2386,6 +2485,7 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
         performedBy,
         performedByEmail,
       });
+      await markLinkedPartsRequestsOrdered(id, performedBy);
 
       await emitProcurementLedgerEvent({
         action: 'VENDOR_PO_ISSUED_WITHOUT_EMAIL',
@@ -2424,6 +2524,7 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
 
     // Atomic transactional issuance: lock row, generate number, update status
     const { vendorPO: issuedPO, poNumber } = await storage.issueVendorPO(id);
+    await markLinkedPartsRequestsOrdered(id, performedBy);
 
     await emitProcurementLedgerEvent({
       action: 'VENDOR_PO_ISSUED',

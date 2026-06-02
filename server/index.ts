@@ -3974,6 +3974,7 @@ async function initializeBackgroundServices() {
           // Inventory
           { key: 'inventory.adjust', description: 'Update and delete inventory items and balances', category: 'inventory' },
           { key: 'inventory.manage_requests', description: 'Receive or reject inventory parts requests', category: 'inventory' },
+          { key: 'inventory.approve_parts_requests', description: 'Approve inventory parts requests before they enter RFQ or Vendor PO flow', category: 'inventory' },
 
           // Inventory — Cycle Count subsystem (Task #142)
           { key: 'inventory.cycleCount.view', description: 'View cycle count sessions, lines, and variance history', category: 'inventory' },
@@ -4229,6 +4230,7 @@ async function initializeBackgroundServices() {
         const inventoryManagerCaps = [
           'inventory.adjust',
           'inventory.manage_requests',
+          'inventory.approve_parts_requests',
           'inventory.cycleCount.view',
           'inventory.cycleCount.create',
           'inventory.cycleCount.approve',

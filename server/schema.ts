@@ -6030,6 +6030,8 @@ export const travelers = pgTable('travelers', {
   // summary that is also stamped into `workOrderId` for legacy display.
   offSystemCompletionLink: text('off_system_completion_link'),
 
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+
   createdBy: varchar('created_by', { length: 255 }).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).default(sql`now()`),
   updatedAt: timestamp('updated_at', { withTimezone: true }).default(sql`now()`),

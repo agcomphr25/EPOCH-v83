@@ -47,6 +47,18 @@ import { generateOrderPdf, PdfIntent } from '../../services/orderPdfService';
 
 const router = Router();
 
+const IMMUTABLE_DUE_DATE_ERROR = 'Due date is locked after order creation';
+
+function stripImmutableDueDate<T extends Record<string, any>>(updates: T): T {
+  if (!Object.prototype.hasOwnProperty.call(updates, 'dueDate')) {
+    return updates;
+  }
+
+  const sanitized = { ...updates };
+  delete sanitized.dueDate;
+  return sanitized as T;
+}
+
 async function requiresP1PaymentAccountingApproval(paymentDate: Date, user: any): Promise<{ required: boolean; period: any }> {
   const period = await getOrCreateAccountingPeriod(paymentDate);
   const status = String(period.status).toUpperCase();
@@ -1453,7 +1465,7 @@ router.put('/draft/:id', async (req: Request, res: Response) => {
     console.log('Update data received:', req.body);
 
     // Validate the input data using the schema
-    const updates = insertAllOrderSchema.partial().parse(req.body);
+    const updates = stripImmutableDueDate(insertAllOrderSchema.partial().parse(req.body));
     console.log('Validated updates:', updates);
 
     // CRITICAL SERVER-SIDE VALIDATION: Prevent null/empty modelId for non-custom orders
@@ -1698,7 +1710,7 @@ router.get('/finalized/:id', async (req: Request, res: Response) => {
 router.put('/finalized/:id', async (req: Request, res: Response) => {
   try {
     const orderId = req.params.id;
-    const updates = req.body;
+    const updates = stripImmutableDueDate({ ...req.body });
 
     // Capture before state for audit
     const beforeOrder = await storage.getFinalizedOrderById(orderId);
@@ -3534,7 +3546,15 @@ router.patch(
         }
       }
 
-      // Normalize dueDate to Tuesday before persisting
+      if (fieldName === 'dueDate' && isFinalized) {
+        return res.status(409).json({
+          error: IMMUTABLE_DUE_DATE_ERROR,
+          fieldName,
+          orderId: orderStringId,
+        });
+      }
+
+      // Draft due dates can still be normalized before the order is created/finalized.
       if (fieldName === 'dueDate' && validatedValue != null) {
         validatedValue = normalizeDueDateForStorage(validatedValue);
       }
@@ -3635,7 +3655,7 @@ router.patch(
 router.patch('/:orderId', async (req: Request, res: Response) => {
   try {
     const orderId = req.params.orderId;
-    const updates = req.body;
+    const updates = stripImmutableDueDate({ ...req.body });
 
     console.log(`📋 PATCH /${orderId} - Department progression update`);
     console.log('📋 Update data:', updates);
@@ -3681,11 +3701,6 @@ router.patch('/:orderId', async (req: Request, res: Response) => {
           );
         }
       }
-    }
-
-    // Normalize dueDate to Tuesday if present in updates
-    if (updates.dueDate != null) {
-      updates.dueDate = normalizeDueDateForStorage(updates.dueDate);
     }
 
     // Try to find and update the order in finalized orders first
@@ -4242,6 +4257,14 @@ router.patch(
       const validatedData = adminFieldUpdateSchema.parse(req.body);
       const { fieldName, newValue } = validatedData;
 
+      if (fieldName === 'dueDate') {
+        return res.status(409).json({
+          error: IMMUTABLE_DUE_DATE_ERROR,
+          fieldName,
+          orderId,
+        });
+      }
+
       // Get field configuration
       const fieldConfig = ADMIN_FIELD_CONFIG[fieldName];
       if (!fieldConfig) {
@@ -4289,16 +4312,11 @@ router.patch(
       const dbField = fieldConfig.dbField;
       const oldValue = (currentOrder as any)[dbField];
 
-      // Normalize dueDate to Tuesday before persisting
-      const normalizedFieldValue = fieldName === 'dueDate' && newValue != null
-        ? normalizeDueDateForStorage(newValue)
-        : newValue;
-
       // Update the order
       await db
         .update(allOrders)
         .set({ 
-          [dbField]: normalizedFieldValue,
+          [dbField]: newValue,
           updatedAt: new Date(),
         })
         .where(eq(allOrders.orderId, orderId));
@@ -4309,7 +4327,7 @@ router.patch(
         fieldName,
         fieldLabel: fieldConfig.label,
         oldValue: oldValue !== null && oldValue !== undefined ? oldValue : null,
-        newValue: normalizedFieldValue,
+        newValue,
         changedBy: (req as any).user?.username || 'unknown',
         userRole: (req as any).user?.role || 'ADMIN',
         changeType: 'INLINE',
@@ -4352,6 +4370,14 @@ router.patch(
       const validatedData = adminBulkUpdateSchema.parse(req.body);
       const { orderIds, fieldName, newValue } = validatedData;
 
+      if (fieldName === 'dueDate') {
+        return res.status(409).json({
+          error: IMMUTABLE_DUE_DATE_ERROR,
+          fieldName,
+          orderIds,
+        });
+      }
+
       // Get field configuration
       const fieldConfig = ADMIN_FIELD_CONFIG[fieldName];
       if (!fieldConfig) {
@@ -4389,11 +4415,6 @@ router.patch(
 
       const dbField = fieldConfig.dbField;
 
-      // Normalize dueDate to Tuesday for bulk updates targeting the due_date field
-      const normalizedValue = fieldName === 'dueDate' && newValue != null
-        ? normalizeDueDateForStorage(newValue)
-        : newValue;
-
       const results = {
         success: [] as string[],
         failed: [] as { orderId: string; error: string }[],
@@ -4418,7 +4439,7 @@ router.patch(
           await db
             .update(allOrders)
             .set({ 
-              [dbField]: normalizedValue,
+              [dbField]: newValue,
               updatedAt: new Date(),
             })
             .where(eq(allOrders.orderId, orderId));
@@ -4429,7 +4450,7 @@ router.patch(
             fieldName,
             fieldLabel: fieldConfig.label,
             oldValue: oldValue !== null && oldValue !== undefined ? oldValue : null,
-            newValue: normalizedValue,
+            newValue,
             changedBy: (req as any).user?.username || 'unknown',
             userRole: (req as any).user?.role || 'ADMIN',
             changeType: 'BULK',

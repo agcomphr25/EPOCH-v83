@@ -22377,19 +22377,26 @@ export class DatabaseStorage implements IStorage {
     data: Partial<InsertAllOrder>
   ): Promise<AllOrder> {
     try {
-      console.log(`[updateFinalizedOrder] Updating order ${orderId} with keys:`, Object.keys(data));
+      const updateData: Partial<InsertAllOrder> = { ...data };
+      if (Object.prototype.hasOwnProperty.call(updateData, 'dueDate')) {
+        delete updateData.dueDate;
+      }
+
+      console.log(`[updateFinalizedOrder] Updating order ${orderId} with keys:`, Object.keys(updateData));
 
       // Check upfront whether a production_orders record exists so we can sync it atomically.
       const productionRecord =
-        data.currentDepartment !== undefined
+        updateData.currentDepartment !== undefined
           ? await this.getProductionOrderByOrderId(orderId)
           : undefined;
 
       const order = await db.transaction(async (tx) => {
-        await tx
-          .update(allOrders)
-          .set({ ...data, updatedAt: new Date() })
-          .where(eq(allOrders.orderId, orderId));
+        if (Object.keys(updateData).length > 0) {
+          await tx
+            .update(allOrders)
+            .set({ ...updateData, updatedAt: new Date() })
+            .where(eq(allOrders.orderId, orderId));
+        }
 
         const [updated] = await tx
           .select()
@@ -22404,11 +22411,11 @@ export class DatabaseStorage implements IStorage {
         // If currentDepartment is being updated and a production_orders record exists,
         // sync it within the same transaction so getAllOrders deduplication
         // (which prefers production_orders) always returns the correct department.
-        if (data.currentDepartment !== undefined && productionRecord) {
+        if (updateData.currentDepartment !== undefined && productionRecord) {
           await tx.execute(
-            sql`UPDATE production_orders SET current_department = ${data.currentDepartment}, updated_at = NOW() WHERE order_id = ${orderId}`
+            sql`UPDATE production_orders SET current_department = ${updateData.currentDepartment}, updated_at = NOW() WHERE order_id = ${orderId}`
           );
-          console.log(`[updateFinalizedOrder] Synced production_orders.current_department for ${orderId} → ${data.currentDepartment}`);
+          console.log(`[updateFinalizedOrder] Synced production_orders.current_department for ${orderId} → ${updateData.currentDepartment}`);
         }
 
         return updated;

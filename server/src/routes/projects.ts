@@ -312,11 +312,24 @@ router.get('/pipeline', async (req, res) => {
     const serialCountsByPoId: Record<number, { total: number; completed: number }> = {};
     if (poIds.length > 0) {
       const serialRows = await pool.query(
-        `SELECT po_id::text,
+        `WITH item_state AS (
+           SELECT
+             psi.po_id,
+             psi.status,
+             EXISTS (
+               SELECT 1
+               FROM travelers t
+               WHERE UPPER(COALESCE(t.status, '')) IN ('COMPLETE', 'COMPLETED', 'CLOSED')
+                 AND t.serial_number IS NOT NULL
+                 AND LOWER(TRIM(t.serial_number)) = LOWER(TRIM(psi.serial_number))
+             ) AS has_completed_traveler
+           FROM p2_serialized_items psi
+           WHERE psi.po_id = ANY($1::int[])
+         )
+         SELECT po_id::text,
                 COUNT(*)::text AS total,
-                COUNT(*) FILTER (WHERE status = 'COMPLETED')::text AS completed
-         FROM p2_serialized_items
-         WHERE po_id = ANY($1::int[])
+                COUNT(*) FILTER (WHERE status = 'COMPLETED' OR has_completed_traveler)::text AS completed
+         FROM item_state
          GROUP BY po_id`,
         [poIds]
       ) as any[];

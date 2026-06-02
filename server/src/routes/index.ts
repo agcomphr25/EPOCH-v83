@@ -4007,7 +4007,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       await ensureProductionWorkflowReadSchema();
       const { storage } = await import('../../storage');
       const { pool: dbPool } = await import('../../db');
-      const serializedItems = await storage.getP2SerializedItems({});
+      const serializedItems = await applyTravelerStateToP2Items(
+        await storage.getP2SerializedItems({})
+      );
 
       const poItemResult = await dbPool.query(
         `SELECT

@@ -4031,6 +4031,22 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         serializedByPoItemId.get(poItemId)!.push(item);
       }
 
+      for (const poItem of poItems) {
+        const poItemId = Number(poItem.poItemId);
+        const orderedQuantity = Number(poItem.orderedQuantity) || 0;
+        const existingItems = serializedByPoItemId.get(poItemId) ?? [];
+        const missingCount = Math.max(0, orderedQuantity - existingItems.length);
+
+        if (missingCount === 0) continue;
+
+        // Historical POs can have ordered quantity that outruns generated
+        // serialized units, which makes pending work disappear from Schedule.
+        const createdItems = await storage.addP2SerializedItemsForPoItem(poItemId, missingCount);
+        if (createdItems.length > 0) {
+          serializedByPoItemId.set(poItemId, [...existingItems, ...createdItems]);
+        }
+      }
+
       const sortBySequence = (a: any, b: any) =>
         (Number(a.sequenceNumber) || 0) - (Number(b.sequenceNumber) || 0) ||
         String(a.id).localeCompare(String(b.id));

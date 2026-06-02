@@ -318,8 +318,9 @@ export default function VendorPOItemSelector({
   const chargeCodes = traceabilityOptions?.chargeCodes ?? [];
 
   const isP2ComplianceComplete = complianceStatus === 'Reviewed';
-  const customerPoAllocationDisabled = isP2Purchase && !isP2ComplianceComplete;
-  const projectAllocationDisabled = isP2Purchase && !isP2ComplianceComplete;
+  const customerPoAllocationDisabled = false;
+  const projectAllocationDisabled = false;
+  const showP2ComplianceReviewHint = isP2Purchase && !isP2ComplianceComplete;
 
   const filteredWorkOrders = useMemo(() => {
     if (!newItem.projectId) return productionWorkOrders;
@@ -542,11 +543,6 @@ export default function VendorPOItemSelector({
   };
 
   const handleAddItem = () => {
-    if (projectAllocationDisabled && (newItem.customerPoId || newItem.projectId || newItem.productionWorkOrderId)) {
-      toast.error('Complete compliance review before linking this P2 purchase to a customer PO, project, or WAD');
-      return;
-    }
-
     if (isP2Purchase && !newItem.customerPoId && !newItem.projectId && !newItem.productionWorkOrderId && !newItem.chargeCodeId) {
       toast.error('P2 line items need at least one traceability link: customer PO, project, WAD/work order, or charge code');
       return;
@@ -632,11 +628,6 @@ export default function VendorPOItemSelector({
     const nextProductionWorkOrderId = 'productionWorkOrderId' in editedItem ? editedItem.productionWorkOrderId : originalItem.productionWorkOrderId;
     const nextChargeCodeId = 'chargeCodeId' in editedItem ? editedItem.chargeCodeId : originalItem.chargeCodeId;
     const nextCustomerPoId = 'customerPoId' in editedItem ? editedItem.customerPoId : originalItem.customerPoId;
-
-    if (projectAllocationDisabled && (nextCustomerPoId || nextProjectId || nextProductionWorkOrderId)) {
-      toast.error('Complete compliance review before linking this P2 purchase to a customer PO, project, or WAD');
-      return;
-    }
 
     if (isP2Purchase && !nextCustomerPoId && !nextProjectId && !nextProductionWorkOrderId && !nextChargeCodeId) {
       toast.error('P2 line items need at least one traceability link: customer PO, project, WAD/work order, or charge code');
@@ -841,6 +832,11 @@ export default function VendorPOItemSelector({
             <div className="flex items-center gap-2 mb-3">
               <span className="font-medium text-purple-800 dark:text-purple-200 text-sm">📋 Internal Tracking (not shown on vendor PO)</span>
             </div>
+            {showP2ComplianceReviewHint && (
+              <p className="text-xs text-purple-700 dark:text-purple-300 mb-3">
+                Link each P2 line now so RFQs and draft POs have traceability. Compliance review is still required before issue.
+              </p>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
               <div>
                 <Label htmlFor="customerPo">Customer PO</Label>

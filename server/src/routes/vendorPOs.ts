@@ -557,6 +557,8 @@ async function requireP2ComplianceBeforeProjectAllocation(
   vendorPoId: number,
   traceability: { customerPoId?: unknown; projectId?: unknown; productionWorkOrderId?: unknown }
 ) {
+  if (VENDOR_PO_ISSUE_GATES_DEACTIVATED) return;
+
   const hasProjectAllocation =
     traceability.customerPoId !== undefined && traceability.customerPoId !== null ||
     traceability.projectId !== undefined && traceability.projectId !== null ||

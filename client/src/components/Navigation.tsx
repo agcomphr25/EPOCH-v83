@@ -550,6 +550,12 @@ export default function Navigation() {
       icon: Calculator,
       description: 'BOM-driven cost estimation with overhead rates and margins',
     },
+    {
+      path: '/estimating/bom-drafts',
+      label: 'Draft BOM Builder',
+      icon: FileSpreadsheet,
+      description: 'Create reusable draft BOMs and sourcing picklists',
+    },
   ];
 
   const orderManagementItems = [

@@ -224,13 +224,34 @@ async function findP1PackingSlipInvoiceForOrders(
 async function findReusableP1InvoiceNumber({
   poNumber,
   orderIds,
+  shipmentRecordId,
 }: {
   poNumber: string;
   orderIds: string[];
+  shipmentRecordId?: string | null;
 }): Promise<string | null> {
   try {
     if (!(await hasP1FulfillmentAttemptsTable())) {
       return null;
+    }
+
+    if (shipmentRecordId) {
+      const exactShipmentRows = rowsOf<{ invoice_number: string }>(
+        await pool.query(
+          `SELECT metadata->>'invoiceNumber' AS invoice_number
+       FROM p1_fulfillment_attempts
+       WHERE metadata->>'invoiceNumber' IS NOT NULL
+         AND shipment_record_id::text = $1
+         AND metadata->>'poNumber' = $2
+       ORDER BY COALESCE(completed_at, updated_at, created_at) DESC
+       LIMIT 1`,
+          [shipmentRecordId, poNumber]
+        )
+      );
+
+      if (exactShipmentRows[0]?.invoice_number) {
+        return exactShipmentRows[0].invoice_number;
+      }
     }
 
     const attemptRows = rowsOf<{ invoice_number: string }>(
@@ -255,6 +276,33 @@ async function findReusableP1InvoiceNumber({
     console.warn(
       `⚠️ Could not search P1 fulfillment artifact history for PO ${poNumber}: ${err.message}`
     );
+  }
+
+  return null;
+}
+
+async function resolveP1PackingSlipInvoiceNumber({
+  shipmentRecordId,
+  shipmentPoCount,
+  shipmentInvoiceNumber,
+  poNumber,
+  orderIds,
+}: {
+  shipmentRecordId: string | null;
+  shipmentPoCount: number;
+  shipmentInvoiceNumber: string | null;
+  poNumber: string;
+  orderIds: string[];
+}): Promise<string | null> {
+  const reusableInvoiceNumber = await findReusableP1InvoiceNumber({
+    poNumber,
+    orderIds,
+    shipmentRecordId,
+  });
+  if (reusableInvoiceNumber) return reusableInvoiceNumber;
+
+  if (shipmentPoCount <= 1 && shipmentInvoiceNumber) {
+    return shipmentInvoiceNumber;
   }
 
   return null;
@@ -363,12 +411,17 @@ async function buildP1PackingSlipInvoiceDraft(
   }
 
   const first = lines[0];
-  const reusableInvoiceNumber = await findReusableP1InvoiceNumber({
+  const resolvedShipmentRecordId = first.shipment_record_id || shipmentRecordId;
+  const shipmentPoCount = resolvedShipmentRecordId
+    ? await getP1ShipmentPoCount(resolvedShipmentRecordId)
+    : 0;
+  const invoiceNumber = await resolveP1PackingSlipInvoiceNumber({
+    shipmentRecordId: resolvedShipmentRecordId,
+    shipmentPoCount,
+    shipmentInvoiceNumber: first.shipment_invoice_number || null,
     poNumber,
     orderIds: shipmentOrderIds,
   });
-  const invoiceNumber =
-    reusableInvoiceNumber || null;
 
   const consolidatedLines = Array.from(
     lines
@@ -709,6 +762,7 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
           orderIds: items
             .map((item) => item.order?.orderId || item.order?.order_id)
             .filter(Boolean),
+          shipmentRecordId,
         });
 
         if (reusableInvoiceNumber) {
@@ -1761,6 +1815,7 @@ router.get(
             const reusableInvoiceNumber = await findReusableP1InvoiceNumber({
               poNumber: poNumberForSlip,
               orderIds: siblingRows.map((r) => r.order_id).filter(Boolean),
+              shipmentRecordId: item.shipment_record_id || null,
             });
 
             if (reusableInvoiceNumber) {
@@ -2115,6 +2170,18 @@ router.post(
             JSON.stringify(tags),
           ]
         );
+      }
+
+      if (first.shipment_record_id) {
+        const shipmentPoCount = await getP1ShipmentPoCount(first.shipment_record_id);
+        if (shipmentPoCount <= 1) {
+          await client.query(
+            `UPDATE shipment_records
+             SET invoice_number = COALESCE(invoice_number, $1), updated_at = NOW()
+             WHERE id = $2`,
+            [invoice.invoice_number, first.shipment_record_id]
+          );
+        }
       }
 
       await client.query('COMMIT');

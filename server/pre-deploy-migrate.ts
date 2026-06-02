@@ -64,7 +64,7 @@ async function runSql(sql: string, label: string): Promise<boolean> {
  * confirmed applied on production.
  */
 async function getPendingMigrationFiles(migrationsDir: string, knownFiles: string[]): Promise<string[]> {
-  const BASELINE_APPLIED_THROUGH = '0094_labor_entry_drafts.sql';
+  const BASELINE_APPLIED_THROUGH = '0154_p1_department_notes.sql';
 
   let appliedHashes: Set<string> = new Set();
   try {

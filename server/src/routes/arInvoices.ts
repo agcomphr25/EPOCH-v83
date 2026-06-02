@@ -27,6 +27,7 @@ import { sendEmailViaSendGrid } from '../../utils/sendgrid';
 import { buildInvoicePreviewFromPackingSlip, createInvoiceFromPackingSlip } from '../services/invoiceFromPackingSlip';
 import { assertPostingAllowedForPeriod } from '../services/accountingPeriodService';
 import { getFileStorageProviderForObjectPath } from '../services/fileStorageProvider';
+import { recordAuditEvent } from '../services/auditLedgerService';
 
 const LOCKED_STATUSES = ['POSTED', 'SENT', 'VOID', 'PAID'];
 
@@ -1206,6 +1207,53 @@ type InvoiceEmailRecipient = {
   type: 'primary' | 'additional' | 'contact';
 };
 
+async function recordInvoiceSendAudit({
+  req,
+  invoice,
+  eventType,
+  reason,
+  payload,
+  fieldsChanged,
+}: {
+  req: Request;
+  invoice: typeof arInvoices.$inferSelect;
+  eventType: 'INVOICE_SEND_ATTEMPTED' | 'INVOICE_SENT' | 'INVOICE_SEND_FAILED';
+  reason: string;
+  payload: Record<string, any>;
+  fieldsChanged?: Record<string, { before: unknown; after: unknown }> | null;
+}) {
+  const user = (req as any).user;
+  try {
+    await recordAuditEvent({
+      eventType,
+      subjectType: 'ar_invoice',
+      subjectId: invoice.id,
+      entityType: 'ar_invoice',
+      entityId: invoice.id,
+      sourceService: 'arInvoices.route',
+      actor: {
+        id: typeof user?.id === 'number' ? user.id : null,
+        username: user?.username || null,
+        role: user?.role || null,
+      },
+      reason,
+      payload: {
+        invoiceId: invoice.id,
+        invoiceNumber: invoice.invoiceNumber,
+        customerId: invoice.customerId,
+        totalAmount: Number(invoice.totalAmount || 0),
+        ...payload,
+      },
+      meta: payload,
+      fieldsChanged: fieldsChanged || null,
+      ipAddress: req.ip || null,
+      userAgent: req.get('user-agent') || null,
+    });
+  } catch (auditError) {
+    console.warn(`[InvoiceAudit] Failed to record ${eventType} for invoice ${invoice.invoiceNumber}:`, auditError);
+  }
+}
+
 function appendRecipient(recipients: InvoiceEmailRecipient[], recipient: InvoiceEmailRecipient) {
   const email = recipient.email?.trim();
   if (!email) return;
@@ -1432,6 +1480,30 @@ router.post('/:id/send', requirePermission('finance.post_invoice'), async (req: 
       return res.status(422).json({ error: 'No customer email found. Add a customer contact email or provide a recipient.' });
     }
 
+    const selectedRecipientRecords = availableRecipients.filter((recipient) =>
+      [to, ...(Array.isArray(cc) ? cc : cc ? [cc] : [])].includes(recipient.email)
+    );
+    const auditPayloadBase = {
+      to,
+      cc: Array.isArray(cc) ? cc : cc ? [cc] : [],
+      selectedRecipients: selectedRecipientRecords.map((recipient) => ({
+        name: recipient.name,
+        email: recipient.email,
+        type: recipient.type,
+      })),
+      requestedRecipientCount: Array.isArray(selectedRecipients) ? selectedRecipients.length : null,
+      customerMessageIncluded: Boolean(customerMessage),
+      invoiceSource: isP1 ? 'P1' : 'P2',
+    };
+
+    await recordInvoiceSendAudit({
+      req,
+      invoice,
+      eventType: 'INVOICE_SEND_ATTEMPTED',
+      reason: `Invoice ${invoice.invoiceNumber} send attempted`,
+      payload: auditPayloadBase,
+    });
+
     const invoicePdf = await generateArInvoicePdf(id);
     const mediaAttachments = await getMediaEmailAttachments([
       { entityType: 'invoice', entityId: id },
@@ -1470,6 +1542,17 @@ router.post('/:id/send', requirePermission('finance.post_invoice'), async (req: 
     });
 
     if (!result.success) {
+      await recordInvoiceSendAudit({
+        req,
+        invoice,
+        eventType: 'INVOICE_SEND_FAILED',
+        reason: `Invoice ${invoice.invoiceNumber} send failed`,
+        payload: {
+          ...auditPayloadBase,
+          provider: 'sendgrid',
+          error: result.error || 'SendGrid failed to send invoice',
+        },
+      });
       return res.status(502).json({ error: result.error || 'SendGrid failed to send invoice' });
     }
 
@@ -1488,6 +1571,27 @@ router.post('/:id/send', requirePermission('finance.post_invoice'), async (req: 
       .returning();
 
     console.log(`[InvoiceService] Invoice ${invoice.invoiceNumber} (${id}) sent by ${user}`);
+
+    await recordInvoiceSendAudit({
+      req,
+      invoice: updated,
+      eventType: 'INVOICE_SENT',
+      reason: `Invoice ${invoice.invoiceNumber} sent`,
+      payload: {
+        ...auditPayloadBase,
+        provider: 'sendgrid',
+        providerMessageId: result.messageId || null,
+        sentAt: updated.sentAt ? new Date(updated.sentAt).toISOString() : new Date().toISOString(),
+      },
+      fieldsChanged: {
+        status: { before: invoice.status, after: updated.status },
+        sentAt: { before: invoice.sentAt, after: updated.sentAt },
+        sentBy: { before: invoice.sentBy, after: updated.sentBy },
+        sentTo: { before: invoice.sentTo, after: updated.sentTo },
+        sentCc: { before: invoice.sentCc, after: updated.sentCc },
+        sendgridMessageId: { before: invoice.sendgridMessageId, after: updated.sendgridMessageId },
+      },
+    });
 
     res.json(updated);
   } catch (error) {

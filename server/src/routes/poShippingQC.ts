@@ -225,7 +225,7 @@ async function findReusableP1InvoiceNumber({
   poNumber,
   orderIds,
   shipmentRecordId,
-  includeBroadHistory = true,
+  includeBroadHistory = false,
 }: {
   poNumber: string;
   orderIds: string[];
@@ -375,11 +375,7 @@ async function resolveP1PackingSlipInvoiceNumber({
     return shipmentInvoiceNumber;
   }
 
-  return findReusableP1InvoiceNumber({
-    poNumber,
-    orderIds,
-    includeBroadHistory: true,
-  });
+  return null;
 }
 
 async function getP1ShipmentPoCount(shipmentRecordId: string): Promise<number> {
@@ -837,6 +833,7 @@ router.post('/packing-slips', authenticateToken, async (req, res) => {
             .map((item) => item.order?.orderId || item.order?.order_id)
             .filter(Boolean),
           shipmentRecordId,
+          includeBroadHistory: false,
         });
 
         if (reusableInvoiceNumber) {
@@ -1890,6 +1887,7 @@ router.get(
               poNumber: poNumberForSlip,
               orderIds: siblingRows.map((r) => r.order_id).filter(Boolean),
               shipmentRecordId: item.shipment_record_id || null,
+              includeBroadHistory: false,
             });
 
             if (reusableInvoiceNumber) {
@@ -3466,6 +3464,7 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
           orderIds: groupItems
             .map((item) => item.order?.orderId || item.order?.order_id)
             .filter(Boolean),
+          includeBroadHistory: false,
         });
 
         const invoiceNumber =

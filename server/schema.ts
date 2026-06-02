@@ -15495,6 +15495,28 @@ export const insertChartOfAccountsSchema = createInsertSchema(chartOfAccounts).o
 export type ChartOfAccount = typeof chartOfAccounts.$inferSelect;
 export type InsertChartOfAccount = z.infer<typeof insertChartOfAccountsSchema>;
 
+export const productionLineAccountingMap = pgTable('production_line_accounting_map', {
+  id: serial('id').primaryKey(),
+  productionLine: text('production_line').notNull(),
+  revenueAccountId: integer('revenue_account_id').references(() => chartOfAccounts.id),
+  revenueAccountNumber: text('revenue_account_number'),
+  revenueAccountNameSnapshot: text('revenue_account_name_snapshot'),
+  quickbooksClass: text('quickbooks_class'),
+  active: boolean('active').notNull().default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  uniqueProductionLine: unique('production_line_accounting_map_line_unique').on(table.productionLine),
+}));
+
+export const insertProductionLineAccountingMapSchema = createInsertSchema(productionLineAccountingMap).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type ProductionLineAccountingMap = typeof productionLineAccountingMap.$inferSelect;
+export type InsertProductionLineAccountingMap = z.infer<typeof insertProductionLineAccountingMapSchema>;
+
 // Journal entries — one per transaction event (e.g. a wire payment)
 export const journalEntries = pgTable('journal_entries', {
   id: serial('id').primaryKey(),

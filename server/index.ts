@@ -3166,6 +3166,213 @@ async function initializeBackgroundServices() {
           END $$;
         `);
         await db.execute(sqlAcct`
+          CREATE TABLE IF NOT EXISTS production_line_accounting_map (
+            id SERIAL PRIMARY KEY,
+            production_line TEXT NOT NULL UNIQUE,
+            revenue_account_id INTEGER REFERENCES chart_of_accounts(id),
+            revenue_account_number TEXT,
+            revenue_account_name_snapshot TEXT,
+            quickbooks_class TEXT,
+            active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        await db.execute(sqlAcct`
+          DO $$
+          DECLARE
+            parent_id integer;
+            p1_id integer;
+            p2_id integer;
+            p3_id integer;
+          BEGIN
+            SELECT id INTO parent_id
+            FROM chart_of_accounts
+            WHERE account_number = '41000'
+               OR account_name = 'Product Revenue'
+            ORDER BY CASE WHEN account_number = '41000' THEN 0 ELSE 1 END, id
+            LIMIT 1;
+
+            IF parent_id IS NULL THEN
+              INSERT INTO chart_of_accounts (
+                account_number, account_name, account_type, normal_balance,
+                financial_statement_section, cost_pool, default_allowability,
+                default_direct_indirect, billing_treatment, requires_documentation,
+                requires_review, system_controlled, description, is_active
+              )
+              VALUES (
+                '41000', 'Product Revenue', 'INCOME', 'CREDIT',
+                'Revenue', 'NONE', 'ALLOWABLE',
+                'DIRECT', 'BILLABLE', FALSE,
+                FALSE, TRUE,
+                'Parent rollup account for production-line product revenue; do not post directly when a production-line child account applies',
+                TRUE
+              )
+              RETURNING id INTO parent_id;
+            ELSE
+              UPDATE chart_of_accounts
+                 SET account_number = '41000',
+                     account_name = 'Product Revenue',
+                     account_type = 'INCOME',
+                     parent_account_id = NULL,
+                     normal_balance = 'CREDIT',
+                     financial_statement_section = 'Revenue',
+                     cost_pool = 'NONE',
+                     default_allowability = 'ALLOWABLE',
+                     default_direct_indirect = 'DIRECT',
+                     billing_treatment = 'BILLABLE',
+                     system_controlled = TRUE,
+                     is_active = TRUE,
+                     description = 'Parent rollup account for production-line product revenue; do not post directly when a production-line child account applies',
+                     updated_at = NOW()
+               WHERE id = parent_id;
+            END IF;
+
+            SELECT id INTO p1_id
+            FROM chart_of_accounts
+            WHERE account_number = '41010'
+               OR account_name = 'Product Revenue - P1'
+            ORDER BY CASE WHEN account_number = '41010' THEN 0 ELSE 1 END, id
+            LIMIT 1;
+
+            IF p1_id IS NULL THEN
+              INSERT INTO chart_of_accounts (
+                account_number, account_name, account_type, parent_account_id,
+                normal_balance, financial_statement_section, cost_pool,
+                default_allowability, default_direct_indirect, billing_treatment,
+                requires_documentation, requires_review, system_controlled,
+                description, is_active
+              )
+              VALUES (
+                '41010', 'Product Revenue - P1', 'INCOME', parent_id,
+                'CREDIT', 'Revenue', 'NONE',
+                'ALLOWABLE', 'DIRECT', 'BILLABLE',
+                FALSE, FALSE, TRUE,
+                'Posting account for P1 product revenue',
+                TRUE
+              )
+              RETURNING id INTO p1_id;
+            ELSE
+              UPDATE chart_of_accounts
+                 SET account_number = '41010',
+                     account_name = 'Product Revenue - P1',
+                     account_type = 'INCOME',
+                     parent_account_id = parent_id,
+                     normal_balance = 'CREDIT',
+                     financial_statement_section = 'Revenue',
+                     default_allowability = 'ALLOWABLE',
+                     default_direct_indirect = 'DIRECT',
+                     billing_treatment = 'BILLABLE',
+                     system_controlled = TRUE,
+                     is_active = TRUE,
+                     description = 'Posting account for P1 product revenue',
+                     updated_at = NOW()
+               WHERE id = p1_id;
+            END IF;
+
+            SELECT id INTO p2_id
+            FROM chart_of_accounts
+            WHERE account_number = '41020'
+               OR account_name = 'Product Revenue - P2'
+            ORDER BY CASE WHEN account_number = '41020' THEN 0 ELSE 1 END, id
+            LIMIT 1;
+
+            IF p2_id IS NULL THEN
+              INSERT INTO chart_of_accounts (
+                account_number, account_name, account_type, parent_account_id,
+                normal_balance, financial_statement_section, cost_pool,
+                default_allowability, default_direct_indirect, billing_treatment,
+                requires_documentation, requires_review, system_controlled,
+                description, is_active
+              )
+              VALUES (
+                '41020', 'Product Revenue - P2', 'INCOME', parent_id,
+                'CREDIT', 'Revenue', 'NONE',
+                'ALLOWABLE', 'DIRECT', 'BILLABLE',
+                FALSE, FALSE, TRUE,
+                'Posting account for P2 product revenue',
+                TRUE
+              )
+              RETURNING id INTO p2_id;
+            ELSE
+              UPDATE chart_of_accounts
+                 SET account_number = '41020',
+                     account_name = 'Product Revenue - P2',
+                     account_type = 'INCOME',
+                     parent_account_id = parent_id,
+                     normal_balance = 'CREDIT',
+                     financial_statement_section = 'Revenue',
+                     default_allowability = 'ALLOWABLE',
+                     default_direct_indirect = 'DIRECT',
+                     billing_treatment = 'BILLABLE',
+                     system_controlled = TRUE,
+                     is_active = TRUE,
+                     description = 'Posting account for P2 product revenue',
+                     updated_at = NOW()
+               WHERE id = p2_id;
+            END IF;
+
+            SELECT id INTO p3_id
+            FROM chart_of_accounts
+            WHERE account_number = '41030'
+               OR account_name = 'Product Revenue - P3'
+            ORDER BY CASE WHEN account_number = '41030' THEN 0 ELSE 1 END, id
+            LIMIT 1;
+
+            IF p3_id IS NULL THEN
+              INSERT INTO chart_of_accounts (
+                account_number, account_name, account_type, parent_account_id,
+                normal_balance, financial_statement_section, cost_pool,
+                default_allowability, default_direct_indirect, billing_treatment,
+                requires_documentation, requires_review, system_controlled,
+                description, is_active
+              )
+              VALUES (
+                '41030', 'Product Revenue - P3', 'INCOME', parent_id,
+                'CREDIT', 'Revenue', 'NONE',
+                'ALLOWABLE', 'DIRECT', 'BILLABLE',
+                FALSE, FALSE, TRUE,
+                'Posting account for P3 product revenue',
+                TRUE
+              )
+              RETURNING id INTO p3_id;
+            ELSE
+              UPDATE chart_of_accounts
+                 SET account_number = '41030',
+                     account_name = 'Product Revenue - P3',
+                     account_type = 'INCOME',
+                     parent_account_id = parent_id,
+                     normal_balance = 'CREDIT',
+                     financial_statement_section = 'Revenue',
+                     default_allowability = 'ALLOWABLE',
+                     default_direct_indirect = 'DIRECT',
+                     billing_treatment = 'BILLABLE',
+                     system_controlled = TRUE,
+                     is_active = TRUE,
+                     description = 'Posting account for P3 product revenue',
+                     updated_at = NOW()
+               WHERE id = p3_id;
+            END IF;
+
+            INSERT INTO production_line_accounting_map (
+              production_line, revenue_account_id, revenue_account_number,
+              revenue_account_name_snapshot, quickbooks_class, active, updated_at
+            )
+            VALUES
+              ('P1', p1_id, '41010', 'Product Revenue - P1', 'P1', TRUE, NOW()),
+              ('P2', p2_id, '41020', 'Product Revenue - P2', 'P2', TRUE, NOW()),
+              ('P3', p3_id, '41030', 'Product Revenue - P3', 'P3', TRUE, NOW())
+            ON CONFLICT (production_line) DO UPDATE
+              SET revenue_account_id = EXCLUDED.revenue_account_id,
+                  revenue_account_number = EXCLUDED.revenue_account_number,
+                  revenue_account_name_snapshot = EXCLUDED.revenue_account_name_snapshot,
+                  quickbooks_class = EXCLUDED.quickbooks_class,
+                  active = TRUE,
+                  updated_at = NOW();
+          END $$;
+        `);
+        console.log('✅ Ensured accounting shadow layer tables and production-line revenue seed accounts exist');
+        await db.execute(sqlAcct`
           DO $$
           DECLARE
             target_id integer;

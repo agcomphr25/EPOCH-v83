@@ -15,6 +15,7 @@ import {
   createOrUpdateP1ShipmentRevenueFromShipmentRecord,
   reverseP1ShipmentRevenueDraftOrEntry,
 } from '../services/p1ShipmentRevenueService';
+import { buildRevenueDimensionTags } from '../services/productionLineAccounting';
 
 const router = Router();
 
@@ -2221,6 +2222,7 @@ router.post(
           p1PoItemIds: line.p1PoItemIds,
           orderIds: line.orderIds,
           trackingNumber: first.master_tracking_number || null,
+          ...buildRevenueDimensionTags('P1'),
         };
 
         await client.query(

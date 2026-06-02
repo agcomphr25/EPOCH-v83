@@ -8,6 +8,7 @@ import {
   p2Customers,
 } from '../../schema';
 import { eq } from 'drizzle-orm';
+import { buildRevenueDimensionTags } from './productionLineAccounting';
 
 interface LineItem {
   poItemId?: number;
@@ -300,10 +301,12 @@ export async function createInvoiceFromPackingSlip(
             invoiceId: invoice.id,
             poItemId: line.poItemId,
             partNumber: line.partNumber,
+            productionLine: 'P2',
             description: line.description,
             qty: String(line.qty),
             unitPrice: String(line.unitPrice),
             lineTotal: String(line.lineTotal),
+            dimensionTags: buildRevenueDimensionTags('P2'),
           })),
         );
       }

@@ -159,7 +159,7 @@ function DispositionDialog({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/p2/serialized-items/scrapped'] });
       queryClient.invalidateQueries({ queryKey: ['/api/p2/serialized-items/closed-ncr'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/p2/rmas'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/nonconforming-rmas'] });
       queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/production-queue'] });
       queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/scheduling-list'] });
       queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/po-statuses'] });
@@ -429,9 +429,9 @@ function RmaRow({ rma, onUpdated }: { rma: Rma; onUpdated: () => void }) {
 
   const updateMutation = useMutation({
     mutationFn: (data: object) =>
-      apiRequest(`/api/p2/rmas/${rma.rma.id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+      apiRequest(`/api/p2/nonconforming-rmas/${rma.rma.id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/p2/rmas'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/nonconforming-rmas'] });
       queryClient.invalidateQueries({ queryKey: ['/api/p2/serialized-items/scrapped'] });
       queryClient.invalidateQueries({ queryKey: ['/api/p2/serialized-items/closed-ncr'] });
       onUpdated();
@@ -662,9 +662,13 @@ export default function P2NonconformingTab({ selectedPOIds = [] }: { selectedPOI
     : closedNcrItemsRaw;
 
   const { data: rmasRaw = [], refetch: refetchRmas } = useQuery<Rma[]>({
-    queryKey: ['/api/p2/rmas'],
+    queryKey: ['/api/p2/nonconforming-rmas'],
     refetchInterval: 60000,
   });
+
+  const rmas = selectedPOIds.length > 0
+    ? rmasRaw.filter((r) => r.item?.poId !== null && r.item?.poId !== undefined && selectedPOIds.includes(r.item.poId))
+    : rmasRaw;
 
   const filtered = openNcrItems.filter((item) => {
     if (!searchTerm) return true;
@@ -681,8 +685,8 @@ export default function P2NonconformingTab({ selectedPOIds = [] }: { selectedPOI
   });
 
   const needsDispositionCount = openNcrItems.filter((i) => !i.disposition).length;
-  const openRmaCount = rmasRaw.filter((r) => r.rma.status === 'open').length;
-  const activeRmas = rmasRaw.filter((r) => r.rma.status === 'open' || r.rma.status === 'shipped');
+  const openRmaCount = rmas.filter((r) => r.rma.status === 'open').length;
+  const activeRmas = rmas.filter((r) => r.rma.status === 'open' || r.rma.status === 'shipped');
 
   if (isLoading) {
     return (
@@ -887,9 +891,9 @@ export default function P2NonconformingTab({ selectedPOIds = [] }: { selectedPOI
                       {openRmaCount} open
                     </Badge>
                   )}
-                  {rmasRaw.length > activeRmas.length && (
+                  {rmas.length > activeRmas.length && (
                     <span className="text-xs text-muted-foreground">
-                      {rmasRaw.length - activeRmas.length} completed
+                      {rmas.length - activeRmas.length} completed
                     </span>
                   )}
                 </div>

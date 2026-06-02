@@ -519,6 +519,7 @@ async function getProjectP2PoStatusSummaries(projectId: string): Promise<P2PoSta
           AND NOT psi.has_completed_traveler
           AND COALESCE(psi.current_department, '') <> ''
           AND COALESCE(psi.current_department, '') <> 'Pending Layup'
+          AND COALESCE(psi.current_department, '') <> 'Layup'
       )::text AS "inProductionItems"
     FROM p2_purchase_orders po
     LEFT JOIN ordered_qty oq ON oq.po_id = po.id

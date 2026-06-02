@@ -110,6 +110,7 @@ export async function sendEmailViaSendGrid(options: {
   text: string;
   html?: string;
   replyTo?: string;
+  fromName?: string;
   cc?: string | string[];
   attachments?: Array<{
     content: string;
@@ -123,7 +124,7 @@ export async function sendEmailViaSendGrid(options: {
 
     const msg: any = {
       to: options.to,
-      from: fromEmail,
+      from: options.fromName ? { ...fromEmail, name: options.fromName } : fromEmail,
       replyTo: options.replyTo || { email: 'laurie.tandy@agadvanced.com', name: 'Laurie Tandy' },
       subject: options.subject,
       text: options.text,
@@ -131,7 +132,7 @@ export async function sendEmailViaSendGrid(options: {
     };
 
     // Add CC recipients if provided
-    if (options.cc) {
+    if (Array.isArray(options.cc) ? options.cc.length > 0 : !!options.cc) {
       msg.cc = options.cc;
     }
 

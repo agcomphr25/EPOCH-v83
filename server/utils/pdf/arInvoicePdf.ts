@@ -3,6 +3,8 @@ import { db } from '../../db';
 import { arInvoices, arInvoiceLines, customers, purchaseOrders, p2Customers, p2PurchaseOrders, p2PackingSlips, p2LotNumbers } from '../../schema';
 import { eq, sql } from 'drizzle-orm';
 import { COMPANY_INFO } from '../../../shared/company-config';
+import { resolveAssetPath } from '../../src/utils/assetPaths';
+import * as fs from 'fs';
 
 const PAGE = { WIDTH: 612, HEIGHT: 792, MARGIN: 40 } as const;
 const FONT_SIZE = { FOOTER: 7, TABLE: 8, BODY: 9, LABEL: 8, SECTION: 10, NUMBER: 14, TITLE: 16 } as const;
@@ -19,6 +21,12 @@ const TOTALS_BLOCK_HEIGHT = 116;
 const NOTES_HEADER_HEIGHT = 28;
 const AMOUNT_DUE_BAR_HEIGHT = 20;
 const AMOUNT_DUE_BAR_GAP = 6;
+const LOGO_WIDTH = 120;
+
+const P1_COMPANY_INFO = {
+  ...COMPANY_INFO,
+  name: 'AG Composites',
+};
 
 function money(value: unknown): string {
   const num = Number(value || 0);
@@ -47,6 +55,16 @@ function wrap(text: string, width: number, font: PDFFont, size: number): string[
   }
   if (current) lines.push(current);
   return lines;
+}
+
+async function embedLogo(pdf: PDFDocument) {
+  try {
+    const logoPath = resolveAssetPath('logo_updated.png');
+    if (fs.existsSync(logoPath)) {
+      return await pdf.embedPng(fs.readFileSync(logoPath));
+    }
+  } catch {}
+  return null;
 }
 
 function billingAddress(customer: any): string[] {
@@ -242,6 +260,7 @@ export async function generateArInvoicePdf(invoiceId: string): Promise<Buffer> {
   const pdf = await PDFDocument.create();
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const logo = await embedLogo(pdf);
   let page = pdf.addPage([PAGE.WIDTH, PAGE.HEIGHT]);
   let y = PAGE.HEIGHT - PAGE.MARGIN;
 
@@ -254,9 +273,18 @@ export async function generateArInvoicePdf(invoiceId: string): Promise<Buffer> {
     if (y - height < PAGE.MARGIN + 40) addPage();
   };
 
-  page.drawText(COMPANY_INFO.name || 'AG Composites', { x: PAGE.MARGIN, y, size: FONT_SIZE.TITLE, font: bold, color: COLOR.TEXT });
-  y -= 13;
-  for (const line of [COMPANY_INFO.streetAddress, `${COMPANY_INFO.city}, ${COMPANY_INFO.state} ${COMPANY_INFO.zipCode}`, COMPANY_INFO.phone].filter(Boolean)) {
+  const isP1Invoice = invoice.invoiceSource === 'P1';
+  const companyInfo = isP1Invoice ? P1_COMPANY_INFO : COMPANY_INFO;
+
+  if (isP1Invoice && logo) {
+    const logoHeight = LOGO_WIDTH * (logo.height / logo.width);
+    page.drawImage(logo, { x: PAGE.MARGIN, y: y - logoHeight, width: LOGO_WIDTH, height: logoHeight });
+    y -= logoHeight + 8;
+  } else {
+    page.drawText(companyInfo.name || 'AG Composites', { x: PAGE.MARGIN, y, size: FONT_SIZE.TITLE, font: bold, color: COLOR.TEXT });
+    y -= 13;
+  }
+  for (const line of [companyInfo.streetAddress, `${companyInfo.city}, ${companyInfo.state} ${companyInfo.zipCode}`, companyInfo.phone].filter(Boolean)) {
     page.drawText(line, { x: PAGE.MARGIN, y, size: FONT_SIZE.LABEL, font, color: COLOR.MUTED });
     y -= 11;
   }
@@ -271,7 +299,6 @@ export async function generateArInvoicePdf(invoiceId: string): Promise<Buffer> {
   page.drawLine({ start: { x: PAGE.MARGIN, y }, end: { x: PAGE.WIDTH - PAGE.MARGIN, y }, thickness: 1, color: COLOR.LINE });
   y -= 18;
 
-  const isP1Invoice = invoice.invoiceSource === 'P1';
   const mid = PAGE.WIDTH / 2;
   page.drawText(isP1Invoice ? 'SHIP TO' : 'BILL TO', { x: PAGE.MARGIN, y, size: FONT_SIZE.LABEL, font: bold, color: COLOR.ACCENT });
   page.drawText('INVOICE DETAILS', { x: mid + 12, y, size: FONT_SIZE.LABEL, font: bold, color: COLOR.ACCENT });

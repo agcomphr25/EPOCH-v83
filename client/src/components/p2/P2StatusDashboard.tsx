@@ -38,6 +38,7 @@ interface POStatus {
   completedItems: number;
   scheduledItems: number;
   inProductionItems: number;
+  scrappedItems?: number;
   pendingItems: number;
   hasBOMsNeeded: boolean;
   status: 'pending' | 'scheduled' | 'in_progress' | 'completed';
@@ -349,6 +350,12 @@ export default function P2StatusDashboard({ onStartBOM, onViewPO, selectedPOIds 
                             <span className="flex items-center gap-1 text-green-600">
                               <Clock className="h-3 w-3" />
                               {po.scheduledItems} scheduled
+                            </span>
+                          )}
+                          {(po.scrappedItems ?? 0) > 0 && (
+                            <span className="flex items-center gap-1 text-red-600">
+                              <AlertCircle className="h-3 w-3" />
+                              {po.scrappedItems} scrapped
                             </span>
                           )}
                           {po.pendingItems > 0 && (

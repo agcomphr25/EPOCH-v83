@@ -397,10 +397,12 @@ interface P2PoStatusSummary {
   dueDate: string | null;
   totalItems: number;
   completedItems: number;
+  scheduledItems: number;
   inProductionItems: number;
+  scrappedItems: number;
   pendingItems: number;
   rawStatus: string;
-  status: 'pending' | 'in_progress' | 'completed';
+  status: 'pending' | 'scheduled' | 'in_progress' | 'completed';
 }
 
 interface P2SerializedBreakdownRow {
@@ -482,7 +484,9 @@ async function getProjectP2PoStatusSummaries(projectId: string): Promise<P2PoSta
     orderedQty: string;
     serializedQty: string;
     completedItems: string;
+    scheduledItems: string;
     inProductionItems: string;
+    scrappedItems: string;
   }>(`
     WITH item_state AS (
       SELECT
@@ -512,15 +516,24 @@ async function getProjectP2PoStatusSummaries(projectId: string): Promise<P2PoSta
       COALESCE(oq.ordered_qty, 0)::text AS "orderedQty",
       COUNT(psi.id)::text AS "serializedQty",
       COUNT(*) FILTER (
-        WHERE psi.status = 'COMPLETED' OR psi.has_completed_traveler
+        WHERE COALESCE(UPPER(psi.status), '') NOT IN ('SCRAPPED', 'CANCELLED', 'CANCELED')
+          AND (psi.status = 'COMPLETED' OR psi.has_completed_traveler)
       )::text AS "completedItems",
       COUNT(*) FILTER (
-        WHERE psi.status = 'ACTIVE'
+        WHERE COALESCE(UPPER(psi.status), '') = 'ACTIVE'
           AND NOT psi.has_completed_traveler
-          AND COALESCE(psi.current_department, '') <> ''
-          AND COALESCE(psi.current_department, '') <> 'Pending Layup'
-          AND COALESCE(psi.current_department, '') <> 'Layup'
-      )::text AS "inProductionItems"
+          AND LOWER(TRIM(COALESCE(psi.current_department, ''))) = 'layup'
+      )::text AS "scheduledItems",
+      COUNT(*) FILTER (
+        WHERE COALESCE(UPPER(psi.status), '') = 'ACTIVE'
+          AND NOT psi.has_completed_traveler
+          AND TRIM(COALESCE(psi.current_department, '')) <> ''
+          AND LOWER(TRIM(COALESCE(psi.current_department, ''))) <> 'pending layup'
+          AND LOWER(TRIM(COALESCE(psi.current_department, ''))) <> 'layup'
+      )::text AS "inProductionItems",
+      COUNT(*) FILTER (
+        WHERE COALESCE(UPPER(psi.status), '') = 'SCRAPPED'
+      )::text AS "scrappedItems"
     FROM p2_purchase_orders po
     LEFT JOIN ordered_qty oq ON oq.po_id = po.id
     LEFT JOIN item_state psi ON psi.po_id = po.id
@@ -535,13 +548,17 @@ async function getProjectP2PoStatusSummaries(projectId: string): Promise<P2PoSta
     const orderedQty = parseInt(row.orderedQty, 10) || 0;
     const totalItems = Math.max(orderedQty, serializedQty);
     const completedItems = parseInt(row.completedItems, 10) || 0;
+    const scheduledItems = parseInt(row.scheduledItems, 10) || 0;
     const inProductionItems = parseInt(row.inProductionItems, 10) || 0;
-    const pendingItems = Math.max(0, totalItems - completedItems - inProductionItems);
+    const scrappedItems = parseInt(row.scrappedItems, 10) || 0;
+    const pendingItems = Math.max(0, totalItems - completedItems - scheduledItems - inProductionItems - scrappedItems);
     const status: P2PoStatusSummary['status'] =
-      totalItems > 0 && completedItems >= totalItems
+      totalItems > 0 && (completedItems + scrappedItems) >= totalItems
         ? 'completed'
-        : (inProductionItems > 0 || rawStatus === 'IN_PRODUCTION')
+        : inProductionItems > 0
           ? 'in_progress'
+          : scheduledItems > 0
+            ? 'scheduled'
           : 'pending';
 
     return {
@@ -551,7 +568,9 @@ async function getProjectP2PoStatusSummaries(projectId: string): Promise<P2PoSta
       dueDate: row.dueDate,
       totalItems,
       completedItems,
+      scheduledItems,
       inProductionItems,
+      scrappedItems,
       pendingItems,
       rawStatus,
       status,

@@ -1953,7 +1953,9 @@ async function initializeBackgroundServices() {
         const { sql: sqlItemCode } = await import('drizzle-orm');
         await db.execute(sqlItemCode`ALTER TABLE production_orders ADD COLUMN IF NOT EXISTS item_code TEXT`);
         await db.execute(sqlItemCode`CREATE INDEX IF NOT EXISTS idx_production_orders_item_code ON production_orders (item_code)`);
-        // Backfill: resolve from purchase_order_items.item_name → item_name → item_id, then UPPER+TRIM
+        // Backfill/sync: resolve from purchase_order_items.item_name → item_name → item_id,
+        // then UPPER+TRIM. Correct stale non-null values too; PO-line repairs can
+        // otherwise leave production_orders.item_code pointing at the old SKU.
         await db.execute(sqlItemCode`
           UPDATE production_orders po
           SET item_code = UPPER(TRIM(
@@ -1965,7 +1967,14 @@ async function initializeBackgroundServices() {
           ))
           FROM purchase_order_items poi
           WHERE po.po_item_id = poi.id
-            AND po.item_code IS NULL
+            AND (po.item_code IS NULL OR po.production_status != 'SHIPPED')
+            AND po.item_code IS DISTINCT FROM UPPER(TRIM(
+              COALESCE(
+                NULLIF(TRIM(poi.item_name), ''),
+                NULLIF(TRIM(po.item_name), ''),
+                NULLIF(TRIM(po.item_id), '')
+              )
+            ))
         `);
         // Fallback for any rows with no matching poi
         await db.execute(sqlItemCode`

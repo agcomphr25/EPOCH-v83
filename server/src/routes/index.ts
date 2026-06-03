@@ -4820,7 +4820,14 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const { status, reason, performedBy, notes, linkedTravelerId, rmaRequired } = validationResult.data;
       
       const { db } = await import('../../db');
-      const { p2SerializedItems, p2SerializedItemEvents, travelers, auditEvents } = await import('../../schema');
+      const {
+        p2NonconformingDispositions,
+        p2Rmas,
+        p2SerializedItems,
+        p2SerializedItemEvents,
+        travelers,
+        auditEvents,
+      } = await import('../../schema');
       const { and, eq, desc, ne, sql } = await import('drizzle-orm');
 
       
@@ -4937,6 +4944,54 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
             }
 
             if (rmaRequired) {
+              const now = new Date();
+              const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+              const existingRmasResult = await tx.execute(sql`
+                SELECT rma_number AS "rmaNumber"
+                FROM ${p2Rmas}
+                WHERE rma_number LIKE ${`RMA-P2-${dateStr}-%`}
+              `);
+              const existingRmas = (Array.isArray(existingRmasResult) ? existingRmasResult : (existingRmasResult.rows ?? [])) as Array<{ rmaNumber: string }>;
+              const maxRmaNumberSequence = existingRmas.reduce((maxSeq, row) => {
+                const match = String(row.rmaNumber || '').match(/-(\d+)$/);
+                return match ? Math.max(maxSeq, Number(match[1]) || 0) : maxSeq;
+              }, 0);
+              const rmaNumber = `RMA-P2-${dateStr}-${maxRmaNumberSequence + 1}`;
+
+              const [disposition] = await tx.insert(p2NonconformingDispositions)
+                .values({
+                  serializedItemId: item.id,
+                  dispositionType: 'Repair',
+                  poId: item.poId,
+                  poNumber: item.poNumber,
+                  authorization: performedBy || 'System',
+                  partNumber: item.partNumber || '',
+                  serialNumber: item.serialNumber || item.barcode || '',
+                  dispositionDate: now.toISOString().slice(0, 10),
+                  reasonType: 'other',
+                  reasonOther: reason,
+                  notes: [notes, `Production RMA replacement requested for ${item.serialNumber || item.barcode}`]
+                    .filter(Boolean)
+                    .join('\n'),
+                  resolved: false,
+                  createdAt: now,
+                  updatedAt: now,
+                })
+                .returning();
+
+              const [rma] = await tx.insert(p2Rmas)
+                .values({
+                  dispositionId: disposition.id,
+                  serializedItemId: item.id,
+                  rmaNumber,
+                  status: 'open',
+                  traceableMaterials: [],
+                  notes: `Production RMA created from scrap decision for ${item.serialNumber || item.barcode}`,
+                  createdAt: now,
+                  updatedAt: now,
+                })
+                .returning();
+
               const rootSerial = String(item.serialNumber || item.barcode).replace(/-rma-\d+$/i, '');
               const rmaPrefix = `${rootSerial}-rma-`;
               const rmaRowsResult = await tx.execute(sql`
@@ -4965,6 +5020,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
                 replacementForSerialNumber: item.serialNumber,
                 replacementForBarcode: item.barcode,
                 replacementReason: reason,
+                nonconformingDispositionId: disposition.id,
+                nonconformingRmaId: rma.id,
+                nonconformingRmaNumber: rmaNumber,
                 rmaRequired: true,
                 rmaReplacementSerialNumber: rmaSerialNumber,
                 generatedFromScrapAt: new Date().toISOString(),
@@ -5014,10 +5072,29 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
                   scrappedSerializedItemId: item.id,
                   scrappedSerialNumber: item.serialNumber,
                   scrappedBarcode: item.barcode,
+                  dispositionId: disposition.id,
+                  rmaId: rma.id,
+                  rmaNumber,
                   replacementSerialNumber: rmaSerialNumber,
                   rmaRequired: true,
                   scrapReason: reason,
                   generatedWithoutPoQuantityIncrease: true,
+                },
+              });
+
+              await tx.insert(p2SerializedItemEvents).values({
+                serializedItemId: item.id,
+                barcode: item.barcode,
+                eventType: 'NCR_RMA_OPENED',
+                performedBy: performedBy || 'System',
+                notes: `Production RMA ${rmaNumber} opened for scrapped serial ${item.serialNumber}`,
+                metadata: {
+                  dispositionId: disposition.id,
+                  rmaId: rma.id,
+                  rmaNumber,
+                  replacementSerializedItemId: createdReplacement.id,
+                  replacementSerialNumber: rmaSerialNumber,
+                  reason,
                 },
               });
             }

@@ -15412,6 +15412,7 @@ export class DatabaseStorage implements IStorage {
         bom_owner_name as "bomOwnerName", scheduled_by_id as "scheduledById",
         scheduled_by_name as "scheduledByName", production_lead_id as "productionLeadId",
         production_lead_name as "productionLeadName",
+        project_id as "projectId",
         project_name as "projectName"
       FROM p2_purchase_orders 
       ORDER BY created_at DESC
@@ -15456,7 +15457,7 @@ export class DatabaseStorage implements IStorage {
         tolerance_notes, bom_configured, source_quote_id, contract_review_role,
         created_by_id, created_by_name, assigned_to_id, assigned_to_name, bom_owner_id, bom_owner_name,
         scheduled_by_id, scheduled_by_name, production_lead_id, production_lead_name,
-        project_name
+        project_id, project_name
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25
       )
@@ -15474,6 +15475,7 @@ export class DatabaseStorage implements IStorage {
         bom_owner_name as "bomOwnerName", scheduled_by_id as "scheduledById",
         scheduled_by_name as "scheduledByName", production_lead_id as "productionLeadId",
         production_lead_name as "productionLeadName",
+        project_id as "projectId",
         project_name as "projectName",
         created_at as "createdAt", updated_at as "updatedAt"
     `, [
@@ -15501,6 +15503,7 @@ export class DatabaseStorage implements IStorage {
       data.scheduledByName || null,
       data.productionLeadId || null,
       data.productionLeadName || null,
+      data.projectId || null,
       data.projectName || null,
     ]);
     return result[0] as P2PurchaseOrder;

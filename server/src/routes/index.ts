@@ -2864,7 +2864,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         toleranceAuthorizerId, toleranceAuthorizerName, toleranceNotes, notes, lineItems,
         assignedToId, assignedToName, productionLeadId, productionLeadName,
         customerName: bodyCustomerName, poDate: bodyPoDate, status: bodyStatus,
-        sourceQuoteId, projectName, contractReviewRole,
+        sourceQuoteId, projectId, projectName, contractReviewRole,
       } = req.body;
       
       // Use the customer-provided PO number — accept either field name
@@ -2901,6 +2901,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         productionLeadName: productionLeadName || null,
         sourceQuoteId: sourceQuoteId || null,
         contractReviewRole: contractReviewRole === 'primary' ? 'primary' : 'secondary',
+        projectId: projectId || null,
         projectName: projectName || null,
       };
       
@@ -3989,7 +3990,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           scrappedItems,
           pendingItems,
           hasBOMsNeeded: !po.bomConfigured,
-          projectId: linkedProject?.projectId ?? null,
+          projectId: po.projectId ?? linkedProject?.projectId ?? null,
           projectCode: linkedProject?.projectCode ?? null,
           projectName: linkedProject?.projectName ?? po.projectName ?? null,
           ...wadContext,

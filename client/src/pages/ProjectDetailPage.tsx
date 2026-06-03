@@ -138,6 +138,10 @@ interface P2PurchaseOrder {
   customerId: string;
   customerName: string;
   status: string;
+  projectId?: string | null;
+  projectName?: string | null;
+  poDate?: string | null;
+  expectedDelivery?: string | null;
   createdAt?: string;
 }
 
@@ -415,16 +419,34 @@ export default function ProjectDetailPage() {
   const [showManualLink, setShowManualLink] = useState(false);
   const [linkPoReason, setLinkPoReason] = useState('');
   const [revisionForm, setRevisionForm] = useState({ summary: '', reason: '' });
+  const [newPoForm, setNewPoForm] = useState({
+    poNumber: '',
+    expectedDelivery: '',
+    notes: '',
+  });
 
   const suggestedPo = useMemo(() => {
-    if (!project || p2PurchaseOrderOptions.length === 0) return null;
-    const sameCustomer = p2PurchaseOrderOptions.filter(po => po.customerId === project.customerId);
-    const pool = sameCustomer.length > 0 ? sameCustomer : p2PurchaseOrderOptions;
+    if (!project || p2PurchaseOrders.length === 0) return null;
+    const available = p2PurchaseOrders.filter(po =>
+      !po.projectId || po.projectId === project.id || po.id === project.poId
+    );
+    const sameCustomer = available.filter(po => po.customerId === project.customerId);
+    const pool = sameCustomer.length > 0 ? sameCustomer : available;
     return pool.slice().sort((a, b) => {
       if (a.createdAt && b.createdAt) return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       return b.id - a.id;
     })[0] ?? null;
-  }, [project, p2PurchaseOrderOptions]);
+  }, [project, p2PurchaseOrders]);
+
+  const projectP2POs = useMemo(() => {
+    if (!project) return [];
+    return p2PurchaseOrders
+      .filter(po => po.projectId === project.id || po.id === project.poId)
+      .sort((a, b) => {
+        if (a.createdAt && b.createdAt) return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        return b.id - a.id;
+      });
+  }, [project, p2PurchaseOrders]);
 
   const linkPoMutation = useMutation({
     mutationFn: ({ poId, reason }: { poId: number; reason?: string }) =>
@@ -441,6 +463,7 @@ export default function ProjectDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['/api/projects', id] });
       queryClient.invalidateQueries({ queryKey: ['/api/projects', id, 'traceability'] });
       queryClient.invalidateQueries({ queryKey: ['/api/projects', id, 'revisions'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2-purchase-orders-bypass'] });
       setLinkPoId('');
       setLinkPoSearch('');
       setLinkPoReason('');
@@ -473,6 +496,51 @@ export default function ProjectDetailPage() {
       toast({ title: 'Revision created', description: 'Project revision history was updated.' });
     },
     onError: (err: any) => toast({ title: 'Revision failed', description: err?.message || 'Could not create revision.', variant: 'destructive' }),
+  });
+
+  const createProjectPOMutation = useMutation({
+    mutationFn: async () => {
+      if (!project) throw new Error('Project is not loaded');
+      const po = await apiRequest('/api/p2-purchase-orders-bypass', {
+        method: 'POST',
+        body: {
+          poNumber: newPoForm.poNumber.trim(),
+          customerId: project.customer?.customerId || project.customerId,
+          customerName: project.customer?.name || project.customerId,
+          poDate: new Date().toISOString().split('T')[0],
+          expectedDelivery: newPoForm.expectedDelivery || null,
+          status: 'OPEN',
+          notes: newPoForm.notes || null,
+          projectId: project.id,
+          projectName: `${project.projectCode} - ${project.projectName}`,
+        },
+      });
+
+      if (!project.poId && po?.id) {
+        await apiRequest(`/api/projects/${id}/link-po`, {
+          method: 'POST',
+          body: {
+            poId: po.id,
+            reason: 'Initial production PO link',
+            createdByDisplayName: currentUser?.username,
+          },
+        });
+      }
+
+      return po;
+    },
+    onSuccess: () => {
+      toast({ title: 'PO entered', description: 'P2 purchase order added to this project.' });
+      setNewPoForm({ poNumber: '', expectedDelivery: '', notes: '' });
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', id] });
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', id, 'traceability'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', id, 'revisions'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2-purchase-orders-bypass'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/po-statuses'] });
+    },
+    onError: (err: any) => {
+      toast({ title: 'PO entry failed', description: err?.message || 'Failed to create project PO.', variant: 'destructive' });
+    },
   });
 
   const { data: projectWorkOrders = [] } = useQuery<ProjectWorkOrder[]>({
@@ -1571,6 +1639,10 @@ export default function ProjectDetailPage() {
         <TabsList>
           <TabsTrigger value="workflow" data-testid="tab-workflow">Workflow</TabsTrigger>
           <TabsTrigger value="activity" data-testid="tab-activity">Activity Log</TabsTrigger>
+          <TabsTrigger value="po" data-testid="tab-po">
+            <Receipt className="h-4 w-4 mr-1.5" />
+            PO
+          </TabsTrigger>
           <TabsTrigger value="revisions" data-testid="tab-revisions">
             <History className="h-4 w-4 mr-1.5" />
             Revisions
@@ -2256,6 +2328,176 @@ export default function ProjectDetailPage() {
           </Card>
         </TabsContent>
 
+        {/* P2 purchase orders assigned to this project */}
+        <TabsContent value="po" className="space-y-4">
+          <div className="grid grid-cols-1 xl:grid-cols-[1fr_380px] gap-4">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Receipt className="h-4 w-4" /> Project P2 Purchase Orders
+                </CardTitle>
+                <CardDescription>P2 POs assigned to {project.projectCode}.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {projectP2POs.length === 0 ? (
+                  <div className="rounded-md border border-dashed p-6 text-center text-muted-foreground">
+                    <Receipt className="mx-auto h-8 w-8 mb-2 opacity-50" />
+                    <p className="text-sm font-medium">No P2 POs assigned yet</p>
+                    <p className="text-xs">Enter a PO here or link an existing P2 PO to this project.</p>
+                  </div>
+                ) : (
+                  projectP2POs.map((po) => (
+                    <div key={po.id} className="flex flex-col gap-3 rounded-md border p-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="space-y-1 min-w-0">
+                        <p className="font-mono font-semibold text-primary">{po.poNumber}</p>
+                        <p className="text-sm text-muted-foreground truncate">{po.customerName}</p>
+                        {po.projectName && <p className="text-xs text-muted-foreground truncate">{po.projectName}</p>}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant={po.status === 'OPEN' ? 'secondary' : 'default'}>{po.status}</Badge>
+                        {project.poId === po.id && <Badge variant="outline">Primary</Badge>}
+                        {po.expectedDelivery && (
+                          <span className="text-xs text-muted-foreground">
+                            Due {format(new Date(po.expectedDelivery), 'MMM d, yyyy')}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+
+            <div className="space-y-4">
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Plus className="h-4 w-4" /> Enter P2 PO
+                  </CardTitle>
+                  <CardDescription>Add a new P2 PO directly to this project.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="project-po-number">PO Number</Label>
+                    <Input
+                      id="project-po-number"
+                      value={newPoForm.poNumber}
+                      onChange={(event) => setNewPoForm((current) => ({ ...current, poNumber: event.target.value }))}
+                      placeholder="Customer PO number"
+                      data-testid="input-project-po-number"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="project-po-due-date">Expected Delivery</Label>
+                    <Input
+                      id="project-po-due-date"
+                      type="date"
+                      value={newPoForm.expectedDelivery}
+                      onChange={(event) => setNewPoForm((current) => ({ ...current, expectedDelivery: event.target.value }))}
+                      data-testid="input-project-po-due-date"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="project-po-notes">Notes</Label>
+                    <Textarea
+                      id="project-po-notes"
+                      value={newPoForm.notes}
+                      onChange={(event) => setNewPoForm((current) => ({ ...current, notes: event.target.value }))}
+                      placeholder="Optional notes"
+                      rows={3}
+                      data-testid="textarea-project-po-notes"
+                    />
+                  </div>
+                  <Button
+                    className="w-full"
+                    disabled={!newPoForm.poNumber.trim() || createProjectPOMutation.isPending}
+                    onClick={() => createProjectPOMutation.mutate()}
+                    data-testid="button-create-project-po"
+                  >
+                    {createProjectPOMutation.isPending ? 'Saving...' : 'Save P2 PO'}
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {!project.poId && (
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <LinkIcon className="h-4 w-4" /> Link Existing P2 PO
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {suggestedPo && !showManualLink ? (
+                      <div className="space-y-3">
+                        <div className="rounded-md border border-blue-200 bg-blue-50 p-3 space-y-1">
+                          <p className="text-xs font-medium text-blue-700 uppercase">Suggested PO</p>
+                          <p className="font-mono font-semibold text-blue-950">{suggestedPo.poNumber}</p>
+                          <p className="text-sm text-blue-800">{suggestedPo.customerName}</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() => linkPoMutation.mutate({ poId: suggestedPo.id })}
+                            disabled={linkPoMutation.isPending}
+                          >
+                            {linkPoMutation.isPending ? 'Linking...' : 'Accept'}
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => setShowManualLink(true)}>
+                            Choose Different
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {showManualLink && suggestedPo && (
+                          <Button variant="ghost" size="sm" className="text-muted-foreground -mb-1" onClick={() => setShowManualLink(false)}>
+                            Back to suggestion
+                          </Button>
+                        )}
+                        <div className="space-y-2">
+                          <Label>Search POs</Label>
+                          <Input
+                            placeholder="Filter by PO number or customer..."
+                            value={linkPoSearch}
+                            onChange={(event) => setLinkPoSearch(event.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Purchase Order</Label>
+                          <Select value={linkPoId} onValueChange={setLinkPoId}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select a purchase order" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {p2PurchaseOrders
+                                .filter(po => !po.projectId || po.projectId === project.id)
+                                .filter(po => {
+                                  const q = linkPoSearch.toLowerCase();
+                                  return !q || po.poNumber?.toLowerCase().includes(q) || po.customerName?.toLowerCase().includes(q);
+                                })
+                                .map(po => (
+                                  <SelectItem key={po.id} value={po.id.toString()}>
+                                    {po.poNumber} - {po.customerName}
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <Button
+                          disabled={!linkPoId || linkPoMutation.isPending}
+                          onClick={() => linkPoMutation.mutate({ poId: parseInt(linkPoId, 10) })}
+                        >
+                          {linkPoMutation.isPending ? 'Linking...' : 'Link PO'}
+                        </Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </div>
+        </TabsContent>
+
         {/* ── TRACEABILITY TAB ── */}
         <TabsContent value="revisions" className="space-y-4">
           <Card>
@@ -2445,7 +2687,7 @@ export default function ProjectDetailPage() {
                       <div>
                         <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">PO Number</p>
                         <button
-                          onClick={() => setLocation(`/p2-control-center?tab=pos`)}
+                          onClick={() => setLocation(`/projects/${project.id}?tab=po`)}
                           className="font-mono font-semibold text-sm text-primary hover:underline cursor-pointer"
                         >
                           {traceability.po?.po_number || `PO ID ${project.poId}`}

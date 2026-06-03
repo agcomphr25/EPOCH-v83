@@ -33,7 +33,8 @@ import {
   ChevronRight,
   Filter,
   X,
-  Lock
+  Lock,
+  Users
 } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import P2POCreationWizard from '@/components/p2/P2POCreationWizard';
@@ -44,11 +45,10 @@ import P2ProductionQueue from '@/components/p2/P2ProductionQueue';
 import P2CertificationsManager from './P2CertificationsManager';
 import PartRoutingManagement from './PartRoutingManagement';
 import RoutingDocumentManagement from './RoutingDocumentManagement';
-import { P2POManager } from '@/components/P2POManager';
-import { P2POItemsManager } from '@/components/P2POItemsManager';
 import P2ChangesTab from '@/components/p2/P2ChangesTab';
 import P2ShippingTab from '@/components/p2/P2ShippingTab';
 import P2NonconformingTab from '@/components/p2/P2ScrappedItemsTab';
+import P2CustomersTab from '@/components/p2/P2CustomersTab';
 import { TravelerCapturedDataById } from '@/components/p2/TravelerCapturedData';
 import ProgramManufacturingOrchestration from '@/components/p2/ProgramManufacturingOrchestration';
 import { queryClient, apiRequest } from '@/lib/queryClient';
@@ -105,23 +105,21 @@ export default function P2ControlCenter() {
   const poFromUrl = urlParams.get('po') || undefined;
   const poIdFromUrl = urlParams.get('poId') ? Number(urlParams.get('poId')) : null;
   const unitsFromUrl = urlParams.get('units') || undefined;
-  const searchFromUrl = urlParams.get('search') || '';
   // Project context: passed from PM/WAD project workflow cards
   const wadProjectId = urlParams.get('projectId') || '';
   const wadProjectName = urlParams.get('projectName') || '';
   const wadPoId = urlParams.get('poId') || '';
-  const [activeTab, setActiveTab] = useState(tabFromUrl || 'status');
+  const [activeTab, setActiveTab] = useState(tabFromUrl === 'pos' ? 'status' : tabFromUrl || 'status');
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tab = params.get('tab');
-    if (tab) setActiveTab(tab);
+    if (tab) setActiveTab(tab === 'pos' ? 'status' : tab);
   }, [location]);
 
   const [showPOWizard, setShowPOWizard] = useState(false);
   const [showBOMWizard, setShowBOMWizard] = useState(false);
   const [selectedPOForBOM, setSelectedPOForBOM] = useState<number | null>(null);
-  const [poItemsView, setPOItemsView] = useState<{ poId: number; poNumber: string } | null>(null);
   const [selectedPOIds, setSelectedPOIds] = useState<number[]>([]);
 
   const { data: stats } = useQuery<P2Stats>({
@@ -705,9 +703,9 @@ export default function P2ControlCenter() {
             <BarChart3 className="h-4 w-4" />
             Status
           </TabsTrigger>
-          <TabsTrigger value="pos" className="flex items-center gap-2" data-testid="tab-pos">
-            <FileText className="h-4 w-4" />
-            POs
+          <TabsTrigger value="customers" className="flex items-center gap-2" data-testid="tab-customers">
+            <Users className="h-4 w-4" />
+            Customers
           </TabsTrigger>
           <TabsTrigger value="setup" className="flex items-center gap-2" data-testid="tab-setup">
             <Settings className="h-4 w-4" />
@@ -777,20 +775,8 @@ export default function P2ControlCenter() {
           />
         </TabsContent>
 
-        <TabsContent value="pos">
-          {poItemsView ? (
-            <P2POItemsManager
-              poId={poItemsView.poId}
-              poNumber={poItemsView.poNumber}
-              onBack={() => setPOItemsView(null)}
-            />
-          ) : (
-            <P2POManager 
-              onManageItems={(poId, poNumber) => setPOItemsView({ poId, poNumber })}
-              selectedPOIds={selectedPOIds}
-              initialSearch={searchFromUrl}
-            />
-          )}
+        <TabsContent value="customers">
+          <P2CustomersTab />
         </TabsContent>
 
         <TabsContent value="setup">

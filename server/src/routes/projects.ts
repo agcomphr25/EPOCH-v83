@@ -699,12 +699,15 @@ router.post('/:id/link-po', async (req, res) => {
       return res.status(400).json({ message: 'A revision reason is required when changing the linked PO' });
     }
 
-    // Validate PO exists
-    const poRows = await pool.query<{ id: number; po_number: string }>(
-      `SELECT id, po_number FROM p2_purchase_orders WHERE id = $1`,
+    // Validate PO exists and is not already assigned to another project
+    const poRows = await pool.query<{ id: number; po_number: string; project_id: string | null }>(
+      `SELECT id, po_number, project_id::text FROM p2_purchase_orders WHERE id = $1`,
       [poId]
     );
     if (poRows.length === 0) return res.status(404).json({ message: 'PO not found' });
+    if (poRows[0].project_id && poRows[0].project_id !== id) {
+      return res.status(409).json({ message: 'This PO is already assigned to another project' });
+    }
 
     // Ensure no other project already uses this poId
     const conflictRows = await pool.query<{ id: string }>(
@@ -723,6 +726,7 @@ router.post('/:id/link-po', async (req, res) => {
     const revisionSummary = isRelink
       ? `Changed linked P2 PO to ${poRows[0].po_number}`
       : `Linked project to P2 PO ${poRows[0].po_number}`;
+    const projectPoLabel = `${project.projectCode} - ${project.projectName}`;
 
     // Task #258: link-po writes + WAD supersede must be atomic. If any step
     // fails (including the supersede helper), the entire link is rolled back
@@ -745,6 +749,14 @@ router.post('/:id/link-po', async (req, res) => {
         UPDATE project_steps
            SET linked_p2_order_id = ${poId}, updated_at = NOW()
          WHERE project_id = ${id}::uuid AND step_type = 'p2_order'
+      `);
+
+      await tx.execute(sql`
+        UPDATE p2_purchase_orders
+           SET project_id = ${id}::uuid,
+               project_name = COALESCE(project_name, ${projectPoLabel}),
+               updated_at = NOW()
+         WHERE id = ${poId}
       `);
 
       await tx.execute(sql`

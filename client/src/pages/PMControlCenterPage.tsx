@@ -174,10 +174,12 @@ interface P2PoStatusSummary {
   dueDate: string | null;
   totalItems: number;
   completedItems: number;
+  scheduledItems?: number;
   inProductionItems: number;
+  scrappedItems?: number;
   pendingItems: number;
   rawStatus: string;
-  status: 'pending' | 'in_progress' | 'completed';
+  status: 'pending' | 'scheduled' | 'in_progress' | 'completed';
 }
 
 interface P2NcrMetrics {
@@ -219,12 +221,17 @@ interface P2SerializedBreakdownItem {
   updatedAt: string | null;
 }
 
-type SerializedStatusGroup = 'complete' | 'in_progress' | 'other';
+type SerializedStatusGroup = 'complete' | 'scheduled' | 'in_progress' | 'scrapped' | 'other';
 
 function serializedStatusGroup(item: P2SerializedBreakdownItem): SerializedStatusGroup {
   const rawStatus = String(item.status || '').trim().toUpperCase();
   const travelerStatus = String(item.activeTravelerStatus || '').trim().toUpperCase();
   const taskStatus = String(item.activeTaskStatus || '').trim().toUpperCase();
+  const department = String(item.currentDepartment || item.activeTaskDepartment || '').trim();
+
+  if (rawStatus === 'SCRAPPED' || rawStatus === 'SCRAP') {
+    return 'scrapped';
+  }
 
   if (
     item.completedAt ||
@@ -237,13 +244,16 @@ function serializedStatusGroup(item: P2SerializedBreakdownItem): SerializedStatu
     return 'complete';
   }
 
+  if (rawStatus === 'ACTIVE' && department === 'Layup') {
+    return 'scheduled';
+  }
+
   if (
     rawStatus === 'IN_PROGRESS' ||
     rawStatus === 'IN PROGRESS' ||
     travelerStatus === 'IN_PROGRESS' ||
     taskStatus === 'IN_PROGRESS' ||
-    item.currentDepartment ||
-    item.activeTaskDepartment
+    (!!department && department !== 'Pending Layup' && department !== 'Layup')
   ) {
     return 'in_progress';
   }
@@ -481,12 +491,14 @@ const WO_STATUS_COLORS: Record<string, string> = {
 
 const P2_PO_STATUS_COLORS: Record<P2PoStatusSummary['status'], string> = {
   pending: 'bg-gray-100 text-gray-700',
+  scheduled: 'bg-emerald-100 text-emerald-700',
   in_progress: 'bg-blue-100 text-blue-700',
   completed: 'bg-green-100 text-green-700',
 };
 
 function p2PoStatusLabel(status: P2PoStatusSummary['status']) {
   if (status === 'in_progress') return 'In Progress';
+  if (status === 'scheduled') return 'Scheduled';
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
@@ -865,6 +877,9 @@ function ProductionTab({ projectId }: { projectId: string }) {
   const serializedCompleteItems = selectedSerializedItems
     .filter(item => serializedStatusGroup(item) === 'complete')
     .sort((a, b) => (a.completedAt || a.updatedAt || '').localeCompare(b.completedAt || b.updatedAt || ''));
+  const serializedScheduledItems = selectedSerializedItems
+    .filter(item => serializedStatusGroup(item) === 'scheduled')
+    .sort((a, b) => (a.serialNumber || a.barcode || a.id).localeCompare(b.serialNumber || b.barcode || b.id));
   const serializedInProgressByDepartment = selectedSerializedItems
     .filter(item => serializedStatusGroup(item) === 'in_progress')
     .reduce<Record<string, P2SerializedBreakdownItem[]>>((acc, item) => {
@@ -879,6 +894,9 @@ function ProductionTab({ projectId }: { projectId: string }) {
       [...items].sort((a, b) => serializedDepartment(a).localeCompare(serializedDepartment(b)) || (a.serialNumber || a.barcode || a.id).localeCompare(b.serialNumber || b.barcode || b.id)),
     ] as const)
     .sort(([a], [b]) => a.localeCompare(b));
+  const serializedScrappedItems = selectedSerializedItems
+    .filter(item => serializedStatusGroup(item) === 'scrapped')
+    .sort((a, b) => (a.serialNumber || a.barcode || a.id).localeCompare(b.serialNumber || b.barcode || b.id));
   const serializedOtherItems = selectedSerializedItems
     .filter(item => serializedStatusGroup(item) === 'other')
     .sort((a, b) => (a.serialNumber || a.barcode || a.id).localeCompare(b.serialNumber || b.barcode || b.id));
@@ -1004,8 +1022,10 @@ function ProductionTab({ projectId }: { projectId: string }) {
                         <span className="font-semibold">{pct}%</span>
                       </div>
                       <Progress value={pct} className="h-2" />
-                      <div className="grid grid-cols-3 gap-2 text-center text-xs text-muted-foreground">
+                      <div className="grid grid-cols-2 gap-2 text-center text-xs text-muted-foreground sm:grid-cols-5">
                         <div><span className="block font-semibold text-foreground">{po.inProductionItems}</span>In production</div>
+                        <div><span className="block font-semibold text-foreground">{po.scheduledItems ?? 0}</span>Scheduled</div>
+                        <div><span className="block font-semibold text-foreground">{po.scrappedItems ?? 0}</span>Scrapped</div>
                         <div><span className="block font-semibold text-foreground">{po.pendingItems}</span>Pending</div>
                         <div><span className="block font-semibold text-foreground">{po.rawStatus}</span>Raw status</div>
                       </div>
@@ -1317,6 +1337,23 @@ function ProductionTab({ projectId }: { projectId: string }) {
                 </AccordionItem>
               )}
 
+              {serializedScheduledItems.length > 0 && (
+                <AccordionItem value="scheduled" className="rounded-md border px-3">
+                  <AccordionTrigger className="py-3 hover:no-underline">
+                    <span className="flex items-center gap-2 text-sm font-semibold">
+                      <Calendar className="h-4 w-4 text-emerald-600" />
+                      Scheduled
+                      <Badge variant="outline">{serializedScheduledItems.length} order{serializedScheduledItems.length === 1 ? '' : 's'}</Badge>
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent className="pb-3">
+                    <div className="divide-y rounded-md border">
+                      {serializedScheduledItems.map(renderSerializedItem)}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              )}
+
               {serializedInProgressDepartments.length > 0 && (
                 <AccordionItem value="in-progress" className="rounded-md border px-3">
                   <AccordionTrigger className="py-3 hover:no-underline">
@@ -1349,6 +1386,23 @@ function ProductionTab({ projectId }: { projectId: string }) {
                         </AccordionItem>
                       ))}
                     </Accordion>
+                  </AccordionContent>
+                </AccordionItem>
+              )}
+
+              {serializedScrappedItems.length > 0 && (
+                <AccordionItem value="scrapped" className="rounded-md border px-3">
+                  <AccordionTrigger className="py-3 hover:no-underline">
+                    <span className="flex items-center gap-2 text-sm font-semibold">
+                      <XCircle className="h-4 w-4 text-red-600" />
+                      Scrapped
+                      <Badge variant="outline">{serializedScrappedItems.length} order{serializedScrappedItems.length === 1 ? '' : 's'}</Badge>
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent className="pb-3">
+                    <div className="divide-y rounded-md border">
+                      {serializedScrappedItems.map(renderSerializedItem)}
+                    </div>
                   </AccordionContent>
                 </AccordionItem>
               )}

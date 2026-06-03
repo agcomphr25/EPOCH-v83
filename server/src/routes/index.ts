@@ -3943,6 +3943,11 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           return dept === 'Layup';
         }).length;
 
+        const scrappedItems = poItems.filter((s: any) => {
+          const status = String(s.status || '').trim().toUpperCase();
+          return status === 'SCRAPPED' || status === 'SCRAP';
+        }).length;
+
         const serializedInProductionItems = poItems.filter((s: any) => {
           if (s.status !== 'ACTIVE') return false;
           const dept = normalizeP2ControlDepartment(s.currentDepartment || '');
@@ -3962,7 +3967,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
         // pendingItems = everything not yet completed or in-production (including
         // line item quantities that haven't had serialized items generated yet).
-        const pendingItems = Math.max(0, totalItems - completedItems - scheduledItems - inProductionItems);
+        const pendingItems = Math.max(0, totalItems - completedItems - scheduledItems - inProductionItems - scrappedItems);
         
         const rawStatus = normalizeP2Status(po.status) || 'OPEN';
 
@@ -3981,6 +3986,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           completedItems,
           scheduledItems,
           inProductionItems,
+          scrappedItems,
           pendingItems,
           hasBOMsNeeded: !po.bomConfigured,
           projectId: linkedProject?.projectId ?? null,
@@ -3988,7 +3994,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           projectName: linkedProject?.projectName ?? po.projectName ?? null,
           ...wadContext,
           rawStatus,
-          status: completedItems === totalItems && totalItems > 0 ? 'completed' :
+          status: (completedItems + scrappedItems) >= totalItems && totalItems > 0 ? 'completed' :
                   inProductionItems > 0 ? 'in_progress' :
                   scheduledItems > 0 ? 'scheduled' : 'pending'
         };

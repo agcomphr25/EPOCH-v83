@@ -5237,7 +5237,8 @@ export const p2PurchaseOrders = pgTable('p2_purchase_orders', {
   productionLeadId: integer('production_lead_id').references(() => employees.id), // Production lead for this PO
   productionLeadName: text('production_lead_name'), // Denormalized for display
   
-  // Project association — free-text field for internal project name or number
+  // Project association for PM/P2 continuity
+  projectId: uuid('project_id').references((): AnyPgColumn => projects.id, { onDelete: 'set null' }),
   projectName: text('project_name'),
   securityClassification: text('security_classification').notNull().default('internal'), // public | internal | cui | itar
   cuiCategory: text('cui_category'),
@@ -6827,6 +6828,7 @@ export const insertP2PurchaseOrderSchema = createInsertSchema(p2PurchaseOrders)
     notes: z.string().optional().nullable(),
     sourceQuoteId: z.string().uuid().optional().nullable(),
     contractReviewRole: z.enum(['primary', 'secondary']).default('secondary'),
+    projectId: z.string().uuid().optional().nullable(),
   });
 
 export const insertP2PurchaseOrderItemSchema = createInsertSchema(

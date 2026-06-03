@@ -1447,6 +1447,11 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
     }));
   };
 
+  const openMissingPunchRequest = () => {
+    startMissingPunchCorrection();
+    setShowPunchCorrectionForm(true);
+  };
+
   const updatePunchCorrectionType = (value: PunchEventType) => {
     setPunchCorrectionForm((prev) => {
       const isEndPunch = value === 'clock_out' || value === 'break_end';
@@ -3415,7 +3420,7 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
                     )}
 
                     {!showPunchCorrectionForm ? (
-                      <div className="mt-6 text-center">
+                      <div className="mt-6 flex flex-wrap justify-center gap-3">
                         <Button
                           type="button"
                           variant="outline"
@@ -3425,65 +3430,84 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
                           <Edit className="h-4 w-4" />
                           Request Punch Correction
                         </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="gap-2"
+                          onClick={openMissingPunchRequest}
+                        >
+                          <Plus className="h-4 w-4" />
+                          Add Missing Punch
+                        </Button>
                       </div>
                     ) : (
                     <div className="mt-6 rounded-lg border bg-muted/20 p-4 text-left space-y-3">
                       <div>
-                        <h3 className="text-sm font-semibold text-gray-900">Request Punch Correction</h3>
+                        <h3 className="text-sm font-semibold text-gray-900">
+                          {punchCorrectionForm.requestType === 'add_session' ? 'Add Missing Punch' : 'Request Punch Correction'}
+                        </h3>
                         <p className="text-xs text-muted-foreground mt-1">
-                          Submit missed or incorrect punch changes for supervisor review.
+                          {punchCorrectionForm.requestType === 'add_session'
+                            ? 'Submit a punch that was missed and needs supervisor review.'
+                            : 'Select an existing punch and submit corrected details for supervisor review.'}
                         </p>
                       </div>
                       <div className="grid gap-3 sm:grid-cols-2">
-                        <div className="sm:col-span-2 space-y-2">
-                          <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div>
-                              <Label className="uppercase tracking-widest text-muted-foreground">Active Shift Punches</Label>
-                              <p className="text-xs text-muted-foreground">Tap a punch to edit it.</p>
+                        {punchCorrectionForm.requestType === 'edit_session' ? (
+                          <div className="sm:col-span-2 space-y-2">
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div>
+                                <Label className="uppercase tracking-widest text-muted-foreground">Active Shift Punches</Label>
+                                <p className="text-xs text-muted-foreground">Tap a punch to edit it.</p>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="gap-2"
+                                onClick={startMissingPunchCorrection}
+                              >
+                                <Plus className="h-4 w-4" />
+                                Add Missing Punch
+                              </Button>
                             </div>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="gap-2"
-                              onClick={startMissingPunchCorrection}
-                            >
-                              <Plus className="h-4 w-4" />
-                              Add Missing
-                            </Button>
-                          </div>
-                          <div className="rounded-md border bg-white max-h-52 overflow-y-auto">
-                            {activeShiftPunchesLoading ? (
-                              <div className="p-3 text-sm text-muted-foreground">Loading punches...</div>
-                            ) : activeShiftPunches.length === 0 ? (
-                              <div className="p-3 text-sm text-muted-foreground">No punches found for this active shift.</div>
-                            ) : (
-                              activeShiftPunches.map((punch) => {
-                                const selected = punchCorrectionForm.requestType === 'edit_session' && punchCorrectionForm.punchLedgerId === String(punch.sessionId) && punchCorrectionForm.selectedPunchType === punch.type;
-                                return (
-                                  <button
-                                    key={`${punch.sessionId}-${punch.type}-${punch.punchedAt}`}
-                                    type="button"
-                                    onClick={() => selectPunchForCorrection(punch)}
-                                    className={`w-full px-3 py-3 text-left border-b last:border-b-0 hover:bg-muted/40 ${selected ? 'bg-blue-50 ring-1 ring-blue-300' : 'bg-white'}`}
-                                  >
-                                    <div className="flex flex-wrap items-center justify-between gap-2">
-                                      <div className="flex items-center gap-2">
-                                        <Badge variant="outline" className={punch.type.includes('break') ? 'text-amber-700 border-amber-200' : 'text-blue-700 border-blue-200'}>
-                                          {punch.type.replace(/_/g, ' ')}
-                                        </Badge>
+                            <div className="rounded-md border bg-white max-h-52 overflow-y-auto">
+                              {activeShiftPunchesLoading ? (
+                                <div className="p-3 text-sm text-muted-foreground">Loading punches...</div>
+                              ) : activeShiftPunches.length === 0 ? (
+                                <div className="p-3 text-sm text-muted-foreground">No punches found for this active shift.</div>
+                              ) : (
+                                activeShiftPunches.map((punch) => {
+                                  const selected = punchCorrectionForm.requestType === 'edit_session' && punchCorrectionForm.punchLedgerId === String(punch.sessionId) && punchCorrectionForm.selectedPunchType === punch.type;
+                                  return (
+                                    <button
+                                      key={`${punch.sessionId}-${punch.type}-${punch.punchedAt}`}
+                                      type="button"
+                                      onClick={() => selectPunchForCorrection(punch)}
+                                      className={`w-full px-3 py-3 text-left border-b last:border-b-0 hover:bg-muted/40 ${selected ? 'bg-blue-50 ring-1 ring-blue-300' : 'bg-white'}`}
+                                    >
+                                      <div className="flex flex-wrap items-center justify-between gap-2">
+                                        <div className="flex items-center gap-2">
+                                          <Badge variant="outline" className={punch.type.includes('break') ? 'text-amber-700 border-amber-200' : 'text-blue-700 border-blue-200'}>
+                                            {punch.type.replace(/_/g, ' ')}
+                                          </Badge>
+                                        </div>
+                                        <span className="text-sm font-medium text-gray-700">
+                                          {new Date(punch.punchedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                                        </span>
                                       </div>
-                                      <span className="text-sm font-medium text-gray-700">
-                                        {new Date(punch.punchedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
-                                      </span>
-                                    </div>
-                                    {punch.costCode && <div className="text-xs text-muted-foreground mt-1">CC {punch.costCode}</div>}
-                                  </button>
-                                );
-                              })
-                            )}
+                                      {punch.costCode && <div className="text-xs text-muted-foreground mt-1">CC {punch.costCode}</div>}
+                                    </button>
+                                  );
+                                })
+                              )}
+                            </div>
                           </div>
-                        </div>
+                        ) : (
+                          <div className="sm:col-span-2 rounded-md border border-blue-100 bg-blue-50 p-3 text-sm text-blue-900">
+                            Use this form only for a punch that was never recorded. To change a punch that already exists, cancel and choose Request Punch Correction.
+                          </div>
+                        )}
                         <div className="space-y-1 sm:col-span-2">
                           <Label>{punchCorrectionForm.requestType === 'add_session' ? 'Missing Punch Type' : 'Correct Punch Type'}</Label>
                           <Select
@@ -3563,13 +3587,13 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
                       <div className="space-y-1">
                         <Label>Reason <span className="text-red-600">*</span></Label>
                         <p className="text-xs font-medium text-muted-foreground">
-                          Required - enter at least 5 characters explaining why this correction is needed.
+                          Required - enter at least 5 characters explaining why this {punchCorrectionForm.requestType === 'add_session' ? 'punch was missed' : 'correction is needed'}.
                         </p>
                         <Textarea
                           rows={3}
                           value={punchCorrectionForm.reason}
                           onChange={(event) => setPunchCorrectionForm((prev) => ({ ...prev, reason: event.target.value }))}
-                          placeholder="Required: explain what needs to be fixed..."
+                          placeholder={punchCorrectionForm.requestType === 'add_session' ? 'Required: explain why this punch was missed...' : 'Required: explain what needs to be fixed...'}
                         />
                       </div>
                       <Button
@@ -3584,7 +3608,11 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
                           ((punchCorrectionForm.selectedPunchType === 'clock_in' || punchCorrectionForm.selectedPunchType === 'break_end') && !punchCorrectionForm.chargeCodeId)
                         }
                       >
-                        {punchCorrectionMutation.isPending ? 'Submitting...' : 'Submit Correction Request'}
+                        {punchCorrectionMutation.isPending
+                          ? 'Submitting...'
+                          : punchCorrectionForm.requestType === 'add_session'
+                            ? 'Submit Missing Punch'
+                            : 'Submit Correction Request'}
                       </Button>
                       <Button
                         type="button"

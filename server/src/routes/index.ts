@@ -4465,9 +4465,10 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         return (!key || !serializedPoItemKeys.has(key)) && !isComplete;
       });
       const activeLegacyProjectProductionRows = legacyProjectProductionRows.filter((row: any) => {
-        if (row.poId) return false;
+        const key = row.poId && row.poItemId ? `${row.poId}:${row.poItemId}` : null;
         const normalizedStatus = String(row.status || '').toUpperCase();
-        return !['COMPLETE', 'COMPLETED', 'CLOSED'].includes(normalizedStatus);
+        return (!key || !serializedPoItemKeys.has(key))
+          && !['COMPLETE', 'COMPLETED', 'CLOSED'].includes(normalizedStatus);
       });
 
       const itemIds = items.map((item: any) => item.id).filter(Boolean);

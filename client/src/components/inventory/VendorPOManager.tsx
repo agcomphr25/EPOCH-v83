@@ -95,7 +95,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { getResendConfirmationKey, getSendRFQInvalidationKeys } from '@/lib/vendorPOInvalidation';
-import { formatDateOnly, formatDateOnlyMedium } from '@shared/utils/dateNormalization';
+import { formatDateOnly, formatDateOnlyMedium, toLocalDate } from '@shared/utils/dateNormalization';
 
 // Helper function to format numbers with commas
 function formatNumber(value: number | undefined | null, decimals: number = 2): string {
@@ -190,6 +190,14 @@ function RecipientPickerList({
 function formatReadinessDate(value: unknown): string {
   if (!value) return 'None recorded';
   return formatDateOnly(String(value));
+}
+
+function formatDateInputValue(date: Date): string {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-');
 }
 
 function IssueReadinessCard({
@@ -1071,10 +1079,7 @@ function VendorPOCard({
                 className="font-medium"
                 data-testid={`text-delivery-date-${vendorPo.id}`}
               >
-                {format(
-                  new Date(vendorPo.expectedDeliveryDate),
-                  'MMM dd, yyyy'
-                )}
+                {formatDateOnlyMedium(vendorPo.expectedDeliveryDate)}
               </p>
             </div>
           )}
@@ -1211,7 +1216,7 @@ function VendorPOForm({
 
   const [deliveryDate, setDeliveryDate] = useState<Date | undefined>(
     vendorPo?.expectedDeliveryDate
-      ? new Date(vendorPo.expectedDeliveryDate)
+      ? toLocalDate(vendorPo.expectedDeliveryDate)
       : undefined
   );
 
@@ -1240,7 +1245,7 @@ function VendorPOForm({
     onSubmit({
       ...formData,
       expectedDeliveryDate: deliveryDate
-        ? deliveryDate.toISOString().split('T')[0]
+        ? formatDateInputValue(deliveryDate)
         : undefined,
     });
   };

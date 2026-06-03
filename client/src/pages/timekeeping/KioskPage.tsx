@@ -923,7 +923,7 @@ export default function KioskPage() {
               setStep('correction');
             }}
           >
-            Add Missing
+            Add Missing Punch
           </Button>
         </div>
 
@@ -1143,61 +1143,73 @@ export default function KioskPage() {
   }
 
   if (step === 'correction' && employee) {
+    const isMissingPunchRequest = correctionForm.requestType === 'add_session';
     const correctionNeedsChargeCode = correctionForm.selectedPunchType === 'clock_in' || correctionForm.selectedPunchType === 'break_end';
     const correctionPunches = selectedCorrectionPunch ? [selectedCorrectionPunch] : activeShiftPunches;
     return (
       <div className="min-h-screen bg-gray-50 text-gray-900 flex flex-col items-center justify-center px-8">
         <div className="w-full max-w-sm space-y-4">
           <div className="text-center">
-            <p className="text-2xl font-bold">Request Punch Correction</p>
+            <p className="text-2xl font-bold">{isMissingPunchRequest ? 'Add Missing Punch' : 'Request Punch Correction'}</p>
             <p className="text-sm text-gray-500">{employee.firstName} {employee.lastName}</p>
+            <p className="mt-1 text-xs text-gray-500">
+              {isMissingPunchRequest ? 'Submit a punch that was missed and needs supervisor approval.' : 'Select an existing punch and submit the corrected details for supervisor approval.'}
+            </p>
             <p className="mt-1 text-xs text-gray-400">This screen resets after inactivity in {idleCountdown}s.</p>
           </div>
 
           <div className="rounded-2xl border bg-white p-4 space-y-3 shadow-sm">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <label className="block text-xs uppercase tracking-widest text-gray-400">
-                  {selectedCorrectionPunch ? 'Selected Punch' : "Today's Punches"}
-                </label>
-                <p className="text-xs text-gray-500">
-                  {selectedCorrectionPunch ? 'Only this punch will be included in the edit request.' : 'Tap a punch to edit it.'}
-                </p>
-              </div>
-              {!selectedCorrectionPunch && (
-                <Button type="button" variant="outline" size="sm" onClick={startMissingPunchCorrection}>
-                  Add Missing
-                </Button>
-              )}
-            </div>
+            {!isMissingPunchRequest ? (
+              <>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <label className="block text-xs uppercase tracking-widest text-gray-400">
+                      {selectedCorrectionPunch ? 'Selected Punch' : "Today's Punches"}
+                    </label>
+                    <p className="text-xs text-gray-500">
+                      {selectedCorrectionPunch ? 'Only this punch will be included in the edit request.' : 'Tap a punch to edit it.'}
+                    </p>
+                  </div>
+                  {!selectedCorrectionPunch && (
+                    <Button type="button" variant="outline" size="sm" onClick={startMissingPunchCorrection}>
+                      Add Missing Punch
+                    </Button>
+                  )}
+                </div>
 
-            <div className="space-y-2 max-h-44 overflow-y-auto">
-              {correctionLoading ? (
-                <div className="rounded-xl border border-gray-200 p-3 text-sm text-gray-500">Loading punches...</div>
-              ) : correctionPunches.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-gray-200 p-3 text-sm text-gray-500">No punches found for today.</div>
-              ) : (
-                correctionPunches.map((punch) => {
-                  const selected = correctionForm.requestType === 'edit_session' && correctionForm.punchLedgerId === String(punch.sessionId) && correctionForm.selectedPunchType === punch.type;
-                  return (
-                    <button
-                      key={`${punch.sessionId}-${punch.type}-${punch.punchedAt}`}
-                      type="button"
-                      onClick={() => selectCorrectionPunch(punch)}
-                      className={`w-full rounded-xl border p-3 text-left transition-colors ${selected ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-semibold capitalize">{punch.type.replace(/_/g, ' ')}</span>
-                        <span className="text-sm font-medium text-gray-700">
-                          {new Date(punch.punchedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                      </div>
-                      {punch.costCode && <p className="text-xs text-gray-500 mt-1">CC {punch.costCode}</p>}
-                    </button>
-                  );
-                })
-              )}
-            </div>
+                <div className="space-y-2 max-h-44 overflow-y-auto">
+                  {correctionLoading ? (
+                    <div className="rounded-xl border border-gray-200 p-3 text-sm text-gray-500">Loading punches...</div>
+                  ) : correctionPunches.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-gray-200 p-3 text-sm text-gray-500">No punches found for today.</div>
+                  ) : (
+                    correctionPunches.map((punch) => {
+                      const selected = correctionForm.requestType === 'edit_session' && correctionForm.punchLedgerId === String(punch.sessionId) && correctionForm.selectedPunchType === punch.type;
+                      return (
+                        <button
+                          key={`${punch.sessionId}-${punch.type}-${punch.punchedAt}`}
+                          type="button"
+                          onClick={() => selectCorrectionPunch(punch)}
+                          className={`w-full rounded-xl border p-3 text-left transition-colors ${selected ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-sm font-semibold capitalize">{punch.type.replace(/_/g, ' ')}</span>
+                            <span className="text-sm font-medium text-gray-700">
+                              {new Date(punch.punchedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                          {punch.costCode && <p className="text-xs text-gray-500 mt-1">CC {punch.costCode}</p>}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-blue-900">
+                Use this form only for a punch that was never recorded. To change a punch that already exists, go back and select that punch from today&apos;s list.
+              </div>
+            )}
 
             <label className="block text-xs uppercase tracking-widest text-gray-400">
               {correctionForm.requestType === 'add_session' ? 'Missing Punch Type' : 'Correct Punch Type'}
@@ -1279,7 +1291,7 @@ export default function KioskPage() {
             <div>
               <label className="block text-xs uppercase tracking-widest text-gray-400">Reason</label>
               <p className="mt-1 text-xs font-medium text-gray-600">
-                Required - enter at least 5 characters explaining why this correction is needed.
+                Required - enter at least 5 characters explaining why this {isMissingPunchRequest ? 'punch was missed' : 'correction is needed'}.
               </p>
             </div>
             <textarea
@@ -1289,7 +1301,7 @@ export default function KioskPage() {
                 restartIdleTimer();
               }}
               rows={3}
-              placeholder="Required: explain what needs to be fixed..."
+              placeholder={isMissingPunchRequest ? 'Required: explain why this punch was missed...' : 'Required: explain what needs to be fixed...'}
               className="w-full rounded-xl border border-gray-200 p-3"
             />
           </div>
@@ -1299,7 +1311,7 @@ export default function KioskPage() {
             disabled={correctionForm.reason.trim().length < 5 || (correctionForm.requestType === 'add_session' && !correctionForm.clockIn) || (correctionForm.requestType === 'edit_session' && !correctionForm.punchLedgerId) || (correctionNeedsChargeCode && !correctionForm.chargeCodeId)}
             className="w-full h-14 rounded-2xl"
           >
-            Submit for Approval
+            {isMissingPunchRequest ? 'Submit Missing Punch' : 'Submit Correction Request'}
           </Button>
           <button onClick={() => setStep('confirm')} className="w-full text-center text-gray-400 hover:text-gray-600 text-sm">
             Back

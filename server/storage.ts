@@ -800,7 +800,7 @@ import {
 const VENDOR_DATE_COLUMNS = ['evaluationDate', 'startRenewalDate', 'approvalExpiration'] as const;
 
 // Employee date columns that must be normalised to "YYYY-MM-DD" strings.
-const EMPLOYEE_DATE_COLUMNS = ['hireDate', 'dateOfBirth', 'driversLicenseExpiration'] as const;
+const EMPLOYEE_DATE_COLUMNS = ['hireDate', 'dateOfBirth', 'driversLicenseExpiration', 'terminationDate', 'finalPaycheckDate'] as const;
 
 // Vendor PO date columns that must be normalised to "YYYY-MM-DD" strings.
 const VENDOR_PO_DATE_COLUMNS = ['orderDate', 'expectedDeliveryDate', 'actualDeliveryDate'] as const;
@@ -7418,6 +7418,12 @@ export class DatabaseStorage implements IStorage {
     if (insertData.hireDate instanceof Date) {
       insertData.hireDate = insertData.hireDate.toISOString().split('T')[0];
     }
+    if (insertData.terminationDate instanceof Date) {
+      insertData.terminationDate = insertData.terminationDate.toISOString().split('T')[0];
+    }
+    if (insertData.finalPaycheckDate instanceof Date) {
+      insertData.finalPaycheckDate = insertData.finalPaycheckDate.toISOString().split('T')[0];
+    }
 
     const [employee] = await db
       .insert(employees)
@@ -7447,6 +7453,12 @@ export class DatabaseStorage implements IStorage {
     }
     if (updateData.driversLicenseExpiration instanceof Date) {
       updateData.driversLicenseExpiration = updateData.driversLicenseExpiration.toISOString().split('T')[0];
+    }
+    if (updateData.terminationDate instanceof Date) {
+      updateData.terminationDate = updateData.terminationDate.toISOString().split('T')[0];
+    }
+    if (updateData.finalPaycheckDate instanceof Date) {
+      updateData.finalPaycheckDate = updateData.finalPaycheckDate.toISOString().split('T')[0];
     }
 
     // Convert portalTokenExpiry string → Date for Drizzle's timestamp column

@@ -60,11 +60,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import AddCertificationModal from '@/components/employee/AddCertificationModal';
 import CertificationFormModal from '@/components/employee/CertificationFormModal';
@@ -89,6 +92,19 @@ interface Employee {
   salary: number;
   hourlyRate: number;
   isActive: boolean;
+  employmentStatus?: string;
+  terminationDate?: string | null;
+  terminationReasonCode?: string | null;
+  terminationReason?: string | null;
+  eligibleForRehire?: boolean | null;
+  finalPaycheckDate?: string | null;
+  terminationNotes?: string | null;
+  userIsActive?: boolean | null;
+  accessExceptionReason?: string | null;
+  accessExceptionApprovedByName?: string | null;
+  accessExceptionApprovedAt?: string | null;
+  accessExceptionExpiresAt?: string | null;
+  terminatedWithAccess?: boolean;
   portalToken: string;
   portalTokenExpiry: string;
   createdAt: string;
@@ -531,6 +547,17 @@ export default function EmployeeDetail() {
   const [selectedAssignUserId, setSelectedAssignUserId] = useState<string>('');
   const [showAssignUser, setShowAssignUser] = useState(false);
   const [selectedChargeCodeIds, setSelectedChargeCodeIds] = useState<number[]>([]);
+  const [showTerminateDialog, setShowTerminateDialog] = useState(false);
+  const [terminationForm, setTerminationForm] = useState({
+    terminationDate: new Date().toISOString().split('T')[0],
+    terminationReasonCode: '',
+    terminationReason: '',
+    eligibleForRehire: false,
+    finalPaycheckDate: '',
+    terminationNotes: '',
+    retainAccess: false,
+    accessExceptionReason: '',
+  });
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -721,6 +748,44 @@ export default function EmployeeDetail() {
     },
   });
 
+  const terminateEmployeeMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch(`/api/employees/${id}/terminate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...terminationForm,
+          finalPaycheckDate: terminationForm.finalPaycheckDate || null,
+          terminationNotes: terminationForm.terminationNotes || null,
+          accessExceptionReason: terminationForm.accessExceptionReason || null,
+        }),
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || 'Failed to complete termination');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/employees', id] });
+      queryClient.invalidateQueries({ queryKey: ['/api/employees'] });
+      setShowTerminateDialog(false);
+      toast({
+        title: 'Termination recorded',
+        description: terminationForm.retainAccess
+          ? 'Employment ended and EPOCH access was retained for 90 days.'
+          : 'Employment ended and EPOCH access was disabled.',
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Termination failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
   const updateChargeCodesMutation = useMutation({
     mutationFn: async () => {
       const response = await fetch(`/api/employees/${id}/charge-codes`, {
@@ -748,6 +813,22 @@ export default function EmployeeDetail() {
   const activeChargeCodes = allChargeCodes
     .filter((code) => code.active !== false)
     .sort((a, b) => a.code.localeCompare(b.code));
+
+  const isTerminated = employee?.employmentStatus === 'TERMINATED' || employee?.isActive === false;
+  const retainedAccessExpires = terminationForm.terminationDate
+    ? (() => {
+        const date = new Date(`${terminationForm.terminationDate}T00:00:00`);
+        date.setDate(date.getDate() + 90);
+        return date;
+      })()
+    : null;
+  const canTerminate =
+    Boolean(terminationForm.terminationDate) &&
+    Boolean(terminationForm.terminationReasonCode) &&
+    Boolean(terminationForm.terminationReason.trim()) &&
+    (!terminationForm.retainAccess ||
+      Boolean(terminationForm.accessExceptionReason.trim())) &&
+    !terminateEmployeeMutation.isPending;
 
   const toggleChargeCode = (chargeCodeId: number) => {
     setSelectedChargeCodeIds((current) =>
@@ -1310,6 +1391,16 @@ export default function EmployeeDetail() {
           </div>
         </div>
         <div className="flex items-center space-x-2">
+          {!isEditing && !isTerminated && (
+            <Button
+              variant="outline"
+              className="border-red-200 text-red-700 hover:bg-red-50"
+              onClick={() => setShowTerminateDialog(true)}
+            >
+              <Ban className="w-4 h-4 mr-2" />
+              Terminate
+            </Button>
+          )}
           {isEditing ? (
             <>
               <Button variant="outline" onClick={handleCancel}>
@@ -1332,6 +1423,25 @@ export default function EmployeeDetail() {
           )}
         </div>
       </div>
+
+      {employee.terminatedWithAccess && (
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="flex flex-wrap items-center gap-3 pt-6 text-red-800">
+            <AlertTriangle className="h-5 w-5" />
+            <div className="text-sm">
+              <span className="font-semibold">Terminated employee retains EPOCH access.</span>{' '}
+              Access expires{' '}
+              {employee.accessExceptionExpiresAt
+                ? new Date(employee.accessExceptionExpiresAt).toLocaleDateString()
+                : 'after review'}
+              {employee.accessExceptionApprovedByName
+                ? `, approved by ${employee.accessExceptionApprovedByName}`
+                : ''}
+              .
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Employee Profile Card */}
@@ -1357,6 +1467,19 @@ export default function EmployeeDetail() {
                 >
                   {employee.isActive ? 'Active' : 'Inactive'}
                 </Badge>
+                {employee.employmentStatus === 'TERMINATED' && (
+                  <div className="mt-2 space-y-1 text-xs text-red-700">
+                    <div>
+                      Terminated{' '}
+                      {employee.terminationDate
+                        ? formatDate(employee.terminationDate)
+                        : ''}
+                    </div>
+                    {employee.terminationReasonCode && (
+                      <div>{employee.terminationReasonCode}</div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="space-y-3 text-sm">
@@ -3345,6 +3468,180 @@ export default function EmployeeDetail() {
               </Card>
             </TabsContent>
           </Tabs>
+
+          <Dialog open={showTerminateDialog} onOpenChange={setShowTerminateDialog}>
+            <DialogContent className="sm:max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Terminate Employee</DialogTitle>
+                <DialogDescription>
+                  Record the employment termination separately from EPOCH access. Historical records will remain intact.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="termination-date">Termination Date</Label>
+                    <Input
+                      id="termination-date"
+                      type="date"
+                      value={terminationForm.terminationDate}
+                      onChange={(event) =>
+                        setTerminationForm((current) => ({
+                          ...current,
+                          terminationDate: event.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="termination-reason-code">Reason Code</Label>
+                    <Select
+                      value={terminationForm.terminationReasonCode}
+                      onValueChange={(value) =>
+                        setTerminationForm((current) => ({
+                          ...current,
+                          terminationReasonCode: value,
+                        }))
+                      }
+                    >
+                      <SelectTrigger id="termination-reason-code">
+                        <SelectValue placeholder="Select reason" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="voluntary">Voluntary</SelectItem>
+                        <SelectItem value="involuntary">Involuntary</SelectItem>
+                        <SelectItem value="layoff">Layoff</SelectItem>
+                        <SelectItem value="retirement">Retirement</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="termination-reason">Reason / Notes for Audit</Label>
+                  <Textarea
+                    id="termination-reason"
+                    value={terminationForm.terminationReason}
+                    onChange={(event) =>
+                      setTerminationForm((current) => ({
+                        ...current,
+                        terminationReason: event.target.value,
+                      }))
+                    }
+                    placeholder="Document the business reason for the employment status change."
+                    rows={3}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="final-paycheck-date">Final Paycheck Date</Label>
+                    <Input
+                      id="final-paycheck-date"
+                      type="date"
+                      value={terminationForm.finalPaycheckDate}
+                      onChange={(event) =>
+                        setTerminationForm((current) => ({
+                          ...current,
+                          finalPaycheckDate: event.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+
+                  <label className="flex items-center gap-3 rounded-md border p-3 text-sm">
+                    <Checkbox
+                      checked={terminationForm.eligibleForRehire}
+                      onCheckedChange={(checked) =>
+                        setTerminationForm((current) => ({
+                          ...current,
+                          eligibleForRehire: checked === true,
+                        }))
+                      }
+                    />
+                    Eligible for rehire
+                  </label>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="termination-notes">Additional Termination Notes</Label>
+                  <Textarea
+                    id="termination-notes"
+                    value={terminationForm.terminationNotes}
+                    onChange={(event) =>
+                      setTerminationForm((current) => ({
+                        ...current,
+                        terminationNotes: event.target.value,
+                      }))
+                    }
+                    rows={2}
+                  />
+                </div>
+
+                <div className="rounded-md border border-amber-200 bg-amber-50 p-4 space-y-3">
+                  <label className="flex items-start gap-3 text-sm font-medium text-amber-950">
+                    <Checkbox
+                      checked={terminationForm.retainAccess}
+                      onCheckedChange={(checked) =>
+                        setTerminationForm((current) => ({
+                          ...current,
+                          retainAccess: checked === true,
+                        }))
+                      }
+                    />
+                    Retain EPOCH access after employment termination
+                  </label>
+
+                  {terminationForm.retainAccess && (
+                    <div className="space-y-3 pl-7">
+                      <p className="text-sm text-amber-900">
+                        Current role and capabilities stay in place until manually changed. This exception expires on{' '}
+                        <span className="font-semibold">
+                          {retainedAccessExpires ? formatDate(retainedAccessExpires.toISOString()) : 'the 90-day review date'}
+                        </span>
+                        .
+                      </p>
+                      <div className="space-y-2">
+                        <Label htmlFor="access-exception-reason">Access Exception Reason</Label>
+                        <Textarea
+                          id="access-exception-reason"
+                          value={terminationForm.accessExceptionReason}
+                          onChange={(event) =>
+                            setTerminationForm((current) => ({
+                              ...current,
+                              accessExceptionReason: event.target.value,
+                            }))
+                          }
+                          placeholder="Document owner/admin approval and why access is being retained."
+                          rows={3}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowTerminateDialog(false)}
+                  disabled={terminateEmployeeMutation.isPending}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => terminateEmployeeMutation.mutate()}
+                  disabled={!canTerminate}
+                >
+                  {terminateEmployeeMutation.isPending ? 'Recording...' : 'Record Termination'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
     </div>

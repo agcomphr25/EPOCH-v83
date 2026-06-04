@@ -388,11 +388,20 @@ Phone: 256-723-8381
     subject,
   });
 
+  const trackingFromEmail =
+    process.env.TRACKING_NOTIFICATION_FROM_EMAIL ||
+    process.env.CUSTOMER_NOTIFICATION_FROM_EMAIL ||
+    undefined;
+  const trackingReplyTo =
+    process.env.TRACKING_NOTIFICATION_REPLY_TO ||
+    trackingFromEmail ||
+    undefined;
+
   const result = await sendEmailViaSendGrid({
     to: data.email,
-    fromEmail: 'sales@agadvanced.com',
+    ...(trackingFromEmail ? { fromEmail: trackingFromEmail } : {}),
     fromName: 'AG Composites Sales',
-    replyTo: 'sales@agadvanced.com',
+    ...(trackingReplyTo ? { replyTo: trackingReplyTo } : {}),
     subject,
     text: message,
     html: message.replace(/\n/g, '<br>'),

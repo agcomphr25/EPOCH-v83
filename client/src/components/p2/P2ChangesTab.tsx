@@ -30,9 +30,32 @@ const productionChangeSchema = z.object({
   riskAssessment: z.string().optional(),
   affectedDocuments: z.array(z.string()).default([]),
   requiredActions: z.array(z.string()).default([]),
-  approverEmployeeId: z.string().min(1, 'Assigned signer is required'),
+  approvalAssignments: z.array(z.object({
+    roleKey: z.string(),
+    roleLabel: z.string(),
+    required: z.boolean(),
+    employeeId: z.string().optional(),
+  })).default([]),
   implementationRequired: z.boolean().default(false),
   requiresCustomerApproval: z.boolean().default(false),
+}).superRefine((data, ctx) => {
+  const requiredAssignments = data.approvalAssignments.filter((assignment) => assignment.required);
+  if (requiredAssignments.length === 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'At least one required signer is needed',
+      path: ['approvalAssignments'],
+    });
+  }
+  requiredAssignments.forEach((assignment, index) => {
+    if (!assignment.employeeId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `${assignment.roleLabel} must be assigned to a user`,
+        path: ['approvalAssignments', index, 'employeeId'],
+      });
+    }
+  });
 });
 
 const travelerChangeSchema = z.object({
@@ -79,6 +102,13 @@ const REQUIRED_ACTION_OPTIONS = [
   { value: 'TRAINING_REQUIRED', label: 'Assign operator training' },
 ];
 
+const PCF_APPROVAL_ROLES = [
+  { roleKey: 'BUSINESS_MANAGER', roleLabel: 'Business Manager' },
+  { roleKey: 'PURCHASING_QUALITY_MANAGER', roleLabel: 'Purchasing / Quality Manager' },
+  { roleKey: 'PRODUCTION_MANAGER', roleLabel: 'Production Manager' },
+  { roleKey: 'CUSTOMER', roleLabel: 'Customer' },
+];
+
 export default function P2ChangesTab() {
   const [activeSection, setActiveSection] = useState('production');
   const [showNewPCFDialog, setShowNewPCFDialog] = useState(false);
@@ -119,7 +149,11 @@ export default function P2ChangesTab() {
       riskAssessment: '',
       affectedDocuments: [],
       requiredActions: [],
-      approverEmployeeId: '',
+      approvalAssignments: PCF_APPROVAL_ROLES.map((role) => ({
+        ...role,
+        required: role.roleKey === 'PURCHASING_QUALITY_MANAGER' || role.roleKey === 'PRODUCTION_MANAGER',
+        employeeId: '',
+      })),
       implementationRequired: false,
       requiresCustomerApproval: false,
     },
@@ -127,6 +161,7 @@ export default function P2ChangesTab() {
 
   const affectedDocuments = pcfForm.watch('affectedDocuments') || [];
   const requiredActions = pcfForm.watch('requiredActions') || [];
+  const approvalAssignments = pcfForm.watch('approvalAssignments') || [];
 
   const deviationForm = useForm({
     resolver: zodResolver(travelerChangeSchema),
@@ -214,7 +249,10 @@ export default function P2ChangesTab() {
     pcfForm.handleSubmit((data) => {
       createPCFMutation.mutate({
         ...data,
-        approverEmployeeId: Number(data.approverEmployeeId),
+        approvalAssignments: data.approvalAssignments.map((assignment) => ({
+          ...assignment,
+          employeeId: assignment.employeeId ? Number(assignment.employeeId) : null,
+        })),
         status: 'SUBMITTED',
         submittedAt: new Date(),
       });
@@ -226,6 +264,20 @@ export default function P2ChangesTab() {
     pcfForm.setValue(
       field,
       current.includes(value) ? current.filter((item: string) => item !== value) : [...current, value],
+      { shouldDirty: true, shouldValidate: true },
+    );
+  };
+
+  const updateApprovalAssignment = (
+    roleKey: string,
+    patch: Partial<{ required: boolean; employeeId: string }>,
+  ) => {
+    const current = pcfForm.getValues('approvalAssignments') || [];
+    pcfForm.setValue(
+      'approvalAssignments',
+      current.map((assignment: any) =>
+        assignment.roleKey === roleKey ? { ...assignment, ...patch } : assignment,
+      ),
       { shouldDirty: true, shouldValidate: true },
     );
   };
@@ -414,31 +466,53 @@ export default function P2ChangesTab() {
                         )}
                       />
 
-                      <FormField
-                        control={pcfForm.control}
-                        name="approverEmployeeId"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Assigned Signer *</FormLabel>
-                            <Select onValueChange={field.onChange} defaultValue={field.value}>
-                              <FormControl>
+                      <div className="rounded-md border p-3 space-y-3">
+                        <div>
+                          <p className="text-sm font-medium">Required signatures</p>
+                          <p className="text-xs text-muted-foreground">Mark each signer required or not required, then assign required signatures to EPOCH users.</p>
+                        </div>
+                        <div className="space-y-3">
+                          {approvalAssignments.map((assignment: any) => (
+                            <div key={assignment.roleKey} className="grid grid-cols-[minmax(0,1fr)_180px_minmax(180px,1fr)] gap-3 items-center">
+                              <div>
+                                <p className="text-sm font-medium">{assignment.roleLabel}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {assignment.required ? 'Signature required' : 'Not required for this PCF'}
+                                </p>
+                              </div>
+                              <label className="flex items-center gap-2 text-sm">
+                                <Switch
+                                  checked={assignment.required}
+                                  onCheckedChange={(checked) => updateApprovalAssignment(assignment.roleKey, { required: checked === true })}
+                                />
+                                Required
+                              </label>
+                              <Select
+                                value={assignment.employeeId || ''}
+                                onValueChange={(employeeId) => updateApprovalAssignment(assignment.roleKey, { employeeId })}
+                                disabled={!assignment.required}
+                              >
                                 <SelectTrigger>
-                                  <SelectValue placeholder="Send signature task to..." />
+                                  <SelectValue placeholder="Assign user..." />
                                 </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {employees.filter((e: any) => e.isActive !== false && e.userId).map((emp: any) => (
-                                  <SelectItem key={emp.id} value={emp.id.toString()}>
-                                    {emp.name || `${emp.firstName || ''} ${emp.lastName || ''}`.trim()}
-                                    {emp.department ? ` (${emp.department})` : ''}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
+                                <SelectContent>
+                                  {employees.filter((e: any) => e.isActive !== false && e.userId).map((emp: any) => (
+                                    <SelectItem key={emp.id} value={emp.id.toString()}>
+                                      {emp.name || `${emp.firstName || ''} ${emp.lastName || ''}`.trim()}
+                                      {emp.department ? ` (${emp.department})` : ''}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          ))}
+                        </div>
+                        {pcfForm.formState.errors.approvalAssignments && (
+                          <p className="text-sm font-medium text-destructive">
+                            {pcfForm.formState.errors.approvalAssignments.message?.toString() || 'Required signers must be assigned.'}
+                          </p>
                         )}
-                      />
+                      </div>
 
                       <div className="rounded-md border p-3 space-y-3">
                         <div>
@@ -556,7 +630,22 @@ export default function P2ChangesTab() {
                           <TableCell>
                             <Badge className={STATUS_COLORS[change.status]}>{change.status}</Badge>
                           </TableCell>
-                          <TableCell>{change.approverEmployeeName || '-'}</TableCell>
+                          <TableCell>
+                            {Array.isArray(change.approvalAssignments) && change.approvalAssignments.length > 0 ? (
+                              <div className="space-y-1">
+                                {change.approvalAssignments
+                                  .filter((assignment: any) => assignment.required)
+                                  .map((assignment: any) => (
+                                    <div key={assignment.roleKey} className="text-xs">
+                                      <span className="font-medium">{assignment.roleLabel}:</span>{' '}
+                                      {assignment.employeeName || 'Unassigned'}
+                                    </div>
+                                  ))}
+                              </div>
+                            ) : (
+                              change.approverEmployeeName || '-'
+                            )}
+                          </TableCell>
                           <TableCell>
                             {change.submittedAt ? new Date(change.submittedAt).toLocaleDateString() : '-'}
                           </TableCell>

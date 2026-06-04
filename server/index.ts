@@ -5182,6 +5182,8 @@ async function initializeBackgroundServices() {
             approver_employee_id       INTEGER REFERENCES employees(id),
             approver_employee_name     TEXT,
             approval_request_id        UUID,
+            approval_request_ids       JSONB DEFAULT '[]'::jsonb,
+            approval_assignments       JSONB DEFAULT '[]'::jsonb,
             implementation_required    BOOLEAN DEFAULT false,
             requires_customer_approval BOOLEAN DEFAULT false,
             status                     TEXT NOT NULL DEFAULT 'DRAFT',
@@ -5211,6 +5213,8 @@ async function initializeBackgroundServices() {
         await pool.query(`ALTER TABLE p2_production_changes ADD COLUMN IF NOT EXISTS approver_employee_id INTEGER REFERENCES employees(id)`);
         await pool.query(`ALTER TABLE p2_production_changes ADD COLUMN IF NOT EXISTS approver_employee_name TEXT`);
         await pool.query(`ALTER TABLE p2_production_changes ADD COLUMN IF NOT EXISTS approval_request_id UUID`);
+        await pool.query(`ALTER TABLE p2_production_changes ADD COLUMN IF NOT EXISTS approval_request_ids JSONB DEFAULT '[]'::jsonb`);
+        await pool.query(`ALTER TABLE p2_production_changes ADD COLUMN IF NOT EXISTS approval_assignments JSONB DEFAULT '[]'::jsonb`);
         await pool.query(`ALTER TABLE p2_production_changes ADD COLUMN IF NOT EXISTS implementation_required BOOLEAN DEFAULT false`);
         await pool.query(`CREATE INDEX IF NOT EXISTS p2_prod_changes_approval_request_idx ON p2_production_changes(approval_request_id)`);
         await pool.query(`

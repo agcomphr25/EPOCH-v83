@@ -141,6 +141,7 @@ function ProductionChangeApprovalSummary({ payload }: { payload: Record<string, 
   const requiredActions: string[] = Array.isArray(payload.requiredActions) ? payload.requiredActions : [];
   const rows: Array<[string, React.ReactNode]> = [
     ['PCF #', <span className="font-mono">{payload.changeNumber ?? 'Pending number'}</span>],
+    ['Signature role', payload.approvalRoleLabel ?? 'Production change approver'],
     ['Type', <Badge variant="outline">{payload.changeType ?? 'Production change'}</Badge>],
     ['Scope', payload.scope ?? '-'],
   ];

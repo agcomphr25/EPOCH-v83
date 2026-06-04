@@ -5,6 +5,8 @@ ALTER TABLE p2_production_changes
   ADD COLUMN IF NOT EXISTS approver_employee_id INTEGER REFERENCES employees(id),
   ADD COLUMN IF NOT EXISTS approver_employee_name TEXT,
   ADD COLUMN IF NOT EXISTS approval_request_id UUID,
+  ADD COLUMN IF NOT EXISTS approval_request_ids JSONB DEFAULT '[]'::jsonb,
+  ADD COLUMN IF NOT EXISTS approval_assignments JSONB DEFAULT '[]'::jsonb,
   ADD COLUMN IF NOT EXISTS implementation_required BOOLEAN DEFAULT false;
 
 CREATE INDEX IF NOT EXISTS p2_prod_changes_approval_request_idx

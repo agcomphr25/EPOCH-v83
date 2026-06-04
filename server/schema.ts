@@ -11144,6 +11144,15 @@ export const p2ProductionChanges = pgTable('p2_production_changes', {
   approverEmployeeId: integer('approver_employee_id').references(() => employees.id),
   approverEmployeeName: text('approver_employee_name'),
   approvalRequestId: uuid('approval_request_id'),
+  approvalRequestIds: jsonb('approval_request_ids').$type<string[]>().default(sql`'[]'::jsonb`),
+  approvalAssignments: jsonb('approval_assignments').$type<Array<{
+    roleKey: string;
+    roleLabel: string;
+    required: boolean;
+    employeeId: number | null;
+    employeeName: string | null;
+    userId: number | null;
+  }>>().default(sql`'[]'::jsonb`),
   implementationRequired: boolean('implementation_required').default(false),
   requiresCustomerApproval: boolean('requires_customer_approval').default(false),
   status: text('status').notNull().default('DRAFT'), // DRAFT | SUBMITTED | APPROVED | REJECTED | IMPLEMENTED

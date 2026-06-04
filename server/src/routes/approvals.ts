@@ -28,7 +28,7 @@ import {
 } from '../services/inventoryApprovalExecutor';
 import { db } from '../../db';
 import { approvalRequestHistory, approvalRequests, employees, p2ProductionChanges, users } from '../../schema';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 
 export const approvalsRouter = Router();
 export const escalationPoliciesRouter = Router();
@@ -126,7 +126,7 @@ approvalsRouter.get('/my-tasks/:employeeId', async (req: Request, res: Response)
         and(
           eq(p2ProductionChanges.status, 'APPROVED'),
           eq(p2ProductionChanges.implementationRequired, true),
-          eq(p2ProductionChanges.approverEmployeeId, employeeId),
+          sql`${p2ProductionChanges.approvalAssignments} @> ${JSON.stringify([{ required: true, employeeId }])}::jsonb`,
         ),
       )
       .limit(100);
@@ -404,16 +404,31 @@ approvalsRouter.post('/:id/approve', async (req: Request, res: Response) => {
     }
 
     if (result.requestType === 'PRODUCTION_CHANGE_FORM') {
-      await db
-        .update(p2ProductionChanges)
-        .set({
-          status: 'APPROVED',
-          approvedById: (req.user as any)?.employeeId ?? null,
-          approvedByName: actor.displayName,
-          approvedAt: new Date(),
-          updatedAt: new Date(),
-        } as any)
-        .where(eq(p2ProductionChanges.approvalRequestId, result.id));
+      const pendingSiblings = await db
+        .select({ id: approvalRequests.id })
+        .from(approvalRequests)
+        .where(
+          and(
+            eq(approvalRequests.requestType, 'PRODUCTION_CHANGE_FORM'),
+            eq(approvalRequests.subjectType, result.subjectType ?? ''),
+            eq(approvalRequests.subjectId, result.subjectId ?? ''),
+            eq(approvalRequests.status, 'PENDING'),
+          ),
+        )
+        .limit(1);
+
+      if (pendingSiblings.length === 0) {
+        await db
+          .update(p2ProductionChanges)
+          .set({
+            status: 'APPROVED',
+            approvedById: (req.user as any)?.employeeId ?? null,
+            approvedByName: actor.displayName,
+            approvedAt: new Date(),
+            updatedAt: new Date(),
+          } as any)
+          .where(eq(p2ProductionChanges.id, result.subjectId ?? ''));
+      }
     }
 
     res.json({ ...result, executor });
@@ -454,7 +469,7 @@ approvalsRouter.post('/:id/reject', async (req: Request, res: Response) => {
           rejectionReason: body.notes ?? body.reasonCode ?? 'Rejected through approval inbox',
           updatedAt: new Date(),
         } as any)
-        .where(eq(p2ProductionChanges.approvalRequestId, result.id));
+        .where(eq(p2ProductionChanges.id, result.subjectId ?? ''));
     }
     res.json(result);
   } catch (err: any) {

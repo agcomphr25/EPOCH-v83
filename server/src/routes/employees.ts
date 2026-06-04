@@ -38,6 +38,86 @@ function rows<T = any>(result: any): T[] {
   return Array.isArray(result) ? result : (result?.rows ?? []);
 }
 
+const employeeListColumns = [
+  ['id', 'id'],
+  ['employee_code', 'employeeCode'],
+  ['canonical_id', 'canonicalId'],
+  ['name', 'name'],
+  ['preferred_name', 'preferredName'],
+  ['email', 'email'],
+  ['phone', 'phone'],
+  ['job_title', 'jobTitle'],
+  ['user_role', 'userRole'],
+  ['department', 'department'],
+  ['hire_date', 'hireDate'],
+  ['date_of_birth', 'dateOfBirth'],
+  ['address', 'address'],
+  ['city', 'city'],
+  ['state', 'state'],
+  ['zip_code', 'zipCode'],
+  ['emergency_contact', 'emergencyContact'],
+  ['emergency_phone', 'emergencyPhone'],
+  ['gate_card_number', 'gateCardNumber'],
+  ['vehicle_type', 'vehicleType'],
+  ['vehicle_make_model', 'vehicleMakeModel'],
+  ['license_plate', 'licensePlate'],
+  ['drivers_license_number', 'driversLicenseNumber'],
+  ['drivers_license_state', 'driversLicenseState'],
+  ['drivers_license_expiration', 'driversLicenseExpiration'],
+  ['bank_name', 'bankName'],
+  ['bank_routing_number', 'bankRoutingNumber'],
+  ['bank_account_number', 'bankAccountNumber'],
+  ['bank_account_type', 'bankAccountType'],
+  ['building_key_access', 'buildingKeyAccess'],
+  ['tci_access', 'tciAccess'],
+  ['employment_type', 'employmentType'],
+  ['pay_type', 'payType'],
+  ['hourly_rate', 'hourlyRate'],
+  ['salary', 'salary'],
+  ['is_finish_technician', 'isFinishTechnician'],
+  ['is_tolerance_authorizer', 'isToleranceAuthorizer'],
+  ['badge_scan_code', 'badgeScanCode'],
+  ['is_active', 'isActive'],
+  ['timekeeper_pin', 'timekeeperPin'],
+  ['timezone', 'timezone'],
+  ['supervisor_employee_id', 'supervisorEmployeeId'],
+  ['employment_status', 'employmentStatus'],
+  ['termination_date', 'terminationDate'],
+  ['termination_reason_code', 'terminationReasonCode'],
+  ['termination_reason', 'terminationReason'],
+  ['eligible_for_rehire', 'eligibleForRehire'],
+  ['final_paycheck_date', 'finalPaycheckDate'],
+  ['termination_notes', 'terminationNotes'],
+  ['terminated_by_user_id', 'terminatedByUserId'],
+  ['terminated_by_name', 'terminatedByName'],
+  ['terminated_at', 'terminatedAt'],
+  ['created_at', 'createdAt'],
+  ['updated_at', 'updatedAt'],
+] as const;
+
+async function getEmployeesWithAvailableColumns() {
+  const availableRows = await pool.query(
+    `SELECT column_name AS "columnName"
+     FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = 'employees'`
+  );
+  const availableColumns = new Set(rows<{ columnName: string }>(availableRows).map((row) => row.columnName));
+  const selectedColumns = employeeListColumns.filter(([column]) =>
+    availableColumns.has(column)
+  );
+
+  if (!selectedColumns.some(([column]) => column === 'id')) {
+    throw new Error('employees.id column is required');
+  }
+
+  const selectList = selectedColumns
+    .map(([column, alias]) => `"${column}" AS "${alias}"`)
+    .join(', ');
+  const orderBy = availableColumns.has('name') ? 'ORDER BY "name"' : 'ORDER BY "id"';
+
+  return rows(await pool.query(`SELECT ${selectList} FROM employees ${orderBy}`));
+}
+
 function requireAdminOrOwner(req: Request, res: Response): boolean {
   const role = String(req.user?.role ?? '').toUpperCase();
   if (role === 'ADMIN' || role === 'OWNER') return true;
@@ -190,7 +270,19 @@ router.get('/', async (req: Request, res: Response) => {
       req.query.includeInactive === 'true' ||
       req.query.includeTerminated === 'true' ||
       req.query.isActive === 'false';
-    const allEmployees = await storage.getAllEmployees();
+    let allEmployees;
+    try {
+      allEmployees = await storage.getAllEmployees();
+    } catch (error: any) {
+      if (error?.code !== '42703') {
+        throw error;
+      }
+      console.warn(
+        '[Employees] Falling back to available-column employee list after schema drift:',
+        error?.message
+      );
+      allEmployees = await getEmployeesWithAvailableColumns();
+    }
     const employees = includeInactive
       ? allEmployees
       : allEmployees.filter((employee: any) =>

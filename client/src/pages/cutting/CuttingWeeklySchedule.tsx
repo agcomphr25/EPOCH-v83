@@ -24,6 +24,7 @@ import { CuttingQueueTraceSheet } from "@/components/cutting/CuttingQueueTraceSh
 import { CuttingQueueHealthBadges } from "@/components/cutting/CuttingQueueHealthBadges";
 import { CuttingBomMatchBadge } from "@/components/cutting/CuttingBomMatchBadge";
 import { CuttingQueueNextActionBadge } from "@/components/cutting/CuttingQueueNextActionBadge";
+import { CuttingQueueProductionLockNotice } from "@/components/cutting/CuttingQueueProductionLockNotice";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -1037,6 +1038,7 @@ export default function CuttingWeeklySchedule() {
                             compact
                           />
                         </div>
+                        <CuttingQueueProductionLockNotice item={item} compact />
                       </TableCell>
                       <TableCell className="text-center">{item.quantityRequested}</TableCell>
                       <TableCell className="text-center">{item.quantityCompleted || 0}</TableCell>

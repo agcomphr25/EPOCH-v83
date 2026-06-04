@@ -35,6 +35,7 @@ import { CuttingQueueTraceSheet } from "@/components/cutting/CuttingQueueTraceSh
 import { CuttingQueueHealthBadges } from "@/components/cutting/CuttingQueueHealthBadges";
 import { CuttingBomMatchBadge } from "@/components/cutting/CuttingBomMatchBadge";
 import { CuttingQueueNextActionBadge } from "@/components/cutting/CuttingQueueNextActionBadge";
+import { CuttingQueueProductionLockNotice } from "@/components/cutting/CuttingQueueProductionLockNotice";
 import { useToast } from "@/hooks/use-toast";
 import {
   Accordion,
@@ -2297,6 +2298,7 @@ export default function CuttingOperatorDashboard() {
                         <div className="mt-1">
                           <CuttingQueueHealthBadges item={item} compact />
                         </div>
+                        <CuttingQueueProductionLockNotice item={item} compact />
                       </TableCell>
                       <TableCell className="text-center">
                         <div className="flex items-center justify-center gap-1">

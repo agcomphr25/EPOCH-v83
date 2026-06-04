@@ -22,6 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 import { GroupedPOsBadge, type GroupedPOEntry } from "@/components/cutting/GroupedPOsBadge";
 import { CuttingQueueTraceSheet } from "@/components/cutting/CuttingQueueTraceSheet";
 import { CuttingQueueHealthBadges } from "@/components/cutting/CuttingQueueHealthBadges";
+import { CuttingBomMatchBadge } from "@/components/cutting/CuttingBomMatchBadge";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -1020,6 +1021,11 @@ export default function CuttingWeeklySchedule() {
                               ...item,
                               poNumbers: poEntries,
                             }}
+                            compact
+                          />
+                          <CuttingBomMatchBadge
+                            reason={item.bomMatchReason}
+                            confidence={item.bomMatchConfidence}
                             compact
                           />
                         </div>

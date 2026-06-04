@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { History, PackageCheck, Route, ScanLine, Layers, AlertTriangle } from "lucide-react";
+import { CuttingBomMatchBadge } from "@/components/cutting/CuttingBomMatchBadge";
 
 type TraceContributor = {
   poNumber: string;
@@ -90,6 +91,7 @@ type CuttingQueueTrace = {
     squareMetersPerCut: number;
     noPlySchedule: boolean | null;
     matchReason: string | null;
+    matchConfidence?: string | null;
     materials: Array<{ id: string; fabricType: string | null; commonName: string | null; rollsRequired: number | null }>;
     parts: Array<{ id: string; partNumber: string; partDescription: string | null; fabricType: string | null; commonName: string | null; yieldPerCut: number | null }>;
   } | null;
@@ -249,7 +251,7 @@ export function CuttingQueueTraceSheet({ queueId, label = "Trace", variant = "gh
                       <div className="flex flex-wrap gap-2">
                         <Badge>{data.bom.packetType}</Badge>
                         <Badge variant="outline">{data.bom.partNumber}</Badge>
-                        <Badge variant="secondary">Matched by {data.bom.matchReason || "fallback"}</Badge>
+                        <CuttingBomMatchBadge reason={data.bom.matchReason} confidence={data.bom.matchConfidence} compact />
                       </div>
                       <DetailRow label="Yield per cut" value={data.bom.yieldPerCut} />
                       <DetailRow label="Sq m per cut" value={data.bom.squareMetersPerCut} />

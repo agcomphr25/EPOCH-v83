@@ -23,6 +23,7 @@ import { GroupedPOsBadge, type GroupedPOEntry } from "@/components/cutting/Group
 import { CuttingQueueTraceSheet } from "@/components/cutting/CuttingQueueTraceSheet";
 import { CuttingQueueHealthBadges } from "@/components/cutting/CuttingQueueHealthBadges";
 import { CuttingBomMatchBadge } from "@/components/cutting/CuttingBomMatchBadge";
+import { CuttingQueueNextActionBadge } from "@/components/cutting/CuttingQueueNextActionBadge";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -960,6 +961,7 @@ export default function CuttingWeeklySchedule() {
                   <TableHead className="text-center">Qty</TableHead>
                   <TableHead className="text-center">Done</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Next</TableHead>
                   <TableHead className="w-24"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -1036,6 +1038,9 @@ export default function CuttingWeeklySchedule() {
                         <Badge variant={item.status === 'COMPLETED' ? 'default' : 'outline'}>
                           {item.status}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <CuttingQueueNextActionBadge item={item} compact />
                       </TableCell>
                       <TableCell>
                         <div className="flex justify-end gap-1">

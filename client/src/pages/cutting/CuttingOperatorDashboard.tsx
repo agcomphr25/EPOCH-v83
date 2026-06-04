@@ -34,6 +34,7 @@ import { GroupedPOsBadge } from "@/components/cutting/GroupedPOsBadge";
 import { CuttingQueueTraceSheet } from "@/components/cutting/CuttingQueueTraceSheet";
 import { CuttingQueueHealthBadges } from "@/components/cutting/CuttingQueueHealthBadges";
 import { CuttingBomMatchBadge } from "@/components/cutting/CuttingBomMatchBadge";
+import { CuttingQueueNextActionBadge } from "@/components/cutting/CuttingQueueNextActionBadge";
 import { useToast } from "@/hooks/use-toast";
 import {
   Accordion,
@@ -2234,6 +2235,7 @@ export default function CuttingOperatorDashboard() {
                     <TableHead className="text-center">Cuts</TableHead>
                     <TableHead className="text-center w-24"># to Print</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Next</TableHead>
                     <TableHead className="text-center">Priority</TableHead>
                     <TableHead>Due Date</TableHead>
                     <TableHead className="w-48 text-right">Actions</TableHead>
@@ -2319,6 +2321,9 @@ export default function CuttingOperatorDashboard() {
                         )}
                       </TableCell>
                       <TableCell>{getStatusBadge(item.status)}</TableCell>
+                      <TableCell>
+                        <CuttingQueueNextActionBadge item={item} compact />
+                      </TableCell>
                       <TableCell className="text-center">
                         <Badge 
                           variant={item.priority >= 80 ? "destructive" : item.priority >= 60 ? "default" : "secondary"}

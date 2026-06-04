@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, User, Shield, Calendar, FileText } from 'lucide-react';
+import { AlertTriangle, Plus, Search, User, Shield, Calendar, FileText } from 'lucide-react';
 import { Link } from 'wouter';
 
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -33,11 +34,17 @@ interface Employee {
   department: string;
   employmentType: string;
   isActive: boolean;
+  employmentStatus?: string;
+  terminationDate?: string | null;
+  userIsActive?: boolean | null;
+  accessExceptionExpiresAt?: string | null;
+  terminatedWithAccess?: boolean;
   createdAt: string;
 }
 
 export default function EmployeeDashboard() {
   const [searchTerm, setSearchTerm] = useState('');
+  const [includeSeparated, setIncludeSeparated] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -47,9 +54,11 @@ export default function EmployeeDashboard() {
     isLoading,
     error,
   } = useQuery({
-    queryKey: ['/api/employees'],
+    queryKey: ['/api/employees', includeSeparated],
     queryFn: async () => {
-      const response = await fetch('/api/employees');
+      const response = await fetch(
+        `/api/employees${includeSeparated ? '?includeInactive=true' : ''}`
+      );
       if (!response.ok) throw new Error('Failed to fetch employees');
       return response.json();
     },
@@ -64,6 +73,9 @@ export default function EmployeeDashboard() {
   );
 
   const activeEmployees = employees.filter((emp: Employee) => emp.isActive);
+  const separatedWithAccess = employees.filter(
+    (emp: Employee) => emp.terminatedWithAccess
+  );
   const totalDepartments = [
     ...new Set(employees.map((emp: Employee) => emp.department)),
   ].length;
@@ -173,7 +185,7 @@ export default function EmployeeDashboard() {
       </div>
 
       {/* Search */}
-      <div className="flex items-center space-x-2">
+      <div className="flex flex-wrap items-center gap-4">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
@@ -183,6 +195,19 @@ export default function EmployeeDashboard() {
             className="pl-8"
           />
         </div>
+        <label className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Checkbox
+            checked={includeSeparated}
+            onCheckedChange={(checked) => setIncludeSeparated(Boolean(checked))}
+          />
+          Include inactive / terminated
+        </label>
+        {separatedWithAccess.length > 0 && (
+          <Badge variant="destructive" className="gap-1">
+            <AlertTriangle className="h-3 w-3" />
+            {separatedWithAccess.length} terminated with access
+          </Badge>
+        )}
       </div>
 
       {/* Employee List */}
@@ -250,13 +275,36 @@ export default function EmployeeDashboard() {
                     </div>
                     <div className="flex items-center space-x-2">
                       <Badge
-                        variant={employee.isActive ? 'default' : 'secondary'}
+                        variant={
+                          employee.employmentStatus === 'TERMINATED'
+                            ? 'destructive'
+                            : employee.isActive
+                              ? 'default'
+                              : 'secondary'
+                        }
                         className={
-                          employee.isActive ? 'bg-green-100 text-green-800' : ''
+                          employee.employmentStatus === 'TERMINATED'
+                            ? ''
+                            : employee.isActive
+                              ? 'bg-green-100 text-green-800'
+                              : ''
                         }
                       >
-                        {employee.isActive ? 'Active' : 'Inactive'}
+                        {employee.employmentStatus === 'TERMINATED'
+                          ? 'Terminated'
+                          : employee.isActive
+                            ? 'Active'
+                            : 'Inactive'}
                       </Badge>
+                      {employee.terminatedWithAccess && (
+                        <Badge variant="destructive" className="gap-1">
+                          <AlertTriangle className="h-3 w-3" />
+                          Access until{' '}
+                          {employee.accessExceptionExpiresAt
+                            ? new Date(employee.accessExceptionExpiresAt).toLocaleDateString()
+                            : 'review'}
+                        </Badge>
+                      )}
                       {employee.userRole && (
                         <Badge
                           variant="outline"

@@ -37,6 +37,7 @@ function buildDeviceFingerprint(ipAddress: string | null | undefined, userAgent:
 
 // ─── Session Audit Helper ─────────────────────────────────────────────────────
 let userSessionsLoginSchemaReady: Promise<void> | null = null;
+let employeeAccessExceptionSchemaReady: Promise<void> | null = null;
 
 function ensureUserSessionsLoginSchema(): Promise<void> {
   if (!userSessionsLoginSchemaReady) {
@@ -54,6 +55,28 @@ function ensureUserSessionsLoginSchema(): Promise<void> {
     });
   }
   return userSessionsLoginSchemaReady;
+}
+
+function ensureEmployeeAccessExceptionSchema(): Promise<void> {
+  if (!employeeAccessExceptionSchemaReady) {
+    employeeAccessExceptionSchemaReady = pool.query(`
+      ALTER TABLE employees
+        ADD COLUMN IF NOT EXISTS employment_status TEXT NOT NULL DEFAULT 'ACTIVE',
+        ADD COLUMN IF NOT EXISTS termination_date DATE;
+
+      ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS access_status TEXT NOT NULL DEFAULT 'ACTIVE',
+        ADD COLUMN IF NOT EXISTS access_exception_reason TEXT,
+        ADD COLUMN IF NOT EXISTS access_exception_approved_by_user_id INTEGER REFERENCES users(id),
+        ADD COLUMN IF NOT EXISTS access_exception_approved_by_name TEXT,
+        ADD COLUMN IF NOT EXISTS access_exception_approved_at TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS access_exception_expires_at TIMESTAMP;
+    `).then(() => undefined).catch((err) => {
+      employeeAccessExceptionSchemaReady = null;
+      throw err;
+    });
+  }
+  return employeeAccessExceptionSchemaReady;
 }
 
 async function ensureHardcodedLoginUser(user: {
@@ -731,6 +754,8 @@ router.post('/login', loginRateLimiter, async (req, res) => {
         .json({ error: 'Username and password are required' });
     }
 
+    await ensureEmployeeAccessExceptionSchema();
+
     // Try to find user in database first using Drizzle ORM
     const dbUserResult = await db.select({
       id: users.id,
@@ -738,6 +763,8 @@ router.post('/login', loginRateLimiter, async (req, res) => {
       passwordHash: users.passwordHash,
       role: users.role,
       isActive: users.isActive,
+      employeeId: users.employeeId,
+      accessExceptionExpiresAt: users.accessExceptionExpiresAt,
     }).from(users).where(sql`LOWER(${users.username}) = LOWER(${username})`);
 
     let user: any;
@@ -751,6 +778,37 @@ router.post('/login', loginRateLimiter, async (req, res) => {
       const devAuthBypass = process.env.DEV_AUTH_BYPASS === 'true';
       if (dbUser.isActive === false && !devAuthBypass) {
         return res.status(401).json({ error: 'Account is inactive' });
+      }
+
+      if (dbUser.employeeId && dbUser.accessExceptionExpiresAt && new Date(dbUser.accessExceptionExpiresAt) <= new Date()) {
+        await pool.query(
+          `UPDATE users
+           SET is_active = false,
+               access_status = 'DISABLED',
+               updated_at = NOW()
+           WHERE id = $1`,
+          [dbUser.id]
+        );
+        await recordAuditEvent({
+          eventType: 'TERMINATED_EMPLOYEE_ACCESS_EXPIRED',
+          subjectType: 'user',
+          subjectId: String(dbUser.id),
+          sourceService: 'auth.route',
+          actor: { id: dbUser.id, username: dbUser.username, role: dbUser.role },
+          reason: 'Retained access expired 90 days after termination date',
+          fieldsChanged: {
+            isActive: { before: true, after: false },
+            accessStatus: { before: 'ACTIVE', after: 'DISABLED' },
+          },
+          payload: {
+            userId: dbUser.id,
+            employeeId: dbUser.employeeId,
+            accessExceptionExpiresAt: new Date(dbUser.accessExceptionExpiresAt).toISOString(),
+          },
+          ipAddress: req.ip ?? null,
+          userAgent: req.headers['user-agent'] ?? null,
+        });
+        return res.status(401).json({ error: 'Account access exception has expired' });
       }
 
       // Verify password against database hash
@@ -837,6 +895,48 @@ router.post('/login', loginRateLimiter, async (req, res) => {
       ipAddress ?? undefined,
       userAgent ?? undefined
     );
+
+    const terminatedAccessRows = await pool.query(
+      `SELECT
+         e.id AS "employeeId",
+         e.name AS "employeeName",
+         e.termination_date AS "terminationDate",
+         u.access_exception_expires_at AS "accessExceptionExpiresAt"
+       FROM users u
+       JOIN employees e ON e.id = u.employee_id
+       WHERE u.id = $1
+         AND e.employment_status = 'TERMINATED'
+         AND u.is_active = true
+       LIMIT 1`,
+      [user.id]
+    );
+    const terminatedAccess = terminatedAccessRows.rows?.[0] ?? terminatedAccessRows[0];
+    if (terminatedAccess) {
+      await recordAuditEvent({
+        eventType: 'TERMINATED_EMPLOYEE_LOGIN',
+        subjectType: 'user',
+        subjectId: String(user.id),
+        sourceService: 'auth.route',
+        actor: { id: user.id, username: user.username, role: user.role },
+        reason: 'Terminated employee retained EPOCH access',
+        payload: {
+          userId: user.id,
+          username: user.username,
+          employeeId: terminatedAccess.employeeId,
+          employeeName: terminatedAccess.employeeName,
+          terminationDate: terminatedAccess.terminationDate,
+          accessExceptionExpiresAt: terminatedAccess.accessExceptionExpiresAt,
+          sessionId: newSessionId,
+        },
+        meta: {
+          employeeId: terminatedAccess.employeeId,
+          employeeName: terminatedAccess.employeeName,
+          sessionId: newSessionId,
+        },
+        ipAddress: ipAddress ?? null,
+        userAgent: userAgent ?? null,
+      });
+    }
 
     console.log('✅ Session saved to database for user:', user.username);
 

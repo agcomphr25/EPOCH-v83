@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcrypt';
+import { z } from 'zod';
 import { storage } from '../../storage';
 import { pool, pgPool } from '../../db';
 import { authenticateToken, requireRole } from '../../middleware/auth';
@@ -31,6 +32,73 @@ import {
 const router = Router();
 
 let chargeCodeAssignmentTableReady: Promise<void> | null = null;
+let employeeTerminationSchemaReady: Promise<void> | null = null;
+
+function rows<T = any>(result: any): T[] {
+  return Array.isArray(result) ? result : (result?.rows ?? []);
+}
+
+function requireAdminOrOwner(req: Request, res: Response): boolean {
+  const role = String(req.user?.role ?? '').toUpperCase();
+  if (role === 'ADMIN' || role === 'OWNER') return true;
+  res.status(403).json({ error: 'Admin or owner access required' });
+  return false;
+}
+
+function actor(req: Request) {
+  return {
+    id: req.user?.id ?? null,
+    username: req.user?.username ?? 'unknown',
+    role: req.user?.role ?? null,
+  };
+}
+
+function addDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function ensureEmployeeTerminationSchema(): Promise<void> {
+  if (!employeeTerminationSchemaReady) {
+    employeeTerminationSchemaReady = pool.query(`
+      ALTER TABLE employees
+        ADD COLUMN IF NOT EXISTS employment_status TEXT NOT NULL DEFAULT 'ACTIVE',
+        ADD COLUMN IF NOT EXISTS termination_date DATE,
+        ADD COLUMN IF NOT EXISTS termination_reason_code TEXT,
+        ADD COLUMN IF NOT EXISTS termination_reason TEXT,
+        ADD COLUMN IF NOT EXISTS eligible_for_rehire BOOLEAN,
+        ADD COLUMN IF NOT EXISTS final_paycheck_date DATE,
+        ADD COLUMN IF NOT EXISTS termination_notes TEXT,
+        ADD COLUMN IF NOT EXISTS terminated_by_user_id INTEGER REFERENCES users(id),
+        ADD COLUMN IF NOT EXISTS terminated_by_name TEXT,
+        ADD COLUMN IF NOT EXISTS terminated_at TIMESTAMP;
+
+      ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS access_status TEXT NOT NULL DEFAULT 'ACTIVE',
+        ADD COLUMN IF NOT EXISTS access_exception_reason TEXT,
+        ADD COLUMN IF NOT EXISTS access_exception_approved_by_user_id INTEGER REFERENCES users(id),
+        ADD COLUMN IF NOT EXISTS access_exception_approved_by_name TEXT,
+        ADD COLUMN IF NOT EXISTS access_exception_approved_at TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS access_exception_expires_at TIMESTAMP;
+    `).then(() => undefined).catch((error) => {
+      employeeTerminationSchemaReady = null;
+      throw error;
+    });
+  }
+  return employeeTerminationSchemaReady;
+}
+
+const terminationSchema = z.object({
+  terminationDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  terminationReasonCode: z.string().trim().min(1),
+  terminationReason: z.string().trim().min(1),
+  eligibleForRehire: z.boolean().nullable().optional(),
+  finalPaycheckDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  terminationNotes: z.string().trim().nullable().optional(),
+  retainAccess: z.boolean().default(false),
+  accessExceptionReason: z.string().trim().optional().nullable(),
+});
 
 function ensureChargeCodeAssignmentTable(): Promise<void> {
   if (!chargeCodeAssignmentTableReady) {
@@ -117,17 +185,38 @@ async function generateNextEmployeeCode(): Promise<string> {
 // Employee Management Routes
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const employees = await storage.getAllEmployees();
+    await ensureEmployeeTerminationSchema();
+    const includeInactive =
+      req.query.includeInactive === 'true' ||
+      req.query.includeTerminated === 'true' ||
+      req.query.isActive === 'false';
+    const allEmployees = await storage.getAllEmployees();
+    const employees = includeInactive
+      ? allEmployees
+      : allEmployees.filter((employee: any) =>
+          employee.isActive !== false &&
+          String(employee.employmentStatus ?? 'ACTIVE').toUpperCase() !== 'TERMINATED'
+        );
     // Enrich each employee with the linked auth user's integer ID so that
     // callers can map ownerUserId (auth user ID) → employee name.
-    let userIdByEmployeeId: Record<number, number> = {};
+    let userByEmployeeId: Record<number, any> = {};
     try {
-      const rows = await pool.query(
-        `SELECT id AS "userId", employee_id AS "employeeId" FROM users WHERE employee_id IS NOT NULL AND is_active = true`
+      const userRows = await pool.query(
+        `SELECT
+           id AS "userId",
+           employee_id AS "employeeId",
+           is_active AS "userIsActive",
+           access_status AS "accessStatus",
+           access_exception_reason AS "accessExceptionReason",
+           access_exception_approved_by_name AS "accessExceptionApprovedByName",
+           access_exception_approved_at AS "accessExceptionApprovedAt",
+           access_exception_expires_at AS "accessExceptionExpiresAt"
+         FROM users
+         WHERE employee_id IS NOT NULL`
       );
-      for (const row of rows) {
+      for (const row of rows<any>(userRows)) {
         if (row.employeeId) {
-          userIdByEmployeeId[row.employeeId] = row.userId;
+          userByEmployeeId[row.employeeId] = row;
         }
       }
     } catch (e) {
@@ -135,9 +224,19 @@ router.get('/', async (req: Request, res: Response) => {
     }
     const enriched = employees.map((emp) => {
       const { timekeeperPin, ...rest } = emp;
+      const linkedUser = userByEmployeeId[emp.id] ?? null;
       return {
         ...rest,
-        userId: userIdByEmployeeId[emp.id] ?? null,
+        userId: linkedUser?.userId ?? null,
+        userIsActive: linkedUser?.userIsActive ?? null,
+        accessStatus: linkedUser?.accessStatus ?? null,
+        accessExceptionReason: linkedUser?.accessExceptionReason ?? null,
+        accessExceptionApprovedByName: linkedUser?.accessExceptionApprovedByName ?? null,
+        accessExceptionApprovedAt: linkedUser?.accessExceptionApprovedAt ?? null,
+        accessExceptionExpiresAt: linkedUser?.accessExceptionExpiresAt ?? null,
+        terminatedWithAccess:
+          String((emp as any).employmentStatus ?? '').toUpperCase() === 'TERMINATED' &&
+          linkedUser?.userIsActive === true,
         hasPin: timekeeperPin !== null && timekeeperPin !== undefined,
       };
     });
@@ -1366,14 +1465,231 @@ router.get('/:id/training-matrix', async (req: Request, res: Response) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Parametric routes MUST come after all specific routes
+router.post('/:id/terminate', authenticateToken, async (req: Request, res: Response) => {
+  if (!requireAdminOrOwner(req, res)) return;
+
+  const employeeId = Number(req.params.id);
+  if (!Number.isInteger(employeeId) || employeeId <= 0) {
+    res.status(400).json({ error: 'Invalid employee id' });
+    return;
+  }
+
+  const parsed = terminationSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid termination data', details: parsed.error.flatten() });
+    return;
+  }
+
+  if (parsed.data.retainAccess && !parsed.data.accessExceptionReason?.trim()) {
+    res.status(400).json({ error: 'Retained access requires an access exception reason.' });
+    return;
+  }
+
+  try {
+    await ensureEmployeeTerminationSchema();
+    const currentEmployee = await storage.getEmployee(employeeId);
+    if (!currentEmployee) {
+      res.status(404).json({ error: 'Employee not found' });
+      return;
+    }
+
+    const termDate = new Date(`${parsed.data.terminationDate}T00:00:00`);
+    const accessExpiresAt = addDays(termDate, 90);
+    const currentActor = actor(req);
+
+    const client = await pgPool.connect();
+    let updatedEmployee: any = null;
+    let linkedUser: any = null;
+    try {
+      await client.query('BEGIN');
+      const employeeResult = await client.query(
+        `UPDATE employees
+         SET employment_status = 'TERMINATED',
+             is_active = false,
+             termination_date = $1,
+             termination_reason_code = $2,
+             termination_reason = $3,
+             eligible_for_rehire = $4,
+             final_paycheck_date = $5,
+             termination_notes = $6,
+             terminated_by_user_id = $7,
+             terminated_by_name = $8,
+             terminated_at = NOW(),
+             updated_at = NOW()
+         WHERE id = $9
+         RETURNING *`,
+        [
+          parsed.data.terminationDate,
+          parsed.data.terminationReasonCode,
+          parsed.data.terminationReason,
+          parsed.data.eligibleForRehire ?? null,
+          parsed.data.finalPaycheckDate ?? null,
+          parsed.data.terminationNotes ?? null,
+          currentActor.id,
+          currentActor.username,
+          employeeId,
+        ]
+      );
+      updatedEmployee = rows(employeeResult)[0];
+
+      const userResult = await client.query(
+        `UPDATE users
+         SET is_active = $1,
+             access_status = $2,
+             access_exception_reason = $3,
+             access_exception_approved_by_user_id = $4,
+             access_exception_approved_by_name = $5,
+             access_exception_approved_at = CASE WHEN $1 THEN NOW() ELSE NULL END,
+             access_exception_expires_at = $6,
+             updated_at = NOW()
+         WHERE employee_id = $7
+         RETURNING id, username, role, is_active AS "userIsActive",
+                   access_status AS "accessStatus",
+                   access_exception_reason AS "accessExceptionReason",
+                   access_exception_approved_by_name AS "accessExceptionApprovedByName",
+                   access_exception_approved_at AS "accessExceptionApprovedAt",
+                   access_exception_expires_at AS "accessExceptionExpiresAt"`,
+        [
+          parsed.data.retainAccess,
+          parsed.data.retainAccess ? 'ACTIVE' : 'DISABLED',
+          parsed.data.retainAccess ? parsed.data.accessExceptionReason : null,
+          parsed.data.retainAccess ? currentActor.id : null,
+          parsed.data.retainAccess ? currentActor.username : null,
+          parsed.data.retainAccess ? accessExpiresAt : null,
+          employeeId,
+        ]
+      );
+      linkedUser = rows(userResult)[0] ?? null;
+
+      if (!parsed.data.retainAccess) {
+        await client.query(
+          `UPDATE user_sessions
+           SET is_active = false
+           WHERE user_id IN (SELECT id FROM users WHERE employee_id = $1)`,
+          [employeeId]
+        );
+      }
+
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    await recordAuditEvent({
+      eventType: 'EMPLOYEE_TERMINATED',
+      subjectType: 'employee',
+      subjectId: String(employeeId),
+      sourceService: 'employees.routes',
+      actor: currentActor,
+      reason: parsed.data.terminationReason,
+      fieldsChanged: {
+        employmentStatus: { before: (currentEmployee as any).employmentStatus ?? 'ACTIVE', after: 'TERMINATED' },
+        isActive: { before: currentEmployee.isActive, after: false },
+        terminationDate: { before: (currentEmployee as any).terminationDate ?? null, after: parsed.data.terminationDate },
+      },
+      meta: { employeeName: currentEmployee.name, retainAccess: parsed.data.retainAccess },
+      payload: {
+        employeeId,
+        employeeName: currentEmployee.name,
+        terminationDate: parsed.data.terminationDate,
+        terminationReasonCode: parsed.data.terminationReasonCode,
+        eligibleForRehire: parsed.data.eligibleForRehire ?? null,
+        finalPaycheckDate: parsed.data.finalPaycheckDate ?? null,
+        retainAccess: parsed.data.retainAccess,
+        accessExceptionExpiresAt: parsed.data.retainAccess ? accessExpiresAt.toISOString() : null,
+      },
+      ipAddress: req.ip ?? null,
+      userAgent: req.headers['user-agent'] ?? null,
+    });
+
+    if (parsed.data.retainAccess && linkedUser) {
+      await recordAuditEvent({
+        eventType: 'TERMINATED_EMPLOYEE_ACCESS_RETAINED',
+        subjectType: 'user',
+        subjectId: String(linkedUser.id),
+        sourceService: 'employees.routes',
+        actor: currentActor,
+        reason: parsed.data.accessExceptionReason,
+        fieldsChanged: {
+          userIsActive: { before: null, after: true },
+          accessExceptionExpiresAt: { before: null, after: accessExpiresAt.toISOString() },
+        },
+        meta: { employeeId, employeeName: currentEmployee.name },
+        payload: {
+          employeeId,
+          employeeName: currentEmployee.name,
+          username: linkedUser.username,
+          role: linkedUser.role,
+          accessExceptionExpiresAt: accessExpiresAt.toISOString(),
+        },
+        ipAddress: req.ip ?? null,
+        userAgent: req.headers['user-agent'] ?? null,
+      });
+    }
+
+    res.json({
+      ...updatedEmployee,
+      userId: linkedUser?.id ?? null,
+      userIsActive: linkedUser?.userIsActive ?? null,
+      accessStatus: linkedUser?.accessStatus ?? null,
+      accessExceptionReason: linkedUser?.accessExceptionReason ?? null,
+      accessExceptionApprovedByName: linkedUser?.accessExceptionApprovedByName ?? null,
+      accessExceptionApprovedAt: linkedUser?.accessExceptionApprovedAt ?? null,
+      accessExceptionExpiresAt: linkedUser?.accessExceptionExpiresAt ?? null,
+      terminatedWithAccess: Boolean(linkedUser?.userIsActive),
+    });
+  } catch (error) {
+    console.error('Terminate employee error:', error);
+    res.status(500).json({ error: 'Failed to terminate employee' });
+  }
+});
+
 router.get('/:id', async (req: Request, res: Response) => {
   try {
+    await ensureEmployeeTerminationSchema();
     const raw = await storage.getEmployee(parseInt(req.params.id));
     if (!raw) {
       return res.status(404).json({ error: 'Employee not found' });
     }
     const { timekeeperPin, ...employee } = raw;
-    res.json({ ...employee, hasPin: timekeeperPin !== null && timekeeperPin !== undefined });
+    let linkedUser: any = null;
+    try {
+      const userResult = await pool.query(
+        `SELECT
+           id AS "userId",
+           is_active AS "userIsActive",
+           access_status AS "accessStatus",
+           access_exception_reason AS "accessExceptionReason",
+           access_exception_approved_by_name AS "accessExceptionApprovedByName",
+           access_exception_approved_at AS "accessExceptionApprovedAt",
+           access_exception_expires_at AS "accessExceptionExpiresAt"
+         FROM users
+         WHERE employee_id = $1
+         ORDER BY id DESC
+         LIMIT 1`,
+        [employee.id]
+      );
+      linkedUser = rows(userResult)[0] ?? null;
+    } catch (error) {
+      console.error('Error fetching employee linked user:', error);
+    }
+    res.json({
+      ...employee,
+      userId: linkedUser?.userId ?? null,
+      userIsActive: linkedUser?.userIsActive ?? null,
+      accessStatus: linkedUser?.accessStatus ?? null,
+      accessExceptionReason: linkedUser?.accessExceptionReason ?? null,
+      accessExceptionApprovedByName: linkedUser?.accessExceptionApprovedByName ?? null,
+      accessExceptionApprovedAt: linkedUser?.accessExceptionApprovedAt ?? null,
+      accessExceptionExpiresAt: linkedUser?.accessExceptionExpiresAt ?? null,
+      terminatedWithAccess:
+        String((employee as any).employmentStatus ?? '').toUpperCase() === 'TERMINATED' &&
+        linkedUser?.userIsActive === true,
+      hasPin: timekeeperPin !== null && timekeeperPin !== undefined,
+    });
   } catch (error) {
     console.error('Get employee error:', error);
     res.status(500).json({ error: 'Failed to fetch employee' });

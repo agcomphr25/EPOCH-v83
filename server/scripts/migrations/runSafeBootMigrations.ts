@@ -193,6 +193,7 @@ const safeFiles = [
   '0158_inventory_receipt_grni_accounting.sql',
   '0159_epoch_copilot_phase1.sql',
   '0160_po_project_links_safe.sql',
+  '0161_employee_termination_access_controls.sql',
   'investigation_308_order_duplication.sql',
 ];
 

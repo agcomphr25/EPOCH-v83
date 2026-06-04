@@ -1089,6 +1089,16 @@ export const employees = pgTable('employees', {
   buildingKeyAccess: boolean('building_key_access').default(false),
   tciAccess: boolean('tci_access').default(false),
   employmentType: text('employment_type').default('FULL_TIME'), // FULL_TIME, PART_TIME, CONTRACT
+  employmentStatus: text('employment_status').notNull().default('ACTIVE'), // ACTIVE, TERMINATED, LEAVE, CONTRACTOR
+  terminationDate: date('termination_date'),
+  terminationReasonCode: text('termination_reason_code'),
+  terminationReason: text('termination_reason'),
+  eligibleForRehire: boolean('eligible_for_rehire'),
+  finalPaycheckDate: date('final_paycheck_date'),
+  terminationNotes: text('termination_notes'),
+  terminatedByUserId: integer('terminated_by_user_id').references((): AnyPgColumn => users.id),
+  terminatedByName: text('terminated_by_name'),
+  terminatedAt: timestamp('terminated_at'),
   payType: text('pay_type'), // 'HOURLY' | 'SALARY'
   hourlyRate: numeric('hourly_rate', { precision: 12, scale: 2 }),
   salary: numeric('salary', { precision: 12, scale: 2 }),
@@ -1663,6 +1673,12 @@ export const users = pgTable('users', {
   canOverridePrices: boolean('can_override_prices').default(false),
   isFinishTechnician: boolean('is_finish_technician').default(false),
   isActive: boolean('is_active').default(true),
+  accessStatus: text('access_status').notNull().default('ACTIVE'), // ACTIVE, DISABLED, LIMITED, EMERGENCY_ONLY
+  accessExceptionReason: text('access_exception_reason'),
+  accessExceptionApprovedByUserId: integer('access_exception_approved_by_user_id').references(() => users.id),
+  accessExceptionApprovedByName: text('access_exception_approved_by_name'),
+  accessExceptionApprovedAt: timestamp('access_exception_approved_at'),
+  accessExceptionExpiresAt: timestamp('access_exception_expires_at'),
   lastLogin: timestamp('last_login'),
   failedLoginAttempts: integer('failed_login_attempts').default(0),
   accountLockedUntil: timestamp('account_locked_until'),

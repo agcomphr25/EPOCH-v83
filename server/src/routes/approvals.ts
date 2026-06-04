@@ -27,7 +27,7 @@ import {
   InventoryExecutorError,
 } from '../services/inventoryApprovalExecutor';
 import { db } from '../../db';
-import { approvalRequestHistory, approvalRequests, employees, users } from '../../schema';
+import { approvalRequestHistory, approvalRequests, employees, p2ProductionChanges, users } from '../../schema';
 import { and, asc, eq } from 'drizzle-orm';
 
 export const approvalsRouter = Router();
@@ -119,15 +119,33 @@ approvalsRouter.get('/my-tasks/:employeeId', async (req: Request, res: Response)
       .orderBy(asc(approvalRequests.currentLevelDeadline))
       .limit(100);
 
+    const approvedFollowUps = await db
+      .select()
+      .from(p2ProductionChanges)
+      .where(
+        and(
+          eq(p2ProductionChanges.status, 'APPROVED'),
+          eq(p2ProductionChanges.implementationRequired, true),
+          eq(p2ProductionChanges.approverEmployeeId, employeeId),
+        ),
+      )
+      .limit(100);
+
     const now = Date.now();
     const tasks = rows.map((row) => {
       const deadlineMs = row.currentLevelDeadline ? new Date(row.currentLevelDeadline).getTime() : null;
       const overdue = deadlineMs != null && deadlineMs <= now;
+      const payload = (row.requestPayload ?? {}) as Record<string, any>;
+      const isProductionChange = row.requestType === 'PRODUCTION_CHANGE_FORM';
       return {
         id: `approval-${row.id}`,
         type: 'approval_request',
-        title: `Approval required: ${row.requestType}`,
-        description: row.subjectType && row.subjectId
+        title: isProductionChange
+          ? `Sign production change ${payload.changeNumber ?? ''}`.trim()
+          : `Approval required: ${row.requestType}`,
+        description: isProductionChange
+          ? `${payload.changeType ?? 'Production'} change: ${payload.proposedChange ?? row.subjectId ?? row.id}`
+          : row.subjectType && row.subjectId
           ? `${row.subjectType} #${row.subjectId}`
           : `Requested by ${row.requestedByDisplayName}`,
         requestType: row.requestType,
@@ -138,7 +156,26 @@ approvalsRouter.get('/my-tasks/:employeeId', async (req: Request, res: Response)
         actionUrl: `/approvals?requestId=${row.id}`,
         sourceId: row.id,
       };
-    });
+    }).concat(approvedFollowUps.map((change) => {
+      const requiredActions = Array.isArray((change as any).requiredActions)
+        ? ((change as any).requiredActions as string[])
+        : [];
+      return {
+        id: `p2-change-followup-${change.id}`,
+        type: 'p2_production_change_followup',
+        title: `Implement production change ${change.changeNumber}`,
+        description: requiredActions.length > 0
+          ? requiredActions.join(', ')
+          : change.proposedChange,
+        requestType: 'PRODUCTION_CHANGE_FORM',
+        requestedByDisplayName: change.submittedByName ?? 'P2 Control Center',
+        createdAt: change.approvedAt ?? change.createdAt,
+        dueAt: change.effectiveDate ?? null,
+        priority: 'normal',
+        actionUrl: `/p2-control-center?tab=changes`,
+        sourceId: change.id,
+      };
+    }));
 
     res.json({
       tasks,
@@ -366,6 +403,19 @@ approvalsRouter.post('/:id/approve', async (req: Request, res: Response) => {
       }
     }
 
+    if (result.requestType === 'PRODUCTION_CHANGE_FORM') {
+      await db
+        .update(p2ProductionChanges)
+        .set({
+          status: 'APPROVED',
+          approvedById: (req.user as any)?.employeeId ?? null,
+          approvedByName: actor.displayName,
+          approvedAt: new Date(),
+          updatedAt: new Date(),
+        } as any)
+        .where(eq(p2ProductionChanges.approvalRequestId, result.id));
+    }
+
     res.json({ ...result, executor });
   } catch (err: any) {
     handleEscalationError(err, res);
@@ -393,6 +443,19 @@ approvalsRouter.post('/:id/reject', async (req: Request, res: Response) => {
       linkedObjectId: body.linkedObjectId ?? null,
       digitalSignatureId: body.digitalSignatureId ?? null,
     });
+    if (result.requestType === 'PRODUCTION_CHANGE_FORM') {
+      await db
+        .update(p2ProductionChanges)
+        .set({
+          status: 'REJECTED',
+          rejectedById: (req.user as any)?.employeeId ?? null,
+          rejectedByName: actor.displayName,
+          rejectedAt: new Date(),
+          rejectionReason: body.notes ?? body.reasonCode ?? 'Rejected through approval inbox',
+          updatedAt: new Date(),
+        } as any)
+        .where(eq(p2ProductionChanges.approvalRequestId, result.id));
+    }
     res.json(result);
   } catch (err: any) {
     handleEscalationError(err, res);

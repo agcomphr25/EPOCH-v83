@@ -3165,9 +3165,148 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   app.post('/api/p2/changes', softAuth, async (req, res) => {
     try {
       const { storage } = await import('../../storage');
-      const change = await storage.createP2ProductionChange(req.body);
-      res.status(201).json(change);
+      const { db } = await import('../../db');
+      const { approvalRequestHistory, approvalRequests, employees, p2ProductionChanges, users } = await import('../../schema');
+      const { and, eq } = await import('drizzle-orm');
+      const { cancel, openRequest } = await import('../services/escalationService');
+      const { notificationManager } = await import('../services/notificationManager');
+      const approverEmployeeId = Number(req.body?.approverEmployeeId);
+      let approverEmployeeName: string | null = null;
+      let approverUserId: number | null = null;
+
+      if (!Number.isInteger(approverEmployeeId) || approverEmployeeId <= 0) {
+        return res.status(400).json({ error: 'An assigned approver is required for a production change form.' });
+      }
+
+      const [approver] = await db
+        .select({
+          employeeId: employees.id,
+          employeeName: employees.name,
+          userId: users.id,
+        })
+        .from(employees)
+        .leftJoin(users, and(eq(users.employeeId, employees.id), eq(users.isActive, true)))
+        .where(eq(employees.id, approverEmployeeId))
+        .limit(1);
+
+      if (!approver) {
+        return res.status(404).json({ error: 'Assigned approver not found.' });
+      }
+      if (approver.userId == null) {
+        return res.status(400).json({ error: 'Assigned approver does not have an active user account.' });
+      }
+
+      approverEmployeeName = approver.employeeName;
+      approverUserId = approver.userId;
+      const actor = (req as any).user;
+      const requestedByDisplayName =
+        actor?.username ||
+        actor?.email ||
+        req.body?.submittedByName ||
+        'P2 Control Center';
+
+      const change = await storage.createP2ProductionChange({
+        ...req.body,
+        approverEmployeeId,
+        approverEmployeeName,
+      });
+
+      let approvalIdToCancel: string | null = null;
+      try {
+        const requiredActions = Array.isArray((change as any).requiredActions) ? (change as any).requiredActions : [];
+        const approval = await openRequest({
+          requestType: 'PRODUCTION_CHANGE_FORM',
+          payload: {
+            changeId: change.id,
+            changeNumber: change.changeNumber,
+            changeType: change.changeType,
+            scope: change.scope,
+            partNumber: change.partNumber,
+            poId: change.poId,
+            routingId: change.routingId,
+            currentRevision: change.currentRevision,
+            proposedRevision: (change as any).proposedRevision,
+            proposedChange: change.proposedChange,
+            reason: change.reason,
+            riskAssessment: change.riskAssessment,
+            affectedDocuments: (change as any).affectedDocuments ?? [],
+            requiredActions,
+            requiresCustomerApproval: change.requiresCustomerApproval,
+            implementationRequired: (change as any).implementationRequired ?? false,
+          },
+          subjectType: 'p2_production_change',
+          subjectId: change.id,
+          requestedByUserId: actor?.id ?? null,
+          requestedByDisplayName,
+          summary: `${change.changeNumber} ${change.changeType} change needs signature review.`,
+        });
+        approvalIdToCancel = approval.id;
+
+        const [assignedApproval] = await db
+          .update(approvalRequests)
+          .set({
+            currentApproverUserId: approverUserId,
+            updatedAt: new Date(),
+          })
+          .where(eq(approvalRequests.id, approval.id))
+          .returning();
+
+        await db.insert(approvalRequestHistory).values({
+          approvalRequestId: approval.id,
+          event: 'ASSIGNED',
+          fromLevel: approval.escalationLevel,
+          toLevel: approval.escalationLevel,
+          fromStatus: approval.status,
+          toStatus: approval.status,
+          actorUserId: actor?.id ?? null,
+          actorDisplayName: requestedByDisplayName,
+          notes: `Production change signature assigned to ${approverEmployeeName}`,
+          metadata: {
+            assignedEmployeeId: approverEmployeeId,
+            assignedUserId: approverUserId,
+            assignedEmployeeName: approverEmployeeName,
+            changeNumber: change.changeNumber,
+          },
+        });
+
+        notificationManager.sendToUsers([approverUserId], {
+          type: 'APPROVAL_REQUEST',
+          title: `Production change signature needed: ${change.changeNumber}`,
+          message: `${requestedByDisplayName} assigned you to review and sign ${change.changeNumber}.`,
+          data: {
+            approvalRequestId: approval.id,
+            requestType: 'PRODUCTION_CHANGE_FORM',
+            subjectType: 'p2_production_change',
+            subjectId: change.id,
+            changeNumber: change.changeNumber,
+          },
+          timestamp: new Date().toISOString(),
+        });
+
+        const updatedChange = await storage.updateP2ProductionChange(change.id, {
+          approvalRequestId: approval.id,
+          status: 'SUBMITTED',
+        } as any);
+        return res.status(201).json({ ...updatedChange, approvalRequest: assignedApproval });
+      } catch (approvalError) {
+        if (approvalIdToCancel) {
+          try {
+            await cancel(
+              approvalIdToCancel,
+              { userId: actor?.id ?? null, displayName: requestedByDisplayName, isPrivilegedOverride: true },
+              `Cancelled because PCF ${change.changeNumber} creation did not complete.`,
+            );
+          } catch (cancelError: any) {
+            console.warn('Failed to cancel incomplete PCF approval request:', cancelError?.message ?? cancelError);
+          }
+        }
+        await db.delete(p2ProductionChanges).where(eq(p2ProductionChanges.id, change.id));
+        throw approvalError;
+      }
     } catch (error: any) {
+      if (error?.code === 'NO_POLICY') {
+        return res.status(500).json({ error: 'Production change approval policy is not installed. Run migrations and try again.' });
+      }
       console.error('Error creating production change:', error);
       res.status(500).json({ error: 'Failed to create production change' });
     }

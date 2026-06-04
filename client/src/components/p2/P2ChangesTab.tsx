@@ -23,9 +23,15 @@ const productionChangeSchema = z.object({
   changeType: z.string().min(1, 'Change type is required'),
   scope: z.string().default('PO'),
   partNumber: z.string().optional(),
+  currentRevision: z.string().optional(),
+  proposedRevision: z.string().optional(),
   proposedChange: z.string().min(1, 'Proposed change description is required'),
   reason: z.string().min(1, 'Reason is required'),
   riskAssessment: z.string().optional(),
+  affectedDocuments: z.array(z.string()).default([]),
+  requiredActions: z.array(z.string()).default([]),
+  approverEmployeeId: z.string().min(1, 'Assigned signer is required'),
+  implementationRequired: z.boolean().default(false),
   requiresCustomerApproval: z.boolean().default(false),
 });
 
@@ -54,6 +60,24 @@ const CHANGE_TYPE_ICONS: Record<string, any> = {
   BOM: ClipboardList,
   INSPECTION: CheckCircle2,
 };
+
+const AFFECTED_DOCUMENT_OPTIONS = [
+  { value: 'ROUTING', label: 'Routing' },
+  { value: 'BOM', label: 'BOM' },
+  { value: 'TRAVELER', label: 'Traveler' },
+  { value: 'WORK_INSTRUCTION', label: 'Work instruction' },
+  { value: 'INSPECTION_PLAN', label: 'Inspection plan' },
+  { value: 'CUSTOMER_SPEC', label: 'Customer specification' },
+];
+
+const REQUIRED_ACTION_OPTIONS = [
+  { value: 'UPDATE_ROUTING', label: 'Update routing' },
+  { value: 'UPDATE_BOM', label: 'Update BOM' },
+  { value: 'UPDATE_TRAVELER', label: 'Revise traveler or instructions' },
+  { value: 'UPDATE_INSPECTION', label: 'Revise inspection requirements' },
+  { value: 'CUSTOMER_APPROVAL', label: 'Obtain customer approval' },
+  { value: 'TRAINING_REQUIRED', label: 'Assign operator training' },
+];
 
 export default function P2ChangesTab() {
   const [activeSection, setActiveSection] = useState('production');
@@ -88,12 +112,21 @@ export default function P2ChangesTab() {
       changeType: '',
       scope: 'PO',
       partNumber: '',
+      currentRevision: '',
+      proposedRevision: '',
       proposedChange: '',
       reason: '',
       riskAssessment: '',
+      affectedDocuments: [],
+      requiredActions: [],
+      approverEmployeeId: '',
+      implementationRequired: false,
       requiresCustomerApproval: false,
     },
   });
+
+  const affectedDocuments = pcfForm.watch('affectedDocuments') || [];
+  const requiredActions = pcfForm.watch('requiredActions') || [];
 
   const deviationForm = useForm({
     resolver: zodResolver(travelerChangeSchema),
@@ -118,7 +151,7 @@ export default function P2ChangesTab() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/p2/changes'] });
       queryClient.invalidateQueries({ queryKey: ['/api/p2/changes/impact'] });
-      toast({ title: 'Production Change Created', description: 'The PCF has been created and is pending review.' });
+      toast({ title: 'Production Change Created', description: 'The assigned signer has a new dashboard approval task.' });
       setShowNewPCFDialog(false);
       pcfForm.reset();
     },
@@ -181,10 +214,20 @@ export default function P2ChangesTab() {
     pcfForm.handleSubmit((data) => {
       createPCFMutation.mutate({
         ...data,
+        approverEmployeeId: Number(data.approverEmployeeId),
         status: 'SUBMITTED',
         submittedAt: new Date(),
       });
     })();
+  };
+
+  const togglePcfArrayValue = (field: 'affectedDocuments' | 'requiredActions', value: string) => {
+    const current = pcfForm.getValues(field) || [];
+    pcfForm.setValue(
+      field,
+      current.includes(value) ? current.filter((item: string) => item !== value) : [...current, value],
+      { shouldDirty: true, shouldValidate: true },
+    );
   };
 
   return (
@@ -300,6 +343,35 @@ export default function P2ChangesTab() {
                         )}
                       />
 
+                      <div className="grid grid-cols-2 gap-4">
+                        <FormField
+                          control={pcfForm.control}
+                          name="currentRevision"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Current Revision</FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder="Rev A, routing rev 3..." />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={pcfForm.control}
+                          name="proposedRevision"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Proposed Revision</FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder="Rev B, routing rev 4..." />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+
                       <FormField
                         control={pcfForm.control}
                         name="proposedChange"
@@ -344,6 +416,68 @@ export default function P2ChangesTab() {
 
                       <FormField
                         control={pcfForm.control}
+                        name="approverEmployeeId"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Assigned Signer *</FormLabel>
+                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Send signature task to..." />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {employees.filter((e: any) => e.isActive !== false && e.userId).map((emp: any) => (
+                                  <SelectItem key={emp.id} value={emp.id.toString()}>
+                                    {emp.name || `${emp.firstName || ''} ${emp.lastName || ''}`.trim()}
+                                    {emp.department ? ` (${emp.department})` : ''}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <div className="rounded-md border p-3 space-y-3">
+                        <div>
+                          <p className="text-sm font-medium">Affected controlled records</p>
+                          <p className="text-xs text-muted-foreground">Select every record that may need revision or verification.</p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          {AFFECTED_DOCUMENT_OPTIONS.map((option) => (
+                            <label key={option.value} className="flex items-center gap-2 text-sm">
+                              <Switch
+                                checked={affectedDocuments.includes(option.value)}
+                                onCheckedChange={() => togglePcfArrayValue('affectedDocuments', option.value)}
+                              />
+                              {option.label}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="rounded-md border p-3 space-y-3">
+                        <div>
+                          <p className="text-sm font-medium">Required follow-up tasks</p>
+                          <p className="text-xs text-muted-foreground">These prompts stay on the PCF summary for implementation follow-through.</p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          {REQUIRED_ACTION_OPTIONS.map((option) => (
+                            <label key={option.value} className="flex items-center gap-2 text-sm">
+                              <Switch
+                                checked={requiredActions.includes(option.value)}
+                                onCheckedChange={() => togglePcfArrayValue('requiredActions', option.value)}
+                              />
+                              {option.label}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      <FormField
+                        control={pcfForm.control}
                         name="requiresCustomerApproval"
                         render={({ field }) => (
                           <FormItem className="flex items-center gap-2">
@@ -351,6 +485,20 @@ export default function P2ChangesTab() {
                               <Switch checked={field.value} onCheckedChange={field.onChange} />
                             </FormControl>
                             <FormLabel className="!mt-0">Requires Customer Approval</FormLabel>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={pcfForm.control}
+                        name="implementationRequired"
+                        render={({ field }) => (
+                          <FormItem className="flex items-center gap-2">
+                            <FormControl>
+                              <Switch checked={field.value} onCheckedChange={field.onChange} />
+                            </FormControl>
+                            <FormLabel className="!mt-0">Implementation task required after signature</FormLabel>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -386,6 +534,7 @@ export default function P2ChangesTab() {
                       <TableHead>Description</TableHead>
                       <TableHead>Scope</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Signer</TableHead>
                       <TableHead>Submitted</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
@@ -407,36 +556,20 @@ export default function P2ChangesTab() {
                           <TableCell>
                             <Badge className={STATUS_COLORS[change.status]}>{change.status}</Badge>
                           </TableCell>
+                          <TableCell>{change.approverEmployeeName || '-'}</TableCell>
                           <TableCell>
                             {change.submittedAt ? new Date(change.submittedAt).toLocaleDateString() : '-'}
                           </TableCell>
                           <TableCell>
-                            {change.status === 'SUBMITTED' && (
-                              <div className="flex gap-2">
-                                <Button 
-                                  size="sm" 
-                                  variant="outline"
-                                  onClick={() => {
-                                    setSelectedApprover('');
-                                    setShowApproveDialog(change.id);
-                                  }}
-                                >
-                                  <CheckCircle2 className="h-4 w-4 mr-1" />
-                                  Approve
-                                </Button>
-                                <Button 
-                                  size="sm" 
-                                  variant="outline"
-                                  onClick={() => {
-                                    setRejectionReason('');
-                                    setSelectedApprover('');
-                                    setShowRejectDialog(change.id);
-                                  }}
-                                >
-                                  <XCircle className="h-4 w-4 mr-1" />
-                                  Reject
-                                </Button>
-                              </div>
+                            {change.status === 'SUBMITTED' && change.approvalRequestId ? (
+                              <Button size="sm" variant="outline" onClick={() => window.location.href = `/approvals?requestId=${change.approvalRequestId}`}>
+                                <Clock className="h-4 w-4 mr-1" />
+                                Signature Task
+                              </Button>
+                            ) : change.status === 'APPROVED' && change.implementationRequired ? (
+                              <Badge variant="outline">Implement follow-ups</Badge>
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
                             )}
                           </TableCell>
                         </TableRow>

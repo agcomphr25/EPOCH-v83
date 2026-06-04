@@ -11142,9 +11142,16 @@ export const p2ProductionChanges = pgTable('p2_production_changes', {
   poId: integer('po_id').references(() => p2PurchaseOrders.id),
   routingId: uuid('routing_id'), // References routing document if applicable
   currentRevision: text('current_revision'),
+  proposedRevision: text('proposed_revision'),
   proposedChange: text('proposed_change').notNull(),
   reason: text('reason').notNull(),
   riskAssessment: text('risk_assessment'),
+  affectedDocuments: jsonb('affected_documents').$type<string[]>().default(sql`'[]'::jsonb`),
+  requiredActions: jsonb('required_actions').$type<string[]>().default(sql`'[]'::jsonb`),
+  approverEmployeeId: integer('approver_employee_id').references(() => employees.id),
+  approverEmployeeName: text('approver_employee_name'),
+  approvalRequestId: uuid('approval_request_id'),
+  implementationRequired: boolean('implementation_required').default(false),
   requiresCustomerApproval: boolean('requires_customer_approval').default(false),
   status: text('status').notNull().default('DRAFT'), // DRAFT | SUBMITTED | APPROVED | REJECTED | IMPLEMENTED
   submittedById: integer('submitted_by_id').references(() => employees.id),

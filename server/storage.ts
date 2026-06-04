@@ -16924,9 +16924,13 @@ export class DatabaseStorage implements IStorage {
   async createP2ProductionChange(data: InsertP2ProductionChange): Promise<P2ProductionChange> {
     // Generate change number: PCF-YYYY-NNN
     const year = new Date().getFullYear();
-    const existingChanges = await db.select().from(p2ProductionChanges);
-    const yearChanges = existingChanges.filter(c => c.changeNumber?.startsWith(`PCF-${year}`));
-    const nextNum = yearChanges.length + 1;
+    const [{ lastNumber } = { lastNumber: null }] = await db
+      .select({
+        lastNumber: sql<number | null>`MAX(NULLIF(SUBSTRING(${p2ProductionChanges.changeNumber} FROM ${`^PCF-${year}-(\\d+)$`}), '')::int)`,
+      })
+      .from(p2ProductionChanges)
+      .where(like(p2ProductionChanges.changeNumber, `PCF-${year}-%`));
+    const nextNum = (lastNumber ?? 0) + 1;
     const changeNumber = `PCF-${year}-${String(nextNum).padStart(3, '0')}`;
     
     const [change] = await db.insert(p2ProductionChanges).values({ ...data, changeNumber }).returning();

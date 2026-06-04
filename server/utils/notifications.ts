@@ -390,6 +390,9 @@ Phone: 256-723-8381
 
   const result = await sendEmailViaSendGrid({
     to: data.email,
+    fromEmail: 'sales@agadvanced.com',
+    fromName: 'AG Composites Sales',
+    replyTo: 'sales@agadvanced.com',
     subject,
     text: message,
     html: message.replace(/\n/g, '<br>'),

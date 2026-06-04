@@ -62,16 +62,16 @@ function ensureEmployeeAccessExceptionSchema(): Promise<void> {
     employeeAccessExceptionSchemaReady = pool.query(`
       ALTER TABLE employees
         ADD COLUMN IF NOT EXISTS employment_status TEXT NOT NULL DEFAULT 'ACTIVE',
-        ADD COLUMN IF NOT EXISTS termination_date DATE;
-
+        ADD COLUMN IF NOT EXISTS termination_date DATE
+    `).then(() => pool.query(`
       ALTER TABLE users
         ADD COLUMN IF NOT EXISTS access_status TEXT NOT NULL DEFAULT 'ACTIVE',
         ADD COLUMN IF NOT EXISTS access_exception_reason TEXT,
         ADD COLUMN IF NOT EXISTS access_exception_approved_by_user_id INTEGER REFERENCES users(id),
         ADD COLUMN IF NOT EXISTS access_exception_approved_by_name TEXT,
         ADD COLUMN IF NOT EXISTS access_exception_approved_at TIMESTAMP,
-        ADD COLUMN IF NOT EXISTS access_exception_expires_at TIMESTAMP;
-    `).then(() => undefined).catch((err) => {
+        ADD COLUMN IF NOT EXISTS access_exception_expires_at TIMESTAMP
+    `)).then(() => undefined).catch((err) => {
       employeeAccessExceptionSchemaReady = null;
       throw err;
     });

@@ -36,6 +36,12 @@ import { CuttingQueueHealthBadges } from "@/components/cutting/CuttingQueueHealt
 import { CuttingBomMatchBadge } from "@/components/cutting/CuttingBomMatchBadge";
 import { CuttingQueueNextActionBadge } from "@/components/cutting/CuttingQueueNextActionBadge";
 import { CuttingQueueProductionLockNotice } from "@/components/cutting/CuttingQueueProductionLockNotice";
+import {
+  CuttingQueueFilterBar,
+  filterCuttingQueueItems,
+  isCuttingQueueProductionProtected,
+  type CuttingQueueFilterValue,
+} from "@/components/cutting/CuttingQueueFilterBar";
 import { useToast } from "@/hooks/use-toast";
 import {
   Accordion,
@@ -238,12 +244,7 @@ function getPrintableBarcodeCount(item: ManufacturingQueueItem): number {
 }
 
 function isQueueProductionProtected(item: ManufacturingQueueItem): boolean {
-  return Boolean(
-    item.productionProtected ||
-    item.quantityCompleted > 0 ||
-    (item.builtPacketCount || 0) > 0 ||
-    (item.allocatedPacketCount || 0) > 0
-  );
+  return isCuttingQueueProductionProtected(item);
 }
 
 function isPacketBarcodePrintable(item: ManufacturingQueueItem): boolean {
@@ -261,6 +262,7 @@ export default function CuttingOperatorDashboard() {
   const isAdmin = useIsAdmin();
   
   const [selectedStatus, setSelectedStatus] = useState<string>("ACTIVE");
+  const [queueFilter, setQueueFilter] = useState<CuttingQueueFilterValue>("all");
   const [selectedMfgItem, setSelectedMfgItem] = useState<ManufacturingQueueItem | null>(null);
   const [isProductionDialogOpen, setIsProductionDialogOpen] = useState(false);
   const [isCuttingWorkflowOpen, setIsCuttingWorkflowOpen] = useState(false);
@@ -1346,7 +1348,11 @@ export default function CuttingOperatorDashboard() {
   const pendingReceiving = freezerAssignmentQueue.length;
   const inProgressCount = mfgQueueItems.filter(i => i.status === 'IN_PROGRESS').length;
   const pendingCount = mfgQueueItems.filter(i => i.status === 'PENDING').length;
-  const printableQueueItems = mfgQueueItems.filter(isPacketBarcodePrintable);
+  const filteredMfgQueueItems = useMemo(
+    () => filterCuttingQueueItems(mfgQueueItems, queueFilter),
+    [mfgQueueItems, queueFilter]
+  );
+  const printableQueueItems = filteredMfgQueueItems.filter(isPacketBarcodePrintable);
   const printableQueueIds = printableQueueItems.map(i => i.id);
   const selectedPrintableIds = selectedPrintIds.filter(id => printableQueueIds.includes(id));
   const printTargetIds = selectedPrintableIds.length > 0 ? selectedPrintableIds : printableQueueIds;
@@ -2227,35 +2233,45 @@ export default function CuttingOperatorDashboard() {
               <p>No items in the queue</p>
               <p className="text-sm">Schedule packets from the Weekly Scheduling page</p>
             </div>
+          ) : filteredMfgQueueItems.length === 0 ? (
+            <div className="space-y-3">
+              <CuttingQueueFilterBar items={mfgQueueItems} value={queueFilter} onChange={setQueueFilter} />
+              <div className="text-center py-10 text-muted-foreground border-2 border-dashed rounded-lg">
+                <Scissors className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                <p>No queue rows match this filter</p>
+              </div>
+            </div>
           ) : (
-            <div className="rounded-lg border overflow-x-auto">
-              <Table>
-                <TableHeader className="bg-muted/50">
-                  <TableRow>
-                    <TableHead className="w-10">
-                      <input
-                        type="checkbox"
-                        checked={selectedPrintableIds.length > 0 && selectedPrintableIds.length === printableQueueItems.length}
-                        onChange={selectAllPendingForPrint}
-                        className="h-4 w-4 rounded border-gray-300"
-                        title="Select all for printing"
-                        disabled={printableQueueItems.length === 0}
-                      />
-                    </TableHead>
-                    <TableHead>Part Number</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead className="text-center">Progress</TableHead>
-                    <TableHead className="text-center">Cuts</TableHead>
-                    <TableHead className="text-center w-24"># to Print</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Next</TableHead>
-                    <TableHead className="text-center">Priority</TableHead>
-                    <TableHead>Due Date</TableHead>
-                    <TableHead className="w-48 text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {mfgQueueItems.map((item) => {
+            <div className="space-y-3">
+              <CuttingQueueFilterBar items={mfgQueueItems} value={queueFilter} onChange={setQueueFilter} />
+              <div className="rounded-lg border overflow-x-auto">
+                <Table>
+                  <TableHeader className="bg-muted/50">
+                    <TableRow>
+                      <TableHead className="w-10">
+                        <input
+                          type="checkbox"
+                          checked={selectedPrintableIds.length > 0 && selectedPrintableIds.length === printableQueueItems.length}
+                          onChange={selectAllPendingForPrint}
+                          className="h-4 w-4 rounded border-gray-300"
+                          title="Select all for printing"
+                          disabled={printableQueueItems.length === 0}
+                        />
+                      </TableHead>
+                      <TableHead>Part Number</TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead className="text-center">Progress</TableHead>
+                      <TableHead className="text-center">Cuts</TableHead>
+                      <TableHead className="text-center w-24"># to Print</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Next</TableHead>
+                      <TableHead className="text-center">Priority</TableHead>
+                      <TableHead>Due Date</TableHead>
+                      <TableHead className="w-48 text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredMfgQueueItems.map((item) => {
                     const isProductionProtected = isQueueProductionProtected(item);
 
                     return (
@@ -2405,8 +2421,9 @@ export default function CuttingOperatorDashboard() {
                     </TableRow>
                     );
                   })}
-                </TableBody>
-              </Table>
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           )}
         </CardContent>

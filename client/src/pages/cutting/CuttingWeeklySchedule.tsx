@@ -26,6 +26,11 @@ import { CuttingBomMatchBadge } from "@/components/cutting/CuttingBomMatchBadge"
 import { CuttingQueueNextActionBadge } from "@/components/cutting/CuttingQueueNextActionBadge";
 import { CuttingQueueProductionLockNotice } from "@/components/cutting/CuttingQueueProductionLockNotice";
 import {
+  CuttingQueueFilterBar,
+  filterCuttingQueueItems,
+  type CuttingQueueFilterValue,
+} from "@/components/cutting/CuttingQueueFilterBar";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -107,6 +112,7 @@ export default function CuttingWeeklySchedule() {
   const { toast } = useToast();
   
   const [currentWeek] = useState(getMondayOfWeek(new Date()));
+  const [queueFilter, setQueueFilter] = useState<CuttingQueueFilterValue>("all");
   const [scheduleQuantities, setScheduleQuantities] = useState<Record<string, number>>({});
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({ p1: true, p2: true });
   const [customDemand, setCustomDemand] = useState({
@@ -296,6 +302,15 @@ export default function CuttingWeeklySchedule() {
     });
     return result;
   }, [mfgQueueData]);
+
+  const activeScheduledRows = useMemo(
+    () => (mfgQueueData || []).filter((item: any) => item.status !== 'COMPLETED'),
+    [mfgQueueData]
+  );
+  const filteredScheduledRows = useMemo(
+    () => filterCuttingQueueItems(activeScheduledRows, queueFilter),
+    [activeScheduledRows, queueFilter]
+  );
 
   const schedulePacketsMutation = useMutation({
     mutationFn: async (data: { packetType: string; quantity: number; materialType: string; description?: string; poNumber?: string; suppressToast?: boolean }) => {
@@ -950,24 +965,33 @@ export default function CuttingWeeklySchedule() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {(mfgQueueData || []).filter((item: any) => item.status !== 'COMPLETED').length === 0 ? (
+          {activeScheduledRows.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               No packets currently scheduled for cutting
             </div>
+          ) : filteredScheduledRows.length === 0 ? (
+            <div className="space-y-3">
+              <CuttingQueueFilterBar items={activeScheduledRows} value={queueFilter} onChange={setQueueFilter} />
+              <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">
+                No scheduled packets match this filter
+              </div>
+            </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Description</TableHead>
-                  <TableHead className="text-center">Qty</TableHead>
-                  <TableHead className="text-center">Done</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Next</TableHead>
-                  <TableHead className="w-24"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {(mfgQueueData || []).filter((item: any) => item.status !== 'COMPLETED').slice(0, 15).map((item: any) => {
+            <div className="space-y-3">
+              <CuttingQueueFilterBar items={activeScheduledRows} value={queueFilter} onChange={setQueueFilter} />
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Description</TableHead>
+                    <TableHead className="text-center">Qty</TableHead>
+                    <TableHead className="text-center">Done</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Next</TableHead>
+                    <TableHead className="w-24"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredScheduledRows.slice(0, 15).map((item: any) => {
                   let notes: any = {};
                   let rawNotes = item.notes || '';
                   try { notes = JSON.parse(item.notes || '{}'); } catch {
@@ -1089,8 +1113,9 @@ export default function CuttingWeeklySchedule() {
                     </TableRow>
                   );
                 })}
-              </TableBody>
-            </Table>
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>

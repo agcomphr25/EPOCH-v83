@@ -25,6 +25,7 @@ import { CuttingQueueHealthBadges } from "@/components/cutting/CuttingQueueHealt
 import { CuttingBomMatchBadge } from "@/components/cutting/CuttingBomMatchBadge";
 import { CuttingQueueNextActionBadge } from "@/components/cutting/CuttingQueueNextActionBadge";
 import { CuttingQueueProductionLockNotice } from "@/components/cutting/CuttingQueueProductionLockNotice";
+import { CuttingQueueSummaryStrip } from "@/components/cutting/CuttingQueueSummaryStrip";
 import {
   CuttingQueueFilterBar,
   filterCuttingQueueItems,
@@ -963,6 +964,9 @@ export default function CuttingWeeklySchedule() {
             <Calendar className="h-5 w-5" />
             Currently Scheduled for Cutting
           </CardTitle>
+          {activeScheduledRows.length > 0 && (
+            <CuttingQueueSummaryStrip items={activeScheduledRows} />
+          )}
         </CardHeader>
         <CardContent>
           {activeScheduledRows.length === 0 ? (

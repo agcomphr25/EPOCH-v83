@@ -36,6 +36,7 @@ import { CuttingQueueHealthBadges } from "@/components/cutting/CuttingQueueHealt
 import { CuttingBomMatchBadge } from "@/components/cutting/CuttingBomMatchBadge";
 import { CuttingQueueNextActionBadge } from "@/components/cutting/CuttingQueueNextActionBadge";
 import { CuttingQueueProductionLockNotice } from "@/components/cutting/CuttingQueueProductionLockNotice";
+import { CuttingQueueSummaryStrip } from "@/components/cutting/CuttingQueueSummaryStrip";
 import {
   CuttingQueueFilterBar,
   filterCuttingQueueItems,
@@ -1367,6 +1368,9 @@ export default function CuttingOperatorDashboard() {
             Operator Dashboard
           </h2>
           <p className="text-muted-foreground text-sm">Cutting workflow, fabric selection, and label printing</p>
+          <div className="mt-2">
+            <CuttingQueueSummaryStrip items={mfgQueueItems} />
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex gap-2 text-sm">

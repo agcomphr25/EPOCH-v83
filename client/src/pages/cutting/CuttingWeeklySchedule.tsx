@@ -27,6 +27,7 @@ import { CuttingQueueNextActionBadge } from "@/components/cutting/CuttingQueueNe
 import { CuttingQueueProductionLockNotice } from "@/components/cutting/CuttingQueueProductionLockNotice";
 import { CuttingQueueSummaryStrip } from "@/components/cutting/CuttingQueueSummaryStrip";
 import { CuttingQueueExportButton } from "@/components/cutting/CuttingQueueExportButton";
+import { CuttingQueueEmptyState } from "@/components/cutting/CuttingQueueEmptyState";
 import {
   CuttingQueueFilterBar,
   filterCuttingQueueItems,
@@ -971,18 +972,14 @@ export default function CuttingWeeklySchedule() {
         </CardHeader>
         <CardContent>
           {activeScheduledRows.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              No packets currently scheduled for cutting
-            </div>
+            <CuttingQueueEmptyState mode="empty" className="py-8" />
           ) : filteredScheduledRows.length === 0 ? (
             <div className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <CuttingQueueFilterBar items={activeScheduledRows} value={queueFilter} onChange={setQueueFilter} />
                 <CuttingQueueExportButton items={filteredScheduledRows} filenamePrefix="cutting-weekly-schedule" />
               </div>
-              <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">
-                No scheduled packets match this filter
-              </div>
+              <CuttingQueueEmptyState mode="filtered" filter={queueFilter} onClearFilter={() => setQueueFilter("all")} className="py-8" />
             </div>
           ) : (
             <div className="space-y-3">

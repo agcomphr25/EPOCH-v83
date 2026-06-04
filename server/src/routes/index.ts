@@ -3170,34 +3170,77 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const { and, eq } = await import('drizzle-orm');
       const { cancel, openRequest } = await import('../services/escalationService');
       const { notificationManager } = await import('../services/notificationManager');
-      const approverEmployeeId = Number(req.body?.approverEmployeeId);
-      let approverEmployeeName: string | null = null;
-      let approverUserId: number | null = null;
+      const roleLabels: Record<string, string> = {
+        BUSINESS_MANAGER: 'Business Manager',
+        PURCHASING_QUALITY_MANAGER: 'Purchasing / Quality Manager',
+        PRODUCTION_MANAGER: 'Production Manager',
+        CUSTOMER: 'Customer',
+      };
+      const rawAssignments = Array.isArray(req.body?.approvalAssignments)
+        ? req.body.approvalAssignments
+        : [];
+      const requiredRawAssignments = rawAssignments.filter((assignment: any) => assignment?.required === true);
 
-      if (!Number.isInteger(approverEmployeeId) || approverEmployeeId <= 0) {
-        return res.status(400).json({ error: 'An assigned approver is required for a production change form.' });
+      if (requiredRawAssignments.length === 0) {
+        return res.status(400).json({ error: 'At least one required signer must be selected for a production change form.' });
       }
 
-      const [approver] = await db
-        .select({
-          employeeId: employees.id,
-          employeeName: employees.name,
-          userId: users.id,
-        })
-        .from(employees)
-        .leftJoin(users, and(eq(users.employeeId, employees.id), eq(users.isActive, true)))
-        .where(eq(employees.id, approverEmployeeId))
-        .limit(1);
+      const normalizedAssignments: Array<{
+        roleKey: string;
+        roleLabel: string;
+        required: boolean;
+        employeeId: number | null;
+        employeeName: string | null;
+        userId: number | null;
+      }> = [];
 
-      if (!approver) {
-        return res.status(404).json({ error: 'Assigned approver not found.' });
-      }
-      if (approver.userId == null) {
-        return res.status(400).json({ error: 'Assigned approver does not have an active user account.' });
+      for (const raw of rawAssignments) {
+        const roleKey = String(raw?.roleKey ?? '').trim();
+        if (!roleLabels[roleKey]) continue;
+        const employeeId = raw?.employeeId == null ? null : Number(raw.employeeId);
+        const normalized = {
+          roleKey,
+          roleLabel: roleLabels[roleKey],
+          required: raw?.required === true,
+          employeeId: Number.isInteger(employeeId) && employeeId > 0 ? employeeId : null,
+          employeeName: null as string | null,
+          userId: null as number | null,
+        };
+
+        if (normalized.required && normalized.employeeId == null) {
+          return res.status(400).json({ error: `${normalized.roleLabel} must be assigned to an active EPOCH user.` });
+        }
+
+        if (normalized.employeeId != null) {
+          const [assignee] = await db
+            .select({
+              employeeId: employees.id,
+              employeeName: employees.name,
+              userId: users.id,
+            })
+            .from(employees)
+            .leftJoin(users, and(eq(users.employeeId, employees.id), eq(users.isActive, true)))
+            .where(eq(employees.id, normalized.employeeId))
+            .limit(1);
+
+          if (!assignee) {
+            return res.status(404).json({ error: `${normalized.roleLabel} assignee not found.` });
+          }
+          if (normalized.required && assignee.userId == null) {
+            return res.status(400).json({ error: `${normalized.roleLabel} assignee does not have an active EPOCH user account.` });
+          }
+          normalized.employeeName = assignee.employeeName;
+          normalized.userId = assignee.userId ?? null;
+        }
+
+        normalizedAssignments.push(normalized);
       }
 
-      approverEmployeeName = approver.employeeName;
-      approverUserId = approver.userId;
+      const requiredAssignments = normalizedAssignments.filter((assignment) => assignment.required);
+      if (requiredAssignments.length === 0) {
+        return res.status(400).json({ error: 'At least one valid required signer must be selected for a production change form.' });
+      }
+      const primaryApprover = requiredAssignments[0];
       const actor = (req as any).user;
       const requestedByDisplayName =
         actor?.username ||
@@ -3207,89 +3250,106 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
       const change = await storage.createP2ProductionChange({
         ...req.body,
-        approverEmployeeId,
-        approverEmployeeName,
+        approverEmployeeId: primaryApprover.employeeId,
+        approverEmployeeName: primaryApprover.employeeName,
+        approvalAssignments: normalizedAssignments,
       });
 
-      let approvalIdToCancel: string | null = null;
+      const approvalIdsToCancel: string[] = [];
       try {
         const requiredActions = Array.isArray((change as any).requiredActions) ? (change as any).requiredActions : [];
-        const approval = await openRequest({
-          requestType: 'PRODUCTION_CHANGE_FORM',
-          payload: {
-            changeId: change.id,
-            changeNumber: change.changeNumber,
-            changeType: change.changeType,
-            scope: change.scope,
-            partNumber: change.partNumber,
-            poId: change.poId,
-            routingId: change.routingId,
-            currentRevision: change.currentRevision,
-            proposedRevision: (change as any).proposedRevision,
-            proposedChange: change.proposedChange,
-            reason: change.reason,
-            riskAssessment: change.riskAssessment,
-            affectedDocuments: (change as any).affectedDocuments ?? [],
-            requiredActions,
-            requiresCustomerApproval: change.requiresCustomerApproval,
-            implementationRequired: (change as any).implementationRequired ?? false,
-          },
-          subjectType: 'p2_production_change',
-          subjectId: change.id,
-          requestedByUserId: actor?.id ?? null,
-          requestedByDisplayName,
-          summary: `${change.changeNumber} ${change.changeType} change needs signature review.`,
-        });
-        approvalIdToCancel = approval.id;
+        const assignedApprovals = [];
 
-        const [assignedApproval] = await db
-          .update(approvalRequests)
-          .set({
-            currentApproverUserId: approverUserId,
-            updatedAt: new Date(),
-          })
-          .where(eq(approvalRequests.id, approval.id))
-          .returning();
-
-        await db.insert(approvalRequestHistory).values({
-          approvalRequestId: approval.id,
-          event: 'ASSIGNED',
-          fromLevel: approval.escalationLevel,
-          toLevel: approval.escalationLevel,
-          fromStatus: approval.status,
-          toStatus: approval.status,
-          actorUserId: actor?.id ?? null,
-          actorDisplayName: requestedByDisplayName,
-          notes: `Production change signature assigned to ${approverEmployeeName}`,
-          metadata: {
-            assignedEmployeeId: approverEmployeeId,
-            assignedUserId: approverUserId,
-            assignedEmployeeName: approverEmployeeName,
-            changeNumber: change.changeNumber,
-          },
-        });
-
-        notificationManager.sendToUsers([approverUserId], {
-          type: 'APPROVAL_REQUEST',
-          title: `Production change signature needed: ${change.changeNumber}`,
-          message: `${requestedByDisplayName} assigned you to review and sign ${change.changeNumber}.`,
-          data: {
-            approvalRequestId: approval.id,
+        for (const assignment of requiredAssignments) {
+          if (assignment.userId == null) {
+            throw new Error(`${assignment.roleLabel} must be assigned to an active EPOCH user.`);
+          }
+          const approval = await openRequest({
             requestType: 'PRODUCTION_CHANGE_FORM',
+            payload: {
+              changeId: change.id,
+              changeNumber: change.changeNumber,
+              changeType: change.changeType,
+              scope: change.scope,
+              partNumber: change.partNumber,
+              poId: change.poId,
+              routingId: change.routingId,
+              currentRevision: change.currentRevision,
+              proposedRevision: (change as any).proposedRevision,
+              proposedChange: change.proposedChange,
+              reason: change.reason,
+              riskAssessment: change.riskAssessment,
+              affectedDocuments: (change as any).affectedDocuments ?? [],
+              requiredActions,
+              approvalRoleKey: assignment.roleKey,
+              approvalRoleLabel: assignment.roleLabel,
+              approvalAssignments: normalizedAssignments,
+              requiresCustomerApproval: change.requiresCustomerApproval,
+              implementationRequired: (change as any).implementationRequired ?? false,
+            },
             subjectType: 'p2_production_change',
             subjectId: change.id,
-            changeNumber: change.changeNumber,
-          },
-          timestamp: new Date().toISOString(),
-        });
+            requestedByUserId: actor?.id ?? null,
+            requestedByDisplayName,
+            summary: `${change.changeNumber} ${assignment.roleLabel} signature review needed.`,
+          });
+          approvalIdsToCancel.push(approval.id);
+
+          const [assignedApproval] = await db
+            .update(approvalRequests)
+            .set({
+              currentApproverUserId: assignment.userId,
+              updatedAt: new Date(),
+            })
+            .where(eq(approvalRequests.id, approval.id))
+            .returning();
+          assignedApprovals.push(assignedApproval);
+
+          await db.insert(approvalRequestHistory).values({
+            approvalRequestId: approval.id,
+            event: 'ASSIGNED',
+            fromLevel: approval.escalationLevel,
+            toLevel: approval.escalationLevel,
+            fromStatus: approval.status,
+            toStatus: approval.status,
+            actorUserId: actor?.id ?? null,
+            actorDisplayName: requestedByDisplayName,
+            notes: `${assignment.roleLabel} production change signature assigned to ${assignment.employeeName}`,
+            metadata: {
+              roleKey: assignment.roleKey,
+              roleLabel: assignment.roleLabel,
+              assignedEmployeeId: assignment.employeeId,
+              assignedUserId: assignment.userId,
+              assignedEmployeeName: assignment.employeeName,
+              changeNumber: change.changeNumber,
+            },
+          });
+
+          notificationManager.sendToUsers([assignment.userId], {
+            type: 'APPROVAL_REQUEST',
+            title: `${assignment.roleLabel} signature needed: ${change.changeNumber}`,
+            message: `${requestedByDisplayName} assigned you to review and sign ${change.changeNumber}.`,
+            data: {
+              approvalRequestId: approval.id,
+              requestType: 'PRODUCTION_CHANGE_FORM',
+              subjectType: 'p2_production_change',
+              subjectId: change.id,
+              changeNumber: change.changeNumber,
+              roleKey: assignment.roleKey,
+              roleLabel: assignment.roleLabel,
+            },
+            timestamp: new Date().toISOString(),
+          });
+        }
 
         const updatedChange = await storage.updateP2ProductionChange(change.id, {
-          approvalRequestId: approval.id,
+          approvalRequestId: approvalIdsToCancel[0] ?? null,
+          approvalRequestIds: approvalIdsToCancel,
           status: 'SUBMITTED',
         } as any);
-        return res.status(201).json({ ...updatedChange, approvalRequest: assignedApproval });
+        return res.status(201).json({ ...updatedChange, approvalRequests: assignedApprovals });
       } catch (approvalError) {
-        if (approvalIdToCancel) {
+        for (const approvalIdToCancel of approvalIdsToCancel) {
           try {
             await cancel(
               approvalIdToCancel,

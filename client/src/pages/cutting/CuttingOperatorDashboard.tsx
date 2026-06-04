@@ -156,8 +156,11 @@ type ManufacturingQueueItem = {
   bomMatchReason?: string | null;
   bomMatchConfidence?: string | null;
   poNumbers?: GroupedPO[] | null;
+  builtPacketCount?: number;
   allocatedPacketCount?: number;
   printableBarcodeCount?: number;
+  productionProtected?: boolean;
+  productionProtectionReason?: string | null;
 };
 
 type PacketBOM = {
@@ -233,8 +236,17 @@ function getPrintableBarcodeCount(item: ManufacturingQueueItem): number {
   return Math.max(0, (item.quantityOrdered || 0) - (item.quantityCompleted || 0));
 }
 
+function isQueueProductionProtected(item: ManufacturingQueueItem): boolean {
+  return Boolean(
+    item.productionProtected ||
+    item.quantityCompleted > 0 ||
+    (item.builtPacketCount || 0) > 0 ||
+    (item.allocatedPacketCount || 0) > 0
+  );
+}
+
 function isPacketBarcodePrintable(item: ManufacturingQueueItem): boolean {
-  return (item.status === 'PENDING' || item.status === 'IN_PROGRESS') && getPrintableBarcodeCount(item) > 0;
+  return (item.status === 'PENDING' || item.status === 'IN_PROGRESS') && !isQueueProductionProtected(item) && getPrintableBarcodeCount(item) > 0;
 }
 
 function useIsAdmin() {
@@ -2242,7 +2254,10 @@ export default function CuttingOperatorDashboard() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {mfgQueueItems.map((item) => (
+                  {mfgQueueItems.map((item) => {
+                    const isProductionProtected = isQueueProductionProtected(item);
+
+                    return (
                     <TableRow 
                       key={item.id} 
                       className={cn(
@@ -2253,7 +2268,7 @@ export default function CuttingOperatorDashboard() {
                       data-testid={`row-mfg-item-${item.id}`}
                     >
                       <TableCell>
-                        {isPacketBarcodePrintable(item) ? (
+                        {isPacketBarcodePrintable(item) && !isProductionProtected ? (
                           <input
                             type="checkbox"
                             checked={selectedPrintIds.includes(item.id)}
@@ -2299,7 +2314,7 @@ export default function CuttingOperatorDashboard() {
                         <Badge variant="outline" className="font-mono">{item.estimatedCuts}</Badge>
                       </TableCell>
                       <TableCell className="text-center">
-                        {isPacketBarcodePrintable(item) ? (
+                        {isPacketBarcodePrintable(item) && !isProductionProtected ? (
                           <Input
                             type="number"
                             min={1}
@@ -2338,7 +2353,7 @@ export default function CuttingOperatorDashboard() {
                       <TableCell>
                         <div className="flex gap-1 justify-end">
                           <CuttingQueueTraceSheet queueId={item.id} size="icon" iconOnly />
-                          {item.status === 'PENDING' && (
+                          {item.status === 'PENDING' && !isProductionProtected && (
                             <Button 
                               size="sm" 
                               onClick={() => handleStartCuttingWorkflow(item)}
@@ -2359,18 +2374,20 @@ export default function CuttingOperatorDashboard() {
                                 <Scissors className="h-4 w-4 mr-1" />
                                 View
                               </Button>
-                              <Button 
-                                size="sm"
-                                className="bg-green-600 hover:bg-green-700"
-                                onClick={() => { setSelectedMfgItem(item); setIsProductionDialogOpen(true); }}
-                                data-testid={`button-complete-${item.id}`}
-                              >
-                                <CheckCircle2 className="h-4 w-4 mr-1" />
-                                Complete
-                              </Button>
+                              {!isProductionProtected && (
+                                <Button
+                                  size="sm"
+                                  className="bg-green-600 hover:bg-green-700"
+                                  onClick={() => { setSelectedMfgItem(item); setIsProductionDialogOpen(true); }}
+                                  data-testid={`button-complete-${item.id}`}
+                                >
+                                  <CheckCircle2 className="h-4 w-4 mr-1" />
+                                  Complete
+                                </Button>
+                              )}
                             </>
                           )}
-                          {item.status === 'COMPLETED' && (
+                          {item.status === 'COMPLETED' && !isProductionProtected && (
                             <Button 
                               size="sm" 
                               variant="outline"
@@ -2384,7 +2401,8 @@ export default function CuttingOperatorDashboard() {
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>

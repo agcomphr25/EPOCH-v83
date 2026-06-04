@@ -33,8 +33,7 @@ import {
   ChevronRight,
   Filter,
   X,
-  Lock,
-  Users
+  Lock
 } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import P2POCreationWizard from '@/components/p2/P2POCreationWizard';
@@ -48,7 +47,6 @@ import RoutingDocumentManagement from './RoutingDocumentManagement';
 import P2ChangesTab from '@/components/p2/P2ChangesTab';
 import P2ShippingTab from '@/components/p2/P2ShippingTab';
 import P2NonconformingTab from '@/components/p2/P2ScrappedItemsTab';
-import P2CustomersPage from './P2CustomersPage';
 import { TravelerCapturedDataById } from '@/components/p2/TravelerCapturedData';
 import ProgramManufacturingOrchestration from '@/components/p2/ProgramManufacturingOrchestration';
 import { queryClient, apiRequest } from '@/lib/queryClient';
@@ -109,12 +107,15 @@ export default function P2ControlCenter() {
   const wadProjectId = urlParams.get('projectId') || '';
   const wadProjectName = urlParams.get('projectName') || '';
   const wadPoId = urlParams.get('poId') || '';
-  const [activeTab, setActiveTab] = useState(tabFromUrl === 'pos' ? 'status' : tabFromUrl || 'status');
+  const resolveControlCenterTab = (tab: string | null) => {
+    return tab === 'pos' || tab === 'customers' ? 'status' : tab || 'status';
+  };
+  const [activeTab, setActiveTab] = useState(resolveControlCenterTab(tabFromUrl));
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tab = params.get('tab');
-    if (tab) setActiveTab(tab === 'pos' ? 'status' : tab);
+    if (tab) setActiveTab(resolveControlCenterTab(tab));
   }, [location]);
 
   const [showPOWizard, setShowPOWizard] = useState(false);
@@ -703,10 +704,6 @@ export default function P2ControlCenter() {
             <BarChart3 className="h-4 w-4" />
             Status
           </TabsTrigger>
-          <TabsTrigger value="customers" className="flex items-center gap-2" data-testid="tab-customers">
-            <Users className="h-4 w-4" />
-            Customers
-          </TabsTrigger>
           <TabsTrigger value="setup" className="flex items-center gap-2" data-testid="tab-setup">
             <Settings className="h-4 w-4" />
             Setup
@@ -773,10 +770,6 @@ export default function P2ControlCenter() {
             }}
             selectedPOIds={selectedPOIds}
           />
-        </TabsContent>
-
-        <TabsContent value="customers">
-          <P2CustomersPage />
         </TabsContent>
 
         <TabsContent value="setup">

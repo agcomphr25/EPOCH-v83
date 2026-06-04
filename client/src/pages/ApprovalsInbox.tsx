@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Link } from 'wouter';
 import { apiRequest, queryClient } from '@/lib/queryClient';
@@ -57,6 +57,24 @@ const INVENTORY_REQUEST_LABELS: Record<string, string> = {
   INV_ALLOCATION_OVERRIDE: 'Allocation override',
   INV_EXPIRED_USE: 'Expired material use',
   INV_QUARANTINE_RELEASE: 'Quarantine release',
+};
+
+const PRODUCTION_CHANGE_ACTION_LABELS: Record<string, string> = {
+  UPDATE_ROUTING: 'Update routing',
+  UPDATE_BOM: 'Update BOM',
+  UPDATE_TRAVELER: 'Revise traveler or instructions',
+  UPDATE_INSPECTION: 'Revise inspection requirements',
+  CUSTOMER_APPROVAL: 'Obtain customer approval',
+  TRAINING_REQUIRED: 'Assign operator training',
+};
+
+const PRODUCTION_CHANGE_DOCUMENT_LABELS: Record<string, string> = {
+  ROUTING: 'Routing',
+  BOM: 'BOM',
+  TRAVELER: 'Traveler',
+  WORK_INSTRUCTION: 'Work instruction',
+  INSPECTION_PLAN: 'Inspection plan',
+  CUSTOMER_SPEC: 'Customer specification',
 };
 
 function InventoryApprovalSummary({
@@ -118,6 +136,79 @@ function InventoryApprovalSummary({
   );
 }
 
+function ProductionChangeApprovalSummary({ payload }: { payload: Record<string, any> }) {
+  const affectedDocuments: string[] = Array.isArray(payload.affectedDocuments) ? payload.affectedDocuments : [];
+  const requiredActions: string[] = Array.isArray(payload.requiredActions) ? payload.requiredActions : [];
+  const rows: Array<[string, React.ReactNode]> = [
+    ['PCF #', <span className="font-mono">{payload.changeNumber ?? 'Pending number'}</span>],
+    ['Type', <Badge variant="outline">{payload.changeType ?? 'Production change'}</Badge>],
+    ['Scope', payload.scope ?? '-'],
+  ];
+  if (payload.partNumber) rows.push(['Part #', payload.partNumber]);
+  if (payload.poId) rows.push(['PO ID', payload.poId]);
+  if (payload.currentRevision) rows.push(['Current revision', payload.currentRevision]);
+  if (payload.proposedRevision) rows.push(['Proposed revision', payload.proposedRevision]);
+
+  return (
+    <div className="border rounded p-4 bg-muted/30 space-y-3" data-testid="production-change-approval-summary">
+      <div className="flex items-center gap-2">
+        <Badge className="bg-blue-600">AS9100 PCF</Badge>
+        <span className="font-semibold text-sm">Production Change Form</span>
+      </div>
+      <table className="text-xs w-full">
+        <tbody>
+          {rows.map(([k, v]) => (
+            <tr key={k} className="border-t border-muted-foreground/20">
+              <td className="py-1 pr-3 text-muted-foreground font-medium">{k}</td>
+              <td className="py-1">{v}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="grid gap-3 md:grid-cols-2">
+        <div>
+          <div className="text-xs font-semibold text-muted-foreground">Proposed Change</div>
+          <p className="text-sm whitespace-pre-wrap">{payload.proposedChange ?? '-'}</p>
+        </div>
+        <div>
+          <div className="text-xs font-semibold text-muted-foreground">Reason</div>
+          <p className="text-sm whitespace-pre-wrap">{payload.reason ?? '-'}</p>
+        </div>
+      </div>
+      {payload.riskAssessment && (
+        <div>
+          <div className="text-xs font-semibold text-muted-foreground">Risk Assessment</div>
+          <p className="text-sm whitespace-pre-wrap">{payload.riskAssessment}</p>
+        </div>
+      )}
+      <div className="grid gap-3 md:grid-cols-2">
+        <div>
+          <div className="text-xs font-semibold text-muted-foreground mb-1">Affected Records</div>
+          <div className="flex flex-wrap gap-1">
+            {affectedDocuments.length > 0
+              ? affectedDocuments.map((item) => <Badge key={item} variant="outline">{PRODUCTION_CHANGE_DOCUMENT_LABELS[item] ?? item}</Badge>)
+              : <span className="text-xs text-muted-foreground">None selected</span>}
+          </div>
+        </div>
+        <div>
+          <div className="text-xs font-semibold text-muted-foreground mb-1">Follow-Up Tasks</div>
+          <div className="flex flex-wrap gap-1">
+            {requiredActions.length > 0
+              ? requiredActions.map((item) => <Badge key={item} variant="secondary">{PRODUCTION_CHANGE_ACTION_LABELS[item] ?? item}</Badge>)
+              : <span className="text-xs text-muted-foreground">No extra tasks selected</span>}
+          </div>
+        </div>
+      </div>
+      {(payload.requiresCustomerApproval || payload.implementationRequired) && (
+        <div className="rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+          {payload.requiresCustomerApproval && <div>Customer approval must be verified before implementation.</div>}
+          {payload.implementationRequired && <div>Implementation follow-up is required after signature.</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ApprovalsInbox() {
   const { toast } = useToast();
   const [selected, setSelected] = useState<ApprovalRequest | null>(null);
@@ -127,6 +218,13 @@ export default function ApprovalsInbox() {
     queryKey: ['/api/approvals'],
     refetchInterval: 30000,
   });
+
+  useEffect(() => {
+    const requestId = new URLSearchParams(window.location.search).get('requestId');
+    if (!requestId || selected || rows.length === 0) return;
+    const match = rows.find((row) => row.id === requestId);
+    if (match) setSelected(match);
+  }, [rows, selected]);
 
   const { data: employees = [] } = useQuery<EmployeeOption[]>({
     queryKey: ['/api/employees'],
@@ -331,7 +429,9 @@ export default function ApprovalsInbox() {
                   </p>
                 </div>
 
-                {INVENTORY_REQUEST_TYPES.has(selectedRequest.requestType) ? (
+                {selectedRequest.requestType === 'PRODUCTION_CHANGE_FORM' ? (
+                  <ProductionChangeApprovalSummary payload={selectedRequest.requestPayload ?? {}} />
+                ) : INVENTORY_REQUEST_TYPES.has(selectedRequest.requestType) ? (
                   <InventoryApprovalSummary
                     requestType={selectedRequest.requestType}
                     payload={selectedRequest.requestPayload ?? {}}

@@ -3679,12 +3679,16 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   });
 
   app.get('/api/p2/control-center/po-statuses', async (req, res) => {
+    let p2StatusStage = 'initializing';
     try {
+      p2StatusStage = 'ensuring production workflow schema';
       const { ensureProductionWorkflowReadSchema } = await import('../lib/productionWorkflowReadiness');
       await ensureProductionWorkflowReadSchema();
+      p2StatusStage = 'loading storage modules';
       const { storage } = await import('../../storage');
       const { pool: dbPool } = await import('../../db');
-      const allPos = await storage.getAllP2PurchaseOrders();
+      p2StatusStage = 'loading P2 purchase orders';
+      const allPos = p2ControlRows(await storage.getAllP2PurchaseOrders());
       const optionalP2Rows = async <T = any>(
         label: string,
         query: Promise<any>,
@@ -3710,12 +3714,14 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       ]);
       let serializedItems: any[] = [];
       try {
+        p2StatusStage = 'loading P2 serialized items';
         serializedItems = await applyTravelerStateToP2Items(
-          await storage.getP2SerializedItems({})
+          p2ControlRows(await storage.getP2SerializedItems({}))
         );
       } catch (error) {
         console.warn('P2 Control Center optional serialized item lookup skipped:', error);
       }
+      p2StatusStage = 'loading legacy project production rows';
       const legacyProductionRows: any[] = [];
       const legacyProjectProductionRows = await optionalP2Rows(
         'legacy project production',
@@ -3809,13 +3815,14 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const poIdsWithLegacyProjectProduction = new Set<number>(legacyProjectStatsByPoId.keys());
       const pos = allPos.filter((po: any) =>
         P2_GATED_STATUSES.has(normalizeP2Status(po.status)) ||
-        poIdsWithSerializedUnits.has(po.id) ||
-        poIdsWithLegacyProjectProduction.has(po.id)
+        poIdsWithSerializedUnits.has(Number(po.id)) ||
+        poIdsWithLegacyProjectProduction.has(Number(po.id))
       );
 
       // Look up projects linked to these POs. PM Control Center resolves the
       // same relationship through either projects.po_id or the p2_order step.
-      const poIds = pos.map((po: any) => po.id);
+      p2StatusStage = 'loading P2 project links';
+      const poIds = pos.map((po: any) => Number(po.id)).filter(Number.isFinite);
       const projectRows = poIds.length > 0
         ? await optionalP2Rows(
             'project link',
@@ -3868,7 +3875,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           )
         : [];
       const projectByPoId = new Map<number, any>(
-        projectRows.map((r: any) => [r.poId, r])
+        projectRows.map((r: any) => [Number(r.poId), r])
       );
       const projectIds = [...new Set(
         projectRows
@@ -3918,13 +3925,15 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           )
         : [];
       const orderedQtyByPoId = new Map<number, number>(
-        orderedQtyRows.map((r: any) => [r.poId, r.orderedQty])
+        orderedQtyRows.map((r: any) => [Number(r.poId), Number(r.orderedQty) || 0])
       );
       
+      p2StatusStage = 'building P2 status response';
       const poStatuses = pos.map((po: any) => {
-        const poItems = serializedItems.filter((s: any) => s.poId === po.id);
-        const legacyP2Stats = legacyStatsByPoId.get(po.id);
-        const legacyProjectStats = legacyProjectStatsByPoId.get(po.id);
+        const poId = Number(po.id);
+        const poItems = serializedItems.filter((s: any) => Number(s.poId ?? s.po_id) === poId);
+        const legacyP2Stats = legacyStatsByPoId.get(poId);
+        const legacyProjectStats = legacyProjectStatsByPoId.get(poId);
         const legacyStats = legacyP2Stats || legacyProjectStats
           ? {
               totalQty: Number(legacyP2Stats?.totalQty ?? 0) + Number(legacyProjectStats?.totalQty ?? 0),
@@ -3960,7 +3969,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
         // totalItems is the sum of ordered quantities across all line items so that
         // lines without serialized items generated yet are still reflected on the card.
-        const totalItems = orderedQtyByPoId.get(po.id) ?? Number(legacyStats?.totalQty ?? poItems.length);
+        const totalItems = orderedQtyByPoId.get(poId) ?? Number(legacyStats?.totalQty ?? poItems.length);
         const inProductionItems = Math.min(
           rawInProductionItems,
           Math.max(0, totalItems - completedItems)
@@ -3972,14 +3981,14 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         
         const rawStatus = normalizeP2Status(po.status) || 'OPEN';
 
-        const linkedProject = projectByPoId.get(po.id);
+        const linkedProject = projectByPoId.get(poId);
         const wadContext = buildP2ProjectWadContext(
           linkedProject,
           linkedProject?.projectId ? wadSummaryByProject.get(String(linkedProject.projectId)) : null
         );
 
         return {
-          id: po.id,
+          id: poId,
           poNumber: po.poNumber,
           customerName: po.customerName || 'Unknown',
           dueDate: po.expectedDelivery,
@@ -4003,7 +4012,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       
       res.json(poStatuses);
     } catch (_error) {
-      console.error('P2 Control Center PO statuses error:', _error);
+      console.error(`P2 Control Center PO statuses error during ${p2StatusStage}:`, _error);
       res.status(500).json({ error: 'Failed to fetch PO statuses' });
     }
   });

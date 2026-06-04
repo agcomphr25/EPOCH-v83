@@ -15189,7 +15189,7 @@ export class DatabaseStorage implements IStorage {
           created_at as "createdAt", updated_at as "updatedAt"
         FROM p2_customers WHERE id = $1
       `, [id]);
-      return result[0] as P2Customer | undefined;
+      return result.rows[0] as P2Customer | undefined;
     }
     
     // Add updated_at
@@ -15212,7 +15212,7 @@ export class DatabaseStorage implements IStorage {
         created_at as "createdAt", updated_at as "updatedAt"
     `, params);
     
-    return result[0] as P2Customer | undefined;
+    return result.rows[0] as P2Customer | undefined;
   }
 
   async deleteP2Customer(id: number): Promise<void> {
@@ -15417,7 +15417,7 @@ export class DatabaseStorage implements IStorage {
       FROM p2_purchase_orders 
       ORDER BY created_at DESC
     `);
-    return result as P2PurchaseOrder[];
+    return result.rows as P2PurchaseOrder[];
   }
 
   async getP2PurchaseOrder(
@@ -15506,7 +15506,7 @@ export class DatabaseStorage implements IStorage {
       data.projectId || null,
       data.projectName || null,
     ]);
-    return result[0] as P2PurchaseOrder;
+    return result.rows[0] as P2PurchaseOrder;
   }
 
   async updateP2PurchaseOrder(
@@ -17006,7 +17006,7 @@ export class DatabaseStorage implements IStorage {
       ${whereClause}
       ORDER BY created_at
     `, params);
-    return result as P2SerializedItem[];
+    return result.rows as P2SerializedItem[];
   }
 
   async getP2SerializedItem(id: string): Promise<P2SerializedItem | undefined> {

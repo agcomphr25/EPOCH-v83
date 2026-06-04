@@ -1,23 +1,15 @@
 import { customers } from '@shared/schema';
 import { allOrders, communicationLogs } from '../schema.js';
 import { eq, and } from 'drizzle-orm';
-import sgMail from '@sendgrid/mail';
 import twilio from 'twilio';
 
 import { db } from '../db.js';
 import { 
   getTwilioConfig, 
-  getSendGridConfig, 
   isTwilioConfigured, 
-  isSendGridConfigured,
   logNotificationConfig 
 } from '../config/notifications.js';
-
-// Initialize SendGrid with API key from centralized config
-const sendGridConfig = getSendGridConfig();
-if (sendGridConfig.apiKey) {
-  sgMail.setApiKey(sendGridConfig.apiKey);
-}
+import { sendEmailViaSendGrid } from './sendgrid.js';
 
 export interface NotificationData {
   orderId: string;
@@ -391,37 +383,25 @@ Owens Cross Roads, AL 35763
 Phone: 256-723-8381
   `.trim();
 
-  const emailConfig = getSendGridConfig();
-  
-  console.log('📧 [DIRECT SENDGRID] Sending email shipping notification:', {
+  console.log('📧 [TRACKING SENDGRID] Sending email shipping notification:', {
     to: data.email,
     subject,
-    from: emailConfig.fromEmail,
   });
 
-  // Validate SendGrid configuration using centralized check
-  if (!isSendGridConfigured()) {
-    throw new Error('SendGrid is not configured (missing API key or from email)');
+  const result = await sendEmailViaSendGrid({
+    to: data.email,
+    subject,
+    text: message,
+    html: message.replace(/\n/g, '<br>'),
+  });
+
+  if (!result.success) {
+    console.error('❌ [TRACKING SENDGRID] Failed to send email:', result.error);
+    throw new Error(result.error || 'SendGrid email failed');
   }
 
-  try {
-    const emailData = {
-      to: data.email,
-      from: emailConfig.fromEmail,
-      subject,
-      text: message,
-      html: message.replace(/\n/g, '<br>'),
-    };
-
-    const result = await sgMail.send(emailData);
-    const messageId = result[0]?.headers?.['x-message-id'] || 'unknown';
-    
-    console.log('✅ [DIRECT SENDGRID] Email sent successfully, messageId:', messageId);
-    return { status: 'sent', messageId };
-  } catch (error: any) {
-    console.error('❌ [DIRECT SENDGRID] Failed to send email:', error?.response?.body || error.message);
-    throw error;
-  }
+  console.log('✅ [TRACKING SENDGRID] Email sent successfully, messageId:', result.messageId || 'unknown');
+  return { status: 'sent', messageId: result.messageId || 'unknown' };
 }
 
 async function sendSMSNotification(

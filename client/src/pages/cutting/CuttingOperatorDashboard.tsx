@@ -36,6 +36,8 @@ import { CuttingQueueHealthBadges } from "@/components/cutting/CuttingQueueHealt
 import { CuttingBomMatchBadge } from "@/components/cutting/CuttingBomMatchBadge";
 import { CuttingQueueNextActionBadge } from "@/components/cutting/CuttingQueueNextActionBadge";
 import { CuttingQueueProductionLockNotice } from "@/components/cutting/CuttingQueueProductionLockNotice";
+import { CuttingQueueSummaryStrip } from "@/components/cutting/CuttingQueueSummaryStrip";
+import { CuttingQueueExportButton } from "@/components/cutting/CuttingQueueExportButton";
 import {
   CuttingQueueFilterBar,
   filterCuttingQueueItems,
@@ -1367,6 +1369,9 @@ export default function CuttingOperatorDashboard() {
             Operator Dashboard
           </h2>
           <p className="text-muted-foreground text-sm">Cutting workflow, fabric selection, and label printing</p>
+          <div className="mt-2">
+            <CuttingQueueSummaryStrip items={mfgQueueItems} />
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex gap-2 text-sm">
@@ -2235,7 +2240,10 @@ export default function CuttingOperatorDashboard() {
             </div>
           ) : filteredMfgQueueItems.length === 0 ? (
             <div className="space-y-3">
-              <CuttingQueueFilterBar items={mfgQueueItems} value={queueFilter} onChange={setQueueFilter} />
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <CuttingQueueFilterBar items={mfgQueueItems} value={queueFilter} onChange={setQueueFilter} />
+                <CuttingQueueExportButton items={filteredMfgQueueItems} filenamePrefix="cutting-operator-queue" />
+              </div>
               <div className="text-center py-10 text-muted-foreground border-2 border-dashed rounded-lg">
                 <Scissors className="h-8 w-8 mx-auto mb-2 opacity-30" />
                 <p>No queue rows match this filter</p>
@@ -2243,7 +2251,10 @@ export default function CuttingOperatorDashboard() {
             </div>
           ) : (
             <div className="space-y-3">
-              <CuttingQueueFilterBar items={mfgQueueItems} value={queueFilter} onChange={setQueueFilter} />
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <CuttingQueueFilterBar items={mfgQueueItems} value={queueFilter} onChange={setQueueFilter} />
+                <CuttingQueueExportButton items={filteredMfgQueueItems} filenamePrefix="cutting-operator-queue" />
+              </div>
               <div className="rounded-lg border overflow-x-auto">
                 <Table>
                   <TableHeader className="bg-muted/50">

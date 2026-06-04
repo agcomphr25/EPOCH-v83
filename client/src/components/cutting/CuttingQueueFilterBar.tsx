@@ -32,6 +32,8 @@ const filterLabels: Record<CuttingQueueFilterValue, string> = {
   trace_review: "Trace review",
 };
 
+export { filterLabels as cuttingQueueFilterLabels };
+
 function numberValue(value: number | null | undefined): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
@@ -81,8 +83,8 @@ export function filterCuttingQueueItems<T extends CuttingQueueFilterItem>(items:
   return items;
 }
 
-export function CuttingQueueFilterBar<T extends CuttingQueueFilterItem>({ items, value, onChange }: Props<T>) {
-  const counts = {
+export function getCuttingQueueFilterCounts<T extends CuttingQueueFilterItem>(items: T[]): Record<CuttingQueueFilterValue, number> {
+  return {
     all: items.length,
     needs_bom: filterCuttingQueueItems(items, "needs_bom").length,
     needs_labels: filterCuttingQueueItems(items, "needs_labels").length,
@@ -90,6 +92,10 @@ export function CuttingQueueFilterBar<T extends CuttingQueueFilterItem>({ items,
     in_production: filterCuttingQueueItems(items, "in_production").length,
     trace_review: filterCuttingQueueItems(items, "trace_review").length,
   };
+}
+
+export function CuttingQueueFilterBar<T extends CuttingQueueFilterItem>({ items, value, onChange }: Props<T>) {
+  const counts = getCuttingQueueFilterCounts(items);
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">

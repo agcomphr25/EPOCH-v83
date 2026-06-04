@@ -120,6 +120,18 @@ interface NotificationHistoryResponse {
   notifications: NotificationHistoryItem[];
 }
 
+function formatNotificationFailure(result: any): string {
+  const details = Array.isArray(result?.details)
+    ? result.details.filter(Boolean).join('; ')
+    : typeof result?.details === 'string'
+      ? result.details
+      : '';
+
+  return [result?.error || 'Failed to send notification', details]
+    .filter(Boolean)
+    .join(': ');
+}
+
 type DateRangeMode = 'week' | 'month' | 'quarter';
 
 const MONTH_NAMES = [
@@ -297,7 +309,7 @@ export default function ShippingTracker() {
 
       if (!response.ok) {
         console.error('[NOTIFY FAIL RESULT]', result);
-        throw new Error(result.error || 'Failed to send notification');
+        throw new Error(formatNotificationFailure(result));
       }
 
       return result;
@@ -315,7 +327,7 @@ export default function ShippingTracker() {
       console.error('[UI ERROR] Failed notification for order:', orderId, error);
       toast({
         title: 'Failed to Send Notification',
-        description: error.message + ' — see browser console for details',
+        description: error.message,
         variant: 'destructive',
       });
     },

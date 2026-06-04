@@ -23,6 +23,8 @@ import { GroupedPOsBadge, type GroupedPOEntry } from "@/components/cutting/Group
 import { CuttingQueueTraceSheet } from "@/components/cutting/CuttingQueueTraceSheet";
 import { CuttingQueueHealthBadges } from "@/components/cutting/CuttingQueueHealthBadges";
 import { CuttingBomMatchBadge } from "@/components/cutting/CuttingBomMatchBadge";
+import { CuttingQueueNextActionBadge } from "@/components/cutting/CuttingQueueNextActionBadge";
+import { CuttingQueueProductionLockNotice } from "@/components/cutting/CuttingQueueProductionLockNotice";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -960,6 +962,7 @@ export default function CuttingWeeklySchedule() {
                   <TableHead className="text-center">Qty</TableHead>
                   <TableHead className="text-center">Done</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Next</TableHead>
                   <TableHead className="w-24"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -974,6 +977,12 @@ export default function CuttingWeeklySchedule() {
                   const poEntries: GroupedPOEntry[] = Array.isArray(item.poNumbers)
                     ? item.poNumbers
                     : (Array.isArray(notes.poNumbers) ? notes.poNumbers : []);
+                  const isProductionProtected = Boolean(
+                    item.productionProtected ||
+                    (item.quantityCompleted || 0) > 0 ||
+                    (item.builtPacketCount || 0) > 0 ||
+                    (item.allocatedPacketCount || 0) > 0
+                  );
 
                   const getDescription = () => {
                     if (item.displayName) return item.displayName;
@@ -1029,6 +1038,7 @@ export default function CuttingWeeklySchedule() {
                             compact
                           />
                         </div>
+                        <CuttingQueueProductionLockNotice item={item} compact />
                       </TableCell>
                       <TableCell className="text-center">{item.quantityRequested}</TableCell>
                       <TableCell className="text-center">{item.quantityCompleted || 0}</TableCell>
@@ -1038,9 +1048,12 @@ export default function CuttingWeeklySchedule() {
                         </Badge>
                       </TableCell>
                       <TableCell>
+                        <CuttingQueueNextActionBadge item={item} compact />
+                      </TableCell>
+                      <TableCell>
                         <div className="flex justify-end gap-1">
                           <CuttingQueueTraceSheet queueId={item.id} size="icon" iconOnly />
-                        {item.status !== 'COMPLETED' && (
+                        {item.status !== 'COMPLETED' && !isProductionProtected && (
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
                               <Button

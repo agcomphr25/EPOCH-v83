@@ -20,6 +20,23 @@ import {
 
 const router = Router();
 
+function getUpsPackageResults(shipmentResults: any): any {
+  const packageResults = shipmentResults?.PackageResults;
+  return Array.isArray(packageResults) ? packageResults[0] : packageResults;
+}
+
+function getUpsTrackingNumber(shipmentResults: any): string | undefined {
+  const packageResults = getUpsPackageResults(shipmentResults);
+  const packageTracking = packageResults?.TrackingNumber;
+  if (typeof packageTracking === 'string' && packageTracking.trim()) {
+    return packageTracking;
+  }
+  if (typeof packageTracking?.Value === 'string' && packageTracking.Value.trim()) {
+    return packageTracking.Value;
+  }
+  return shipmentResults?.ShipmentIdentificationNumber;
+}
+
 // Helper function to normalize country names to ISO country codes for UPS API
 function getCountryCode(country: string | undefined): string {
   if (!country) return 'US';
@@ -1042,7 +1059,7 @@ router.post('/create-label', requirePermission('shipping.create_label'), async (
     const labelBase64 =
       shipmentResults?.PackageResults?.[0]?.ShippingLabel?.GraphicImage ||
       shipmentResults?.PackageResults?.ShippingLabel?.GraphicImage;
-    const trackingNumber = shipmentResults?.ShipmentIdentificationNumber;
+    const trackingNumber = getUpsTrackingNumber(shipmentResults);
     // Use negotiated rate if available, otherwise use retail rate
     const negotiatedCost = shipmentResults?.NegotiatedRateCharges?.TotalCharge?.MonetaryValue;
     const retailCost = shipmentResults?.ShipmentCharges?.TotalCharges?.MonetaryValue;
@@ -1060,6 +1077,7 @@ router.post('/create-label', requirePermission('shipping.create_label'), async (
             shippingMethod: getServiceName(serviceType || '03'),
             shippingCost: shipmentCost ? parseFloat(shipmentCost) : null,
             labelGenerated: true,
+            shippingLabelGenerated: true,
             labelGeneratedAt: new Date(),
             shippedDate: new Date(),
           };
@@ -2025,7 +2043,7 @@ router.post('/bulk/create-consolidated-label', async (req: Request, res: Respons
     const labelBase64 =
       shipmentResults?.PackageResults?.[0]?.ShippingLabel?.GraphicImage ||
       shipmentResults?.PackageResults?.ShippingLabel?.GraphicImage;
-    const trackingNumber = shipmentResults?.ShipmentIdentificationNumber;
+    const trackingNumber = getUpsTrackingNumber(shipmentResults);
     // Use negotiated rate if available, otherwise use retail rate
     const negotiatedCost = shipmentResults?.NegotiatedRateCharges?.TotalCharge?.MonetaryValue;
     const retailCost = shipmentResults?.ShipmentCharges?.TotalCharges?.MonetaryValue;
@@ -2479,7 +2497,7 @@ router.post('/bulk/create-labels', async (req: Request, res: Response) => {
 
           const shipmentResults = shipResponse.data?.ShipmentResponse?.ShipmentResults;
           const labelBase64 = shipmentResults?.PackageResults?.[0]?.ShippingLabel?.GraphicImage;
-          const trackingNumber = shipmentResults?.ShipmentIdentificationNumber;
+          const trackingNumber = getUpsTrackingNumber(shipmentResults);
 
           if (labelBase64 && trackingNumber) {
             // Update NCR with tracking number (instead of order)
@@ -2659,7 +2677,7 @@ router.post('/bulk/create-labels', async (req: Request, res: Response) => {
 
         const shipmentResults = shipResponse.data?.ShipmentResponse?.ShipmentResults;
         const labelBase64 = shipmentResults?.PackageResults?.[0]?.ShippingLabel?.GraphicImage;
-        const trackingNumber = shipmentResults?.ShipmentIdentificationNumber;
+        const trackingNumber = getUpsTrackingNumber(shipmentResults);
 
         if (labelBase64 && trackingNumber) {
           // Update order with tracking number

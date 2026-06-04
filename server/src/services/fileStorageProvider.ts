@@ -388,7 +388,11 @@ export async function uploadSupabaseObjectFromSignedToken(token: string, body: B
 export function getStorageErrorResponse(error: unknown) {
   const err = error as { status?: number; reason?: string; message?: string };
   const reason = err?.reason || 'storage_error';
-  const message = err?.message || 'Storage operation failed';
+  const rawMessage = err?.message || 'Storage operation failed';
+  const message =
+    rawMessage.toLowerCase().includes('error code undefined')
+      ? 'File storage is not available. Check the storage provider configuration and try again.'
+      : rawMessage;
   const status = err?.status && err.status >= 400 ? err.status : 500;
   return { status, reason, message };
 }

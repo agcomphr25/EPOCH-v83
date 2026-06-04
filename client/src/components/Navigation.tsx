@@ -540,15 +540,21 @@ export default function Navigation() {
   const estimatingItems: NavItemDef[] = [
     {
       path: '/estimating',
-      label: 'RFQs',
+      label: 'ROM Builder',
       icon: FileSearch,
-      description: 'View and manage Requests for Quotation',
+      description: 'View and manage ROM estimates',
     },
     {
       path: '/rfq-builder',
       label: 'Cost Builder',
       icon: Calculator,
       description: 'BOM-driven cost estimation with overhead rates and margins',
+    },
+    {
+      path: '/estimating/bom-drafts',
+      label: 'Draft BOM Builder',
+      icon: FileSpreadsheet,
+      description: 'Create reusable draft BOMs and sourcing picklists',
     },
   ];
 
@@ -567,9 +573,9 @@ export default function Navigation() {
     },
     {
       path: '/nonconformance',
-      label: 'Nonconforming Tracker',
+      label: 'P1 Nonconforming',
       icon: XCircle,
-      description: 'Track and manage quality issues and dispositions',
+      description: 'Track P1 stock-line nonconforming items and dispositions',
     },
     {
       path: '/rts',
@@ -1235,6 +1241,12 @@ export default function Navigation() {
       description: 'CNC operations and maintenance management dashboard',
     },
     {
+      path: '/angiet-dashboard',
+      label: 'ANGIET Dashboard',
+      icon: Settings,
+      description: 'Cutting Table, CNC & Gunsmith Operations dashboard',
+    },
+    {
       path: '/bradw-dashboard',
       label: 'BRADW Dashboard',
       icon: Users,
@@ -1657,14 +1669,16 @@ export default function Navigation() {
     if (!isUserInPermissionsList(username)) {
       return items.filter((item) => {
         const cap = getRequiredCapability(item.path);
-        if (cap && navCapSet.has(cap)) return true;
+        const caps = Array.isArray(cap) ? cap : cap ? [cap] : [];
+        if (caps.some((requiredCap) => navCapSet.has(requiredCap))) return true;
         return DEFAULT_USER_ROUTES.some(route => item.path === route || item.path.startsWith(route + '/'));
       });
     }
 
     return items.filter((item) => {
       const cap = getRequiredCapability(item.path);
-      if (cap && navCapSet.has(cap)) return true;
+      const caps = Array.isArray(cap) ? cap : cap ? [cap] : [];
+      if (caps.some((requiredCap) => navCapSet.has(requiredCap))) return true;
       return hasRouteAccess(username, item.path, userRole);
     });
   };
@@ -1937,7 +1951,7 @@ export default function Navigation() {
               </div>
             )}
 
-            {/* Estimating Dropdown */}
+            {/* Design Dropdown */}
             {filteredEstimatingItems.length > 0 && (
               <div className="relative">
                 <Button
@@ -1955,7 +1969,7 @@ export default function Navigation() {
                   }
                 >
                   <Calculator className="h-4 w-4" />
-                  Estimating
+                  Design
                   {estimatingExpanded ? (
                     <ChevronDown className="h-4 w-4" />
                   ) : (
@@ -2734,8 +2748,8 @@ export default function Navigation() {
               <Button
                 variant={location.startsWith('/admin/edri') ? 'default' : 'ghost'}
                 className={cn(
-                  'flex items-center gap-2 text-sm text-sky-500 hover:bg-sky-50 hover:text-sky-600',
-                  location.startsWith('/admin/edri') && 'bg-sky-400 text-white hover:bg-sky-500 hover:text-white'
+                  'flex items-center gap-2 text-sm text-foreground hover:bg-gray-100 hover:text-foreground',
+                  location.startsWith('/admin/edri') && 'bg-primary text-white hover:bg-primary hover:text-white'
                 )}
                 onClick={() => { closeAllDropdowns(); setLocation('/admin/edri'); }}
               >
@@ -2764,8 +2778,8 @@ export default function Navigation() {
               <Button
                 variant={location.startsWith('/admin/continuity') ? 'default' : 'ghost'}
                 className={cn(
-                  'flex items-center gap-2 text-sm',
-                  location.startsWith('/admin/continuity') && 'bg-primary text-white'
+                  'flex items-center gap-2 text-sm text-foreground hover:bg-gray-100 hover:text-foreground',
+                  location.startsWith('/admin/continuity') && 'bg-primary text-white hover:bg-primary hover:text-white'
                 )}
                 onClick={() => { closeAllDropdowns(); setLocation('/admin/continuity'); }}
               >

@@ -390,7 +390,7 @@ export async function runEarlyBootRepairBackfills({ db, pool }: BootRepairContex
     console.warn('⚠️ Global production order item name correction skipped:', corrErr.message);
   }
 
-  // Data correction: fix production orders where item_id, item_name, or specifications
+  // Data correction: fix production orders where item_id, item_name, item_code, or specifications
   // don't match the linked purchase_order_items row (via po_item_id). Excludes SHIPPED orders.
   // Also cancels excess duplicate production orders for PO lines that have more active orders
   // than the line's quantity (keeping the earliest-created one per PO line, excluding SHIPPED).
@@ -398,7 +398,7 @@ export async function runEarlyBootRepairBackfills({ db, pool }: BootRepairContex
   try {
     const { pgPool: mismatchPool } = await import('../../db');
 
-    // Step 1: fix item_id / item_name / specifications mismatches
+    // Step 1: fix item_id / item_name / item_code / specifications mismatches
     const mismatchCheck = await mismatchPool.query(
       `SELECT COUNT(*) AS cnt
        FROM production_orders po
@@ -407,6 +407,7 @@ export async function runEarlyBootRepairBackfills({ db, pool }: BootRepairContex
          AND (
            po.item_id       IS DISTINCT FROM poi.item_id
            OR po.item_name  IS DISTINCT FROM poi.item_name
+           OR po.item_code  IS DISTINCT FROM UPPER(TRIM(COALESCE(NULLIF(TRIM(poi.item_name), ''), NULLIF(TRIM(poi.item_id), ''))))
            OR po.specifications IS DISTINCT FROM poi.specifications::jsonb
          )`
     );
@@ -416,6 +417,7 @@ export async function runEarlyBootRepairBackfills({ db, pool }: BootRepairContex
         `UPDATE production_orders po
          SET item_id        = poi.item_id,
              item_name      = poi.item_name,
+             item_code      = UPPER(TRIM(COALESCE(NULLIF(TRIM(poi.item_name), ''), NULLIF(TRIM(poi.item_id), '')))),
              specifications = poi.specifications::jsonb,
              updated_at     = NOW()
          FROM purchase_order_items poi
@@ -424,6 +426,7 @@ export async function runEarlyBootRepairBackfills({ db, pool }: BootRepairContex
            AND (
              po.item_id       IS DISTINCT FROM poi.item_id
              OR po.item_name  IS DISTINCT FROM poi.item_name
+             OR po.item_code  IS DISTINCT FROM UPPER(TRIM(COALESCE(NULLIF(TRIM(poi.item_name), ''), NULLIF(TRIM(poi.item_id), ''))))
              OR po.specifications IS DISTINCT FROM poi.specifications::jsonb
            )`
       );

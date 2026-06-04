@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'wouter';
 import {
-  ShieldCheck, Crown, Bug, BarChart3,
+  ShieldCheck, ShieldAlert, Crown, Bug, BarChart3,
   AlertOctagon, Wrench, Clock, Tags, FileCheck2, Percent, ClipboardCheck,
   ChevronDown, ShoppingCart, Boxes, Fingerprint, BookOpenCheck, UsersRound, UserCheck, ClipboardPenLine, Network,
   FolderOpen,
@@ -22,6 +22,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Dashboard',        path: '/admin/edri',                    icon: ShieldCheck   },
   { label: 'Executive Matrix', path: '/admin/edri/executive-matrix',   icon: Crown         },
   { label: 'DCAA Findings',    path: '/admin/dcaa-findings',           icon: Bug           },
+  { label: 'Security',         path: '/admin/security-center',          icon: ShieldAlert   },
   { label: 'Heatmap',          path: '/admin/edri/heatmap',            icon: BarChart3     },
   { label: 'Red Flags',        path: '/admin/edri/red-flags',          icon: AlertOctagon  },
   { label: 'Remediation',      path: '/admin/edri/remediation',        icon: Wrench        },

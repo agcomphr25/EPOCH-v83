@@ -1509,12 +1509,21 @@ router.get('/order-lookup', authenticateToken, requirePermission('admin.order_lo
     // Exactly one match — proceed with full detail lookup using the resolved order_id
     const resolvedOrderId = candidateRows[0].order_id;
 
-    // Get the production order and its specs, plus directly linked item code
+    // Get the production order and its specs, plus the item code resolved from the
+    // linked PO line. Prefer purchase_order_items.item_name because this card is
+    // labeled "via PO link"; production_orders.item_code can be stale on repaired rows.
     const orderRows = await pool.query(
       `SELECT po.id, po.order_id, po.po_number, po.current_department, po.production_status,
-              po.specifications, po.item_id, po.item_name, po.po_item_id,
+              po.specifications, po.item_code, po.item_id, po.item_name, po.po_item_id,
               poi.item_id  AS poi_item_id,
-              poi.item_name AS poi_item_name
+              poi.item_name AS poi_item_name,
+              UPPER(TRIM(COALESCE(
+                NULLIF(TRIM(poi.item_name), ''),
+                NULLIF(TRIM(po.item_code), ''),
+                NULLIF(TRIM(po.item_name), ''),
+                NULLIF(TRIM(poi.item_id), ''),
+                NULLIF(TRIM(po.item_id), '')
+              ))) AS resolved_item_code
        FROM production_orders po
        LEFT JOIN purchase_order_items poi ON po.po_item_id = poi.id
        WHERE po.order_id = $1 LIMIT 1`,
@@ -1586,9 +1595,22 @@ router.get('/item-code-lookup', async (req: Request, res: Response) => {
               po.po_number,
               po.current_department,
               po.production_status,
-              po.item_code AS resolved_item_code
+              UPPER(TRIM(COALESCE(
+                NULLIF(TRIM(poi.item_name), ''),
+                NULLIF(TRIM(po.item_code), ''),
+                NULLIF(TRIM(po.item_name), ''),
+                NULLIF(TRIM(poi.item_id), ''),
+                NULLIF(TRIM(po.item_id), '')
+              ))) AS resolved_item_code
        FROM production_orders po
-       WHERE po.item_code ILIKE $1
+       LEFT JOIN purchase_order_items poi ON po.po_item_id = poi.id
+       WHERE UPPER(TRIM(COALESCE(
+         NULLIF(TRIM(poi.item_name), ''),
+         NULLIF(TRIM(po.item_code), ''),
+         NULLIF(TRIM(po.item_name), ''),
+         NULLIF(TRIM(poi.item_id), ''),
+         NULLIF(TRIM(po.item_id), '')
+       ))) ILIKE $1
        ORDER BY po.order_id
        LIMIT 200`,
       [`%${itemCode.trim()}%`]

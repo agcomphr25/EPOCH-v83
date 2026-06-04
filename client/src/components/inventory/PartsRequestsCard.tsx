@@ -117,6 +117,14 @@ export default function PartsRequestsCard() {
     null
   );
   const requestedByEditedRef = useRef(false);
+  const initialProjectId = useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    return new URLSearchParams(window.location.search).get('projectId') || '';
+  }, []);
+  const openCreateFromQuery = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return new URLSearchParams(window.location.search).get('create') === '1';
+  }, []);
 
   const { data: sessionUser } = useQuery<SessionUser | null>({
     queryKey: ['/api/auth/session'],
@@ -129,7 +137,7 @@ export default function PartsRequestsCard() {
     partName: '',
     requestedBy: '',
     productionLine: '',
-    projectId: '',
+    projectId: initialProjectId,
     department: '',
     quantity: '',
     urgency: 'MEDIUM',
@@ -267,7 +275,7 @@ export default function PartsRequestsCard() {
       partName: '',
       requestedBy: getDefaultRequestor(sessionUser),
       productionLine: '',
-      projectId: '',
+      projectId: initialProjectId,
       department: '',
       quantity: '',
       urgency: 'MEDIUM',
@@ -303,6 +311,14 @@ export default function PartsRequestsCard() {
       prev.requestedBy ? prev : { ...prev, requestedBy: defaultRequestor }
     );
   }, [isCreateOpen, editingRequest, defaultRequestor]);
+
+  useEffect(() => {
+    if (!initialProjectId) return;
+    setFormData((prev) => ({ ...prev, projectId: initialProjectId }));
+    if (openCreateFromQuery) {
+      setIsCreateOpen(true);
+    }
+  }, [initialProjectId, openCreateFromQuery]);
 
   const handleSelectChange = (name: string, value: string) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -437,78 +453,87 @@ export default function PartsRequestsCard() {
     }
   };
 
-  const renderFormContent = () => (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <Label htmlFor="inventoryItem">Inventory Part *</Label>
-        <Popover open={isPartSelectOpen} onOpenChange={setIsPartSelectOpen}>
-          <PopoverTrigger asChild>
-            <Button
-              id="inventoryItem"
-              type="button"
-              variant="outline"
-              role="combobox"
-              aria-expanded={isPartSelectOpen}
-              className={cn(
-                'w-full justify-between',
-                !formData.agPartNumber && 'text-muted-foreground'
-              )}
-              disabled={isLoadingInventory}
-            >
-              {selectedInventoryItem
-                ? `${selectedInventoryItem.agPartNumber} - ${selectedInventoryItem.name}`
-                : formData.partNumber && formData.partName
-                  ? `${formData.partNumber} - ${formData.partName}`
-                  : isLoadingInventory
-                    ? 'Loading inventory...'
-                    : 'Search inventory by part number or name...'}
-              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-            <Command>
-              <CommandInput placeholder="Type part number or name..." />
-              <CommandList>
-                <CommandEmpty>No inventory items found.</CommandEmpty>
-                <CommandGroup>
-                  {activeInventoryItems.map((item) => (
-                    <CommandItem
-                      key={item.id}
-                      value={`${item.agPartNumber} ${item.name}`}
-                      onSelect={() => handleInventoryItemSelect(item)}
-                    >
-                      <Check
-                        className={cn(
-                          'mr-2 h-4 w-4',
-                          item.agPartNumber === formData.agPartNumber
-                            ? 'opacity-100'
-                            : 'opacity-0'
-                        )}
-                      />
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-mono text-sm font-medium">
-                            {item.agPartNumber}
-                          </span>
-                          <span className="truncate">{item.name}</span>
-                        </div>
-                      </div>
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              </CommandList>
-            </Command>
-          </PopoverContent>
-        </Popover>
-        {formData.partNumber && formData.partName && (
-          <p className="mt-2 text-xs text-muted-foreground">
-            Selected part: {formData.partNumber} - {formData.partName}
-          </p>
-        )}
-      </div>
+  const dialogContentClass =
+    'flex max-h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-2xl flex-col overflow-hidden';
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
+  const renderFormContent = () => (
+    <form onSubmit={handleSubmit} className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <div className="min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto pr-1">
+        <div className="min-w-0">
+          <Label htmlFor="inventoryItem">Inventory Part *</Label>
+          <Popover open={isPartSelectOpen} onOpenChange={setIsPartSelectOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                id="inventoryItem"
+                type="button"
+                variant="outline"
+                role="combobox"
+                aria-expanded={isPartSelectOpen}
+                className={cn(
+                  'min-w-0 w-full justify-between overflow-hidden',
+                  !formData.agPartNumber && 'text-muted-foreground'
+                )}
+                disabled={isLoadingInventory}
+              >
+                <span className="min-w-0 flex-1 truncate text-left">
+                  {selectedInventoryItem
+                    ? `${selectedInventoryItem.agPartNumber} - ${selectedInventoryItem.name}`
+                    : formData.partNumber && formData.partName
+                      ? `${formData.partNumber} - ${formData.partName}`
+                      : isLoadingInventory
+                        ? 'Loading inventory...'
+                        : 'Search inventory by part number or name...'}
+                </span>
+                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent
+              className="w-[--radix-popover-trigger-width] max-w-[calc(100vw-3rem)] p-0"
+              align="start"
+            >
+              <Command>
+                <CommandInput placeholder="Type part number or name..." />
+                <CommandList>
+                  <CommandEmpty>No inventory items found.</CommandEmpty>
+                  <CommandGroup>
+                    {activeInventoryItems.map((item) => (
+                      <CommandItem
+                        key={item.id}
+                        value={`${item.agPartNumber} ${item.name}`}
+                        onSelect={() => handleInventoryItemSelect(item)}
+                      >
+                        <Check
+                          className={cn(
+                            'mr-2 h-4 w-4',
+                            item.agPartNumber === formData.agPartNumber
+                              ? 'opacity-100'
+                              : 'opacity-0'
+                          )}
+                        />
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="shrink-0 font-mono text-sm font-medium">
+                              {item.agPartNumber}
+                            </span>
+                            <span className="truncate">{item.name}</span>
+                          </div>
+                        </div>
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+          {formData.partNumber && formData.partName && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Selected part: {formData.partNumber} - {formData.partName}
+            </p>
+          )}
+        </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="min-w-0">
           <Label htmlFor="requestedBy">Requested By *</Label>
           <Input
             id="requestedBy"
@@ -519,7 +544,7 @@ export default function PartsRequestsCard() {
             required
           />
         </div>
-        <div>
+        <div className="min-w-0">
           <Label htmlFor="productionLine">Production Line</Label>
           <Select
             value={formData.productionLine || NONE_VALUE}
@@ -540,8 +565,8 @@ export default function PartsRequestsCard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="min-w-0">
           <Label htmlFor="projectId">Project</Label>
           <Select
             value={formData.projectId || NONE_VALUE}
@@ -562,7 +587,7 @@ export default function PartsRequestsCard() {
             </SelectContent>
           </Select>
         </div>
-        <div>
+        <div className="min-w-0">
           <Label htmlFor="department">Department</Label>
           <Select
             value={formData.department || NONE_VALUE}
@@ -585,8 +610,8 @@ export default function PartsRequestsCard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="min-w-0">
           <Label htmlFor="quantity">Quantity *</Label>
           <Input
             id="quantity"
@@ -598,7 +623,7 @@ export default function PartsRequestsCard() {
             required
           />
         </div>
-        <div>
+        <div className="min-w-0">
           <Label htmlFor="urgency">Urgency</Label>
           <Select
             value={formData.urgency}
@@ -619,8 +644,8 @@ export default function PartsRequestsCard() {
 
       {isManagerResponse && (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div className="min-w-0">
               <Label htmlFor="status">Status</Label>
               <Select
                 value={formData.status}
@@ -641,7 +666,7 @@ export default function PartsRequestsCard() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
+            <div className="min-w-0">
               <Label htmlFor="supplier">Supplier</Label>
               <Input
                 id="supplier"
@@ -651,7 +676,7 @@ export default function PartsRequestsCard() {
                 placeholder="Enter supplier name"
               />
             </div>
-            <div>
+            <div className="min-w-0">
               <Label htmlFor="estimatedCost">Estimated Cost</Label>
               <Input
                 id="estimatedCost"
@@ -719,8 +744,9 @@ export default function PartsRequestsCard() {
           />
         </div>
       )}
+      </div>
 
-      <div className="flex justify-end space-x-2">
+      <div className="mt-4 flex shrink-0 justify-end space-x-2 border-t pt-4">
         <Button
           type="button"
           variant="outline"
@@ -765,8 +791,8 @@ export default function PartsRequestsCard() {
               New Request
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
+          <DialogContent className={dialogContentClass}>
+            <DialogHeader className="shrink-0">
               <DialogTitle>Create New Parts Request</DialogTitle>
             </DialogHeader>
             {renderFormContent()}
@@ -954,8 +980,8 @@ export default function PartsRequestsCard() {
           }
         }}
       >
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
+        <DialogContent className={dialogContentClass}>
+          <DialogHeader className="shrink-0">
             <DialogTitle>Edit Parts Request</DialogTitle>
           </DialogHeader>
           {renderFormContent()}

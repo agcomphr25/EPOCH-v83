@@ -2,6 +2,8 @@ import { Router, Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import { storage } from '../../storage';
 import { pool, pgPool } from '../../db';
+import { authenticateToken, requireRole } from '../../middleware/auth';
+import { recordAuditEvent } from '../services/auditLedgerService';
 import {
   fetchRecertificationRecords,
   countRecertificationRecords,
@@ -27,6 +29,61 @@ import {
 } from '@shared/schema';
 
 const router = Router();
+
+let chargeCodeAssignmentTableReady: Promise<void> | null = null;
+
+function ensureChargeCodeAssignmentTable(): Promise<void> {
+  if (!chargeCodeAssignmentTableReady) {
+    chargeCodeAssignmentTableReady = (async () => {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS charge_code_employee_assignments (
+          id SERIAL PRIMARY KEY,
+          charge_code_id INTEGER NOT NULL REFERENCES charge_codes(id) ON DELETE CASCADE,
+          employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+          assigned_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          UNIQUE (charge_code_id, employee_id)
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS charge_code_employee_assignments_charge_code_idx ON charge_code_employee_assignments(charge_code_id)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS charge_code_employee_assignments_employee_idx ON charge_code_employee_assignments(employee_id)`);
+    })().catch((error) => {
+      chargeCodeAssignmentTableReady = null;
+      throw error;
+    });
+  }
+  return chargeCodeAssignmentTableReady;
+}
+
+function normalizeEmployeeChargeCodeIds(value: unknown): number[] | null {
+  if (!Array.isArray(value)) return null;
+  const ids = value
+    .map((id) => Number(id))
+    .filter((id) => Number.isInteger(id) && id > 0);
+  return Array.from(new Set(ids)).sort((a, b) => a - b);
+}
+
+async function getEmployeeAssignedChargeCodes(employeeId: number) {
+  await ensureChargeCodeAssignmentTable();
+  return pool.query(
+    `SELECT
+       cc.id,
+       cc.code,
+       cc.description,
+       cc.type,
+       cc.cost_handling AS "costHandling",
+       cc.department,
+       cc.billable,
+       cc.requires_approval AS "requiresApproval",
+       cc.active,
+       cca.assigned_at AS "assignedAt"
+     FROM charge_code_employee_assignments cca
+     JOIN charge_codes cc ON cc.id = cca.charge_code_id
+     WHERE cca.employee_id = $1
+     ORDER BY cc.code`,
+    [employeeId]
+  );
+}
 
 // Helper function to generate next employee code
 async function generateNextEmployeeCode(): Promise<string> {
@@ -152,6 +209,130 @@ router.delete(
     }
   }
 );
+
+router.get('/:id/charge-codes', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const employeeId = parseInt(req.params.id, 10);
+    if (!Number.isInteger(employeeId) || employeeId <= 0) {
+      res.status(400).json({ error: 'Invalid employee id' });
+      return;
+    }
+
+    const employeeRows = await pool.query(
+      `SELECT id, name FROM employees WHERE id = $1 LIMIT 1`,
+      [employeeId]
+    );
+    if (employeeRows.length === 0) {
+      res.status(404).json({ error: 'Employee not found' });
+      return;
+    }
+
+    const assignedChargeCodes = await getEmployeeAssignedChargeCodes(employeeId);
+    res.json({
+      employeeId,
+      assignedChargeCodeIds: assignedChargeCodes.map((code: any) => code.id),
+      assignedChargeCodes,
+    });
+  } catch (error) {
+    console.error('Get employee charge codes error:', error);
+    res.status(500).json({ error: 'Failed to fetch employee charge codes' });
+  }
+});
+
+router.put('/:id/charge-codes', authenticateToken, requireRole('ADMIN'), async (req: Request, res: Response) => {
+  const employeeId = parseInt(req.params.id, 10);
+  if (!Number.isInteger(employeeId) || employeeId <= 0) {
+    res.status(400).json({ error: 'Invalid employee id' });
+    return;
+  }
+
+  const nextChargeCodeIds = normalizeEmployeeChargeCodeIds(req.body?.chargeCodeIds);
+  if (!nextChargeCodeIds) {
+    res.status(400).json({ error: 'chargeCodeIds must be an array' });
+    return;
+  }
+
+  try {
+    const employeeRows = await pool.query(
+      `SELECT id, name FROM employees WHERE id = $1 LIMIT 1`,
+      [employeeId]
+    );
+    const employee = employeeRows[0];
+    if (!employee) {
+      res.status(404).json({ error: 'Employee not found' });
+      return;
+    }
+
+    if (nextChargeCodeIds.length > 0) {
+      const validRows = await pool.query(`SELECT id FROM charge_codes WHERE id = ANY($1::int[])`, [nextChargeCodeIds]);
+      const validIds = new Set(validRows.map((row: any) => row.id));
+      const missingIds = nextChargeCodeIds.filter((chargeCodeId) => !validIds.has(chargeCodeId));
+      if (missingIds.length > 0) {
+        res.status(400).json({ error: `Unknown charge code id(s): ${missingIds.join(', ')}` });
+        return;
+      }
+    }
+
+    const beforeCodes = await getEmployeeAssignedChargeCodes(employeeId);
+    const beforeIds = beforeCodes.map((code: any) => code.id).sort((a: number, b: number) => a - b);
+
+    const client = await pgPool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(`DELETE FROM charge_code_employee_assignments WHERE employee_id = $1`, [employeeId]);
+      if (nextChargeCodeIds.length > 0) {
+        await client.query(
+          `INSERT INTO charge_code_employee_assignments (charge_code_id, employee_id, assigned_by_user_id)
+           SELECT unnest($1::int[]), $2, $3
+           ON CONFLICT (charge_code_id, employee_id) DO NOTHING`,
+          [nextChargeCodeIds, employeeId, req.user?.id ?? null]
+        );
+      }
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    const assignedChargeCodes = await getEmployeeAssignedChargeCodes(employeeId);
+    await recordAuditEvent({
+      eventType: 'EMPLOYEE_CHARGE_CODE_ASSIGNMENTS_UPDATED',
+      subjectType: 'employee',
+      subjectId: String(employeeId),
+      sourceService: 'employees.routes',
+      actor: {
+        id: req.user?.id ?? null,
+        username: req.user?.username ?? 'admin',
+        role: req.user?.role ?? 'admin',
+      },
+      fieldsChanged: {
+        chargeCodeIds: {
+          before: beforeIds,
+          after: assignedChargeCodes.map((code: any) => code.id),
+        },
+      },
+      meta: { employeeName: employee.name },
+      ipAddress: req.ip ?? null,
+      userAgent: req.headers['user-agent'] ?? null,
+      payload: {
+        employeeId,
+        employeeName: employee.name,
+        chargeCodeIds: assignedChargeCodes.map((code: any) => code.id),
+      },
+    });
+
+    res.json({
+      employeeId,
+      assignedChargeCodeIds: assignedChargeCodes.map((code: any) => code.id),
+      assignedChargeCodes,
+    });
+  } catch (error) {
+    console.error('Update employee charge codes error:', error);
+    res.status(500).json({ error: 'Failed to update employee charge codes' });
+  }
+});
 
 router.patch(
   '/employee-capabilities/:id/toggle',
@@ -728,10 +909,31 @@ router.delete('/certifications/:id', async (req: Request, res: Response) => {
 router.get('/finish-technicians', async (req: Request, res: Response) => {
   try {
     const finishTechnicians = await pool.query(
-      `SELECT id, name, employee_code as "employeeCode"
-       FROM employees
-       WHERE is_finish_technician = true AND is_active = true
-       ORDER BY name`
+      `WITH finish_technicians AS (
+        SELECT
+          id::text as id,
+          name,
+          employee_code as "employeeCode",
+          'employee' as source
+        FROM employees
+        WHERE is_finish_technician = true AND is_active = true
+
+        UNION ALL
+
+        SELECT
+          ('user:' || u.id::text) as id,
+          COALESCE(NULLIF(TRIM(CONCAT_WS(' ', u.first_name, u.last_name)), ''), u.username) as name,
+          u.username as "employeeCode",
+          'user' as source
+        FROM users u
+        LEFT JOIN employees e ON u.employee_id = e.id
+        WHERE u.is_finish_technician = true
+          AND u.is_active = true
+          AND NOT COALESCE(e.is_finish_technician = true AND e.is_active = true, false)
+      )
+      SELECT DISTINCT ON (LOWER(name)) id, name, "employeeCode", source
+      FROM finish_technicians
+      ORDER BY LOWER(name), source`
     );
     res.json(finishTechnicians || []);
   } catch (error) {

@@ -98,6 +98,23 @@ type CustomerAddress = {
   updatedAt: string;
 };
 
+type CustomerContact = {
+  id: number;
+  customerId: number;
+  name: string;
+  title?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  isPrimary: boolean;
+  receivesInvoices: boolean;
+  receivesShippingNotifications: boolean;
+  receivesOrderConfirmations: boolean;
+  notes?: string | null;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
 type CustomerFormData = {
   name: string;
   email: string;
@@ -130,6 +147,19 @@ type AddressFormData = {
   isDefault: boolean;
 };
 
+type ContactFormData = {
+  name: string;
+  title: string;
+  email: string;
+  phone: string;
+  isPrimary: boolean;
+  receivesInvoices: boolean;
+  receivesShippingNotifications: boolean;
+  receivesOrderConfirmations: boolean;
+  notes: string;
+  active: boolean;
+};
+
 const initialFormData: CustomerFormData = {
   name: '',
   email: '',
@@ -148,6 +178,19 @@ const initialFormData: CustomerFormData = {
   zipCode: '',
   country: 'United States',
   addressType: 'both',
+};
+
+const initialContactFormData: ContactFormData = {
+  name: '',
+  title: '',
+  email: '',
+  phone: '',
+  isPrimary: false,
+  receivesInvoices: true,
+  receivesShippingNotifications: false,
+  receivesOrderConfirmations: false,
+  notes: '',
+  active: true,
 };
 
 // Move CustomerFormFields outside the main component to prevent cursor reset
@@ -615,6 +658,11 @@ export default function CustomerManagement() {
   const [isEditAddressDialogOpen, setIsEditAddressDialogOpen] = useState(false);
   const [selectedAddress, setSelectedAddress] =
     useState<CustomerAddress | null>(null);
+  const [isContactDialogOpen, setIsContactDialogOpen] = useState(false);
+  const [selectedContact, setSelectedContact] =
+    useState<CustomerContact | null>(null);
+  const [contactFormData, setContactFormData] =
+    useState<ContactFormData>(initialContactFormData);
   const [addressFormData, setAddressFormData] = useState<AddressFormData>({
     customerId: '',
     street: '',
@@ -716,6 +764,15 @@ export default function CustomerManagement() {
     enabled: !!selectedCustomer?.id,
     queryFn: () =>
       apiRequest(`/api/addresses?customerId=${selectedCustomer?.id}`),
+  });
+
+  const { data: contacts = [], isLoading: contactsLoading } = useQuery<
+    CustomerContact[]
+  >({
+    queryKey: ['/api/customers', selectedCustomer?.id, 'contacts'],
+    enabled: !!selectedCustomer?.id,
+    queryFn: () =>
+      apiRequest(`/api/customers/${selectedCustomer?.id}/contacts`),
   });
 
   // Precompute default state per customer for efficient sorting and filtering
@@ -1003,6 +1060,81 @@ export default function CustomerManagement() {
     },
   });
 
+  const createContactMutation = useMutation({
+    mutationFn: (data: ContactFormData) =>
+      apiRequest(`/api/customers/${selectedCustomer?.id}/contacts`, {
+        method: 'POST',
+        body: data,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['/api/customers', selectedCustomer?.id, 'contacts'],
+      });
+      setIsContactDialogOpen(false);
+      resetContactForm();
+      toast({
+        title: 'Success',
+        description: 'Contact added successfully',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to add contact',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const updateContactMutation = useMutation({
+    mutationFn: (data: ContactFormData & { id: number }) =>
+      apiRequest(`/api/customers/${selectedCustomer?.id}/contacts/${data.id}`, {
+        method: 'PUT',
+        body: data,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['/api/customers', selectedCustomer?.id, 'contacts'],
+      });
+      setIsContactDialogOpen(false);
+      resetContactForm();
+      toast({
+        title: 'Success',
+        description: 'Contact updated successfully',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to update contact',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const deleteContactMutation = useMutation({
+    mutationFn: (id: number) =>
+      apiRequest(`/api/customers/${selectedCustomer?.id}/contacts/${id}`, {
+        method: 'DELETE',
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['/api/customers', selectedCustomer?.id, 'contacts'],
+      });
+      toast({
+        title: 'Success',
+        description: 'Contact deleted successfully',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to delete contact',
+        variant: 'destructive',
+      });
+    },
+  });
+
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
 
@@ -1270,6 +1402,77 @@ export default function CustomerManagement() {
 
   const handleDeleteAddress = (id: number) => {
     deleteAddressMutation.mutate(id);
+  };
+
+  const resetContactForm = () => {
+    setContactFormData(initialContactFormData);
+    setSelectedContact(null);
+  };
+
+  const handleAddContact = () => {
+    if (!selectedCustomer) return;
+    resetContactForm();
+    setIsContactDialogOpen(true);
+  };
+
+  const handleEditContact = (contact: CustomerContact) => {
+    setSelectedContact(contact);
+    setContactFormData({
+      name: contact.name,
+      title: contact.title || '',
+      email: contact.email || '',
+      phone: contact.phone || '',
+      isPrimary: contact.isPrimary,
+      receivesInvoices: contact.receivesInvoices,
+      receivesShippingNotifications: contact.receivesShippingNotifications,
+      receivesOrderConfirmations: contact.receivesOrderConfirmations,
+      notes: contact.notes || '',
+      active: contact.active,
+    });
+    setIsContactDialogOpen(true);
+  };
+
+  const validateContactForm = () => {
+    if (!contactFormData.name.trim()) {
+      toast({
+        title: 'Validation Error',
+        description: 'Contact name is required',
+        variant: 'destructive',
+      });
+      return false;
+    }
+    if (contactFormData.email && !isValidEmail(contactFormData.email)) {
+      toast({
+        title: 'Validation Error',
+        description: 'Please enter a valid email address',
+        variant: 'destructive',
+      });
+      return false;
+    }
+    if (contactFormData.phone && !isValidPhone(contactFormData.phone)) {
+      toast({
+        title: 'Validation Error',
+        description: 'Please enter a valid phone number',
+        variant: 'destructive',
+      });
+      return false;
+    }
+    return true;
+  };
+
+  const handleSaveContact = () => {
+    if (!selectedCustomer || !validateContactForm()) return;
+    if (selectedContact) {
+      updateContactMutation.mutate({ ...contactFormData, id: selectedContact.id });
+    } else {
+      createContactMutation.mutate(contactFormData);
+    }
+  };
+
+  const handleDeleteContact = (contact: CustomerContact) => {
+    if (confirm(`Delete contact ${contact.name}?`)) {
+      deleteContactMutation.mutate(contact.id);
+    }
   };
 
   const handleAddAddress = () => {
@@ -2068,6 +2271,65 @@ export default function CustomerManagement() {
                   />
                 </div>
               </div>
+
+              <div className="space-y-3 rounded-md border p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-sm font-semibold">Additional Contacts</h4>
+                    <p className="text-xs text-muted-foreground">
+                      Used for invoice recipient selection and customer notifications.
+                    </p>
+                  </div>
+                  <Button type="button" size="sm" variant="outline" onClick={handleAddContact}>
+                    <Plus className="h-3.5 w-3.5 mr-1" />
+                    Add
+                  </Button>
+                </div>
+
+                {contactsLoading ? (
+                  <div className="text-sm text-muted-foreground">Loading contacts...</div>
+                ) : contacts.length === 0 ? (
+                  <div className="text-sm text-muted-foreground italic">
+                    No additional contacts. Invoice sends will fall back to the customer email above.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {contacts.map((contact) => (
+                      <div key={contact.id} className="rounded-md border bg-muted/20 p-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="text-sm font-medium">{contact.name}</span>
+                              {contact.isPrimary && <Badge variant="secondary">Primary</Badge>}
+                              {!contact.active && <Badge variant="outline">Inactive</Badge>}
+                            </div>
+                            {contact.title && (
+                              <div className="text-xs text-muted-foreground">{contact.title}</div>
+                            )}
+                            <div className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+                              {contact.email && <div>{contact.email}</div>}
+                              {contact.phone && <div>{contact.phone}</div>}
+                            </div>
+                            <div className="mt-2 flex flex-wrap gap-1">
+                              {contact.receivesInvoices && <Badge variant="outline">Invoices</Badge>}
+                              {contact.receivesShippingNotifications && <Badge variant="outline">Shipping</Badge>}
+                              {contact.receivesOrderConfirmations && <Badge variant="outline">Orders</Badge>}
+                            </div>
+                          </div>
+                          <div className="flex shrink-0 gap-1">
+                            <Button type="button" variant="ghost" size="sm" onClick={() => handleEditContact(contact)}>
+                              <Edit className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button type="button" variant="ghost" size="sm" onClick={() => handleDeleteContact(contact)}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Address Information Section */}
@@ -2364,6 +2626,145 @@ export default function CustomerManagement() {
               {updateCustomerMutation.isPending
                 ? 'Updating...'
                 : 'Update Customer & Address'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isContactDialogOpen} onOpenChange={setIsContactDialogOpen}>
+        <DialogContent className="sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5" />
+              {selectedContact ? 'Edit Customer Contact' : 'Add Customer Contact'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="contact-name">Name *</Label>
+                <Input
+                  id="contact-name"
+                  value={contactFormData.name}
+                  onChange={(e) => setContactFormData((prev) => ({ ...prev, name: e.target.value }))}
+                  placeholder="Jane Smith"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="contact-title">Role / Title</Label>
+                <Input
+                  id="contact-title"
+                  value={contactFormData.title}
+                  onChange={(e) => setContactFormData((prev) => ({ ...prev, title: e.target.value }))}
+                  placeholder="Accounts payable"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="contact-email">Email</Label>
+                <Input
+                  id="contact-email"
+                  type="email"
+                  value={contactFormData.email}
+                  onChange={(e) => setContactFormData((prev) => ({ ...prev, email: e.target.value }))}
+                  placeholder="contact@example.com"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="contact-phone">Phone</Label>
+                <Input
+                  id="contact-phone"
+                  value={contactFormData.phone}
+                  onChange={(e) => setContactFormData((prev) => ({ ...prev, phone: e.target.value }))}
+                  placeholder="(555) 123-4567"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-3 rounded-md border p-3">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="contact-primary"
+                  checked={contactFormData.isPrimary}
+                  onCheckedChange={(checked) =>
+                    setContactFormData((prev) => ({ ...prev, isPrimary: !!checked }))
+                  }
+                />
+                <Label htmlFor="contact-primary" className="cursor-pointer text-sm font-medium">
+                  Primary contact
+                </Label>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="contact-invoices"
+                    checked={contactFormData.receivesInvoices}
+                    onCheckedChange={(checked) =>
+                      setContactFormData((prev) => ({ ...prev, receivesInvoices: !!checked }))
+                    }
+                  />
+                  <Label htmlFor="contact-invoices" className="cursor-pointer text-sm">
+                    Invoice recipient
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="contact-shipping"
+                    checked={contactFormData.receivesShippingNotifications}
+                    onCheckedChange={(checked) =>
+                      setContactFormData((prev) => ({ ...prev, receivesShippingNotifications: !!checked }))
+                    }
+                  />
+                  <Label htmlFor="contact-shipping" className="cursor-pointer text-sm">
+                    Shipping notifications
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="contact-orders"
+                    checked={contactFormData.receivesOrderConfirmations}
+                    onCheckedChange={(checked) =>
+                      setContactFormData((prev) => ({ ...prev, receivesOrderConfirmations: !!checked }))
+                    }
+                  />
+                  <Label htmlFor="contact-orders" className="cursor-pointer text-sm">
+                    Order confirmations
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="contact-active"
+                    checked={contactFormData.active}
+                    onCheckedChange={(checked) =>
+                      setContactFormData((prev) => ({ ...prev, active: !!checked }))
+                    }
+                  />
+                  <Label htmlFor="contact-active" className="cursor-pointer text-sm">
+                    Active
+                  </Label>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="contact-notes">Notes</Label>
+              <Textarea
+                id="contact-notes"
+                value={contactFormData.notes}
+                onChange={(e) => setContactFormData((prev) => ({ ...prev, notes: e.target.value }))}
+                rows={3}
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-4 border-t">
+            <Button variant="outline" onClick={() => setIsContactDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveContact}
+              disabled={createContactMutation.isPending || updateContactMutation.isPending}
+            >
+              <CheckCircle className="h-4 w-4 mr-2" />
+              {selectedContact ? 'Update Contact' : 'Add Contact'}
             </Button>
           </div>
         </DialogContent>

@@ -40,6 +40,7 @@ import { useLocation } from 'wouter';
 import { SalesOrderModal } from '@/components/SalesOrderModal';
 import TicketBadge, { useOrderTicketCounts } from '@/components/TicketBadge';
 import KickbackReportModal from '@/components/KickbackReportModal';
+import DepartmentOrderNotes from '@/components/DepartmentOrderNotes';
 
 export default function CNCQueuePage() {
   const [selectedGunsimthOrders, setSelectedGunsimthOrders] = useState<
@@ -1309,6 +1310,8 @@ export default function CNCQueuePage() {
                                 })()
                               : 'READY FOR FINISH'}
                           </div>
+
+                          <DepartmentOrderNotes notes={order.notes} departmentNotes={(order as any).departmentNotes} currentDepartment={order.currentDepartment} />
                         </div>
                       </div>
                     </div>

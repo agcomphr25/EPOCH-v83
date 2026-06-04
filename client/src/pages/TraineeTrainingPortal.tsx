@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
+import { useLocation } from 'wouter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -73,6 +74,36 @@ interface QuizResults {
   }[];
 }
 
+interface ForkliftQuestion {
+  id: string;
+  question: string;
+  options: string[];
+}
+
+interface ForkliftWrittenTest {
+  programTitle: string;
+  passingScore: number;
+  questions: ForkliftQuestion[];
+}
+
+interface ForkliftWrittenResult {
+  score: number;
+  passed: boolean;
+  passingScore: number;
+  correctCount: number;
+  totalQuestions: number;
+  evaluation?: { id: number; status: string } | null;
+}
+
+interface TrainingModuleSummary {
+  id: number;
+  title: string;
+  description?: string | null;
+  category?: string | null;
+  content?: string | null;
+  contentHtml?: string | null;
+}
+
 interface ProgramAssignment {
   id: number;
   programId: number;
@@ -109,7 +140,21 @@ const stepDescriptions = [
   { step: 4, title: "Trainee Does / Trainer Observes", icon: CheckCircle, bgClass: "bg-green-500", description: "Demonstrate competency with trainer observation" },
 ];
 
-export default function TraineeTrainingPortal() {
+interface TraineeTrainingPortalProps {
+  embedded?: boolean;
+  defaultTab?: 'programs' | '4step' | 'forklift';
+}
+
+const traineeTrainingTabs = new Set(['programs', '4step', 'forklift']);
+
+function getTraineeTrainingTab(defaultTab: TraineeTrainingPortalProps['defaultTab']) {
+  const query = typeof window !== 'undefined' ? window.location.search.replace(/^\?/, '') : '';
+  const tab = new URLSearchParams(query).get('tab');
+  return traineeTrainingTabs.has(tab || '') ? tab! : defaultTab || 'programs';
+}
+
+export default function TraineeTrainingPortal({ embedded = false, defaultTab = 'programs' }: TraineeTrainingPortalProps = {}) {
+  const [location] = useLocation();
   const { toast } = useToast();
   const [quizDialogOpen, setQuizDialogOpen] = useState(false);
   const [selectedQuiz, setSelectedQuiz] = useState<StepQuiz | null>(null);
@@ -117,6 +162,12 @@ export default function TraineeTrainingPortal() {
   const [quizSubmitted, setQuizSubmitted] = useState(false);
   const [quizResults, setQuizResults] = useState<QuizResults | null>(null);
   const [selectedPlanId, setSelectedPlanId] = useState<number | null>(null);
+  const [forkliftDialogOpen, setForkliftDialogOpen] = useState(false);
+  const [forkliftTest, setForkliftTest] = useState<ForkliftWrittenTest | null>(null);
+  const [forkliftAnswers, setForkliftAnswers] = useState<Record<string, string>>({});
+  const [forkliftResult, setForkliftResult] = useState<ForkliftWrittenResult | null>(null);
+  const [forkliftTestType, setForkliftTestType] = useState('initial');
+  const [forkliftTrainingReviewed, setForkliftTrainingReviewed] = useState(false);
 
   const { data: currentUser } = useQuery<{ id: number; employeeId?: number; name?: string }>({
     queryKey: ['/api/auth/session'],
@@ -138,6 +189,15 @@ export default function TraineeTrainingPortal() {
       return res.json();
     },
     enabled: !!traineeId,
+  });
+
+  const { data: trainingModules = [] } = useQuery<TrainingModuleSummary[]>({
+    queryKey: ['/api/training/modules'],
+  });
+
+  const forkliftTrainingModule = trainingModules.find((module) => {
+    const searchable = `${module.title || ''} ${module.description || ''} ${module.category || ''}`.toLowerCase();
+    return searchable.includes('forklift') || searchable.includes('powered industrial truck');
   });
 
   const startQuizMutation = useMutation({
@@ -180,6 +240,47 @@ export default function TraineeTrainingPortal() {
     },
   });
 
+  const startForkliftWrittenTestMutation = useMutation({
+    mutationFn: async () => apiRequest('/api/training/forklift/written-test'),
+    onSuccess: (data: ForkliftWrittenTest) => {
+      setForkliftTest(data);
+      setForkliftAnswers({});
+      setForkliftResult(null);
+      setForkliftDialogOpen(true);
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error loading forklift test', description: error.message, variant: 'destructive' });
+    },
+  });
+
+  const submitForkliftWrittenTestMutation = useMutation({
+    mutationFn: async () => {
+      if (!forkliftTest) throw new Error('No forklift test loaded');
+      return apiRequest('/api/training/forklift/written-test/submit', {
+        method: 'POST',
+        body: JSON.stringify({
+          employeeId: traineeId,
+          testType: forkliftTestType,
+          questionIds: forkliftTest.questions.map((q) => q.id),
+          answers: forkliftAnswers,
+        }),
+      });
+    },
+    onSuccess: (data: ForkliftWrittenResult) => {
+      setForkliftResult(data);
+      toast({
+        title: data.passed ? 'Forklift written test passed' : 'Forklift written test not passed',
+        description: data.passed
+          ? `You scored ${data.score}%. agrace now has a practical evaluation task.`
+          : `You scored ${data.score}%. You need ${data.passingScore}% to continue.`,
+        variant: data.passed ? 'default' : 'destructive',
+      });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error submitting forklift test', description: error.message, variant: 'destructive' });
+    },
+  });
+
   const handleStartQuiz = (planId: number, stepNumber: number) => {
     setSelectedPlanId(planId);
     startQuizMutation.mutate({ planId, stepNumber });
@@ -214,7 +315,7 @@ export default function TraineeTrainingPortal() {
 
   if (isLoading || programsLoading) {
     return (
-      <div className="container mx-auto px-4 py-8">
+      <div className={embedded ? 'space-y-6' : 'container mx-auto px-4 py-8'}>
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
         </div>
@@ -243,7 +344,8 @@ export default function TraineeTrainingPortal() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className={embedded ? 'space-y-6' : 'container mx-auto px-4 py-8'}>
+      {!embedded && (
       <div className="mb-8">
         <h1 className="text-3xl font-bold flex items-center gap-3">
           <GraduationCap className="h-8 w-8 text-primary" />
@@ -253,8 +355,9 @@ export default function TraineeTrainingPortal() {
           Complete your assigned training programs and quizzes
         </p>
       </div>
+      )}
 
-      <Tabs defaultValue="programs" className="space-y-6">
+      <Tabs key={`${location}-${getTraineeTrainingTab(defaultTab)}`} defaultValue={getTraineeTrainingTab(defaultTab)} className="space-y-6">
         <TabsList>
           <TabsTrigger value="programs" className="gap-2">
             <BookOpen className="h-4 w-4" />
@@ -270,7 +373,112 @@ export default function TraineeTrainingPortal() {
               <Badge variant="secondary" className="ml-1">{trainingPlans.length}</Badge>
             )}
           </TabsTrigger>
+          <TabsTrigger value="forklift" className="gap-2">
+            <ClipboardCheck className="h-4 w-4" />
+            Forklift
+          </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="forklift" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Award className="h-5 w-5 text-primary" />
+                Sit-Down Counterbalance Forklift Operator
+              </CardTitle>
+              <CardDescription>
+                Review the training material first, then complete the randomized written test. A passing score creates a practical evaluation task for agrace.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="rounded-lg border bg-muted/30 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <div className="text-sm font-semibold">Step 1: Review training material</div>
+                    <p className="text-sm text-muted-foreground">
+                      This material is pulled from the OSHA Forklift Certification training module and should be reviewed before the written test.
+                    </p>
+                  </div>
+                  <Button
+                    variant={forkliftTrainingReviewed ? 'default' : 'outline'}
+                    onClick={() => setForkliftTrainingReviewed(true)}
+                    data-testid="button-mark-forklift-training-reviewed"
+                  >
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    {forkliftTrainingReviewed ? 'Reviewed' : 'Mark Reviewed'}
+                  </Button>
+                </div>
+
+                <div className="mt-4 max-h-[420px] overflow-y-auto rounded-md border bg-background p-4">
+                  {forkliftTrainingModule?.contentHtml ? (
+                    <div
+                      className="prose prose-sm max-w-none"
+                      dangerouslySetInnerHTML={{ __html: forkliftTrainingModule.contentHtml }}
+                    />
+                  ) : forkliftTrainingModule?.content ? (
+                    <div className="whitespace-pre-wrap text-sm leading-6">{forkliftTrainingModule.content}</div>
+                  ) : (
+                    <div className="flex items-start gap-3 text-sm text-muted-foreground">
+                      <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                      <div>No forklift module content was found. The written test is held until training material is available.</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-lg border p-4">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <div className="text-sm font-semibold">Step 2: Written test</div>
+                    <p className="text-sm text-muted-foreground">
+                      Passing score: 80%. AGC refresh: 6 months. OSHA evaluation: 3 years.
+                    </p>
+                  </div>
+                  <div className="w-full sm:w-[240px]">
+                    <Label className="text-xs text-muted-foreground">Evaluation type</Label>
+                    <select
+                      value={forkliftTestType}
+                      onChange={(event) => setForkliftTestType(event.target.value)}
+                      className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    >
+                      <option value="initial">Initial certification</option>
+                      <option value="agc_6_month_refresher">AGC 6-month refresher</option>
+                      <option value="osha_3_year_evaluation">OSHA 3-year evaluation</option>
+                      <option value="incident_refresher">Incident / near-miss refresher</option>
+                    </select>
+                  </div>
+                  <Button
+                    onClick={() => startForkliftWrittenTestMutation.mutate()}
+                    disabled={startForkliftWrittenTestMutation.isPending || !traineeId || !forkliftTrainingReviewed || !forkliftTrainingModule}
+                    data-testid="button-start-forklift-written-test"
+                  >
+                    {startForkliftWrittenTestMutation.isPending ? (
+                      <span className="flex items-center gap-2">
+                        <Clock className="h-4 w-4 animate-spin" />
+                        Loading
+                      </span>
+                    ) : (
+                      <>
+                        <Play className="h-4 w-4 mr-2" />
+                        Start Written Test
+                      </>
+                    )}
+                  </Button>
+                </div>
+                {!forkliftTrainingReviewed && (
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    Mark the training material reviewed to unlock the written test.
+                  </p>
+                )}
+                {!forkliftTrainingModule && (
+                  <p className="mt-3 text-xs text-destructive">
+                    OSHA Forklift Certification module content is missing or not published.
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         {/* Program-Based Training */}
         <TabsContent value="programs" className="space-y-4">
@@ -627,6 +835,96 @@ export default function TraineeTrainingPortal() {
                   </>
                 ) : (
                   <Button onClick={() => setQuizDialogOpen(false)}>
+                    Close
+                  </Button>
+                )}
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={forkliftDialogOpen} onOpenChange={setForkliftDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          {forkliftTest && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <ClipboardCheck className="h-5 w-5 text-primary" />
+                  {forkliftTest.programTitle} Written Test
+                </DialogTitle>
+                <p className="text-sm text-muted-foreground">
+                  Questions and answer choices are randomized. You need {forkliftTest.passingScore}% to continue to the practical evaluation.
+                </p>
+              </DialogHeader>
+
+              <div className="space-y-6 py-4">
+                {forkliftTest.questions.map((question, idx) => (
+                  <div key={question.id} className="p-4 rounded-lg border border-gray-200">
+                    <p className="font-medium mb-3">
+                      {idx + 1}. {question.question}
+                    </p>
+                    <RadioGroup
+                      value={forkliftAnswers[question.id] || ''}
+                      onValueChange={(value) => setForkliftAnswers((prev) => ({ ...prev, [question.id]: value }))}
+                      disabled={!!forkliftResult}
+                    >
+                      {question.options.map((option, optIdx) => (
+                        <div key={option} className="flex items-center space-x-2 p-2 rounded">
+                          <RadioGroupItem value={option} id={`forklift-${question.id}-${optIdx}`} />
+                          <Label htmlFor={`forklift-${question.id}-${optIdx}`} className="cursor-pointer flex-1">
+                            {option}
+                          </Label>
+                        </div>
+                      ))}
+                    </RadioGroup>
+                  </div>
+                ))}
+              </div>
+
+              {forkliftResult && (
+                <div className={`p-4 rounded-lg ${forkliftResult.passed ? 'bg-green-100 border-green-300' : 'bg-red-100 border-red-300'} border`}>
+                  <div className="flex items-center gap-3">
+                    {forkliftResult.passed ? (
+                      <CheckCircle className="h-8 w-8 text-green-600" />
+                    ) : (
+                      <AlertCircle className="h-8 w-8 text-red-600" />
+                    )}
+                    <div>
+                      <h4 className={`font-semibold ${forkliftResult.passed ? 'text-green-800' : 'text-red-800'}`}>
+                        {forkliftResult.passed ? 'Written Test Passed' : 'Written Test Not Passed'}
+                      </h4>
+                      <p className={`text-sm ${forkliftResult.passed ? 'text-green-700' : 'text-red-700'}`}>
+                        Score: {forkliftResult.score}% ({forkliftResult.correctCount}/{forkliftResult.totalQuestions} correct)
+                      </p>
+                      {forkliftResult.passed && (
+                        <p className="text-sm text-green-700">
+                          agrace now has a My Tasks item to complete your practical mini-course checklist.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <DialogFooter>
+                {!forkliftResult ? (
+                  <>
+                    <Button variant="outline" onClick={() => setForkliftDialogOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={() => submitForkliftWrittenTestMutation.mutate()}
+                      disabled={
+                        Object.keys(forkliftAnswers).length < forkliftTest.questions.length ||
+                        submitForkliftWrittenTestMutation.isPending
+                      }
+                    >
+                      {submitForkliftWrittenTestMutation.isPending ? 'Submitting...' : 'Submit Test'}
+                    </Button>
+                  </>
+                ) : (
+                  <Button onClick={() => setForkliftDialogOpen(false)}>
                     Close
                   </Button>
                 )}

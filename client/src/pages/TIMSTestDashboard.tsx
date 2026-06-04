@@ -19,6 +19,11 @@ export default function TIMSTestDashboard() {
   const { data: currentUser } = useQuery<{ id: number; username: string; role: string; employeeId?: number }>({
     queryKey: ['currentUser'],
   });
+  const { data: resolvedEmployee } = useQuery<{ employeeId: number | null }>({
+    queryKey: ['/api/timekeeping/my-employee-id'],
+    enabled: !!currentUser && !currentUser.employeeId,
+  });
+  const dashboardEmployeeId = currentUser?.employeeId ?? resolvedEmployee?.employeeId ?? null;
 
   return (
     <div className="p-6 space-y-6 max-w-full mx-auto">
@@ -125,10 +130,10 @@ export default function TIMSTestDashboard() {
       </div>
 
       {/* My Tasks Control Center */}
-      {currentUser?.employeeId && (
+      {dashboardEmployeeId && (
         <MyTasksControlCenter
-          employeeId={currentUser.employeeId}
-          userName={currentUser.username}
+          employeeId={dashboardEmployeeId}
+          userName={currentUser?.username ?? 'tims'}
           compact={false}
         />
       )}

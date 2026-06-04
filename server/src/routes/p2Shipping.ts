@@ -14,6 +14,7 @@ import { authenticateToken, requireRole } from '../../middleware/auth';
 import { requirePermission } from '../../middleware/requirePermission';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { generatePackingSlipPdf } from '../../utils/pdf/packingSlipPdf';
+import { generateMaterialTransferPdf } from '../../utils/pdf/materialTransferPdf';
 import type { PackingSlipData, PackingSlipItem } from '../../utils/pdf/types';
 import { COMPANY_INFO } from '../../utils/pdf/pdfConfig';
 import {
@@ -30,6 +31,114 @@ import {
 const upload = multer({ storage: multer.memoryStorage() });
 
 const router = Router();
+
+const materialTransferItemSchema = z.object({
+  quantity: z.coerce.number().positive('Quantity must be greater than zero'),
+  description: z.string().trim().min(1, 'Description is required'),
+  partNumber: z.string().trim().optional().default(''),
+  serialNumber: z.string().trim().optional().default(''),
+  customerAssetId: z.string().trim().optional().default(''),
+  condition: z.string().trim().optional().default(''),
+  notes: z.string().trim().optional().default(''),
+});
+
+const materialTransferPdfSchema = z.object({
+  formNumber: z.string().trim().optional().default(''),
+  transferDate: z.string().trim().min(1, 'Transfer date is required'),
+  customerName: z.string().trim().min(1, 'Customer name is required'),
+  customerContact: z.string().trim().optional().default(''),
+  customerPhone: z.string().trim().optional().default(''),
+  customerEmail: z.string().trim().optional().default(''),
+  shipToAddress: z.string().trim().min(1, 'Ship-to address is required'),
+  returnReason: z.string().trim().min(1, 'Reason for transfer is required'),
+  carrier: z.string().trim().optional().default(''),
+  trackingNumber: z.string().trim().optional().default(''),
+  freightTerms: z.string().trim().optional().default('Prepaid'),
+  preparedBy: z.string().trim().min(1, 'Prepared by is required'),
+  authorizedBy: z.string().trim().optional().default(''),
+  notes: z.string().trim().optional().default(''),
+  items: z.array(materialTransferItemSchema).min(1, 'At least one item is required'),
+});
+
+const MANUFACTURER_COC_TEMPLATE_KEY = 'manufacturer_coc';
+const MANUFACTURER_COC_FALLBACK = {
+  documentId: null as string | null,
+  documentName: "Manufacturer's Certificate of Conformance",
+  documentNumber: 'FO Form 6',
+  version: '2.3',
+  versionDate: '2024-08-14',
+  display: 'Version 2.3 08/14/2024',
+};
+
+let p2CertificateTemplateMetadataSchemaReady: Promise<void> | null = null;
+
+function ensureP2CertificateTemplateMetadataSchema(): Promise<void> {
+  if (!p2CertificateTemplateMetadataSchemaReady) {
+    p2CertificateTemplateMetadataSchemaReady = pool.query(`
+      ALTER TABLE p2_certificates_of_conformance
+        ADD COLUMN IF NOT EXISTS template_document_id uuid,
+        ADD COLUMN IF NOT EXISTS template_document_name text,
+        ADD COLUMN IF NOT EXISTS template_document_number text,
+        ADD COLUMN IF NOT EXISTS template_version text,
+        ADD COLUMN IF NOT EXISTS template_version_date date,
+        ADD COLUMN IF NOT EXISTS template_display text
+    `).then(() => undefined);
+  }
+
+  return p2CertificateTemplateMetadataSchemaReady;
+}
+
+function formatControlledVersionDisplay(version: string, versionDate: string | Date | null | undefined): string {
+  if (!versionDate) return `Version ${version}`;
+  const date = versionDate instanceof Date
+    ? versionDate
+    : new Date(String(versionDate).includes('T') ? versionDate : `${versionDate}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return `Version ${version}`;
+  return `Version ${version} ${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}/${date.getFullYear()}`;
+}
+
+async function getApprovedManufacturerCocTemplateSnapshot() {
+  const rows = await pool.query<{
+    id: string;
+    document_name: string;
+    document_number: string;
+    current_version: string;
+    version_date: string | Date | null;
+    effective_date: string | Date | null;
+  }>(
+    `SELECT id, document_name, document_number, current_version, version_date, effective_date
+       FROM controlled_documents
+      WHERE status = 'approved'
+        AND (
+          template_key = $1
+          OR document_number = $2
+          OR lower(document_name) = lower($3)
+        )
+      ORDER BY COALESCE(version_date, effective_date, created_at::date) DESC, updated_at DESC
+      LIMIT 1`,
+    [
+      MANUFACTURER_COC_TEMPLATE_KEY,
+      MANUFACTURER_COC_FALLBACK.documentNumber,
+      MANUFACTURER_COC_FALLBACK.documentName,
+    ]
+  ).catch((error) => {
+    console.warn('Falling back to built-in Manufacturer CoC template metadata:', error);
+    return [];
+  });
+
+  const doc = rows[0];
+  if (!doc) return MANUFACTURER_COC_FALLBACK;
+
+  const versionDate = doc.version_date || doc.effective_date || MANUFACTURER_COC_FALLBACK.versionDate;
+  return {
+    documentId: doc.id,
+    documentName: doc.document_name,
+    documentNumber: doc.document_number,
+    version: doc.current_version,
+    versionDate,
+    display: formatControlledVersionDisplay(doc.current_version, versionDate),
+  };
+}
 
 async function uploadP2EvidenceFile(file: Express.Multer.File, scope: string, entityId?: string): Promise<string> {
   return getFileStorageProvider().uploadBuffer({
@@ -55,6 +164,73 @@ function auditActor(req: Request) {
 }
 
 // ─── Session auth helper (for PDF routes that use cookie-based sessions) ─────
+function assignedSkuFromSerials(serials: Array<{ sku?: string | null }>): string | null {
+  const skus = Array.from(
+    new Set(
+      serials
+        .map((serial) => serial.sku?.trim())
+        .filter((sku): sku is string => Boolean(sku))
+    )
+  );
+
+  return skus.length > 0 ? skus.join(', ') : null;
+}
+
+async function getAssignedSkuForLot(lotNumberId: string | null | undefined): Promise<string | null> {
+  if (!lotNumberId) return null;
+
+  const [lot] = await db
+    .select({ serializedItemIds: p2LotNumbers.serializedItemIds })
+    .from(p2LotNumbers)
+    .where(eq(p2LotNumbers.id, lotNumberId));
+
+  const serialIds = Array.isArray(lot?.serializedItemIds)
+    ? lot.serializedItemIds.filter((id): id is string => typeof id === 'string' && id.length > 0)
+    : [];
+
+  if (serialIds.length === 0) return null;
+
+  const serials = await db
+    .select({ sku: p2SerializedItems.sku })
+    .from(p2SerializedItems)
+    .where(inArray(p2SerializedItems.id, serialIds));
+
+  return assignedSkuFromSerials(serials);
+}
+
+function getSpecialProcesses(processRecords: unknown): string {
+  if (processRecords && typeof processRecords === 'object') {
+    if (!Array.isArray(processRecords)) {
+      const value = (processRecords as { specialProcesses?: unknown }).specialProcesses;
+      if (typeof value === 'string' && value.trim()) return value.trim();
+    }
+
+    if (Array.isArray(processRecords)) {
+      const values = processRecords
+        .map((record) =>
+          record && typeof record === 'object'
+            ? (record as { process?: unknown; name?: unknown }).process || (record as { name?: unknown }).name
+            : null
+        )
+        .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+        .map((value) => value.trim());
+
+      if (values.length > 0) return Array.from(new Set(values)).join(', ');
+    }
+  }
+
+  return 'N/A';
+}
+
+function getQaMgrTitle(traceabilityData: unknown): string {
+  if (traceabilityData && typeof traceabilityData === 'object' && !Array.isArray(traceabilityData)) {
+    const value = (traceabilityData as { qaMgrTitle?: unknown }).qaMgrTitle;
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+
+  return 'Quality Assurance';
+}
+
 async function getUserFromSession(req: Request): Promise<{ username: string; role: string } | null> {
   const sessionToken = req.cookies?.sessionToken || req.headers.authorization?.replace('Bearer ', '');
   if (!sessionToken) return null;
@@ -125,9 +301,12 @@ function buildCustomerAddress(customer: {
     customer.shippingContactName,
     customer.shippingAddress,
     customer.shippingAddress2,
-    [customer.shippingCity, customer.shippingState, customer.shippingZip]
+    [
+      [customer.shippingCity, customer.shippingState].filter(Boolean).join(', '),
+      customer.shippingZip,
+    ]
       .filter(Boolean)
-      .join(', '),
+      .join(' '),
   ]
     .filter(Boolean)
     .join('\n');
@@ -159,6 +338,54 @@ const createLotSchema = z.object({
   createdBy: z.string().min(1).default('system'),
 });
 
+const voidShipmentSchema = z.object({
+  reason: z.string().trim().min(1, 'Void reason is required'),
+});
+
+// ============================================================
+// POST /api/p2/material-transfer/pdf - Generate manual material transfer form
+// ============================================================
+router.post('/material-transfer/pdf', authenticateToken, requirePermission('shipping.release_shipment'), async (req: Request, res: Response) => {
+  try {
+    const input = materialTransferPdfSchema.parse(req.body);
+    const pdf = await generateMaterialTransferPdf(input);
+    const safeFormNumber = (input.formNumber || `MTF-${input.transferDate}`)
+      .replace(/[^A-Za-z0-9._-]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 80) || 'material-transfer-form';
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${safeFormNumber}.pdf"`);
+    res.setHeader('Cache-Control', 'no-store');
+    return res.send(pdf);
+  } catch (err: any) {
+    if (err?.issues) {
+      return res.status(400).json({ error: 'Invalid material transfer form data', issues: err.issues });
+    }
+    console.error('Material transfer PDF error:', err);
+    return res.status(500).json({ error: 'Failed to generate material transfer form' });
+  }
+});
+
+async function ensureP2VoidShipmentSchema(client: Pick<typeof pgPool, 'query'>): Promise<void> {
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS p2_shipping_audit_log (
+      id          SERIAL PRIMARY KEY,
+      entity_type TEXT NOT NULL,
+      entity_id   TEXT NOT NULL,
+      field_name  TEXT NOT NULL,
+      old_value   TEXT,
+      new_value   TEXT,
+      changed_by  TEXT NOT NULL,
+      changed_at  TIMESTAMP NOT NULL DEFAULT NOW(),
+      reason      TEXT NOT NULL
+    )
+  `);
+  await client.query(`ALTER TABLE ar_invoices ADD COLUMN IF NOT EXISTS voided_at TIMESTAMP`);
+  await client.query(`ALTER TABLE ar_invoices ADD COLUMN IF NOT EXISTS voided_by TEXT`);
+  await client.query(`ALTER TABLE ar_invoices ADD COLUMN IF NOT EXISTS void_reason TEXT`);
+}
+
 router.post('/lots', authenticateToken, requirePermission('shipping.release_shipment'), async (req: Request, res: Response) => {
   try {
     const input = createLotSchema.parse(req.body);
@@ -181,7 +408,7 @@ router.post('/lots', authenticateToken, requirePermission('shipping.release_ship
       });
     }
 
-    const poNumbers = [...new Set(serials.map((s) => s.poNumber))];
+    const poNumbers = Array.from(new Set(serials.map((s) => s.poNumber)));
     if (poNumbers.length > 1) {
       return res.status(400).json({
         error: 'All serials must belong to the same PO',
@@ -191,7 +418,10 @@ router.post('/lots', authenticateToken, requirePermission('shipping.release_ship
 
     // Guard: serial reuse — reject if any serial already exists in another lot
     const existingLots = await pool.query<{ id: string; lot_number: string }>(
-      `SELECT id, lot_number FROM p2_lot_numbers WHERE serialized_item_ids ?| $1::text[]`,
+      `SELECT id, lot_number
+         FROM p2_lot_numbers
+        WHERE serialized_item_ids ?| $1::text[]
+          AND COALESCE(status, '') <> 'VOID'`,
       [input.serialIds]
     );
     if (existingLots.length > 0) {
@@ -252,6 +482,13 @@ router.get('/lots/existing-shipments', async (req: Request, res: Response) => {
       slip_number: string;
       cert_id: string | null;
       cert_number: string | null;
+      invoice_id: string | null;
+      invoice_number: string | null;
+      invoice_status: string | null;
+      invoice_total_amount: string | null;
+      journal_entry_id: number | null;
+      journal_entry_status: string | null;
+      journal_line_count: number | null;
     }>(`
       SELECT
         l.po_id,
@@ -260,11 +497,40 @@ router.get('/lots/existing-shipments', async (req: Request, res: Response) => {
         ps.id          AS slip_id,
         ps.packing_slip_number AS slip_number,
         cc.id          AS cert_id,
-        cc.certificate_number  AS cert_number
+        cc.certificate_number  AS cert_number,
+        inv.id AS invoice_id,
+        inv.invoice_number,
+        inv.status AS invoice_status,
+        inv.total_amount AS invoice_total_amount,
+        je.id AS journal_entry_id,
+        je.status AS journal_entry_status,
+        COALESCE(jlc.line_count, 0)::int AS journal_line_count
       FROM p2_lot_numbers l
       JOIN p2_packing_slips ps ON ps.id = l.packing_slip_id
       LEFT JOIN p2_certificates_of_conformance cc ON cc.id = l.certificate_id
-      WHERE l.po_id IS NOT NULL AND l.packing_slip_id IS NOT NULL
+      LEFT JOIN LATERAL (
+        SELECT id, invoice_number, status, total_amount
+        FROM ar_invoices
+        WHERE packing_slip_id = ps.id OR lot_id = l.id
+        ORDER BY created_at DESC
+        LIMIT 1
+      ) inv ON true
+      LEFT JOIN LATERAL (
+        SELECT id, status
+        FROM journal_entries
+        WHERE reference_uuid = inv.id
+          AND transaction_type = 'AR_INVOICE'
+        ORDER BY created_at DESC
+        LIMIT 1
+      ) je ON true
+      LEFT JOIN LATERAL (
+        SELECT COUNT(*)::int AS line_count
+        FROM journal_lines
+        WHERE journal_entry_id = je.id
+      ) jlc ON true
+      WHERE l.po_id IS NOT NULL
+        AND l.packing_slip_id IS NOT NULL
+        AND COALESCE(l.status, '') <> 'VOID'
       ORDER BY l.created_at DESC
     `);
     return res.json(rows);
@@ -351,8 +617,8 @@ router.post('/packing-slips', authenticateToken, requirePermission('shipping.rel
 
     const lineItems = Object.values(byPart).map((group) => ({
       poItemId: group[0].poItemId,
-      partNumber: group[0].partNumber,
-      partName: group[0].partName,
+      partNumber: assignedSkuFromSerials(group) || group[0].sku || group[0].partNumber,
+      partName: group[0].drawingName || group[0].partName,
       quantity: group.length,
       serialNumbers: group.map((s) => s.serialNumber),
       lotNumber: lot.lotNumber,
@@ -626,9 +892,45 @@ router.get('/packing-slips/:id/pdf', async (req: Request, res: Response) => {
 
     // Map slip DB record to PackingSlipData
     const lineItems = (slip.lineItems as any[]) || [];
+    const lineItemSerialNumbers = Array.from(
+      new Set(
+        lineItems.flatMap((item) =>
+          Array.isArray(item.serialNumbers)
+            ? item.serialNumbers.filter((serial: unknown): serial is string => typeof serial === 'string' && serial.trim().length > 0)
+            : []
+        )
+      )
+    );
+    type PackingSlipSerialIdentity = {
+      serial_number: string;
+      sku: string | null;
+      drawing_name: string | null;
+    };
+    const serialRows: PackingSlipSerialIdentity[] = lineItemSerialNumbers.length > 0
+      ? await pool.query<PackingSlipSerialIdentity>(
+          `SELECT serial_number, sku, drawing_name
+             FROM p2_serialized_items
+            WHERE serial_number = ANY($1::text[])`,
+          [lineItemSerialNumbers]
+        )
+      : [];
+    const serialIdentityByNumber = new Map<string, PackingSlipSerialIdentity>(
+      serialRows.map((row) => [row.serial_number, row])
+    );
+
     const slipItems: PackingSlipItem[] = lineItems.map((item) => ({
-      partNumber: item.partNumber || '',
-      description: item.partName || item.partNumber || 'N/A',
+      partNumber: assignedSkuFromSerials(
+        (Array.isArray(item.serialNumbers) ? item.serialNumbers : [])
+          .map((serialNumber: string) => serialIdentityByNumber.get(serialNumber))
+          .filter((row: unknown): row is { sku: string | null } => Boolean(row))
+      ) || item.sku || item.partNumber || '',
+      description: Array.from(
+        new Set(
+          (Array.isArray(item.serialNumbers) ? item.serialNumbers : [])
+            .map((serialNumber: string) => serialIdentityByNumber.get(serialNumber)?.drawing_name?.trim())
+            .filter((drawingName: unknown): drawingName is string => typeof drawingName === 'string' && drawingName.length > 0)
+        )
+      ).join(', ') || item.drawingName || item.partName || item.partNumber || 'N/A',
       quantity: item.quantity ?? (Array.isArray(item.serialNumbers) ? item.serialNumbers.length : 1),
       serialNumbers: Array.isArray(item.serialNumbers) ? item.serialNumbers : [],
       lotNumber: item.lotNumber || slip.lotNumber || undefined,
@@ -637,7 +939,14 @@ router.get('/packing-slips/:id/pdf', async (req: Request, res: Response) => {
     // Parse the stored customerAddress string into structured fields where possible,
     // preserving rawLines as a fallback for addresses that don't match a standard pattern.
     const rawAddress = slip.customerAddress || '';
-    const addrLines = rawAddress.split('\n').filter((l: string) => l && l !== slip.customerName);
+    const addrLines = rawAddress
+      .split('\n')
+      .map((line: string) => line.trim())
+      .filter((line: string, index: number, lines: string[]) =>
+        line.length > 0 &&
+        line.toLowerCase() !== (slip.customerName || '').trim().toLowerCase() &&
+        lines.findIndex((candidate) => candidate.toLowerCase() === line.toLowerCase()) === index
+      );
     let structuredAddress: PackingSlipData['customerAddress'];
     if (addrLines.length > 0) {
       const lastLine = addrLines[addrLines.length - 1];
@@ -855,11 +1164,15 @@ const createCertificateSchema = z.object({
   lotId: z.string().uuid(),
   createdBy: z.string().min(1).default('system'),
   certificationText: z.string().optional(),
+  specialProcesses: z.string().optional(),
+  qaMgrTitle: z.string().optional(),
+  shipDate: z.string().optional(),
 });
 
 router.post('/certificates', authenticateToken, requirePermission('shipping.release_shipment'), async (req: Request, res: Response) => {
   try {
     const input = createCertificateSchema.parse(req.body);
+    await ensureP2CertificateTemplateMetadataSchema();
 
     const [lot] = await db
       .select()
@@ -867,9 +1180,37 @@ router.post('/certificates', authenticateToken, requirePermission('shipping.rele
       .where(eq(p2LotNumbers.id, input.lotId));
     if (!lot) return res.status(404).json({ error: 'Lot not found' });
 
-    // Guard: one certificate per lot
-    if (lot.certificateId) {
-      return res.status(409).json({ error: 'Certificate already exists for this lot' });
+    // Idempotency guard: one certificate per lot. If the certificate already
+    // exists but the lot link/UI cache is stale, return the existing CoC.
+    const existingCertRows = await pool.query<{
+      id: string;
+      certificate_number: string;
+    }>(
+      `SELECT id, certificate_number
+         FROM p2_certificates_of_conformance
+        WHERE id = COALESCE($1::uuid, '00000000-0000-0000-0000-000000000000'::uuid)
+           OR lot_number_id = $2::uuid
+        ORDER BY created_at DESC
+        LIMIT 1`,
+      [lot.certificateId, lot.id]
+    );
+    if (existingCertRows.length > 0) {
+      const existingCert = existingCertRows[0];
+      if (lot.certificateId !== existingCert.id) {
+        await pool.query(
+          `UPDATE p2_lot_numbers
+              SET certificate_id = $1::uuid,
+                  updated_at = NOW()
+            WHERE id = $2::uuid`,
+          [existingCert.id, lot.id]
+        );
+      }
+
+      return res.status(200).json({
+        id: existingCert.id,
+        certificateNumber: existingCert.certificate_number,
+        alreadyExists: true,
+      });
     }
 
     const serialIds = (lot.serializedItemIds as string[]) || [];
@@ -877,6 +1218,7 @@ router.post('/certificates', authenticateToken, requirePermission('shipping.rele
       .select()
       .from(p2SerializedItems)
       .where(inArray(p2SerializedItems.id, serialIds));
+    const assignedSku = assignedSkuFromSerials(serials);
 
     const [customer] = await db
       .select()
@@ -890,14 +1232,22 @@ router.post('/certificates', authenticateToken, requirePermission('shipping.rele
       lot.manufacturingDate ||
       new Date();
 
-    const certNumber = await generateSequentialId(
-      'COC',
-      'p2_certificates_of_conformance',
-      'certificate_number'
+    const certNumberRows = await pool.query<{ certificate_number: string }>(
+      `SELECT certificate_number
+         FROM p2_certificates_of_conformance
+        WHERE certificate_number = $1
+           OR certificate_number LIKE $2
+        ORDER BY certificate_number DESC`,
+      [lot.lotNumber, `${lot.lotNumber}-%`]
     );
+    const certNumber = certNumberRows.length === 0
+      ? lot.lotNumber
+      : `${lot.lotNumber}-${String(certNumberRows.length + 1).padStart(2, '0')}`;
 
     const defaultText =
-      'AG Composites certifies that the items listed herein have been manufactured, inspected, and tested in accordance with the applicable drawings, specifications, and purchase order requirements. All materials used in manufacture conform to applicable specifications. Records are on file and available for review.';
+      'AG Advanced certifies that the items listed herein have been manufactured, inspected, and tested in accordance with the applicable drawings, specifications, and purchase order requirements. All materials used in manufacture conform to applicable specifications. Records are on file and available for review.';
+
+    const templateSnapshot = await getApprovedManufacturerCocTemplateSnapshot();
 
     const [cert] = await db
       .insert(p2CertificatesOfConformance)
@@ -909,13 +1259,21 @@ router.post('/certificates', authenticateToken, requirePermission('shipping.rele
         customerName: lot.customerName || '',
         customerAddress,
         poNumber: lot.poNumber,
-        partNumber: lot.partNumber,
+        partNumber: assignedSku || lot.partNumber,
         partName: lot.partName,
         quantity: serials.length,
         serialNumbers: serials.map((s) => s.serialNumber),
         manufacturingDate: manufacturingDate as Date,
-        shipDate: new Date(),
+        shipDate: input.shipDate ? new Date(`${input.shipDate}T12:00:00`) : new Date(),
         certificationText: input.certificationText || defaultText,
+        templateDocumentId: templateSnapshot.documentId,
+        templateDocumentName: templateSnapshot.documentName,
+        templateDocumentNumber: templateSnapshot.documentNumber,
+        templateVersion: templateSnapshot.version,
+        templateVersionDate: templateSnapshot.versionDate as any,
+        templateDisplay: templateSnapshot.display,
+        processRecords: { specialProcesses: input.specialProcesses?.trim() || 'N/A' },
+        traceabilityData: { qaMgrTitle: input.qaMgrTitle?.trim() || 'Quality Assurance' },
         status: 'DRAFT',
         createdBy: input.createdBy,
       })
@@ -930,8 +1288,20 @@ router.post('/certificates', authenticateToken, requirePermission('shipping.rele
   } catch (err: any) {
     if (err instanceof z.ZodError)
       return res.status(400).json({ error: err.errors[0].message });
-    console.error('Create certificate error:', err);
-    return res.status(500).json({ error: 'Failed to create certificate' });
+    console.error('Create certificate error:', {
+      message: err?.message,
+      code: err?.code,
+      detail: err?.detail,
+      column: err?.column,
+      constraint: err?.constraint,
+    });
+    return res.status(500).json({
+      error: err?.message || 'Failed to create certificate',
+      code: err?.code,
+      detail: err?.detail,
+      column: err?.column,
+      constraint: err?.constraint,
+    });
   }
 });
 
@@ -945,7 +1315,13 @@ router.get('/certificates/:id', async (req: Request, res: Response) => {
       .from(p2CertificatesOfConformance)
       .where(eq(p2CertificatesOfConformance.id, req.params.id));
     if (!cert) return res.status(404).json({ error: 'Certificate not found' });
-    return res.json(cert);
+    const assignedSku = await getAssignedSkuForLot(cert.lotNumberId);
+    return res.json({
+      ...cert,
+      partNumber: assignedSku || cert.partNumber,
+      specialProcesses: getSpecialProcesses(cert.processRecords),
+      qaMgrTitle: getQaMgrTitle(cert.traceabilityData),
+    });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to fetch certificate' });
   }
@@ -972,6 +1348,11 @@ router.get('/certificates/:id/pdf', async (req: Request, res: Response) => {
       .from(p2CertificatesOfConformance)
       .where(eq(p2CertificatesOfConformance.id, req.params.id));
     if (!cert) return res.status(404).json({ error: 'Certificate not found' });
+    const assignedSku = await getAssignedSkuForLot(cert.lotNumberId);
+    const displayPartNumber = assignedSku || cert.partNumber || '—';
+    const specialProcesses = getSpecialProcesses(cert.processRecords);
+    const qaMgrName = cert.qaMgrName || cert.approvedBy || '';
+    const qaMgrTitle = getQaMgrTitle(cert.traceabilityData);
 
     const pdfDoc = await PDFDocument.create();
     const page = pdfDoc.addPage([612, 792]);
@@ -989,11 +1370,11 @@ router.get('/certificates/:id/pdf', async (req: Request, res: Response) => {
     const usableWidth = width - margin * 2;
 
     // ── Header ──
-    page.drawText(COMPANY_INFO.NAME, { x: margin, y, size: 13, font: boldFont, color: black });
+    page.drawText('AG Advanced Technologies', { x: margin, y, size: 13, font: boldFont, color: black });
     y -= 14;
     page.drawText(COMPANY_INFO.ADDRESS, { x: margin, y, size: 8.5, font, color: gray });
     y -= 11;
-    page.drawText(`${COMPANY_INFO.PHONE}  |  ${COMPANY_INFO.EMAIL}`, {
+    page.drawText(`${COMPANY_INFO.PHONE}  |  glenn@agadvanced.com`, {
       x: margin,
       y,
       size: 8.5,
@@ -1009,22 +1390,8 @@ router.get('/certificates/:id/pdf', async (req: Request, res: Response) => {
     });
     y -= 26;
 
-    // Date top-right (cert number is used for association only, not displayed)
-    const certDate = new Date().toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-    page.drawText(`Date: ${certDate}`, {
-      x: width - margin - 160,
-      y: height - margin,
-      size: 8.5,
-      font,
-      color: gray,
-    });
-
     // ── Title ──
-    const titleText = 'CERTIFICATE OF CONFORMANCE';
+    const titleText = "MANUFACTURER'S CERTIFICATE OF CONFORMANCE";
     const titleW = boldFont.widthOfTextAtSize(titleText, 15);
     page.drawText(titleText, {
       x: (width - titleW) / 2,
@@ -1049,10 +1416,10 @@ router.get('/certificates/:id/pdf', async (req: Request, res: Response) => {
 
     const infoRows: [string, string][] = [
       ['Customer:', cert.customerName],
-      ['Ship-To Address:', (cert.customerAddress || '').replace(/\n/g, ', ')],
       ['Purchase Order #:', cert.poNumber || '—'],
-      ['Part Number:', cert.partNumber || '—'],
+      [assignedSku ? 'SKU:' : 'Part Number:', displayPartNumber],
       ['Part Description:', cert.partName || '—'],
+      ['Special Processes:', specialProcesses],
       ['Lot Number:', cert.lotNumber || '—'],
       ['Quantity:', String(cert.quantity)],
     ];
@@ -1173,7 +1540,40 @@ router.get('/certificates/:id/pdf', async (req: Request, res: Response) => {
       color: darkGray,
     });
     page.drawText('Signature', { x: margin, y: sigY - 32, size: 8, font, color: gray });
+    if (qaMgrName) {
+      page.drawText(qaMgrName, { x: margin, y: sigY - 45, size: 8.5, font: boldFont, color: black });
+    }
+    page.drawText('Title', { x: margin, y: sigY - 58, size: 8, font, color: gray });
+    page.drawLine({
+      start: { x: margin + 25, y: sigY - 55 },
+      end: { x: margin + 210, y: sigY - 55 },
+      thickness: 0.5,
+      color: darkGray,
+    });
     page.drawText('Date', { x: margin + 260, y: sigY - 32, size: 8, font, color: gray });
+
+    const formNumber = cert.templateDocumentNumber || MANUFACTURER_COC_FALLBACK.documentNumber;
+    const versionDisplay =
+      cert.templateDisplay ||
+      formatControlledVersionDisplay(
+        cert.templateVersion || MANUFACTURER_COC_FALLBACK.version,
+        cert.templateVersionDate || MANUFACTURER_COC_FALLBACK.versionDate
+      );
+    const versionW = font.widthOfTextAtSize(versionDisplay, 8);
+    page.drawText(formNumber, {
+      x: margin,
+      y: margin - 18,
+      size: 8,
+      font,
+      color: gray,
+    });
+    page.drawText(versionDisplay, {
+      x: width - margin - versionW,
+      y: margin - 18,
+      size: 8,
+      font,
+      color: gray,
+    });
 
     const bytes = await pdfDoc.save();
     res.set('Content-Type', 'application/pdf');
@@ -1195,6 +1595,7 @@ router.get('/certificates/:id/pdf', async (req: Request, res: Response) => {
 // GET /api/p2/shipments — all lots with packing slip link, newest first
 router.get('/shipments', async (req: Request, res: Response) => {
   try {
+    const includeVoid = String(req.query.includeVoid ?? '').toLowerCase() === 'true';
     const rows = await pool.query(
       `SELECT
          l.id,
@@ -1224,8 +1625,10 @@ router.get('/shipments', async (req: Request, res: Response) => {
          ORDER BY created_at DESC
          LIMIT 1
        ) inv ON true
+       WHERE ($1::boolean = true OR COALESCE(l.status, '') <> 'VOID')
        ORDER BY l.created_at DESC
-       LIMIT 500`
+       LIMIT 500`,
+      [includeVoid]
     );
     return res.json(rows);
   } catch (err: any) {
@@ -1315,11 +1718,37 @@ router.get('/shipments/:lotId', async (req: Request, res: Response) => {
       );
     }
 
-    // Fetch invoice if linked to this lot
+    // Fetch invoice and posting status if linked to this lot or packing slip
     const invoiceRows = await pool.query(
-      `SELECT id, invoice_number, invoice_date, due_date, total_amount, status
-       FROM ar_invoices WHERE lot_id = $1 LIMIT 1`,
-      [lotId]
+      `SELECT
+         inv.id,
+         inv.invoice_number,
+         inv.invoice_date,
+         inv.due_date,
+         inv.total_amount,
+         inv.status,
+         inv.packing_slip_id,
+         je.id AS journal_entry_id,
+         je.status AS journal_entry_status,
+         COALESCE(jlc.line_count, 0)::int AS journal_line_count
+       FROM ar_invoices inv
+       LEFT JOIN LATERAL (
+         SELECT id, status
+         FROM journal_entries
+         WHERE reference_uuid = inv.id
+           AND transaction_type = 'AR_INVOICE'
+         ORDER BY created_at DESC
+         LIMIT 1
+       ) je ON true
+       LEFT JOIN LATERAL (
+         SELECT COUNT(*)::int AS line_count
+         FROM journal_lines
+         WHERE journal_entry_id = je.id
+       ) jlc ON true
+       WHERE inv.lot_id = $1 OR ($2::uuid IS NOT NULL AND inv.packing_slip_id = $2::uuid)
+       ORDER BY inv.created_at DESC
+       LIMIT 1`,
+      [lotId, lot.packing_slip_id]
     );
     const invoice = invoiceRows.length ? invoiceRows[0] : null;
 
@@ -1472,6 +1901,233 @@ router.patch('/shipments/:lotId', authenticateToken, requirePermission('shipping
   } catch (err: any) {
     console.error('Shipment update error:', err);
     return res.status(500).json({ error: 'Failed to update shipment' });
+  }
+});
+
+// POST /api/p2/shipments/:lotId/void — void a shipment lot and release its finalized serials for regrouping.
+router.post('/shipments/:lotId/void', authenticateToken, requirePermission('shipping.release_shipment'), async (req: Request, res: Response) => {
+  try {
+    const { lotId } = req.params;
+    const input = voidShipmentSchema.parse(req.body);
+    const actor = auditActor(req).username || req.body?.voidedBy || 'system';
+
+    const client = await pgPool.connect();
+    try {
+      await ensureP2VoidShipmentSchema(client);
+      await client.query('BEGIN');
+
+      const lotRows = await client.query<{
+        id: string;
+        lot_number: string;
+        status: string;
+        packing_slip_id: string | null;
+        certificate_id: string | null;
+        serialized_item_ids: string[] | null;
+      }>(
+        `SELECT id, lot_number, status, packing_slip_id, certificate_id, serialized_item_ids
+           FROM p2_lot_numbers
+          WHERE id::text = $1 OR lot_number = $1
+          FOR UPDATE`,
+        [lotId]
+      );
+
+      if (lotRows.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Shipment lot not found' });
+      }
+
+      const lot = lotRows.rows[0];
+      const wasAlreadyVoid = lot.status === 'VOID';
+
+      const invoiceRows = wasAlreadyVoid ? { rows: [] as Array<{
+        id: string;
+        invoice_number: string;
+        status: string;
+      }> } : await client.query<{
+        id: string;
+        invoice_number: string;
+        status: string;
+      }>(
+        `SELECT id, invoice_number, status
+           FROM ar_invoices
+          WHERE lot_id = $1
+             OR ($2::uuid IS NOT NULL AND packing_slip_id = $2::uuid)
+          FOR UPDATE`,
+        [lot.id, lot.packing_slip_id]
+      );
+
+      const blockedInvoices = invoiceRows.rows.filter((invoice) =>
+        ['POSTED', 'SENT', 'PAID'].includes(invoice.status)
+      );
+      if (blockedInvoices.length > 0) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          error: 'Shipment has posted, sent, or paid invoices. Void those invoices through finance first so reversals are handled.',
+          invoices: blockedInvoices.map((invoice) => ({
+            id: invoice.id,
+            invoiceNumber: invoice.invoice_number,
+            status: invoice.status,
+          })),
+        });
+      }
+
+      const now = new Date();
+      const serializedItemIds = Array.isArray(lot.serialized_item_ids)
+        ? lot.serialized_item_ids.filter((id): id is string => typeof id === 'string' && id.length > 0)
+        : [];
+
+      const finalizedSerialRows = serializedItemIds.length > 0
+        ? await client.query<{
+            id: string;
+            barcode: string;
+            sku: string | null;
+            drawing_name: string | null;
+            customer_serial_number: string | null;
+            finalized_at: string | Date | null;
+            finalized_by: string | null;
+          }>(
+            `SELECT id, barcode, sku, drawing_name, customer_serial_number, finalized_at, finalized_by
+               FROM p2_serialized_items
+              WHERE id = ANY($1::uuid[])
+                AND finalized_at IS NOT NULL
+              FOR UPDATE`,
+            [serializedItemIds]
+          )
+        : { rows: [] };
+
+      if (finalizedSerialRows.rows.length > 0) {
+        const finalizedIds = finalizedSerialRows.rows.map((item) => item.id);
+        await client.query(
+          `UPDATE p2_serialized_items
+              SET finalized_at = NULL,
+                  finalized_by = NULL,
+                  updated_at = NOW()
+            WHERE id = ANY($1::uuid[])`,
+          [finalizedIds]
+        );
+
+        for (const item of finalizedSerialRows.rows) {
+          await client.query(
+            `INSERT INTO p2_serialized_item_events
+               (serialized_item_id, barcode, event_type, performed_by, notes, metadata)
+             VALUES ($1::uuid, $2::text, 'NOTE', $3::text, $4::text, $5::jsonb)`,
+            [
+              item.id,
+              item.barcode,
+              actor,
+              `Unfinalized because shipment ${lot.lot_number} was voided: ${input.reason}`,
+              JSON.stringify({
+                lotId: lot.id,
+                lotNumber: lot.lot_number,
+                previousSku: item.sku,
+                previousDrawingName: item.drawing_name,
+                previousCustomerSerialNumber: item.customer_serial_number,
+                previousFinalizedAt: item.finalized_at,
+                previousFinalizedBy: item.finalized_by,
+                reason: input.reason,
+                alreadyVoidShipment: wasAlreadyVoid,
+              }),
+            ]
+          );
+        }
+      }
+
+      if (!wasAlreadyVoid) {
+        await client.query(
+          `UPDATE p2_lot_numbers
+              SET status = 'VOID',
+                  closed_at = COALESCE(closed_at, $1::timestamp),
+                  closed_by = COALESCE(closed_by, $2::text),
+                  notes = CONCAT_WS(E'\n', NULLIF(notes, ''), $3::text),
+                  updated_at = NOW()
+            WHERE id = $4::uuid`,
+          [now.toISOString(), actor, `VOIDED: ${input.reason}`, lot.id]
+        );
+      }
+
+      if (!wasAlreadyVoid && lot.packing_slip_id) {
+        await client.query(
+          `UPDATE p2_packing_slips
+              SET status = 'VOID',
+                  notes = CONCAT_WS(E'\n', NULLIF(notes, ''), $1::text),
+                  updated_at = NOW()
+            WHERE id = $2::uuid`,
+          [`VOIDED: ${input.reason}`, lot.packing_slip_id]
+        );
+      }
+
+      if (!wasAlreadyVoid && lot.certificate_id) {
+        await client.query(
+          `UPDATE p2_certificates_of_conformance
+              SET status = 'VOID',
+                  notes = CONCAT_WS(E'\n', NULLIF(notes, ''), $1::text),
+                  updated_at = NOW()
+            WHERE id = $2::uuid`,
+          [`VOIDED: ${input.reason}`, lot.certificate_id]
+        );
+      }
+
+      const voidableInvoices = wasAlreadyVoid ? [] : invoiceRows.rows.filter((invoice) =>
+        ['DRAFT', 'REVIEW'].includes(invoice.status)
+      );
+      for (const invoice of voidableInvoices) {
+        await client.query(
+          `UPDATE ar_invoices
+              SET status = 'VOID',
+                  voided_at = $1::timestamp,
+                  voided_by = $2::text,
+                  void_reason = $3::text,
+                  updated_at = NOW()
+            WHERE id = $4::uuid`,
+          [now.toISOString(), actor, `Shipment ${lot.lot_number} voided: ${input.reason}`, invoice.id]
+        );
+      }
+
+      const auditRows: Array<[string, string, string, string | null, string | null]> = wasAlreadyVoid
+        ? []
+        : [['lot_number', lot.id, 'status', lot.status, 'VOID']];
+      if (!wasAlreadyVoid && lot.packing_slip_id) auditRows.push(['packing_slip', lot.packing_slip_id, 'status', null, 'VOID']);
+      if (!wasAlreadyVoid && lot.certificate_id) auditRows.push(['certificate', lot.certificate_id, 'status', null, 'VOID']);
+      for (const item of finalizedSerialRows.rows) {
+        auditRows.push(['serialized_item', item.id, 'finalized_at', item.finalized_at ? String(item.finalized_at) : null, null]);
+      }
+      for (const invoice of voidableInvoices) {
+        auditRows.push(['ar_invoice', invoice.id, 'status', invoice.status, 'VOID']);
+      }
+
+      for (const [entityType, entityId, fieldName, oldValue, newValue] of auditRows) {
+        await client.query(
+          `INSERT INTO p2_shipping_audit_log
+             (entity_type, entity_id, field_name, old_value, new_value, changed_by, reason)
+           VALUES ($1::text, $2::text, $3::text, $4::text, $5::text, $6::text, $7::text)`,
+          [entityType, entityId, fieldName, oldValue, newValue, actor, input.reason]
+        );
+      }
+
+      await client.query('COMMIT');
+      return res.json({
+        success: true,
+        lotId: lot.id,
+        lotNumber: lot.lot_number,
+        releasedSerializedItemIds: Array.isArray(lot.serialized_item_ids) ? lot.serialized_item_ids : [],
+        unfinalizedSerializedItemIds: finalizedSerialRows.rows.map((item) => item.id),
+        wasAlreadyVoid,
+        voidedInvoices: voidableInvoices.map((invoice) => ({
+          id: invoice.id,
+          invoiceNumber: invoice.invoice_number,
+          previousStatus: invoice.status,
+        })),
+      });
+    } catch (txErr) {
+      await client.query('ROLLBACK');
+      throw txErr;
+    } finally {
+      client.release();
+    }
+  } catch (err: any) {
+    if (err instanceof z.ZodError) return res.status(400).json({ error: err.errors[0].message });
+    console.error('Void shipment error:', { message: err?.message, code: err?.code });
+    return res.status(500).json({ error: err?.message || 'Failed to void shipment' });
   }
 });
 

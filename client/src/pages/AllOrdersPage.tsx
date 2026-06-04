@@ -75,6 +75,9 @@ import {
   Eye,
   RefreshCw,
   FileDown,
+  Paperclip,
+  Image as ImageIcon,
+  File,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { apiRequest } from '@/lib/queryClient';
@@ -155,6 +158,172 @@ interface PaginatedOrdersResponse {
   page: number;
   limit: number;
   totalPages: number;
+}
+
+interface OrderAttachmentRow {
+  id: number;
+  originalFileName: string;
+  fileSize: number;
+  mimeType: string;
+  notes?: string | null;
+  createdAt: string;
+}
+
+interface MediaAttachmentRow {
+  attachment: {
+    id: string;
+    notes?: string | null;
+    attachedAt: string;
+  };
+  media: {
+    id: string;
+    filename: string;
+    mimeType: string;
+    fileSize: number;
+    title?: string | null;
+  };
+}
+
+function AttachmentQuickView({ orderId }: { orderId: string }) {
+  const [open, setOpen] = useState(false);
+
+  const { data: orderAttachments = [], isLoading: orderAttachmentsLoading } =
+    useQuery<OrderAttachmentRow[]>({
+      queryKey: ['order-attachments', orderId],
+      queryFn: () => apiRequest(`/api/order-attachments/${orderId}`),
+      enabled: open && !!orderId,
+      staleTime: 30000,
+    });
+
+  const { data: mediaAttachments = [], isLoading: mediaAttachmentsLoading } =
+    useQuery<MediaAttachmentRow[]>({
+      queryKey: ['/api/media/attachments', 'order', orderId],
+      queryFn: async () => {
+        const res = await fetch(`/api/media/attachments/order/${orderId}`, {
+          credentials: 'include',
+        });
+        if (!res.ok) throw new Error('Failed to fetch linked media');
+        return res.json();
+      },
+      enabled: open && !!orderId,
+      staleTime: 30000,
+    });
+
+  const isLoading = orderAttachmentsLoading || mediaAttachmentsLoading;
+  const totalAttachments = orderAttachments.length + mediaAttachments.length;
+
+  const formatFileSize = (bytes?: number) => {
+    if (!bytes) return '0 Bytes';
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), sizes.length - 1);
+    return `${Math.round((bytes / Math.pow(1024, i)) * 100) / 100} ${sizes[i]}`;
+  };
+
+  const iconFor = (mimeType?: string) => {
+    if (mimeType?.startsWith('image/')) return <ImageIcon className="h-4 w-4 text-blue-600" />;
+    if (mimeType === 'application/pdf') return <FileText className="h-4 w-4 text-red-600" />;
+    return <File className="h-4 w-4 text-gray-500" />;
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button
+          variant="outline"
+          size="sm"
+          title="View order attachments"
+          onClick={(e) => e.stopPropagation()}
+          className="relative"
+        >
+          <Paperclip className="h-4 w-4" />
+          {!isLoading && totalAttachments > 0 && (
+            <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] leading-none text-white">
+              {totalAttachments}
+            </span>
+          )}
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Order Attachments</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-2">
+          {orderAttachments.map((attachment) => (
+            <div
+              key={`order-${attachment.id}`}
+              className="flex items-center justify-between gap-3 rounded-md border p-3"
+            >
+              <div className="flex min-w-0 items-center gap-3">
+                {iconFor(attachment.mimeType)}
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">{attachment.originalFileName}</p>
+                  <p className="text-xs text-gray-500">
+                    {formatFileSize(attachment.fileSize)}
+                    {attachment.notes ? ` - ${attachment.notes}` : ''}
+                  </p>
+                </div>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => window.open(`/api/order-attachments/download/${attachment.id}`, '_blank')}
+                  title="View file"
+                >
+                  <Eye className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => window.open(`/api/order-attachments/download/${attachment.id}?download=true`, '_blank')}
+                  title="Download file"
+                >
+                  <Download className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          ))}
+          {mediaAttachments.map((attachment) => (
+            <div
+              key={`media-${attachment.attachment.id}`}
+              className="flex items-center justify-between gap-3 rounded-md border p-3"
+            >
+              <div className="flex min-w-0 items-center gap-3">
+                {iconFor(attachment.media.mimeType)}
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">
+                    {attachment.media.title || attachment.media.filename}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {formatFileSize(attachment.media.fileSize)}
+                    {attachment.attachment.notes ? ` - ${attachment.attachment.notes}` : ''}
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => window.open(`/api/media/${attachment.media.id}/download`, '_blank')}
+                title="View linked media"
+              >
+                <Eye className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+          {!isLoading && totalAttachments === 0 && (
+            <div className="rounded-md border border-dashed p-6 text-center text-sm text-gray-500">
+              No attachments linked to this order.
+            </div>
+          )}
+          {isLoading && (
+            <div className="rounded-md border border-dashed p-6 text-center text-sm text-gray-500">
+              Loading attachments...
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 export default function AllOrdersPage() {
@@ -1159,6 +1328,8 @@ export default function AllOrdersPage() {
                       >
                         <Eye className="w-3 h-3" />
                       </Badge>
+
+                      <AttachmentQuickView orderId={order.orderId} />
 
                       {/* Barcode Button */}
                       <Dialog>

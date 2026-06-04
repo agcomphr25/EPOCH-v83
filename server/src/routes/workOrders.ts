@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { auditService } from '../services/auditService';
-import { db } from '../../db';
+import { db, pool } from '../../db';
 import {
   workOrders,
   workOrderParts,
@@ -32,6 +32,9 @@ import {
   projectSteps,
   rfqRiskAssessments,
   purchaseReviewChecklists,
+  preproductionChecklists,
+  preproductionChecklistSections,
+  preproductionChecklistTasks,
   type LaborBudgetOverride,
   type ProductionControlTemplate,
 } from '../../schema';
@@ -54,6 +57,114 @@ import {
 } from '../services/productionControl/productionControlAI.service';
 
 const router = Router();
+
+type WadStatusP2Demand = {
+  projectId: string;
+  p2PoCount: number;
+  p2PoNumbers: string | null;
+  p2DemandQuantity: number;
+  p2SerializedCount: number;
+  p2ActiveUnits: number;
+  p2ProductionOrderCount: number;
+};
+
+async function getWadStatusP2Demand(projectIds: string[]): Promise<Map<string, WadStatusP2Demand>> {
+  if (projectIds.length === 0) return new Map();
+
+  const rows = await pool.query<{
+    projectId: string;
+    p2PoCount: string;
+    p2PoNumbers: string | null;
+    p2DemandQuantity: string;
+    p2SerializedCount: string;
+    p2ActiveUnits: string;
+    p2ProductionOrderCount: string;
+  }>(`
+    WITH project_po_link AS (
+      SELECT p.id AS project_id, p.po_id AS po_id
+      FROM projects p
+      WHERE p.id = ANY($1::uuid[])
+        AND p.po_id IS NOT NULL
+      UNION
+      SELECT ps.project_id, ps.linked_p2_order_id AS po_id
+      FROM project_steps ps
+      WHERE ps.project_id = ANY($1::uuid[])
+        AND ps.linked_p2_order_id IS NOT NULL
+      UNION
+      SELECT DISTINCT p2po.project_id, p2po.p2_po_id AS po_id
+      FROM p2_production_orders p2po
+      WHERE p2po.project_id = ANY($1::uuid[])
+        AND p2po.project_id IS NOT NULL
+      UNION
+      SELECT p.id AS project_id, po.id AS po_id
+      FROM p2_purchase_orders po
+      JOIN projects p ON LOWER(TRIM(po.project_name)) IN (
+        LOWER(TRIM(p.project_code)),
+        LOWER(TRIM(p.project_name)),
+        LOWER(TRIM(CONCAT_WS(' - ', NULLIF(p.project_code, ''), NULLIF(p.project_name, ''))))
+      )
+      WHERE p.id = ANY($1::uuid[])
+        AND po.project_name IS NOT NULL
+        AND TRIM(po.project_name) <> ''
+    ),
+    distinct_links AS (
+      SELECT DISTINCT project_id, po_id
+      FROM project_po_link
+      WHERE project_id IS NOT NULL
+        AND po_id IS NOT NULL
+    ),
+    ordered_qty AS (
+      SELECT dl.project_id, COALESCE(SUM(poi.quantity), 0)::int AS qty
+      FROM distinct_links dl
+      JOIN p2_purchase_order_items poi ON poi.po_id = dl.po_id
+      GROUP BY dl.project_id
+    ),
+    serialized AS (
+      SELECT
+        dl.project_id,
+        COUNT(psi.id)::int AS serialized_count,
+        COUNT(psi.id) FILTER (
+          WHERE COALESCE(UPPER(psi.status), '') NOT IN ('COMPLETED', 'CLOSED', 'CANCELLED', 'CANCELED', 'SCRAPPED', 'SHIPPED')
+        )::int AS active_units
+      FROM distinct_links dl
+      JOIN p2_serialized_items psi ON psi.po_id = dl.po_id
+      GROUP BY dl.project_id
+    ),
+    production_orders AS (
+      SELECT dl.project_id, COUNT(p2po.id)::int AS production_order_count
+      FROM distinct_links dl
+      JOIN p2_production_orders p2po ON p2po.p2_po_id = dl.po_id
+      GROUP BY dl.project_id
+    )
+    SELECT
+      dl.project_id::text AS "projectId",
+      COUNT(DISTINCT dl.po_id)::text AS "p2PoCount",
+      string_agg(DISTINCT po.po_number, ', ' ORDER BY po.po_number) AS "p2PoNumbers",
+      COALESCE(MAX(oq.qty), 0)::text AS "p2DemandQuantity",
+      COALESCE(MAX(s.serialized_count), 0)::text AS "p2SerializedCount",
+      COALESCE(MAX(s.active_units), 0)::text AS "p2ActiveUnits",
+      COALESCE(MAX(po2.production_order_count), 0)::text AS "p2ProductionOrderCount"
+    FROM distinct_links dl
+    JOIN p2_purchase_orders po ON po.id = dl.po_id
+    LEFT JOIN ordered_qty oq ON oq.project_id = dl.project_id
+    LEFT JOIN serialized s ON s.project_id = dl.project_id
+    LEFT JOIN production_orders po2 ON po2.project_id = dl.project_id
+    GROUP BY dl.project_id
+  `, [projectIds]);
+
+  return new Map(rows.map((row) => [
+    row.projectId,
+    {
+      projectId: row.projectId,
+      p2PoCount: parseInt(row.p2PoCount, 10) || 0,
+      p2PoNumbers: row.p2PoNumbers,
+      p2DemandQuantity: parseInt(row.p2DemandQuantity, 10) || 0,
+      p2SerializedCount: parseInt(row.p2SerializedCount, 10) || 0,
+      p2ActiveUnits: parseInt(row.p2ActiveUnits, 10) || 0,
+      p2ProductionOrderCount: parseInt(row.p2ProductionOrderCount, 10) || 0,
+    },
+  ]));
+}
 
 router.use(async (_req, res, next) => {
   try {
@@ -109,6 +220,166 @@ function normalizeWadApprovalRole(role: string | undefined | null): WadApprovalS
   const normalized = role.trim().toLowerCase();
   if ((WAD_APPROVAL_SLOTS as readonly string[]).includes(normalized)) return normalized as WadApprovalSlot;
   return WAD_LEGACY_SLOT_ALIASES[normalized] ?? null;
+}
+
+const WAD_APPROVAL_TASK_SECTION_NAME = 'WAD Approvals';
+
+/**
+ * Sync per-role WAD approval assignments to the project's preproduction
+ * checklist so the assignee sees the pending signature on their My Tasks /
+ * Pre-production Checklist dashboard.
+ *
+ * Stable lookup: tasks in the "WAD Approvals" section whose `link` matches
+ * the WAD summary page, with support for older wizard deep-links.
+ *
+ * Backfill-safe: if the project has no linked preproduction checklist, or
+ * the WAD has no assignments and no pre-existing approval tasks, this is a
+ * no-op.
+ */
+async function syncWadApprovalChecklistTasks(params: {
+  wadId: string;
+  workOrderNumber: string;
+  projectId: string | null;
+  wizardData: Record<string, unknown>;
+}): Promise<void> {
+  try {
+    if (!params.projectId) return;
+    const [project] = await db
+      .select({ checklistId: projects.linkedPreproductionChecklistId })
+      .from(projects)
+      .where(eq(projects.id, params.projectId))
+      .limit(1);
+    const checklistId = project?.checklistId ?? null;
+    if (!checklistId) return;
+
+    const rawAssignments = (params.wizardData?.approvalAssignments as Record<string, unknown>) ?? {};
+    const approvals = (Array.isArray(params.wizardData?.approvals) ? params.wizardData.approvals : []) as Array<{
+      role?: string;
+      decision?: string;
+      displayName?: string;
+      timestamp?: string;
+    }>;
+
+    // Build desired map: role → { employeeId, employeeName }
+    const desiredByRole = new Map<WadApprovalSlot, { employeeId: number; employeeName: string | null }>();
+    for (const [rawRole, raw] of Object.entries(rawAssignments)) {
+      const role = normalizeWadApprovalRole(rawRole);
+      if (!role) continue;
+      if (!raw || typeof raw !== 'object') continue;
+      const a = raw as { employeeId?: number | string | null; employeeName?: string | null };
+      const empId =
+        typeof a.employeeId === 'number'
+          ? a.employeeId
+          : (a.employeeId != null ? Number.parseInt(String(a.employeeId), 10) : NaN);
+      if (!Number.isFinite(empId) || empId <= 0) continue;
+      desiredByRole.set(role, { employeeId: empId as number, employeeName: a.employeeName ?? null });
+    }
+
+    // Find or create the "WAD Approvals" section
+    let [section] = await db
+      .select()
+      .from(preproductionChecklistSections)
+      .where(
+        and(
+          eq(preproductionChecklistSections.checklistId, checklistId),
+          eq(preproductionChecklistSections.name, WAD_APPROVAL_TASK_SECTION_NAME),
+        ),
+      )
+      .limit(1);
+
+    // Fetch existing tasks for this WAD (if section exists)
+    type TaskRow = typeof preproductionChecklistTasks.$inferSelect;
+    const existingByRole = new Map<WadApprovalSlot, TaskRow>();
+    const summaryLinkPrefix = `/work-orders/${params.wadId}/wad-summary`;
+    const legacyWizardLinkPrefix = `/work-orders/${params.wadId}/wizard`;
+
+    if (section) {
+      const tasks = await db
+        .select()
+        .from(preproductionChecklistTasks)
+        .where(eq(preproductionChecklistTasks.sectionId, section.id));
+      for (const t of tasks) {
+        if (!t.link || (!t.link.startsWith(summaryLinkPrefix) && !t.link.startsWith(legacyWizardLinkPrefix))) continue;
+        const m = t.link.match(/[?&]role=([^&]+)/);
+        const role = normalizeWadApprovalRole(m ? decodeURIComponent(m[1]) : null);
+        if (role) existingByRole.set(role, t);
+      }
+    }
+
+    // Nothing to do, and nothing to clean up
+    if (desiredByRole.size === 0 && existingByRole.size === 0) return;
+
+    if (!section && desiredByRole.size > 0) {
+      [section] = await db
+        .insert(preproductionChecklistSections)
+        .values({ checklistId, name: WAD_APPROVAL_TASK_SECTION_NAME, sortOrder: 999 })
+        .returning();
+    }
+    if (!section) return;
+
+    // Upsert one task per desired role
+    for (const [role, assignment] of desiredByRole) {
+      const matrixEntry = WAD_APPROVAL_MATRIX.find((s) => s.key === role);
+      const roleLabel = matrixEntry?.label ?? role;
+      const description = `Sign ${roleLabel} approval — WAD ${params.workOrderNumber}`;
+      const link = `${summaryLinkPrefix}?role=${role}`;
+      const sortOrder = WAD_APPROVAL_MATRIX.findIndex((s) => s.key === role);
+      const matchingApproval = approvals.find(
+        (a) => normalizeWadApprovalRole(a.role) === role && a.decision === 'APPROVED',
+      );
+      const isApproved = !!matchingApproval;
+      const existing = existingByRole.get(role);
+
+      if (existing) {
+        const patch: Partial<typeof preproductionChecklistTasks.$inferInsert> = {
+          description,
+          assignedToEmployeeId: assignment.employeeId,
+          assignedTo: assignment.employeeName ?? existing.assignedTo ?? null,
+          link,
+          sortOrder,
+          updatedAt: new Date(),
+        };
+        if (isApproved && !existing.isCompleted) {
+          patch.isCompleted = true;
+          patch.completedAt = matchingApproval?.timestamp ? new Date(matchingApproval.timestamp) : new Date();
+          patch.completedBy = matchingApproval?.displayName ?? assignment.employeeName ?? null;
+        } else if (!isApproved && existing.isCompleted) {
+          patch.isCompleted = false;
+          patch.completedAt = null;
+          patch.completedBy = null;
+        }
+        await db
+          .update(preproductionChecklistTasks)
+          .set(patch)
+          .where(eq(preproductionChecklistTasks.id, existing.id));
+      } else {
+        await db.insert(preproductionChecklistTasks).values({
+          sectionId: section.id,
+          description,
+          sortOrder,
+          assignedToEmployeeId: assignment.employeeId,
+          assignedTo: assignment.employeeName ?? null,
+          link,
+          isCompleted: isApproved,
+          completedAt: isApproved
+            ? (matchingApproval?.timestamp ? new Date(matchingApproval.timestamp) : new Date())
+            : null,
+          completedBy: isApproved ? (matchingApproval?.displayName ?? assignment.employeeName ?? null) : null,
+        });
+      }
+    }
+
+    // Delete tasks for roles no longer assigned
+    for (const [role, task] of existingByRole) {
+      if (!desiredByRole.has(role)) {
+        await db.delete(preproductionChecklistTasks).where(eq(preproductionChecklistTasks.id, task.id));
+      }
+    }
+  } catch (err) {
+    // Sync failures must not break wizard save/approve — log only.
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn('[WAD Wizard] syncWadApprovalChecklistTasks failed:', msg);
+  }
 }
 
 function toNumber(value: unknown): number | null {
@@ -396,10 +667,33 @@ router.get('/production/wad-status', authenticateToken, requirePermission('work_
               AND ps.status = 'completed'
               AND ps.step_type IN ('purchase_review_checklist', 'preproduction_checklist', 'p2_order')
           )`,
+          sql`EXISTS (
+            SELECT 1
+            FROM project_steps ps
+            WHERE ps.project_id = ${projects.id}
+              AND ps.linked_p2_order_id IS NOT NULL
+          )`,
+          sql`EXISTS (
+            SELECT 1
+            FROM p2_production_orders p2po
+            WHERE p2po.project_id = ${projects.id}
+          )`,
+          sql`EXISTS (
+            SELECT 1
+            FROM p2_purchase_orders po
+            WHERE po.project_name IS NOT NULL
+              AND TRIM(po.project_name) <> ''
+              AND LOWER(TRIM(po.project_name)) IN (
+                LOWER(TRIM(${projects.projectCode})),
+                LOWER(TRIM(${projects.projectName})),
+                LOWER(TRIM(CONCAT_WS(' - ', NULLIF(${projects.projectCode}, ''), NULLIF(${projects.projectName}, ''))))
+              )
+          )`,
         ),
       ));
 
     const projectIds = projRows.map((p) => p.id);
+    const p2DemandByProject = await getWadStatusP2Demand(projectIds);
     const woRows = projectIds.length > 0
       ? await db
           .select({
@@ -446,6 +740,7 @@ router.get('/production/wad-status', authenticateToken, requirePermission('work_
 
     const result = projRows.map((p) => {
       const wos = byProject.get(p.id) ?? [];
+      const p2Demand = p2DemandByProject.get(p.id) ?? null;
       let aggregateStatus: 'NONE' | 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' = 'NONE';
       let bestRank = 0;
       let latestPwo: typeof woRows[number] | null = null;
@@ -477,10 +772,29 @@ router.get('/production/wad-status', authenticateToken, requirePermission('work_
         projectName: p.projectName,
         customerName: p.customerName,
         currentStage: p.currentStage,
-        poNumber: p.poNumber,
+        poNumber: p.poNumber ?? p2Demand?.p2PoNumbers ?? null,
         pwoCount: wos.length,
         wadStatus: aggregateStatus,
         gateSatisfied,
+        p2HasProductionDemand: !!p2Demand && (
+          p2Demand.p2PoCount > 0 ||
+          p2Demand.p2DemandQuantity > 0 ||
+          p2Demand.p2SerializedCount > 0 ||
+          p2Demand.p2ProductionOrderCount > 0
+        ),
+        p2PoCount: p2Demand?.p2PoCount ?? 0,
+        p2PoNumbers: p2Demand?.p2PoNumbers ?? null,
+        p2DemandQuantity: p2Demand?.p2DemandQuantity ?? 0,
+        p2SerializedCount: p2Demand?.p2SerializedCount ?? 0,
+        p2ActiveUnits: p2Demand?.p2ActiveUnits ?? 0,
+        p2ProductionOrderCount: p2Demand?.p2ProductionOrderCount ?? 0,
+        p2WadConnectionStatus: p2Demand
+          ? gateSatisfied
+            ? 'P2_WAD_APPROVED'
+            : wos.length > 0
+              ? 'P2_WAD_INCOMPLETE'
+              : 'P2_WAD_MISSING'
+          : 'NO_P2_DEMAND',
         latestPwoId: latestPwo?.id ?? null,
         latestWorkOrderNumber: latestPwo?.workOrderNumber ?? null,
         percentComplete,
@@ -2766,6 +3080,13 @@ router.patch(
         .where(eq(productionWorkOrders.id, id))
         .returning();
 
+      await syncWadApprovalChecklistTasks({
+        wadId: id,
+        workOrderNumber: updated.workOrderNumber ?? wad.workOrderNumber,
+        projectId: updated.projectId ?? wad.projectId ?? null,
+        wizardData: mergedWizardData,
+      });
+
       return res.json({ wad: updated });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -2896,16 +3217,28 @@ router.post(
       const [wad] = await db.select().from(productionWorkOrders).where(eq(productionWorkOrders.id, id)).limit(1);
       if (!wad) return res.status(404).json({ error: 'WAD not found' });
 
-      const body = req.body as { role?: string; decision?: 'APPROVED' | 'REJECTED'; comments?: string };
+      const body = req.body as {
+        role?: string;
+        decision?: 'APPROVED' | 'REJECTED';
+        comments?: string | null;
+        signature?: string | null;
+      };
       const role = normalizeWadApprovalRole(body.role);
       const decision = body.decision;
-      const comments = body.comments ?? null;
+      const comments = typeof body.comments === 'string' && body.comments.trim() ? body.comments.trim() : null;
+      const signature = typeof body.signature === 'string' ? body.signature.trim() : '';
 
       if (!role) {
         return res.status(400).json({ error: `role must be one of: ${WAD_APPROVAL_SLOTS.join(', ')}` });
       }
       if (decision !== 'APPROVED' && decision !== 'REJECTED') {
         return res.status(400).json({ error: 'decision must be APPROVED or REJECTED' });
+      }
+      if (signature.length < 2) {
+        return res.status(400).json({ error: 'A typed signature is required to approve or deny a WAD' });
+      }
+      if (decision === 'REJECTED' && !comments) {
+        return res.status(400).json({ error: 'Denial notes are required when rejecting a WAD approval slot' });
       }
 
       // Slot authorization: verify the session user holds a system role permitted to fill this slot.
@@ -2929,7 +3262,7 @@ router.post(
       const existingData = normalizeWizardData(wad.wizardData);
       const existingApprovals = (existingData.approvals as unknown[] ?? []) as Array<{
         role?: string; userId?: number | string | null; displayName?: string; decision?: string;
-        comments?: string | null; timestamp?: string;
+        comments?: string | null; signature?: string | null; signedAt?: string | null; timestamp?: string;
       }>;
       const existingRevisionHistory = Array.isArray(existingData.revisionHistory) ? existingData.revisionHistory : [];
       const currentRevision = getWadRevisionNumber(existingData);
@@ -2940,6 +3273,9 @@ router.post(
         displayName: sessionDisplayName,
         decision,
         comments,
+        signature,
+        signatureMeaning: 'Typed signature confirms the signer reviewed the WAD summary and accepts responsibility for this decision.',
+        signedAt: new Date().toISOString(),
         timestamp: new Date().toISOString(),
       };
 
@@ -2955,6 +3291,8 @@ router.post(
         actorId: sessionUserIdNumber,
         actorName: sessionDisplayName,
         comments,
+        signatureMeaning: newApproval.signatureMeaning,
+        signedAt: newApproval.signedAt,
         timestamp: newApproval.timestamp,
       };
 
@@ -3021,13 +3359,20 @@ router.post(
         .where(eq(productionWorkOrders.id, id))
         .returning();
 
+      await syncWadApprovalChecklistTasks({
+        wadId: id,
+        workOrderNumber: updated.workOrderNumber ?? wad.workOrderNumber,
+        projectId: updated.projectId ?? wad.projectId ?? null,
+        wizardData: updatedWizardData,
+      });
+
       auditService.logEvent({
         entityType: 'work_order',
         entityId: id,
         action: decision === 'APPROVED' ? 'WAD_APPROVAL_RECORDED' : 'WAD_REJECTION_RECORDED',
         actor: { id: sessionUserIdNumber ?? 0, username: sessionDisplayName },
         reason: comments ?? undefined,
-        meta: { role, decision, allApproved: releaseApproved, matrixApproved: allApproved, missingExceptionRequests, backfill: isBackfill, sessionRole },
+        meta: { role, decision, allApproved: releaseApproved, matrixApproved: allApproved, missingExceptionRequests, backfill: isBackfill, sessionRole, hasSignature: true, signedAt: newApproval.signedAt },
       }).catch((e: Error) => console.warn('[Audit] WAD approval log failed:', e?.message));
 
       await recordAuditEvent({
@@ -3042,6 +3387,9 @@ router.post(
           workOrderNumber: wad.workOrderNumber,
           role,
           decision,
+          hasSignature: true,
+          signatureMeaning: newApproval.signatureMeaning,
+          signedAt: newApproval.signedAt,
           revision: currentRevision,
           revisionStatus: updatedWizardData.revisionStatus,
           matrixApproved: allApproved,
@@ -3067,6 +3415,8 @@ router.post(
               role: a.role,
               decision: a.decision,
               displayName: a.displayName,
+              signedAt: a.signedAt ?? a.timestamp,
+              hasSignature: !!a.signature,
               timestamp: a.timestamp,
             })),
           },

@@ -555,8 +555,7 @@ import {
   type InsertTicketOrder,
   type TicketActivity,
   type InsertTicketActivity,
-  getSupplySourceDashboard,
-  supplySourceDashboardToLegacyDept,
+  getManufacturingRouteDefinition,
   type ManufacturedCategory,
   // CNC Dashboard types
   type CncScheduleSettings,
@@ -710,6 +709,11 @@ import { db, pool, rawSql } from './db';
 import { recordAuditEvent } from './src/services/auditLedgerService';
 import { recordInventoryLedgerEntry } from './src/services/inventoryTransactionLedgerService';
 import { assignDashboardForWorkOrder } from './src/lib/workOrderDashboardAssignment';
+import {
+  getProgramBuilds,
+  getProgramBuildStatus,
+  type ProgramBuildStatus,
+} from './src/lib/programManufacturingOrchestration';
 
 // Drizzle's transaction handle is API-compatible with `db` for the CRUD
 // surface our helpers use, but its TS type is a `PgTransaction` (not the
@@ -865,6 +869,89 @@ const productionOrdersColumns = {
   p2PoItemId: productionOrders.p2PoItemId,
   itemCode: productionOrders.itemCode,
 };
+
+const productionWorkOrderReadColumns = {
+  id: productionWorkOrders.id,
+  workOrderNumber: productionWorkOrders.workOrderNumber,
+  projectId: productionWorkOrders.projectId,
+  partNumber: productionWorkOrders.partNumber,
+  description: productionWorkOrders.description,
+  quantity: productionWorkOrders.quantity,
+  status: productionWorkOrders.status,
+  departmentBudgets: productionWorkOrders.departmentBudgets,
+  totalBudgetHours: productionWorkOrders.totalBudgetHours,
+  startDate: productionWorkOrders.startDate,
+  dueDate: productionWorkOrders.dueDate,
+  warningThreshold: productionWorkOrders.warningThreshold,
+  blockedThreshold: productionWorkOrders.blockedThreshold,
+  defaultChargeCodeId: productionWorkOrders.defaultChargeCodeId,
+  dashboardType: productionWorkOrders.dashboardType,
+  queueType: productionWorkOrders.queueType,
+  assignedDepartment: productionWorkOrders.assignedDepartment,
+  assignedDashboardRoute: productionWorkOrders.assignedDashboardRoute,
+  manufacturingQueueId: productionWorkOrders.manufacturingQueueId,
+  wadStatus: productionWorkOrders.wadStatus,
+  wizardData: productionWorkOrders.wizardData,
+  createdAt: productionWorkOrders.createdAt,
+  updatedAt: productionWorkOrders.updatedAt,
+};
+
+function withDefaultMaterialBudgetAmount<T extends Record<string, unknown>>(row: T | undefined): (T & { materialBudgetAmount: string }) | undefined {
+  return row ? ({ ...row, materialBudgetAmount: '0' } as T & { materialBudgetAmount: string }) : undefined;
+}
+
+type P1OrderNoteParts = {
+  productionOrderNotes?: string | null;
+  poItemProductionNotes?: string | null;
+  poItemNotes?: string | null;
+  poNotes?: string | null;
+};
+
+type P1DepartmentNote = {
+  id?: string;
+  text: string;
+  departments: string[];
+};
+
+function normalizeP1DepartmentNotes(value: unknown): P1DepartmentNote[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object') return null;
+      const raw = entry as { id?: unknown; text?: unknown; departments?: unknown };
+      const text = typeof raw.text === 'string' ? raw.text.trim() : '';
+      if (!text) return null;
+      const departments = Array.isArray(raw.departments)
+        ? raw.departments.filter((dept): dept is string => typeof dept === 'string' && dept.trim().length > 0)
+        : [];
+      return {
+        id: typeof raw.id === 'string' ? raw.id : undefined,
+        text,
+        departments,
+      };
+    })
+    .filter((entry): entry is P1DepartmentNote => entry !== null);
+}
+
+function combineP1OrderNotes(parts: P1OrderNoteParts): string | null {
+  const seen = new Set<string>();
+  const notes = [
+    parts.productionOrderNotes,
+    parts.poItemProductionNotes,
+    parts.poItemNotes,
+    parts.poNotes,
+  ]
+    .map((note) => (note ?? '').trim())
+    .filter((note) => {
+      if (!note) return false;
+      const key = note.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+  return notes.length > 0 ? notes.join('\n\n') : null;
+}
 
 // modify the interface with any CRUD methods
 // you might need
@@ -1538,6 +1625,7 @@ export interface IStorage {
     clockOut?: Date | null;
     chargeCodeId?: number | null;
     travelerId?: string | null;
+    laborClass?: string;
     isEdited?: boolean;
     editNote?: string | null;
     updatedBy?: number | null;
@@ -1780,6 +1868,10 @@ export interface IStorage {
   getRFQRiskAssessmentById(id: number): Promise<RFQRiskAssessment | undefined>;
   updateRFQRiskAssessment(id: number, data: Partial<InsertRFQRiskAssessment>): Promise<RFQRiskAssessment | undefined>;
   submitRFQRiskAssessment(id: number, username: string): Promise<RFQRiskAssessment | undefined>;
+
+  // Program Manufacturing Orchestration read methods
+  getProgramBuilds(filters?: { projectId?: string | null }): Promise<ProgramBuildStatus['build'][]>;
+  getProgramBuildStatus(buildId?: string | null, filters?: { projectId?: string | null }): Promise<ProgramBuildStatus | null>;
 
   // P2 Purchase Orders CRUD
   getAllP2PurchaseOrders(): Promise<P2PurchaseOrder[]>;
@@ -3102,6 +3194,7 @@ export interface IStorage {
 
   // Cutting documents
   listCuttingDocuments(): Promise<CuttingDocument[]>;
+  getCuttingDocument(id: number): Promise<CuttingDocument | undefined>;
   createCuttingDocument(data: InsertCuttingDocument): Promise<CuttingDocument>;
   deleteCuttingDocument(id: number): Promise<CuttingDocument | undefined>;
 
@@ -3908,6 +4001,7 @@ export class DatabaseStorage implements IStorage {
         customerPO: allOrders.customerPO,
         fbOrderNumber: allOrders.fbOrderNumber,
         agrOrderDetails: allOrders.agrOrderDetails,
+        isFlattop: allOrders.isFlattop,
         isCustomOrder: allOrders.isCustomOrder,
         modelId: allOrders.modelId,
         handedness: allOrders.handedness,
@@ -3916,6 +4010,7 @@ export class DatabaseStorage implements IStorage {
         featureQuantities: allOrders.featureQuantities,
         discountCode: allOrders.discountCode,
         notes: allOrders.notes,
+        departmentNotes: allOrders.departmentNotes,
         customDiscountType: allOrders.customDiscountType,
         customDiscountValue: allOrders.customDiscountValue,
         showCustomDiscount: allOrders.showCustomDiscount,
@@ -3998,7 +4093,7 @@ export class DatabaseStorage implements IStorage {
       customer: customerMap.get(order.customerId || '') || 'Unknown Customer',
       // Add product field for frontend compatibility
       product: order.modelId || 'Unknown Product',
-      isFlattop: false, // Add missing field
+      isFlattop: order.isFlattop || false,
     })) as any;
   }
 
@@ -4022,6 +4117,7 @@ export class DatabaseStorage implements IStorage {
         featureQuantities: allOrders.featureQuantities,
         discountCode: allOrders.discountCode,
         notes: allOrders.notes,
+        departmentNotes: allOrders.departmentNotes,
         customDiscountType: allOrders.customDiscountType,
         customDiscountValue: allOrders.customDiscountValue,
         showCustomDiscount: allOrders.showCustomDiscount,
@@ -4114,12 +4210,29 @@ export class DatabaseStorage implements IStorage {
     // Get purchase order items for P1 PO item name lookup
     const poItems = await db.select({
       id: purchaseOrderItems.id,
+      poId: purchaseOrderItems.poId,
       itemName: purchaseOrderItems.itemName,
       stockModelId: purchaseOrderItems.stockModelId,
+      productionNotes: purchaseOrderItems.productionNotes,
+      notes: purchaseOrderItems.notes,
     }).from(purchaseOrderItems);
     const poItemMap = new Map(
       poItems.map((poi) => [poi.id.toString(), stockModelMap.get(poi.stockModelId || '') || poi.itemName || poi.id.toString()])
     );
+    const poItemNotesMap = new Map(
+      poItems.map((poi) => [
+        poi.id.toString(),
+        {
+          poId: poi.poId,
+          productionNotes: poi.productionNotes,
+          notes: poi.notes,
+        },
+      ])
+    );
+    const p1PoNotesRows = await db
+      .select({ id: purchaseOrders.id, notes: purchaseOrders.notes })
+      .from(purchaseOrders);
+    const p1PoNotesMap = new Map(p1PoNotesRows.map((po) => [po.id, po.notes]));
 
     // Get P2 purchase order items for P2 PO item name lookup
     const p2PoItems = await db.select({
@@ -4226,6 +4339,13 @@ export class DatabaseStorage implements IStorage {
       // Look up the proper item name — prefer the stock model display name (from specifications.stockModel),
       // then fall back to the FK-based poItemMap lookup, then itemName, then itemId
       const resolvedItemName = stockModelMap.get(derivedModelId) || p2PoItemMap.get(po.p2PoItemId?.toString() || '') || poItemMap.get(po.itemId?.toString() || '') || p2PoItemMap.get(po.itemId?.toString() || '') || po.itemName || po.itemId || 'Unknown Product';
+      const poItemNotes = po.poItemId ? poItemNotesMap.get(String(po.poItemId)) : undefined;
+      const orderNotes = combineP1OrderNotes({
+        productionOrderNotes: po.notes,
+        poItemProductionNotes: poItemNotes?.productionNotes,
+        poItemNotes: poItemNotes?.notes,
+        poNotes: p1PoNotesMap.get(po.poId),
+      });
 
       // If modelId is still numeric or empty, attempt match from resolvedItemName
       if (!derivedModelId || /^\d+$/.test(String(derivedModelId))) {
@@ -4276,7 +4396,11 @@ export class DatabaseStorage implements IStorage {
         features: Object.keys(mappedFeatures).length > 0 ? mappedFeatures : null,
         featureQuantities: null,
         discountCode: null,
-        notes: po.notes,
+        notes: orderNotes,
+        productionOrderNotes: po.notes,
+        poItemProductionNotes: poItemNotes?.productionNotes ?? null,
+        poItemNotes: poItemNotes?.notes ?? null,
+        poNotes: p1PoNotesMap.get(po.poId) ?? null,
         customDiscountType: null,
         customDiscountValue: 0,
         showCustomDiscount: false,
@@ -4822,7 +4946,7 @@ export class DatabaseStorage implements IStorage {
           totalPayments: sql<number>`COALESCE(SUM(${payments.paymentAmount}), 0)`,
         })
         .from(payments)
-        .where(eq(payments.orderId, orderId));
+        .where(and(eq(payments.orderId, orderId), eq(payments.status, 'posted')));
       
       const paymentTotal = paymentResult.length > 0 ? Number(paymentResult[0].totalPayments) : 0;
 
@@ -5255,7 +5379,7 @@ export class DatabaseStorage implements IStorage {
               totalPaid: sql<number>`COALESCE(SUM(${payments.paymentAmount}), 0)`,
             })
             .from(payments)
-            .where(eq(payments.orderId, order.orderId))
+            .where(and(eq(payments.orderId, order.orderId), eq(payments.status, 'posted')))
             .groupBy(payments.orderId);
 
           const totalPaid =
@@ -5335,7 +5459,7 @@ export class DatabaseStorage implements IStorage {
               totalPaid: sql<number>`COALESCE(SUM(${payments.paymentAmount}), 0)`,
             })
             .from(payments)
-            .where(eq(payments.orderId, order.orderId))
+            .where(and(eq(payments.orderId, order.orderId), eq(payments.status, 'posted')))
             .groupBy(payments.orderId);
 
           const totalPaid =
@@ -5446,6 +5570,7 @@ export class DatabaseStorage implements IStorage {
         featureQuantities: allOrders.featureQuantities,
         discountCode: allOrders.discountCode,
         notes: allOrders.notes,
+        departmentNotes: allOrders.departmentNotes,
         customDiscountType: allOrders.customDiscountType,
         customDiscountValue: allOrders.customDiscountValue,
         showCustomDiscount: allOrders.showCustomDiscount,
@@ -5536,6 +5661,7 @@ export class DatabaseStorage implements IStorage {
         totalPayments: sql<number>`COALESCE(SUM(${payments.paymentAmount}), 0)`,
       })
       .from(payments)
+      .where(eq(payments.status, 'posted'))
       .groupBy(payments.orderId);
 
     // Create payment map for fast lookup
@@ -5613,6 +5739,7 @@ export class DatabaseStorage implements IStorage {
         featureQuantities: allOrders.featureQuantities,
         discountCode: allOrders.discountCode,
         notes: allOrders.notes,
+        departmentNotes: allOrders.departmentNotes,
         customDiscountType: allOrders.customDiscountType,
         customDiscountValue: allOrders.customDiscountValue,
         showCustomDiscount: allOrders.showCustomDiscount,
@@ -5695,6 +5822,7 @@ export class DatabaseStorage implements IStorage {
         totalPayments: sql<number>`COALESCE(SUM(${payments.paymentAmount}), 0)`,
       })
       .from(payments)
+      .where(eq(payments.status, 'posted'))
       .groupBy(payments.orderId);
 
     const paymentMap = new Map(
@@ -5873,6 +6001,7 @@ export class DatabaseStorage implements IStorage {
         status: allOrders.status,
         modelId: allOrders.modelId,
         shipping: allOrders.shipping,
+        shippingMethod: allOrders.shippingMethod,
         paymentAmount: allOrders.paymentAmount,
         isPaid: allOrders.isPaid,
         isVerified: allOrders.isVerified,
@@ -5915,6 +6044,7 @@ export class DatabaseStorage implements IStorage {
         totalPayments: sql<number>`COALESCE(SUM(${payments.paymentAmount}), 0)`,
       })
       .from(payments)
+      .where(eq(payments.status, 'posted'))
       .groupBy(payments.orderId);
 
     // Create payment map for fast lookup
@@ -5983,6 +6113,7 @@ export class DatabaseStorage implements IStorage {
           featureQuantities: allOrders.featureQuantities,
           discountCode: allOrders.discountCode,
           notes: allOrders.notes,
+          departmentNotes: allOrders.departmentNotes,
           customDiscountType: allOrders.customDiscountType,
           customDiscountValue: allOrders.customDiscountValue,
           showCustomDiscount: allOrders.showCustomDiscount,
@@ -6071,6 +6202,29 @@ export class DatabaseStorage implements IStorage {
         allStockModels.map((sm) => [sm.id, sm.displayName || sm.name])
       );
 
+      const poItems = await db
+        .select({
+          id: purchaseOrderItems.id,
+          poId: purchaseOrderItems.poId,
+          productionNotes: purchaseOrderItems.productionNotes,
+          notes: purchaseOrderItems.notes,
+        })
+        .from(purchaseOrderItems);
+      const poItemNotesMap = new Map(
+        poItems.map((poi) => [
+          poi.id.toString(),
+          {
+            poId: poi.poId,
+            productionNotes: poi.productionNotes,
+            notes: poi.notes,
+          },
+        ])
+      );
+      const p1PoNotesRows = await db
+        .select({ id: purchaseOrders.id, notes: purchaseOrders.notes })
+        .from(purchaseOrders);
+      const p1PoNotesMap = new Map(p1PoNotesRows.map((po) => [po.id, po.notes]));
+
       // Enrich orders with customer names and stock model display names
       const enrichedOrders = orders.map((order) => ({
         ...order,
@@ -6126,6 +6280,13 @@ export class DatabaseStorage implements IStorage {
             Object.assign(mappedFeatures, parsedSpecs.features);
           }
         }
+        const poItemNotes = po.poItemId ? poItemNotesMap.get(String(po.poItemId)) : undefined;
+        const orderNotes = combineP1OrderNotes({
+          productionOrderNotes: po.notes,
+          poItemProductionNotes: poItemNotes?.productionNotes,
+          poItemNotes: poItemNotes?.notes,
+          poNotes: p1PoNotesMap.get(po.poId),
+        });
         
         return {
           id: po.id,
@@ -6149,7 +6310,11 @@ export class DatabaseStorage implements IStorage {
           features: Object.keys(mappedFeatures).length > 0 ? mappedFeatures : null,
           featureQuantities: null,
         discountCode: null,
-        notes: po.notes,
+        notes: orderNotes,
+        productionOrderNotes: po.notes,
+        poItemProductionNotes: poItemNotes?.productionNotes ?? null,
+        poItemNotes: poItemNotes?.notes ?? null,
+        poNotes: p1PoNotesMap.get(po.poId) ?? null,
         customDiscountType: null,
         customDiscountValue: 0,
         showCustomDiscount: false,
@@ -8519,6 +8684,7 @@ export class DatabaseStorage implements IStorage {
         ...(updates.clockOut !== undefined ? { clockOut: updates.clockOut } : {}),
         ...(updates.chargeCodeId !== undefined ? { chargeCodeId: updates.chargeCodeId, chargeCode: derivedChargeCode ?? null } : {}),
         ...(updates.travelerId !== undefined ? { travelerId: updates.travelerId } : {}),
+        ...(updates.laborClass !== undefined ? { laborClass: updates.laborClass } : {}),
         ...(updates.isEdited !== undefined ? { isEdited: updates.isEdited } : {}),
         ...(updates.editNote !== undefined ? { editNote: updates.editNote } : {}),
         ...(updates.updatedBy !== undefined ? { updatedBy: updates.updatedBy } : {}),
@@ -10493,6 +10659,7 @@ export class DatabaseStorage implements IStorage {
     // Task #229 — also write a `RECEIVE` row to inventory_transaction_ledger so
     // PO receipts surface in the Material Traceability Viewer / Inventory Ledger.
     let derivedPoStatus: string = 'Sent';
+    let receiptAccrualJournal: any = null;
     await db.transaction(async (tx) => {
       // The route/UI sends `receivedQuantity` as the PER-ACTION amount being
       // received in this call (e.g. `expectedQuantity - alreadyReceived` in
@@ -10511,7 +10678,7 @@ export class DatabaseStorage implements IStorage {
         .update(vendorPOItems)
         .set({
           receivedQuantity: newCumulative,
-          receivedDate,
+          receivedDate: receivedDate.toISOString().slice(0, 10),
           updatedAt: new Date(),
         })
         .where(eq(vendorPOItems.id, poLineItemId));
@@ -10813,6 +10980,18 @@ export class DatabaseStorage implements IStorage {
         .update(vendorPOs)
         .set({ status: derivedPoStatus, updatedAt: new Date() })
         .where(eq(vendorPOs.id, poLineItem.vendorPoId));
+
+      const { createOrUpdateVendorPOReceiptAccrualJournalEntry } = await import(
+        './src/services/vendorPOReceiptAccountingService.js'
+      );
+      receiptAccrualJournal = await createOrUpdateVendorPOReceiptAccrualJournalEntry({
+        poLineItemId,
+        receivedQuantity,
+        receivedDate,
+        cumulativeReceivedQuantity: newCumulative,
+        createdBy,
+        notes: notes ?? null,
+      }, tx);
     });
     console.log(`📦 PO ${poLineItem.vendorPoId} status set to "${derivedPoStatus}"`);
 
@@ -11039,8 +11218,9 @@ export class DatabaseStorage implements IStorage {
           // - expirationDate: Expiration Date column
           const purchaseUnitNormSingle = (inventoryItem.purchaseUnit || '').toLowerCase().trim();
           const sqMeterUnitsSingle = ['sq m', 'sqm', 'square meters', 'm2', 'm²'];
-          const sqMetersPerRollSingle = sqMeterUnitsSingle.includes(purchaseUnitNormSingle) && inventoryItem.purchaseQuantity > 0
-            ? String(inventoryItem.purchaseQuantity)
+          const purchaseQuantitySingle = Number(inventoryItem.purchaseQuantity ?? 0);
+          const sqMetersPerRollSingle = sqMeterUnitsSingle.includes(purchaseUnitNormSingle) && purchaseQuantitySingle > 0
+            ? String(purchaseQuantitySingle)
             : undefined;
           const fabricRecord = await db
             .insert(cuttingFabricInventory)
@@ -11104,6 +11284,9 @@ export class DatabaseStorage implements IStorage {
         isPL2Item: inventoryItem?.utilizedInPL2 ?? false,
         productionLines: productionLines || undefined,
       } : null,
+      accounting: {
+        inventoryReceiptAccrual: receiptAccrualJournal,
+      },
     };
   }
 
@@ -12578,7 +12761,7 @@ export class DatabaseStorage implements IStorage {
         
         po.itemsMap.set(row.poItemId, {
           poItemId: row.poItemId,
-          description: row.customerProductNumber || row.itemName || row.stockModelName || row.stockModelId || 'Unknown Item',
+          description: row.itemName || row.stockModelName || row.stockModelId || row.customerProductNumber || 'Unknown Item',
           quantity: row.quantity,
           actionLength: specs.actionLength || null,
           material: specs.material || null,
@@ -13135,11 +13318,12 @@ export class DatabaseStorage implements IStorage {
               .limit(1);
             const childInvItem = rows[0] ?? null;
 
-            // Trigger BOM explosion when manufacturedCategory is ASSEMBLY or SUB_ASSEMBLY.
+            // Trigger BOM explosion when manufacturedCategory is ASSEMBLY, FINAL_ASSEMBLY, or SUB_ASSEMBLY.
             // itemType === 'MANUFACTURED' is an optional guard — some legacy rows may lack itemType
             // while still having a valid manufacturedCategory, so category is the primary signal.
             const isAssembly =
               childInvItem?.manufacturedCategory === 'ASSEMBLY' ||
+              childInvItem?.manufacturedCategory === 'FINAL_ASSEMBLY' ||
               childInvItem?.manufacturedCategory === 'SUB_ASSEMBLY';
             const isManufactured =
               !childInvItem?.itemType || childInvItem?.itemType === 'MANUFACTURED';
@@ -14600,6 +14784,8 @@ export class DatabaseStorage implements IStorage {
           shankLength: scrapOrder.shankLength,
           features: scrapOrder.features,
           featureQuantities: scrapOrder.featureQuantities,
+          notes: scrapOrder.notes,
+          departmentNotes: normalizeP1DepartmentNotes((scrapOrder as any).departmentNotes),
           status: 'ACTIVE',
           currentDepartment: 'Layup', // Reset to start of pipeline
           isReplacement: true,
@@ -15193,6 +15379,17 @@ export class DatabaseStorage implements IStorage {
     return submitted;
   }
 
+  async getProgramBuilds(filters?: { projectId?: string | null }): Promise<ProgramBuildStatus['build'][]> {
+    return getProgramBuilds(filters);
+  }
+
+  async getProgramBuildStatus(
+    buildId?: string | null,
+    filters?: { projectId?: string | null }
+  ): Promise<ProgramBuildStatus | null> {
+    return getProgramBuildStatus(buildId, filters);
+  }
+
   // P2 Purchase Orders CRUD
   async getAllP2PurchaseOrders(): Promise<P2PurchaseOrder[]> {
     await ensureP2PurchaseOrderReadSchema();
@@ -15215,6 +15412,7 @@ export class DatabaseStorage implements IStorage {
         bom_owner_name as "bomOwnerName", scheduled_by_id as "scheduledById",
         scheduled_by_name as "scheduledByName", production_lead_id as "productionLeadId",
         production_lead_name as "productionLeadName",
+        project_id as "projectId",
         project_name as "projectName"
       FROM p2_purchase_orders 
       ORDER BY created_at DESC
@@ -15259,7 +15457,7 @@ export class DatabaseStorage implements IStorage {
         tolerance_notes, bom_configured, source_quote_id, contract_review_role,
         created_by_id, created_by_name, assigned_to_id, assigned_to_name, bom_owner_id, bom_owner_name,
         scheduled_by_id, scheduled_by_name, production_lead_id, production_lead_name,
-        project_name
+        project_id, project_name
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25
       )
@@ -15277,6 +15475,7 @@ export class DatabaseStorage implements IStorage {
         bom_owner_name as "bomOwnerName", scheduled_by_id as "scheduledById",
         scheduled_by_name as "scheduledByName", production_lead_id as "productionLeadId",
         production_lead_name as "productionLeadName",
+        project_id as "projectId",
         project_name as "projectName",
         created_at as "createdAt", updated_at as "updatedAt"
     `, [
@@ -15304,6 +15503,7 @@ export class DatabaseStorage implements IStorage {
       data.scheduledByName || null,
       data.productionLeadId || null,
       data.productionLeadName || null,
+      data.projectId || null,
       data.projectName || null,
     ]);
     return result[0] as P2PurchaseOrder;
@@ -15702,10 +15902,8 @@ export class DatabaseStorage implements IStorage {
             }
 
             // Derive department: category takes priority; fall back to legacy isPacket/manufacturingDepartment for unmigrated items.
-            const derivedDashboard = getSupplySourceDashboard(part.manufacturedCategory as ManufacturedCategory);
-            const effectiveDepartment = derivedDashboard
-              ? supplySourceDashboardToLegacyDept(derivedDashboard)
-              : (isPacketItem ? 'Cutting Table' : part.manufacturingDepartment);
+            const route = getManufacturingRouteDefinition(part.manufacturedCategory as ManufacturedCategory);
+            const effectiveDepartment = route?.department || (isPacketItem ? 'Cutting Table' : part.manufacturingDepartment);
 
             if (!effectiveDepartment) {
               const skipMsg = `Manufactured part ${line.childPartAgNumber} has no manufacturing department assigned`;
@@ -15795,10 +15993,8 @@ export class DatabaseStorage implements IStorage {
             }
 
             // Derive department: category takes priority; fall back to legacy isPacket/manufacturingDepartment for unmigrated items.
-            const derivedDashboard2 = getSupplySourceDashboard(part?.manufacturedCategory as ManufacturedCategory);
-            const effectiveDepartment = derivedDashboard2
-              ? supplySourceDashboardToLegacyDept(derivedDashboard2)
-              : (isPacketItem ? 'Cutting Table' : (item.firstDept || part?.manufacturingDepartment || null));
+            const route = getManufacturingRouteDefinition(part?.manufacturedCategory as ManufacturedCategory);
+            const effectiveDepartment = route?.department || (isPacketItem ? 'Cutting Table' : (item.firstDept || part?.manufacturingDepartment || null));
 
             if (!effectiveDepartment) {
               const skipMsg = `Part ${itemPartNumber} has no department assigned`;
@@ -15856,10 +16052,8 @@ export class DatabaseStorage implements IStorage {
 
       if (topLevelPart.length > 0 && (topIsManufactured || topIsPacket)) {
         const part = topLevelPart[0];
-        const topDerivedDashboard = getSupplySourceDashboard(part.manufacturedCategory as ManufacturedCategory);
-        const topDepartment = topDerivedDashboard
-          ? supplySourceDashboardToLegacyDept(topDerivedDashboard)
-          : (topIsPacket ? 'Cutting Table' : part.manufacturingDepartment);
+        const topRoute = getManufacturingRouteDefinition(part.manufacturedCategory as ManufacturedCategory);
+        const topDepartment = topRoute?.department || (topIsPacket ? 'Cutting Table' : part.manufacturingDepartment);
         
         if (topDepartment) {
           console.log(`🔧 Top-level item ${poItem.partNumber} is ${topIsPacket ? 'Packet' : 'Manufactured'} (dept: ${topDepartment}) - queuing ${effectiveQuantity} production orders`);
@@ -16225,8 +16419,9 @@ export class DatabaseStorage implements IStorage {
   async updateP2PoItemWithQtySync(
     poId: number,
     itemId: number,
-    updateData: Partial<InsertP2PurchaseOrderItem>,
-    actor: { username: string; role: string; ipAddress?: string; userAgent?: string | null }
+    updateData: Partial<InsertP2PurchaseOrderItem> & { quantityDelta?: number },
+    actor: { username: string; role: string; ipAddress?: string; userAgent?: string | null },
+    existingTx?: DbOrTx,
   ): Promise<{
     item: P2PurchaseOrderItem;
     sync:
@@ -16244,7 +16439,7 @@ export class DatabaseStorage implements IStorage {
           productionOrdersRemoved: number;
         };
   }> {
-    return await db.transaction(async (tx) => {
+    const runner = async (tx: DbOrTx) => {
       // Lock the PO row first to serialize concurrent qty edits
       const [po] = await tx
         .select()
@@ -16281,8 +16476,12 @@ export class DatabaseStorage implements IStorage {
       }
 
       const oldQty = existingItem.quantity;
-      const newQty = updateData.quantity ?? oldQty;
-      const qtyChanged = updateData.quantity !== undefined && newQty !== oldQty;
+      const newQty = updateData.quantityDelta !== undefined
+        ? oldQty + updateData.quantityDelta
+        : (updateData.quantity ?? oldQty);
+      const qtyChanged =
+        (updateData.quantityDelta !== undefined && updateData.quantityDelta !== 0) ||
+        (updateData.quantity !== undefined && newQty !== oldQty);
 
       // Re-read counts inside the transaction so the in-progress guard sees a
       // consistent view of serialized units / production orders.
@@ -16312,11 +16511,16 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
-      // Build the partial update payload (recompute totalPrice if needed)
+      // Build the partial update payload (recompute totalPrice if needed).
+      // Strip the synthetic `quantityDelta` flag — it's not a column.
+      const { quantityDelta: _delta, ...rest } = updateData;
       const persistData: Partial<InsertP2PurchaseOrderItem> & { totalPrice?: number } = {
-        ...updateData,
+        ...rest,
       };
-      if (updateData.quantity !== undefined || updateData.unitPrice !== undefined) {
+      if (updateData.quantityDelta !== undefined) {
+        persistData.quantity = newQty;
+      }
+      if (qtyChanged || updateData.unitPrice !== undefined) {
         const unitPrice = updateData.unitPrice ?? existingItem.unitPrice ?? 0;
         persistData.totalPrice = newQty * unitPrice;
       }
@@ -16485,7 +16689,8 @@ export class DatabaseStorage implements IStorage {
       }
 
       return { item: updatedItem, sync };
-    });
+    };
+    return existingTx ? await runner(existingTx) : await db.transaction(runner);
   }
 
   async getP2MaterialRequirements(poId: number): Promise<any[]> {
@@ -16748,6 +16953,8 @@ export class DatabaseStorage implements IStorage {
     department?: string;
     status?: string;
   }): Promise<P2SerializedItem[]> {
+    await ensureP2PurchaseOrderReadSchema();
+
     // Use pg pool instead of Drizzle/Neon HTTP driver for better compatibility
     let whereClause = '';
     const params: any[] = [];
@@ -17182,7 +17389,7 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(routingOperations)
       .where(eq(routingOperations.partRoutingId, partRoutingId))
-      .orderBy(routingOperations.stepNumber);
+      .orderBy(asc(routingOperations.stepNumber), asc(routingOperations.id));
   }
 
   async createRoutingOperation(data: InsertRoutingOperation): Promise<RoutingOperation> {
@@ -18331,11 +18538,11 @@ export class DatabaseStorage implements IStorage {
       .limit(1);
     if (!traveler?.productionWorkOrderId) return undefined;
     const [wad] = await db
-      .select()
+      .select(productionWorkOrderReadColumns)
       .from(productionWorkOrders)
       .where(eq(productionWorkOrders.id, traveler.productionWorkOrderId))
       .limit(1);
-    return wad;
+    return withDefaultMaterialBudgetAmount(wad) as ProductionWorkOrder | undefined;
   }
 
   async createTimeClockEntryWithChargeContext(data: InsertTimeClockEntry): Promise<TimeClockEntry> {
@@ -19309,6 +19516,9 @@ export class DatabaseStorage implements IStorage {
     const departmentSequence = routing.departmentSequence as string[];
     const traceabilityConfig = routing.traceabilityConfig as Record<string, string[]>;
     const departmentConfig = (routing.departmentConfig || {}) as Record<string, any>;
+    const routingHasExplicitMaterials = Object.values(departmentConfig).some(
+      (config: any) => Array.isArray(config?.materials) && config.materials.length > 0,
+    );
 
     let stepCounter = 0;
     for (let i = 0; i < departmentSequence.length; i++) {
@@ -19338,18 +19548,19 @@ export class DatabaseStorage implements IStorage {
       // ===== POLICY-DRIVEN MATERIAL TRACEABILITY =====
       const tracePolicy = this._getTracePolicyForDepartment(deptName);
       const routingMaterials = deptConfig.materials || [];
-      if (tracePolicy.enabled) {
-        if (routingMaterials.length > 1) {
+      if (tracePolicy.enabled && (!routingHasExplicitMaterials || routingMaterials.length > 0)) {
+        if (routingMaterials.length > 0) {
           for (let matIdx = 0; matIdx < routingMaterials.length; matIdx++) {
             const mat = routingMaterials[matIdx];
             const matLabel = mat.partName || mat.partNumber || `Material ${matIdx + 1}`;
             const matShort = mat.partNumber ? `#${mat.partNumber}` : `Material ${matIdx + 1}`;
             const perMatFields = this._buildTraceFields(tracePolicy.capture);
+            const traceTaskPhase = this._normalizePhase(mat.traceabilityPhase || tracePolicy.phase);
             if (perMatFields.length > 0) {
               const matTraceTask = await this._createTaskIfAllowed({
                 travelerStepId: step.id,
                 taskType: 'TRACE',
-                taskPhase: tracePolicy.phase,
+                taskPhase: traceTaskPhase,
                 title: `Material Traceability — ${matShort}`,
                 instructions: `Select ${matLabel} from inventory. Fields will auto-fill.`,
                 required: true,
@@ -19547,9 +19758,8 @@ export class DatabaseStorage implements IStorage {
 
       // Phase-separated QC Standards - create separate QC tasks per phase
       const startQcStandards = deptConfig.startQcStandards || [];
+      const workQcStandards = deptConfig.qcStandards || [];
       const finishQcStandards = deptConfig.finishQcStandards || [];
-      const hasPhaseQcStandards = startQcStandards.length > 0 || finishQcStandards.length > 0;
-      const workQcStandards = hasPhaseQcStandards ? [] : (deptConfig.qcStandards || []);
 
       const qcPhaseConfigs = [
         { standards: startQcStandards, phase: 'START' as const, title: 'Incoming QC Inspection', instructions: 'Complete START phase quality control verifications' },
@@ -19651,6 +19861,25 @@ export class DatabaseStorage implements IStorage {
           requiresSignature: false,
           requiresCertification: false,
           instructionPack: routingInstructionPack,
+          status: 'NOT_STARTED',
+        }, enabledPhases, createdTaskKeys);
+      }
+
+      // Explicit WORK checks from routing template
+      for (const check of deptConfig.workChecks || []) {
+        await this._createTaskIfAllowed({
+          travelerStepId: step.id,
+          taskType: check.taskType || 'CHECK',
+          taskPhase: 'WORK',
+          title: check.title,
+          instructions: check.instructions || `Complete: ${check.title}`,
+          required: check.required !== false,
+          sortOrder: sortOrder++,
+          timePolicy: check.timePolicy || 'AUTO_ON_COMPLETE',
+          requiresSignature: check.requiresSignature || false,
+          signatureRole: check.requiresSignature ? (check.signatureRole || 'OPERATOR') : null,
+          requiresCertification: check.requiresCertification || false,
+          instructionPack: check.instructionPack || null,
           status: 'NOT_STARTED',
         }, enabledPhases, createdTaskKeys);
       }
@@ -20006,7 +20235,7 @@ export class DatabaseStorage implements IStorage {
     }
 
     const [wad] = await db
-      .select()
+      .select({ id: productionWorkOrders.id })
       .from(productionWorkOrders)
       .where(eq(productionWorkOrders.id, workOrderId));
     if (!wad) {
@@ -20040,15 +20269,15 @@ export class DatabaseStorage implements IStorage {
 
   async getProductionWorkOrderWithProject(id: string): Promise<ProductionWorkOrder | undefined> {
     const [wad] = await db
-      .select()
+      .select(productionWorkOrderReadColumns)
       .from(productionWorkOrders)
       .where(eq(productionWorkOrders.id, id));
-    return wad ?? undefined;
+    return withDefaultMaterialBudgetAmount(wad) as ProductionWorkOrder | undefined;
   }
 
   async findRoutingForProductionWorkOrder(wadId: string): Promise<PartRouting | undefined> {
     const [wad] = await db
-      .select()
+      .select({ partNumber: productionWorkOrders.partNumber })
       .from(productionWorkOrders)
       .where(eq(productionWorkOrders.id, wadId));
     if (!wad) return undefined;
@@ -20057,7 +20286,12 @@ export class DatabaseStorage implements IStorage {
 
   async createTravelerFromProductionWorkOrder(wadId: string, createdBy: string): Promise<Traveler> {
     const [wad] = await db
-      .select()
+      .select({
+        id: productionWorkOrders.id,
+        workOrderNumber: productionWorkOrders.workOrderNumber,
+        partNumber: productionWorkOrders.partNumber,
+        quantity: productionWorkOrders.quantity,
+      })
       .from(productionWorkOrders)
       .where(eq(productionWorkOrders.id, wadId));
     if (!wad) {
@@ -20123,10 +20357,21 @@ export class DatabaseStorage implements IStorage {
       switch (t) {
         case 'SETUP': return 'START';
         case 'MATERIAL': return 'START';
-        case 'QC': return 'FINISH';
-        case 'INSPECT': return 'FINISH';
+        case 'QC': return 'WORK';
+        case 'INSPECT': return 'WORK';
         default: return 'WORK';
       }
+    };
+    const normalizeExplicitPhase = (value: any): 'START' | 'WORK' | 'FINISH' | null => {
+      const normalized = String(value || '').trim().toUpperCase();
+      return normalized === 'START' || normalized === 'WORK' || normalized === 'FINISH'
+        ? normalized
+        : null;
+    };
+    const operationTaskPhase = (op: RoutingOperation): 'START' | 'WORK' | 'FINISH' => {
+      const pack = (op.instructionPack || {}) as any;
+      return normalizeExplicitPhase(pack.taskPhase || pack.phase || pack.qcPhase || pack.workPhase)
+        || operationTypeToPhase(op.operationType) as 'START' | 'WORK' | 'FINISH';
     };
     const sanitizeFieldKey = (value: string) =>
       String(value || '')
@@ -20177,7 +20422,7 @@ export class DatabaseStorage implements IStorage {
       const fallbackStandards =
         taskPhase === 'FINISH'
           ? normalizeQcStandards(deptConfig.qcStandards)
-          : normalizeQcStandards(deptConfig.finishQcStandards);
+          : [];
       if (fallbackStandards.length > 0) return fallbackStandards;
 
       if (pack.specialNotes) {
@@ -20191,23 +20436,102 @@ export class DatabaseStorage implements IStorage {
       }
       return [];
     };
+    const buildOperationEvidenceFields = (op: RoutingOperation) => {
+      const baseKey = `routing_op_${op.id}`;
+      const fields: Array<{
+        fieldKey: string;
+        fieldLabel: string;
+        fieldType: string;
+        required: boolean;
+        validation?: any;
+      }> = [
+        {
+          fieldKey: `${baseKey}_complete`,
+          fieldLabel: `Completed: ${op.operationName}`,
+          fieldType: 'yes_no',
+          required: true,
+        },
+        {
+          fieldKey: `${baseKey}_department`,
+          fieldLabel: 'Routing Department',
+          fieldType: 'text',
+          required: false,
+          validation: { readonly: true, value: op.departmentName },
+        },
+        {
+          fieldKey: `${baseKey}_operation_type`,
+          fieldLabel: 'Operation Type',
+          fieldType: 'text',
+          required: false,
+          validation: { readonly: true, value: op.operationType },
+        },
+      ];
 
-    // Group ops by unique (stepNumber, departmentName)
-    const stepGroups: Map<string, RoutingOperation[]> = new Map();
-    for (const op of ops) {
-      const key = `${op.stepNumber}__${op.departmentName}`;
-      if (!stepGroups.has(key)) stepGroups.set(key, []);
-      stepGroups.get(key)!.push(op);
+      if (op.workCenter) {
+        fields.push({
+          fieldKey: `${baseKey}_work_center`,
+          fieldLabel: 'Work Center',
+          fieldType: 'text',
+          required: false,
+          validation: { readonly: true, value: op.workCenter },
+        });
+      }
+      if (op.estimatedMinutes) {
+        fields.push({
+          fieldKey: `${baseKey}_estimated_minutes`,
+          fieldLabel: 'Estimated Minutes',
+          fieldType: 'number',
+          required: false,
+          validation: { readonly: true, value: String(op.estimatedMinutes) },
+        });
+        fields.push({
+          fieldKey: `${baseKey}_actual_minutes`,
+          fieldLabel: 'Actual Minutes',
+          fieldType: 'number',
+          required: false,
+        });
+      }
+
+      return fields;
+    };
+
+    const departmentSequence = Array.isArray(routing.departmentSequence)
+      ? (routing.departmentSequence as string[])
+      : [];
+    const departmentOrder = new Map(
+      departmentSequence.map((dept, index) => [String(dept).trim().toLowerCase(), index])
+    );
+    const getDepartmentOrder = (departmentName: string) =>
+      departmentOrder.get(String(departmentName || '').trim().toLowerCase()) ?? Number.MAX_SAFE_INTEGER;
+    const compareOperations = (a: RoutingOperation, b: RoutingOperation) => {
+      const aStep = Number.isFinite(Number(a.stepNumber)) ? Number(a.stepNumber) : Number.MAX_SAFE_INTEGER;
+      const bStep = Number.isFinite(Number(b.stepNumber)) ? Number(b.stepNumber) : Number.MAX_SAFE_INTEGER;
+      if (aStep !== bStep) return aStep - bStep;
+
+      const deptDiff = getDepartmentOrder(a.departmentName) - getDepartmentOrder(b.departmentName);
+      if (deptDiff !== 0) return deptDiff;
+
+      return (a.id ?? 0) - (b.id ?? 0);
+    };
+
+    const orderedOps = [...ops].sort(compareOperations);
+
+    // Keep the exact operation placement in the traveler flow. Consecutive
+    // operations for the same department become one traveler step; if a
+    // department appears again later in the routing, it remains a later step.
+    const stepGroups: RoutingOperation[][] = [];
+    for (const op of orderedOps) {
+      const currentGroup = stepGroups[stepGroups.length - 1];
+      const currentDept = currentGroup?.[0]?.departmentName;
+      if (currentGroup && currentDept === op.departmentName) {
+        currentGroup.push(op);
+      } else {
+        stepGroups.push([op]);
+      }
     }
-    const sortedKeys = Array.from(stepGroups.keys()).sort((a, b) => {
-      const [aStep] = a.split('__').map(Number);
-      const [bStep] = b.split('__').map(Number);
-      return aStep - bStep;
-    });
 
     let stepCounter = 0;
-    for (const key of sortedKeys) {
-      const groupOps = stepGroups.get(key)!;
+    for (const groupOps of stepGroups) {
       const deptName = groupOps[0].departmentName;
       stepCounter++;
       const step = await this.createTravelerStep({
@@ -20221,9 +20545,40 @@ export class DatabaseStorage implements IStorage {
       let sortOrder = 0;
       for (const op of groupOps) {
         const taskType = operationTypeToTaskType(op.operationType);
-        const taskPhase = operationTypeToPhase(op.operationType);
-        const instPack = op.instructionPack as any;
-        const instructions = instPack?.specialNotes || op.operationName;
+        const taskPhase = operationTaskPhase(op);
+        const instPack = (op.instructionPack || {}) as any;
+        const operationDetails = [
+          instPack?.specialNotes,
+          op.workCenter ? `Work center: ${op.workCenter}` : null,
+          op.estimatedMinutes ? `Estimated time: ${op.estimatedMinutes} minutes` : null,
+          op.isOutsideProcess ? 'Outside process required' : null,
+          op.certificateRequired ? 'Certificate required' : null,
+          op.receivingInspectionRequired ? 'Receiving inspection required' : null,
+          Array.isArray(op.requiredCalibrationAssetTags) && op.requiredCalibrationAssetTags.length > 0
+            ? `Required calibration assets: ${op.requiredCalibrationAssetTags.join(', ')}`
+            : null,
+        ].filter(Boolean);
+        const instructions = operationDetails.length > 0
+          ? operationDetails.join('\n')
+          : op.operationName;
+        const instructionPack = {
+          ...instPack,
+          routingOperation: {
+            id: op.id,
+            stepNumber: op.stepNumber,
+            departmentName: op.departmentName,
+            operationName: op.operationName,
+            operationType: op.operationType,
+            workCenter: op.workCenter,
+            estimatedMinutes: op.estimatedMinutes,
+            isOutsideProcess: op.isOutsideProcess,
+            outsideProcessType: op.outsideProcessType,
+            expectedLeadDays: op.expectedLeadDays,
+            certificateRequired: op.certificateRequired,
+            receivingInspectionRequired: op.receivingInspectionRequired,
+            requiredCalibrationAssetTags: op.requiredCalibrationAssetTags || [],
+          },
+        };
 
         const task = await this.createTravelerTask({
           travelerStepId: step.id,
@@ -20238,14 +20593,14 @@ export class DatabaseStorage implements IStorage {
           requiresCertification: op.requiresCertification ?? false,
           signatureRole: op.requiresSignature ? 'OPERATOR' : null,
           status: 'NOT_STARTED',
-          instructionPack: op.instructionPack as any,
+          instructionPack,
         });
 
         if (taskType === 'QC') {
           const qcStandards = getOperationQcStandards(op, taskPhase);
-          for (const qc of qcStandards) {
-            await this.createTravelerTaskField({
-              travelerTaskId: task.id,
+          const fields = [
+            ...buildOperationEvidenceFields(op),
+            ...qcStandards.map((qc) => ({
               fieldKey: `qc_${op.id}_${sanitizeFieldKey(qc.standard || op.operationName)}`,
               fieldLabel: qc.standard || op.operationName,
               fieldType: 'yes_no',
@@ -20256,6 +20611,27 @@ export class DatabaseStorage implements IStorage {
                 ...(qc.hardQcStop ? { hardQcStop: true } : {}),
                 ...(qc.referenceLink ? { referenceLink: qc.referenceLink } : {}),
               },
+            })),
+          ];
+          for (const field of this._dedupeFieldsByKey(fields)) {
+            await this.createTravelerTaskField({
+              travelerTaskId: task.id,
+              fieldKey: field.fieldKey,
+              fieldLabel: field.fieldLabel,
+              fieldType: field.fieldType,
+              required: field.required,
+              validation: field.validation,
+            });
+          }
+        } else {
+          for (const field of buildOperationEvidenceFields(op)) {
+            await this.createTravelerTaskField({
+              travelerTaskId: task.id,
+              fieldKey: field.fieldKey,
+              fieldLabel: field.fieldLabel,
+              fieldType: field.fieldType,
+              required: field.required,
+              validation: field.validation,
             });
           }
         }
@@ -21595,6 +21971,7 @@ export class DatabaseStorage implements IStorage {
       discountValue: (orderData.discountValue !== '' && orderData.discountValue != null) ? Number(orderData.discountValue) : null,
       discountAppliesTo: orderData.discountAppliesTo,
       notes: orderData.notes || '',
+      departmentNotes: normalizeP1DepartmentNotes((orderData as any).departmentNotes),
       customDiscountType: orderData.customDiscountType || 'percent',
       customDiscountValue: (orderData.customDiscountValue !== '' && orderData.customDiscountValue != null) ? Number(orderData.customDiscountValue) : 0,
       showCustomDiscount: orderData.showCustomDiscount || false,
@@ -21787,6 +22164,7 @@ export class DatabaseStorage implements IStorage {
       featureQuantities: draft.featureQuantities,
       discountCode: draft.discountCode,
       notes: draft.notes,
+      departmentNotes: normalizeP1DepartmentNotes((draft as any).departmentNotes),
       customDiscountType: draft.customDiscountType,
       customDiscountValue: draft.customDiscountValue,
       showCustomDiscount: draft.showCustomDiscount,
@@ -22019,19 +22397,26 @@ export class DatabaseStorage implements IStorage {
     data: Partial<InsertAllOrder>
   ): Promise<AllOrder> {
     try {
-      console.log(`[updateFinalizedOrder] Updating order ${orderId} with keys:`, Object.keys(data));
+      const updateData: Partial<InsertAllOrder> = { ...data };
+      if (Object.prototype.hasOwnProperty.call(updateData, 'dueDate')) {
+        delete updateData.dueDate;
+      }
+
+      console.log(`[updateFinalizedOrder] Updating order ${orderId} with keys:`, Object.keys(updateData));
 
       // Check upfront whether a production_orders record exists so we can sync it atomically.
       const productionRecord =
-        data.currentDepartment !== undefined
+        updateData.currentDepartment !== undefined
           ? await this.getProductionOrderByOrderId(orderId)
           : undefined;
 
       const order = await db.transaction(async (tx) => {
-        await tx
-          .update(allOrders)
-          .set({ ...data, updatedAt: new Date() })
-          .where(eq(allOrders.orderId, orderId));
+        if (Object.keys(updateData).length > 0) {
+          await tx
+            .update(allOrders)
+            .set({ ...updateData, updatedAt: new Date() })
+            .where(eq(allOrders.orderId, orderId));
+        }
 
         const [updated] = await tx
           .select()
@@ -22046,11 +22431,11 @@ export class DatabaseStorage implements IStorage {
         // If currentDepartment is being updated and a production_orders record exists,
         // sync it within the same transaction so getAllOrders deduplication
         // (which prefers production_orders) always returns the correct department.
-        if (data.currentDepartment !== undefined && productionRecord) {
+        if (updateData.currentDepartment !== undefined && productionRecord) {
           await tx.execute(
-            sql`UPDATE production_orders SET current_department = ${data.currentDepartment}, updated_at = NOW() WHERE order_id = ${orderId}`
+            sql`UPDATE production_orders SET current_department = ${updateData.currentDepartment}, updated_at = NOW() WHERE order_id = ${orderId}`
           );
-          console.log(`[updateFinalizedOrder] Synced production_orders.current_department for ${orderId} → ${data.currentDepartment}`);
+          console.log(`[updateFinalizedOrder] Synced production_orders.current_department for ${orderId} → ${updateData.currentDepartment}`);
         }
 
         return updated;
@@ -26051,31 +26436,36 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAllProductionWorkOrders(): Promise<ProductionWorkOrder[]> {
-    return await db
-      .select()
+    const rows = await db
+      .select(productionWorkOrderReadColumns)
       .from(productionWorkOrders)
       .orderBy(desc(productionWorkOrders.createdAt));
+    return rows.map((row) => withDefaultMaterialBudgetAmount(row)!) as ProductionWorkOrder[];
   }
 
   async getWorkOrdersByProject(projectId: string): Promise<ProductionWorkOrder[]> {
-    return await db
-      .select()
+    const rows = await db
+      .select(productionWorkOrderReadColumns)
       .from(productionWorkOrders)
       .where(eq(productionWorkOrders.projectId, projectId))
       .orderBy(desc(productionWorkOrders.createdAt));
+    return rows.map((row) => withDefaultMaterialBudgetAmount(row)!) as ProductionWorkOrder[];
   }
 
   async getWorkOrderById(id: string): Promise<ProductionWorkOrder | undefined> {
     const [row] = await db
-      .select()
+      .select(productionWorkOrderReadColumns)
       .from(productionWorkOrders)
       .where(eq(productionWorkOrders.id, id));
-    return row || undefined;
+    return withDefaultMaterialBudgetAmount(row) as ProductionWorkOrder | undefined;
   }
 
   async checkWorkOrderMaterialAvailability(workOrderId: string): Promise<boolean> {
     const [wad] = await db
-      .select()
+      .select({
+        partNumber: productionWorkOrders.partNumber,
+        quantity: productionWorkOrders.quantity,
+      })
       .from(productionWorkOrders)
       .where(eq(productionWorkOrders.id, workOrderId))
       .limit(1);
@@ -26119,7 +26509,10 @@ export class DatabaseStorage implements IStorage {
 
   async getMaterialShortageDetail(workOrderId: string): Promise<string | null> {
     const [wad] = await db
-      .select()
+      .select({
+        partNumber: productionWorkOrders.partNumber,
+        quantity: productionWorkOrders.quantity,
+      })
       .from(productionWorkOrders)
       .where(eq(productionWorkOrders.id, workOrderId))
       .limit(1);
@@ -26162,7 +26555,7 @@ export class DatabaseStorage implements IStorage {
 
   async checkWorkOrderTrainingCoverage(workOrderId: string): Promise<boolean> {
     const [wad] = await db
-      .select()
+      .select({ partNumber: productionWorkOrders.partNumber })
       .from(productionWorkOrders)
       .where(eq(productionWorkOrders.id, workOrderId))
       .limit(1);
@@ -26226,8 +26619,8 @@ export class DatabaseStorage implements IStorage {
       .update(productionWorkOrders)
       .set({ status, updatedAt: new Date() })
       .where(eq(productionWorkOrders.id, workOrderId))
-      .returning();
-    return updated;
+      .returning(productionWorkOrderReadColumns);
+    return withDefaultMaterialBudgetAmount(updated) as ProductionWorkOrder;
   }
 
   // ── Estimating – RFQs ────────────────────────────────────────────────────────
@@ -27100,6 +27493,11 @@ export class DatabaseStorage implements IStorage {
 
   async listCuttingDocuments(): Promise<CuttingDocument[]> {
     return db.select().from(cuttingDocuments).orderBy(desc(cuttingDocuments.uploadedAt));
+  }
+
+  async getCuttingDocument(id: number): Promise<CuttingDocument | undefined> {
+    const [row] = await db.select().from(cuttingDocuments).where(eq(cuttingDocuments.id, id));
+    return row ?? undefined;
   }
 
   async createCuttingDocument(data: InsertCuttingDocument): Promise<CuttingDocument> {

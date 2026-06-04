@@ -61,6 +61,29 @@ CREATE INDEX IF NOT EXISTS onboarding_verification_codes_invitation_idx
 CREATE INDEX IF NOT EXISTS onboarding_verification_codes_channel_status_idx
   ON onboarding_verification_codes(channel, status);
 
+-- Self-heal: ensure the unique constraint exists on capabilities(name) before the upsert.
+-- The capabilities.name UNIQUE constraint is created in 0000_shiny_amazoness.sql, but some
+-- environments (and the schema-baseline pg_dump used by migrationSafety.test.ts) can be missing
+-- it. Without it, the ON CONFLICT (name) clause below fails with "there is no unique or
+-- exclusion constraint matching the ON CONFLICT specification". Idempotent: no-op if present.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint c
+    JOIN pg_class t ON t.oid = c.conrelid
+    WHERE t.relname = 'capabilities'
+      AND c.contype = 'u'
+      AND c.conname IN ('capabilities_name_unique', 'capabilities_name_key')
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_indexes
+    WHERE schemaname = 'public'
+      AND tablename = 'capabilities'
+      AND indexdef ILIKE '%UNIQUE%(name)%'
+  ) THEN
+    ALTER TABLE capabilities ADD CONSTRAINT capabilities_name_unique UNIQUE (name);
+  END IF;
+END$$;
+
 INSERT INTO capabilities (name, display_name, category, description, is_active)
 VALUES
   ('onboarding.invite.create', 'Create onboarding invites', 'ONBOARDING', 'Start onboarding sessions and create in-person or sent invite links.', true),

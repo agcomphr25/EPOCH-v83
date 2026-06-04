@@ -84,6 +84,7 @@ async function getOrderAndCustomer(tx: DbExecutor, orderId: string) {
 
 function isPostableCustomerPayment(payment: PaymentRow): boolean {
   return (
+    payment.status === 'posted' &&
     payment.status !== 'voided' &&
     payment.status !== 'reversal' &&
     payment.paymentType !== 'payment_reversal' &&

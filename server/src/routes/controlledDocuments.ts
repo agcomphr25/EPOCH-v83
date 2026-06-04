@@ -197,10 +197,14 @@ router.post('/', requireDocumentEditor, upload.single('file'), async (req: Reque
     const {
       documentNumber,
       documentName,
+      templateKey,
       documentType,
       department,
       category,
       description,
+      currentVersion,
+      versionDate,
+      originationDate,
       retentionLength,
       documentOwner,
       classification,
@@ -225,11 +229,14 @@ router.post('/', requireDocumentEditor, upload.single('file'), async (req: Reque
     const [newDoc] = await db.insert(controlledDocuments).values({
       documentNumber,
       documentName,
+      templateKey: templateKey || null,
       documentType,
       department,
       category,
       description,
-      currentVersion: '1.0',
+      currentVersion: currentVersion || '1.0',
+      versionDate: versionDate || null,
+      originationDate: originationDate || null,
       status: 'pending',
       retentionLength,
       documentOwner,
@@ -250,7 +257,7 @@ router.post('/', requireDocumentEditor, upload.single('file'), async (req: Reque
     // Create initial version history entry
     await db.insert(documentVersionHistory).values({
       documentId: newDoc.id,
-      versionNumber: '1.0',
+      versionNumber: currentVersion || '1.0',
       changeDescription: 'Initial version',
       changeType: 'major',
       filePath,
@@ -260,9 +267,12 @@ router.post('/', requireDocumentEditor, upload.single('file'), async (req: Reque
     });
 
     res.status(201).json(newDoc);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error creating document:', error);
-    res.status(500).json({ error: 'Failed to create document' });
+    res.status(500).json({
+      error: 'Failed to create document',
+      details: error?.message || String(error),
+    });
   }
 });
 
@@ -276,10 +286,13 @@ router.put('/:id', requireDocumentEditor, upload.single('file'), async (req: Req
       versionType, // 'major' or 'minor'
       changeDescription,
       documentName,
+      templateKey,
       documentType,
       department,
       category,
       description,
+      versionDate,
+      originationDate,
       retentionLength,
       documentOwner,
       classification,
@@ -350,10 +363,13 @@ router.put('/:id', requireDocumentEditor, upload.single('file'), async (req: Req
           status: 'pending',
           filePath,
           documentName,
+          templateKey: templateKey || existingDoc.templateKey,
           documentType,
           department,
           category,
           description,
+          versionDate: versionDate || existingDoc.versionDate,
+          originationDate: originationDate || existingDoc.originationDate,
           retentionLength,
           documentOwner,
           classification: classification || existingDoc.classification,
@@ -381,10 +397,13 @@ router.put('/:id', requireDocumentEditor, upload.single('file'), async (req: Req
         .update(controlledDocuments)
         .set({
           documentName,
+          templateKey: templateKey || existingDoc.templateKey,
           documentType,
           department,
           category,
           description,
+          versionDate: versionDate || existingDoc.versionDate,
+          originationDate: originationDate || existingDoc.originationDate,
           retentionLength,
           documentOwner,
           filePath,

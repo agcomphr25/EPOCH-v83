@@ -30,6 +30,11 @@ export default function STACIWTestDashboard() {
   const { data: currentUser } = useQuery<{ id: number; username: string; role: string; employeeId?: number }>({
     queryKey: ['currentUser'],
   });
+  const { data: resolvedEmployee } = useQuery<{ employeeId: number | null }>({
+    queryKey: ['/api/timekeeping/my-employee-id'],
+    enabled: !!currentUser && !currentUser.employeeId,
+  });
+  const dashboardEmployeeId = currentUser?.employeeId ?? resolvedEmployee?.employeeId ?? null;
 
   const handleLogout = async () => {
     try {
@@ -255,10 +260,10 @@ export default function STACIWTestDashboard() {
       </div>
 
       {/* My Tasks Control Center */}
-      {currentUser?.employeeId && (
+      {dashboardEmployeeId && (
         <MyTasksControlCenter
-          employeeId={currentUser.employeeId}
-          userName={currentUser.username}
+          employeeId={dashboardEmployeeId}
+          userName={currentUser?.username ?? 'staciw'}
           compact={false}
         />
       )}

@@ -96,6 +96,7 @@ import POItemsManager from './POItemsManager';
 import AddressInput from './AddressInput';
 import { type AddressData } from '@/utils/addressUtils';
 import { format as formatDate } from 'date-fns';
+import { formatDateOnly } from '@shared/utils/dateNormalization';
 
 // Component to display PO quantity
 function POQuantityDisplay({ poId }: { poId: number }) {
@@ -616,12 +617,49 @@ function POAttachments({ poId, poNumber }: { poId: number; poNumber: string }) {
   const [isUploading, setIsUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewFileName, setPreviewFileName] = useState<string>('');
+  const [previewLoadingId, setPreviewLoadingId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const fileInputRef = { current: null as HTMLInputElement | null };
 
-  const handlePreview = (attachmentId: string, fileName: string) => {
-    setPreviewFileName(fileName);
-    setPreviewUrl(`/api/pos/${poId}/attachments/${attachmentId}/download`);
+  const closePreview = () => {
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+    setPreviewUrl(null);
+    setPreviewFileName('');
+  };
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
+
+  const handlePreview = async (attachmentId: string, fileName: string) => {
+    const downloadUrl = `/api/pos/${poId}/attachments/${attachmentId}/download`;
+    setPreviewLoadingId(attachmentId);
+    try {
+      const response = await fetch(downloadUrl, { credentials: 'include' });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.details || error.reason || error.error || `Unable to open PDF (${response.status})`);
+      }
+
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+      setPreviewFileName(fileName);
+      setPreviewUrl(objectUrl);
+    } catch (error: any) {
+      console.error('Preview error:', error);
+      toast.error(error.message || 'Unable to open PDF');
+    } finally {
+      setPreviewLoadingId(null);
+    }
   };
 
   const { data: attachments = [], isLoading, refetch } = useQuery({
@@ -670,11 +708,15 @@ function POAttachments({ poId, poNumber }: { poId: number; poNumber: string }) {
         }),
       });
 
-      await fetch(urlResponse.uploadURL, {
+      const uploadResponse = await fetch(urlResponse.uploadURL, {
         method: 'PUT',
         body: file,
         headers: { 'Content-Type': file.type },
       });
+      if (!uploadResponse.ok) {
+        const error = await uploadResponse.json().catch(() => ({}));
+        throw new Error(error.details || error.reason || `Storage upload failed (${uploadResponse.status})`);
+      }
 
       await apiRequest(`/api/pos/${poId}/attachments/complete-upload`, {
         method: 'POST',
@@ -791,9 +833,14 @@ function POAttachments({ poId, poNumber }: { poId: number; poNumber: string }) {
                     <Button
                       variant="ghost"
                       size="sm"
+                      disabled={previewLoadingId === attachment.id}
                       onClick={() => handlePreview(attachment.id, attachment.originalFileName)}
                     >
-                      <Eye className="w-4 h-4" />
+                      {previewLoadingId === attachment.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Eye className="w-4 h-4" />
+                      )}
                     </Button>
                     <Button
                       variant="ghost"
@@ -822,7 +869,7 @@ function POAttachments({ poId, poNumber }: { poId: number; poNumber: string }) {
       </DialogContent>
     </Dialog>
 
-    <Dialog open={!!previewUrl} onOpenChange={(open) => { if (!open) { setPreviewUrl(null); setPreviewFileName(''); } }}>
+    <Dialog open={!!previewUrl} onOpenChange={(open) => { if (!open) closePreview(); }}>
       <DialogContent className="max-w-4xl w-full h-[90vh] flex flex-col p-0">
         <DialogHeader className="px-6 py-4 border-b flex-shrink-0">
           <div className="flex items-center justify-between">
@@ -1006,11 +1053,11 @@ function POCard({
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div>
             <span className="font-medium">PO Date:</span>{' '}
-            {new Date(po.poDate).toLocaleDateString()}
+            {formatDateOnly(po.poDate)}
           </div>
           <div>
             <span className="font-medium">Expected Delivery:</span>{' '}
-            {new Date(po.expectedDelivery).toLocaleDateString()}
+            {formatDateOnly(po.expectedDelivery)}
           </div>
         </div>
         {po.notes && (
@@ -2043,7 +2090,7 @@ export default function POManager() {
                           >
                             <div className="font-medium">Week {week.week}</div>
                             <div className="text-sm text-gray-600 dark:text-gray-400">
-                              Due: {new Date(week.dueDate).toLocaleDateString()}
+                              Due: {formatDateOnly(week.dueDate)}
                             </div>
                             <div className="text-sm">
                               Complete: {week.itemsToComplete} items

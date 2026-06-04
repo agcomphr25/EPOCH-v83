@@ -1057,7 +1057,8 @@ async function handleGetCurrentSession(req: any, res: any, endpoint: string) {
     // Use user_id as source of truth to eliminate username casing / rename drift
     const dbUserResult = await pool.query(
       `SELECT u.id, u.username, u.first_name, u.last_name, u.role, u.employee_id,
-              e.name as employee_name
+              e.name as employee_name,
+              e.pay_type as pay_type
        FROM users u
        LEFT JOIN employees e ON u.employee_id = e.id
        WHERE u.id = $1 AND u.is_active = true`,
@@ -1098,6 +1099,7 @@ async function handleGetCurrentSession(req: any, res: any, endpoint: string) {
       role: user.role,
       employeeId: user.employee_id,
       employeeName: user.employee_name ?? null,
+      payType: user.pay_type ?? null,
     });
   } catch (error) {
     console.error(`[AUTH] ${endpoint} error:`, error);

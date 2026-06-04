@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useRoute, useLocation, Link } from 'wouter';
-import { format } from 'date-fns';
 import {
   ArrowLeft,
   Edit,
@@ -16,10 +15,12 @@ import {
   RotateCcw,
   Send,
   Printer,
+  History,
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -52,6 +53,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import MediaAttachmentPicker from '@/components/MediaAttachmentPicker';
+import AuditDrawer from '@/components/AuditDrawer';
+import { formatDateOnly } from '@shared/utils/dateNormalization';
 
 const PAYMENT_METHODS = [
   { value: 'ACH', label: 'ACH' },
@@ -87,7 +90,7 @@ function formatCurrency(val: string | number | null | undefined) {
 function formatDate(val: string | null | undefined) {
   if (!val) return '—';
   try {
-    return format(new Date(val), 'MM/dd/yyyy');
+    return formatDateOnly(val);
   } catch {
     return val;
   }
@@ -118,6 +121,74 @@ interface AllocationRow {
   applyAmount: string;
 }
 
+type EmailRecipient = {
+  name: string;
+  email: string;
+  type: 'primary' | 'additional' | 'contact';
+};
+
+function RecipientPickerList({
+  recipients,
+  selected,
+  onChange,
+  isLoading,
+}: {
+  recipients: EmailRecipient[];
+  selected: string[];
+  onChange: (emails: string[]) => void;
+  isLoading: boolean;
+}) {
+  const toggle = (email: string) => {
+    if (selected.includes(email)) {
+      onChange(selected.filter((item) => item !== email));
+    } else {
+      onChange([...selected, email]);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 py-3 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Loading recipients...
+      </div>
+    );
+  }
+
+  if (recipients.length === 0) {
+    return <div className="py-2 text-sm text-muted-foreground italic">No customer email recipients found.</div>;
+  }
+
+  return (
+    <div className="space-y-2 py-1">
+      {recipients.map((recipient) => (
+        <div
+          key={recipient.email}
+          className="flex cursor-pointer items-start gap-3 rounded-lg border p-2.5 transition-colors hover:bg-muted/40"
+          onClick={() => toggle(recipient.email)}
+        >
+          <Checkbox
+            id={`invoice-recipient-${recipient.email}`}
+            checked={selected.includes(recipient.email)}
+            onCheckedChange={() => toggle(recipient.email)}
+            onClick={(event) => event.stopPropagation()}
+            className="mt-0.5"
+          />
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-medium">{recipient.name}</div>
+            <div className="truncate text-xs text-muted-foreground">{recipient.email}</div>
+          </div>
+          {recipient.type === 'primary' && (
+            <span className="mt-0.5 shrink-0 rounded bg-blue-100 px-1.5 py-0.5 text-xs text-blue-700">
+              Primary
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function InvoiceDetailPage() {
   const [, setLocation] = useLocation();
   const [matched, params] = useRoute('/finance/invoices/:id');
@@ -126,9 +197,14 @@ export default function InvoiceDetailPage() {
 
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [allocationDialogOpen, setAllocationDialogOpen] = useState(false);
+  const [isPreviewingPdf, setIsPreviewingPdf] = useState(false);
   const [paymentForm, setPaymentForm] = useState<PaymentFormData>(defaultPaymentForm());
   const [createdPaymentId, setCreatedPaymentId] = useState<string | null>(null);
   const [allocations, setAllocations] = useState<AllocationRow[]>([]);
+  const [sendDialogOpen, setSendDialogOpen] = useState(false);
+  const [dialogRecipients, setDialogRecipients] = useState<EmailRecipient[]>([]);
+  const [selectedRecipients, setSelectedRecipients] = useState<string[]>([]);
+  const [isLoadingRecipients, setIsLoadingRecipients] = useState(false);
 
   const { data: invoice, isLoading } = useQuery<any>({
     queryKey: ['/api/ar-invoices', id],
@@ -144,13 +220,13 @@ export default function InvoiceDetailPage() {
   const { data: packingSlipInfo } = useQuery<any>({
     queryKey: ['/api/p2/packing-slips', invoice?.packingSlipId],
     queryFn: () => fetch(`/api/p2/packing-slips/${invoice.packingSlipId}`, { credentials: 'include' }).then(r => r.ok ? r.json() : null),
-    enabled: !!invoice?.packingSlipId,
+    enabled: !!invoice?.packingSlipId && invoice?.invoiceSource !== 'P1',
   });
 
   const { data: lotInfo } = useQuery<any>({
     queryKey: ['/api/p2/lots', invoice?.lotId],
     queryFn: () => fetch(`/api/p2/lots/${invoice.lotId}`, { credentials: 'include' }).then(r => r.ok ? r.json() : null),
-    enabled: !!invoice?.lotId,
+    enabled: !!invoice?.lotId && invoice?.invoiceSource !== 'P1',
   });
 
   const markPaidMutation = useMutation({
@@ -184,17 +260,51 @@ export default function InvoiceDetailPage() {
   });
 
   const sendInvoiceMutation = useMutation({
-    mutationFn: () => apiRequest(`/api/ar-invoices/${id}/send`, { method: 'POST', body: {} }),
+    mutationFn: (recipients: string[]) =>
+      apiRequest(`/api/ar-invoices/${id}/send`, {
+        method: 'POST',
+        body: { recipients },
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ predicate: (query) =>
         Array.isArray(query.queryKey) && query.queryKey[0] === '/api/ar-invoices'
       });
+      setSendDialogOpen(false);
       toast({ title: 'Invoice sent', description: 'SendGrid delivery was accepted and tracked.' });
     },
     onError: (error: any) => {
       toast({ title: 'Send failed', description: error.message, variant: 'destructive' });
     },
   });
+
+  const loadInvoiceRecipients = async () => {
+    if (!id) return;
+    setIsLoadingRecipients(true);
+    setDialogRecipients([]);
+    setSelectedRecipients([]);
+    try {
+      const raw: EmailRecipient[] = await apiRequest(`/api/ar-invoices/${id}/email-recipients`);
+      const seen = new Set<string>();
+      const recipients = raw.filter((recipient) => {
+        const key = recipient.email.trim().toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      setDialogRecipients(recipients);
+      const primary = recipients.find((recipient) => recipient.type === 'primary');
+      setSelectedRecipients(primary ? [primary.email] : recipients.slice(0, 1).map((recipient) => recipient.email));
+    } catch (error: any) {
+      toast({ title: 'Recipients unavailable', description: error.message, variant: 'destructive' });
+    } finally {
+      setIsLoadingRecipients(false);
+    }
+  };
+
+  const handleOpenSendDialog = () => {
+    setSendDialogOpen(true);
+    loadInvoiceRecipients();
+  };
 
   const createPaymentMutation = useMutation({
     mutationFn: async (data: PaymentFormData) => {
@@ -324,6 +434,56 @@ export default function InvoiceDetailPage() {
     allocateMutation.mutate({ paymentId: createdPaymentId, allocations: items });
   };
 
+  const handlePreviewPdf = async () => {
+    if (!id) return;
+
+    setIsPreviewingPdf(true);
+    const previewWindow = window.open('about:blank', '_blank');
+    if (previewWindow) {
+      previewWindow.opener = null;
+    }
+
+    try {
+      const response = await fetch(`/api/ar-invoices/${id}/pdf`, {
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        let message = 'Failed to generate invoice PDF.';
+        try {
+          const errorBody = await response.clone().json();
+          message = errorBody?.error || errorBody?.message || message;
+        } catch {
+          const text = await response.text().catch(() => '');
+          message = text || message;
+        }
+        throw new Error(message);
+      }
+
+      const blob = await response.blob();
+      const pdfUrl = URL.createObjectURL(blob);
+
+      if (!previewWindow) {
+        window.location.assign(pdfUrl);
+        return;
+      }
+
+      previewWindow.location.href = pdfUrl;
+      window.setTimeout(() => URL.revokeObjectURL(pdfUrl), 60000);
+    } catch (error: any) {
+      if (previewWindow && !previewWindow.closed) {
+        previewWindow.close();
+      }
+      toast({
+        title: 'PDF preview failed',
+        description: error?.message || 'The invoice PDF could not be opened.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsPreviewingPdf(false);
+    }
+  };
+
   const updateAllocation = (index: number, value: string) => {
     setAllocations((prev) => {
       const next = [...prev];
@@ -362,6 +522,8 @@ export default function InvoiceDetailPage() {
 
   const lines = invoice.lines || [];
   const payments = invoice.payments || [];
+  const isP1Invoice = invoice.invoiceSource === 'P1';
+  const sourcePoLabel = invoice.poOverride || invoice.poNumber || invoice.poId;
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
@@ -378,11 +540,24 @@ export default function InvoiceDetailPage() {
           <Button variant="outline" onClick={() => setLocation(`/finance/invoices/${id}/edit`)}>
             <Edit className="mr-2 h-4 w-4" /> Edit
           </Button>
-          <Button variant="outline" asChild>
-            <a href={`/api/ar-invoices/${id}/pdf`} target="_blank" rel="noopener noreferrer">
-              <Printer className="mr-2 h-4 w-4" /> Preview PDF
-            </a>
+          <Button variant="outline" onClick={handlePreviewPdf} disabled={isPreviewingPdf}>
+            {isPreviewingPdf ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Printer className="mr-2 h-4 w-4" />
+            )}
+            {isPreviewingPdf ? 'Opening...' : 'Preview PDF'}
           </Button>
+          <AuditDrawer
+            entityType="ar_invoice"
+            entityId={invoice.id}
+            trigger={
+              <Button variant="outline">
+                <History className="mr-2 h-4 w-4" />
+                Audit
+              </Button>
+            }
+          />
           {['DRAFT', 'REVIEW'].includes(invoice.status) && (
             <Button
               variant="outline"
@@ -396,7 +571,7 @@ export default function InvoiceDetailPage() {
           )}
           {['REVIEW', 'POSTED'].includes(invoice.status) && (
             <Button
-              onClick={() => sendInvoiceMutation.mutate()}
+              onClick={handleOpenSendDialog}
               disabled={sendInvoiceMutation.isPending || invoice.pricingMismatch || invoice.pricingAmbiguous}
               title={invoice.pricingMismatch || invoice.pricingAmbiguous ? 'Resolve pricing before sending' : 'Send invoice'}
             >
@@ -490,6 +665,10 @@ export default function InvoiceDetailPage() {
                   <div className="mt-1">{statusBadge(invoice.status)}</div>
                 </div>
                 <div>
+                  <p className="text-sm text-muted-foreground">Source</p>
+                  <p className="font-medium">{isP1Invoice ? 'P1 PO Invoice' : 'P2 PO Invoice'}</p>
+                </div>
+                <div>
                   <p className="text-sm text-muted-foreground">Invoice Date</p>
                   <p className="font-medium">{formatDate(invoice.invoiceDate)}</p>
                 </div>
@@ -515,7 +694,16 @@ export default function InvoiceDetailPage() {
                   <div>
                     <p className="text-sm font-medium mb-2">Source Documents</p>
                     <div className="flex flex-wrap gap-2">
-                      {invoice.packingSlipId && (
+                      {isP1Invoice && (
+                        <Button variant="outline" size="sm" asChild>
+                          <Link href={`/oem-shipments?search=${encodeURIComponent(sourcePoLabel || '')}`}>
+                            <FileText className="h-3.5 w-3.5 mr-1.5" />
+                            P1 OEM Packing Slip{sourcePoLabel ? `: ${sourcePoLabel}` : ''}
+                            <ExternalLink className="h-3 w-3 ml-1.5 opacity-60" />
+                          </Link>
+                        </Button>
+                      )}
+                      {!isP1Invoice && invoice.packingSlipId && (
                         <Button variant="outline" size="sm" asChild>
                           <Link href={`/p2/packing-slip/${invoice.packingSlipId}`}>
                             <FileText className="h-3.5 w-3.5 mr-1.5" />
@@ -524,7 +712,7 @@ export default function InvoiceDetailPage() {
                           </Link>
                         </Button>
                       )}
-                      {invoice.lotId && (
+                      {!isP1Invoice && invoice.lotId && (
                         <Button variant="outline" size="sm" asChild>
                           <Link href={`/p2/shipments/${invoice.lotId}`}>
                             <FileText className="h-3.5 w-3.5 mr-1.5" />
@@ -535,9 +723,12 @@ export default function InvoiceDetailPage() {
                       )}
                       {(invoice.poOverride || invoice.poId) && (
                         <Button variant="outline" size="sm" asChild>
-                          <Link href={`/p2-control-center?tab=pos&search=${encodeURIComponent(invoice.poOverride || invoice.poNumber || '')}`}>
+                          <Link href={isP1Invoice
+                            ? `/oem-shipments?search=${encodeURIComponent(sourcePoLabel || '')}`
+                            : `/p2-control-center?tab=pos&search=${encodeURIComponent(sourcePoLabel || '')}`}
+                          >
                             <FileText className="h-3.5 w-3.5 mr-1.5" />
-                            PO: {invoice.poOverride || invoice.poNumber || invoice.poId}
+                            {isP1Invoice ? 'P1 PO' : 'P2 PO'}: {sourcePoLabel || invoice.poId}
                             <ExternalLink className="h-3 w-3 ml-1.5 opacity-60" />
                           </Link>
                         </Button>
@@ -546,6 +737,29 @@ export default function InvoiceDetailPage() {
                   </div>
                 </>
               )}
+
+              <Separator className="my-4" />
+
+              <div>
+                <p className="text-sm font-medium mb-2">Accounting Posting</p>
+                {invoice.journalEntryId ? (
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
+                    <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">
+                      JE #{invoice.journalEntryId}
+                    </Badge>
+                    <Badge variant="outline">
+                      {invoice.journalEntryStatus || 'POSTED'}
+                    </Badge>
+                    <span className="text-muted-foreground">
+                      {invoice.journalLineCount || 0} journal line{Number(invoice.journalLineCount || 0) === 1 ? '' : 's'} created from this invoice.
+                    </span>
+                  </div>
+                ) : (
+                  <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                    No journal entry has been created yet. Posting this invoice will create the AR invoice JE.
+                  </div>
+                )}
+              </div>
 
               <Separator className="my-4" />
 
@@ -799,6 +1013,38 @@ export default function InvoiceDetailPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <Dialog open={sendDialogOpen} onOpenChange={setSendDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Send Invoice</DialogTitle>
+            <DialogDescription>
+              Select the recipients for invoice {invoice.invoiceNumber}. The primary recipient is sent directly when selected; other selected recipients are copied.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Email Recipients</Label>
+            <RecipientPickerList
+              recipients={dialogRecipients}
+              selected={selectedRecipients}
+              onChange={setSelectedRecipients}
+              isLoading={isLoadingRecipients}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSendDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => sendInvoiceMutation.mutate(selectedRecipients)}
+              disabled={sendInvoiceMutation.isPending || isLoadingRecipients || selectedRecipients.length === 0}
+            >
+              {sendInvoiceMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Send Invoice
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
         <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">

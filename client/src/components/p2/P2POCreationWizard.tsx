@@ -44,10 +44,20 @@ interface P2InternalName {
   name: string;
 }
 
+interface Project {
+  id: string;
+  projectCode: string;
+  projectName: string;
+  status: string;
+  customerName?: string | null;
+}
+
 interface P2POCreationWizardProps {
   onComplete: (poId: number) => void;
   onCancel: () => void;
 }
+
+const NO_PROJECT_VALUE = '__no_project__';
 
 const steps = [
   { id: 'customer', title: 'Customer', icon: User },
@@ -67,6 +77,7 @@ const detailsSchema = z.object({
   assignedTo: z.string().optional(), // Who is responsible for this PO
   productionLead: z.string().optional(), // Production lead for this PO
   notes: z.string().optional(),
+  projectId: z.string().optional(),
   projectName: z.string().optional(), // Optional project association
 });
 
@@ -115,6 +126,17 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
     queryKey: ['/api/p2/internal-names'],
   });
 
+  const { data: projects = [] } = useQuery<Project[]>({
+    queryKey: ['/api/projects'],
+  });
+
+  const openProjects = projects.filter((project) =>
+    !['completed', 'cancelled', 'closed'].includes(String(project.status || '').toLowerCase())
+  );
+
+  const renderProjectLabel = (project: Project) =>
+    `${project.projectCode} - ${project.projectName}${project.customerName ? ` (${project.customerName})` : ''}`;
+
   const createProductMutation = useMutation({
     mutationFn: async (data: typeof newProductForm) => {
       return apiRequest('/api/p2/product-items', {
@@ -156,6 +178,7 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
       assignedTo: '',
       productionLead: '',
       notes: '',
+      projectId: NO_PROJECT_VALUE,
       projectName: '',
     },
   });
@@ -201,7 +224,14 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
   };
 
   const handleDetailsSubmit = (data: z.infer<typeof detailsSchema>) => {
-    setPODetails(data);
+    const selectedProject = data.projectId && data.projectId !== NO_PROJECT_VALUE
+      ? projects.find((project) => project.id === data.projectId)
+      : null;
+    setPODetails({
+      ...data,
+      projectId: selectedProject?.id || '',
+      projectName: selectedProject ? renderProjectLabel(selectedProject) : '',
+    });
     setCurrentStep(2);
   };
 
@@ -299,6 +329,7 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
       productionLeadName: productionLeadEmployee
         ? `${productionLeadEmployee.firstName} ${productionLeadEmployee.lastName}`
         : null,
+      projectId: poDetails?.projectId && poDetails.projectId !== NO_PROJECT_VALUE ? poDetails.projectId : null,
       projectName: poDetails?.projectName || null,
       lineItems: lineItems.map((item) => ({
         partNumber: `${item.sku}${item.revision ? ` Rev ${item.revision}` : ''}`,
@@ -552,13 +583,25 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
 
               <FormField
                 control={detailsForm.control}
-                name="projectName"
+                name="projectId"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Project (Optional)</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="e.g., Project Alpha or PRJ-001" data-testid="input-project-name" />
-                    </FormControl>
+                    <Select onValueChange={field.onChange} value={field.value || NO_PROJECT_VALUE}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-project">
+                          <SelectValue placeholder="Select project..." />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value={NO_PROJECT_VALUE}>No linked project</SelectItem>
+                        {openProjects.map((project) => (
+                          <SelectItem key={project.id} value={project.id}>
+                            {renderProjectLabel(project)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}

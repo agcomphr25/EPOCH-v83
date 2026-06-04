@@ -32,11 +32,12 @@ interface TrainingStats {
 }
 
 type Language = 'en' | 'es';
+type TrainingTab = 'modules' | 'library' | 'matrix' | 'assignments' | 'trainer' | 'management';
 
 const translations = {
   en: {
     pageTitle: 'Training Control Center',
-    pageSubtitle: 'Unified training management: modules, matrix, and assignments',
+    pageSubtitle: 'Unified training management: modules, certifications, matrix, and assignments',
     programBuilder: 'Program Builder',
     statModules: 'Modules',
     statModulesDesc: 'available',
@@ -55,7 +56,7 @@ const translations = {
   },
   es: {
     pageTitle: 'Centro de Control de Capacitación',
-    pageSubtitle: 'Gestión unificada de capacitación: módulos, matriz y asignaciones',
+    pageSubtitle: 'Gestión unificada de capacitación: módulos, certificaciones, matriz y asignaciones',
     programBuilder: 'Constructor de Programas',
     statModules: 'Módulos',
     statModulesDesc: 'disponibles',
@@ -75,7 +76,7 @@ const translations = {
 };
 
 export default function TrainingControlCenter() {
-  const [activeTab, setActiveTab] = useState('modules');
+  const [activeTab, setActiveTab] = useState<TrainingTab>('modules');
   const [lang, setLang] = useState<Language>(() => (localStorage.getItem('trainingLang') as Language) || 'en');
 
   const toggleLang = () => {

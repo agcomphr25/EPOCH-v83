@@ -131,6 +131,7 @@ const trainingTranslations = {
     transforming: 'Transforming...',
     aiTransform: 'AI Transform',
     startTraining: 'Start Training',
+    previewModule: 'Preview Module',
     noModulesTitle: 'No Training Modules Yet',
     noModulesDesc: 'Create training modules for employee certification programs',
     createFirstModule: 'Create Your First Module',
@@ -168,6 +169,7 @@ const trainingTranslations = {
     transforming: 'Transformando...',
     aiTransform: 'Transformar con IA',
     startTraining: 'Iniciar Capacitación',
+    previewModule: 'Vista Previa',
     noModulesTitle: 'Aún No Hay Módulos de Capacitación',
     noModulesDesc: 'Cree módulos de capacitación para programas de certificación de empleados',
     createFirstModule: 'Crear su Primer Módulo',
@@ -412,7 +414,7 @@ export default function Training({ lang = 'en' }: TrainingProps) {
                         className="w-full"
                         data-testid={`button-start-training-${module.id}`}
                       >
-                        {t.startTraining}
+                        {t.previewModule}
                       </Button>
                     </Link>
                   </div>

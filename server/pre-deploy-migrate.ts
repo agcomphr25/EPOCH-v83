@@ -64,7 +64,7 @@ async function runSql(sql: string, label: string): Promise<boolean> {
  * confirmed applied on production.
  */
 async function getPendingMigrationFiles(migrationsDir: string, knownFiles: string[]): Promise<string[]> {
-  const BASELINE_APPLIED_THROUGH = '0094_labor_entry_drafts.sql';
+  const BASELINE_APPLIED_THROUGH = '0154_p1_department_notes.sql';
 
   let appliedHashes: Set<string> = new Set();
   try {
@@ -357,6 +357,121 @@ async function main() {
       END IF;
     END $$;
   `, 'Ensure routing_operations.required_calibration_asset_tags column');
+
+  await runSql(`
+    CREATE SCHEMA IF NOT EXISTS timekeeping;
+
+    CREATE TABLE IF NOT EXISTS timekeeping.punch_correction_requests (
+      id SERIAL PRIMARY KEY,
+      employee_id INTEGER NOT NULL REFERENCES public.employees(id) ON DELETE CASCADE,
+      punch_ledger_id INTEGER,
+      request_type TEXT NOT NULL,
+      source TEXT NOT NULL DEFAULT 'employee_portal',
+      status TEXT NOT NULL DEFAULT 'pending_supervisor',
+      reason TEXT NOT NULL,
+      original_snapshot JSONB,
+      proposed_changes JSONB NOT NULL,
+      supervisor_id INTEGER,
+      supervisor_decision TEXT,
+      supervisor_note TEXT,
+      supervisor_reviewed_at TIMESTAMPTZ,
+      supervisor_reviewed_by INTEGER,
+      hr_decision TEXT,
+      hr_note TEXT,
+      hr_reviewed_at TIMESTAMPTZ,
+      hr_reviewed_by INTEGER,
+      applied_at TIMESTAMPTZ,
+      applied_by INTEGER,
+      after_snapshot JSONB,
+      submitted_by_user_id INTEGER,
+      submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT chk_punch_correction_request_type
+        CHECK (request_type IN ('edit_session', 'add_session', 'delete_session')),
+      CONSTRAINT chk_punch_correction_status
+        CHECK (status IN ('pending_supervisor', 'pending_hr', 'approved', 'rejected', 'cancelled')),
+      CONSTRAINT chk_punch_correction_supervisor_decision
+        CHECK (supervisor_decision IS NULL OR supervisor_decision IN ('approved', 'denied')),
+      CONSTRAINT chk_punch_correction_hr_decision
+        CHECK (hr_decision IS NULL OR hr_decision IN ('approved', 'denied'))
+    )
+  `, 'Ensure punch_correction_requests table');
+
+  await runSql(`
+    CREATE INDEX IF NOT EXISTS idx_punch_correction_requests_employee_id
+      ON timekeeping.punch_correction_requests(employee_id)
+  `, 'Ensure punch_correction_requests employee index');
+  await runSql(`
+    CREATE INDEX IF NOT EXISTS idx_punch_correction_requests_punch_ledger_id
+      ON timekeeping.punch_correction_requests(punch_ledger_id)
+  `, 'Ensure punch_correction_requests punch ledger index');
+  await runSql(`
+    CREATE INDEX IF NOT EXISTS idx_punch_correction_requests_status
+      ON timekeeping.punch_correction_requests(status)
+  `, 'Ensure punch_correction_requests status index');
+  await runSql(`
+    CREATE INDEX IF NOT EXISTS idx_punch_correction_requests_supervisor_id
+      ON timekeeping.punch_correction_requests(supervisor_id)
+  `, 'Ensure punch_correction_requests supervisor index');
+  await runSql(`
+    ALTER TABLE timekeeping.punch_correction_requests
+      ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'employee_portal'
+  `, 'Ensure punch_correction_requests source column');
+  await runSql(`
+    ALTER TABLE timekeeping.punch_correction_requests
+      ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'pending_supervisor'
+  `, 'Ensure punch_correction_requests status column');
+  await runSql(`
+    ALTER TABLE timekeeping.punch_correction_requests
+      ADD COLUMN IF NOT EXISTS submitted_by_user_id INTEGER
+  `, 'Ensure punch_correction_requests submitted_by_user_id column');
+  await runSql(`
+    ALTER TABLE timekeeping.punch_correction_requests
+      ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  `, 'Ensure punch_correction_requests submitted_at column');
+  await runSql(`
+    ALTER TABLE timekeeping.punch_correction_requests
+      DROP CONSTRAINT IF EXISTS punch_correction_requests_source_check;
+    ALTER TABLE timekeeping.punch_correction_requests
+      DROP CONSTRAINT IF EXISTS chk_punch_correction_source;
+    ALTER TABLE timekeeping.punch_correction_requests
+      ADD CONSTRAINT chk_punch_correction_source
+        CHECK (source IN ('employee_portal', 'kiosk', 'admin'))
+  `, 'Ensure punch_correction_requests source constraint');
+  await runSql(`
+    ALTER TABLE timekeeping.punch_correction_requests
+      DROP CONSTRAINT IF EXISTS chk_punch_correction_request_type;
+    ALTER TABLE timekeeping.punch_correction_requests
+      ADD CONSTRAINT chk_punch_correction_request_type
+        CHECK (request_type IN ('edit_session', 'add_session', 'delete_session'))
+  `, 'Ensure punch_correction_requests request type constraint');
+  await runSql(`
+    ALTER TABLE timekeeping.punch_correction_requests
+      DROP CONSTRAINT IF EXISTS chk_punch_correction_status;
+    ALTER TABLE timekeeping.punch_correction_requests
+      ADD CONSTRAINT chk_punch_correction_status
+        CHECK (status IN ('pending_supervisor', 'pending_hr', 'approved', 'rejected', 'cancelled'))
+  `, 'Ensure punch_correction_requests status constraint');
+
+  await runSql(`
+    ALTER TABLE all_orders
+      ADD COLUMN IF NOT EXISTS department_notes jsonb DEFAULT '[]'::jsonb
+  `, 'Ensure all_orders.department_notes column');
+  await runSql(`
+    ALTER TABLE order_drafts
+      ADD COLUMN IF NOT EXISTS department_notes jsonb DEFAULT '[]'::jsonb
+  `, 'Ensure order_drafts.department_notes column');
+  await runSql(`
+    UPDATE all_orders
+    SET department_notes = '[]'::jsonb
+    WHERE department_notes IS NULL
+  `, 'Backfill all_orders.department_notes default');
+  await runSql(`
+    UPDATE order_drafts
+    SET department_notes = '[]'::jsonb
+    WHERE department_notes IS NULL
+  `, 'Backfill order_drafts.department_notes default');
 
   // ------------------------------------------------------------------
   // STEP 4: Quick verification — report remaining integer→uuid mismatches

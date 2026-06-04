@@ -16,6 +16,7 @@ import {
   updateReceivingInspectionPlanSchema,
   materialLots,
   materialLotTransactions,
+  inventoryTransactionLedger,
   mediaLibrary,
   vendorPOs,
   vendorPOItems,
@@ -39,6 +40,7 @@ import { requireRole } from '../../middleware/auth';
 import { getFileStorageProvider, getStorageErrorResponse } from '../services/fileStorageProvider';
 import { createInventoryEvent } from '../services/inventoryEventService';
 import { recordInventoryLedgerEntry } from '../services/inventoryTransactionLedgerService';
+import { ensureInventoryItemForReceipt } from '../services/ensureInventoryItemForReceipt';
 
 const router = Router();
 
@@ -65,6 +67,68 @@ function uploadReceiptDocument(req: Request, res: Response, next: NextFunction) 
 // All authenticated employees (ADMIN, EMPLOYEE, OWNER) may perform receiving operations.
 // Applied to all mutating endpoints at the route level for defence-in-depth beyond global auth.
 const requireReceivingAccess = requireRole('ADMIN', 'EMPLOYEE', 'OWNER');
+
+let receivingProjectMaterialSchemaReady: Promise<void> | null = null;
+
+async function ensureReceivingProjectMaterialSchema(): Promise<void> {
+  if (!receivingProjectMaterialSchemaReady) {
+    receivingProjectMaterialSchemaReady = (async () => {
+      await db.execute(sql`
+        ALTER TABLE received_units
+          ADD COLUMN IF NOT EXISTS target_project_id UUID REFERENCES projects(id) ON DELETE SET NULL
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS received_units_target_project_idx
+          ON received_units(target_project_id)
+      `);
+      await db.execute(sql`
+        CREATE TABLE IF NOT EXISTS project_received_materials (
+          id SERIAL PRIMARY KEY,
+          project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+          received_unit_id INTEGER NOT NULL REFERENCES received_units(id) ON DELETE CASCADE,
+          receipt_id INTEGER NOT NULL REFERENCES receipts(id) ON DELETE CASCADE,
+          material_lot_id UUID REFERENCES material_lots(id) ON DELETE SET NULL,
+          quantity NUMERIC NOT NULL DEFAULT 0,
+          unit_cost NUMERIC NOT NULL DEFAULT 0,
+          extended_cost NUMERIC NOT NULL DEFAULT 0,
+          status TEXT NOT NULL DEFAULT 'pending_pm_acceptance',
+          accepted_by_user_id INTEGER,
+          accepted_by_display_name TEXT,
+          accepted_at TIMESTAMP,
+          rejected_by_user_id INTEGER,
+          rejected_by_display_name TEXT,
+          rejected_at TIMESTAMP,
+          notes TEXT,
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW(),
+          UNIQUE(received_unit_id)
+        )
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS project_received_materials_project_idx
+          ON project_received_materials(project_id)
+      `);
+      await db.execute(sql`
+        CREATE INDEX IF NOT EXISTS project_received_materials_status_idx
+          ON project_received_materials(status)
+      `);
+    })().catch((err) => {
+      receivingProjectMaterialSchemaReady = null;
+      throw err;
+    });
+  }
+  await receivingProjectMaterialSchemaReady;
+}
+
+router.use(async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    await ensureReceivingProjectMaterialSchema();
+    next();
+  } catch (err: any) {
+    console.error('Receiving project material schema guard failed:', err);
+    res.status(500).json({ error: 'Receiving project material schema is not ready' });
+  }
+});
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -192,6 +256,169 @@ async function assertUnitOwnership(receiptId: number, unitId: number): Promise<R
     and(eq(receivedUnits.id, unitId), eq(receivedUnits.receiptId, receiptId))
   );
   return unit ?? null;
+}
+
+async function getOpenReceivingProjectTargets(): Promise<Array<{
+  id: string;
+  projectCode: string;
+  projectName: string;
+  status: string;
+  customerName: string | null;
+}>> {
+  const result = await db.execute(sql`
+    SELECT
+      p.id::text AS id,
+      p.project_code AS "projectCode",
+      p.project_name AS "projectName",
+      p.status,
+      p.customer_name_snapshot AS "customerName"
+    FROM projects p
+    WHERE p.status IN ('active', 'won', 'on_hold')
+    ORDER BY p.project_code ASC, p.created_at DESC
+  `);
+  return sqlRows(result);
+}
+
+async function resolveDefaultTargetProjectId(receipt: Receipt, line: ReceiptLine): Promise<string | null> {
+  if (!receipt.vendorPoId) return null;
+
+  try {
+    const partsRequestResult = await db.execute(sql`
+      SELECT p.id::text AS id
+      FROM parts_requests pr
+      JOIN projects p ON p.id = pr.project_id
+      LEFT JOIN vendor_po_items vpi ON vpi.id = ${line.vendorPoItemId ?? null}
+      WHERE pr.vendor_po_id = ${receipt.vendorPoId}
+        AND pr.project_id IS NOT NULL
+        AND p.status IN ('active', 'won', 'on_hold')
+        AND (
+          ${line.vendorPoItemId ?? null} IS NULL
+          OR pr.ag_part_number = vpi.ag_part_number
+          OR pr.part_number = vpi.ag_part_number
+          OR pr.part_number = vpi.description
+          OR pr.ag_part_number = ${line.agPartNumber ?? null}
+          OR pr.part_number = ${line.agPartNumber ?? null}
+        )
+      ORDER BY pr.updated_at DESC NULLS LAST, pr.request_date DESC NULLS LAST
+      LIMIT 1
+    `);
+    const partsRequestRows = sqlRows<{ id: string }>(partsRequestResult);
+    if (partsRequestRows[0]?.id) return partsRequestRows[0].id;
+
+    const requisitionResult = await db.execute(sql`
+      SELECT p.id::text AS id
+      FROM vendor_pos vpo
+      JOIN purchase_requisitions req ON req.id = vpo.requisition_id
+      JOIN projects p ON p.id::text = req.project_id
+      WHERE vpo.id = ${receipt.vendorPoId}
+        AND req.project_id IS NOT NULL
+        AND p.status IN ('active', 'won', 'on_hold')
+      LIMIT 1
+    `);
+    const requisitionRows = sqlRows<{ id: string }>(requisitionResult);
+    return requisitionRows[0]?.id ?? null;
+  } catch (err: any) {
+    console.warn('Receiving target project inference skipped:', {
+      receiptId: receipt.id,
+      vendorPoId: receipt.vendorPoId,
+      lineId: line.id,
+      vendorPoItemId: line.vendorPoItemId,
+      message: err?.message ?? String(err),
+    });
+    return null;
+  }
+}
+
+async function syncProjectReceivedMaterial(unitId: number, user: AuthUser, notes?: string | null): Promise<void> {
+  const result = await db.execute(sql`
+    SELECT
+      ru.id AS "unitId",
+      ru.receipt_id AS "receiptId",
+      ru.target_project_id::text AS "targetProjectId",
+      ru.material_lot_id::text AS "materialLotId",
+      ru.quantity::numeric AS quantity,
+      COALESCE(
+        NULLIF(vpi.purchase_unit_price, 0),
+        CASE
+          WHEN NULLIF(vpi.conversion_factor, 0) IS NOT NULL AND NULLIF(vpi.unit_price, 0) IS NOT NULL
+            THEN vpi.unit_price / vpi.conversion_factor
+          ELSE NULL
+        END,
+        NULLIF(vpi.unit_price, 0),
+        ii.unit_cost,
+        0
+      )::numeric AS "unitCost"
+    FROM received_units ru
+    JOIN receipt_lines rl ON rl.id = ru.receipt_line_id
+    LEFT JOIN vendor_po_items vpi ON vpi.id = rl.vendor_po_item_id
+    LEFT JOIN inventory_items ii ON ii.ag_part_number = rl.ag_part_number
+    WHERE ru.id = ${unitId}
+    LIMIT 1
+  `);
+  const [row] = sqlRows<{
+    unitId: number;
+    receiptId: number;
+    targetProjectId: string | null;
+    materialLotId: string | null;
+    quantity: string;
+    unitCost: string;
+  }>(result);
+
+  if (!row) return;
+
+  if (!row.targetProjectId || !row.materialLotId) {
+    await db.execute(sql`
+      DELETE FROM project_received_materials
+      WHERE received_unit_id = ${unitId}
+        AND status = 'pending_pm_acceptance'
+    `);
+    return;
+  }
+
+  const qty = Number(row.quantity) || 0;
+  const unitCost = Number(row.unitCost) || 0;
+  const extendedCost = qty * unitCost;
+  const displayName = actorName(user);
+
+  await db.execute(sql`
+    INSERT INTO project_received_materials (
+      project_id,
+      received_unit_id,
+      receipt_id,
+      material_lot_id,
+      quantity,
+      unit_cost,
+      extended_cost,
+      status,
+      notes,
+      created_at,
+      updated_at
+    )
+    VALUES (
+      ${row.targetProjectId}::uuid,
+      ${row.unitId},
+      ${row.receiptId},
+      ${row.materialLotId}::uuid,
+      ${String(qty)}::numeric,
+      ${String(unitCost)}::numeric,
+      ${String(extendedCost)}::numeric,
+      'pending_pm_acceptance',
+      ${notes ?? `Assigned from receiving by ${displayName}`},
+      NOW(),
+      NOW()
+    )
+    ON CONFLICT (received_unit_id) DO UPDATE
+      SET project_id = EXCLUDED.project_id,
+          receipt_id = EXCLUDED.receipt_id,
+          material_lot_id = EXCLUDED.material_lot_id,
+          quantity = EXCLUDED.quantity,
+          unit_cost = EXCLUDED.unit_cost,
+          extended_cost = EXCLUDED.extended_cost,
+          status = 'pending_pm_acceptance',
+          notes = EXCLUDED.notes,
+          updated_at = NOW()
+      WHERE project_received_materials.status <> 'accepted'
+  `);
 }
 
 // Auto-import PO lines into the receipt as receipt_lines
@@ -412,6 +639,15 @@ router.get('/', requireReceivingAccess, async (req: Request, res: Response) => {
 
 // ── POST /api/receipts ─────────────────────────────────────────────────────────
 // Supports resume: if vendorPoId provided and in_progress receipt exists, returns it
+router.get('/project-targets/open', requireReceivingAccess, async (_req: Request, res: Response) => {
+  try {
+    res.json({ data: await getOpenReceivingProjectTargets() });
+  } catch (err: any) {
+    console.error('GET /api/receipts/project-targets/open:', err);
+    res.status(500).json({ error: 'Failed to fetch open project targets' });
+  }
+});
+
 router.post('/', requireReceivingAccess, async (req: Request, res: Response) => {
   try {
     const user = req.user;
@@ -720,6 +956,9 @@ router.post('/:id/lines/:lineId/units', requireReceivingAccess, async (req: Requ
 
     const unitSequence = await getNextUnitSequence(receiptId);
     const barcode = generateUnitBarcode(receipt.receiptNumber, unitSequence);
+    const targetProjectId = req.body.targetProjectId !== undefined
+      ? req.body.targetProjectId
+      : await resolveDefaultTargetProjectId(receipt, line);
 
     const body = insertReceivedUnitSchema.parse({
       ...req.body,
@@ -727,6 +966,7 @@ router.post('/:id/lines/:lineId/units', requireReceivingAccess, async (req: Requ
       receiptLineId: lineId,
       unitSequence,
       barcode,
+      targetProjectId,
     });
     const [unit] = await db.insert(receivedUnits).values(body).returning();
 
@@ -762,6 +1002,7 @@ router.post('/:id/lines/:lineId/units', requireReceivingAccess, async (req: Requ
       }
       try {
         await handleAcceptedUnit(unit, receipt, user);
+        await syncProjectReceivedMaterial(unit.id, user, 'Material accepted in receiving and queued for PM review');
       } catch (lotErr: any) {
         // Roll back all disposition metadata so the clerk can retry after fixing catalog data
         await db.update(receivedUnits).set({
@@ -825,7 +1066,7 @@ router.patch('/:id/units/:unitId', requireReceivingAccess, async (req: Request, 
     const updates = insertReceivedUnitSchema.partial().parse(req.body);
 
     // Audit traceability-affecting changes (location, freezer, allocation, disposition fields)
-    const auditableKeys: (keyof typeof updates)[] = ['quantity', 'uom', 'unitType', 'location', 'freezerNumber', 'allocatedToType', 'allocatedToId', 'lotNumber', 'batchNumber', 'serialNumber', 'internalControlNumber', 'rollNumber', 'heatLot', 'manufactureDate', 'expirationDate', 'certReference'];
+    const auditableKeys: (keyof typeof updates)[] = ['quantity', 'uom', 'unitType', 'location', 'freezerNumber', 'allocatedToType', 'allocatedToId', 'targetProjectId', 'lotNumber', 'batchNumber', 'serialNumber', 'internalControlNumber', 'rollNumber', 'heatLot', 'manufactureDate', 'expirationDate', 'certReference'];
     const auditableChanges: Record<string, unknown> = {};
     for (const key of auditableKeys) {
       if (key in updates) auditableChanges[key] = updates[key];
@@ -937,6 +1178,79 @@ router.patch('/:id/units/:unitId', requireReceivingAccess, async (req: Request, 
           notes: `Receiving correction for unit ${saved.barcode}`,
         });
         await tx.insert(materialLotTransactions).values(txValues);
+
+        // ── Inventory Transaction Ledger write (Task #260) ──────────────
+        // The accept path writes an ITL RECEIVE row via handleAcceptedUnit,
+        // but the post-accept quantity-correction path was silently dropping
+        // the ledger entry — so RCC putaway/edit corrections never appeared
+        // in the Material Traceability Viewer. Mirror the receive pattern
+        // and key by (receiving:rcc-adjust, ${unitId}:${newQty}) so repeated
+        // saves of the same correction are idempotent.
+        const [lotRow] = await tx
+          .select({
+            inventoryItemId: materialLots.inventoryItemId,
+            materialPartNumber: materialLots.materialPartNumber,
+            unitOfMeasure: materialLots.unitOfMeasure,
+          })
+          .from(materialLots)
+          .where(eq(materialLots.id, quantityAdjustment.materialLotId))
+          .limit(1);
+
+        if (lotRow?.materialPartNumber) {
+          let invItemId = lotRow.inventoryItemId;
+          // Defence-in-depth: if the lot's FK is somehow missing an
+          // inventory_items row, materialise a placeholder so the ITL
+          // NOT NULL FK is satisfied.
+          if (!invItemId) {
+            const ensured = await ensureInventoryItemForReceipt(tx, {
+              agPartNumber: lotRow.materialPartNumber,
+              fallbackName: lotRow.materialPartNumber,
+              createdBy: `user:${actorName(user)}`,
+            });
+            invItemId = ensured.id;
+          }
+
+          const ledgerSourceModule = 'receiving:rcc-adjust';
+          const ledgerSourceRecordId = `${unitId}:${quantityAdjustment.after}`;
+          const [existingLedger] = await tx
+            .select({ id: inventoryTransactionLedger.id })
+            .from(inventoryTransactionLedger)
+            .where(
+              and(
+                eq(inventoryTransactionLedger.sourceModule, ledgerSourceModule),
+                eq(inventoryTransactionLedger.sourceRecordId, ledgerSourceRecordId),
+              ),
+            )
+            .limit(1);
+
+          if (!existingLedger) {
+            await recordInventoryLedgerEntry({
+              transactionType: 'ADJUST',
+              inventoryItemId: invItemId,
+              agPartNumber: lotRow.materialPartNumber,
+              lotId: quantityAdjustment.materialLotId,
+              unitOfMeasure: lotRow.unitOfMeasure ?? saved.uom ?? 'EA',
+              quantityBefore: quantityAdjustment.before,
+              quantityDelta: quantityAdjustment.delta,
+              quantityAfter: quantityAdjustment.after,
+              performedByUserId: user?.id ?? null,
+              performedByDisplayName: actorName(user),
+              reasonCode: 'RECEIPT_QTY_CORRECTION',
+              notes: `Receiving correction for unit ${saved.barcode} (receipt ${receiptId})`,
+              sourceModule: ledgerSourceModule,
+              sourceRecordId: ledgerSourceRecordId,
+              metadata: {
+                receiptId,
+                receivedUnitId: unitId,
+                unitBarcode: saved.barcode,
+                materialLotId: quantityAdjustment.materialLotId,
+                internalControlNumber: quantityAdjustment.internalControlNumber,
+                quantityBefore: quantityAdjustment.before,
+                quantityAfter: quantityAdjustment.after,
+              },
+            }, tx);
+          }
+        }
       }
 
       return [saved];
@@ -944,6 +1258,10 @@ router.patch('/:id/units/:unitId', requireReceivingAccess, async (req: Request, 
 
     if (Object.keys(auditableChanges).length > 0) {
       await logAudit(receiptId, 'unit_updated', user?.employeeId, actorName(user), { unitId, changes: auditableChanges });
+    }
+
+    if ('targetProjectId' in updates) {
+      await syncProjectReceivedMaterial(unitId, user, updates.targetProjectId ? 'Project target assigned from receiving putaway' : 'Project target cleared from receiving putaway');
     }
 
     res.json(updated);
@@ -1046,6 +1364,7 @@ router.post('/:id/units/:unitId/disposition', requireReceivingAccess, async (req
       if (receipt) {
         try {
           await handleAcceptedUnit(unit, receipt, user);
+          await syncProjectReceivedMaterial(unitId, user, 'Material accepted in receiving and queued for PM review');
         } catch (lotErr: any) {
           // Roll back all disposition metadata so the clerk can retry after fixing catalog data
           await db.update(receivedUnits).set({
@@ -1657,9 +1976,9 @@ async function handleAcceptedUnit(unit: ReceivedUnit, receipt: Receipt, user: Au
 }
 
 // ── Helper: determine whether a receipt line strictly requires per-unit traceability ──
-// Lines whose part config marks serial / roll / lot as "required" must be explicitly
+// Lines whose part config marks serial / roll as "required" must be explicitly
 // split by the receiver — they cannot be auto-promoted to a single bulk unit because
-// each physical unit needs its own serial / roll / lot identifier.
+// each physical unit needs its own serial / roll identifier.
 async function lineRequiresStrictSplit(line: ReceiptLine): Promise<{ requires: boolean; fields: string[] }> {
   if (!line.agPartNumber) return { requires: false, fields: [] };
   const [invItem] = await db.select({ traceabilityFieldConfig: inventoryItems.traceabilityFieldConfig })
@@ -1668,7 +1987,7 @@ async function lineRequiresStrictSplit(line: ReceiptLine): Promise<{ requires: b
     .limit(1);
   const cfg = invItem?.traceabilityFieldConfig as Record<string, string> | null | undefined;
   if (!cfg) return { requires: false, fields: [] };
-  const STRICT_KEYS = ['serialNumber', 'rollNumber', 'lotNumber'] as const;
+  const STRICT_KEYS = ['serialNumber', 'rollNumber'] as const;
   const fields = STRICT_KEYS.filter(f => (cfg[f] ?? 'optional') === 'required');
   return { requires: fields.length > 0, fields };
 }
@@ -1676,7 +1995,7 @@ async function lineRequiresStrictSplit(line: ReceiptLine): Promise<{ requires: b
 // ── POST /api/receipts/:id/ensure-units ──────────────────────────────────────
 // Idempotently promote each receipt line that has receivedQty > 0 and zero existing
 // units into a single default received_units record so it shows up in Disposition.
-// Lines whose part config strictly requires per-unit traceability (serial / roll / lot)
+// Lines whose part config strictly requires per-unit traceability (serial / roll)
 // are skipped and reported back so the UI can prompt the receiver to split them.
 router.post('/:id/ensure-units', requireReceivingAccess, async (req: Request, res: Response) => {
   try {
@@ -1718,6 +2037,7 @@ router.post('/:id/ensure-units', requireReceivingAccess, async (req: Request, re
 
       const unitSequence = await getNextUnitSequence(receiptId);
       const barcode = generateUnitBarcode(receipt.receiptNumber, unitSequence);
+      const targetProjectId = await resolveDefaultTargetProjectId(receipt, line);
       const body = insertReceivedUnitSchema.parse({
         receiptId,
         receiptLineId: line.id,
@@ -1726,6 +2046,7 @@ router.post('/:id/ensure-units', requireReceivingAccess, async (req: Request, re
         unitType: 'other',
         quantity: String(receivedQty),
         uom: line.uom ?? 'EA',
+        targetProjectId,
       });
       const [unit] = await db.insert(receivedUnits).values(body).returning();
       created.push(unit);
@@ -1808,6 +2129,9 @@ router.post('/:id/lines/:lineId/split', requireReceivingAccess, async (req: Requ
     // Calling getNextUnitSequence inside the loop would return the same MAX+1 every
     // iteration because no units are inserted until the transaction below.
     let nextSequence = await getNextUnitSequence(receiptId);
+    const defaultTargetProjectId = templateFields && Object.prototype.hasOwnProperty.call(templateFields, 'targetProjectId')
+      ? templateFields.targetProjectId
+      : await resolveDefaultTargetProjectId(receipt, line);
     for (let i = 0; i < count; i++) {
       let qtyForUnit: number;
       if (isRollArray) {
@@ -1829,6 +2153,7 @@ router.post('/:id/lines/:lineId/split', requireReceivingAccess, async (req: Requ
         quantity: String(qtyForUnit),
         uom: line.uom ?? 'EA',
         ...(isRollArray && normalizedRollNumbers ? { rollNumber: normalizedRollNumbers[i] } : {}),
+        targetProjectId: defaultTargetProjectId,
       });
       unitBodies.push(body);
     }
@@ -1924,6 +2249,7 @@ router.post('/:id/units/:unitId/clone', requireReceivingAccess, async (req: Requ
       freezerNumber: source.freezerNumber,
       allocatedToType: source.allocatedToType,
       allocatedToId: source.allocatedToId,
+      targetProjectId: source.targetProjectId,
       disposition: 'pending_inspection',
     });
     const [cloned] = await db.insert(receivedUnits).values(body).returning();
@@ -1966,6 +2292,9 @@ router.post('/:id/units/batch-update', requireReceivingAccess, async (req: Reque
         .where(eq(receivedUnits.id, uid))
         .returning();
       if (updated) results.push(updated);
+      if ('targetProjectId' in safeUpdates) {
+        await syncProjectReceivedMaterial(uid, user, safeUpdates.targetProjectId ? 'Project target assigned from receiving putaway' : 'Project target cleared from receiving putaway');
+      }
     }
 
     await logAudit(receiptId, 'batch_unit_update', user?.employeeId, actorName(user), {

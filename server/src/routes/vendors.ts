@@ -11,10 +11,17 @@ import { storage } from '../../storage';
 import { db } from '../../db';
 import { authenticateToken } from '../../middleware/auth';
 import { authorizeApiRoute } from '../../middleware/routeAuthorization';
-import { objectStorageClient } from '../../replit_integrations/object_storage/objectStorage';
+import {
+  ObjectNotFoundError,
+  objectStorageClient,
+} from '../../replit_integrations/object_storage/objectStorage';
 import { setObjectAclPolicy } from '../../replit_integrations/object_storage/objectAcl';
 import { auditService } from '../services/auditService';
-import { getFileStorageProvider, getStorageErrorResponse } from '../services/fileStorageProvider';
+import {
+  getFileStorageProvider,
+  getFileStorageProviderForObjectPath,
+  getStorageErrorResponse,
+} from '../services/fileStorageProvider';
 import {
   insertSupplierAuditSchema,
   insertSupplierScopeSchema,
@@ -44,6 +51,123 @@ if (!fs.existsSync(vendorApprovalsDir)) {
 
 if (!fs.existsSync(vendorDocumentsDir)) {
   fs.mkdirSync(vendorDocumentsDir, { recursive: true });
+}
+
+type VendorDocumentPath =
+  | { type: 'object'; path: string }
+  | { type: 'upload'; path: string }
+  | { type: 'external'; url: string };
+
+function isVendorDocumentScope(pathValue: string): boolean {
+  const parts = pathValue
+    .split(/[/?#]/)[0]
+    .split('/')
+    .filter(Boolean);
+  return parts.includes('vendor-documents') || parts.includes('vendor-approvals');
+}
+
+function normalizeVendorDocumentPath(rawValue: unknown): VendorDocumentPath | null {
+  const raw = String(rawValue || '').trim();
+  if (!raw) return null;
+
+  let value = raw;
+  try {
+    value = decodeURIComponent(raw);
+  } catch {
+    value = raw;
+  }
+
+  if (/^https?:\/\//i.test(value) && !value.startsWith('https://storage.googleapis.com/')) {
+    try {
+      value = new URL(value).pathname;
+    } catch {
+      return null;
+    }
+  }
+
+  if (value.startsWith('https://storage.googleapis.com/')) {
+    try {
+      const privateObjectDir = process.env.PRIVATE_OBJECT_DIR;
+      const rawPath = new URL(value).pathname;
+      const entityDir = privateObjectDir
+        ? privateObjectDir.endsWith('/')
+          ? privateObjectDir
+          : `${privateObjectDir}/`
+        : null;
+
+      if (entityDir && rawPath.startsWith(entityDir)) {
+        const entityId = rawPath.slice(entityDir.length);
+        if (isVendorDocumentScope(entityId)) {
+          return { type: 'object', path: `/objects/${entityId}` };
+        }
+      }
+    } catch {
+      // Fall through to the direct external redirect below.
+    }
+
+    return { type: 'external', url: value };
+  }
+
+  const pathOnlyValue = value.split(/[?#]/)[0];
+  const normalized = pathOnlyValue.startsWith('objects/') ? `/${pathOnlyValue}` : pathOnlyValue;
+  if (normalized.startsWith('/objects/')) {
+    return isVendorDocumentScope(normalized)
+      ? { type: 'object', path: normalized }
+      : null;
+  }
+
+  if (normalized.startsWith('vendor-documents/') || normalized.startsWith('vendor-approvals/')) {
+    return { type: 'object', path: `/objects/${normalized}` };
+  }
+
+  const uploadPath = normalized.startsWith('uploads/') ? `/${normalized}` : normalized;
+  if (
+    uploadPath.startsWith('/uploads/vendor-documents/') ||
+    uploadPath.startsWith('/uploads/vendor-approvals/')
+  ) {
+    return { type: 'upload', path: uploadPath };
+  }
+
+  return null;
+}
+
+async function serveVendorDocumentPath(rawPath: unknown, res: Response): Promise<void> {
+  const docPath = normalizeVendorDocumentPath(rawPath);
+  if (!docPath) {
+    res.status(404).json({ error: 'Vendor document not found' });
+    return;
+  }
+
+  if (docPath.type === 'external') {
+    res.redirect(docPath.url);
+    return;
+  }
+
+  if (docPath.type === 'upload') {
+    const relativePath = docPath.path.replace(/^\/uploads\//, '');
+    const absolutePath = path.resolve(uploadsDir, relativePath);
+    const uploadsRoot = path.resolve(uploadsDir);
+    if (!absolutePath.startsWith(uploadsRoot + path.sep)) {
+      res.status(400).json({ error: 'Invalid vendor document path' });
+      return;
+    }
+    res.sendFile(absolutePath, (err) => {
+      if (err && !res.headersSent) {
+        res.status((err as any).status || 404).json({ error: 'Vendor document not found' });
+      }
+    });
+    return;
+  }
+
+  try {
+    await getFileStorageProviderForObjectPath(docPath.path).downloadObject(docPath.path, res);
+  } catch (error) {
+    if (error instanceof ObjectNotFoundError && !res.headersSent) {
+      res.status(404).json({ error: 'Vendor document not found' });
+      return;
+    }
+    throw error;
+  }
 }
 
 // Configure multer for vendor approval PDFs (memory storage for object storage upload)
@@ -84,18 +208,63 @@ function parseGcsPath(fullPath: string): { bucketName: string; objectName: strin
 }
 
 async function uploadVendorPdfToStorage(file: Express.Multer.File, scope: 'vendor-approvals' | 'vendor-documents') {
-  const provider = getFileStorageProvider();
-  const objectPath = await provider.uploadBuffer({
-    buffer: file.buffer,
-    fileName: file.originalname,
-    contentType: 'application/pdf',
-    scope,
-  });
-  await provider.setPublicReadPolicy(objectPath, 'system');
+  try {
+    const provider = getFileStorageProvider();
+    const objectPath = await provider.uploadBuffer({
+      buffer: file.buffer,
+      fileName: file.originalname,
+      contentType: 'application/pdf',
+      scope,
+    });
+    await provider.setPublicReadPolicy(objectPath, 'system');
+
+    return {
+      url: objectPath,
+      filename: objectPath.split('/').pop() || file.originalname,
+      originalName: file.originalname,
+      size: file.size,
+    };
+  } catch (error) {
+    if (!shouldUseLocalVendorUploadFallback(error)) {
+      throw error;
+    }
+
+    const result = await saveVendorPdfLocally(file, scope);
+    const { reason, message, status } = getStorageErrorResponse(error);
+    console.warn('[vendor-upload] Used local upload fallback', {
+      scope,
+      originalName: file.originalname,
+      reason,
+      message,
+      status,
+      localUrl: result.url,
+    });
+
+    return result;
+  }
+}
+
+function shouldUseLocalVendorUploadFallback(error: unknown): boolean {
+  const { status, reason } = getStorageErrorResponse(error);
+  if ([401, 403, 502, 503].includes(status)) return true;
+  return /storage|signing|supabase|missing|unavailable|unauthorized/i.test(reason);
+}
+
+async function saveVendorPdfLocally(file: Express.Multer.File, scope: 'vendor-approvals' | 'vendor-documents') {
+  const targetDir = scope === 'vendor-approvals' ? vendorApprovalsDir : vendorDocumentsDir;
+  const ext = path.extname(file.originalname).toLowerCase() || '.pdf';
+  const safeBase = path
+    .basename(file.originalname, ext)
+    .replace(/[^a-zA-Z0-9_-]/g, '_')
+    .slice(0, 90) || 'vendor-document';
+  const filename = `${Date.now()}_${randomUUID()}_${safeBase}${ext}`;
+  const absolutePath = path.join(targetDir, filename);
+
+  await fs.promises.writeFile(absolutePath, file.buffer);
 
   return {
-    url: objectPath,
-    filename: objectPath.split('/').pop() || file.originalname,
+    url: `/uploads/${scope}/${filename}`,
+    filename,
     originalName: file.originalname,
     size: file.size,
   };
@@ -401,6 +570,17 @@ router.get('/', async (req: Request, res: Response) => {
         .json({ error: 'Invalid query parameters', details: error.errors });
     }
     res.status(500).json({ error: 'Failed to fetch vendors' });
+  }
+});
+
+// GET /api/vendors/documents/view - Stream a vendor document through the API
+router.get('/documents/view', async (req: Request, res: Response) => {
+  try {
+    await serveVendorDocumentPath(req.query.path, res);
+  } catch (error) {
+    console.error('View vendor document error:', error);
+    const { status, reason, message } = getStorageErrorResponse(error);
+    res.status(status).json({ error: message, reason });
   }
 });
 

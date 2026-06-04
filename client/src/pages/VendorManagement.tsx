@@ -89,6 +89,23 @@ import { FolderOpen } from 'lucide-react';
 import { useFormDraft } from '@/hooks/useFormDraft';
 import { useUnsavedChangesWarning } from '@/hooks/useUnsavedChangesWarning';
 
+function getUploadErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message?.trim()) {
+    return error.message;
+  }
+
+  if (error && typeof error === 'object') {
+    const data = error as Record<string, unknown>;
+    const message = data.message || data.error || data.reason || data.details;
+
+    if (typeof message === 'string' && message.trim()) {
+      return message;
+    }
+  }
+
+  return fallback;
+}
+
 const vendorFormSchema = insertVendorSchema.extend({
   email: z.string().email('Invalid email').optional().or(z.literal('')),
   additionalEmail: z
@@ -661,40 +678,172 @@ export default function VendorManagement() {
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch('/api/vendors/upload/document', {
+      const data = await apiRequest('/api/vendors/upload/document', {
         method: 'POST',
         body: formData,
-      });
+        timeout: 60000,
+      }) as { url: string };
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const message =
-          errorData.message ||
-          errorData.error ||
-          errorData.reason ||
-          'Upload failed';
-        throw new Error(message);
-      }
-
-      const data = await response.json();
       form.setValue('mainDocumentUrl', data.url);
       setMainDocFile(file);
       toast({ title: 'Document uploaded successfully' });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to upload document';
       toast({
         title: 'Upload failed',
-        description: message,
+        description: getUploadErrorMessage(error, 'Failed to upload document'),
         variant: 'destructive',
       });
     } finally {
       setUploadingMainDoc(false);
+      e.target.value = '';
     }
   };
 
   const handleRemoveMainDoc = () => {
     setMainDocFile(null);
     form.setValue('mainDocumentUrl', '');
+  };
+
+  const getVendorPdfViewUrl = (url: string) => {
+    const trimmed = url.trim();
+    let normalized = trimmed.startsWith('objects/') ? `/${trimmed}` : trimmed;
+
+    try {
+      const parsed = new URL(trimmed, window.location.origin);
+      if (parsed.origin === window.location.origin) {
+        normalized = parsed.pathname.startsWith('/objects/') ||
+          parsed.pathname.startsWith('/uploads/vendor-documents/') ||
+          parsed.pathname.startsWith('/uploads/vendor-approvals/')
+          ? parsed.pathname
+          : normalized;
+      }
+    } catch {
+      // Keep the original value when it is not a URL-like path.
+    }
+
+    const isVendorStoragePath =
+      normalized.startsWith('/objects/') ||
+      normalized.startsWith('/uploads/vendor-documents/') ||
+      normalized.startsWith('/uploads/vendor-approvals/') ||
+      normalized.startsWith('vendor-documents/') ||
+      normalized.startsWith('vendor-approvals/');
+
+    return isVendorStoragePath
+      ? `/api/vendors/documents/view?path=${encodeURIComponent(normalized)}`
+      : trimmed;
+  };
+
+  const getStoredAuthHeaders = (): HeadersInit => {
+    const storedToken =
+      localStorage.getItem('sessionToken') || localStorage.getItem('jwtToken');
+    return storedToken ? { Authorization: `Bearer ${storedToken}` } : {};
+  };
+
+  // Opens a vendor PDF through the vendor document API. Fetching same-origin
+  // storage paths first lets localStorage-backed sessions view uploaded PDFs even
+  // when the browser does not attach the session cookie to a new tab.
+  const openVendorPdf = async (
+    url: string | undefined | null,
+    label: string = 'document'
+  ) => {
+    const trimmed = (url || '').trim();
+    if (!trimmed) {
+      toast({
+        title: 'No document on file',
+        description: `There is no ${label} uploaded for this vendor yet.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const viewUrl = getVendorPdfViewUrl(trimmed);
+
+    // External URLs are left alone so the browser can handle legacy storage links.
+    const isSameOriginStoragePath = viewUrl.startsWith('/api/vendors/documents/view');
+
+    const openDirect = () => {
+      const win = window.open(viewUrl, '_blank', 'noopener,noreferrer');
+      if (!win) {
+        toast({
+          title: 'Pop-up blocked',
+          description:
+            'Your browser blocked the PDF from opening. Please allow pop-ups for this site and try again.',
+          variant: 'destructive',
+        });
+      }
+    };
+
+    if (!isSameOriginStoragePath) {
+      openDirect();
+      return;
+    }
+
+    const popup = window.open('about:blank', '_blank');
+    if (!popup) {
+      toast({
+        title: 'Pop-up blocked',
+        description:
+          'Your browser blocked the PDF from opening. Please allow pop-ups for this site and try again.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    popup.opener = null;
+
+    let res: Response;
+    try {
+      res = await fetch(viewUrl, {
+        credentials: 'include',
+        headers: getStoredAuthHeaders(),
+      });
+    } catch {
+      popup.close();
+      toast({
+        title: 'Unable to open document',
+        description: `A network error occurred while trying to open the ${label}. Please try again.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (res.ok) {
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(
+        blob.type ? blob : new Blob([blob], { type: 'application/pdf' })
+      );
+      popup.location.href = blobUrl;
+      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+      return;
+    }
+
+    popup.close();
+
+    if (res.status === 404) {
+      toast({
+        title: 'Document not found',
+        description: `The ${label} could not be located in storage. It may have been deleted — please re-upload it.`,
+        variant: 'destructive',
+      });
+    } else if (res.status === 403) {
+      toast({
+        title: 'Access denied',
+        description: `You do not have permission to view this ${label}, or its access policy is missing. Re-uploading the document will restore access.`,
+        variant: 'destructive',
+      });
+    } else if (res.status === 503) {
+      toast({
+        title: 'Storage temporarily unavailable',
+        description:
+          'The document storage is temporarily unavailable. Please try again in a moment.',
+        variant: 'destructive',
+      });
+    } else {
+      toast({
+        title: 'Unable to open document',
+        description: `An error occurred (${res.status}) while trying to open the ${label}. Please try again.`,
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleSelectFromLibrary = (url: string, filename: string) => {
@@ -721,34 +870,24 @@ export default function VendorManagement() {
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch('/api/vendors/upload/approval', {
+      const data = await apiRequest('/api/vendors/upload/approval', {
         method: 'POST',
         body: formData,
-      });
+        timeout: 60000,
+      }) as { url: string };
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(
-          errorData.message ||
-          errorData.error ||
-          errorData.reason ||
-          'Upload failed'
-        );
-      }
-
-      const data = await response.json();
       form.setValue('approvalPdfUrl', data.url);
       setUploadedFile(file);
       toast({ title: 'File uploaded successfully' });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to upload file';
       toast({
         title: 'Upload failed',
-        description: message,
+        description: getUploadErrorMessage(error, 'Failed to upload file'),
         variant: 'destructive',
       });
     } finally {
       setUploadingFile(false);
+      e.target.value = '';
     }
   };
 
@@ -1238,7 +1377,7 @@ export default function VendorManagement() {
                             <span>This approved vendor's document was cleared and needs to be re-uploaded.</span>
                             <Label
                               htmlFor="main-doc-upload"
-                              className="mt-2 inline-flex cursor-pointer items-center gap-1 rounded-md border border-amber-500 bg-white px-3 py-1.5 text-xs font-medium text-amber-800 hover:bg-amber-50 dark:bg-amber-900 dark:text-amber-200 dark:border-amber-500 dark:hover:bg-amber-800"
+                              className="mt-2 inline-flex cursor-pointer items-center gap-1 rounded-md border border-amber-500 bg-white px-3 py-1.5 text-xs font-medium text-black hover:bg-amber-50 dark:bg-amber-900 dark:text-white dark:border-amber-500 dark:hover:bg-amber-800"
                             >
                               <Upload className="h-3 w-3" />
                               Upload replacement
@@ -1253,7 +1392,7 @@ export default function VendorManagement() {
                               <Upload className="w-6 h-6 mb-1 text-gray-400" />
                               <Label
                                 htmlFor="main-doc-upload"
-                                className="cursor-pointer text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                                className="cursor-pointer text-sm text-black hover:text-black dark:text-white dark:hover:text-white"
                               >
                                 Upload from Computer
                               </Label>
@@ -1284,7 +1423,7 @@ export default function VendorManagement() {
                         <div className="border border-gray-300 dark:border-gray-600 rounded-lg p-4 bg-gray-50 dark:bg-gray-800">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              <FileText className="w-5 h-5 text-blue-600" />
+                              <FileText className="w-5 h-5 text-black dark:text-white" />
                               <span className="text-sm font-medium truncate max-w-[200px]">
                                 {mainDocFile?.name || (
                                   form.watch('mainDocumentUrl')
@@ -1304,15 +1443,19 @@ export default function VendorManagement() {
                             </Button>
                           </div>
                           {form.watch('mainDocumentUrl') && (
-                            <a
-                              href={form.watch('mainDocumentUrl')}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 mt-2 inline-block"
+                            <button
+                              type="button"
+                              className="text-xs text-black hover:text-black dark:text-white dark:hover:text-white mt-2 inline-block underline"
                               data-testid="link-view-main-doc"
+                              onClick={() =>
+                                openVendorPdf(
+                                  form.getValues('mainDocumentUrl'),
+                                  'vendor document'
+                                )
+                              }
                             >
                               View PDF
-                            </a>
+                            </button>
                           )}
                         </div>
                       )}
@@ -1806,7 +1949,7 @@ export default function VendorManagement() {
                           <Upload className="w-8 h-8 mx-auto mb-2 text-gray-400" />
                           <Label
                             htmlFor="file-upload"
-                            className="cursor-pointer text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                            className="cursor-pointer text-sm text-black hover:text-black dark:text-white dark:hover:text-white"
                           >
                             Click to upload PDF
                           </Label>
@@ -1827,7 +1970,7 @@ export default function VendorManagement() {
                         <div className="border border-gray-300 dark:border-gray-600 rounded-lg p-4 bg-gray-50 dark:bg-gray-800">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              <FileText className="w-5 h-5 text-blue-600" />
+                              <FileText className="w-5 h-5 text-black dark:text-white" />
                               <span className="text-sm font-medium">
                                 {uploadedFile?.name || (
                                   form.watch('approvalPdfUrl')
@@ -1849,54 +1992,14 @@ export default function VendorManagement() {
                           {form.watch('approvalPdfUrl') && (
                             <button
                               type="button"
-                              className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 mt-2 inline-block underline"
+                              className="text-xs text-black hover:text-black dark:text-white dark:hover:text-white mt-2 inline-block underline"
                               data-testid="link-view-pdf"
-                              onClick={async () => {
-                                const url = form.getValues('approvalPdfUrl');
-                                const newWindow = window.open('', '_blank', 'noopener,noreferrer');
-                                try {
-                                  const res = await fetch(url, { method: 'HEAD' });
-                                  if (res.ok) {
-                                    if (newWindow) {
-                                      newWindow.location.href = url;
-                                    } else {
-                                      toast({
-                                        title: 'Pop-up blocked',
-                                        description: 'Your browser blocked the PDF from opening. Please allow pop-ups for this site and try again.',
-                                        variant: 'destructive',
-                                      });
-                                    }
-                                  } else {
-                                    if (newWindow) newWindow.close();
-                                    if (res.status === 404) {
-                                      toast({
-                                        title: 'Document not found',
-                                        description: 'The approval PDF could not be located. It may have been deleted.',
-                                        variant: 'destructive',
-                                      });
-                                    } else if (res.status === 503) {
-                                      toast({
-                                        title: 'Storage temporarily unavailable',
-                                        description: 'The document storage is temporarily unavailable. Please try again in a moment.',
-                                        variant: 'destructive',
-                                      });
-                                    } else {
-                                      toast({
-                                        title: 'Unable to open document',
-                                        description: 'An error occurred while trying to open the approval PDF. Please try again.',
-                                        variant: 'destructive',
-                                      });
-                                    }
-                                  }
-                                } catch {
-                                  if (newWindow) newWindow.close();
-                                  toast({
-                                    title: 'Unable to reach storage',
-                                    description: 'Could not connect to document storage. Please check your connection and try again.',
-                                    variant: 'destructive',
-                                  });
-                                }
-                              }}
+                              onClick={() =>
+                                openVendorPdf(
+                                  form.getValues('approvalPdfUrl'),
+                                  'approval PDF'
+                                )
+                              }
                             >
                               View PDF
                             </button>
@@ -2265,6 +2368,23 @@ export default function VendorManagement() {
                     >
                       <div className="flex items-center gap-2">
                         {vendor.name}
+                        {vendor.mainDocumentUrl?.trim() && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-6 gap-1 px-2 py-0 text-xs"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openVendorPdf(vendor.mainDocumentUrl, 'vendor document');
+                            }}
+                            data-testid={`button-view-vendor-doc-${vendor.id}`}
+                            title="View uploaded vendor document"
+                          >
+                            <FileText className="w-3 h-3" />
+                            Document
+                          </Button>
+                        )}
                         {vendor.approved && !vendor.mainDocumentUrl?.trim() && (
                           <span
                             tabIndex={0}
@@ -2382,16 +2502,18 @@ export default function VendorManagement() {
                           </div>
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <a
-                            href={vd.mainDocumentUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="gap-1"
+                            data-testid={`button-open-vendor-doc-${vd.id}`}
+                            onClick={() =>
+                              openVendorPdf(vd.mainDocumentUrl, 'vendor document')
+                            }
                           >
-                            <Button variant="outline" size="sm" className="gap-1">
-                              <ExternalLink className="w-4 h-4" />
-                              Open
-                            </Button>
-                          </a>
+                            <ExternalLink className="w-4 h-4" />
+                            Open
+                          </Button>
                         </td>
                       </tr>
                     );
@@ -2521,7 +2643,7 @@ export default function VendorManagement() {
                 <Upload className="w-10 h-10 mx-auto mb-2 text-gray-400" />
                 <Label
                   htmlFor="csv-upload"
-                  className="cursor-pointer text-blue-600 hover:text-blue-700 dark:text-blue-400 font-medium"
+                  className="cursor-pointer text-black hover:text-black dark:text-white dark:hover:text-white font-medium"
                 >
                   Upload Vendors CSV
                 </Label>
@@ -2535,7 +2657,7 @@ export default function VendorManagement() {
                   disabled={importingCsv}
                 />
                 {importingCsv && (
-                  <p className="text-sm text-blue-600 mt-2">
+                  <p className="text-sm text-black dark:text-white mt-2">
                     Importing...
                   </p>
                 )}
@@ -2549,10 +2671,10 @@ export default function VendorManagement() {
                 CSV should include vendor names and annual scores (Annual- Quality, Annual- Cost, Annual- Delivery, Annual- Response). Vendor names must match existing vendors.
               </p>
               <div className="border-2 border-dashed border-blue-300 dark:border-blue-600 rounded-lg p-6 text-center bg-white dark:bg-gray-900">
-                <Upload className="w-10 h-10 mx-auto mb-2 text-blue-400" />
+                <Upload className="w-10 h-10 mx-auto mb-2 text-black dark:text-white" />
                 <Label
                   htmlFor="evaluations-csv-upload"
-                  className="cursor-pointer text-blue-600 hover:text-blue-700 dark:text-blue-400 font-medium"
+                  className="cursor-pointer text-black hover:text-black dark:text-white dark:hover:text-white font-medium"
                 >
                   Upload Evaluations CSV
                 </Label>
@@ -2566,7 +2688,7 @@ export default function VendorManagement() {
                   disabled={importingCsv}
                 />
                 {importingCsv && (
-                  <p className="text-sm text-blue-600 mt-2">
+                  <p className="text-sm text-black dark:text-white mt-2">
                     Importing evaluations...
                   </p>
                 )}

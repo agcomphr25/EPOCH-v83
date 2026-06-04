@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   Download,
+  ExternalLink,
   FileSearch,
   Loader2,
   RefreshCw,
@@ -77,6 +78,16 @@ interface ChargeCodeUsageReportData {
     laborDistEndDate: string | null;
     totalHours: number;
     chargeCodeStatus: 'ACTIVE' | 'INACTIVE' | 'INVALID';
+    punchCount: number;
+    editedPunchCount: number;
+    editedPunches: Array<{
+      id: number;
+      clockIn: string | null;
+      clockOut: string | null;
+      editNote: string | null;
+      updatedAt: string | null;
+      link: string;
+    }>;
   }>;
   exceptions: Array<{
     entryId: number;
@@ -92,6 +103,9 @@ interface ChargeCodeUsageReportData {
     operation: string | null;
     approvalStatus: string | null;
     laborApprovalId: number | null;
+    isEdited: boolean;
+    editNote: string | null;
+    punchLink: string;
   }>;
 }
 
@@ -140,6 +154,9 @@ function downloadCsv(report: ChargeCodeUsageReportData) {
     'Labor Dist End Date',
     'Hours',
     'Charge Code Status',
+    'Punch Count',
+    'Edited Punch Count',
+    'Edited Punch IDs',
   ];
   const distributionRows = report.distributionRows.map((row) => [
     row.employeeName,
@@ -157,6 +174,9 @@ function downloadCsv(report: ChargeCodeUsageReportData) {
     row.laborDistEndDate,
     row.totalHours,
     row.chargeCodeStatus,
+    row.punchCount,
+    row.editedPunchCount,
+    row.editedPunches.map((punch) => punch.id).join('; '),
   ]);
 
   const masterHeader = [
@@ -201,6 +221,9 @@ function downloadCsv(report: ChargeCodeUsageReportData) {
     'Department',
     'Operation',
     'Approval Status',
+    'Edited',
+    'Edit Note',
+    'Punch Link',
   ];
   const exceptionRows = report.exceptions.map((row) => [
     row.exceptionType,
@@ -213,6 +236,9 @@ function downloadCsv(report: ChargeCodeUsageReportData) {
     row.department,
     row.operation,
     row.approvalStatus,
+    row.isEdited ? 'Yes' : 'No',
+    row.editNote,
+    row.punchLink,
   ]);
 
   const lines = [
@@ -265,6 +291,9 @@ function downloadDistributionCsv(report: ChargeCodeUsageReportData) {
       'Labor Dist End Date',
       'Hours',
       'Charge Code Status',
+      'Punch Count',
+      'Edited Punch Count',
+      'Edited Punch IDs',
     ],
     ...report.distributionRows.map((row) => [
       row.employeeName,
@@ -282,6 +311,9 @@ function downloadDistributionCsv(report: ChargeCodeUsageReportData) {
       row.laborDistEndDate,
       row.totalHours,
       row.chargeCodeStatus,
+      row.punchCount,
+      row.editedPunchCount,
+      row.editedPunches.map((punch) => punch.id).join('; '),
     ]),
   ];
 
@@ -522,7 +554,11 @@ export default function ChargeCodeUsageReport() {
                           {group.rows.map((row, rowIndex) => (
                             <TableRow
                               key={`${row.employeeId}-${row.indexCode}-${rowIndex}`}
-                              className={groupIndex % 2 === 0 ? 'bg-background' : 'bg-blue-50/25'}
+                              className={
+                                row.editedPunchCount > 0
+                                  ? 'bg-amber-50/80 hover:bg-amber-50/80'
+                                  : groupIndex % 2 === 0 ? 'bg-background' : 'bg-blue-50/25'
+                              }
                             >
                               <TableCell className="whitespace-nowrap pl-8">{row.employeeName ?? row.employeeId}</TableCell>
                               <TableCell className="whitespace-nowrap">{row.employeeId}</TableCell>
@@ -536,7 +572,29 @@ export default function ChargeCodeUsageReport() {
                               <TableCell>{row.jobStartDate ?? '-'}</TableCell>
                               <TableCell>{row.jobEndDate ?? '-'}</TableCell>
                               <TableCell>{row.laborDistStartDate ?? '-'}</TableCell>
-                              <TableCell>{row.laborDistEndDate ?? '-'}</TableCell>
+                              <TableCell>
+                                <div>{row.laborDistEndDate ?? '-'}</div>
+                                {row.editedPunchCount > 0 && (
+                                  <div className="mt-1 flex flex-wrap gap-1">
+                                    {row.editedPunches.slice(0, 3).map((punch) => (
+                                      <Link
+                                        key={punch.id}
+                                        href={punch.link}
+                                        className="inline-flex items-center gap-1 rounded border border-amber-300 bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-900 hover:bg-amber-200"
+                                        title={punch.editNote ?? `Open punch ${punch.id}`}
+                                      >
+                                        Edited punch #{punch.id}
+                                        <ExternalLink className="h-3 w-3" />
+                                      </Link>
+                                    ))}
+                                    {row.editedPunches.length > 3 && (
+                                      <Badge variant="outline" className="border-amber-300 bg-amber-50 text-[11px] text-amber-900">
+                                        +{row.editedPunches.length - 3} more
+                                      </Badge>
+                                    )}
+                                  </div>
+                                )}
+                              </TableCell>
                             </TableRow>
                           ))}
                         </Fragment>
@@ -620,7 +678,7 @@ export default function ChargeCodeUsageReport() {
                     </TableHeader>
                     <TableBody>
                       {data.exceptions.map((row) => (
-                        <TableRow key={row.entryId}>
+                        <TableRow key={row.entryId} className={row.isEdited ? 'bg-amber-50/80 hover:bg-amber-50/80' : undefined}>
                           <TableCell><ExceptionBadge type={row.exceptionType} /></TableCell>
                           <TableCell>{row.workDate}</TableCell>
                           <TableCell>
@@ -630,7 +688,19 @@ export default function ChargeCodeUsageReport() {
                           <TableCell className="font-mono">{row.chargeCode ?? '-'}</TableCell>
                           <TableCell className="text-right">{row.hours.toLocaleString()}</TableCell>
                           <TableCell>{row.department ?? '-'}</TableCell>
-                          <TableCell>{row.approvalStatus ?? '-'}</TableCell>
+                          <TableCell>
+                            <div>{row.approvalStatus ?? '-'}</div>
+                            {row.isEdited && (
+                              <Link
+                                href={row.punchLink}
+                                className="mt-1 inline-flex items-center gap-1 rounded border border-amber-300 bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-900 hover:bg-amber-200"
+                                title={row.editNote ?? `Open punch ${row.entryId}`}
+                              >
+                                Edited punch #{row.entryId}
+                                <ExternalLink className="h-3 w-3" />
+                              </Link>
+                            )}
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>

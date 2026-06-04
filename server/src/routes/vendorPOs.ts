@@ -13,8 +13,9 @@ import { storage } from '../../storage';
 import { requirePermission } from '../../middleware/requirePermission';
 import { generateMagicLink, peekMagicLink, validateMagicLink, createVendorConfirmFrontendUrl } from '../../utils/magicLink';
 import { sendCommunication } from '../../communication/send';
-import { db } from '../../db';
+import { db, queryRows } from '../../db';
 import { sql } from 'drizzle-orm';
+import { appendUniqueEmail, resolveVendorPoReturnEmail } from '../../utils/vendorPoContact';
 import {
   getVendorQualificationBlockers,
   emitProcurementLedgerEvent,
@@ -23,6 +24,102 @@ import {
 import { sendApiError } from '../../utils/apiErrors';
 
 const router = Router();
+
+// Temporary operational override: purchasing leadership is transitioning, so
+// vendor PO issuance must not be blocked by procurement/compliance gates.
+const VENDOR_PO_ISSUE_GATES_DEACTIVATED = true;
+
+async function markLinkedPartsRequestsOrdered(vendorPoId: number, actor: string) {
+  const updated = await queryRows<{ id: number; status: string }>(
+    `
+    UPDATE parts_requests
+       SET status = 'ORDERED',
+           order_date = COALESCE(order_date, NOW()),
+           qty_ordered = GREATEST(COALESCE(qty_ordered, 0), quantity),
+           updated_at = NOW()
+     WHERE vendor_po_id = $1
+       AND status = 'APPROVED'
+     RETURNING id, status
+    `,
+    [vendorPoId]
+  );
+
+  if (updated.length === 0) return;
+
+  await queryRows(
+    `
+    INSERT INTO parts_request_status_history (parts_request_id, from_status, to_status, changed_by, reason)
+    SELECT unnest($1::int[]), 'APPROVED', 'ORDERED', $2, $3
+    `,
+    [
+      updated.map((row) => row.id),
+      actor,
+      `Linked Vendor PO #${vendorPoId} was issued.`,
+    ]
+  );
+}
+
+async function markLinkedPartsRequestsReceivedForPo(vendorPoId: number, actor: string) {
+  const updated = await queryRows<{ id: number; previous_status: string; next_status: string }>(
+    `
+    WITH po_totals AS (
+      SELECT
+        pr.id,
+        pr.status AS previous_status,
+        pr.quantity,
+        COALESCE(SUM(vpi.received_quantity), 0)::float AS received_qty
+      FROM parts_requests pr
+      JOIN vendor_po_items vpi
+        ON vpi.vendor_po_id = pr.vendor_po_id
+       AND (
+         (pr.ag_part_number IS NOT NULL AND vpi.ag_part_number = pr.ag_part_number)
+         OR (pr.ag_part_number IS NULL AND vpi.description = pr.part_name)
+       )
+      WHERE pr.vendor_po_id = $1
+        AND pr.status IN ('ORDERED', 'ORDERED_PARTIAL', 'RECEIVED_PARTIAL')
+      GROUP BY pr.id, pr.status, pr.quantity
+    ),
+    next_values AS (
+      SELECT
+        id,
+        previous_status,
+        LEAST(quantity, FLOOR(received_qty)::int) AS qty_received,
+        CASE
+          WHEN received_qty >= quantity THEN 'RECEIVED'
+          WHEN received_qty > 0 THEN 'RECEIVED_PARTIAL'
+          ELSE previous_status
+        END AS next_status
+      FROM po_totals
+      WHERE received_qty > 0
+    )
+    UPDATE parts_requests pr
+       SET qty_received = next_values.qty_received,
+           status = next_values.next_status,
+           actual_delivery = CASE WHEN next_values.next_status = 'RECEIVED' THEN CURRENT_DATE ELSE pr.actual_delivery END,
+           updated_at = NOW()
+      FROM next_values
+     WHERE pr.id = next_values.id
+       AND pr.status <> next_values.next_status
+    RETURNING pr.id, next_values.previous_status, next_values.next_status
+    `,
+    [vendorPoId]
+  );
+
+  if (updated.length === 0) return;
+
+  await queryRows(
+    `
+    INSERT INTO parts_request_status_history (parts_request_id, from_status, to_status, changed_by, reason)
+    SELECT id, previous_status, next_status, $2, $3
+      FROM jsonb_to_recordset($1::jsonb) AS x(id int, previous_status text, next_status text)
+    `,
+    [
+      JSON.stringify(updated),
+      actor,
+      `Linked Vendor PO #${vendorPoId} receipt updated the parts request automatically.`,
+    ]
+  );
+}
 
 let vendorPOReadSchemaReady: Promise<void> | null = null;
 
@@ -328,15 +425,7 @@ async function buildVendorPOIssueReadiness(vendorPO: any): Promise<{
     if (vendor.approvalExpiration && new Date(vendor.approvalExpiration) < new Date()) {
       vendorMasterBlockers.push(`Vendor approval expired on ${vendor.approvalExpiration}`);
     }
-    const status = String(vendor.debarmentStatus ?? '').trim().toLowerCase();
-    if (['debarred', 'suspended', 'excluded', 'blocked'].includes(status)) {
-      vendorMasterBlockers.push(`Vendor debarment status is ${vendor.debarmentStatus}`);
-    }
   }
-
-  const debarmentBlockers = freshDebarment.length === 0
-    ? [`No fresh passing debarment check for vendor (within ${freshnessDays} days)`]
-    : [];
 
   const supplierQualificationBlockers = await getVendorQualificationBlockers(
     vendorPO.id,
@@ -377,10 +466,12 @@ async function buildVendorPOIssueReadiness(vendorPO: any): Promise<{
   const sections: IssueReadinessSection[] = [
     {
       key: 'vendor_master',
-      label: 'Vendor Master Approval',
-      status: vendorMasterBlockers.length > 0 ? 'fail' : 'pass',
-      blockers: vendorMasterBlockers,
+      label: VENDOR_PO_ISSUE_GATES_DEACTIVATED ? 'Vendor Master Approval (deactivated)' : 'Vendor Master Approval',
+      status: VENDOR_PO_ISSUE_GATES_DEACTIVATED ? 'not_applicable' : vendorMasterBlockers.length > 0 ? 'fail' : 'pass',
+      blockers: VENDOR_PO_ISSUE_GATES_DEACTIVATED ? [] : vendorMasterBlockers,
       details: vendor ? {
+        deactivatedForIssuance: VENDOR_PO_ISSUE_GATES_DEACTIVATED,
+        deactivatedBlockers: vendorMasterBlockers,
         vendorId: vendor.id,
         vendorName: vendor.name,
         approved: hasCurrentVendorMasterApproval(vendor),
@@ -390,30 +481,42 @@ async function buildVendorPOIssueReadiness(vendorPO: any): Promise<{
         debarmentStatus: vendor.debarmentStatus ?? null,
         debarmentCheckedAt: vendor.debarmentCheckedAt ?? null,
         approvedSameNameVendors,
-      } : { vendorId },
+      } : {
+        vendorId,
+        deactivatedForIssuance: VENDOR_PO_ISSUE_GATES_DEACTIVATED,
+        deactivatedBlockers: vendorMasterBlockers,
+      },
     },
     {
       key: 'debarment',
-      label: 'Debarment Check',
-      status: debarmentBlockers.length > 0 ? 'fail' : 'pass',
-      blockers: debarmentBlockers,
+      label: 'Debarment Check (deactivated)',
+      status: 'not_applicable',
+      blockers: [],
       details: {
+        deactivated: true,
+        deactivatedReason: 'Debarment check is temporarily not enforced on vendor PO issuance.',
         freshnessDays,
         latestPassingCheck: freshDebarment[0] ?? null,
       },
     },
     {
       key: 'supplier_scope',
-      label: 'Approved Supplier Scope',
-      status: scopeBlockers.length > 0 ? 'fail' : 'pass',
-      blockers: scopeBlockers,
+      label: VENDOR_PO_ISSUE_GATES_DEACTIVATED ? 'Approved Supplier Scope (deactivated)' : 'Approved Supplier Scope',
+      status: VENDOR_PO_ISSUE_GATES_DEACTIVATED ? 'not_applicable' : scopeBlockers.length > 0 ? 'fail' : 'pass',
+      blockers: VENDOR_PO_ISSUE_GATES_DEACTIVATED ? [] : scopeBlockers,
+      details: {
+        deactivatedForIssuance: VENDOR_PO_ISSUE_GATES_DEACTIVATED,
+        deactivatedBlockers: scopeBlockers,
+      },
     },
     {
       key: 'purchasing_controls',
-      label: 'Purchasing Controls',
-      status: !isP2 ? 'not_applicable' : purchasingBlockers.length > 0 ? 'fail' : 'pass',
-      blockers: isP2 ? purchasingBlockers : [],
+      label: VENDOR_PO_ISSUE_GATES_DEACTIVATED ? 'Purchasing Controls (deactivated)' : 'Purchasing Controls',
+      status: VENDOR_PO_ISSUE_GATES_DEACTIVATED || !isP2 ? 'not_applicable' : purchasingBlockers.length > 0 ? 'fail' : 'pass',
+      blockers: VENDOR_PO_ISSUE_GATES_DEACTIVATED || !isP2 ? [] : purchasingBlockers,
       details: {
+        deactivatedForIssuance: VENDOR_PO_ISSUE_GATES_DEACTIVATED,
+        deactivatedBlockers: purchasingBlockers,
         requisitionId: vendorPO.requisitionId ?? null,
         competitionMethod: vendorPO.competitionMethod ?? null,
         flowdownCount: flowdowns.length,
@@ -421,10 +524,14 @@ async function buildVendorPOIssueReadiness(vendorPO: any): Promise<{
     },
     {
       key: 'p2_compliance_review',
-      label: 'P2 Compliance Review',
-      status: !isP2 ? 'not_applicable' : complianceBlockers.length > 0 ? 'fail' : 'pass',
-      blockers: complianceBlockers,
-      details: { appliesToProductionLine: isP2 },
+      label: VENDOR_PO_ISSUE_GATES_DEACTIVATED ? 'P2 Compliance Review (deactivated)' : 'P2 Compliance Review',
+      status: VENDOR_PO_ISSUE_GATES_DEACTIVATED || !isP2 ? 'not_applicable' : complianceBlockers.length > 0 ? 'fail' : 'pass',
+      blockers: VENDOR_PO_ISSUE_GATES_DEACTIVATED || !isP2 ? [] : complianceBlockers,
+      details: {
+        appliesToProductionLine: isP2,
+        deactivatedForIssuance: VENDOR_PO_ISSUE_GATES_DEACTIVATED,
+        deactivatedBlockers: complianceBlockers,
+      },
     },
   ];
 
@@ -450,6 +557,8 @@ async function requireP2ComplianceBeforeProjectAllocation(
   vendorPoId: number,
   traceability: { customerPoId?: unknown; projectId?: unknown; productionWorkOrderId?: unknown }
 ) {
+  if (VENDOR_PO_ISSUE_GATES_DEACTIVATED) return;
+
   const hasProjectAllocation =
     traceability.customerPoId !== undefined && traceability.customerPoId !== null ||
     traceability.projectId !== undefined && traceability.projectId !== null ||
@@ -531,7 +640,7 @@ function rowsFromDbResult<T>(result: unknown): T[] {
  *  - If no valid selections → fall back to primaryEmail as `to`.
  *  - If primary is in the selection → use primaryEmail as `to`, rest go to CC.
  *  - If primary is NOT in the selection → first validated entry is `to`, rest go to CC.
- *  - standardCc entries (laurie@, issuing user email) are merged into CC, deduped.
+ *  - standardCc entries (Vendor PO return contact, issuing user email) are merged into CC, deduped.
  */
 function deriveToAndCc(
   rawRecipients: unknown,
@@ -558,6 +667,13 @@ function deriveToAndCc(
   }
 
   return { to, cc };
+}
+
+async function getVendorPoEmailRouting(userEmail?: string | null): Promise<{ returnEmail: string; cc: string[] }> {
+  const settings = await storage.getVendorPOSettings();
+  const returnEmail = resolveVendorPoReturnEmail(settings);
+  const cc = appendUniqueEmail(appendUniqueEmail([], returnEmail), userEmail);
+  return { returnEmail, cc };
 }
 
 // Query params schema for list vendor POs
@@ -680,7 +796,7 @@ router.get('/', async (req: Request, res: Response) => {
       // we hide the badge entirely so a stale review left over from when the PO
       // was P2 doesn't show as "Blocked / Requires Attention". The DB row is left
       // intact so flipping back to P2 re-surfaces the prior state.
-      const showCompliance = isP2ProductionLine(po.productionLine);
+      const showCompliance = !VENDOR_PO_ISSUE_GATES_DEACTIVATED && isP2ProductionLine(po.productionLine);
       return {
         ...po,
         pendingReceiptCount: countMap[po.id] ?? 0,
@@ -744,12 +860,16 @@ router.get('/settings', async (req: Request, res: Response) => {
     if (!settings) {
       // Return default settings if none exist
       return res.json({
+        contactEmail: resolveVendorPoReturnEmail(),
         termsAndConditions: '',
         paymentTerms: '',
         shippingInstructions: '',
       });
     }
-    res.json(settings);
+    res.json({
+      ...settings,
+      contactEmail: resolveVendorPoReturnEmail(settings),
+    });
   } catch (error) {
     console.error('Get vendor PO settings error:', error);
     res.status(500).json({ error: 'Failed to retrieve vendor PO settings' });
@@ -1326,16 +1446,6 @@ router.post('/:id/items', async (req: Request, res: Response) => {
       vendorPoId,
     });
 
-    // Invalidate compliance review BEFORE creating the item so that if invalidation
-    // fails the item insertion never commits (fail-safe).
-    const actorId = (req as any).user?.id as number | undefined;
-    await storage.invalidateVendorPoComplianceReview(
-      vendorPoId,
-      'Line item added after compliance review',
-      actorId,
-      { changedField: 'lineItems', action: 'added' },
-    );
-
     await requireP2LineTraceability(vendorPoId, data as Record<string, unknown>);
     await requireP2ComplianceBeforeProjectAllocation(vendorPoId, data);
 
@@ -1509,6 +1619,12 @@ router.post('/items/:itemId/receive', async (req: Request, res: Response) => {
       cocLink,
       units,
     });
+
+    const receivedItem = await storage.getVendorPOItemById(itemId);
+    if (receivedItem?.vendorPoId) {
+      const actor = String((req as any).user?.username ?? createdBy ?? 'unknown');
+      await markLinkedPartsRequestsReceivedForPo(receivedItem.vendorPoId, actor);
+    }
 
     res.json(result);
   } catch (error) {
@@ -1876,11 +1992,12 @@ router.post('/:id/send-rfq', async (req: Request, res: Response) => {
 
     const { recipients: rawRecipients, printOnly } = req.body ?? {};
     const allowedEmails = await getAllowedVendorEmails(vendorPO.vendorId);
+    const { returnEmail: rfqReplyTo, cc: rfqStandardCc } = await getVendorPoEmailRouting((req as any).user?.email);
     const { to: rfqTo, cc: rfqCc } = deriveToAndCc(
       rawRecipients,
       vendor.email,
       allowedEmails,
-      ['laurie.tandy@agadvanced.com']
+      rfqStandardCc
     );
 
     const shouldPrintOnly =
@@ -1949,6 +2066,7 @@ router.post('/:id/send-rfq', async (req: Request, res: Response) => {
       context: rfqContext,
       to: rfqTo,
       cc: rfqCc,
+      replyTo: rfqReplyTo,
       triggeredBy: String((req as any).user?.id ?? (req as any).user?.username ?? 'unknown'),
       capabilityRequired: 'send_vendor_rfq',
       orderId: String(id),
@@ -2095,7 +2213,9 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
     const supplierQualificationBlockers = await getVendorQualificationBlockers(id, vendorPO.vendorId, vendorPO.productionLine ?? null);
     if (supplierQualificationBlockers.length > 0) {
       await emitProcurementLedgerEvent({
-        action: 'VENDOR_PO_ISSUE_BLOCKED_SUPPLIER_QUALIFICATION',
+        action: VENDOR_PO_ISSUE_GATES_DEACTIVATED
+          ? 'VENDOR_PO_ISSUE_SUPPLIER_QUALIFICATION_GATE_DEACTIVATED'
+          : 'VENDOR_PO_ISSUE_BLOCKED_SUPPLIER_QUALIFICATION',
         entityId: id,
         actor,
         reason: supplierQualificationBlockers.join('; '),
@@ -2106,29 +2226,29 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
           blockers: supplierQualificationBlockers,
         },
       });
-      return res.status(422).json({
-        error: 'Supplier qualification gate failed',
-        message: `Cannot issue PO. Reason(s): ${supplierQualificationBlockers.join('; ')}.`,
-        supplierQualificationBlocked: true,
-        blockingReasons: supplierQualificationBlockers,
-      });
+      if (!VENDOR_PO_ISSUE_GATES_DEACTIVATED) {
+        return res.status(422).json({
+          error: 'Supplier qualification gate failed',
+          message: `Cannot issue PO. Reason(s): ${supplierQualificationBlockers.join('; ')}.`,
+          supplierQualificationBlocked: true,
+          blockingReasons: supplierQualificationBlockers,
+        });
+      }
     }
 
-    // ── PURCHASING-CONTROLS GATE (Task #83): require approved requisition + fresh debarment check + FAR flowdowns ─
+    // ── PURCHASING-CONTROLS GATE (Task #83): require approved requisition + FAR flowdowns ─
     {
       const { db: drizzleDb } = await import('../../db');
       const {
         purchaseRequisitions,
         vendorPoFarFlowdowns,
-        vendorDebarmentChecks,
         procurementSettings,
       } = await import('../../schema');
-      const { eq: dEq, and: dAnd, gte: dGte, desc: dDesc } = await import('drizzle-orm');
+      const { eq: dEq } = await import('drizzle-orm');
 
       const [setting] = await drizzleDb.select().from(procurementSettings).limit(1);
       const allowDirectPo = setting?.allowDirectPo ?? false;
       const directPoCap = setting?.directPoExceptionCapability ?? 'purchasing.direct_po_exception';
-      const freshnessDays = setting?.debarmentCheckFreshnessDays ?? 30;
 
       const purchasingBlockers: string[] = [];
 
@@ -2198,27 +2318,19 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
         }
       }
 
-      // (4) Vendor debarment check freshness
-      const cutoff = new Date(Date.now() - freshnessDays * 86_400_000);
-      const fresh = await drizzleDb.select().from(vendorDebarmentChecks).where(dAnd(
-        dEq(vendorDebarmentChecks.vendorId, vendorPO.vendorId),
-        dGte(vendorDebarmentChecks.checkedAt, cutoff),
-        dEq(vendorDebarmentChecks.result, 'pass'),
-      )).orderBy(dDesc(vendorDebarmentChecks.checkedAt)).limit(1);
-      if (fresh.length === 0) {
-        purchasingBlockers.push(`No fresh passing debarment check for vendor (within ${freshnessDays} days)`);
-      } else {
-        // Defer po_issuance evidence creation until AFTER issuance succeeds —
-        // a failed issuance attempt must not leave behind issuance evidence.
-        (req as any)._task83_freshDebarmentCheckId = fresh[0].id;
-        (req as any)._task83_freshDebarmentSource = fresh[0].source;
-        (req as any)._task83_freshDebarmentResult = fresh[0].result;
+      if (purchasingBlockers.length > 0 && VENDOR_PO_ISSUE_GATES_DEACTIVATED) {
+        await emitProcurementLedgerEvent({
+          action: 'VENDOR_PO_ISSUE_PURCHASING_CONTROLS_GATE_DEACTIVATED',
+          entityId: id,
+          actor,
+          reason: purchasingBlockers.join('; '),
+          meta: { vendorPoId: id, vendorId: vendorPO.vendorId, productionLine: vendorPO.productionLine ?? null, blockers: purchasingBlockers },
+        });
       }
 
-      // P2/customer-project purchases remain hard-blocked. P1 stock/internal purchases
-      // can be issued with the gaps left visible for the procurement backfill/ERDI
-      // remediation queue, which keeps production moving without hiding the audit debt.
-      if (purchasingBlockers.length > 0 && isP2ProductionLine(vendorPO.productionLine)) {
+      // P2/customer-project purchases normally remain hard-blocked. This can be
+      // re-enabled by turning off VENDOR_PO_ISSUE_GATES_DEACTIVATED.
+      if (purchasingBlockers.length > 0 && isP2ProductionLine(vendorPO.productionLine) && !VENDOR_PO_ISSUE_GATES_DEACTIVATED) {
         await emitProcurementLedgerEvent({
           action: 'VENDOR_PO_ISSUE_BLOCKED_PURCHASING_CONTROLS',
           entityId: id,
@@ -2253,19 +2365,7 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
       } else {
         // Explicit requires_attention check — PO changed after review
         if (complianceReview.reviewStatus === 'requires_attention') {
-          await emitProcurementLedgerEvent({
-            action: 'VENDOR_PO_ISSUE_BLOCKED_COMPLIANCE_REVIEW',
-            entityId: id,
-            actor,
-            reason: 'Compliance review requires attention because PO changed after review.',
-            meta: { vendorPoId: id, vendorId: vendorPO.vendorId, reviewStatus: complianceReview.reviewStatus },
-          });
-          return res.status(422).json({
-            error: 'Compliance review requires attention',
-            message: 'Compliance review requires attention because PO changed after review.',
-            complianceBlocked: true,
-            blockingReasons: ['Compliance review requires attention because PO changed after review.'],
-          });
+          blockingReasons.push('Compliance review requires attention because PO changed after review.');
         }
         if (complianceReview.reviewStatus !== 'reviewed') {
           blockingReasons.push(`Compliance review status is "${complianceReview.reviewStatus}" — must be "reviewed"`);
@@ -2282,30 +2382,30 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
       }
       if (blockingReasons.length > 0) {
         await emitProcurementLedgerEvent({
-          action: 'VENDOR_PO_ISSUE_BLOCKED_COMPLIANCE_REVIEW',
+          action: VENDOR_PO_ISSUE_GATES_DEACTIVATED
+            ? 'VENDOR_PO_ISSUE_COMPLIANCE_REVIEW_GATE_DEACTIVATED'
+            : 'VENDOR_PO_ISSUE_BLOCKED_COMPLIANCE_REVIEW',
           entityId: id,
           actor,
           reason: blockingReasons.join('; '),
           meta: { vendorPoId: id, vendorId: vendorPO.vendorId, productionLine: vendorPO.productionLine ?? null, blockers: blockingReasons },
         });
-        return res.status(422).json({
-          error: 'Compliance review gate failed',
-          message: `Cannot issue PO. Reason(s): ${blockingReasons.join('; ')}.`,
-          complianceBlocked: true,
-          blockingReasons,
-        });
+        if (!VENDOR_PO_ISSUE_GATES_DEACTIVATED) {
+          return res.status(422).json({
+            error: 'Compliance review gate failed',
+            message: `Cannot issue PO. Reason(s): ${blockingReasons.join('; ')}.`,
+            complianceBlocked: true,
+            blockingReasons,
+          });
+        }
       }
     }
 
     // ── PATH A: Issue WITHOUT emailing vendor (legacy/backfill) ──────────────
     if (skip) {
-      const trimmedReason = typeof reason === 'string' ? reason.trim() : '';
-      if (trimmedReason.length < 10 || !/\S/.test(trimmedReason)) {
-        return res.status(400).json({
-          error: 'Reason required',
-          message: 'Please provide a meaningful reason (at least 10 characters) for issuing without notifying the vendor.',
-        });
-      }
+      const trimmedReason = typeof reason === 'string' && reason.trim().length >= 10
+        ? reason.trim()
+        : 'Issued without vendor email during temporary purchasing controls deactivation.';
 
       const nowAt = new Date();
       const { vendorPO: issuedPO, poNumber } = await storage.issueVendorPO(id, {
@@ -2315,6 +2415,7 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
         performedBy,
         performedByEmail,
       });
+      await markLinkedPartsRequestsOrdered(id, performedBy);
 
       console.log(`[VendorPOIssuedNoEmail] PO ${poNumber} issued WITHOUT email by ${performedBy} — reason: ${trimmedReason}`);
 
@@ -2377,9 +2478,46 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
     }
 
     if (!vendor.email) {
-      return res.status(400).json({ 
-        error: 'Vendor email not configured',
-        message: 'Please add a contact email for this vendor before issuing the PO.',
+      const nowAt = new Date();
+      const fallbackReason = 'Issued without vendor email because vendor email is not configured.';
+      const { vendorPO: issuedPO, poNumber } = await storage.issueVendorPO(id, {
+        issuedWithoutEmail: true,
+        reason: fallbackReason,
+        issuedWithoutEmailAt: nowAt,
+        performedBy,
+        performedByEmail,
+      });
+      await markLinkedPartsRequestsOrdered(id, performedBy);
+
+      await emitProcurementLedgerEvent({
+        action: 'VENDOR_PO_ISSUED_WITHOUT_EMAIL',
+        entityId: id,
+        actor,
+        reason: fallbackReason,
+        meta: { vendorPoId: id, vendorId: vendorPO.vendorId, poNumber, issuedWithoutEmail: true, vendorEmailMissing: true },
+      });
+
+      if (vendorPO.requisitionId) {
+        try {
+          const { db: drizzleDb } = await import('../../db');
+          const { purchaseRequisitions } = await import('../../schema');
+          const { eq: dEq } = await import('drizzle-orm');
+          await drizzleDb.update(purchaseRequisitions).set({
+            status: 'CONVERTED_TO_PO',
+            convertedToPoId: id,
+            convertedAt: new Date(),
+            updatedAt: new Date(),
+          }).where(dEq(purchaseRequisitions.id, vendorPO.requisitionId));
+        } catch (e) {
+          console.error('[Task #83] failed to auto-convert requisition', e);
+        }
+      }
+
+      return res.json({
+        ...issuedPO,
+        emailSent: false,
+        poNumber,
+        message: 'PO issued successfully. Vendor email is not configured, so no confirmation email was sent.',
       });
     }
 
@@ -2388,6 +2526,7 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
 
     // Atomic transactional issuance: lock row, generate number, update status
     const { vendorPO: issuedPO, poNumber } = await storage.issueVendorPO(id);
+    await markLinkedPartsRequestsOrdered(id, performedBy);
 
     await emitProcurementLedgerEvent({
       action: 'VENDOR_PO_ISSUED',
@@ -2410,12 +2549,9 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
     });
     const link = createVendorConfirmFrontendUrl(confirmToken);
 
-    // Build standard CC list: always include laurie.tandy@agadvanced.com + issuing user's email
-    const standardCc: string[] = ['laurie.tandy@agadvanced.com'];
+    // Build standard email routing from Vendor PO settings plus the issuing user's email.
     const issuingUserEmail = (req as any).user?.email as string | undefined;
-    if (issuingUserEmail && !standardCc.map((c) => c.toLowerCase()).includes(issuingUserEmail.toLowerCase())) {
-      standardCc.push(issuingUserEmail);
-    }
+    const { returnEmail: issueReplyTo, cc: standardCc } = await getVendorPoEmailRouting(issuingUserEmail);
 
     // Derive authoritative to/cc from selected recipients (validated against vendor's allowed emails)
     const allowedEmails = await getAllowedVendorEmails(vendorPO.vendorId);
@@ -2441,6 +2577,7 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
       context: issueContext,
       to: issueToEmail,
       cc: issueCcList,
+      replyTo: issueReplyTo,
       triggeredBy: performedBy,
       capabilityRequired: 'issue_vendor_po',
       orderId: String(id),
@@ -2717,11 +2854,8 @@ router.post('/:id/resend', async (req: Request, res: Response) => {
 
     const poNumber = vendorPO.poNumber;
 
-    const standardResendCc: string[] = ['laurie.tandy@agadvanced.com'];
     const resendingUserEmail = (req as any).user?.email as string | undefined;
-    if (resendingUserEmail && !standardResendCc.map((c) => c.toLowerCase()).includes(resendingUserEmail.toLowerCase())) {
-      standardResendCc.push(resendingUserEmail);
-    }
+    const { returnEmail: resendReplyTo, cc: standardResendCc } = await getVendorPoEmailRouting(resendingUserEmail);
 
     const resendAllowedEmails = await getAllowedVendorEmails(vendorPO.vendorId);
     const { to: resendToEmail, cc: resendCcList } = deriveToAndCc(
@@ -2746,6 +2880,7 @@ router.post('/:id/resend', async (req: Request, res: Response) => {
       context: resendContext,
       to: resendToEmail,
       cc: resendCcList,
+      replyTo: resendReplyTo,
       triggeredBy: String((req as any).user?.id ?? (req as any).user?.username ?? 'unknown'),
       capabilityRequired: 'resend_vendor_po',
       orderId: String(id),

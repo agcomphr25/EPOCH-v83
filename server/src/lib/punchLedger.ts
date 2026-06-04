@@ -16,7 +16,7 @@
 import { db } from '../../db';
 import { punchLedger, employees, chargeCodes } from '../../schema';
 import type { PunchLedgerEntry, InsertPunchLedger } from '../../schema';
-import { type SQL, eq, and, isNull, gte, lte, desc, sql } from 'drizzle-orm';
+import { type SQL, eq, and, isNull, gte, lte, desc, sql, or } from 'drizzle-orm';
 import { laborAllocationsEnabled } from './featureFlags';
 import {
   openAllocation,
@@ -25,7 +25,7 @@ import {
 
 export type { PunchLedgerEntry };
 
-export type PunchSource = 'KIOSK' | 'TRAVELER' | 'PORTAL';
+export type PunchSource = 'KIOSK' | 'TRAVELER' | 'PORTAL' | 'TIMETRAKGO_IMPORT' | 'ADMIN';
 export type LaborClass = 'REGULAR' | 'BREAK';
 export type LedgerStatus = 'clocked_out' | 'clocked_in' | 'on_break';
 
@@ -67,6 +67,13 @@ export interface SwitchAssignmentParams {
   updatedByDisplayName?: string | null;
 }
 
+export interface CreateClosedHistoricalSessionParams extends Omit<OpenSessionParams, 'clockIn'> {
+  source: PunchSource;
+  clockIn: Date;
+  clockOut: Date;
+  editNote: string;
+}
+
 /**
  * Derive a chargeCode snapshot string from the chargeCodes FK.
  * Returns null when chargeCodeId is null/undefined.
@@ -81,6 +88,7 @@ export interface ListSessionsParams {
   employeeId?: number;
   from?: Date;
   to?: Date;
+  includeOverlapping?: boolean;
   openOnly?: boolean;
   limit?: number;
   offset?: number;
@@ -170,18 +178,93 @@ export async function openSession(params: OpenSessionParams): Promise<PunchLedge
 }
 
 /**
+ * Create a closed historical session from an external timekeeping source.
+ * This is intentionally separate from openSession/closeSession so imports can
+ * preserve the original clock-out timestamp instead of closing at "now".
+ */
+export async function createClosedHistoricalSession(
+  params: CreateClosedHistoricalSessionParams,
+): Promise<PunchLedgerEntry> {
+  if (params.clockOut <= params.clockIn) {
+    throw Object.assign(new Error('clockOut must be after clockIn'), { code: 'INVALID_HISTORICAL_SESSION' });
+  }
+
+  const now = new Date();
+  const chargeCode = await deriveChargeCodeSnapshot(params.chargeCodeId);
+  const resolvedApprovalStatus = defaultApprovalStatus(params.source, params.approvalStatus);
+  assertTravelerNotAuto(params.source, resolvedApprovalStatus, 'createClosedHistoricalSession');
+
+  const [entry] = await db
+    .insert(punchLedger)
+    .values({
+      employeeId: params.employeeId,
+      clockIn: params.clockIn,
+      clockOut: params.clockOut,
+      source: params.source,
+      laborClass: params.laborClass ?? 'REGULAR',
+      travelerId: params.travelerId ?? null,
+      productionWorkOrderId: params.productionWorkOrderId ?? null,
+      chargeCodeId: params.chargeCodeId ?? null,
+      chargeCode,
+      department: params.department ?? null,
+      operation: params.operation ?? null,
+      projectId: params.projectId ?? null,
+      travelerStepId: params.travelerStepId ?? null,
+      certificationStatus: params.certificationStatus ?? null,
+      isOverrun: params.isOverrun ?? false,
+      overrunReason: params.overrunReason ?? null,
+      overrideReason: params.overrideReason ?? null,
+      approvalStatus: resolvedApprovalStatus,
+      laborApprovalId: params.laborApprovalId ?? null,
+      laborBudgetOverrideId: params.laborBudgetOverrideId ?? null,
+      createdBy: params.createdBy ?? null,
+      createdByDisplayName: params.createdByDisplayName ?? null,
+      updatedBy: params.createdBy ?? null,
+      updatedByDisplayName: params.createdByDisplayName ?? null,
+      isEdited: false,
+      editNote: params.editNote,
+      updatedAt: now,
+    } satisfies Omit<InsertPunchLedger, 'id' | 'createdAt'>)
+    .returning();
+
+  if (laborAllocationsEnabled) {
+    try {
+      await openAllocation(entry);
+      await closeAllocation(entry);
+    } catch (err: unknown) {
+      console.warn('[punchLedger] labor_allocations dual-write (historical) failed:', (err as Error)?.message ?? err);
+    }
+  }
+
+  return entry;
+}
+
+/**
  * Close an open session (clock-out). Resolves the open row by employeeId.
  * Returns the closed row, or null if no open session was found.
  */
-export async function closeSession(employeeId: number, updatedBy?: number | null, updatedByDisplayName?: string | null): Promise<PunchLedgerEntry | null> {
+export async function closeSession(
+  employeeId: number,
+  updatedBy?: number | null,
+  updatedByDisplayName?: string | null,
+  clockOut?: Date | null,
+): Promise<PunchLedgerEntry | null> {
   const open = await getOpenSession(employeeId);
   if (!open) return null;
 
   const now = new Date();
+  const effectiveClockOut = clockOut ?? now;
+  if (effectiveClockOut <= open.clockIn) {
+    throw Object.assign(
+      new Error(`Clock-out time (${effectiveClockOut.toISOString()}) must be after the session's clock-in (${open.clockIn.toISOString()}).`),
+      { code: 'INVALID_CLOCK_OUT' },
+    );
+  }
+
   const [closed] = await db
     .update(punchLedger)
     .set({
-      clockOut: now,
+      clockOut: effectiveClockOut,
       updatedBy: updatedBy ?? null,
       updatedByDisplayName: updatedByDisplayName ?? null,
       updatedAt: now,
@@ -205,12 +288,18 @@ export async function closeSession(employeeId: number, updatedBy?: number | null
 /**
  * Close a specific open session by its ID. Used when the caller already has the entry.
  */
-export async function closeSessionById(entryId: number, updatedBy?: number | null, updatedByDisplayName?: string | null): Promise<PunchLedgerEntry | null> {
+export async function closeSessionById(
+  entryId: number,
+  updatedBy?: number | null,
+  updatedByDisplayName?: string | null,
+  clockOut?: Date | null,
+): Promise<PunchLedgerEntry | null> {
   const now = new Date();
+  const effectiveClockOut = clockOut ?? now;
   const [closed] = await db
     .update(punchLedger)
     .set({
-      clockOut: now,
+      clockOut: effectiveClockOut,
       updatedBy: updatedBy ?? null,
       updatedByDisplayName: updatedByDisplayName ?? null,
       updatedAt: now,
@@ -303,11 +392,20 @@ export async function listSessions(params: ListSessionsParams): Promise<PunchLed
   if (params.openOnly) {
     conditions.push(isNull(punchLedger.clockOut));
   }
-  if (params.from) {
-    conditions.push(gte(punchLedger.clockIn, params.from));
-  }
-  if (params.to) {
-    conditions.push(lte(punchLedger.clockIn, params.to));
+  if (params.includeOverlapping && (params.from || params.to)) {
+    if (params.to) {
+      conditions.push(lte(punchLedger.clockIn, params.to));
+    }
+    if (params.from) {
+      conditions.push(or(gte(punchLedger.clockOut, params.from), isNull(punchLedger.clockOut))!);
+    }
+  } else {
+    if (params.from) {
+      conditions.push(gte(punchLedger.clockIn, params.from));
+    }
+    if (params.to) {
+      conditions.push(lte(punchLedger.clockIn, params.to));
+    }
   }
 
   return db

@@ -19,6 +19,8 @@ import { format } from 'date-fns';
 
 interface SchedulableItem {
   id: string;
+  poId?: number;
+  poItemId?: number;
   poNumber: string;
   partNumber: string;
   description: string;
@@ -59,12 +61,14 @@ export default function P2ProductionScheduler({ selectedPONumbers = [] }: P2Prod
     ? schedulingListRaw.filter((item) => selectedPONumbers.includes(item.poNumber))
     : schedulingListRaw;
 
-  // Group items by PO + Part Number
+  // Group by PO item so duplicate display PO/part labels do not collapse together.
   const groupedParts = useMemo(() => {
     const groups: Record<string, GroupedPart> = {};
     
     schedulingList.forEach((item) => {
-      const key = `${item.poNumber}-${item.partNumber}`;
+      const key = item.poItemId
+        ? `po-item-${item.poItemId}`
+        : `${item.poNumber}-${item.partNumber}`;
       
       if (!groups[key]) {
         groups[key] = {
@@ -143,6 +147,9 @@ export default function P2ProductionScheduler({ selectedPONumbers = [] }: P2Prod
     },
     onSuccess: (result: any, variables) => {
       queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/scheduling-list'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/production-queue'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/po-statuses'] });
       queryClient.invalidateQueries({ queryKey: ['/api/cutting-table-mfg-queue'] });
       const cuttingMsg = result?.cuttingTableDemands > 0 ? ` ${result.cuttingTableDemands} cutting table stock packet demand(s) created.` : '';
       toast({
@@ -191,6 +198,9 @@ export default function P2ProductionScheduler({ selectedPONumbers = [] }: P2Prod
     },
     onSuccess: (result: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/scheduling-list'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/production-queue'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/po-statuses'] });
       queryClient.invalidateQueries({ queryKey: ['/api/cutting-table-mfg-queue'] });
       const cuttingMsg = result?.cuttingTableDemands > 0 ? ` ${result.cuttingTableDemands} cutting table stock packet demand(s) created.` : '';
       toast({

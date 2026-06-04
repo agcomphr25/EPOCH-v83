@@ -20,8 +20,12 @@ import {
   Layers,
   Wrench,
   Printer,
+  Receipt,
+  ExternalLink,
+  Loader2,
   TrendingUp,
 } from 'lucide-react';
+import { useLocation } from 'wouter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -67,6 +71,10 @@ interface ShipmentItem {
   itemType: 'stock_model' | 'custom_model' | string;
   unitPrice?: number | null;
   lineTotal?: number | null;
+  packingSlipInvoiceNumber?: string | null;
+  invoiceId?: string | null;
+  invoiceNumber?: string | null;
+  invoiceStatus?: string | null;
 }
 
 interface Shipment {
@@ -91,6 +99,9 @@ interface Shipment {
   stock_count: number;
   accessory_count: number;
   po_count: number;
+  shipmentInvoiceId?: string | null;
+  shipmentInvoiceNumber?: string | null;
+  shipmentInvoiceStatus?: string | null;
   items: ShipmentItem[];
 }
 
@@ -122,6 +133,7 @@ const SERVICE_NAMES: Record<string, string> = {
 
 export default function OEMShipmentsPage() {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [startDate, setStartDate] = useState('');
@@ -138,6 +150,12 @@ export default function OEMShipmentsPage() {
   const [addItemPoItemId, setAddItemPoItemId] = useState('');
   const [addItemOrderId, setAddItemOrderId] = useState('');
   const [addItemPoNumber, setAddItemPoNumber] = useState('');
+  const [invoicePreview, setInvoicePreview] = useState<any | null>(null);
+  const [invoicePreviewRequest, setInvoicePreviewRequest] = useState<{
+    shipmentId: string;
+    poNumber: string;
+  } | null>(null);
+  const [invoicePreviewOpen, setInvoicePreviewOpen] = useState(false);
   const limit = 20;
 
   // Fetch shipments with filters
@@ -173,11 +191,12 @@ export default function OEMShipmentsPage() {
   const shipments = data?.shipments || [];
   const pagination = data?.pagination;
 
-  const { data: session } = useQuery<{ username?: string }>({
+  const { data: session } = useQuery<{ username?: string; role?: string }>({
     queryKey: ['/api/auth/session'],
     queryFn: () => apiRequest('/api/auth/session'),
   });
   const isGlennj = session?.username === 'glennj';
+  const isGlennAdmin = isGlennj && String(session?.role || '').toUpperCase() === 'ADMIN';
 
   // Fetch weekly/monthly stats
   const { data: stats } = useQuery<OEMStats>({
@@ -212,6 +231,140 @@ export default function OEMShipmentsPage() {
         sum + Number(item.lineTotal ?? Number(item.unitPrice || 0) * Number(item.quantity || 0)),
       0
     );
+
+  const getPoInvoice = (items: ShipmentItem[], _shipment?: Shipment) => {
+    const invoiceItem = items.find((item) => item.invoiceId);
+    const packingSlipItem = items.find((item) => item.packingSlipInvoiceNumber);
+    return invoiceItem
+      ? {
+          id: invoiceItem.invoiceId || null,
+          invoiceNumber: invoiceItem.invoiceNumber || null,
+          status: invoiceItem.invoiceStatus || null,
+          packingSlipInvoiceNumber: invoiceItem.packingSlipInvoiceNumber || packingSlipItem?.packingSlipInvoiceNumber || null,
+        }
+      : packingSlipItem
+        ? {
+            id: null,
+            invoiceNumber: null,
+            status: null,
+            packingSlipInvoiceNumber: packingSlipItem.packingSlipInvoiceNumber || null,
+          }
+        : null;
+  };
+
+  const getShipmentPoGroups = (shipment: Shipment) =>
+    Object.entries(
+      shipment.items.reduce<Record<string, ShipmentItem[]>>((acc, item) => {
+        if (!acc[item.poNumber]) acc[item.poNumber] = [];
+        acc[item.poNumber].push(item);
+        return acc;
+      }, {})
+    );
+
+  const createInvoiceMutation = useMutation({
+    mutationFn: async ({ shipmentId, poNumber }: { shipmentId: string; poNumber: string }) => {
+      return await apiRequest(`/api/po-orders/oem-shipments/${shipmentId}/invoices`, {
+        method: 'POST',
+        body: { poNumber },
+      });
+    },
+    onSuccess: (invoice: any) => {
+      setInvoicePreviewOpen(false);
+      setInvoicePreview(null);
+      setInvoicePreviewRequest(null);
+      toast({
+        title: 'Invoice ready for review',
+        description: invoice?.invoiceNumber
+          ? `Invoice ${invoice.invoiceNumber} was created from this P1 packing slip.`
+          : 'Invoice was created from this P1 packing slip.',
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/po-orders/oem-shipments'] });
+      queryClient.invalidateQueries({ predicate: (query) =>
+        Array.isArray(query.queryKey) && query.queryKey[0] === '/api/ar-invoices'
+      });
+      if (invoice?.id) setLocation(`/finance/invoices/${invoice.id}`);
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Invoice creation failed',
+        description: error.message || 'Unable to create invoice from this P1 packing slip.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const previewInvoiceMutation = useMutation({
+    mutationFn: async ({ shipmentId, poNumber }: { shipmentId: string; poNumber: string }) => {
+      return await apiRequest(`/api/po-orders/oem-shipments/${shipmentId}/invoices/preview`, {
+        method: 'POST',
+        body: { poNumber },
+      });
+    },
+    onSuccess: (preview: any, variables) => {
+      if (preview?.exists && preview?.id) {
+        setLocation(`/finance/invoices/${preview.id}`);
+        return;
+      }
+      setInvoicePreview(preview);
+      setInvoicePreviewRequest(variables);
+      setInvoicePreviewOpen(true);
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Invoice preview failed',
+        description: error.message || 'Unable to preview invoice from this P1 packing slip.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const renderInvoiceButton = (
+    shipmentId: string | number,
+    poNumber: string,
+    items: ShipmentItem[],
+    shipment?: Shipment,
+    size: 'sm' = 'sm'
+  ) => {
+    const invoice = getPoInvoice(items, shipment);
+    const isCreating =
+      createInvoiceMutation.isPending &&
+      createInvoiceMutation.variables?.shipmentId === String(shipmentId) &&
+      createInvoiceMutation.variables?.poNumber === poNumber;
+
+    if (invoice?.id) {
+      return (
+        <Button
+          size={size}
+          variant="outline"
+          onClick={() => setLocation(`/finance/invoices/${invoice.id}`)}
+        >
+          <Receipt className="h-3 w-3 mr-1" />
+          View Invoice
+          <ExternalLink className="h-3 w-3 ml-1" />
+        </Button>
+      );
+    }
+
+    return (
+      <Button
+        size={size}
+        variant="outline"
+        onClick={() => previewInvoiceMutation.mutate({ shipmentId: String(shipmentId), poNumber })}
+        disabled={!isGlennAdmin || createInvoiceMutation.isPending || previewInvoiceMutation.isPending}
+      >
+        {isCreating || (
+          previewInvoiceMutation.isPending &&
+          previewInvoiceMutation.variables?.shipmentId === String(shipmentId) &&
+          previewInvoiceMutation.variables?.poNumber === poNumber
+        ) ? (
+          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+        ) : (
+          <Receipt className="h-3 w-3 mr-1" />
+        )}
+        Preview Invoice
+      </Button>
+    );
+  };
 
   const toggleExpanded = (shipmentId: number) => {
     const newExpanded = new Set(expandedShipments);
@@ -763,16 +916,6 @@ export default function OEMShipmentsPage() {
                                 </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3">
-                                  {shipment.invoice_number && (
-                                    <div>
-                                      <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
-                                        Invoice #
-                                      </p>
-                                      <code className="text-sm font-mono bg-white dark:bg-gray-900 px-2 py-1 rounded border">
-                                        {shipment.invoice_number}
-                                      </code>
-                                    </div>
-                                  )}
                                   <div>
                                     <p className="text-xs text-gray-600 dark:text-gray-400 mb-1">
                                       Tracking Number
@@ -886,13 +1029,7 @@ export default function OEMShipmentsPage() {
                                   </Tooltip>
                                 </TooltipProvider>
                                 {(() => {
-                                  const poGroups = Object.entries(
-                                    shipment.items.reduce<Record<string, ShipmentItem[]>>((acc, item) => {
-                                      if (!acc[item.poNumber]) acc[item.poNumber] = [];
-                                      acc[item.poNumber].push(item);
-                                      return acc;
-                                    }, {})
-                                  );
+                                  const poGroups = getShipmentPoGroups(shipment);
                                   if (poGroups.length === 0) return null;
                                   if (poGroups.length === 1) {
                                     const [poNumber, items] = poGroups[0];
@@ -964,6 +1101,73 @@ export default function OEMShipmentsPage() {
                                     </DropdownMenu>
                                   );
                                 })()}
+                                {(() => {
+                                  const poGroups = getShipmentPoGroups(shipment);
+                                  if (poGroups.length === 0 || !isGlennAdmin) return null;
+                                  if (poGroups.length === 1) {
+                                    const [poNumber, items] = poGroups[0];
+                                    return renderInvoiceButton(shipment.id, poNumber, items, shipment);
+                                  }
+                                  return (
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button size="sm" variant="outline">
+                                          <Receipt className="h-4 w-4 mr-2" />
+                                          Invoices
+                                          <ChevronDown className="h-3 w-3 ml-1" />
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end">
+                                        {poGroups.map(([poNumber, items]) => {
+                                          const invoice = getPoInvoice(items, shipment);
+                                          const isCreating =
+                                            createInvoiceMutation.isPending &&
+                                            createInvoiceMutation.variables?.shipmentId === String(shipment.id) &&
+                                            createInvoiceMutation.variables?.poNumber === poNumber;
+                                          return (
+                                            <DropdownMenuItem
+                                              key={poNumber}
+                                              onClick={() => {
+                                                if (invoice?.id) {
+                                                  setLocation(`/finance/invoices/${invoice.id}`);
+                                                } else {
+                                                  previewInvoiceMutation.mutate({ shipmentId: String(shipment.id), poNumber });
+                                                }
+                                              }}
+                                              disabled={
+                                                (createInvoiceMutation.isPending && !isCreating) ||
+                                                previewInvoiceMutation.isPending
+                                              }
+                                            >
+                                              {isCreating || (
+                                                previewInvoiceMutation.isPending &&
+                                                previewInvoiceMutation.variables?.shipmentId === String(shipment.id) &&
+                                                previewInvoiceMutation.variables?.poNumber === poNumber
+                                              ) ? (
+                                                <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                                              ) : (
+                                                <Receipt className="h-3 w-3 mr-2" />
+                                              )}
+                                              <div className="flex flex-col">
+                                                <span>{invoice?.id ? 'View' : 'Preview'} invoice for PO {poNumber}</span>
+                                                {invoice?.invoiceNumber && (
+                                                  <span className="text-xs text-muted-foreground">
+                                                    {invoice.invoiceNumber} {invoice.status ? `- ${invoice.status}` : ''}
+                                                  </span>
+                                                )}
+                                                {!invoice?.invoiceNumber && invoice?.packingSlipInvoiceNumber && (
+                                                  <span className="text-xs text-muted-foreground">
+                                                    Packing slip # {invoice.packingSlipInvoiceNumber}
+                                                  </span>
+                                                )}
+                                              </div>
+                                            </DropdownMenuItem>
+                                          );
+                                        })}
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  );
+                                })()}
                                 <CollapsibleTrigger asChild>
                                   <Button size="sm" variant="ghost">
                                     {expandedShipments.has(shipment.id) ? (
@@ -987,6 +1191,7 @@ export default function OEMShipmentsPage() {
                                       <th className="text-left p-3 font-semibold">Order ID</th>
                                       <th className="text-left p-3 font-semibold">Description</th>
                                       <th className="text-center p-3 font-semibold">Qty</th>
+                                      {isGlennAdmin && <th className="text-center p-3 font-semibold">Invoice</th>}
                                     </tr>
                                   </thead>
                                   <tbody>
@@ -1015,6 +1220,16 @@ export default function OEMShipmentsPage() {
                                         <td className="p-3 text-center">
                                           <Badge variant="outline">{item.quantity}</Badge>
                                         </td>
+                                        {isGlennAdmin && (
+                                          <td className="p-3 text-center">
+                                            {renderInvoiceButton(
+                                              shipment.id,
+                                              item.poNumber,
+                                              shipment.items.filter((poItem) => poItem.poNumber === item.poNumber),
+                                              shipment
+                                            )}
+                                          </td>
+                                        )}
                                       </tr>
                                     ))}
                                   </tbody>
@@ -1068,16 +1283,24 @@ export default function OEMShipmentsPage() {
                         <Badge variant="outline">
                           {poGroup.items.length} item{poGroup.items.length !== 1 ? 's' : ''} shipped
                         </Badge>
+                        {getPoInvoice(poGroup.items) && (
+                          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                            Invoice {getPoInvoice(poGroup.items)?.invoiceNumber}
+                          </Badge>
+                        )}
                       </div>
-                      <CollapsibleTrigger asChild>
-                        <Button size="sm" variant="ghost">
-                          {expandedPOs.has(poGroup.poNumber) ? (
-                            <ChevronUp className="h-4 w-4" />
-                          ) : (
-                            <ChevronDown className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </CollapsibleTrigger>
+                      <div className="flex items-center gap-2">
+                        {isGlennAdmin && poGroup.items.length > 0 && renderInvoiceButton(poGroup.items[0].shipmentId, poGroup.poNumber, poGroup.items)}
+                        <CollapsibleTrigger asChild>
+                          <Button size="sm" variant="ghost">
+                            {expandedPOs.has(poGroup.poNumber) ? (
+                              <ChevronUp className="h-4 w-4" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </CollapsibleTrigger>
+                      </div>
                     </div>
                   </CardHeader>
 
@@ -1169,6 +1392,7 @@ export default function OEMShipmentsPage() {
                                       <Printer className="h-3 w-3 mr-1" />
                                       View Packing Slip
                                     </Button>
+                                    {isGlennAdmin && renderInvoiceButton(item.shipmentId, item.poNumber, poGroup.items)}
                                     <Button
                                       size="sm"
                                       variant="outline"
@@ -1455,6 +1679,111 @@ export default function OEMShipmentsPage() {
           </div>
         </div>
       )}
+
+      <Dialog open={invoicePreviewOpen} onOpenChange={setInvoicePreviewOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Preview P1 Packing Slip Invoice</DialogTitle>
+            <DialogDescription>
+              Review the invoice generated from this PO-specific packing slip before creating it.
+            </DialogDescription>
+          </DialogHeader>
+
+          {invoicePreview && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-sm">
+                <div>
+                  <p className="text-xs text-muted-foreground">Invoice #</p>
+                  <p className="font-mono font-semibold">{invoicePreview.invoiceNumber}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">PO</p>
+                  <p className="font-semibold">{invoicePreview.poNumber}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Customer</p>
+                  <p className="font-semibold">{invoicePreview.customerName || 'P1 OEM Customer'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Total</p>
+                  <p className="font-semibold">{formatCurrency(Number(invoicePreview.totalAmount || 0))}</p>
+                </div>
+              </div>
+
+              {invoicePreview.pricingMismatch && (
+                <div className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                  One or more lines are missing unit pricing. The invoice will be created for review.
+                </div>
+              )}
+
+              <div className="border rounded-lg overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-100 dark:bg-gray-800">
+                    <tr>
+                      <th className="text-left p-3 font-semibold">Part</th>
+                      <th className="text-left p-3 font-semibold">Description</th>
+                      <th className="text-center p-3 font-semibold">Qty</th>
+                      <th className="text-right p-3 font-semibold">Unit Price</th>
+                      <th className="text-right p-3 font-semibold">Line Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(invoicePreview.lines || []).map((line: any, index: number) => (
+                      <tr key={`${line.description}-${index}`} className="border-t">
+                        <td className="p-3 font-mono text-xs">{line.partNumber || '-'}</td>
+                        <td className="p-3">
+                          <div>{line.description}</div>
+                          {line.orderIds?.length > 0 && (
+                            <div className="text-xs text-muted-foreground">
+                              {line.orderIds.join(', ')}
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-3 text-center">{line.quantity}</td>
+                        <td className="p-3 text-right">{formatCurrency(Number(line.unitPrice || 0))}</td>
+                        <td className="p-3 text-right font-medium">{formatCurrency(Number(line.lineTotal || 0))}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setInvoicePreviewOpen(false);
+                setInvoicePreview(null);
+                setInvoicePreviewRequest(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (invoicePreviewRequest) {
+                  createInvoiceMutation.mutate(invoicePreviewRequest);
+                }
+              }}
+              disabled={!invoicePreviewRequest || createInvoiceMutation.isPending}
+            >
+              {createInvoiceMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <Receipt className="h-4 w-4 mr-2" />
+                  Create Invoice
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Add Item Dialog */}
       <Dialog open={addItemDialogOpen} onOpenChange={setAddItemDialogOpen}>

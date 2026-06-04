@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs/promises';
@@ -28,6 +29,9 @@ import {
   getSupplySourceDashboard,
   type ManufacturedCategory,
   type InventoryItem,
+  p2NonconformingDispositions,
+  p2SerializedItems,
+  travelers,
 } from '@shared/schema';
 
 function withSupplySourceDashboard(item: InventoryItem) {
@@ -37,11 +41,18 @@ function withSupplySourceDashboard(item: InventoryItem) {
   };
 }
 
+function isServiceInventoryItem(item: InventoryItem | undefined): boolean {
+  if (!item) return false;
+  const looseType = (item.type || '').trim().toLowerCase();
+  return item.utilizedInServices === true || looseType === 'service' || looseType === 'services';
+}
+
 import { storage } from '../../storage';
 import { db } from '../../db';
 import { DEFAULT_INVENTORY_TRANSACTIONS_LIMIT, MAX_INVENTORY_TRANSACTIONS_LIMIT } from '../constants/inventory';
 import { requireRole } from '../../middleware/auth';
 import { requirePermission } from '../../middleware/requirePermission';
+import { getUserPermissions } from '../services/permissionService';
 
 const router = Router();
 
@@ -872,7 +883,7 @@ router.post('/items/:id/routing', async (req: Request, res: Response) => {
     const inferredRoutingType = (() => {
       if (routingType) return routingType;
       const cat = (item as any).manufacturedCategory;
-      if (cat === 'ASSEMBLY') return 'ASSEMBLY';
+      if (cat === 'ASSEMBLY' || cat === 'FINAL_ASSEMBLY') return 'ASSEMBLY';
       if (cat === 'SUB_ASSEMBLY') return 'SUB_ASSEMBLY';
       if (cat === 'MACHINED_PART') return 'CNC';
       if (cat === 'KIT') return 'KIT';
@@ -1131,6 +1142,26 @@ function getApprovalActor(req: Request, fallback?: string | null) {
   return req.user?.username || fallback?.trim() || 'Unknown approver';
 }
 
+async function userCan(req: Request, capabilityKey: string) {
+  const user = req.user as any;
+  if (!user) return false;
+  if (user.role === 'ADMIN' || user.role === 'OWNER') return true;
+  const { permissionSet } = await getUserPermissions(user.id, user.role);
+  return permissionSet.has(capabilityKey);
+}
+
+async function requirePartsRequestApprovalAuthority(req: Request, res: Response) {
+  const allowed = await userCan(req, 'inventory.approve_parts_requests');
+  if (!allowed) {
+    res.status(403).json({
+      error: 'Forbidden',
+      requiredCapability: 'inventory.approve_parts_requests',
+      message: 'Inventory manager approval authority is required to approve parts requests.',
+    });
+  }
+  return allowed;
+}
+
 router.get('/parts-requests/owner-approvals', async (_req: Request, res: Response) => {
   try {
     const requests = await storage.getAllPartsRequests();
@@ -1225,6 +1256,8 @@ router.post('/parts-requests', async (req: Request, res: Response) => {
 
 router.post('/parts-requests/:id/approve', async (req: Request, res: Response) => {
   try {
+    if (!(await requirePartsRequestApprovalAuthority(req, res))) return;
+
     const requestId = parseInt(req.params.id);
     const {
       approvedBy,
@@ -1343,6 +1376,8 @@ router.put('/parts-requests/:id', async (req: Request, res: Response) => {
     }
 
     if (updates.status === 'APPROVED') {
+      if (!(await requirePartsRequestApprovalAuthority(req, res))) return;
+
       const effectiveRequest = { ...existingRequest, ...updates };
       const totalCost = getPartsRequestTotalCost(effectiveRequest);
       const actor = getApprovalActor(req, updates.approvedBy ?? null);
@@ -1671,6 +1706,197 @@ router.put('/parts-requests/bulk', async (req: Request, res: Response) => {
 // ==========================================
 
 // Create order batch from selected parts requests
+const createVendorPoFromPartsRequestsSchema = z.object({
+  requestIds: z.array(z.number().int().positive()).min(1),
+  purchasingCategory: z.enum(['P1', 'P2', 'GENERAL', 'R_AND_D']),
+  quantities: z.record(z.coerce.number().positive()).optional(),
+  expectedDeliveryDate: z.string().optional().nullable(),
+  shipVia: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+});
+
+function normalizePartsRequestCategory(value: string | null | undefined) {
+  const normalized = String(value || '').trim().toUpperCase();
+  if (!normalized) return null;
+  if (normalized === 'G&A' || normalized === 'G_AND_A' || normalized === 'GA') return 'GENERAL';
+  if (normalized === 'R&D' || normalized === 'R_AND_D') return 'R_AND_D';
+  return normalized;
+}
+
+router.post(
+  '/parts-requests/create-vendor-po-draft',
+  requirePermission('purchasing.manage_pos'),
+  async (req: Request, res: Response) => {
+    try {
+      const payload = createVendorPoFromPartsRequestsSchema.parse(req.body);
+      const actor = String((req as any).user?.username ?? (req as any).user?.id ?? 'unknown');
+      const { partsRequests, partsRequestStatusHistory, vendorPOs, vendorPOItems } = await import('../../schema');
+      const { eq: dEq, inArray: dInArray, and: dAnd, sql: dSql } = await import('drizzle-orm');
+
+      const uniqueRequestIds = Array.from(new Set(payload.requestIds));
+      const result = await db.transaction(async (tx) => {
+        const selected = await tx
+          .select()
+          .from(partsRequests)
+          .where(dInArray(partsRequests.id, uniqueRequestIds))
+          .for('update');
+
+        if (selected.length !== uniqueRequestIds.length) {
+          const found = new Set(selected.map((r) => r.id));
+          const missing = uniqueRequestIds.filter((id) => !found.has(id));
+          throw Object.assign(new Error(`Parts request(s) not found: ${missing.join(', ')}`), { status: 404 });
+        }
+
+        const badStatus = selected.filter((r) => r.status !== 'APPROVED');
+        if (badStatus.length > 0) {
+          throw Object.assign(
+            new Error(`Only APPROVED parts requests can start RFQ/PO flow. Invalid request id(s): ${badStatus.map((r) => `${r.id} (${r.status})`).join(', ')}`),
+            { status: 422 }
+          );
+        }
+
+        const websiteRequests = selected.filter((r) => r.orderMethod === 'WEBSITE');
+        if (websiteRequests.length > 0) {
+          throw Object.assign(
+            new Error(`Website-order request(s) cannot be used to create a Vendor PO: ${websiteRequests.map((r) => r.id).join(', ')}`),
+            { status: 422 }
+          );
+        }
+
+        const alreadyLinked = selected.filter((r) => r.vendorPoId != null);
+        if (alreadyLinked.length > 0) {
+          throw Object.assign(
+            new Error(`Request(s) already linked to a Vendor PO: ${alreadyLinked.map((r) => `${r.id} -> PO ${r.vendorPoId}`).join(', ')}`),
+            { status: 409 }
+          );
+        }
+
+        const vendorIds = Array.from(new Set(selected.map((r) => r.vendorId).filter((v): v is number => typeof v === 'number')));
+        if (vendorIds.length !== 1) {
+          throw Object.assign(new Error('All selected requests must have the same assigned vendor before creating a Vendor PO draft.'), { status: 422 });
+        }
+
+        const wrongCategory = selected.filter((r) => {
+          const requestCategory = normalizePartsRequestCategory(r.productionLine);
+          return requestCategory != null && requestCategory !== payload.purchasingCategory;
+        });
+        if (wrongCategory.length > 0) {
+          throw Object.assign(
+            new Error(`Selected request(s) do not match purchasing category ${payload.purchasingCategory}: ${wrongCategory.map((r) => `${r.id} (${r.productionLine})`).join(', ')}`),
+            { status: 422 }
+          );
+        }
+
+        const vendorId = vendorIds[0];
+        const estimatedTotal = selected.reduce((sum, r) => sum + Number(r.estimatedCost || 0), 0);
+        const requestSummary = selected.map((r) => `PR-${r.id}`).join(', ');
+        const [vendorPO] = await tx
+          .insert(vendorPOs)
+          .values({
+            vendorId,
+            productionLine: payload.purchasingCategory,
+            status: 'Draft',
+            expectedDeliveryDate: payload.expectedDeliveryDate || null,
+            shipVia: payload.shipVia || null,
+            subtotal: estimatedTotal,
+            totalCost: estimatedTotal,
+            notes: [
+              payload.notes?.trim() || null,
+              `Created from parts request(s): ${requestSummary}. PO/RFQ numbering remains controlled by the normal Vendor PO workflow.`,
+            ].filter(Boolean).join('\n'),
+            createdBy: actor,
+          })
+          .returning();
+
+        const grouped = new Map<string, typeof selected>();
+        for (const request of selected) {
+          const key = `${request.agPartNumber || ''}|${request.partNumber}|${request.partName}`;
+          grouped.set(key, [...(grouped.get(key) || []), request]);
+        }
+
+        let lineNumber = 1;
+        for (const requests of grouped.values()) {
+          const first = requests[0];
+          const totalRequestedQty = requests.reduce((sum, request) => sum + request.quantity, 0);
+          const totalQty = requests.reduce((sum, request) => {
+            const override = payload.quantities?.[String(request.id)] ?? payload.quantities?.[request.id as any];
+            return sum + Number(override || request.quantity);
+          }, 0);
+          const estimatedLineCost = requests.reduce((sum, request) => sum + Number(request.estimatedCost || 0), 0);
+          const unitPrice = totalQty > 0 ? estimatedLineCost / totalQty : 0;
+          const extraQty = Math.max(0, totalQty - totalRequestedQty);
+          const allocationNotes = requests
+            .map((request) => {
+              const qty = payload.quantities?.[String(request.id)] ?? payload.quantities?.[request.id as any] ?? request.quantity;
+              return `PR-${request.id}: ${qty} requested by ${request.requestedBy}${request.department ? ` (${request.department})` : ''}${request.reason ? ` - ${request.reason}` : ''}`;
+            })
+            .join('\n');
+
+          await tx.insert(vendorPOItems).values({
+            vendorPoId: vendorPO.id,
+            lineNumber,
+            agPartNumber: first.agPartNumber || null,
+            description: first.partName,
+            quantity: totalQty,
+            unitPrice,
+            lineTotal: totalQty * unitPrice,
+            notes: [
+              allocationNotes,
+              extraQty > 0 ? `Includes ${extraQty} extra unit(s) for stock.` : null,
+              requests.some((r) => r.vendorPartNumber) ? `Vendor part refs: ${requests.map((r) => r.vendorPartNumber).filter(Boolean).join(', ')}` : null,
+            ].filter(Boolean).join('\n'),
+          });
+          lineNumber += 1;
+        }
+
+        await tx
+          .update(partsRequests)
+          .set({
+            vendorPoId: vendorPO.id,
+            vendorId,
+            orderMethod: 'PO',
+            updatedAt: new Date(),
+          })
+          .where(dAnd(dInArray(partsRequests.id, uniqueRequestIds), dEq(partsRequests.status, 'APPROVED')));
+
+        await tx.insert(partsRequestStatusHistory).values(
+          selected.map((request) => ({
+            partsRequestId: request.id,
+            fromStatus: request.status,
+            toStatus: request.status,
+            changedBy: actor,
+            reason: `Linked to Vendor PO draft #${vendorPO.id}; request remains APPROVED until the PO is issued.`,
+          }))
+        );
+
+        const [totals] = await tx
+          .select({
+            subtotal: dSql<number>`COALESCE(SUM(${vendorPOItems.lineTotal}), 0)::float`,
+          })
+          .from(vendorPOItems)
+          .where(dEq(vendorPOItems.vendorPoId, vendorPO.id));
+
+        const subtotal = Number(totals?.subtotal || 0);
+        const [updatedPO] = await tx
+          .update(vendorPOs)
+          .set({ subtotal, totalCost: subtotal, updatedAt: new Date() })
+          .where(dEq(vendorPOs.id, vendorPO.id))
+          .returning();
+
+        return { vendorPO: updatedPO, linkedRequestIds: uniqueRequestIds };
+      });
+
+      res.status(201).json(result);
+    } catch (error) {
+      console.error('Create Vendor PO draft from parts requests error:', error);
+      const status = (error as any)?.status || 500;
+      res.status(status).json({
+        error: status === 500 ? 'Failed to create Vendor PO draft from parts requests' : (error as Error).message,
+      });
+    }
+  }
+);
+
 router.post('/parts-requests/batches', async (req: Request, res: Response) => {
   try {
     const { partsRequests, partsRequestBatches, partsRequestOrderLines, partsRequestOrderAllocations, partsRequestStatusHistory } = await import('../../schema');
@@ -2892,12 +3118,64 @@ router.get('/restock-signals', async (req: Request, res: Response) => {
 router.get('/inventory/balances', async (req: Request, res: Response) => {
   try {
     const balances = await storage.getAllInventoryBalances();
+    const items = await storage.getAllInventoryItems();
+    const itemMap = new Map(items.map((item) => [item.agPartNumber, item]));
+    const nonServiceBalances = balances.filter((balance) => !isServiceInventoryItem(itemMap.get(balance.agPartNumber)));
+
+    const ncrInventorySerialRows = await db
+      .select({
+        agPartNumber: p2SerializedItems.partNumber,
+        id: p2SerializedItems.id,
+        serialNumber: p2SerializedItems.serialNumber,
+        barcode: p2SerializedItems.barcode,
+        travelerBarcode: p2SerializedItems.travelerBarcode,
+        travelerId: travelers.id,
+        travelerNumber: travelers.travelerNumber,
+        dispositionId: p2NonconformingDispositions.id,
+        dispositionType: p2NonconformingDispositions.dispositionType,
+      })
+      .from(p2NonconformingDispositions)
+      .innerJoin(
+        p2SerializedItems,
+        eq(p2NonconformingDispositions.serializedItemId, p2SerializedItems.id)
+      )
+      .leftJoin(
+        travelers,
+        eq(travelers.serialNumber, p2SerializedItems.serialNumber)
+      )
+      .where(eq(p2NonconformingDispositions.dispositionType, 'Use as Is'))
+      .orderBy(p2SerializedItems.partNumber, p2SerializedItems.serialNumber, desc(travelers.createdAt));
+
+    const serializedItemsByPart = new Map<string, EnrichedInventoryBalance['serializedItems']>();
+    const seenSerials = new Set<string>();
+
+    for (const row of ncrInventorySerialRows) {
+      const key = `${row.agPartNumber}:${row.id}`;
+      if (seenSerials.has(key)) continue;
+      seenSerials.add(key);
+
+      const options = serializedItemsByPart.get(row.agPartNumber) || [];
+      options.push({
+        id: row.id,
+        serialNumber: row.serialNumber,
+        barcode: row.barcode,
+        travelerBarcode: row.travelerBarcode,
+        travelerId: row.travelerId,
+        travelerNumber: row.travelerNumber,
+        dispositionId: row.dispositionId,
+        dispositionType: row.dispositionType,
+      });
+      serializedItemsByPart.set(row.agPartNumber, options);
+    }
     
     // Enrich balances with department metadata
-    const enrichedBalances: EnrichedInventoryBalance[] = balances.map((balance) => {
+    const enrichedBalances: EnrichedInventoryBalance[] = nonServiceBalances.map((balance) => {
       const deptInfo = DEPARTMENT_LOCATION_MAP[balance.locationId];
+      const item = itemMap.get(balance.agPartNumber);
       return {
         ...balance,
+        partName: item?.name,
+        serializedItems: serializedItemsByPart.get(balance.agPartNumber) || [],
         departmentMeta: deptInfo ? {
           departmentId: deptInfo.departmentId,
           departmentName: deptInfo.departmentName,

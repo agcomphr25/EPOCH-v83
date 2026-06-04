@@ -17,7 +17,7 @@ const NonconformanceReport: React.FC = () => {
             </Link>
           </Button>
           <h1 className="text-3xl font-bold text-gray-900">
-            Nonconformance Report
+            P1 Nonconforming Report
           </h1>
         </div>
 
@@ -36,7 +36,7 @@ const NonconformanceReport: React.FC = () => {
       {/* Report Content */}
       <Card>
         <CardHeader>
-          <CardTitle>Comprehensive Nonconformance Analysis</CardTitle>
+          <CardTitle>P1 Nonconforming Analysis</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-6">
@@ -45,7 +45,7 @@ const NonconformanceReport: React.FC = () => {
               <div className="bg-red-50 p-4 rounded-lg border">
                 <div className="text-2xl font-bold text-red-600">0</div>
                 <div className="text-sm text-gray-600">
-                  Total Nonconformances
+                  Total P1 Nonconforming Items
                 </div>
               </div>
               <div className="bg-yellow-50 p-4 rounded-lg border">
@@ -108,7 +108,7 @@ const NonconformanceReport: React.FC = () => {
               </CardHeader>
               <CardContent>
                 <div className="text-center py-8 text-gray-500">
-                  No recent nonconformance records found
+                  No recent P1 nonconforming records found
                 </div>
               </CardContent>
             </Card>

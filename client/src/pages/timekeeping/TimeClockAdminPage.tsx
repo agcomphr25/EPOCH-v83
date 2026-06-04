@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, Fragment } from 'react';
-import { runCreatePunch, buildAddPunchFetchDep } from '@/lib/addPunchHandler';
 import { runEditPunch, buildEditPunchFetchDep } from '@/lib/editPunchHandler';
 import { runDeletePunch, buildDeletePunchFetchDep } from '@/lib/deletePunchHandler';
+import { runCreatePunch, buildAddPunchFetchDep } from '@/lib/addPunchHandler';
 import { AuditTrailPanel } from '@/components/timekeeping/AuditTrailPanel';
 import { ComplianceExceptionDashboard } from '@/components/timekeeping/ComplianceExceptionDashboard';
 import { useQuery, useMutation } from '@tanstack/react-query';
@@ -62,6 +62,8 @@ import {
   FilePen,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   History,
   Settings,
 } from 'lucide-react';
@@ -98,6 +100,85 @@ interface EmployeeHours {
   regularHours: number;
 }
 
+interface PayrollReviewIssue {
+  code: string;
+  label: string;
+  severity: 'error' | 'warning' | 'info';
+  blocksPayroll: boolean;
+}
+
+interface PayrollReviewSegment {
+  id: number;
+  type: 'work' | 'break';
+  label: string;
+  clockIn: string;
+  clockOut: string | null;
+  hours: number;
+  isOpen: boolean;
+  isEdited: boolean;
+  chargeCode: string | null;
+  source: string | null;
+}
+
+interface PayrollReviewDay {
+  date: string;
+  totalHours: number;
+  breakHours: number;
+  hasIssue: boolean;
+  segments: PayrollReviewSegment[];
+}
+
+interface HourlyPayrollReviewRow {
+  employeeId: number;
+  timekeepingEmployeeId: number | null;
+  employeeName: string;
+  department: string | null;
+  timesheetId: number | null;
+  status: string;
+  totalHours: number;
+  regularHours: number;
+  overtimeHours: number;
+  leaveHours: number;
+  readyForPayroll: boolean;
+  locked: boolean;
+  issues: PayrollReviewIssue[];
+  days: PayrollReviewDay[];
+}
+
+interface SalariedPayrollReviewRow {
+  employeeId: number;
+  employeeName: string;
+  department: string | null;
+  timesheetId: number | null;
+  status: string;
+  totalHours: number;
+  leaveHours: number;
+  readyForPayroll: boolean;
+  payrollApproved: boolean;
+  issues: PayrollReviewIssue[];
+}
+
+interface PayrollReviewBatch {
+  periodStart: string;
+  periodEnd: string;
+  label: string;
+  generatedAt: string;
+  summary: {
+    employeeCount: number;
+    totalHours: number;
+    regularHours: number;
+    overtimeHours: number;
+    leaveHours: number;
+    missingPunchCount: number;
+    blockedCount: number;
+    readyCount: number;
+    lockedCount: number;
+    pendingCorrectionCount: number;
+  };
+  hourly: HourlyPayrollReviewRow[];
+  salaried: SalariedPayrollReviewRow[];
+}
+
 interface TimeOffRequest {
   id: number;
   employeeId: number;
@@ -119,6 +200,35 @@ interface TimeOffRequest {
   createdAt: string;
   employeeFirstName: string | null;
   employeeLastName: string | null;
+}
+
+type WeeklyPtoHours = {
+  mon: number;
+  tue: number;
+  wed: number;
+  thu: number;
+  fri: number;
+  sat: number;
+  sun: number;
+};
+
+interface PtoBalanceSummary {
+  employeeId: number;
+  availableHours: number;
+  pendingReservedHours: number;
+  approvedReservedHours: number;
+  currentBalanceHours: number;
+  hasSchedule: boolean;
+  schedule: WeeklyPtoHours | null;
+  lastEventAt: string | null;
+  recentEvents: Array<{
+    id: number;
+    eventType: string;
+    hours: number;
+    note: string | null;
+    timeOffRequestId: number | null;
+    createdAt: string;
+  }>;
 }
 
 interface EmployeeRecord {
@@ -214,7 +324,12 @@ interface Punch {
   editNote: string | null;
   costCode: string | null;
   hasMissingClockOut: boolean;
+  hasMissingClockIn?: boolean;
+  reviewReason?: string | null;
 }
+
+type PunchEventFilter = 'all' | 'review' | 'timetrakgo' | 'edited' | 'manual' | 'kiosk_portal' | 'open';
+type PunchEventSort = 'newest' | 'oldest' | 'employee';
 
 interface DcaaViolation {
   ruleId: string;
@@ -403,22 +518,68 @@ function punchTypeLabel(t: string) {
   return map[t] ?? t;
 }
 
+function punchTypeUsesChargeCode(t: string) {
+  return t === 'clock_in' || t === 'break_end';
+}
+
+function punchSourceLabel(source: string | null | undefined) {
+  const key = String(source ?? '').toUpperCase();
+  const map: Record<string, string> = {
+    ADMIN: 'HR Created',
+    KIOSK: 'Kiosk',
+    PORTAL: 'Employee Portal',
+    TIMETRAKGO_IMPORT: 'TimeTrakGO',
+    TRAVELER: 'Traveler',
+  };
+  return map[key] ?? (source || '-');
+}
+
+function dateInputStartIso(value: string) {
+  return new Date(`${value}T00:00:00`).toISOString();
+}
+
+function dateInputEndIso(value: string) {
+  return new Date(`${value}T23:59:59.999`).toISOString();
+}
+
+const BIWEEKLY_PAY_PERIOD_DAYS = 14;
+
+function formatUtcDateInput(date: Date) {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
+}
+
+function shiftDateInput(value: string, days: number) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return value;
+  const [, year, month, day] = match;
+  const next = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+  next.setUTCDate(next.getUTCDate() + days);
+  return formatUtcDateInput(next);
+}
+
+function shiftPayPeriodRange(start: string, end: string, periods: -1 | 1) {
+  const days = periods * BIWEEKLY_PAY_PERIOD_DAYS;
+  return {
+    start: shiftDateInput(start, days),
+    end: shiftDateInput(end, days),
+  };
+}
+
 /** Computes the current bi-weekly pay period (anchored 2024-01-01, same as server). */
 function getCurrentPayPeriod(): { start: string; end: string } {
   const ANCHOR = Date.UTC(2024, 0, 1);
   const DAY_MS = 24 * 60 * 60 * 1000;
-  const PERIOD_DAYS = 14;
   const now = new Date();
   const inputUTC = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
   const daysSinceAnchor = Math.round((inputUTC - ANCHOR) / DAY_MS);
-  const periodIndex = Math.floor(daysSinceAnchor / PERIOD_DAYS);
-  const startUTC = ANCHOR + periodIndex * PERIOD_DAYS * DAY_MS;
-  const endUTC = startUTC + (PERIOD_DAYS - 1) * DAY_MS;
+  const periodIndex = Math.floor(daysSinceAnchor / BIWEEKLY_PAY_PERIOD_DAYS);
+  const startUTC = ANCHOR + periodIndex * BIWEEKLY_PAY_PERIOD_DAYS * DAY_MS;
+  const endUTC = startUTC + (BIWEEKLY_PAY_PERIOD_DAYS - 1) * DAY_MS;
   const startDate = new Date(startUTC);
   const endDate = new Date(endUTC);
   return {
-    start: `${startDate.getUTCFullYear()}-${String(startDate.getUTCMonth() + 1).padStart(2, '0')}-${String(startDate.getUTCDate()).padStart(2, '0')}`,
-    end: `${endDate.getUTCFullYear()}-${String(endDate.getUTCMonth() + 1).padStart(2, '0')}-${String(endDate.getUTCDate()).padStart(2, '0')}`,
+    start: formatUtcDateInput(startDate),
+    end: formatUtcDateInput(endDate),
   };
 }
 
@@ -529,6 +690,295 @@ function WorkQueueCard({
         </div>
       </div>
     </button>
+  );
+}
+
+function PayrollReviewPanel({
+  batch,
+  loading,
+  periodStart,
+  periodEnd,
+  onPeriodStartChange,
+  onPeriodEndChange,
+  onRefresh,
+  onLockHourly,
+  locking,
+}: {
+  batch: PayrollReviewBatch | undefined;
+  loading: boolean;
+  periodStart: string;
+  periodEnd: string;
+  onPeriodStartChange: (value: string) => void;
+  onPeriodEndChange: (value: string) => void;
+  onRefresh: () => void;
+  onLockHourly: (timesheetId: number) => void;
+  locking: boolean;
+}) {
+  const [selectedHourlyId, setSelectedHourlyId] = useState<number | null>(null);
+  const hourlyRows = batch?.hourly ?? [];
+  const selectedHourly = hourlyRows.find((row) => row.employeeId === selectedHourlyId) ?? hourlyRows.find((row) => row.issues.length > 0) ?? hourlyRows[0];
+  const salariedRows = batch?.salaried ?? [];
+  const shiftPeriod = (periods: -1 | 1) => {
+    const next = shiftPayPeriodRange(periodStart, periodEnd, periods);
+    onPeriodStartChange(next.start);
+    onPeriodEndChange(next.end);
+  };
+
+  useEffect(() => {
+    if (!selectedHourly && selectedHourlyId != null) setSelectedHourlyId(null);
+  }, [selectedHourly, selectedHourlyId]);
+
+  const issueBadge = (issue: PayrollReviewIssue) => (
+    <Badge
+      key={issue.code}
+      variant="outline"
+      className={
+        issue.severity === 'error'
+          ? 'border-red-300 bg-red-50 text-red-700'
+          : issue.severity === 'warning'
+            ? 'border-amber-300 bg-amber-50 text-amber-700'
+            : 'border-slate-300 bg-slate-50 text-slate-700'
+      }
+    >
+      {issue.label}
+    </Badge>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight">Payroll Review</h2>
+          <p className="text-sm text-muted-foreground">Biweekly batch review before HR/payroll lock and export.</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => shiftPeriod(-1)}
+            className="mt-5"
+          >
+            <ChevronLeft className="h-4 w-4 mr-1" />
+            Prev Pay Period
+          </Button>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Period start</Label>
+            <Input type="date" value={periodStart} onChange={(e) => onPeriodStartChange(e.target.value)} className="h-9 w-36" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Period end</Label>
+            <Input type="date" value={periodEnd} onChange={(e) => onPeriodEndChange(e.target.value)} className="h-9 w-36" />
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => shiftPeriod(1)}
+            className="mt-5"
+          >
+            Next Pay Period
+            <ChevronRight className="h-4 w-4 ml-1" />
+          </Button>
+          <Button variant="outline" size="sm" onClick={onRefresh} disabled={loading} className="mt-5">
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex h-48 items-center justify-center rounded-lg border bg-card">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : !batch ? (
+        <Card>
+          <CardContent className="py-10 text-center text-sm text-muted-foreground">No payroll review data loaded.</CardContent>
+        </Card>
+      ) : (
+        <>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            <StatCard icon={Clock} label="Total Hours" value={fmtHours(batch.summary.totalHours)} sub={`${fmtHours(batch.summary.regularHours)} regular`} />
+            <StatCard icon={AlertTriangle} label="Overtime" value={fmtHours(batch.summary.overtimeHours)} color={batch.summary.overtimeHours > 0 ? 'text-orange-600' : 'text-primary'} />
+            <StatCard icon={FileText} label="Leave / PTO" value={fmtHours(batch.summary.leaveHours)} />
+            <StatCard icon={XCircle} label="Blocked" value={batch.summary.blockedCount} sub={`${batch.summary.missingPunchCount} missing punches`} color={batch.summary.blockedCount > 0 ? 'text-red-600' : 'text-green-600'} />
+            <StatCard icon={CheckCircle} label="Ready / Locked" value={`${batch.summary.readyCount}/${batch.summary.lockedCount}`} sub="Ready to lock / locked" color="text-green-600" />
+          </div>
+
+          <Tabs defaultValue="hourly" className="space-y-4">
+            <TabsList>
+              <TabsTrigger value="hourly">Hourly</TabsTrigger>
+              <TabsTrigger value="salaried">Salaried</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="hourly" className="mt-0">
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">Hourly Employee Hours</CardTitle>
+                    <CardDescription>{batch.label}</CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <div className="max-h-[620px] overflow-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Employee</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead className="text-right">Total</TableHead>
+                            <TableHead className="text-right">Regular</TableHead>
+                            <TableHead className="text-right">OT</TableHead>
+                            <TableHead>Issues</TableHead>
+                            <TableHead className="text-right">Payroll</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {hourlyRows.map((row) => (
+                            <TableRow
+                              key={row.employeeId}
+                              className={selectedHourly?.employeeId === row.employeeId ? 'bg-blue-50/70 dark:bg-blue-950/20' : undefined}
+                              onClick={() => setSelectedHourlyId(row.employeeId)}
+                            >
+                              <TableCell>
+                                <button type="button" className="text-left font-medium hover:underline" onClick={() => setSelectedHourlyId(row.employeeId)}>
+                                  {row.employeeName}
+                                </button>
+                                <div className="text-xs text-muted-foreground">{row.department ?? 'No department'}</div>
+                              </TableCell>
+                              <TableCell><StatusBadge status={row.status} /></TableCell>
+                              <TableCell className="text-right font-mono">{fmtHours(row.totalHours)}</TableCell>
+                              <TableCell className="text-right font-mono text-muted-foreground">{fmtHours(row.regularHours)}</TableCell>
+                              <TableCell className="text-right font-mono">{row.overtimeHours > 0 ? <span className="text-orange-600">{fmtHours(row.overtimeHours)}</span> : '—'}</TableCell>
+                              <TableCell>
+                                <div className="flex max-w-64 flex-wrap gap-1">
+                                  {row.issues.length ? row.issues.slice(0, 2).map(issueBadge) : <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Clean</Badge>}
+                                  {row.issues.length > 2 && <Badge variant="outline">+{row.issues.length - 2}</Badge>}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {row.locked ? (
+                                  <Badge variant="outline" className="border-slate-300">Locked</Badge>
+                                ) : row.readyForPayroll && row.timesheetId ? (
+                                  <Button size="sm" onClick={(e) => { e.stopPropagation(); onLockHourly(row.timesheetId!); }} disabled={locking}>
+                                    <LogOut className="h-4 w-4 mr-1" />
+                                    Lock
+                                  </Button>
+                                ) : (
+                                  <Badge variant="outline" className="border-red-200 text-red-700">Blocked</Badge>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">{selectedHourly?.employeeName ?? 'Employee Detail'}</CardTitle>
+                    <CardDescription>Source punches and blockers</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {!selectedHourly ? (
+                      <p className="text-sm text-muted-foreground">Select an employee to review source transactions.</p>
+                    ) : (
+                      <>
+                        <div className="flex flex-wrap gap-1">
+                          {selectedHourly.issues.length ? selectedHourly.issues.map(issueBadge) : <Badge className="bg-green-100 text-green-800 hover:bg-green-100">No blockers</Badge>}
+                        </div>
+                        <div className="max-h-[520px] space-y-2 overflow-auto pr-1">
+                          {selectedHourly.days.map((day) => (
+                            <div key={day.date} className={`rounded-md border p-2 ${day.hasIssue ? 'border-red-200 bg-red-50/50' : 'bg-background'}`}>
+                              <div className="mb-2 flex items-center justify-between gap-2 text-sm">
+                                <span className="font-medium">{new Date(`${day.date}T12:00:00`).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+                                <span className="font-mono text-xs text-muted-foreground">{fmtHours(day.totalHours)}</span>
+                              </div>
+                              {day.segments.length === 0 ? (
+                                <p className="text-xs text-muted-foreground">No punches</p>
+                              ) : (
+                                <div className="flex flex-wrap gap-1.5">
+                                  {day.segments.map((segment, idx) => (
+                                    <div
+                                      key={`${segment.id}-${idx}-${segment.clockIn}`}
+                                      className={`min-w-28 rounded border px-2 py-1 text-xs ${
+                                        segment.isOpen
+                                          ? 'border-red-300 bg-red-50 text-red-800'
+                                          : segment.type === 'break'
+                                            ? 'border-amber-200 bg-amber-50 text-amber-800'
+                                            : 'border-green-200 bg-green-50 text-green-800'
+                                      }`}
+                                      title={segment.chargeCode ?? segment.source ?? undefined}
+                                    >
+                                      <div className="font-medium">{segment.type === 'break' ? 'Break' : 'Work'}{segment.isEdited ? ' - edited' : ''}</div>
+                                      <div className="font-mono">
+                                        {new Date(segment.clockIn).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                                        {' - '}
+                                        {segment.clockOut ? new Date(segment.clockOut).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : 'Missing out'}
+                                      </div>
+                                      <div className="truncate text-[11px] opacity-80">{fmtHours(segment.hours)} {segment.label}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="salaried" className="mt-0">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Salaried Review</CardTitle>
+                  <CardDescription>Separate payroll review queue for salaried timesheets.</CardDescription>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Employee</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Hours</TableHead>
+                        <TableHead className="text-right">Leave</TableHead>
+                        <TableHead>Issues</TableHead>
+                        <TableHead className="text-right">Payroll</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {salariedRows.map((row) => (
+                        <TableRow key={row.employeeId}>
+                          <TableCell>
+                            <div className="font-medium">{row.employeeName}</div>
+                            <div className="text-xs text-muted-foreground">{row.department ?? 'No department'}</div>
+                          </TableCell>
+                          <TableCell><StatusBadge status={row.status} /></TableCell>
+                          <TableCell className="text-right font-mono">{fmtHours(row.totalHours)}</TableCell>
+                          <TableCell className="text-right font-mono text-muted-foreground">{fmtHours(row.leaveHours)}</TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {row.issues.length ? row.issues.map(issueBadge) : <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Clean</Badge>}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {row.payrollApproved ? <Badge variant="outline">Approved</Badge> : row.readyForPayroll ? <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Ready</Badge> : <Badge variant="outline" className="border-red-200 text-red-700">Blocked</Badge>}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -646,9 +1096,18 @@ function DevSeedPunchesPanel() {
   );
 }
 
+function initialTimeClockQueryParam(name: string) {
+  if (typeof window === 'undefined') return '';
+  return new URLSearchParams(window.location.search).get(name) ?? '';
+}
+
 export default function TimeClockAdminPage() {
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState('command');
+  const [activeTab, setActiveTab] = useState(() => initialTimeClockQueryParam('tab') || 'payroll-review');
+  const [highlightedPunchId] = useState(() => {
+    const value = Number(initialTimeClockQueryParam('punchId'));
+    return Number.isInteger(value) && value > 0 ? value : null;
+  });
   const [inOutBoardUpdatedAt, setInOutBoardUpdatedAt] = useState<Date | null>(null);
   const [approvalTarget, setApprovalTarget] = useState<UnapprovedGroup | null>(null);
   const [approvalReason, setApprovalReason] = useState('');
@@ -706,6 +1165,36 @@ export default function TimeClockAdminPage() {
     const { end } = getCurrentPayPeriod();
     return end;
   });
+  const [reviewPeriodStart, setReviewPeriodStart] = useState(() => {
+    const { start } = getCurrentPayPeriod();
+    return start;
+  });
+  const [reviewPeriodEnd, setReviewPeriodEnd] = useState(() => {
+    const { end } = getCurrentPayPeriod();
+    return end;
+  });
+  const shiftHoursPeriod = (periods: -1 | 1) => {
+    const next = shiftPayPeriodRange(hoursFrom, hoursTo, periods);
+    setHoursFrom(next.start);
+    setHoursTo(next.end);
+  };
+
+  const {
+    data: payrollReview,
+    isLoading: payrollReviewLoading,
+    refetch: refetchPayrollReview,
+  } = useQuery<PayrollReviewBatch>({
+    queryKey: ['/api/timekeeping/dashboard/pay-period-review', reviewPeriodStart, reviewPeriodEnd],
+    queryFn: async () => {
+      const qs = `?periodStart=${reviewPeriodStart}&periodEnd=${reviewPeriodEnd}`;
+      const res = await fetch(`/api/timekeeping/dashboard/pay-period-review${qs}`, { credentials: 'include' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null) as { error?: string } | null;
+        throw new Error(body?.error ?? 'Failed to load payroll review');
+      }
+      return res.json();
+    },
+  });
 
   const { data: employeeHours, isLoading: employeeHoursLoading, isError: employeeHoursError } = useQuery<EmployeeHours[]>({
     queryKey: ['/api/timekeeping/dashboard/employee-hours', hoursFrom, hoursTo],
@@ -752,6 +1241,7 @@ export default function TimeClockAdminPage() {
     employeeName(employeeByTimekeepingId[employeeId], employeeId);
   const employeeNameFromEpochId = (employeeId: number): string =>
     employeeName(employeeByEpochId[employeeId], employeeId);
+  const employeesLinkedToEpoch = (employees ?? []).filter(e => e.epochEmployeeId != null);
 
   const {
     data: unapprovedGroups,
@@ -810,6 +1300,7 @@ export default function TimeClockAdminPage() {
     onSuccess: () => {
       toast({ title: 'Timesheet locked', description: 'The timesheet is now locked. Changes require a formal correction request.' });
       queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/timesheets'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/dashboard/pay-period-review'] });
     },
     onError: (err: unknown) => toast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to lock timesheet.', variant: 'destructive' }),
   });
@@ -838,6 +1329,46 @@ export default function TimeClockAdminPage() {
       queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/timesheets'] });
     },
     onError: () => toast({ title: 'Error', description: 'Failed to recalculate.', variant: 'destructive' }),
+  });
+
+  const [autoPreparedTimesheetPeriod, setAutoPreparedTimesheetPeriod] = useState<string | null>(null);
+  const autoPrepareTimesheetsMutation = useMutation({
+    mutationFn: async ({ periodStart, periodEnd }: { periodStart: string; periodEnd: string }) => {
+      const res = await fetch('/api/timekeeping/admin/timesheets/generate', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ periodStart, periodEnd }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error ?? 'Failed to prepare timesheets');
+      return data as {
+        periodStart: string;
+        periodEnd: string;
+        created: Array<{ employeeId: number; timesheetId: number }>;
+        skipped: Array<{ employeeId: number; reason: string }>;
+        failed: Array<{ employeeId: number; reason: string }>;
+      };
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/timesheets'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/dashboard/summary'] });
+      if (result.failed.length > 0) {
+        toast({
+          title: 'Timesheet preparation needs attention',
+          description: `${result.failed.length} employee timesheet${result.failed.length === 1 ? '' : 's'} could not be prepared.`,
+          variant: 'destructive',
+        });
+      }
+    },
+    onError: (err: Error) => {
+      setAutoPreparedTimesheetPeriod(null);
+      toast({
+        title: 'Timesheet preparation failed',
+        description: err.message,
+        variant: 'destructive',
+      });
+    },
   });
 
   const attestMutation = useMutation({
@@ -1080,18 +1611,46 @@ export default function TimeClockAdminPage() {
     }
   }, [timesheets]);
 
+  useEffect(() => {
+    if (activeTab !== 'timesheets') return;
+    if (!hoursFrom || !hoursTo || hoursFrom > hoursTo) return;
+    const periodKey = `${hoursFrom}:${hoursTo}`;
+    if (autoPreparedTimesheetPeriod === periodKey || autoPrepareTimesheetsMutation.isPending) return;
+    setAutoPreparedTimesheetPeriod(periodKey);
+    autoPrepareTimesheetsMutation.mutate({ periodStart: hoursFrom, periodEnd: hoursTo });
+  }, [activeTab, hoursFrom, hoursTo, autoPreparedTimesheetPeriod, autoPrepareTimesheetsMutation.isPending]);
+
   const [punchFrom, setPunchFrom] = useState(() => {
+    const queryFrom = initialTimeClockQueryParam('from');
+    if (/^\d{4}-\d{2}-\d{2}$/.test(queryFrom)) return queryFrom;
     const d = new Date();
     d.setDate(d.getDate() - 7);
     return d.toISOString().slice(0, 10);
   });
-  const [punchTo, setPunchTo] = useState(() => new Date().toISOString().slice(0, 10));
+  const [punchTo, setPunchTo] = useState(() => {
+    const queryTo = initialTimeClockQueryParam('to');
+    return /^\d{4}-\d{2}-\d{2}$/.test(queryTo) ? queryTo : new Date().toISOString().slice(0, 10);
+  });
+  const shiftPunchPeriod = (periods: -1 | 1) => {
+    const next = shiftPayPeriodRange(punchFrom, punchTo, periods);
+    setPunchFrom(next.start);
+    setPunchTo(next.end);
+  };
+  const [punchEmployeeId] = useState(() => {
+    const value = initialTimeClockQueryParam('employeeId');
+    return /^\d+$/.test(value) ? value : '';
+  });
 
   const { data: punches, isLoading: punchesLoading, refetch: refetchPunches } = useQuery<Punch[]>({
-    queryKey: ['/api/timekeeping/punches', punchFrom, punchTo],
+    queryKey: ['/api/timekeeping/punches', punchFrom, punchTo, punchEmployeeId],
     queryFn: async () => {
+      const params = new URLSearchParams({
+        from: dateInputStartIso(punchFrom),
+        to: dateInputEndIso(punchTo),
+      });
+      if (punchEmployeeId) params.set('employeeId', punchEmployeeId);
       const res = await fetch(
-        `/api/timekeeping/punches?from=${punchFrom}&to=${punchTo}`,
+        `/api/timekeeping/punches?${params.toString()}`,
         { credentials: 'include' }
       );
       if (!res.ok) throw new Error('Failed to load punches');
@@ -1099,31 +1658,96 @@ export default function TimeClockAdminPage() {
     },
     enabled: activeTab === 'punches',
   });
+  const [showAllPunchEvents, setShowAllPunchEvents] = useState(() => initialTimeClockQueryParam('showAll') === '1' || !!highlightedPunchId);
+  const [allPunchFilter, setAllPunchFilter] = useState<PunchEventFilter>('all');
+  const [allPunchSearch, setAllPunchSearch] = useState(() => initialTimeClockQueryParam('q'));
+  const [allPunchSort, setAllPunchSort] = useState<PunchEventSort>('newest');
+  const reviewPunches = (punches ?? []).filter(p => p.hasMissingClockOut || p.hasMissingClockIn);
+  const allPunchEvents = punches ?? [];
+  const matchesPunchEventFilter = (punch: Punch, filter: PunchEventFilter): boolean => {
+    const source = punch.source.toUpperCase();
+    if (filter === 'all') return true;
+    if (filter === 'review') return Boolean(punch.hasMissingClockOut || punch.hasMissingClockIn);
+    if (filter === 'timetrakgo') return source === 'TIMETRAKGO_IMPORT';
+    if (filter === 'edited') return punch.isEdited;
+    if (filter === 'manual') return source.includes('ADMIN') || source.includes('MANUAL');
+    if (filter === 'kiosk_portal') return source === 'KIOSK' || source === 'PORTAL';
+    if (filter === 'open') return punch.hasMissingClockOut;
+    return true;
+  };
+  const filteredAllPunchEvents = allPunchEvents
+    .filter(punch => matchesPunchEventFilter(punch, allPunchFilter))
+    .filter(punch => {
+      const q = allPunchSearch.trim().toLowerCase();
+      if (!q) return true;
+      const empName = employeeNameFromEpochId(punch.employeeId);
+      return [
+        empName,
+        punchTypeLabel(punch.type),
+        fmtTime(punch.punchedAt),
+        punchSourceLabel(punch.source),
+        punch.costCode,
+        punch.reviewReason,
+        punch.editNote,
+        punch.note,
+      ].some(value => String(value ?? '').toLowerCase().includes(q));
+    })
+    .sort((a, b) => {
+      if (allPunchSort === 'employee') {
+        const nameDiff = employeeNameFromEpochId(a.employeeId).localeCompare(employeeNameFromEpochId(b.employeeId));
+        if (nameDiff !== 0) return nameDiff;
+        return a.punchedAt.localeCompare(b.punchedAt);
+      }
+      return allPunchSort === 'oldest'
+        ? a.punchedAt.localeCompare(b.punchedAt)
+        : b.punchedAt.localeCompare(a.punchedAt);
+    });
+  const punchEventFilters: Array<{ value: PunchEventFilter; label: string; count: number }> = [
+    { value: 'all', label: 'All', count: allPunchEvents.length },
+    { value: 'review', label: 'Needs Review', count: allPunchEvents.filter(p => matchesPunchEventFilter(p, 'review')).length },
+    { value: 'timetrakgo', label: 'TimeTrakGO', count: allPunchEvents.filter(p => matchesPunchEventFilter(p, 'timetrakgo')).length },
+    { value: 'edited', label: 'Edited', count: allPunchEvents.filter(p => matchesPunchEventFilter(p, 'edited')).length },
+    { value: 'manual', label: 'Manual/Admin', count: allPunchEvents.filter(p => matchesPunchEventFilter(p, 'manual')).length },
+    { value: 'kiosk_portal', label: 'Kiosk/Portal', count: allPunchEvents.filter(p => matchesPunchEventFilter(p, 'kiosk_portal')).length },
+    { value: 'open', label: 'Open Sessions', count: allPunchEvents.filter(p => matchesPunchEventFilter(p, 'open')).length },
+  ];
+
+  useEffect(() => {
+    if (activeTab !== 'punches' || !highlightedPunchId || !punches?.length) return;
+    const row = document.querySelector(`[data-punch-session-id="${highlightedPunchId}"]`);
+    row?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [activeTab, highlightedPunchId, punches]);
 
   const [addPunchOpen, setAddPunchOpen] = useState(false);
   const [addPunchEmployeeId, setAddPunchEmployeeId] = useState('');
   const [addPunchType, setAddPunchType] = useState('clock_in');
   const [addPunchAt, setAddPunchAt] = useState('');
   const [addPunchCostCode, setAddPunchCostCode] = useState('');
-  const [addPunchNote, setAddPunchNote] = useState('');
+  const [addPunchReason, setAddPunchReason] = useState('');
   const [addPunchDcaaError, setAddPunchDcaaError] = useState<DcaaViolation | null>(null);
 
   const createPunchMutation = useMutation({
     mutationFn: (params: {
-      employeeId: string;
+      employeeId: number;
       type: string;
       punchedAt: string;
       costCode: string;
-      note: string;
-    }) => runCreatePunch(params, buildAddPunchFetchDep()),
+      reason: string;
+    }) => runCreatePunch({
+      employeeId: String(params.employeeId),
+      type: params.type,
+      punchedAt: params.punchedAt,
+      costCode: params.costCode,
+      note: params.reason,
+    }, buildAddPunchFetchDep()),
     onSuccess: () => {
-      toast({ title: 'Punch created', description: 'The punch has been recorded.' });
+      toast({ title: 'Punch added', description: 'The missing punch was added to the time clock ledger.' });
       setAddPunchOpen(false);
       setAddPunchEmployeeId('');
       setAddPunchType('clock_in');
       setAddPunchAt('');
       setAddPunchCostCode('');
-      setAddPunchNote('');
+      setAddPunchReason('');
       setAddPunchDcaaError(null);
       queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/punches'] });
       queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/dashboard/summary'] });
@@ -1132,7 +1756,7 @@ export default function TimeClockAdminPage() {
       if (err.dcaaViolation) {
         setAddPunchDcaaError(err.dcaaViolation);
       } else {
-        toast({ title: 'Error', description: err?.message ?? 'Failed to create punch.', variant: 'destructive' });
+        toast({ title: 'Error', description: err?.message ?? 'Failed to submit correction request.', variant: 'destructive' });
       }
     },
   });
@@ -1144,7 +1768,7 @@ export default function TimeClockAdminPage() {
     setAddPunchEmployeeId('');
     setAddPunchType('clock_in');
     setAddPunchCostCode('');
-    setAddPunchNote('');
+    setAddPunchReason('');
     setAddPunchDcaaError(null);
     setAddPunchOpen(true);
   }
@@ -1172,6 +1796,36 @@ export default function TimeClockAdminPage() {
   const [toOnBehalfUnit, setToOnBehalfUnit] = useState('full_day');
   const [toOnBehalfHours, setToOnBehalfHours] = useState('');
   const [toOnBehalfNote, setToOnBehalfNote] = useState('');
+  const [ptoSetupOpen, setPtoSetupOpen] = useState(false);
+  const [ptoSetupEmployeeId, setPtoSetupEmployeeId] = useState('');
+  const [ptoAdjustmentHours, setPtoAdjustmentHours] = useState('');
+  const [ptoAdjustmentNote, setPtoAdjustmentNote] = useState('');
+  const [ptoScheduleNote, setPtoScheduleNote] = useState('');
+  const [ptoWeeklyHours, setPtoWeeklyHours] = useState<WeeklyPtoHours>({
+    mon: 8,
+    tue: 8,
+    wed: 8,
+    thu: 8,
+    fri: 8,
+    sat: 0,
+    sun: 0,
+  });
+
+  const { data: ptoSetupBalance, isLoading: ptoSetupLoading } = useQuery<PtoBalanceSummary>({
+    queryKey: ['/api/timekeeping/time-off', ptoSetupEmployeeId, 'balance'],
+    queryFn: async () => {
+      const res = await fetch(`/api/timekeeping/time-off/${ptoSetupEmployeeId}/balance`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to load PTO balance');
+      return res.json();
+    },
+    enabled: ptoSetupOpen && !!ptoSetupEmployeeId,
+  });
+
+  useEffect(() => {
+    if (ptoSetupBalance?.schedule) {
+      setPtoWeeklyHours(ptoSetupBalance.schedule);
+    }
+  }, [ptoSetupBalance?.employeeId, ptoSetupBalance?.schedule]);
 
   const reviewTimeOffMutation = useMutation({
     mutationFn: ({ id, decision, stage, note }: { id: number; decision: string; stage: string; note: string }) =>
@@ -1214,6 +1868,49 @@ export default function TimeClockAdminPage() {
     onError: (err: Error) => toast({ title: 'Submission failed', description: err.message, variant: 'destructive' }),
   });
 
+  const savePtoAdjustmentMutation = useMutation({
+    mutationFn: () => {
+      const hours = Number(ptoAdjustmentHours);
+      if (!ptoSetupEmployeeId || !Number.isFinite(hours) || hours === 0) {
+        throw new Error('Enter a non-zero balance adjustment.');
+      }
+      return apiRequest(`/api/timekeeping/time-off/${ptoSetupEmployeeId}/balance-adjustment`, {
+        method: 'POST',
+        body: JSON.stringify({
+          hours,
+          note: ptoAdjustmentNote.trim() || undefined,
+        }),
+      });
+    },
+    onSuccess: () => {
+      toast({ title: 'PTO balance updated', description: 'The employee PTO balance was adjusted.' });
+      setPtoAdjustmentHours('');
+      setPtoAdjustmentNote('');
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/time-off', ptoSetupEmployeeId, 'balance'] });
+    },
+    onError: (err: Error) => toast({ title: 'Balance update failed', description: err.message, variant: 'destructive' }),
+  });
+
+  const savePtoScheduleMutation = useMutation({
+    mutationFn: () => {
+      if (!ptoSetupEmployeeId) throw new Error('Select an employee.');
+      return apiRequest(`/api/timekeeping/time-off/${ptoSetupEmployeeId}/schedule`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          weeklyHours: ptoWeeklyHours,
+          effectiveStart: new Date().toISOString().slice(0, 10),
+          note: ptoScheduleNote.trim() || undefined,
+        }),
+      });
+    },
+    onSuccess: () => {
+      toast({ title: 'PTO schedule saved', description: 'Future PTO requests will use this weekly schedule.' });
+      setPtoScheduleNote('');
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/time-off', ptoSetupEmployeeId, 'balance'] });
+    },
+    onError: (err: Error) => toast({ title: 'Schedule update failed', description: err.message, variant: 'destructive' }),
+  });
+
   const { data: chargeCodes = [] } = useQuery<{ id: number; code: string; description: string | null; department: string | null }[]>({
     queryKey: ['/api/timekeeping/charge-codes'],
   });
@@ -1224,6 +1921,7 @@ export default function TimeClockAdminPage() {
   const [editPayDate, setEditPayDate] = useState('');
   const [editPunchTime, setEditPunchTime] = useState('');
   const [editPunchAmPm, setEditPunchAmPm] = useState<'AM' | 'PM'>('AM');
+  const [editPunchType, setEditPunchType] = useState<Punch['type']>('clock_in');
   const [editNote, setEditNote] = useState('');
   const [editCostCode, setEditCostCode] = useState('');
 
@@ -1248,7 +1946,7 @@ export default function TimeClockAdminPage() {
   });
 
   const updatePunchMutation = useMutation({
-    mutationFn: ({ id, punchType, punchedAt, note, chargeCodeId }: { id: number; punchType: Punch['type']; punchedAt: string; note: string; chargeCodeId: number | null }) =>
+    mutationFn: ({ id, punchType, punchedAt, note, chargeCodeId }: { id: number; punchType: Punch['type']; punchedAt: string; note: string; chargeCodeId?: number | null }) =>
       runEditPunch({ id, punchType, punchedAt, note, chargeCodeId }, buildEditPunchFetchDep()),
     onSuccess: () => {
       toast({ title: 'Punch updated', description: 'The punch has been corrected.' });
@@ -1258,6 +1956,7 @@ export default function TimeClockAdminPage() {
       setEditPayDate('');
       setEditPunchTime('');
       setEditPunchAmPm('AM');
+      setEditPunchType('clock_in');
       setEditNote('');
       setEditCostCode('');
       queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/punches'] });
@@ -1287,6 +1986,7 @@ export default function TimeClockAdminPage() {
     setEditPayDate(dateStr);
     setEditPunchTime(timeStr);
     setEditPunchAmPm(ampm);
+    setEditPunchType(p.type);
     setEditNote('');
     setEditCostCode(p.costCode ?? '');
   }
@@ -1452,6 +2152,13 @@ export default function TimeClockAdminPage() {
 
   const navGroups = [
     {
+      id: 'payroll-review',
+      label: 'Payroll Review',
+      icon: FileText,
+      tabs: ['payroll-review'],
+      count: payrollReview?.summary.blockedCount ?? 0,
+    },
+    {
       id: 'command',
       label: 'Command Center',
       icon: CheckCircle,
@@ -1514,7 +2221,7 @@ export default function TimeClockAdminPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="sticky top-0 z-30 -mx-4 flex items-center justify-between gap-4 border-b bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:-mx-6 sm:px-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Time Clock Admin</h1>
           <p className="text-muted-foreground text-sm mt-1">
@@ -1529,7 +2236,7 @@ export default function TimeClockAdminPage() {
 
       <div className="grid gap-6 xl:grid-cols-[240px_minmax(0,1fr)]">
         <aside className="space-y-2">
-          <div className="rounded-lg border bg-card p-2">
+          <div className="sticky top-[84px] rounded-lg border bg-card p-2">
             {navGroups.map(group => {
               const Icon = group.icon;
               const isActive = group.id === activeNavGroup.id;
@@ -1581,6 +2288,20 @@ export default function TimeClockAdminPage() {
         </aside>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="min-w-0">
+        <TabsContent value="payroll-review" className="space-y-6">
+          <PayrollReviewPanel
+            batch={payrollReview}
+            loading={payrollReviewLoading}
+            periodStart={reviewPeriodStart}
+            periodEnd={reviewPeriodEnd}
+            onPeriodStartChange={setReviewPeriodStart}
+            onPeriodEndChange={setReviewPeriodEnd}
+            onRefresh={() => refetchPayrollReview()}
+            onLockHourly={(timesheetId) => lockMutation.mutate(timesheetId)}
+            locking={lockMutation.isPending}
+          />
+        </TabsContent>
+
         <TabsContent value="command" className="space-y-6">
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <WorkQueueCard
@@ -1737,6 +2458,17 @@ export default function TimeClockAdminPage() {
                   </CardTitle>
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <CalendarRange className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="h-7 w-7"
+                      title="Previous pay period"
+                      aria-label="Previous pay period"
+                      onClick={() => shiftHoursPeriod(-1)}
+                    >
+                      <ChevronLeft className="h-3.5 w-3.5" />
+                    </Button>
                     <Input
                       type="date"
                       value={hoursFrom}
@@ -1750,6 +2482,17 @@ export default function TimeClockAdminPage() {
                       onChange={e => setHoursTo(e.target.value)}
                       className="w-32 h-7 text-xs"
                     />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="h-7 w-7"
+                      title="Next pay period"
+                      aria-label="Next pay period"
+                      onClick={() => shiftHoursPeriod(1)}
+                    >
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </Button>
                   </div>
                 </div>
               </CardHeader>
@@ -2007,17 +2750,43 @@ export default function TimeClockAdminPage() {
             >
               <RefreshCw className="h-4 w-4" />
             </Button>
-            <Button
-              size="sm"
-              className="ml-auto"
-              onClick={() => setReviewTsOpen(true)}
-            >
-              <FileText className="h-4 w-4 mr-1" />
-              Review Timesheet
-            </Button>
+            <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+              {autoPrepareTimesheetsMutation.isPending && (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Preparing current period
+                </>
+              )}
+              {!autoPrepareTimesheetsMutation.isPending && autoPreparedTimesheetPeriod === `${hoursFrom}:${hoursTo}` && (
+                <>
+                  <CheckCircle className="h-3.5 w-3.5 text-green-600" />
+                  Current period prepared
+                </>
+              )}
+            </div>
           </div>
 
           <Card>
+            <CardHeader className="pb-2">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <CardTitle className="text-base">Hourly Timesheet Review Queue</CardTitle>
+                  <CardDescription>
+                    Drafts and submitted timesheets are prepared automatically from hourly punch data.
+                  </CardDescription>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {(['draft', 'submitted', 'certified', 'locked'] as const).map(status => {
+                    const count = timesheets?.filter(ts => ts.status === status).length ?? 0;
+                    return (
+                      <Badge key={status} variant="outline" className="capitalize tabular-nums">
+                        {status.replace('_', ' ')} {count}
+                      </Badge>
+                    );
+                  })}
+                </div>
+              </div>
+            </CardHeader>
             <CardContent className="pt-0">
               {tsLoading ? (
                 <div className="flex items-center justify-center h-32">
@@ -2028,8 +2797,9 @@ export default function TimeClockAdminPage() {
                   No timesheets found for the selected filter.
                 </p>
               ) : (
+                <div className="max-h-[520px] overflow-auto">
                 <Table>
-                  <TableHeader>
+                  <TableHeader className="sticky top-0 z-10 bg-background">
                     <TableRow>
                       <TableHead>Employee</TableHead>
                       <TableHead>Period</TableHead>
@@ -2223,9 +2993,11 @@ export default function TimeClockAdminPage() {
                     })}
                   </TableBody>
                 </Table>
+                </div>
               )}
             </CardContent>
           </Card>
+
         </TabsContent>
 
         {/* ── CORRECTIONS TAB ── */}
@@ -2348,6 +3120,10 @@ export default function TimeClockAdminPage() {
         {/* ── PUNCH REVIEW TAB ── */}
         <TabsContent value="punches" className="space-y-4">
           <div className="flex items-center gap-3 flex-wrap">
+            <Button type="button" size="sm" variant="outline" onClick={() => shiftPunchPeriod(-1)}>
+              <ChevronLeft className="h-4 w-4 mr-1" />
+              Prev Pay Period
+            </Button>
             <div className="flex items-center gap-2">
               <CalendarRange className="h-4 w-4 text-muted-foreground" />
               <Input
@@ -2364,18 +3140,35 @@ export default function TimeClockAdminPage() {
                 className="w-40"
               />
             </div>
+            <Button type="button" size="sm" variant="outline" onClick={() => shiftPunchPeriod(1)}>
+              Next Pay Period
+              <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
             <Button size="sm" variant="outline" onClick={() => refetchPunches()}>
               <RefreshCw className="h-4 w-4 mr-2" />
               Load
             </Button>
             <Button size="sm" className="ml-auto" onClick={openAddPunch}>
               <Plus className="h-4 w-4 mr-1" />
-              Add Punch
+              Request Missing Punch
             </Button>
           </div>
 
           <Card>
-            <CardContent className="pt-0">
+            <CardHeader className="pb-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <CardTitle className="text-base">Needs review</CardTitle>
+                  <CardDescription>
+                    Missing punch exceptions for the selected date range. Full punch history is available below.
+                  </CardDescription>
+                </div>
+                <Badge variant={reviewPunches.length > 0 ? 'destructive' : 'outline'} className="tabular-nums">
+                  {reviewPunches.length} to review
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent>
               {punchesLoading ? (
                 <div className="flex items-center justify-center h-32">
                   <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -2384,32 +3177,49 @@ export default function TimeClockAdminPage() {
                 <p className="text-sm text-muted-foreground text-center py-12">
                   No punches found for this date range.
                 </p>
+              ) : reviewPunches.length === 0 ? (
+                <div className="rounded-md border border-dashed p-8 text-center">
+                  <CheckCircle className="mx-auto mb-2 h-6 w-6 text-green-600" />
+                  <p className="text-sm font-medium">No missing punch exceptions in this range.</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Use the full event log below when you need to inspect all imported or kiosk punches.
+                  </p>
+                </div>
               ) : (
+                <div className="max-h-[520px] overflow-auto">
                 <Table>
-                  <TableHeader>
+                  <TableHeader className="sticky top-0 z-10 bg-background">
                     <TableRow>
                       <TableHead>Employee</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Punched At</TableHead>
+                      <TableHead>Issue</TableHead>
+                      <TableHead>Punch Time</TableHead>
                       <TableHead>Source</TableHead>
                       <TableHead>Note</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {punches.map(p => {
+                    {reviewPunches.map(p => {
                       const empName = employeeNameFromEpochId(p.employeeId);
+                      const isHighlightedPunch = highlightedPunchId === p.sessionId;
                       return (
-                        <TableRow key={`${p.sessionId}-${p.type}`} className={p.hasMissingClockOut ? 'bg-amber-50/60 dark:bg-amber-900/10' : p.isEdited ? 'bg-yellow-50/40 dark:bg-yellow-900/10' : undefined}>
+                        <TableRow
+                          data-punch-session-id={p.sessionId}
+                          key={`${p.sessionId}-${p.type}`}
+                          className={[
+                            p.hasMissingClockOut || p.hasMissingClockIn ? 'bg-amber-50/60 dark:bg-amber-900/10' : p.isEdited ? 'bg-yellow-50/40 dark:bg-yellow-900/10' : '',
+                            isHighlightedPunch ? 'ring-2 ring-amber-400 ring-inset' : '',
+                          ].filter(Boolean).join(' ') || undefined}
+                        >
                           <TableCell className="font-medium">{empName}</TableCell>
                           <TableCell>
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex flex-wrap items-center gap-1.5">
                               <Badge variant="outline" className="text-xs">
                                 {punchTypeLabel(p.type)}
                               </Badge>
-                              {p.hasMissingClockOut && (
+                              {(p.hasMissingClockOut || p.hasMissingClockIn) && (
                                 <Badge className="text-xs bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-700">
-                                  Missing Clock Out
+                                  {p.hasMissingClockOut ? 'Missing Clock Out' : 'Missing Clock In'}
                                 </Badge>
                               )}
                             </div>
@@ -2418,10 +3228,13 @@ export default function TimeClockAdminPage() {
                             {fmtTime(p.punchedAt)}
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground capitalize">
-                            {p.source}
+                            {punchSourceLabel(p.source)}
                             {p.costCode && <span className="ml-1 text-xs">({p.costCode})</span>}
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
+                            {p.reviewReason && (
+                              <span className="mr-1">{p.reviewReason}</span>
+                            )}
                             {p.isEdited && (
                               <span className="text-yellow-600 mr-1 text-xs">✎ edited:</span>
                             )}
@@ -2466,8 +3279,166 @@ export default function TimeClockAdminPage() {
                     })}
                   </TableBody>
                 </Table>
+                </div>
               )}
             </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <CardTitle className="text-base">All punch events</CardTitle>
+                  <CardDescription>
+                    Complete event log for audit checks and payroll reconciliation.
+                  </CardDescription>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowAllPunchEvents(value => !value)}
+                >
+                  {showAllPunchEvents ? <ChevronUp className="h-4 w-4 mr-1" /> : <ChevronDown className="h-4 w-4 mr-1" />}
+                  {showAllPunchEvents ? 'Hide' : `Show ${filteredAllPunchEvents.length}/${allPunchEvents.length}`}
+                </Button>
+              </div>
+            </CardHeader>
+            {showAllPunchEvents && (
+              <CardContent className="pt-0">
+                <div className="sticky top-0 z-20 space-y-3 border-b bg-background pb-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Input
+                      value={allPunchSearch}
+                      onChange={event => setAllPunchSearch(event.target.value)}
+                      placeholder="Search employee, source, note, cost code..."
+                      className="h-8 min-w-[240px] flex-1 text-sm"
+                    />
+                    <Select value={allPunchSort} onValueChange={(value) => setAllPunchSort(value as PunchEventSort)}>
+                      <SelectTrigger className="h-8 w-[150px] text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="newest">Newest first</SelectItem>
+                        <SelectItem value="oldest">Oldest first</SelectItem>
+                        <SelectItem value="employee">Employee</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {punchEventFilters.map(filter => (
+                      <Button
+                        key={filter.value}
+                        type="button"
+                        size="sm"
+                        variant={allPunchFilter === filter.value ? 'default' : 'outline'}
+                        className="h-7 gap-1 px-2 text-xs"
+                        onClick={() => setAllPunchFilter(filter.value)}
+                      >
+                        {filter.label}
+                        <span className="font-mono text-[10px] opacity-80">{filter.count}</span>
+                      </Button>
+                    ))}
+                    <span className="ml-auto text-xs text-muted-foreground tabular-nums">
+                      Showing {filteredAllPunchEvents.length} of {allPunchEvents.length}
+                    </span>
+                  </div>
+                </div>
+                <div className="max-h-[560px] overflow-auto">
+                <Table>
+                  <TableHeader className="sticky top-0 z-10 bg-background">
+                    <TableRow>
+                      <TableHead>Employee</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Punched At</TableHead>
+                      <TableHead>Source</TableHead>
+                      <TableHead>Note</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredAllPunchEvents.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="py-10 text-center text-sm text-muted-foreground">
+                          No punch events match the current filters.
+                        </TableCell>
+                      </TableRow>
+                    ) : filteredAllPunchEvents.map(p => {
+                      const empName = employeeNameFromEpochId(p.employeeId);
+                      const isHighlightedPunch = highlightedPunchId === p.sessionId;
+                      return (
+                        <TableRow
+                          data-punch-session-id={p.sessionId}
+                          key={`all-${p.sessionId}-${p.type}`}
+                          className={[
+                            p.hasMissingClockOut || p.hasMissingClockIn ? 'bg-amber-50/60 dark:bg-amber-900/10' : p.isEdited ? 'bg-yellow-50/40 dark:bg-yellow-900/10' : '',
+                            isHighlightedPunch ? 'ring-2 ring-amber-400 ring-inset' : '',
+                          ].filter(Boolean).join(' ') || undefined}
+                        >
+                          <TableCell className="font-medium">{empName}</TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <Badge variant="outline" className="text-xs">
+                                {punchTypeLabel(p.type)}
+                              </Badge>
+                              {(p.hasMissingClockOut || p.hasMissingClockIn) && (
+                                <Badge className="text-xs bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-700">
+                                  {p.hasMissingClockOut ? 'Missing Clock Out' : 'Missing Clock In'}
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {fmtTime(p.punchedAt)}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground capitalize">
+                            {punchSourceLabel(p.source)}
+                            {p.costCode && <span className="ml-1 text-xs">({p.costCode})</span>}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
+                            {p.reviewReason ?? p.editNote ?? p.note ?? '-'}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              {p.hasMissingClockOut && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                                  title="Close session - record missing clock-out"
+                                  onClick={() => openCloseSession(p)}
+                                >
+                                  <LogOut className="h-3 w-3" />
+                                </Button>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => openEditPunch(p, empName)}
+                              >
+                                <Edit2 className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                                onClick={() => {
+                                  setDeletePunchTarget(p);
+                                  setDeleteNote('');
+                                }}
+                                disabled={deletePunchMutation.isPending}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+                </div>
+              </CardContent>
+            )}
           </Card>
         </TabsContent>
 
@@ -2498,6 +3469,9 @@ export default function TimeClockAdminPage() {
             <Button size="sm" variant="default" onClick={() => setToOnBehalfOpen(true)}>
               <Plus className="h-4 w-4 mr-1" />Submit On Behalf
             </Button>
+            <Button size="sm" variant="outline" onClick={() => setPtoSetupOpen(true)}>
+              <Settings className="h-4 w-4 mr-1" />PTO Setup
+            </Button>
           </div>
 
           <Card>
@@ -2517,6 +3491,7 @@ export default function TimeClockAdminPage() {
                       <TableHead>Employee</TableHead>
                       <TableHead>Dates</TableHead>
                       <TableHead>Type</TableHead>
+                      <TableHead>Hours</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Employee Note</TableHead>
                       <TableHead>Admin Note</TableHead>
@@ -2538,6 +3513,9 @@ export default function TimeClockAdminPage() {
                             <Badge variant="outline" className="capitalize text-xs">
                               {req.leaveType.toUpperCase()}
                             </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {req.requestedHours != null ? `${Number(req.requestedHours).toFixed(2)}h` : '—'}
                           </TableCell>
                           <TableCell>
                             <StatusBadge status={req.status} />
@@ -3207,8 +4185,8 @@ export default function TimeClockAdminPage() {
                   <SelectValue placeholder="Select employee…" />
                 </SelectTrigger>
                 <SelectContent>
-                  {(employees ?? []).map(e => (
-                    <SelectItem key={e.id} value={String(e.id)}>
+                  {employeesLinkedToEpoch.map(e => (
+                    <SelectItem key={e.epochEmployeeId} value={String(e.epochEmployeeId)}>
                       {e.firstName} {e.lastName}
                       {e.employeeNumber ? ` (${e.employeeNumber})` : ''}
                     </SelectItem>
@@ -3267,15 +4245,15 @@ export default function TimeClockAdminPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Add Punch Dialog */}
+      {/* Missing Punch Request Dialog */}
       <Dialog open={addPunchOpen} onOpenChange={(o) => { if (!o) { setAddPunchOpen(false); setAddPunchDcaaError(null); } }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Add Punch</DialogTitle>
+            <DialogTitle>Request Missing Punch</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <p className="text-sm text-muted-foreground">
-              Admin-created punches are subject to the same DCAA charge code policies as kiosk punches.
+              Payroll admins can add missing punches directly for reconciliation. The completed timesheet remains subject to the normal review and approval flow.
             </p>
             <div className="space-y-1">
               <Label>Employee <span className="text-red-500">*</span></Label>
@@ -3284,8 +4262,8 @@ export default function TimeClockAdminPage() {
                   <SelectValue placeholder="Select employee…" />
                 </SelectTrigger>
                 <SelectContent>
-                  {(employees ?? []).map(e => (
-                    <SelectItem key={e.epochEmployeeId ?? e.id} value={String(e.epochEmployeeId ?? e.employeeNumber ?? e.id)}>
+                  {employeesLinkedToEpoch.map(e => (
+                    <SelectItem key={e.epochEmployeeId} value={String(e.epochEmployeeId)}>
                       {e.firstName} {e.lastName}
                       {e.employeeNumber ? ` (${e.employeeNumber})` : ''}
                     </SelectItem>
@@ -3315,6 +4293,7 @@ export default function TimeClockAdminPage() {
                 onChange={e => setAddPunchAt(e.target.value)}
               />
             </div>
+            {punchTypeUsesChargeCode(addPunchType) && (
             <div className="space-y-1">
               <Label>Charge Code</Label>
               <Select value={addPunchCostCode || '__none__'} onValueChange={(v) => { setAddPunchCostCode(v === '__none__' ? '' : v); setAddPunchDcaaError(null); }}>
@@ -3340,12 +4319,14 @@ export default function TimeClockAdminPage() {
                 Required for clock-in punches on charge-code-tracked projects. DCAA policy is enforced.
               </p>
             </div>
+            )}
             <div className="space-y-1">
-              <Label>Note</Label>
-              <Input
-                placeholder="Optional note…"
-                value={addPunchNote}
-                onChange={e => setAddPunchNote(e.target.value)}
+              <Label>Reason <span className="text-red-500">*</span></Label>
+              <Textarea
+                rows={3}
+                placeholder="Explain why this missing punch is needed..."
+                value={addPunchReason}
+                onChange={e => setAddPunchReason(e.target.value)}
               />
             </div>
             {addPunchDcaaError && (
@@ -3367,25 +4348,148 @@ export default function TimeClockAdminPage() {
               disabled={
                 !addPunchEmployeeId ||
                 !addPunchAt ||
+                addPunchReason.trim().length < 5 ||
                 createPunchMutation.isPending
               }
               onClick={() => {
                 setAddPunchDcaaError(null);
                 createPunchMutation.mutate({
-                  employeeId: addPunchEmployeeId,
+                  employeeId: Number(addPunchEmployeeId),
                   type: addPunchType,
                   punchedAt: new Date(addPunchAt).toISOString(),
-                  costCode: addPunchCostCode.trim(),
-                  note: addPunchNote.trim(),
+                  costCode: punchTypeUsesChargeCode(addPunchType) ? addPunchCostCode : '',
+                  reason: addPunchReason.trim(),
                 });
               }}
             >
               {createPunchMutation.isPending ? (
-                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Creating…</>
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Adding...</>
               ) : (
-                <><Plus className="h-4 w-4 mr-1" />Create Punch</>
+                <><Plus className="h-4 w-4 mr-1" />Add Punch</>
               )}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* PTO Balance and Schedule Setup Dialog */}
+      <Dialog open={ptoSetupOpen} onOpenChange={(o) => { if (!o) setPtoSetupOpen(false); }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>PTO Setup</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1">
+              <Label>Employee</Label>
+              <Select value={ptoSetupEmployeeId} onValueChange={setPtoSetupEmployeeId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select employee..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {(employees ?? []).map((e) => (
+                    <SelectItem key={e.epochEmployeeId ?? e.id} value={String(e.epochEmployeeId ?? e.id)}>
+                      {e.firstName} {e.lastName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="rounded-md border bg-slate-50 p-3">
+                <p className="text-xs text-muted-foreground">Available</p>
+                <p className="text-xl font-semibold">
+                  {ptoSetupLoading ? '...' : `${(ptoSetupBalance?.availableHours ?? 0).toFixed(2)}h`}
+                </p>
+              </div>
+              <div className="rounded-md border bg-slate-50 p-3">
+                <p className="text-xs text-muted-foreground">Pending Reserved</p>
+                <p className="text-xl font-semibold">{(ptoSetupBalance?.pendingReservedHours ?? 0).toFixed(2)}h</p>
+              </div>
+              <div className="rounded-md border bg-slate-50 p-3">
+                <p className="text-xs text-muted-foreground">Approved Used</p>
+                <p className="text-xl font-semibold">{(ptoSetupBalance?.approvedReservedHours ?? 0).toFixed(2)}h</p>
+              </div>
+            </div>
+
+            <div className="rounded-md border p-3 space-y-3">
+              <div>
+                <p className="text-sm font-medium">Weekly PTO Schedule</p>
+                <p className="text-xs text-muted-foreground">Used to calculate full-day, half-day, and multi-day request hours.</p>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+                {(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as Array<keyof WeeklyPtoHours>).map((day) => (
+                  <div key={day} className="space-y-1">
+                    <Label className="capitalize">{day}</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      max="24"
+                      step="0.25"
+                      value={ptoWeeklyHours[day]}
+                      onChange={(event) => {
+                        const value = Number(event.target.value);
+                        setPtoWeeklyHours((prev) => ({
+                          ...prev,
+                          [day]: Number.isFinite(value) ? value : 0,
+                        }));
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+              <Textarea
+                placeholder="Schedule note..."
+                value={ptoScheduleNote}
+                onChange={(event) => setPtoScheduleNote(event.target.value)}
+                rows={2}
+                className="resize-none"
+              />
+              <Button
+                size="sm"
+                disabled={!ptoSetupEmployeeId || savePtoScheduleMutation.isPending}
+                onClick={() => savePtoScheduleMutation.mutate()}
+              >
+                {savePtoScheduleMutation.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving...</> : 'Save Schedule'}
+              </Button>
+            </div>
+
+            <div className="rounded-md border p-3 space-y-3">
+              <div>
+                <p className="text-sm font-medium">Balance Adjustment</p>
+                <p className="text-xs text-muted-foreground">Use this for transition balances now; later accruals can post here automatically.</p>
+              </div>
+              <div className="grid gap-3 md:grid-cols-[160px_1fr]">
+                <div className="space-y-1">
+                  <Label>Hours</Label>
+                  <Input
+                    type="number"
+                    step="0.25"
+                    placeholder="e.g. 40"
+                    value={ptoAdjustmentHours}
+                    onChange={(event) => setPtoAdjustmentHours(event.target.value)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>Note</Label>
+                  <Input
+                    placeholder="Opening balance, correction, etc."
+                    value={ptoAdjustmentNote}
+                    onChange={(event) => setPtoAdjustmentNote(event.target.value)}
+                  />
+                </div>
+              </div>
+              <Button
+                size="sm"
+                disabled={!ptoSetupEmployeeId || !ptoAdjustmentHours || savePtoAdjustmentMutation.isPending}
+                onClick={() => savePtoAdjustmentMutation.mutate()}
+              >
+                {savePtoAdjustmentMutation.isPending ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Applying...</> : 'Apply Adjustment'}
+              </Button>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPtoSetupOpen(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -3632,11 +4736,11 @@ export default function TimeClockAdminPage() {
       </Dialog>
 
       {/* Edit Punch Dialog */}
-      <Dialog open={!!editPunch} onOpenChange={(o) => { if (!o) { setEditPunch(null); setEditEmployeeName(''); setEditPunchDate(''); setEditPayDate(''); setEditPunchTime(''); setEditPunchAmPm('AM'); setEditNote(''); setEditCostCode(''); } }}>
+      <Dialog open={!!editPunch} onOpenChange={(o) => { if (!o) { setEditPunch(null); setEditEmployeeName(''); setEditPunchDate(''); setEditPayDate(''); setEditPunchTime(''); setEditPunchAmPm('AM'); setEditPunchType('clock_in'); setEditNote(''); setEditCostCode(''); } }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {editPunch?.type === 'clock_out' ? 'Clock-Out' : editPunch?.type === 'break_end' ? 'Break End' : editPunch?.type === 'break_start' ? 'Break Start' : 'Clock-In'}
+              {punchTypeLabel(editPunchType)}
               {editEmployeeName ? ` — ${editEmployeeName}` : ''}
             </DialogTitle>
           </DialogHeader>
@@ -3644,6 +4748,21 @@ export default function TimeClockAdminPage() {
             <p className="text-sm text-muted-foreground">
               An edit note is required for all punch corrections (DCAA audit trail). If you change the charge code, it must be in the active registry.
             </p>
+
+            <div className="space-y-1">
+              <Label>Punch Type</Label>
+              <Select value={editPunchType} onValueChange={(v) => setEditPunchType(v as Punch['type'])}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="clock_in">Clock In</SelectItem>
+                  <SelectItem value="clock_out">Clock Out</SelectItem>
+                  <SelectItem value="break_start">Break Start</SelectItem>
+                  <SelectItem value="break_end">Break End</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
             {/* Punch Date */}
             <div className="space-y-1">
@@ -3704,6 +4823,7 @@ export default function TimeClockAdminPage() {
             </div>
 
             {/* Charge Code */}
+            {punchTypeUsesChargeCode(editPunchType) && (
             <div className="space-y-1">
               <Label>Charge Code</Label>
               <Select value={editCostCode || '__none__'} onValueChange={(v) => setEditCostCode(v === '__none__' ? '' : v)}>
@@ -3727,6 +4847,7 @@ export default function TimeClockAdminPage() {
               </Select>
               <p className="text-xs text-muted-foreground">Only active charge codes are shown. Inactive codes will be rejected.</p>
             </div>
+            )}
 
             {/* Edit Note */}
             <div className="space-y-1">
@@ -3741,7 +4862,7 @@ export default function TimeClockAdminPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setEditPunch(null); setEditEmployeeName(''); setEditPunchDate(''); setEditPayDate(''); setEditPunchTime(''); setEditPunchAmPm('AM'); setEditNote(''); setEditCostCode(''); }}>Cancel</Button>
+            <Button variant="outline" onClick={() => { setEditPunch(null); setEditEmployeeName(''); setEditPunchDate(''); setEditPayDate(''); setEditPunchTime(''); setEditPunchAmPm('AM'); setEditPunchType('clock_in'); setEditNote(''); setEditCostCode(''); }}>Cancel</Button>
             <Button
               disabled={!editNote.trim() || !editPunchDate || !editPunchTime || !editPayDate || updatePunchMutation.isPending}
               onClick={() => {
@@ -3763,16 +4884,18 @@ export default function TimeClockAdminPage() {
                   if (hours !== 12) hours += 12;
                 }
                 const combinedIso = new Date(`${editPunchDate}T${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:00`).toISOString();
-                const resolvedChargeCodeId = editCostCode
-                  ? (chargeCodes.find(cc => cc.code === editCostCode)?.id ?? null)
-                  : null;
+                const resolvedChargeCodeId = editPunchType === 'break_start'
+                  ? null
+                  : punchTypeUsesChargeCode(editPunchType)
+                  ? (editCostCode ? (chargeCodes.find(cc => cc.code === editCostCode)?.id ?? null) : null)
+                  : undefined;
                 let finalNote = editNote.trim();
                 if (editPayDate && editPayDate !== editPunchDate) {
                   finalNote = `${finalNote}\nPay Date: ${editPayDate}`;
                 }
                 updatePunchMutation.mutate({
                   id: editPunch.id,
-                  punchType: editPunch.type,
+                  punchType: editPunchType,
                   punchedAt: combinedIso,
                   note: finalNote,
                   chargeCodeId: resolvedChargeCodeId,

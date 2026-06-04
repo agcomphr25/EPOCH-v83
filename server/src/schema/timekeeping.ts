@@ -234,6 +234,33 @@ export const insertTimeOffRequestSchema = createInsertSchema(timeOffRequestsTabl
 export type InsertTimeOffRequest = z.infer<typeof insertTimeOffRequestSchema>;
 export type TimeOffRequest = typeof timeOffRequestsTable.$inferSelect;
 
+export const ptoBalanceEventsTable = timekeepingSchema.table("pto_balance_events", {
+  id: serial("id").primaryKey(),
+  employeeId: integer("employee_id").notNull().references(() => employees.id, { onDelete: "cascade" }),
+  eventType: text("event_type").notNull(),
+  hours: doublePrecision("hours").notNull(),
+  timeOffRequestId: integer("time_off_request_id").references(() => timeOffRequestsTable.id, { onDelete: "set null" }),
+  note: text("note"),
+  createdByUserId: integer("created_by_user_id").references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type PtoBalanceEvent = typeof ptoBalanceEventsTable.$inferSelect;
+
+export const employeePtoSchedulesTable = timekeepingSchema.table("employee_pto_schedules", {
+  id: serial("id").primaryKey(),
+  employeeId: integer("employee_id").notNull().references(() => employees.id, { onDelete: "cascade" }),
+  effectiveStart: text("effective_start").notNull(),
+  effectiveEnd: text("effective_end"),
+  weeklyHours: jsonb("weekly_hours").notNull(),
+  note: text("note"),
+  createdByUserId: integer("created_by_user_id").references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+
+export type EmployeePtoSchedule = typeof employeePtoSchedulesTable.$inferSelect;
+
 // ---------------------------------------------------------------------------
 // SALARIED TIMESHEET SYSTEM — Phase 1
 // All salaried-specific tables live in the timekeeping schema, isolated from
@@ -385,6 +412,36 @@ export const insertTimesheetCorrectionSchema = createInsertSchema(timesheetCorre
 });
 export type InsertTimesheetCorrection = z.infer<typeof insertTimesheetCorrectionSchema>;
 export type TimesheetCorrection = typeof timesheetCorrectionsTable.$inferSelect;
+
+export const punchCorrectionRequestsTable = timekeepingSchema.table("punch_correction_requests", {
+  id: serial("id").primaryKey(),
+  employeeId: integer("employee_id").notNull().references(() => employees.id, { onDelete: "cascade" }),
+  punchLedgerId: integer("punch_ledger_id"),
+  requestType: text("request_type").notNull(),
+  source: text("source").notNull().default("employee_portal"),
+  status: text("status").notNull().default("pending_supervisor"),
+  reason: text("reason").notNull(),
+  originalSnapshot: jsonb("original_snapshot"),
+  proposedChanges: jsonb("proposed_changes").notNull(),
+  supervisorId: integer("supervisor_id"),
+  supervisorDecision: text("supervisor_decision"),
+  supervisorNote: text("supervisor_note"),
+  supervisorReviewedAt: timestamp("supervisor_reviewed_at", { withTimezone: true }),
+  supervisorReviewedBy: integer("supervisor_reviewed_by"),
+  hrDecision: text("hr_decision"),
+  hrNote: text("hr_note"),
+  hrReviewedAt: timestamp("hr_reviewed_at", { withTimezone: true }),
+  hrReviewedBy: integer("hr_reviewed_by"),
+  appliedAt: timestamp("applied_at", { withTimezone: true }),
+  appliedBy: integer("applied_by"),
+  afterSnapshot: jsonb("after_snapshot"),
+  submittedByUserId: integer("submitted_by_user_id"),
+  submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+
+export type PunchCorrectionRequest = typeof punchCorrectionRequestsTable.$inferSelect;
 
 // ---------------------------------------------------------------------------
 // TIMEKEEPING POLICY SETTINGS

@@ -33,7 +33,8 @@ import {
   ChevronRight,
   Filter,
   X,
-  Lock
+  Lock,
+  Users
 } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import P2POCreationWizard from '@/components/p2/P2POCreationWizard';
@@ -44,12 +45,12 @@ import P2ProductionQueue from '@/components/p2/P2ProductionQueue';
 import P2CertificationsManager from './P2CertificationsManager';
 import PartRoutingManagement from './PartRoutingManagement';
 import RoutingDocumentManagement from './RoutingDocumentManagement';
-import { P2POManager } from '@/components/P2POManager';
-import { P2POItemsManager } from '@/components/P2POItemsManager';
 import P2ChangesTab from '@/components/p2/P2ChangesTab';
 import P2ShippingTab from '@/components/p2/P2ShippingTab';
 import P2NonconformingTab from '@/components/p2/P2ScrappedItemsTab';
+import P2CustomersPage from './P2CustomersPage';
 import { TravelerCapturedDataById } from '@/components/p2/TravelerCapturedData';
+import ProgramManufacturingOrchestration from '@/components/p2/ProgramManufacturingOrchestration';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -104,23 +105,21 @@ export default function P2ControlCenter() {
   const poFromUrl = urlParams.get('po') || undefined;
   const poIdFromUrl = urlParams.get('poId') ? Number(urlParams.get('poId')) : null;
   const unitsFromUrl = urlParams.get('units') || undefined;
-  const searchFromUrl = urlParams.get('search') || '';
   // Project context: passed from PM/WAD project workflow cards
   const wadProjectId = urlParams.get('projectId') || '';
   const wadProjectName = urlParams.get('projectName') || '';
   const wadPoId = urlParams.get('poId') || '';
-  const [activeTab, setActiveTab] = useState(tabFromUrl || 'status');
+  const [activeTab, setActiveTab] = useState(tabFromUrl === 'pos' ? 'status' : tabFromUrl || 'status');
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tab = params.get('tab');
-    if (tab) setActiveTab(tab);
+    if (tab) setActiveTab(tab === 'pos' ? 'status' : tab);
   }, [location]);
 
   const [showPOWizard, setShowPOWizard] = useState(false);
   const [showBOMWizard, setShowBOMWizard] = useState(false);
   const [selectedPOForBOM, setSelectedPOForBOM] = useState<number | null>(null);
-  const [poItemsView, setPOItemsView] = useState<{ poId: number; poNumber: string } | null>(null);
   const [selectedPOIds, setSelectedPOIds] = useState<number[]>([]);
 
   const { data: stats } = useQuery<P2Stats>({
@@ -704,9 +703,9 @@ export default function P2ControlCenter() {
             <BarChart3 className="h-4 w-4" />
             Status
           </TabsTrigger>
-          <TabsTrigger value="pos" className="flex items-center gap-2" data-testid="tab-pos">
-            <FileText className="h-4 w-4" />
-            POs
+          <TabsTrigger value="customers" className="flex items-center gap-2" data-testid="tab-customers">
+            <Users className="h-4 w-4" />
+            Customers
           </TabsTrigger>
           <TabsTrigger value="setup" className="flex items-center gap-2" data-testid="tab-setup">
             <Settings className="h-4 w-4" />
@@ -719,6 +718,18 @@ export default function P2ControlCenter() {
           <TabsTrigger value="production" className="flex items-center gap-2" data-testid="tab-production">
             <Factory className="h-4 w-4" />
             Production
+          </TabsTrigger>
+          <TabsTrigger value="program" className="flex items-center gap-2" data-testid="tab-program-overview">
+            <Layers className="h-4 w-4" />
+            Program
+          </TabsTrigger>
+          <TabsTrigger value="assembly-tree" className="flex items-center gap-2" data-testid="tab-assembly-tree">
+            <Route className="h-4 w-4" />
+            Assembly Tree
+          </TabsTrigger>
+          <TabsTrigger value="swimlane" className="flex items-center gap-2" data-testid="tab-swimlane">
+            <BarChart3 className="h-4 w-4" />
+            Swimlane
           </TabsTrigger>
           <TabsTrigger value="shipping" className="flex items-center gap-2" data-testid="tab-shipping">
             <Truck className="h-4 w-4" />
@@ -764,20 +775,8 @@ export default function P2ControlCenter() {
           />
         </TabsContent>
 
-        <TabsContent value="pos">
-          {poItemsView ? (
-            <P2POItemsManager
-              poId={poItemsView.poId}
-              poNumber={poItemsView.poNumber}
-              onBack={() => setPOItemsView(null)}
-            />
-          ) : (
-            <P2POManager 
-              onManageItems={(poId, poNumber) => setPOItemsView({ poId, poNumber })}
-              selectedPOIds={selectedPOIds}
-              initialSearch={searchFromUrl}
-            />
-          )}
+        <TabsContent value="customers">
+          <P2CustomersPage />
         </TabsContent>
 
         <TabsContent value="setup">
@@ -836,8 +835,24 @@ export default function P2ControlCenter() {
           <P2ProductionQueue selectedPONumbers={selectedPONumbers} />
         </TabsContent>
 
+        <TabsContent value="program">
+          <ProgramManufacturingOrchestration mode="overview" projectId={wadProjectId || undefined} />
+        </TabsContent>
+
+        <TabsContent value="assembly-tree">
+          <ProgramManufacturingOrchestration mode="tree" projectId={wadProjectId || undefined} />
+        </TabsContent>
+
+        <TabsContent value="swimlane">
+          <ProgramManufacturingOrchestration mode="swimlane" projectId={wadProjectId || undefined} />
+        </TabsContent>
+
         <TabsContent value="shipping" className="space-y-4">
-          <div className="flex justify-end">
+          <div className="flex flex-wrap justify-end gap-2">
+            <Link href="/p2/material-transfer" className="inline-flex items-center gap-2 text-sm px-3 py-1.5 rounded-md border border-blue-300 text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-400 dark:hover:bg-blue-900/20 transition-colors">
+              <ScrollText className="h-3.5 w-3.5" />
+              Material Transfer Form
+            </Link>
             <Link href="/p2/ready-to-ship" className="inline-flex items-center gap-2 text-sm px-3 py-1.5 rounded-md border border-green-300 text-green-700 hover:bg-green-50 dark:border-green-700 dark:text-green-400 dark:hover:bg-green-900/20 transition-colors">
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
               Ready to Ship Dashboard

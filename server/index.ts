@@ -502,6 +502,100 @@ async function initializeBackgroundServices() {
       // Safe boot migrations are intentionally not run during normal server startup.
       // Run them before deploy or manually with: npm run maintenance:safe-migrations
 
+      try {
+        await pool.query(`
+          ALTER TABLE users
+            ADD COLUMN IF NOT EXISTS is_finish_technician boolean DEFAULT false
+        `);
+        await pool.query(`
+          UPDATE users
+          SET is_finish_technician = false
+          WHERE is_finish_technician IS NULL
+        `);
+        await pool.query(`
+          ALTER TABLE user_sessions
+            ADD COLUMN IF NOT EXISTS username text,
+            ADD COLUMN IF NOT EXISTS last_activity_at timestamp,
+            ADD COLUMN IF NOT EXISTS ip_address text,
+            ADD COLUMN IF NOT EXISTS user_agent text,
+            ADD COLUMN IF NOT EXISTS device_fingerprint text,
+            ADD COLUMN IF NOT EXISTS mfa_verified_at timestamptz,
+            ADD COLUMN IF NOT EXISTS security_policy_version text DEFAULT 'cmmc-itar-v1',
+            ADD COLUMN IF NOT EXISTS last_credential_verified_at timestamptz
+        `);
+        await pool.query(`
+          UPDATE user_sessions us
+          SET username = COALESCE(NULLIF(us.username, ''), u.username, 'user-' || us.user_id::text)
+          FROM users u
+          WHERE us.user_id = u.id
+            AND (us.username IS NULL OR us.username = '')
+        `);
+        await pool.query(`
+          UPDATE user_sessions
+          SET username = COALESCE(NULLIF(username, ''), 'unknown'),
+              last_activity_at = COALESCE(last_activity_at, created_at, NOW())
+          WHERE username IS NULL
+             OR username = ''
+             OR last_activity_at IS NULL
+        `);
+        console.log('Authentication schema guard complete');
+      } catch (authSchemaErr: any) {
+        console.error('Authentication schema guard failed:', authSchemaErr?.message || authSchemaErr);
+      }
+
+      try {
+        await pool.query(`
+          ALTER TABLE controlled_documents
+            ADD COLUMN IF NOT EXISTS template_key text,
+            ADD COLUMN IF NOT EXISTS version_date date,
+            ADD COLUMN IF NOT EXISTS origination_date date,
+            ADD COLUMN IF NOT EXISTS classification text NOT NULL DEFAULT 'internal',
+            ADD COLUMN IF NOT EXISTS cui_category text,
+            ADD COLUMN IF NOT EXISTS itar_category text,
+            ADD COLUMN IF NOT EXISTS export_control_jurisdiction text,
+            ADD COLUMN IF NOT EXISTS customer_id text,
+            ADD COLUMN IF NOT EXISTS contract_artifact_type text,
+            ADD COLUMN IF NOT EXISTS access_rule text NOT NULL DEFAULT 'authenticated',
+            ADD COLUMN IF NOT EXISTS mfa_required boolean NOT NULL DEFAULT false,
+            ADD COLUMN IF NOT EXISTS download_tracking_required boolean NOT NULL DEFAULT true
+        `);
+        await pool.query(`
+          ALTER TABLE document_version_history
+            ADD COLUMN IF NOT EXISTS expiration_date date
+        `);
+        await pool.query(`
+          CREATE INDEX IF NOT EXISTS idx_controlled_documents_template_key
+          ON controlled_documents(template_key)
+        `);
+        console.log('Controlled documents schema guard complete');
+      } catch (controlledDocumentsSchemaErr: any) {
+        console.error('Controlled documents schema guard failed:', controlledDocumentsSchemaErr?.message || controlledDocumentsSchemaErr);
+      }
+
+      try {
+        await pool.query(`
+          ALTER TABLE all_orders
+            ADD COLUMN IF NOT EXISTS department_notes jsonb DEFAULT '[]'::jsonb
+        `);
+        await pool.query(`
+          ALTER TABLE order_drafts
+            ADD COLUMN IF NOT EXISTS department_notes jsonb DEFAULT '[]'::jsonb
+        `);
+        await pool.query(`
+          UPDATE all_orders
+          SET department_notes = '[]'::jsonb
+          WHERE department_notes IS NULL
+        `);
+        await pool.query(`
+          UPDATE order_drafts
+          SET department_notes = '[]'::jsonb
+          WHERE department_notes IS NULL
+        `);
+        console.log('P1 department notes schema guard complete');
+      } catch (departmentNotesSchemaErr: any) {
+        console.error('P1 department notes schema guard failed:', departmentNotesSchemaErr?.message || departmentNotesSchemaErr);
+      }
+
       const runHistoricalBootRepairs = shouldRunHistoricalBootRepairs();
       const runLegacyStartupDbMaintenance = shouldRunLegacyStartupDbMaintenance();
       if (runHistoricalBootRepairs) {
@@ -1095,6 +1189,19 @@ async function initializeBackgroundServices() {
           ON CONFLICT (code) DO NOTHING
         `);
 
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS charge_code_employee_assignments (
+            id SERIAL PRIMARY KEY,
+            charge_code_id INTEGER NOT NULL REFERENCES charge_codes(id) ON DELETE CASCADE,
+            employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+            assigned_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+            assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE (charge_code_id, employee_id)
+          )
+        `);
+        await pool.query(`CREATE INDEX IF NOT EXISTS charge_code_employee_assignments_charge_code_idx ON charge_code_employee_assignments(charge_code_id)`);
+        await pool.query(`CREATE INDEX IF NOT EXISTS charge_code_employee_assignments_employee_idx ON charge_code_employee_assignments(employee_id)`);
+
         // salaried_timesheets — weekly header record per salaried employee
         await db.execute(sqlSalary`
           CREATE TABLE IF NOT EXISTS timekeeping.salaried_timesheets (
@@ -1200,11 +1307,108 @@ async function initializeBackgroundServices() {
       }
 
       // -----------------------------------------------------------------------
-      // BLOCKER 2 PHASE A — Indirect Code → Charge Code Unification
+      // PUNCH CORRECTION REQUESTS - kiosk / portal / admin correction queue
+      // Canonical DDL lives in migrations/0142 and drift repair in 0155. This
+      // boot-time safety net keeps kiosk correction submissions from failing on
+      // environments where those migrations were skipped during publish.
+      // -----------------------------------------------------------------------
+      try {
+        await pool.query(`CREATE SCHEMA IF NOT EXISTS timekeeping`);
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS timekeeping.punch_correction_requests (
+            id SERIAL PRIMARY KEY,
+            employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+            punch_ledger_id INTEGER,
+            request_type TEXT NOT NULL,
+            source TEXT NOT NULL DEFAULT 'employee_portal',
+            status TEXT NOT NULL DEFAULT 'pending_supervisor',
+            reason TEXT NOT NULL,
+            original_snapshot JSONB,
+            proposed_changes JSONB NOT NULL,
+            supervisor_id INTEGER,
+            supervisor_decision TEXT,
+            supervisor_note TEXT,
+            supervisor_reviewed_at TIMESTAMPTZ,
+            supervisor_reviewed_by INTEGER,
+            hr_decision TEXT,
+            hr_note TEXT,
+            hr_reviewed_at TIMESTAMPTZ,
+            hr_reviewed_by INTEGER,
+            applied_at TIMESTAMPTZ,
+            applied_by INTEGER,
+            after_snapshot JSONB,
+            submitted_by_user_id INTEGER,
+            submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          )
+        `);
+        await pool.query(`
+          CREATE INDEX IF NOT EXISTS idx_punch_correction_requests_employee_id
+            ON timekeeping.punch_correction_requests(employee_id)
+        `);
+        await pool.query(`
+          CREATE INDEX IF NOT EXISTS idx_punch_correction_requests_punch_ledger_id
+            ON timekeeping.punch_correction_requests(punch_ledger_id)
+        `);
+        await pool.query(`
+          CREATE INDEX IF NOT EXISTS idx_punch_correction_requests_status
+            ON timekeeping.punch_correction_requests(status)
+        `);
+        await pool.query(`
+          CREATE INDEX IF NOT EXISTS idx_punch_correction_requests_supervisor_id
+            ON timekeeping.punch_correction_requests(supervisor_id)
+        `);
+        await pool.query(`
+          ALTER TABLE timekeeping.punch_correction_requests
+            ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'employee_portal'
+        `);
+        await pool.query(`
+          ALTER TABLE timekeeping.punch_correction_requests
+            ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'pending_supervisor'
+        `);
+        await pool.query(`
+          ALTER TABLE timekeeping.punch_correction_requests
+            ADD COLUMN IF NOT EXISTS submitted_by_user_id INTEGER
+        `);
+        await pool.query(`
+          ALTER TABLE timekeeping.punch_correction_requests
+            ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        `);
+        await pool.query(`
+          ALTER TABLE timekeeping.punch_correction_requests
+            DROP CONSTRAINT IF EXISTS punch_correction_requests_source_check;
+          ALTER TABLE timekeeping.punch_correction_requests
+            DROP CONSTRAINT IF EXISTS chk_punch_correction_source;
+          ALTER TABLE timekeeping.punch_correction_requests
+            ADD CONSTRAINT chk_punch_correction_source
+              CHECK (source IN ('employee_portal', 'kiosk', 'admin'))
+        `);
+        await pool.query(`
+          ALTER TABLE timekeeping.punch_correction_requests
+            DROP CONSTRAINT IF EXISTS chk_punch_correction_request_type;
+          ALTER TABLE timekeeping.punch_correction_requests
+            ADD CONSTRAINT chk_punch_correction_request_type
+              CHECK (request_type IN ('edit_session', 'add_session', 'delete_session'))
+        `);
+        await pool.query(`
+          ALTER TABLE timekeeping.punch_correction_requests
+            DROP CONSTRAINT IF EXISTS chk_punch_correction_status;
+          ALTER TABLE timekeeping.punch_correction_requests
+            ADD CONSTRAINT chk_punch_correction_status
+              CHECK (status IN ('pending_supervisor', 'pending_hr', 'approved', 'rejected', 'cancelled'))
+        `);
+        console.log('punch_correction_requests table ensured (timekeeping schema)');
+      } catch (punchCorrectionErr: any) {
+        console.error('punch_correction_requests migration failed:', punchCorrectionErr.message);
+      }
+
+      // -----------------------------------------------------------------------
+      // BLOCKER 2 PHASE A - Indirect Code to Charge Code Unification
       // Seeds public.charge_codes indirect pool entries, adds charge_code_id
       // mapping to timekeeping.indirect_codes, and reconciles the live DB
       // salaried_timesheet_lines columns with the Drizzle schema.
-      // All operations are idempotent.  Feature flag stays FALSE.
+      // All operations are idempotent. Feature flag stays FALSE.
       // -----------------------------------------------------------------------
       try {
         // Step 1: Seed indirect labor pool entries in public.charge_codes
@@ -1749,7 +1953,9 @@ async function initializeBackgroundServices() {
         const { sql: sqlItemCode } = await import('drizzle-orm');
         await db.execute(sqlItemCode`ALTER TABLE production_orders ADD COLUMN IF NOT EXISTS item_code TEXT`);
         await db.execute(sqlItemCode`CREATE INDEX IF NOT EXISTS idx_production_orders_item_code ON production_orders (item_code)`);
-        // Backfill: resolve from purchase_order_items.item_name → item_name → item_id, then UPPER+TRIM
+        // Backfill/sync: resolve from purchase_order_items.item_name → item_name → item_id,
+        // then UPPER+TRIM. Correct stale non-null values too; PO-line repairs can
+        // otherwise leave production_orders.item_code pointing at the old SKU.
         await db.execute(sqlItemCode`
           UPDATE production_orders po
           SET item_code = UPPER(TRIM(
@@ -1761,7 +1967,14 @@ async function initializeBackgroundServices() {
           ))
           FROM purchase_order_items poi
           WHERE po.po_item_id = poi.id
-            AND po.item_code IS NULL
+            AND (po.item_code IS NULL OR po.production_status != 'SHIPPED')
+            AND po.item_code IS DISTINCT FROM UPPER(TRIM(
+              COALESCE(
+                NULLIF(TRIM(poi.item_name), ''),
+                NULLIF(TRIM(po.item_name), ''),
+                NULLIF(TRIM(po.item_id), '')
+              )
+            ))
         `);
         // Fallback for any rows with no matching poi
         await db.execute(sqlItemCode`
@@ -1969,10 +2182,11 @@ async function initializeBackgroundServices() {
         await db.execute(sqlInvClass`
           DO $$ BEGIN
             IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'inventory_manufactured_category') THEN
-              CREATE TYPE inventory_manufactured_category AS ENUM ('PACKET', 'KIT', 'MACHINED_PART', 'CORE', 'SUB_ASSEMBLY', 'ASSEMBLY');
+              CREATE TYPE inventory_manufactured_category AS ENUM ('PACKET', 'KIT', 'MACHINED_PART', 'CORE', 'SUB_ASSEMBLY', 'ASSEMBLY', 'FINAL_ASSEMBLY', 'COMPOSITE', 'COMPONENT');
             END IF;
           END $$
         `);
+        await db.execute(sqlInvClass`ALTER TYPE inventory_manufactured_category ADD VALUE IF NOT EXISTS 'FINAL_ASSEMBLY'`);
         await db.execute(sqlInvClass`
           DO $$ BEGIN
             IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'inventory_manufacturing_level') THEN
@@ -2943,7 +3157,7 @@ async function initializeBackgroundServices() {
 
             UPDATE chart_of_accounts
                SET account_number = '10300',
-                   account_name = CASE WHEN account_number = '10300' THEN 'Customer Payment Clearing' ELSE 'Customer Payment Clearing (Duplicate - inactive)' END,
+                   account_name = 'Customer Payment Clearing',
                    account_type = 'ASSET',
                    normal_balance = 'DEBIT',
                    financial_statement_section = 'Current Assets',
@@ -2956,6 +3170,303 @@ async function initializeBackgroundServices() {
                    system_controlled = FALSE,
                    is_active = TRUE,
                    description = 'Individually traceable customer payments awaiting bank reconciliation or settlement matching',
+                   updated_at = NOW()
+             WHERE id = target_id;
+          END $$;
+        `);
+        await db.execute(sqlAcct`
+          CREATE TABLE IF NOT EXISTS production_line_accounting_map (
+            id SERIAL PRIMARY KEY,
+            production_line TEXT NOT NULL UNIQUE,
+            revenue_account_id INTEGER REFERENCES chart_of_accounts(id),
+            revenue_account_number TEXT,
+            revenue_account_name_snapshot TEXT,
+            quickbooks_class TEXT,
+            active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        await db.execute(sqlAcct`
+          DO $$
+          DECLARE
+            parent_id integer;
+            p1_id integer;
+            p2_id integer;
+            p3_id integer;
+          BEGIN
+            SELECT id INTO parent_id
+            FROM chart_of_accounts
+            WHERE account_number = '41000'
+               OR account_name = 'Product Revenue'
+            ORDER BY CASE WHEN account_number = '41000' THEN 0 ELSE 1 END, id
+            LIMIT 1;
+
+            IF parent_id IS NULL THEN
+              INSERT INTO chart_of_accounts (
+                account_number, account_name, account_type, normal_balance,
+                financial_statement_section, cost_pool, default_allowability,
+                default_direct_indirect, billing_treatment, requires_documentation,
+                requires_review, system_controlled, description, is_active
+              )
+              VALUES (
+                '41000', 'Product Revenue', 'REVENUE', 'CREDIT',
+                'Revenue', 'NONE', 'ALLOWABLE',
+                'DIRECT', 'BILLABLE', FALSE,
+                FALSE, TRUE,
+                'Parent rollup account for production-line product revenue; do not post directly when a production-line child account applies',
+                TRUE
+              )
+              RETURNING id INTO parent_id;
+            ELSE
+              UPDATE chart_of_accounts
+                 SET account_number = '41000',
+                     account_name = 'Product Revenue',
+                     account_type = 'REVENUE',
+                     parent_account_id = NULL,
+                     normal_balance = 'CREDIT',
+                     financial_statement_section = 'Revenue',
+                     cost_pool = 'NONE',
+                     default_allowability = 'ALLOWABLE',
+                     default_direct_indirect = 'DIRECT',
+                     billing_treatment = 'BILLABLE',
+                     system_controlled = TRUE,
+                     is_active = TRUE,
+                     description = 'Parent rollup account for production-line product revenue; do not post directly when a production-line child account applies',
+                     updated_at = NOW()
+               WHERE id = parent_id;
+            END IF;
+
+            SELECT id INTO p1_id
+            FROM chart_of_accounts
+            WHERE account_number = '41010'
+               OR account_name = 'Product Revenue - P1'
+            ORDER BY CASE WHEN account_number = '41010' THEN 0 ELSE 1 END, id
+            LIMIT 1;
+
+            IF p1_id IS NULL THEN
+              INSERT INTO chart_of_accounts (
+                account_number, account_name, account_type, parent_account_id,
+                normal_balance, financial_statement_section, cost_pool,
+                default_allowability, default_direct_indirect, billing_treatment,
+                requires_documentation, requires_review, system_controlled,
+                description, is_active
+              )
+              VALUES (
+                '41010', 'Product Revenue - P1', 'REVENUE', parent_id,
+                'CREDIT', 'Revenue', 'NONE',
+                'ALLOWABLE', 'DIRECT', 'BILLABLE',
+                FALSE, FALSE, TRUE,
+                'Posting account for P1 product revenue',
+                TRUE
+              )
+              RETURNING id INTO p1_id;
+            ELSE
+              UPDATE chart_of_accounts
+                 SET account_number = '41010',
+                     account_name = 'Product Revenue - P1',
+                     account_type = 'REVENUE',
+                     parent_account_id = parent_id,
+                     normal_balance = 'CREDIT',
+                     financial_statement_section = 'Revenue',
+                     default_allowability = 'ALLOWABLE',
+                     default_direct_indirect = 'DIRECT',
+                     billing_treatment = 'BILLABLE',
+                     system_controlled = TRUE,
+                     is_active = TRUE,
+                     description = 'Posting account for P1 product revenue',
+                     updated_at = NOW()
+               WHERE id = p1_id;
+            END IF;
+
+            SELECT id INTO p2_id
+            FROM chart_of_accounts
+            WHERE account_number = '41020'
+               OR account_name = 'Product Revenue - P2'
+            ORDER BY CASE WHEN account_number = '41020' THEN 0 ELSE 1 END, id
+            LIMIT 1;
+
+            IF p2_id IS NULL THEN
+              INSERT INTO chart_of_accounts (
+                account_number, account_name, account_type, parent_account_id,
+                normal_balance, financial_statement_section, cost_pool,
+                default_allowability, default_direct_indirect, billing_treatment,
+                requires_documentation, requires_review, system_controlled,
+                description, is_active
+              )
+              VALUES (
+                '41020', 'Product Revenue - P2', 'REVENUE', parent_id,
+                'CREDIT', 'Revenue', 'NONE',
+                'ALLOWABLE', 'DIRECT', 'BILLABLE',
+                FALSE, FALSE, TRUE,
+                'Posting account for P2 product revenue',
+                TRUE
+              )
+              RETURNING id INTO p2_id;
+            ELSE
+              UPDATE chart_of_accounts
+                 SET account_number = '41020',
+                     account_name = 'Product Revenue - P2',
+                     account_type = 'REVENUE',
+                     parent_account_id = parent_id,
+                     normal_balance = 'CREDIT',
+                     financial_statement_section = 'Revenue',
+                     default_allowability = 'ALLOWABLE',
+                     default_direct_indirect = 'DIRECT',
+                     billing_treatment = 'BILLABLE',
+                     system_controlled = TRUE,
+                     is_active = TRUE,
+                     description = 'Posting account for P2 product revenue',
+                     updated_at = NOW()
+               WHERE id = p2_id;
+            END IF;
+
+            SELECT id INTO p3_id
+            FROM chart_of_accounts
+            WHERE account_number = '41030'
+               OR account_name = 'Product Revenue - P3'
+            ORDER BY CASE WHEN account_number = '41030' THEN 0 ELSE 1 END, id
+            LIMIT 1;
+
+            IF p3_id IS NULL THEN
+              INSERT INTO chart_of_accounts (
+                account_number, account_name, account_type, parent_account_id,
+                normal_balance, financial_statement_section, cost_pool,
+                default_allowability, default_direct_indirect, billing_treatment,
+                requires_documentation, requires_review, system_controlled,
+                description, is_active
+              )
+              VALUES (
+                '41030', 'Product Revenue - P3', 'REVENUE', parent_id,
+                'CREDIT', 'Revenue', 'NONE',
+                'ALLOWABLE', 'DIRECT', 'BILLABLE',
+                FALSE, FALSE, TRUE,
+                'Posting account for P3 product revenue',
+                TRUE
+              )
+              RETURNING id INTO p3_id;
+            ELSE
+              UPDATE chart_of_accounts
+                 SET account_number = '41030',
+                     account_name = 'Product Revenue - P3',
+                     account_type = 'REVENUE',
+                     parent_account_id = parent_id,
+                     normal_balance = 'CREDIT',
+                     financial_statement_section = 'Revenue',
+                     default_allowability = 'ALLOWABLE',
+                     default_direct_indirect = 'DIRECT',
+                     billing_treatment = 'BILLABLE',
+                     system_controlled = TRUE,
+                     is_active = TRUE,
+                     description = 'Posting account for P3 product revenue',
+                     updated_at = NOW()
+               WHERE id = p3_id;
+            END IF;
+
+            INSERT INTO production_line_accounting_map (
+              production_line, revenue_account_id, revenue_account_number,
+              revenue_account_name_snapshot, quickbooks_class, active, updated_at
+            )
+            VALUES
+              ('P1', p1_id, '41010', 'Product Revenue - P1', 'P1', TRUE, NOW()),
+              ('P2', p2_id, '41020', 'Product Revenue - P2', 'P2', TRUE, NOW()),
+              ('P3', p3_id, '41030', 'Product Revenue - P3', 'P3', TRUE, NOW())
+            ON CONFLICT (production_line) DO UPDATE
+              SET revenue_account_id = EXCLUDED.revenue_account_id,
+                  revenue_account_number = EXCLUDED.revenue_account_number,
+                  revenue_account_name_snapshot = EXCLUDED.revenue_account_name_snapshot,
+                  quickbooks_class = EXCLUDED.quickbooks_class,
+                  active = TRUE,
+                  updated_at = NOW();
+          END $$;
+        `);
+        console.log('✅ Ensured accounting shadow layer tables and production-line revenue seed accounts exist');
+        await db.execute(sqlAcct`
+          DO $$
+          DECLARE
+            target_id integer;
+            duplicate_id integer;
+          BEGIN
+            SELECT id
+              INTO target_id
+              FROM chart_of_accounts
+             WHERE account_number = '21100'
+                OR account_name = 'GRNI - Received Not Invoiced'
+             ORDER BY CASE WHEN account_number = '21100' THEN 0 ELSE 1 END, id
+             LIMIT 1;
+
+            IF target_id IS NULL THEN
+              INSERT INTO chart_of_accounts (
+                account_number,
+                account_name,
+                account_type,
+                normal_balance,
+                financial_statement_section,
+                cost_pool,
+                default_allowability,
+                default_direct_indirect,
+                billing_treatment,
+                requires_documentation,
+                requires_review,
+                system_controlled,
+                description,
+                is_active
+              )
+              VALUES (
+                '21100',
+                'GRNI - Received Not Invoiced',
+                'LIABILITY',
+                'CREDIT',
+                'Current Liabilities',
+                'NONE',
+                'ALLOWABLE',
+                'UNASSIGNED',
+                'NOT_BILLABLE',
+                TRUE,
+                FALSE,
+                TRUE,
+                'Goods received not invoiced / received-not-vouchered clearing liability for inventory receipts awaiting vendor bill match',
+                TRUE
+              )
+              RETURNING id INTO target_id;
+            END IF;
+
+            SELECT id
+              INTO duplicate_id
+              FROM chart_of_accounts
+             WHERE account_name = 'GRNI - Received Not Invoiced'
+               AND id <> target_id
+             LIMIT 1;
+
+            IF duplicate_id IS NOT NULL THEN
+              UPDATE journal_lines
+                 SET account_id = target_id,
+                     updated_at = NOW()
+               WHERE account_id = duplicate_id;
+
+              UPDATE chart_of_accounts
+                 SET account_name = 'GRNI - Received Not Invoiced (Duplicate - inactive)',
+                     account_number = NULL,
+                     is_active = FALSE,
+                     updated_at = NOW()
+               WHERE id = duplicate_id;
+            END IF;
+
+            UPDATE chart_of_accounts
+               SET account_number = '21100',
+                   account_name = 'GRNI - Received Not Invoiced',
+                   account_type = 'LIABILITY',
+                   normal_balance = 'CREDIT',
+                   financial_statement_section = 'Current Liabilities',
+                   cost_pool = 'NONE',
+                   default_allowability = 'ALLOWABLE',
+                   default_direct_indirect = 'UNASSIGNED',
+                   billing_treatment = 'NOT_BILLABLE',
+                   requires_documentation = TRUE,
+                   requires_review = FALSE,
+                   system_controlled = TRUE,
+                   is_active = TRUE,
+                   description = 'Goods received not invoiced / received-not-vouchered clearing liability for inventory receipts awaiting vendor bill match',
                    updated_at = NOW()
              WHERE id = target_id;
           END $$;
@@ -3599,6 +4110,33 @@ async function initializeBackgroundServices() {
         `);
         await db.execute(sqlRcc`CREATE INDEX IF NOT EXISTS received_units_receipt_id_idx ON received_units(receipt_id)`);
         await db.execute(sqlRcc`CREATE INDEX IF NOT EXISTS received_units_disposition_idx ON received_units(disposition)`);
+        await db.execute(sqlRcc`ALTER TABLE received_units ADD COLUMN IF NOT EXISTS target_project_id UUID REFERENCES projects(id) ON DELETE SET NULL`);
+        await db.execute(sqlRcc`CREATE INDEX IF NOT EXISTS received_units_target_project_idx ON received_units(target_project_id)`);
+        await db.execute(sqlRcc`
+          CREATE TABLE IF NOT EXISTS project_received_materials (
+            id SERIAL PRIMARY KEY,
+            project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            received_unit_id INTEGER NOT NULL REFERENCES received_units(id) ON DELETE CASCADE,
+            receipt_id INTEGER NOT NULL REFERENCES receipts(id) ON DELETE CASCADE,
+            material_lot_id UUID REFERENCES material_lots(id) ON DELETE SET NULL,
+            quantity NUMERIC NOT NULL,
+            unit_cost NUMERIC NOT NULL DEFAULT 0,
+            extended_cost NUMERIC NOT NULL DEFAULT 0,
+            status TEXT NOT NULL DEFAULT 'pending_pm_acceptance',
+            accepted_by_user_id INTEGER,
+            accepted_by_display_name TEXT,
+            accepted_at TIMESTAMP,
+            rejected_by_user_id INTEGER,
+            rejected_by_display_name TEXT,
+            rejected_at TIMESTAMP,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW(),
+            CONSTRAINT project_received_materials_received_unit_unique UNIQUE(received_unit_id)
+          )
+        `);
+        await db.execute(sqlRcc`CREATE INDEX IF NOT EXISTS project_received_materials_project_idx ON project_received_materials(project_id)`);
+        await db.execute(sqlRcc`CREATE INDEX IF NOT EXISTS project_received_materials_status_idx ON project_received_materials(status)`);
 
         await db.execute(sqlRcc`
           CREATE TABLE IF NOT EXISTS receipt_documents (
@@ -3833,11 +4371,13 @@ async function initializeBackgroundServices() {
           { key: 'finance.view', description: 'Read AR invoices, payments, aging reports, and customer summaries', category: 'finance' },
           { key: 'finance.post_invoice', description: 'Post an AR invoice to the general ledger', category: 'finance' },
           { key: 'finance.void_invoice', description: 'Void an AR invoice', category: 'finance' },
-          { key: 'finance.manage_payments', description: 'Record and delete AR payments', category: 'finance' },
+          { key: 'finance.manage_payments', description: 'Record, update, and void AR/P1 customer payments', category: 'finance' },
+          { key: 'finance.accounting_admin', description: 'Post or adjust entries in migration or soft-closed accounting periods', category: 'finance' },
 
           // Inventory
           { key: 'inventory.adjust', description: 'Update and delete inventory items and balances', category: 'inventory' },
           { key: 'inventory.manage_requests', description: 'Receive or reject inventory parts requests', category: 'inventory' },
+          { key: 'inventory.approve_parts_requests', description: 'Approve inventory parts requests before they enter RFQ or Vendor PO flow', category: 'inventory' },
 
           // Inventory — Cycle Count subsystem (Task #142)
           { key: 'inventory.cycleCount.view', description: 'View cycle count sessions, lines, and variance history', category: 'inventory' },
@@ -4093,6 +4633,7 @@ async function initializeBackgroundServices() {
         const inventoryManagerCaps = [
           'inventory.adjust',
           'inventory.manage_requests',
+          'inventory.approve_parts_requests',
           'inventory.cycleCount.view',
           'inventory.cycleCount.create',
           'inventory.cycleCount.approve',
@@ -4278,6 +4819,32 @@ async function initializeBackgroundServices() {
           }
         } catch (overrideErr: any) {
           console.warn('⚠️ faleeshah override seed skipped:', overrideErr.message);
+        }
+
+        // User-level finance overrides for darleneb.
+        try {
+          const darlenebRows = await pool.query(
+            `SELECT id FROM users WHERE lower(username) = 'darleneb' LIMIT 1`
+          );
+          if (darlenebRows.length > 0) {
+            const darlenebId = darlenebRows[0].id;
+            const darlenebCaps = ['finance.manage_payments'];
+            for (const capKey of darlenebCaps) {
+              await pool.query(
+                `INSERT INTO perm_user_overrides (user_id, capability_id, effect)
+                 SELECT $1, pc.id, 'allow'
+                 FROM perm_capabilities pc
+                 WHERE pc.key = $2
+                 ON CONFLICT (user_id, capability_id) DO UPDATE SET effect = EXCLUDED.effect`,
+                [darlenebId, capKey]
+              );
+            }
+            console.log('✅ Granted finance.manage_payments user-level override to darleneb');
+          } else {
+            console.warn('⚠️ darleneb user not found - finance user-level overrides not seeded');
+          }
+        } catch (overrideErr: any) {
+          console.warn('⚠️ darleneb finance override seed skipped:', overrideErr.message);
         }
 
         console.log('✅ Seeded EPOCH capability keys and assigned to ADMIN/OWNER/FLOOR_OPERATOR/SUPERVISOR/MANAGER/DOCUMENT_MANAGER/HR/VP roles');
@@ -6052,6 +6619,7 @@ async function initializeBackgroundServices() {
       await pool.query(`ALTER TABLE production_work_orders ADD COLUMN IF NOT EXISTS assigned_department TEXT`);
       await pool.query(`ALTER TABLE production_work_orders ADD COLUMN IF NOT EXISTS assigned_dashboard_route TEXT`);
       await pool.query(`ALTER TABLE production_work_orders ADD COLUMN IF NOT EXISTS manufacturing_queue_id INTEGER`);
+      await pool.query(`ALTER TABLE production_work_orders ADD COLUMN IF NOT EXISTS material_budget_amount NUMERIC NOT NULL DEFAULT 0`);
       console.log('✅ Ensured production_work_orders table and WAD spine columns exist');
     } catch (wadErr: any) {
       console.warn('⚠️ production_work_orders migration skipped:', wadErr?.message);

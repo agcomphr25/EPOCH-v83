@@ -6,7 +6,16 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion';
 import {
   Package,
@@ -24,10 +33,13 @@ import {
   ClipboardCheck,
   Zap,
   ExternalLink,
+  Receipt,
+  Ban,
 } from 'lucide-react';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import ShipmentSummaryModal from './ShipmentSummaryModal';
+import P2InvoicePreviewButton from './P2InvoicePreviewButton';
 
 type SerializedUnit = {
   id: string;
@@ -71,7 +83,26 @@ type CreatedShipment = {
   slipNumber: string;
   certId?: string;
   certNumber?: string;
+  invoiceId?: string;
+  invoiceNumber?: string;
+  invoiceStatus?: string;
+  invoiceTotalAmount?: string;
+  journalEntryId?: number;
+  journalEntryStatus?: string;
+  journalLineCount?: number;
 };
+
+function invoiceStatusColor(status?: string) {
+  switch (status?.toUpperCase()) {
+    case 'DRAFT': return 'bg-blue-50 text-blue-700 border-blue-200';
+    case 'REVIEW': return 'bg-orange-50 text-orange-700 border-orange-200';
+    case 'POSTED': return 'bg-indigo-50 text-indigo-700 border-indigo-200';
+    case 'SENT': return 'bg-teal-50 text-teal-700 border-teal-200';
+    case 'PAID': return 'bg-green-50 text-green-800 border-green-200';
+    case 'VOID': return 'bg-gray-50 text-gray-600 border-gray-200';
+    default: return 'bg-gray-50 text-gray-700 border-gray-200';
+  }
+}
 
 export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds = [] }: { initialPO?: string; initialUnits?: string; selectedPOIds?: number[] } = {}) {
   const [, setLocation] = useLocation();
@@ -93,6 +124,9 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
   const [generatingCertFor, setGeneratingCertFor] = useState<string | null>(null);
   const [summaryModalPO, setSummaryModalPO] = useState<string | null>(null);
   const [summaryModalSerials, setSummaryModalSerials] = useState<SerializedUnit[]>([]);
+  const [cocModal, setCocModal] = useState<{ poNumber: string; lotId: string } | null>(null);
+  const [cocSpecialProcesses, setCocSpecialProcesses] = useState('N/A');
+  const [cocShipDate, setCocShipDate] = useState(() => new Date().toISOString().slice(0, 10));
 
   const autoTriggered = useRef(false);
 
@@ -113,6 +147,13 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
     slip_number: string;
     cert_id: string | null;
     cert_number: string | null;
+    invoice_id: string | null;
+    invoice_number: string | null;
+    invoice_status: string | null;
+    invoice_total_amount: string | null;
+    journal_entry_id: number | null;
+    journal_entry_status: string | null;
+    journal_line_count: number | null;
   };
 
   const { data: existingShipmentRows = [] } = useQuery<ExistingShipmentRow[]>({
@@ -147,6 +188,13 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
           slipNumber: row.slip_number,
           certId: row.cert_id ?? undefined,
           certNumber: row.cert_number ?? undefined,
+          invoiceId: row.invoice_id ?? undefined,
+          invoiceNumber: row.invoice_number ?? undefined,
+          invoiceStatus: row.invoice_status ?? undefined,
+          invoiceTotalAmount: row.invoice_total_amount ?? undefined,
+          journalEntryId: row.journal_entry_id ?? undefined,
+          journalEntryStatus: row.journal_entry_status ?? undefined,
+          journalLineCount: row.journal_line_count ?? undefined,
         };
         if (existingIdx === -1) {
           next[poNumber] = [...next[poNumber], serverEntry];
@@ -386,12 +434,21 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
     }
   };
 
-  const handleGenerateCoC = async (poNumber: string, lotId: string) => {
+  const openCoCModal = (poNumber: string, lotId: string) => {
+    setCocModal({ poNumber, lotId });
+    setCocSpecialProcesses('N/A');
+    setCocShipDate(new Date().toISOString().slice(0, 10));
+  };
+
+  const handleGenerateCoC = async () => {
+    if (!cocModal) return;
+    const { poNumber, lotId } = cocModal;
+    const specialProcesses = cocSpecialProcesses.trim() || 'N/A';
     setGeneratingCertFor(lotId);
     try {
       const cert = await apiRequest('/api/p2/certificates', {
         method: 'POST',
-        body: JSON.stringify({ lotId, createdBy: 'shipping' }),
+        body: JSON.stringify({ lotId, createdBy: 'shipping', specialProcesses, shipDate: cocShipDate }),
       });
       setCreatedShipments((prev) => {
         const list = prev[poNumber] ?? [];
@@ -402,12 +459,70 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
           ),
         };
       });
+      setCocModal(null);
       toast({ title: 'CoC Generated', description: `Certificate ${cert.certificateNumber} created.` });
     } catch (err: any) {
       toast({ title: 'CoC Failed', description: err?.message || 'Failed to generate certificate', variant: 'destructive' });
     } finally {
       setGeneratingCertFor(null);
     }
+  };
+
+  const handleInvoiceCreated = (poNumber: string, shipment: CreatedShipment, invoice: any) => {
+    setCreatedShipments((prev) => {
+      const list = prev[poNumber] ?? [];
+      return {
+        ...prev,
+        [poNumber]: list.map((s) =>
+          s.slipId === shipment.slipId
+            ? {
+                ...s,
+                invoiceId: invoice?.id,
+                invoiceNumber: invoice?.invoiceNumber,
+                invoiceStatus: invoice?.status,
+              }
+            : s
+        ),
+      };
+    });
+    queryClient.invalidateQueries({ queryKey: ['/api/p2/lots/existing-shipments'] });
+    queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === '/api/ar-invoices' });
+  };
+
+  const voidShipmentMutation = useMutation({
+    mutationFn: async ({ poNumber, shipment, reason }: { poNumber: string; shipment: CreatedShipment; reason: string }) => {
+      return apiRequest(`/api/p2/shipments/${shipment.lotId}/void`, {
+        method: 'POST',
+        body: { reason },
+      });
+    },
+    onSuccess: (_result, variables) => {
+      setCreatedShipments((prev) => ({
+        ...prev,
+        [variables.poNumber]: (prev[variables.poNumber] ?? []).filter((s) => s.lotId !== variables.shipment.lotId),
+      }));
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/serialized-items/shipping-queue'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/lots/existing-shipments'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/shipments'] });
+      queryClient.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === '/api/ar-invoices' });
+      toast({
+        title: 'Shipment voided',
+        description: `${variables.shipment.lotNumber} was voided. Finalized units are available to regroup.`,
+      });
+    },
+    onError: (err: any) => {
+      toast({
+        title: 'Void failed',
+        description: err?.message || 'Shipment could not be voided.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const handleVoidShipment = (poNumber: string, shipment: CreatedShipment) => {
+    const reason = window.prompt(`Reason for voiding lot ${shipment.lotNumber}? Finalized units will be released for regrouping.`);
+    if (!reason || !reason.trim()) return;
+    voidShipmentMutation.mutate({ poNumber, shipment, reason: reason.trim() });
   };
 
   const summary = useMemo(() => {
@@ -901,7 +1016,7 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
                               size="sm" variant="outline"
                               className="border-blue-300 text-blue-700 hover:bg-blue-50"
                               disabled={generatingCertFor === shipment.lotId}
-                              onClick={() => handleGenerateCoC(group.poNumber, shipment.lotId)}
+                              onClick={() => openCoCModal(group.poNumber, shipment.lotId)}
                             >
                               {generatingCertFor === shipment.lotId ? (
                                 <><Loader2 className="w-3 h-3 mr-1 animate-spin" />Generating...</>
@@ -909,6 +1024,60 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
                                 <><ClipboardCheck className="w-3 h-3 mr-1" />Generate CoC</>
                               )}
                             </Button>
+                          )}
+                          {shipment.invoiceId ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                              onClick={() => setLocation(`/finance/invoices/${shipment.invoiceId}`)}
+                            >
+                              <Receipt className="w-3 h-3 mr-1" />Invoice {shipment.invoiceNumber}
+                            </Button>
+                          ) : (
+                            <P2InvoicePreviewButton
+                              packingSlipId={shipment.slipId}
+                              size="sm"
+                              variant="outline"
+                              className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                              onCreated={(invoice) => handleInvoiceCreated(group.poNumber, shipment, invoice)}
+                            />
+                          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-red-300 text-red-700 hover:bg-red-50"
+                            disabled={voidShipmentMutation.isPending && voidShipmentMutation.variables?.shipment.lotId === shipment.lotId}
+                            onClick={() => handleVoidShipment(group.poNumber, shipment)}
+                          >
+                            {voidShipmentMutation.isPending && voidShipmentMutation.variables?.shipment.lotId === shipment.lotId ? (
+                              <><Loader2 className="w-3 h-3 mr-1 animate-spin" />Voiding...</>
+                            ) : (
+                              <><Ban className="w-3 h-3 mr-1" />Void</>
+                            )}
+                          </Button>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                          {shipment.invoiceId ? (
+                            <>
+                              <Badge variant="outline" className={invoiceStatusColor(shipment.invoiceStatus)}>
+                                Invoice {shipment.invoiceStatus || 'created'}
+                              </Badge>
+                              {shipment.journalEntryId ? (
+                                <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">
+                                  JE #{shipment.journalEntryId} {shipment.journalEntryStatus || 'POSTED'}
+                                  {shipment.journalLineCount ? ` (${shipment.journalLineCount} lines)` : ''}
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+                                  JE pending until invoice is posted
+                                </Badge>
+                              )}
+                            </>
+                          ) : (
+                            <Badge variant="outline" className="bg-gray-50 text-gray-600 border-gray-200">
+                              No invoice created
+                            </Badge>
                           )}
                         </div>
                       </div>
@@ -932,6 +1101,60 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
           })}
         </div>
       )}
+      <Dialog open={!!cocModal} onOpenChange={(open) => !open && setCocModal(null)}>
+        <DialogContent className="sm:max-w-[460px]">
+          <DialogHeader>
+            <DialogTitle>Generate Certificate of Conformance</DialogTitle>
+            <DialogDescription>
+              Confirm the shipping date and any special processes before creating the CoC.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="coc-ship-date">Shipping Date</Label>
+              <Input
+                id="coc-ship-date"
+                type="date"
+                value={cocShipDate}
+                onChange={(event) => setCocShipDate(event.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="coc-special-processes">Special Processes</Label>
+              <Textarea
+                id="coc-special-processes"
+                value={cocSpecialProcesses}
+                onChange={(event) => setCocSpecialProcesses(event.target.value)}
+                placeholder="N/A"
+                rows={3}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setCocModal(null)}
+              disabled={!!cocModal && generatingCertFor === cocModal.lotId}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleGenerateCoC}
+              disabled={!cocShipDate || (!!cocModal && generatingCertFor === cocModal.lotId)}
+            >
+              {!!cocModal && generatingCertFor === cocModal.lotId ? (
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Generating...</>
+              ) : (
+                <><ClipboardCheck className="w-4 h-4 mr-2" />Generate CoC</>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

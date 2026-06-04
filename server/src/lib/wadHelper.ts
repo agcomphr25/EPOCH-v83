@@ -14,6 +14,7 @@ import {
   type QuoteLineItem,
 } from '../../schema';
 import { and, eq, desc, sql } from 'drizzle-orm';
+import { cancelWadWorkOrdersSupersededByP2 } from '../services/wadSupersedeService';
 
 export interface WadSeedData {
   partNumber: string | null;
@@ -84,6 +85,36 @@ export interface EnsureWadResult {
   workOrder: ProductionWorkOrder;
   created: boolean;
   seedData: WadSeedData | null;
+}
+
+const productionWorkOrderReadColumns = {
+  id: productionWorkOrders.id,
+  workOrderNumber: productionWorkOrders.workOrderNumber,
+  projectId: productionWorkOrders.projectId,
+  partNumber: productionWorkOrders.partNumber,
+  description: productionWorkOrders.description,
+  quantity: productionWorkOrders.quantity,
+  status: productionWorkOrders.status,
+  departmentBudgets: productionWorkOrders.departmentBudgets,
+  totalBudgetHours: productionWorkOrders.totalBudgetHours,
+  startDate: productionWorkOrders.startDate,
+  dueDate: productionWorkOrders.dueDate,
+  warningThreshold: productionWorkOrders.warningThreshold,
+  blockedThreshold: productionWorkOrders.blockedThreshold,
+  defaultChargeCodeId: productionWorkOrders.defaultChargeCodeId,
+  dashboardType: productionWorkOrders.dashboardType,
+  queueType: productionWorkOrders.queueType,
+  assignedDepartment: productionWorkOrders.assignedDepartment,
+  assignedDashboardRoute: productionWorkOrders.assignedDashboardRoute,
+  manufacturingQueueId: productionWorkOrders.manufacturingQueueId,
+  wadStatus: productionWorkOrders.wadStatus,
+  wizardData: productionWorkOrders.wizardData,
+  createdAt: productionWorkOrders.createdAt,
+  updatedAt: productionWorkOrders.updatedAt,
+};
+
+function withDefaultMaterialBudgetAmount(row: Record<string, unknown>): ProductionWorkOrder {
+  return { ...row, materialBudgetAmount: '0' } as ProductionWorkOrder;
 }
 
 /**
@@ -194,14 +225,14 @@ export async function ensureProjectHasWADFromCanonicalSources(
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${projectId}))`);
 
     const existingRows = await tx
-      .select()
+      .select(productionWorkOrderReadColumns)
       .from(productionWorkOrders)
       .where(eq(productionWorkOrders.projectId, projectId))
       .orderBy(desc(productionWorkOrders.createdAt));
     if (existingRows.length > 0) {
       const target =
         existingRows.find((w) => w.wadStatus !== 'APPROVED') ?? existingRows[0];
-      return { workOrder: target, created: false, seedData: null };
+      return { workOrder: withDefaultMaterialBudgetAmount(target), created: false, seedData: null };
     }
 
     const [project] = await tx.select().from(projects).where(eq(projects.id, projectId)).limit(1);
@@ -342,6 +373,15 @@ export async function ensureProjectHasWADFromCanonicalSources(
       dueDate,
       totalBudgetHours: seedData.totalBudgetHours,
       ...(seedData.departmentBudgets ? { departmentBudgets: seedData.departmentBudgets } : {}),
+    });
+
+    // Task #258: if a P2 PO is already linked to this project and covers this
+    // part number, the WAD we just generated is redundant. Cancel it
+    // inside the same tx so it never appears as PLANNED on the PM Control
+    // Center. Errors propagate so the WAD insert + supersede are atomic.
+    await cancelWadWorkOrdersSupersededByP2(projectId, {
+      tx,
+      sourceService: 'wadHelper.ensureProjectHasWADFromCanonicalSources',
     });
 
     return { workOrder: wo, created: true, seedData };

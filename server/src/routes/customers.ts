@@ -4,12 +4,13 @@ import {
   insertCustomerAddressSchema,
   insertCommunicationLogSchema,
   insertP2CustomerSchema,
+  insertCustomerContactSchema,
 } from '@shared/schema';
 import { requireExecutiveAccess } from '../middleware/requireExecutiveAccess';
 
 import { storage } from '../../storage';
 import { pool, db } from '../../db';
-import { p2LayupSchedules, p2SerializedItems, insertP2PurchaseOrderSchema } from '../../schema';
+import { customerContacts, p2LayupSchedules, p2SerializedItems, insertP2PurchaseOrderSchema } from '../../schema';
 import { eq, and, inArray, or } from 'drizzle-orm';
 import { uploadMiddleware } from '../../utils/fileUpload';
 import path from 'path';
@@ -20,6 +21,55 @@ import { softAuth } from '../../middleware/auth';
 import { z } from 'zod';
 
 const router = Router();
+
+const customerContactUpdateSchema = z.object({
+  name: z.string().trim().min(1, 'Contact name is required').optional(),
+  title: z.string().nullable().optional(),
+  email: z
+    .string()
+    .nullable()
+    .optional()
+    .transform((val) => (val === '' ? null : val))
+    .refine(
+      (email) => !email || z.string().email().safeParse(email).success,
+      { message: 'Invalid email format' }
+    ),
+  phone: z.string().nullable().optional(),
+  isPrimary: z.boolean().optional(),
+  receivesInvoices: z.boolean().optional(),
+  receivesShippingNotifications: z.boolean().optional(),
+  receivesOrderConfirmations: z.boolean().optional(),
+  notes: z.string().nullable().optional(),
+  active: z.boolean().optional(),
+});
+
+function parsePositiveInt(value: string): number | null {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function sendCustomerContactDatabaseError(res: Response, error: unknown, action: string): boolean {
+  const dbError = error as { code?: string; message?: string };
+
+  if (dbError.code === '42P01') {
+    res.status(503).json({
+      error: 'Customer contacts are not available yet. Run the latest database migrations, then try again.',
+      detail: 'Missing customer_contacts table',
+    });
+    return true;
+  }
+
+  if (dbError.code === '23503') {
+    res.status(404).json({ error: 'Customer not found for this contact' });
+    return true;
+  }
+
+  console.error(`${action} customer contact database error:`, {
+    code: dbError.code,
+    message: dbError.message,
+  });
+  return false;
+}
 
 // P2 Customers Management - Bypass route (must be before parameterized routes)
 // SECURITY: softAuth enforces authentication in production
@@ -973,6 +1023,126 @@ router.get('/rfq-assessments/:id/pdf', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Generate RFQ PDF error:', error);
     res.status(500).json({ error: 'Failed to generate PDF' });
+  }
+});
+
+router.get('/:id/contacts', softAuth, async (req: Request, res: Response) => {
+  try {
+    const customerId = parsePositiveInt(req.params.id);
+    if (!customerId) {
+      return res.status(400).json({ error: 'Invalid customer ID' });
+    }
+
+    const contacts = await db
+      .select()
+      .from(customerContacts)
+      .where(eq(customerContacts.customerId, customerId))
+      .orderBy(customerContacts.name);
+
+    res.json(contacts);
+  } catch (error) {
+    console.error('Get customer contacts error:', error);
+    if (sendCustomerContactDatabaseError(res, error, 'Get')) return;
+    res.status(500).json({ error: 'Failed to fetch customer contacts' });
+  }
+});
+
+router.post('/:id/contacts', softAuth, async (req: Request, res: Response) => {
+  try {
+    const customerId = parsePositiveInt(req.params.id);
+    if (!customerId) {
+      return res.status(400).json({ error: 'Invalid customer ID' });
+    }
+
+    const contactData = insertCustomerContactSchema.parse({
+      ...req.body,
+      customerId,
+    });
+
+    const [contact] = await db.transaction(async (tx) => {
+      if (contactData.isPrimary) {
+        await tx
+          .update(customerContacts)
+          .set({ isPrimary: false, updatedAt: new Date() })
+          .where(eq(customerContacts.customerId, customerId));
+      }
+
+      return tx.insert(customerContacts).values(contactData).returning();
+    });
+
+    res.status(201).json(contact);
+  } catch (error) {
+    console.error('Create customer contact error:', error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: error.errors[0]?.message || 'Invalid contact data', issues: error.errors });
+    }
+    if (sendCustomerContactDatabaseError(res, error, 'Create')) return;
+    res.status(500).json({ error: 'Failed to create customer contact' });
+  }
+});
+
+router.put('/:id/contacts/:contactId', softAuth, async (req: Request, res: Response) => {
+  try {
+    const customerId = parsePositiveInt(req.params.id);
+    const contactId = parsePositiveInt(req.params.contactId);
+    if (!customerId || !contactId) {
+      return res.status(400).json({ error: 'Invalid customer contact ID' });
+    }
+
+    const updates = customerContactUpdateSchema.parse(req.body);
+
+    const [contact] = await db.transaction(async (tx) => {
+      if (updates.isPrimary) {
+        await tx
+          .update(customerContacts)
+          .set({ isPrimary: false, updatedAt: new Date() })
+          .where(eq(customerContacts.customerId, customerId));
+      }
+
+      return tx
+        .update(customerContacts)
+        .set({ ...updates, updatedAt: new Date() })
+        .where(and(eq(customerContacts.id, contactId), eq(customerContacts.customerId, customerId)))
+        .returning();
+    });
+
+    if (!contact) {
+      return res.status(404).json({ error: 'Customer contact not found' });
+    }
+
+    res.json(contact);
+  } catch (error) {
+    console.error('Update customer contact error:', error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: error.errors[0]?.message || 'Invalid contact data', issues: error.errors });
+    }
+    if (sendCustomerContactDatabaseError(res, error, 'Update')) return;
+    res.status(500).json({ error: 'Failed to update customer contact' });
+  }
+});
+
+router.delete('/:id/contacts/:contactId', softAuth, async (req: Request, res: Response) => {
+  try {
+    const customerId = parsePositiveInt(req.params.id);
+    const contactId = parsePositiveInt(req.params.contactId);
+    if (!customerId || !contactId) {
+      return res.status(400).json({ error: 'Invalid customer contact ID' });
+    }
+
+    const [deleted] = await db
+      .delete(customerContacts)
+      .where(and(eq(customerContacts.id, contactId), eq(customerContacts.customerId, customerId)))
+      .returning({ id: customerContacts.id });
+
+    if (!deleted) {
+      return res.status(404).json({ error: 'Customer contact not found' });
+    }
+
+    res.status(204).end();
+  } catch (error) {
+    console.error('Delete customer contact error:', error);
+    if (sendCustomerContactDatabaseError(res, error, 'Delete')) return;
+    res.status(500).json({ error: 'Failed to delete customer contact' });
   }
 });
 

@@ -24,8 +24,6 @@ import * as ledger from '../lib/punchLedger';
 import type { PunchLedgerEntry } from '../lib/punchLedger';
 import { resolveChargeCode, deriveProjectId, resolveBudgetOverrunState, resolveCertificationStatus } from '../lib/resolveChargeCode';
 import { checkActivePTOForEmployee } from '../services/timekeeping/timeoff.service';
-import { laborAllocationsEnabled } from '../lib/featureFlags';
-import * as allocationService from '../services/laborAllocationService';
 
 function laborBudgetConsumptionLabel(laborStatus: WorkOrderLaborStatusResult): string {
   const deptPct = laborStatus.departmentPercentUsed;
@@ -80,7 +78,8 @@ async function validateActiveChargeCode(
 
 interface JobSwitchResult {
   entry: PunchLedgerEntry;
-  chargeContext: ChargeContext;
+  closedEntry?: PunchLedgerEntry | null;
+  chargeContext: ChargeContext & { resolvedChargeCode?: string | null };
   warning?: string;
   laborStatus?: WorkOrderLaborStatusResult;
 }
@@ -94,7 +93,7 @@ interface JobSwitchResult {
  *   2. Resolve string employeeId to public.employees.id (integer).
  *   3. Get open punch_ledger session (must exist for a switch).
  *   4. Run budget enforcement (BLOCKED / WARNING / override / approval).
- *   5. switchPunchLedgerAssignment — UPDATE the existing session IN PLACE (no close+reopen).
+ *   5. Close the current session and open a new TRAVELER session at the same timestamp.
  *   6. Consume any approved budget override.
  *   7. Write JOB_SWITCH audit event.
  */
@@ -104,16 +103,6 @@ async function executeJobSwitch(params: {
   parsedApprovalId: number | null;
 }): Promise<{ ok: true; result: JobSwitchResult } | { ok: false; status: number; body: Record<string, unknown> }> {
   const { employeeId, context, parsedApprovalId } = params;
-
-  // 1. Reject inactive charge codes before touching any session
-  const chargeValidation = await validateActiveChargeCode(context.chargeCode);
-  if (!chargeValidation.valid) {
-    return {
-      ok: false,
-      status: 422,
-      body: { error: chargeValidation.errorCode, message: chargeValidation.error },
-    };
-  }
 
   // 2. Resolve string employeeId to public.employees.id (integer) for punch_ledger FK
   const canonicalStr = await resolveCanonicalEmployeeId(employeeId);
@@ -128,24 +117,6 @@ async function executeJobSwitch(params: {
 
   // 3. Require an open punch_ledger session for the switch
   const currentOpenEntry = await storage.getOpenPunchLedgerEntry(numericEmployeeId);
-
-  // Duplicate-session guard: reject a switch to the same traveler/charge code already active
-  if (
-    currentOpenEntry &&
-    currentOpenEntry.travelerId != null &&
-    currentOpenEntry.travelerId === context.travelerId &&
-    currentOpenEntry.chargeCode === context.chargeCode
-  ) {
-    return {
-      ok: false,
-      status: 409,
-      body: {
-        error: 'DUPLICATE_SESSION',
-        message: `Employee is already clocked in against this traveler and charge code (entry #${currentOpenEntry.id}). No switch needed.`,
-        currentEntryId: currentOpenEntry.id,
-      },
-    };
-  }
 
   if (!currentOpenEntry) {
     return {
@@ -217,6 +188,7 @@ async function executeJobSwitch(params: {
   // Fail-closed: if WAD is linked and resolution fails, abort the switch — never proceed
   // with a null charge code for traveler-driven sessions against a known WAD.
   let resolvedChargeCodeId: number | null = null;
+  let resolvedChargeCode: string | null = null;
   const jobSwitchCcResult = await resolveChargeCode({
     productionWorkOrderId: context.wadId ?? null,
     travelerId: context.travelerId ?? null,
@@ -225,6 +197,7 @@ async function executeJobSwitch(params: {
   });
   if (!('error' in jobSwitchCcResult)) {
     resolvedChargeCodeId = jobSwitchCcResult.chargeCodeId;
+    resolvedChargeCode = jobSwitchCcResult.chargeCode;
   } else if (context.wadId) {
     // WAD is linked but no charge code could be resolved — block the switch
     return {
@@ -239,6 +212,37 @@ async function executeJobSwitch(params: {
   }
   // If no wadId at all, proceed with null chargeCodeId
 
+  const sessionChargeCode = resolvedChargeCode ?? context.chargeCode ?? null;
+  const chargeValidation = await validateActiveChargeCode(sessionChargeCode);
+  if (!chargeValidation.valid) {
+    return {
+      ok: false,
+      status: 422,
+      body: { error: chargeValidation.errorCode, message: chargeValidation.error },
+    };
+  }
+
+  // Duplicate-session guard: reject a switch to the same traveler/charge code already active.
+  // Compare against the resolved WAD charge-code identity, not the barcode context's
+  // derived WAD/work-order number.
+  const sameTraveler =
+    currentOpenEntry.travelerId != null &&
+    currentOpenEntry.travelerId === context.travelerId;
+  const sameChargeCode =
+    resolvedChargeCodeId != null && currentOpenEntry.chargeCodeId != null
+      ? currentOpenEntry.chargeCodeId === resolvedChargeCodeId
+      : currentOpenEntry.chargeCode === sessionChargeCode;
+  if (sameTraveler && sameChargeCode && currentOpenEntry.laborClass !== 'BREAK') {
+    return {
+      ok: true,
+      result: {
+        entry: currentOpenEntry,
+        closedEntry: null,
+        chargeContext: { ...context, resolvedChargeCode: sessionChargeCode },
+      },
+    };
+  }
+
   const [jobSwitchProjectId, jobSwitchBudget, jobSwitchCertResult] = await Promise.all([
     deriveProjectId(context.wadId ?? null),
     resolveBudgetOverrunState({ productionWorkOrderId: context.wadId ?? null, department: context.department ?? null }),
@@ -251,64 +255,41 @@ async function executeJobSwitch(params: {
       : Promise.resolve(null),
   ]);
 
-  // 6. Update punch_ledger IN PLACE — no close+reopen
-  const updatedEntry = await storage.switchPunchLedgerAssignment({
-    entryId: currentOpenEntry.id,
+  const switchBoundary = new Date();
+  const approvalStatus = switchApprovalId != null || switchOverrideId != null ? 'APPROVED_OVERRUN' : 'PENDING_APPROVAL';
+  const closedEntry = await ledger.closeSessionById(currentOpenEntry.id, numericEmployeeId, null, switchBoundary);
+
+  if (!closedEntry) {
+    return { ok: false, status: 500, body: { error: 'SWITCH_FAILED', message: 'Failed to close current labor session' } };
+  }
+
+  const newEntry = await ledger.openSession({
+    employeeId: numericEmployeeId,
+    source: 'TRAVELER',
+    laborClass: 'REGULAR',
+    clockIn: switchBoundary,
     travelerId: context.travelerId ?? null,
     productionWorkOrderId: context.wadId ?? null,
     chargeCodeId: resolvedChargeCodeId,
     department: context.department ?? null,
     operation: context.operation ?? null,
-    // Per Architecture Constitution §5.2 (Task #77): TRAVELER-source punches
-    // default to PENDING_APPROVAL; APPROVED_OVERRUN is only valid when a
-    // pre-approved override or labor approval id is supplied.
-    approvalStatus: switchApprovalId != null || switchOverrideId != null ? 'APPROVED_OVERRUN' : 'PENDING_APPROVAL',
+    projectId: jobSwitchProjectId,
+    travelerStepId: activeStepForSwitch?.id ?? null,
+    certificationStatus: jobSwitchCertResult?.status ?? null,
+    isOverrun: jobSwitchBudget.isOverrun,
+    overrunReason: jobSwitchBudget.overrunReason,
+    approvalStatus,
     laborApprovalId: switchApprovalId,
     laborBudgetOverrideId: switchOverrideId,
-    updatedBy: numericEmployeeId,
+    createdBy: numericEmployeeId,
   });
-
-  // 6b. Stamp WAD traceability fields on the switched entry (Task #1235)
-  // Includes travelerStepId + certificationStatus for full per-session traceability.
-  if (updatedEntry) {
-    try {
-      await storage.updatePunchLedgerEntry(updatedEntry.id, {
-        projectId: jobSwitchProjectId,
-        travelerStepId: activeStepForSwitch?.id ?? null,
-        certificationStatus: jobSwitchCertResult?.status ?? null,
-        isOverrun: jobSwitchBudget.isOverrun,
-        overrunReason: jobSwitchBudget.overrunReason,
-      });
-    } catch (traceErr: any) {
-      console.warn('[JobSwitch] Non-fatal error stamping WAD traceability on switched entry:', traceErr?.message);
-    }
-  }
-
-  // 6c. Phase D: close current allocation segment and open a new one for the new assignment.
-  if (updatedEntry && laborAllocationsEnabled) {
-    allocationService.switchAllocation(updatedEntry, {
-      chargeCodeId: resolvedChargeCodeId,
-      travelerId: context.travelerId ?? null,
-      travelerStepId: activeStepForSwitch?.id ?? null,
-      productionWorkOrderId: context.wadId ?? null,
-      projectId: jobSwitchProjectId ?? null,
-      department: context.department ?? null,
-      operation: context.operation ?? null,
-    }).catch((allocErr: unknown) =>
-      console.warn('[timeClock/executeJobSwitch] switchAllocation failed (non-fatal):', (allocErr as Error)?.message)
-    );
-  }
-
-  if (!updatedEntry) {
-    return { ok: false, status: 500, body: { error: 'SWITCH_FAILED', message: 'Failed to switch labor assignment' } };
-  }
 
   // 6. Consume the override only after a successful switch
   if (switchOverrideId != null) {
     await storage.consumeLaborBudgetOverride(switchOverrideId);
   }
 
-  // 7. Audit event — single JOB_SWITCH event (no separate close+open since session persists)
+  // 7. Audit event for the automatic close+open traveler switch.
   if (context.travelerId) {
     try {
       await storage.createTravelerEvent({
@@ -317,12 +298,15 @@ async function executeJobSwitch(params: {
         actorName: null,
         action: 'JOB_SWITCH',
         details: {
-          entryId: updatedEntry.id,
+          closedEntryId: closedEntry.id,
+          newEntryId: newEntry.id,
           previousTravelerId: currentOpenEntry.travelerId ?? null,
           previousChargeCode: currentOpenEntry.chargeCode ?? null,
+          previousSource: currentOpenEntry.source ?? null,
+          previousLaborClass: currentOpenEntry.laborClass ?? null,
           newTravelerId: context.travelerId,
-          newChargeCode: context.chargeCode,
-          timestamp: new Date().toISOString(),
+          newChargeCode: sessionChargeCode,
+          timestamp: switchBoundary.toISOString(),
           source: 'punch_ledger',
         },
       });
@@ -335,19 +319,24 @@ async function executeJobSwitch(params: {
   try {
     await db.insert(laborEntryAuditTable).values({
       tableName: 'punch_ledger',
-      recordId: updatedEntry.id,
+      recordId: newEntry.id,
       action: 'JOB_SWITCH',
       oldValues: {
+        entryId: currentOpenEntry.id,
         travelerId: currentOpenEntry.travelerId ?? null,
         chargeCode: currentOpenEntry.chargeCode ?? null,
         productionWorkOrderId: currentOpenEntry.productionWorkOrderId ?? null,
+        source: currentOpenEntry.source ?? null,
+        laborClass: currentOpenEntry.laborClass ?? null,
+        closedAt: switchBoundary.toISOString(),
       },
       newValues: {
+        entryId: newEntry.id,
         travelerId: context.travelerId ?? null,
-        chargeCode: context.chargeCode ?? null,
+        chargeCode: sessionChargeCode,
         productionWorkOrderId: context.wadId ?? null,
         editReason: 'job switch via traveler scan',
-        timestamp: new Date().toISOString(),
+        timestamp: switchBoundary.toISOString(),
       },
       actorId: numericEmployeeId,
       actorEmail: null,
@@ -358,7 +347,11 @@ async function executeJobSwitch(params: {
     console.error('[TimeClock] Failed to write JOB_SWITCH DCAA audit entry:', dcaaAuditErr);
   }
 
-  const result: JobSwitchResult = { entry: updatedEntry, chargeContext: context };
+  const result: JobSwitchResult = {
+    entry: newEntry,
+    closedEntry,
+    chargeContext: { ...context, resolvedChargeCode: sessionChargeCode },
+  };
   if (warningMessage) result.warning = warningMessage;
   if (laborStatusForResponse) result.laborStatus = laborStatusForResponse;
 
@@ -369,7 +362,7 @@ async function executeJobSwitch(params: {
  * Result type for executeTravelerAutoPunch.
  * `action` describes the punch_ledger transition that was performed:
  *   - 'clockedIn' — no open session existed; a new one was opened
- *   - 'switched'  — open session existed on a different traveler/charge code; updated in place
+ *   - 'switched'  — open session existed on a different traveler/charge code; closed+reopened as a new segment
  *   - 'unchanged' — open session was already on this traveler+chargeCode; no-op
  */
 export type TravelerAutoPunchAction = 'clockedIn' | 'switched' | 'unchanged';
@@ -379,6 +372,7 @@ export type TravelerAutoPunchResult =
       ok: true;
       action: TravelerAutoPunchAction;
       entry: PunchLedgerEntry | null;
+      closedEntry?: PunchLedgerEntry | null;
       chargeContext: ChargeContext & { resolvedChargeCode?: string | null };
       warning?: string;
       laborStatus?: WorkOrderLaborStatusResult;
@@ -625,7 +619,7 @@ async function executeTravelerClockIn(params: {
  * code:
  *   - no open session   → run `executeTravelerClockIn` (clock in fresh)
  *   - open same job     → no-op, return action='unchanged'
- *   - open different    → call `executeJobSwitch` (in-place switch)
+ *   - open different    → call `executeJobSwitch` (close current + open traveler segment)
  *
  * Reused by the kiosk barcode clock-in route AND the P2 Traveler start-task
  * route so both paths apply identical gates (WAD release, material readiness,
@@ -733,7 +727,7 @@ export async function executeTravelerAutoPunch(params: {
           ? openEntry.chargeCodeId === resolvedCompareChargeCodeId
           : openEntry.chargeCode === resolvedCompareChargeCode;
 
-      if (sameTraveler && sameChargeCode) {
+      if (sameTraveler && sameChargeCode && openEntry.laborClass !== 'BREAK') {
         return {
           ok: true,
           action: 'unchanged',
@@ -756,6 +750,7 @@ export async function executeTravelerAutoPunch(params: {
       ok: true,
       action: 'switched',
       entry: switchResult.result.entry,
+      closedEntry: switchResult.result.closedEntry ?? null,
       chargeContext: {
         ...switchResult.result.chargeContext,
         resolvedChargeCode: switchResult.result.entry.chargeCode ?? null,
@@ -1669,6 +1664,8 @@ export function registerTimeClockRoutes(app: Express) {
       if (autoPunch.action === 'switched') {
         return res.status(201).json({
           switched: true,
+          closed: autoPunch.closedEntry ?? null,
+          created: autoPunch.entry,
           entry: autoPunch.entry,
           chargeContext: autoPunch.chargeContext,
           warning: autoPunch.warning,

@@ -41,6 +41,28 @@ export async function ensureP2PurchaseOrderReadSchema(): Promise<void> {
               ADD COLUMN IF NOT EXISTS scrapped_item_count integer NOT NULL DEFAULT 0,
               ADD COLUMN IF NOT EXISTS scrap_rate_percent real NOT NULL DEFAULT 0;
           END IF;
+
+          IF to_regclass('public.p2_serialized_items') IS NOT NULL THEN
+            ALTER TABLE public.p2_serialized_items
+              ADD COLUMN IF NOT EXISTS build_family_key text,
+              ADD COLUMN IF NOT EXISTS part_routing_id varchar(255),
+              ADD COLUMN IF NOT EXISTS part_routing_revision integer,
+              ADD COLUMN IF NOT EXISTS sku text,
+              ADD COLUMN IF NOT EXISTS drawing_name text,
+              ADD COLUMN IF NOT EXISTS customer_serial_number text,
+              ADD COLUMN IF NOT EXISTS customer_serial_assigned_at timestamp,
+              ADD COLUMN IF NOT EXISTS customer_serial_assigned_by text,
+              ADD COLUMN IF NOT EXISTS finalized_at timestamp,
+              ADD COLUMN IF NOT EXISTS finalized_by text,
+              ADD COLUMN IF NOT EXISTS hold_reason text,
+              ADD COLUMN IF NOT EXISTS hold_by text,
+              ADD COLUMN IF NOT EXISTS hold_at timestamp,
+              ADD COLUMN IF NOT EXISTS scrap_reason text,
+              ADD COLUMN IF NOT EXISTS scrap_by text,
+              ADD COLUMN IF NOT EXISTS scrap_at timestamp,
+              ADD COLUMN IF NOT EXISTS notes text,
+              ADD COLUMN IF NOT EXISTS barcode_printed_at timestamp;
+          END IF;
         END $$;
       `);
     } finally {

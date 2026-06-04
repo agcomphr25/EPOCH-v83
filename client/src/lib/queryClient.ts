@@ -76,6 +76,14 @@ function isServerStartingResponse(status: number, body: any, message: string): b
   );
 }
 
+function normalizeApiErrorMessage(message: string): string {
+  if (message.toLowerCase().includes('error code undefined')) {
+    return 'File storage is not available. Check the storage provider configuration and try again.';
+  }
+
+  return message;
+}
+
 // ─── Session expiry handler ───────────────────────────────────────────────────
 // Called when a 401/403 is confirmed to be a genuine session expiry.
 // Shows a toast and redirects to /login after a brief delay.
@@ -90,6 +98,7 @@ const KIOSK_ROUTES = [
   '/p2-traveler',
   '/p2-traveler-viewer',
   '/traveler',
+  '/travelers',
   '/production/timers',
   '/badge-scan',
 ];
@@ -97,6 +106,10 @@ const KIOSK_ROUTES = [
 function isKioskRoute(): boolean {
   const path = window.location.pathname;
   return KIOSK_ROUTES.some(r => path === r || path.startsWith(r + '/'));
+}
+
+function isLoginRoute(): boolean {
+  return window.location.pathname === '/login';
 }
 
 function isLocalDevelopmentHost(): boolean {
@@ -111,6 +124,15 @@ function handleSessionExpiry(reason: 'expired' | 'unauthorized' = 'expired') {
   // Clear stored tokens regardless of page type
   localStorage.removeItem('sessionToken');
   localStorage.removeItem('jwtToken');
+
+  // If a background request discovers stale auth while the user is already on
+  // the login screen, clean up quietly instead of showing an access-denied
+  // toast and reloading the page they are trying to use.
+  if (isLoginRoute()) {
+    console.warn(`[AUTH] Session ${reason} on login page - tokens cleared, no toast`);
+    sessionExpiryNotified = false;
+    return;
+  }
 
   // On kiosk/floor pages: silently drop the expired session without
   // redirecting — the badge scan flow still works without a session.
@@ -130,9 +152,10 @@ function handleSessionExpiry(reason: 'expired' | 'unauthorized' = 'expired') {
   // Redirect after a brief pause so the toast is visible
   setTimeout(() => {
     sessionExpiryNotified = false;
-    const current = window.location.pathname + window.location.search;
+    const currentPath = window.location.pathname;
+    const current = currentPath + window.location.search;
     const loginUrl =
-      current && current !== '/' && current !== '/login'
+      currentPath !== '/' && currentPath !== '/login'
         ? `/login?redirect=${encodeURIComponent(current)}`
         : '/login';
     window.location.href = loginUrl;
@@ -282,9 +305,11 @@ export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
         // Not JSON
       }
       
-      const errorMessage =
+      const errorMessage = normalizeApiErrorMessage(
         data?.message ||
         data?.error ||
+        (typeof data?.details === 'string' ? data.details : null) ||
+        (typeof data?.reason === 'string' ? data.reason : null) ||
         (Array.isArray(data?.details)
           ? data.details.map((i: any) => `${(i.path || []).join(".")}: ${i.message}`).join(", ")
           : null) ||
@@ -292,7 +317,8 @@ export async function apiRequest(url: string, options: ApiRequestOptions = {}) {
           ? data.issues.map((i: any) => `${(i.path || []).join(".")}: ${i.message}`).join(", ")
           : null) ||
         text ||
-        `Request failed (${response.status})`;
+        `Request failed (${response.status})`
+      );
 
       if (
         isServerStartingResponse(response.status, data, errorMessage) &&

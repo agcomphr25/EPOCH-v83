@@ -24,7 +24,6 @@ import {
   ChevronRight,
   Zap,
   Printer,
-  MessageSquare,
 } from 'lucide-react';
 import { ReturnsRepairsSection } from '@/components/ReturnsRepairsSection';
 import { Button } from '@/components/ui/button';
@@ -48,6 +47,7 @@ import { SalesOrderModal } from '@/components/SalesOrderModal';
 import { ShipmentDialog } from '@/components/ShipmentDialog';
 import TicketBadge, { useOrderTicketCounts } from '@/components/TicketBadge';
 import OrderActionButtons from '@/components/OrderActionButtons';
+import DepartmentOrderNotes from '@/components/DepartmentOrderNotes';
 
 export default function QCShippingQueuePage() {
   // State for tab selection
@@ -1128,18 +1128,9 @@ export default function QCShippingQueuePage() {
           ))}
         </div>
 
-        {/* Show Notes Badge if order has notes */}
-        {order.notes && (
-          <div className="mb-2">
-            <Badge
-              className="bg-blue-600 hover:bg-blue-700 text-white text-xs flex items-center gap-1"
-              title={order.notes}
-            >
-              <MessageSquare className="w-3 h-3" />
-              Has Notes
-            </Badge>
-          </div>
-        )}
+        <div className="mb-2">
+          <DepartmentOrderNotes notes={order.notes} departmentNotes={(order as any).departmentNotes} currentDepartment={order.currentDepartment} />
+        </div>
 
         {/* Action Buttons */}
         <div className="mb-2">

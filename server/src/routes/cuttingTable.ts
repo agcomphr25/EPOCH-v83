@@ -3855,15 +3855,18 @@ router.put('/inventory-audit/settings', async (req, res) => {
 router.get('/inventory-audit/packets', async (req, res) => {
   try {
     const allItems = await storage.getAllInventoryItems();
-    const packets = allItems.filter((item: any) => item.isPacket === true);
+    const packets = allItems.filter((item: any) =>
+      item.isPacket === true || item.manufacturedCategory === 'PACKET'
+    );
     const result = await Promise.all(
       packets.map(async (p) => {
         const latest = await storage.getLatestAuditRecordByPacket(p.id);
+        const systemQty = Number((p as any).onHand ?? (p as any).quantityInStock ?? (p as any).available ?? 0);
         return {
           id: p.id,
           agPartNumber: p.agPartNumber,
           name: p.name,
-          systemQty: p.onHand ?? p.quantityInStock ?? 0,
+          systemQty: Number.isFinite(systemQty) ? systemQty : 0,
           lastAuditRecord: latest ?? null,
         };
       })
@@ -3887,14 +3890,17 @@ router.post('/inventory-audit/submit', async (req, res) => {
     }
 
     const allItems = await storage.getAllInventoryItems();
-    const packets = allItems.filter((item: any) => item.isPacket === true);
+    const packets = allItems.filter((item: any) =>
+      item.isPacket === true || item.manufacturedCategory === 'PACKET'
+    );
     const packetMap = new Map(packets.map((p) => [p.id, p]));
 
     const records = [];
     for (const entry of entries) {
       const packet = packetMap.get(entry.packetId);
       if (!packet) continue;
-      const systemQty = (packet as any).onHand ?? (packet as any).quantityInStock ?? 0;
+      const rawSystemQty = (packet as any).onHand ?? (packet as any).quantityInStock ?? (packet as any).available ?? 0;
+      const systemQty = Number.isFinite(Number(rawSystemQty)) ? Number(rawSystemQty) : 0;
       const variance = entry.actualQty - systemQty;
       const record = await storage.createInventoryAuditRecord({
         packetId: entry.packetId,

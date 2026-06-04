@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation, Link } from 'wouter';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
+import { Input } from '@/components/ui/input';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -17,6 +18,9 @@ import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
 } from '@/components/ui/sheet';
 import {
+  Accordion, AccordionContent, AccordionItem, AccordionTrigger,
+} from '@/components/ui/accordion';
+import {
   Switch,
 } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -24,21 +28,13 @@ import {
   CheckCircle, Clock, AlertCircle, Package, TrendingUp, Calendar,
   Briefcase, Users, ShieldCheck, ShieldAlert, ShieldOff, HelpCircle,
   ChevronUp, ChevronDown, ArrowUpDown, LayoutDashboard, XCircle, Filter,
+  Plus,
 } from 'lucide-react';
-import { format, differenceInDays, differenceInBusinessDays, parseISO } from 'date-fns';
+import { format, differenceInBusinessDays, parseISO } from 'date-fns';
+import { apiRequest } from '@/lib/queryClient';
 
 async function safeFetch<T>(url: string): Promise<T> {
-  const res = await fetch(url);
-  if (!res.ok) {
-    let message = res.statusText;
-    try {
-      const body = await res.json();
-      if (body.error) message = body.error;
-      else if (body.message) message = body.message;
-    } catch {}
-    throw new Error(`${res.status}: ${message}`);
-  }
-  return res.json();
+  return apiRequest(url) as Promise<T>;
 }
 
 function QueryErrorBanner({ message }: { message?: string }) {
@@ -132,6 +128,13 @@ interface WorkOrderRow {
   replacementSerialNumbers?: string | null;
   daysScheduleVariance: number | null;
   blockReason: string | null;
+  linkedWadId?: string | null;
+  linkedWadNumber?: string | null;
+  linkedWadStatus?: string | null;
+  linkedWadWorkOrderStatus?: string | null;
+  productionConnectionStatus?: 'CONNECTED' | 'WAD_MISSING' | 'WAD_NOT_MATCHED' | 'WAD_INCOMPLETE' | 'TRAVELER_NOT_ACTIVE' | string | null;
+  productionConnectionLabel?: string | null;
+  productionConnectionDetail?: string | null;
 }
 
 interface WorkOrderDetail {
@@ -162,6 +165,121 @@ interface WorkOrderDetail {
     startedAt: string;
     elapsedMinutes: number;
   }[];
+}
+
+interface P2PoStatusSummary {
+  id: number;
+  poNumber: string;
+  customerName: string | null;
+  dueDate: string | null;
+  totalItems: number;
+  completedItems: number;
+  scheduledItems?: number;
+  inProductionItems: number;
+  scrappedItems?: number;
+  pendingItems: number;
+  rawStatus: string;
+  status: 'pending' | 'scheduled' | 'in_progress' | 'completed';
+}
+
+interface P2NcrMetrics {
+  totalSerializedItems: number;
+  openNcrCount: number;
+  finalScrapCount: number;
+  finalScrapRatePercent: number;
+}
+
+interface ProductionResponse {
+  rows: WorkOrderRow[];
+  linkedP2Production?: WorkOrderRow[];
+  linkedP2PoCount: number;
+  linkedP2PoStatuses: P2PoStatusSummary[];
+  p2NcrMetrics?: P2NcrMetrics;
+}
+
+interface P2SerializedBreakdownItem {
+  id: string;
+  poId: number;
+  poNumber: string | null;
+  poItemId: number | null;
+  serialNumber: string | null;
+  barcode: string | null;
+  travelerBarcode: string | null;
+  partNumber: string | null;
+  partName: string | null;
+  status: string;
+  currentDepartment: string | null;
+  currentStageIndex: number | null;
+  activeTravelerId: string | null;
+  activeTravelerNumber: string | null;
+  activeTravelerStatus: string | null;
+  activeTaskDepartment: string | null;
+  activeTaskStatus: string | null;
+  holdReason: string | null;
+  scrapReason: string | null;
+  completedAt: string | null;
+  updatedAt: string | null;
+}
+
+type SerializedStatusGroup = 'complete' | 'scheduled' | 'in_progress' | 'scrapped' | 'other';
+
+function serializedStatusGroup(item: P2SerializedBreakdownItem): SerializedStatusGroup {
+  const rawStatus = String(item.status || '').trim().toUpperCase();
+  const travelerStatus = String(item.activeTravelerStatus || '').trim().toUpperCase();
+  const taskStatus = String(item.activeTaskStatus || '').trim().toUpperCase();
+  const department = String(item.currentDepartment || item.activeTaskDepartment || '').trim();
+
+  if (rawStatus === 'SCRAPPED' || rawStatus === 'SCRAP') {
+    return 'scrapped';
+  }
+
+  if (
+    item.completedAt ||
+    rawStatus === 'COMPLETED' ||
+    rawStatus === 'COMPLETE' ||
+    rawStatus === 'FULFILLED' ||
+    rawStatus === 'SHIPPED' ||
+    travelerStatus === 'COMPLETED'
+  ) {
+    return 'complete';
+  }
+
+  if (rawStatus === 'ACTIVE' && department === 'Layup') {
+    return 'scheduled';
+  }
+
+  if (
+    rawStatus === 'IN_PROGRESS' ||
+    rawStatus === 'IN PROGRESS' ||
+    travelerStatus === 'IN_PROGRESS' ||
+    taskStatus === 'IN_PROGRESS' ||
+    (!!department && department !== 'Pending Layup' && department !== 'Layup')
+  ) {
+    return 'in_progress';
+  }
+
+  return 'other';
+}
+
+function serializedDepartment(item: P2SerializedBreakdownItem): string {
+  return item.currentDepartment || item.activeTaskDepartment || 'Unassigned Department';
+}
+
+interface DailyThroughputBoardData {
+  businessDate: string;
+  date: string;
+  isToday: boolean;
+  targetSlots: number;
+  summary: {
+    target: number;
+    started: number;
+    green: number;
+    inProcess: number;
+    blocked: number;
+    cancelled: number;
+    notStarted: number;
+    overflowCount: number;
+  };
 }
 
 interface LaborSummary {
@@ -198,10 +316,56 @@ interface LiveSession {
   certificationStatus: 'Valid' | 'Missing' | 'Expired' | 'Unknown';
 }
 
+interface DailyLaborRow {
+  workDate: string;
+  employeeId: number;
+  employeeName: string;
+  department: string | null;
+  chargeCode: string | null;
+  workOrderNumber: string | null;
+  travelerNumber: string | null;
+  budgetedHours: number;
+  actualHours: number;
+  activeHours: number;
+  usedHours: number;
+  remainingHours: number;
+  percentConsumed: number;
+  openSessionCount: number;
+}
+
+interface LaborEntryTraceRow {
+  sessionId: number;
+  employeeId: number;
+  employeeName: string;
+  clockIn: string;
+  clockOut: string | null;
+  hours: number;
+  source: string;
+  laborClass: string | null;
+  department: string | null;
+  operation: string | null;
+  chargeCode: string | null;
+  workOrderNumber: string | null;
+  travelerNumber: string | null;
+  approvalStatus: string | null;
+  isEdited: boolean;
+  editNote: string | null;
+  timesheetId: number | null;
+  timesheetStatus: string | null;
+  periodStart: string | null;
+  periodEnd: string | null;
+  locked: boolean;
+}
+
+type LaborTraceTarget =
+  | { type: 'chargeCode'; label: string; chargeCode: string }
+  | { type: 'daily'; label: string; employeeId: number; workDate: string; chargeCode: string | null };
+
 interface LaborData {
   summary: LaborSummary;
   chargeCodeRows: ChargeCodeRow[];
   liveFeed: LiveSession[];
+  dailyLaborRows: DailyLaborRow[];
 }
 
 interface MaterialSummary {
@@ -209,14 +373,23 @@ interface MaterialSummary {
   committedCost: number;
   consumedCost: number;
   remainingCost: number;
+  pendingReceivedCost?: number;
+  acceptedReceivedCost?: number;
 }
 
 interface MaterialRow {
   inventoryItemId: string;
+  partsRequestId?: number;
+  projectReceivedMaterialId?: number;
   itemCode: string;
   itemName: string;
   lotNumber: string | null;
   internalControlNumber: string | null;
+  receiptNumber?: string | null;
+  receivedUnitBarcode?: string | null;
+  requestedBy?: string | null;
+  requestDate?: string | null;
+  expectedDelivery?: string | null;
   qtyRequired: number;
   qtyAllocated: number;
   qtyIssued: number;
@@ -231,6 +404,41 @@ interface MaterialData {
   rows: MaterialRow[];
 }
 
+interface ProgramAssemblyWidgetRow {
+  id: string;
+  assemblyCode: string;
+  assemblyName: string;
+  computedStatus: 'PLANNED' | 'READY' | 'IN_PROGRESS' | 'BLOCKED' | 'COMPLETE';
+  completionPercent: number;
+  blockedBy: { assemblyCode: string; assemblyName: string }[];
+}
+
+interface ProgramHealthData {
+  ready: boolean;
+  build: {
+    id: string;
+    buildName: string;
+    programName: string;
+    programCode: string;
+    targetShipDate: string | null;
+  } | null;
+  widgets: {
+    programHealth: number;
+    criticalPath: ProgramAssemblyWidgetRow[];
+    blockedAssemblies: ProgramAssemblyWidgetRow[];
+    shipReadiness: {
+      ready: boolean;
+      completeAssemblies: number;
+      totalAssemblies: number;
+    };
+    laborMaterialImpact: {
+      queueItems: number;
+      completedQueueItems: number;
+      blockedAssemblies: number;
+    };
+  } | null;
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function fmtDate(d: string | null) {
@@ -240,6 +448,20 @@ function fmtDate(d: string | null) {
 
 function fmtHours(h: number) {
   return h.toFixed(1) + ' hrs';
+}
+
+function fmtTime(iso: string | null) {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleString([], {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return iso;
+  }
 }
 
 function fmtCurrency(n: number) {
@@ -267,14 +489,85 @@ const WO_STATUS_COLORS: Record<string, string> = {
   BLOCKED: 'bg-red-100 text-red-700',
 };
 
+const P2_PO_STATUS_COLORS: Record<P2PoStatusSummary['status'], string> = {
+  pending: 'bg-gray-100 text-gray-700',
+  scheduled: 'bg-emerald-100 text-emerald-700',
+  in_progress: 'bg-blue-100 text-blue-700',
+  completed: 'bg-green-100 text-green-700',
+};
+
+function p2PoStatusLabel(status: P2PoStatusSummary['status']) {
+  if (status === 'in_progress') return 'In Progress';
+  if (status === 'scheduled') return 'Scheduled';
+  return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+const CONNECTION_STATUS_COLORS: Record<string, string> = {
+  CONNECTED: 'bg-green-100 text-green-700 border-green-200',
+  WAD_MISSING: 'bg-red-100 text-red-700 border-red-200',
+  WAD_NOT_MATCHED: 'bg-orange-100 text-orange-700 border-orange-200',
+  WAD_INCOMPLETE: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+  TRAVELER_NOT_ACTIVE: 'bg-blue-100 text-blue-700 border-blue-200',
+};
+
+function ProductionConnectionCell({ row, navTo }: { row: WorkOrderRow; navTo: (path: string) => void }) {
+  if (row.sourceType !== 'p2_production_order') {
+    return (
+      <div className="text-xs text-muted-foreground">
+        WAD source
+      </div>
+    );
+  }
+
+  const status = row.productionConnectionStatus ?? 'WAD_MISSING';
+  const label = row.productionConnectionLabel ?? 'Connection check';
+  const detail = row.productionConnectionDetail ?? 'P2 production is shown without changing production flow.';
+
+  return (
+    <div className="flex min-w-[190px] flex-col gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${CONNECTION_STATUS_COLORS[status] ?? 'bg-gray-100 text-gray-700 border-gray-200'}`}>
+          {label}
+        </Badge>
+        {row.linkedWadNumber && (
+          <button
+            type="button"
+            className="font-mono text-xs text-primary hover:underline"
+            onClick={() => row.linkedWadId && navTo(`/production-work-orders/${row.linkedWadId}`)}
+            title={row.linkedWadStatus || undefined}
+          >
+            {row.linkedWadNumber}
+          </button>
+        )}
+      </div>
+      <div className="text-xs text-muted-foreground line-clamp-2" title={detail}>
+        {detail}
+      </div>
+    </div>
+  );
+}
+
 const MATERIAL_STATUS_COLORS: Record<string, string> = {
   OVER_ISSUED: 'bg-red-100 text-red-700',
   SHORT: 'bg-red-100 text-red-700',
   ON_HOLD: 'bg-orange-100 text-orange-700',
   PARTIAL: 'bg-yellow-100 text-yellow-700',
   ALLOCATED: 'bg-blue-100 text-blue-700',
+  PENDING_PM_ACCEPTANCE: 'bg-blue-100 text-blue-700',
   FULLY_ALLOCATED: 'bg-green-100 text-green-700',
   FULLY_ISSUED: 'bg-green-100 text-green-700',
+  RECEIVED_ACCEPTED: 'bg-green-100 text-green-700',
+  RECEIVED_REJECTED: 'bg-gray-100 text-gray-600',
+  PART_REQUEST_PENDING: 'bg-gray-100 text-gray-700',
+  PART_REQUEST_PENDING_OWNER_APPROVAL: 'bg-orange-100 text-orange-700',
+  PART_REQUEST_APPROVED: 'bg-blue-100 text-blue-700',
+  PART_REQUEST_ORDERED: 'bg-indigo-100 text-indigo-700',
+  PART_REQUEST_ORDERED_PARTIAL: 'bg-indigo-100 text-indigo-700',
+  PART_REQUEST_RECEIVED: 'bg-green-100 text-green-700',
+  PART_REQUEST_RECEIVED_PARTIAL: 'bg-green-100 text-green-700',
+  PART_REQUEST_DELIVERED_TO_DEPT: 'bg-green-100 text-green-700',
+  PART_REQUEST_REJECTED: 'bg-red-100 text-red-700',
+  PART_REQUEST_CANCEL_REQUESTED: 'bg-orange-100 text-orange-700',
 };
 
 const MATERIAL_STATUS_ORDER: Record<string, number> = {
@@ -282,10 +575,27 @@ const MATERIAL_STATUS_ORDER: Record<string, number> = {
   SHORT: 1,
   ON_HOLD: 2,
   PARTIAL: 3,
+  PENDING_PM_ACCEPTANCE: 4,
   ALLOCATED: 4,
   FULLY_ALLOCATED: 5,
   FULLY_ISSUED: 6,
+  RECEIVED_ACCEPTED: 7,
+  RECEIVED_REJECTED: 8,
+  PART_REQUEST_PENDING: 9,
+  PART_REQUEST_PENDING_OWNER_APPROVAL: 10,
+  PART_REQUEST_APPROVED: 11,
+  PART_REQUEST_ORDERED: 12,
+  PART_REQUEST_ORDERED_PARTIAL: 13,
+  PART_REQUEST_RECEIVED: 14,
+  PART_REQUEST_RECEIVED_PARTIAL: 15,
+  PART_REQUEST_DELIVERED_TO_DEPT: 16,
+  PART_REQUEST_REJECTED: 17,
+  PART_REQUEST_CANCEL_REQUESTED: 18,
 };
+
+function materialStatusLabel(status: string) {
+  return status.replace(/^PART_REQUEST_/, 'REQUEST ').replace(/_/g, ' ');
+}
 
 function CertBadge({ status }: { status: string }) {
   if (status === 'Valid') return (
@@ -308,6 +618,27 @@ function CertBadge({ status }: { status: string }) {
       <HelpCircle className="h-3 w-3" /> Unknown
     </Badge>
   );
+}
+
+function dateInputValue(iso: string | null) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso.slice(0, 10);
+  return d.toISOString().slice(0, 10);
+}
+
+function buildTimeClockPunchUrl(entry: LaborEntryTraceRow) {
+  const date = dateInputValue(entry.clockIn);
+  const params = new URLSearchParams({
+    tab: 'punches',
+    from: date,
+    to: date,
+    punchId: String(entry.sessionId),
+    employeeId: String(entry.employeeId),
+    showAll: '1',
+    q: entry.chargeCode ?? '',
+  });
+  return `/time-clock-admin?${params.toString()}`;
 }
 
 function KpiCard({
@@ -343,6 +674,98 @@ function KpiCard({
 
 // ── Production Tab ────────────────────────────────────────────────────────────
 
+function ProgramManufacturingWidgets({ projectId }: { projectId: string }) {
+  const { data, isLoading } = useQuery<ProgramHealthData>({
+    queryKey: ['/api/program-manufacturing/projects', projectId, 'health'],
+    queryFn: () => safeFetch<ProgramHealthData>(`/api/program-manufacturing/projects/${projectId}/health`),
+    enabled: !!projectId,
+    refetchInterval: 60000,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-24" />)}
+      </div>
+    );
+  }
+
+  if (!data?.build || !data.widgets) {
+    return (
+      <Card>
+        <CardContent className="p-4 flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium">No program build linked</p>
+            <p className="text-xs text-muted-foreground">
+              PM production, labor, and material tabs still use the existing project queues.
+            </p>
+          </div>
+          <Badge variant="outline">Program layer idle</Badge>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const critical = data.widgets.criticalPath[0];
+  const blocked = data.widgets.blockedAssemblies[0];
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="text-lg font-semibold">{data.build.buildName}</h2>
+          <p className="text-sm text-muted-foreground">
+            {data.build.programCode} - {data.build.programName}
+          </p>
+        </div>
+        <Link href={`/p2-control-center?tab=program&projectId=${projectId}`}>
+          <Button variant="outline" size="sm">
+            <LayoutDashboard className="h-3.5 w-3.5 mr-1.5" />
+            Open Program
+          </Button>
+        </Link>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <KpiCard
+          icon={<TrendingUp className="h-4 w-4" />}
+          label="Program Health"
+          value={`${data.widgets.programHealth}%`}
+          sub="assembly rollup"
+          colorClass={data.widgets.programHealth >= 80 ? 'text-green-600' : 'text-blue-600'}
+        />
+        <KpiCard
+          icon={<ArrowUpDown className="h-4 w-4" />}
+          label="Critical Path"
+          value={critical ? `${critical.completionPercent}%` : 'Clear'}
+          sub={critical ? `${critical.assemblyCode} ${critical.assemblyName}` : 'no open path'}
+          colorClass="text-amber-600"
+        />
+        <KpiCard
+          icon={<AlertCircle className="h-4 w-4" />}
+          label="Blocked Assemblies"
+          value={data.widgets.blockedAssemblies.length}
+          sub={blocked ? `First: ${blocked.assemblyCode}` : 'none blocked'}
+          colorClass={data.widgets.blockedAssemblies.length > 0 ? 'text-red-600' : 'text-green-600'}
+        />
+        <KpiCard
+          icon={<Calendar className="h-4 w-4" />}
+          label="Ship Readiness"
+          value={data.widgets.shipReadiness.ready ? 'Ready' : 'Not Ready'}
+          sub={`${data.widgets.shipReadiness.completeAssemblies}/${data.widgets.shipReadiness.totalAssemblies} assemblies`}
+          colorClass={data.widgets.shipReadiness.ready ? 'text-green-600' : 'text-orange-600'}
+        />
+        <KpiCard
+          icon={<Package className="h-4 w-4" />}
+          label="Labor/Material Impact"
+          value={`${data.widgets.laborMaterialImpact.completedQueueItems}/${data.widgets.laborMaterialImpact.queueItems}`}
+          sub={`${data.widgets.laborMaterialImpact.blockedAssemblies} blocked assemblies`}
+          colorClass="text-indigo-600"
+        />
+      </div>
+    </div>
+  );
+}
+
 type CompletionFilter = 'all' | 'not_started' | 'in_progress' | 'complete';
 type QtySort = null | 'asc' | 'desc';
 
@@ -361,22 +784,35 @@ function completionState(row: WorkOrderRow): CompletionFilter {
 function ProductionTab({ projectId }: { projectId: string }) {
   const [, navTo] = useLocation();
   const [selectedWO, setSelectedWO] = useState<WorkOrderRow | null>(null);
+  const [selectedP2Po, setSelectedP2Po] = useState<P2PoStatusSummary | null>(null);
   const [showBlockersOnly, setShowBlockersOnly] = useState(false);
   const [completionFilter, setCompletionFilter] = useState<CompletionFilter>('all');
   const [qtySort, setQtySort] = useState<QtySort>(null);
 
-  const { data: productionResponse, isLoading, isError } = useQuery<{ rows: WorkOrderRow[]; linkedP2PoCount: number }>({
+  const { data: productionResponse, isLoading, isError } = useQuery<ProductionResponse>({
     queryKey: ['/api/pm-dashboard', projectId, 'production'],
-    queryFn: () => safeFetch<{ rows: WorkOrderRow[]; linkedP2PoCount: number }>(`/api/pm-dashboard/${projectId}/production`),
+    queryFn: () => safeFetch<ProductionResponse>(`/api/pm-dashboard/${projectId}/production`),
     enabled: !!projectId,
   });
   const rows = productionResponse?.rows ?? [];
   const linkedP2PoCount = productionResponse?.linkedP2PoCount ?? 0;
+  const linkedP2PoStatuses = productionResponse?.linkedP2PoStatuses ?? [];
+  const p2NcrMetrics = productionResponse?.p2NcrMetrics;
 
   const { data: detail, isLoading: detailLoading } = useQuery<WorkOrderDetail>({
     queryKey: ['/api/pm-dashboard', projectId, 'production', selectedWO?.productionWorkOrderId],
     queryFn: () => safeFetch<WorkOrderDetail>(`/api/pm-dashboard/${projectId}/production/${selectedWO!.productionWorkOrderId}`),
     enabled: !!selectedWO && selectedWO.sourceType !== 'p2_production_order',
+  });
+
+  const {
+    data: serializedBreakdown,
+    isLoading: serializedBreakdownLoading,
+    isError: serializedBreakdownError,
+  } = useQuery<{ items: P2SerializedBreakdownItem[] }>({
+    queryKey: ['/api/pm-dashboard', projectId, 'production', 'p2-serialized'],
+    queryFn: () => safeFetch<{ items: P2SerializedBreakdownItem[] }>(`/api/pm-dashboard/${projectId}/production/p2-serialized`),
+    enabled: !!projectId && !!selectedP2Po,
   });
 
   if (isLoading) {
@@ -387,7 +823,7 @@ function ProductionTab({ projectId }: { projectId: string }) {
     return <QueryErrorBanner message="Failed to load production data." />;
   }
 
-  if (!rows.length) {
+  if (!rows.length && linkedP2PoStatuses.length === 0) {
     if (linkedP2PoCount === 0) {
       return (
         <Card className="p-10 text-center" data-testid="empty-no-p2-link">
@@ -436,9 +872,172 @@ function ProductionTab({ projectId }: { projectId: string }) {
 
   const chipBase = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-sm font-medium transition-colors';
   const chipOff = 'bg-background border-border text-muted-foreground hover:text-foreground hover:bg-accent';
+  const selectedSerializedItems = (serializedBreakdown?.items ?? [])
+    .filter(item => !selectedP2Po || item.poId === selectedP2Po.id);
+  const serializedCompleteItems = selectedSerializedItems
+    .filter(item => serializedStatusGroup(item) === 'complete')
+    .sort((a, b) => (a.completedAt || a.updatedAt || '').localeCompare(b.completedAt || b.updatedAt || ''));
+  const serializedScheduledItems = selectedSerializedItems
+    .filter(item => serializedStatusGroup(item) === 'scheduled')
+    .sort((a, b) => (a.serialNumber || a.barcode || a.id).localeCompare(b.serialNumber || b.barcode || b.id));
+  const serializedInProgressByDepartment = selectedSerializedItems
+    .filter(item => serializedStatusGroup(item) === 'in_progress')
+    .reduce<Record<string, P2SerializedBreakdownItem[]>>((acc, item) => {
+      const dept = serializedDepartment(item);
+      if (!acc[dept]) acc[dept] = [];
+      acc[dept].push(item);
+      return acc;
+    }, {});
+  const serializedInProgressDepartments = Object.entries(serializedInProgressByDepartment)
+    .map(([department, items]) => [
+      department,
+      [...items].sort((a, b) => serializedDepartment(a).localeCompare(serializedDepartment(b)) || (a.serialNumber || a.barcode || a.id).localeCompare(b.serialNumber || b.barcode || b.id)),
+    ] as const)
+    .sort(([a], [b]) => a.localeCompare(b));
+  const serializedScrappedItems = selectedSerializedItems
+    .filter(item => serializedStatusGroup(item) === 'scrapped')
+    .sort((a, b) => (a.serialNumber || a.barcode || a.id).localeCompare(b.serialNumber || b.barcode || b.id));
+  const serializedOtherItems = selectedSerializedItems
+    .filter(item => serializedStatusGroup(item) === 'other')
+    .sort((a, b) => (a.serialNumber || a.barcode || a.id).localeCompare(b.serialNumber || b.barcode || b.id));
+  function renderSerializedItem(item: P2SerializedBreakdownItem) {
+    return (
+      <div key={item.id} className="grid gap-2 p-3 text-sm sm:grid-cols-[1.2fr_1fr_1fr]">
+        <div>
+          <div className="font-mono font-semibold">
+            {item.serialNumber || item.barcode || item.id}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {item.partNumber || 'No part'} {item.partName ? `- ${item.partName}` : ''}
+          </div>
+        </div>
+        <div>
+          <Badge className={WO_STATUS_COLORS[item.status] ?? 'bg-gray-100 text-gray-700'}>
+            {item.status.replace('_', ' ')}
+          </Badge>
+          {(item.holdReason || item.scrapReason) && (
+            <div className="mt-1 text-xs text-red-700">
+              {item.holdReason || item.scrapReason}
+            </div>
+          )}
+        </div>
+        <div className="text-xs text-muted-foreground">
+          {item.activeTravelerNumber && item.activeTravelerId ? (
+            <Link
+              to={`/travelers/${item.activeTravelerId}`}
+              className="font-mono text-blue-600 hover:underline"
+            >
+              {item.activeTravelerNumber}
+            </Link>
+          ) : (
+            <span>No active traveler</span>
+          )}
+          <div>{item.activeTaskStatus || item.activeTravelerStatus || 'No active task'}</div>
+          <div>Updated {fmtTime(item.updatedAt)}</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
+      {p2NcrMetrics && p2NcrMetrics.totalSerializedItems > 0 && (
+        <div className="mb-4 grid gap-3 sm:grid-cols-3">
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-medium uppercase text-muted-foreground">Open NCR</p>
+                  <p className="text-2xl font-semibold">{p2NcrMetrics.openNcrCount}</p>
+                </div>
+                <ShieldAlert className="h-5 w-5 text-orange-500" />
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">Items awaiting disposition</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-medium uppercase text-muted-foreground">Final Scrap</p>
+                  <p className="text-2xl font-semibold">{p2NcrMetrics.finalScrapCount}</p>
+                </div>
+                <XCircle className="h-5 w-5 text-red-500" />
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">Dispositioned as scrap/trash</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-medium uppercase text-muted-foreground">Scrap Rate</p>
+                  <p className="text-2xl font-semibold">{p2NcrMetrics.finalScrapRatePercent.toFixed(2)}%</p>
+                </div>
+                <TrendingUp className="h-5 w-5 text-red-500" />
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {p2NcrMetrics.finalScrapCount} of {p2NcrMetrics.totalSerializedItems} serialized items
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {linkedP2PoStatuses.length > 0 && (
+        <div className="grid gap-3 mb-4">
+          {linkedP2PoStatuses.map((po) => {
+            const pct = po.totalItems > 0 ? Math.round((po.completedItems / po.totalItems) * 100) : 0;
+            return (
+              <Card
+                key={po.id}
+                className="cursor-pointer hover:border-primary/50 transition-colors"
+                onClick={() => setSelectedP2Po(po)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setSelectedP2Po(po);
+                  }
+                }}
+              >
+                <CardContent className="p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-mono text-lg font-semibold">{po.poNumber}</span>
+                        <Badge className={P2_PO_STATUS_COLORS[po.status]}>
+                          {p2PoStatusLabel(po.status)}
+                        </Badge>
+                        <Badge variant="outline">P2 PO Status</Badge>
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {po.customerName || 'Unknown customer'} · Due {fmtDate(po.dueDate)}
+                      </div>
+                    </div>
+                    <div className="min-w-[260px] space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span>{po.completedItems} / {po.totalItems} completed</span>
+                        <span className="font-semibold">{pct}%</span>
+                      </div>
+                      <Progress value={pct} className="h-2" />
+                      <div className="grid grid-cols-2 gap-2 text-center text-xs text-muted-foreground sm:grid-cols-5">
+                        <div><span className="block font-semibold text-foreground">{po.inProductionItems}</span>In production</div>
+                        <div><span className="block font-semibold text-foreground">{po.scheduledItems ?? 0}</span>Scheduled</div>
+                        <div><span className="block font-semibold text-foreground">{po.scrappedItems ?? 0}</span>Scrapped</div>
+                        <div><span className="block font-semibold text-foreground">{po.pendingItems}</span>Pending</div>
+                        <div><span className="block font-semibold text-foreground">{po.rawStatus}</span>Raw status</div>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
       {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-2 mb-3">
         <button
@@ -506,7 +1105,11 @@ function ProductionTab({ projectId }: { projectId: string }) {
       {displayRows.length === 0 && (
         <Card className="p-10 text-center">
           <CheckCircle className="mx-auto h-10 w-10 text-green-500 mb-3" />
-          <p className="text-muted-foreground">No work orders match the selected filters.</p>
+          <p className="text-muted-foreground">
+            {rows.length === 0
+              ? 'No WAD/project work orders found; use the linked P2 PO status above for serialized production.'
+              : 'No work orders match the selected filters.'}
+          </p>
         </Card>
       )}
 
@@ -540,6 +1143,7 @@ function ProductionTab({ projectId }: { projectId: string }) {
               <TableHead>Status</TableHead>
               <TableHead>Department</TableHead>
               <TableHead>Dashboard / Queue</TableHead>
+              <TableHead>Connection</TableHead>
               <TableHead>Current Step</TableHead>
               <TableHead>Active Traveler</TableHead>
               <TableHead>Due Date</TableHead>
@@ -647,6 +1251,9 @@ function ProductionTab({ projectId }: { projectId: string }) {
                     )}
                   </div>
                 </TableCell>
+                <TableCell className="text-sm" onClick={(e) => e.stopPropagation()}>
+                  <ProductionConnectionCell row={row} navTo={navTo} />
+                </TableCell>
                 <TableCell className="text-sm">{row.currentTravelerStep ?? <span className="text-muted-foreground">—</span>}</TableCell>
                 <TableCell className="text-sm" onClick={(e) => e.stopPropagation()}>
                   {row.activeTravelerNumber && row.activeTravelerId ? (
@@ -680,6 +1287,146 @@ function ProductionTab({ projectId }: { projectId: string }) {
         </Table>
       </div>
       )}
+
+      <Sheet open={!!selectedP2Po} onOpenChange={(open) => !open && setSelectedP2Po(null)}>
+        <SheetContent className="w-[520px] sm:w-[720px] overflow-y-auto">
+          <SheetHeader className="mb-4">
+            <SheetTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5" />
+              {selectedP2Po?.poNumber} serialized production
+              {selectedP2Po && (
+                <Badge className={P2_PO_STATUS_COLORS[selectedP2Po.status]}>
+                  {p2PoStatusLabel(selectedP2Po.status)}
+                </Badge>
+              )}
+            </SheetTitle>
+          </SheetHeader>
+
+          {serializedBreakdownLoading && (
+            <div className="space-y-3">
+              {[1, 2, 3].map(i => <Skeleton key={i} className="h-20 w-full" />)}
+            </div>
+          )}
+
+          {serializedBreakdownError && (
+            <QueryErrorBanner message="Failed to load serialized item breakdown." />
+          )}
+
+          {!serializedBreakdownLoading && !serializedBreakdownError && selectedSerializedItems.length === 0 && (
+            <div className="rounded-md border p-8 text-center text-sm text-muted-foreground">
+              No serialized items are currently tied to this PO.
+            </div>
+          )}
+
+          {!serializedBreakdownLoading && !serializedBreakdownError && selectedSerializedItems.length > 0 && (
+            <Accordion type="multiple" className="space-y-3">
+              {serializedCompleteItems.length > 0 && (
+                <AccordionItem value="complete" className="rounded-md border px-3">
+                  <AccordionTrigger className="py-3 hover:no-underline">
+                    <span className="flex items-center gap-2 text-sm font-semibold">
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                      Complete
+                      <Badge variant="outline">{serializedCompleteItems.length} order{serializedCompleteItems.length === 1 ? '' : 's'}</Badge>
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent className="pb-3">
+                    <div className="divide-y rounded-md border">
+                      {serializedCompleteItems.map(renderSerializedItem)}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              )}
+
+              {serializedScheduledItems.length > 0 && (
+                <AccordionItem value="scheduled" className="rounded-md border px-3">
+                  <AccordionTrigger className="py-3 hover:no-underline">
+                    <span className="flex items-center gap-2 text-sm font-semibold">
+                      <Calendar className="h-4 w-4 text-emerald-600" />
+                      Scheduled
+                      <Badge variant="outline">{serializedScheduledItems.length} order{serializedScheduledItems.length === 1 ? '' : 's'}</Badge>
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent className="pb-3">
+                    <div className="divide-y rounded-md border">
+                      {serializedScheduledItems.map(renderSerializedItem)}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              )}
+
+              {serializedInProgressDepartments.length > 0 && (
+                <AccordionItem value="in-progress" className="rounded-md border px-3">
+                  <AccordionTrigger className="py-3 hover:no-underline">
+                    <span className="flex items-center gap-2 text-sm font-semibold">
+                      <Clock className="h-4 w-4 text-yellow-600" />
+                      In Progress
+                      <Badge variant="outline">
+                        {serializedInProgressDepartments.reduce((sum, [, items]) => sum + items.length, 0)} order{serializedInProgressDepartments.reduce((sum, [, items]) => sum + items.length, 0) === 1 ? '' : 's'}
+                      </Badge>
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent className="pb-3">
+                    <Accordion
+                      type="multiple"
+                      className="space-y-2"
+                    >
+                      {serializedInProgressDepartments.map(([department, items]) => (
+                        <AccordionItem key={department} value={`dept-${department}`} className="rounded-md border px-3">
+                          <AccordionTrigger className="py-2 hover:no-underline">
+                            <span className="flex items-center gap-2 text-sm font-semibold">
+                              {department}
+                              <Badge variant="outline">{items.length} order{items.length === 1 ? '' : 's'}</Badge>
+                            </span>
+                          </AccordionTrigger>
+                          <AccordionContent className="pb-3">
+                            <div className="divide-y rounded-md border">
+                              {items.map(renderSerializedItem)}
+                            </div>
+                          </AccordionContent>
+                        </AccordionItem>
+                      ))}
+                    </Accordion>
+                  </AccordionContent>
+                </AccordionItem>
+              )}
+
+              {serializedScrappedItems.length > 0 && (
+                <AccordionItem value="scrapped" className="rounded-md border px-3">
+                  <AccordionTrigger className="py-3 hover:no-underline">
+                    <span className="flex items-center gap-2 text-sm font-semibold">
+                      <XCircle className="h-4 w-4 text-red-600" />
+                      Scrapped
+                      <Badge variant="outline">{serializedScrappedItems.length} order{serializedScrappedItems.length === 1 ? '' : 's'}</Badge>
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent className="pb-3">
+                    <div className="divide-y rounded-md border">
+                      {serializedScrappedItems.map(renderSerializedItem)}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              )}
+
+              {serializedOtherItems.length > 0 && (
+                <AccordionItem value="other" className="rounded-md border px-3">
+                  <AccordionTrigger className="py-3 hover:no-underline">
+                    <span className="flex items-center gap-2 text-sm font-semibold">
+                      <HelpCircle className="h-4 w-4 text-muted-foreground" />
+                      Other Status
+                      <Badge variant="outline">{serializedOtherItems.length} order{serializedOtherItems.length === 1 ? '' : 's'}</Badge>
+                    </span>
+                  </AccordionTrigger>
+                  <AccordionContent className="pb-3">
+                    <div className="divide-y rounded-md border">
+                      {serializedOtherItems.map(renderSerializedItem)}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              )}
+            </Accordion>
+          )}
+        </SheetContent>
+      </Sheet>
 
       <Sheet open={!!selectedWO} onOpenChange={(open) => !open && setSelectedWO(null)}>
         <SheetContent className="w-[420px] sm:w-[540px] overflow-y-auto">
@@ -779,11 +1526,43 @@ function ProductionTab({ projectId }: { projectId: string }) {
 // ── Direct Labor Tab ──────────────────────────────────────────────────────────
 
 function DirectLaborTab({ projectId }: { projectId: string }) {
+  const [, navTo] = useLocation();
+  const [traceTarget, setTraceTarget] = useState<LaborTraceTarget | null>(null);
+
   const { data, isLoading, isError } = useQuery<LaborData>({
     queryKey: ['/api/pm-dashboard', projectId, 'labor'],
     queryFn: () => safeFetch<LaborData>(`/api/pm-dashboard/${projectId}/labor`),
     enabled: !!projectId,
     refetchInterval: 30000,
+  });
+
+  const { data: currentUser } = useQuery<{ id: number; username: string; role: string } | null>({
+    queryKey: ['/api/auth/me'],
+    queryFn: () => safeFetch<{ id: number; username: string; role: string } | null>('/api/auth/me'),
+  });
+
+  const canTraceLabor = currentUser?.username?.toLowerCase() === 'glennj'
+    && currentUser?.role?.toUpperCase() === 'ADMIN';
+
+  const traceParams = new URLSearchParams();
+  if (traceTarget?.type === 'chargeCode') {
+    traceParams.set('chargeCode', traceTarget.chargeCode);
+  } else if (traceTarget?.type === 'daily') {
+    traceParams.set('employeeId', String(traceTarget.employeeId));
+    traceParams.set('workDate', traceTarget.workDate);
+    if (traceTarget.chargeCode) traceParams.set('chargeCode', traceTarget.chargeCode);
+  }
+
+  const {
+    data: traceEntries = [],
+    isLoading: traceLoading,
+    isError: traceError,
+  } = useQuery<LaborEntryTraceRow[]>({
+    queryKey: ['/api/pm-dashboard', projectId, 'labor', 'entries', traceTarget],
+    queryFn: () => safeFetch<LaborEntryTraceRow[]>(
+      `/api/pm-dashboard/${projectId}/labor/entries?${traceParams.toString()}`
+    ),
+    enabled: !!projectId && !!traceTarget && canTraceLabor,
   });
 
   if (isLoading) {
@@ -796,7 +1575,7 @@ function DirectLaborTab({ projectId }: { projectId: string }) {
 
   if (!data) return null;
 
-  const { summary, chargeCodeRows, liveFeed } = data;
+  const { summary, chargeCodeRows, liveFeed, dailyLaborRows = [] } = data;
 
   return (
     <div className="space-y-6">
@@ -843,6 +1622,7 @@ function DirectLaborTab({ projectId }: { projectId: string }) {
                   <TableHead className="text-right">Remaining</TableHead>
                   <TableHead className="text-right">%</TableHead>
                   <TableHead className="min-w-[100px]">Labor Used</TableHead>
+                  {canTraceLabor && <TableHead className="text-right">Trace</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -887,6 +1667,21 @@ function DirectLaborTab({ projectId }: { projectId: string }) {
                         )}
                       </div>
                     </TableCell>
+                    {canTraceLabor && (
+                      <TableCell className="text-right">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setTraceTarget({
+                            type: 'chargeCode',
+                            label: row.chargeCode,
+                            chargeCode: row.chargeCode,
+                          })}
+                        >
+                          Entries
+                        </Button>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
@@ -900,6 +1695,80 @@ function DirectLaborTab({ projectId }: { projectId: string }) {
           <Clock className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
           <p className="text-muted-foreground text-sm">No charge code authorizations found for this project.</p>
         </Card>
+      )}
+
+      {dailyLaborRows.length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold mb-3">Daily WAD Time Bank Usage</h3>
+          <div className="rounded-md border overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Employee</TableHead>
+                  <TableHead>WAD / Traveler</TableHead>
+                  <TableHead>Department</TableHead>
+                  <TableHead className="text-right">Used Today</TableHead>
+                  <TableHead className="text-right">WAD Bank</TableHead>
+                  <TableHead className="text-right">Remaining</TableHead>
+                  <TableHead className="text-right">%</TableHead>
+                  {canTraceLabor && <TableHead className="text-right">Trace</TableHead>}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {dailyLaborRows.map((row) => (
+                  <TableRow key={`${row.workDate}-${row.employeeId}-${row.chargeCode ?? row.department ?? 'labor'}`}>
+                    <TableCell className="text-sm">{fmtDate(row.workDate)}</TableCell>
+                    <TableCell>
+                      <div className="font-medium text-sm">{row.employeeName}</div>
+                      {row.openSessionCount > 0 && (
+                        <Badge className="bg-blue-100 text-blue-700 mt-1">Clocked in</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      <div className="font-mono">{row.workOrderNumber ?? 'WAD'}</div>
+                      <div className="text-xs text-muted-foreground">{row.travelerNumber ?? row.chargeCode ?? 'Direct labor'}</div>
+                    </TableCell>
+                    <TableCell className="text-sm">{row.department ?? '—'}</TableCell>
+                    <TableCell className="text-right text-sm">{fmtHours(row.usedHours)}</TableCell>
+                    <TableCell className="text-right text-sm">{fmtHours(row.budgetedHours)}</TableCell>
+                    <TableCell className={`text-right text-sm ${row.remainingHours < 0 ? 'text-red-600 font-medium' : ''}`}>
+                      {fmtHours(row.remainingHours)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Badge className={
+                        row.percentConsumed > 100
+                          ? 'bg-red-100 text-red-700'
+                          : row.percentConsumed >= 80
+                            ? 'bg-yellow-100 text-yellow-700'
+                            : 'bg-green-100 text-green-700'
+                      }>
+                        {row.percentConsumed}%
+                      </Badge>
+                    </TableCell>
+                    {canTraceLabor && (
+                      <TableCell className="text-right">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setTraceTarget({
+                            type: 'daily',
+                            label: `${row.employeeName} - ${fmtDate(row.workDate)}`,
+                            employeeId: row.employeeId,
+                            workDate: row.workDate,
+                            chargeCode: row.chargeCode,
+                          })}
+                        >
+                          Entries
+                        </Button>
+                      </TableCell>
+                    )}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
       )}
 
       <div>
@@ -953,6 +1822,92 @@ function DirectLaborTab({ projectId }: { projectId: string }) {
           </div>
         )}
       </div>
+
+      <Sheet open={!!traceTarget} onOpenChange={(open) => !open && setTraceTarget(null)}>
+        <SheetContent className="w-[520px] sm:w-[760px] overflow-y-auto">
+          <SheetHeader className="mb-4">
+            <SheetTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5" />
+              Labor Entries
+              {traceTarget && <Badge variant="outline">{traceTarget.label}</Badge>}
+            </SheetTitle>
+          </SheetHeader>
+
+          <div className="space-y-4">
+            <div className="rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">
+              These rows are read-only here. Use Timekeeper to make corrections so locked timesheets keep the existing audit and correction workflow.
+            </div>
+
+            {traceLoading ? (
+              <div className="space-y-2">
+                {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full" />)}
+              </div>
+            ) : traceError ? (
+              <QueryErrorBanner message="Failed to load labor entry trace." />
+            ) : traceEntries.length === 0 ? (
+              <Card className="p-6 text-center">
+                <p className="text-sm text-muted-foreground">No time entries matched this labor line.</p>
+              </Card>
+            ) : (
+              <div className="rounded-md border overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Employee</TableHead>
+                      <TableHead>Time</TableHead>
+                      <TableHead className="text-right">Hours</TableHead>
+                      <TableHead>WAD / Traveler</TableHead>
+                      <TableHead>Timesheet</TableHead>
+                      <TableHead className="text-right">Timekeeper</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {traceEntries.map(entry => (
+                      <TableRow key={entry.sessionId}>
+                        <TableCell>
+                          <div className="font-medium text-sm">{entry.employeeName}</div>
+                          <div className="text-xs text-muted-foreground font-mono">{entry.chargeCode ?? 'No charge code'}</div>
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          <div>{fmtTime(entry.clockIn)}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {entry.clockOut ? fmtTime(entry.clockOut) : 'Open session'}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right text-sm">{fmtHours(entry.hours)}</TableCell>
+                        <TableCell className="text-sm">
+                          <div className="font-mono">{entry.workOrderNumber ?? 'WAD'}</div>
+                          <div className="text-xs text-muted-foreground">{entry.travelerNumber ?? entry.department ?? 'Direct labor'}</div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {entry.timesheetId ? (
+                              <Badge className={entry.locked ? 'bg-slate-200 text-slate-800' : 'bg-blue-100 text-blue-800'}>
+                                TS #{entry.timesheetId} {entry.timesheetStatus ?? ''}
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline">No timesheet</Badge>
+                            )}
+                            {entry.isEdited && <Badge className="bg-yellow-100 text-yellow-800">Edited</Badge>}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            size="sm"
+                            onClick={() => navTo(buildTimeClockPunchUrl(entry))}
+                          >
+                            Open
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
@@ -963,6 +1918,8 @@ type SortField = 'status' | 'itemCode' | 'qtyRequired' | 'qtyAllocated' | 'qtyIs
 type SortDir = 'asc' | 'desc';
 
 function MaterialBudgetTab({ projectId }: { projectId: string }) {
+  const [, navTo] = useLocation();
+  const queryClient = useQueryClient();
   const [sortField, setSortField] = useState<SortField>('status');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
 
@@ -970,6 +1927,25 @@ function MaterialBudgetTab({ projectId }: { projectId: string }) {
     queryKey: ['/api/pm-dashboard', projectId, 'materials'],
     queryFn: () => safeFetch<MaterialData>(`/api/pm-dashboard/${projectId}/materials`),
     enabled: !!projectId,
+  });
+
+  const receivedMaterialMutation = useMutation({
+    mutationFn: async ({ id, action }: { id: number; action: 'accept' | 'reject' }) => {
+      const res = await fetch(`/api/pm-dashboard/${projectId}/materials/received/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || body.message || 'Failed to update received material');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/pm-dashboard', projectId, 'materials'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/pm-dashboard', projectId, 'summary'] });
+    },
   });
 
   if (isLoading) {
@@ -1012,6 +1988,16 @@ function MaterialBudgetTab({ projectId }: { projectId: string }) {
 
   return (
     <div className="space-y-6">
+      <div className="flex justify-end">
+        <Button
+          size="sm"
+          onClick={() => navTo(`/inventory/parts-request?projectId=${encodeURIComponent(projectId)}&create=1`)}
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          New Parts Request
+        </Button>
+      </div>
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <KpiCard
           icon={<Package className="h-4 w-4" />}
@@ -1021,8 +2007,9 @@ function MaterialBudgetTab({ projectId }: { projectId: string }) {
         />
         <KpiCard
           icon={<TrendingUp className="h-4 w-4" />}
-          label="Committed"
+          label="Approved Received"
           value={fmtCurrency(summary.committedCost)}
+          sub={summary.pendingReceivedCost ? `${fmtCurrency(summary.pendingReceivedCost)} pending receipt` : undefined}
           colorClass="text-purple-600"
         />
         <KpiCard
@@ -1091,6 +2078,7 @@ function MaterialBudgetTab({ projectId }: { projectId: string }) {
                       Consumed <SortIcon field="consumedCost" />
                     </button>
                   </TableHead>
+                  <TableHead className="text-right">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1098,7 +2086,7 @@ function MaterialBudgetTab({ projectId }: { projectId: string }) {
                   <TableRow key={`${row.inventoryItemId}-${idx}`}>
                     <TableCell>
                       <Badge className={MATERIAL_STATUS_COLORS[row.status] ?? 'bg-gray-100 text-gray-600'}>
-                        {row.status.replace(/_/g, ' ')}
+                        {materialStatusLabel(row.status)}
                       </Badge>
                     </TableCell>
                     <TableCell className="font-mono text-sm font-medium">{row.itemCode || '—'}</TableCell>
@@ -1106,7 +2094,13 @@ function MaterialBudgetTab({ projectId }: { projectId: string }) {
                     <TableCell className="text-xs text-muted-foreground">
                       {row.lotNumber && <div className="font-mono">{row.lotNumber}</div>}
                       {row.internalControlNumber && <div className="text-xs opacity-70">{row.internalControlNumber}</div>}
-                      {!row.lotNumber && !row.internalControlNumber && '—'}
+                      {row.receiptNumber && <div className="text-xs opacity-70">Receipt {row.receiptNumber}</div>}
+                      {row.receivedUnitBarcode && <div className="text-xs opacity-70">{row.receivedUnitBarcode}</div>}
+                      {row.partsRequestId && <div className="font-mono">Request #{row.partsRequestId}</div>}
+                      {row.requestedBy && <div className="text-xs opacity-70">By {row.requestedBy}</div>}
+                      {row.requestDate && <div className="text-xs opacity-70">Requested {fmtDate(row.requestDate)}</div>}
+                      {row.expectedDelivery && <div className="text-xs opacity-70">Need by {fmtDate(row.expectedDelivery)}</div>}
+                      {!row.lotNumber && !row.internalControlNumber && !row.receiptNumber && !row.receivedUnitBarcode && !row.partsRequestId && '—'}
                     </TableCell>
                     <TableCell className="text-right text-sm">{row.qtyRequired > 0 ? row.qtyRequired : '—'}</TableCell>
                     <TableCell className="text-right text-sm">{row.qtyAllocated > 0 ? row.qtyAllocated : '—'}</TableCell>
@@ -1114,6 +2108,34 @@ function MaterialBudgetTab({ projectId }: { projectId: string }) {
                     <TableCell className="text-right text-sm">{row.unitCost > 0 ? fmtCurrency(row.unitCost) : '—'}</TableCell>
                     <TableCell className="text-right text-sm">{row.committedCost > 0 ? fmtCurrency(row.committedCost) : '—'}</TableCell>
                     <TableCell className="text-right text-sm">{row.consumedCost > 0 ? fmtCurrency(row.consumedCost) : '—'}</TableCell>
+                    <TableCell className="text-right">
+                      {row.status === 'PENDING_PM_ACCEPTANCE' && row.projectReceivedMaterialId ? (
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 px-2"
+                            disabled={receivedMaterialMutation.isPending}
+                            onClick={() => receivedMaterialMutation.mutate({ id: row.projectReceivedMaterialId!, action: 'accept' })}
+                          >
+                            <CheckCircle className="h-3 w-3 mr-1" />
+                            Accept
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 px-2"
+                            disabled={receivedMaterialMutation.isPending}
+                            onClick={() => receivedMaterialMutation.mutate({ id: row.projectReceivedMaterialId!, action: 'reject' })}
+                          >
+                            <XCircle className="h-3 w-3 mr-1" />
+                            Reject
+                          </Button>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -1202,9 +2224,9 @@ export default function PMControlCenterPage() {
   });
 
   // Page-level production query — shares cache with ProductionTab, only used for blockers sheet + throughput
-  const { data: productionData, isError: productionError } = useQuery<{ rows: WorkOrderRow[]; linkedP2PoCount: number }>({
+  const { data: productionData, isError: productionError } = useQuery<ProductionResponse>({
     queryKey: ['/api/pm-dashboard', selectedProjectId, 'production'],
-    queryFn: () => safeFetch<{ rows: WorkOrderRow[]; linkedP2PoCount: number }>(`/api/pm-dashboard/${selectedProjectId}/production`),
+    queryFn: () => safeFetch<ProductionResponse>(`/api/pm-dashboard/${selectedProjectId}/production`),
     enabled: !!selectedProjectId,
   });
   const productionRows = productionData?.rows ?? [];
@@ -1219,6 +2241,26 @@ export default function PMControlCenterPage() {
   const blockedWorkOrders = productionRows.filter(r => r.status === 'BLOCKED');
 
   const selectedProject = projects.find(p => String(p.id) === selectedProjectId);
+  const linkedP2PoStatus = productionData?.linkedP2PoStatuses?.[0] ?? null;
+
+  const throughputParams = new URLSearchParams();
+  if (selectedProjectId) throughputParams.set('projectId', selectedProjectId);
+  if (linkedP2PoStatus?.id) throughputParams.set('poId', String(linkedP2PoStatus.id));
+  else if (selectedProject?.poId) throughputParams.set('poId', String(selectedProject.poId));
+
+  const {
+    data: liveThroughput,
+    isLoading: liveThroughputLoading,
+    isError: liveThroughputError,
+  } = useQuery<DailyThroughputBoardData>({
+    queryKey: ['/api/p2/daily-throughput-board', selectedProjectId, linkedP2PoStatus?.id ?? selectedProject?.poId ?? null],
+    queryFn: () => safeFetch<DailyThroughputBoardData>(
+      `/api/p2/daily-throughput-board${throughputParams.toString() ? `?${throughputParams.toString()}` : ''}`
+    ),
+    enabled: !!selectedProjectId,
+    refetchInterval: 45000,
+    staleTime: 30000,
+  });
 
   // Derive lifecycle stage label from project steps
   const lifecycleStageLabel = (() => {
@@ -1243,20 +2285,9 @@ export default function PMControlCenterPage() {
     return deriveStageLabel(selectedProject);
   })();
 
-  // Daily throughput calculation
-  const dailyThroughput = (() => {
-    if (!productionRows.length || !selectedProject?.targetShipDate) return null;
-    const totalRequired = productionRows.reduce((sum, r) => sum + (r.quantityRequired || 0), 0);
-    const totalCompleted = productionRows.reduce((sum, r) => sum + (r.quantityCompleted || 0), 0);
-    const completedToday = productionRows.reduce((sum, r) => sum + (r.quantityCompletedToday || 0), 0);
-    const totalRemaining = Math.max(0, totalRequired - totalCompleted);
-    const daysRemaining = Math.max(1, differenceInBusinessDays(parseISO(selectedProject.targetShipDate), new Date()));
-    // Daily target = total units still needed / business days remaining (Mon-Fri, excl. weekends)
-    const neededPerDay = Math.ceil(totalRemaining / daysRemaining);
-    // Pace: today's actual completions vs. daily target
-    const pacePercent = neededPerDay > 0 ? Math.round((completedToday / neededPerDay) * 100) : 100;
-    return { totalRequired, totalCompleted, completedToday, totalRemaining, daysRemaining, neededPerDay, pacePercent, percentComplete: totalRequired > 0 ? Math.round((totalCompleted / totalRequired) * 100) : 0 };
-  })();
+  const liveThroughputPace = liveThroughput
+    ? Math.round((liveThroughput.summary.green / Math.max(1, liveThroughput.summary.target)) * 100)
+    : 0;
 
   // Detect current user for "Only My Projects" toggle
   const { data: currentUser } = useQuery<{ id: number; name: string; username: string }>({
@@ -1486,6 +2517,10 @@ export default function PMControlCenterPage() {
         </Card>
       )}
 
+      {selectedProjectId && (
+        <ProgramManufacturingWidgets projectId={selectedProjectId} />
+      )}
+
       {/* KPI Summary Cards */}
       {selectedProjectId && (
         <>
@@ -1515,7 +2550,7 @@ export default function PMControlCenterPage() {
                 icon={<Package className="h-4 w-4" />}
                 label="Material Cost"
                 value={fmtCurrency(summary.consumedMaterialCost)}
-                sub={`${fmtCurrency(summary.committedMaterialCost)} committed`}
+                sub={`${fmtCurrency(summary.committedMaterialCost)} approved received`}
                 colorClass="text-indigo-600"
               />
               <KpiCard
@@ -1548,7 +2583,7 @@ export default function PMControlCenterPage() {
           )}
 
           {/* Stage + Throughput Row */}
-          {summary && !productionError && (lifecycleStageLabel || dailyThroughput) && (
+          {summary && !productionError && (lifecycleStageLabel || liveThroughput || liveThroughputLoading || liveThroughputError) && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {lifecycleStageLabel && (
                 <KpiCard
@@ -1563,26 +2598,42 @@ export default function PMControlCenterPage() {
                   }
                 />
               )}
-              {dailyThroughput && (
+              {(liveThroughput || liveThroughputLoading || liveThroughputError) && (
                 <Card>
                   <CardContent className="p-4">
                     <div className="flex items-center gap-2 mb-2">
                       <TrendingUp className="h-4 w-4 text-blue-600" />
-                      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Daily Throughput</span>
+                      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Live Daily Throughput</span>
                     </div>
-                    <div className="flex items-end justify-between mb-2">
-                      <div>
-                        <p className="text-lg font-bold">{dailyThroughput.completedToday}<span className="text-sm text-muted-foreground"> / {dailyThroughput.neededPerDay} today's target</span></p>
-                        <p className="text-xs text-muted-foreground">{dailyThroughput.totalCompleted}/{dailyThroughput.totalRequired} total · {dailyThroughput.daysRemaining}d left</p>
+                    {liveThroughputLoading ? (
+                      <div className="space-y-2">
+                        <Skeleton className="h-6 w-40" />
+                        <Skeleton className="h-2 w-full" />
                       </div>
-                      <span className={`text-sm font-semibold ${dailyThroughput.pacePercent >= 100 ? 'text-green-600' : dailyThroughput.pacePercent >= 75 ? 'text-blue-600' : 'text-orange-600'}`}>
-                        {dailyThroughput.pacePercent}% pace
-                      </span>
-                    </div>
-                    <Progress
-                      value={Math.min(100, dailyThroughput.pacePercent)}
-                      className={`h-2 ${dailyThroughput.pacePercent >= 100 ? '[&>div]:bg-green-500' : dailyThroughput.pacePercent >= 75 ? '[&>div]:bg-blue-500' : '[&>div]:bg-orange-500'}`}
-                    />
+                    ) : liveThroughputError || !liveThroughput ? (
+                      <p className="text-sm text-red-600">Live throughput data is unavailable.</p>
+                    ) : (
+                      <>
+                        <div className="flex items-end justify-between mb-2">
+                          <div>
+                            <p className="text-lg font-bold">
+                              {liveThroughput.summary.green}
+                              <span className="text-sm text-muted-foreground"> / {liveThroughput.summary.target} green target</span>
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {liveThroughput.summary.started} started · {liveThroughput.summary.inProcess} in process · {liveThroughput.summary.blocked} blocked · {liveThroughput.date}
+                            </p>
+                          </div>
+                          <span className={`text-sm font-semibold ${liveThroughputPace >= 100 ? 'text-green-600' : liveThroughputPace >= 75 ? 'text-blue-600' : 'text-orange-600'}`}>
+                            {liveThroughputPace}% live pace
+                          </span>
+                        </div>
+                        <Progress
+                          value={Math.min(100, liveThroughputPace)}
+                          className={`h-2 ${liveThroughputPace >= 100 ? '[&>div]:bg-green-500' : liveThroughputPace >= 75 ? '[&>div]:bg-blue-500' : '[&>div]:bg-orange-500'}`}
+                        />
+                      </>
+                    )}
                   </CardContent>
                 </Card>
               )}

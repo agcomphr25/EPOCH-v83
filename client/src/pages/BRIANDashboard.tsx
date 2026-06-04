@@ -1,9 +1,20 @@
 import React from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent } from '@/components/ui/card';
 import { Users, GraduationCap } from 'lucide-react';
 import { Link } from 'wouter';
+import MyTasksControlCenter from '@/components/MyTasksControlCenter';
 
 export default function BRIANDashboard() {
+  const { data: currentUser } = useQuery<{ id: number; username: string; role: string; employeeId?: number }>({
+    queryKey: ['currentUser'],
+  });
+  const { data: resolvedEmployee } = useQuery<{ employeeId: number | null }>({
+    queryKey: ['/api/timekeeping/my-employee-id'],
+    enabled: !!currentUser && !currentUser.employeeId,
+  });
+  const dashboardEmployeeId = currentUser?.employeeId ?? resolvedEmployee?.employeeId ?? null;
+
   return (
     <div className="p-6 space-y-6 max-w-full mx-auto">
       <div className="flex items-center justify-between">
@@ -49,6 +60,14 @@ export default function BRIANDashboard() {
           </Card>
         </Link>
       </div>
+
+      {dashboardEmployeeId && (
+        <MyTasksControlCenter
+          employeeId={dashboardEmployeeId}
+          userName={currentUser?.username ?? 'brian'}
+          compact={false}
+        />
+      )}
     </div>
   );
 }

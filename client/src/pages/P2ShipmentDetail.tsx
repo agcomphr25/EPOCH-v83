@@ -28,8 +28,12 @@ import {
   ShieldAlert,
   History,
   AlertTriangle,
+  Ban,
 } from 'lucide-react';
 import OverrideShippingDataModal from '@/components/p2/OverrideShippingDataModal';
+import P2InvoicePreviewButton from '@/components/p2/P2InvoicePreviewButton';
+
+const BILL_OF_LADING_TEMPLATE_URL = '/forms/bill-of-lading-template.pdf';
 
 interface ShipmentLot {
   id: string;
@@ -98,6 +102,9 @@ interface Invoice {
   due_date: string | null;
   total_amount: string;
   status: string;
+  journal_entry_id: number | null;
+  journal_entry_status: string | null;
+  journal_line_count: number | null;
 }
 
 interface ShipmentDetail {
@@ -152,6 +159,7 @@ interface CurrentUser {
 function statusColor(status: string) {
   switch (status?.toUpperCase()) {
     case 'SHIPPED': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
+    case 'VOID': return 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300';
     case 'CLOSED': return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
     case 'OPEN': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
     case 'FINALIZED': return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
@@ -260,32 +268,11 @@ export default function P2ShipmentDetail() {
     enabled: !!packingSlipId,
   });
 
-  const createInvoiceMutation = useMutation({
-    mutationFn: async () => {
-      if (!packingSlipId) throw new Error('No packing slip is linked to this shipment.');
-      return apiRequest(`/api/ar-invoices/from-packing-slip/${packingSlipId}`, {
-        method: 'POST',
-      });
-    },
-    onSuccess: (createdInvoice: any) => {
-      toast({
-        title: 'Invoice ready for review',
-        description: createdInvoice?.invoiceNumber
-          ? `Invoice ${createdInvoice.invoiceNumber} was created from this packing slip.`
-          : 'Invoice was created from this packing slip.',
-      });
-      qc.invalidateQueries({ queryKey: ['/api/p2/shipments', lotId] });
-      qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === '/api/ar-invoices' });
-      if (createdInvoice?.id) setLocation(`/finance/invoices/${createdInvoice.id}`);
-    },
-    onError: (err: any) => {
-      toast({
-        title: 'Invoice creation failed',
-        description: err.message || 'Unable to create invoice from this packing slip.',
-        variant: 'destructive',
-      });
-    },
-  });
+  const handleInvoiceCreated = (createdInvoice: any) => {
+    qc.invalidateQueries({ queryKey: ['/api/p2/shipments', lotId] });
+    qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === '/api/ar-invoices' });
+    if (createdInvoice?.id) setLocation(`/finance/invoices/${createdInvoice.id}`);
+  };
 
   useEffect(() => {
     if (data?.lot) {
@@ -332,6 +319,38 @@ export default function P2ShipmentDetail() {
       variant: 'destructive',
     }),
   });
+
+  const voidShipmentMutation = useMutation({
+    mutationFn: (reason: string) =>
+      apiRequest(`/api/p2/shipments/${lotId}/void`, {
+        method: 'POST',
+        body: { reason },
+      }),
+    onSuccess: (result: any) => {
+      toast({
+        title: 'Shipment voided',
+        description: `${result?.lotNumber || 'Shipment'} was voided. Finalized serials are available to regroup.`,
+      });
+      qc.invalidateQueries({ queryKey: ['/api/p2/shipments', lotId] });
+      qc.invalidateQueries({ queryKey: ['/api/p2/shipments'] });
+      qc.invalidateQueries({ queryKey: ['/api/p2/lots/existing-shipments'] });
+      qc.invalidateQueries({ queryKey: ['/api/p2/serialized-items/shipping-queue'] });
+      qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === '/api/ar-invoices' });
+      refetch();
+      refetchAuditLog();
+    },
+    onError: (err: any) => toast({
+      title: 'Void failed',
+      description: err?.message || 'Shipment could not be voided.',
+      variant: 'destructive',
+    }),
+  });
+
+  const handleVoidShipment = () => {
+    const reason = window.prompt('Reason for voiding this shipment? Finalized serials will be released for regrouping.');
+    if (!reason || !reason.trim()) return;
+    voidShipmentMutation.mutate(reason.trim());
+  };
 
   async function handleBolUpload(file: File) {
     setUploading(true);
@@ -427,6 +446,7 @@ export default function P2ShipmentDetail() {
 
   const { lot, packingSlip, certificate, serializedItems, invoice } = data;
   const isShipped = lot.status === 'SHIPPED';
+  const isVoid = lot.status === 'VOID';
 
   return (
     <div className="p-4 md:p-6 max-w-5xl mx-auto space-y-5">
@@ -470,7 +490,7 @@ export default function P2ShipmentDetail() {
             </div>
 
             <div className="flex flex-col sm:flex-row gap-2 shrink-0">
-              {!isShipped && (
+              {!isShipped && !isVoid && (
                 <Button
                   size="sm"
                   className="bg-green-600 hover:bg-green-700 text-white"
@@ -483,6 +503,22 @@ export default function P2ShipmentDetail() {
                     <CheckCircle2 className="h-4 w-4 mr-1" />
                   )}
                   Mark as Shipped
+                </Button>
+              )}
+              {canOverride && !isVoid && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-red-300 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/30"
+                  onClick={handleVoidShipment}
+                  disabled={voidShipmentMutation.isPending}
+                >
+                  {voidShipmentMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                  ) : (
+                    <Ban className="h-4 w-4 mr-1" />
+                  )}
+                  Void Shipment
                 </Button>
               )}
               {canOverride && (
@@ -801,6 +837,11 @@ export default function P2ShipmentDetail() {
                   </a>
                 </Button>
               )}
+              <Button variant="outline" size="sm" asChild>
+                <a href={BILL_OF_LADING_TEMPLATE_URL} target="_blank" rel="noopener noreferrer" download>
+                  <FileText className="h-3.5 w-3.5 mr-1" /> Blank Form
+                </a>
+              </Button>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -883,15 +924,27 @@ export default function P2ShipmentDetail() {
                 <div>
                   <p className="text-sm font-medium">AR Invoice</p>
                   {invoice ? (
-                    <p className="text-xs text-muted-foreground font-mono flex items-center gap-1.5">
-                      <Link
-                        href={`/finance/invoices/${invoice.id}`}
-                        className="text-blue-600 hover:underline dark:text-blue-400"
-                      >
-                        {invoice.invoice_number}
-                      </Link>
-                      <Badge className={`text-xs ${invoiceStatusColor(invoice.status)}`}>{invoice.status}</Badge>
-                    </p>
+                    <>
+                      <p className="text-xs text-muted-foreground font-mono flex items-center gap-1.5">
+                        <Link
+                          href={`/finance/invoices/${invoice.id}`}
+                          className="text-blue-600 hover:underline dark:text-blue-400"
+                        >
+                          {invoice.invoice_number}
+                        </Link>
+                        <Badge className={`text-xs ${invoiceStatusColor(invoice.status)}`}>{invoice.status}</Badge>
+                      </p>
+                      {invoice.journal_entry_id ? (
+                        <p className="text-xs text-indigo-700 mt-1">
+                          JE #{invoice.journal_entry_id} {invoice.journal_entry_status || 'POSTED'}
+                          {invoice.journal_line_count ? ` (${invoice.journal_line_count} lines)` : ''}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-amber-700 mt-1">
+                          Journal entry pending until invoice is posted.
+                        </p>
+                      )}
+                    </>
                   ) : (
                     <p className="text-xs text-muted-foreground italic">No invoice created yet</p>
                   )}
@@ -910,19 +963,12 @@ export default function P2ShipmentDetail() {
                   </Button>
                 </div>
               ) : packingSlip ? (
-                <Button
+                <P2InvoicePreviewButton
+                  packingSlipId={packingSlipId}
                   size="sm"
                   variant="outline"
-                  onClick={() => createInvoiceMutation.mutate()}
-                  disabled={createInvoiceMutation.isPending}
-                >
-                  {createInvoiceMutation.isPending ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
-                  ) : (
-                    <Receipt className="h-3.5 w-3.5 mr-1" />
-                  )}
-                  Create Invoice
-                </Button>
+                  onCreated={handleInvoiceCreated}
+                />
               ) : null}
             </div>
           </>

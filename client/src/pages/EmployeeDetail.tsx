@@ -36,6 +36,7 @@ import {
   XCircle,
   Eye,
   EyeOff,
+  Tags,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -97,6 +98,22 @@ interface Employee {
   tciAccess?: boolean;
   hasPin?: boolean;
   supervisorEmployeeId?: number | null;
+}
+
+interface ChargeCodeOption {
+  id: number;
+  code: string;
+  description?: string | null;
+  type: string;
+  costHandling?: string | null;
+  department?: string | null;
+  active: boolean;
+}
+
+interface EmployeeChargeCodeAssignments {
+  employeeId: number;
+  assignedChargeCodeIds: number[];
+  assignedChargeCodes: ChargeCodeOption[];
 }
 
 interface CertificationFile {
@@ -477,7 +494,7 @@ function CertificationCard({
   );
 }
 
-const VALID_TABS = ['details','permissions','certifications','evaluations','training','traveler','documents','badge','journal','history','qualifications'] as const;
+const VALID_TABS = ['details','permissions','charge-codes','certifications','evaluations','training','traveler','documents','badge','journal','history','qualifications'] as const;
 type TabValue = typeof VALID_TABS[number];
 
 export default function EmployeeDetail() {
@@ -513,6 +530,7 @@ export default function EmployeeDetail() {
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [selectedAssignUserId, setSelectedAssignUserId] = useState<string>('');
   const [showAssignUser, setShowAssignUser] = useState(false);
+  const [selectedChargeCodeIds, setSelectedChargeCodeIds] = useState<number[]>([]);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -543,6 +561,31 @@ export default function EmployeeDetail() {
     .filter((emp) => emp.isActive !== false && String(emp.id) !== String(id))
     .sort((a, b) => a.name.localeCompare(b.name));
   const assignedSupervisor = allEmployees.find((emp) => emp.id === employee?.supervisorEmployeeId);
+
+  const { data: allChargeCodes = [] } = useQuery<ChargeCodeOption[]>({
+    queryKey: ['/api/charge-codes'],
+    queryFn: async () => {
+      const response = await fetch('/api/charge-codes');
+      if (!response.ok) throw new Error('Failed to fetch charge codes');
+      return response.json();
+    },
+  });
+
+  const { data: employeeChargeCodes } = useQuery<EmployeeChargeCodeAssignments>({
+    queryKey: ['/api/employees', id, 'charge-codes'],
+    queryFn: async () => {
+      const response = await fetch(`/api/employees/${id}/charge-codes`);
+      if (!response.ok) throw new Error('Failed to fetch employee charge codes');
+      return response.json();
+    },
+    enabled: !!id,
+  });
+
+  useEffect(() => {
+    if (employeeChargeCodes) {
+      setSelectedChargeCodeIds(employeeChargeCodes.assignedChargeCodeIds);
+    }
+  }, [employeeChargeCodes]);
 
   const { data: certifications = [] } = useQuery({
     queryKey: ['/api/employee-certifications', { employeeId: id }],
@@ -677,6 +720,42 @@ export default function EmployeeDetail() {
       });
     },
   });
+
+  const updateChargeCodesMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch(`/api/employees/${id}/charge-codes`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chargeCodeIds: selectedChargeCodeIds }),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to update charge code assignments');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/employees', id, 'charge-codes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/charge-codes'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/kiosk/charge-codes'] });
+      toast({ title: 'Success', description: 'Charge code assignments updated' });
+    },
+    onError: (err: Error) => {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    },
+  });
+
+  const activeChargeCodes = allChargeCodes
+    .filter((code) => code.active !== false)
+    .sort((a, b) => a.code.localeCompare(b.code));
+
+  const toggleChargeCode = (chargeCodeId: number) => {
+    setSelectedChargeCodeIds((current) =>
+      current.includes(chargeCodeId)
+        ? current.filter((id) => id !== chargeCodeId)
+        : [...current, chargeCodeId].sort((a, b) => a - b)
+    );
+  };
 
   const generatePortalTokenMutation = useMutation({
     mutationFn: async () => {
@@ -1640,9 +1719,10 @@ export default function EmployeeDetail() {
         {/* Main Content Tabs */}
         <div className="lg:col-span-2">
           <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-4">
-            <TabsList className="grid w-full grid-cols-11">
+            <TabsList className="grid w-full grid-cols-12">
               <TabsTrigger value="details">Details</TabsTrigger>
               <TabsTrigger value="permissions">Permissions</TabsTrigger>
+              <TabsTrigger value="charge-codes">Codes</TabsTrigger>
               <TabsTrigger value="certifications">Certs</TabsTrigger>
               <TabsTrigger value="evaluations">Reviews</TabsTrigger>
               <TabsTrigger value="training">Training</TabsTrigger>
@@ -2211,6 +2291,61 @@ export default function EmployeeDetail() {
                           </div>
                         )}
                       </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="charge-codes">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Tags className="w-5 h-5" />
+                      Charge Codes
+                    </CardTitle>
+                    <CardDescription>
+                      Checked codes are added to the all-employee codes this employee can already use.
+                    </CardDescription>
+                  </div>
+                  <Button
+                    onClick={() => updateChargeCodesMutation.mutate()}
+                    disabled={updateChargeCodesMutation.isPending}
+                  >
+                    {updateChargeCodesMutation.isPending && <Clock className="w-4 h-4 mr-2 animate-spin" />}
+                    Save Codes
+                  </Button>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
+                    Employees can always use codes set to all employees. Check codes here when a code is restricted to selected employees and this employee should be included.
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {activeChargeCodes.map((code) => (
+                      <label
+                        key={code.id}
+                        className="flex cursor-pointer items-start gap-3 rounded-md border p-3 hover:bg-muted/50"
+                      >
+                        <Checkbox
+                          checked={selectedChargeCodeIds.includes(code.id)}
+                          onCheckedChange={() => toggleChargeCode(code.id)}
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center gap-2">
+                            <span className="font-mono font-medium">{code.code}</span>
+                            <Badge variant="outline">{code.type}</Badge>
+                          </span>
+                          <span className="block truncate text-sm text-muted-foreground">
+                            {code.description || code.department || 'No description'}
+                          </span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  {activeChargeCodes.length === 0 && (
+                    <div className="text-center py-8 text-muted-foreground">
+                      No active charge codes found.
                     </div>
                   )}
                 </CardContent>

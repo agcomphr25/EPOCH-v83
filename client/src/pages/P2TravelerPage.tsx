@@ -320,7 +320,7 @@ export default function P2TravelerPage() {
   const [notes, setNotes] = useState('');
   const [traceabilityMode, setTraceabilityMode] = useState<'scan' | 'manual'>('scan');
   const [pendingFocusMaterialIndex, setPendingFocusMaterialIndex] = useState<number | null>(null);
-  const [validatedMaterialIndices, setValidatedMaterialIndices] = useState<Set<number>>(new Set());
+  const [, setValidatedMaterialIndices] = useState<Set<number>>(new Set());
   const validateAbortControllersRef = useRef<Map<number, AbortController>>(new Map());
   const latestValidationIcnRef = useRef<Map<number, string>>(new Map());
   const [cameraTarget, setCameraTarget] = useState<'badge' | 'part' | null>(null);
@@ -850,6 +850,9 @@ export default function P2TravelerPage() {
           employeeCode: badgeInput,
           barcode: partInput,
           notes,
+          traceabilityData: traceabilityData.filter(item => item.value.trim()),
+          customData: Object.keys(customData).length > 0 ? customData : null,
+          qcResults: [...qcResults, ...startQcResults, ...finishQcResults],
         }),
       });
 
@@ -1046,12 +1049,30 @@ export default function P2TravelerPage() {
     }
   };
 
-  // Add another material traceability entry
-  const addMaterialTraceEntry = () => {
+  const materialControlFieldTypes = new Set([
+    'material_lot',
+    'internal_control_number',
+    'material_internal_control_number',
+    'material_icn',
+    'fabric_internal_control_number',
+  ]);
+
+  const isMaterialControlField = (item: any) => {
+    const type = String(item?.type || '').toLowerCase();
+    const label = String(item?.label || '').toLowerCase();
+    return materialControlFieldTypes.has(type) || label.includes('control number') || label.includes('icn');
+  };
+
+  const getNextMaterialIndex = () => {
     const existingMaterialIndices = traceabilityData
       .filter(item => item.materialIndex !== undefined)
       .map(item => item.materialIndex!);
-    const nextIndex = existingMaterialIndices.length > 0 ? Math.max(...existingMaterialIndices) + 1 : 0;
+    return existingMaterialIndices.length > 0 ? Math.max(...existingMaterialIndices) + 1 : 0;
+  };
+
+  // Add another material traceability entry
+  const addMaterialTraceEntry = () => {
+    const nextIndex = getNextMaterialIndex();
     
     const defaultFields = ['material_lot', 'material_expiration_date'];
     const newEntries = defaultFields.map(fieldType => ({
@@ -1430,12 +1451,11 @@ export default function P2TravelerPage() {
 
                           {materialGroupEntries.map(([matIdx, items], groupArrayIdx) => {
                             const isLastGroup = groupArrayIdx === materialGroupEntries.length - 1;
-                            const lotItem = (items as any[]).find((i) => i.type === 'material_lot');
+                            const controlItem = (items as any[]).find(isMaterialControlField);
                             const showAddAnotherPrompt =
                               isLastGroup &&
                               traceabilityMode === 'manual' &&
-                              !!lotItem?.value?.trim() &&
-                              validatedMaterialIndices.has(matIdx);
+                              !!controlItem?.value?.trim();
                             return (
                             <div key={matIdx} className="border rounded-lg p-3 bg-blue-50/30 dark:bg-blue-950/20 space-y-2">
                               <div className="flex items-center justify-between">
@@ -1484,10 +1504,7 @@ export default function P2TravelerPage() {
                                   size="sm"
                                   className="w-full mt-2 bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
                                   onClick={() => {
-                                    const existing = traceabilityData
-                                      .filter((it) => it.materialIndex !== undefined)
-                                      .map((it) => it.materialIndex!);
-                                    const nextIdx = existing.length > 0 ? Math.max(...existing) + 1 : 0;
+                                    const nextIdx = getNextMaterialIndex();
                                     addMaterialTraceEntry();
                                     setPendingFocusMaterialIndex(nextIdx);
                                   }}

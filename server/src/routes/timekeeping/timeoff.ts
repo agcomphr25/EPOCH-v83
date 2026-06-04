@@ -3,6 +3,13 @@ import { z } from "zod";
 import { authenticateToken, authenticatePortalToken, requireRole } from "../../../middleware/auth";
 import { requirePermission } from "../../../middleware/requirePermission";
 import * as svc from "../../services/timekeeping/timeoff.service";
+import {
+  addManualPtoBalanceEvent,
+  getPtoBalanceSummary,
+  restorePtoForRequest,
+  setPtoSchedule,
+  normalizeWeeklyHours,
+} from "../../services/timekeeping/ptoBalance.service";
 import { actorFromUser, logAction } from "../../services/timekeeping/audit.service";
 import type { SafeUser } from "../../services/timekeeping/audit.service";
 
@@ -10,13 +17,64 @@ function h(fn: (req: Request, res: Response, next: NextFunction) => Promise<void
   return (req, res, next) => fn(req, res, next).catch((err) => {
     console.error("[timekeeping/timeoff]", err?.message ?? err);
     if (!res.headersSent) {
-      const status = err?.message?.includes("required") || err?.message?.includes("not at") ? 400 : 500;
+      const message = String(err?.message ?? "");
+      const status = message.includes("required") || message.includes("not at") || message.includes("Insufficient PTO") || message.includes("PTO schedule") || message.includes("Selected dates")
+        ? 400
+        : 500;
       res.status(status).json({ error: err?.message ?? "Internal server error" });
     }
   });
 }
 
 const router: IRouter = Router();
+
+async function resolveUserEmployeeId(user: SafeUser | undefined | null): Promise<number | null> {
+  if (!user) return null;
+
+  const username = String(user.username ?? "").trim();
+  if (!username && user.id == null) return user.employeeId ?? null;
+
+  const { pool } = await import("../../../db");
+  const { rows } = await pool.query<{ id: number }>(
+    `
+      SELECT e.id
+      FROM employees e
+      LEFT JOIN users u ON u.id = $2
+      WHERE e.id = u.employee_id
+         OR e.id = $3
+         OR LOWER(e.employee_code) = LOWER($1)
+         OR (u.email IS NOT NULL AND e.email IS NOT NULL AND LOWER(u.email) = LOWER(e.email))
+         OR LOWER(CONCAT(
+              REGEXP_REPLACE(SPLIT_PART(TRIM(e.name), ' ', 1), '[^[:alnum:]]', '', 'g'),
+              LEFT(REGEXP_REPLACE((REGEXP_SPLIT_TO_ARRAY(TRIM(e.name), '[[:space:]]+'))[ARRAY_LENGTH(REGEXP_SPLIT_TO_ARRAY(TRIM(e.name), '[[:space:]]+'), 1)], '[^[:alnum:]]', '', 'g'), 1)
+            )) = LOWER($1)
+         OR LOWER(CONCAT(
+              LEFT(REGEXP_REPLACE(SPLIT_PART(TRIM(e.name), ' ', 1), '[^[:alnum:]]', '', 'g'), 1),
+              REGEXP_REPLACE((REGEXP_SPLIT_TO_ARRAY(TRIM(e.name), '[[:space:]]+'))[ARRAY_LENGTH(REGEXP_SPLIT_TO_ARRAY(TRIM(e.name), '[[:space:]]+'), 1)], '[^[:alnum:]]', '', 'g')
+            )) = LOWER($1)
+      ORDER BY
+        CASE
+          WHEN e.id = u.employee_id THEN 0
+          WHEN LOWER(e.employee_code) = LOWER($1) THEN 1
+          WHEN u.email IS NOT NULL AND e.email IS NOT NULL AND LOWER(u.email) = LOWER(e.email) THEN 2
+          WHEN LOWER(CONCAT(
+                 REGEXP_REPLACE(SPLIT_PART(TRIM(e.name), ' ', 1), '[^[:alnum:]]', '', 'g'),
+                 LEFT(REGEXP_REPLACE((REGEXP_SPLIT_TO_ARRAY(TRIM(e.name), '[[:space:]]+'))[ARRAY_LENGTH(REGEXP_SPLIT_TO_ARRAY(TRIM(e.name), '[[:space:]]+'), 1)], '[^[:alnum:]]', '', 'g'), 1)
+               )) = LOWER($1) THEN 3
+          WHEN LOWER(CONCAT(
+                 LEFT(REGEXP_REPLACE(SPLIT_PART(TRIM(e.name), ' ', 1), '[^[:alnum:]]', '', 'g'), 1),
+                 REGEXP_REPLACE((REGEXP_SPLIT_TO_ARRAY(TRIM(e.name), '[[:space:]]+'))[ARRAY_LENGTH(REGEXP_SPLIT_TO_ARRAY(TRIM(e.name), '[[:space:]]+'), 1)], '[^[:alnum:]]', '', 'g')
+               )) = LOWER($1) THEN 4
+          WHEN e.id = $3 THEN 5
+          ELSE 6
+        END,
+        e.id ASC
+      LIMIT 1
+    `,
+    [username, user.id ?? null, user.employeeId ?? null]
+  );
+  return rows[0]?.id ?? null;
+}
 
 // ---------------------------------------------------------------------------
 // Validation schemas
@@ -50,6 +108,25 @@ const StageReviewSchema = z.object({
   note: z.string().max(2000).optional(),
   // Legacy field
   adminNote: z.string().max(2000).optional(),
+});
+
+const PtoBalanceAdjustmentSchema = z.object({
+  hours: z.number(),
+  note: z.string().max(1000).optional(),
+});
+
+const WeeklyPtoScheduleSchema = z.object({
+  weeklyHours: z.object({
+    mon: z.number().min(0).max(24),
+    tue: z.number().min(0).max(24),
+    wed: z.number().min(0).max(24),
+    thu: z.number().min(0).max(24),
+    fri: z.number().min(0).max(24),
+    sat: z.number().min(0).max(24),
+    sun: z.number().min(0).max(24),
+  }),
+  effectiveStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  note: z.string().max(1000).optional(),
 });
 
 // ---------------------------------------------------------------------------
@@ -98,6 +175,18 @@ router.get(
 
     const requests = await svc.getTimeOffRequestsByEmployee(employeeId);
     res.json(requests);
+  })
+);
+
+router.get(
+  "/time-off/my/balance",
+  authenticateToken,
+  h(async (req, res): Promise<void> => {
+    const employeeId = req.user?.employeeId ?? null;
+    if (!employeeId) { res.status(403).json({ error: "Your account is not linked to an employee record" }); return; }
+
+    const summary = await getPtoBalanceSummary(employeeId, { includeEvents: true });
+    res.json(summary);
   })
 );
 
@@ -180,6 +269,59 @@ router.get(
     const endDateFilter = typeof req.query.endDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.query.endDate) ? req.query.endDate : undefined;
     const requests = await svc.getAllTimeOffRequests(statusFilter, employeeIdFilter, startDateFilter, endDateFilter);
     res.json(requests);
+  })
+);
+
+router.get(
+  "/time-off/:employeeId/balance",
+  authenticateToken,
+  requirePermission("timekeeping.pto.view_all"),
+  h(async (req, res): Promise<void> => {
+    const employeeId = parseInt(req.params.employeeId, 10);
+    if (isNaN(employeeId)) { res.status(400).json({ error: "Invalid employee ID" }); return; }
+    const summary = await getPtoBalanceSummary(employeeId, { includeEvents: true });
+    res.json(summary);
+  })
+);
+
+router.post(
+  "/time-off/:employeeId/balance-adjustment",
+  authenticateToken,
+  requirePermission("timekeeping.pto.view_all"),
+  h(async (req, res): Promise<void> => {
+    const employeeId = parseInt(req.params.employeeId, 10);
+    if (isNaN(employeeId)) { res.status(400).json({ error: "Invalid employee ID" }); return; }
+    const parse = PtoBalanceAdjustmentSchema.safeParse(req.body);
+    if (!parse.success) { res.status(400).json({ error: parse.error.message }); return; }
+    const user = req.user as SafeUser | undefined;
+    const summary = await addManualPtoBalanceEvent({
+      employeeId,
+      hours: parse.data.hours,
+      note: parse.data.note,
+      actorUserId: user?.id ?? null,
+    });
+    res.json(summary);
+  })
+);
+
+router.put(
+  "/time-off/:employeeId/schedule",
+  authenticateToken,
+  requirePermission("timekeeping.pto.view_all"),
+  h(async (req, res): Promise<void> => {
+    const employeeId = parseInt(req.params.employeeId, 10);
+    if (isNaN(employeeId)) { res.status(400).json({ error: "Invalid employee ID" }); return; }
+    const parse = WeeklyPtoScheduleSchema.safeParse(req.body);
+    if (!parse.success) { res.status(400).json({ error: parse.error.message }); return; }
+    const user = req.user as SafeUser | undefined;
+    const schedule = await setPtoSchedule({
+      employeeId,
+      weeklyHours: normalizeWeeklyHours(parse.data.weeklyHours),
+      effectiveStart: parse.data.effectiveStart,
+      note: parse.data.note,
+      actorUserId: user?.id ?? null,
+    });
+    res.json({ employeeId, schedule });
   })
 );
 
@@ -322,34 +464,39 @@ router.post(
 
     // ADMIN/OWNER bypass capability check
     if (!isAdminOrOwner) {
+      let isAssignedSupervisorReviewer = false;
+
+      // Supervisor stage: assigned supervisors can review their own direct reports
+      // even if they do not carry the broader PTO supervisor capability.
+      if (stage === "supervisor") {
+        const reviewerEpochEmployeeId: number | null = await resolveUserEmployeeId(user);
+        if (reviewerEpochEmployeeId === null) {
+          res.status(403).json({ error: "Your account is not linked to an employee record and cannot perform supervisor reviews." }); return;
+        }
+        const { pool } = await import("../../../db");
+        const { rows } = await pool.query<{ supervisor_id: number | null }>(
+          `
+            SELECT COALESCE(r.supervisor_id, e.supervisor_employee_id) AS supervisor_id
+            FROM timekeeping.time_off_requests r
+            LEFT JOIN employees e ON e.id = r.employee_id
+            WHERE r.id = $1
+            LIMIT 1
+          `,
+          [id],
+        );
+        const assignedSupervisorId = rows[0]?.supervisor_id ?? null;
+        if (assignedSupervisorId !== null && assignedSupervisorId !== reviewerEpochEmployeeId) {
+          res.status(403).json({ error: "You are not the assigned supervisor for this request." }); return;
+        }
+        isAssignedSupervisorReviewer = assignedSupervisorId === reviewerEpochEmployeeId;
+      }
+
       const requiredCap = stageCapMap[stage];
       if (requiredCap) {
         const { getUserPermissions } = await import("../../services/permissionService");
         const { permissionSet } = await getUserPermissions(user.id, user.role);
-        if (!permissionSet.has(requiredCap)) {
+        if (!permissionSet.has(requiredCap) && !isAssignedSupervisorReviewer) {
           res.status(403).json({ error: `Missing capability: ${requiredCap}` }); return;
-        }
-      }
-
-      // Supervisor stage: enforce reviewer-to-request supervisor assignment.
-      // user.employeeId is the epoch employee ID from AuthUser (number | null).
-      // Fail closed: if the reviewer has no linked epoch employee, deny access.
-      if (stage === "supervisor") {
-        const reviewerEpochEmployeeId: number | null = user.employeeId ?? null;
-        if (reviewerEpochEmployeeId === null) {
-          res.status(403).json({ error: "Your account is not linked to an employee record and cannot perform supervisor reviews." }); return;
-        }
-        const { db } = await import("../../../db");
-        const { timeOffRequestsTable } = await import("../../schema/timekeeping");
-        const { eq } = await import("drizzle-orm");
-        const rows = await db
-          .select({ supervisorId: timeOffRequestsTable.supervisorId })
-          .from(timeOffRequestsTable)
-          .where(eq(timeOffRequestsTable.id, id))
-          .limit(1);
-        const assignedSupervisorId: number | null = rows[0]?.supervisorId ?? null;
-        if (assignedSupervisorId !== null && assignedSupervisorId !== reviewerEpochEmployeeId) {
-          res.status(403).json({ error: "You are not the assigned supervisor for this request." }); return;
         }
       }
     }
@@ -443,6 +590,13 @@ router.post(
       oldValues: { status: existing.status },
       newValues: { status: "cancelled", cancelledBy: user.id, reason: reason || null, cancelledAt: now.toISOString() },
       actor: actorFromUser(user, req.ip ?? null),
+    });
+
+    await restorePtoForRequest({
+      employeeId: existing.employeeId,
+      requestId: id,
+      reason: "cancelled",
+      actorUserId: user.id,
     });
 
     res.json(updated);

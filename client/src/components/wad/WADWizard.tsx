@@ -12,6 +12,16 @@ import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Check, ChevronRight, ChevronLeft, AlertTriangle, FileText, Users, ClipboardList,
   DollarSign, Package, Route, ShieldCheck, Calendar, AlertCircle, FolderOpen,
   Star, Loader2, CheckCircle, XCircle, Plus, Trash2
@@ -108,8 +118,19 @@ interface ApprovalRecord {
   displayName: string;
   decision: 'APPROVED' | 'REJECTED';
   comments: string | null;
+  signature?: string | null;
+  signatureMeaning?: string | null;
+  signedAt?: string | null;
   timestamp: string;
 }
+
+interface ApprovalAssignment {
+  employeeId: number;
+  employeeName: string | null;
+  assignedAt?: string;
+}
+
+type ApprovalAssignmentsMap = Record<string, ApprovalAssignment>;
 
 type WadExceptionType = 'overrun' | 'charge_code_override' | 'late_release_exception';
 
@@ -254,6 +275,7 @@ interface WizardData {
   };
   step10?: { documents: DocItem[] };
   approvals?: ApprovalRecord[];
+  approvalAssignments?: ApprovalAssignmentsMap;
   approvalRequests?: ApprovalRequestRecord[];
   currentRevision?: number;
   revisionStatus?: 'DRAFT' | 'IN_REVIEW' | 'IN_REVISION' | 'NEEDS_REVISION' | 'APPROVED';
@@ -271,6 +293,7 @@ interface WizardData {
 interface WADWizardProps {
   wadId: string;
   onClose: () => void;
+  initialStep?: number | null;
 }
 
 function normalizeText(value: unknown): string {
@@ -335,11 +358,12 @@ function BoolField({ label, value, onChange }: { label: string; value: boolean; 
   );
 }
 
-export default function WADWizard({ wadId, onClose }: WADWizardProps) {
+export default function WADWizard({ wadId, onClose, initialStep = null }: WADWizardProps) {
   const { toast } = useToast();
   const [step, setStep] = useState(1);
   const [data, setData] = useState<WizardData>({});
   const [saving, setSaving] = useState(false);
+  const [initialStepApplied, setInitialStepApplied] = useState(false);
 
   const { data: wizardCtx, isLoading } = useQuery<{ wad: any; project: any; po: any; controlStatus?: WadControlStatus; contractContextDefaults?: any }>({
     queryKey: ['/api/work-orders/production', wadId, 'wizard'],
@@ -350,9 +374,15 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
     if (wizardCtx?.wad?.wizardData) {
       const savedData = wizardCtx.wad.wizardData as WizardData;
       setData(savedData);
-      setStep(inferResumeStep(savedData));
+      // Deep-link via ?step=<n> (e.g. from My Tasks WAD-approval assignment) wins over saved currentStep.
+      if (initialStep != null && !initialStepApplied) {
+        setStep(clampWizardStep(initialStep));
+        setInitialStepApplied(true);
+      } else {
+        setStep(inferResumeStep(savedData));
+      }
     }
-  }, [wizardCtx]);
+  }, [wizardCtx, initialStep, initialStepApplied]);
 
   const saveMutation = useMutation({
     mutationFn: async (payload: { wizardData: WizardData; wadStatus?: string }) => {
@@ -383,7 +413,7 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
   });
 
   const approveMutation = useMutation({
-    mutationFn: async (payload: { role: string; displayName: string; decision: 'APPROVED' | 'REJECTED'; comments?: string }) => {
+    mutationFn: async (payload: { role: string; displayName: string; decision: 'APPROVED' | 'REJECTED'; comments?: string; signature: string }) => {
       return apiRequest(`/api/work-orders/production/${wadId}/wizard/approve`, {
         method: 'POST',
         body: JSON.stringify(payload),
@@ -995,6 +1025,11 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
               scopeDescription={data.step2?.scopeDescription ?? ''}
               data={data.step3}
               onChange={(v) => patch('step3', v)}
+              onRemoveDepartment={(dept) => {
+                const currentStep2 = data.step2 ?? { scopeDescription: '', departments: [] as string[] };
+                const nextDepts = (currentStep2.departments ?? []).filter(d => d !== dept);
+                handleStep2Change({ ...currentStep2, departments: nextDepts });
+              }}
             />
           )}
           {/* ── Step 4: Charge Codes ─────────────────────────────────── */}
@@ -1052,6 +1087,11 @@ export default function WADWizard({ wadId, onClose }: WADWizardProps) {
           {step === 11 && (
             <Step11Approvals
               approvals={approvals}
+              assignments={(data.approvalAssignments ?? {}) as ApprovalAssignmentsMap}
+              onAssignmentsChange={(next) => {
+                setData((prev) => ({ ...prev, approvalAssignments: next }));
+                saveMutation.mutate({ wizardData: { ...data, approvalAssignments: next } });
+              }}
               wadId={wadId}
               approveMutation={approveMutation}
             />
@@ -1482,13 +1522,45 @@ function Step2ScopeOfWork({ data, onChange }: {
 }
 
 // ─── Step 3: Work Breakdown ───────────────────────────────────────────────────
-function Step3WorkBreakdown({ departments, scopeDescription, data, onChange }: {
+function Step3WorkBreakdown({ departments, scopeDescription, data, onChange, onRemoveDepartment }: {
   departments: string[];
   scopeDescription?: string;
   data?: WizardData['step3'];
   onChange: (v: WizardData['step3']) => void;
+  onRemoveDepartment?: (dept: string) => void;
 }) {
   const deptLabels = Object.fromEntries(WAD_DEPARTMENTS.map(d => [d.key, d.label]));
+  const [pendingRemove, setPendingRemove] = useState<string | null>(null);
+
+  const isRowDirty = (row: WorkBreakdownRow): boolean => {
+    if (row.seeded) return false;
+    const scopeOperation = getScopeBreakdownOperation(scopeDescription);
+    const opIsDefault = (row.operation ?? '') === (scopeOperation ?? '');
+    return (
+      !opIsDefault ||
+      !!(row.responsibleLead && row.responsibleLead.trim()) ||
+      !!(row.requiredCerts && row.requiredCerts.trim()) ||
+      (typeof row.estimatedHours === 'number' && row.estimatedHours !== 0) ||
+      !!row.isTravelerStep ||
+      !!row.requiresQCSignoff
+    );
+  };
+
+  const requestRemove = (row: WorkBreakdownRow) => {
+    if (!onRemoveDepartment) return;
+    if (isRowDirty(row)) {
+      setPendingRemove(row.department);
+    } else {
+      onRemoveDepartment(row.department);
+    }
+  };
+
+  const confirmRemove = () => {
+    if (pendingRemove && onRemoveDepartment) {
+      onRemoveDepartment(pendingRemove);
+    }
+    setPendingRemove(null);
+  };
 
   const existingRows: WorkBreakdownRow[] = data?.rows ?? [];
 
@@ -1561,6 +1633,7 @@ function Step3WorkBreakdown({ departments, scopeDescription, data, onChange }: {
               <TableHead>Req. Certs</TableHead>
               <TableHead className="w-20 text-center">Traveler</TableHead>
               <TableHead className="w-20 text-center">QC Signoff</TableHead>
+              <TableHead className="w-12" />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -1627,11 +1700,44 @@ function Step3WorkBreakdown({ departments, scopeDescription, data, onChange }: {
                     onCheckedChange={c => setRow(idx, { requiresQCSignoff: !!c })}
                   />
                 </TableCell>
+                <TableCell className="text-right">
+                  {onRemoveDepartment && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                      onClick={() => requestRemove(row)}
+                      aria-label={`Remove ${deptLabels[row.department] ?? row.department}`}
+                      data-testid={`button-remove-wb-row-${row.department}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </div>
+      <AlertDialog open={pendingRemove !== null} onOpenChange={(open) => { if (!open) setPendingRemove(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove {pendingRemove ? (deptLabels[pendingRemove] ?? pendingRemove) : ''}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This row has changes you've entered (operation, lead, hours, certs, or checkboxes).
+              Removing it will discard those entries and also unselect the department on Step 2 and
+              prune its Step 4 charge code row. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-remove-wb-row">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmRemove} data-testid="button-confirm-remove-wb-row">
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -2224,12 +2330,19 @@ function Step10Documents({ data, onChange }: {
 }
 
 // ─── Step 11: Approvals ───────────────────────────────────────────────────────
-function Step11Approvals({ approvals, wadId, approveMutation }: {
+function Step11Approvals({ approvals, assignments, onAssignmentsChange, wadId, approveMutation }: {
   approvals: ApprovalRecord[];
+  assignments: ApprovalAssignmentsMap;
+  onAssignmentsChange: (next: ApprovalAssignmentsMap) => void;
   wadId: string;
   approveMutation: any;
 }) {
-  const [forms, setForms] = useState<Record<string, { displayName: string; decision: 'APPROVED' | 'REJECTED'; comments: string }>>({});
+  const [forms, setForms] = useState<Record<string, { displayName: string; decision: 'APPROVED' | 'REJECTED'; comments: string; signature: string }>>({});
+
+  const { data: employees = [] } = useQuery<Array<{ id: number; name: string; role?: string | null; isActive?: boolean | null }>>({
+    queryKey: ['/api/employees'],
+  });
+  const activeEmployees = employees.filter(e => e.isActive !== false);
 
   const getApproval = (role: string) => approvals.find(a => a.role === role);
 
@@ -2238,26 +2351,54 @@ function Step11Approvals({ approvals, wadId, approveMutation }: {
 
   const submit = (role: string) => {
     const f = forms[role];
-    if (!f?.displayName) return;
-    approveMutation.mutate({ role, displayName: f.displayName, decision: f.decision, comments: f.comments });
-    setForms(prev => ({ ...prev, [role]: { displayName: '', decision: 'APPROVED', comments: '' } }));
+    if (!f?.displayName || !f?.signature) return;
+    approveMutation.mutate({ role, displayName: f.displayName, decision: f.decision, comments: f.comments, signature: f.signature });
+    setForms(prev => ({ ...prev, [role]: { displayName: '', decision: 'APPROVED', comments: '', signature: '' } }));
+  };
+
+  const handleAssign = (roleKey: string, value: string) => {
+    const next: ApprovalAssignmentsMap = { ...assignments };
+    if (value === EMPTY_SELECT_VALUE) {
+      delete next[roleKey];
+    } else {
+      const empId = Number.parseInt(value, 10);
+      const emp = activeEmployees.find(e => e.id === empId);
+      if (!emp) return;
+      next[roleKey] = {
+        employeeId: emp.id,
+        employeeName: emp.name,
+        assignedAt: new Date().toISOString(),
+      };
+      // Auto-fill the approver display name field if the form is empty.
+      setForm(roleKey, { displayName: forms[roleKey]?.displayName || emp.name });
+    }
+    onAssignmentsChange(next);
   };
 
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Collect the WAD approval matrix: PM, engineering, quality, operations, and executive. Rejections keep the WAD in revision until the next saved change resets the signature cycle.
+        Collect the WAD approval matrix: PM, engineering, quality, operations, and executive. Assign each
+        signature to a named approver so the pending task appears on their Pre-production Checklist /
+        My Tasks dashboard. Rejections keep the WAD in revision until the next saved change resets the
+        signature cycle.
       </p>
       <div className="space-y-3">
         {REQUIRED_APPROVAL_ROLES.map(role => {
           const existing = getApproval(role.key);
-          const f = forms[role.key] ?? { displayName: '', decision: 'APPROVED' as const, comments: '' };
+          const f = forms[role.key] ?? { displayName: '', decision: 'APPROVED' as const, comments: '', signature: '' };
+          const assignment = assignments[role.key];
           return (
-            <Card key={role.key} className="p-3">
-              <div className="flex items-center justify-between mb-2">
+            <Card key={role.key} className="p-3" data-testid={`card-approval-${role.key}`}>
+              <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
                 <div className="flex items-center gap-2">
                   <span className="font-medium text-sm">{role.label}</span>
-                  {role.optional && <Badge variant="outline" className="text-xs">Optional</Badge>}
+                  {(role as { optional?: boolean }).optional && <Badge variant="outline" className="text-xs">Optional</Badge>}
+                  {assignment && !existing && (
+                    <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200" data-testid={`badge-assigned-${role.key}`}>
+                      Awaiting {assignment.employeeName ?? `employee #${assignment.employeeId}`}
+                    </Badge>
+                  )}
                 </div>
                 {existing && (
                   <div className="flex items-center gap-1 text-xs">
@@ -2271,9 +2412,34 @@ function Step11Approvals({ approvals, wadId, approveMutation }: {
                   </div>
                 )}
               </div>
+              <div className="mb-2">
+                <Label className="text-xs text-muted-foreground">Assign to</Label>
+                <Select
+                  value={assignment ? String(assignment.employeeId) : EMPTY_SELECT_VALUE}
+                  onValueChange={(v) => handleAssign(role.key, v)}
+                >
+                  <SelectTrigger className="h-8 text-sm" data-testid={`select-assignee-${role.key}`}>
+                    <SelectValue placeholder="Select an approver…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={EMPTY_SELECT_VALUE}>— Unassigned —</SelectItem>
+                    {activeEmployees.map(emp => (
+                      <SelectItem key={emp.id} value={String(emp.id)}>
+                        {emp.name}{emp.role ? ` (${emp.role})` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {assignment && (
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Pending signature appears on {assignment.employeeName ?? 'assignee'}'s My Tasks dashboard.
+                  </p>
+                )}
+              </div>
               {existing ? (
                 <div className="text-xs text-muted-foreground">
-                  Recorded {new Date(existing.timestamp).toLocaleDateString()}
+                  Recorded {new Date(existing.signedAt ?? existing.timestamp).toLocaleDateString()}
+                  {existing.signature && <span> - Signed: {existing.signature}</span>}
                   {existing.comments && <span> · "{existing.comments}"</span>}
                 </div>
               ) : (
@@ -2296,14 +2462,21 @@ function Step11Approvals({ approvals, wadId, approveMutation }: {
                   <Input
                     value={f.comments}
                     onChange={e => setForm(role.key, { comments: e.target.value })}
-                    placeholder="Comments (optional)"
+                    placeholder={f.decision === 'REJECTED' ? 'Denial notes required' : 'Comments (optional)'}
+                    className="h-8 text-sm"
+                  />
+                  <Input
+                    value={f.signature}
+                    onChange={e => setForm(role.key, { signature: e.target.value })}
+                    placeholder="Typed signature *"
                     className="h-8 text-sm"
                   />
                   <Button
                     size="sm"
                     onClick={() => submit(role.key)}
-                    disabled={!f.displayName || approveMutation.isPending}
+                    disabled={!f.displayName || !f.signature || (f.decision === 'REJECTED' && !f.comments.trim()) || approveMutation.isPending}
                     className={f.decision === 'REJECTED' ? 'bg-red-600 hover:bg-red-700 text-white' : ''}
+                    data-testid={`button-record-${role.key}`}
                   >
                     {approveMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
                     Record {f.decision === 'APPROVED' ? 'Approval' : 'Rejection'}

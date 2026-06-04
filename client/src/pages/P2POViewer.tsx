@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Printer, Download, ArrowLeft, FileText, Clock } from 'lucide-react';
-import { format } from 'date-fns';
+import { formatDateOnlyMedium } from '@shared/utils/dateNormalization';
 import { COMPANY_INFO } from '@shared/company-config';
 
 interface P2POLineItem {
@@ -160,11 +160,11 @@ export default function P2POViewer() {
             <div className="text-right space-y-3">
               <div>
                 <span className="text-sm text-gray-500">PO Date:</span>
-                <p className="font-semibold">{format(new Date(po.poDate), 'MMM d, yyyy')}</p>
+                <p className="font-semibold">{formatDateOnlyMedium(po.poDate)}</p>
               </div>
               <div>
                 <span className="text-sm text-gray-500">Expected Delivery:</span>
-                <p className="font-semibold">{format(new Date(po.expectedDelivery), 'MMM d, yyyy')}</p>
+                <p className="font-semibold">{formatDateOnlyMedium(po.expectedDelivery)}</p>
               </div>
             </div>
           </div>

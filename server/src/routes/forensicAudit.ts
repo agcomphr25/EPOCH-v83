@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { requireAdminOrOwner, sessionAwareAuth } from '../../middleware/auth';
 import { runForensicScan, getFindings, getFindingsSummary, updateFindingStatus } from '../services/dcaaForensicEngine';
 import { timekeepingForensicRules } from '../services/dcaaForensicRules';
+import { securityForensicRules } from '../services/securityForensicRules';
 import { getLastAutomatedScan, getForensicAuditScheduleConfig, setForensicAuditScheduleConfig, getScanHistory } from '../jobs/forensicAuditScheduler';
 
 const router = Router();
@@ -17,7 +18,7 @@ router.post('/run', requireAdminOrOwner, async (req, res) => {
 });
 
 router.get('/rules', sessionAwareAuth, (_req, res) => {
-  const rules = timekeepingForensicRules.map(r => ({
+  const rules = [...timekeepingForensicRules, ...securityForensicRules].map(r => ({
     ruleId: r.ruleId,
     domain: r.domain,
     severity: r.severity,

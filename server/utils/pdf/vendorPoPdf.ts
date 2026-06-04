@@ -1,6 +1,7 @@
 import { PDFDocument, rgb, StandardFonts, type PDFFont, type PDFPage } from 'pdf-lib';
 import { storage } from '../../storage';
 import { resolveAssetPath } from '../../src/utils/assetPaths';
+import { resolveVendorPoReturnEmail } from '../vendorPoContact';
 import * as fs from 'fs';
 
 const PAGE = { WIDTH: 612, HEIGHT: 792, MARGIN: 40 } as const;
@@ -225,7 +226,7 @@ export async function generateVendorPoPdf(poId: number): Promise<Buffer> {
   const companyName = companySettings?.companyName || 'AG Composites';
   const companyAddress = companySettings?.companyAddress || '';
   const companyPhone = companySettings?.companyPhone || '';
-  const companyEmail = companySettings?.companyEmail || '';
+  const companyEmail = resolveVendorPoReturnEmail(poSettings) || companySettings?.companyEmail || '';
 
   if (companyAddress) {
     page.drawText(companyAddress, { x: PAGE.MARGIN, y, size: FONT_SIZE.SECTION_LABEL, font, color: COLOR.MUTED_TEXT });

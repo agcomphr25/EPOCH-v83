@@ -1,0 +1,521 @@
+ React initialized: Object
+ React hooks: Object
+ [EPOCH SYNC] Sync engine starting
+ [EPOCH SYNC] Sync engine started — interval: 30000 ms
+ App component is rendering...
+ Environment: production
+ Base URL: /
+ 🌐 API Request to /api/vendor-pos/compliance-backfill?filter=enforced (timeout: 15000ms, deployment: true)
+ [EPOCH] Service Worker Registered https://agcompepoch.xyz/
+ [EPOCH] Install prompt captured and ready
+cutting-control-center/bom:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+ ✅ API Response from /api/vendor-pos/compliance-backfill?filter=enforced: 200
+api/p2/control-center/po-statuses:1  Failed to load resource: the server responded with a status of 500 ()
+api/p2/control-center/po-statuses:1  Failed to load resource: the server responded with a status of 500 ()
+api/p2/control-center/production-queue:1  Failed to load resource: the server responded with a status of 500 ()
+api/p2/control-center/production-queue:1  Failed to load resource: the server responded with a status of 500 ()
+api/p2/control-center/scheduling-list:1  Failed to load resource: the server responded with a status of 500 ()
+api/p2/control-center/scheduling-list:1  Failed to load resource: the server responded with a status of 500 ()
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications' failed: 
+ [EPOCH SYNC] Connection restored — triggering sync
+ [EPOCH SYNC] Connection restored — triggering sync
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+api/permissions/me:1  Failed to load resource: the server responded with a status of 403 ()
+ [AUTH] Query returned 403 for /api/permissions/me
+ [AUTH] 403 on /api/permissions/me — checking session state
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ [AUTH] Session check returned 401 — session is gone
+ [AUTH] Session unauthorized on login page - tokens cleared, no toast
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+ 🌐 API Request to /api/vendor-pos/compliance-backfill?filter=enforced (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/admin/queue-integrity/status (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/inventory/parts-requests/owner-approvals (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/admin/queue-integrity/status: 200
+ ✅ API Response from /api/inventory/parts-requests/owner-approvals: 200
+ ✅ API Response from /api/vendor-pos/compliance-backfill?filter=enforced: 200
+api/p2/control-center/scheduling-list:1  Failed to load resource: the server responded with a status of 500 ()
+api/p2/control-center/scheduling-list:1  Failed to load resource: the server responded with a status of 500 ()
+api/p2/control-center/po-statuses:1  Failed to load resource: the server responded with a status of 429 ()
+ 🌐 API Request to /api/vendor-pos?status=Sent&pageSize=200 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/vendor-pos?status=Partially%20Received&pageSize=200 (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/receipts/pending-by-po (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/receipts?status=complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/receipts?status=complete: 200
+ ✅ API Response from /api/vendor-pos?status=Sent&pageSize=200: 200
+ ✅ API Response from /api/vendor-pos?status=Partially%20Received&pageSize=200: 200
+ ✅ API Response from /api/receipts/pending-by-po: 200
+ 🌐 API Request to /api/receipts/pending-by-po (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/receipts/pending-by-po: 200
+ 🌐 API Request to /api/receipts?status=complete (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/receipts?status=complete: 200
+ 🌐 API Request to /api/receipts/pending-by-po (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/receipts/pending-by-po: 200
+ 🌐 API Request to /api/vendor-pos?status=Sent (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/vendor-pos/98/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/vendor-pos/97/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/vendor-pos/82/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/vendor-pos/81/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/vendor-pos/80/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/vendor-pos/78/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/vendor-pos/70/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/vendor-pos/68/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/vendor-pos/55/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/vendor-pos/24/items (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/vendor-pos/98/items: 200
+ ✅ API Response from /api/vendor-pos/70/items: 200
+ ✅ API Response from /api/vendor-pos/24/items: 200
+ ✅ API Response from /api/vendor-pos/68/items: 200
+ ✅ API Response from /api/vendor-pos/80/items: 200
+ ✅ API Response from /api/vendor-pos/82/items: 200
+ ✅ API Response from /api/vendor-pos/81/items: 200
+ ✅ API Response from /api/vendor-pos/97/items: 200
+ ✅ API Response from /api/vendor-pos/78/items: 200
+ ✅ API Response from /api/vendor-pos?status=Sent: 200
+ ✅ API Response from /api/vendor-pos/55/items: 200
+ [EPOCH SYNC] Connection restored — triggering sync
+ 🌐 API Request to /api/vendor-pos/compliance-backfill?filter=enforced (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/vendor-pos?status=Sent (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/vendor-pos/98/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/vendor-pos/97/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/vendor-pos/82/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/vendor-pos/81/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/vendor-pos/80/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/vendor-pos/78/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/vendor-pos/70/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/vendor-pos/68/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/vendor-pos/55/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/vendor-pos/24/items (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/vendor-pos/97/items: 200
+ ✅ API Response from /api/vendor-pos/70/items: 200
+ ✅ API Response from /api/vendor-pos/68/items: 200
+ ✅ API Response from /api/vendor-pos/98/items: 200
+ ✅ API Response from /api/vendor-pos/78/items: 200
+ ✅ API Response from /api/vendor-pos/82/items: 200
+ ✅ API Response from /api/vendor-pos/compliance-backfill?filter=enforced: 200
+ ✅ API Response from /api/vendor-pos/55/items: 200
+ ✅ API Response from /api/vendor-pos/81/items: 200
+ ✅ API Response from /api/vendor-pos/24/items: 200
+ ✅ API Response from /api/vendor-pos/80/items: 200
+ ✅ API Response from /api/vendor-pos?status=Sent: 200
+ [EPOCH SYNC] Connection restored — triggering sync
+ 🌐 API Request to /api/vendor-pos/compliance-backfill?filter=enforced (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/vendor-pos?status=Sent (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/vendor-pos/98/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/vendor-pos/97/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/vendor-pos/82/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/vendor-pos/81/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/vendor-pos/80/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/vendor-pos/78/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/vendor-pos/70/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/vendor-pos/68/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/vendor-pos/55/items (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/vendor-pos/24/items (timeout: 15000ms, deployment: true)
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+api/employees/recertification-count:1  Failed to load resource: the server responded with a status of 403 ()
+ [AUTH] Query returned 403 for /api/employees/recertification-count
+ [AUTH] 403 on /api/employees/recertification-count — checking session state
+api/permissions/me:1  Failed to load resource: the server responded with a status of 403 ()
+ [AUTH] Query returned 403 for /api/permissions/me
+ [AUTH] 403 on /api/permissions/me — checking session state
+api/vendor-pos/24/items:1  Failed to load resource: the server responded with a status of 403 ()
+ ✅ API Response from /api/vendor-pos/24/items: 403
+ [AUTH] 403 on /api/vendor-pos/24/items — checking session state
+api/vendor-pos/81/items:1  Failed to load resource: the server responded with a status of 403 ()
+ ✅ API Response from /api/vendor-pos/81/items: 403
+ [AUTH] 403 on /api/vendor-pos/81/items — checking session state
+api/policies/outstanding:1  Failed to load resource: the server responded with a status of 403 ()
+ [AUTH] Query returned 403 for /api/policies/outstanding
+ [AUTH] 403 on /api/policies/outstanding — checking session state
+api/vendor-pos/55/items:1  Failed to load resource: the server responded with a status of 403 ()
+ ✅ API Response from /api/vendor-pos/55/items: 403
+ [AUTH] 403 on /api/vendor-pos/55/items — checking session state
+api/inventory/parts-requests/pending-receipts:1  Failed to load resource: the server responded with a status of 403 ()
+ [AUTH] Query returned 403 for /api/inventory/parts-requests/pending-receipts
+ [AUTH] 403 on /api/inventory/parts-requests/pending-receipts — checking session state
+api/inventory:1  Failed to load resource: the server responded with a status of 403 ()
+ [AUTH] Query returned 403 for /api/inventory
+ [AUTH] 403 on /api/inventory — checking session state
+api/vendor-pos?status=Sent:1  Failed to load resource: the server responded with a status of 403 ()
+ ✅ API Response from /api/vendor-pos?status=Sent: 403
+ [AUTH] 403 on /api/vendor-pos?status=Sent — checking session state
+api/vendor-pos/98/items:1  Failed to load resource: the server responded with a status of 403 ()
+ ✅ API Response from /api/vendor-pos/98/items: 403
+ [AUTH] 403 on /api/vendor-pos/98/items — checking session state
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+api/vendor-pos/68/items:1  Failed to load resource: the server responded with a status of 403 ()
+ ✅ API Response from /api/vendor-pos/68/items: 403
+ [AUTH] 403 on /api/vendor-pos/68/items — checking session state
+api/vendor-pos/97/items:1  Failed to load resource: the server responded with a status of 403 ()
+ ✅ API Response from /api/vendor-pos/97/items: 403
+ [AUTH] 403 on /api/vendor-pos/97/items — checking session state
+api/vendor-pos/78/items:1  Failed to load resource: the server responded with a status of 403 ()
+ ✅ API Response from /api/vendor-pos/78/items: 403
+ [AUTH] 403 on /api/vendor-pos/78/items — checking session state
+api/vendor-pos/82/items:1  Failed to load resource: the server responded with a status of 403 ()
+ ✅ API Response from /api/vendor-pos/82/items: 403
+ [AUTH] 403 on /api/vendor-pos/82/items — checking session state
+api/vendor-pos/compliance-backfill?filter=enforced:1  Failed to load resource: the server responded with a status of 403 ()
+ ✅ API Response from /api/vendor-pos/compliance-backfill?filter=enforced: 403
+ [AUTH] 403 on /api/vendor-pos/compliance-backfill?filter=enforced — checking session state
+api/vendor-pos/70/items:1  Failed to load resource: the server responded with a status of 403 ()
+ ✅ API Response from /api/vendor-pos/70/items: 403
+ [AUTH] 403 on /api/vendor-pos/70/items — checking session state
+api/vendor-pos/80/items:1  Failed to load resource: the server responded with a status of 403 ()
+ ✅ API Response from /api/vendor-pos/80/items: 403
+ [AUTH] 403 on /api/vendor-pos/80/items — checking session state
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ [AUTH] Session check returned 401 — session is gone
+ [AUTH] Session unauthorized on login page - tokens cleared, no toast
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ [AUTH] Session check returned 401 — session is gone
+ [AUTH] Session unauthorized on login page - tokens cleared, no toast
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ [AUTH] Session check returned 401 — session is gone
+ [AUTH] Session unauthorized on login page - tokens cleared, no toast
+ API error raw body: {"error":"Invalid or expired token"}
+ 💥 API Request failed for /api/vendor-pos/24/items: 
+ Failed to fetch items for PO 24: 
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ [AUTH] Session check returned 401 — session is gone
+ [AUTH] Session unauthorized on login page - tokens cleared, no toast
+ API error raw body: {"error":"Invalid or expired token"}
+ 💥 API Request failed for /api/vendor-pos/81/items: 
+ Failed to fetch items for PO 81: 
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ [AUTH] Session check returned 401 — session is gone
+ [AUTH] Session unauthorized on login page - tokens cleared, no toast
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ [AUTH] Session check returned 401 — session is gone
+ [AUTH] Session unauthorized on login page - tokens cleared, no toast
+ API error raw body: {"error":"Invalid or expired token"}
+ 💥 API Request failed for /api/vendor-pos/55/items: 
+ Failed to fetch items for PO 55: 
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ [AUTH] Session check returned 401 — session is gone
+ [AUTH] Session unauthorized on login page - tokens cleared, no toast
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ [AUTH] Session check returned 401 — session is gone
+ [AUTH] Session unauthorized on login page - tokens cleared, no toast
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ [AUTH] Session check returned 401 — session is gone
+ [AUTH] Session unauthorized on login page - tokens cleared, no toast
+ API error raw body: {"error":"Invalid or expired token"}
+ 💥 API Request failed for /api/vendor-pos?status=Sent: 
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ [AUTH] Session check returned 401 — session is gone
+ [AUTH] Session unauthorized on login page - tokens cleared, no toast
+ API error raw body: {"error":"Invalid or expired token"}
+ 💥 API Request failed for /api/vendor-pos/98/items: 
+ Failed to fetch items for PO 98: 
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ [AUTH] Session check returned 401 — session is gone
+ [AUTH] Session unauthorized on login page - tokens cleared, no toast
+ API error raw body: {"error":"Invalid or expired token"}
+ 💥 API Request failed for /api/vendor-pos/68/items: 
+ Failed to fetch items for PO 68: 
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ [AUTH] Session check returned 401 — session is gone
+ [AUTH] Session unauthorized on login page - tokens cleared, no toast
+ API error raw body: {"error":"Invalid or expired token"}
+ 💥 API Request failed for /api/vendor-pos/97/items: 
+ Failed to fetch items for PO 97: 
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ [AUTH] Session check returned 401 — session is gone
+ [AUTH] Session unauthorized on login page - tokens cleared, no toast
+ API error raw body: {"error":"Invalid or expired token"}
+ 💥 API Request failed for /api/vendor-pos/78/items: 
+ Failed to fetch items for PO 78: 
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ [AUTH] Session check returned 401 — session is gone
+ [AUTH] Session unauthorized on login page - tokens cleared, no toast
+ API error raw body: {"error":"Invalid or expired token"}
+ 💥 API Request failed for /api/vendor-pos/82/items: 
+ Failed to fetch items for PO 82: 
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ [AUTH] Session check returned 401 — session is gone
+ [AUTH] Session unauthorized on login page - tokens cleared, no toast
+ API error raw body: {"error":"Invalid or expired token"}
+ 💥 API Request failed for /api/vendor-pos/compliance-backfill?filter=enforced: 
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ [AUTH] Session check returned 401 — session is gone
+ [AUTH] Session unauthorized on login page - tokens cleared, no toast
+ API error raw body: {"error":"Invalid or expired token"}
+ 💥 API Request failed for /api/vendor-pos/70/items: 
+ Failed to fetch items for PO 70: 
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ [AUTH] Session check returned 401 — session is gone
+ [AUTH] Session unauthorized on login page - tokens cleared, no toast
+ API error raw body: {"error":"Invalid or expired token"}
+ 💥 API Request failed for /api/vendor-pos/80/items: 
+ Failed to fetch items for PO 80: 
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 403 ()
+ 🌐 API Request to /api/vendor-pos/compliance-backfill?filter=enforced (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/admin/queue-integrity/status (timeout: 15000ms, deployment: true)
+ 🌐 API Request to /api/inventory/parts-requests/owner-approvals (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/inventory/parts-requests/owner-approvals: 200
+ ✅ API Response from /api/vendor-pos/compliance-backfill?filter=enforced: 200
+ ✅ API Response from /api/admin/queue-integrity/status: 200
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+ 🌐 API Request to /api/cutting-table-mfg-queue/bulk-print-barcodes (timeout: 15000ms, deployment: true)
+ ✅ API Response from /api/cutting-table-mfg-queue/bulk-print-barcodes: 200
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ 🌐 API Request to /api/vendor-pos/compliance-backfill?filter=enforced (timeout: 15000ms, deployment: true)
+ 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+api/permissions/me:1  Failed to load resource: the server responded with a status of 401 ()
+ [AUTH] Query returned 401 for /api/permissions/me
+ [AUTH] 401 on /api/permissions/me — checking session state
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+api/vendor-pos/compliance-backfill?filter=enforced:1  Failed to load resource: the server responded with a status of 401 ()
+ ✅ API Response from /api/vendor-pos/compliance-backfill?filter=enforced: 401
+ [AUTH] 401 on /api/vendor-pos/compliance-backfill?filter=enforced — checking session state
+api/employees/recertification-count:1  Failed to load resource: the server responded with a status of 401 ()
+ [AUTH] Query returned 401 for /api/employees/recertification-count
+ [AUTH] 401 on /api/employees/recertification-count — checking session state
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ [AUTH] Session check returned 401 — session is gone
+ [AUTH] Session expired on kiosk page — tokens cleared, no redirect
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+ [AUTH] Session check returned 401 — session is gone
+ [AUTH] Session expired on kiosk page — tokens cleared, no redirect
+ API error raw body: {"error":"No session token"}
+ 💥 API Request failed for /api/vendor-pos/compliance-backfill?filter=enforced: 
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+index-DSPTb691.js:235 [AUTH] Session check returned 401 — session is gone
+Tds @ index-DSPTb691.js:235
+index-DSPTb691.js:235 [AUTH] Session expired on kiosk page — tokens cleared, no redirect
+Dds @ index-DSPTb691.js:235
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications' failed: 
+ WebSocket connection to 'wss://agcompepoch.xyz/ws/notifications' failed: 
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+api/policies/outstanding:1  Failed to load resource: the server responded with a status of 401 ()
+index-DSPTb691.js:235 [AUTH] Query returned 401 for /api/policies/outstanding
+(anonymous) @ index-DSPTb691.js:235
+index-DSPTb691.js:235 [AUTH] 401 on /api/policies/outstanding — checking session state
+Kwt @ index-DSPTb691.js:235
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+index-DSPTb691.js:235 [AUTH] Session check returned 401 — session is gone
+Tds @ index-DSPTb691.js:235
+index-DSPTb691.js:235 [AUTH] Session expired on login page - tokens cleared, no toast
+Dds @ index-DSPTb691.js:235
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+api/internal-messages/unread/count/19:1  Failed to load resource: the server responded with a status of 401 ()
+index-DSPTb691.js:235 🌐 API Request to /api/vendor-pos/compliance-backfill?filter=enforced (timeout: 15000ms, deployment: true)
+index-DSPTb691.js:235 🌐 API Request to /api/admin/queue-integrity/status (timeout: 15000ms, deployment: true)
+index-DSPTb691.js:235 🌐 API Request to /api/inventory/parts-requests/owner-approvals (timeout: 15000ms, deployment: true)
+index-DSPTb691.js:235 ✅ API Response from /api/inventory/parts-requests/owner-approvals: 200
+index-DSPTb691.js:235 ✅ API Response from /api/vendor-pos/compliance-backfill?filter=enforced: 200
+index-DSPTb691.js:235 ✅ API Response from /api/admin/queue-integrity/status: 200
+api/pm-dashboard/589d0880-78c8-4124-ba00-196030de8454/production:1  Failed to load resource: the server responded with a status of 500 ()
+api/pm-dashboard/589d0880-78c8-4124-ba00-196030de8454/summary:1  Failed to load resource: the server responded with a status of 500 ()
+api/pm-dashboard/589d0880-78c8-4124-ba00-196030de8454/production:1  Failed to load resource: the server responded with a status of 500 ()
+api/pm-dashboard/589d0880-78c8-4124-ba00-196030de8454/summary:1  Failed to load resource: the server responded with a status of 500 ()
+api/pm-dashboard/589d0880-78c8-4124-ba00-196030de8454/materials:1  Failed to load resource: the server responded with a status of 500 ()
+api/pm-dashboard/589d0880-78c8-4124-ba00-196030de8454/materials:1  Failed to load resource: the server responded with a status of 500 ()
+index-DSPTb691.js:235 🌐 API Request to /api/work-orders/production/ensure-for-project/589d0880-78c8-4124-ba00-196030de8454 (timeout: 15000ms, deployment: true)
+index-DSPTb691.js:235 ✅ API Response from /api/work-orders/production/ensure-for-project/589d0880-78c8-4124-ba00-196030de8454: 200
+index-DSPTb691.js:235 🌐 API Request to /api/work-orders/production/4682a64d-21ce-4852-aadf-901553b09aef/wizard (timeout: 15000ms, deployment: true)
+index-DSPTb691.js:235 ✅ API Response from /api/work-orders/production/4682a64d-21ce-4852-aadf-901553b09aef/wizard: 200
+index-DSPTb691.js:235 🌐 API Request to /api/work-orders/production/4682a64d-21ce-4852-aadf-901553b09aef/wizard (timeout: 15000ms, deployment: true)
+index-DSPTb691.js:235 ✅ API Response from /api/work-orders/production/4682a64d-21ce-4852-aadf-901553b09aef/wizard: 200
+index-DSPTb691.js:235 🌐 API Request to /api/work-orders/production/4682a64d-21ce-4852-aadf-901553b09aef/wizard (timeout: 15000ms, deployment: true)
+index-DSPTb691.js:235 ✅ API Response from /api/work-orders/production/4682a64d-21ce-4852-aadf-901553b09aef/wizard: 200
+index-DSPTb691.js:235 🌐 API Request to /api/work-orders/production/4682a64d-21ce-4852-aadf-901553b09aef/wizard (timeout: 15000ms, deployment: true)
+index-DSPTb691.js:235 ✅ API Response from /api/work-orders/production/4682a64d-21ce-4852-aadf-901553b09aef/wizard: 200
+index-DSPTb691.js:235 🌐 API Request to /api/work-orders/production/4682a64d-21ce-4852-aadf-901553b09aef/wizard (timeout: 15000ms, deployment: true)
+index-DSPTb691.js:235 ✅ API Response from /api/work-orders/production/4682a64d-21ce-4852-aadf-901553b09aef/wizard: 200
+index-DSPTb691.js:235 🌐 API Request to /api/work-orders/production/4682a64d-21ce-4852-aadf-901553b09aef/wizard (timeout: 15000ms, deployment: true)
+index-DSPTb691.js:235 ✅ API Response from /api/work-orders/production/4682a64d-21ce-4852-aadf-901553b09aef/wizard: 200
+index-DSPTb691.js:235 🌐 API Request to /api/work-orders/production/4682a64d-21ce-4852-aadf-901553b09aef/wizard (timeout: 15000ms, deployment: true)
+index-DSPTb691.js:235 ✅ API Response from /api/work-orders/production/4682a64d-21ce-4852-aadf-901553b09aef/wizard: 200
+index-DSPTb691.js:235 🌐 API Request to /api/work-orders/production/4682a64d-21ce-4852-aadf-901553b09aef/wizard (timeout: 15000ms, deployment: true)
+index-DSPTb691.js:235 ✅ API Response from /api/work-orders/production/4682a64d-21ce-4852-aadf-901553b09aef/wizard: 200
+index-DSPTb691.js:235 🌐 API Request to /api/work-orders/production/4682a64d-21ce-4852-aadf-901553b09aef/wizard (timeout: 15000ms, deployment: true)
+index-DSPTb691.js:235 ✅ API Response from /api/work-orders/production/4682a64d-21ce-4852-aadf-901553b09aef/wizard: 200
+index-DSPTb691.js:235 🌐 API Request to /api/work-orders/production/4682a64d-21ce-4852-aadf-901553b09aef/wizard (timeout: 15000ms, deployment: true)
+index-DSPTb691.js:235 ✅ API Response from /api/work-orders/production/4682a64d-21ce-4852-aadf-901553b09aef/wizard: 200
+index-DSPTb691.js:235 🌐 API Request to /api/work-orders/production/4682a64d-21ce-4852-aadf-901553b09aef/wizard (timeout: 15000ms, deployment: true)
+index-DSPTb691.js:235 ✅ API Response from /api/work-orders/production/4682a64d-21ce-4852-aadf-901553b09aef/wizard: 200
+index-DSPTb691.js:235 🌐 API Request to /api/work-orders/production/4682a64d-21ce-4852-aadf-901553b09aef/wizard (timeout: 15000ms, deployment: true)
+index-DSPTb691.js:235 ✅ API Response from /api/work-orders/production/4682a64d-21ce-4852-aadf-901553b09aef/wizard: 200
+index-DSPTb691.js:235 🌐 API Request to /api/work-orders/production/4682a64d-21ce-4852-aadf-901553b09aef/wizard (timeout: 15000ms, deployment: true)
+index-DSPTb691.js:235 ✅ API Response from /api/work-orders/production/4682a64d-21ce-4852-aadf-901553b09aef/wizard: 200
+index-DSPTb691.js:235 🌐 API Request to /api/work-orders/production/4682a64d-21ce-4852-aadf-901553b09aef/wizard (timeout: 15000ms, deployment: true)
+index-DSPTb691.js:235 ✅ API Response from /api/work-orders/production/4682a64d-21ce-4852-aadf-901553b09aef/wizard: 200
+index-DSPTb691.js:235 🌐 API Request to /api/work-orders/production/4682a64d-21ce-4852-aadf-901553b09aef/wizard (timeout: 15000ms, deployment: true)
+index-DSPTb691.js:235 ✅ API Response from /api/work-orders/production/4682a64d-21ce-4852-aadf-901553b09aef/wizard: 200
+index-DSPTb691.js:235 🌐 API Request to /api/work-orders/production/4682a64d-21ce-4852-aadf-901553b09aef/wizard (timeout: 15000ms, deployment: true)
+index-DSPTb691.js:235 ✅ API Response from /api/work-orders/production/4682a64d-21ce-4852-aadf-901553b09aef/wizard: 200
+index-DSPTb691.js:235 🌐 API Request to /api/work-orders/production/4682a64d-21ce-4852-aadf-901553b09aef/wizard (timeout: 15000ms, deployment: true)
+index-DSPTb691.js:235 ✅ API Response from /api/work-orders/production/4682a64d-21ce-4852-aadf-901553b09aef/wizard: 200
+index-DSPTb691.js:235 🌐 API Request to /api/work-orders/production/4682a64d-21ce-4852-aadf-901553b09aef/wizard (timeout: 15000ms, deployment: true)
+index-DSPTb691.js:235 ✅ API Response from /api/work-orders/production/4682a64d-21ce-4852-aadf-901553b09aef/wizard: 200
+index-DSPTb691.js:235 🌐 API Request to /api/work-orders/production/4682a64d-21ce-4852-aadf-901553b09aef/wizard (timeout: 15000ms, deployment: true)
+index-DSPTb691.js:235 ✅ API Response from /api/work-orders/production/4682a64d-21ce-4852-aadf-901553b09aef/wizard: 200
+index-DSPTb691.js:235 🌐 API Request to /api/work-orders/production/4682a64d-21ce-4852-aadf-901553b09aef/wizard (timeout: 15000ms, deployment: true)
+index-DSPTb691.js:235 ✅ API Response from /api/work-orders/production/4682a64d-21ce-4852-aadf-901553b09aef/wizard: 200
+index-DSPTb691.js:235 🌐 API Request to /api/work-orders/production/4682a64d-21ce-4852-aadf-901553b09aef/wizard (timeout: 15000ms, deployment: true)
+index-DSPTb691.js:235 ✅ API Response from /api/work-orders/production/4682a64d-21ce-4852-aadf-901553b09aef/wizard: 200
+api/training/trainer/6/soa-notes/recent:1  Failed to load resource: the server responded with a status of 500 ()
+api/training/daily-sessions/yesterday-feedback:1  Failed to load resource: the server responded with a status of 500 ()
+api/training/content-library/training-plans:1  Failed to load resource: the server responded with a status of 500 ()
+api/training/content-library/topics:1  Failed to load resource: the server responded with a status of 500 ()
+api/training/daily-sessions/yesterday-feedback:1  Failed to load resource: the server responded with a status of 500 ()
+api/training/content-library/training-plans:1  Failed to load resource: the server responded with a status of 500 ()
+api/training/content-library/topics:1  Failed to load resource: the server responded with a status of 500 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+index-DSPTb691.js:235 🌐 API Request to /api/training/modules (timeout: 15000ms, deployment: true)
+index-DSPTb691.js:235 ✅ API Response from /api/training/modules: 201
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+index-DSPTb691.js:235 🌐 API Request to /api/training/modules/11/ai-transform (timeout: 120000ms, deployment: true)
+api/training/modules/11/ai-transform:1  Failed to load resource: the server responded with a status of 400 ()
+index-DSPTb691.js:235 ✅ API Response from /api/training/modules/11/ai-transform: 400
+index-DSPTb691.js:5575 API error raw body: {"error":"Module has no content to transform"}
+console.error @ index-DSPTb691.js:5575
+index-DSPTb691.js:5575 💥 API Request failed for /api/training/modules/11/ai-transform: Error: Module has no content to transform
+    at Ne (index-DSPTb691.js:235:9246)
+    at async Object.mutationFn (index-DSPTb691.js:4331:4434)
+console.error @ index-DSPTb691.js:5575
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+index-DSPTb691.js:235 🌐 API Request to /api/training/modules (timeout: 15000ms, deployment: true)
+index-DSPTb691.js:235 ✅ API Response from /api/training/modules: 201
+index-DSPTb691.js:235 🌐 API Request to /api/training/modules/12/questions (timeout: 15000ms, deployment: true)
+api/training/modules/12/questions:1  Failed to load resource: the server responded with a status of 404 ()
+index-DSPTb691.js:235 ✅ API Response from /api/training/modules/12/questions: 404
+index-DSPTb691.js:5575 API error raw body: <!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Error</title>
+</head>
+<body>
+<pre>Cannot POST /api/training/modules/12/questions</pre>
+</body>
+</html>
+
+console.error @ index-DSPTb691.js:5575
+index-DSPTb691.js:5575 💥 API Request failed for /api/training/modules/12/questions: Error: <!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Error</title>
+</head>
+<body>
+<pre>Cannot POST /api/training/modules/12/questions</pre>
+</body>
+</html>
+
+    at Ne (index-DSPTb691.js:235:9246)
+    at async Object.mutationFn (index-DSPTb691.js:4331:3766)
+console.error @ index-DSPTb691.js:5575
+index-DSPTb691.js:235 🌐 API Request to /api/training/modules (timeout: 15000ms, deployment: true)
+index-DSPTb691.js:235 ✅ API Response from /api/training/modules: 201
+index-DSPTb691.js:235 🌐 API Request to /api/training/modules/13/questions (timeout: 15000ms, deployment: true)
+api/training/modules/13/questions:1  Failed to load resource: the server responded with a status of 404 ()
+index-DSPTb691.js:235 ✅ API Response from /api/training/modules/13/questions: 404
+index-DSPTb691.js:5575 API error raw body: <!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Error</title>
+</head>
+<body>
+<pre>Cannot POST /api/training/modules/13/questions</pre>
+</body>
+</html>
+
+console.error @ index-DSPTb691.js:5575
+index-DSPTb691.js:5575 💥 API Request failed for /api/training/modules/13/questions: Error: <!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Error</title>
+</head>
+<body>
+<pre>Cannot POST /api/training/modules/13/questions</pre>
+</body>
+</html>
+
+    at Ne (index-DSPTb691.js:235:9246)
+    at async Object.mutationFn (index-DSPTb691.js:4331:3766)
+console.error @ index-DSPTb691.js:5575

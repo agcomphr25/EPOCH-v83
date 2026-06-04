@@ -109,6 +109,202 @@ import {
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
+const FORKLIFT_PROGRAM_TITLE = 'Sit-Down Counterbalance Forklift Operator';
+const FORKLIFT_EVALUATOR_USERNAME = 'agrace';
+const FORKLIFT_PASSING_SCORE = 80;
+
+const FORKLIFT_WRITTEN_QUESTIONS = [
+  {
+    id: 'stability-triangle',
+    question: 'What is the most important reason to keep the load low while traveling?',
+    options: [
+      'It helps maintain stability and visibility',
+      'It makes the forklift travel faster',
+      'It reduces the need to use the horn',
+      'It lets the operator carry heavier loads than rated',
+    ],
+    correctAnswer: 'It helps maintain stability and visibility',
+  },
+  {
+    id: 'pre-use-inspection',
+    question: 'When should a sit-down counterbalance forklift inspection be completed?',
+    options: [
+      'Before operating the forklift at the start of use',
+      'Only after a maintenance issue is found',
+      'Only once per month',
+      'After the forklift has already been loaded',
+    ],
+    correctAnswer: 'Before operating the forklift at the start of use',
+  },
+  {
+    id: 'pedestrian-intersection',
+    question: 'What should the operator do when approaching an intersection or blind corner?',
+    options: [
+      'Slow down, look in the direction of travel, and sound the horn as needed',
+      'Speed up to clear the area quickly',
+      'Raise the forks for better visibility',
+      'Assume pedestrians will hear the forklift',
+    ],
+    correctAnswer: 'Slow down, look in the direction of travel, and sound the horn as needed',
+  },
+  {
+    id: 'seat-belt',
+    question: 'Why must the operator wear the seat belt on a sit-down forklift?',
+    options: [
+      'To keep the operator within the protective zone if the truck tips',
+      'To satisfy parking requirements only',
+      'To increase lifting capacity',
+      'To prevent the mast from tilting',
+    ],
+    correctAnswer: 'To keep the operator within the protective zone if the truck tips',
+  },
+  {
+    id: 'parking',
+    question: 'Which action is part of properly parking a forklift?',
+    options: [
+      'Lower the forks, set controls to neutral, and set the parking brake',
+      'Leave the forks raised so they are visible',
+      'Park in an aisle if the job will resume soon',
+      'Leave the engine running whenever the operator steps away',
+    ],
+    correctAnswer: 'Lower the forks, set controls to neutral, and set the parking brake',
+  },
+  {
+    id: 'load-rating',
+    question: 'What should an operator do before lifting a load?',
+    options: [
+      'Confirm the load is stable and within the forklift rated capacity',
+      'Lift the load first to test whether the truck can handle it',
+      'Carry unstable loads slowly without adjustment',
+      'Tilt the mast fully forward before traveling',
+    ],
+    correctAnswer: 'Confirm the load is stable and within the forklift rated capacity',
+  },
+  {
+    id: 'unsafe-condition',
+    question: 'What should the operator do if the forklift has a safety defect?',
+    options: [
+      'Remove it from service and report the condition',
+      'Keep using it until the end of the shift',
+      'Use it only for light loads',
+      'Let the next operator decide',
+    ],
+    correctAnswer: 'Remove it from service and report the condition',
+  },
+  {
+    id: 'travel-direction',
+    question: 'If a load blocks forward visibility, what is the safer travel practice?',
+    options: [
+      'Travel in reverse while looking in the direction of travel',
+      'Raise the load above eye level',
+      'Lean outside the operator compartment',
+      'Drive forward slowly without changing direction',
+    ],
+    correctAnswer: 'Travel in reverse while looking in the direction of travel',
+  },
+  {
+    id: 'fork-position',
+    question: 'How should forks normally be positioned when traveling without a load?',
+    options: [
+      'Low to the ground and tilted back slightly',
+      'At eye level',
+      'Fully raised',
+      'Dragging on the ground',
+    ],
+    correctAnswer: 'Low to the ground and tilted back slightly',
+  },
+  {
+    id: 'refresher-trigger',
+    question: 'Which event can require refresher forklift training or re-evaluation?',
+    options: [
+      'Unsafe operation, accident, near miss, different truck type, or changed workplace condition',
+      'Only a yearly calendar reminder',
+      'Only a change in department name',
+      'Only when an employee asks for it',
+    ],
+    correctAnswer: 'Unsafe operation, accident, near miss, different truck type, or changed workplace condition',
+  },
+];
+
+const FORKLIFT_PRACTICAL_ITEMS = [
+  { key: 'pre_operation_inspection', label: 'Pre-operation inspection', required: true },
+  { key: 'controls_brakes_horn', label: 'Seat belt, horn, controls, and brake check', required: true },
+  { key: 'smooth_start_stop_turn', label: 'Starts, stops, and turns smoothly', required: true },
+  { key: 'mini_course_control', label: 'Travels through mini course under control', required: true },
+  { key: 'fork_load_position', label: 'Handles fork/load position safely', required: true },
+  { key: 'intersection_awareness', label: 'Stops/checks at intersections and pedestrian areas', required: true },
+  { key: 'parking_shutdown', label: 'Parks, lowers forks, neutralizes controls, and sets brake', required: true },
+  { key: 'unsafe_condition_response', label: 'Responds correctly to unsafe condition or failed inspection', required: true },
+];
+
+function shuffleArray<T>(items: T[]): T[] {
+  return [...items].sort(() => Math.random() - 0.5);
+}
+
+let forkliftTablesEnsured = false;
+async function ensureForkliftTables() {
+  if (forkliftTablesEnsured) return;
+  await pgPool.query(`
+    CREATE TABLE IF NOT EXISTS forklift_written_attempts (
+      id SERIAL PRIMARY KEY,
+      employee_id INTEGER NOT NULL REFERENCES employees(id),
+      test_type TEXT NOT NULL DEFAULT 'initial',
+      score INTEGER NOT NULL,
+      passed BOOLEAN NOT NULL DEFAULT false,
+      question_order JSONB NOT NULL DEFAULT '[]'::jsonb,
+      answers JSONB NOT NULL DEFAULT '{}'::jsonb,
+      submitted_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS forklift_operator_evaluations (
+      id SERIAL PRIMARY KEY,
+      written_attempt_id INTEGER REFERENCES forklift_written_attempts(id),
+      employee_id INTEGER NOT NULL REFERENCES employees(id),
+      evaluator_employee_id INTEGER NOT NULL REFERENCES employees(id),
+      test_type TEXT NOT NULL DEFAULT 'initial',
+      status TEXT NOT NULL DEFAULT 'pending_evaluation',
+      practical_result TEXT,
+      evaluator_notes TEXT,
+      certified_at TIMESTAMP,
+      agc_refresher_due_at TIMESTAMP,
+      osha_evaluation_due_at TIMESTAMP,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS forklift_evaluation_items (
+      id SERIAL PRIMARY KEY,
+      evaluation_id INTEGER NOT NULL REFERENCES forklift_operator_evaluations(id) ON DELETE CASCADE,
+      item_key TEXT NOT NULL,
+      label TEXT NOT NULL,
+      required BOOLEAN NOT NULL DEFAULT true,
+      result TEXT NOT NULL DEFAULT 'pending',
+      notes TEXT,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      UNIQUE(evaluation_id, item_key)
+    );
+  `);
+  forkliftTablesEnsured = true;
+}
+
+async function resolveAgraceEmployeeId(): Promise<number | null> {
+  const result = await pgPool.query(
+    `
+      SELECT COALESCE(u.employee_id, e.id) AS employee_id
+      FROM users u
+      LEFT JOIN employees e
+        ON LOWER(e.employee_code) = LOWER(u.username)
+        OR (u.email IS NOT NULL AND e.email IS NOT NULL AND LOWER(e.email) = LOWER(u.email))
+      WHERE LOWER(u.username) = LOWER($1)
+      ORDER BY CASE WHEN u.employee_id IS NOT NULL THEN 0 ELSE 1 END, e.id ASC
+      LIMIT 1
+    `,
+    [FORKLIFT_EVALUATOR_USERNAME],
+  );
+  return result.rows[0]?.employee_id ? Number(result.rows[0].employee_id) : null;
+}
+
 // Convert plain text content to formatted HTML with professional styling
 function convertContentToHtml(content: string): string {
   if (!content) return '';
@@ -348,6 +544,62 @@ router.post('/modules', requirePermission('training.manage_content'), async (req
     res.status(201).json(newModule);
   } catch (error: any) {
     console.error('Error creating training module:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Add quiz questions to a module (called by the Create Module dialog after the module is saved)
+router.post('/modules/:id/questions', requirePermission('training.manage_content'), async (req, res) => {
+  try {
+    const moduleId = parseInt(req.params.id);
+    if (isNaN(moduleId)) {
+      return res.status(400).json({ error: 'Invalid module id' });
+    }
+
+    const { question, questionType, options, correctAnswer, points } = req.body;
+
+    if (!question || typeof question !== 'string' || !question.trim()) {
+      return res.status(400).json({ error: 'question is required' });
+    }
+
+    const result = await db.transaction(async (tx) => {
+      const [newQuestion] = await tx
+        .insert(trainingQuestions)
+        .values({
+          moduleId,
+          questionText: question.trim(),
+          questionType: (questionType || 'multiple_choice').toUpperCase(),
+          points: typeof points === 'number' ? points : 1,
+          sortOrder: 0,
+          isActive: true,
+        } as InsertTrainingQuestion)
+        .returning();
+
+      const filteredOptions: string[] = Array.isArray(options)
+        ? options.filter((o: unknown) => typeof o === 'string' && (o as string).trim())
+        : [];
+
+      let insertedOptions: typeof trainingQuestionOptions.$inferSelect[] = [];
+      if (filteredOptions.length > 0) {
+        insertedOptions = await tx
+          .insert(trainingQuestionOptions)
+          .values(
+            filteredOptions.map((optText, idx) => ({
+              questionId: newQuestion.id,
+              optionText: (optText as string).trim(),
+              isCorrect: idx === correctAnswer,
+              sortOrder: idx,
+            } as InsertTrainingQuestionOption))
+          )
+          .returning();
+      }
+
+      return { ...newQuestion, options: insertedOptions };
+    });
+
+    res.status(201).json(result);
+  } catch (error: any) {
+    console.error('Error creating module question:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -7828,6 +8080,286 @@ router.post('/epoch/plans/:planId/steps/:stepNumber/quiz/submit', async (req, re
     });
   } catch (error: any) {
     console.error('Error submitting quiz:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============= FORKLIFT OPERATOR CERTIFICATION FLOW =============
+
+router.get('/forklift/written-test', async (_req, res) => {
+  try {
+    await ensureForkliftTables();
+    const selectedQuestions = shuffleArray(FORKLIFT_WRITTEN_QUESTIONS).slice(0, 8);
+    res.json({
+      programTitle: FORKLIFT_PROGRAM_TITLE,
+      passingScore: FORKLIFT_PASSING_SCORE,
+      questions: selectedQuestions.map((q) => ({
+        id: q.id,
+        question: q.question,
+        options: shuffleArray(q.options),
+      })),
+    });
+  } catch (error: any) {
+    console.error('Error building forklift written test:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/forklift/written-test/submit', async (req, res) => {
+  try {
+    await ensureForkliftTables();
+    const employeeId = Number(req.body.employeeId);
+    const testType = String(req.body.testType || 'initial');
+    const answers = req.body.answers || {};
+    const questionIds = Array.isArray(req.body.questionIds) ? req.body.questionIds : Object.keys(answers);
+
+    if (!employeeId) {
+      return res.status(400).json({ error: 'employeeId is required' });
+    }
+
+    const questions = questionIds
+      .map((id: string) => FORKLIFT_WRITTEN_QUESTIONS.find((q) => q.id === id))
+      .filter(Boolean) as typeof FORKLIFT_WRITTEN_QUESTIONS;
+    if (questions.length === 0) {
+      return res.status(400).json({ error: 'No valid forklift written-test questions submitted' });
+    }
+
+    const correctCount = questions.filter((q) => answers[q.id] === q.correctAnswer).length;
+    const score = Math.round((correctCount / questions.length) * 100);
+    const passed = score >= FORKLIFT_PASSING_SCORE;
+
+    const attempt = await pgPool.query(
+      `
+        INSERT INTO forklift_written_attempts
+          (employee_id, test_type, score, passed, question_order, answers)
+        VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb)
+        RETURNING *
+      `,
+      [employeeId, testType, score, passed, JSON.stringify(questionIds), JSON.stringify(answers)],
+    );
+
+    let evaluation = null;
+    if (passed) {
+      const evaluatorEmployeeId = await resolveAgraceEmployeeId();
+      if (!evaluatorEmployeeId) {
+        return res.status(500).json({
+          error: `Written test passed, but evaluator ${FORKLIFT_EVALUATOR_USERNAME} could not be resolved to an employee.`,
+        });
+      }
+
+      const existing = await pgPool.query(
+        `
+          SELECT *
+          FROM forklift_operator_evaluations
+          WHERE employee_id = $1
+            AND evaluator_employee_id = $2
+            AND status = 'pending_evaluation'
+          ORDER BY created_at DESC
+          LIMIT 1
+        `,
+        [employeeId, evaluatorEmployeeId],
+      );
+
+      if (existing.rows[0]) {
+        evaluation = existing.rows[0];
+      } else {
+        const created = await pgPool.query(
+          `
+            INSERT INTO forklift_operator_evaluations
+              (written_attempt_id, employee_id, evaluator_employee_id, test_type)
+            VALUES ($1, $2, $3, $4)
+            RETURNING *
+          `,
+          [attempt.rows[0].id, employeeId, evaluatorEmployeeId, testType],
+        );
+        evaluation = created.rows[0];
+
+        await pgPool.query(
+          `
+            INSERT INTO forklift_evaluation_items
+              (evaluation_id, item_key, label, required, sort_order)
+            SELECT $1, item_key, label, required, sort_order
+            FROM jsonb_to_recordset($2::jsonb)
+              AS x(item_key text, label text, required boolean, sort_order integer)
+            ON CONFLICT (evaluation_id, item_key) DO NOTHING
+          `,
+          [
+            evaluation.id,
+            JSON.stringify(FORKLIFT_PRACTICAL_ITEMS.map((item, index) => ({
+              item_key: item.key,
+              label: item.label,
+              required: item.required,
+              sort_order: index + 1,
+            }))),
+          ],
+        );
+      }
+    }
+
+    res.status(201).json({
+      attempt: attempt.rows[0],
+      score,
+      passed,
+      passingScore: FORKLIFT_PASSING_SCORE,
+      correctCount,
+      totalQuestions: questions.length,
+      evaluation,
+    });
+  } catch (error: any) {
+    console.error('Error submitting forklift written test:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.get('/forklift/evaluations/:id', async (req, res) => {
+  try {
+    await ensureForkliftTables();
+    const evaluationId = Number(req.params.id);
+    const evaluation = await pgPool.query(
+      `
+        SELECT ev.*,
+               trainee.name AS employee_name,
+               evaluator.name AS evaluator_name,
+               wa.score AS written_score,
+               wa.submitted_at AS written_submitted_at
+        FROM forklift_operator_evaluations ev
+        JOIN employees trainee ON trainee.id = ev.employee_id
+        JOIN employees evaluator ON evaluator.id = ev.evaluator_employee_id
+        LEFT JOIN forklift_written_attempts wa ON wa.id = ev.written_attempt_id
+        WHERE ev.id = $1
+      `,
+      [evaluationId],
+    );
+    if (!evaluation.rows[0]) return res.status(404).json({ error: 'Forklift evaluation not found' });
+
+    const items = await pgPool.query(
+      `
+        SELECT id, item_key, label, required, result, notes, sort_order
+        FROM forklift_evaluation_items
+        WHERE evaluation_id = $1
+        ORDER BY sort_order ASC, id ASC
+      `,
+      [evaluationId],
+    );
+
+    res.json({ evaluation: evaluation.rows[0], items: items.rows });
+  } catch (error: any) {
+    console.error('Error fetching forklift evaluation:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/forklift/evaluations/:id/complete', async (req, res) => {
+  try {
+    await ensureForkliftTables();
+    const evaluationId = Number(req.params.id);
+    const items = Array.isArray(req.body.items) ? req.body.items : [];
+    const evaluatorNotes = req.body.evaluatorNotes ? String(req.body.evaluatorNotes) : null;
+    const certify = req.body.certify !== false;
+
+    if (items.length === 0) {
+      return res.status(400).json({ error: 'Checklist items are required' });
+    }
+
+    const allowed = new Set(['pass', 'needs_coaching', 'fail', 'na']);
+    for (const item of items) {
+      if (!allowed.has(item.result)) {
+        return res.status(400).json({ error: `Invalid checklist result for ${item.itemKey || item.item_key}` });
+      }
+      await pgPool.query(
+        `
+          UPDATE forklift_evaluation_items
+          SET result = $3,
+              notes = $4,
+              updated_at = NOW()
+          WHERE evaluation_id = $1
+            AND item_key = $2
+        `,
+        [evaluationId, item.itemKey || item.item_key, item.result, item.notes || null],
+      );
+    }
+
+    const currentItems = await pgPool.query(
+      `SELECT required, result FROM forklift_evaluation_items WHERE evaluation_id = $1`,
+      [evaluationId],
+    );
+    const hasFail = currentItems.rows.some((item) => item.required && item.result === 'fail');
+    const hasPending = currentItems.rows.some((item) => item.required && item.result === 'pending');
+    if (certify && (hasFail || hasPending)) {
+      return res.status(400).json({
+        error: hasFail
+          ? 'Required checklist items marked Fail cannot be certified.'
+          : 'All required checklist items must be completed before certification.',
+      });
+    }
+
+    const status = certify ? 'certified' : 'failed';
+    const result = certify ? 'satisfactory' : 'unsatisfactory';
+    const updated = await pgPool.query(
+      `
+        UPDATE forklift_operator_evaluations
+        SET status = $2,
+            practical_result = $3,
+            evaluator_notes = $4,
+            certified_at = CASE WHEN $2 = 'certified' THEN NOW() ELSE certified_at END,
+            agc_refresher_due_at = CASE WHEN $2 = 'certified' THEN NOW() + INTERVAL '6 months' ELSE agc_refresher_due_at END,
+            osha_evaluation_due_at = CASE WHEN $2 = 'certified' THEN NOW() + INTERVAL '3 years' ELSE osha_evaluation_due_at END,
+            updated_at = NOW()
+        WHERE id = $1
+        RETURNING *
+      `,
+      [evaluationId, status, result, evaluatorNotes],
+    );
+
+    res.json({ evaluation: updated.rows[0] });
+  } catch (error: any) {
+    console.error('Error completing forklift evaluation:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.get('/forklift/evaluations/:id/badge.pdf', async (req, res) => {
+  try {
+    await ensureForkliftTables();
+    const evaluationId = Number(req.params.id);
+    const result = await pgPool.query(
+      `
+        SELECT ev.*,
+               trainee.name AS employee_name,
+               evaluator.name AS evaluator_name
+        FROM forklift_operator_evaluations ev
+        JOIN employees trainee ON trainee.id = ev.employee_id
+        JOIN employees evaluator ON evaluator.id = ev.evaluator_employee_id
+        WHERE ev.id = $1
+          AND ev.status = 'certified'
+      `,
+      [evaluationId],
+    );
+    const row = result.rows[0];
+    if (!row) return res.status(404).json({ error: 'Certified forklift evaluation not found' });
+
+    const { PDFDocument, StandardFonts, rgb } = await import('pdf-lib');
+    const pdfDoc = await PDFDocument.create();
+    const page = pdfDoc.addPage([252, 162]); // 3.5 x 2.25 in badge-ish card
+    const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    const regular = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+    page.drawRectangle({ x: 0, y: 0, width: 252, height: 162, color: rgb(0.96, 0.98, 1) });
+    page.drawRectangle({ x: 8, y: 8, width: 236, height: 146, borderColor: rgb(0.1, 0.2, 0.35), borderWidth: 1.5 });
+    page.drawText('AGC FORKLIFT CERTIFIED', { x: 18, y: 132, size: 12, font: bold, color: rgb(0.05, 0.12, 0.22) });
+    page.drawText('Sit-Down Counterbalance', { x: 18, y: 116, size: 10, font: regular });
+    page.drawText(String(row.employee_name || 'Employee'), { x: 18, y: 92, size: 16, font: bold, color: rgb(0.04, 0.22, 0.18) });
+    page.drawText(`Evaluator: ${row.evaluator_name || FORKLIFT_EVALUATOR_USERNAME}`, { x: 18, y: 70, size: 8.5, font: regular });
+    page.drawText(`Issued: ${new Date(row.certified_at).toLocaleDateString('en-US')}`, { x: 18, y: 54, size: 8.5, font: regular });
+    page.drawText(`AGC refresh due: ${new Date(row.agc_refresher_due_at).toLocaleDateString('en-US')}`, { x: 18, y: 38, size: 8.5, font: regular });
+    page.drawText(`OSHA evaluation due: ${new Date(row.osha_evaluation_due_at).toLocaleDateString('en-US')}`, { x: 18, y: 22, size: 8.5, font: regular });
+
+    const bytes = await pdfDoc.save();
+    res.set('Content-Type', 'application/pdf');
+    res.set('Content-Disposition', `inline; filename="forklift-certification-${evaluationId}.pdf"`);
+    res.send(Buffer.from(bytes));
+  } catch (error: any) {
+    console.error('Error generating forklift badge PDF:', error);
     res.status(500).json({ error: error.message });
   }
 });

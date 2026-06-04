@@ -36,20 +36,34 @@ interface POStatus {
   dueDate: string;
   totalItems: number;
   completedItems: number;
+  scheduledItems: number;
   inProductionItems: number;
+  scrappedItems?: number;
   pendingItems: number;
   hasBOMsNeeded: boolean;
-  status: 'pending' | 'in_progress' | 'completed';
+  status: 'pending' | 'scheduled' | 'in_progress' | 'completed';
   rawStatus?: string;
   projectId?: string | null;
   projectCode?: string | null;
   projectName?: string | null;
+  linkedWadCount?: number;
+  approvedWadCount?: number;
+  releasedWadCount?: number;
+  wadNumbers?: string | null;
+  p2WadConnectionStatus?: 'WAD_READY' | 'WAD_INCOMPLETE' | 'WAD_MISSING' | 'WAD_NOT_MATCHED' | 'NO_PROJECT_LINK';
+  p2WadConnectionLabel?: string;
 }
 
 export default function P2StatusDashboard({ onStartBOM, onViewPO, selectedPOIds = [] }: P2StatusDashboardProps) {
   const [activeSortBy, setActiveSortBy] = useState<'default' | 'project_asc' | 'project_desc'>('default');
 
-  const { data: poStatuses = [], isLoading } = useQuery<POStatus[]>({
+  const {
+    data: poStatuses = [],
+    error: poStatusesError,
+    isError: isPOStatusesError,
+    isLoading,
+    refetch: refetchPOStatuses,
+  } = useQuery<POStatus[]>({
     queryKey: ['/api/p2/control-center/po-statuses'],
   });
 
@@ -82,6 +96,8 @@ export default function P2StatusDashboard({ onStartBOM, onViewPO, selectedPOIds 
         return <CheckCircle className="h-4 w-4 text-green-600" />;
       case 'in_progress':
         return <Factory className="h-4 w-4 text-blue-600" />;
+      case 'scheduled':
+        return <Clock className="h-4 w-4 text-green-600" />;
       default:
         return <Clock className="h-4 w-4 text-amber-600" />;
     }
@@ -90,6 +106,7 @@ export default function P2StatusDashboard({ onStartBOM, onViewPO, selectedPOIds 
   const getStatusBadge = (status: string) => {
     const config: Record<string, { variant: 'default' | 'secondary' | 'outline'; label: string }> = {
       pending: { variant: 'outline', label: 'Pending' },
+      scheduled: { variant: 'outline', label: 'Scheduled' },
       in_progress: { variant: 'default', label: 'In Progress' },
       completed: { variant: 'secondary', label: 'Completed' },
     };
@@ -109,6 +126,45 @@ export default function P2StatusDashboard({ onStartBOM, onViewPO, selectedPOIds 
     return null;
   };
 
+  const getWadConnectionBadge = (po: POStatus) => {
+    const status = po.p2WadConnectionStatus || (po.projectId ? 'WAD_MISSING' : 'NO_PROJECT_LINK');
+    const config: Record<string, { className: string; label: string; title: string }> = {
+      WAD_READY: {
+        className: 'border-green-300 bg-green-50 text-green-700 dark:bg-green-950/40 dark:text-green-300',
+        label: po.p2WadConnectionLabel || 'WAD ready',
+        title: po.wadNumbers ? `WAD: ${po.wadNumbers}` : 'Linked WAD is approved or released',
+      },
+      WAD_INCOMPLETE: {
+        className: 'border-amber-300 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300',
+        label: po.p2WadConnectionLabel || 'WAD incomplete',
+        title: po.wadNumbers ? `WAD: ${po.wadNumbers}` : 'Linked project has WAD work that is not ready',
+      },
+      WAD_MISSING: {
+        className: 'border-red-300 bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300',
+        label: po.p2WadConnectionLabel || 'WAD missing',
+        title: 'Linked project has no visible WAD work order',
+      },
+      WAD_NOT_MATCHED: {
+        className: 'border-amber-300 bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300',
+        label: po.p2WadConnectionLabel || 'WAD not matched',
+        title: 'Linked project has WAD work, but not for this P2 line',
+      },
+      NO_PROJECT_LINK: {
+        className: 'border-slate-300 bg-slate-50 text-slate-700 dark:bg-slate-900 dark:text-slate-300',
+        label: po.p2WadConnectionLabel || 'No project link',
+        title: 'Assign a project to show WAD context',
+      },
+    };
+    const badge = config[status] || config.WAD_MISSING;
+
+    return (
+      <Badge variant="outline" className={`gap-1 ${badge.className}`} title={badge.title}>
+        <FileText className="h-3 w-3" />
+        {badge.label}
+      </Badge>
+    );
+  };
+
   const getProgressPercentage = (po: POStatus): number => {
     if (po.totalItems === 0) return 0;
     return Math.round((po.completedItems / po.totalItems) * 100);
@@ -119,6 +175,30 @@ export default function P2StatusDashboard({ onStartBOM, onViewPO, selectedPOIds 
       <Card>
         <CardContent className="py-12 text-center text-muted-foreground">
           Loading status dashboard...
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (isPOStatusesError) {
+    const message = poStatusesError instanceof Error
+      ? poStatusesError.message
+      : 'Failed to fetch PO statuses';
+
+    return (
+      <Card className="border-destructive/40">
+        <CardContent className="py-12 text-center">
+          <AlertCircle className="h-12 w-12 mx-auto text-destructive mb-4" />
+          <p className="font-medium text-destructive">P2 order status could not be loaded</p>
+          <p className="text-sm text-muted-foreground mt-2">{message}</p>
+          <Button
+            variant="outline"
+            className="mt-4"
+            onClick={() => refetchPOStatuses()}
+            data-testid="button-retry-p2-statuses"
+          >
+            Retry
+          </Button>
         </CardContent>
       </Card>
     );
@@ -215,6 +295,7 @@ export default function P2StatusDashboard({ onStartBOM, onViewPO, selectedPOIds 
                           <span className="font-semibold text-lg">{po.poNumber}</span>
                           {getStatusBadge(po.status)}
                           {getReadyForProductionBadge(po)}
+                          {getWadConnectionBadge(po)}
                           {po.hasBOMsNeeded && (
                             <Badge variant="destructive" className="gap-1">
                               <AlertCircle className="h-3 w-3" />
@@ -263,6 +344,18 @@ export default function P2StatusDashboard({ onStartBOM, onViewPO, selectedPOIds 
                             <span className="flex items-center gap-1 text-blue-600">
                               <Factory className="h-3 w-3" />
                               {po.inProductionItems} in production
+                            </span>
+                          )}
+                          {po.scheduledItems > 0 && (
+                            <span className="flex items-center gap-1 text-green-600">
+                              <Clock className="h-3 w-3" />
+                              {po.scheduledItems} scheduled
+                            </span>
+                          )}
+                          {(po.scrappedItems ?? 0) > 0 && (
+                            <span className="flex items-center gap-1 text-red-600">
+                              <AlertCircle className="h-3 w-3" />
+                              {po.scrappedItems} scrapped
                             </span>
                           )}
                           {po.pendingItems > 0 && (

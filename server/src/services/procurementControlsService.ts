@@ -1,11 +1,9 @@
-import { and, desc, eq, gte, inArray, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, or, sql } from 'drizzle-orm';
 import { db } from '../../db';
 import {
   inventoryItemGroups,
   inventoryItems,
-  procurementSettings,
   supplierScopes,
-  vendorDebarmentChecks,
   vendorPOItems,
   vendors,
 } from '../../schema';
@@ -206,23 +204,6 @@ export async function getVendorQualificationBlockers(vendorPoId: number, vendorI
   if (vendor.approvalExpiration && new Date(vendor.approvalExpiration) < new Date()) {
     blockers.push(`Vendor approval expired on ${vendor.approvalExpiration}`);
   }
-  if (['debarred', 'suspended', 'excluded', 'blocked'].includes(normalize(vendor.debarmentStatus))) {
-    blockers.push(`Vendor debarment status is ${vendor.debarmentStatus}`);
-  }
-
-  const [setting] = await db.select().from(procurementSettings).limit(1);
-  const freshnessDays = setting?.debarmentCheckFreshnessDays ?? 30;
-  const cutoff = new Date(Date.now() - freshnessDays * 86_400_000);
-  const freshDebarment = await db.select().from(vendorDebarmentChecks).where(and(
-    eq(vendorDebarmentChecks.vendorId, vendorId),
-    gte(vendorDebarmentChecks.checkedAt, cutoff),
-    eq(vendorDebarmentChecks.result, 'pass'),
-  )).orderBy(desc(vendorDebarmentChecks.checkedAt)).limit(1);
-
-  if (freshDebarment.length === 0) {
-    blockers.push(`No fresh passing debarment check for vendor (within ${freshnessDays} days)`);
-  }
-
   const lines = await db.select().from(vendorPOItems).where(eq(vendorPOItems.vendorPoId, vendorPoId));
 
   const scopes = await db.select().from(supplierScopes).where(and(

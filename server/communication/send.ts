@@ -18,6 +18,7 @@ export interface SendCommunicationOptions {
   orderId?: string;
   customerId?: string;
   emailContext?: string;
+  replyTo?: string;
 }
 
 function wrapWithSystemNotice(html: string): string {
@@ -100,6 +101,7 @@ export async function sendCommunication(
   const result = await sendEmailViaSendGrid({
     to: toList.join(','),
     cc: ccList,
+    replyTo: opts.replyTo,
     subject: rendered.subject,
     text: finalText,
     html: finalHtml,

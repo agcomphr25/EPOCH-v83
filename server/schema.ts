@@ -39,6 +39,7 @@ import {
 import { sql, relations } from 'drizzle-orm';
 import { createInsertSchema } from 'drizzle-zod';
 import { z } from 'zod';
+import { getManufacturingRouteDefinition as resolveManufacturingRouteDefinition } from '../shared/utils/manufacturingRouting';
 
 // Order Department Types Reference Table (separate from order_departments tracking table)
 export const inventoryDepartments = pgTable('inventory_departments', {
@@ -112,6 +113,7 @@ export const allOrders = pgTable('all_orders', {
   discountValue: numeric('discount_value'),
   discountAppliesTo: text('discount_applies_to'),
   notes: text('notes'), // Order notes/special instructions
+  departmentNotes: jsonb('department_notes').$type<Array<{ id?: string; text: string; departments: string[] }>>().default(sql`'[]'::jsonb`),
   customDiscountType: text('custom_discount_type').default('percent'),
   customDiscountValue: real('custom_discount_value').default(0),
   showCustomDiscount: boolean('show_custom_discount').default(false),
@@ -525,7 +527,7 @@ export const payments = pgTable('payments', {
   notes: text('notes'), // Optional notes for the payment
   processingFee: real('processing_fee'), // Optional wire/bank processing fee (nullable)
   batchId: integer('batch_id').references(() => bulkPaymentBatches.id),
-  status: text('status').default('posted').notNull(), // posted, voided, reversal
+  status: text('status').default('posted').notNull(), // posted, pending_accounting_approval, voided, reversal
   voidedAt: timestamp('voided_at'),
   voidedBy: text('voided_by'),
   voidReason: text('void_reason'),
@@ -619,12 +621,19 @@ export const formSubmissions = pgTable('form_submissions', {
 
 // Inventory Item Type Enums
 export const inventoryItemTypeEnum = pgEnum('inventory_item_type', ['PURCHASED', 'MANUFACTURED']);
-export const inventoryManufacturedCategoryEnum = pgEnum('inventory_manufactured_category', ['PACKET', 'KIT', 'MACHINED_PART', 'CORE', 'SUB_ASSEMBLY', 'ASSEMBLY', 'COMPOSITE', 'COMPONENT']);
+export const inventoryManufacturedCategoryEnum = pgEnum('inventory_manufactured_category', ['PACKET', 'KIT', 'MACHINED_PART', 'CORE', 'SUB_ASSEMBLY', 'ASSEMBLY', 'FINAL_ASSEMBLY', 'COMPOSITE', 'COMPONENT']);
 export const inventoryManufacturingLevelEnum = pgEnum('inventory_manufacturing_level', ['COMPONENT', 'INTERMEDIATE', 'FINAL']);
 
-// Supply source dashboard mapping — re-exported from canonical shared utility
-export type { ManufacturedCategory, SupplySourceDashboard } from '../shared/utils/supplySourceDashboard';
-export { getSupplySourceDashboard, supplySourceDashboardToLegacyDept, getDashboardCategories } from '../shared/utils/supplySourceDashboard';
+// Manufacturing routing mapping — re-exported from canonical shared utility
+export type { ManufacturedCategory, ManufacturingQueueType, ManufacturingSwimlane, SupplySourceDashboard } from '../shared/utils/manufacturingRouting';
+export {
+  getManufacturingCategoriesForDashboard,
+  getManufacturingCategoriesForDepartment,
+  getManufacturingRouteDefinition,
+  getSupplySourceDashboard,
+  supplySourceDashboardToLegacyDept,
+  getDashboardCategories,
+} from '../shared/utils/supplySourceDashboard';
 
 // Inventory Management Tables
 export const inventoryItems = pgTable('inventory_items', {
@@ -698,7 +707,7 @@ export const inventoryItems = pgTable('inventory_items', {
   // Formal item type classification (replaces loose text `type` field)
   itemType: inventoryItemTypeEnum('item_type'), // PURCHASED | MANUFACTURED
   // Manufactured items only — category determines production routing
-  manufacturedCategory: inventoryManufacturedCategoryEnum('manufactured_category'), // PACKET | KIT | MACHINED_PART | CORE | SUB_ASSEMBLY | ASSEMBLY
+  manufacturedCategory: inventoryManufacturedCategoryEnum('manufactured_category'), // PACKET | KIT | MACHINED_PART | CORE | SUB_ASSEMBLY | ASSEMBLY | FINAL_ASSEMBLY | COMPOSITE | COMPONENT
   // Manufactured items only — production level independent of category
   manufacturingLevel: inventoryManufacturingLevelEnum('manufacturing_level'), // COMPONENT | INTERMEDIATE | FINAL
   // Machined parts only — type of machine required to produce the part
@@ -1652,6 +1661,7 @@ export const users = pgTable('users', {
   lastName: text('last_name'),
   email: text('email'),
   canOverridePrices: boolean('can_override_prices').default(false),
+  isFinishTechnician: boolean('is_finish_technician').default(false),
   isActive: boolean('is_active').default(true),
   lastLogin: timestamp('last_login'),
   failedLoginAttempts: integer('failed_login_attempts').default(0),
@@ -1891,7 +1901,7 @@ export type InsertLaborBudgetOverride = z.infer<typeof insertLaborBudgetOverride
 // ── UNIFIED PUNCH LEDGER (Task #1186) ─────────────────────────────────────────
 // Single source of truth for ALL labor events: Kiosk, Traveler scan, Portal.
 // Replaces the dual-system: public.time_clock_entries + timekeeping.punches.
-// source enum: KIOSK | TRAVELER | PORTAL
+// source enum: KIOSK | TRAVELER | PORTAL | TIMETRAKGO_IMPORT | ADMIN
 // laborClass: REGULAR | BREAK
 // ─────────────────────────────────────────────────────────────────────────────
 export const punchLedger = pgTable('punch_ledger', {
@@ -1905,7 +1915,7 @@ export const punchLedger = pgTable('punch_ledger', {
   clockOut: timestamp('clock_out', { withTimezone: true }),
 
   // Capture source
-  source: text('source').notNull().default('KIOSK'), // KIOSK | TRAVELER | PORTAL
+  source: text('source').notNull().default('KIOSK'), // KIOSK | TRAVELER | PORTAL | TIMETRAKGO_IMPORT | ADMIN
 
   // Labor attribution (nullable FKs — no free-text charge codes)
   travelerId: text('traveler_id').references((): AnyPgColumn => travelers.id),
@@ -2446,7 +2456,7 @@ export const insertInventoryItemSchema = createInsertSchema(inventoryItems)
     utilizedInServices: z.boolean().default(false),
     isActive: z.boolean().default(true),
     itemType: z.enum(['PURCHASED', 'MANUFACTURED']).optional().nullable(),
-    manufacturedCategory: z.enum(['PACKET', 'KIT', 'MACHINED_PART', 'CORE', 'SUB_ASSEMBLY', 'ASSEMBLY', 'COMPOSITE', 'COMPONENT']).optional().nullable(),
+    manufacturedCategory: z.enum(['PACKET', 'KIT', 'MACHINED_PART', 'CORE', 'SUB_ASSEMBLY', 'ASSEMBLY', 'FINAL_ASSEMBLY', 'COMPOSITE', 'COMPONENT']).optional().nullable(),
     manufacturingLevel: z.enum(['COMPONENT', 'INTERMEDIATE', 'FINAL']).optional().nullable(),
     machineType: z.enum(['CNC Mill 3rd Axis', 'CNC Mill 4th Axis', 'Lathe']).optional().nullable(),
     shelfLifeControlled: z.boolean().default(false),
@@ -3556,6 +3566,25 @@ export const customerAddresses = pgTable('customer_addresses', {
   updatedAt: timestamp('updated_at'),
 });
 
+export const customerContacts = pgTable('customer_contacts', {
+  id: serial('id').primaryKey(),
+  customerId: integer('customer_id')
+    .notNull()
+    .references(() => customers.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  title: text('title'),
+  email: text('email'),
+  phone: text('phone'),
+  isPrimary: boolean('is_primary').notNull().default(false),
+  receivesInvoices: boolean('receives_invoices').notNull().default(true),
+  receivesShippingNotifications: boolean('receives_shipping_notifications').notNull().default(false),
+  receivesOrderConfirmations: boolean('receives_order_confirmations').notNull().default(false),
+  notes: text('notes'),
+  active: boolean('active').notNull().default(true),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+
 // Vendors table for supplier management
 export const vendors = pgTable('vendors', {
   id: serial('id').primaryKey(),
@@ -3751,9 +3780,21 @@ export type DepartmentBalanceBreakdown = {
   locations: string[];
 };
 
+export type InventorySerializedItemOption = {
+  id: string;
+  serialNumber: string;
+  barcode: string;
+  travelerBarcode?: string | null;
+  travelerId?: string | null;
+  travelerNumber?: string | null;
+  dispositionId?: number | null;
+  dispositionType?: string | null;
+};
+
 export type EnrichedInventoryBalance = typeof inventoryBalances.$inferSelect & {
   partName?: string;
   departmentMeta?: DepartmentBalanceMeta;
+  serializedItems?: InventorySerializedItemOption[];
 };
 
 export type InventoryBalanceWithDepartments = {
@@ -4240,6 +4281,34 @@ export const insertCustomerSchema = createInsertSchema(customers)
     preferredCommunicationMethod: z.array(z.enum(['email', 'sms'])).optional(),
     notes: z.string().optional(),
     isActive: z.boolean().default(true),
+  });
+
+export const insertCustomerContactSchema = createInsertSchema(customerContacts)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    customerId: z.coerce.number().int().positive(),
+    name: z.string().trim().min(1, 'Contact name is required'),
+    title: z.string().optional().nullable(),
+    email: z
+      .string()
+      .optional()
+      .nullable()
+      .transform((val) => (val === '' ? null : val))
+      .refine(
+        (email) => !email || z.string().email().safeParse(email).success,
+        { message: 'Invalid email format' }
+      ),
+    phone: z.string().optional().nullable(),
+    isPrimary: z.boolean().default(false),
+    receivesInvoices: z.boolean().default(true),
+    receivesShippingNotifications: z.boolean().default(false),
+    receivesOrderConfirmations: z.boolean().default(false),
+    notes: z.string().optional().nullable(),
+    active: z.boolean().default(true),
   });
 
 export const insertVendorSchema = createInsertSchema(vendors)
@@ -4934,6 +5003,8 @@ export const insertNonconformanceRecordSchema = createInsertSchema(
 // Types for Module 8
 export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
 export type Customer = typeof customers.$inferSelect;
+export type CustomerContact = typeof customerContacts.$inferSelect;
+export type InsertCustomerContact = z.infer<typeof insertCustomerContactSchema>;
 export type InsertCustomerAddress = z.infer<typeof insertCustomerAddressSchema>;
 export type CustomerAddress = typeof customerAddresses.$inferSelect;
 export type InsertCommunicationLog = z.infer<
@@ -5166,7 +5237,8 @@ export const p2PurchaseOrders = pgTable('p2_purchase_orders', {
   productionLeadId: integer('production_lead_id').references(() => employees.id), // Production lead for this PO
   productionLeadName: text('production_lead_name'), // Denormalized for display
   
-  // Project association — free-text field for internal project name or number
+  // Project association for PM/P2 continuity
+  projectId: uuid('project_id').references((): AnyPgColumn => projects.id, { onDelete: 'set null' }),
   projectName: text('project_name'),
   securityClassification: text('security_classification').notNull().default('internal'), // public | internal | cui | itar
   cuiCategory: text('cui_category'),
@@ -5918,6 +5990,20 @@ export const insertChargeCodeSchema = createInsertSchema(chargeCodes).omit({
 export type InsertChargeCode = z.infer<typeof insertChargeCodeSchema>;
 export type ChargeCode = typeof chargeCodes.$inferSelect;
 
+export const chargeCodeEmployeeAssignments = pgTable('charge_code_employee_assignments', {
+  id: serial('id').primaryKey(),
+  chargeCodeId: integer('charge_code_id').notNull().references(() => chargeCodes.id, { onDelete: 'cascade' }),
+  employeeId: integer('employee_id').notNull().references(() => employees.id, { onDelete: 'cascade' }),
+  assignedByUserId: integer('assigned_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  assignedAt: timestamp('assigned_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+  uniqueChargeCodeEmployee: unique().on(table.chargeCodeId, table.employeeId),
+  chargeCodeIdx: index('charge_code_employee_assignments_charge_code_idx').on(table.chargeCodeId),
+  employeeIdx: index('charge_code_employee_assignments_employee_idx').on(table.employeeId),
+}));
+
+export type ChargeCodeEmployeeAssignment = typeof chargeCodeEmployeeAssignments.$inferSelect;
+
 // ============================================================================
 // TRAVELER SYSTEM - AS9100 Digital Travelers (Execution Records)
 // ============================================================================
@@ -5956,6 +6042,8 @@ export const travelers = pgTable('travelers', {
   // off-system from the P2 Production Queue. Mirrors the `Off-system: …`
   // summary that is also stamped into `workOrderId` for legacy display.
   offSystemCompletionLink: text('off_system_completion_link'),
+
+  completedAt: timestamp('completed_at', { withTimezone: true }),
 
   createdBy: varchar('created_by', { length: 255 }).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).default(sql`now()`),
@@ -6368,6 +6456,12 @@ export const p2LotNumbers = pgTable('p2_lot_numbers', {
   packingSlipId: uuid('packing_slip_id'), // Reference to packing slip if generated
   certificateId: uuid('certificate_id'), // Reference to certificate of conformance
   notes: text('notes'),
+  trackingNumber: text('tracking_number'),
+  carrier: text('carrier'),
+  billOfLadingUrl: text('bill_of_lading_url'),
+  lotValidationReportUrl: text('lot_validation_report_url'),
+  packingSlipUploadUrl: text('packing_slip_upload_url'),
+  certificateUploadUrl: text('certificate_upload_url'),
   createdBy: text('created_by').notNull(),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
@@ -6438,6 +6532,12 @@ export const p2CertificatesOfConformance = pgTable('p2_certificates_of_conforman
   processRecords: jsonb('process_records'), // Array of { process, recordId, result }
   inspectionSummary: jsonb('inspection_summary'), // Summary of all inspections
   traceabilityData: jsonb('traceability_data'), // All material traceability data
+  templateDocumentId: uuid('template_document_id').references(() => controlledDocuments.id),
+  templateDocumentName: text('template_document_name'),
+  templateDocumentNumber: text('template_document_number'),
+  templateVersion: text('template_version'),
+  templateVersionDate: date('template_version_date'),
+  templateDisplay: text('template_display'),
   qaMgrName: text('qa_mgr_name'),
   qaMgrSignature: text('qa_mgr_signature'),
   qaMgrDate: timestamp('qa_mgr_date'),
@@ -6728,6 +6828,7 @@ export const insertP2PurchaseOrderSchema = createInsertSchema(p2PurchaseOrders)
     notes: z.string().optional().nullable(),
     sourceQuoteId: z.string().uuid().optional().nullable(),
     contractReviewRole: z.enum(['primary', 'secondary']).default('secondary'),
+    projectId: z.string().uuid().optional().nullable(),
   });
 
 export const insertP2PurchaseOrderItemSchema = createInsertSchema(
@@ -9099,7 +9200,7 @@ export const internalMessages = pgTable('internal_messages', {
   id: serial('id').primaryKey(),
   subject: text('subject').notNull(),
   message: text('message').notNull(),
-  senderId: integer('sender_id').notNull(),
+  senderId: integer('sender_id'),
   senderName: text('sender_name').notNull(),
   recipientType: text('recipient_type').notNull(), // 'user' or 'department'
   recipientUserId: integer('recipient_user_id'),
@@ -9702,7 +9803,7 @@ export const manufacturingQueue = pgTable('manufacturing_queue', {
   p2PoItemId: integer('p2_po_item_id'), // Reference to P2 PO item
   // BOM explosion lineage — set when this record is created by explodeBomDemand
   parentProductionOrderId: text('parent_production_order_id'), // Production order that triggered this demand (FK to production_orders.order_id)
-  department: text('department').notNull(), // CNC, Cutting Table, Cores, or Assembly — derived via getSupplySourceDashboard()
+  department: text('department').notNull(), // Derived from manufactured category routing
   quantityRequested: integer('quantity_requested').notNull().default(1),
   quantityCompleted: integer('quantity_completed').default(0),
   priority: integer('priority').default(50), // 1-100, lower = higher priority
@@ -9724,7 +9825,7 @@ export const manufacturingQueue = pgTable('manufacturing_queue', {
   sourceId: text('source_id'), // Source identifier (e.g. PO number, order ID) that generated this entry
   sourceType: text('source_type'), // Source type (e.g. 'vendor_po', 'production_order', 'manual')
   // Readiness tracking fields (added for queue readiness engine)
-  queueType: text('queue_type'), // LAYUP | CORE | SUB_ASSEMBLY | ASSEMBLY | KIT
+  queueType: text('queue_type'), // CUTTING_TABLE | KIT | CNC | CORE | SUB_ASSEMBLY | ASSEMBLY | FINAL_ASSEMBLY | LAYUP
   readinessStatus: text('readiness_status').default('NOT_READY'), // NOT_READY | PARTIAL | READY | BLOCKED
   percentReady: numeric('percent_ready').default('0'),
   blockedReason: text('blocked_reason'),
@@ -10049,27 +10150,19 @@ export const insertAllocationRequirementSchema = createInsertSchema(allocationRe
 export type AllocationRequirement = typeof allocationRequirements.$inferSelect;
 export type InsertAllocationRequirement = z.infer<typeof insertAllocationRequirementSchema>;
 
-// mapQueueType — maps manufacturedCategory to { queueType, department } pairs
-export type QueueType = 'LAYUP' | 'CORE' | 'SUB_ASSEMBLY' | 'ASSEMBLY' | 'KIT';
+// mapQueueType — compatibility wrapper around the canonical manufactured category routing map.
+export type QueueType = import('../shared/utils/manufacturingRouting').ManufacturingQueueType;
 
 export function mapQueueType(category: import('../shared/utils/supplySourceDashboard').ManufacturedCategory | null): { queueType: QueueType; department: string } | null {
-  if (!category) return null;
-  if (category === 'COMPONENT') return null;
-  const mapping: Record<string, { queueType: QueueType; department: string }> = {
-    PACKET: { queueType: 'LAYUP', department: 'Cutting Table' },
-    KIT: { queueType: 'KIT', department: 'Kitting' },
-    MACHINED_PART: { queueType: 'ASSEMBLY', department: 'CNC' },
-    CORE: { queueType: 'CORE', department: 'Cores' },
-    SUB_ASSEMBLY: { queueType: 'SUB_ASSEMBLY', department: 'Assembly' },
-    ASSEMBLY: { queueType: 'ASSEMBLY', department: 'Assembly' },
-    COMPOSITE: { queueType: 'LAYUP', department: 'Cutting Table' },
-  };
-  return mapping[category] ?? null;
+  const route = resolveManufacturingRouteDefinition(category);
+  if (!route?.queueType || !route.department) return null;
+  return { queueType: route.queueType, department: route.department };
 }
 
 // Controlled Documents - Master Document Register
 export const controlledDocuments = pgTable('controlled_documents', {
   id: uuid('id').defaultRandom().primaryKey(),
+  templateKey: text('template_key'),
   documentNumber: text('document_number').notNull(), // e.g., DOC-001
   documentName: text('document_name').notNull(),
   documentType: text('document_type').notNull(), // SOP, Work Instruction, Form, etc.
@@ -10077,6 +10170,8 @@ export const controlledDocuments = pgTable('controlled_documents', {
   category: text('category'), // Optional additional categorization
   description: text('description'),
   currentVersion: text('current_version').notNull().default('1.0'), // Major.Minor format
+  versionDate: date('version_date'),
+  originationDate: date('origination_date'),
   status: text('status').notNull().default('draft'), // draft, pending, approved, expired
   effectiveDate: date('effective_date'),
   expirationDate: date('expiration_date'),
@@ -13034,6 +13129,7 @@ export const orderDrafts = pgTable('order_drafts', {
   qcCompletedAt: timestamp('qc_completed_at'),
   shippingCompletedAt: timestamp('shipping_completed_at'),
   notes: text('notes'),
+  departmentNotes: jsonb('department_notes').$type<Array<{ id?: string; text: string; departments: string[] }>>().default(sql`'[]'::jsonb`),
   isPaid: boolean('is_paid'),
   paymentType: text('payment_type'),
   paymentAmount: real('payment_amount'),
@@ -15434,6 +15530,28 @@ export const insertChartOfAccountsSchema = createInsertSchema(chartOfAccounts).o
 export type ChartOfAccount = typeof chartOfAccounts.$inferSelect;
 export type InsertChartOfAccount = z.infer<typeof insertChartOfAccountsSchema>;
 
+export const productionLineAccountingMap = pgTable('production_line_accounting_map', {
+  id: serial('id').primaryKey(),
+  productionLine: text('production_line').notNull(),
+  revenueAccountId: integer('revenue_account_id').references(() => chartOfAccounts.id),
+  revenueAccountNumber: text('revenue_account_number'),
+  revenueAccountNameSnapshot: text('revenue_account_name_snapshot'),
+  quickbooksClass: text('quickbooks_class'),
+  active: boolean('active').notNull().default(true),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  uniqueProductionLine: unique('production_line_accounting_map_line_unique').on(table.productionLine),
+}));
+
+export const insertProductionLineAccountingMapSchema = createInsertSchema(productionLineAccountingMap).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type ProductionLineAccountingMap = typeof productionLineAccountingMap.$inferSelect;
+export type InsertProductionLineAccountingMap = z.infer<typeof insertProductionLineAccountingMapSchema>;
+
 // Journal entries — one per transaction event (e.g. a wire payment)
 export const journalEntries = pgTable('journal_entries', {
   id: serial('id').primaryKey(),
@@ -16502,6 +16620,7 @@ export const receivedUnits = pgTable('received_units', {
   freezerNumber: integer('freezer_number'),
   allocatedToType: text('allocated_to_type'), // work_order | po_demand | stock | quarantine
   allocatedToId: integer('allocated_to_id'),
+  targetProjectId: uuid('target_project_id').references((): AnyPgColumn => projects.id, { onDelete: 'set null' }),
   // Link to material_lots when accepted
   materialLotId: uuid('material_lot_id'),
   createdAt: timestamp('created_at').defaultNow(),
@@ -16510,6 +16629,7 @@ export const receivedUnits = pgTable('received_units', {
   receiptLineIdx: index('received_units_receipt_line_idx').on(table.receiptLineId),
   receiptIdx: index('received_units_receipt_idx').on(table.receiptId),
   barcodeIdx: uniqueIndex('received_units_barcode_idx').on(table.barcode),
+  targetProjectIdx: index('received_units_target_project_idx').on(table.targetProjectId),
 }));
 
 export const insertReceivedUnitSchema = createInsertSchema(receivedUnits).omit({
@@ -16535,6 +16655,41 @@ export const cncSetupPhotos = pgTable('cnc_setup_photos', {
 
 export type ReceivedUnit = typeof receivedUnits.$inferSelect;
 export type InsertReceivedUnit = z.infer<typeof insertReceivedUnitSchema>;
+
+export const projectReceivedMaterials = pgTable('project_received_materials', {
+  id: serial('id').primaryKey(),
+  projectId: uuid('project_id').notNull().references((): AnyPgColumn => projects.id, { onDelete: 'cascade' }),
+  receivedUnitId: integer('received_unit_id').notNull().references(() => receivedUnits.id, { onDelete: 'cascade' }),
+  receiptId: integer('receipt_id').notNull().references(() => receipts.id, { onDelete: 'cascade' }),
+  materialLotId: uuid('material_lot_id').references(() => materialLots.id, { onDelete: 'set null' }),
+  quantity: numeric('quantity').notNull(),
+  unitCost: numeric('unit_cost').notNull().default('0'),
+  extendedCost: numeric('extended_cost').notNull().default('0'),
+  status: text('status').notNull().default('pending_pm_acceptance'),
+  acceptedByUserId: integer('accepted_by_user_id'),
+  acceptedByDisplayName: text('accepted_by_display_name'),
+  acceptedAt: timestamp('accepted_at'),
+  rejectedByUserId: integer('rejected_by_user_id'),
+  rejectedByDisplayName: text('rejected_by_display_name'),
+  rejectedAt: timestamp('rejected_at'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  projectIdx: index('project_received_materials_project_idx').on(table.projectId),
+  receiptIdx: index('project_received_materials_receipt_idx').on(table.receiptId),
+  statusIdx: index('project_received_materials_status_idx').on(table.status),
+  unitUnique: unique('project_received_materials_received_unit_unique').on(table.receivedUnitId),
+}));
+
+export const insertProjectReceivedMaterialSchema = createInsertSchema(projectReceivedMaterials).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ProjectReceivedMaterial = typeof projectReceivedMaterials.$inferSelect;
+export type InsertProjectReceivedMaterial = z.infer<typeof insertProjectReceivedMaterialSchema>;
 
 export const receiptDocuments = pgTable('receipt_documents', {
   id: serial('id').primaryKey(),
@@ -16790,6 +16945,7 @@ export const productionWorkOrders = pgTable('production_work_orders', {
   status: text('status').notNull().default('PLANNED'),
   departmentBudgets: jsonb('department_budgets').default({}).notNull(),
   totalBudgetHours: numeric('total_budget_hours'),
+  materialBudgetAmount: numeric('material_budget_amount').default('0').notNull(),
   startDate: date('start_date'),
   dueDate: date('due_date'),
   warningThreshold: numeric('warning_threshold'),
@@ -16850,6 +17006,111 @@ export const insertProductionWorkOrderSchema = createInsertSchema(productionWork
 
 export type ProductionWorkOrder = typeof productionWorkOrders.$inferSelect;
 export type InsertProductionWorkOrder = z.infer<typeof insertProductionWorkOrderSchema>;
+
+// Program Manufacturing Orchestration - additive layer above P2 queues/WADs.
+export const programBuilds = pgTable('program_builds', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  projectId: uuid('project_id').references(() => projects.id, { onDelete: 'set null' }),
+  p2PurchaseOrderId: integer('p2_purchase_order_id').references(() => p2PurchaseOrders.id, { onDelete: 'set null' }),
+  programCode: text('program_code').notNull().unique(),
+  programName: text('program_name').notNull(),
+  buildName: text('build_name').notNull(),
+  buildType: text('build_type').notNull().default('program'),
+  status: text('status').notNull().default('PLANNED'),
+  priority: integer('priority').notNull().default(50),
+  targetShipDate: date('target_ship_date'),
+  customerName: text('customer_name'),
+  notes: text('notes'),
+  metadata: jsonb('metadata').default({}).notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  projectIdIdx: index('program_builds_project_id_idx').on(table.projectId),
+  poIdIdx: index('program_builds_po_id_idx').on(table.p2PurchaseOrderId),
+  statusIdx: index('program_builds_status_idx').on(table.status),
+}));
+
+export const programAssemblies = pgTable('program_assemblies', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  programBuildId: uuid('program_build_id').notNull().references(() => programBuilds.id, { onDelete: 'cascade' }),
+  parentAssemblyId: uuid('parent_assembly_id').references((): AnyPgColumn => programAssemblies.id, { onDelete: 'cascade' }),
+  assemblyCode: text('assembly_code').notNull(),
+  assemblyName: text('assembly_name').notNull(),
+  level: integer('level').notNull().default(0),
+  sequence: integer('sequence').notNull().default(0),
+  assemblyType: text('assembly_type').notNull().default('assembly'),
+  partNumber: text('part_number'),
+  requiredQuantity: integer('required_quantity').notNull().default(1),
+  status: text('status').notNull().default('PLANNED'),
+  plannedStartDate: date('planned_start_date'),
+  plannedFinishDate: date('planned_finish_date'),
+  targetShipDate: date('target_ship_date'),
+  metadata: jsonb('metadata').default({}).notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  buildIdx: index('program_assemblies_build_idx').on(table.programBuildId),
+  parentIdx: index('program_assemblies_parent_idx').on(table.parentAssemblyId),
+  codeUnique: uniqueIndex('program_assemblies_build_code_unique').on(table.programBuildId, table.assemblyCode),
+}));
+
+export const programAssemblyLinks = pgTable('program_assembly_links', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  assemblyId: uuid('assembly_id').notNull().references(() => programAssemblies.id, { onDelete: 'cascade' }),
+  manufacturingQueueId: integer('manufacturing_queue_id').references(() => manufacturingQueue.id, { onDelete: 'set null' }),
+  productionWorkOrderId: uuid('production_work_order_id').references(() => productionWorkOrders.id, { onDelete: 'set null' }),
+  travelerId: varchar('traveler_id', { length: 255 }).references(() => travelers.id, { onDelete: 'set null' }),
+  p2SerializedItemId: uuid('p2_serialized_item_id').references(() => p2SerializedItems.id, { onDelete: 'set null' }),
+  linkType: text('link_type').notNull().default('queue_item'),
+  requiredQuantity: integer('required_quantity').notNull().default(1),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  assemblyIdx: index('program_assembly_links_assembly_idx').on(table.assemblyId),
+  queueIdx: index('program_assembly_links_queue_idx').on(table.manufacturingQueueId),
+  travelerIdx: index('program_assembly_links_traveler_idx').on(table.travelerId),
+}));
+
+export const programAssemblyDependencies = pgTable('program_assembly_dependencies', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  assemblyId: uuid('assembly_id').notNull().references(() => programAssemblies.id, { onDelete: 'cascade' }),
+  dependsOnAssemblyId: uuid('depends_on_assembly_id').notNull().references(() => programAssemblies.id, { onDelete: 'cascade' }),
+  dependencyType: text('dependency_type').notNull().default('finish_to_start'),
+  isBlocking: boolean('is_blocking').notNull().default(true),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  assemblyIdx: index('program_assembly_dependencies_assembly_idx').on(table.assemblyId),
+  dependsOnIdx: index('program_assembly_dependencies_depends_on_idx').on(table.dependsOnAssemblyId),
+  uniqueDependency: uniqueIndex('program_assembly_dependencies_unique').on(table.assemblyId, table.dependsOnAssemblyId),
+}));
+
+export const insertProgramBuildSchema = createInsertSchema(programBuilds).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const insertProgramAssemblySchema = createInsertSchema(programAssemblies).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const insertProgramAssemblyLinkSchema = createInsertSchema(programAssemblyLinks).omit({
+  id: true,
+  createdAt: true,
+});
+export const insertProgramAssemblyDependencySchema = createInsertSchema(programAssemblyDependencies).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ProgramBuild = typeof programBuilds.$inferSelect;
+export type ProgramAssembly = typeof programAssemblies.$inferSelect;
+export type ProgramAssemblyLink = typeof programAssemblyLinks.$inferSelect;
+export type ProgramAssemblyDependency = typeof programAssemblyDependencies.$inferSelect;
+export type InsertProgramBuild = z.infer<typeof insertProgramBuildSchema>;
+export type InsertProgramAssembly = z.infer<typeof insertProgramAssemblySchema>;
+export type InsertProgramAssemblyLink = z.infer<typeof insertProgramAssemblyLinkSchema>;
+export type InsertProgramAssemblyDependency = z.infer<typeof insertProgramAssemblyDependencySchema>;
 
 // ─── LABOR THRESHOLD SETTINGS (system-wide singleton) ─────────────────────────
 
@@ -17443,6 +17704,54 @@ export const insertAppliedBurdenAmountSchema = createInsertSchema(appliedBurdenA
 });
 export type AppliedBurdenAmount = typeof appliedBurdenAmounts.$inferSelect;
 export type InsertAppliedBurdenAmount = z.infer<typeof insertAppliedBurdenAmountSchema>;
+
+export const burdenRateAccumulations = pgTable('burden_rate_accumulations', {
+  id: serial('id').primaryKey(),
+  calculationYear: integer('calculation_year').notNull(),
+  lookbackStart: date('lookback_start').notNull(),
+  lookbackEnd: date('lookback_end').notNull(),
+  rateType: text('rate_type').notNull().default('PROVISIONAL'), // PROVISIONAL | BILLING | FINAL
+  effectiveFrom: date('effective_from').notNull(),
+  status: text('status').notNull().default('DRAFT'), // DRAFT | POSTED
+  notes: text('notes'),
+  createdBy: text('created_by').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  postedAt: timestamp('posted_at', { withTimezone: true }),
+});
+export const insertBurdenRateAccumulationSchema = createInsertSchema(burdenRateAccumulations).omit({
+  id: true, createdAt: true, postedAt: true,
+});
+export type BurdenRateAccumulation = typeof burdenRateAccumulations.$inferSelect;
+export type InsertBurdenRateAccumulation = z.infer<typeof insertBurdenRateAccumulationSchema>;
+
+export const burdenRateAccumulationExpenseLines = pgTable('burden_rate_accumulation_expense_lines', {
+  id: serial('id').primaryKey(),
+  accumulationId: integer('accumulation_id').notNull().references(() => burdenRateAccumulations.id, { onDelete: 'cascade' }),
+  poolId: integer('pool_id').notNull().references(() => indirectCostPools.id),
+  lineItem: text('line_item').notNull(),
+  monthlyAmounts: jsonb('monthly_amounts').$type<Record<string, number>>().notNull().default(sql`'{}'::jsonb`),
+  notes: text('notes'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+export const insertBurdenRateAccumulationExpenseLineSchema = createInsertSchema(burdenRateAccumulationExpenseLines).omit({
+  id: true, createdAt: true,
+});
+export type BurdenRateAccumulationExpenseLine = typeof burdenRateAccumulationExpenseLines.$inferSelect;
+export type InsertBurdenRateAccumulationExpenseLine = z.infer<typeof insertBurdenRateAccumulationExpenseLineSchema>;
+
+export const burdenRateAccumulationBases = pgTable('burden_rate_accumulation_bases', {
+  id: serial('id').primaryKey(),
+  accumulationId: integer('accumulation_id').notNull().references(() => burdenRateAccumulations.id, { onDelete: 'cascade' }),
+  poolId: integer('pool_id').notNull().references(() => indirectCostPools.id),
+  baseAmount: numeric('base_amount', { precision: 14, scale: 4 }).notNull().default('0'),
+  baseSource: text('base_source'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+export const insertBurdenRateAccumulationBaseSchema = createInsertSchema(burdenRateAccumulationBases).omit({
+  id: true, createdAt: true,
+});
+export type BurdenRateAccumulationBase = typeof burdenRateAccumulationBases.$inferSelect;
+export type InsertBurdenRateAccumulationBase = z.infer<typeof insertBurdenRateAccumulationBaseSchema>;
 
 // ============================================================================
 // CYCLE COUNT SESSIONS — AS9100 Physical Inventory Verification Workflow

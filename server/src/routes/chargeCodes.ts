@@ -3,8 +3,34 @@ import { authenticateToken, requireRole } from '../../middleware/auth';
 import { storage } from '../../storage';
 import { insertChargeCodeSchema } from '../../schema';
 import { recordAuditEvent } from '../services/auditLedgerService';
+import { pgPool, pool } from '../../db';
 
 const router: IRouter = Router();
+
+let chargeCodeAssignmentTableReady: Promise<void> | null = null;
+
+function ensureChargeCodeAssignmentTable(): Promise<void> {
+  if (!chargeCodeAssignmentTableReady) {
+    chargeCodeAssignmentTableReady = (async () => {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS charge_code_employee_assignments (
+          id SERIAL PRIMARY KEY,
+          charge_code_id INTEGER NOT NULL REFERENCES charge_codes(id) ON DELETE CASCADE,
+          employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+          assigned_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          UNIQUE (charge_code_id, employee_id)
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS charge_code_employee_assignments_charge_code_idx ON charge_code_employee_assignments(charge_code_id)`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS charge_code_employee_assignments_employee_idx ON charge_code_employee_assignments(employee_id)`);
+    })().catch((error) => {
+      chargeCodeAssignmentTableReady = null;
+      throw error;
+    });
+  }
+  return chargeCodeAssignmentTableReady;
+}
 
 function h(fn: (req: Request, res: Response, next: NextFunction) => Promise<void>): RequestHandler {
   return (req, res, next) => fn(req, res, next).catch((err) => {
@@ -22,6 +48,32 @@ function extractActor(req: Request): { actorId: number | null; actorName: string
   };
 }
 
+function normalizeEmployeeIds(value: unknown): number[] | null {
+  if (!Array.isArray(value)) return null;
+  const ids = value
+    .map((id) => Number(id))
+    .filter((id) => Number.isInteger(id) && id > 0);
+  return Array.from(new Set(ids)).sort((a, b) => a - b);
+}
+
+async function getChargeCodeAssignments(chargeCodeId: number) {
+  await ensureChargeCodeAssignmentTable();
+  return pool.query(
+    `SELECT
+       e.id,
+       e.employee_code AS "employeeCode",
+       e.name,
+       e.department,
+       e.job_title AS "jobTitle",
+       e.is_active AS "isActive"
+     FROM charge_code_employee_assignments cca
+     JOIN employees e ON e.id = cca.employee_id
+     WHERE cca.charge_code_id = $1
+     ORDER BY e.name`,
+    [chargeCodeId]
+  );
+}
+
 // GET /api/charge-codes — list all charge codes; supports ?active=true filter
 router.get('/', authenticateToken, h(async (req, res) => {
   const activeOnly = req.query.active === 'true';
@@ -30,6 +82,123 @@ router.get('/', authenticateToken, h(async (req, res) => {
 }));
 
 // POST /api/charge-codes — admin create
+router.get('/:id/assignments', authenticateToken, h(async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: 'Invalid charge code id' });
+    return;
+  }
+
+  const chargeCode = await storage.getChargeCodeById(id);
+  if (!chargeCode) {
+    res.status(404).json({ error: 'Charge code not found' });
+    return;
+  }
+
+  const assignedEmployees = await getChargeCodeAssignments(id);
+  res.json({
+    chargeCodeId: id,
+    scope: assignedEmployees.length > 0 ? 'SELECTED_EMPLOYEES' : 'ALL_EMPLOYEES',
+    employeeIds: assignedEmployees.map((employee: any) => employee.id),
+    assignedEmployees,
+  });
+}));
+
+router.put('/:id/assignments', authenticateToken, requireRole('ADMIN'), h(async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: 'Invalid charge code id' });
+    return;
+  }
+
+  const scope = req.body?.scope;
+  if (scope !== 'ALL_EMPLOYEES' && scope !== 'SELECTED_EMPLOYEES') {
+    res.status(400).json({ error: 'scope must be ALL_EMPLOYEES or SELECTED_EMPLOYEES' });
+    return;
+  }
+
+  const nextEmployeeIds = scope === 'ALL_EMPLOYEES' ? [] : normalizeEmployeeIds(req.body?.employeeIds);
+  if (!nextEmployeeIds) {
+    res.status(400).json({ error: 'employeeIds must be an array' });
+    return;
+  }
+  if (scope === 'SELECTED_EMPLOYEES' && nextEmployeeIds.length === 0) {
+    res.status(400).json({ error: 'Select at least one employee or choose All employees' });
+    return;
+  }
+
+  const chargeCode = await storage.getChargeCodeById(id);
+  if (!chargeCode) {
+    res.status(404).json({ error: 'Charge code not found' });
+    return;
+  }
+
+  const beforeAssignments = await getChargeCodeAssignments(id);
+  const beforeIds = beforeAssignments.map((employee: any) => employee.id).sort((a: number, b: number) => a - b);
+
+  if (nextEmployeeIds.length > 0) {
+    const validRows = await pool.query(`SELECT id FROM employees WHERE id = ANY($1::int[])`, [nextEmployeeIds]);
+    const validIds = new Set(validRows.map((row: any) => row.id));
+    const missingIds = nextEmployeeIds.filter((employeeId) => !validIds.has(employeeId));
+    if (missingIds.length > 0) {
+      res.status(400).json({ error: `Unknown employee id(s): ${missingIds.join(', ')}` });
+      return;
+    }
+  }
+
+  const client = await pgPool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(`DELETE FROM charge_code_employee_assignments WHERE charge_code_id = $1`, [id]);
+    if (nextEmployeeIds.length > 0) {
+      await client.query(
+        `INSERT INTO charge_code_employee_assignments (charge_code_id, employee_id, assigned_by_user_id)
+         SELECT $1, unnest($2::int[]), $3
+         ON CONFLICT (charge_code_id, employee_id) DO NOTHING`,
+        [id, nextEmployeeIds, req.user?.id ?? null]
+      );
+    }
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+
+  const assignedEmployees = await getChargeCodeAssignments(id);
+  const { actorId, actorName, actorRole } = extractActor(req);
+  await recordAuditEvent({
+    eventType: 'CHARGE_CODE_ASSIGNMENTS_UPDATED',
+    subjectType: 'charge_code',
+    subjectId: String(id),
+    sourceService: 'chargeCodes.routes',
+    actor: { id: actorId, username: actorName, role: actorRole },
+    fieldsChanged: {
+      assignmentScope: {
+        before: beforeIds.length > 0 ? 'SELECTED_EMPLOYEES' : 'ALL_EMPLOYEES',
+        after: assignedEmployees.length > 0 ? 'SELECTED_EMPLOYEES' : 'ALL_EMPLOYEES',
+      },
+      employeeIds: { before: beforeIds, after: assignedEmployees.map((employee: any) => employee.id) },
+    },
+    meta: { chargeCode: chargeCode.code },
+    ipAddress: req.ip ?? null,
+    userAgent: req.headers['user-agent'] ?? null,
+    payload: {
+      chargeCodeId: id,
+      chargeCode: chargeCode.code,
+      employeeIds: assignedEmployees.map((employee: any) => employee.id),
+    },
+  });
+
+  res.json({
+    chargeCodeId: id,
+    scope: assignedEmployees.length > 0 ? 'SELECTED_EMPLOYEES' : 'ALL_EMPLOYEES',
+    employeeIds: assignedEmployees.map((employee: any) => employee.id),
+    assignedEmployees,
+  });
+}));
+
 router.post('/', authenticateToken, requireRole('ADMIN'), h(async (req, res) => {
   const parsed = insertChargeCodeSchema.safeParse(req.body);
   if (!parsed.success) {

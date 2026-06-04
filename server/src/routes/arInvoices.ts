@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import { db } from '../../db';
 import {
   arInvoices,
@@ -6,12 +7,16 @@ import {
   arPaymentAllocations,
   mediaAttachments,
   mediaLibrary,
+  customers,
+  customerContacts,
+  purchaseOrders,
   p2Customers,
   p2CustomerContacts,
   p2LotNumbers,
   p2PackingSlips,
   p2PurchaseOrders,
   chartOfAccounts,
+  productionLineAccountingMap,
   journalEntries,
   journalLines,
 } from '../../schema';
@@ -20,9 +25,14 @@ import { authenticateToken } from '../../middleware/auth';
 import { requirePermission } from '../../middleware/requirePermission';
 import { generateArInvoicePdf } from '../../utils/pdf/arInvoicePdf';
 import { sendEmailViaSendGrid } from '../../utils/sendgrid';
-import { createInvoiceFromPackingSlip } from '../services/invoiceFromPackingSlip';
+import { buildInvoicePreviewFromPackingSlip, createInvoiceFromPackingSlip } from '../services/invoiceFromPackingSlip';
 import { assertPostingAllowedForPeriod } from '../services/accountingPeriodService';
 import { getFileStorageProviderForObjectPath } from '../services/fileStorageProvider';
+import { recordAuditEvent } from '../services/auditLedgerService';
+import {
+  buildRevenueDimensionTags,
+  resolveRevenueAccountForProductionLine,
+} from '../services/productionLineAccounting';
 
 const LOCKED_STATUSES = ['POSTED', 'SENT', 'VOID', 'PAID'];
 
@@ -40,6 +50,26 @@ const REQUIRED_P2_INVOICE_COLUMNS = [
   'ar_invoice_lines.po_item_id',
   'ar_invoice_lines.part_number',
 ];
+
+const invoicePreviewLineSchema = z.object({
+  poItemId: z.number().nullable().optional(),
+  partNumber: z.string().nullable().optional(),
+  description: z.string().trim().min(1, 'Line description is required'),
+  qty: z.coerce.number().positive('Line quantity must be greater than zero'),
+  unitPrice: z.coerce.number().min(0, 'Unit price cannot be negative'),
+});
+
+const invoicePreviewOverrideSchema = z.object({
+  invoiceDate: z.string().trim().optional(),
+  dueDate: z.string().trim().optional(),
+  terms: z.string().trim().optional(),
+  poOverride: z.string().nullable().optional(),
+  freightAmount: z.coerce.number().min(0).optional(),
+  taxAmount: z.coerce.number().min(0).optional(),
+  discountAmount: z.coerce.number().min(0).optional(),
+  customerVisibleNotes: z.string().nullable().optional(),
+  lines: z.array(invoicePreviewLineSchema).optional(),
+});
 
 async function getMissingP2InvoiceColumns(): Promise<string[]> {
   const result = await db.execute(sql`
@@ -76,11 +106,69 @@ const router = Router();
 router.use(authenticateToken);
 router.use(requirePermission('finance.view'));
 
+const invoiceSourceSql = () => sql<string>`
+  CASE WHEN EXISTS (
+    SELECT 1
+    FROM ar_invoice_lines ail
+    WHERE ail.invoice_id = ${arInvoices.id}
+      AND ail.dimension_tags->>'source' = 'p1_oem_packing_slip'
+  )
+    OR ${arInvoices.notes} ILIKE 'Auto-created from P1 OEM packing slip%'
+    OR ${arInvoices.internalNotes} ILIKE 'Source: P1 OEM shipment%'
+  THEN 'P1' ELSE 'P2' END
+`;
+
+const invoiceCustomerNameSql = () => sql<string | null>`
+  COALESCE(
+    CASE WHEN (${invoiceSourceSql()}) = 'P1' THEN ${customers.name} ELSE ${p2Customers.customerName} END,
+    ${purchaseOrders.customerName},
+    ${p2Customers.customerName}
+  )
+`;
+
+const invoicePoNumberSql = () => sql<string | null>`
+  COALESCE(
+    CASE WHEN (${invoiceSourceSql()}) = 'P1' THEN ${purchaseOrders.poNumber} ELSE ${p2PurchaseOrders.poNumber} END,
+    ${arInvoices.poOverride},
+    ${purchaseOrders.poNumber},
+    ${p2PurchaseOrders.poNumber}
+  )
+`;
+
+async function isP1PackingSlipInvoice(invoiceId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: arInvoiceLines.id })
+    .from(arInvoiceLines)
+    .where(
+      and(
+        eq(arInvoiceLines.invoiceId, invoiceId),
+        sql`${arInvoiceLines.dimensionTags}->>'source' = 'p1_oem_packing_slip'`,
+      ),
+    )
+    .limit(1);
+
+  return !!row;
+}
+
 router.get('/customer-pos', async (req: Request, res: Response) => {
   try {
-    const { customerId } = req.query;
+    const { customerId, source } = req.query;
     if (!customerId) {
       return res.status(400).json({ error: 'customerId is required' });
+    }
+
+    if (String(source).toUpperCase() === 'P1') {
+      const pos = await db
+        .select({
+          id: purchaseOrders.id,
+          poNumber: purchaseOrders.poNumber,
+          status: purchaseOrders.status,
+        })
+        .from(purchaseOrders)
+        .where(eq(purchaseOrders.customerId, String(customerId)))
+        .orderBy(desc(purchaseOrders.createdAt));
+
+      return res.json(pos);
     }
 
     const pos = await db
@@ -245,7 +333,7 @@ router.get('/', async (req: Request, res: Response) => {
       .select({
         id: arInvoices.id,
         customerId: arInvoices.customerId,
-        customerName: p2Customers.customerName,
+        customerName: invoiceCustomerNameSql(),
         invoiceNumber: arInvoices.invoiceNumber,
         invoiceDate: arInvoices.invoiceDate,
         dueDate: arInvoices.dueDate,
@@ -256,7 +344,8 @@ router.get('/', async (req: Request, res: Response) => {
         terms: arInvoices.terms,
         poId: arInvoices.poId,
         poOverride: arInvoices.poOverride,
-        poNumber: p2PurchaseOrders.poNumber,
+        poNumber: invoicePoNumberSql(),
+        invoiceSource: invoiceSourceSql(),
         notes: arInvoices.notes,
         customerVisibleNotes: arInvoices.customerVisibleNotes,
         internalNotes: arInvoices.internalNotes,
@@ -276,6 +365,29 @@ router.get('/', async (req: Request, res: Response) => {
         retainageAmount: arInvoices.retainageAmount,
         sentTo: arInvoices.sentTo,
         sentCc: arInvoices.sentCc,
+        journalEntryId: sql<number | null>`(
+          SELECT je.id
+          FROM journal_entries je
+          WHERE je.reference_uuid = ${arInvoices.id}
+            AND je.transaction_type = 'AR_INVOICE'
+          ORDER BY je.created_at DESC
+          LIMIT 1
+        )`,
+        journalEntryStatus: sql<string | null>`(
+          SELECT je.status
+          FROM journal_entries je
+          WHERE je.reference_uuid = ${arInvoices.id}
+            AND je.transaction_type = 'AR_INVOICE'
+          ORDER BY je.created_at DESC
+          LIMIT 1
+        )`,
+        journalLineCount: sql<number>`COALESCE((
+          SELECT COUNT(*)::int
+          FROM journal_entries je
+          JOIN journal_lines jl ON jl.journal_entry_id = je.id
+          WHERE je.reference_uuid = ${arInvoices.id}
+            AND je.transaction_type = 'AR_INVOICE'
+        ), 0)`,
         amountPaid: sql<string>`COALESCE(
           (
             SELECT SUM(a.amount_applied)
@@ -308,9 +420,12 @@ router.get('/', async (req: Request, res: Response) => {
       .from(arInvoices)
       .leftJoin(p2Customers, eq(arInvoices.customerId, p2Customers.customerId))
       .leftJoin(p2PurchaseOrders, sql`(CASE WHEN ${arInvoices.poId} ~ '^[0-9]+$' THEN ${arInvoices.poId}::integer END) = ${p2PurchaseOrders.id}`)
+      .leftJoin(customers, sql`(CASE WHEN ${arInvoices.customerId} ~ '^[0-9]+$' THEN ${arInvoices.customerId}::integer END) = ${customers.id}`)
+      .leftJoin(purchaseOrders, sql`(CASE WHEN ${arInvoices.poId} ~ '^[0-9]+$' THEN ${arInvoices.poId}::integer END) = ${purchaseOrders.id}`)
       .where(
         and(
           status && status !== 'all' ? eq(arInvoices.status, String(status)) : undefined,
+          !status || status === 'all' ? not(eq(arInvoices.status, 'VOID')) : undefined,
           customerId ? eq(arInvoices.customerId, String(customerId)) : undefined,
           search ? ilike(arInvoices.invoiceNumber, `%${String(search)}%`) : undefined,
           safePackingSlipId ? eq(arInvoices.packingSlipId, safePackingSlipId) : undefined,
@@ -328,7 +443,7 @@ router.get('/', async (req: Request, res: Response) => {
 const DASHBOARD_INVOICE_SELECT = (invoices: typeof arInvoices, customers: typeof p2Customers, purchaseOrders?: typeof p2PurchaseOrders) => ({
   id: invoices.id,
   customerId: invoices.customerId,
-  customerName: customers.customerName,
+  customerName: invoiceCustomerNameSql(),
   invoiceNumber: invoices.invoiceNumber,
   invoiceDate: invoices.invoiceDate,
   dueDate: invoices.dueDate,
@@ -341,7 +456,8 @@ const DASHBOARD_INVOICE_SELECT = (invoices: typeof arInvoices, customers: typeof
   autoCreated: invoices.autoCreated,
   poId: invoices.poId,
   poOverride: invoices.poOverride,
-  poNumber: purchaseOrders ? purchaseOrders.poNumber : sql<string | null>`null`,
+  poNumber: invoicePoNumberSql(),
+  invoiceSource: invoiceSourceSql(),
   balance: sql<string>`(
     ${invoices.totalAmount}::numeric - COALESCE(
       (
@@ -364,7 +480,8 @@ router.get('/summary-counts', async (_req: Request, res: Response) => {
     const [needsReviewRow, unsentRow, disputedRow] = await Promise.all([
       db.execute(sql`
         SELECT COUNT(*)::int AS count FROM ar_invoices
-        WHERE status IN ('DRAFT','REVIEW') OR pricing_mismatch = true OR pricing_ambiguous = true
+        WHERE status <> 'VOID'
+          AND (status IN ('DRAFT','REVIEW') OR pricing_mismatch = true OR pricing_ambiguous = true)
       `),
       db.execute(sql`
         SELECT COUNT(*)::int AS count FROM ar_invoices
@@ -393,11 +510,16 @@ router.get('/needs-review', async (_req: Request, res: Response) => {
       .from(arInvoices)
       .leftJoin(p2Customers, eq(arInvoices.customerId, p2Customers.customerId))
       .leftJoin(p2PurchaseOrders, sql`(CASE WHEN ${arInvoices.poId} ~ '^[0-9]+$' THEN ${arInvoices.poId}::integer END) = ${p2PurchaseOrders.id}`)
+      .leftJoin(customers, sql`(CASE WHEN ${arInvoices.customerId} ~ '^[0-9]+$' THEN ${arInvoices.customerId}::integer END) = ${customers.id}`)
+      .leftJoin(purchaseOrders, sql`(CASE WHEN ${arInvoices.poId} ~ '^[0-9]+$' THEN ${arInvoices.poId}::integer END) = ${purchaseOrders.id}`)
       .where(
-        or(
-          inArray(arInvoices.status, ['DRAFT', 'REVIEW']),
-          eq(arInvoices.pricingMismatch, true),
-          eq(arInvoices.pricingAmbiguous, true),
+        and(
+          not(eq(arInvoices.status, 'VOID')),
+          or(
+            inArray(arInvoices.status, ['DRAFT', 'REVIEW']),
+            eq(arInvoices.pricingMismatch, true),
+            eq(arInvoices.pricingAmbiguous, true),
+          ),
         )
       )
       .orderBy(desc(arInvoices.createdAt));
@@ -415,6 +537,8 @@ router.get('/unsent', async (_req: Request, res: Response) => {
       .from(arInvoices)
       .leftJoin(p2Customers, eq(arInvoices.customerId, p2Customers.customerId))
       .leftJoin(p2PurchaseOrders, sql`(CASE WHEN ${arInvoices.poId} ~ '^[0-9]+$' THEN ${arInvoices.poId}::integer END) = ${p2PurchaseOrders.id}`)
+      .leftJoin(customers, sql`(CASE WHEN ${arInvoices.customerId} ~ '^[0-9]+$' THEN ${arInvoices.customerId}::integer END) = ${customers.id}`)
+      .leftJoin(purchaseOrders, sql`(CASE WHEN ${arInvoices.poId} ~ '^[0-9]+$' THEN ${arInvoices.poId}::integer END) = ${purchaseOrders.id}`)
       .where(
         and(
           eq(arInvoices.status, 'POSTED'),
@@ -436,6 +560,8 @@ router.get('/disputed', async (_req: Request, res: Response) => {
       .from(arInvoices)
       .leftJoin(p2Customers, eq(arInvoices.customerId, p2Customers.customerId))
       .leftJoin(p2PurchaseOrders, sql`(CASE WHEN ${arInvoices.poId} ~ '^[0-9]+$' THEN ${arInvoices.poId}::integer END) = ${p2PurchaseOrders.id}`)
+      .leftJoin(customers, sql`(CASE WHEN ${arInvoices.customerId} ~ '^[0-9]+$' THEN ${arInvoices.customerId}::integer END) = ${customers.id}`)
+      .leftJoin(purchaseOrders, sql`(CASE WHEN ${arInvoices.poId} ~ '^[0-9]+$' THEN ${arInvoices.poId}::integer END) = ${purchaseOrders.id}`)
       .where(
         and(
           eq(arInvoices.isDisputed, true),
@@ -450,16 +576,22 @@ router.get('/disputed', async (_req: Request, res: Response) => {
   }
 });
 
-router.post('/from-packing-slip/:packingSlipId', requirePermission('finance.post_invoice'), async (req: Request, res: Response) => {
+async function getPackingSlipLotLink(packingSlipId: string) {
+  const [slip] = await db
+    .select({ id: p2PackingSlips.id, lotNumberId: p2PackingSlips.lotNumberId })
+    .from(p2PackingSlips)
+    .where(eq(p2PackingSlips.id, packingSlipId));
+
+  if (!slip) return { error: 'Packing slip not found' as const, status: 404 as const };
+  if (!slip.lotNumberId) return { error: 'Packing slip is not linked to a lot' as const, status: 422 as const };
+  return { slip };
+}
+
+router.get('/from-packing-slip/:packingSlipId/preview', requirePermission('finance.post_invoice'), async (req: Request, res: Response) => {
   try {
     const { packingSlipId } = req.params;
-    const [slip] = await db
-      .select({ id: p2PackingSlips.id, lotNumberId: p2PackingSlips.lotNumberId })
-      .from(p2PackingSlips)
-      .where(eq(p2PackingSlips.id, packingSlipId));
-
-    if (!slip) return res.status(404).json({ error: 'Packing slip not found' });
-    if (!slip.lotNumberId) return res.status(422).json({ error: 'Packing slip is not linked to a lot' });
+    const link = await getPackingSlipLotLink(packingSlipId);
+    if ('error' in link) return res.status(link.status).json({ error: link.error });
 
     const missingColumns = await getMissingP2InvoiceColumns();
     if (missingColumns.length > 0) {
@@ -469,7 +601,31 @@ router.post('/from-packing-slip/:packingSlipId', requirePermission('finance.post
       });
     }
 
-    await createInvoiceFromPackingSlip(packingSlipId, slip.lotNumberId);
+    const preview = await buildInvoicePreviewFromPackingSlip(packingSlipId, link.slip.lotNumberId);
+    res.json(preview);
+  } catch (error) {
+    console.error('Failed to preview invoice from packing slip:', error);
+    const message = error instanceof Error ? error.message : 'Failed to preview invoice from packing slip';
+    res.status(500).json({ error: message });
+  }
+});
+
+router.post('/from-packing-slip/:packingSlipId', requirePermission('finance.post_invoice'), async (req: Request, res: Response) => {
+  try {
+    const { packingSlipId } = req.params;
+    const link = await getPackingSlipLotLink(packingSlipId);
+    if ('error' in link) return res.status(link.status).json({ error: link.error });
+
+    const missingColumns = await getMissingP2InvoiceColumns();
+    if (missingColumns.length > 0) {
+      return res.status(500).json({
+        error: `Invoice database migration is not applied. Missing columns: ${missingColumns.join(', ')}`,
+        missingColumns,
+      });
+    }
+
+    const overrides = invoicePreviewOverrideSchema.parse(req.body || {});
+    await createInvoiceFromPackingSlip(packingSlipId, link.slip.lotNumberId, overrides);
 
     const [invoice] = await db
       .select({ id: arInvoices.id, invoiceNumber: arInvoices.invoiceNumber, status: arInvoices.status })
@@ -478,6 +634,9 @@ router.post('/from-packing-slip/:packingSlipId', requirePermission('finance.post
 
     res.status(201).json(invoice);
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: error.errors[0]?.message || 'Invalid invoice preview data', issues: error.errors });
+    }
     console.error('Failed to create invoice from packing slip:', error);
     const message = error instanceof Error ? error.message : 'Failed to create invoice from packing slip';
     res.status(500).json({ error: message });
@@ -505,14 +664,15 @@ router.get('/:id', async (req: Request, res: Response) => {
       .select({
         id: arInvoices.id,
         customerId: arInvoices.customerId,
-        customerName: p2Customers.customerName,
+        customerName: invoiceCustomerNameSql(),
         invoiceNumber: arInvoices.invoiceNumber,
         invoiceDate: arInvoices.invoiceDate,
         dueDate: arInvoices.dueDate,
         terms: arInvoices.terms,
         poId: arInvoices.poId,
         poOverride: arInvoices.poOverride,
-        poNumber: p2PurchaseOrders.poNumber,
+        poNumber: invoicePoNumberSql(),
+        invoiceSource: invoiceSourceSql(),
         packingSlipId: arInvoices.packingSlipId,
         lotId: arInvoices.lotId,
         pricingMismatch: arInvoices.pricingMismatch,
@@ -538,6 +698,29 @@ router.get('/:id', async (req: Request, res: Response) => {
         createdBy: arInvoices.createdBy,
         createdAt: arInvoices.createdAt,
         updatedAt: arInvoices.updatedAt,
+        journalEntryId: sql<number | null>`(
+          SELECT je.id
+          FROM journal_entries je
+          WHERE je.reference_uuid = ${arInvoices.id}
+            AND je.transaction_type = 'AR_INVOICE'
+          ORDER BY je.created_at DESC
+          LIMIT 1
+        )`,
+        journalEntryStatus: sql<string | null>`(
+          SELECT je.status
+          FROM journal_entries je
+          WHERE je.reference_uuid = ${arInvoices.id}
+            AND je.transaction_type = 'AR_INVOICE'
+          ORDER BY je.created_at DESC
+          LIMIT 1
+        )`,
+        journalLineCount: sql<number>`COALESCE((
+          SELECT COUNT(*)::int
+          FROM journal_entries je
+          JOIN journal_lines jl ON jl.journal_entry_id = je.id
+          WHERE je.reference_uuid = ${arInvoices.id}
+            AND je.transaction_type = 'AR_INVOICE'
+        ), 0)`,
         amountPaid: sql<string>`COALESCE(
           (
             SELECT SUM(a.amount_applied)
@@ -570,6 +753,8 @@ router.get('/:id', async (req: Request, res: Response) => {
       .from(arInvoices)
       .leftJoin(p2Customers, eq(arInvoices.customerId, p2Customers.customerId))
       .leftJoin(p2PurchaseOrders, sql`(CASE WHEN ${arInvoices.poId} ~ '^[0-9]+$' THEN ${arInvoices.poId}::integer END) = ${p2PurchaseOrders.id}`)
+      .leftJoin(customers, sql`(CASE WHEN ${arInvoices.customerId} ~ '^[0-9]+$' THEN ${arInvoices.customerId}::integer END) = ${customers.id}`)
+      .leftJoin(purchaseOrders, sql`(CASE WHEN ${arInvoices.poId} ~ '^[0-9]+$' THEN ${arInvoices.poId}::integer END) = ${purchaseOrders.id}`)
       .where(eq(arInvoices.id, id));
 
     if (!invoice) {
@@ -674,25 +859,31 @@ router.post('/', requirePermission('finance.post_invoice'), async (req: Request,
         })
         .returning();
 
-      const lineInserts = calculatedLines.map((line: any) => ({
-        invoiceId: invoice.id,
-        inventoryItemId: line.inventoryItemId || null,
-        poItemId: line.poItemId || null,
-        partNumber: line.partNumber || null,
-        productionLine: line.productionLine || 'MIGRATION_REVIEW',
-        projectId: line.projectId || null,
-        projectNameSnapshot: line.projectNameSnapshot || null,
-        salespersonUserId: line.salespersonUserId || null,
-        salespersonNameSnapshot: line.salespersonNameSnapshot || null,
-        csrUserId: line.csrUserId || null,
-        csrNameSnapshot: line.csrNameSnapshot || null,
-        customerType: line.customerType || null,
-        dimensionTags: line.dimensionTags || {},
-        description: line.description,
-        qty: line.qty,
-        unitPrice: line.unitPrice,
-        lineTotal: line.lineTotal,
-      }));
+      const lineInserts = calculatedLines.map((line: any) => {
+        const productionLine = line.productionLine || 'MIGRATION_REVIEW';
+        return {
+          invoiceId: invoice.id,
+          inventoryItemId: line.inventoryItemId || null,
+          poItemId: line.poItemId || null,
+          partNumber: line.partNumber || null,
+          productionLine,
+          projectId: line.projectId || null,
+          projectNameSnapshot: line.projectNameSnapshot || null,
+          salespersonUserId: line.salespersonUserId || null,
+          salespersonNameSnapshot: line.salespersonNameSnapshot || null,
+          csrUserId: line.csrUserId || null,
+          csrNameSnapshot: line.csrNameSnapshot || null,
+          customerType: line.customerType || null,
+          dimensionTags: {
+            ...(line.dimensionTags || {}),
+            ...buildRevenueDimensionTags(productionLine),
+          },
+          description: line.description,
+          qty: line.qty,
+          unitPrice: line.unitPrice,
+          lineTotal: line.lineTotal,
+        };
+      });
 
       const insertedLines = await tx
         .insert(arInvoiceLines)
@@ -745,6 +936,11 @@ router.put('/:id', requirePermission('finance.post_invoice'), async (req: Reques
       return res.status(409).json({ error: 'Invoice is locked' });
     }
 
+    const isP1Invoice =
+      (await isP1PackingSlipInvoice(id)) ||
+      String(existing.notes || '').startsWith('Auto-created from P1 OEM packing slip') ||
+      String(existing.internalNotes || '').startsWith('Source: P1 OEM shipment');
+
     const result = await db.transaction(async (tx) => {
       let subtotal = parseFloat(existing.subtotal);
       let discount = parseFloat(discountAmount ?? existing.discountAmount ?? '0');
@@ -752,18 +948,19 @@ router.put('/:id', requirePermission('finance.post_invoice'), async (req: Reques
       let tax = parseFloat(taxAmount ?? existing.taxAmount);
       let retainage = parseFloat(retainageAmount ?? existing.retainageAmount ?? '0');
 
-      if (lines && Array.isArray(lines)) {
+      if (!isP1Invoice && lines && Array.isArray(lines)) {
         await tx.delete(arInvoiceLines).where(eq(arInvoiceLines.invoiceId, id));
 
         const calculatedLines = lines.map((line: any) => {
           const qty = parseFloat(line.qty) || 0;
           const unitPrice = parseFloat(line.unitPrice) || 0;
+          const productionLine = line.productionLine || 'MIGRATION_REVIEW';
           return {
             invoiceId: id,
             inventoryItemId: line.inventoryItemId || null,
             poItemId: line.poItemId || null,
             partNumber: line.partNumber || null,
-            productionLine: line.productionLine || 'MIGRATION_REVIEW',
+            productionLine,
             projectId: line.projectId || null,
             projectNameSnapshot: line.projectNameSnapshot || null,
             salespersonUserId: line.salespersonUserId || null,
@@ -771,7 +968,10 @@ router.put('/:id', requirePermission('finance.post_invoice'), async (req: Reques
             csrUserId: line.csrUserId || null,
             csrNameSnapshot: line.csrNameSnapshot || null,
             customerType: line.customerType || null,
-            dimensionTags: line.dimensionTags || {},
+            dimensionTags: {
+              ...(line.dimensionTags || {}),
+              ...buildRevenueDimensionTags(productionLine),
+            },
             description: line.description,
             qty: qty.toString(),
             unitPrice: unitPrice.toString(),
@@ -798,13 +998,13 @@ router.put('/:id', requirePermission('finance.post_invoice'), async (req: Reques
       const [updated] = await tx
         .update(arInvoices)
         .set({
-          ...(customerId !== undefined && { customerId }),
+          ...(!isP1Invoice && customerId !== undefined && { customerId }),
           ...(invoiceNumber !== undefined && { invoiceNumber }),
           ...(invoiceDate !== undefined && { invoiceDate }),
           ...(dueDate !== undefined && { dueDate: dueDate || null }),
           ...(terms !== undefined && { terms: terms || null }),
-          ...(poId !== undefined && { poId: poId || null }),
-          ...(poOverride !== undefined && { poOverride: poOverride || null }),
+          ...(!isP1Invoice && poId !== undefined && { poId: poId || null }),
+          ...(!isP1Invoice && poOverride !== undefined && { poOverride: poOverride || null }),
           ...(notes !== undefined && { notes: notes || null }),
           ...(customerVisibleNotes !== undefined && { customerVisibleNotes: customerVisibleNotes || null }),
           ...(internalNotes !== undefined && { internalNotes: internalNotes || null }),
@@ -871,6 +1071,10 @@ router.post('/:id/post', requirePermission('finance.post_invoice'), async (req: 
     const retainage = parseFloat(invoice.retainageAmount ?? '0') || 0;
 
     const allAccounts = await db.select().from(chartOfAccounts);
+    const revenueMaps = await db
+      .select()
+      .from(productionLineAccountingMap)
+      .where(eq(productionLineAccountingMap.active, true));
     const arAccount = allAccounts.find((a) => a.accountName === 'Accounts Receivable');
     const accountByNumber = (accountNumber: string) => allAccounts.find((a) => a.accountNumber === accountNumber);
     const arAccountV2 = accountByNumber('11000') ?? arAccount;
@@ -965,13 +1169,20 @@ router.post('/:id/post', requirePermission('finance.post_invoice'), async (req: 
         lines.push({ ...commonDimensions, journalEntryId: entry.id, accountId: retainageAccount!.id, debitAmount: retainage, creditAmount: 0 });
       }
       for (const line of invoiceLines) {
+        const lineProductionLine = line.productionLine || 'MIGRATION_REVIEW';
+        const lineRevenueAccount = resolveRevenueAccountForProductionLine({
+          productionLine: lineProductionLine,
+          accounts: allAccounts,
+          revenueMaps,
+          fallbackRevenueAccount: revenueAccountV2,
+        });
         lines.push({
           ...commonDimensions,
           journalEntryId: entry.id,
-          accountId: revenueAccountV2.id,
+          accountId: lineRevenueAccount.id,
           debitAmount: 0,
           creditAmount: parseFloat(String(line.lineTotal)) || 0,
-          productionLine: line.productionLine || 'MIGRATION_REVIEW',
+          productionLine: lineProductionLine,
           projectId: line.projectId,
           projectNameSnapshot: line.projectNameSnapshot,
           salespersonUserId: line.salespersonUserId,
@@ -983,8 +1194,11 @@ router.post('/:id/post', requirePermission('finance.post_invoice'), async (req: 
           partNumber: line.partNumber,
           dimensionTags: {
             ...commonDimensions.dimensionTags,
+            ...(line.dimensionTags && typeof line.dimensionTags === 'object' ? line.dimensionTags : {}),
             arInvoiceLineId: line.id,
             lineDescription: line.description,
+            revenueAccountNumber: lineRevenueAccount.accountNumber,
+            revenueAccountName: lineRevenueAccount.accountName,
           },
         });
       }
@@ -1016,20 +1230,179 @@ router.post('/:id/post', requirePermission('finance.post_invoice'), async (req: 
   }
 });
 
-async function getInvoiceRecipients(customerId: string, explicitTo?: string): Promise<string | null> {
-  if (explicitTo) return explicitTo;
-  const [customer] = await db
-    .select({ id: p2Customers.id, email: p2Customers.contactEmail })
-    .from(p2Customers)
-    .where(eq(p2Customers.customerId, customerId));
-  if (customer?.email) return customer.email;
-  if (!customer?.id) return null;
+type InvoiceEmailRecipient = {
+  name: string;
+  email: string;
+  type: 'primary' | 'additional' | 'contact';
+};
 
-  const [primaryContact] = await db
-    .select({ email: p2CustomerContacts.email })
-    .from(p2CustomerContacts)
-    .where(and(eq(p2CustomerContacts.customerId, customer.id), eq(p2CustomerContacts.isPrimary, true)));
-  return primaryContact?.email || null;
+async function recordInvoiceSendAudit({
+  req,
+  invoice,
+  eventType,
+  reason,
+  payload,
+  fieldsChanged,
+}: {
+  req: Request;
+  invoice: typeof arInvoices.$inferSelect;
+  eventType: 'INVOICE_SEND_ATTEMPTED' | 'INVOICE_SENT' | 'INVOICE_SEND_FAILED';
+  reason: string;
+  payload: Record<string, any>;
+  fieldsChanged?: Record<string, { before: unknown; after: unknown }> | null;
+}) {
+  const user = (req as any).user;
+  try {
+    await recordAuditEvent({
+      eventType,
+      subjectType: 'ar_invoice',
+      subjectId: invoice.id,
+      entityType: 'ar_invoice',
+      entityId: invoice.id,
+      sourceService: 'arInvoices.route',
+      actor: {
+        id: typeof user?.id === 'number' ? user.id : null,
+        username: user?.username || null,
+        role: user?.role || null,
+      },
+      reason,
+      payload: {
+        invoiceId: invoice.id,
+        invoiceNumber: invoice.invoiceNumber,
+        customerId: invoice.customerId,
+        totalAmount: Number(invoice.totalAmount || 0),
+        ...payload,
+      },
+      meta: payload,
+      fieldsChanged: fieldsChanged || null,
+      ipAddress: req.ip || null,
+      userAgent: req.get('user-agent') || null,
+    });
+  } catch (auditError) {
+    console.warn(`[InvoiceAudit] Failed to record ${eventType} for invoice ${invoice.invoiceNumber}:`, auditError);
+  }
+}
+
+function appendRecipient(recipients: InvoiceEmailRecipient[], recipient: InvoiceEmailRecipient) {
+  const email = recipient.email?.trim();
+  if (!email) return;
+  if (recipients.some((r) => r.email.trim().toLowerCase() === email.toLowerCase())) return;
+  recipients.push({ ...recipient, email });
+}
+
+function filterAllowedRecipients(raw: unknown, allowed: Set<string>): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((email): email is string => typeof email === 'string')
+    .map((email) => email.trim().toLowerCase())
+    .filter((email) => allowed.has(email));
+}
+
+function deriveInvoiceToAndCc(rawRecipients: unknown, recipients: InvoiceEmailRecipient[]): { to: string | null; cc: string[] } {
+  const primary = recipients.find((recipient) => recipient.type === 'primary') ?? recipients[0];
+  if (!primary) return { to: null, cc: [] };
+
+  const allowed = new Set(recipients.map((recipient) => recipient.email.trim().toLowerCase()));
+  const validated = filterAllowedRecipients(rawRecipients, allowed);
+  const primaryNorm = primary.email.trim().toLowerCase();
+
+  if (validated.length === 0) return { to: primary.email, cc: [] };
+
+  const to = validated.includes(primaryNorm) ? primary.email : validated[0];
+  const toNorm = to.trim().toLowerCase();
+  const cc = validated.filter((email) => email !== toNorm);
+  return { to, cc };
+}
+
+async function getInvoiceEmailRecipients(invoice: typeof arInvoices.$inferSelect): Promise<InvoiceEmailRecipient[]> {
+  const recipients: InvoiceEmailRecipient[] = [];
+
+  const isP1 = await isP1Invoice(invoice);
+  if (isP1) {
+    const [customer] = await db
+      .select({ id: customers.id, name: customers.name, email: customers.email, contact: customers.contact })
+      .from(customers)
+      .where(sql`(CASE WHEN ${invoice.customerId} ~ '^[0-9]+$' THEN ${invoice.customerId}::integer END) = ${customers.id}`);
+
+    if (customer?.id) {
+      const contacts = await db
+        .select({
+          name: customerContacts.name,
+          email: customerContacts.email,
+          phone: customerContacts.phone,
+          isPrimary: customerContacts.isPrimary,
+        })
+        .from(customerContacts)
+        .where(and(
+          eq(customerContacts.customerId, customer.id),
+          eq(customerContacts.active, true),
+          eq(customerContacts.receivesInvoices, true),
+        ))
+        .orderBy(desc(customerContacts.isPrimary), customerContacts.name);
+
+      for (const contact of contacts) {
+        if (contact.email) {
+          appendRecipient(recipients, {
+            name: contact.name,
+            email: contact.email,
+            type: contact.isPrimary && recipients.length === 0 ? 'primary' : 'contact',
+          });
+        }
+      }
+    }
+
+    if (customer?.email) {
+      appendRecipient(recipients, {
+        name: customer.contact || customer.name,
+        email: customer.email,
+        type: recipients.length === 0 ? 'primary' : 'additional',
+      });
+    }
+  }
+
+  const [p2Customer] = await db
+    .select({ id: p2Customers.id, name: p2Customers.customerName, email: p2Customers.contactEmail })
+    .from(p2Customers)
+    .where(eq(p2Customers.customerId, invoice.customerId));
+
+  if (p2Customer?.email) {
+    appendRecipient(recipients, {
+      name: p2Customer.name,
+      email: p2Customer.email,
+      type: recipients.length === 0 ? 'primary' : 'additional',
+    });
+  }
+
+  if (p2Customer?.id) {
+    const contacts = await db
+      .select({ name: p2CustomerContacts.name, email: p2CustomerContacts.email, isPrimary: p2CustomerContacts.isPrimary })
+      .from(p2CustomerContacts)
+      .where(eq(p2CustomerContacts.customerId, p2Customer.id));
+
+    for (const contact of contacts) {
+      if (contact.email) {
+        appendRecipient(recipients, {
+          name: contact.name,
+          email: contact.email,
+          type: contact.isPrimary && recipients.length === 0 ? 'primary' : 'contact',
+        });
+      }
+    }
+  }
+
+  return recipients;
+}
+
+async function isP1Invoice(invoice: typeof arInvoices.$inferSelect): Promise<boolean> {
+  if (invoice.notes?.includes('Auto-created from P1 OEM packing slip')) return true;
+  if (invoice.internalNotes?.includes('Source: P1 OEM shipment')) return true;
+
+  const [line] = await db
+    .select({ id: arInvoiceLines.id })
+    .from(arInvoiceLines)
+    .where(and(eq(arInvoiceLines.invoiceId, invoice.id), sql`${arInvoiceLines.dimensionTags}->>'source' = 'p1_oem_packing_slip'`))
+    .limit(1);
+  return !!line;
 }
 
 async function getMediaEmailAttachments(entityRefs: Array<{ entityType: string; entityId: string }>) {
@@ -1096,11 +1469,27 @@ async function getLotFileAttachments(lotId: string | null) {
   return attachments;
 }
 
+router.get('/:id/email-recipients', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const [invoice] = await db.select().from(arInvoices).where(eq(arInvoices.id, id));
+    if (!invoice) {
+      return res.status(404).json({ error: 'Invoice not found' });
+    }
+
+    const recipients = await getInvoiceEmailRecipients(invoice);
+    res.json(recipients);
+  } catch (error) {
+    console.error('Failed to retrieve invoice email recipients:', error);
+    res.status(500).json({ error: 'Failed to retrieve invoice email recipients' });
+  }
+});
+
 router.post('/:id/send', requirePermission('finance.post_invoice'), async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const user = (req as any).user?.username || null;
-    const { to: explicitTo, cc, customerMessage } = req.body || {};
+    const { recipients: selectedRecipients, customerMessage } = req.body || {};
 
     const [invoice] = await db.select().from(arInvoices).where(eq(arInvoices.id, id));
     if (!invoice) {
@@ -1113,10 +1502,36 @@ router.post('/:id/send', requirePermission('finance.post_invoice'), async (req: 
       return res.status(409).json({ error: 'Invoice pricing must be resolved before sending' });
     }
 
-    const to = await getInvoiceRecipients(invoice.customerId, explicitTo);
+    const isP1 = await isP1Invoice(invoice);
+    const availableRecipients = await getInvoiceEmailRecipients(invoice);
+    const { to, cc } = deriveInvoiceToAndCc(selectedRecipients, availableRecipients);
     if (!to) {
       return res.status(422).json({ error: 'No customer email found. Add a customer contact email or provide a recipient.' });
     }
+
+    const selectedRecipientRecords = availableRecipients.filter((recipient) =>
+      [to, ...(Array.isArray(cc) ? cc : cc ? [cc] : [])].includes(recipient.email)
+    );
+    const auditPayloadBase = {
+      to,
+      cc: Array.isArray(cc) ? cc : cc ? [cc] : [],
+      selectedRecipients: selectedRecipientRecords.map((recipient) => ({
+        name: recipient.name,
+        email: recipient.email,
+        type: recipient.type,
+      })),
+      requestedRecipientCount: Array.isArray(selectedRecipients) ? selectedRecipients.length : null,
+      customerMessageIncluded: Boolean(customerMessage),
+      invoiceSource: isP1 ? 'P1' : 'P2',
+    };
+
+    await recordInvoiceSendAudit({
+      req,
+      invoice,
+      eventType: 'INVOICE_SEND_ATTEMPTED',
+      reason: `Invoice ${invoice.invoiceNumber} send attempted`,
+      payload: auditPayloadBase,
+    });
 
     const invoicePdf = await generateArInvoicePdf(id);
     const mediaAttachments = await getMediaEmailAttachments([
@@ -1148,6 +1563,7 @@ router.post('/:id/send', requirePermission('finance.post_invoice'), async (req: 
     const result = await sendEmailViaSendGrid({
       to,
       cc,
+      fromName: isP1 ? 'AG Composites' : undefined,
       subject: `Invoice ${invoice.invoiceNumber}`,
       text,
       html: `<p>Please find attached invoice <strong>${invoice.invoiceNumber}</strong>.</p>${customerMessage || invoice.customerVisibleNotes ? `<p>${String(customerMessage || invoice.customerVisibleNotes).replace(/\n/g, '<br/>')}</p>` : ''}<p><strong>Amount due:</strong> $${Number(invoice.totalAmount || 0).toFixed(2)}</p>${invoice.dueDate ? `<p><strong>Due date:</strong> ${invoice.dueDate}</p>` : ''}`,
@@ -1155,6 +1571,17 @@ router.post('/:id/send', requirePermission('finance.post_invoice'), async (req: 
     });
 
     if (!result.success) {
+      await recordInvoiceSendAudit({
+        req,
+        invoice,
+        eventType: 'INVOICE_SEND_FAILED',
+        reason: `Invoice ${invoice.invoiceNumber} send failed`,
+        payload: {
+          ...auditPayloadBase,
+          provider: 'sendgrid',
+          error: result.error || 'SendGrid failed to send invoice',
+        },
+      });
       return res.status(502).json({ error: result.error || 'SendGrid failed to send invoice' });
     }
 
@@ -1173,6 +1600,27 @@ router.post('/:id/send', requirePermission('finance.post_invoice'), async (req: 
       .returning();
 
     console.log(`[InvoiceService] Invoice ${invoice.invoiceNumber} (${id}) sent by ${user}`);
+
+    await recordInvoiceSendAudit({
+      req,
+      invoice: updated,
+      eventType: 'INVOICE_SENT',
+      reason: `Invoice ${invoice.invoiceNumber} sent`,
+      payload: {
+        ...auditPayloadBase,
+        provider: 'sendgrid',
+        providerMessageId: result.messageId || null,
+        sentAt: updated.sentAt ? new Date(updated.sentAt).toISOString() : new Date().toISOString(),
+      },
+      fieldsChanged: {
+        status: { before: invoice.status, after: updated.status },
+        sentAt: { before: invoice.sentAt, after: updated.sentAt },
+        sentBy: { before: invoice.sentBy, after: updated.sentBy },
+        sentTo: { before: invoice.sentTo, after: updated.sentTo },
+        sentCc: { before: invoice.sentCc, after: updated.sentCc },
+        sendgridMessageId: { before: invoice.sendgridMessageId, after: updated.sendgridMessageId },
+      },
+    });
 
     res.json(updated);
   } catch (error) {
@@ -1203,21 +1651,39 @@ router.post('/:id/void', requirePermission('finance.void_invoice'), async (req: 
     const needsReversal = ['POSTED', 'SENT'].includes(invoice.status);
 
     if (needsReversal) {
-      const allAccounts = await db.select().from(chartOfAccounts);
-      const arAccount = allAccounts.find((a) => a.accountName === 'Accounts Receivable');
-      const revenueAccount = allAccounts.find((a) => a.accountName === 'Revenue — P2 Products');
-
-      const total = parseFloat(invoice.totalAmount);
-      const subtotal = parseFloat(invoice.subtotal);
-      const tax = parseFloat(invoice.taxAmount);
-
-      const taxAccount = tax > 0 ? allAccounts.find((a) => a.accountName === 'Sales Tax Payable') : null;
-
-      if (!arAccount || !revenueAccount) {
-        return res.status(500).json({ error: 'Required chart-of-accounts entries not found' });
+      const [originalEntry] = await db
+        .select()
+        .from(journalEntries)
+        .where(
+          and(
+            eq(journalEntries.transactionType, 'AR_INVOICE'),
+            eq(journalEntries.referenceType, 'ar_invoice'),
+            eq(journalEntries.referenceUuid, id),
+          ),
+        )
+        .limit(1);
+      if (!originalEntry) {
+        return res.status(409).json({ error: 'Cannot void posted invoice: original AR invoice journal entry was not found' });
       }
-      if (tax > 0 && !taxAccount) {
-        return res.status(500).json({ error: 'Sales Tax Payable account not found in chart of accounts' });
+      const [existingReversal] = await db
+        .select()
+        .from(journalEntries)
+        .where(
+          and(
+            eq(journalEntries.transactionType, 'AR_INVOICE_REVERSAL'),
+            eq(journalEntries.referenceType, 'ar_invoice'),
+            eq(journalEntries.referenceUuid, id),
+          ),
+        )
+        .limit(1);
+
+      const effectiveDate = new Date();
+      if (!existingReversal) {
+        await assertPostingAllowedForPeriod({
+          effectiveDate,
+          user: user ? { username: user } : null,
+          postingMode: 'REVERSAL',
+        });
       }
 
       const result = await db.transaction(async (tx) => {
@@ -1227,33 +1693,74 @@ router.post('/:id/void', requirePermission('finance.void_invoice'), async (req: 
           .where(eq(arInvoices.id, id))
           .returning();
 
+        if (existingReversal) {
+          console.log(`[InvoiceService] Invoice ${invoice.invoiceNumber} (${id}) voided by ${user}; reversal journal entry ${existingReversal.id} already exists`);
+          return updated;
+        }
+
+        const originalLines = await tx
+          .select()
+          .from(journalLines)
+          .where(eq(journalLines.journalEntryId, originalEntry.id));
+
+        if (originalLines.length === 0) {
+          throw new Error(`Original AR invoice journal entry ${originalEntry.id} has no journal lines`);
+        }
+
         const [entry] = await tx
           .insert(journalEntries)
           .values({
             transactionType: 'AR_INVOICE_REVERSAL',
             referenceType: 'ar_invoice',
             referenceId: 0,
-            effectiveDate: new Date(),
+            referenceUuid: id,
+            effectiveDate,
             memo: `Reversal — AR Invoice ${invoice.invoiceNumber} — ID: ${id}`,
-            status: 'DRAFT',
+            status: 'POSTED',
+            sourceSystem: 'EPOCH',
+            sourceDocumentType: 'AR_INVOICE_VOID',
+            sourceDocumentNumber: invoice.invoiceNumber,
+            postingMode: 'REVERSAL',
+            postedAt: new Date(),
+            postedBy: user,
+            reversalOfJournalEntryId: originalEntry.id,
             createdBy: user,
           })
           .returning();
 
-        type LineInsert = { journalEntryId: number; accountId: number; debitAmount: number; creditAmount: number };
-        const lines: LineInsert[] = [
-          { journalEntryId: entry.id, accountId: revenueAccount.id, debitAmount: subtotal, creditAmount: 0 },
-          { journalEntryId: entry.id, accountId: arAccount.id, debitAmount: 0, creditAmount: total },
-        ];
-        if (tax > 0) {
-          lines.push({ journalEntryId: entry.id, accountId: taxAccount!.id, debitAmount: tax, creditAmount: 0 });
-        }
-
-        await tx.insert(journalLines).values(lines);
-
-        console.log(`[InvoiceService] Invoice ${invoice.invoiceNumber} (${id}) voided by ${user} — reason: ${voidReason}`);
-        console.log(`[InvoiceService] Reversal journal entry ${entry.id} created for invoice ${invoice.invoiceNumber} — DR Revenue ${subtotal}, CR AR ${total}${tax > 0 ? `, DR Sales Tax ${tax}` : ''}`);
-
+        await tx.insert(journalLines).values(
+          originalLines.map((line: typeof journalLines.$inferSelect) => ({
+            journalEntryId: entry.id,
+            accountId: line.accountId,
+            debitAmount: Number(line.creditAmount ?? 0),
+            creditAmount: Number(line.debitAmount ?? 0),
+            customerId: line.customerId,
+            customerNameSnapshot: line.customerNameSnapshot,
+            customerType: line.customerType,
+            projectId: line.projectId,
+            projectNameSnapshot: line.projectNameSnapshot,
+            contractNumber: line.contractNumber,
+            productionLine: line.productionLine,
+            department: line.department,
+            chargeCodeId: line.chargeCodeId,
+            inventoryItemId: line.inventoryItemId,
+            partNumber: line.partNumber,
+            salespersonUserId: line.salespersonUserId,
+            salespersonNameSnapshot: line.salespersonNameSnapshot,
+            csrUserId: line.csrUserId,
+            csrNameSnapshot: line.csrNameSnapshot,
+            allowability: line.allowability,
+            directIndirect: line.directIndirect,
+            costPool: line.costPool,
+            dimensionTags: {
+              ...(line.dimensionTags as Record<string, unknown>),
+              source: 'ar_invoice_void',
+              reversalOfJournalEntryId: originalEntry.id,
+              voidReason,
+            },
+          })),
+        );
+        console.log(`[InvoiceService] Invoice ${invoice.invoiceNumber} (${id}) voided by ${user}; reversal journal entry ${entry.id} created from original entry ${originalEntry.id}`);
         return updated;
       });
 

@@ -66,6 +66,7 @@ import {
   ExternalLink,
   StickyNote,
   Link2,
+  RotateCcw,
   X,
 } from 'lucide-react';
 import { Link } from 'wouter';
@@ -115,6 +116,95 @@ interface PartRouting {
   isActive?: boolean;
 }
 
+interface LegacyRocBackfillStepAction {
+  stepId: string;
+  stepNumber: number;
+  departmentName: string;
+  status: string;
+  mapsTo: string;
+  targetChargeCode: { id?: number; code: string; active: boolean; missing?: boolean };
+  incompleteRequiredTasks: { id: string; title: string; status: string }[];
+  missingRequiredFields: { id: string; fieldLabel: string; fieldKey: string }[];
+  proposedAction: 'already_completed_no_write' | 'eligible_for_legacy_mapping_apply' | 'manual_review_required';
+}
+
+interface LegacyRocBackfillReportRow {
+  inputSerial: string;
+  classification: 'safe_to_apply' | 'needs_review' | 'do_not_touch';
+  reasons: string[];
+  traveler: {
+    id: string;
+    travelerNumber: string;
+    serialNumber: string | null;
+    status: string;
+    partNumber: string | null;
+    createdAt: string;
+  } | null;
+  serializedItem: {
+    serialNumber: string;
+    barcode: string;
+    currentDepartment: string;
+    status: string;
+    partNumber: string;
+  } | null;
+  proposedActions: LegacyRocBackfillStepAction[];
+}
+
+interface LegacyRocBackfillReport {
+  mode: 'dry_run';
+  writesPerformed: false;
+  scope: {
+    serials: string[];
+    cutoffDate: string;
+    approver: string;
+    departmentMapping: Record<string, string>;
+  };
+  chargeCodes: {
+    layup: { id: number; code: string; active: boolean } | null;
+    qualityControl: { id: number; code: string; active: boolean } | null;
+  };
+  summary: {
+    totalRows: number;
+    safe_to_apply: number;
+    needs_review: number;
+    do_not_touch: number;
+    proposedStepActions: number;
+    manualReviewStepActions: number;
+  };
+  rows: LegacyRocBackfillReportRow[];
+}
+
+interface LegacyRocBackfillApplyResult {
+  mode: 'apply';
+  writesPerformed: true;
+  approver: string;
+  summary: {
+    requested: number;
+    applied: number;
+    skipped: number;
+  };
+  results: {
+    travelerId: string;
+    travelerNumber: string;
+    serialNumber?: string | null;
+    status: 'applied' | 'skipped';
+    reason?: string;
+    travelerCompleted?: boolean;
+    serializedItemUpdated?: boolean;
+    stepCount?: number;
+  }[];
+}
+
+interface LegacyRocRestoreResult {
+  mode: 'restore_canceled';
+  writesPerformed: boolean;
+  status: 'restored' | 'skipped';
+  traveler?: Traveler;
+  travelerId?: string;
+  travelerNumber?: string;
+  message?: string;
+}
+
 const STATUS_COLORS: Record<string, string> = {
   DRAFT: 'bg-gray-100 text-gray-800',
   IN_PROGRESS: 'bg-blue-100 text-blue-800',
@@ -141,6 +231,10 @@ export default function TravelerManagement() {
   const [showBlockDialog, setShowBlockDialog] = useState(false);
   const [showAuthorizedNotesDialog, setShowAuthorizedNotesDialog] = useState(false);
   const [showOffSystemLinkDialog, setShowOffSystemLinkDialog] = useState(false);
+  const [showLegacyRocBackfillDialog, setShowLegacyRocBackfillDialog] = useState(false);
+  const [legacyRocBackfillReport, setLegacyRocBackfillReport] = useState<LegacyRocBackfillReport | null>(null);
+  const [legacyRocApplyResult, setLegacyRocApplyResult] = useState<LegacyRocBackfillApplyResult | null>(null);
+  const [legacyRocRestoreResult, setLegacyRocRestoreResult] = useState<LegacyRocRestoreResult | null>(null);
   const [offSystemLinkDraft, setOffSystemLinkDraft] = useState('');
   const [selectedTraveler, setSelectedTraveler] = useState<Traveler | null>(null);
   const [selectedRouting, setSelectedRouting] = useState<string>('');
@@ -173,6 +267,83 @@ export default function TravelerManagement() {
 
   const { data: routings = [] } = useQuery<PartRouting[]>({
     queryKey: ['/api/part-routings'],
+  });
+
+  const legacyRocBackfillDryRunMutation = useMutation({
+    mutationFn: () =>
+      apiRequest('/api/travelers/legacy-roc-backfill/dry-run', {
+        method: 'POST',
+        body: {},
+        timeout: 120000,
+      }) as Promise<LegacyRocBackfillReport>,
+    onSuccess: (report) => {
+      setLegacyRocBackfillReport(report);
+      setLegacyRocApplyResult(null);
+      setLegacyRocRestoreResult(null);
+      setShowLegacyRocBackfillDialog(true);
+      toast({
+        title: 'Dry-run complete',
+        description: `${report.summary.safe_to_apply} safe, ${report.summary.needs_review} need review, ${report.summary.do_not_touch} skipped`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Dry-run failed',
+        description: error.message || 'Could not generate the legacy ROC backfill report',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const legacyRocRestoreCanceledMutation = useMutation({
+    mutationFn: () =>
+      apiRequest('/api/travelers/legacy-roc-backfill/restore-canceled', {
+        method: 'POST',
+        body: { confirmSupervisorApproval: true },
+        timeout: 120000,
+      }) as Promise<LegacyRocRestoreResult>,
+    onSuccess: (result) => {
+      setLegacyRocRestoreResult(result);
+      queryClient.invalidateQueries({ queryKey: ['/api/travelers'] });
+      toast({
+        title: result.status === 'restored' ? 'Traveler restored' : 'No restore needed',
+        description: result.status === 'restored'
+          ? 'TRV-2026-000271 is active again for supervised backfill.'
+          : result.message,
+      });
+      legacyRocBackfillDryRunMutation.mutate();
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Restore failed',
+        description: error.message || 'Could not restore the canceled ROC traveler',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const legacyRocBackfillApplyMutation = useMutation({
+    mutationFn: () =>
+      apiRequest('/api/travelers/legacy-roc-backfill/apply', {
+        method: 'POST',
+        body: { confirmSupervisorApproval: true },
+        timeout: 120000,
+      }) as Promise<LegacyRocBackfillApplyResult>,
+    onSuccess: (result) => {
+      setLegacyRocApplyResult(result);
+      queryClient.invalidateQueries({ queryKey: ['/api/travelers'] });
+      toast({
+        title: 'Legacy backfill applied',
+        description: `${result.summary.applied} travelers updated, ${result.summary.skipped} skipped`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Apply failed',
+        description: error.message || 'Could not apply the legacy ROC backfill',
+        variant: 'destructive',
+      });
+    },
   });
 
   const createMutation = useMutation({
@@ -304,6 +475,29 @@ export default function TravelerManagement() {
       toast({
         title: 'Error',
         description: error.message || 'Failed to cancel traveler',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const reactivateMutation = useMutation({
+    mutationFn: (id: string) =>
+      apiRequest(`/api/travelers/${id}/reactivate`, {
+        method: 'POST',
+        body: JSON.stringify({ reactivatedBy: 'system' }),
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    onSuccess: () => {
+      toast({
+        title: 'Traveler Reactivated',
+        description: 'Traveler is available for production workflow again',
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/travelers'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to reactivate traveler',
         variant: 'destructive',
       });
     },
@@ -538,6 +732,12 @@ export default function TravelerManagement() {
     unblockMutation.mutate(id);
   };
 
+  const handleReactivate = (traveler: Traveler) => {
+    if (confirm(`Reactivate traveler ${traveler.travelerNumber}?`)) {
+      reactivateMutation.mutate(traveler.id);
+    }
+  };
+
   const handleDelete = (id: string) => {
     if (confirm('Are you sure you want to delete this draft traveler?')) {
       deleteMutation.mutate(id);
@@ -567,6 +767,9 @@ export default function TravelerManagement() {
     blocked: travelers.filter((t) => t.status === 'BLOCKED').length,
     scrapped: travelers.filter((t) => t.status === 'SCRAPPED').length,
   };
+  const hasCanceledLegacyRocTraveler = legacyRocBackfillReport?.rows.some(
+    (row) => row.traveler?.travelerNumber === 'TRV-2026-000271' && row.traveler.status.toUpperCase() === 'CANCELED'
+  ) ?? false;
 
   if (isLoading) {
     return (
@@ -578,17 +781,32 @@ export default function TravelerManagement() {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="sticky top-0 z-30 -mx-6 flex items-center justify-between border-b bg-background/95 px-6 py-4 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/80">
         <div>
           <h1 className="text-3xl font-bold" data-testid="page-title">Traveler Management</h1>
           <p className="text-muted-foreground">
             AS9100-compliant production travelers for manufacturing execution
           </p>
         </div>
-        <Button onClick={() => setShowCreateDialog(true)} data-testid="button-create-traveler">
-          <Plus className="h-4 w-4 mr-2" />
-          Create Traveler
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => legacyRocBackfillDryRunMutation.mutate()}
+            disabled={legacyRocBackfillDryRunMutation.isPending}
+            data-testid="button-legacy-roc-dry-run"
+          >
+            {legacyRocBackfillDryRunMutation.isPending ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Clipboard className="h-4 w-4 mr-2" />
+            )}
+            Legacy ROC Dry Run
+          </Button>
+          <Button onClick={() => setShowCreateDialog(true)} data-testid="button-create-traveler">
+            <Plus className="h-4 w-4 mr-2" />
+            Create Traveler
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
@@ -684,16 +902,16 @@ export default function TravelerManagement() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Traveler #</TableHead>
-                <TableHead>Part Number</TableHead>
-                <TableHead>Part Name</TableHead>
-                <TableHead>Serial Number</TableHead>
-                <TableHead>Work Order</TableHead>
-                <TableHead>Lot #</TableHead>
-                <TableHead>Qty</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead className="sticky top-[85px] z-20 bg-background shadow-sm">Traveler #</TableHead>
+                <TableHead className="sticky top-[85px] z-20 bg-background shadow-sm">Part Number</TableHead>
+                <TableHead className="sticky top-[85px] z-20 bg-background shadow-sm">Part Name</TableHead>
+                <TableHead className="sticky top-[85px] z-20 bg-background shadow-sm">Serial Number</TableHead>
+                <TableHead className="sticky top-[85px] z-20 bg-background shadow-sm">Work Order</TableHead>
+                <TableHead className="sticky top-[85px] z-20 bg-background shadow-sm">Lot #</TableHead>
+                <TableHead className="sticky top-[85px] z-20 bg-background shadow-sm">Qty</TableHead>
+                <TableHead className="sticky top-[85px] z-20 bg-background shadow-sm">Status</TableHead>
+                <TableHead className="sticky top-[85px] z-20 bg-background shadow-sm">Created</TableHead>
+                <TableHead className="sticky top-[85px] z-20 bg-background text-right shadow-sm">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -822,6 +1040,12 @@ export default function TravelerManagement() {
                                   Unblock Traveler
                                 </DropdownMenuItem>
                               )}
+                              {traveler.status === 'CANCELED' && (
+                                <DropdownMenuItem onClick={() => handleReactivate(traveler)}>
+                                  <RotateCcw className="h-4 w-4 mr-2" />
+                                  Reactivate Traveler
+                                </DropdownMenuItem>
+                              )}
                               {!isTerminal && (
                                 <>
                                   <DropdownMenuSeparator />
@@ -855,6 +1079,198 @@ export default function TravelerManagement() {
           </Table>
         </CardContent>
       </Card>
+
+      <Dialog open={showLegacyRocBackfillDialog} onOpenChange={setShowLegacyRocBackfillDialog}>
+        <DialogContent className="max-w-6xl">
+          <DialogHeader>
+            <DialogTitle>Legacy ROC Traveler Backfill Dry Run</DialogTitle>
+            <DialogDescription>
+              Read-only report for the May 20 routing change. No traveler, task, charge-code, or audit records are changed by this report.
+            </DialogDescription>
+          </DialogHeader>
+
+          {legacyRocBackfillReport && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                <div className="rounded border p-3">
+                  <p className="text-xs text-muted-foreground">Rows</p>
+                  <p className="text-xl font-semibold">{legacyRocBackfillReport.summary.totalRows}</p>
+                </div>
+                <div className="rounded border p-3">
+                  <p className="text-xs text-muted-foreground">Safe</p>
+                  <p className="text-xl font-semibold text-emerald-700">{legacyRocBackfillReport.summary.safe_to_apply}</p>
+                </div>
+                <div className="rounded border p-3">
+                  <p className="text-xs text-muted-foreground">Review</p>
+                  <p className="text-xl font-semibold text-amber-700">{legacyRocBackfillReport.summary.needs_review}</p>
+                </div>
+                <div className="rounded border p-3">
+                  <p className="text-xs text-muted-foreground">Skipped</p>
+                  <p className="text-xl font-semibold text-slate-700">{legacyRocBackfillReport.summary.do_not_touch}</p>
+                </div>
+                <div className="rounded border p-3">
+                  <p className="text-xs text-muted-foreground">Step Actions</p>
+                  <p className="text-xl font-semibold">{legacyRocBackfillReport.summary.proposedStepActions}</p>
+                </div>
+              </div>
+
+              <div className="rounded border p-3 text-sm">
+                <div className="grid gap-2 md:grid-cols-3">
+                  <div>
+                    <span className="text-muted-foreground">Approver: </span>
+                    <span className="font-medium">{legacyRocBackfillReport.scope.approver}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Cutoff: </span>
+                    <span className="font-medium">{legacyRocBackfillReport.scope.cutoffDate}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Writes: </span>
+                    <span className="font-medium">{legacyRocBackfillReport.writesPerformed ? 'Yes' : 'No'}</span>
+                  </div>
+                </div>
+              </div>
+
+              <ScrollArea className="h-[520px] rounded border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>ROC ID</TableHead>
+                      <TableHead>Traveler</TableHead>
+                      <TableHead>Current Dept</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Classification</TableHead>
+                      <TableHead>Mapped Steps</TableHead>
+                      <TableHead>Reason</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {legacyRocBackfillReport.rows.map((row, index) => (
+                      <TableRow key={`${row.inputSerial}-${row.traveler?.id ?? index}`}>
+                        <TableCell className="font-mono text-sm">{row.inputSerial}</TableCell>
+                        <TableCell>
+                          {row.traveler ? (
+                            <div>
+                              <p className="font-medium">{row.traveler.travelerNumber}</p>
+                              <p className="text-xs text-muted-foreground">{row.traveler.partNumber || row.serializedItem?.partNumber || '-'}</p>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">No traveler</span>
+                          )}
+                        </TableCell>
+                        <TableCell>{row.serializedItem?.currentDepartment || '-'}</TableCell>
+                        <TableCell>{row.traveler?.status || row.serializedItem?.status || '-'}</TableCell>
+                        <TableCell>
+                          <Badge
+                            className={
+                              row.classification === 'safe_to_apply'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : row.classification === 'needs_review'
+                                  ? 'bg-amber-100 text-amber-800'
+                                  : 'bg-slate-100 text-slate-800'
+                            }
+                          >
+                            {row.classification.replace(/_/g, ' ')}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            {row.proposedActions.length === 0 ? (
+                              <span className="text-muted-foreground">None</span>
+                            ) : (
+                              row.proposedActions.map((action) => (
+                                <div key={action.stepId} className="text-xs">
+                                  <span className="font-medium">{action.stepNumber}. {action.departmentName}</span>
+                                  <span className="text-muted-foreground"> to {action.mapsTo}</span>
+                                  <span className="font-mono"> {action.targetChargeCode.code}</span>
+                                  {(action.missingRequiredFields.length > 0 || action.incompleteRequiredTasks.length > 0) && (
+                                    <span className="text-amber-700"> review</span>
+                                  )}
+                                  {action.incompleteRequiredTasks.length > 0 && (
+                                    <div className="text-[11px] text-amber-700">
+                                      Tasks: {action.incompleteRequiredTasks.map((task) => task.title).join(', ')}
+                                    </div>
+                                  )}
+                                  {action.missingRequiredFields.length > 0 && (
+                                    <div className="text-[11px] text-amber-700">
+                                      Fields: {action.missingRequiredFields.map((field) => field.fieldLabel || field.fieldKey).join(', ')}
+                                    </div>
+                                  )}
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="max-w-[320px] text-xs text-muted-foreground">
+                          {row.reasons.join(' ')}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+
+              {legacyRocApplyResult && (
+                <div className="rounded border border-emerald-200 bg-emerald-50 p-3 text-sm">
+                  <p className="font-medium text-emerald-900">
+                    Applied {legacyRocApplyResult.summary.applied} traveler backfill(s); skipped {legacyRocApplyResult.summary.skipped}.
+                  </p>
+                  <div className="mt-2 grid gap-1 md:grid-cols-2">
+                    {legacyRocApplyResult.results.map((result) => (
+                      <div key={result.travelerId} className="text-emerald-900">
+                        <span className="font-mono">{result.travelerNumber}</span>
+                        <span className="text-emerald-700"> {result.status}</span>
+                        {result.stepCount ? <span className="text-emerald-700"> ({result.stepCount} steps)</span> : null}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {legacyRocRestoreResult && (
+                <div className="rounded border border-blue-200 bg-blue-50 p-3 text-sm">
+                  <p className="font-medium text-blue-900">
+                    {legacyRocRestoreResult.status === 'restored'
+                      ? 'TRV-2026-000271 was restored to active status with an audit trail.'
+                      : legacyRocRestoreResult.message}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowLegacyRocBackfillDialog(false)}>
+              Close
+            </Button>
+            {hasCanceledLegacyRocTraveler && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const ok = window.confirm('Restore TRV-2026-000271 from canceled to active status with a timestamped audit record?');
+                  if (ok) legacyRocRestoreCanceledMutation.mutate();
+                }}
+                disabled={legacyRocRestoreCanceledMutation.isPending}
+                data-testid="button-legacy-roc-restore-canceled"
+              >
+                {legacyRocRestoreCanceledMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Restore Canceled Traveler
+              </Button>
+            )}
+            <Button
+              onClick={() => {
+                const ok = window.confirm('Apply the supervised legacy ROC backfill to the active eligible travelers and write timestamped audit records?');
+                if (ok) legacyRocBackfillApplyMutation.mutate();
+              }}
+              disabled={legacyRocBackfillApplyMutation.isPending || !legacyRocBackfillReport}
+              data-testid="button-legacy-roc-apply"
+            >
+              {legacyRocBackfillApplyMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Apply Supervised Backfill
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Create Dialog */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>

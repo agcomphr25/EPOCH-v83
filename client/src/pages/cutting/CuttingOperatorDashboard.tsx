@@ -85,6 +85,7 @@ type BuiltPacket = {
   barcode: string;
   packetNumber: number;
   displayPacketNumber: number | null;
+  printedPacketNumber?: number | null;
   buildDate: string;
   status: string;
   isMixedFabric: boolean;
@@ -298,6 +299,7 @@ export default function CuttingOperatorDashboard() {
   const [editingSource, setEditingSource] = useState<BuiltPacketFabricSource | null>(null);
   const [editingPacketId, setEditingPacketId] = useState<number | null>(null);
   const [confirmDeleteSourceId, setConfirmDeleteSourceId] = useState<number | null>(null);
+  const [packetMaterialScanValues, setPacketMaterialScanValues] = useState<Record<number, string>>({});
   const [fabricSourceForm, setFabricSourceForm] = useState({
     fabricType: '',
     lotNumber: '',
@@ -312,13 +314,15 @@ export default function CuttingOperatorDashboard() {
     queryKey: ['currentUser'],
   });
 
-  const { data: builtPackets = [], isLoading: loadingBuiltPackets, refetch: refetchBuiltPackets } = useQuery<BuiltPacket[]>({
+  const {
+    data: builtPackets = [],
+    isLoading: loadingBuiltPackets,
+    isError: builtPacketsError,
+    error: builtPacketsErrorDetails,
+    refetch: refetchBuiltPackets,
+  } = useQuery<BuiltPacket[]>({
     queryKey: ['/api/cutting-table-mfg-queue/built-packets'],
-    queryFn: async () => {
-      const res = await fetch('/api/cutting-table-mfg-queue/built-packets?limit=50');
-      if (!res.ok) return [];
-      return res.json();
-    },
+    queryFn: () => apiRequest('/api/cutting-table-mfg-queue/built-packets?limit=50'),
   });
 
   const updateFabricSourceMutation = useMutation({
@@ -352,6 +356,33 @@ export default function CuttingOperatorDashboard() {
     },
     onError: () => {
       toast({ title: 'Error', description: 'Failed to delete fabric source.', variant: 'destructive' });
+    },
+  });
+
+  const scanPacketFabricSourceMutation = useMutation({
+    mutationFn: async ({ packetId, barcode }: { packetId: number; barcode: string }) => {
+      return apiRequest(`/api/cutting-table-mfg-queue/built-packets/${packetId}/fabric-sources/scan`, {
+        method: 'POST',
+        body: JSON.stringify({ barcode }),
+      });
+    },
+    onSuccess: (data: any, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table-mfg-queue/built-packets'] });
+      setPacketMaterialScanValues(prev => ({ ...prev, [variables.packetId]: '' }));
+      const roll = data?.roll;
+      toast({
+        title: 'Material attached',
+        description: roll?.rollNumber
+          ? `Roll ${roll.rollNumber} was added to this packet.`
+          : 'The scanned material was added to this packet.',
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Scan Error',
+        description: error?.message || 'Failed to add material to packet.',
+        variant: 'destructive',
+      });
     },
   });
 
@@ -541,6 +572,7 @@ export default function CuttingOperatorDashboard() {
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/cutting-table-mfg-queue/cutting-table'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table-mfg-queue/built-packets'] });
       setIsProductionDialogOpen(false);
       resetProductionForm();
       toast({
@@ -1175,6 +1207,7 @@ export default function CuttingOperatorDashboard() {
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/cutting-table-mfg-queue/cutting-table'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/cutting-table-mfg-queue/built-packets'] });
       queryClient.invalidateQueries({ queryKey: ['/api/cutting-table/fabric-inventory'] });
       setIsProductionDialogOpen(false);
       resetProductionForm();
@@ -2359,6 +2392,10 @@ export default function CuttingOperatorDashboard() {
         <CardContent>
           {loadingBuiltPackets ? (
             <div className="text-sm text-muted-foreground py-4 text-center">Loading...</div>
+          ) : builtPacketsError ? (
+            <div className="text-sm text-destructive py-6 text-center">
+              {(builtPacketsErrorDetails as Error)?.message || 'Failed to load made packets.'}
+            </div>
           ) : builtPackets.length === 0 ? (
             <div className="text-sm text-muted-foreground py-6 text-center">No built packets found.</div>
           ) : (
@@ -2408,7 +2445,7 @@ export default function CuttingOperatorDashboard() {
                           const mfgParsed = parseMfgBarcode(packet.barcode);
                           const mfgBarcode = mfgParsed.isMfgFormat
                             ? mfgParsed.raw
-                            : buildMfgBarcode(packet.queueId, packet.sku, packet.displayPacketNumber ?? packet.packetNumber);
+                            : buildMfgBarcode(packet.queueId, packet.sku, packet.printedPacketNumber ?? packet.displayPacketNumber ?? packet.packetNumber);
                           const segments = mfgBarcode ? parseMfgBarcode(mfgBarcode) : null;
                           const isInternalBarcode = !mfgParsed.isMfgFormat;
 
@@ -2484,6 +2521,37 @@ export default function CuttingOperatorDashboard() {
 
                   {expandedPacketId === packet.id && (
                     <div className="border-t bg-muted/20 px-4 py-3">
+                      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end">
+                        <div className="flex-1 space-y-1">
+                          <Label className="text-xs">Scan Material Into Packet</Label>
+                          <Input
+                            value={packetMaterialScanValues[packet.id] || ''}
+                            onChange={(e) => setPacketMaterialScanValues(prev => ({ ...prev, [packet.id]: e.target.value }))}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                const barcode = (packetMaterialScanValues[packet.id] || '').trim();
+                                if (barcode) {
+                                  scanPacketFabricSourceMutation.mutate({ packetId: packet.id, barcode });
+                                }
+                              }
+                            }}
+                            placeholder="Scan material roll barcode, ICN, or roll number..."
+                          />
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={scanPacketFabricSourceMutation.isPending || !(packetMaterialScanValues[packet.id] || '').trim()}
+                          onClick={() => {
+                            const barcode = (packetMaterialScanValues[packet.id] || '').trim();
+                            if (!barcode) return;
+                            scanPacketFabricSourceMutation.mutate({ packetId: packet.id, barcode });
+                          }}
+                        >
+                          <Scan className="h-3 w-3 mr-1" />
+                          Add Material
+                        </Button>
+                      </div>
                       {packet.fabricSources.length === 0 ? (
                         <p className="text-sm text-muted-foreground italic">No fabric source records for this packet.</p>
                       ) : (

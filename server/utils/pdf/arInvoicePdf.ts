@@ -1,8 +1,10 @@
 import { PDFDocument, rgb, StandardFonts, type PDFFont } from 'pdf-lib';
 import { db } from '../../db';
-import { arInvoices, arInvoiceLines, p2Customers, p2PurchaseOrders, p2PackingSlips, p2LotNumbers } from '../../schema';
+import { arInvoices, arInvoiceLines, customers, purchaseOrders, p2Customers, p2PurchaseOrders, p2PackingSlips, p2LotNumbers } from '../../schema';
 import { eq, sql } from 'drizzle-orm';
 import { COMPANY_INFO } from '../../../shared/company-config';
+import { resolveAssetPath } from '../../src/utils/assetPaths';
+import * as fs from 'fs';
 
 const PAGE = { WIDTH: 612, HEIGHT: 792, MARGIN: 40 } as const;
 const FONT_SIZE = { FOOTER: 7, TABLE: 8, BODY: 9, LABEL: 8, SECTION: 10, NUMBER: 14, TITLE: 16 } as const;
@@ -14,6 +16,17 @@ const COLOR = {
   WHITE: rgb(1, 1, 1),
   ACCENT: rgb(0.1, 0.23, 0.36),
 } as const;
+
+const TOTALS_BLOCK_HEIGHT = 116;
+const NOTES_HEADER_HEIGHT = 28;
+const AMOUNT_DUE_BAR_HEIGHT = 20;
+const AMOUNT_DUE_BAR_GAP = 6;
+const LOGO_WIDTH = 120;
+
+const P1_COMPANY_INFO = {
+  ...COMPANY_INFO,
+  name: 'AG Composites',
+};
 
 function money(value: unknown): string {
   const num = Number(value || 0);
@@ -44,29 +57,86 @@ function wrap(text: string, width: number, font: PDFFont, size: number): string[
   return lines;
 }
 
+async function embedLogo(pdf: PDFDocument) {
+  try {
+    const logoPath = resolveAssetPath('logo_updated.png');
+    if (fs.existsSync(logoPath)) {
+      return await pdf.embedPng(fs.readFileSync(logoPath));
+    }
+  } catch {}
+  return null;
+}
+
 function billingAddress(customer: any): string[] {
   if (!customer) return [];
   return [
-    customer.customerName,
-    customer.billingAddress,
-    [customer.billingCity, customer.billingState, customer.billingZip].filter(Boolean).join(', ').replace(', ', ', '),
+    customer.customerName || customer.p1ShipToName,
+    customer.billingAddress || customer.p1ShipToStreet,
+    [customer.billingCity || customer.p1ShipToCity, customer.billingState || customer.p1ShipToState, customer.billingZip || customer.p1ShipToZip].filter(Boolean).join(', '),
     customer.contactEmail,
   ].filter(Boolean);
 }
+
+function shipToAddress(invoice: any): string[] {
+  return [
+    invoice.p1ShipToName || invoice.customerName,
+    invoice.p1ShipToStreet || invoice.billingAddress,
+    invoice.p1ShipToStreet2,
+    [invoice.p1ShipToCity || invoice.billingCity, invoice.p1ShipToState || invoice.billingState, invoice.p1ShipToZip || invoice.billingZip].filter(Boolean).join(', '),
+  ].filter(Boolean);
+}
+
+function consolidateLines(lines: any[]): any[] {
+  const grouped = new Map<string, any>();
+  for (const line of lines) {
+    const key = JSON.stringify([line.partNumber || '', line.description || '', String(line.unitPrice ?? '')]);
+    const existing = grouped.get(key);
+    if (existing) {
+      existing.qty = String(Number(existing.qty || 0) + Number(line.qty || 0));
+      existing.lineTotal = String(Number(existing.lineTotal || 0) + Number(line.lineTotal || 0));
+    } else {
+      grouped.set(key, { ...line });
+    }
+  }
+  return Array.from(grouped.values());
+}
+
+const invoiceSourceSql = () => sql<string>`
+  CASE WHEN EXISTS (
+    SELECT 1
+    FROM ar_invoice_lines ail
+    WHERE ail.invoice_id = ${arInvoices.id}
+      AND ail.dimension_tags->>'source' = 'p1_oem_packing_slip'
+  ) THEN 'P1' ELSE 'P2' END
+`;
 
 export async function generateArInvoicePdf(invoiceId: string): Promise<Buffer> {
   const [invoice] = await db
     .select({
       id: arInvoices.id,
       customerId: arInvoices.customerId,
-      customerName: p2Customers.customerName,
+      customerName: sql<string | null>`
+        COALESCE(
+          CASE WHEN (${invoiceSourceSql()}) = 'P1' THEN ${customers.name} ELSE ${p2Customers.customerName} END,
+          ${purchaseOrders.customerName},
+          ${p2Customers.customerName}
+        )
+      `,
       invoiceNumber: arInvoices.invoiceNumber,
       invoiceDate: arInvoices.invoiceDate,
       dueDate: arInvoices.dueDate,
       terms: arInvoices.terms,
       poId: arInvoices.poId,
       poOverride: arInvoices.poOverride,
-      poNumber: p2PurchaseOrders.poNumber,
+      poNumber: sql<string | null>`
+        COALESCE(
+          CASE WHEN (${invoiceSourceSql()}) = 'P1' THEN ${purchaseOrders.poNumber} ELSE ${p2PurchaseOrders.poNumber} END,
+          ${arInvoices.poOverride},
+          ${purchaseOrders.poNumber},
+          ${p2PurchaseOrders.poNumber}
+        )
+      `,
+      invoiceSource: invoiceSourceSql(),
       packingSlipId: arInvoices.packingSlipId,
       lotId: arInvoices.lotId,
       subtotal: arInvoices.subtotal,
@@ -78,37 +148,143 @@ export async function generateArInvoicePdf(invoiceId: string): Promise<Buffer> {
       totalAmount: arInvoices.totalAmount,
       customerVisibleNotes: arInvoices.customerVisibleNotes,
       status: arInvoices.status,
-      billingAddress: p2Customers.billingAddress,
-      billingCity: p2Customers.billingCity,
-      billingState: p2Customers.billingState,
-      billingZip: p2Customers.billingZip,
-      contactEmail: p2Customers.contactEmail,
+      billingAddress: sql<string | null>`CASE WHEN (${invoiceSourceSql()}) = 'P1' THEN NULL ELSE ${p2Customers.billingAddress} END`,
+      billingCity: sql<string | null>`CASE WHEN (${invoiceSourceSql()}) = 'P1' THEN NULL ELSE ${p2Customers.billingCity} END`,
+      billingState: sql<string | null>`CASE WHEN (${invoiceSourceSql()}) = 'P1' THEN NULL ELSE ${p2Customers.billingState} END`,
+      billingZip: sql<string | null>`CASE WHEN (${invoiceSourceSql()}) = 'P1' THEN NULL ELSE ${p2Customers.billingZip} END`,
+      contactEmail: sql<string | null>`CASE WHEN (${invoiceSourceSql()}) = 'P1' THEN ${customers.email} ELSE ${p2Customers.contactEmail} END`,
       packingSlipNumber: p2PackingSlips.packingSlipNumber,
       lotNumber: p2LotNumbers.lotNumber,
+      p1ShipToName: sql<string | null>`(
+        SELECT sr.ship_to_snapshot->>'name'
+        FROM shipment_records sr
+        WHERE sr.id::text = (
+          SELECT ail.dimension_tags->>'shipmentRecordId'
+          FROM ar_invoice_lines ail
+          WHERE ail.invoice_id = ${arInvoices.id}
+            AND ail.dimension_tags->>'source' = 'p1_oem_packing_slip'
+          LIMIT 1
+        )
+        LIMIT 1
+      )`,
+      p1ShipToStreet: sql<string | null>`(
+        SELECT sr.ship_to_snapshot->>'street'
+        FROM shipment_records sr
+        WHERE sr.id::text = (
+          SELECT ail.dimension_tags->>'shipmentRecordId'
+          FROM ar_invoice_lines ail
+          WHERE ail.invoice_id = ${arInvoices.id}
+            AND ail.dimension_tags->>'source' = 'p1_oem_packing_slip'
+          LIMIT 1
+        )
+        LIMIT 1
+      )`,
+      p1ShipToStreet2: sql<string | null>`(
+        SELECT sr.ship_to_snapshot->>'street2'
+        FROM shipment_records sr
+        WHERE sr.id::text = (
+          SELECT ail.dimension_tags->>'shipmentRecordId'
+          FROM ar_invoice_lines ail
+          WHERE ail.invoice_id = ${arInvoices.id}
+            AND ail.dimension_tags->>'source' = 'p1_oem_packing_slip'
+          LIMIT 1
+        )
+        LIMIT 1
+      )`,
+      p1ShipToCity: sql<string | null>`(
+        SELECT sr.ship_to_snapshot->>'city'
+        FROM shipment_records sr
+        WHERE sr.id::text = (
+          SELECT ail.dimension_tags->>'shipmentRecordId'
+          FROM ar_invoice_lines ail
+          WHERE ail.invoice_id = ${arInvoices.id}
+            AND ail.dimension_tags->>'source' = 'p1_oem_packing_slip'
+          LIMIT 1
+        )
+        LIMIT 1
+      )`,
+      p1ShipToState: sql<string | null>`(
+        SELECT sr.ship_to_snapshot->>'state'
+        FROM shipment_records sr
+        WHERE sr.id::text = (
+          SELECT ail.dimension_tags->>'shipmentRecordId'
+          FROM ar_invoice_lines ail
+          WHERE ail.invoice_id = ${arInvoices.id}
+            AND ail.dimension_tags->>'source' = 'p1_oem_packing_slip'
+          LIMIT 1
+        )
+        LIMIT 1
+      )`,
+      p1ShipToZip: sql<string | null>`(
+        SELECT sr.ship_to_snapshot->>'postalCode'
+        FROM shipment_records sr
+        WHERE sr.id::text = (
+          SELECT ail.dimension_tags->>'shipmentRecordId'
+          FROM ar_invoice_lines ail
+          WHERE ail.invoice_id = ${arInvoices.id}
+            AND ail.dimension_tags->>'source' = 'p1_oem_packing_slip'
+          LIMIT 1
+        )
+        LIMIT 1
+      )`,
+      p1TrackingNumber: sql<string | null>`(
+        SELECT sr.master_tracking_number
+        FROM shipment_records sr
+        WHERE sr.id::text = (
+          SELECT ail.dimension_tags->>'shipmentRecordId'
+          FROM ar_invoice_lines ail
+          WHERE ail.invoice_id = ${arInvoices.id}
+            AND ail.dimension_tags->>'source' = 'p1_oem_packing_slip'
+          LIMIT 1
+        )
+        LIMIT 1
+      )`,
     })
     .from(arInvoices)
     .leftJoin(p2Customers, eq(arInvoices.customerId, p2Customers.customerId))
     .leftJoin(p2PurchaseOrders, sql`(CASE WHEN ${arInvoices.poId} ~ '^[0-9]+$' THEN ${arInvoices.poId}::integer END) = ${p2PurchaseOrders.id}`)
+    .leftJoin(customers, sql`(CASE WHEN ${arInvoices.customerId} ~ '^[0-9]+$' THEN ${arInvoices.customerId}::integer END) = ${customers.id}`)
+    .leftJoin(purchaseOrders, sql`(CASE WHEN ${arInvoices.poId} ~ '^[0-9]+$' THEN ${arInvoices.poId}::integer END) = ${purchaseOrders.id}`)
     .leftJoin(p2PackingSlips, eq(arInvoices.packingSlipId, p2PackingSlips.id))
     .leftJoin(p2LotNumbers, eq(arInvoices.lotId, p2LotNumbers.id))
     .where(eq(arInvoices.id, invoiceId));
 
   if (!invoice) throw new Error(`Invoice ${invoiceId} not found`);
 
-  const lines = await db
+  const rawLines = await db
     .select()
     .from(arInvoiceLines)
     .where(eq(arInvoiceLines.invoiceId, invoiceId));
+  const lines = consolidateLines(rawLines);
 
   const pdf = await PDFDocument.create();
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const logo = await embedLogo(pdf);
   let page = pdf.addPage([PAGE.WIDTH, PAGE.HEIGHT]);
   let y = PAGE.HEIGHT - PAGE.MARGIN;
 
-  page.drawText(COMPANY_INFO.name || 'AG Composites', { x: PAGE.MARGIN, y, size: FONT_SIZE.TITLE, font: bold, color: COLOR.TEXT });
-  y -= 13;
-  for (const line of [COMPANY_INFO.streetAddress, `${COMPANY_INFO.city}, ${COMPANY_INFO.state} ${COMPANY_INFO.zipCode}`, COMPANY_INFO.phone].filter(Boolean)) {
+  const addPage = () => {
+    page = pdf.addPage([PAGE.WIDTH, PAGE.HEIGHT]);
+    y = PAGE.HEIGHT - PAGE.MARGIN;
+  };
+
+  const ensureSpace = (height: number) => {
+    if (y - height < PAGE.MARGIN + 40) addPage();
+  };
+
+  const isP1Invoice = invoice.invoiceSource === 'P1';
+  const companyInfo = isP1Invoice ? P1_COMPANY_INFO : COMPANY_INFO;
+
+  if (isP1Invoice && logo) {
+    const logoHeight = LOGO_WIDTH * (logo.height / logo.width);
+    page.drawImage(logo, { x: PAGE.MARGIN, y: y - logoHeight, width: LOGO_WIDTH, height: logoHeight });
+    y -= logoHeight + 8;
+  } else {
+    page.drawText(companyInfo.name || 'AG Composites', { x: PAGE.MARGIN, y, size: FONT_SIZE.TITLE, font: bold, color: COLOR.TEXT });
+    y -= 13;
+  }
+  for (const line of [companyInfo.streetAddress, `${companyInfo.city}, ${companyInfo.state} ${companyInfo.zipCode}`, companyInfo.phone].filter(Boolean)) {
     page.drawText(line, { x: PAGE.MARGIN, y, size: FONT_SIZE.LABEL, font, color: COLOR.MUTED });
     y -= 11;
   }
@@ -124,24 +300,38 @@ export async function generateArInvoicePdf(invoiceId: string): Promise<Buffer> {
   y -= 18;
 
   const mid = PAGE.WIDTH / 2;
-  page.drawText('BILL TO', { x: PAGE.MARGIN, y, size: FONT_SIZE.LABEL, font: bold, color: COLOR.ACCENT });
+  page.drawText(isP1Invoice ? 'SHIP TO' : 'BILL TO', { x: PAGE.MARGIN, y, size: FONT_SIZE.LABEL, font: bold, color: COLOR.ACCENT });
   page.drawText('INVOICE DETAILS', { x: mid + 12, y, size: FONT_SIZE.LABEL, font: bold, color: COLOR.ACCENT });
   y -= 13;
 
   let leftY = y;
-  for (const line of billingAddress(invoice)) {
-    page.drawText(String(line), { x: PAGE.MARGIN, y: leftY, size: FONT_SIZE.BODY, font, color: COLOR.TEXT });
+  const leftLines = isP1Invoice ? shipToAddress(invoice) : billingAddress(invoice);
+  if (isP1Invoice) {
+    const shipBoxHeight = Math.max(44, leftLines.length * 13 + 8);
+    page.drawRectangle({
+      x: PAGE.MARGIN,
+      y: y - shipBoxHeight + 6,
+      width: mid - PAGE.MARGIN - 12,
+      height: shipBoxHeight,
+      borderColor: COLOR.LINE,
+      borderWidth: 1,
+    });
+    leftY -= 6;
+  }
+  for (const line of leftLines) {
+    page.drawText(String(line), { x: PAGE.MARGIN + (isP1Invoice ? 6 : 0), y: leftY, size: FONT_SIZE.BODY, font, color: COLOR.TEXT });
     leftY -= 13;
   }
+  if (isP1Invoice) leftY -= 4;
 
   let rightY = y;
-  const detailRows = [
+  const detailRows: Array<[string, string]> = [
     ['Invoice Date:', date(invoice.invoiceDate)],
     ['Due Date:', date(invoice.dueDate)],
-    ['Terms:', invoice.terms || 'N/A'],
-    ['Customer PO:', invoice.poOverride || invoice.poNumber || invoice.poId || 'N/A'],
-    ['Packing Slip:', invoice.packingSlipNumber || 'N/A'],
-    ['Lot:', invoice.lotNumber || 'N/A'],
+    ['Terms:', String(invoice.terms || 'N/A')],
+    ['Customer PO:', String(invoice.poOverride || invoice.poNumber || invoice.poId || 'N/A')],
+    ['Packing Slip:', String(invoice.packingSlipNumber || (isP1Invoice ? invoice.invoiceNumber : 'N/A'))],
+    ...(isP1Invoice ? [['Tracking #:', String(invoice.p1TrackingNumber || 'N/A')]] : [['Lot:', String(invoice.lotNumber || 'N/A')]]),
   ];
   for (const [label, value] of detailRows) {
     page.drawText(label, { x: mid + 12, y: rightY, size: FONT_SIZE.BODY, font: bold, color: COLOR.MUTED });
@@ -151,9 +341,9 @@ export async function generateArInvoicePdf(invoiceId: string): Promise<Buffer> {
 
   y = Math.min(leftY, rightY) - 15;
   page.drawRectangle({ x: PAGE.MARGIN, y: y - 18, width: PAGE.WIDTH - PAGE.MARGIN * 2, height: 18, color: COLOR.ACCENT });
-  const cols = { part: PAGE.MARGIN + 5, desc: PAGE.MARGIN + 95, qty: PAGE.MARGIN + 350, unit: PAGE.MARGIN + 405, total: PAGE.MARGIN + 475 };
-  page.drawText('Part #', { x: cols.part, y: y - 12, size: FONT_SIZE.TABLE, font: bold, color: COLOR.WHITE });
-  page.drawText('Description', { x: cols.desc, y: y - 12, size: FONT_SIZE.TABLE, font: bold, color: COLOR.WHITE });
+  const cols = { part: PAGE.MARGIN + 5, desc: PAGE.MARGIN + 105, qty: PAGE.MARGIN + 350, unit: PAGE.MARGIN + 405, total: PAGE.MARGIN + 475 };
+  page.drawText(isP1Invoice ? 'PO #' : 'Part #', { x: cols.part, y: y - 12, size: FONT_SIZE.TABLE, font: bold, color: COLOR.WHITE });
+  page.drawText(isP1Invoice ? 'Contents' : 'Description', { x: cols.desc, y: y - 12, size: FONT_SIZE.TABLE, font: bold, color: COLOR.WHITE });
   page.drawText('Qty', { x: cols.qty, y: y - 12, size: FONT_SIZE.TABLE, font: bold, color: COLOR.WHITE });
   page.drawText('Unit', { x: cols.unit, y: y - 12, size: FONT_SIZE.TABLE, font: bold, color: COLOR.WHITE });
   page.drawText('Total', { x: cols.total, y: y - 12, size: FONT_SIZE.TABLE, font: bold, color: COLOR.WHITE });
@@ -167,7 +357,7 @@ export async function generateArInvoicePdf(invoiceId: string): Promise<Buffer> {
       y = PAGE.HEIGHT - PAGE.MARGIN;
     }
     if (idx % 2 === 1) page.drawRectangle({ x: PAGE.MARGIN, y: y - rowHeight + 3, width: PAGE.WIDTH - PAGE.MARGIN * 2, height: rowHeight, color: COLOR.ALT });
-    page.drawText(line.partNumber || '', { x: cols.part, y: y - 8, size: FONT_SIZE.TABLE, font, color: COLOR.TEXT });
+    page.drawText(isP1Invoice ? String(invoice.poOverride || invoice.poNumber || invoice.poId || '') : (line.partNumber || ''), { x: cols.part, y: y - 8, size: FONT_SIZE.TABLE, font, color: COLOR.TEXT });
     descLines.forEach((dl, i) => page.drawText(dl, { x: cols.desc, y: y - 8 - i * 10, size: FONT_SIZE.TABLE, font, color: COLOR.TEXT }));
     page.drawText(String(line.qty), { x: cols.qty, y: y - 8, size: FONT_SIZE.TABLE, font, color: COLOR.TEXT });
     page.drawText(money(line.unitPrice), { x: cols.unit, y: y - 8, size: FONT_SIZE.TABLE, font, color: COLOR.TEXT });
@@ -176,6 +366,7 @@ export async function generateArInvoicePdf(invoiceId: string): Promise<Buffer> {
   });
 
   y -= 8;
+  ensureSpace(TOTALS_BLOCK_HEIGHT);
   page.drawLine({ start: { x: PAGE.MARGIN, y }, end: { x: PAGE.WIDTH - PAGE.MARGIN, y }, thickness: 1, color: COLOR.LINE });
   y -= 18;
 
@@ -192,15 +383,18 @@ export async function generateArInvoicePdf(invoiceId: string): Promise<Buffer> {
     page.drawText(String(value), { x: totalsX + 110, y, size: FONT_SIZE.BODY, font, color: COLOR.TEXT });
     y -= 14;
   }
-  page.drawRectangle({ x: totalsX - 5, y: y - 2, width: 195, height: 20, color: COLOR.ACCENT });
-  page.drawText('AMOUNT DUE:', { x: totalsX, y: y + 4, size: FONT_SIZE.SECTION, font: bold, color: COLOR.WHITE });
-  page.drawText(money(invoice.totalAmount), { x: totalsX + 110, y: y + 4, size: FONT_SIZE.SECTION, font: bold, color: COLOR.WHITE });
-  y -= 34;
+  y -= AMOUNT_DUE_BAR_GAP;
+  page.drawRectangle({ x: totalsX - 5, y: y - AMOUNT_DUE_BAR_HEIGHT, width: 195, height: AMOUNT_DUE_BAR_HEIGHT, color: COLOR.ACCENT });
+  page.drawText('AMOUNT DUE:', { x: totalsX, y: y - 14, size: FONT_SIZE.SECTION, font: bold, color: COLOR.WHITE });
+  page.drawText(money(invoice.totalAmount), { x: totalsX + 110, y: y - 14, size: FONT_SIZE.SECTION, font: bold, color: COLOR.WHITE });
+  y -= AMOUNT_DUE_BAR_HEIGHT + 14;
 
   if (invoice.customerVisibleNotes) {
+    ensureSpace(NOTES_HEADER_HEIGHT);
     page.drawText('NOTES', { x: PAGE.MARGIN, y, size: FONT_SIZE.SECTION, font: bold, color: COLOR.ACCENT });
     y -= 14;
     for (const line of wrap(invoice.customerVisibleNotes, PAGE.WIDTH - PAGE.MARGIN * 2, font, FONT_SIZE.BODY).slice(0, 12)) {
+      ensureSpace(12);
       page.drawText(line, { x: PAGE.MARGIN, y, size: FONT_SIZE.BODY, font, color: COLOR.TEXT });
       y -= 12;
     }
@@ -208,7 +402,6 @@ export async function generateArInvoicePdf(invoiceId: string): Promise<Buffer> {
 
   for (const pg of pdf.getPages()) {
     pg.drawLine({ start: { x: PAGE.MARGIN, y: 32 }, end: { x: PAGE.WIDTH - PAGE.MARGIN, y: 32 }, thickness: 0.5, color: COLOR.LINE });
-    pg.drawText('Generated by EPOCH', { x: PAGE.MARGIN, y: 20, size: FONT_SIZE.FOOTER, font, color: COLOR.MUTED });
   }
 
   return Buffer.from(await pdf.save());

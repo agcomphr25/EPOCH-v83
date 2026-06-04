@@ -18,9 +18,16 @@
  * builds slipItems via groupItemsByDescription (poShippingQC.ts ~2034).
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import express, { type Request, type Response, type NextFunction } from 'express';
+/* eslint-disable import/order */
+
+import express, {
+  type Request,
+  type Response,
+  type NextFunction,
+} from 'express';
 import request from 'supertest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
 import type {
   PurchaseOrder,
   PurchaseOrderItem,
@@ -49,19 +56,31 @@ vi.mock('../db', () => ({
 
 vi.mock('../storage', () => ({
   storage: {
-    getPurchaseOrderItem: vi.fn<(id: number) => Promise<PurchaseOrderItem | undefined>>(),
-    getPurchaseOrder: vi.fn<(id: number) => Promise<PurchaseOrder | undefined>>(),
+    getPurchaseOrderItem:
+      vi.fn<(id: number) => Promise<PurchaseOrderItem | undefined>>(),
+    getPurchaseOrder:
+      vi.fn<(id: number) => Promise<PurchaseOrder | undefined>>(),
     getCustomer: vi.fn().mockResolvedValue(null),
-    getCustomerAddresses: vi.fn<(customerId: string) => Promise<CustomerAddress[]>>(),
-    getCustomerDefaultAddress: vi.fn<(customerId: string) => Promise<CustomerAddress | undefined>>(),
-    getNextInvoiceNumber: vi.fn<(customerId: string, customerName: string) => Promise<string>>(),
+    getCustomerAddresses:
+      vi.fn<(customerId: string) => Promise<CustomerAddress[]>>(),
+    getCustomerDefaultAddress:
+      vi.fn<(customerId: string) => Promise<CustomerAddress | undefined>>(),
+    getNextInvoiceNumber:
+      vi.fn<(customerId: string, customerName: string) => Promise<string>>(),
     updatePurchaseOrderItem: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
 vi.mock('../middleware/auth', () => ({
-  authenticateToken: vi.fn((_req: Request, _res: Response, next: NextFunction) => next()),
-  requireRole: vi.fn(() => (_req: Request, _res: Response, next: NextFunction) => next()),
+  authenticateToken: vi.fn(
+    (req: Request, _res: Response, next: NextFunction) => {
+      (req as any).user = { username: 'glennj', role: 'ADMIN' };
+      next();
+    }
+  ),
+  requireRole: vi.fn(
+    () => (_req: Request, _res: Response, next: NextFunction) => next()
+  ),
 }));
 
 vi.mock('../utils/pdf/packingSlipPdf', () => ({
@@ -108,13 +127,16 @@ vi.mock('../schema', () => ({
 // ---------------------------------------------------------------------------
 
 import { storage } from '../storage';
+import { pool } from '../db';
 import { generatePoPackingSlipPdf } from '../utils/pdf/packingSlipPdf';
 
 // ---------------------------------------------------------------------------
 // Typed fixture factories
 // ---------------------------------------------------------------------------
 
-function makePOItem(overrides: Partial<PurchaseOrderItem> & { poId: number }): PurchaseOrderItem {
+function makePOItem(
+  overrides: Partial<PurchaseOrderItem> & { poId: number }
+): PurchaseOrderItem {
   return {
     id: 92,
     poId: overrides.poId,
@@ -143,7 +165,9 @@ function makePOItem(overrides: Partial<PurchaseOrderItem> & { poId: number }): P
   };
 }
 
-function makePO(overrides: Partial<PurchaseOrder> & { id: number; poNumber: string }): PurchaseOrder {
+function makePO(
+  overrides: Partial<PurchaseOrder> & { id: number; poNumber: string }
+): PurchaseOrder {
   return {
     id: overrides.id,
     poNumber: overrides.poNumber,
@@ -161,7 +185,9 @@ function makePO(overrides: Partial<PurchaseOrder> & { id: number; poNumber: stri
   };
 }
 
-function makeAddress(overrides: Partial<CustomerAddress> = {}): CustomerAddress {
+function makeAddress(
+  overrides: Partial<CustomerAddress> = {}
+): CustomerAddress {
   return {
     id: 1,
     customerId: 0,
@@ -231,7 +257,8 @@ describe('POST /api/po-orders/process-shipment — packing slip description prio
 
     app = express();
     app.use(express.json());
-    const poShippingRouter = (await import('../src/routes/poShippingQC')).default;
+    const poShippingRouter = (await import('../src/routes/poShippingQC'))
+      .default;
     app.use('/api/po-orders', poShippingRouter);
   });
 
@@ -244,9 +271,12 @@ describe('POST /api/po-orders/process-shipment — packing slip description prio
     } else {
       process.env.UPS_ENV = savedUpsEnv;
     }
-    if (savedUpsClientId !== undefined) process.env.UPS_CLIENT_ID = savedUpsClientId;
-    if (savedUpsClientSecret !== undefined) process.env.UPS_CLIENT_SECRET = savedUpsClientSecret;
-    if (savedUpsAccountNumber !== undefined) process.env.UPS_ACCOUNT_NUMBER = savedUpsAccountNumber;
+    if (savedUpsClientId !== undefined)
+      process.env.UPS_CLIENT_ID = savedUpsClientId;
+    if (savedUpsClientSecret !== undefined)
+      process.env.UPS_CLIENT_SECRET = savedUpsClientSecret;
+    if (savedUpsAccountNumber !== undefined)
+      process.env.UPS_ACCOUNT_NUMBER = savedUpsAccountNumber;
   });
 
   it('uses stockModelName over stockModelId for a single-PO shipment', async () => {
@@ -350,7 +380,9 @@ describe('POST /api/po-orders/process-shipment — packing slip description prio
 
     // Response includes a packingSlips entry for each PO
     expect(res.body.packingSlips).toHaveLength(2);
-    const poNumbers = res.body.packingSlips.map((p: { poNumber: string }) => p.poNumber);
+    const poNumbers = res.body.packingSlips.map(
+      (p: { poNumber: string }) => p.poNumber
+    );
     expect(poNumbers).toContain('PO-0001');
     expect(poNumbers).toContain('PO-0002');
   });
@@ -389,7 +421,12 @@ describe('POST /api/po-orders/process-shipment — packing slip description prio
 
   it('returns success:true and a trackingNumber in test mode (no real UPS credentials)', async () => {
     vi.mocked(storage.getPurchaseOrderItem).mockResolvedValue(
-      makePOItem({ id: 92, poId: 1, stockModelName: 'Mesa Universal', stockModelId: 'mesa_universal' })
+      makePOItem({
+        id: 92,
+        poId: 1,
+        stockModelName: 'Mesa Universal',
+        stockModelId: 'mesa_universal',
+      })
     );
     vi.mocked(storage.getPurchaseOrder).mockResolvedValue(
       makePO({ id: 1, poNumber: 'PO-0001' })
@@ -403,5 +440,179 @@ describe('POST /api/po-orders/process-shipment — packing slip description prio
     expect(res.body.success).toBe(true);
     expect(typeof res.body.trackingNumber).toBe('string');
     expect(res.body.trackingNumber).toMatch(/^TEST-/);
+  });
+});
+
+describe('GET /api/po-orders/oem-shipments', () => {
+  let app: express.Express;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+
+    app = express();
+    app.use(express.json());
+    const poShippingRouter = (await import('../src/routes/poShippingQC'))
+      .default;
+    app.use('/api/po-orders', poShippingRouter);
+  });
+
+  afterEach(() => {
+    vi.resetModules();
+  });
+
+  it('uses only filter params for the total-count query when no filters are set', async () => {
+    vi.mocked(pool.query)
+      .mockResolvedValueOnce({ rows: [{ table_exists: true }] } as any)
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: '11111111-1111-1111-1111-111111111111',
+            customer_id: 'CUST-1',
+            customer_name: 'OEM Customer',
+            master_tracking_number: '1Z999',
+            created_at: '2026-05-20T12:00:00.000Z',
+            item_count: 1,
+            stock_count: 1,
+            accessory_count: 0,
+            po_count: 1,
+            has_shipping_label: true,
+            items: [],
+          },
+        ],
+      } as any)
+      .mockResolvedValueOnce({ rows: [{ total: '1' }] } as any);
+
+    const res = await request(app).get('/api/po-orders/oem-shipments');
+
+    expect(res.status).toBe(200);
+    expect(res.body.pagination.total).toBe(1);
+    expect(vi.mocked(pool.query).mock.calls[1][1]).toEqual([50, 0, false]);
+    expect(vi.mocked(pool.query).mock.calls[2][1]).toEqual([]);
+  });
+
+  it('does not hard-reference fulfillment attempts when the artifact table is absent', async () => {
+    vi.mocked(pool.query)
+      .mockResolvedValueOnce({
+        rows: [
+          { table_exists: true, fulfillment_attempts_table_exists: false },
+        ],
+      } as any)
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: '11111111-1111-1111-1111-111111111111',
+            customer_id: 'CUST-1',
+            customer_name: 'OEM Customer',
+            master_tracking_number: '1Z999',
+            created_at: '2026-05-20T12:00:00.000Z',
+            item_count: 1,
+            stock_count: 1,
+            accessory_count: 0,
+            po_count: 1,
+            has_shipping_label: true,
+            items: [],
+          },
+        ],
+      } as any)
+      .mockResolvedValueOnce({ rows: [{ total: '1' }] } as any);
+
+    const res = await request(app).get('/api/po-orders/oem-shipments');
+
+    expect(res.status).toBe(200);
+    expect(res.body.shipments).toHaveLength(1);
+    expect(vi.mocked(pool.query).mock.calls[1][0]).not.toContain(
+      'p1_fulfillment_attempts'
+    );
+  });
+});
+
+describe('POST /api/po-orders/oem-shipments/:id/invoices', () => {
+  let app: express.Express;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    vi.mocked(storage.getNextInvoiceNumber).mockResolvedValue('INV-001');
+
+    app = express();
+    app.use(express.json());
+    const poShippingRouter = (await import('../src/routes/poShippingQC'))
+      .default;
+    app.use('/api/po-orders', poShippingRouter);
+  });
+
+  afterEach(() => {
+    vi.resetModules();
+  });
+
+  it('creates an invoice without querying fulfillment attempts when the artifact table is absent', async () => {
+    const shipmentId = '11111111-1111-1111-1111-111111111111';
+    const client = {
+      query: vi
+        .fn()
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              shipment_record_id: shipmentId,
+              reference: 'SHIP-001',
+              shipment_invoice_number: null,
+              master_tracking_number: '1Z999',
+              shipped_at: '2026-05-26T12:00:00.000Z',
+              shipment_created_at: '2026-05-26T12:00:00.000Z',
+              shipment_customer_id: '10',
+              shipment_customer_name: 'OEM Customer',
+              ship_to_snapshot: { name: 'OEM Customer' },
+              shipment_item_id: 'item-1',
+              order_id: 'ORDER-1',
+              quantity: '2',
+              p1_po_item_id: 42,
+              po_number: 'PO-123',
+              description: 'Widget',
+              part_number: 'WIDGET-1',
+              unit_price: '25.00',
+              purchase_order_id: 7,
+              po_customer_id: '10',
+              po_customer_name: 'OEM Customer',
+            },
+          ],
+        })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({
+          rows: [
+            { id: 'invoice-1', invoice_number: 'INV-001', status: 'REVIEW' },
+          ],
+        })
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [] }),
+      release: vi.fn(),
+    };
+
+    vi.mocked(pool.connect).mockResolvedValue(client as any);
+    vi.mocked(pool.query)
+      .mockResolvedValueOnce({ rows: [{ table_exists: false }] } as any)
+      .mockResolvedValueOnce({ rows: [] } as any)
+      .mockResolvedValueOnce({ rows: [] } as any)
+      .mockResolvedValueOnce({ rows: [] } as any);
+
+    const res = await request(app)
+      .post(`/api/po-orders/oem-shipments/${shipmentId}/invoices`)
+      .send({ poNumber: 'PO-123' });
+
+    expect(res.status).toBe(201);
+    expect(res.body.invoiceNumber).toBe('INV-001');
+    expect(client.release).toHaveBeenCalled();
+
+    const issuedSql = [
+      ...vi.mocked(pool.query).mock.calls.map((call) => String(call[0])),
+      ...client.query.mock.calls.map((call) => String(call[0])),
+    ];
+    expect(
+      issuedSql.some((sql) => /FROM\s+p1_fulfillment_attempts/i.test(sql))
+    ).toBe(false);
+    expect(
+      issuedSql.some((sql) =>
+        /INSERT\s+INTO\s+p1_fulfillment_attempts/i.test(sql)
+      )
+    ).toBe(false);
   });
 });

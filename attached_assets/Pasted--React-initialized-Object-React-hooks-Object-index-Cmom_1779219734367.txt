@@ -1,0 +1,82 @@
+ React initialized: Object
+ React hooks: Object
+index-CmomDkVW.js:5575 [EPOCH SYNC] Sync engine starting
+index-CmomDkVW.js:5575 [EPOCH SYNC] Sync engine started — interval: 30000 ms
+index-CmomDkVW.js:5572 App component is rendering...
+index-CmomDkVW.js:5572 Environment: production
+index-CmomDkVW.js:5572 Base URL: /
+index-CmomDkVW.js:1825 [EPOCH] Service Worker Registered https://agcompepoch.xyz/
+index-CmomDkVW.js:1825 [EPOCH] Install prompt captured and ready
+login?redirect=%2Ftravelers%2F2e37689b-b05e-4bfd-8e12-b354bf1503a4%2Fexecute%3Fbadge%3D757ed306c66446f7871fac16bd141974:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+index-CmomDkVW.js:235 🌐 API Request to /api/vendor-pos/compliance-backfill?filter=enforced (timeout: 15000ms, deployment: true)
+index-CmomDkVW.js:2271 📱 Mobile Camera Debug: Video element created with mobile-friendly attributes
+api/employees/recertification-count:1  Failed to load resource: the server responded with a status of 401 ()
+index-CmomDkVW.js:235 [AUTH] Query returned 401 for /api/employees/recertification-count
+(anonymous) @ index-CmomDkVW.js:235
+index-CmomDkVW.js:235 [AUTH] 401 on /api/employees/recertification-count — checking session state
+Vwt @ index-CmomDkVW.js:235
+(anonymous) @ index-CmomDkVW.js:235
+api/vendor-pos/compliance-backfill?filter=enforced:1  Failed to load resource: the server responded with a status of 401 ()
+index-CmomDkVW.js:235 ✅ API Response from /api/vendor-pos/compliance-backfill?filter=enforced: 401
+index-CmomDkVW.js:235 [AUTH] 401 on /api/vendor-pos/compliance-backfill?filter=enforced — checking session state
+Vwt @ index-CmomDkVW.js:235
+je @ index-CmomDkVW.js:235
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+index-CmomDkVW.js:235 [AUTH] Session check returned 401 — session is gone
+Tds @ index-CmomDkVW.js:235
+index-CmomDkVW.js:235 [AUTH] Session expired on kiosk page — tokens cleared, no redirect
+Dds @ index-CmomDkVW.js:235
+Vwt @ index-CmomDkVW.js:235
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+index-CmomDkVW.js:235 [AUTH] Session check returned 401 — session is gone
+Tds @ index-CmomDkVW.js:235
+index-CmomDkVW.js:235 [AUTH] Session expired on kiosk page — tokens cleared, no redirect
+Dds @ index-CmomDkVW.js:235
+Vwt @ index-CmomDkVW.js:235
+index-CmomDkVW.js:5575 API error raw body: {"error":"No session token"}
+console.error @ index-CmomDkVW.js:5575
+je @ index-CmomDkVW.js:235
+index-CmomDkVW.js:5575 💥 API Request failed for /api/vendor-pos/compliance-backfill?filter=enforced: Error: No session token
+    at je (index-CmomDkVW.js:235:9246)
+console.error @ index-CmomDkVW.js:5575
+je @ index-CmomDkVW.js:235
+index-CmomDkVW.js:235 🌐 API Request to /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974 (timeout: 15000ms, deployment: true)
+index-CmomDkVW.js:235 ✅ API Response from /api/p2-traveler/badge-lookup/757ed306c66446f7871fac16bd141974: 200
+index-CmomDkVW.js:235 🌐 API Request to /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600084 (timeout: 15000ms, deployment: true)
+index-CmomDkVW.js:235 ✅ API Response from /api/p2-traveler/verify-certification/757ed306c66446f7871fac16bd141974/ROC2600084: 200
+index-CmomDkVW.js:235 🌐 API Request to /api/p2-traveler/generate-traveler (timeout: 15000ms, deployment: true)
+index-CmomDkVW.js:235 ✅ API Response from /api/p2-traveler/generate-traveler: 200
+api/auth/session:1  Failed to load resource: the server responded with a status of 401 ()
+travelers/2e37689b-b05e-4bfd-8e12-b354bf1503a4/execute?badge=757ed306c66446f7871fac16bd141974:1 [DOM] Password forms should have (optionally hidden) username fields for accessibility: (More info: https://goo.gl/9p2vKq) null
+index-CmomDkVW.js:235 🌐 API Request to /api/vendor-pos/compliance-backfill?filter=enforced (timeout: 15000ms, deployment: true)
+index-CmomDkVW.js:235 🌐 API Request to /api/admin/queue-integrity/status (timeout: 15000ms, deployment: true)
+index-CmomDkVW.js:235 🌐 API Request to /api/inventory/parts-requests/owner-approvals (timeout: 15000ms, deployment: true)
+index-CmomDkVW.js:235 ✅ API Response from /api/inventory/parts-requests/owner-approvals: 200
+index-CmomDkVW.js:235 ✅ API Response from /api/vendor-pos/compliance-backfill?filter=enforced: 200
+index-CmomDkVW.js:235 ✅ API Response from /api/admin/queue-integrity/status: 200
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+index-CmomDkVW.js:235 🌐 API Request to /api/training/modules/13/complete (timeout: 15000ms, deployment: true)
+index-CmomDkVW.js:235 ✅ API Response from /api/training/modules/13/complete: 200
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+api/training/stats:1  Failed to load resource: the server responded with a status of 404 ()
+index-CmomDkVW.js:235 🌐 API Request to /api/training/modules/13/ai-transform (timeout: 120000ms, deployment: true)
+api/training/modules/13/ai-transform:1  Failed to load resource: the server responded with a status of 500 ()
+index-CmomDkVW.js:235 ✅ API Response from /api/training/modules/13/ai-transform: 500
+index-CmomDkVW.js:5575 API error raw body: {"error":"401 Incorrect API key provided: sk-place**lder. You can find your API key at https://platform.openai.com/account/api-keys."}
+console.error @ index-CmomDkVW.js:5575
+index-CmomDkVW.js:5575 💥 API Request failed for /api/training/modules/13/ai-transform: Error: 401 Incorrect API key provided: sk-place**lder. You can find your API key at https://platform.openai.com/account/api-keys.
+    at je (index-CmomDkVW.js:235:9246)
+    at async Object.mutationFn (index-CmomDkVW.js:4331:4434)
+console.error @ index-CmomDkVW.js:5575
+index-CmomDkVW.js:235 🌐 API Request to /api/training/modules/13/ai-transform (timeout: 120000ms, deployment: true)
+api/training/modules/13/ai-transform:1  Failed to load resource: the server responded with a status of 500 ()
+index-CmomDkVW.js:235 ✅ API Response from /api/training/modules/13/ai-transform: 500
+index-CmomDkVW.js:5575 API error raw body: {"error":"401 Incorrect API key provided: sk-place**lder. You can find your API key at https://platform.openai.com/account/api-keys."}
+console.error @ index-CmomDkVW.js:5575
+index-CmomDkVW.js:5575 💥 API Request failed for /api/training/modules/13/ai-transform: Error: 401 Incorrect API key provided: sk-place**lder. You can find your API key at https://platform.openai.com/account/api-keys.
+    at je (index-CmomDkVW.js:235:9246)
+    at async Object.mutationFn (index-CmomDkVW.js:4331:4434)
+console.error @ index-CmomDkVW.js:5575

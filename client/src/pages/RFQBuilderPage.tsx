@@ -8,6 +8,7 @@ import RFQBuilderStep2Tooling, {
 import RFQBuilderStep3Bom, {
   type BomLineRow,
 } from "@/components/estimating/RFQBuilderStep3Bom";
+import { privateerDraftBomLines, type PrivateerDraftBomLine } from "@/data/privateerDraftBom";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -151,6 +152,14 @@ type ReleaseReadiness = {
   };
 };
 
+type DraftBomRecord = {
+  id: string;
+  name: string;
+  revision: string;
+  project: string;
+  lines: PrivateerDraftBomLine[];
+};
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const defaultDepartmentOptions = [
@@ -168,6 +177,7 @@ const pricingModeOptions = [
 
 const shippingModeOptions = ["PER_PART", "PER_PO", "INTERNAL_ONLY"];
 const shippingAllocationOptions = ["EVEN", "BY_QUANTITY", "BY_VALUE", "MANUAL"];
+const draftBomStorageKey = "epoch:draft-boms";
 
 // ── Factories ─────────────────────────────────────────────────────────────────
 
@@ -188,6 +198,35 @@ const emptyBomLine = (rfqPartId: string): BomLineRow => ({
   scrapPercent: 0, isEstimated: true, isDraftInventoryItem: false,
   vendorNameSnapshot: "", materialSpec: "", notes: "",
 });
+
+const privateerDraftBomRecord = (): DraftBomRecord => ({
+  id: "privateer",
+  name: "Privateer",
+  revision: "Draft A",
+  project: "Privateer",
+  lines: privateerDraftBomLines,
+});
+
+function loadDraftBomRecords(): DraftBomRecord[] {
+  try {
+    const raw = window.localStorage.getItem(draftBomStorageKey);
+    if (!raw) return [privateerDraftBomRecord()];
+    const saved = JSON.parse(raw) as DraftBomRecord[];
+    const hasPrivateer = saved.some((draft) => draft.id === "privateer");
+    return hasPrivateer ? saved : [privateerDraftBomRecord(), ...saved];
+  } catch {
+    return [privateerDraftBomRecord()];
+  }
+}
+
+function mapDraftCategoryToEstimateCategory(category: string): string {
+  const upper = category.toUpperCase();
+  if (upper.includes("ELECTRICAL") || upper.includes("AVIONICS")) return "OTHER";
+  if (upper.includes("HARDWARE")) return "HARDWARE";
+  if (upper.includes("TOOLING")) return "OTHER";
+  if (upper.includes("PAINT")) return "PAINT";
+  return "OTHER";
+}
 
 const emptyProcessRow = (rfqPartId: string): ProcessRow => ({
   rfqPartId, departmentName: "LAYUP", sourceType: "MANUAL",
@@ -230,6 +269,10 @@ export default function RFQBuilderPage() {
   const [selectedBomPartId, setSelectedBomPartId] = useState("");
   const [bomLines, setBomLines] = useState<BomLineRow[]>([]);
   const [bomMessage, setBomMessage] = useState("");
+  const [bomSourceType, setBomSourceType] = useState<"draft" | "existing">("draft");
+  const [selectedDraftBomId, setSelectedDraftBomId] = useState("privateer");
+  const [selectedExistingBomId, setSelectedExistingBomId] = useState("");
+  const [bomSourceMessage, setBomSourceMessage] = useState("");
 
   const [selectedProcessPartId, setSelectedProcessPartId] = useState("");
   const [processRows, setProcessRows] = useState<ProcessRow[]>([]);
@@ -306,6 +349,11 @@ export default function RFQBuilderPage() {
   const bomLinesQuery = useQuery({
     queryKey: ["estimating-rfq-bom-lines", rfqId], enabled: !!rfqId,
     queryFn: async () => apiRequest(`/api/estimating/rfqs/${rfqId}/bom-lines`),
+  });
+
+  const robustBomsQuery = useQuery({
+    queryKey: ["robust-boms-for-rfq-source"],
+    queryFn: async () => apiRequest("/api/robust-boms/boms?pageSize=100"),
   });
 
   const processRowsQuery = useQuery({
@@ -594,6 +642,95 @@ export default function RFQBuilderPage() {
     if (!rfqId) { setBomMessage("Save the RFQ first before adding BOM lines."); return; }
     if (!selectedBomPartId) { setBomMessage("Select an RFQ part first."); return; }
     setBomLines((prev) => [...prev, emptyBomLine(selectedBomPartId)]);
+  };
+
+  const draftBomRecords = useMemo(() => loadDraftBomRecords(), []);
+  const existingBomRecords = useMemo(() => {
+    const data = robustBomsQuery.data as any;
+    return Array.isArray(data?.data) ? data.data : [];
+  }, [robustBomsQuery.data]);
+
+  const loadDraftBomIntoRfq = () => {
+    if (!selectedBomPartId) {
+      setBomSourceMessage("Select an RFQ part before loading a draft BOM.");
+      return;
+    }
+
+    const draft = draftBomRecords.find((item) => item.id === selectedDraftBomId);
+    if (!draft) {
+      setBomSourceMessage("Select a draft BOM to load.");
+      return;
+    }
+
+    const sourceLines = draft.lines.filter((line) => line.action !== "Do Not Order" && !line.finalized);
+    const mappedLines: BomLineRow[] = sourceLines.map((line) => ({
+      rfqPartId: selectedBomPartId,
+      inventoryItemId: null,
+      childPartAgNumber: line.agPartNumber || "",
+      description: line.description,
+      category: mapDraftCategoryToEstimateCategory(line.category),
+      quantityPerPart: Number(line.qtyNeeded || 0),
+      uom: line.unit || "EA",
+      estimatedUnitCost: Number(line.unitCost || 0),
+      scrapPercent: 0,
+      isEstimated: line.unitCost === "",
+      isDraftInventoryItem: !line.agPartNumber,
+      vendorNameSnapshot: line.supplier || "",
+      materialSpec: line.manufacturer || "",
+      notes: [line.supplierItemId, line.note].filter(Boolean).join(" | "),
+    }));
+
+    setBomLines((prev) => [
+      ...prev.filter((line) => line.rfqPartId !== selectedBomPartId || line.id),
+      ...mappedLines,
+    ]);
+    setBomSourceMessage(`${mappedLines.length} line(s) loaded from ${draft.name}. Save individual lines to persist them to this RFQ.`);
+  };
+
+  const loadExistingBomIntoRfq = async () => {
+    if (!selectedBomPartId) {
+      setBomSourceMessage("Select an RFQ part before loading an existing BOM.");
+      return;
+    }
+
+    const selectedBom = existingBomRecords.find((bom: any) => bom.id === selectedExistingBomId);
+    const revisionId = selectedBom?.revisions?.find((revision: any) => revision.isReleased)?.id ?? selectedBom?.revisions?.[0]?.id;
+    if (!revisionId) {
+      setBomSourceMessage("Select an existing BOM with at least one revision.");
+      return;
+    }
+
+    const revision = await apiRequest(`/api/robust-boms/revisions/${revisionId}`);
+    const mappedLines: BomLineRow[] = (revision?.lines ?? []).map((line: any) => ({
+      rfqPartId: selectedBomPartId,
+      inventoryItemId: null,
+      childPartAgNumber: line.childPartAgNumber || "",
+      description: line.childInventoryItem?.name || line.childPartAgNumber || "BOM component",
+      category: "OTHER",
+      quantityPerPart: Number(line.quantityPer || 0),
+      uom: line.uom || line.childInventoryItem?.usageUnit || "EA",
+      estimatedUnitCost: Number(line.childInventoryItem?.costPer || 0),
+      scrapPercent: Number(line.scrapPercent || 0),
+      isEstimated: true,
+      isDraftInventoryItem: false,
+      vendorNameSnapshot: line.childInventoryItem?.source || "",
+      materialSpec: line.referenceDesignator || "",
+      notes: `Loaded from existing BOM ${selectedBom.code ?? selectedBom.id}`,
+    }));
+
+    setBomLines((prev) => [
+      ...prev.filter((line) => line.rfqPartId !== selectedBomPartId || line.id),
+      ...mappedLines,
+    ]);
+    setBomSourceMessage(`${mappedLines.length} line(s) loaded from existing BOM ${selectedBom.code ?? selectedBom.id}. Save individual lines to persist them to this RFQ.`);
+  };
+
+  const loadSelectedBomSource = async () => {
+    if (bomSourceType === "draft") {
+      loadDraftBomIntoRfq();
+      return;
+    }
+    await loadExistingBomIntoRfq();
   };
 
   const updateBomLine = (index: number, field: keyof BomLineRow, value: string | number | boolean | null) => {
@@ -1160,14 +1297,14 @@ export default function RFQBuilderPage() {
       <div className="border rounded-lg p-5">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold">RFQ Builder</h1>
+            <h1 className="text-2xl font-bold">ROM Builder</h1>
             <p className="text-sm text-muted-foreground">
-              Multi-step cost builder — header, tooling, material, labor, overhead, shipping
+              Multi-step ROM builder — header, tooling, material, labor, overhead, shipping
             </p>
           </div>
           <div className="flex gap-2">
             <button className="border rounded px-4 py-2" onClick={() => setLocation("/estimating")} type="button">
-              Back to RFQs
+              Back to ROM Builder
             </button>
             <button className="bg-primary text-primary-foreground rounded px-4 py-2 disabled:opacity-50"
               onClick={onSaveDraft} disabled={isSaving} type="button">
@@ -1287,6 +1424,68 @@ export default function RFQBuilderPage() {
           />
 
           {/* ── Step 3: BOM Builder (extracted component) ────────────────────── */}
+          <div className="border rounded-lg p-5 space-y-4">
+            <div>
+              <h2 className="text-lg font-semibold">BOM Source</h2>
+              <p className="text-sm text-muted-foreground">
+                Load material lines from a draft BOM or an existing released BOM instead of building every line manually.
+              </p>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-[180px_minmax(260px,1fr)_auto] lg:items-end">
+              <div>
+                <label className="block text-sm mb-1">Source Type</label>
+                <select
+                  className="w-full border rounded px-3 py-2"
+                  value={bomSourceType}
+                  onChange={(event) => setBomSourceType(event.target.value as "draft" | "existing")}
+                >
+                  <option value="draft">Draft BOM</option>
+                  <option value="existing">Existing BOM</option>
+                </select>
+              </div>
+
+              {bomSourceType === "draft" ? (
+                <div>
+                  <label className="block text-sm mb-1">Draft BOM</label>
+                  <select
+                    className="w-full border rounded px-3 py-2"
+                    value={selectedDraftBomId}
+                    onChange={(event) => setSelectedDraftBomId(event.target.value)}
+                  >
+                    {draftBomRecords.map((draft) => (
+                      <option key={draft.id} value={draft.id}>
+                        {draft.name} - {draft.revision} ({draft.lines.length} lines)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-sm mb-1">Existing BOM</label>
+                  <select
+                    className="w-full border rounded px-3 py-2"
+                    value={selectedExistingBomId}
+                    onChange={(event) => setSelectedExistingBomId(event.target.value)}
+                  >
+                    <option value="">Select an existing BOM</option>
+                    {existingBomRecords.map((bom: any) => (
+                      <option key={bom.id} value={bom.id}>
+                        {bom.code} - {bom.parentInventoryItem?.name ?? bom.parentPartAgNumber}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <button className="border rounded px-4 py-2" type="button" onClick={loadSelectedBomSource}>
+                Load BOM lines
+              </button>
+            </div>
+
+            {bomSourceMessage && <div className="rounded border px-3 py-2 text-sm">{bomSourceMessage}</div>}
+          </div>
+
           <RFQBuilderStep3Bom
             parts={parts} selectedBomPartId={selectedBomPartId}
             setSelectedBomPartId={setSelectedBomPartId} filteredBomLines={filteredBomLines}

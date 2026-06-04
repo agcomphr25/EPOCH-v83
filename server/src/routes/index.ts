@@ -54,6 +54,7 @@ import communicationsRoutes from './communications';
 import marketingRoutes from './marketing';
 import internalMessagesRoutes from './internalMessages';
 import nonconformanceRoutes from '../../routes/nonconformance';
+import nonConformingItemsRoutes from './nonConformingItems';
 import paymentsRoutes from './payments';
 import algorithmicSchedulerRoutes from './algorithmicScheduler';
 import productionQueueRoutes from './productionQueue';
@@ -135,6 +136,7 @@ import projectsRoutes from './projects';
 import projectStepAttachmentsRoutes from './projectStepAttachments';
 import projectClosingsRoutes from './projectClosings';
 import pmDashboardRoutes from './pmDashboard';
+import programManufacturingRoutes from './programManufacturing';
 import quoteFeedbackRoutes from './quoteFeedback';
 import modelAnalyticsRoutes from './modelAnalytics';
 import aqlSamplingRoutes from './aqlSampling';
@@ -222,6 +224,7 @@ import {
 import cncDashboardRoutes from './cncDashboard';
 import receivingRoutes from './receiving';
 import estimatingRoutes from './estimating';
+import rfqRiskSessionsRoutes from './rfqRiskSessions';
 import auditsRoutes from './audits';
 import commandCenterRoutes from './commandCenter';
 import edriRoutes from './edri';
@@ -457,7 +460,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   // P2 Production Queue routes
   app.use('/api/p2-production-queue', p2ProductionQueueRoutes);
   
-  // P2 Serialized Items - scrapped/nonconforming list (inline to avoid router mount ordering issues)
+  // P2 Serialized Items - open nonconforming list (inline to avoid router mount ordering issues)
   app.get('/api/p2/serialized-items/scrapped', async (req, res) => {
     try {
       const { db } = await import('../../db');
@@ -468,23 +471,65 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         orderBy: (t: any, { desc: d }: any) => [d(t.scrapAt)],
       });
 
-      // Enrich with disposition info
+      // Enrich with the latest disposition and return only open NCR items.
+      // The serialized item status is still SCRAPPED for compatibility, but
+      // operationally this endpoint is the open nonconforming attention queue.
       const itemIds = units.map((u: any) => u.id);
       let dispositions: any[] = [];
       if (itemIds.length > 0) {
         dispositions = await db
           .select()
           .from(p2NonconformingDispositions)
-          .where(inArray(p2NonconformingDispositions.serializedItemId, itemIds));
+          .where(inArray(p2NonconformingDispositions.serializedItemId, itemIds))
+          .orderBy(desc(p2NonconformingDispositions.createdAt));
       }
-      const dispositionMap = new Map(dispositions.map((d: any) => [d.serializedItemId, d]));
-      const enriched = units.map((u: any) => ({
-        ...u,
-        disposition: dispositionMap.get(u.id) || null,
-      }));
+      const dispositionMap = new Map();
+      dispositions.forEach((d: any) => {
+        if (!dispositionMap.has(d.serializedItemId)) {
+          dispositionMap.set(d.serializedItemId, d);
+        }
+      });
+      const enriched = units
+        .map((u: any) => ({
+          ...u,
+          disposition: dispositionMap.get(u.id) || null,
+        }))
+        .filter((u: any) => !u.disposition || u.disposition.resolved !== true);
       res.json(enriched);
     } catch (err: any) {
-      res.status(500).json({ error: err?.message || 'Failed to fetch scrapped items' });
+      res.status(500).json({ error: err?.message || 'Failed to fetch open nonconforming items' });
+    }
+  });
+
+  // P2 Serialized Items - closed NCR history
+  app.get('/api/p2/serialized-items/closed-ncr', async (req, res) => {
+    try {
+      const { db } = await import('../../db');
+      const { p2SerializedItems, p2NonconformingDispositions } = await import('../../schema');
+      const { eq, desc } = await import('drizzle-orm');
+
+      const rows = await db
+        .select({
+          item: p2SerializedItems,
+          disposition: p2NonconformingDispositions,
+        })
+        .from(p2NonconformingDispositions)
+        .innerJoin(
+          p2SerializedItems,
+          eq(p2NonconformingDispositions.serializedItemId, p2SerializedItems.id),
+        )
+        .where(eq(p2NonconformingDispositions.resolved, true))
+        .orderBy(
+          desc(p2NonconformingDispositions.resolvedAt),
+          desc(p2NonconformingDispositions.createdAt),
+        );
+
+      res.json(rows.map((row: any) => ({
+        ...row.item,
+        disposition: row.disposition,
+      })));
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || 'Failed to fetch closed NCR items' });
     }
   });
 
@@ -513,12 +558,17 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         p2NonconformingDispositions,
         p2Rmas,
         p2SerializedItems,
+        p2SerializedItemEvents,
+        travelers,
+        travelerSteps,
         p2PurchaseOrders,
         inventoryItems,
         inventoryBalances,
+        inventoryTransactions,
         insertP2NonconformingDispositionSchema,
+        P2_DEPARTMENT_STAGES,
       } = await import('../../schema');
-      const { eq } = await import('drizzle-orm');
+      const { eq, sql } = await import('drizzle-orm');
 
       const parsed = insertP2NonconformingDispositionSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -526,6 +576,23 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       }
 
       const data = parsed.data;
+      const useAsIsDestination = req.body?.useAsIsDestination === 'production'
+        ? 'production'
+        : 'inventory';
+      const returnProjectId = typeof req.body?.returnProjectId === 'string' && req.body.returnProjectId.trim()
+        ? req.body.returnProjectId.trim()
+        : null;
+      const returnDepartment = typeof req.body?.returnDepartment === 'string' && req.body.returnDepartment.trim()
+        ? req.body.returnDepartment.trim()
+        : null;
+
+      if (data.dispositionType === 'Use as Is' && useAsIsDestination === 'production') {
+        if (!returnProjectId || !returnDepartment) {
+          return res.status(400).json({
+            error: 'Use as Is return-to-production requires project and department',
+          });
+        }
+      }
 
       // Resolve instantly for dispositions that don't require further action
       // Use as Is → inventory added, then resolved; Repair → stays open until RMA complete
@@ -569,7 +636,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           }
         }
       } else if (data.dispositionType === 'Use as Is') {
-        // Add item to inventory bank
+        // Use as Is can either capture the serial as inventory-on-hand or
+        // return it to production at the selected project/department.
         try {
           const [item] = await db
             .select()
@@ -577,63 +645,189 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
             .where(eq(p2SerializedItems.id, data.serializedItemId))
             .limit(1);
           if (item) {
-            // Check if inventory item exists for this part number
-            const [invItem] = await db
-              .select()
-              .from(inventoryItems)
-              .where(eq(inventoryItems.agPartNumber, item.partNumber))
-              .limit(1);
-            // Ensure an inventory_items record exists for this part
-            const effectiveInvItem = invItem || await db
-              .insert(inventoryItems)
-              .values({
-                agPartNumber: item.partNumber,
-                name: item.partName || item.partNumber,
-                source: 'P2 Nonconforming (Use as Is)',
-                notes: `Created by nonconforming disposition for S/N ${data.serialNumber}`,
-                isActive: true,
-                createdAt: new Date(),
-                updatedAt: new Date(),
-              })
-              .returning()
-              .then(([r]) => r);
+            const metadata = (item.metadata as Record<string, unknown> | null) || {};
 
-            if (effectiveInvItem) {
-              // Upsert inventory balance in WAREHOUSE-MAIN location
-              const [existingBalance] = await db
+            if (useAsIsDestination === 'inventory') {
+              // Check if inventory item exists for this part number
+              const [invItem] = await db
                 .select()
-                .from(inventoryBalances)
-                .where(eq(inventoryBalances.agPartNumber, item.partNumber))
+                .from(inventoryItems)
+                .where(eq(inventoryItems.agPartNumber, item.partNumber))
                 .limit(1);
-              if (existingBalance) {
+              // Ensure an inventory_items record exists for this part
+              const effectiveInvItem = invItem || await db
+                .insert(inventoryItems)
+                .values({
+                  agPartNumber: item.partNumber,
+                  name: item.partName || item.partNumber,
+                  source: 'P2 Nonconforming (Use as Is)',
+                  notes: `Created by nonconforming disposition for S/N ${data.serialNumber}`,
+                  isActive: true,
+                  createdAt: new Date(),
+                  updatedAt: new Date(),
+                })
+                .returning()
+                .then(([r]) => r);
+
+              if (effectiveInvItem) {
+                // Upsert inventory balance in WAREHOUSE-MAIN location
+                const [existingBalance] = await db
+                  .select()
+                  .from(inventoryBalances)
+                  .where(eq(inventoryBalances.agPartNumber, item.partNumber))
+                  .limit(1);
+                if (existingBalance) {
+                  await db
+                    .update(inventoryBalances)
+                    .set({
+                      quantityOnHand: existingBalance.quantityOnHand + 1,
+                      quantityAvailable: existingBalance.quantityAvailable + 1,
+                      updatedAt: new Date(),
+                    })
+                    .where(eq(inventoryBalances.id, existingBalance.id));
+                } else {
+                  await db
+                    .insert(inventoryBalances)
+                    .values({
+                      agPartNumber: item.partNumber,
+                      locationId: 'WAREHOUSE-MAIN',
+                      quantityOnHand: 1,
+                      quantityAllocated: 0,
+                      quantityAvailable: 1,
+                      createdAt: new Date(),
+                      updatedAt: new Date(),
+                    });
+                }
+
                 await db
-                  .update(inventoryBalances)
+                  .update(inventoryItems)
                   .set({
-                    quantityOnHand: existingBalance.quantityOnHand + 1,
-                    quantityAvailable: existingBalance.quantityAvailable + 1,
+                    quantityInStock: sql`COALESCE(${inventoryItems.quantityInStock}, 0) + 1`,
+                    onHand: sql`COALESCE(${inventoryItems.onHand}, 0) + 1`,
+                    available: sql`COALESCE(${inventoryItems.available}, 0) + 1`,
+                    lastUpdated: new Date(),
                     updatedAt: new Date(),
                   })
-                  .where(eq(inventoryBalances.id, existingBalance.id));
-              } else {
-                await db
-                  .insert(inventoryBalances)
-                  .values({
-                    agPartNumber: item.partNumber,
-                    locationId: 'WAREHOUSE-MAIN',
-                    quantityOnHand: 1,
-                    quantityAllocated: 0,
-                    quantityAvailable: 1,
-                    createdAt: new Date(),
-                    updatedAt: new Date(),
-                  });
+                  .where(eq(inventoryItems.id, effectiveInvItem.id));
+
+                await db.insert(inventoryTransactions).values({
+                  agPartNumber: item.partNumber,
+                  transactionType: 'return',
+                  quantity: 1,
+                  unitOfMeasure: 'EA',
+                  fromLocation: 'P2 Nonconforming',
+                  toLocation: 'WAREHOUSE-MAIN',
+                  referenceType: 'P2_NCR_USE_AS_IS',
+                  referenceId: String(disposition.id),
+                  notes: `Use As Is inventory capture for serialized item ${item.serialNumber}`,
+                  performedBy: data.authorization,
+                  metadata: {
+                    serializedItemId: item.id,
+                    serialNumber: item.serialNumber,
+                    travelerBarcode: item.travelerBarcode,
+                    dispositionId: disposition.id,
+                    poId: item.poId,
+                    poNumber: item.poNumber,
+                    reasonType: data.reasonType,
+                    reasonOther: data.reasonOther,
+                  },
+                });
               }
+
+              await db.update(p2SerializedItems)
+                .set({
+                  status: 'COMPLETED',
+                  currentDepartment: 'Inventory',
+                  metadata: {
+                    ...metadata,
+                    useAsIsDisposition: {
+                      destination: 'inventory',
+                      dispositionId: disposition.id,
+                      inventoryPartNumber: item.partNumber,
+                      locationId: 'WAREHOUSE-MAIN',
+                      reasonType: data.reasonType,
+                      reasonOther: data.reasonOther,
+                      recordedAt: new Date().toISOString(),
+                    },
+                  },
+                  updatedAt: new Date(),
+                })
+                .where(eq(p2SerializedItems.id, item.id));
+
+              await db.insert(p2SerializedItemEvents).values({
+                serializedItemId: item.id,
+                barcode: item.barcode,
+                eventType: 'NCR_USE_AS_IS_INVENTORY',
+                fromDepartment: item.currentDepartment,
+                toDepartment: 'Inventory',
+                toStageIndex: item.currentStageIndex,
+                performedBy: data.authorization,
+                notes: `Use As Is disposition sent to inventory under ${item.partNumber}`,
+                metadata: {
+                  dispositionId: disposition.id,
+                  serialNumber: item.serialNumber,
+                  travelerBarcode: item.travelerBarcode,
+                  locationId: 'WAREHOUSE-MAIN',
+                  reasonType: data.reasonType,
+                  reasonOther: data.reasonOther,
+                },
+              });
+            } else {
+              const p2Stages = ['Pending Layup', ...P2_DEPARTMENT_STAGES] as string[];
+              const nextDepartment = returnDepartment || 'Pending Layup';
+              const stageIndex = Math.max(0, p2Stages.indexOf(nextDepartment));
+
+              await db.update(p2SerializedItems)
+                .set({
+                  status: 'ACTIVE',
+                  currentDepartment: nextDepartment,
+                  currentStageIndex: stageIndex,
+                  scrapReason: null,
+                  scrapBy: null,
+                  scrapAt: null,
+                  metadata: {
+                    ...metadata,
+                    useAsIsDisposition: {
+                      destination: 'production',
+                      dispositionId: disposition.id,
+                      returnProjectId,
+                      returnDepartment: nextDepartment,
+                      reasonType: data.reasonType,
+                      reasonOther: data.reasonOther,
+                      recordedAt: new Date().toISOString(),
+                    },
+                  },
+                  updatedAt: new Date(),
+                })
+                .where(eq(p2SerializedItems.id, item.id));
+
+              await db.insert(p2SerializedItemEvents).values({
+                serializedItemId: item.id,
+                barcode: item.barcode,
+                eventType: 'NCR_USE_AS_IS_PRODUCTION',
+                fromDepartment: item.currentDepartment,
+                fromStageIndex: item.currentStageIndex,
+                toDepartment: nextDepartment,
+                toStageIndex: stageIndex,
+                performedBy: data.authorization,
+                notes: `Use As Is disposition returned to production at ${nextDepartment}`,
+                metadata: {
+                  dispositionId: disposition.id,
+                  serialNumber: item.serialNumber,
+                  travelerBarcode: item.travelerBarcode,
+                  returnProjectId,
+                  returnDepartment: nextDepartment,
+                  reasonType: data.reasonType,
+                  reasonOther: data.reasonOther,
+                },
+              });
             }
           }
         } catch (e) {
-          console.error('Failed to add item to inventory bank:', e);
+          console.error('Failed to apply Use as Is disposition:', e);
         }
       } else if (data.dispositionType === 'Repair') {
-        // Create an open RMA record
+        // Create an open repair RMA and return the original serial to a Repair queue.
         try {
           const now = new Date();
           const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
@@ -649,7 +843,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           }
           const rmaNumber = `RMA-P2-${dateStr}-${maxSeq + 1}`;
 
-          await db
+          const [rma] = await db
             .insert(p2Rmas)
             .values({
               dispositionId: disposition.id,
@@ -659,7 +853,86 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
               traceableMaterials: [],
               createdAt: new Date(),
               updatedAt: new Date(),
+            })
+            .returning();
+
+          const [item] = await db
+            .select()
+            .from(p2SerializedItems)
+            .where(eq(p2SerializedItems.id, data.serializedItemId))
+            .limit(1);
+
+          if (item) {
+            const metadata = (item.metadata as Record<string, unknown> | null) || {};
+            const [activeTraveler] = item.serialNumber
+              ? await db
+                  .select()
+                  .from(travelers)
+                  .where(eq(travelers.serialNumber, item.serialNumber))
+                  .orderBy(sql`${travelers.updatedAt} DESC NULLS LAST`, sql`${travelers.createdAt} DESC NULLS LAST`)
+                  .limit(1)
+              : [];
+
+            await db.update(p2SerializedItems)
+              .set({
+                status: 'ACTIVE',
+                currentDepartment: 'Repair',
+                metadata: {
+                  ...metadata,
+                  repairDisposition: {
+                    dispositionId: disposition.id,
+                    rmaId: rma.id,
+                    rmaNumber,
+                    reasonType: data.reasonType,
+                    reasonOther: data.reasonOther,
+                    routedAt: new Date().toISOString(),
+                  },
+                },
+                updatedAt: new Date(),
+              })
+              .where(eq(p2SerializedItems.id, item.id));
+
+            let repairStepId: string | null = null;
+            if (activeTraveler) {
+              const [maxStepRow] = await db
+                .select({ maxStep: sql<number>`COALESCE(MAX(${travelerSteps.stepNumber}), 0)` })
+                .from(travelerSteps)
+                .where(eq(travelerSteps.travelerId, activeTraveler.id));
+              const nextStepNumber = Number(maxStepRow?.maxStep || 0) + 1;
+              const [repairStep] = await db.insert(travelerSteps)
+                .values({
+                  travelerId: activeTraveler.id,
+                  departmentName: 'Repair',
+                  stepNumber: nextStepNumber,
+                  status: 'NOT_STARTED',
+                  notes: `Repair step created from NCR disposition ${disposition.id} / ${rmaNumber}`,
+                })
+                .returning({ id: travelerSteps.id });
+              repairStepId = repairStep?.id ?? null;
+            }
+
+            await db.insert(p2SerializedItemEvents).values({
+              serializedItemId: item.id,
+              barcode: item.barcode,
+              eventType: 'NCR_DISPOSITION_REPAIR',
+              fromDepartment: item.currentDepartment,
+              fromStageIndex: item.currentStageIndex,
+              toDepartment: 'Repair',
+              toStageIndex: item.currentStageIndex,
+              performedBy: data.authorization,
+              notes: `Repair disposition opened as ${rmaNumber}`,
+              metadata: {
+                dispositionId: disposition.id,
+                rmaId: rma.id,
+                rmaNumber,
+                travelerId: activeTraveler?.id ?? null,
+                travelerNumber: activeTraveler?.travelerNumber ?? null,
+                repairStepId,
+                reasonType: data.reasonType,
+                reasonOther: data.reasonOther,
+              },
             });
+          }
         } catch (e) {
           console.error('Failed to create RMA for disposition:', e);
         }
@@ -690,8 +963,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     }
   });
 
-  // P2 RMAs - GET all open RMAs
-  app.get('/api/p2/rmas', async (req, res) => {
+  // P2 Nonconforming RMAs - production repair RMAs from P2 NCR dispositions.
+  // Keep this path separate from /api/p2/rmas, which is used for customer shipping RMAs.
+  app.get('/api/p2/nonconforming-rmas', async (req, res) => {
     try {
       const { db } = await import('../../db');
       const { p2Rmas, p2NonconformingDispositions, p2SerializedItems } = await import('../../schema');
@@ -712,12 +986,12 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     }
   });
 
-  // P2 RMAs - PATCH add materials and/or mark shipped/complete
-  app.patch('/api/p2/rmas/:id', async (req, res) => {
+  // P2 Nonconforming RMAs - PATCH add materials and/or mark shipped/complete
+  app.patch('/api/p2/nonconforming-rmas/:id', async (req, res) => {
     try {
       const { db } = await import('../../db');
-      const { p2Rmas } = await import('../../schema');
-      const { eq } = await import('drizzle-orm');
+      const { p2Rmas, p2SerializedItems, p2SerializedItemEvents, inventoryTransactions, travelers, travelerSteps } = await import('../../schema');
+      const { and, eq, sql } = await import('drizzle-orm');
       const { traceableMaterials, status, notes } = req.body;
 
       const updateData: any = { updatedAt: new Date() };
@@ -733,12 +1007,130 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         updateData.status = status;
       }
 
+      const [existingRma] = await db
+        .select()
+        .from(p2Rmas)
+        .where(eq(p2Rmas.id, parseInt(req.params.id)))
+        .limit(1);
+      if (!existingRma) return res.status(404).json({ error: 'RMA not found' });
+
       const [updated] = await db
         .update(p2Rmas)
         .set(updateData)
         .where(eq(p2Rmas.id, parseInt(req.params.id)))
         .returning();
       if (!updated) return res.status(404).json({ error: 'RMA not found' });
+
+      if (traceableMaterials !== undefined) {
+        const [item] = await db
+          .select()
+          .from(p2SerializedItems)
+          .where(eq(p2SerializedItems.id, updated.serializedItemId))
+          .limit(1);
+
+        if (item) {
+          const [activeTraveler] = item.serialNumber
+            ? await db
+                .select()
+                .from(travelers)
+                .where(eq(travelers.serialNumber, item.serialNumber))
+                .orderBy(sql`${travelers.updatedAt} DESC NULLS LAST`, sql`${travelers.createdAt} DESC NULLS LAST`)
+                .limit(1)
+            : [];
+          const [repairStep] = activeTraveler
+            ? await db
+                .select()
+                .from(travelerSteps)
+                .where(and(eq(travelerSteps.travelerId, activeTraveler.id), eq(travelerSteps.departmentName, 'Repair')))
+                .orderBy(sql`${travelerSteps.stepNumber} DESC`)
+                .limit(1)
+            : [];
+          const materialSummary = (traceableMaterials as Array<{ name?: string; partNumber?: string; lot?: string; qty?: string }>)
+            .map((material) => {
+              const label = [material.partNumber, material.name].filter(Boolean).join(' - ');
+              return [label, material.lot ? `lot ${material.lot}` : null, material.qty ? `qty ${material.qty}` : null]
+                .filter(Boolean)
+                .join(', ');
+            })
+            .filter(Boolean)
+            .join('; ');
+
+          if (repairStep && materialSummary) {
+            const existingNotes = String(repairStep.notes || '')
+              .split('\n')
+              .filter((line) => !line.startsWith('Repair materials:'))
+              .join('\n')
+              .trim();
+            await db.update(travelerSteps)
+              .set({
+                notes: [existingNotes, `Repair materials: ${materialSummary}`].filter(Boolean).join('\n'),
+              })
+              .where(eq(travelerSteps.id, repairStep.id));
+          }
+
+          await db.insert(p2SerializedItemEvents).values({
+            serializedItemId: item.id,
+            barcode: item.barcode,
+            eventType: 'NCR_REPAIR_MATERIAL_USED',
+            toDepartment: 'Repair',
+            toStageIndex: item.currentStageIndex,
+            performedBy: 'Repair',
+            notes: `Repair material traceability updated for RMA ${updated.rmaNumber}`,
+            metadata: {
+              rmaId: updated.id,
+              rmaNumber: updated.rmaNumber,
+              traceableMaterials,
+            },
+          });
+
+          const previousMaterials = Array.isArray(existingRma.traceableMaterials)
+            ? existingRma.traceableMaterials as Array<{ name?: string; partNumber?: string; lot?: string; qty?: string }>
+            : [];
+          const previousKeys = new Set(previousMaterials.map((material) =>
+            [
+              String(material.partNumber || '').trim(),
+              String(material.name || '').trim(),
+              String(material.lot || '').trim(),
+              String(material.qty || '').trim(),
+            ].join('|')
+          ));
+
+          for (const material of traceableMaterials as Array<{ name?: string; partNumber?: string; lot?: string; qty?: string }>) {
+            const partNumber = String(material.partNumber || '').trim();
+            if (!partNumber) continue;
+            const materialKey = [
+              partNumber,
+              String(material.name || '').trim(),
+              String(material.lot || '').trim(),
+              String(material.qty || '').trim(),
+            ].join('|');
+            if (previousKeys.has(materialKey)) continue;
+            const quantity = Number(material.qty || 0);
+            await db.insert(inventoryTransactions).values({
+              agPartNumber: partNumber,
+              transactionType: 'issue',
+              quantity: Number.isFinite(quantity) && quantity > 0 ? -quantity : 0,
+              unitOfMeasure: 'EA',
+              fromLocation: 'Inventory',
+              toLocation: 'P2 Repair',
+              referenceType: 'P2_NCR_REPAIR',
+              referenceId: String(updated.id),
+              notes: `Repair material used for ${item.serialNumber}: ${material.name || partNumber}`,
+              performedBy: 'Repair',
+              metadata: {
+                rmaId: updated.id,
+                rmaNumber: updated.rmaNumber,
+                serializedItemId: item.id,
+                serialNumber: item.serialNumber,
+                materialName: material.name || null,
+                materialPartNumber: partNumber,
+                lot: material.lot || null,
+                qty: material.qty || null,
+              },
+            });
+          }
+        }
+      }
 
       // When RMA is marked complete, resolve the linked disposition
       if (status === 'complete' && updated.dispositionId) {
@@ -1010,6 +1402,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // Nonconformance tracking routes
   app.use('/api/nonconformance', nonconformanceRoutes);
+  app.use('/api/non-conforming-items', nonConformingItemsRoutes);
 
   // Payment processing routes
   app.use('/api/payments', paymentsRoutes);
@@ -1067,6 +1460,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // PM Control Center dashboard routes
   app.use('/api/pm-dashboard', pmDashboardRoutes);
+
+  // Program Manufacturing Orchestration routes
+  app.use('/api/program-manufacturing', programManufacturingRoutes);
 
   // P2 Projects routes
   app.use('/api/projects', projectsRoutes);
@@ -2472,7 +2868,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         toleranceAuthorizerId, toleranceAuthorizerName, toleranceNotes, notes, lineItems,
         assignedToId, assignedToName, productionLeadId, productionLeadName,
         customerName: bodyCustomerName, poDate: bodyPoDate, status: bodyStatus,
-        sourceQuoteId, projectName, contractReviewRole,
+        sourceQuoteId, projectId, projectName, contractReviewRole,
       } = req.body;
       
       // Use the customer-provided PO number — accept either field name
@@ -2509,6 +2905,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         productionLeadName: productionLeadName || null,
         sourceQuoteId: sourceQuoteId || null,
         contractReviewRole: contractReviewRole === 'primary' ? 'primary' : 'secondary',
+        projectId: projectId || null,
         projectName: projectName || null,
       };
       
@@ -2900,39 +3297,297 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     }
   });
 
+  function normalizeP2ControlDepartment(department: unknown): string {
+    const raw = String(department || '').trim();
+    if (!raw) return '';
+
+    const key = raw.toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ');
+    const canonical: Record<string, string> = {
+      'pending layup': 'Pending Layup',
+      layup: 'Layup',
+      'assemble disassembly': 'Assemble/Disassembly',
+      'assembly disassembly': 'Assemble/Disassembly',
+      assembly: 'Assemble/Disassembly',
+      cnc: 'CNC',
+      finish: 'Finish',
+      paint: 'Paint',
+      'final qc': 'Final QC',
+      qc: 'Final QC',
+      shipping: 'Shipping',
+      completed: 'Completed',
+      complete: 'Completed',
+      'cutting table': 'Cutting Table',
+    };
+
+    return canonical[key] || raw;
+  }
+
+  async function applyTravelerStateToP2Items(items: any[]): Promise<any[]> {
+    if (!items.length) return items;
+
+    const getSerializedKeys = (item: any) => [
+      item.serialNumber,
+      item.serial_number,
+      item.barcode,
+      item.travelerBarcode,
+      item.traveler_barcode,
+    ]
+      .map((value) => String(value ?? '').trim().toLowerCase())
+      .filter(Boolean);
+
+    const serials = [...new Set(
+      items.flatMap(getSerializedKeys)
+    )];
+    if (!serials.length) return items;
+
+    const { pool: dbPool } = await import('../../db');
+    const travelerStateRows = await dbPool.query(
+      `WITH traveler_keys AS (
+         SELECT
+           LOWER(TRIM(key_value)) AS serial,
+           t.status,
+           t.off_system_completion_link IS NOT NULL AS is_off_system_completion,
+           t.traveler_number,
+           t.updated_at,
+           active_step.department_name,
+           active_step.started_at
+         FROM travelers t
+         LEFT JOIN LATERAL (
+           SELECT ts.department_name, ts.started_at
+           FROM traveler_steps ts
+           WHERE ts.traveler_id = t.id
+             AND UPPER(ts.status) IN ('IN_PROGRESS', 'ACTIVE', 'STARTED')
+           ORDER BY ts.step_number ASC
+           LIMIT 1
+         ) active_step ON true
+         CROSS JOIN LATERAL (
+           VALUES (t.serial_number), (t.lot_number)
+         ) AS key_values(key_value)
+         WHERE key_value IS NOT NULL
+           AND TRIM(key_value) <> ''
+           AND LOWER(TRIM(key_value)) = ANY($1::text[])
+           AND UPPER(t.status) IN ('IN_PROGRESS', 'COMPLETED')
+       )
+       SELECT DISTINCT ON (serial)
+         serial,
+         t.status,
+         t.is_off_system_completion AS "isOffSystemCompletion",
+         t.traveler_number AS "travelerNumber",
+         t.updated_at AS "updatedAt",
+         t.department_name AS "activeDepartment",
+         t.started_at AS "startedAt"
+       FROM traveler_keys t
+       ORDER BY serial,
+         CASE WHEN UPPER(t.status) = 'COMPLETED' AND t.is_off_system_completion THEN 0 ELSE 1 END,
+         CASE WHEN UPPER(t.status) = 'IN_PROGRESS' THEN 0 ELSE 1 END,
+         t.updated_at DESC NULLS LAST`,
+      [serials]
+    );
+    const rows = (travelerStateRows as any).rows ?? travelerStateRows;
+    const travelerBySerial = new Map<string, any>(
+      rows.map((row: any) => [row.serial, row])
+    );
+
+    return items.map((item: any) => {
+      const serializedStatus = String(item.status || item.productionStatus || item.production_status || '').toUpperCase();
+      if (serializedStatus && serializedStatus !== 'ACTIVE') {
+        return item;
+      }
+
+      const travelerState = getSerializedKeys(item)
+        .map((key) => travelerBySerial.get(key))
+        .find(Boolean);
+      if (!travelerState) return item;
+
+      const travelerStatus = String(travelerState.status || '').toUpperCase();
+      if (travelerStatus === 'COMPLETED') {
+        return {
+          ...item,
+          status: 'COMPLETED',
+          completedAt: item.completedAt ?? item.completed_at ?? travelerState.updatedAt ?? new Date(),
+          completed_at: item.completed_at ?? item.completedAt ?? travelerState.updatedAt ?? new Date(),
+          activeTravelerNumber: travelerState.travelerNumber ?? item.activeTravelerNumber ?? null,
+        };
+      }
+
+      const activeDepartment = normalizeP2ControlDepartment(travelerState.activeDepartment);
+      return {
+        ...item,
+        status: 'ACTIVE',
+        currentDepartment: activeDepartment || normalizeP2ControlDepartment(item.currentDepartment) || item.currentDepartment,
+        current_department: activeDepartment || normalizeP2ControlDepartment(item.current_department) || item.current_department,
+        activeTravelerNumber: travelerState.travelerNumber ?? item.activeTravelerNumber ?? null,
+        activeTravelerStartedAt: travelerState.startedAt ?? item.activeTravelerStartedAt ?? null,
+      };
+    });
+  }
+
+  function p2ControlRows<T = any>(result: any): T[] {
+    return Array.isArray(result) ? result : (result?.rows ?? []);
+  }
+
+  function normalizeP2ControlPartKey(value: unknown): string {
+    return String(value || '').trim().toLowerCase();
+  }
+
+  function getP2ControlWadStatusLabel(status: string): string {
+    const labels: Record<string, string> = {
+      WAD_READY: 'WAD ready',
+      WAD_INCOMPLETE: 'WAD incomplete',
+      WAD_MISSING: 'WAD missing',
+      WAD_NOT_MATCHED: 'WAD not matched',
+      NO_PROJECT_LINK: 'No project link',
+    };
+    return labels[status] || 'WAD unknown';
+  }
+
+  function buildP2ProjectWadContext(project: any, summary: any) {
+    const linkedWadCount = Number(summary?.wadCount ?? 0);
+    const approvedWadCount = Number(summary?.approvedWadCount ?? 0);
+    const releasedWadCount = Number(summary?.releasedWadCount ?? 0);
+    const status = !project?.projectId
+      ? 'NO_PROJECT_LINK'
+      : linkedWadCount === 0
+        ? 'WAD_MISSING'
+        : (approvedWadCount > 0 || releasedWadCount > 0)
+          ? 'WAD_READY'
+          : 'WAD_INCOMPLETE';
+
+    return {
+      linkedWadCount,
+      approvedWadCount,
+      releasedWadCount,
+      wadNumbers: summary?.wadNumbers ?? null,
+      p2WadConnectionStatus: status,
+      p2WadConnectionLabel: getP2ControlWadStatusLabel(status),
+    };
+  }
+
+  function buildP2ItemWadContext(
+    project: any,
+    partNumber: unknown,
+    wadByProjectPart: Map<string, any>,
+    wadSummaryByProject: Map<string, any>,
+  ) {
+    if (!project?.projectId) {
+      const status = 'NO_PROJECT_LINK';
+      return {
+        linkedWadId: null,
+        linkedWadNumber: null,
+        linkedWadStatus: null,
+        linkedWadWorkOrderStatus: null,
+        p2WadConnectionStatus: status,
+        p2WadConnectionLabel: getP2ControlWadStatusLabel(status),
+      };
+    }
+
+    const projectId = String(project.projectId);
+    const partKey = normalizeP2ControlPartKey(partNumber);
+    const matchedWad = partKey ? wadByProjectPart.get(`${projectId}:${partKey}`) : null;
+    const projectSummary = wadSummaryByProject.get(projectId);
+
+    if (!matchedWad) {
+      const status = Number(projectSummary?.wadCount ?? 0) > 0 ? 'WAD_NOT_MATCHED' : 'WAD_MISSING';
+      return {
+        linkedWadId: null,
+        linkedWadNumber: null,
+        linkedWadStatus: null,
+        linkedWadWorkOrderStatus: null,
+        p2WadConnectionStatus: status,
+        p2WadConnectionLabel: getP2ControlWadStatusLabel(status),
+      };
+    }
+
+    const wadStatus = String(matchedWad.wadStatus || '').toUpperCase();
+    const workOrderStatus = String(matchedWad.status || '').toUpperCase();
+    const status = wadStatus === 'APPROVED'
+      || ['RELEASED', 'IN_PROGRESS', 'COMPLETE', 'COMPLETED', 'CLOSED'].includes(workOrderStatus)
+      ? 'WAD_READY'
+      : 'WAD_INCOMPLETE';
+
+    return {
+      linkedWadId: matchedWad.id ?? null,
+      linkedWadNumber: matchedWad.workOrderNumber ?? null,
+      linkedWadStatus: matchedWad.wadStatus ?? null,
+      linkedWadWorkOrderStatus: matchedWad.status ?? null,
+      p2WadConnectionStatus: status,
+      p2WadConnectionLabel: getP2ControlWadStatusLabel(status),
+    };
+  }
+
   // P2 Control Center API Routes
   app.get('/api/p2/control-center/stats', async (req, res) => {
     try {
+      const { ensureProductionWorkflowReadSchema } = await import('../lib/productionWorkflowReadiness');
+      await ensureProductionWorkflowReadSchema();
       const { pool } = await import('../../db');
       const oneWeekAgo = new Date();
       oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
 
-      const [poStats, itemStats] = await Promise.all([
+      const [poStats, itemStats, legacyStats] = await Promise.all([
         pool.query(`
           SELECT
-            COUNT(*) FILTER (WHERE status NOT IN ('COMPLETED','CANCELED')) AS "openPOs",
-            COUNT(*) FILTER (WHERE bom_configured = false AND status NOT IN ('COMPLETED','CANCELED')) AS "pendingBOMs"
+            COUNT(*) FILTER (WHERE COALESCE(UPPER(status), '') NOT IN ('COMPLETED','CLOSED','CANCELED','CANCELLED')) AS "openPOs",
+            COUNT(*) FILTER (
+              WHERE bom_configured = false
+                AND COALESCE(UPPER(status), '') NOT IN ('COMPLETED','CLOSED','CANCELED','CANCELLED')
+            ) AS "pendingBOMs"
           FROM p2_purchase_orders
         `),
         pool.query(`
+          WITH item_state AS (
+            SELECT
+              psi.*,
+              EXISTS (
+                SELECT 1
+                FROM travelers t
+                WHERE t.status = 'COMPLETED'
+                  AND t.serial_number IS NOT NULL
+                  AND LOWER(TRIM(t.serial_number)) = LOWER(TRIM(psi.serial_number))
+              ) AS has_completed_traveler
+            FROM p2_serialized_items psi
+          )
           SELECT
-            COUNT(*) FILTER (WHERE status = 'SCHEDULED') AS "scheduledItems",
-            COUNT(*) FILTER (WHERE status NOT IN ('PENDING','SCHEDULED','COMPLETED','SHIPPED') AND status IS NOT NULL) AS "inProduction",
-            COUNT(*) FILTER (WHERE status = 'COMPLETED' AND completed_at > $1) AS "completedThisWeek",
-            COUNT(*) FILTER (WHERE status = 'FINAL_QC') AS "pendingQC"
-          FROM p2_serialized_items
+            COUNT(*) FILTER (WHERE status = 'SCHEDULED' AND NOT has_completed_traveler) AS "scheduledItems",
+            COUNT(*) FILTER (
+              WHERE status NOT IN ('PENDING','SCHEDULED','COMPLETED','SHIPPED')
+                AND status IS NOT NULL
+                AND NOT has_completed_traveler
+            ) AS "inProduction",
+            COUNT(*) FILTER (
+              WHERE (status = 'COMPLETED' OR has_completed_traveler)
+                AND COALESCE(completed_at, updated_at) > $1
+            ) AS "completedThisWeek",
+            COUNT(*) FILTER (WHERE status = 'FINAL_QC' AND NOT has_completed_traveler) AS "pendingQC"
+          FROM item_state
+        `, [oneWeekAgo]),
+        pool.query(`
+          SELECT
+            COALESCE(SUM(quantity) FILTER (
+              WHERE scheduled_layup_date IS NOT NULL
+                AND COALESCE(UPPER(status), '') NOT IN ('COMPLETED', 'CLOSED', 'CANCELLED', 'CANCELED')
+            ), 0)::int AS "scheduledItems",
+            COALESCE(SUM(quantity) FILTER (
+              WHERE COALESCE(UPPER(status), '') = 'IN_PROGRESS'
+            ), 0)::int AS "inProduction",
+            COALESCE(SUM(quantity) FILTER (
+              WHERE COALESCE(UPPER(status), '') IN ('COMPLETED', 'CLOSED')
+                AND COALESCE(completed_at, updated_at) > $1
+            ), 0)::int AS "completedThisWeek"
+          FROM p2_production_orders
         `, [oneWeekAgo]),
       ]);
 
       const po = poStats[0] || poStats.rows?.[0];
       const si = itemStats[0] || itemStats.rows?.[0];
+      const legacy = legacyStats[0] || legacyStats.rows?.[0];
 
       res.json({
         openPOs:          parseInt(po.openPOs, 10)          || 0,
         pendingBOMs:      parseInt(po.pendingBOMs, 10)      || 0,
-        scheduledItems:   parseInt(si.scheduledItems, 10)   || 0,
-        inProduction:     parseInt(si.inProduction, 10)     || 0,
-        completedThisWeek:parseInt(si.completedThisWeek, 10)|| 0,
+        scheduledItems:   (parseInt(si.scheduledItems, 10)   || 0) + (parseInt(legacy.scheduledItems, 10) || 0),
+        inProduction:     (parseInt(si.inProduction, 10)     || 0) + (parseInt(legacy.inProduction, 10) || 0),
+        completedThisWeek:(parseInt(si.completedThisWeek, 10)|| 0) + (parseInt(legacy.completedThisWeek, 10) || 0),
         pendingQC:        parseInt(si.pendingQC, 10)        || 0,
       });
     } catch (_error) {
@@ -3029,9 +3684,22 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   app.get('/api/p2/control-center/po-statuses', async (req, res) => {
     try {
+      const { ensureProductionWorkflowReadSchema } = await import('../lib/productionWorkflowReadiness');
+      await ensureProductionWorkflowReadSchema();
       const { storage } = await import('../../storage');
       const { pool: dbPool } = await import('../../db');
       const allPos = await storage.getAllP2PurchaseOrders();
+      const optionalP2Rows = async <T = any>(
+        label: string,
+        query: Promise<any>,
+      ): Promise<T[]> => {
+        try {
+          return p2ControlRows<T>(await query);
+        } catch (error) {
+          console.warn(`P2 Control Center optional ${label} lookup skipped:`, error);
+          return [];
+        }
+      };
       // Surface POs that have cleared the P2 Release Gate. Status values have
       // existed in both legacy lowercase and current uppercase forms. Also
       // include any PO with serialized units: Pending Layup units are already
@@ -3039,11 +3707,96 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const normalizeP2Status = (status: unknown) =>
         String(status || '').trim().toUpperCase();
       const P2_GATED_STATUSES = new Set([
+        'OPEN',
         'READY_FOR_P2_RELEASE',
         'READY_FOR_PRODUCTION',
         'IN_PRODUCTION',
       ]);
-      const serializedItems = await storage.getP2SerializedItems({});
+      let serializedItems: any[] = [];
+      try {
+        serializedItems = await applyTravelerStateToP2Items(
+          await storage.getP2SerializedItems({})
+        );
+      } catch (error) {
+        console.warn('P2 Control Center optional serialized item lookup skipped:', error);
+      }
+      const legacyProductionRows: any[] = [];
+      const legacyProjectProductionRows = await optionalP2Rows(
+        'legacy project production',
+        dbPool.query(
+         `WITH project_po_link AS (
+           SELECT p.id AS project_id, p.po_id AS po_id
+           FROM projects p
+           WHERE p.po_id IS NOT NULL
+           UNION
+           SELECT ps.project_id, ps.linked_p2_order_id AS po_id
+           FROM project_steps ps
+           WHERE ps.linked_p2_order_id IS NOT NULL
+           UNION
+           SELECT p.id AS project_id, po.id AS po_id
+           FROM p2_purchase_orders po
+           JOIN projects p ON LOWER(TRIM(po.project_name)) IN (
+             LOWER(TRIM(p.project_code)),
+             LOWER(TRIM(p.project_name)),
+             LOWER(TRIM(CONCAT_WS(' - ', NULLIF(p.project_code, ''), NULLIF(p.project_name, ''))))
+           )
+           WHERE po.project_name IS NOT NULL
+             AND TRIM(po.project_name) <> ''
+         ),
+         work_order_quantities AS (
+           SELECT
+             ppl.po_id AS "poId",
+             wo.id,
+             COALESCE(wo.quantity, 1)::numeric AS quantity,
+             COALESCE((
+               SELECT COUNT(*)
+               FROM travelers t
+               WHERE t.production_work_order_id = wo.id
+                 AND UPPER(t.status) IN ('COMPLETE', 'COMPLETED', 'CLOSED')
+             ), 0)::numeric AS completed_travelers,
+             EXISTS (
+               SELECT 1
+               FROM travelers t
+               WHERE t.production_work_order_id = wo.id
+                 AND UPPER(t.status) IN ('IN_PROGRESS', 'ACTIVE', 'STARTED')
+             ) AS has_active_traveler,
+             UPPER(COALESCE(wo.status, '')) AS status
+           FROM project_po_link ppl
+           JOIN production_work_orders wo ON wo.project_id = ppl.project_id
+           WHERE COALESCE(UPPER(wo.status), '') NOT IN ('CANCELLED', 'CANCELED')
+             AND NOT (
+               wo.work_order_number LIKE 'WAD-%'
+               AND COALESCE(UPPER(wo.status), '') NOT IN ('COMPLETE', 'COMPLETED', 'CLOSED')
+               AND EXISTS (
+                 SELECT 1
+                 FROM p2_purchase_order_items poi
+                 WHERE poi.po_id = ppl.po_id
+                   AND poi.part_number IS NOT NULL
+                   AND LOWER(TRIM(poi.part_number)) = LOWER(TRIM(wo.part_number))
+               )
+             )
+         )
+         SELECT
+           "poId",
+           COALESCE(SUM(quantity), 0)::int AS "totalQty",
+           COALESCE(SUM(
+             CASE
+               WHEN status IN ('COMPLETE', 'COMPLETED', 'CLOSED') THEN quantity
+               ELSE LEAST(completed_travelers, quantity)
+             END
+           ), 0)::int AS "completedQty",
+           COALESCE(SUM(
+             CASE
+               WHEN status NOT IN ('', 'PLANNED', 'PLAN', 'DRAFT', 'PENDING', 'COMPLETE', 'COMPLETED', 'CLOSED')
+                 OR has_active_traveler
+               THEN GREATEST(quantity - LEAST(completed_travelers, quantity), 0)
+               ELSE 0
+             END
+           ), 0)::int AS "inProductionQty"
+         FROM work_order_quantities
+         GROUP BY "poId"`
+        )
+      );
       const poIdsWithSerializedUnits = new Set<number>();
       for (const s of serializedItems as any[]) {
         const poId = s.poId ?? s.po_id;
@@ -3051,16 +3804,26 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           poIdsWithSerializedUnits.add(Number(poId));
         }
       }
+      const legacyStatsByPoId = new Map<number, any>(
+        legacyProductionRows.map((row: any) => [Number(row.poId), row])
+      );
+      const legacyProjectStatsByPoId = new Map<number, any>(
+        legacyProjectProductionRows.map((row: any) => [Number(row.poId), row])
+      );
+      const poIdsWithLegacyProjectProduction = new Set<number>(legacyProjectStatsByPoId.keys());
       const pos = allPos.filter((po: any) =>
         P2_GATED_STATUSES.has(normalizeP2Status(po.status)) ||
-        poIdsWithSerializedUnits.has(po.id)
+        poIdsWithSerializedUnits.has(po.id) ||
+        poIdsWithLegacyProjectProduction.has(po.id)
       );
 
       // Look up projects linked to these POs. PM Control Center resolves the
       // same relationship through either projects.po_id or the p2_order step.
       const poIds = pos.map((po: any) => po.id);
       const projectRows = poIds.length > 0
-        ? await dbPool.query(
+        ? await optionalP2Rows(
+            'project link',
+            dbPool.query(
             `WITH project_po_link AS (
                SELECT
                  p.id,
@@ -3077,9 +3840,24 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
                        AND ps.linked_p2_order_id IS NOT NULL
                      ORDER BY ps.updated_at DESC NULLS LAST, ps.completed_at DESC NULLS LAST
                      LIMIT 1
-                   )
-                 ) AS linked_po_id
+                 )
+               ) AS linked_po_id
                FROM projects p
+               UNION
+               SELECT
+                 p.id,
+                 p.project_code,
+                 p.project_name,
+                 p.updated_at,
+                 po.id AS linked_po_id
+               FROM p2_purchase_orders po
+               JOIN projects p ON LOWER(TRIM(po.project_name)) IN (
+                 LOWER(TRIM(p.project_code)),
+                 LOWER(TRIM(p.project_name)),
+                 LOWER(TRIM(CONCAT_WS(' - ', NULLIF(p.project_code, ''), NULLIF(p.project_name, ''))))
+               )
+               WHERE po.project_name IS NOT NULL
+                 AND TRIM(po.project_name) <> ''
              )
              SELECT DISTINCT ON (linked_po_id)
                linked_po_id AS "poId",
@@ -3091,48 +3869,118 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
              ORDER BY linked_po_id, updated_at DESC NULLS LAST`,
             [poIds]
           )
+          )
         : [];
       const projectByPoId = new Map<number, any>(
-        (projectRows as any[]).map((r: any) => [r.poId, r])
+        projectRows.map((r: any) => [r.poId, r])
+      );
+      const projectIds = [...new Set(
+        projectRows
+          .map((row: any) => row.projectId)
+          .filter(Boolean)
+          .map((projectId: any) => String(projectId))
+      )];
+      const wadSummaryRows = projectIds.length > 0
+        ? await optionalP2Rows(
+            'WAD project summary',
+            dbPool.query(
+            `SELECT
+               project_id::text AS "projectId",
+               COUNT(*)::int AS "wadCount",
+               COUNT(*) FILTER (WHERE COALESCE(UPPER(wad_status), '') = 'APPROVED')::int AS "approvedWadCount",
+               COUNT(*) FILTER (
+                 WHERE COALESCE(UPPER(wad_status), '') = 'APPROVED'
+                    OR COALESCE(UPPER(status), '') IN ('RELEASED', 'IN_PROGRESS', 'COMPLETE', 'COMPLETED', 'CLOSED')
+               )::int AS "releasedWadCount",
+               STRING_AGG(work_order_number, ', ' ORDER BY created_at DESC NULLS LAST) AS "wadNumbers"
+             FROM production_work_orders
+             WHERE project_id = ANY($1::uuid[])
+               AND COALESCE(UPPER(status), '') NOT IN ('CANCELLED', 'CANCELED')
+               AND (work_order_number LIKE 'WAD-%' OR wad_status IS NOT NULL)
+             GROUP BY project_id`,
+            [projectIds]
+          )
+          )
+        : [];
+      const wadSummaryByProject = new Map<string, any>(
+        wadSummaryRows.map((row: any) => [String(row.projectId), row])
       );
 
       // Sum ordered quantities from all PO line items, grouped by po_id.
       // This ensures PO lines that haven't had serialized items generated yet
       // are still counted in totalItems rather than being invisible on the dashboard.
       const orderedQtyRows = poIds.length > 0
-        ? await dbPool.query(
+        ? await optionalP2Rows(
+            'ordered quantity',
+            dbPool.query(
             `SELECT po_id AS "poId", COALESCE(SUM(quantity), 0)::int AS "orderedQty"
              FROM p2_purchase_order_items
              WHERE po_id = ANY($1)
              GROUP BY po_id`,
             [poIds]
           )
+          )
         : [];
       const orderedQtyByPoId = new Map<number, number>(
-        (orderedQtyRows as any[]).map((r: any) => [r.poId, r.orderedQty])
+        orderedQtyRows.map((r: any) => [r.poId, r.orderedQty])
       );
       
       const poStatuses = pos.map((po: any) => {
         const poItems = serializedItems.filter((s: any) => s.poId === po.id);
+        const legacyP2Stats = legacyStatsByPoId.get(po.id);
+        const legacyProjectStats = legacyProjectStatsByPoId.get(po.id);
+        const legacyStats = legacyP2Stats || legacyProjectStats
+          ? {
+              totalQty: Number(legacyP2Stats?.totalQty ?? 0) + Number(legacyProjectStats?.totalQty ?? 0),
+              completedQty: Number(legacyP2Stats?.completedQty ?? 0) + Number(legacyProjectStats?.completedQty ?? 0),
+              inProductionQty: Number(legacyP2Stats?.inProductionQty ?? 0) + Number(legacyProjectStats?.inProductionQty ?? 0),
+            }
+          : null;
         
         // Use actual column names: status (ACTIVE/COMPLETED/SCRAPPED/HOLD) and currentDepartment
-        const completedItems = poItems.filter((s: any) => s.status === 'COMPLETED').length;
-        const inProductionItems = poItems.filter((s: any) => {
+        const serializedCompletedItems = poItems.filter((s: any) => s.status === 'COMPLETED').length;
+        const legacyCompletedItems = Number(legacyStats?.completedQty ?? 0);
+        const completedItems = Math.max(serializedCompletedItems, legacyCompletedItems);
+
+        const scheduledItems = poItems.filter((s: any) => {
           if (s.status !== 'ACTIVE') return false;
-          const dept = s.currentDepartment || '';
-          // In production if past Pending Layup stage
-          return dept !== 'Pending Layup' && dept !== '';
+          const dept = normalizeP2ControlDepartment(s.currentDepartment || '');
+          return dept === 'Layup';
         }).length;
+
+        const scrappedItems = poItems.filter((s: any) => {
+          const status = String(s.status || '').trim().toUpperCase();
+          return status === 'SCRAPPED' || status === 'SCRAP';
+        }).length;
+
+        const serializedInProductionItems = poItems.filter((s: any) => {
+          if (s.status !== 'ACTIVE') return false;
+          const dept = normalizeP2ControlDepartment(s.currentDepartment || '');
+          // Scheduled Layup work is not floor production yet.
+          return dept !== 'Pending Layup' && dept !== 'Layup' && dept !== '';
+        }).length;
+        const legacyInProductionItems = Number(legacyStats?.inProductionQty ?? 0);
+        const rawInProductionItems = Math.max(serializedInProductionItems, legacyInProductionItems);
 
         // totalItems is the sum of ordered quantities across all line items so that
         // lines without serialized items generated yet are still reflected on the card.
-        const totalItems = orderedQtyByPoId.get(po.id) ?? poItems.length;
+        const totalItems = orderedQtyByPoId.get(po.id) ?? Number(legacyStats?.totalQty ?? poItems.length);
+        const inProductionItems = Math.min(
+          rawInProductionItems,
+          Math.max(0, totalItems - completedItems)
+        );
 
         // pendingItems = everything not yet completed or in-production (including
         // line item quantities that haven't had serialized items generated yet).
-        const pendingItems = Math.max(0, totalItems - completedItems - inProductionItems);
+        const pendingItems = Math.max(0, totalItems - completedItems - scheduledItems - inProductionItems - scrappedItems);
         
         const rawStatus = normalizeP2Status(po.status) || 'OPEN';
+
+        const linkedProject = projectByPoId.get(po.id);
+        const wadContext = buildP2ProjectWadContext(
+          linkedProject,
+          linkedProject?.projectId ? wadSummaryByProject.get(String(linkedProject.projectId)) : null
+        );
 
         return {
           id: po.id,
@@ -3141,15 +3989,19 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           dueDate: po.expectedDelivery,
           totalItems,
           completedItems,
+          scheduledItems,
           inProductionItems,
+          scrappedItems,
           pendingItems,
           hasBOMsNeeded: !po.bomConfigured,
-          projectId: projectByPoId.get(po.id)?.projectId ?? null,
-          projectCode: projectByPoId.get(po.id)?.projectCode ?? null,
-          projectName: projectByPoId.get(po.id)?.projectName ?? po.projectName ?? null,
+          projectId: po.projectId ?? linkedProject?.projectId ?? null,
+          projectCode: linkedProject?.projectCode ?? null,
+          projectName: linkedProject?.projectName ?? po.projectName ?? null,
+          ...wadContext,
           rawStatus,
-          status: completedItems === totalItems && totalItems > 0 ? 'completed' : 
-                  (inProductionItems > 0 || rawStatus === 'IN_PRODUCTION') ? 'in_progress' : 'pending'
+          status: (completedItems + scrappedItems) >= totalItems && totalItems > 0 ? 'completed' :
+                  inProductionItems > 0 ? 'in_progress' :
+                  scheduledItems > 0 ? 'scheduled' : 'pending'
         };
       });
       
@@ -3162,37 +4014,117 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   app.get('/api/p2/control-center/scheduling-list', async (req, res) => {
     try {
+      const { ensureProductionWorkflowReadSchema } = await import('../lib/productionWorkflowReadiness');
+      await ensureProductionWorkflowReadSchema();
       const { storage } = await import('../../storage');
-      const serializedItems = await storage.getP2SerializedItems({});
-      const pos = await storage.getAllP2PurchaseOrders();
-      
-      // Filter for items that are ACTIVE and either pending layup or in early production stages
-      // Items are schedulable if they haven't completed production yet
-      const schedulingList = serializedItems
-        .filter((s: any) => {
-          // Must be ACTIVE (not completed, scrapped, or on hold)
+      const { pool: dbPool } = await import('../../db');
+      const serializedItems = await applyTravelerStateToP2Items(
+        await storage.getP2SerializedItems({})
+      );
+
+      const poItemResult = await dbPool.query(
+        `SELECT
+           poi.id AS "poItemId",
+           poi.po_id AS "poId",
+           poi.part_number AS "partNumber",
+           poi.part_name AS "partName",
+           poi.quantity AS "orderedQuantity",
+           po.po_number AS "poNumber",
+           po.expected_delivery AS "dueDate",
+           po.status AS "poStatus"
+         FROM p2_purchase_order_items poi
+         JOIN p2_purchase_orders po ON po.id = poi.po_id
+         WHERE COALESCE(UPPER(po.status), '') NOT IN ('COMPLETED', 'CANCELED', 'CANCELLED', 'CLOSED')`
+      );
+      const poItems = Array.isArray(poItemResult)
+        ? poItemResult
+        : ((poItemResult as any)?.rows ?? []);
+      const poItemById = new Map<number, any>(
+        poItems.map((item: any) => [Number(item.poItemId), item])
+      );
+
+      const serializedByPoItemId = new Map<number, any[]>();
+      for (const item of serializedItems as any[]) {
+        const poItemId = Number(item.poItemId);
+        if (!poItemById.has(poItemId)) continue;
+        if (!serializedByPoItemId.has(poItemId)) {
+          serializedByPoItemId.set(poItemId, []);
+        }
+        serializedByPoItemId.get(poItemId)!.push(item);
+      }
+
+      for (const poItem of poItems) {
+        const poItemId = Number(poItem.poItemId);
+        const orderedQuantity = Number(poItem.orderedQuantity) || 0;
+        const existingItems = serializedByPoItemId.get(poItemId) ?? [];
+        const missingCount = Math.max(0, orderedQuantity - existingItems.length);
+
+        if (missingCount === 0) continue;
+
+        // Historical POs can have ordered quantity that outruns generated
+        // serialized units, which makes pending work disappear from Schedule.
+        const createdItems = await storage.addP2SerializedItemsForPoItem(poItemId, missingCount);
+        if (createdItems.length > 0) {
+          serializedByPoItemId.set(poItemId, [...existingItems, ...createdItems]);
+        }
+      }
+
+      const sortBySequence = (a: any, b: any) =>
+        (Number(a.sequenceNumber) || 0) - (Number(b.sequenceNumber) || 0) ||
+        String(a.id).localeCompare(String(b.id));
+
+      const schedulingList: any[] = [];
+      for (const poItem of poItems) {
+        const items = (serializedByPoItemId.get(Number(poItem.poItemId)) ?? [])
+          .sort(sortBySequence);
+        if (items.length === 0) continue;
+
+        const orderedQuantity = Number(poItem.orderedQuantity) || 0;
+        const completedCount = items.filter((s: any) => s.status === 'COMPLETED').length;
+        const otherInProductionCount = items.filter((s: any) => {
           if (s.status !== 'ACTIVE') return false;
-          // Schedulable if in Pending Layup or Layup department (early stages)
-          const dept = s.currentDepartment || '';
-          return dept === 'Pending Layup' || dept === 'Layup' || dept === '' || !dept;
-        })
-        .map((s: any) => {
-          const po = pos.find((p: any) => p.id === s.poId);
-          const isScheduled = s.currentDepartment === 'Layup';
-          return {
+          const dept = String(s.currentDepartment || '').trim();
+          return dept !== '' && dept !== 'Pending Layup' && dept !== 'Layup';
+        }).length;
+        const earlyStageCapacity = Math.max(
+          0,
+          orderedQuantity - completedCount - otherInProductionCount
+        );
+
+        const scheduledItems = items.filter((s: any) =>
+          s.status === 'ACTIVE' && String(s.currentDepartment || '').trim() === 'Layup'
+        );
+        const pendingItems = items.filter((s: any) => {
+          if (s.status !== 'ACTIVE') return false;
+          const dept = String(s.currentDepartment || '').trim();
+          return dept === '' || dept === 'Pending Layup';
+        });
+
+        const scheduledToShow = scheduledItems.slice(0, earlyStageCapacity);
+        const pendingToShow = pendingItems.slice(
+          0,
+          Math.max(0, earlyStageCapacity - scheduledToShow.length)
+        );
+
+        for (const s of [...scheduledToShow, ...pendingToShow]) {
+          const isScheduled = String(s.currentDepartment || '').trim() === 'Layup';
+          schedulingList.push({
             id: s.id,
-            poNumber: s.poNumber || po?.poNumber || 'Unknown',
-            partNumber: s.partNumber || 'Unknown',
-            description: s.partName || '',
+            poId: poItem.poId,
+            poItemId: poItem.poItemId,
+            poNumber: poItem.poNumber || s.poNumber || 'Unknown',
+            partNumber: poItem.partNumber || s.partNumber || 'Unknown',
+            description: poItem.partName || s.partName || '',
             totalQuantity: 1,
             scheduledQuantity: isScheduled ? 1 : 0,
             remainingQuantity: isScheduled ? 0 : 1,
-            dueDate: po?.expectedDelivery || po?.dueDate,
+            dueDate: poItem.dueDate,
             priority: 'normal',
             status: isScheduled ? 'scheduled' : 'pending'
-          };
-        });
-      
+          });
+        }
+      }
+
       res.json(schedulingList);
     } catch (_error) {
       console.error('P2 Control Center scheduling list error:', _error);
@@ -3286,15 +4218,144 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   // P2 Production Queue - Get items grouped by department
   app.get('/api/p2/control-center/production-queue', async (req, res) => {
     try {
+      const { ensureProductionWorkflowReadSchema } = await import('../lib/productionWorkflowReadiness');
+      await ensureProductionWorkflowReadSchema();
       const { storage } = await import('../../storage');
-      
-      // Get all active serialized items using storage method (which handles pool.query)
-      const allItems = await storage.getP2SerializedItems({ status: 'ACTIVE' });
-      const items = allItems || [];
       const { pool: dbPool } = await import('../../db');
-      const poIds = [...new Set(items.map((item: any) => item.poId ?? item.po_id).filter(Boolean))];
+      const optionalP2Rows = async <T = any>(
+        label: string,
+        query: Promise<any>,
+      ): Promise<T[]> => {
+        try {
+          return p2ControlRows<T>(await query);
+        } catch (error) {
+          console.warn(`P2 Production Queue optional ${label} lookup skipped:`, error);
+          return [];
+        }
+      };
+
+      // Keep this tab focused on active WIP; completed/off-system units roll up
+      // through PO status instead of remaining in the production queue.
+      let allItems: any[] = [];
+      try {
+        allItems = await applyTravelerStateToP2Items(
+          await storage.getP2SerializedItems({})
+        );
+      } catch (error) {
+        console.warn('P2 Production Queue optional serialized item lookup skipped:', error);
+      }
+      const visibleStatuses = new Set(['ACTIVE']);
+      const items = (allItems || []).filter((item: any) => visibleStatuses.has(item.status));
+      const legacyProductionRows: any[] = [];
+      const legacyProjectProductionRows = await optionalP2Rows(
+        'legacy project production',
+        dbPool.query(
+         `WITH project_po_link AS (
+           SELECT p.id AS project_id, p.po_id AS po_id
+           FROM projects p
+           WHERE p.po_id IS NOT NULL
+           UNION
+           SELECT ps.project_id, ps.linked_p2_order_id AS po_id
+           FROM project_steps ps
+           WHERE ps.linked_p2_order_id IS NOT NULL
+           UNION
+           SELECT p.id AS project_id, po.id AS po_id
+           FROM p2_purchase_orders po
+           JOIN projects p ON LOWER(TRIM(po.project_name)) IN (
+             LOWER(TRIM(p.project_code)),
+             LOWER(TRIM(p.project_name)),
+             LOWER(TRIM(CONCAT_WS(' - ', NULLIF(p.project_code, ''), NULLIF(p.project_name, ''))))
+           )
+           WHERE po.project_name IS NOT NULL
+             AND TRIM(po.project_name) <> ''
+         )
+         SELECT DISTINCT ON (wo.id)
+           wo.id,
+           wo.work_order_number AS "workOrderNumber",
+           wo.part_number AS "partNumber",
+           wo.description,
+           COALESCE(wo.quantity, 1)::int AS quantity,
+           wo.status,
+           wo.wad_status AS "wadStatus",
+           wo.due_date AS "dueDate",
+           wo.project_id AS "projectId",
+           p.project_code AS "projectCode",
+           p.project_name AS "projectName",
+           wo.assigned_department AS "assignedDepartment",
+           wo.queue_type AS "queueType",
+           wo.dashboard_type AS "dashboardType",
+           po.id AS "poId",
+           po.po_number AS "poNumber",
+           po.customer_name AS "customerName",
+           (
+             SELECT pl.department
+             FROM punch_ledger pl
+             WHERE pl.production_work_order_id = wo.id
+               AND pl.clock_out IS NULL
+             ORDER BY pl.clock_in DESC
+             LIMIT 1
+           ) AS "activeDepartment",
+           (
+             SELECT ts.department_name
+             FROM traveler_steps ts
+             JOIN travelers t ON t.id = ts.traveler_id
+             WHERE t.production_work_order_id = wo.id
+               AND UPPER(ts.status) IN ('IN_PROGRESS', 'ACTIVE', 'STARTED')
+             ORDER BY ts.step_number ASC
+             LIMIT 1
+           ) AS "currentTravelerStep",
+            (
+              SELECT t.id
+              FROM travelers t
+              WHERE t.production_work_order_id = wo.id
+                AND COALESCE(UPPER(t.status), '') NOT IN ('COMPLETE', 'COMPLETED', 'CLOSED', 'SCRAPPED', 'CANCELLED', 'CANCELED')
+              ORDER BY t.created_at DESC
+              LIMIT 1
+            ) AS "activeTravelerId",
+            (
+              SELECT t.traveler_number
+              FROM travelers t
+              WHERE t.production_work_order_id = wo.id
+                AND COALESCE(UPPER(t.status), '') NOT IN ('COMPLETE', 'COMPLETED', 'CLOSED', 'SCRAPPED', 'CANCELLED', 'CANCELED')
+             ORDER BY t.created_at DESC
+             LIMIT 1
+           ) AS "activeTravelerNumber",
+           (
+             SELECT UPPER(t.status)
+             FROM travelers t
+             WHERE t.production_work_order_id = wo.id
+               AND COALESCE(UPPER(t.status), '') NOT IN ('COMPLETE', 'COMPLETED', 'CLOSED', 'SCRAPPED', 'CANCELLED', 'CANCELED')
+             ORDER BY t.created_at DESC
+             LIMIT 1
+           ) AS "activeTravelerStatus"
+         FROM project_po_link ppl
+         JOIN production_work_orders wo ON wo.project_id = ppl.project_id
+         JOIN projects p ON p.id = wo.project_id
+         JOIN p2_purchase_orders po ON po.id = ppl.po_id
+         WHERE COALESCE(UPPER(wo.status), '') NOT IN ('CANCELLED', 'CANCELED')
+           AND NOT (
+             wo.work_order_number LIKE 'WAD-%'
+             AND COALESCE(UPPER(wo.status), '') NOT IN ('COMPLETE', 'COMPLETED', 'CLOSED')
+             AND EXISTS (
+               SELECT 1
+               FROM p2_purchase_order_items poi
+               WHERE poi.po_id = ppl.po_id
+                 AND poi.part_number IS NOT NULL
+                 AND LOWER(TRIM(poi.part_number)) = LOWER(TRIM(wo.part_number))
+             )
+           )
+         ORDER BY wo.id, wo.due_date NULLS LAST, wo.work_order_number`
+        )
+      );
+      const poIds = [...new Set([
+        ...items.map((item: any) => item.poId ?? item.po_id).filter(Boolean),
+        ...legacyProductionRows.map((row: any) => row.poId).filter(Boolean),
+        ...legacyProjectProductionRows.map((row: any) => row.poId).filter(Boolean),
+      ])];
       const projectRows = poIds.length > 0
-        ? await dbPool.query(
+        ? await optionalP2Rows(
+            'project link',
+            dbPool.query(
             `WITH project_po_link AS (
                SELECT
                  p.id,
@@ -3311,9 +4372,24 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
                        AND ps.linked_p2_order_id IS NOT NULL
                      ORDER BY ps.updated_at DESC NULLS LAST, ps.completed_at DESC NULLS LAST
                      LIMIT 1
-                   )
-                 ) AS linked_po_id
+                 )
+               ) AS linked_po_id
                FROM projects p
+               UNION
+               SELECT
+                 p.id,
+                 p.project_code,
+                 p.project_name,
+                 p.updated_at,
+                 po.id AS linked_po_id
+               FROM p2_purchase_orders po
+               JOIN projects p ON LOWER(TRIM(po.project_name)) IN (
+                 LOWER(TRIM(p.project_code)),
+                 LOWER(TRIM(p.project_name)),
+                 LOWER(TRIM(CONCAT_WS(' - ', NULLIF(p.project_code, ''), NULLIF(p.project_name, ''))))
+               )
+               WHERE po.project_name IS NOT NULL
+                 AND TRIM(po.project_name) <> ''
              )
              SELECT DISTINCT ON (linked_po_id)
                linked_po_id AS "poId",
@@ -3325,27 +4401,128 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
              ORDER BY linked_po_id, updated_at DESC NULLS LAST`,
             [poIds]
           )
+          )
         : [];
       const projectByPoId = new Map<number, any>(
-        (projectRows as any[]).map((row: any) => [Number(row.poId), row])
+        projectRows.map((row: any) => [Number(row.poId), row])
       );
+      const projectIds = [...new Set(
+        projectRows
+          .map((row: any) => row.projectId)
+          .filter(Boolean)
+          .map((projectId: any) => String(projectId))
+      )];
+      const wadRows = projectIds.length > 0
+        ? await optionalP2Rows(
+            'WAD item context',
+            dbPool.query(
+            `SELECT DISTINCT ON (project_id, LOWER(TRIM(COALESCE(part_number, ''))))
+               id::text AS id,
+               project_id::text AS "projectId",
+               work_order_number AS "workOrderNumber",
+               part_number AS "partNumber",
+               status,
+               wad_status AS "wadStatus",
+               created_at AS "createdAt"
+             FROM production_work_orders
+             WHERE project_id = ANY($1::uuid[])
+               AND COALESCE(UPPER(status), '') NOT IN ('CANCELLED', 'CANCELED')
+               AND (work_order_number LIKE 'WAD-%' OR wad_status IS NOT NULL)
+             ORDER BY project_id, LOWER(TRIM(COALESCE(part_number, ''))), created_at DESC NULLS LAST`,
+            [projectIds]
+          )
+          )
+        : [];
+      const wadByProjectPart = new Map<string, any>();
+      const wadSummaryByProject = new Map<string, any>();
+      wadRows.forEach((row: any) => {
+        const projectId = String(row.projectId || '');
+        if (!projectId) return;
+
+        const summary = wadSummaryByProject.get(projectId) || { wadCount: 0 };
+        summary.wadCount += 1;
+        wadSummaryByProject.set(projectId, summary);
+
+        const partKey = normalizeP2ControlPartKey(row.partNumber);
+        const mapKey = partKey ? `${projectId}:${partKey}` : '';
+        if (mapKey && !wadByProjectPart.has(mapKey)) {
+          wadByProjectPart.set(mapKey, row);
+        }
+      });
       
-      // Work tasks and routings tables may not exist yet - use empty arrays as fallback
-      const activeTasks: any[] = [];
+      const serializedPoItemKeys = new Set(
+        items
+          .map((item: any) => {
+            const poId = item.poId ?? item.po_id;
+            const poItemId = item.poItemId ?? item.po_item_id;
+            return poId && poItemId ? `${poId}:${poItemId}` : null;
+          })
+          .filter(Boolean)
+      );
+      const legacyProductionControlRows = p2ControlRows(legacyProductionRows).filter((row: any) => {
+        if (row.poId) return false;
+        const key = row.poId && row.poItemId ? `${row.poId}:${row.poItemId}` : null;
+        const normalizedStatus = String(row.status || '').toUpperCase();
+        const quantity = Math.max(1, Number(row.quantity || 1));
+        const manufactured = Number(row.quantityManufactured || 0);
+        const isComplete = ['COMPLETED', 'CLOSED'].includes(normalizedStatus) || manufactured >= quantity;
+        return (!key || !serializedPoItemKeys.has(key)) && !isComplete;
+      });
+      const activeLegacyProjectProductionRows = legacyProjectProductionRows.filter((row: any) => {
+        const key = row.poId && row.poItemId ? `${row.poId}:${row.poItemId}` : null;
+        const normalizedStatus = String(row.status || '').toUpperCase();
+        return (!key || !serializedPoItemKeys.has(key))
+          && !['COMPLETE', 'COMPLETED', 'CLOSED'].includes(normalizedStatus);
+      });
+
+      const itemIds = items.map((item: any) => item.id).filter(Boolean);
+      let activeTasks: any[] = [];
+      if (itemIds.length > 0) {
+        try {
+          activeTasks = await dbPool.query(
+            `SELECT
+               id::text AS id,
+               serialized_item_id::text AS "serializedItemId",
+               employee_name AS "employeeName",
+               employee_code AS "employeeCode",
+               started_at AS "startedAt"
+             FROM p2_work_tasks
+             WHERE serialized_item_id = ANY($1::uuid[])
+               AND status = 'IN_PROGRESS'
+             ORDER BY started_at DESC`,
+            [itemIds]
+          );
+        } catch (taskError: any) {
+          console.warn('P2 production queue active task lookup skipped:', taskError?.message);
+        }
+      }
       const allRoutings: any[] = [];
       
       // Create task lookup by serialized item ID
       const taskByItemId = new Map<string, any>();
-      activeTasks.forEach((task: any) => {
+      p2ControlRows(activeTasks).forEach((task: any) => {
         taskByItemId.set(task.serializedItemId, task);
       });
       
       // Get unique departments from all items and routings
       const departmentsSet = new Set<string>();
       items.forEach((item: any) => {
-        if (item.currentDepartment) {
-          departmentsSet.add(item.currentDepartment);
-        }
+        const displayDepartment = item.status === 'COMPLETED'
+          ? 'Completed'
+          : normalizeP2ControlDepartment(item.currentDepartment);
+        if (displayDepartment) departmentsSet.add(displayDepartment);
+      });
+      legacyProductionControlRows.forEach((row: any) => {
+        const displayDepartment = ['COMPLETED', 'CLOSED'].includes(String(row.status || '').toUpperCase())
+          ? 'Completed'
+          : (normalizeP2ControlDepartment(row.department) || 'Pending Layup');
+        departmentsSet.add(displayDepartment);
+      });
+      activeLegacyProjectProductionRows.forEach((row: any) => {
+        const displayDepartment = ['COMPLETE', 'COMPLETED', 'CLOSED'].includes(String(row.status || '').toUpperCase())
+          ? 'Completed'
+          : (normalizeP2ControlDepartment(row.activeDepartment || row.currentTravelerStep || row.assignedDepartment || row.queueType || row.dashboardType) || 'Pending Layup');
+        departmentsSet.add(displayDepartment);
       });
       allRoutings.forEach((routing: any) => {
         const sequence = routing.departmentSequence as string[] || [];
@@ -3355,13 +4532,16 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       // Standard department order for display
       const departmentOrder = [
         'Pending Layup',
+        'Cutting Table',
         'Layup',
         'Assemble/Disassembly',
         'CNC',
         'Finish',
         'Paint',
+        'Repair',
         'Final QC',
-        'Shipping'
+        'Shipping',
+        'Completed'
       ];
       
       // Add any departments not in standard order
@@ -3378,15 +4558,25 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       });
       
       items.forEach((item: any) => {
-        const dept = item.currentDepartment || 'Pending Layup';
+        const dept = item.status === 'COMPLETED'
+          ? 'Completed'
+          : (normalizeP2ControlDepartment(item.currentDepartment) || 'Pending Layup');
         if (!departmentQueues[dept]) {
           departmentQueues[dept] = [];
         }
         
         const activeTask = taskByItemId.get(item.id);
+        const activeTravelerNumber = item.activeTravelerNumber ?? item.active_traveler_number ?? null;
+        const activeTravelerStartedAt = item.activeTravelerStartedAt ?? item.active_traveler_started_at ?? null;
         const poId = item.poId ?? item.po_id ?? null;
         const linkedProject = poId ? projectByPoId.get(Number(poId)) : null;
         const metadata = item.metadata || {};
+        const wadContext = buildP2ItemWadContext(
+          linkedProject,
+          item.partNumber,
+          wadByProjectPart,
+          wadSummaryByProject
+        );
         
         departmentQueues[dept].push({
           id: item.id,
@@ -3403,17 +4593,143 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           projectId: linkedProject?.projectId ?? null,
           projectCode: linkedProject?.projectCode ?? null,
           projectName: linkedProject?.projectName ?? null,
+          ...wadContext,
           isReplacement: metadata.isReplacement === true,
           replacementForSerializedItemId: metadata.replacementForSerializedItemId ?? null,
           replacementForSerialNumber: metadata.replacementForSerialNumber ?? null,
           replacementReason: metadata.replacementReason ?? null,
-          hasActiveTask: !!activeTask,
+          hasActiveTask: !!activeTask || !!activeTravelerNumber,
           barcodePrintedAt: item.barcodePrintedAt || null,
           activeTask: activeTask ? {
             id: activeTask.id,
             employeeName: activeTask.employeeName,
             employeeCode: activeTask.employeeCode,
             startedAt: activeTask.startedAt,
+          } : activeTravelerNumber ? {
+            id: activeTravelerNumber,
+            employeeName: activeTravelerNumber,
+            employeeCode: '',
+            startedAt: activeTravelerStartedAt,
+          } : null,
+        });
+      });
+
+      legacyProductionControlRows.forEach((row: any) => {
+        const normalizedStatus = String(row.status || '').toUpperCase();
+        const dept = ['COMPLETED', 'CLOSED'].includes(normalizedStatus)
+          ? 'Completed'
+          : (normalizeP2ControlDepartment(row.department) || 'Pending Layup');
+        if (!departmentQueues[dept]) {
+          departmentQueues[dept] = [];
+        }
+
+        const poId = row.poId ?? null;
+        const linkedProject = row.projectId
+          ? {
+              projectId: row.projectId,
+              projectCode: row.projectCode,
+              projectName: row.projectName,
+            }
+          : (poId ? projectByPoId.get(Number(poId)) : null);
+        const quantity = Math.max(1, Number(row.quantity || 1));
+        const manufactured = Number(row.quantityManufactured || 0);
+        const displayStatus = ['COMPLETED', 'CLOSED'].includes(normalizedStatus)
+          || manufactured >= quantity
+          ? 'COMPLETED'
+          : 'ACTIVE';
+        const wadContext = buildP2ItemWadContext(
+          linkedProject,
+          row.partNumber || row.orderId,
+          wadByProjectPart,
+          wadSummaryByProject
+        );
+
+        departmentQueues[dept].push({
+          id: `legacy-p2-production-order-${row.id}`,
+          poId,
+          barcode: row.orderId,
+          serialNumber: row.orderId,
+          partNumber: row.partNumber || row.orderId,
+          partName: row.partName || row.department || '',
+          poNumber: row.poNumber,
+          customerName: row.customerName || 'Unknown',
+          status: displayStatus,
+          currentDepartment: dept,
+          currentStageIndex: 0,
+          projectId: linkedProject?.projectId ?? null,
+          projectCode: linkedProject?.projectCode ?? null,
+          projectName: linkedProject?.projectName ?? null,
+          ...wadContext,
+          isLegacyProductionOrder: true,
+          hasActiveTask: normalizedStatus === 'IN_PROGRESS',
+          barcodePrintedAt: null,
+          activeTask: normalizedStatus === 'IN_PROGRESS' ? {
+            id: row.id,
+            employeeName: 'Legacy production order',
+            employeeCode: '',
+            startedAt: row.dueDate,
+          } : null,
+        });
+      });
+
+      activeLegacyProjectProductionRows.forEach((row: any) => {
+        const normalizedStatus = String(row.status || '').toUpperCase();
+        const dept = ['COMPLETE', 'COMPLETED', 'CLOSED'].includes(normalizedStatus)
+          ? 'Completed'
+          : (normalizeP2ControlDepartment(row.activeDepartment || row.currentTravelerStep || row.assignedDepartment || row.queueType || row.dashboardType) || 'Pending Layup');
+        if (!departmentQueues[dept]) {
+          departmentQueues[dept] = [];
+        }
+
+        const poId = row.poId ?? null;
+        const linkedProject = row.projectId
+          ? {
+              projectId: row.projectId,
+              projectCode: row.projectCode,
+              projectName: row.projectName,
+            }
+          : (poId ? projectByPoId.get(Number(poId)) : null);
+        const isComplete = ['COMPLETE', 'COMPLETED', 'CLOSED'].includes(normalizedStatus);
+        const hasActiveTask = !isComplete && (
+          !!row.activeDepartment ||
+          ['IN_PROGRESS', 'ACTIVE', 'STARTED'].includes(String(row.activeTravelerStatus || '').toUpperCase()) ||
+          ['IN_PROGRESS', 'ACTIVE', 'STARTED', 'RELEASED'].includes(normalizedStatus)
+        );
+        const wadContext = buildP2ItemWadContext(
+          linkedProject,
+          row.partNumber || row.workOrderNumber,
+          wadByProjectPart,
+          wadSummaryByProject
+        );
+
+        departmentQueues[dept].push({
+          id: `legacy-project-work-order-${row.id}`,
+          poId,
+          productionWorkOrderId: row.id,
+          workOrderNumber: row.workOrderNumber,
+          barcode: row.activeTravelerNumber || row.workOrderNumber,
+          serialNumber: row.activeTravelerNumber || row.workOrderNumber,
+          partNumber: row.partNumber || row.workOrderNumber,
+          partName: row.description || 'Legacy project work order',
+          poNumber: row.poNumber,
+          customerName: row.customerName || 'Unknown',
+          status: isComplete ? 'COMPLETED' : 'ACTIVE',
+          currentDepartment: dept,
+          currentStageIndex: 0,
+          projectId: linkedProject?.projectId ?? null,
+          projectCode: linkedProject?.projectCode ?? null,
+          projectName: linkedProject?.projectName ?? null,
+          ...wadContext,
+          isLegacyProjectWorkOrder: true,
+          activeTravelerId: row.activeTravelerId || null,
+          activeTravelerNumber: row.activeTravelerNumber || null,
+          hasActiveTask,
+          barcodePrintedAt: null,
+          activeTask: hasActiveTask ? {
+            id: row.id,
+            employeeName: 'Project work order',
+            employeeCode: '',
+            startedAt: row.dueDate,
           } : null,
         });
       });
@@ -3424,7 +4740,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         .map(dept => {
           const queueItems = departmentQueues[dept] || [];
           const inProgressCount = queueItems.filter(i => i.hasActiveTask).length;
-          const waitingCount = queueItems.length - inProgressCount;
+          const waitingCount = queueItems.filter(i => i.status === 'ACTIVE' && !i.hasActiveTask).length;
           
           return {
             name: dept,
@@ -3438,8 +4754,24 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       res.json({
         departments,
         summary: {
-          totalActive: items.length,
-          totalInProgress: activeTasks.length,
+          totalActive: items.filter((item: any) => item.status === 'ACTIVE').length
+            + legacyProductionControlRows.filter((row: any) =>
+              !['COMPLETED', 'CLOSED'].includes(String(row.status || '').toUpperCase())
+            ).length
+            + activeLegacyProjectProductionRows.filter((row: any) =>
+              !['COMPLETE', 'COMPLETED', 'CLOSED'].includes(String(row.status || '').toUpperCase())
+            ).length,
+          totalInProgress: p2ControlRows(activeTasks).length
+            + items.filter((item: any) =>
+              (item.activeTravelerNumber || item.active_traveler_number) && !taskByItemId.has(item.id)
+            ).length
+            + legacyProductionControlRows.filter((row: any) =>
+              String(row.status || '').toUpperCase() === 'IN_PROGRESS'
+            ).length
+            + activeLegacyProjectProductionRows.filter((row: any) =>
+              ['IN_PROGRESS', 'ACTIVE', 'STARTED', 'RELEASED'].includes(String(row.status || '').toUpperCase())
+              || !!row.activeDepartment
+            ).length,
           departmentCount: departments.filter(d => d.totalItems > 0).length,
         },
       });
@@ -3488,6 +4820,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         performedBy: z.string().optional().default('System'),
         notes: z.string().optional().default(''),
         linkedTravelerId: z.string().optional(),
+        rmaRequired: z.boolean().optional().default(false),
       });
       
       const validationResult = updateStatusSchema.safeParse(req.body);
@@ -3498,12 +4831,19 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         });
       }
       
-      const { status, reason, performedBy, notes, linkedTravelerId } = validationResult.data;
+      const { status, reason, performedBy, notes, linkedTravelerId, rmaRequired } = validationResult.data;
       
       const { db } = await import('../../db');
-      const { p2SerializedItems, p2SerializedItemEvents, travelers, auditEvents } = await import('../../schema');
-      const { eq, desc } = await import('drizzle-orm');
-      const { randomUUID } = await import('crypto');
+      const {
+        p2NonconformingDispositions,
+        p2Rmas,
+        p2SerializedItems,
+        p2SerializedItemEvents,
+        travelers,
+        auditEvents,
+      } = await import('../../schema');
+      const { and, eq, desc, ne, sql } = await import('drizzle-orm');
+
       
       const [item] = await db.select().from(p2SerializedItems).where(eq(p2SerializedItems.id, itemId)).limit(1);
       
@@ -3546,10 +4886,268 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         updateFields.holdAt = null;
       }
 
+      // SCRAPPED transitions are atomic. In this P2 flow, SCRAPPED means the
+      // original serial has left active production and entered open NCR.
+      // Final trash/scrap is recorded later by the disposition workflow.
+      // If an RMA is required, the status
+      // update, trace events, and parent PO line qty bump all commit or roll
+      // back together. If not, the item simply becomes P2 nonconforming and
+      // waits for disposition in the P2 Control Center tab.
+      const isFirstScrapTransition = status === 'SCRAPPED' && item.status !== 'SCRAPPED';
+      if (isFirstScrapTransition) {
+        const { storage } = await import('../../storage');
+        const { and, ne } = await import('drizzle-orm');
+        let replacementItem: typeof p2SerializedItems.$inferSelect | null = null;
+        try {
+          await db.transaction(async (tx) => {
+            // Conditional update enforces idempotency inside the transaction
+            // so simultaneous duplicate scrap requests cannot both pass the
+            // pre-transaction `item.status` guard and double-bump qty.
+            const claimed = await tx.update(p2SerializedItems)
+              .set(updateFields)
+              .where(and(
+                eq(p2SerializedItems.id, itemId),
+                ne(p2SerializedItems.status, 'SCRAPPED'),
+              ))
+              .returning({ id: p2SerializedItems.id });
+            if (claimed.length === 0) {
+              // Lost the race: another request already scrapped this item.
+              return;
+            }
+
+            await tx.insert(p2SerializedItemEvents).values({
+              serializedItemId: itemId,
+              barcode: item.barcode,
+              eventType: 'SCRAP',
+              performedBy: performedBy || 'System',
+              notes: [reason, notes].filter(Boolean).join(' — ') || `Status changed to ${status}`,
+              metadata: { previousStatus: item.status, newStatus: status, linkedTravelerId: linkedTravelerId || null, rmaRequired },
+            });
+
+            await tx.insert(p2SerializedItemEvents).values({
+              serializedItemId: itemId,
+              barcode: item.barcode,
+              eventType: 'CYCLE_SCRAPPED',
+              performedBy: performedBy || 'System',
+              notes: `Production cycle scrapped — ${reason}`,
+              metadata: {
+                reason,
+                rmaRequired,
+                travelerId: activeTraveler?.id ?? null,
+                travelerNumber: activeTraveler?.travelerNumber ?? null,
+                serialNumber: item.serialNumber,
+              },
+            });
+
+            if (activeTraveler) {
+              await tx.insert(auditEvents).values({
+                entityType: 'traveler',
+                entityId: activeTraveler.id,
+                action: 'CYCLE_SCRAPPED',
+                actorName: performedBy || 'System',
+                reason,
+                meta: {
+                  travelerId: activeTraveler.id,
+                  travelerNumber: activeTraveler.travelerNumber,
+                  serialNumber: item.serialNumber,
+                  serializedItemId: itemId,
+                  barcode: item.barcode,
+                  rmaRequired,
+                },
+              });
+            }
+
+            if (rmaRequired) {
+              const now = new Date();
+              const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+              const existingRmasResult = await tx.execute(sql`
+                SELECT rma_number AS "rmaNumber"
+                FROM ${p2Rmas}
+                WHERE rma_number LIKE ${`RMA-P2-${dateStr}-%`}
+              `);
+              const existingRmas = (Array.isArray(existingRmasResult) ? existingRmasResult : (existingRmasResult.rows ?? [])) as Array<{ rmaNumber: string }>;
+              const maxRmaNumberSequence = existingRmas.reduce((maxSeq, row) => {
+                const match = String(row.rmaNumber || '').match(/-(\d+)$/);
+                return match ? Math.max(maxSeq, Number(match[1]) || 0) : maxSeq;
+              }, 0);
+              const rmaNumber = `RMA-P2-${dateStr}-${maxRmaNumberSequence + 1}`;
+
+              const [disposition] = await tx.insert(p2NonconformingDispositions)
+                .values({
+                  serializedItemId: item.id,
+                  dispositionType: 'Repair',
+                  poId: item.poId,
+                  poNumber: item.poNumber,
+                  authorization: performedBy || 'System',
+                  partNumber: item.partNumber || '',
+                  serialNumber: item.serialNumber || item.barcode || '',
+                  dispositionDate: now.toISOString().slice(0, 10),
+                  reasonType: 'other',
+                  reasonOther: reason,
+                  notes: [notes, `Production RMA replacement requested for ${item.serialNumber || item.barcode}`]
+                    .filter(Boolean)
+                    .join('\n'),
+                  resolved: false,
+                  createdAt: now,
+                  updatedAt: now,
+                })
+                .returning();
+
+              const [rma] = await tx.insert(p2Rmas)
+                .values({
+                  dispositionId: disposition.id,
+                  serializedItemId: item.id,
+                  rmaNumber,
+                  status: 'open',
+                  traceableMaterials: [],
+                  notes: `Production RMA created from scrap decision for ${item.serialNumber || item.barcode}`,
+                  createdAt: now,
+                  updatedAt: now,
+                })
+                .returning();
+
+              const rootSerial = String(item.serialNumber || item.barcode).replace(/-rma-\d+$/i, '');
+              const rmaPrefix = `${rootSerial}-rma-`;
+              const rmaRowsResult = await tx.execute(sql`
+                SELECT serial_number AS "serialNumber"
+                FROM ${p2SerializedItems}
+                WHERE lower(serial_number) LIKE ${`${rmaPrefix.toLowerCase()}%`}
+              `);
+              const rmaRows = (Array.isArray(rmaRowsResult) ? rmaRowsResult : (rmaRowsResult.rows ?? [])) as Array<{ serialNumber: string }>;
+              const maxRmaSequence = rmaRows.reduce((maxSeq, row) => {
+                const suffix = String(row.serialNumber || '').slice(rmaPrefix.length);
+                const parsed = /^\d+$/.test(suffix) ? Number(suffix) : 0;
+                return Math.max(maxSeq, parsed);
+              }, 0);
+              const rmaSerialNumber = `${rmaPrefix}${String(maxRmaSequence + 1).padStart(2, '0')}`;
+
+              const maxSequenceResult = await tx.execute(sql`
+                SELECT COALESCE(MAX(sequence_number), 0) + 1 AS "nextSequence"
+                FROM ${p2SerializedItems}
+                WHERE po_item_id = ${item.poItemId}
+              `);
+              const maxSequenceRows = (Array.isArray(maxSequenceResult) ? maxSequenceResult : (maxSequenceResult.rows ?? [])) as Array<{ nextSequence: number | string }>;
+              const nextSequence = Number(maxSequenceRows[0]?.nextSequence || 1);
+              const replacementMetadata = {
+                isReplacement: true,
+                replacementForSerializedItemId: item.id,
+                replacementForSerialNumber: item.serialNumber,
+                replacementForBarcode: item.barcode,
+                replacementReason: reason,
+                nonconformingDispositionId: disposition.id,
+                nonconformingRmaId: rma.id,
+                nonconformingRmaNumber: rmaNumber,
+                rmaRequired: true,
+                rmaReplacementSerialNumber: rmaSerialNumber,
+                generatedFromScrapAt: new Date().toISOString(),
+                generatedWithoutPoQuantityIncrease: true,
+              };
+
+              const [createdReplacement] = await tx
+                .insert(p2SerializedItems)
+                .values({
+                  serialNumber: rmaSerialNumber,
+                  barcode: rmaSerialNumber,
+                  travelerBarcode: rmaSerialNumber,
+                  poId: item.poId,
+                  poItemId: item.poItemId,
+                  poNumber: item.poNumber,
+                  partNumber: item.partNumber,
+                  partName: item.partName,
+                  customerId: item.customerId,
+                  customerName: item.customerName,
+                  sequenceNumber: nextSequence,
+                  currentDepartment: 'Pending Layup',
+                  currentStageIndex: 0,
+                  status: 'ACTIVE',
+                  metadata: replacementMetadata,
+                  partRoutingId: item.partRoutingId,
+                  partRoutingRevision: item.partRoutingRevision,
+                  sku: item.sku,
+                  drawingName: item.drawingName,
+                  buildFamilyKey: item.buildFamilyKey,
+                  notes: `RMA replacement generated for scrapped serial ${item.serialNumber}`,
+                  createdAt: new Date(),
+                  updatedAt: new Date(),
+                })
+                .returning();
+
+              replacementItem = createdReplacement;
+
+              await tx.insert(p2SerializedItemEvents).values({
+                serializedItemId: createdReplacement.id,
+                barcode: rmaSerialNumber,
+                eventType: 'REPLACEMENT_GENERATED',
+                toDepartment: createdReplacement.currentDepartment,
+                toStageIndex: createdReplacement.currentStageIndex,
+                performedBy: performedBy || 'System',
+                notes: `RMA replacement ${rmaSerialNumber} generated for scrapped serial ${item.serialNumber}`,
+                metadata: {
+                  scrappedSerializedItemId: item.id,
+                  scrappedSerialNumber: item.serialNumber,
+                  scrappedBarcode: item.barcode,
+                  dispositionId: disposition.id,
+                  rmaId: rma.id,
+                  rmaNumber,
+                  replacementSerialNumber: rmaSerialNumber,
+                  rmaRequired: true,
+                  scrapReason: reason,
+                  generatedWithoutPoQuantityIncrease: true,
+                },
+              });
+
+              await tx.insert(p2SerializedItemEvents).values({
+                serializedItemId: item.id,
+                barcode: item.barcode,
+                eventType: 'NCR_RMA_OPENED',
+                performedBy: performedBy || 'System',
+                notes: `Production RMA ${rmaNumber} opened for scrapped serial ${item.serialNumber}`,
+                metadata: {
+                  dispositionId: disposition.id,
+                  rmaId: rma.id,
+                  rmaNumber,
+                  replacementSerializedItemId: createdReplacement.id,
+                  replacementSerialNumber: rmaSerialNumber,
+                  reason,
+                },
+              });
+            }
+          });
+        } catch (scrapErr: unknown) {
+          const code = (scrapErr as { code?: string } | null)?.code;
+          const message = (scrapErr as Error)?.message || 'Failed to scrap item';
+          console.error('P2 Scrap atomic transaction failed:', scrapErr);
+          if (code === 'PO_ITEM_NOT_FOUND' || code === 'PO_NOT_FOUND' || code === 'ITEM_NOT_FOUND') {
+            return res.status(404).json({ error: message });
+          }
+          if (code === 'PO_LOCKED' || code === 'IN_PROGRESS_BLOCKS_DECREASE') {
+            return res.status(409).json({ error: message });
+          }
+          // Postgres deadlock_detected (40P01) and serialization_failure (40001)
+          // are retryable by the caller — surface as 409 instead of 500.
+          if (code === '40P01' || code === '40001') {
+            return res.status(409).json({ error: `Scrap conflicted with a concurrent update — please retry: ${message}` });
+          }
+          return res.status(500).json({ error: `Failed to scrap item: ${message}` });
+        }
+
+        return res.json({
+          success: true,
+          message: replacementItem
+            ? `NCR opened and RMA replacement ${replacementItem.serialNumber} generated for scheduling`
+            : `Item status updated to ${status}`,
+          travelerCreated: false,
+          linkedTravelerFound: false,
+          rmaRequired,
+          replacementCreated: !!replacementItem,
+          replacementItem,
+        });
+      }
+
       await db.update(p2SerializedItems)
         .set(updateFields)
         .where(eq(p2SerializedItems.id, itemId));
-      
+
       let eventType = 'NOTE';
       if (status === 'HOLD') eventType = 'HOLD';
       else if (status === 'SCRAPPED') eventType = 'SCRAP';
@@ -3565,39 +5163,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       });
 
       // Write cycle sentinel events to mark manufacturing cycle boundaries
-      if (status === 'SCRAPPED') {
-        // CYCLE_SCRAPPED: marks the end of this production cycle
-        await db.insert(p2SerializedItemEvents).values({
-          serializedItemId: itemId,
-          barcode: item.barcode,
-          eventType: 'CYCLE_SCRAPPED',
-          performedBy: performedBy || 'System',
-          notes: `Production cycle scrapped — ${reason}`,
-          metadata: {
-            reason,
-            travelerId: activeTraveler?.id ?? null,
-            travelerNumber: activeTraveler?.travelerNumber ?? null,
-            serialNumber: item.serialNumber,
-          },
-        });
-        // Also write to the main audit events table so it appears in AuditTimeline
-        if (activeTraveler) {
-          await db.insert(auditEvents).values({
-            entityType: 'traveler',
-            entityId: activeTraveler.id,
-            action: 'CYCLE_SCRAPPED',
-            actorName: performedBy || 'System',
-            reason,
-            meta: {
-              travelerId: activeTraveler.id,
-              travelerNumber: activeTraveler.travelerNumber,
-              serialNumber: item.serialNumber,
-              serializedItemId: itemId,
-              barcode: item.barcode,
-            },
-          });
-        }
-      } else if (status === 'ACTIVE' && item.status === 'SCRAPPED') {
+      if (status === 'ACTIVE' && item.status === 'SCRAPPED') {
         // CYCLE_RESTARTED: marks the beginning of a new production cycle for this serial number
         await db.insert(p2SerializedItemEvents).values({
           serializedItemId: itemId,
@@ -3633,7 +5199,6 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
       let travelerCreated = false;
       let linkedTravelerFound = false;
-      let replacementItem: any = null;
       if (status === 'COMPLETED') {
         if (linkedTravelerId) {
           const [existingTraveler] = await db.select().from(travelers).where(eq(travelers.id, linkedTravelerId)).limit(1);
@@ -3692,155 +5257,18 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         }
       }
 
-      if (status === 'SCRAPPED') {
-        const siblingItems = await db
-          .select()
-          .from(p2SerializedItems)
-          .where(eq(p2SerializedItems.poItemId, item.poItemId));
+      // Note: the SCRAPPED-first-transition path is handled atomically above
+      // and short-circuits with its own response. A repeat scrap on an
+      // already-SCRAPPED item falls through to the legacy status update path
+      // and is intentionally a no-op for the qty bump.
 
-        const existingReplacement = siblingItems.find((candidate: any) => {
-          const metadata = candidate.metadata || {};
-          return metadata.isReplacement === true && metadata.replacementForSerializedItemId === itemId;
-        });
-
-        if (!existingReplacement) {
-          const now = new Date();
-          const replacementNumber = siblingItems.filter((candidate: any) => {
-            const metadata = candidate.metadata || {};
-            return metadata.isReplacement === true
-              && (
-                metadata.replacementForSerializedItemId === itemId
-                || metadata.replacementForSerialNumber === item.serialNumber
-              );
-          }).length + 1;
-          const replacementSuffix = `R${replacementNumber}`;
-          const baseSerial = item.serialNumber || item.barcode || item.id;
-          const baseBarcode = item.barcode || baseSerial;
-          const replacementSerialNumber = `${baseSerial}-${replacementSuffix}`;
-          const replacementBarcode = `${baseBarcode}-${replacementSuffix}`;
-          const maxSequenceNumber = Math.max(
-            Number(item.sequenceNumber || 0),
-            ...siblingItems.map((candidate: any) => Number(candidate.sequenceNumber || 0))
-          );
-          const replacementId = randomUUID();
-          const replacementMetadata = {
-            ...((item.metadata as Record<string, unknown> | null) || {}),
-            isReplacement: true,
-            replacementForSerializedItemId: itemId,
-            replacementForSerialNumber: item.serialNumber,
-            replacementForBarcode: item.barcode,
-            replacementReason: reason,
-            replacementCreatedAt: now.toISOString(),
-            replacementCreatedBy: performedBy || 'System',
-            replacementSource: 'NCR_SCRAP',
-          };
-
-          const [createdReplacement] = await db.insert(p2SerializedItems).values({
-            id: replacementId,
-            poId: item.poId,
-            poItemId: item.poItemId,
-            poNumber: item.poNumber,
-            partNumber: item.partNumber,
-            partName: item.partName,
-            customerId: item.customerId,
-            customerName: item.customerName,
-            sequenceNumber: maxSequenceNumber + 1,
-            serialNumber: replacementSerialNumber,
-            barcode: replacementBarcode,
-            travelerBarcode: replacementBarcode,
-            buildFamilyKey: item.buildFamilyKey,
-            partRoutingId: item.partRoutingId,
-            partRoutingRevision: item.partRoutingRevision,
-            sku: item.sku,
-            drawingName: item.drawingName,
-            status: 'ACTIVE',
-            currentDepartment: item.currentDepartment || 'Pending Layup',
-            currentStageIndex: item.currentStageIndex || 0,
-            notes: `Replacement for NCR item ${item.serialNumber || item.barcode}. ${reason}`,
-            metadata: replacementMetadata,
-            createdAt: now,
-            updatedAt: now,
-          }).returning();
-
-          replacementItem = createdReplacement;
-
-          await db.update(p2SerializedItems)
-            .set({
-              metadata: {
-                ...((item.metadata as Record<string, unknown> | null) || {}),
-                ncrReplacementSerializedItemId: replacementId,
-                ncrReplacementSerialNumber: replacementSerialNumber,
-                ncrReplacementBarcode: replacementBarcode,
-                ncrReplacementCreatedAt: now.toISOString(),
-              },
-              updatedAt: now,
-            })
-            .where(eq(p2SerializedItems.id, itemId));
-
-          await db.insert(p2SerializedItemEvents).values({
-            serializedItemId: replacementId,
-            barcode: replacementBarcode,
-            eventType: 'NCR_REPLACEMENT_CREATED',
-            performedBy: performedBy || 'System',
-            notes: `Replacement created for NCR item ${item.serialNumber || item.barcode} - ${reason}`,
-            metadata: {
-              originalSerializedItemId: itemId,
-              originalSerialNumber: item.serialNumber,
-              originalBarcode: item.barcode,
-              replacementReason: reason,
-            },
-          });
-
-          await db.insert(p2SerializedItemEvents).values({
-            serializedItemId: itemId,
-            barcode: item.barcode,
-            eventType: 'NCR_REPLACEMENT_LINKED',
-            performedBy: performedBy || 'System',
-            notes: `Replacement item ${replacementSerialNumber} linked to this NCR scrap`,
-            metadata: {
-              replacementSerializedItemId: replacementId,
-              replacementSerialNumber,
-              replacementBarcode,
-              replacementReason: reason,
-            },
-          });
-
-          if (activeTraveler) {
-            await db.insert(auditEvents).values({
-              entityType: 'traveler',
-              entityId: activeTraveler.id,
-              action: 'NCR_REPLACEMENT_CREATED',
-              actorName: performedBy || 'System',
-              reason,
-              meta: {
-                travelerId: activeTraveler.id,
-                travelerNumber: activeTraveler.travelerNumber,
-                originalSerializedItemId: itemId,
-                replacementSerializedItemId: replacementId,
-                replacementSerialNumber,
-                replacementBarcode,
-                poId: item.poId,
-                poNumber: item.poNumber,
-              },
-            });
-          }
-        } else {
-          replacementItem = existingReplacement;
-        }
-      }
-      
       res.json({
         success: true,
         message: `Item status updated to ${status}`,
         travelerCreated,
         linkedTravelerFound,
-        replacementCreated: Boolean(replacementItem),
-        replacementItem: replacementItem ? {
-          id: replacementItem.id,
-          serialNumber: replacementItem.serialNumber,
-          barcode: replacementItem.barcode,
-          currentDepartment: replacementItem.currentDepartment,
-        } : null,
+        replacementCreated: false,
+        replacementItem: null,
       });
     } catch (_error) {
       console.error('P2 Update item status error:', _error);
@@ -4550,8 +5978,6 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const { inspectionId } = req.params;
       const { serializedItemId, rejectedBy, rejectedByName } = req.body;
 
-      const { storage } = await import('../../storage');
-      
       // Log the rejection
       console.log('Tolerance deviation rejected:', {
         inspectionId,
@@ -4560,17 +5986,70 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         rejectedByName
       });
 
-      // Flag the item for rework by updating its status
+      // Move the serialized item into the same nonconforming/disposition flow
+      // used by P2 Control Center scrap. The open disposition queue reads
+      // p2_serialized_items.status = SCRAPPED, while production only shows ACTIVE.
       if (serializedItemId) {
-        await storage.updateP2SerializedItem(serializedItemId, {
-          productionStatus: 'HOLD',
-          notes: `Tolerance deviation rejected by ${rejectedByName} on ${new Date().toISOString()} - requires rework or scrap`
+        const { db } = await import('../../db');
+        const { p2SerializedItems, p2SerializedItemEvents } = await import('../../schema');
+        const { eq } = await import('drizzle-orm');
+
+        const [item] = await db
+          .select()
+          .from(p2SerializedItems)
+          .where(eq(p2SerializedItems.id, serializedItemId))
+          .limit(1);
+
+        if (!item) {
+          return res.status(404).json({ error: 'Serialized item not found' });
+        }
+
+        const now = new Date();
+        const actor = rejectedByName || rejectedBy || 'System';
+        const reason = 'Tolerance deviation rejected - NCR/Scrap disposition required';
+        const existingMetadata =
+          item.metadata && typeof item.metadata === 'object' && !Array.isArray(item.metadata)
+            ? item.metadata
+            : {};
+
+        await db.update(p2SerializedItems)
+          .set({
+            status: 'SCRAPPED',
+            scrapReason: reason,
+            scrapBy: actor,
+            scrapAt: now,
+            notes: `Tolerance deviation rejected by ${actor} on ${now.toISOString()} - requires NCR/Scrap disposition`,
+            metadata: {
+              ...existingMetadata,
+              hasToleranceDeviation: true,
+              toleranceDeviationRejected: true,
+              toleranceDeviationRejectedAt: now.toISOString(),
+              toleranceDeviationRejectedBy: actor,
+              finalInspectionId: inspectionId,
+            },
+            updatedAt: now,
+          })
+          .where(eq(p2SerializedItems.id, serializedItemId));
+
+        await db.insert(p2SerializedItemEvents).values({
+          serializedItemId,
+          barcode: item.barcode,
+          eventType: 'SCRAP',
+          performedBy: actor,
+          notes: reason,
+          metadata: {
+            source: 'final-inspection-reject-deviation',
+            inspectionId,
+            previousStatus: item.status,
+            newStatus: 'SCRAPPED',
+            dispositionRequired: true,
+          },
         });
       }
 
       res.json({ 
         success: true, 
-        message: 'Tolerance deviation rejected - item flagged for rework',
+        message: 'Tolerance deviation rejected - item moved to NCR/Scrap open disposition',
         inspectionId,
         rejectedBy: rejectedByName,
         rejectedAt: new Date().toISOString()
@@ -7304,10 +8783,19 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         res.setHeader('Content-Disposition', `inline; filename="${attachment.originalFileName}"`);
       }
 
+      res.setHeader('Content-Type', attachment.mimeType || 'application/pdf');
       await getFileStorageProviderForObjectPath(normalizedPath).downloadObject(normalizedPath, res);
     } catch (error: any) {
-      console.error('Error downloading PO attachment:', error);
-      res.status(500).json({ error: 'Failed to download attachment' });
+      const { status, reason, message } = getStorageErrorResponse(error);
+      console.error('Error downloading PO attachment:', { status, reason, message });
+      if (res.headersSent) {
+        return res.end();
+      }
+      res.status(status).json({
+        error: status === 404 ? 'File not found in storage' : 'Failed to download attachment',
+        reason,
+        details: message,
+      });
     }
   });
 
@@ -9897,16 +11385,37 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       
       console.log('📊 Querying Finish QC report from', startDate, 'to', endDate);
       
-      // Get all Finish Technicians from employees table (regardless of whether they've completed orders)
+      // Get all Finish Technicians from employees and explicitly marked user accounts.
       // Defensive helper: pool.query returns rows[] directly, but handle QueryResult too
       const getRows = (r: any) => Array.isArray(r) ? r : (r?.rows ?? []);
       
       const finishTechniciansResult = await pool.query(
-        `SELECT id, name, employee_code
-        FROM employees
-        WHERE is_finish_technician = true
-          AND is_active = true
-        ORDER BY name`
+        `WITH finish_technicians AS (
+          SELECT
+            id::text as id,
+            name,
+            employee_code,
+            'employee' as source
+          FROM employees
+          WHERE is_finish_technician = true
+            AND is_active = true
+
+          UNION ALL
+
+          SELECT
+            ('user:' || u.id::text) as id,
+            COALESCE(NULLIF(TRIM(CONCAT_WS(' ', u.first_name, u.last_name)), ''), u.username) as name,
+            u.username as employee_code,
+            'user' as source
+          FROM users u
+          LEFT JOIN employees e ON u.employee_id = e.id
+          WHERE u.is_finish_technician = true
+            AND u.is_active = true
+            AND NOT COALESCE(e.is_finish_technician = true AND e.is_active = true, false)
+        )
+        SELECT DISTINCT ON (LOWER(name)) id, name, employee_code, source
+        FROM finish_technicians
+        ORDER BY LOWER(name), source`
       );
       const finishTechnicians = getRows(finishTechniciansResult);
       
@@ -10066,6 +11575,31 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // Admin Journal Entries — read-only, ADMIN only
   // Note: /api/* routes already pass through authenticateToken globally (server/index.ts)
+  app.get('/api/finance/accounting/journal-entries/:id/source-trace', async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (user?.role !== 'ADMIN') {
+        return res.status(403).json({ error: 'Access denied. ADMIN role required.' });
+      }
+
+      const journalEntryId = Number(req.params.id);
+      if (!Number.isInteger(journalEntryId) || journalEntryId <= 0) {
+        return res.status(400).json({ error: 'Invalid journal entry ID' });
+      }
+
+      const { getJournalEntrySourceTrace } = await import('../services/accountingSourceTraceService');
+      const trace = await getJournalEntrySourceTrace(journalEntryId);
+      if (!trace) {
+        return res.status(404).json({ error: 'Journal entry not found' });
+      }
+
+      res.json(trace);
+    } catch (error: any) {
+      console.error('Error fetching journal entry source trace:', error);
+      res.status(500).json({ error: 'Failed to fetch journal entry source trace' });
+    }
+  });
+
   app.get('/api/finance/accounting/journal-entries', async (req, res) => {
     try {
       const user = (req as any).user;
@@ -10073,16 +11607,27 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         return res.status(403).json({ error: 'Access denied. ADMIN role required.' });
       }
 
-      const { fromDate, toDate, status, transactionType } = req.query;
+      const { fromDate, toDate, status, transactionType, journalEntryId, journalEntryIds } = req.query;
       const { db } = await import('../../db');
       const { journalEntries, journalLines, chartOfAccounts } = await import('../../schema');
-      const { eq, and, gte, lte, desc } = await import('drizzle-orm');
+      const { eq, and, gte, lte, desc, inArray } = await import('drizzle-orm');
 
       const conditions: any[] = [];
       if (fromDate) conditions.push(gte(journalEntries.effectiveDate, new Date(fromDate as string)));
       if (toDate) conditions.push(lte(journalEntries.effectiveDate, new Date(toDate as string)));
       if (status) conditions.push(eq(journalEntries.status, status as string));
       if (transactionType) conditions.push(eq(journalEntries.transactionType, transactionType as string));
+      const requestedJournalEntryIds = [
+        journalEntryId,
+        journalEntryIds,
+      ]
+        .flatMap((value) => Array.isArray(value) ? value : [value])
+        .flatMap((value) => String(value ?? '').split(','))
+        .map((value) => Number(value.trim()))
+        .filter((value) => Number.isInteger(value) && value > 0);
+      if (requestedJournalEntryIds.length > 0) {
+        conditions.push(inArray(journalEntries.id, Array.from(new Set(requestedJournalEntryIds))));
+      }
 
       const entries = await db
         .select()
@@ -11055,6 +12600,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // Estimating / RFQ Builder routes
   app.use('/api/estimating', authenticateToken, estimatingRoutes);
+
+  // Conversational RFQ Risk Assessment routes
+  app.use('/api/rfq-risk-sessions', authenticateToken, rfqRiskSessionsRoutes);
 
   // System Audit Library routes (admin and owner only)
   app.use('/api/audits', requireAdminOrOwner, auditsRoutes);

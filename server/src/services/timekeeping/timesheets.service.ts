@@ -21,6 +21,10 @@ import { recordAuditEvent, type AuditPayload } from "../auditLedgerService";
 
 export type { Timesheet };
 
+function isHourlyTimekeepingEmployee(employee: { payType?: string | null }): boolean {
+  return (employee.payType ?? "HOURLY").toUpperCase() !== "SALARY";
+}
+
 export async function listTimesheets(filters?: {
   employeeId?: number | null;
   status?: string | null;
@@ -76,6 +80,7 @@ export interface RunningTimesheetView {
   periodStart: string;
   periodEnd: string;
   generatedAt: string;
+  normalHoursLimit: number;
   totalHours: number;
   regularHours: number;
   overtimeHours: number;
@@ -140,6 +145,8 @@ export async function getRunningTimesheetForEmployee(
   const periodStartDate = midnightInTZ(periodStart, tz);
   const nextDayAfterEnd = addDays(periodEnd, 1);
   const periodEndDate = new Date(midnightInTZ(nextDayAfterEnd, tz).getTime() - 1);
+  const periodDayCount = Math.max(1, Math.round((new Date(`${periodEnd}T12:00:00Z`).getTime() - new Date(`${periodStart}T12:00:00Z`).getTime()) / 86_400_000) + 1);
+  const normalHoursLimit = roundHours((settings.standardWorkWeekHours || settings.overtimeThresholdWeekly) * (periodDayCount / 7));
   const now = new Date();
 
   const sessions = await db
@@ -247,6 +254,7 @@ export async function getRunningTimesheetForEmployee(
     periodStart,
     periodEnd,
     generatedAt: now.toISOString(),
+    normalHoursLimit,
     totalHours,
     regularHours,
     overtimeHours: roundHours(overtimeHours),
@@ -554,9 +562,9 @@ export async function certifyTimesheetDay(
   const timesheet = await getTimesheet(timesheetId);
   if (!timesheet) return { error: "Timesheet not found", statusCode: 404 };
 
-  if (!isEditable(timesheet.status)) {
+  if (timesheet.status !== "draft" && timesheet.status !== "submitted") {
     return {
-      error: `Only draft timesheets can receive daily certifications (current status: ${timesheet.status})`,
+      error: `Only draft or supervisor-pending timesheets can receive daily certifications (current status: ${timesheet.status})`,
       statusCode: 409,
     };
   }
@@ -1294,7 +1302,7 @@ export async function generateTimesheetsForAllEmployees(
 
   const allEmployees = await listResolvedEmployees();
   const activeWithTimekeeping = allEmployees.filter(
-    (e) => e.isActive && e.timekeepingId != null
+    (e) => e.isActive && e.timekeepingId != null && isHourlyTimekeepingEmployee(e)
   );
 
   for (const emp of activeWithTimekeeping) {
@@ -1322,7 +1330,11 @@ export async function generateTimesheetsForAllEmployees(
     }
 
     try {
-      const ts = await createTimesheet({ employeeId, periodStart, periodEnd }, actor);
+      const ts = await getOrAutoCreateTimesheet(employeeId, periodStart, periodEnd, actor);
+      if (!ts) {
+        result.skipped.push({ employeeId, reason: "No punch hours for period" });
+        continue;
+      }
       result.created.push({ employeeId, timesheetId: ts.id });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

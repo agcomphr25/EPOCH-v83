@@ -1,6 +1,7 @@
 import { db } from '../../db';
 import { dcaaAuditFindings, InsertDcaaAuditFinding } from '../../schema';
 import { timekeepingForensicRules, ForensicRule, ForensicViolation } from './dcaaForensicRules';
+import { securityForensicRules } from './securityForensicRules';
 import { eq, and, sql, inArray } from 'drizzle-orm';
 
 export interface ScanSummary {
@@ -50,7 +51,7 @@ export async function runForensicScan(): Promise<ScanSummary> {
 }
 
 async function _runForensicScanInternal(): Promise<ScanSummary> {
-  const allRules: ForensicRule[] = [...timekeepingForensicRules];
+  const allRules: ForensicRule[] = [...timekeepingForensicRules, ...securityForensicRules];
 
   let totalViolationsFound = 0;
   let totalClosed = 0;

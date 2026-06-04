@@ -15,6 +15,7 @@ import { format } from 'date-fns';
 import { COMPANY_INFO } from '@shared/company-config';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
+import P2InvoicePreviewButton from '@/components/p2/P2InvoicePreviewButton';
 
 interface PackingSlipLineItem {
   partNumber: string;
@@ -66,6 +67,18 @@ interface CurrentUser {
   id: number;
   username: string;
   role: string;
+}
+
+function invoiceStatusClass(status?: string) {
+  switch (status?.toUpperCase()) {
+    case 'DRAFT': return 'bg-blue-50 text-blue-700 border-blue-200';
+    case 'REVIEW': return 'bg-orange-50 text-orange-700 border-orange-200';
+    case 'POSTED': return 'bg-indigo-50 text-indigo-700 border-indigo-200';
+    case 'SENT': return 'bg-teal-50 text-teal-700 border-teal-200';
+    case 'PAID': return 'bg-green-50 text-green-800 border-green-200';
+    case 'VOID': return 'bg-gray-50 text-gray-600 border-gray-200';
+    default: return 'bg-gray-50 text-gray-700 border-gray-200';
+  }
 }
 
 export default function P2PackingSlipViewer() {
@@ -143,24 +156,13 @@ export default function P2PackingSlipViewer() {
     },
   });
 
-  const createInvoiceMutation = useMutation({
-    mutationFn: async () => {
-      return apiRequest(`/api/ar-invoices/from-packing-slip/${packingSlipId}`, {
-        method: 'POST',
-      });
-    },
-    onSuccess: (invoice: any) => {
-      qc.invalidateQueries({ predicate: (query) =>
-        Array.isArray(query.queryKey) && query.queryKey[0] === '/api/ar-invoices'
-      });
-      qc.invalidateQueries({ queryKey: ['/api/p2/packing-slips', packingSlipId] });
-      toast({ title: 'Invoice ready for review', description: `Invoice ${invoice?.invoiceNumber || ''} was created from this packing slip.` });
-      if (invoice?.id) setLocation(`/finance/invoices/${invoice.id}`);
-    },
-    onError: (err: any) => {
-      toast({ title: 'Invoice creation failed', description: err.message || 'Unable to create invoice.', variant: 'destructive' });
-    },
-  });
+  const handleInvoiceCreated = (invoice: any) => {
+    qc.invalidateQueries({ predicate: (query) =>
+      Array.isArray(query.queryKey) && query.queryKey[0] === '/api/ar-invoices'
+    });
+    qc.invalidateQueries({ queryKey: ['/api/p2/packing-slips', packingSlipId] });
+    if (invoice?.id) setLocation(`/finance/invoices/${invoice.id}`);
+  };
 
   const handleStartEdit = () => {
     if (!packingSlip) return;
@@ -253,6 +255,9 @@ export default function P2PackingSlipViewer() {
   const displayDate = packingSlip.shipDate
     ? format(new Date(packingSlip.shipDate), 'MMM d, yyyy')
     : format(new Date(packingSlip.createdAt), 'MMM d, yyyy');
+  const linkedInvoice = Array.isArray(linkedInvoices) && linkedInvoices.length > 0
+    ? linkedInvoices[0]
+    : null;
 
   return (
     <div className="container mx-auto px-4 py-6 max-w-4xl">
@@ -268,19 +273,20 @@ export default function P2PackingSlipViewer() {
               Edit
             </Button>
           )}
-          {(!Array.isArray(linkedInvoices) || linkedInvoices.length === 0) && (
+          {linkedInvoice ? (
             <Button
               variant="outline"
-              onClick={() => createInvoiceMutation.mutate()}
-              disabled={createInvoiceMutation.isPending}
+              onClick={() => setLocation(`/finance/invoices/${linkedInvoice.id}`)}
             >
-              {createInvoiceMutation.isPending ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              ) : (
-                <Receipt className="h-4 w-4 mr-2" />
-              )}
-              Create Invoice
+              <Receipt className="h-4 w-4 mr-2" />
+              View Invoice
             </Button>
+          ) : (
+            <P2InvoicePreviewButton
+              packingSlipId={packingSlipId}
+              variant="outline"
+              onCreated={handleInvoiceCreated}
+            />
           )}
           <Button variant="outline" onClick={handlePrint} data-testid="button-print">
             <Printer className="h-4 w-4 mr-2" />
@@ -292,6 +298,62 @@ export default function P2PackingSlipViewer() {
           </Button>
         </div>
       </div>
+
+      <Card className="print:hidden mb-6 border-slate-200 bg-slate-50/70">
+        <CardContent className="p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <Receipt className={`h-5 w-5 mt-0.5 ${linkedInvoice ? 'text-green-600' : 'text-muted-foreground'}`} />
+              <div>
+                <p className="text-sm font-medium">
+                  {linkedInvoice ? 'Invoice created for this packing slip' : 'No invoice created for this packing slip'}
+                </p>
+                {linkedInvoice ? (
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <Link
+                      href={`/finance/invoices/${linkedInvoice.id}`}
+                      className="font-mono text-blue-600 hover:underline"
+                    >
+                      {linkedInvoice.invoiceNumber}
+                    </Link>
+                    <Badge variant="outline" className={invoiceStatusClass(linkedInvoice.status)}>
+                      {linkedInvoice.status}
+                    </Badge>
+                    {linkedInvoice.journalEntryId ? (
+                      <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">
+                        JE #{linkedInvoice.journalEntryId} {linkedInvoice.journalEntryStatus || 'POSTED'}
+                        {linkedInvoice.journalLineCount ? ` (${linkedInvoice.journalLineCount} lines)` : ''}
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+                        JE pending until invoice is posted
+                      </Badge>
+                    )}
+                  </div>
+                ) : (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Use Preview Invoice to review and edit the invoice before creating it.
+                  </p>
+                )}
+              </div>
+            </div>
+            {linkedInvoice ? (
+              <Button size="sm" variant="outline" asChild>
+                <Link href={`/finance/invoices/${linkedInvoice.id}`}>
+                  Audit Invoice <ExternalLink className="h-3.5 w-3.5 ml-1" />
+                </Link>
+              </Button>
+            ) : (
+              <P2InvoicePreviewButton
+                packingSlipId={packingSlipId}
+                size="sm"
+                variant="outline"
+                onCreated={handleInvoiceCreated}
+              />
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {editMode && (
         <Card className="print:hidden mb-6 border-blue-200 bg-blue-50 dark:bg-blue-950 dark:border-blue-800">
@@ -584,6 +646,16 @@ export default function P2PackingSlipViewer() {
                       {(inv.pricingMismatch || inv.pricingAmbiguous) && (
                         <p className="text-xs text-yellow-700 flex items-center gap-1 mt-0.5">
                           <AlertTriangle className="h-3 w-3" /> Pricing requires review
+                        </p>
+                      )}
+                      {inv.journalEntryId ? (
+                        <p className="text-xs text-indigo-700 mt-0.5">
+                          JE #{inv.journalEntryId} {inv.journalEntryStatus || 'POSTED'}
+                          {inv.journalLineCount ? ` (${inv.journalLineCount} lines)` : ''}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-amber-700 mt-0.5">
+                          Journal entry pending until invoice is posted.
                         </p>
                       )}
                     </div>

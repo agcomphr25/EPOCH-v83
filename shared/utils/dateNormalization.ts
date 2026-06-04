@@ -4,7 +4,7 @@
  * UTC-parsing shifting the calendar day in non-UTC timezones.
  * Date objects are kept as-is (their local-time date components are used).
  */
-function toLocalDate(value: Date | string): Date {
+export function toLocalDate(value: Date | string): Date {
   if (value instanceof Date) {
     return value;
   }
@@ -35,3 +35,29 @@ export function normalizeToTuesday(date: Date | string): Date {
 }
 
 export const normalizeDueDateForStorage = normalizeToTuesday;
+
+export function formatDateOnly(
+  value: Date | string | null | undefined,
+  options: Intl.DateTimeFormatOptions = {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }
+): string {
+  if (!value) return '—';
+
+  const date = toLocalDate(value);
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+
+  return new Intl.DateTimeFormat('en-US', options).format(date);
+}
+
+export function formatDateOnlyMedium(value: Date | string | null | undefined): string {
+  return formatDateOnly(value, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}

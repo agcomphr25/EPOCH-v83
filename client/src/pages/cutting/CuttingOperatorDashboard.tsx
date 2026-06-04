@@ -38,6 +38,7 @@ import { CuttingQueueNextActionBadge } from "@/components/cutting/CuttingQueueNe
 import { CuttingQueueProductionLockNotice } from "@/components/cutting/CuttingQueueProductionLockNotice";
 import { CuttingQueueSummaryStrip } from "@/components/cutting/CuttingQueueSummaryStrip";
 import { CuttingQueueExportButton } from "@/components/cutting/CuttingQueueExportButton";
+import { CuttingQueueEmptyState } from "@/components/cutting/CuttingQueueEmptyState";
 import {
   CuttingQueueFilterBar,
   filterCuttingQueueItems,
@@ -2233,21 +2234,14 @@ export default function CuttingOperatorDashboard() {
               Loading queue...
             </div>
           ) : mfgQueueItems.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground border-2 border-dashed rounded-lg">
-              <Scissors className="h-8 w-8 mx-auto mb-2 opacity-30" />
-              <p>No items in the queue</p>
-              <p className="text-sm">Schedule packets from the Weekly Scheduling page</p>
-            </div>
+            <CuttingQueueEmptyState mode="empty" />
           ) : filteredMfgQueueItems.length === 0 ? (
             <div className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <CuttingQueueFilterBar items={mfgQueueItems} value={queueFilter} onChange={setQueueFilter} />
                 <CuttingQueueExportButton items={filteredMfgQueueItems} filenamePrefix="cutting-operator-queue" />
               </div>
-              <div className="text-center py-10 text-muted-foreground border-2 border-dashed rounded-lg">
-                <Scissors className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                <p>No queue rows match this filter</p>
-              </div>
+              <CuttingQueueEmptyState mode="filtered" filter={queueFilter} onClearFilter={() => setQueueFilter("all")} />
             </div>
           ) : (
             <div className="space-y-3">

@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/dialog";
 import { GroupedPOsBadge } from "@/components/cutting/GroupedPOsBadge";
 import { CuttingQueueTraceSheet } from "@/components/cutting/CuttingQueueTraceSheet";
+import { CuttingQueueHealthBadges } from "@/components/cutting/CuttingQueueHealthBadges";
 import { useToast } from "@/hooks/use-toast";
 import {
   Accordion,
@@ -2265,6 +2266,9 @@ export default function CuttingOperatorDashboard() {
                             poNumbers={item.poNumbers}
                             testIdPrefix={`pos-${item.id}`}
                           />
+                        </div>
+                        <div className="mt-1">
+                          <CuttingQueueHealthBadges item={item} compact />
                         </div>
                       </TableCell>
                       <TableCell className="text-center">

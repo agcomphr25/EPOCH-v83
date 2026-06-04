@@ -48,7 +48,7 @@ import RoutingDocumentManagement from './RoutingDocumentManagement';
 import P2ChangesTab from '@/components/p2/P2ChangesTab';
 import P2ShippingTab from '@/components/p2/P2ShippingTab';
 import P2NonconformingTab from '@/components/p2/P2ScrappedItemsTab';
-import P2CustomersTab from '@/components/p2/P2CustomersTab';
+import P2CustomersPage from './P2CustomersPage';
 import { TravelerCapturedDataById } from '@/components/p2/TravelerCapturedData';
 import ProgramManufacturingOrchestration from '@/components/p2/ProgramManufacturingOrchestration';
 import { queryClient, apiRequest } from '@/lib/queryClient';
@@ -776,7 +776,7 @@ export default function P2ControlCenter() {
         </TabsContent>
 
         <TabsContent value="customers">
-          <P2CustomersTab />
+          <P2CustomersPage />
         </TabsContent>
 
         <TabsContent value="setup">

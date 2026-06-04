@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -55,6 +55,8 @@ interface Project {
 interface P2POCreationWizardProps {
   onComplete: (poId: number) => void;
   onCancel: () => void;
+  initialProjectId?: string | null;
+  initialCustomerId?: string | null;
 }
 
 const NO_PROJECT_VALUE = '__no_project__';
@@ -92,7 +94,12 @@ interface LineItem {
   inventoryItemId?: number | null;
 }
 
-export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreationWizardProps) {
+export default function P2POCreationWizard({
+  onComplete,
+  onCancel,
+  initialProjectId,
+  initialCustomerId,
+}: P2POCreationWizardProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const [poDetails, setPODetails] = useState<z.infer<typeof detailsSchema> | null>(null);
@@ -133,6 +140,13 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
   const openProjects = projects.filter((project) =>
     !['completed', 'cancelled', 'closed'].includes(String(project.status || '').toLowerCase())
   );
+
+  const selectedInitialProject = initialProjectId
+    ? projects.find((project) => project.id === initialProjectId)
+    : null;
+  const projectOptions = selectedInitialProject && !openProjects.some((project) => project.id === selectedInitialProject.id)
+    ? [selectedInitialProject, ...openProjects]
+    : openProjects;
 
   const renderProjectLabel = (project: Project) =>
     `${project.projectCode} - ${project.projectName}${project.customerName ? ` (${project.customerName})` : ''}`;
@@ -178,10 +192,23 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
       assignedTo: '',
       productionLead: '',
       notes: '',
-      projectId: NO_PROJECT_VALUE,
+      projectId: initialProjectId || NO_PROJECT_VALUE,
       projectName: '',
     },
   });
+
+  useEffect(() => {
+    if (!initialProjectId) return;
+    detailsForm.setValue('projectId', initialProjectId);
+  }, [detailsForm, initialProjectId]);
+
+  useEffect(() => {
+    if (!initialCustomerId || p2Customers.length === 0) return;
+    const customer = p2Customers.find((candidate: any) => candidate.customerId === initialCustomerId);
+    if (!customer) return;
+    customerForm.setValue('customerId', customer.id.toString());
+    setSelectedCustomer((current: any) => current || customer);
+  }, [customerForm, initialCustomerId, p2Customers]);
 
   const createPOMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -595,7 +622,7 @@ export default function P2POCreationWizard({ onComplete, onCancel }: P2POCreatio
                       </FormControl>
                       <SelectContent>
                         <SelectItem value={NO_PROJECT_VALUE}>No linked project</SelectItem>
-                        {openProjects.map((project) => (
+                        {projectOptions.map((project) => (
                           <SelectItem key={project.id} value={project.id}>
                             {renderProjectLabel(project)}
                           </SelectItem>

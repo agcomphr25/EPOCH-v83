@@ -17,6 +17,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
+import P2POCreationWizard from '@/components/p2/P2POCreationWizard';
 import { 
   ArrowLeft, 
   CheckCircle2, 
@@ -427,11 +428,7 @@ export default function ProjectDetailPage() {
     reason: '',
     hasPoChange: false,
   });
-  const [newPoForm, setNewPoForm] = useState({
-    poNumber: '',
-    expectedDelivery: '',
-    notes: '',
-  });
+  const [showProjectPOWizard, setShowProjectPOWizard] = useState(false);
 
   const suggestedPo = useMemo(() => {
     if (!project || p2PurchaseOrders.length === 0) return null;
@@ -512,50 +509,18 @@ export default function ProjectDetailPage() {
     onError: (err: any) => toast({ title: 'Revision failed', description: err?.message || 'Could not create revision.', variant: 'destructive' }),
   });
 
-  const createProjectPOMutation = useMutation({
-    mutationFn: async () => {
-      if (!project) throw new Error('Project is not loaded');
-      const po = await apiRequest('/api/p2-purchase-orders-bypass', {
-        method: 'POST',
-        body: {
-          poNumber: newPoForm.poNumber.trim(),
-          customerId: project.customer?.customerId || project.customerId,
-          customerName: project.customer?.name || project.customerId,
-          poDate: new Date().toISOString().split('T')[0],
-          expectedDelivery: newPoForm.expectedDelivery || null,
-          status: 'OPEN',
-          notes: newPoForm.notes || null,
-          projectId: project.id,
-          projectName: `${project.projectCode} - ${project.projectName}`,
-        },
-      });
-
-      if (!project.poId && po?.id) {
-        await apiRequest(`/api/projects/${id}/link-po`, {
-          method: 'POST',
-          body: {
-            poId: po.id,
-            reason: 'Initial production PO link',
-            createdByDisplayName: currentUser?.username,
-          },
-        });
-      }
-
-      return po;
-    },
-    onSuccess: () => {
-      toast({ title: 'PO entered', description: 'P2 purchase order added to this project.' });
-      setNewPoForm({ poNumber: '', expectedDelivery: '', notes: '' });
-      queryClient.invalidateQueries({ queryKey: ['/api/projects', id] });
-      queryClient.invalidateQueries({ queryKey: ['/api/projects', id, 'traceability'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/projects', id, 'revisions'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/p2-purchase-orders-bypass'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/po-statuses'] });
-    },
-    onError: (err: any) => {
-      toast({ title: 'PO entry failed', description: err?.message || 'Failed to create project PO.', variant: 'destructive' });
-    },
-  });
+  const handleProjectPOWizardComplete = (poId: number) => {
+    setShowProjectPOWizard(false);
+    if (!project?.poId) {
+      linkPoMutation.mutate({ poId, reason: 'Initial production PO link' });
+      return;
+    }
+    toast({ title: 'PO created', description: 'P2 purchase order was added to this project.' });
+    queryClient.invalidateQueries({ queryKey: ['/api/projects', id] });
+    queryClient.invalidateQueries({ queryKey: ['/api/projects', id, 'traceability'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/p2-purchase-orders-bypass'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/po-statuses'] });
+  };
 
   const { data: projectWorkOrders = [] } = useQuery<ProjectWorkOrder[]>({
     queryKey: ['/api/work-orders/project', id],
@@ -2386,49 +2351,18 @@ export default function ProjectDetailPage() {
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="flex items-center gap-2 text-base">
-                    <Plus className="h-4 w-4" /> Enter P2 PO
+                    <Plus className="h-4 w-4" /> Create P2 PO
                   </CardTitle>
-                  <CardDescription>Add a new P2 PO directly to this project.</CardDescription>
+                  <CardDescription>Use the P2 PO wizard with this project pre-selected.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="project-po-number">PO Number</Label>
-                    <Input
-                      id="project-po-number"
-                      value={newPoForm.poNumber}
-                      onChange={(event) => setNewPoForm((current) => ({ ...current, poNumber: event.target.value }))}
-                      placeholder="Customer PO number"
-                      data-testid="input-project-po-number"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="project-po-due-date">Expected Delivery</Label>
-                    <Input
-                      id="project-po-due-date"
-                      type="date"
-                      value={newPoForm.expectedDelivery}
-                      onChange={(event) => setNewPoForm((current) => ({ ...current, expectedDelivery: event.target.value }))}
-                      data-testid="input-project-po-due-date"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="project-po-notes">Notes</Label>
-                    <Textarea
-                      id="project-po-notes"
-                      value={newPoForm.notes}
-                      onChange={(event) => setNewPoForm((current) => ({ ...current, notes: event.target.value }))}
-                      placeholder="Optional notes"
-                      rows={3}
-                      data-testid="textarea-project-po-notes"
-                    />
-                  </div>
                   <Button
                     className="w-full"
-                    disabled={!newPoForm.poNumber.trim() || createProjectPOMutation.isPending}
-                    onClick={() => createProjectPOMutation.mutate()}
-                    data-testid="button-create-project-po"
+                    onClick={() => setShowProjectPOWizard(true)}
+                    data-testid="button-open-project-po-wizard"
                   >
-                    {createProjectPOMutation.isPending ? 'Saving...' : 'Save P2 PO'}
+                    <Plus className="h-4 w-4 mr-2" />
+                    Open P2 PO Wizard
                   </Button>
                 </CardContent>
               </Card>
@@ -3560,6 +3494,21 @@ export default function ProjectDetailPage() {
           </Card>
         </TabsContent>
 
+
+        <Dialog open={showProjectPOWizard} onOpenChange={setShowProjectPOWizard}>
+          <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto p-0">
+            <DialogHeader className="sr-only">
+              <DialogTitle>Create P2 PO</DialogTitle>
+              <DialogDescription>Create a P2 purchase order linked to this project.</DialogDescription>
+            </DialogHeader>
+            <P2POCreationWizard
+              initialProjectId={project.id}
+              initialCustomerId={project.customer?.customerId || project.customerId}
+              onComplete={handleProjectPOWizardComplete}
+              onCancel={() => setShowProjectPOWizard(false)}
+            />
+          </DialogContent>
+        </Dialog>
 
         {/* ── PDF Preview Dialog ── */}
         <Dialog open={!!pdfPreviewUrl} onOpenChange={(open) => { if (!open) setPdfPreviewUrl(null); }}>

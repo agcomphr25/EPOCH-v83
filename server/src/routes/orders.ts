@@ -66,6 +66,9 @@ const READY_FOR_SHIPPING_STATUSES = new Set([
   'ready to ship',
 ]);
 
+const FULFILLED_STATUSES = new Set(['fulfilled', 'shipped']);
+const READY_FOR_SHIPPING_STATUS = 'Ready for Shipping';
+
 function shouldResetReadyForShippingToInProgress(
   currentDepartment: string | null | undefined,
   targetDepartment: string | null | undefined,
@@ -77,6 +80,23 @@ function shouldResetReadyForShippingToInProgress(
 
   const normalizedStatus = String(currentStatus || '').trim().toLowerCase();
   return READY_FOR_SHIPPING_STATUSES.has(normalizedStatus);
+}
+
+function shouldResetFulfilledToReadyForShipping(
+  currentDepartment: string | null | undefined,
+  targetDepartment: string | null | undefined,
+  currentStatus: string | null | undefined
+): boolean {
+  if (targetDepartment !== 'Shipping') {
+    return false;
+  }
+
+  const normalizedStatus = String(currentStatus || '').trim().toLowerCase();
+  return (
+    FULFILLED_STATUSES.has(normalizedStatus) ||
+    currentDepartment === 'Shipping Management' ||
+    currentDepartment === 'Fulfilled'
+  );
 }
 
 async function requiresP1PaymentAccountingApproval(paymentDate: Date, user: any): Promise<{ required: boolean; period: any }> {
@@ -2894,6 +2914,17 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
       ) {
         updateData.status = 'IN_PROGRESS';
       }
+      if (
+        shouldResetFulfilledToReadyForShipping(
+          existingOrder.currentDepartment,
+          targetDepartment,
+          existingOrder.status
+        )
+      ) {
+        updateData.status = READY_FOR_SHIPPING_STATUS;
+        updateData.shippedDate = null;
+        updateData.shippingCompletedAt = null;
+      }
     }
 
     // Build actor from authenticated user
@@ -3855,6 +3886,11 @@ router.patch(
       department,
       existingOrder?.status ?? existingOrder?.productionStatus
     );
+    const shouldResetStatusToReadyForShipping = shouldResetFulfilledToReadyForShipping(
+      previousDepartment,
+      department,
+      existingOrder?.status ?? existingOrder?.productionStatus
+    );
 
     // Try to find and update the order
     let updatedOrder;
@@ -3867,6 +3903,11 @@ router.patch(
       if (shouldResetStatusToInProgress) {
         finalizedUpdates.status = 'IN_PROGRESS';
       }
+      if (shouldResetStatusToReadyForShipping) {
+        finalizedUpdates.status = READY_FOR_SHIPPING_STATUS;
+        finalizedUpdates.shippedDate = null;
+        finalizedUpdates.shippingCompletedAt = null;
+      }
       updatedOrder = await storage.updateFinalizedOrder(orderId, finalizedUpdates);
       orderType = 'finalized';
       console.log(`✅ Updated finalized order ${orderId} to ${department}`);
@@ -3877,6 +3918,11 @@ router.patch(
         };
         if (shouldResetStatusToInProgress) {
           draftUpdates.status = 'IN_PROGRESS';
+        }
+        if (shouldResetStatusToReadyForShipping) {
+          draftUpdates.status = READY_FOR_SHIPPING_STATUS;
+          draftUpdates.shippedDate = null;
+          draftUpdates.shippingCompletedAt = null;
         }
         updatedOrder = await storage.updateOrderDraft(orderId, draftUpdates);
         orderType = 'draft';

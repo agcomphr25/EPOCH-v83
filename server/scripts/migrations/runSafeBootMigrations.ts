@@ -174,6 +174,7 @@ const safeFiles = [
   '0133_voice_notes_persistence.sql',
   '0134_conversational_rfq_risk_sessions.sql',
   '0135_pto_balances_and_schedules.sql',
+  '0136_p2_production_change_form_approvals.sql',
   '0142_punch_correction_requests.sql',
   '0143_internal_messages_nullable_sender.sql',
   '0144_rename_10300_customer_payment_clearing.sql',

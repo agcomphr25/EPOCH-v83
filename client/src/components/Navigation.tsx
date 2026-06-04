@@ -1475,6 +1475,12 @@ export default function Navigation() {
       description: 'Private voice journal for process observations and business knowledge',
     },
     {
+      path: '/epoch-copilot',
+      label: 'EPOCH Copilot',
+      icon: MessageSquare,
+      description: 'Admin assistant for EPOCH records and how-to guides',
+    },
+    {
       path: '/metric-directory',
       label: 'Metric Directory',
       icon: Database,

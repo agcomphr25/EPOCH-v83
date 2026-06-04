@@ -12734,6 +12734,39 @@ export const chatbotKnowledgeBase = pgTable('chatbot_knowledge_base', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
+// EPOCH Copilot conversations
+export const epochCopilotConversations = pgTable('epoch_copilot_conversations', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: text('user_id'),
+  username: text('username').notNull(),
+  title: text('title').notNull().default('New Copilot conversation'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const epochCopilotMessages = pgTable('epoch_copilot_messages', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  conversationId: uuid('conversation_id')
+    .notNull()
+    .references(() => epochCopilotConversations.id, { onDelete: 'cascade' }),
+  role: text('role').notNull(),
+  content: text('content').notNull(),
+  payload: jsonb('payload'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const epochCopilotDraftGuides = pgTable('epoch_copilot_draft_guides', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  title: text('title').notNull(),
+  prompt: text('prompt'),
+  guide: jsonb('guide').notNull(),
+  createdByUserId: text('created_by_user_id'),
+  createdByUsername: text('created_by_username').notNull(),
+  status: text('status').notNull().default('draft'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
 // Checklist metadata
 export const checklistMetadata = pgTable('checklist_metadata', {
   id: serial('id').primaryKey(),

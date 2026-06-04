@@ -56,6 +56,7 @@ import PolicyLibraryPage from './pages/PolicyLibraryPage';
 import PoliciesAdminPage from './pages/admin/PoliciesAdminPage';
 import PolicyAcknowledgmentGate from './components/PolicyAcknowledgmentGate';
 import VoiceNotesPage from './pages/VoiceNotesPage';
+import EpochCopilotPage from './pages/EpochCopilotPage';
 import ProcessRuns from './pages/ProcessRuns';
 import ProductionStationDashboard from './pages/ProductionStationDashboard';
 import TVDisplayPage from './pages/TVDisplayPage';
@@ -675,6 +676,7 @@ function App() {
                   <Route path="/reference-docs" component={ReferenceDocsPage} />
                   <Route path="/knowledge-capture" component={VoiceNotesPage} />
                   <Route path="/voice-notes" component={VoiceNotesPage} />
+                  <Route path="/epoch-copilot" component={EpochCopilotPage} />
                   <Route path="/process-runs" component={ProcessRuns} />
                   <Route path="/app/production/stations" component={ProductionStationDashboard} />
                   <Route path="/tv-display" component={TVDisplayPage} />

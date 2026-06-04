@@ -1092,15 +1092,15 @@ router.post('/create-label', requirePermission('shipping.create_label'), async (
 
             if (customer && (customer.email || customer.phone)) {
               // Send notification respecting customer preference (ONE channel only)
-              const { sendCustomerNotification } = await import(
+              const { normalizeNotificationMethods, sendCustomerNotification } = await import(
                 '../../utils/notifications'
               );
               
               // Use customer's preferred communication method - NOT all available channels
-              const customerPreference = (customer.preferredCommunicationMethod as string[]) || [];
-              const preferredMethods: string[] = customerPreference.length > 0 
-                ? customerPreference 
-                : (customer.email ? ['email'] : (customer.phone ? ['sms'] : []));
+              const preferredMethods = normalizeNotificationMethods(
+                customer.preferredCommunicationMethod,
+                { email: customer.email, phone: customer.phone }
+              );
               
               console.log(`[LABEL-NOTIFY] Order ${orderId} - Customer preference: ${preferredMethods.join(', ')}`);
               

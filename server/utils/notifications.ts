@@ -37,14 +37,14 @@ export function normalizeNotificationMethods(
   const rawMethods = Array.isArray(preferredMethods)
     ? preferredMethods
     : typeof preferredMethods === 'string'
-      ? preferredMethods.split(/[,\s]+/)
+      ? preferredMethods.split(/[\s,;|/]+/)
       : [];
 
   const normalized = rawMethods
-    .map((method) => String(method).trim().toLowerCase())
+    .map((method) => String(method || '').trim().toLowerCase())
     .map((method) => {
-      if (method === 'text' || method === 'phone') return 'sms';
-      if (method === 'e-mail') return 'email';
+      if (['text', 'txt', 'phone', 'mobile'].includes(method)) return 'sms';
+      if (['e-mail', 'mail'].includes(method)) return 'email';
       return method;
     })
     .filter((method): method is 'email' | 'sms' => method === 'email' || method === 'sms');

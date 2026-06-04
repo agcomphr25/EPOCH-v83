@@ -59,6 +59,8 @@ async function ensureProjectRevisionSchema() {
       revision_number INTEGER NOT NULL,
       revision_label TEXT NOT NULL,
       revision_type TEXT NOT NULL DEFAULT 'PROJECT_CHANGE',
+      revision_date DATE NOT NULL DEFAULT CURRENT_DATE,
+      has_po_change BOOLEAN NOT NULL DEFAULT false,
       summary TEXT NOT NULL,
       reason TEXT NOT NULL,
       previous_po_id INTEGER REFERENCES p2_purchase_orders(id),
@@ -72,6 +74,8 @@ async function ensureProjectRevisionSchema() {
   `);
   await pool.query(`CREATE INDEX IF NOT EXISTS project_revisions_project_id_idx ON project_revisions(project_id)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS project_revisions_created_at_idx ON project_revisions(created_at)`);
+  await pool.query(`ALTER TABLE project_revisions ADD COLUMN IF NOT EXISTS revision_date DATE NOT NULL DEFAULT CURRENT_DATE`);
+  await pool.query(`ALTER TABLE project_revisions ADD COLUMN IF NOT EXISTS has_po_change BOOLEAN NOT NULL DEFAULT false`);
 
   projectRevisionSchemaReady = true;
 }
@@ -583,6 +587,8 @@ router.get('/:id/revisions', async (req, res) => {
          pr.revision_number,
          pr.revision_label,
          pr.revision_type,
+         pr.revision_date,
+         pr.has_po_change,
          pr.summary,
          pr.reason,
          pr.previous_po_id,
@@ -612,9 +618,11 @@ router.post('/:id/revisions', async (req, res) => {
   try {
     const { id } = req.params;
     const schema = z.object({
-      summary: z.string().min(3),
+      summary: z.string().min(3).optional(),
       reason: z.string().min(3),
-      revisionType: z.string().min(1).default('PROJECT_CHANGE'),
+      revisionType: z.enum(['po', 'drawing', 'contract']).default('po'),
+      revisionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      hasPoChange: z.boolean().optional().default(false),
       createdBy: z.number().int().positive().optional(),
       createdByDisplayName: z.string().optional(),
       metadata: z.record(z.any()).optional(),
@@ -630,23 +638,56 @@ router.post('/:id/revisions', async (req, res) => {
     const nextRevision = await getNextProjectRevisionNumber(id);
     const revisionLabel = `Rev ${nextRevision}`;
     const data = parsed.data;
+    const summary = data.summary?.trim() || `${data.revisionType.toUpperCase()} revision`;
+    let previousPoId = project.poId ?? null;
+    let newPoId: number | null = null;
+    let newPoNumber: string | null = null;
+
+    if (data.hasPoChange) {
+      if (data.revisionType !== 'po') {
+        return res.status(400).json({ message: 'PO change can only be selected for PO revisions.' });
+      }
+      if (!project.poId) {
+        return res.status(400).json({ message: 'This project does not have a linked PO to revise.' });
+      }
+
+      const revisedPo = await storage.createP2PurchaseOrderRevision(
+        project.poId,
+        data.reason,
+        data.createdByDisplayName
+      );
+      newPoId = revisedPo.id;
+      newPoNumber = revisedPo.poNumber;
+      await storage.updateProject(id, { poId: revisedPo.id } as any);
+    }
+
     const rows = await pool.query(
       `INSERT INTO project_revisions (
-         project_id, revision_number, revision_label, revision_type, summary, reason,
+         project_id, revision_number, revision_label, revision_type, revision_date,
+         has_po_change, summary, reason, previous_po_id, new_po_id,
          created_by, created_by_display_name, metadata
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
+       VALUES ($1, $2, $3, $4, $5::date, $6, $7, $8, $9, $10, $11, $12, $13::jsonb)
        RETURNING *`,
       [
         id,
         nextRevision,
         revisionLabel,
         data.revisionType,
-        data.summary,
+        data.revisionDate || new Date().toISOString().split('T')[0],
+        data.hasPoChange,
+        summary,
         data.reason,
+        previousPoId,
+        newPoId,
         data.createdBy ?? null,
         data.createdByDisplayName ?? null,
-        JSON.stringify(data.metadata ?? {}),
+        JSON.stringify({
+          ...(data.metadata ?? {}),
+          previousPoId,
+          newPoId,
+          newPoNumber,
+        }),
       ]
     );
 
@@ -660,10 +701,20 @@ router.post('/:id/revisions', async (req, res) => {
     await storage.createProjectActivityLog({
       projectId: id,
       activityType: 'project_revision_created',
-      description: `${revisionLabel}: ${data.summary}`,
+      description: newPoNumber
+        ? `${revisionLabel}: ${summary} and PO revision ${newPoNumber}`
+        : `${revisionLabel}: ${summary}`,
       performedBy: data.createdBy ?? undefined,
       performedByDisplayName: data.createdByDisplayName,
-      metadata: { revisionNumber: nextRevision, revisionType: data.revisionType },
+      metadata: {
+        revisionNumber: nextRevision,
+        revisionType: data.revisionType,
+        revisionDate: data.revisionDate,
+        hasPoChange: data.hasPoChange,
+        previousPoId,
+        newPoId,
+        newPoNumber,
+      },
     } as any);
 
     res.status(201).json(rows[0]);

@@ -194,6 +194,7 @@ const safeFiles = [
   '0159_epoch_copilot_phase1.sql',
   '0160_po_project_links_safe.sql',
   '0161_employee_termination_access_controls.sql',
+  '0162_p2_project_revision_type_po_change.sql',
   'investigation_308_order_duplication.sql',
 ];
 

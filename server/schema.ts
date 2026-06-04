@@ -5256,6 +5256,13 @@ export const p2PurchaseOrders = pgTable('p2_purchase_orders', {
   // Project association for PM/P2 continuity
   projectId: uuid('project_id').references((): AnyPgColumn => projects.id, { onDelete: 'set null' }),
   projectName: text('project_name'),
+  // Revision tracking mirrors Vendor PO revision behavior for customer P2 POs
+  revisionNumber: integer('revision_number').default(0).notNull(),
+  parentPoId: integer('parent_po_id'),
+  changeReason: text('change_reason'),
+  isCurrentRevision: boolean('is_current_revision').default(true).notNull(),
+  revisedAt: timestamp('revised_at'),
+  revisedBy: text('revised_by'),
   securityClassification: text('security_classification').notNull().default('internal'), // public | internal | cui | itar
   cuiCategory: text('cui_category'),
   itarCategory: text('itar_category'),
@@ -11658,6 +11665,8 @@ export const projectRevisions = pgTable('project_revisions', {
   revisionNumber: integer('revision_number').notNull(),
   revisionLabel: text('revision_label').notNull(),
   revisionType: text('revision_type').notNull().default('PROJECT_CHANGE'),
+  revisionDate: date('revision_date').notNull().default(sql`CURRENT_DATE`),
+  hasPoChange: boolean('has_po_change').notNull().default(false),
   summary: text('summary').notNull(),
   reason: text('reason').notNull(),
   previousPoId: integer('previous_po_id').references(() => p2PurchaseOrders.id),

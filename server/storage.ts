@@ -506,6 +506,7 @@ import {
   projects,
   projectSteps,
   projectActivityLog,
+  projectRevisions,
   projectNotifications,
   projectStepAttachments,
   projectClosings,
@@ -516,6 +517,8 @@ import {
   type Project,
   type InsertProject,
   type ProjectStep,
+  type ProjectRevision,
+  type InsertProjectRevision,
   type ProjectStepAttachment,
   type InsertProjectStepAttachment,
   type InsertProjectStep,
@@ -1880,6 +1883,7 @@ export interface IStorage {
     options?: { includeItems?: boolean }
   ): Promise<(P2PurchaseOrder & { items?: P2PurchaseOrderItem[] }) | undefined>;
   createP2PurchaseOrder(data: InsertP2PurchaseOrder): Promise<P2PurchaseOrder>;
+  createP2PurchaseOrderRevision(poId: number, changeReason: string, revisedBy?: string): Promise<P2PurchaseOrder>;
   updateP2PurchaseOrder(
     id: number,
     data: Partial<InsertP2PurchaseOrder>
@@ -2973,6 +2977,10 @@ export interface IStorage {
   // Project Activity Log
   getProjectActivityLog(projectId: string): Promise<ProjectActivityLog[]>;
   createProjectActivityLog(data: InsertProjectActivityLog): Promise<ProjectActivityLog>;
+
+  // Project Revisions
+  getProjectRevisions(projectId: string): Promise<ProjectRevision[]>;
+  createProjectRevision(data: InsertProjectRevision): Promise<ProjectRevision>;
 
   // Project Notifications
   getProjectNotifications(recipientId: number, unreadOnly?: boolean): Promise<ProjectNotification[]>;
@@ -15425,7 +15433,10 @@ export class DatabaseStorage implements IStorage {
         scheduled_by_name as "scheduledByName", production_lead_id as "productionLeadId",
         production_lead_name as "productionLeadName",
         project_id as "projectId",
-        project_name as "projectName"
+        project_name as "projectName",
+        revision_number as "revisionNumber", parent_po_id as "parentPoId",
+        change_reason as "changeReason", is_current_revision as "isCurrentRevision",
+        revised_at as "revisedAt", revised_by as "revisedBy"
       FROM p2_purchase_orders 
       ORDER BY created_at DESC
     `);
@@ -15521,6 +15532,117 @@ export class DatabaseStorage implements IStorage {
     return result.rows[0] as P2PurchaseOrder;
   }
 
+  async createP2PurchaseOrderRevision(
+    poId: number,
+    changeReason: string,
+    revisedBy?: string
+  ): Promise<P2PurchaseOrder> {
+    await ensureP2PurchaseOrderReadSchema();
+
+    return await db.transaction(async (tx) => {
+      const [originalPO] = await tx
+        .select()
+        .from(p2PurchaseOrders)
+        .where(eq(p2PurchaseOrders.id, poId))
+        .for('update');
+
+      if (!originalPO) {
+        throw new Error('P2 purchase order not found');
+      }
+
+      const rootParentId = originalPO.parentPoId || originalPO.id;
+      const existingRevisions = await tx
+        .select({ revisionNumber: p2PurchaseOrders.revisionNumber })
+        .from(p2PurchaseOrders)
+        .where(
+          or(
+            eq(p2PurchaseOrders.id, rootParentId),
+            eq(p2PurchaseOrders.parentPoId, rootParentId)
+          )
+        )
+        .orderBy(desc(p2PurchaseOrders.revisionNumber))
+        .limit(1)
+        .for('update');
+
+      const nextRevisionNumber = (existingRevisions[0]?.revisionNumber || 0) + 1;
+      const basePONumber = originalPO.poNumber.replace(/-R[A-Z]+$/, '');
+      const revisionLetter = String.fromCharCode(64 + nextRevisionNumber);
+      const newPONumber = `${basePONumber}-R${revisionLetter}`;
+
+      await tx
+        .update(p2PurchaseOrders)
+        .set({ isCurrentRevision: false, updatedAt: new Date() })
+        .where(eq(p2PurchaseOrders.id, originalPO.id));
+
+      const [newRevision] = await tx
+        .insert(p2PurchaseOrders)
+        .values({
+          poNumber: newPONumber,
+          customerId: originalPO.customerId,
+          customerName: originalPO.customerName,
+          poDate: originalPO.poDate,
+          expectedDelivery: originalPO.expectedDelivery,
+          status: 'OPEN',
+          notes: originalPO.notes,
+          attachments: originalPO.attachments || [],
+          toleranceAuthorizerId: originalPO.toleranceAuthorizerId,
+          toleranceAuthorizerName: originalPO.toleranceAuthorizerName,
+          toleranceNotes: originalPO.toleranceNotes,
+          bomConfigured: originalPO.bomConfigured,
+          sourceQuoteId: originalPO.sourceQuoteId,
+          contractReviewRole: originalPO.contractReviewRole,
+          createdById: originalPO.createdById,
+          createdByName: originalPO.createdByName,
+          assignedToId: originalPO.assignedToId,
+          assignedToName: originalPO.assignedToName,
+          bomOwnerId: originalPO.bomOwnerId,
+          bomOwnerName: originalPO.bomOwnerName,
+          scheduledById: originalPO.scheduledById,
+          scheduledByName: originalPO.scheduledByName,
+          productionLeadId: originalPO.productionLeadId,
+          productionLeadName: originalPO.productionLeadName,
+          projectId: originalPO.projectId,
+          projectName: originalPO.projectName,
+          securityClassification: originalPO.securityClassification,
+          cuiCategory: originalPO.cuiCategory,
+          itarCategory: originalPO.itarCategory,
+          exportControlJurisdiction: originalPO.exportControlJurisdiction,
+          customerFileAccessRule: originalPO.customerFileAccessRule,
+          scrappedItemCount: 0,
+          scrapRatePercent: 0,
+          revisionNumber: nextRevisionNumber,
+          parentPoId: rootParentId,
+          changeReason,
+          isCurrentRevision: true,
+          revisedAt: new Date(),
+          revisedBy: revisedBy || null,
+          updatedAt: new Date(),
+        })
+        .returning();
+
+      const originalItems = await tx
+        .select()
+        .from(p2PurchaseOrderItems)
+        .where(eq(p2PurchaseOrderItems.poId, originalPO.id));
+
+      for (const item of originalItems) {
+        await tx.insert(p2PurchaseOrderItems).values({
+          poId: newRevision.id,
+          inventoryItemId: item.inventoryItemId,
+          partNumber: item.partNumber,
+          partName: item.partName,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          totalPrice: item.totalPrice,
+          specifications: item.specifications,
+          notes: item.notes,
+        });
+      }
+
+      return newRevision;
+    });
+  }
+
   async updateP2PurchaseOrder(
     id: number,
     data: Partial<InsertP2PurchaseOrder>
@@ -15529,7 +15651,7 @@ export class DatabaseStorage implements IStorage {
 
     const [po] = await db
       .update(p2PurchaseOrders)
-      .set(data)
+      .set({ ...data, updatedAt: new Date() })
       .where(eq(p2PurchaseOrders.id, id))
       .returning();
     return po;
@@ -24796,6 +24918,19 @@ export class DatabaseStorage implements IStorage {
   async createProjectActivityLog(data: InsertProjectActivityLog): Promise<ProjectActivityLog> {
     const [log] = await db.insert(projectActivityLog).values(data).returning();
     return log;
+  }
+
+  async getProjectRevisions(projectId: string): Promise<ProjectRevision[]> {
+    return await db
+      .select()
+      .from(projectRevisions)
+      .where(eq(projectRevisions.projectId, projectId))
+      .orderBy(desc(projectRevisions.revisionDate), desc(projectRevisions.createdAt));
+  }
+
+  async createProjectRevision(data: InsertProjectRevision): Promise<ProjectRevision> {
+    const [revision] = await db.insert(projectRevisions).values(data).returning();
+    return revision;
   }
 
   // Project Notifications

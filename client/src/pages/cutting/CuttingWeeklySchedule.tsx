@@ -26,6 +26,7 @@ import { CuttingBomMatchBadge } from "@/components/cutting/CuttingBomMatchBadge"
 import { CuttingQueueNextActionBadge } from "@/components/cutting/CuttingQueueNextActionBadge";
 import { CuttingQueueProductionLockNotice } from "@/components/cutting/CuttingQueueProductionLockNotice";
 import { CuttingQueueSummaryStrip } from "@/components/cutting/CuttingQueueSummaryStrip";
+import { CuttingQueueExportButton } from "@/components/cutting/CuttingQueueExportButton";
 import {
   CuttingQueueFilterBar,
   filterCuttingQueueItems,
@@ -975,14 +976,20 @@ export default function CuttingWeeklySchedule() {
             </div>
           ) : filteredScheduledRows.length === 0 ? (
             <div className="space-y-3">
-              <CuttingQueueFilterBar items={activeScheduledRows} value={queueFilter} onChange={setQueueFilter} />
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <CuttingQueueFilterBar items={activeScheduledRows} value={queueFilter} onChange={setQueueFilter} />
+                <CuttingQueueExportButton items={filteredScheduledRows} filenamePrefix="cutting-weekly-schedule" />
+              </div>
               <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">
                 No scheduled packets match this filter
               </div>
             </div>
           ) : (
             <div className="space-y-3">
-              <CuttingQueueFilterBar items={activeScheduledRows} value={queueFilter} onChange={setQueueFilter} />
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <CuttingQueueFilterBar items={activeScheduledRows} value={queueFilter} onChange={setQueueFilter} />
+                <CuttingQueueExportButton items={filteredScheduledRows} filenamePrefix="cutting-weekly-schedule" />
+              </div>
               <Table>
                 <TableHeader>
                   <TableRow>

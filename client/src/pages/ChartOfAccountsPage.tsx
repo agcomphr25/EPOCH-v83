@@ -222,11 +222,6 @@ export default function ChartOfAccountsPage() {
                 ? 'Loading accounts'
                 : `${filtered.length} account${filtered.length === 1 ? '' : 's'}`}
             </span>
-            {!isLoading && (
-              <Button size="sm" data-testid="button-success">
-                SUCCESS
-              </Button>
-            )}
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
@@ -243,8 +238,8 @@ export default function ChartOfAccountsPage() {
               No accounts match the current filters.
             </div>
           ) : (
-            <Table>
-              <TableHeader>
+            <Table containerClassName="max-h-[calc(100vh-18rem)]">
+              <TableHeader className="sticky top-0 z-20 bg-background shadow-sm">
                 <TableRow>
                   <TableHead className="w-24">Account #</TableHead>
                   <TableHead>Account Name</TableHead>

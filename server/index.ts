@@ -3210,7 +3210,7 @@ async function initializeBackgroundServices() {
                 requires_review, system_controlled, description, is_active
               )
               VALUES (
-                '41000', 'Product Revenue', 'INCOME', 'CREDIT',
+                '41000', 'Product Revenue', 'REVENUE', 'CREDIT',
                 'Revenue', 'NONE', 'ALLOWABLE',
                 'DIRECT', 'BILLABLE', FALSE,
                 FALSE, TRUE,
@@ -3222,7 +3222,7 @@ async function initializeBackgroundServices() {
               UPDATE chart_of_accounts
                  SET account_number = '41000',
                      account_name = 'Product Revenue',
-                     account_type = 'INCOME',
+                     account_type = 'REVENUE',
                      parent_account_id = NULL,
                      normal_balance = 'CREDIT',
                      financial_statement_section = 'Revenue',
@@ -3253,7 +3253,7 @@ async function initializeBackgroundServices() {
                 description, is_active
               )
               VALUES (
-                '41010', 'Product Revenue - P1', 'INCOME', parent_id,
+                '41010', 'Product Revenue - P1', 'REVENUE', parent_id,
                 'CREDIT', 'Revenue', 'NONE',
                 'ALLOWABLE', 'DIRECT', 'BILLABLE',
                 FALSE, FALSE, TRUE,
@@ -3265,7 +3265,7 @@ async function initializeBackgroundServices() {
               UPDATE chart_of_accounts
                  SET account_number = '41010',
                      account_name = 'Product Revenue - P1',
-                     account_type = 'INCOME',
+                     account_type = 'REVENUE',
                      parent_account_id = parent_id,
                      normal_balance = 'CREDIT',
                      financial_statement_section = 'Revenue',
@@ -3295,7 +3295,7 @@ async function initializeBackgroundServices() {
                 description, is_active
               )
               VALUES (
-                '41020', 'Product Revenue - P2', 'INCOME', parent_id,
+                '41020', 'Product Revenue - P2', 'REVENUE', parent_id,
                 'CREDIT', 'Revenue', 'NONE',
                 'ALLOWABLE', 'DIRECT', 'BILLABLE',
                 FALSE, FALSE, TRUE,
@@ -3307,7 +3307,7 @@ async function initializeBackgroundServices() {
               UPDATE chart_of_accounts
                  SET account_number = '41020',
                      account_name = 'Product Revenue - P2',
-                     account_type = 'INCOME',
+                     account_type = 'REVENUE',
                      parent_account_id = parent_id,
                      normal_balance = 'CREDIT',
                      financial_statement_section = 'Revenue',
@@ -3337,7 +3337,7 @@ async function initializeBackgroundServices() {
                 description, is_active
               )
               VALUES (
-                '41030', 'Product Revenue - P3', 'INCOME', parent_id,
+                '41030', 'Product Revenue - P3', 'REVENUE', parent_id,
                 'CREDIT', 'Revenue', 'NONE',
                 'ALLOWABLE', 'DIRECT', 'BILLABLE',
                 FALSE, FALSE, TRUE,
@@ -3349,7 +3349,7 @@ async function initializeBackgroundServices() {
               UPDATE chart_of_accounts
                  SET account_number = '41030',
                      account_name = 'Product Revenue - P3',
-                     account_type = 'INCOME',
+                     account_type = 'REVENUE',
                      parent_account_id = parent_id,
                      normal_balance = 'CREDIT',
                      financial_statement_section = 'Revenue',

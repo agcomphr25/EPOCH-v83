@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
 import { GroupedPOsBadge, type GroupedPOEntry } from "@/components/cutting/GroupedPOsBadge";
+import { CuttingQueueTraceSheet } from "@/components/cutting/CuttingQueueTraceSheet";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -957,7 +958,7 @@ export default function CuttingWeeklySchedule() {
                   <TableHead className="text-center">Qty</TableHead>
                   <TableHead className="text-center">Done</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="w-20"></TableHead>
+                  <TableHead className="w-24"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1023,6 +1024,8 @@ export default function CuttingWeeklySchedule() {
                         </Badge>
                       </TableCell>
                       <TableCell>
+                        <div className="flex justify-end gap-1">
+                          <CuttingQueueTraceSheet queueId={item.id} size="icon" iconOnly />
                         {item.status !== 'COMPLETED' && (
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
@@ -1054,6 +1057,7 @@ export default function CuttingWeeklySchedule() {
                             </AlertDialogContent>
                           </AlertDialog>
                         )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   );

@@ -122,7 +122,7 @@ router.get('/', async (req, res) => {
     const { projectId } = req.params;
     const closing = await storage.getProjectClosingByProjectId(projectId);
     if (!closing) {
-      return res.status(404).json({ message: 'No closing record found for this project' });
+      return res.json(null);
     }
     res.json(closing);
   } catch (error) {

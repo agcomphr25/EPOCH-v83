@@ -21,6 +21,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { GroupedPOsBadge, type GroupedPOEntry } from "@/components/cutting/GroupedPOsBadge";
 import { CuttingQueueTraceSheet } from "@/components/cutting/CuttingQueueTraceSheet";
+import { CuttingQueueHealthBadges } from "@/components/cutting/CuttingQueueHealthBadges";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -1013,6 +1014,13 @@ export default function CuttingWeeklySchedule() {
                           <GroupedPOsBadge
                             poNumbers={poEntries}
                             testIdPrefix={`weekly-pos-${item.id}`}
+                          />
+                          <CuttingQueueHealthBadges
+                            item={{
+                              ...item,
+                              poNumbers: poEntries,
+                            }}
+                            compact
                           />
                         </div>
                       </TableCell>

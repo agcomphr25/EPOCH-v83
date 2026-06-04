@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { 
@@ -151,6 +152,8 @@ interface ProjectRevision {
   revision_number: number;
   revision_label: string;
   revision_type: string;
+  revision_date: string;
+  has_po_change: boolean;
   summary: string;
   reason: string;
   previous_po_id: number | null;
@@ -418,7 +421,12 @@ export default function ProjectDetailPage() {
   const [linkPoSearch, setLinkPoSearch] = useState('');
   const [showManualLink, setShowManualLink] = useState(false);
   const [linkPoReason, setLinkPoReason] = useState('');
-  const [revisionForm, setRevisionForm] = useState({ summary: '', reason: '' });
+  const [revisionForm, setRevisionForm] = useState({
+    revisionType: 'po' as 'po' | 'drawing' | 'contract',
+    revisionDate: new Date().toISOString().split('T')[0],
+    reason: '',
+    hasPoChange: false,
+  });
   const [newPoForm, setNewPoForm] = useState({
     poNumber: '',
     expectedDelivery: '',
@@ -492,7 +500,13 @@ export default function ProjectDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/projects', id] });
       queryClient.invalidateQueries({ queryKey: ['/api/projects', id, 'revisions'] });
-      setRevisionForm({ summary: '', reason: '' });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2-purchase-orders-bypass'] });
+      setRevisionForm({
+        revisionType: 'po',
+        revisionDate: new Date().toISOString().split('T')[0],
+        reason: '',
+        hasPoChange: false,
+      });
       toast({ title: 'Revision created', description: 'Project revision history was updated.' });
     },
     onError: (err: any) => toast({ title: 'Revision failed', description: err?.message || 'Could not create revision.', variant: 'destructive' }),
@@ -2511,13 +2525,36 @@ export default function ProjectDetailPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-3 md:grid-cols-[1fr_1.2fr_auto]">
+              <div className="grid gap-3 md:grid-cols-[0.8fr_0.8fr_1.2fr_auto]">
                 <div className="space-y-2">
-                  <Label>Summary</Label>
+                  <Label>Revision Type</Label>
+                  <Select
+                    value={revisionForm.revisionType}
+                    onValueChange={(value: 'po' | 'drawing' | 'contract') =>
+                      setRevisionForm((prev) => ({
+                        ...prev,
+                        revisionType: value,
+                        hasPoChange: value === 'po' ? prev.hasPoChange : false,
+                      }))
+                    }
+                  >
+                    <SelectTrigger data-testid="select-project-revision-type">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="po">PO</SelectItem>
+                      <SelectItem value="drawing">Drawing</SelectItem>
+                      <SelectItem value="contract">Contract</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Revision Date</Label>
                   <Input
-                    value={revisionForm.summary}
-                    onChange={(e) => setRevisionForm((prev) => ({ ...prev, summary: e.target.value }))}
-                    placeholder="Scope, PO, routing, or schedule change"
+                    type="date"
+                    value={revisionForm.revisionDate}
+                    onChange={(e) => setRevisionForm((prev) => ({ ...prev, revisionDate: e.target.value }))}
+                    data-testid="input-project-revision-date"
                   />
                 </div>
                 <div className="space-y-2">
@@ -2531,12 +2568,32 @@ export default function ProjectDetailPage() {
                 <div className="flex items-end">
                   <Button
                     className="w-full md:w-auto"
-                    disabled={revisionForm.summary.trim().length < 3 || revisionForm.reason.trim().length < 3 || createRevisionMutation.isPending}
+                    disabled={!revisionForm.revisionDate || revisionForm.reason.trim().length < 3 || createRevisionMutation.isPending || (revisionForm.hasPoChange && !project.poId)}
                     onClick={() => createRevisionMutation.mutate(revisionForm)}
                   >
                     <Plus className="h-4 w-4 mr-1.5" />
                     {createRevisionMutation.isPending ? 'Saving...' : 'Create Revision'}
                   </Button>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 rounded-md border p-3">
+                <Checkbox
+                  id="project-po-change"
+                  checked={revisionForm.hasPoChange}
+                  disabled={revisionForm.revisionType !== 'po' || !project.poId}
+                  onCheckedChange={(checked) =>
+                    setRevisionForm((prev) => ({ ...prev, hasPoChange: checked === true }))
+                  }
+                  data-testid="checkbox-project-po-change"
+                />
+                <div className="space-y-1">
+                  <Label htmlFor="project-po-change" className="font-medium">PO change required</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Creates a copied editable P2 PO revision and links it back to this project revision.
+                  </p>
+                  {!project.poId && (
+                    <p className="text-xs text-amber-700">Link a PO before creating a PO-change revision.</p>
+                  )}
                 </div>
               </div>
 
@@ -2550,14 +2607,20 @@ export default function ProjectDetailPage() {
                     <div key={revision.id} className="rounded-md border p-4 space-y-2">
                       <div className="flex flex-wrap items-center gap-2">
                         <Badge variant="outline" className="font-mono">{revision.revision_label}</Badge>
-                        <Badge variant={revision.revision_type === 'PO_LINK_CHANGE' ? 'default' : 'secondary'}>
-                          {revision.revision_type === 'PO_LINK_CHANGE' ? 'PO Link' : 'Project Change'}
+                        <Badge variant={revision.has_po_change || revision.revision_type === 'PO_LINK_CHANGE' ? 'default' : 'secondary'}>
+                          {revision.revision_type === 'po' ? 'PO' : revision.revision_type === 'drawing' ? 'Drawing' : revision.revision_type === 'contract' ? 'Contract' : revision.revision_type === 'PO_LINK_CHANGE' ? 'PO Link' : 'Project Change'}
                         </Badge>
+                        {revision.has_po_change && <Badge className="bg-blue-100 text-blue-800">PO Change</Badge>}
                         <span className="text-xs text-muted-foreground">
                           {format(new Date(revision.created_at), 'MMM d, yyyy h:mm a')}
                         </span>
                       </div>
                       <p className="text-sm font-medium">{revision.summary}</p>
+                      {revision.revision_date && (
+                        <p className="text-xs text-muted-foreground">
+                          Revision date: {format(new Date(revision.revision_date), 'MMM d, yyyy')}
+                        </p>
+                      )}
                       <p className="text-sm text-muted-foreground">{revision.reason}</p>
                       {(revision.previous_po_number || revision.new_po_number) && (
                         <p className="text-xs text-muted-foreground font-mono">
@@ -2566,6 +2629,16 @@ export default function ProjectDetailPage() {
                       )}
                       {revision.created_by_display_name && (
                         <p className="text-xs text-muted-foreground">Recorded by {revision.created_by_display_name}</p>
+                      )}
+                      {revision.new_po_id && revision.has_po_change && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setLocation(`/p2-control-center?tab=pos&search=${encodeURIComponent(revision.new_po_number || String(revision.new_po_id))}`)}
+                        >
+                          <Edit className="h-4 w-4 mr-2" />
+                          Edit Revised PO
+                        </Button>
                       )}
                     </div>
                   ))}

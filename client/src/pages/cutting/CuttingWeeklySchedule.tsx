@@ -976,6 +976,12 @@ export default function CuttingWeeklySchedule() {
                   const poEntries: GroupedPOEntry[] = Array.isArray(item.poNumbers)
                     ? item.poNumbers
                     : (Array.isArray(notes.poNumbers) ? notes.poNumbers : []);
+                  const isProductionProtected = Boolean(
+                    item.productionProtected ||
+                    (item.quantityCompleted || 0) > 0 ||
+                    (item.builtPacketCount || 0) > 0 ||
+                    (item.allocatedPacketCount || 0) > 0
+                  );
 
                   const getDescription = () => {
                     if (item.displayName) return item.displayName;
@@ -1045,7 +1051,7 @@ export default function CuttingWeeklySchedule() {
                       <TableCell>
                         <div className="flex justify-end gap-1">
                           <CuttingQueueTraceSheet queueId={item.id} size="icon" iconOnly />
-                        {item.status !== 'COMPLETED' && (
+                        {item.status !== 'COMPLETED' && !isProductionProtected && (
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
                               <Button

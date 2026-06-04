@@ -11,6 +11,8 @@ export type CuttingQueueNextActionItem = {
   quantityCompleted?: number | null;
   allocatedPacketCount?: number | null;
   printableBarcodeCount?: number | null;
+  productionProtected?: boolean | null;
+  productionProtectionReason?: string | null;
 };
 
 type Props = {
@@ -32,7 +34,7 @@ export function CuttingQueueNextActionBadge({ item, compact = false }: Props) {
   const quantityCompleted = numberValue(item.quantityCompleted);
   const printableBarcodeCount = numberValue(item.printableBarcodeCount);
   const allocatedPacketCount = numberValue(item.allocatedPacketCount);
-  const hasTrace = allocatedPacketCount > 0 || quantityCompleted > 0;
+  const hasTrace = allocatedPacketCount > 0 || quantityCompleted > 0 || Boolean(item.productionProtected);
   const className = compact ? "h-6 gap-1 px-1.5 text-[11px]" : "gap-1";
   const iconClassName = "h-3 w-3";
 
@@ -56,8 +58,13 @@ export function CuttingQueueNextActionBadge({ item, compact = false }: Props) {
 
   if (hasTrace) {
     const fullyAccountedFor = quantityRequested > 0 && allocatedPacketCount >= quantityRequested;
+    const reason = item.productionProtectionReason === "built_packets_exist"
+      ? "Built packet records already exist"
+      : item.productionProtectionReason === "quantity_completed"
+        ? "Completed quantity is already recorded"
+        : "Packets already have production trace or allocation";
     return (
-      <Badge variant="outline" className={className} title="Packets already have production trace or allocation; review only">
+      <Badge variant="outline" className={className} title={`${reason}; review only`}>
         <PackageCheck className={iconClassName} />
         {fullyAccountedFor ? "In production" : "Review trace"}
       </Badge>

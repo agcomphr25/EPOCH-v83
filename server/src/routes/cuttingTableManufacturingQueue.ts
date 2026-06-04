@@ -327,8 +327,15 @@ router.get('/cutting-table', async (req: Request, res: Response) => {
       const displayName = packetName || userNotes || row.item?.name || orderId || null;
       const quantityRequested = row.queue.quantityRequested || 0;
       const completedQuantity = row.queue.quantityCompleted || 0;
-      const allocatedPacketCount = Math.max(completedQuantity, builtPacketCounts.get(row.queue.id) || 0);
+      const builtPacketCount = builtPacketCounts.get(row.queue.id) || 0;
+      const allocatedPacketCount = Math.max(completedQuantity, builtPacketCount);
       const printableBarcodeCount = Math.max(0, quantityRequested - allocatedPacketCount);
+      const productionProtected = completedQuantity > 0 || builtPacketCount > 0;
+      const productionProtectionReason = builtPacketCount > 0
+        ? 'built_packets_exist'
+        : completedQuantity > 0
+          ? 'quantity_completed'
+          : null;
       
       return {
         ...row.queue,
@@ -346,8 +353,11 @@ router.get('/cutting-table', async (req: Request, res: Response) => {
         orderId,
         packetName,
         poNumbers,
+        builtPacketCount,
         allocatedPacketCount,
         printableBarcodeCount,
+        productionProtected,
+        productionProtectionReason,
       };
     });
     
@@ -1850,6 +1860,19 @@ router.delete('/:id', async (req: Request, res: Response) => {
 
     if (queueItem.status === 'IN_PROGRESS' && (queueItem.quantityCompleted || 0) > 0) {
       return res.status(400).json({ error: 'Cannot unschedule an item that has partially completed work' });
+    }
+
+    const builtPackets = await db
+      .select({ barcode: cuttingBuiltPackets.barcode })
+      .from(cuttingBuiltPackets);
+    const builtPacketCount = builtPackets.filter((packet) => parseQueueIdFromBuiltPacketBarcode(packet.barcode) === parsedId).length;
+
+    if ((queueItem.quantityCompleted || 0) > 0 || builtPacketCount > 0) {
+      return res.status(409).json({
+        error: 'Cannot unschedule a packet that is already in production',
+        productionProtected: true,
+        productionProtectionReason: builtPacketCount > 0 ? 'built_packets_exist' : 'quantity_completed',
+      });
     }
 
     // Capture the packet identity BEFORE deleting so we can preserve barcode→packet

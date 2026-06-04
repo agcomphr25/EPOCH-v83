@@ -33,6 +33,7 @@ import {
 import { GroupedPOsBadge } from "@/components/cutting/GroupedPOsBadge";
 import { CuttingQueueTraceSheet } from "@/components/cutting/CuttingQueueTraceSheet";
 import { CuttingQueueHealthBadges } from "@/components/cutting/CuttingQueueHealthBadges";
+import { CuttingBomMatchBadge } from "@/components/cutting/CuttingBomMatchBadge";
 import { useToast } from "@/hooks/use-toast";
 import {
   Accordion,
@@ -151,6 +152,8 @@ type ManufacturingQueueItem = {
   dueDate: string | null;
   estimatedCuts: number;
   packetBomId: string | null;
+  bomMatchReason?: string | null;
+  bomMatchConfidence?: string | null;
   poNumbers?: GroupedPO[] | null;
   allocatedPacketCount?: number;
   printableBarcodeCount?: number;
@@ -519,6 +522,8 @@ export default function CuttingOperatorDashboard() {
         estimatedCuts,
         displayName,
         packetBomId: bomId || matchingBOM?.id,
+        bomMatchReason: item.bomMatchReason || (bomId || matchingBOM?.id ? 'client_fallback' : null),
+        bomMatchConfidence: item.bomMatchConfidence || (bomId ? 'strong' : matchingBOM?.id ? 'fallback' : 'none'),
         poNumbers,
       };
     });
@@ -2265,6 +2270,11 @@ export default function CuttingOperatorDashboard() {
                           <GroupedPOsBadge
                             poNumbers={item.poNumbers}
                             testIdPrefix={`pos-${item.id}`}
+                          />
+                          <CuttingBomMatchBadge
+                            reason={item.bomMatchReason}
+                            confidence={item.bomMatchConfidence}
+                            compact
                           />
                         </div>
                         <div className="mt-1">

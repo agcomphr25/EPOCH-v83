@@ -52,6 +52,74 @@ function parseQueueNotes(notes: string | null): Record<string, any> {
   }
 }
 
+type QueueBomMatch = {
+  bom: any | null;
+  reason: 'notes_bom_id' | 'inventory_item' | 'part_number' | 'material_type' | 'packet_name' | 'item_name' | null;
+  confidence: 'strong' | 'medium' | 'fallback' | 'none';
+};
+
+function resolveQueueBomMatch(params: {
+  allActiveBoms: Array<{ id: string; partNumber: string; inventoryItemId: number | null; packetType?: string | null }>;
+  bomId?: string | null;
+  inventoryItemId?: number | null;
+  itemPartNumber?: string | null;
+  materialType?: string | null;
+  packetName?: string | null;
+  itemName?: string | null;
+}): QueueBomMatch {
+  const { allActiveBoms, bomId, inventoryItemId, itemPartNumber, materialType, packetName, itemName } = params;
+
+  const byBomId = bomId ? allActiveBoms.find((b) => b.id === bomId) : null;
+  if (byBomId) return { bom: byBomId, reason: 'notes_bom_id', confidence: 'strong' };
+
+  const byInventoryItem = inventoryItemId
+    ? allActiveBoms.find((b) => b.inventoryItemId != null && b.inventoryItemId === inventoryItemId)
+    : null;
+  if (byInventoryItem) return { bom: byInventoryItem, reason: 'inventory_item', confidence: 'strong' };
+
+  const byPartNumber = itemPartNumber ? allActiveBoms.find((b) => b.partNumber === itemPartNumber) : null;
+  if (byPartNumber) return { bom: byPartNumber, reason: 'part_number', confidence: 'medium' };
+
+  const materialToPacketType: Record<string, string> = {
+    carbon_fiber: 'carbon fiber packet',
+    fiberglass: 'fiberglass packet',
+    mesa: 'mesa packet',
+    p2_disruptor: 'disruptor',
+    p2_disruptor_packet: 'disruptor packet',
+    p2_antenna: 'antenna cover',
+    p2_antenna_cover: 'antenna cover packet',
+  };
+
+  const materialTarget = materialType ? materialToPacketType[materialType] : null;
+  const byMaterialType = materialTarget
+    ? allActiveBoms.find((b) => {
+        const packetType = String(b.packetType || '').toLowerCase();
+        return packetType === materialTarget || packetType.includes(materialTarget) || materialTarget.includes(packetType);
+      })
+    : null;
+  if (byMaterialType) return { bom: byMaterialType, reason: 'material_type', confidence: 'fallback' };
+
+  const normalizedPacketName = packetName ? packetName.toLowerCase() : null;
+  const byPacketName = normalizedPacketName
+    ? allActiveBoms.find((b) => {
+        const packetType = String(b.packetType || '').toLowerCase();
+        return packetType === normalizedPacketName || packetType.includes(normalizedPacketName) || normalizedPacketName.includes(packetType);
+      })
+    : null;
+  if (byPacketName) return { bom: byPacketName, reason: 'packet_name', confidence: 'fallback' };
+
+  const normalizedItemName = itemName ? itemName.toLowerCase() : null;
+  const byItemName = normalizedItemName
+    ? allActiveBoms.find((b) => {
+        const packetType = String(b.packetType || '').toLowerCase();
+        return packetType === normalizedItemName || packetType.includes(normalizedItemName) || normalizedItemName.includes(packetType);
+      })
+    : null;
+  if (byItemName) return { bom: byItemName, reason: 'item_name', confidence: 'fallback' };
+
+  return { bom: null, reason: null, confidence: 'none' };
+}
+
 async function ensureBuiltPacketsForCompletedQueueRows(): Promise<void> {
   const cuttingTableDept = supplySourceDashboardToLegacyDept('CUTTING_TABLE')!;
   const cuttingTableCategories = getDashboardCategories('CUTTING_TABLE');
@@ -188,13 +256,14 @@ router.get('/cutting-table', async (req: Request, res: Response) => {
       .limit(CUTTING_QUEUE_MAX_ROWS);
 
     // Fetch all active BOMs once for efficient lookup. Selecting only the
-    // columns we use downstream (id, partNumber, inventoryItemId) so the BOM
+    // columns we use downstream so the BOM
     // table doesn't have to be fully materialised in memory.
     const allActiveBoms = await db
       .select({
         id: cuttingPacketBOMs.id,
         partNumber: cuttingPacketBOMs.partNumber,
         inventoryItemId: cuttingPacketBOMs.inventoryItemId,
+        packetType: cuttingPacketBOMs.packetType,
       })
       .from(cuttingPacketBOMs)
       .where(eq(cuttingPacketBOMs.isActive, true));
@@ -244,12 +313,16 @@ router.get('/cutting-table', async (req: Request, res: Response) => {
         // Notes might not be JSON, that's ok
       }
 
-      // Find the BOM linked to this queue item (by bomId, inventoryItemId, or partNumber)
-      const linkedBom = 
-        (packetBomId && allActiveBoms.find(b => b.id === packetBomId)) ||
-        (row.queue.inventoryItemId && allActiveBoms.find(b => b.inventoryItemId != null && b.inventoryItemId === row.queue.inventoryItemId)) ||
-        (row.item?.agPartNumber && allActiveBoms.find(b => b.partNumber === row.item!.agPartNumber)) ||
-        null;
+      const bomMatch = resolveQueueBomMatch({
+        allActiveBoms,
+        bomId: packetBomId,
+        inventoryItemId: row.queue.inventoryItemId,
+        itemPartNumber: row.item?.agPartNumber ?? null,
+        materialType,
+        packetName,
+        itemName: row.item?.name ?? null,
+      });
+      const linkedBom = bomMatch.bom;
 
       const displayName = packetName || userNotes || row.item?.name || orderId || null;
       const quantityRequested = row.queue.quantityRequested || 0;
@@ -264,8 +337,10 @@ router.get('/cutting-table', async (req: Request, res: Response) => {
         partName: row.item?.name,
         displayName,
         inventoryItem: row.item,
-        packetBomId,
+        packetBomId: linkedBom?.id || packetBomId,
         bomPartNumber: linkedBom?.partNumber || null,
+        bomMatchReason: bomMatch.reason,
+        bomMatchConfidence: bomMatch.confidence,
         materialType,
         source,
         orderId,
@@ -340,32 +415,16 @@ router.get('/:id/trace', async (req: Request, res: Response) => {
       .from(cuttingPacketBOMs)
       .where(eq(cuttingPacketBOMs.isActive, true));
 
-    let bomMatchReason: string | null = null;
-    let packetBom =
-      notes.bomId
-        ? allActiveBoms.find((b) => b.id === notes.bomId) ?? null
-        : null;
-    if (packetBom) bomMatchReason = 'notes.bomId';
-
-    if (!packetBom && row.queue.inventoryItemId) {
-      packetBom = allActiveBoms.find((b) => b.inventoryItemId != null && b.inventoryItemId === row.queue.inventoryItemId) ?? null;
-      if (packetBom) bomMatchReason = 'inventory item';
-    }
-
-    if (!packetBom && row.item?.agPartNumber) {
-      packetBom = allActiveBoms.find((b) => b.partNumber === row.item!.agPartNumber) ?? null;
-      if (packetBom) bomMatchReason = 'part number';
-    }
-
-    if (!packetBom && (notes.packetName || row.item?.name)) {
-      const name = String(notes.packetName || row.item?.name || '').toLowerCase();
-      packetBom = allActiveBoms.find((b) =>
-        b.packetType.toLowerCase() === name ||
-        b.packetType.toLowerCase().includes(name) ||
-        name.includes(b.packetType.toLowerCase())
-      ) ?? null;
-      if (packetBom) bomMatchReason = 'packet name';
-    }
+    const bomMatch = resolveQueueBomMatch({
+      allActiveBoms,
+      bomId: notes.bomId || null,
+      inventoryItemId: row.queue.inventoryItemId,
+      itemPartNumber: row.item?.agPartNumber ?? null,
+      materialType: notes.materialType || null,
+      packetName: notes.packetName || null,
+      itemName: row.item?.name ?? null,
+    });
+    const packetBom = bomMatch.bom;
 
     const bomMaterials = packetBom
       ? await db.select().from(cuttingPacketBOMMaterials).where(eq(cuttingPacketBOMMaterials.packetBomId, packetBom.id))
@@ -463,7 +522,8 @@ router.get('/:id/trace', async (req: Request, res: Response) => {
         squareMetersPerCut: packetBom.squareMetersPerCut,
         wasteFactor: packetBom.wasteFactor,
         noPlySchedule: packetBom.noPlySchedule,
-        matchReason: bomMatchReason,
+        matchReason: bomMatch.reason,
+        matchConfidence: bomMatch.confidence,
         materials: bomMaterials,
         parts: bomParts,
       } : null,

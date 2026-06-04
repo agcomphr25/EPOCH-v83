@@ -15482,7 +15482,7 @@ export class DatabaseStorage implements IStorage {
         scheduled_by_id, scheduled_by_name, production_lead_id, production_lead_name,
         project_id, project_name
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26
       )
       RETURNING id, po_number as "poNumber", customer_id as "customerId",
         customer_name as "customerName", po_date as "poDate",

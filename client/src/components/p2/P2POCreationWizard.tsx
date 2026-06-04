@@ -52,6 +52,15 @@ interface Project {
   customerName?: string | null;
 }
 
+interface EmployeeOption {
+  id: number | string;
+  name?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  employeeCode?: string | null;
+  isActive?: boolean | null;
+}
+
 interface P2POCreationWizardProps {
   onComplete: (poId: number) => void;
   onCancel: () => void;
@@ -150,6 +159,16 @@ export default function P2POCreationWizard({
 
   const renderProjectLabel = (project: Project) =>
     `${project.projectCode} - ${project.projectName}${project.customerName ? ` (${project.customerName})` : ''}`;
+
+  const employeeOptions = employees.filter((emp: EmployeeOption) => emp.isActive !== false);
+  const getEmployeeName = (emp: EmployeeOption | null | undefined) =>
+    emp
+      ? emp.name || `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || emp.employeeCode || `Employee ${emp.id}`
+      : null;
+  const findEmployeeById = (employeeId: string | undefined) =>
+    employeeId && employeeId !== 'none'
+      ? employeeOptions.find((emp: EmployeeOption) => String(emp.id) === employeeId)
+      : null;
 
   const createProductMutation = useMutation({
     mutationFn: async (data: typeof newProductForm) => {
@@ -323,18 +342,11 @@ export default function P2POCreationWizard({
 
   const handleCreateOrder = () => {
     // Find the selected tolerance authorizer employee
-    const selectedAuthorizerId = poDetails?.toleranceAuthorizer;
-    const selectedAuthorizer = selectedAuthorizerId 
-      ? employees.find((emp: any) => emp.id.toString() === selectedAuthorizerId)
-      : null;
+    const selectedAuthorizer = findEmployeeById(poDetails?.toleranceAuthorizer);
 
     // Find assigned employee and production lead for ownership fields
-    const assignedEmployee = poDetails?.assignedTo 
-      ? employees.find((e: any) => e.id.toString() === poDetails.assignedTo)
-      : null;
-    const productionLeadEmployee = poDetails?.productionLead
-      ? employees.find((e: any) => e.id.toString() === poDetails.productionLead)
-      : null;
+    const assignedEmployee = findEmployeeById(poDetails?.assignedTo);
+    const productionLeadEmployee = findEmployeeById(poDetails?.productionLead);
 
     const orderData = {
       customerId: selectedCustomer.customerId,
@@ -342,20 +354,14 @@ export default function P2POCreationWizard({
       dueDate: poDetails?.dueDate,
       // Properly map tolerance authorizer fields
       toleranceAuthorizerId: selectedAuthorizer?.id || null,
-      toleranceAuthorizerName: selectedAuthorizer 
-        ? `${selectedAuthorizer.firstName} ${selectedAuthorizer.lastName}` 
-        : null,
+      toleranceAuthorizerName: getEmployeeName(selectedAuthorizer),
       toleranceNotes: poDetails?.notes,
       notes: poDetails?.notes,
       // Ownership fields for accountability
       assignedToId: assignedEmployee?.id || null,
-      assignedToName: assignedEmployee 
-        ? `${assignedEmployee.firstName} ${assignedEmployee.lastName}` 
-        : null,
+      assignedToName: getEmployeeName(assignedEmployee),
       productionLeadId: productionLeadEmployee?.id || null,
-      productionLeadName: productionLeadEmployee
-        ? `${productionLeadEmployee.firstName} ${productionLeadEmployee.lastName}`
-        : null,
+      productionLeadName: getEmployeeName(productionLeadEmployee),
       projectId: poDetails?.projectId && poDetails.projectId !== NO_PROJECT_VALUE ? poDetails.projectId : null,
       projectName: poDetails?.projectName || null,
       lineItems: lineItems.map((item) => ({
@@ -517,12 +523,10 @@ export default function P2POCreationWizard({
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="none">None</SelectItem>
-                        {employees
-                          .filter((emp: any) => emp.isActive !== false)
-                          .map((emp: any) => (
+                        {employeeOptions
+                          .map((emp: EmployeeOption) => (
                             <SelectItem key={emp.id} value={emp.id.toString()}>
-                              {emp.name || `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || `Employee ${emp.id}`}
+                              {getEmployeeName(emp)}
                             </SelectItem>
                           ))}
                       </SelectContent>
@@ -550,11 +554,10 @@ export default function P2POCreationWizard({
                           </FormControl>
                           <SelectContent>
                             <SelectItem value="none">Unassigned</SelectItem>
-                            {employees
-                              .filter((emp: any) => emp.isActive !== false)
-                              .map((emp: any) => (
+                            {employeeOptions
+                              .map((emp: EmployeeOption) => (
                                 <SelectItem key={emp.id} value={emp.id.toString()}>
-                                  {emp.name || `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || `Employee ${emp.id}`}
+                                  {getEmployeeName(emp)}
                                 </SelectItem>
                               ))}
                           </SelectContent>
@@ -578,11 +581,10 @@ export default function P2POCreationWizard({
                           </FormControl>
                           <SelectContent>
                             <SelectItem value="none">Unassigned</SelectItem>
-                            {employees
-                              .filter((emp: any) => emp.isActive !== false)
-                              .map((emp: any) => (
+                            {employeeOptions
+                              .map((emp: EmployeeOption) => (
                                 <SelectItem key={emp.id} value={emp.id.toString()}>
-                                  {emp.name || `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || `Employee ${emp.id}`}
+                                  {getEmployeeName(emp)}
                                 </SelectItem>
                               ))}
                           </SelectContent>

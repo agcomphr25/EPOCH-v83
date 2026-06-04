@@ -34,10 +34,6 @@ const router = Router();
 let chargeCodeAssignmentTableReady: Promise<void> | null = null;
 let employeeTerminationSchemaReady: Promise<void> | null = null;
 
-function rows<T = any>(result: any): T[] {
-  return Array.isArray(result) ? result : (result?.rows ?? []);
-}
-
 const employeeListColumns = [
   ['id', 'id'],
   ['employee_code', 'employeeCode'],
@@ -94,6 +90,10 @@ const employeeListColumns = [
   ['created_at', 'createdAt'],
   ['updated_at', 'updatedAt'],
 ] as const;
+
+function rows<T = any>(result: any): T[] {
+  return Array.isArray(result) ? result : (result?.rows ?? []);
+}
 
 async function getEmployeesWithAvailableColumns() {
   const availableRows = await pool.query(
@@ -265,7 +265,11 @@ async function generateNextEmployeeCode(): Promise<string> {
 // Employee Management Routes
 router.get('/', async (req: Request, res: Response) => {
   try {
-    await ensureEmployeeTerminationSchema();
+    try {
+      await ensureEmployeeTerminationSchema();
+    } catch (error) {
+      console.warn('[Employees] Continuing list response after optional schema maintenance failed:', error);
+    }
     const includeInactive =
       req.query.includeInactive === 'true' ||
       req.query.includeTerminated === 'true' ||
@@ -273,14 +277,8 @@ router.get('/', async (req: Request, res: Response) => {
     let allEmployees;
     try {
       allEmployees = await storage.getAllEmployees();
-    } catch (error: any) {
-      if (error?.code !== '42703') {
-        throw error;
-      }
-      console.warn(
-        '[Employees] Falling back to available-column employee list after schema drift:',
-        error?.message
-      );
+    } catch (error) {
+      console.warn('[Employees] Falling back to available-column employee list:', error);
       allEmployees = await getEmployeesWithAvailableColumns();
     }
     const employees = includeInactive

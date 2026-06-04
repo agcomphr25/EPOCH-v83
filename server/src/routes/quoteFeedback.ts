@@ -54,7 +54,7 @@ router.get('/projects/:projectId/quote-feedback', async (req, res) => {
   try {
     const feedback = await storage.getQuoteExecutionFeedbackByProjectId(parsed.data);
     if (!feedback) {
-      return res.status(404).json({ error: 'No feedback record found for this project' });
+      return res.json(null);
     }
     res.json(feedback);
   } catch (err: any) {

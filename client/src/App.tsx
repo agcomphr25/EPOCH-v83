@@ -58,6 +58,7 @@ const PolicyLibraryPage = React.lazy(() => import('./pages/PolicyLibraryPage'));
 const PoliciesAdminPage = React.lazy(() => import('./pages/admin/PoliciesAdminPage'));
 import PolicyAcknowledgmentGate from './components/PolicyAcknowledgmentGate';
 const VoiceNotesPage = React.lazy(() => import('./pages/VoiceNotesPage'));
+const EpochCopilotPage = React.lazy(() => import('./pages/EpochCopilotPage'));
 const ProcessRuns = React.lazy(() => import('./pages/ProcessRuns'));
 const ProductionStationDashboard = React.lazy(() => import('./pages/ProductionStationDashboard'));
 const TVDisplayPage = React.lazy(() => import('./pages/TVDisplayPage'));
@@ -711,6 +712,7 @@ function App() {
                   <Route path="/reference-docs" component={ReferenceDocsPage} />
                   <Route path="/knowledge-capture" component={VoiceNotesPage} />
                   <Route path="/voice-notes" component={VoiceNotesPage} />
+                  <Route path="/epoch-copilot" component={EpochCopilotPage} />
                   <Route path="/process-runs" component={ProcessRuns} />
                   <Route path="/app/production/stations" component={ProductionStationDashboard} />
                   <Route path="/tv-display" component={TVDisplayPage} />

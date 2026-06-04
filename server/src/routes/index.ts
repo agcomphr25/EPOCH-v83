@@ -150,6 +150,7 @@ import cycleCountsRoutes from './cycleCounts';
 import { auditService } from '../services/auditService';
 import mediaRoutes from './media';
 import voiceNotesRoutes from './voiceNotes';
+import epochCopilotRoutes from './epochCopilot';
 import patternSignalsRoutes from './patternSignals';
 import signPdfRoutes from './signPdf';
 import signatureWorkflowRoutes from './signatureWorkflow';
@@ -1297,6 +1298,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
   // Voice notes routes (uses sessionAwareAuth to preserve real user sessions over bypass)
   app.use('/api/voice-notes', sessionAwareAuth, voiceNotesRoutes);
+
+  // EPOCH Copilot routes (ADMIN/OWNER only in Phase 1)
+  app.use('/api/epoch-copilot', requireAdminOrOwner, epochCopilotRoutes);
 
   // Pattern awareness signals routes
   app.use('/api/pattern-signals', patternSignalsRoutes);
@@ -4229,7 +4233,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           return [];
         }
       };
-      
+
       // Keep this tab focused on active WIP; completed/off-system units roll up
       // through PO status instead of remaining in the production queue.
       let allItems: any[] = [];

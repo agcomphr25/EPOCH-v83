@@ -271,7 +271,7 @@ export default function P2ChangesTab() {
                     New PCF
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="max-w-2xl">
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>Create Production Change Form</DialogTitle>
                     <DialogDescription>
@@ -596,7 +596,7 @@ export default function P2ChangesTab() {
                     New Deviation
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="max-w-2xl">
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>Create Traveler Deviation</DialogTitle>
                     <DialogDescription>
@@ -882,7 +882,7 @@ export default function P2ChangesTab() {
 
       {/* Approval Dialog */}
       <Dialog open={!!showApproveDialog} onOpenChange={() => setShowApproveDialog(null)}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Approve Production Change</DialogTitle>
             <DialogDescription>Select the approving authority for this change.</DialogDescription>
@@ -926,7 +926,7 @@ export default function P2ChangesTab() {
 
       {/* Rejection Dialog */}
       <Dialog open={!!showRejectDialog} onOpenChange={() => setShowRejectDialog(null)}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Reject Production Change</DialogTitle>
             <DialogDescription>Provide a reason for rejection and select the rejecting authority.</DialogDescription>
@@ -981,7 +981,7 @@ export default function P2ChangesTab() {
 
       {/* Deviation Authorization Dialog */}
       <Dialog open={!!showAuthorizeDeviationDialog} onOpenChange={() => { setShowAuthorizeDeviationDialog(null); setSelectedApprover(''); }}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Authorize Traveler Deviation</DialogTitle>
             <DialogDescription>

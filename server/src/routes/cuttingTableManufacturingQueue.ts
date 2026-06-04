@@ -42,6 +42,16 @@ function parseBuiltPacketBarcode(barcode: string | null | undefined): { sku: str
   return { sku, queueId, packetNumber };
 }
 
+function parseQueueNotes(notes: string | null): Record<string, any> {
+  if (!notes) return {};
+  try {
+    const parsed = JSON.parse(notes);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return { rawNotes: notes };
+  }
+}
+
 async function ensureBuiltPacketsForCompletedQueueRows(): Promise<void> {
   const cuttingTableDept = supplySourceDashboardToLegacyDept('CUTTING_TABLE')!;
   const cuttingTableCategories = getDashboardCategories('CUTTING_TABLE');
@@ -275,6 +285,202 @@ router.get('/cutting-table', async (req: Request, res: Response) => {
       code: error?.code,
     });
     res.status(500).json({ error: 'Failed to fetch cutting table queue' });
+  }
+});
+
+// Normalized trace view for a cutting-table work order. This gathers the
+// lineage spread across manufacturing_queue.notes, BOM records, built packets,
+// and fabric source rows into one payload for the control center drawer.
+router.get('/:id/trace', async (req: Request, res: Response) => {
+  try {
+    const parsedId = parseInt(req.params.id, 10);
+    if (isNaN(parsedId)) {
+      return res.status(400).json({ error: 'Invalid queue item ID' });
+    }
+
+    const [row] = await db
+      .select({
+        queue: manufacturingQueue,
+        item: inventoryItems,
+      })
+      .from(manufacturingQueue)
+      .leftJoin(inventoryItems, eq(manufacturingQueue.inventoryItemId, inventoryItems.id))
+      .where(eq(manufacturingQueue.id, parsedId))
+      .limit(1);
+
+    if (!row) {
+      return res.status(404).json({ error: 'Cutting table queue item not found' });
+    }
+
+    const cuttingTableDept = supplySourceDashboardToLegacyDept('CUTTING_TABLE')!;
+    const cuttingTableCategories = getDashboardCategories('CUTTING_TABLE');
+    const itemCategory = row.item?.manufacturedCategory ?? null;
+    const isCuttingQueueItem =
+      row.queue.department === cuttingTableDept ||
+      (itemCategory ? cuttingTableCategories.includes(itemCategory as any) : false);
+
+    if (!isCuttingQueueItem) {
+      return res.status(404).json({ error: 'Cutting table queue item not found' });
+    }
+
+    const notes = parseQueueNotes(row.queue.notes);
+    const poNumbers = Array.isArray(notes.poNumbers)
+      ? notes.poNumbers
+          .filter((p: any) => p && (p.poNumber || p.p2PoItemId || p.p2PoId))
+          .map((p: any) => ({
+            poNumber: String(p.poNumber || ''),
+            quantity: Number(p.quantity) || 0,
+            p2PoItemId: p.p2PoItemId ?? null,
+            p2PoId: p.p2PoId ?? null,
+          }))
+      : [];
+
+    const allActiveBoms = await db
+      .select()
+      .from(cuttingPacketBOMs)
+      .where(eq(cuttingPacketBOMs.isActive, true));
+
+    let bomMatchReason: string | null = null;
+    let packetBom =
+      notes.bomId
+        ? allActiveBoms.find((b) => b.id === notes.bomId) ?? null
+        : null;
+    if (packetBom) bomMatchReason = 'notes.bomId';
+
+    if (!packetBom && row.queue.inventoryItemId) {
+      packetBom = allActiveBoms.find((b) => b.inventoryItemId != null && b.inventoryItemId === row.queue.inventoryItemId) ?? null;
+      if (packetBom) bomMatchReason = 'inventory item';
+    }
+
+    if (!packetBom && row.item?.agPartNumber) {
+      packetBom = allActiveBoms.find((b) => b.partNumber === row.item!.agPartNumber) ?? null;
+      if (packetBom) bomMatchReason = 'part number';
+    }
+
+    if (!packetBom && (notes.packetName || row.item?.name)) {
+      const name = String(notes.packetName || row.item?.name || '').toLowerCase();
+      packetBom = allActiveBoms.find((b) =>
+        b.packetType.toLowerCase() === name ||
+        b.packetType.toLowerCase().includes(name) ||
+        name.includes(b.packetType.toLowerCase())
+      ) ?? null;
+      if (packetBom) bomMatchReason = 'packet name';
+    }
+
+    const bomMaterials = packetBom
+      ? await db.select().from(cuttingPacketBOMMaterials).where(eq(cuttingPacketBOMMaterials.packetBomId, packetBom.id))
+      : [];
+    const bomParts = packetBom
+      ? await db.select().from(cuttingPacketBOMParts).where(eq(cuttingPacketBOMParts.packetBomId, packetBom.id)).orderBy(asc(cuttingPacketBOMParts.sortOrder))
+      : [];
+
+    const allBuiltPackets = await db
+      .select({
+        id: cuttingBuiltPackets.id,
+        barcode: cuttingBuiltPackets.barcode,
+        packetNumber: cuttingBuiltPackets.packetNumber,
+        buildDate: cuttingBuiltPackets.buildDate,
+        status: cuttingBuiltPackets.status,
+        isMixedFabric: cuttingBuiltPackets.isMixedFabric,
+        fabricSourceCount: cuttingBuiltPackets.fabricSourceCount,
+        notes: cuttingBuiltPackets.notes,
+        createdBy: cuttingBuiltPackets.createdBy,
+        allocatedToOrder: cuttingBuiltPackets.allocatedToOrder,
+        categoryName: cuttingProductCategories.categoryName,
+      })
+      .from(cuttingBuiltPackets)
+      .leftJoin(cuttingProductCategories, eq(cuttingProductCategories.id, cuttingBuiltPackets.productCategoryId))
+      .orderBy(asc(cuttingBuiltPackets.id));
+
+    const builtPackets = allBuiltPackets.filter((packet) => parseQueueIdFromBuiltPacketBarcode(packet.barcode) === parsedId);
+
+    const builtPacketIds = builtPackets.map((p) => p.id);
+    const fabricSources = builtPacketIds.length > 0
+      ? await db
+          .select()
+          .from(cuttingBuiltPacketFabricSources)
+          .where(inArray(cuttingBuiltPacketFabricSources.builtPacketId, builtPacketIds))
+      : [];
+
+    const packetsWithSources = builtPackets.map((packet) => ({
+      ...packet,
+      fabricSources: fabricSources.filter((source) => source.builtPacketId === packet.id),
+    }));
+
+    const quantityRequested = row.queue.quantityRequested || 0;
+    const quantityCompleted = row.queue.quantityCompleted || 0;
+    const remainingQuantity = Math.max(0, quantityRequested - quantityCompleted);
+    const sourceLabel = notes.source || row.queue.sourceType || 'UNKNOWN';
+
+    res.json({
+      queueItem: {
+        id: row.queue.id,
+        department: row.queue.department,
+        status: row.queue.status,
+        priority: row.queue.priority,
+        quantityRequested,
+        quantityCompleted,
+        remainingQuantity,
+        dueDate: row.queue.dueDate,
+        requestedBy: row.queue.requestedBy,
+        assignedTo: row.queue.assignedTo,
+        startedAt: row.queue.startedAt,
+        completedAt: row.queue.completedAt,
+        completedBy: row.queue.completedBy,
+        completionNotes: row.queue.completionNotes,
+        fabricLot: row.queue.fabricLot,
+        fabricBatch: row.queue.fabricBatch,
+        fabricRoll: row.queue.fabricRoll,
+        materialDetails: row.queue.materialDetails,
+        createdAt: row.queue.createdAt,
+        updatedAt: row.queue.updatedAt,
+      },
+      inventoryItem: row.item ? {
+        id: row.item.id,
+        agPartNumber: row.item.agPartNumber,
+        name: row.item.name,
+        manufacturedCategory: row.item.manufacturedCategory,
+        category: row.item.category,
+        quantityInStock: row.item.quantityInStock,
+        onHand: (row.item as any).onHand,
+      } : null,
+      demand: {
+        source: sourceLabel,
+        orderId: notes.orderId || row.queue.sourceId || null,
+        packetName: notes.packetName || row.item?.name || null,
+        materialType: notes.materialType || null,
+        userNotes: notes.userNotes || notes.rawNotes || null,
+        grouped: poNumbers.length > 0,
+        contributors: poNumbers,
+        contributorCount: poNumbers.length,
+        contributorQuantity: poNumbers.reduce((sum: number, item: any) => sum + (Number(item.quantity) || 0), 0),
+      },
+      bom: packetBom ? {
+        id: packetBom.id,
+        partNumber: packetBom.partNumber,
+        packetType: packetBom.packetType,
+        yieldPerCut: packetBom.yieldPerCut,
+        squareMetersPerCut: packetBom.squareMetersPerCut,
+        wasteFactor: packetBom.wasteFactor,
+        noPlySchedule: packetBom.noPlySchedule,
+        matchReason: bomMatchReason,
+        materials: bomMaterials,
+        parts: bomParts,
+      } : null,
+      builtPackets: packetsWithSources,
+      traceSummary: {
+        bomConfigured: Boolean(packetBom),
+        builtPacketCount: packetsWithSources.length,
+        fabricSourceCount: fabricSources.length,
+        mixedFabricCount: packetsWithSources.filter((p) => p.isMixedFabric).length,
+        availablePacketCount: packetsWithSources.filter((p) => p.status === 'AVAILABLE').length,
+        allocatedPacketCount: packetsWithSources.filter((p) => p.status === 'ALLOCATED').length,
+        completed: row.queue.status === 'COMPLETED',
+      },
+    });
+  } catch (error) {
+    console.error('Error fetching cutting table trace:', error);
+    res.status(500).json({ error: 'Failed to fetch cutting table trace' });
   }
 });
 

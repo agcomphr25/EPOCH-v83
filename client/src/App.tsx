@@ -294,7 +294,6 @@ const PurchaseRequisitionsPage = React.lazy(() => import('./pages/PurchaseRequis
 const VendorPOPage = React.lazy(() => import('./pages/VendorPOPage'));
 const VendorPOComplianceBackfillPage = React.lazy(() => import('./pages/VendorPOComplianceBackfillPage'));
 const PDFTemplateManager = React.lazy(() => import('./pages/PDFTemplateManager'));
-const CuttingTableControlCenter = React.lazy(() => import('./pages/CuttingTableControlCenter'));
 const CuttingControlCenterLayout = React.lazy(() => import('./pages/cutting/CuttingControlCenterLayout'));
 const FabricInventoryPage = React.lazy(() => import('./pages/FabricInventoryPage'));
 const MetalAccessoriesTracker = React.lazy(() => import('./pages/MetalAccessoriesTracker'));
@@ -1001,7 +1000,6 @@ function App() {
                   {/* Cutting Table Routes - 3-Page Structure */}
                   <Route path="/cutting-control-center/:rest*" component={CuttingControlCenterLayout} />
                   <Route path="/cutting-control-center" component={CuttingControlCenterLayout} />
-                  <Route path="/cutting-table-legacy" component={CuttingTableControlCenter} />
                   <Route path="/cutting-table"><Redirect to="/cutting-control-center" /></Route>
                   <Route path="/cutting-dashboard"><Redirect to="/cutting-control-center" /></Route>
                   <Route path="/fabric-inventory" component={FabricInventoryPage} />

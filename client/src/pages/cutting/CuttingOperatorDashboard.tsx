@@ -31,6 +31,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { GroupedPOsBadge } from "@/components/cutting/GroupedPOsBadge";
+import { CuttingQueueTraceSheet } from "@/components/cutting/CuttingQueueTraceSheet";
 import { useToast } from "@/hooks/use-toast";
 import {
   Accordion,
@@ -2229,7 +2230,7 @@ export default function CuttingOperatorDashboard() {
                     <TableHead>Status</TableHead>
                     <TableHead className="text-center">Priority</TableHead>
                     <TableHead>Due Date</TableHead>
-                    <TableHead className="w-40 text-right">Actions</TableHead>
+                    <TableHead className="w-48 text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -2317,6 +2318,7 @@ export default function CuttingOperatorDashboard() {
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-1 justify-end">
+                          <CuttingQueueTraceSheet queueId={item.id} size="icon" iconOnly />
                           {item.status === 'PENDING' && (
                             <Button 
                               size="sm" 

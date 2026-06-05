@@ -20,6 +20,10 @@ const INCOMPLETE_HOURLY_ISSUES = new Set([
   "missing_timesheet",
 ]);
 
+const BILLING_TASK_OWNER_USERNAME = "glennj";
+const BILLING_GRACE_DAYS = 2;
+const BILLING_OVERDUE_DAYS = 3;
+
 function emptyPayrollReviewBatch(): PayrollReviewBatch {
   return {
     periodStart: "",
@@ -43,6 +47,23 @@ function emptyPayrollReviewBatch(): PayrollReviewBatch {
   };
 }
 
+let billingTaskTablesEnsured = false;
+async function ensureBillingTaskTables() {
+  if (billingTaskTablesEnsured) return;
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS p2_billing_task_snoozes (
+      id SERIAL PRIMARY KEY,
+      customer_id TEXT NOT NULL,
+      username TEXT NOT NULL,
+      snoozed_until TIMESTAMP NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+      UNIQUE(customer_id, username)
+    );
+  `);
+  billingTaskTablesEnsured = true;
+}
+
 async function optionalValue<T>(label: string, promise: Promise<T>, fallback: T): Promise<T> {
   try {
     return await promise;
@@ -50,6 +71,121 @@ async function optionalValue<T>(label: string, promise: Promise<T>, fallback: T)
     console.error(`[timekeeping/myTasks] Optional task source failed (${label})`, err?.message ?? err);
     return fallback;
   }
+}
+
+function isBillingTaskOwner(user: any): boolean {
+  return String(user?.username ?? "").trim().toLowerCase() === BILLING_TASK_OWNER_USERNAME;
+}
+
+async function getP2BillingTasksForUser(user: any) {
+  if (!isBillingTaskOwner(user)) return [];
+
+  await ensureBillingTaskTables();
+
+  const { rows } = await optionalQuery<any>(
+    "p2BillingTasks",
+    `
+      WITH eligible_slips AS (
+        SELECT
+          ps.id,
+          ps.packing_slip_number,
+          ps.customer_id,
+          ps.customer_name,
+          ps.po_number,
+          ps.lot_number_id,
+          ps.shipment_number,
+          ps.created_at,
+          ps.ship_date,
+          ps.status,
+          inv_any.id AS invoice_id,
+          inv_any.invoice_number,
+          inv_any.status AS invoice_status,
+          inv_posted.id AS posted_invoice_id
+        FROM p2_packing_slips ps
+        LEFT JOIN LATERAL (
+          SELECT id, invoice_number, status
+          FROM ar_invoices
+          WHERE packing_slip_id = ps.id
+            AND COALESCE(status, '') <> 'VOID'
+          ORDER BY created_at DESC
+          LIMIT 1
+        ) inv_any ON true
+        LEFT JOIN LATERAL (
+          SELECT id
+          FROM ar_invoices
+          WHERE packing_slip_id = ps.id
+            AND status = 'POSTED'
+          ORDER BY created_at DESC
+          LIMIT 1
+        ) inv_posted ON true
+        WHERE inv_posted.id IS NULL
+          AND COALESCE(ps.status, '') <> 'VOID'
+          AND ps.created_at <= NOW() - ($1::int * INTERVAL '1 day')
+      ),
+      unsnoozed_slips AS (
+        SELECT es.*
+        FROM eligible_slips es
+        LEFT JOIN p2_billing_task_snoozes s
+          ON s.customer_id = es.customer_id
+         AND LOWER(s.username) = LOWER($2)
+         AND s.snoozed_until > NOW()
+        WHERE s.id IS NULL
+      )
+      SELECT
+        customer_id,
+        COALESCE(NULLIF(customer_name, ''), customer_id) AS customer_name,
+        COUNT(*)::int AS packing_slip_count,
+        MIN(created_at) AS oldest_created_at,
+        MAX(created_at) AS newest_created_at,
+        JSON_AGG(
+          JSON_BUILD_OBJECT(
+            'id', id,
+            'packingSlipNumber', packing_slip_number,
+            'poNumber', po_number,
+            'lotNumberId', lot_number_id,
+            'shipmentNumber', shipment_number,
+            'createdAt', created_at,
+            'shipDate', ship_date,
+            'status', status,
+            'invoiceId', invoice_id,
+            'invoiceNumber', invoice_number,
+            'invoiceStatus', invoice_status
+          )
+          ORDER BY created_at ASC
+        ) AS items
+      FROM unsnoozed_slips
+      GROUP BY customer_id, COALESCE(NULLIF(customer_name, ''), customer_id)
+      ORDER BY MIN(created_at) ASC
+      LIMIT 25
+    `,
+    [BILLING_GRACE_DAYS, BILLING_TASK_OWNER_USERNAME],
+  );
+
+  return rows.map((row: any) => {
+    const oldest = new Date(row.oldest_created_at);
+    const ageDays = Math.max(0, Math.floor((Date.now() - oldest.getTime()) / 86_400_000));
+    const count = Number(row.packing_slip_count ?? 0);
+    const label = count === 1 ? "packing slip" : "packing slips";
+    return {
+      id: `p2-billing-${row.customer_id}`,
+      type: "p2_invoice_posting_group",
+      title: `Post P2 invoices: ${row.customer_name}`,
+      description: `${count} ${label} past the ${BILLING_GRACE_DAYS}-day grace period without a posted invoice`,
+      employeeName: BILLING_TASK_OWNER_USERNAME,
+      createdAt: row.oldest_created_at,
+      priority: ageDays >= BILLING_OVERDUE_DAYS ? "overdue" : "normal",
+      actionUrl: "/p2/shipments",
+      sourceId: 0,
+      customerId: row.customer_id,
+      customerName: row.customer_name,
+      packingSlipCount: count,
+      oldestCreatedAt: row.oldest_created_at,
+      newestCreatedAt: row.newest_created_at,
+      graceDays: BILLING_GRACE_DAYS,
+      overdueDays: BILLING_OVERDUE_DAYS,
+      items: Array.isArray(row.items) ? row.items : [],
+    };
+  });
 }
 
 async function optionalQuery<T>(label: string, query: string, params: unknown[]): Promise<{ rows: T[] }> {
@@ -165,6 +301,38 @@ router.get(
   }),
 );
 
+router.post(
+  "/my-tasks/p2-billing/:customerId/snooze",
+  authenticateToken,
+  h(async (req, res): Promise<void> => {
+    const user = req.user as any;
+    if (!isBillingTaskOwner(user)) {
+      res.status(403).json({ error: "Only glennj can snooze P2 billing tasks." });
+      return;
+    }
+
+    const customerId = String(req.params.customerId ?? "").trim();
+    if (!customerId) {
+      res.status(400).json({ error: "Customer ID is required." });
+      return;
+    }
+
+    await ensureBillingTaskTables();
+    const { rows } = await pool.query<{ snoozed_until: string }>(
+      `
+        INSERT INTO p2_billing_task_snoozes (customer_id, username, snoozed_until, updated_at)
+        VALUES ($1, $2, DATE_TRUNC('day', NOW()) + INTERVAL '1 day' + INTERVAL '8 hours', NOW())
+        ON CONFLICT (customer_id, username)
+        DO UPDATE SET snoozed_until = EXCLUDED.snoozed_until, updated_at = NOW()
+        RETURNING snoozed_until
+      `,
+      [customerId, BILLING_TASK_OWNER_USERNAME],
+    );
+
+    res.json({ customerId, snoozedUntil: rows[0]?.snoozed_until ?? null });
+  }),
+);
+
 router.get(
   "/my-tasks/:employeeId",
   authenticateToken,
@@ -185,7 +353,7 @@ router.get(
 
     await optionalValue("ensureForkliftTaskTables", ensureForkliftTaskTables(), undefined);
 
-    const [pto, punchCorrections, salaried, hourly, forklift, payrollReview, salariedReviewQueue] = await Promise.all([
+    const [pto, punchCorrections, salaried, hourly, forklift, payrollReview, salariedReviewQueue, p2BillingTasks] = await Promise.all([
       optionalQuery(
         "pto",
         `
@@ -286,6 +454,7 @@ router.get(
       ),
       optionalValue("payrollReviewBatch", getPayrollReviewBatch(), emptyPayrollReviewBatch()),
       optionalValue("salariedReviewQueue", getAdminReviewQueue(), []),
+      optionalValue("p2BillingTasks", getP2BillingTasksForUser(user), []),
     ]);
 
     const ptoTasks = pto.rows.map((r: any) => ({
@@ -422,9 +591,11 @@ router.get(
       testType: r.test_type,
     }));
 
-    const tasks = [...ptoTasks, ...punchCorrectionTasks, ...salariedTasks, ...hourlyTasks, ...blockedHourlyTasks, ...missingSalariedTasks, ...needsReviewSalariedTasks, ...forkliftTasks].sort(
+    const tasks = [...p2BillingTasks, ...ptoTasks, ...punchCorrectionTasks, ...salariedTasks, ...hourlyTasks, ...blockedHourlyTasks, ...missingSalariedTasks, ...needsReviewSalariedTasks, ...forkliftTasks].sort(
       (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
     );
+
+    const overdueCount = tasks.filter((task: any) => task.priority === "overdue").length;
 
     res.json({
       tasks,
@@ -432,7 +603,7 @@ router.get(
         total: tasks.length,
         pending: tasks.length,
         completed: 0,
-        overdue: 0,
+        overdue: overdueCount,
       },
     });
   }),

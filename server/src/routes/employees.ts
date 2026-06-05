@@ -152,16 +152,16 @@ function ensureEmployeeTerminationSchema(): Promise<void> {
         ADD COLUMN IF NOT EXISTS termination_notes TEXT,
         ADD COLUMN IF NOT EXISTS terminated_by_user_id INTEGER REFERENCES users(id),
         ADD COLUMN IF NOT EXISTS terminated_by_name TEXT,
-        ADD COLUMN IF NOT EXISTS terminated_at TIMESTAMP;
-
+        ADD COLUMN IF NOT EXISTS terminated_at TIMESTAMP
+    `).then(() => pool.query(`
       ALTER TABLE users
         ADD COLUMN IF NOT EXISTS access_status TEXT NOT NULL DEFAULT 'ACTIVE',
         ADD COLUMN IF NOT EXISTS access_exception_reason TEXT,
         ADD COLUMN IF NOT EXISTS access_exception_approved_by_user_id INTEGER REFERENCES users(id),
         ADD COLUMN IF NOT EXISTS access_exception_approved_by_name TEXT,
         ADD COLUMN IF NOT EXISTS access_exception_approved_at TIMESTAMP,
-        ADD COLUMN IF NOT EXISTS access_exception_expires_at TIMESTAMP;
-    `).then(() => undefined).catch((error) => {
+        ADD COLUMN IF NOT EXISTS access_exception_expires_at TIMESTAMP
+    `)).then(() => undefined).catch((error) => {
       employeeTerminationSchemaReady = null;
       throw error;
     });

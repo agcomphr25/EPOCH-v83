@@ -74,8 +74,9 @@ async function ensureForkliftTaskTables() {
       question_order JSONB NOT NULL DEFAULT '[]'::jsonb,
       answers JSONB NOT NULL DEFAULT '{}'::jsonb,
       submitted_at TIMESTAMP NOT NULL DEFAULT NOW()
-    );
-
+    )
+  `);
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS forklift_operator_evaluations (
       id SERIAL PRIMARY KEY,
       written_attempt_id INTEGER REFERENCES forklift_written_attempts(id),
@@ -90,8 +91,9 @@ async function ensureForkliftTaskTables() {
       osha_evaluation_due_at TIMESTAMP,
       created_at TIMESTAMP NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMP NOT NULL DEFAULT NOW()
-    );
-
+    )
+  `);
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS forklift_evaluation_items (
       id SERIAL PRIMARY KEY,
       evaluation_id INTEGER NOT NULL REFERENCES forklift_operator_evaluations(id) ON DELETE CASCADE,
@@ -103,7 +105,7 @@ async function ensureForkliftTaskTables() {
       sort_order INTEGER NOT NULL DEFAULT 0,
       updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
       UNIQUE(evaluation_id, item_key)
-    );
+    )
   `);
   forkliftTablesEnsured = true;
 }

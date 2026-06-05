@@ -281,7 +281,6 @@ export default function CuttingOperatorDashboard() {
     freezerNumber: string;
   }[]>([]);
   
-  const [universalBarcode, setUniversalBarcode] = useState("");
   const [fabricSearch, setFabricSearch] = useState("");
   const [allFabricSearch, setAllFabricSearch] = useState("");
   const barcodeInputRef = useRef<HTMLInputElement>(null);
@@ -1096,8 +1095,6 @@ export default function CuttingOperatorDashboard() {
         variant: "destructive",
       });
     }
-    
-    setUniversalBarcode("");
   };
 
   const handleStartCuttingWorkflow = (item: ManufacturingQueueItem) => {
@@ -1414,61 +1411,120 @@ export default function CuttingOperatorDashboard() {
         </div>
       </div>
 
-      {/* Quick Actions Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Scan Packet to Start */}
-        <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-background">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <Scan className="h-4 w-4 text-primary" />
+      <Card className="border-primary/30 bg-primary/5">
+        <CardHeader className="pb-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Scan className="h-5 w-5 text-primary" />
+                Scan Station
+              </CardTitle>
+              <CardDescription>Start with the packet barcode, then scan material rolls for that active packet.</CardDescription>
+            </div>
+            {activeScannedPacket ? (
+              <Badge className="w-fit bg-blue-600">
+                Active: {activeScannedPacket.queueItem?.partNumber || activeScannedPacket.queueItem?.displayName || 'Packet'}
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="w-fit">No active packet</Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div className="rounded-lg border bg-background p-4">
+              <div className="mb-3 flex items-start gap-3">
+                <Badge className="h-7 w-7 justify-center rounded-full p-0">1</Badge>
+                <div>
+                  <h3 className="font-medium">Scan packet barcode</h3>
+                  <p className="text-sm text-muted-foreground">This opens the packet and loads its BOM material requirements.</p>
+                </div>
               </div>
-              Scan Packet to Start
-            </CardTitle>
-            <CardDescription className="text-xs">Scan a printed packet barcode to begin work</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex gap-2 mb-3">
-              <BarcodeInputField
-                id="packet-scan-barcode"
-                value={packetScanBarcode}
-                onChange={(val) => {
-                  setPacketScanBarcode(val);
-                }}
-                placeholder="Scan packet barcode (MFG-...)..."
-                data-testid="input-packet-scan"
-              />
-              <Button 
-                onClick={() => handlePacketScan(packetScanBarcode)} 
-                className="shrink-0"
-                disabled={scanStartMutation.isPending}
-                data-testid="button-packet-scan"
-              >
-                {scanStartMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Scan className="h-4 w-4" />}
-              </Button>
+              <div className="flex gap-2">
+                <BarcodeInputField
+                  id="packet-scan-barcode"
+                  value={packetScanBarcode}
+                  onChange={(val) => setPacketScanBarcode(val)}
+                  placeholder="Scan packet barcode (MFG-...)"
+                  data-testid="input-packet-scan"
+                />
+                <Button
+                  onClick={() => handlePacketScan(packetScanBarcode)}
+                  className="shrink-0"
+                  disabled={scanStartMutation.isPending || !packetScanBarcode.trim()}
+                  data-testid="button-packet-scan"
+                >
+                  {scanStartMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Scan className="h-4 w-4" />}
+                </Button>
+              </div>
             </div>
-            <div className="flex gap-2">
-              <BarcodeInputField
-                id="universal-barcode"
-                value={universalBarcode}
-                onChange={(val) => {
-                  setUniversalBarcode(val);
-                  if (val && val.length > 5) {
-                    handleBarcodeScan(val);
-                  }
-                }}
-                placeholder="Quick scan fabric roll..."
-                data-testid="input-universal-barcode"
-              />
-              <Button onClick={() => handleBarcodeScan(universalBarcode)} className="shrink-0" variant="outline" size="sm" data-testid="button-scan">
-                <Scan className="h-4 w-4" />
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
 
+            <div className={cn("rounded-lg border bg-background p-4", !activeScannedPacket && "opacity-60")}>
+              <div className="mb-3 flex items-start gap-3">
+                <Badge className="h-7 w-7 justify-center rounded-full p-0" variant={activeScannedPacket ? "default" : "secondary"}>2</Badge>
+                <div>
+                  <h3 className="font-medium">Scan material for active packet</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {activeScannedPacket
+                      ? `${activeScannedPacket.queueItem?.displayName || activeScannedPacket.queueItem?.partName || 'Packet'} is active.`
+                      : "Scan a packet first so the material can be checked against the right BOM."}
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <BarcodeInputField
+                  id="material-scan-barcode"
+                  value={materialScanBarcode}
+                  onChange={(val) => setMaterialScanBarcode(val)}
+                  placeholder="Scan material roll barcode"
+                  data-testid="input-material-scan"
+                />
+                <Button
+                  onClick={() => handleMaterialScan(materialScanBarcode)}
+                  className="shrink-0"
+                  disabled={validateMaterialMutation.isPending || !activeScannedPacket?.queueItem?.id || !materialScanBarcode.trim()}
+                  data-testid="button-material-scan"
+                >
+                  {validateMaterialMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Scan className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {validatedRolls.length > 0 && (
+            <div className="rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-800 dark:bg-green-950">
+              <div className="mb-2 flex items-center gap-2 text-sm font-medium text-green-700 dark:text-green-300">
+                <CheckCircle2 className="h-4 w-4" />
+                {validatedRolls.length} material roll(s) scanned for this packet
+              </div>
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
+                {validatedRolls.map((roll: any) => (
+                  <div key={roll.id} className="flex items-center justify-between gap-2 rounded border bg-background px-3 py-2 text-sm">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{roll.fabric || roll.nickname || 'Material roll'}</p>
+                      <p className="text-xs text-muted-foreground">Roll {roll.rollNumber || '-'} | Lot {roll.lotNumber || 'N/A'}</p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 shrink-0"
+                      onClick={() => setValidatedRolls(prev => prev.filter(r => r.id !== roll.id))}
+                      aria-label="Remove scanned material roll"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <div className="grid grid-cols-1 gap-4">
         {/* FIFO Lookup */}
-        <Card className="lg:col-span-2">
+        <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
               <div className="p-2 rounded-lg bg-blue-500/10">
@@ -1877,72 +1933,6 @@ export default function CuttingOperatorDashboard() {
                   <p className="text-sm text-muted-foreground py-4 text-center">No cutting programs configured for this packet</p>
                 )}
               </div>
-            </div>
-
-            {/* Material Roll Scanning */}
-            <div className="border-2 border-dashed border-primary/30 rounded-lg p-4">
-              <h4 className="font-medium mb-3 flex items-center gap-2">
-                <Barcode className="h-4 w-4" />
-                Scan Material Rolls
-              </h4>
-              <div className="flex gap-2 mb-3">
-                <BarcodeInputField
-                  id="material-scan-barcode"
-                  value={materialScanBarcode}
-                  onChange={(val) => {
-                    setMaterialScanBarcode(val);
-                  }}
-                  placeholder="Scan material roll barcode..."
-                  data-testid="input-material-scan"
-                />
-                <Button
-                  onClick={() => handleMaterialScan(materialScanBarcode)}
-                  className="shrink-0"
-                  disabled={validateMaterialMutation.isPending}
-                  data-testid="button-material-scan"
-                >
-                  {validateMaterialMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Scan className="h-4 w-4" />}
-                </Button>
-              </div>
-
-              {validatedRolls.length > 0 ? (
-                <div className="space-y-2">
-                  <p className="text-sm font-medium text-green-600 dark:text-green-400">
-                    {validatedRolls.length} roll(s) validated and ready
-                  </p>
-                  {validatedRolls.map((roll: any) => (
-                    <div key={roll.id} className="flex items-center justify-between p-2 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg">
-                      <div className="flex items-center gap-2">
-                        <CheckCircle2 className="h-4 w-4 text-green-600" />
-                        <div>
-                          <span className="font-medium text-sm">{roll.fabric || roll.nickname}</span>
-                          <span className="text-muted-foreground text-sm ml-2">Roll {roll.rollNumber}</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="text-right text-xs text-muted-foreground">
-                          <div>Lot: {roll.lotNumber || 'N/A'} | Batch: {roll.batchNumber || 'N/A'}</div>
-                          <div>
-                            {parseFloat(roll.squareMeters || '0').toFixed(1)} m²
-                            {roll.expirationDate && ` | Exp: ${new Date(roll.expirationDate).toLocaleDateString()}`}
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => setValidatedRolls(prev => prev.filter(r => r.id !== roll.id))}
-                          className="ml-1 p-1 text-muted-foreground hover:text-red-600 transition-colors"
-                          aria-label="Remove roll"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground text-center py-2">
-                  Scan material roll barcodes to validate against the BOM
-                </p>
-              )}
             </div>
           </CardContent>
         </Card>

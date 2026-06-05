@@ -55,6 +55,7 @@ interface PartsRequestFormData {
   partNumber: string;
   partName: string;
   requestedBy: string;
+  requestedForEmployeeId: string;
   productionLine: string;
   projectId: string;
   department: string;
@@ -81,7 +82,16 @@ interface DepartmentOption {
   name: string;
 }
 
+interface EmployeeOption {
+  id: number;
+  name: string;
+  department?: string | null;
+  isActive?: boolean | null;
+}
+
 type PartsRequestWithProject = PartsRequest & {
+  requestedForEmployeeId?: number | null;
+  requestedForDisplayName?: string | null;
   project?: {
     id: string | null;
     projectCode: string | null;
@@ -136,6 +146,7 @@ export default function PartsRequestsCard() {
     partNumber: '',
     partName: '',
     requestedBy: '',
+    requestedForEmployeeId: '',
     productionLine: '',
     projectId: initialProjectId,
     department: '',
@@ -165,6 +176,19 @@ export default function PartsRequestsCard() {
     queryKey: ['/api/inventory/departments'],
     queryFn: () => apiRequest('/api/inventory/departments'),
   });
+
+  const { data: employees = [] } = useQuery<EmployeeOption[]>({
+    queryKey: ['/api/employees'],
+    queryFn: () => apiRequest('/api/employees'),
+  });
+
+  const activeEmployees = useMemo(
+    () =>
+      employees
+        .filter((employee) => employee.isActive !== false)
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [employees]
+  );
 
   const { data: inventoryItems = [], isLoading: isLoadingInventory } = useQuery<InventoryItem[]>({
     queryKey: ['/api/inventory'],
@@ -274,6 +298,7 @@ export default function PartsRequestsCard() {
       partNumber: '',
       partName: '',
       requestedBy: getDefaultRequestor(sessionUser),
+      requestedForEmployeeId: '',
       productionLine: '',
       projectId: initialProjectId,
       department: '',
@@ -352,6 +377,9 @@ export default function PartsRequestsCard() {
       partNumber: formData.partNumber,
       partName: formData.partName,
       requestedBy: formData.requestedBy,
+      requestedForEmployeeId: formData.requestedForEmployeeId
+        ? parseInt(formData.requestedForEmployeeId)
+        : null,
       productionLine: formData.productionLine || null,
       projectId: formData.projectId || null,
       department: formData.department || null,
@@ -393,6 +421,9 @@ export default function PartsRequestsCard() {
       partNumber: request.partNumber,
       partName: request.partName,
       requestedBy: request.requestedBy,
+      requestedForEmployeeId: request.requestedForEmployeeId
+        ? String(request.requestedForEmployeeId)
+        : '',
       productionLine: request.productionLine || '',
       projectId: request.projectId || '',
       department: request.department || '',
@@ -544,6 +575,30 @@ export default function PartsRequestsCard() {
             required
           />
         </div>
+        <div className="min-w-0">
+          <Label htmlFor="requestedForEmployeeId">Requested For</Label>
+          <Select
+            value={formData.requestedForEmployeeId || NONE_VALUE}
+            onValueChange={(value) =>
+              handleSelectChange('requestedForEmployeeId', value === NONE_VALUE ? '' : value)
+            }
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Optional employee" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NONE_VALUE}>No employee selected</SelectItem>
+              {activeEmployees.map((employee) => (
+                <SelectItem key={employee.id} value={String(employee.id)}>
+                  {employee.name}{employee.department ? ` - ${employee.department}` : ''}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div className="min-w-0">
           <Label htmlFor="productionLine">Production Line</Label>
           <Select
@@ -876,7 +931,11 @@ export default function PartsRequestsCard() {
                       <div className="space-y-2 text-sm">
                         <div className="flex items-center gap-2">
                           <User className="h-4 w-4 text-gray-400" />
-                          <span>{request.requestedBy}</span>
+                          <span>By: {request.requestedBy}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <User className="h-4 w-4 text-gray-400" />
+                          <span>For: {request.requestedForDisplayName || '—'}</span>
                         </div>
 
                         {(request.productionLine || request.project) && (

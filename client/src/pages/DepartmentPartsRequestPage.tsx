@@ -45,6 +45,8 @@ type PartsRequest = {
   partNumber: string;
   partName: string;
   requestedBy: string;
+  requestedForEmployeeId?: number | null;
+  requestedForDisplayName?: string | null;
   department: string;
   departmentId: number;
   quantity: number;
@@ -80,6 +82,13 @@ type Department = {
   name: string;
 };
 
+type EmployeeOption = {
+  id: number;
+  name: string;
+  department?: string | null;
+  isActive?: boolean | null;
+};
+
 export default function DepartmentPartsRequestPage() {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
@@ -94,6 +103,7 @@ export default function DepartmentPartsRequestPage() {
     reason: '',
     outOfDeptReason: '',
     requestedBy: '',
+    requestedForEmployeeId: '',
   });
   const requestedByEditedRef = useRef(false);
 
@@ -131,6 +141,14 @@ export default function DepartmentPartsRequestPage() {
     enabled: isAdmin,
   });
 
+  const { data: employees = [] } = useQuery<EmployeeOption[]>({
+    queryKey: ['/api/employees'],
+  });
+
+  const activeEmployees = employees
+    .filter((employee) => employee.isActive !== false)
+    .sort((a, b) => a.name.localeCompare(b.name));
+
   const effectiveDepartment = isAdmin ? selectedDepartment : (user?.department || '');
   const effectiveDepartmentId = isAdmin ? selectedDepartmentId : (user?.departmentId || null);
 
@@ -164,6 +182,7 @@ export default function DepartmentPartsRequestPage() {
       departmentId: number | null;
       catalogFixNeeded: boolean;
       outOfDeptReason: string | null;
+      requestedForEmployeeId: number | null;
     }) => {
       return apiRequest('/api/inventory/parts-requests', {
         method: 'POST',
@@ -186,7 +205,7 @@ export default function DepartmentPartsRequestPage() {
       setIsRequestDialogOpen(false);
       setSelectedItem(null);
       requestedByEditedRef.current = false;
-      setRequestForm({ quantity: '', urgency: 'MEDIUM', reason: '', outOfDeptReason: '', requestedBy: defaultRequestor });
+      setRequestForm({ quantity: '', urgency: 'MEDIUM', reason: '', outOfDeptReason: '', requestedBy: defaultRequestor, requestedForEmployeeId: '' });
     },
     onError: () => {
       toast({
@@ -230,6 +249,7 @@ export default function DepartmentPartsRequestPage() {
       reason: '',
       outOfDeptReason: '',
       requestedBy: defaultRequestor,
+      requestedForEmployeeId: '',
     });
     setIsRequestDialogOpen(true);
   };
@@ -304,6 +324,9 @@ export default function DepartmentPartsRequestPage() {
       departmentId: effectiveDepartmentId,
       catalogFixNeeded: outOfDept,
       outOfDeptReason: outOfDept ? requestForm.outOfDeptReason : null,
+      requestedForEmployeeId: requestForm.requestedForEmployeeId
+        ? Number(requestForm.requestedForEmployeeId)
+        : null,
     });
   };
 
@@ -615,6 +638,12 @@ export default function DepartmentPartsRequestPage() {
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                       Department
                     </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      Requested By
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      Requested For
+                    </th>
                     <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                       Qty Requested
                     </th>
@@ -650,6 +679,12 @@ export default function DepartmentPartsRequestPage() {
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
                         {request.department}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
+                        {request.requestedBy}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
+                        {request.requestedForDisplayName || '—'}
                       </td>
                       <td className="px-4 py-3 text-sm text-center text-gray-900 dark:text-gray-100" data-testid={`text-request-qty-requested-${request.id}`}>
                         {request.quantity}
@@ -774,6 +809,34 @@ export default function DepartmentPartsRequestPage() {
               />
             </div>
 
+            {/* Requested For */}
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Requested For <span className="text-muted-foreground text-xs">(optional)</span>
+              </label>
+              <Select
+                value={requestForm.requestedForEmployeeId || '__none__'}
+                onValueChange={(value) =>
+                  setRequestForm({
+                    ...requestForm,
+                    requestedForEmployeeId: value === '__none__' ? '' : value,
+                  })
+                }
+              >
+                <SelectTrigger data-testid="select-requested-for">
+                  <SelectValue placeholder="Select employee..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">No employee selected</SelectItem>
+                  {activeEmployees.map((employee) => (
+                    <SelectItem key={employee.id} value={String(employee.id)}>
+                      {employee.name}{employee.department ? ` - ${employee.department}` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* Quantity */}
             <div>
               <label className="block text-sm font-medium mb-1">
@@ -848,7 +911,7 @@ export default function DepartmentPartsRequestPage() {
                   setIsRequestDialogOpen(false);
                   setSelectedItem(null);
                   requestedByEditedRef.current = false;
-                  setRequestForm({ quantity: '', urgency: 'MEDIUM', reason: '', outOfDeptReason: '', requestedBy: '' });
+                  setRequestForm({ quantity: '', urgency: 'MEDIUM', reason: '', outOfDeptReason: '', requestedBy: '', requestedForEmployeeId: '' });
                 }}
                 data-testid="button-cancel-request"
               >

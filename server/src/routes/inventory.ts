@@ -53,6 +53,7 @@ import { DEFAULT_INVENTORY_TRANSACTIONS_LIMIT, MAX_INVENTORY_TRANSACTIONS_LIMIT 
 import { requireRole } from '../../middleware/auth';
 import { requirePermission } from '../../middleware/requirePermission';
 import { getUserPermissions } from '../services/permissionService';
+import { notificationManager } from '../services/notificationManager';
 
 const router = Router();
 
@@ -1162,6 +1163,105 @@ async function requirePartsRequestApprovalAuthority(req: Request, res: Response)
   return allowed;
 }
 
+function formatPartsRequestStatus(status: string | null | undefined) {
+  return String(status || 'UPDATED').replace(/_/g, ' ');
+}
+
+async function resolveRequestedForEmployee(employeeId: number | null | undefined) {
+  if (!employeeId) return null;
+  const { employees } = await import('../../schema');
+  const [employee] = await db
+    .select({ id: employees.id, name: employees.name, isActive: employees.isActive })
+    .from(employees)
+    .where(eq(employees.id, employeeId))
+    .limit(1);
+  return employee ?? null;
+}
+
+async function normalizePartsRequestParticipantFields(
+  data: Record<string, any>,
+  req: Request,
+  options: { defaultRequester?: boolean } = {}
+) {
+  if (options.defaultRequester && !data.requestedByUserId && req.user?.id) {
+    data.requestedByUserId = req.user.id;
+  }
+
+  if ('requestedForEmployeeId' in data) {
+    const employeeId = data.requestedForEmployeeId == null ? null : Number(data.requestedForEmployeeId);
+    if (!employeeId) {
+      data.requestedForEmployeeId = null;
+      data.requestedForDisplayName = null;
+      return;
+    }
+
+    const employee = await resolveRequestedForEmployee(employeeId);
+    if (!employee || employee.isActive === false) {
+      throw new Error('Requested For must be an active employee.');
+    }
+
+    data.requestedForEmployeeId = employee.id;
+    data.requestedForDisplayName = employee.name;
+  }
+}
+
+async function resolvePartsRequestNotificationRecipients(request: {
+  requestedByUserId?: number | null;
+  requestedForEmployeeId?: number | null;
+}) {
+  const ids = new Set<number>();
+  if (request.requestedByUserId) ids.add(request.requestedByUserId);
+
+  if (request.requestedForEmployeeId) {
+    const { users } = await import('../../schema');
+    const linkedUsers = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(and(eq(users.employeeId, request.requestedForEmployeeId), eq(users.isActive, true)));
+    for (const user of linkedUsers) ids.add(user.id);
+  }
+
+  return Array.from(ids);
+}
+
+async function notifyPartsRequestParticipants(params: {
+  request: any;
+  fromStatus?: string | null;
+  toStatus: string;
+  changedBy?: string | null;
+  reason?: string | null;
+}) {
+  try {
+    const recipients = await resolvePartsRequestNotificationRecipients(params.request);
+    if (recipients.length === 0) return;
+
+    const partLabel = params.request.partName || params.request.partNumber || `Request #${params.request.id}`;
+    const statusLabel = formatPartsRequestStatus(params.toStatus);
+    const transition = params.fromStatus && params.fromStatus !== params.toStatus
+      ? `${formatPartsRequestStatus(params.fromStatus)} to ${statusLabel}`
+      : statusLabel;
+
+    notificationManager.sendToUsers(recipients, {
+      type: 'parts_request_status',
+      title: `Parts request #${params.request.id}: ${statusLabel}`,
+      message: `${partLabel} is now ${transition}.`,
+      timestamp: new Date().toISOString(),
+      data: {
+        requestId: params.request.id,
+        partNumber: params.request.partNumber,
+        partName: params.request.partName,
+        fromStatus: params.fromStatus ?? null,
+        toStatus: params.toStatus,
+        changedBy: params.changedBy ?? null,
+        reason: params.reason ?? null,
+        url: '/inventory/parts-request',
+      },
+    });
+  } catch (error) {
+    console.warn('[parts-requests] status notification failed:', error instanceof Error ? error.message : error);
+  }
+}
+
 router.get('/parts-requests/owner-approvals', async (_req: Request, res: Response) => {
   try {
     const requests = await storage.getAllPartsRequests();
@@ -1196,7 +1296,8 @@ async function resolveSourceVendorId(sourceText: string | null | undefined, db: 
 
 router.post('/parts-requests', async (req: Request, res: Response) => {
   try {
-    const requestData = insertPartsRequestSchema.parse(req.body);
+    const requestData = insertPartsRequestSchema.parse(req.body) as any;
+    await normalizePartsRequestParticipantFields(requestData, req, { defaultRequester: true });
     const now = new Date();
     requestData.status = 'PENDING';
     requestData.approvalStatus = 'PENDING';
@@ -1244,6 +1345,13 @@ router.post('/parts-requests', async (req: Request, res: Response) => {
     }
 
     const newRequest = await storage.createPartsRequest(requestData);
+    await notifyPartsRequestParticipants({
+      request: newRequest,
+      fromStatus: null,
+      toStatus: newRequest.status,
+      changedBy: requestData.requestedBy,
+      reason: 'Parts request submitted.',
+    });
     res.status(201).json(newRequest);
   } catch (error) {
     console.error('Create parts request error:', error);
@@ -1321,6 +1429,14 @@ router.post('/parts-requests/:id/approve', async (req: Request, res: Response) =
       reason: isApproved ? 'Owner digital approval completed.' : notes || 'Owner rejected approval request.',
     });
 
+    await notifyPartsRequestParticipants({
+      request: updatedRequest,
+      fromStatus: existingRequest.status,
+      toStatus: nextStatus,
+      changedBy: actor,
+      reason: isApproved ? 'Owner digital approval completed.' : notes || 'Owner rejected approval request.',
+    });
+
     res.json(updatedRequest);
   } catch (error) {
     console.error('Approve owner parts request error:', error);
@@ -1334,7 +1450,8 @@ router.post('/parts-requests/:id/approve', async (req: Request, res: Response) =
 router.put('/parts-requests/:id', async (req: Request, res: Response) => {
   try {
     const requestId = parseInt(req.params.id);
-    const updates = insertPartsRequestSchema.partial().parse(req.body);
+    const updates = insertPartsRequestSchema.partial().parse(req.body) as any;
+    await normalizePartsRequestParticipantFields(updates, req);
     const existingRequest = await storage.getPartsRequest(requestId);
     if (!existingRequest) {
       return res.status(404).json({ error: 'Request not found' });
@@ -1407,6 +1524,15 @@ router.put('/parts-requests/:id', async (req: Request, res: Response) => {
     }
     
     const updatedRequest = await storage.updatePartsRequest(requestId, updates);
+    if (updates.status && updatedRequest.status !== existingRequest.status) {
+      await notifyPartsRequestParticipants({
+        request: updatedRequest,
+        fromStatus: existingRequest.status,
+        toStatus: updatedRequest.status,
+        changedBy: getApprovalActor(req, updates.approvedBy ?? updates.rejectedBy ?? null),
+        reason: updates.notes ?? updates.rejectionReason ?? null,
+      });
+    }
     res.json(updatedRequest);
   } catch (error) {
     console.error('Update parts request error:', error);
@@ -1435,7 +1561,11 @@ router.get('/parts-requests/my', async (req: Request, res: Response) => {
     if (!username) {
       return res.status(401).json({ error: 'Not authenticated' });
     }
-    const requests = await storage.getPartsRequestsByUser(username);
+    const requests = await storage.getPartsRequestsByUser(
+      username,
+      req.user?.id ?? null,
+      (req.user as any)?.employeeId ?? null
+    );
     res.json(requests);
   } catch (error) {
     console.error('Get user parts requests error:', error);
@@ -1665,11 +1795,22 @@ router.put('/parts-requests/bulk', async (req: Request, res: Response) => {
       
       if (validIds.length > 0) {
         updateData.status = updates.status;
-        await db
+        const updatedRequests = await db
           .update(partsRequests)
           .set(updateData)
-          .where(inArray(partsRequests.id, validIds));
+          .where(inArray(partsRequests.id, validIds))
+          .returning();
         updatedCount = validIds.length;
+        for (const request of updatedRequests) {
+          const previous = existingRequests.find((r) => r.id === request.id);
+          await notifyPartsRequestParticipants({
+            request,
+            fromStatus: previous?.status ?? null,
+            toStatus: request.status,
+            changedBy: req.user?.username ?? 'bulk update',
+            reason: updates.notes ?? null,
+          });
+        }
       }
       
       // Return detailed response about what was updated/skipped
@@ -1688,10 +1829,23 @@ router.put('/parts-requests/bulk', async (req: Request, res: Response) => {
         updateData.status = updates.status;
       }
       
-      await db
+      const updatedRequests = await db
         .update(partsRequests)
         .set(updateData)
-        .where(inArray(partsRequests.id, requestIds));
+        .where(inArray(partsRequests.id, requestIds))
+        .returning();
+
+      if (updates.status) {
+        for (const request of updatedRequests) {
+          await notifyPartsRequestParticipants({
+            request,
+            fromStatus: null,
+            toStatus: request.status,
+            changedBy: req.user?.username ?? 'bulk update',
+            reason: updates.notes ?? null,
+          });
+        }
+      }
       
       res.json({ success: true, updatedCount: requestIds.length });
     }
@@ -1927,6 +2081,8 @@ router.post('/parts-requests/batches', async (req: Request, res: Response) => {
       orderDate: new Date(),
     }).returning();
 
+    const statusNotifications: Array<{ request: any; fromStatus: string; toStatus: string; reason: string }> = [];
+
     for (const reqId of requestIds) {
       const qtyOrdered = quantities[reqId] || 0;
       if (qtyOrdered <= 0) continue;
@@ -1957,7 +2113,7 @@ router.post('/parts-requests/batches', async (req: Request, res: Response) => {
       const totalOrdered = (existing.qtyOrdered || 0) + qtyOrdered;
       const newStatus = totalOrdered >= existing.quantity ? 'ORDERED' : 'ORDERED_PARTIAL';
 
-      await db.update(partsRequests).set({
+      const [updatedRequest] = await db.update(partsRequests).set({
         batchId: batch.id,
         qtyOrdered: totalOrdered,
         status: newStatus,
@@ -1965,7 +2121,7 @@ router.post('/parts-requests/batches', async (req: Request, res: Response) => {
         orderMethod: orderMethod,
         orderDate: new Date(),
         updatedAt: new Date(),
-      }).where(eq(partsRequests.id, reqId));
+      }).where(eq(partsRequests.id, reqId)).returning();
 
       await db.insert(partsRequestStatusHistory).values({
         partsRequestId: reqId,
@@ -1973,6 +2129,22 @@ router.post('/parts-requests/batches', async (req: Request, res: Response) => {
         toStatus: newStatus,
         changedBy: createdBy,
         reason: `Order batch #${batch.id} created - ${qtyOrdered} ordered via order line #${orderLine.id}`,
+      });
+
+      if (updatedRequest) {
+        statusNotifications.push({
+          request: updatedRequest,
+          fromStatus: existing.status,
+          toStatus: newStatus,
+          reason: `Order batch #${batch.id} created - ${qtyOrdered} ordered via order line #${orderLine.id}`,
+        });
+      }
+    }
+
+    for (const notification of statusNotifications) {
+      await notifyPartsRequestParticipants({
+        ...notification,
+        changedBy: createdBy,
       });
     }
 
@@ -2171,7 +2343,7 @@ router.post('/parts-requests/receive', requirePermission('inventory.manage_reque
     // allocation propagation, batch status, request status history, AND the
     // ITL `RECEIVE` writes) in a single db.transaction so the ledger and the
     // parts-request state cannot diverge. ITL failure rolls back everything.
-    const receipt = await db.transaction(async (tx) => {
+    const receiveResult = await db.transaction(async (tx) => {
       const [createdReceipt] = await tx.insert(partsRequestReceipts).values({
         batchId: batchId || null,
         vendorId: null,
@@ -2181,6 +2353,7 @@ router.post('/parts-requests/receive', requirePermission('inventory.manage_reque
 
       let allFullyReceived = true;
       let anyReceived = false;
+      const statusNotifications: Array<{ request: any; fromStatus: string; toStatus: string; reason: string }> = [];
 
       for (const line of lines) {
         if (line.qtyReceived <= 0) continue;
@@ -2304,20 +2477,30 @@ router.post('/parts-requests/receive', requirePermission('inventory.manage_reque
             const newTotalReceived = (request.qtyReceived || 0) + canApply;
             const requestStatus = newTotalReceived >= (request.qtyOrdered || request.quantity) ? 'RECEIVED' : 'RECEIVED_PARTIAL';
 
-            await tx.update(partsRequests).set({
+            const [updatedRequest] = await tx.update(partsRequests).set({
               qtyReceived: newTotalReceived,
               status: requestStatus,
               actualDelivery: new Date().toISOString().split('T')[0],
               updatedAt: new Date(),
-            }).where(eq(partsRequests.id, alloc.partsRequestId));
+            }).where(eq(partsRequests.id, alloc.partsRequestId)).returning();
 
+            const reason = `Received ${canApply} units via order line #${line.orderLineId}`;
             await tx.insert(partsRequestStatusHistory).values({
               partsRequestId: alloc.partsRequestId,
               fromStatus: request.status,
               toStatus: requestStatus,
               changedBy: receivedBy,
-              reason: `Received ${canApply} units via order line #${line.orderLineId}`,
+              reason,
             });
+
+            if (updatedRequest) {
+              statusNotifications.push({
+                request: updatedRequest,
+                fromStatus: request.status,
+                toStatus: requestStatus,
+                reason,
+              });
+            }
           }
 
           remainingToApply -= canApply;
@@ -2332,10 +2515,17 @@ router.post('/parts-requests/receive', requirePermission('inventory.manage_reque
         }).where(eq(partsRequestBatches.id, batchId));
       }
 
-      return createdReceipt;
+      return { receipt: createdReceipt, statusNotifications };
     });
 
-    res.status(201).json(receipt);
+    for (const notification of receiveResult.statusNotifications) {
+      await notifyPartsRequestParticipants({
+        ...notification,
+        changedBy: receivedBy,
+      });
+    }
+
+    res.status(201).json(receiveResult.receipt);
   } catch (error: any) {
     console.error('Receive parts error:', error);
     // Surface inventory-ledger validation/FK failures as a structured 422 so
@@ -2363,7 +2553,7 @@ router.post('/parts-requests/:id/cancel', async (req: Request, res: Response) =>
     const { eq } = await import('drizzle-orm');
 
     const requestId = parseInt(req.params.id);
-    const { cancelledBy, reason } = req.body as { cancelledBy: string; reason?: string };
+    const { cancelledBy: cancelledByInput, reason } = req.body as { cancelledBy?: string; reason?: string };
 
     const [existing] = await db.select().from(partsRequests).where(eq(partsRequests.id, requestId));
     if (!existing) return res.status(404).json({ error: 'Request not found' });
@@ -2376,14 +2566,15 @@ router.post('/parts-requests/:id/cancel', async (req: Request, res: Response) =>
     }
 
     const newStatus = canCancelDirectly ? 'CANCELED' : 'CANCEL_REQUESTED';
+    const cancelledBy = cancelledByInput || req.user?.username || existing.requestedBy;
 
-    await db.update(partsRequests).set({
+    const [updatedRequest] = await db.update(partsRequests).set({
       status: newStatus,
       cancelReason: reason || null,
       cancelRequestedAt: new Date(),
       cancelRequestedBy: cancelledBy,
       updatedAt: new Date(),
-    }).where(eq(partsRequests.id, requestId));
+    }).where(eq(partsRequests.id, requestId)).returning();
 
     await db.insert(partsRequestStatusHistory).values({
       partsRequestId: requestId,
@@ -2392,6 +2583,16 @@ router.post('/parts-requests/:id/cancel', async (req: Request, res: Response) =>
       changedBy: cancelledBy,
       reason: reason || 'Cancelled by requester',
     });
+
+    if (updatedRequest) {
+      await notifyPartsRequestParticipants({
+        request: updatedRequest,
+        fromStatus: existing.status,
+        toStatus: newStatus,
+        changedBy: cancelledBy,
+        reason: reason || 'Cancelled by requester',
+      });
+    }
 
     res.json({ success: true, newStatus });
   } catch (error) {
@@ -2422,13 +2623,13 @@ router.post('/parts-requests/:id/reject', requirePermission('inventory.manage_re
 
     const newStatus = existing.status === 'CANCEL_REQUESTED' ? 'CANCELED' : 'REJECTED';
 
-    await db.update(partsRequests).set({
+    const [updatedRequest] = await db.update(partsRequests).set({
       status: newStatus,
       rejectionReason: reason,
       rejectedBy,
       rejectedAt: new Date(),
       updatedAt: new Date(),
-    }).where(eq(partsRequests.id, requestId));
+    }).where(eq(partsRequests.id, requestId)).returning();
 
     await db.insert(partsRequestStatusHistory).values({
       partsRequestId: requestId,
@@ -2437,6 +2638,16 @@ router.post('/parts-requests/:id/reject', requirePermission('inventory.manage_re
       changedBy: rejectedBy,
       reason,
     });
+
+    if (updatedRequest) {
+      await notifyPartsRequestParticipants({
+        request: updatedRequest,
+        fromStatus: existing.status,
+        toStatus: newStatus,
+        changedBy: rejectedBy,
+        reason,
+      });
+    }
 
     res.json({ success: true, newStatus });
   } catch (error) {

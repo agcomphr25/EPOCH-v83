@@ -18,12 +18,15 @@ function ensureChargeCodeAssignmentTable(): Promise<void> {
           charge_code_id INTEGER NOT NULL REFERENCES charge_codes(id) ON DELETE CASCADE,
           employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
           assigned_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          is_default BOOLEAN NOT NULL DEFAULT FALSE,
           assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           UNIQUE (charge_code_id, employee_id)
         )
       `);
+      await pool.query(`ALTER TABLE charge_code_employee_assignments ADD COLUMN IF NOT EXISTS is_default BOOLEAN NOT NULL DEFAULT FALSE`);
       await pool.query(`CREATE INDEX IF NOT EXISTS charge_code_employee_assignments_charge_code_idx ON charge_code_employee_assignments(charge_code_id)`);
       await pool.query(`CREATE INDEX IF NOT EXISTS charge_code_employee_assignments_employee_idx ON charge_code_employee_assignments(employee_id)`);
+      await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS charge_code_employee_assignments_one_default_per_employee_idx ON charge_code_employee_assignments(employee_id) WHERE is_default = TRUE`);
     })().catch((error) => {
       chargeCodeAssignmentTableReady = null;
       throw error;
@@ -56,6 +59,43 @@ function normalizeEmployeeIds(value: unknown): number[] | null {
   return Array.from(new Set(ids)).sort((a, b) => a - b);
 }
 
+function normalizeChargeCodePolicy<T extends Record<string, any>>(data: T): T {
+  const next = { ...data };
+  const productionLine = typeof next.productionLine === 'string' ? next.productionLine.trim().toUpperCase() : next.productionLine;
+  const type = typeof next.type === 'string' ? next.type.toUpperCase() : next.type;
+  const costHandling = typeof next.costHandling === 'string' ? next.costHandling.toUpperCase() : next.costHandling;
+
+  if (productionLine) next.productionLine = productionLine;
+
+  if (next.requireClin === true) {
+    next.allowClin = true;
+  }
+  if (next.allowClin === true || next.requireProject === true) {
+    next.allowProject = true;
+  }
+
+  if (productionLine === 'P1' && type === 'DIRECT') {
+    next.costObjectivePolicy = 'P1_INVENTORY_WIP_GENERAL_STOCK';
+    next.inventoryWipPolicy = 'P1_INVENTORY_WIP_GENERAL_STOCK';
+    next.allowProject = false;
+    next.requireProject = false;
+    next.allowClin = false;
+    next.requireClin = false;
+  }
+
+  if (productionLine === 'P2' && type === 'DIRECT') {
+    next.allowProject = true;
+    next.requireProject = true;
+    next.costObjectivePolicy = 'PROJECT_REQUIRED';
+  }
+
+  if (type === 'OVERHEAD' || type === 'G_AND_A' || costHandling === 'OVERHEAD' || costHandling === 'G_AND_A') {
+    next.costObjectivePolicy = next.costObjectivePolicy || 'NONE';
+  }
+
+  return next as T;
+}
+
 async function getChargeCodeAssignments(chargeCodeId: number) {
   await ensureChargeCodeAssignmentTable();
   return pool.query(
@@ -65,7 +105,8 @@ async function getChargeCodeAssignments(chargeCodeId: number) {
        e.name,
        e.department,
        e.job_title AS "jobTitle",
-       e.is_active AS "isActive"
+       e.is_active AS "isActive",
+       cca.is_default AS "isDefault"
      FROM charge_code_employee_assignments cca
      JOIN employees e ON e.id = cca.employee_id
      WHERE cca.charge_code_id = $1
@@ -100,6 +141,7 @@ router.get('/:id/assignments', authenticateToken, h(async (req, res) => {
     chargeCodeId: id,
     scope: assignedEmployees.length > 0 ? 'SELECTED_EMPLOYEES' : 'ALL_EMPLOYEES',
     employeeIds: assignedEmployees.map((employee: any) => employee.id),
+    defaultEmployeeIds: assignedEmployees.filter((employee: any) => employee.isDefault).map((employee: any) => employee.id),
     assignedEmployees,
   });
 }));
@@ -124,6 +166,17 @@ router.put('/:id/assignments', authenticateToken, requireRole('ADMIN'), h(async 
   }
   if (scope === 'SELECTED_EMPLOYEES' && nextEmployeeIds.length === 0) {
     res.status(400).json({ error: 'Select at least one employee or choose All employees' });
+    return;
+  }
+  const defaultEmployeeIds = normalizeEmployeeIds(req.body?.defaultEmployeeIds) ?? [];
+  if (scope === 'ALL_EMPLOYEES' && defaultEmployeeIds.length > 0) {
+    res.status(400).json({ error: 'Default employees can only be set when employee access is limited to selected employees' });
+    return;
+  }
+  const selectedEmployeeSet = new Set(nextEmployeeIds);
+  const defaultOutsideSelection = defaultEmployeeIds.filter((employeeId) => !selectedEmployeeSet.has(employeeId));
+  if (defaultOutsideSelection.length > 0) {
+    res.status(400).json({ error: `Default employee(s) must also be selected: ${defaultOutsideSelection.join(', ')}` });
     return;
   }
 
@@ -151,11 +204,20 @@ router.put('/:id/assignments', authenticateToken, requireRole('ADMIN'), h(async 
     await client.query('BEGIN');
     await client.query(`DELETE FROM charge_code_employee_assignments WHERE charge_code_id = $1`, [id]);
     if (nextEmployeeIds.length > 0) {
+      if (defaultEmployeeIds.length > 0) {
+        await client.query(
+          `UPDATE charge_code_employee_assignments
+              SET is_default = FALSE
+            WHERE employee_id = ANY($1::int[])`,
+          [defaultEmployeeIds]
+        );
+      }
       await client.query(
-        `INSERT INTO charge_code_employee_assignments (charge_code_id, employee_id, assigned_by_user_id)
-         SELECT $1, unnest($2::int[]), $3
+        `INSERT INTO charge_code_employee_assignments (charge_code_id, employee_id, assigned_by_user_id, is_default)
+         SELECT $1, t.employee_id, $3, t.employee_id = ANY($4::int[])
+         FROM unnest($2::int[]) AS t(employee_id)
          ON CONFLICT (charge_code_id, employee_id) DO NOTHING`,
-        [id, nextEmployeeIds, req.user?.id ?? null]
+        [id, nextEmployeeIds, req.user?.id ?? null, defaultEmployeeIds]
       );
     }
     await client.query('COMMIT');
@@ -180,6 +242,10 @@ router.put('/:id/assignments', authenticateToken, requireRole('ADMIN'), h(async 
         after: assignedEmployees.length > 0 ? 'SELECTED_EMPLOYEES' : 'ALL_EMPLOYEES',
       },
       employeeIds: { before: beforeIds, after: assignedEmployees.map((employee: any) => employee.id) },
+      defaultEmployeeIds: {
+        before: beforeAssignments.filter((employee: any) => employee.isDefault).map((employee: any) => employee.id),
+        after: assignedEmployees.filter((employee: any) => employee.isDefault).map((employee: any) => employee.id),
+      },
     },
     meta: { chargeCode: chargeCode.code },
     ipAddress: req.ip ?? null,
@@ -195,6 +261,7 @@ router.put('/:id/assignments', authenticateToken, requireRole('ADMIN'), h(async 
     chargeCodeId: id,
     scope: assignedEmployees.length > 0 ? 'SELECTED_EMPLOYEES' : 'ALL_EMPLOYEES',
     employeeIds: assignedEmployees.map((employee: any) => employee.id),
+    defaultEmployeeIds: assignedEmployees.filter((employee: any) => employee.isDefault).map((employee: any) => employee.id),
     assignedEmployees,
   });
 }));
@@ -205,7 +272,7 @@ router.post('/', authenticateToken, requireRole('ADMIN'), h(async (req, res) => 
     res.status(400).json({ error: 'Invalid charge code data', details: parsed.error.flatten() });
     return;
   }
-  const created = await storage.createChargeCode(parsed.data);
+  const created = await storage.createChargeCode(normalizeChargeCodePolicy(parsed.data));
 
   // DCAA audit trail — unified hash-chained ledger (Task #85).
   const { actorId, actorName, actorRole } = extractActor(req);
@@ -257,7 +324,8 @@ router.patch('/:id', authenticateToken, requireRole('ADMIN'), h(async (req, res)
   // Fetch existing record before update — required for before/after diff and deactivation detection
   const existing = await storage.getChargeCodeById(id);
 
-  const updated = await storage.updateChargeCode(id, parsed.data);
+  const normalizedPatch = normalizeChargeCodePolicy(parsed.data);
+  const updated = await storage.updateChargeCode(id, normalizedPatch);
   if (!updated) {
     res.status(404).json({ error: 'Charge code not found' });
     return;
@@ -270,7 +338,7 @@ router.patch('/:id', authenticateToken, requireRole('ADMIN'), h(async (req, res)
   const reason: string | null = (req.body as any).reason ?? null;
 
   const fieldsChanged: Record<string, { before: unknown; after: unknown }> = {};
-  for (const [key, toVal] of Object.entries(parsed.data)) {
+  for (const [key, toVal] of Object.entries(normalizedPatch)) {
     const fromVal = existing ? (existing as Record<string, unknown>)[key] : undefined;
     if (fromVal !== toVal) {
       fieldsChanged[key] = { before: fromVal, after: toVal };

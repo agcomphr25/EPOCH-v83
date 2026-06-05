@@ -122,13 +122,17 @@ interface ChargeCodeOption {
   description?: string | null;
   type: string;
   costHandling?: string | null;
+  productionLine?: string | null;
+  activityCategory?: string | null;
   department?: string | null;
   active: boolean;
+  isDefault?: boolean;
 }
 
 interface EmployeeChargeCodeAssignments {
   employeeId: number;
   assignedChargeCodeIds: number[];
+  defaultChargeCodeId: number | null;
   assignedChargeCodes: ChargeCodeOption[];
 }
 
@@ -547,6 +551,7 @@ export default function EmployeeDetail() {
   const [selectedAssignUserId, setSelectedAssignUserId] = useState<string>('');
   const [showAssignUser, setShowAssignUser] = useState(false);
   const [selectedChargeCodeIds, setSelectedChargeCodeIds] = useState<number[]>([]);
+  const [defaultChargeCodeId, setDefaultChargeCodeId] = useState<number | null>(null);
   const [showTerminateDialog, setShowTerminateDialog] = useState(false);
   const [terminationForm, setTerminationForm] = useState({
     terminationDate: new Date().toISOString().split('T')[0],
@@ -611,6 +616,7 @@ export default function EmployeeDetail() {
   useEffect(() => {
     if (employeeChargeCodes) {
       setSelectedChargeCodeIds(employeeChargeCodes.assignedChargeCodeIds);
+      setDefaultChargeCodeId(employeeChargeCodes.defaultChargeCodeId ?? null);
     }
   }, [employeeChargeCodes]);
 
@@ -791,7 +797,7 @@ export default function EmployeeDetail() {
       const response = await fetch(`/api/employees/${id}/charge-codes`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chargeCodeIds: selectedChargeCodeIds }),
+        body: JSON.stringify({ chargeCodeIds: selectedChargeCodeIds, defaultChargeCodeId }),
       });
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
@@ -836,6 +842,7 @@ export default function EmployeeDetail() {
         ? current.filter((id) => id !== chargeCodeId)
         : [...current, chargeCodeId].sort((a, b) => a - b)
     );
+    setDefaultChargeCodeId((current) => (current === chargeCodeId ? null : current));
   };
 
   const generatePortalTokenMutation = useMutation({
@@ -2442,7 +2449,7 @@ export default function EmployeeDetail() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
-                    Employees can always use codes set to all employees. Check codes here when a code is restricted to selected employees and this employee should be included.
+                    Employees can always use codes set to all employees. Check restricted codes this employee should be included on, then choose one assigned active code as the default.
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     {activeChargeCodes.map((code) => (
@@ -2458,9 +2465,19 @@ export default function EmployeeDetail() {
                           <span className="flex items-center gap-2">
                             <span className="font-mono font-medium">{code.code}</span>
                             <Badge variant="outline">{code.type}</Badge>
+                            {code.productionLine && <Badge variant="secondary">{code.productionLine}</Badge>}
                           </span>
                           <span className="block truncate text-sm text-muted-foreground">
-                            {code.description || code.department || 'No description'}
+                            {code.description || code.activityCategory || code.department || 'No description'}
+                          </span>
+                          <span className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                            <Checkbox
+                              checked={defaultChargeCodeId === code.id}
+                              disabled={!selectedChargeCodeIds.includes(code.id)}
+                              onCheckedChange={(checked) => setDefaultChargeCodeId(checked ? code.id : null)}
+                              onClick={(event) => event.stopPropagation()}
+                            />
+                            Default
                           </span>
                         </span>
                       </label>

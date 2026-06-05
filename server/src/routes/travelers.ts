@@ -2505,6 +2505,7 @@ router.post('/:travelerId/steps/:stepId/start/override', requirePermission('work
             travelerStepId: stepId,
             productionWorkOrderId: traveler.productionWorkOrderId ?? null,
             projectId: overrideProjectId ?? null,
+            clinId: null,
             department: step.departmentName ?? null,
             operation: null,
           });
@@ -2905,6 +2906,7 @@ router.post('/:travelerId/steps/:stepId/start', async (req: Request, res: Respon
               travelerStepId: stepId,
               productionWorkOrderId: traveler.productionWorkOrderId ?? null,
               projectId: projectId ?? null,
+              clinId: null,
               department: step.departmentName ?? null,
               operation: activeOperationName,
             }).catch((e: unknown) =>

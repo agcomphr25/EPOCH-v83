@@ -134,6 +134,15 @@ export default function AGTestDashboard() {
         </div>
       </div>
 
+      {/* My Tasks Control Center */}
+      {dashboardEmployeeId && (
+        <MyTasksControlCenter
+          employeeId={dashboardEmployeeId}
+          userName={currentUser.username}
+          compact={false}
+        />
+      )}
+
       {/* Navigation Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card
@@ -439,15 +448,6 @@ export default function AGTestDashboard() {
         {/* Weekly Shipping Widget */}
         <WeeklyShippingWidget />
       </div>
-
-      {/* My Tasks Control Center */}
-      {dashboardEmployeeId && (
-        <MyTasksControlCenter
-          employeeId={dashboardEmployeeId}
-          userName={currentUser.username}
-          compact={false}
-        />
-      )}
 
       {/* Dashboard Layout */}
       {!expandedSection ? (

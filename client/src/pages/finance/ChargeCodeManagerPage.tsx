@@ -118,6 +118,15 @@ type ChargeCodeAssignments = {
   assignedEmployees: EmployeeOption[];
 };
 
+const PRODUCTION_LINE_OPTIONS = [
+  { value: 'P1', label: 'P1 - Production Line 1' },
+  { value: 'P2', label: 'P2 - Production Line 2' },
+  { value: 'P3', label: 'P3 - Production Line 3' },
+  { value: 'P4', label: 'P4 - Production Line 4' },
+  { value: 'GENERAL', label: 'General' },
+  { value: 'R_AND_D', label: 'R&D' },
+];
+
 function defaultValues(
   code?: ChargeCode,
   mode: 'create' | 'edit' | 'copy' = 'create'
@@ -461,9 +470,20 @@ function ChargeCodeForm({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Production Line *</FormLabel>
-                  <FormControl>
-                    <Input placeholder="P1" {...field} value={field.value ?? ''} />
-                  </FormControl>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select line" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {PRODUCTION_LINE_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}

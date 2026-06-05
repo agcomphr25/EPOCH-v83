@@ -3335,8 +3335,6 @@ export default function OrderEntry() {
                         className={`text-xs px-2 py-0.5 ${
                           orderStatus === 'HOLDING' || orderStatus === 'DRAFT'
                             ? 'bg-yellow-100 text-yellow-800 border-yellow-300'
-                            : orderStatus === 'PENDING_SIGNATURE'
-                            ? 'bg-orange-100 text-orange-800 border-orange-300'
                             : orderStatus === 'FINALIZED'
                             ? 'bg-blue-100 text-blue-800 border-blue-300'
                             : orderStatus === 'IN_PROGRESS'

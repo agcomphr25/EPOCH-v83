@@ -73,7 +73,6 @@ import {
   Mail,
   MessageSquare,
   Eye,
-  RefreshCw,
   FileDown,
   Paperclip,
   Image as ImageIcon,
@@ -350,7 +349,6 @@ export default function AllOrdersPage() {
 
   // Department progression flow (Shipping is final department)
   const departments = [
-    'Awaiting Customer Signature',
     'P1 Production Queue',
     'Layup/Plugging',
     'Barcode',
@@ -516,52 +514,6 @@ export default function AllOrdersPage() {
     },
   });
 
-  // Resend signature email mutation
-  const resendSignatureEmailMutation = useMutation({
-    mutationFn: async (orderId: string) => {
-      return apiRequest(`/api/followup-orders/${orderId}/resend-email`, {
-        method: 'POST',
-      });
-    },
-    onSuccess: () => {
-      toast({
-        title: 'Email Sent',
-        description: 'Review and sign email has been resent to the customer.',
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: 'Error',
-        description:
-          'Failed to send email: ' + (error.message || 'Unknown error'),
-        variant: 'destructive',
-      });
-    },
-  });
-
-  // Send updated order email mutation (creates new snapshot with current order data)
-  const sendUpdatedOrderMutation = useMutation({
-    mutationFn: async (orderId: string) => {
-      return apiRequest(`/api/followup-orders/${orderId}/send-updated-order`, {
-        method: 'POST',
-      });
-    },
-    onSuccess: () => {
-      toast({
-        title: 'Updated Order Sent',
-        description: 'A new signature request with the updated order has been sent.',
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: 'Error',
-        description:
-          'Failed to send updated order: ' + (error.message || 'Unknown error'),
-        variant: 'destructive',
-      });
-    },
-  });
-
   // Email PDF Copy mutation (no signature workflow, just sends PDF attachment)
   const emailPdfCopyMutation = useMutation({
     mutationFn: async (orderId: string) => {
@@ -580,29 +532,6 @@ export default function AllOrdersPage() {
         title: 'Error',
         description:
           'Failed to email PDF: ' + (error.message || 'Unknown error'),
-        variant: 'destructive',
-      });
-    },
-  });
-
-  // Test reminder mutation - manually triggers the 5-day reminder check
-  const testReminderMutation = useMutation({
-    mutationFn: async () => {
-      return apiRequest(`/api/followup-orders/test-reminder`, {
-        method: 'POST',
-      });
-    },
-    onSuccess: (data: any) => {
-      toast({
-        title: 'Reminder Check Complete',
-        description: data.message || 'Reminder check finished.',
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: 'Error',
-        description:
-          'Failed to run reminder check: ' + (error.message || 'Unknown error'),
         variant: 'destructive',
       });
     },
@@ -733,8 +662,6 @@ export default function AllOrdersPage() {
         return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300';
       case 'DRAFT':
         return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300';
-      case 'PENDING_SIGNATURE':
-        return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300';
       case 'FINALIZED':
         return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300';
       case 'IN_PROGRESS':
@@ -1020,7 +947,6 @@ export default function AllOrdersPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Statuses</SelectItem>
-                  <SelectItem value="PENDING_SIGNATURE">Pending Signature</SelectItem>
                   <SelectItem value="FINALIZED">Finalized</SelectItem>
                   <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
                   <SelectItem value="FULFILLED">Fulfilled</SelectItem>
@@ -1038,20 +964,6 @@ export default function AllOrdersPage() {
                   title={statusFilterMode === 'include' ? 'Click to exclude this status instead' : 'Click to include this status instead'}
                 >
                   {statusFilterMode === 'include' ? 'Include' : 'Exclude'}
-                </Button>
-              )}
-              {/* Test Reminder Button - visible when filtering for PENDING_SIGNATURE or for admin */}
-              {((selectedStatus === 'PENDING_SIGNATURE' && statusFilterMode === 'include') || currentUser?.role === 'ADMIN') && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => testReminderMutation.mutate()}
-                  disabled={testReminderMutation.isPending}
-                  title="Manually run the 5-day reminder check for unsigned orders"
-                  data-testid="button-test-reminder"
-                >
-                  <Mail className="h-4 w-4 mr-1" />
-                  {testReminderMutation.isPending ? 'Checking...' : 'Test Reminder'}
                 </Button>
               )}
             </div>
@@ -1160,33 +1072,6 @@ export default function AllOrdersPage() {
                             >
                               {order.status}
                             </Badge>
-                          )}
-                          {/* Resend Email Button - Show on hover for PENDING_SIGNATURE (any user) or FINALIZED (admin only) */}
-                          {(order.status?.toUpperCase() === 'PENDING_SIGNATURE' || 
-                            (order.status?.toUpperCase() === 'FINALIZED' && currentUser?.role === 'ADMIN')) && (
-                            <div className="absolute left-full top-0 ml-2 opacity-0 group-hover/status:opacity-100 pointer-events-none group-hover/status:pointer-events-auto transition-opacity z-20">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className={`h-7 px-2 bg-white ${
-                                  order.status?.toUpperCase() === 'PENDING_SIGNATURE'
-                                    ? 'hover:bg-orange-50 border-orange-300 text-orange-700'
-                                    : 'hover:bg-blue-50 border-blue-300 text-blue-700'
-                                }`}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  resendSignatureEmailMutation.mutate(order.orderId);
-                                }}
-                                disabled={resendSignatureEmailMutation.isPending}
-                                title={order.status?.toUpperCase() === 'PENDING_SIGNATURE' 
-                                  ? "Resend Review and Sign Email" 
-                                  : "Resend Review and Confirm Email"}
-                                data-testid={`button-resend-email-${order.orderId}`}
-                              >
-                                <Mail className="h-3 w-3 mr-1" />
-                                Resend Email
-                              </Button>
-                            </div>
                           )}
                         </div>
                       )}
@@ -1423,18 +1308,6 @@ export default function AllOrdersPage() {
                             <AlertTriangle className="mr-2 h-4 w-4" />
                             Report Kickback
                           </DropdownMenuItem>
-                          {/* Send Updated Order Email - for orders that need customer to sign updated version */}
-                          {(order.status?.toUpperCase() === 'PENDING_SIGNATURE' || 
-                            order.status?.toUpperCase() === 'FINALIZED') && (
-                            <DropdownMenuItem
-                              onClick={() => sendUpdatedOrderMutation.mutate(order.orderId)}
-                              disabled={sendUpdatedOrderMutation.isPending}
-                              className="text-blue-600"
-                            >
-                              <RefreshCw className={`mr-2 h-4 w-4 ${sendUpdatedOrderMutation.isPending ? 'animate-spin' : ''}`} />
-                              {sendUpdatedOrderMutation.isPending ? 'Sending...' : 'Send Updated Order Email'}
-                            </DropdownMenuItem>
-                          )}
                           {/* Email PDF Copy - sends PDF without signature workflow, available for all orders */}
                           <DropdownMenuItem
                             onClick={() => emailPdfCopyMutation.mutate(order.orderId)}

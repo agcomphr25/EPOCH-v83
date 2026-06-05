@@ -713,6 +713,12 @@ import { recordAuditEvent } from './src/services/auditLedgerService';
 import { recordInventoryLedgerEntry } from './src/services/inventoryTransactionLedgerService';
 import { assignDashboardForWorkOrder } from './src/lib/workOrderDashboardAssignment';
 import {
+  ALL_ORDERS_DEPARTMENT,
+  ALL_ORDERS_STATUS,
+  canonicalizeAllOrdersUpdate,
+  deriveCanonicalAllOrdersState,
+} from './src/lib/allOrdersStatusDepartment';
+import {
   getProgramBuilds,
   getProgramBuildStatus,
   type ProgramBuildStatus,
@@ -13900,10 +13906,11 @@ export class DatabaseStorage implements IStorage {
     try {
       // Departments that are initial queue placements — orders there may keep FINALIZED.
       // Any other department is a real production department and must be IN_PROGRESS.
-      const INITIAL_QUEUE_DEPARTMENTS = ['P1 Production Queue', 'Shipping QC'];
-      const resolvedStatus = INITIAL_QUEUE_DEPARTMENTS.includes(department)
-        ? status
-        : 'IN_PROGRESS';
+      const canonicalState = deriveCanonicalAllOrdersState({
+        status,
+        currentDepartment: department,
+      });
+      const resolvedStatus = canonicalState.status;
 
       console.log(
         ` প্রক্র PRODUCTION FLOW: Updating order ${orderId} to department ${department} with status ${resolvedStatus}`
@@ -13913,8 +13920,8 @@ export class DatabaseStorage implements IStorage {
       await db
         .update(allOrders)
         .set({
-          currentDepartment: department,
-          status: resolvedStatus,
+          currentDepartment: canonicalState.currentDepartment,
+          status: canonicalState.status,
           updatedAt: new Date(),
         })
         .where(eq(allOrders.orderId, orderId));
@@ -22084,17 +22091,22 @@ export class DatabaseStorage implements IStorage {
       console.log(
         `CREATE APPROVED: Order ${orderData.orderId} has no stock model - routing to P1 Production Queue`
       );
-      currentDepartment = 'P1 Production Queue';
+      currentDepartment = ALL_ORDERS_DEPARTMENT.P1_PRODUCTION_QUEUE;
       barcode = orderData.barcode || `P1-${orderData.orderId}`;
       status = requestedStatus || 'FINALIZED';
     } else {
       console.log(
         `✅ CREATE APPROVED: Order ${orderData.orderId} has valid stock model "${orderData.modelId}" - going directly to P1 Production Queue`
       );
-      currentDepartment = 'P1 Production Queue';
+      currentDepartment = ALL_ORDERS_DEPARTMENT.P1_PRODUCTION_QUEUE;
       barcode = orderData.barcode || `P1-${orderData.orderId}`;
       status = requestedStatus || 'FINALIZED';
     }
+
+    const canonicalCreateState = deriveCanonicalAllOrdersState({
+      status,
+      currentDepartment,
+    });
 
     // Create the finalized order data directly - exclude id field explicitly
     const finalizedOrderData = {
@@ -22125,10 +22137,10 @@ export class DatabaseStorage implements IStorage {
       flattopPriceOverride: (orderData.flattopPriceOverride !== '' && orderData.flattopPriceOverride != null) ? Number(orderData.flattopPriceOverride) : null,
       shipping: (orderData.shipping !== '' && orderData.shipping != null) ? Number(orderData.shipping) : 0,
       tikkaOption: orderData.tikkaOption,
-      status: status,
+      status: canonicalCreateState.status,
       statusId: orderData.statusId,
       barcode: barcode,
-      currentDepartment: currentDepartment,
+      currentDepartment: canonicalCreateState.currentDepartment,
       currentDepartmentId: orderData.currentDepartmentId,
       departmentHistory: [],
       scrappedQuantity: 0,
@@ -22274,9 +22286,14 @@ export class DatabaseStorage implements IStorage {
       console.log(
         `✅ FINALIZE APPROVED: Order ${orderId} has valid stock model "${draft.modelId}" - proceeding to P1 Production Queue`
       );
-      currentDepartment = 'P1 Production Queue';
+      currentDepartment = ALL_ORDERS_DEPARTMENT.P1_PRODUCTION_QUEUE;
       barcode = draft.barcode || `P1-${orderId}`;
     }
+
+    const canonicalFinalizedState = deriveCanonicalAllOrdersState({
+      status: ALL_ORDERS_STATUS.FINALIZED,
+      currentDepartment,
+    });
 
     // Create the finalized order data
     const finalizedOrderData: InsertAllOrder = {
@@ -22302,9 +22319,9 @@ export class DatabaseStorage implements IStorage {
       priceOverride: draft.priceOverride,
       shipping: draft.shipping,
       tikkaOption: draft.tikkaOption,
-      status: 'FINALIZED',
+      status: canonicalFinalizedState.status,
       barcode: barcode,
-      currentDepartment: currentDepartment,
+      currentDepartment: canonicalFinalizedState.currentDepartment,
       departmentHistory: draft.departmentHistory,
       scrappedQuantity: draft.scrappedQuantity,
       totalProduced: draft.totalProduced,
@@ -22509,6 +22526,25 @@ export class DatabaseStorage implements IStorage {
         delete updateData.dueDate;
       }
 
+      const shouldCanonicalize =
+        Object.prototype.hasOwnProperty.call(updateData, 'status') ||
+        Object.prototype.hasOwnProperty.call(updateData, 'currentDepartment') ||
+        Object.prototype.hasOwnProperty.call(updateData, 'isCancelled');
+
+      if (shouldCanonicalize) {
+        const [currentOrder] = await db
+          .select()
+          .from(allOrders)
+          .where(eq(allOrders.orderId, orderId))
+          .limit(1);
+
+        if (!currentOrder) {
+          throw new Error(`Finalized order with ID ${orderId} not found`);
+        }
+
+        Object.assign(updateData, canonicalizeAllOrdersUpdate(currentOrder, updateData));
+      }
+
       console.log(`[updateFinalizedOrder] Updating order ${orderId} with keys:`, Object.keys(updateData));
 
       // Check upfront whether a production_orders record exists so we can sync it atomically.
@@ -22575,8 +22611,8 @@ export class DatabaseStorage implements IStorage {
       const [after] = await tx
         .update(allOrders)
         .set({
-          currentDepartment: 'Shipping Management',
-          status: 'FULFILLED',
+          currentDepartment: ALL_ORDERS_DEPARTMENT.SHIPPING_MANAGEMENT,
+          status: ALL_ORDERS_STATUS.FULFILLED,
           shippedDate: now,
           updatedAt: now,
         })
@@ -22599,14 +22635,14 @@ export class DatabaseStorage implements IStorage {
         source: 'fulfill-route',
         sourceRoute: '/api/orders/fulfill',
         statusFrom: before.status ?? null,
-        statusTo: 'FULFILLED',
+        statusTo: ALL_ORDERS_STATUS.FULFILLED,
         departmentFrom: before.currentDepartment ?? null,
-        departmentTo: 'Shipping Management',
+        departmentTo: ALL_ORDERS_DEPARTMENT.SHIPPING_MANAGEMENT,
         beforeSnapshot: before as InsertOrderActivityEvent['beforeSnapshot'],
         afterSnapshot: after as InsertOrderActivityEvent['afterSnapshot'],
         fieldDiff: {
-          status: { before: before.status, after: 'FULFILLED', label: 'Order Status' },
-          currentDepartment: { before: before.currentDepartment, after: 'Shipping Management', label: 'Current Department' },
+          status: { before: before.status, after: ALL_ORDERS_STATUS.FULFILLED, label: 'Order Status' },
+          currentDepartment: { before: before.currentDepartment, after: ALL_ORDERS_DEPARTMENT.SHIPPING_MANAGEMENT, label: 'Current Department' },
         } as InsertOrderActivityEvent['fieldDiff'],
       } satisfies InsertOrderActivityEvent);
 

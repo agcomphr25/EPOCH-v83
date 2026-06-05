@@ -656,8 +656,24 @@ export default function AllOrdersPage() {
     progressOrderMutation.mutate({ orderId, nextDepartment: 'Layup/Plugging' });
   };
 
+  const normalizeStatus = (status?: string | null) =>
+    String(status || '').trim().toUpperCase().replace(/[\s-]+/g, '_');
+
+  const getStatusLabel = (status?: string | null) => {
+    switch (normalizeStatus(status)) {
+      case 'READY_TO_SHIP':
+        return 'Ready to Ship';
+      case 'PENDING_SIGNATURE':
+        return 'Pending Signature';
+      case 'IN_PROGRESS':
+        return 'In Progress';
+      default:
+        return status || '';
+    }
+  };
+
   const getStatusColor = (status: string) => {
-    switch (status?.toUpperCase()) {
+    switch (normalizeStatus(status)) {
       case 'HOLDING':
         return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300';
       case 'DRAFT':
@@ -666,6 +682,8 @@ export default function AllOrdersPage() {
         return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300';
       case 'IN_PROGRESS':
         return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300';
+      case 'READY_TO_SHIP':
+        return 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-300';
       case 'FULFILLED':
         return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
       case 'SHIPPED':
@@ -691,7 +709,7 @@ export default function AllOrdersPage() {
 
     return deduped.filter((order) => {
       // Exclude cancelled orders from main list
-      if (order.isCancelled || order.status === 'CANCELLED') {
+      if (order.isCancelled || normalizeStatus(order.status) === 'CANCELLED') {
         return false;
       }
 
@@ -710,9 +728,9 @@ export default function AllOrdersPage() {
       if (selectedStatus === 'all') {
         statusMatch = true;
       } else if (statusFilterMode === 'exclude') {
-        statusMatch = order.status?.toUpperCase() !== selectedStatus.toUpperCase();
+        statusMatch = normalizeStatus(order.status) !== normalizeStatus(selectedStatus);
       } else {
-        statusMatch = order.status?.toUpperCase() === selectedStatus.toUpperCase();
+        statusMatch = normalizeStatus(order.status) === normalizeStatus(selectedStatus);
       }
 
       // Search filter - search in multiple fields including FB Order Number
@@ -949,6 +967,7 @@ export default function AllOrdersPage() {
                   <SelectItem value="all">All Statuses</SelectItem>
                   <SelectItem value="FINALIZED">Finalized</SelectItem>
                   <SelectItem value="IN_PROGRESS">In Progress</SelectItem>
+                  <SelectItem value="READY_TO_SHIP">Ready to Ship</SelectItem>
                   <SelectItem value="FULFILLED">Fulfilled</SelectItem>
                   <SelectItem value="SHIPPED">Shipped</SelectItem>
                   <SelectItem value="HOLDING">Holding</SelectItem>
@@ -1041,7 +1060,7 @@ export default function AllOrdersPage() {
                       </OrderSummaryTooltip>
                       {order.status && (
                         <div className="relative group/status">
-                          {(order.status?.toUpperCase() === 'FULFILLED' || order.status?.toUpperCase() === 'SHIPPED') && (order.shippedDate || order.shippingCompletedAt) ? (
+                          {(normalizeStatus(order.status) === 'FULFILLED' || normalizeStatus(order.status) === 'SHIPPED') && (order.shippedDate || order.shippingCompletedAt) ? (
                             <RadixTooltip.Provider delayDuration={200}>
                               <RadixTooltip.Root>
                                 <RadixTooltip.Trigger asChild>
@@ -1049,7 +1068,7 @@ export default function AllOrdersPage() {
                                     <Badge
                                       className={`${getStatusColor(order.status)} text-xs px-1 py-0 cursor-default`}
                                     >
-                                      {order.status}
+                                      {getStatusLabel(order.status)}
                                     </Badge>
                                   </span>
                                 </RadixTooltip.Trigger>
@@ -1068,9 +1087,9 @@ export default function AllOrdersPage() {
                           ) : (
                             <Badge
                               className={`${getStatusColor(order.status)} text-xs px-1 py-0`}
-                              title={`Order Status: ${order.status}`}
+                              title={`Order Status: ${getStatusLabel(order.status)}`}
                             >
-                              {order.status}
+                              {getStatusLabel(order.status)}
                             </Badge>
                           )}
                         </div>
@@ -1241,8 +1260,8 @@ export default function AllOrdersPage() {
                         const nextDept = getNextDepartment(
                           order.currentDepartment
                         );
-                        const isScrapped = order.status === 'SCRAPPED';
-                        const isFulfilled = order.status === 'FULFILLED';
+                        const isScrapped = normalizeStatus(order.status) === 'SCRAPPED';
+                        const isFulfilled = normalizeStatus(order.status) === 'FULFILLED';
                         const isInShipping =
                           order.currentDepartment === 'Shipping';
 

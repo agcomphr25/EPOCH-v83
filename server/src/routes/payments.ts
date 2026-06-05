@@ -17,6 +17,7 @@ import { auditService } from '../services/auditService';
 import { createOrUpdateP1PaymentJournalEntry } from '../services/p1PaymentPostingService';
 import { authenticateToken, requireRole } from '../../middleware/auth';
 import { requirePermission } from '../../middleware/requirePermission';
+import { ALL_ORDERS_DEPARTMENT, ALL_ORDERS_STATUS } from '../lib/allOrdersStatusDepartment';
 
 const router = Router();
 
@@ -275,7 +276,8 @@ async function processTransactionResult(data: {
 
     // If order was PENDING_PAYMENT (card-before-save flow), finalize it
     if (data.wasPendingPayment) {
-      updateFields.status = 'FINALIZED';
+      updateFields.status = ALL_ORDERS_STATUS.FINALIZED;
+      updateFields.currentDepartment = ALL_ORDERS_DEPARTMENT.P1_PRODUCTION_QUEUE;
       console.log(`✅ Finalizing PENDING_PAYMENT order ${data.orderId} after successful payment`);
     }
 

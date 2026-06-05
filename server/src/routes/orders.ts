@@ -44,6 +44,11 @@ import {
   OrderConfirmationOutcome,
 } from '../../utils/notifications';
 import { generateOrderPdf, PdfIntent } from '../../services/orderPdfService';
+import {
+  ALL_ORDERS_DEPARTMENT,
+  ALL_ORDERS_STATUS,
+  canonicalizeAllOrdersUpdate,
+} from '../lib/allOrdersStatusDepartment';
 
 const router = Router();
 
@@ -59,45 +64,7 @@ function stripImmutableDueDate<T extends Record<string, any>>(updates: T): T {
   return sanitized as T;
 }
 
-const READY_FOR_SHIPPING_STATUSES = new Set([
-  'ready for shipping',
-  'ready_for_shipping',
-  'ready-to-ship',
-  'ready to ship',
-]);
-
-const FULFILLED_STATUSES = new Set(['fulfilled', 'shipped']);
-const READY_FOR_SHIPPING_STATUS = 'Ready for Shipping';
-
-function shouldResetReadyForShippingToInProgress(
-  currentDepartment: string | null | undefined,
-  targetDepartment: string | null | undefined,
-  currentStatus: string | null | undefined
-): boolean {
-  if (currentDepartment !== 'Shipping' || !targetDepartment || targetDepartment === 'Shipping') {
-    return false;
-  }
-
-  const normalizedStatus = String(currentStatus || '').trim().toLowerCase();
-  return READY_FOR_SHIPPING_STATUSES.has(normalizedStatus);
-}
-
-function shouldResetFulfilledToReadyForShipping(
-  currentDepartment: string | null | undefined,
-  targetDepartment: string | null | undefined,
-  currentStatus: string | null | undefined
-): boolean {
-  if (targetDepartment !== 'Shipping') {
-    return false;
-  }
-
-  const normalizedStatus = String(currentStatus || '').trim().toLowerCase();
-  return (
-    FULFILLED_STATUSES.has(normalizedStatus) ||
-    currentDepartment === 'Shipping Management' ||
-    currentDepartment === 'Fulfilled'
-  );
-}
+const READY_FOR_SHIPPING_STATUS = ALL_ORDERS_STATUS.READY_TO_SHIP;
 
 async function requiresP1PaymentAccountingApproval(paymentDate: Date, user: any): Promise<{ required: boolean; period: any }> {
   const period = await getOrCreateAccountingPeriod(paymentDate);
@@ -2820,11 +2787,11 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
     if (!targetDepartment) {
       // Special case: Shipping is the final department
       // When progressing from Shipping, set status to FULFILLED and clear department
-      if (existingOrder.currentDepartment === 'Shipping') {
+      if (existingOrder.currentDepartment === ALL_ORDERS_DEPARTMENT.SHIPPING) {
         shouldMarkFulfilled = true;
-        targetDepartment = null; // Clear department
+        targetDepartment = ALL_ORDERS_DEPARTMENT.SHIPPING_MANAGEMENT;
         console.log(
-          `📦 Order ${orderId} completing Shipping - will be marked as FULFILLED with no department`
+          `📦 Order ${orderId} completing Shipping - will be marked as FULFILLED in Shipping Management`
         );
       }
       // Orders with no stock model should skip manufacturing departments
@@ -2899,29 +2866,18 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
     };
 
     if (shouldMarkFulfilled) {
-      updateData.status = 'FULFILLED';
+      updateData.status = ALL_ORDERS_STATUS.FULFILLED;
       updateData.shippedDate = now;
-      updateData.currentDepartment = undefined; // Clear department when fulfilled
-      console.log(`📦 Marking order as FULFILLED with no department`);
+      updateData.currentDepartment = ALL_ORDERS_DEPARTMENT.SHIPPING_MANAGEMENT;
+      console.log(`📦 Marking order as FULFILLED in Shipping Management`);
     } else {
-      updateData.currentDepartment = targetDepartment;
-      if (
-        shouldResetReadyForShippingToInProgress(
-          existingOrder.currentDepartment,
-          targetDepartment,
-          existingOrder.status
-        )
-      ) {
-        updateData.status = 'IN_PROGRESS';
-      }
-      if (
-        shouldResetFulfilledToReadyForShipping(
-          existingOrder.currentDepartment,
-          targetDepartment,
-          existingOrder.status
-        )
-      ) {
-        updateData.status = READY_FOR_SHIPPING_STATUS;
+      Object.assign(
+        updateData,
+        canonicalizeAllOrdersUpdate(existingOrder, {
+          currentDepartment: targetDepartment,
+        })
+      );
+      if (updateData.status === READY_FOR_SHIPPING_STATUS) {
         updateData.shippedDate = null;
         updateData.shippingCompletedAt = null;
       }
@@ -2975,7 +2931,12 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
         const fieldDiff: Record<string, { before: string | null; after: string | null; label: string }> = {};
 
         if (shouldMarkFulfilled) {
-          fieldDiff['status'] = { before: existingOrder.status ?? null, after: 'FULFILLED', label: 'Order Status' };
+          fieldDiff['status'] = { before: existingOrder.status ?? null, after: ALL_ORDERS_STATUS.FULFILLED, label: 'Order Status' };
+          fieldDiff['currentDepartment'] = {
+            before: existingOrder.currentDepartment ?? null,
+            after: ALL_ORDERS_DEPARTMENT.SHIPPING_MANAGEMENT,
+            label: 'Current Department',
+          };
         } else {
           fieldDiff['currentDepartment'] = {
             before: existingOrder.currentDepartment ?? null,
@@ -3002,9 +2963,9 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
           source: 'department-transition',
           sourceRoute: req.path,
           statusFrom: existingOrder.status ?? null,
-          statusTo: shouldMarkFulfilled ? 'FULFILLED' : (after.status ?? null),
+          statusTo: shouldMarkFulfilled ? ALL_ORDERS_STATUS.FULFILLED : (after.status ?? null),
           departmentFrom: existingOrder.currentDepartment ?? null,
-          departmentTo: shouldMarkFulfilled ? null : (targetDepartment ?? null),
+          departmentTo: shouldMarkFulfilled ? ALL_ORDERS_DEPARTMENT.SHIPPING_MANAGEMENT : (targetDepartment ?? null),
           fieldDiff,
         });
 
@@ -3094,11 +3055,11 @@ router.post('/complete-qc/:orderId', async (req: Request, res: Response) => {
     }
 
     const updateData = {
-      currentDepartment: qcPassedAll ? 'Shipping' : 'QC',
+      currentDepartment: qcPassedAll ? ALL_ORDERS_DEPARTMENT.SHIPPING : 'QC',
       qcCompletedAt: qcPassedAll ? new Date() : null,
       qcNotes: qcNotes || null,
       qcPassed: qcPassedAll,
-      status: qcPassedAll ? 'Ready for Shipping' : 'In QC',
+      status: qcPassedAll ? ALL_ORDERS_STATUS.READY_TO_SHIP : ALL_ORDERS_STATUS.IN_PROGRESS,
     };
 
     // Try to update in finalized orders first
@@ -3127,11 +3088,11 @@ router.post('/complete-qc/:orderId', async (req: Request, res: Response) => {
     );
     
     // Record department transition if moving to shipping
-    if (qcPassedAll && beforeOrder.currentDepartment !== 'Shipping') {
+    if (qcPassedAll && beforeOrder.currentDepartment !== ALL_ORDERS_DEPARTMENT.SHIPPING) {
       await auditService.recordDepartmentEntry({
         entityType: 'p1_order',
         entityId: orderId,
-        department: 'Shipping',
+        department: ALL_ORDERS_DEPARTMENT.SHIPPING,
         enteredByUserId: (req as any).user?.id,
         metadata: {
           fromDepartment: beforeOrder.currentDepartment,
@@ -3178,8 +3139,8 @@ router.post('/undo-cancel/:orderId', async (req: Request, res: Response) => {
       isCancelled: false,
       cancelledAt: null,
       cancelReason: null,
-      status: 'FINALIZED', // Restore to finalized status
-      currentDepartment: 'P1 Production Queue', // Put back in production queue
+      status: ALL_ORDERS_STATUS.FINALIZED,
+      currentDepartment: ALL_ORDERS_DEPARTMENT.P1_PRODUCTION_QUEUE,
       updatedAt: new Date(),
     };
 
@@ -3217,7 +3178,7 @@ router.post('/undo-cancel/:orderId', async (req: Request, res: Response) => {
     await auditService.recordDepartmentEntry({
       entityType: 'p1_order',
       entityId: orderId,
-      department: 'P1 Production Queue',
+      department: ALL_ORDERS_DEPARTMENT.P1_PRODUCTION_QUEUE,
       enteredByUserId: (req as any).user?.id,
       metadata: {
         restoredFromCancellation: true,
@@ -3404,8 +3365,8 @@ router.post('/cancel/:orderId', requirePermission('orders.cancel'), async (req: 
       isCancelled: true,
       cancelledAt: new Date(),
       cancelReason: reason || 'No reason provided',
-      status: 'CANCELLED',
-      currentDepartment: undefined, // Remove from all department queues
+      status: ALL_ORDERS_STATUS.CANCELLED,
+      currentDepartment: ALL_ORDERS_DEPARTMENT.CANCELLED,
       updatedAt: new Date(),
     };
 
@@ -3635,6 +3596,13 @@ router.patch(
       // Special handling for urgency - set isManualUrgency flag
       if (fieldName === 'urgency') {
         updateData.isManualUrgency = true;
+      }
+
+      if (
+        isFinalized &&
+        (fieldName === 'status' || fieldName === 'currentDepartment' || fieldName === 'isCancelled')
+      ) {
+        Object.assign(updateData, canonicalizeAllOrdersUpdate(order as any, updateData));
       }
 
       // Update the appropriate table using the correct identifier
@@ -3881,15 +3849,12 @@ router.patch(
       }
     }
 
-    const shouldResetStatusToInProgress = shouldResetReadyForShippingToInProgress(
-      previousDepartment,
-      department,
-      existingOrder?.status ?? existingOrder?.productionStatus
-    );
-    const shouldResetStatusToReadyForShipping = shouldResetFulfilledToReadyForShipping(
-      previousDepartment,
-      department,
-      existingOrder?.status ?? existingOrder?.productionStatus
+    const canonicalDepartmentUpdate = canonicalizeAllOrdersUpdate(
+      existingOrder || {
+        currentDepartment: previousDepartment,
+        status: existingOrder?.status ?? existingOrder?.productionStatus,
+      },
+      { currentDepartment: department }
     );
 
     // Try to find and update the order
@@ -3898,13 +3863,10 @@ router.patch(
 
     try {
       const finalizedUpdates: any = {
-        currentDepartment: department,
+        currentDepartment: canonicalDepartmentUpdate.currentDepartment,
+        status: canonicalDepartmentUpdate.status,
       };
-      if (shouldResetStatusToInProgress) {
-        finalizedUpdates.status = 'IN_PROGRESS';
-      }
-      if (shouldResetStatusToReadyForShipping) {
-        finalizedUpdates.status = READY_FOR_SHIPPING_STATUS;
+      if (finalizedUpdates.status === READY_FOR_SHIPPING_STATUS) {
         finalizedUpdates.shippedDate = null;
         finalizedUpdates.shippingCompletedAt = null;
       }
@@ -3914,13 +3876,10 @@ router.patch(
     } catch (finalizedError) {
       try {
         const draftUpdates: any = {
-          currentDepartment: department,
+          currentDepartment: canonicalDepartmentUpdate.currentDepartment,
+          status: canonicalDepartmentUpdate.status,
         };
-        if (shouldResetStatusToInProgress) {
-          draftUpdates.status = 'IN_PROGRESS';
-        }
-        if (shouldResetStatusToReadyForShipping) {
-          draftUpdates.status = READY_FOR_SHIPPING_STATUS;
+        if (draftUpdates.status === READY_FOR_SHIPPING_STATUS) {
           draftUpdates.shippedDate = null;
           draftUpdates.shippingCompletedAt = null;
         }

@@ -257,7 +257,6 @@ const KNOWN_DUPLICATE_PREFIXES = new Set<string>([
   '0135', // 0135_p2_po_contract_review_role.sql vs 0135_pto_balances_and_schedules.sql — parallel P2 contract review role + PTO balances/schedules feature work merged in the same window
   '0116', // 0116_parts_request_po_approvals.sql vs 0116_po_project_links.sql — parallel P2 PO project-link feature landed alongside parts-request PO approvals
   '0136', // 0136_p1_fulfillment_attempts.sql vs 0136_p2_production_change_form_approvals.sql — parallel P1 fulfillment attempts + P2 production change form approvals merged in the same window
-  '0163', // 0163_parts_request_requested_for.sql vs 0163_retire_customer_signature_queue.sql — parallel parts-request requested-for feature + customer signature queue retirement merged in the same window
 ]);
 
 describe('Migration file structure', () => {

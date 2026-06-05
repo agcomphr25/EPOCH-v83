@@ -95,6 +95,50 @@ export function useOrderActions(options: UseOrderActionsOptions = {}) {
     },
   });
 
+  const resendSignatureEmailMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      return apiRequest(`/api/followup-orders/${orderId}/resend-email`, {
+        method: 'POST',
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Email Sent',
+        description: 'Review and sign email has been resent to the customer.',
+      });
+      options.onSuccess?.();
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: 'Failed to send email: ' + (error.message || 'Unknown error'),
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const sendUpdatedOrderMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      return apiRequest(`/api/followup-orders/${orderId}/send-updated-order`, {
+        method: 'POST',
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Updated Order Sent',
+        description: 'A new signature request with the updated order has been sent.',
+      });
+      options.onSuccess?.();
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Error',
+        description: 'Failed to send updated order: ' + (error.message || 'Unknown error'),
+        variant: 'destructive',
+      });
+    },
+  });
+
   const emailPdfCopyMutation = useMutation({
     mutationFn: async (orderId: string) => {
       return apiRequest(`/api/orders/${orderId}/email-pdf-copy`, {
@@ -145,12 +189,16 @@ export function useOrderActions(options: UseOrderActionsOptions = {}) {
     progressOrderMutation,
     cancelOrderMutation,
     undoCancelMutation,
+    resendSignatureEmailMutation,
+    sendUpdatedOrderMutation,
     emailPdfCopyMutation,
     setUrgencyMutation,
     isAnyPending:
       progressOrderMutation.isPending ||
       cancelOrderMutation.isPending ||
       undoCancelMutation.isPending ||
+      resendSignatureEmailMutation.isPending ||
+      sendUpdatedOrderMutation.isPending ||
       emailPdfCopyMutation.isPending ||
       setUrgencyMutation.isPending,
   };

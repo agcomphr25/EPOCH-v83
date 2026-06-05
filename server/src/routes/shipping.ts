@@ -347,7 +347,6 @@ router.get('/ready-for-shipping', async (req: Request, res: Response) => {
         order.currentDepartment === 'Shipping' ||
         order.currentDepartment === 'Fulfilled' ||
         order.status === 'Ready for Shipping' ||
-        order.status === 'READY_TO_SHIP' ||
         order.status === 'FULFILLED' ||
         (order.qcCompletedAt && !order.shippedDate) ||
         (order.currentDepartment === 'QC' && order.qcPassed)

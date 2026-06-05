@@ -46,6 +46,8 @@ export class TransitionValidationError extends Error {
  * so that future statuses or edge-case legacy rows do not hard-block.
  */
 export const STATUS_TRANSITIONS: Readonly<Record<string, readonly string[]>> = {
+  // New orders start here (website import, manual entry)
+  PENDING_SIGNATURE: ['FINALIZED', 'CANCELLED'],
   // Finalized order enters production
   FINALIZED:         ['IN_PROGRESS', 'CANCELLED'],
   // Active production paths

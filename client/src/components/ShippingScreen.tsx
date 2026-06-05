@@ -213,7 +213,6 @@ export function ShippingScreen({ rows }: ShippingScreenProps) {
     rows.filter(
       (row) =>
         row.status === 'Ready for Shipping' ||
-        row.status === 'READY_TO_SHIP' ||
         row.trackingNumber ||
         row.shippedDate
     );

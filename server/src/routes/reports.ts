@@ -918,7 +918,7 @@ router.get('/po-production-orders', async (req, res) => {
 // Due Date Capacity Report - Shows FINALIZED and IN_PROGRESS orders grouped by week
 router.get('/due-date-capacity', async (req, res) => {
   try {
-    // Query active production orders joined with customer info.
+    // Query orders with FINALIZED, IN_PROGRESS, or PENDING_SIGNATURE status, joined with customer info
     const ordersResult = await db.execute(sql`
       SELECT 
         o.id,
@@ -934,7 +934,7 @@ router.get('/due-date-capacity', async (req, res) => {
         WHEN o.customer_id ~ '^[0-9]+$' THEN o.customer_id::integer 
         ELSE NULL 
       END = c.id
-      WHERE o.status IN ('FINALIZED', 'IN_PROGRESS')
+      WHERE o.status IN ('FINALIZED', 'IN_PROGRESS', 'PENDING_SIGNATURE')
         AND o.is_cancelled = false
         AND o.due_date IS NOT NULL
       ORDER BY o.due_date ASC

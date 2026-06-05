@@ -196,7 +196,6 @@ const safeFiles = [
   '0160_po_project_links_safe.sql',
   '0161_employee_termination_access_controls.sql',
   '0162_p2_project_revision_type_po_change.sql',
-  '0163_retire_customer_signature_queue.sql',
   'investigation_308_order_duplication.sql',
 ];
 

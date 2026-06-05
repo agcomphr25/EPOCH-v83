@@ -44,11 +44,6 @@ import {
   OrderConfirmationOutcome,
 } from '../../utils/notifications';
 import { generateOrderPdf, PdfIntent } from '../../services/orderPdfService';
-import {
-  ALL_ORDERS_DEPARTMENT,
-  ALL_ORDERS_STATUS,
-  canonicalizeAllOrdersUpdate,
-} from '../lib/allOrdersStatusDepartment';
 
 const router = Router();
 
@@ -64,7 +59,45 @@ function stripImmutableDueDate<T extends Record<string, any>>(updates: T): T {
   return sanitized as T;
 }
 
-const READY_FOR_SHIPPING_STATUS = ALL_ORDERS_STATUS.READY_TO_SHIP;
+const READY_FOR_SHIPPING_STATUSES = new Set([
+  'ready for shipping',
+  'ready_for_shipping',
+  'ready-to-ship',
+  'ready to ship',
+]);
+
+const FULFILLED_STATUSES = new Set(['fulfilled', 'shipped']);
+const READY_FOR_SHIPPING_STATUS = 'Ready for Shipping';
+
+function shouldResetReadyForShippingToInProgress(
+  currentDepartment: string | null | undefined,
+  targetDepartment: string | null | undefined,
+  currentStatus: string | null | undefined
+): boolean {
+  if (currentDepartment !== 'Shipping' || !targetDepartment || targetDepartment === 'Shipping') {
+    return false;
+  }
+
+  const normalizedStatus = String(currentStatus || '').trim().toLowerCase();
+  return READY_FOR_SHIPPING_STATUSES.has(normalizedStatus);
+}
+
+function shouldResetFulfilledToReadyForShipping(
+  currentDepartment: string | null | undefined,
+  targetDepartment: string | null | undefined,
+  currentStatus: string | null | undefined
+): boolean {
+  if (targetDepartment !== 'Shipping') {
+    return false;
+  }
+
+  const normalizedStatus = String(currentStatus || '').trim().toLowerCase();
+  return (
+    FULFILLED_STATUSES.has(normalizedStatus) ||
+    currentDepartment === 'Shipping Management' ||
+    currentDepartment === 'Fulfilled'
+  );
+}
 
 async function requiresP1PaymentAccountingApproval(paymentDate: Date, user: any): Promise<{ required: boolean; period: any }> {
   const period = await getOrCreateAccountingPeriod(paymentDate);
@@ -802,7 +835,7 @@ router.get('/draft/:id', async (req: Request, res: Response) => {
 // each blocked attempt is written to order_activity_events for observability.
 const ordersBeingFinalized = new Set<string>();
 
-// Create order directly into production and email the customer a Sales Order PDF.
+// Create order - with or without signature requirement based on whether stock is selected
 router.post('/finalized', async (req: Request, res: Response) => {
   // Declare outside try so finally can release the guard reliably
   let incomingOrderId: string | null = null;
@@ -829,8 +862,16 @@ router.post('/finalized', async (req: Request, res: Response) => {
     }
     if (incomingOrderId) ordersBeingFinalized.add(incomingOrderId);
     
-    const orderStatus = 'FINALIZED';
-    const orderDepartment = 'P1 Production Queue';
+    // Determine if stock is selected (has modelId and it's not "no_stock" or similar)
+    // Normalize the modelId for checking (trim whitespace and convert to lowercase)
+    const normalizedModelId = orderData.modelId?.trim().toLowerCase() || '';
+    const noStockIdentifiers = ['', 'no_stock', 'no stock', 'none'];
+    const hasStock: boolean = !noStockIdentifiers.includes(normalizedModelId);
+    
+    // If has stock: PENDING_SIGNATURE status, awaiting customer signature
+    // If no stock: IN_PROGRESS status, skip production pipeline, go directly to Shipping QC
+    const orderStatus = hasStock ? 'PENDING_SIGNATURE' : 'IN_PROGRESS';
+    const orderDepartment = hasStock ? 'Awaiting Customer Signature' : 'Shipping QC';
     
     // Compute bottomMetalSource upfront to set it on creation (no interim incorrect state)
     const bottomMetalSource = computeBottomMetalSource(orderData.features as Record<string, any>);
@@ -864,7 +905,11 @@ router.post('/finalized', async (req: Request, res: Response) => {
       console.warn('⚠️ reconcileRailDemand skipped on order create:', railErr?.message);
     }
     
-    console.log(`Order ${order.orderId} created as FINALIZED and routed to P1 Production Queue - sending Sales Order PDF to customer...`);
+    if (hasStock) {
+      console.log(`📧 Order ${order.orderId} created with PENDING_SIGNATURE status - sending confirmation email to customer...`);
+    } else {
+      console.log(`📧 Order ${order.orderId} created as IN_PROGRESS (no stock) - skipping production, going to Shipping QC - sending thank you email to customer...`);
+    }
     
     // Track email outcome for API response (declared outside inner try block for scoping)
     let emailOutcome: OrderConfirmationOutcome | undefined;
@@ -872,6 +917,9 @@ router.post('/finalized', async (req: Request, res: Response) => {
     
     // Automatically create followup order and send email
     try {
+      // Import dependencies
+      const { nanoid } = await import('nanoid');
+      const { sendFollowupOrderEmail } = await import('../../utils/followupOrderEmail');
       const { sendThankYouOrderEmail } = await import('../../utils/thankYouOrderEmail');
       const fs = await import('fs');
       const path = await import('path');
@@ -905,70 +953,7 @@ router.post('/finalized', async (req: Request, res: Response) => {
           emailError,
         });
       }
-
-      const pdfResult = await generateOrderPdf(order.orderId, PdfIntent.CUSTOMER_VIEW);
-      const pdfDir = path.join(process.cwd(), 'uploads', 'order-confirmations');
-      fs.mkdirSync(pdfDir, { recursive: true });
-      const safeOrderId = order.orderId.replace(/[^a-zA-Z0-9_-]/g, '_');
-      const pdfPath = path.join(pdfDir, `sales_order_${safeOrderId}_${Date.now()}.pdf`);
-      fs.writeFileSync(pdfPath, pdfResult.buffer);
-
-      const thankYouResult = await sendThankYouOrderEmail(
-        {
-          orderId: order.orderId,
-          customerName: customer.name,
-          customerEmail: customer.email,
-          customerPO: order.customerPO || '',
-          orderDate: new Date(order.orderDate).toISOString().split('T')[0],
-          dueDate: new Date(order.dueDate).toISOString().split('T')[0],
-          notes: order.notes || '',
-        },
-        pdfPath
-      );
-
-      if (thankYouResult.success) {
-        emailOutcome = 'sent';
-        console.log(`Sales Order PDF email sent for order ${order.orderId}`);
-
-        await db.insert(communicationLogs).values({
-          orderId: order.orderId,
-          customerId: order.customerId || '',
-          messageType: 'transactional',
-          method: 'email',
-          type: 'order-confirmation',
-          context: 'initial',
-          recipient: customer.email,
-          status: 'sent',
-          signatureToken: null,
-          externalId: thankYouResult.messageId,
-          message: `Sales Order PDF emailed for ${order.orderId}`,
-          sentAt: new Date(),
-        });
-      } else {
-        emailOutcome = 'failed';
-        emailError = thankYouResult.error;
-        console.error(`Failed to send Sales Order PDF email for order ${order.orderId}: ${thankYouResult.error}`);
-
-        await db.insert(communicationLogs).values({
-          orderId: order.orderId,
-          customerId: order.customerId || '',
-          messageType: 'transactional',
-          method: 'email',
-          type: 'order-confirmation',
-          context: 'initial',
-          recipient: customer.email,
-          status: 'failed',
-          signatureToken: null,
-          error: thankYouResult.error,
-          message: `Failed Sales Order PDF email for ${order.orderId}: ${thankYouResult.error}`,
-          sentAt: new Date(),
-        });
-      }
-
-      /*
-       * Legacy signature follow-up workflow intentionally disabled.
-       * New orders now enter production immediately and only receive the Sales Order PDF.
-       *
+      
       // Get customer address
       const addresses = await storage.getCustomerAddresses(String(customer.id));
       const defaultAddress = addresses.find(addr => addr.isDefault) || addresses[0];
@@ -1347,7 +1332,6 @@ router.post('/finalized', async (req: Request, res: Response) => {
           // Continue to success response with emailOutcome='failed' for frontend to display warning
         }
       }
-      */
     } catch (sendError: any) {
       // MANDATORY OUTCOME: Any thrown error results in 'failed' outcome
       // NOTE: sendOrderConfirmationNotification handles its own logging internally
@@ -1371,7 +1355,7 @@ router.post('/finalized', async (req: Request, res: Response) => {
             context: 'initial',
             recipient: 'N/A - exception during preparation',
             status: 'failed',
-            signatureToken: null,
+            signatureToken: signatureToken || null, // May be null if exception occurred before token generation
             error: errorMessage,
             message: `Order confirmation failed for ${order.orderId}: ${errorMessage}`,
             sentAt: new Date(),
@@ -1489,19 +1473,19 @@ router.post('/pending-payment', async (req: Request, res: Response) => {
   }
 });
 
-// Create draft order (legacy method - now creates finalized production orders)
+// Create draft order (legacy method - now creates PENDING_SIGNATURE orders)
 router.post('/draft', requirePermission('orders.create'), async (req: Request, res: Response) => {
   try {
     const orderData = insertAllOrderSchema.parse(req.body);
 
-    const finalStatus = 'FINALIZED';
+    // Create as PENDING_SIGNATURE or FINALIZED based on status
+    const finalStatus = orderData.status === 'FINALIZED' ? 'FINALIZED' : 'PENDING_SIGNATURE';
     
     console.log(`🔄 Creating order ${orderData.orderId} with status: ${finalStatus}`);
     
     const order = await storage.createFinalizedOrder({
       ...orderData,
-      status: finalStatus,
-      currentDepartment: 'P1 Production Queue',
+      status: finalStatus
     }, req.body.finalizedBy);
     
     res.status(201).json(order);
@@ -1963,7 +1947,7 @@ router.get('/:id', async (req: Request, res: Response, next: Function) => {
     const orderId = req.params.id;
     
     // Skip static routes that should be handled by other handlers defined later
-    const staticRoutes = ['heat-map', 'stats', 'all', 'generate-id', 'last-id', 'reference'];
+    const staticRoutes = ['heat-map', 'stats', 'all', 'generate-id', 'last-id', 'reference', 'awaiting-signature'];
     if (staticRoutes.some(route => orderId === route || orderId.startsWith(route + '/'))) {
       return next('route');
     }
@@ -2836,11 +2820,11 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
     if (!targetDepartment) {
       // Special case: Shipping is the final department
       // When progressing from Shipping, set status to FULFILLED and clear department
-      if (existingOrder.currentDepartment === ALL_ORDERS_DEPARTMENT.SHIPPING) {
+      if (existingOrder.currentDepartment === 'Shipping') {
         shouldMarkFulfilled = true;
-        targetDepartment = ALL_ORDERS_DEPARTMENT.SHIPPING_MANAGEMENT;
+        targetDepartment = null; // Clear department
         console.log(
-          `📦 Order ${orderId} completing Shipping - will be marked as FULFILLED in Shipping Management`
+          `📦 Order ${orderId} completing Shipping - will be marked as FULFILLED with no department`
         );
       }
       // Orders with no stock model should skip manufacturing departments
@@ -2915,18 +2899,29 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
     };
 
     if (shouldMarkFulfilled) {
-      updateData.status = ALL_ORDERS_STATUS.FULFILLED;
+      updateData.status = 'FULFILLED';
       updateData.shippedDate = now;
-      updateData.currentDepartment = ALL_ORDERS_DEPARTMENT.SHIPPING_MANAGEMENT;
-      console.log(`📦 Marking order as FULFILLED in Shipping Management`);
+      updateData.currentDepartment = undefined; // Clear department when fulfilled
+      console.log(`📦 Marking order as FULFILLED with no department`);
     } else {
-      Object.assign(
-        updateData,
-        canonicalizeAllOrdersUpdate(existingOrder, {
-          currentDepartment: targetDepartment,
-        })
-      );
-      if (updateData.status === READY_FOR_SHIPPING_STATUS) {
+      updateData.currentDepartment = targetDepartment;
+      if (
+        shouldResetReadyForShippingToInProgress(
+          existingOrder.currentDepartment,
+          targetDepartment,
+          existingOrder.status
+        )
+      ) {
+        updateData.status = 'IN_PROGRESS';
+      }
+      if (
+        shouldResetFulfilledToReadyForShipping(
+          existingOrder.currentDepartment,
+          targetDepartment,
+          existingOrder.status
+        )
+      ) {
+        updateData.status = READY_FOR_SHIPPING_STATUS;
         updateData.shippedDate = null;
         updateData.shippingCompletedAt = null;
       }
@@ -2980,12 +2975,7 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
         const fieldDiff: Record<string, { before: string | null; after: string | null; label: string }> = {};
 
         if (shouldMarkFulfilled) {
-          fieldDiff['status'] = { before: existingOrder.status ?? null, after: ALL_ORDERS_STATUS.FULFILLED, label: 'Order Status' };
-          fieldDiff['currentDepartment'] = {
-            before: existingOrder.currentDepartment ?? null,
-            after: ALL_ORDERS_DEPARTMENT.SHIPPING_MANAGEMENT,
-            label: 'Current Department',
-          };
+          fieldDiff['status'] = { before: existingOrder.status ?? null, after: 'FULFILLED', label: 'Order Status' };
         } else {
           fieldDiff['currentDepartment'] = {
             before: existingOrder.currentDepartment ?? null,
@@ -3012,9 +3002,9 @@ router.post('/:orderId/progress', async (req: Request, res: Response) => {
           source: 'department-transition',
           sourceRoute: req.path,
           statusFrom: existingOrder.status ?? null,
-          statusTo: shouldMarkFulfilled ? ALL_ORDERS_STATUS.FULFILLED : (after.status ?? null),
+          statusTo: shouldMarkFulfilled ? 'FULFILLED' : (after.status ?? null),
           departmentFrom: existingOrder.currentDepartment ?? null,
-          departmentTo: shouldMarkFulfilled ? ALL_ORDERS_DEPARTMENT.SHIPPING_MANAGEMENT : (targetDepartment ?? null),
+          departmentTo: shouldMarkFulfilled ? null : (targetDepartment ?? null),
           fieldDiff,
         });
 
@@ -3104,11 +3094,11 @@ router.post('/complete-qc/:orderId', async (req: Request, res: Response) => {
     }
 
     const updateData = {
-      currentDepartment: qcPassedAll ? ALL_ORDERS_DEPARTMENT.SHIPPING : 'QC',
+      currentDepartment: qcPassedAll ? 'Shipping' : 'QC',
       qcCompletedAt: qcPassedAll ? new Date() : null,
       qcNotes: qcNotes || null,
       qcPassed: qcPassedAll,
-      status: qcPassedAll ? ALL_ORDERS_STATUS.READY_TO_SHIP : ALL_ORDERS_STATUS.IN_PROGRESS,
+      status: qcPassedAll ? 'Ready for Shipping' : 'In QC',
     };
 
     // Try to update in finalized orders first
@@ -3137,11 +3127,11 @@ router.post('/complete-qc/:orderId', async (req: Request, res: Response) => {
     );
     
     // Record department transition if moving to shipping
-    if (qcPassedAll && beforeOrder.currentDepartment !== ALL_ORDERS_DEPARTMENT.SHIPPING) {
+    if (qcPassedAll && beforeOrder.currentDepartment !== 'Shipping') {
       await auditService.recordDepartmentEntry({
         entityType: 'p1_order',
         entityId: orderId,
-        department: ALL_ORDERS_DEPARTMENT.SHIPPING,
+        department: 'Shipping',
         enteredByUserId: (req as any).user?.id,
         metadata: {
           fromDepartment: beforeOrder.currentDepartment,
@@ -3188,8 +3178,8 @@ router.post('/undo-cancel/:orderId', async (req: Request, res: Response) => {
       isCancelled: false,
       cancelledAt: null,
       cancelReason: null,
-      status: ALL_ORDERS_STATUS.FINALIZED,
-      currentDepartment: ALL_ORDERS_DEPARTMENT.P1_PRODUCTION_QUEUE,
+      status: 'FINALIZED', // Restore to finalized status
+      currentDepartment: 'P1 Production Queue', // Put back in production queue
       updatedAt: new Date(),
     };
 
@@ -3227,7 +3217,7 @@ router.post('/undo-cancel/:orderId', async (req: Request, res: Response) => {
     await auditService.recordDepartmentEntry({
       entityType: 'p1_order',
       entityId: orderId,
-      department: ALL_ORDERS_DEPARTMENT.P1_PRODUCTION_QUEUE,
+      department: 'P1 Production Queue',
       enteredByUserId: (req as any).user?.id,
       metadata: {
         restoredFromCancellation: true,
@@ -3414,8 +3404,8 @@ router.post('/cancel/:orderId', requirePermission('orders.cancel'), async (req: 
       isCancelled: true,
       cancelledAt: new Date(),
       cancelReason: reason || 'No reason provided',
-      status: ALL_ORDERS_STATUS.CANCELLED,
-      currentDepartment: ALL_ORDERS_DEPARTMENT.CANCELLED,
+      status: 'CANCELLED',
+      currentDepartment: undefined, // Remove from all department queues
       updatedAt: new Date(),
     };
 
@@ -3645,13 +3635,6 @@ router.patch(
       // Special handling for urgency - set isManualUrgency flag
       if (fieldName === 'urgency') {
         updateData.isManualUrgency = true;
-      }
-
-      if (
-        isFinalized &&
-        (fieldName === 'status' || fieldName === 'currentDepartment' || fieldName === 'isCancelled')
-      ) {
-        Object.assign(updateData, canonicalizeAllOrdersUpdate(order as any, updateData));
       }
 
       // Update the appropriate table using the correct identifier
@@ -3898,12 +3881,15 @@ router.patch(
       }
     }
 
-    const canonicalDepartmentUpdate = canonicalizeAllOrdersUpdate(
-      existingOrder || {
-        currentDepartment: previousDepartment,
-        status: existingOrder?.status ?? existingOrder?.productionStatus,
-      },
-      { currentDepartment: department }
+    const shouldResetStatusToInProgress = shouldResetReadyForShippingToInProgress(
+      previousDepartment,
+      department,
+      existingOrder?.status ?? existingOrder?.productionStatus
+    );
+    const shouldResetStatusToReadyForShipping = shouldResetFulfilledToReadyForShipping(
+      previousDepartment,
+      department,
+      existingOrder?.status ?? existingOrder?.productionStatus
     );
 
     // Try to find and update the order
@@ -3912,10 +3898,13 @@ router.patch(
 
     try {
       const finalizedUpdates: any = {
-        currentDepartment: canonicalDepartmentUpdate.currentDepartment,
-        status: canonicalDepartmentUpdate.status,
+        currentDepartment: department,
       };
-      if (finalizedUpdates.status === READY_FOR_SHIPPING_STATUS) {
+      if (shouldResetStatusToInProgress) {
+        finalizedUpdates.status = 'IN_PROGRESS';
+      }
+      if (shouldResetStatusToReadyForShipping) {
+        finalizedUpdates.status = READY_FOR_SHIPPING_STATUS;
         finalizedUpdates.shippedDate = null;
         finalizedUpdates.shippingCompletedAt = null;
       }
@@ -3925,10 +3914,13 @@ router.patch(
     } catch (finalizedError) {
       try {
         const draftUpdates: any = {
-          currentDepartment: canonicalDepartmentUpdate.currentDepartment,
-          status: canonicalDepartmentUpdate.status,
+          currentDepartment: department,
         };
-        if (draftUpdates.status === READY_FOR_SHIPPING_STATUS) {
+        if (shouldResetStatusToInProgress) {
+          draftUpdates.status = 'IN_PROGRESS';
+        }
+        if (shouldResetStatusToReadyForShipping) {
+          draftUpdates.status = READY_FOR_SHIPPING_STATUS;
           draftUpdates.shippedDate = null;
           draftUpdates.shippingCompletedAt = null;
         }
@@ -5145,6 +5137,74 @@ router.post('/:orderId/email-pdf-copy', authenticateToken, async (req: Request, 
       error: 'Failed to send PDF copy',
       details: error instanceof Error ? error.message : 'Unknown error',
     });
+  }
+});
+
+// GET /api/orders/awaiting-signature - All orders in Awaiting Customer Signature department
+router.get('/awaiting-signature', async (req: Request, res: Response) => {
+  try {
+    const { search, sort = 'due_date', dir = 'asc' } = req.query as Record<string, string>;
+
+    const allowedSorts: Record<string, string> = {
+      due_date: 'ao.due_date',
+      order_date: 'ao.order_date',
+      order_id: 'ao.order_id',
+      customer: 'c.name',
+      days_waiting: 'ao.created_at',
+    };
+    const sortCol = allowedSorts[sort] || 'ao.due_date';
+    const sortDir = dir === 'desc' ? 'DESC' : 'ASC';
+
+    let searchClause = '';
+    const params: any[] = [];
+
+    if (search && search.trim()) {
+      params.push(`%${search.trim().toLowerCase()}%`);
+      searchClause = `AND (LOWER(ao.order_id) LIKE $${params.length} OR LOWER(c.name) LIKE $${params.length} OR LOWER(ao.model_id) LIKE $${params.length})`;
+    }
+
+    const query = `
+      SELECT
+        ao.order_id AS "orderId",
+        ao.order_date AS "orderDate",
+        ao.due_date AS "dueDate",
+        ao.status,
+        ao.model_id AS "modelId",
+        ao.handedness,
+        ao.notes,
+        ao.urgency,
+        ao.customer_id AS "customerId",
+        ao.created_at AS "createdAt",
+        ao.signature_data IS NOT NULL AND ao.signature_data != '' AS "hasSigned",
+        ao.signed_at AS "signedAt",
+        ao.is_replacement AS "isReplacement",
+        c.name AS "customerName",
+        c.email AS "customerEmail",
+        NOW() - ao.created_at AS "waitingDuration",
+        EXTRACT(EPOCH FROM (NOW() - ao.created_at)) / 86400 AS "daysWaiting"
+      FROM all_orders ao
+      LEFT JOIN customers c ON c.id::text = ao.customer_id
+      WHERE ao.current_department = 'Awaiting Customer Signature'
+        AND ao.status != 'CANCELLED'
+        ${searchClause}
+      ORDER BY ${sortCol} ${sortDir}
+    `;
+
+    const rows = await pool.query(query, params);
+
+    const orders = (Array.isArray(rows) ? rows : (rows as any).rows || rows).map((r: any) => ({
+      ...r,
+      daysWaiting: Math.floor(Number(r.daysWaiting) || 0),
+    }));
+
+    const total = orders.length;
+    const overdue = orders.filter((o: any) => new Date(o.dueDate) < new Date()).length;
+    const signed = orders.filter((o: any) => o.hasSigned).length;
+
+    res.json({ orders, total, overdue, signed });
+  } catch (error) {
+    console.error('Error fetching awaiting-signature orders:', error);
+    res.status(500).json({ error: 'Failed to fetch awaiting-signature orders' });
   }
 });
 

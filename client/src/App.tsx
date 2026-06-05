@@ -197,6 +197,7 @@ const BOMAdministration = React.lazy(() => import('./pages/BOMAdministration').t
 const RobustBOMAdministration = React.lazy(() => import('./pages/RobustBOMAdministration'));
 const AGBottomMetalReport = React.lazy(() => import('./pages/AGBottomMetalReport'));
 const ShippingTracker = React.lazy(() => import('./pages/ShippingTracker'));
+const AwaitingSignaturePage = React.lazy(() => import('./pages/AwaitingSignaturePage'));
 const EmployeeDashboard = React.lazy(() => import('./pages/EmployeeDashboard'));
 const EmployeeDetail = React.lazy(() => import('./pages/EmployeeDetail'));
 const EmployeePortal = React.lazy(() => import('./pages/EmployeePortal'));
@@ -1337,6 +1338,7 @@ function App() {
                   />
                   <Route path="/shipping-tracker" component={ShippingTracker} />
                   <Route path="/weekly-shipments" component={RedirectToShippingTracker} />
+                  <Route path="/awaiting-signature" component={AwaitingSignaturePage} />
                   <Route path="/gateway-reports" component={GatewayReports} />
                   <Route path="/metrics-sandbox" component={MetricsSandbox} />
                   <Route path="/metric-directory" component={MetricDirectory} />

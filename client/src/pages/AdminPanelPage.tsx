@@ -589,6 +589,7 @@ export default function AdminPanelPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">All Departments</SelectItem>
+                <SelectItem value="Awaiting Customer Signature">Awaiting Customer Signature</SelectItem>
                 <SelectItem value="Layup">Layup</SelectItem>
                 <SelectItem value="Finish">Finish</SelectItem>
                 <SelectItem value="Gunsmith">Gunsmith</SelectItem>

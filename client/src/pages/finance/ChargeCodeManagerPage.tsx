@@ -1161,7 +1161,12 @@ export default function ChargeCodeManagerPage() {
                 </TableCell>
               </TableRow>
             ) : (
-              displayed.map((code) => {
+              displayed.map((rawCode) => {
+                const code = {
+                  ...rawCode,
+                  activityCategory:
+                    (rawCode as any).activityCategory || '-',
+                } as ChargeCode;
                 const poolContext = resolvePoolContext(code, pools, bases);
                 return (
                   <TableRow

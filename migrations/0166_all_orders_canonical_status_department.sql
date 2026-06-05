@@ -114,4 +114,4 @@ SET
 FROM tmp_all_orders_canonical_status_department tmp
 WHERE ao.id = tmp.id;
 
-DROP TABLE tmp_all_orders_canonical_status_department;
+-- TEMP TABLE is session-scoped and auto-drops; no explicit DROP needed.

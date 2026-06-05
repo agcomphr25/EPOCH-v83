@@ -256,6 +256,7 @@ const KNOWN_DUPLICATE_PREFIXES = new Set<string>([
   '0115', // 0115_receiving_project_material_acceptance.sql vs 0115_vendor_pos_production_line.sql — parallel receiving project material acceptance + vendor PO production line tasks merged in the same window
   '0135', // 0135_p2_po_contract_review_role.sql vs 0135_pto_balances_and_schedules.sql — parallel P2 contract review role + PTO balances/schedules feature work merged in the same window
   '0116', // 0116_parts_request_po_approvals.sql vs 0116_po_project_links.sql — parallel P2 PO project-link feature landed alongside parts-request PO approvals
+  '0136', // 0136_p1_fulfillment_attempts.sql vs 0136_p2_production_change_form_approvals.sql — parallel P1 fulfillment attempts + P2 production change form approvals merged in the same window
 ]);
 
 describe('Migration file structure', () => {
@@ -449,6 +450,16 @@ const KNOWN_BROKEN_ON_SCHEMA_BASELINE: Record<string, string> = {
   '0027_brian_ramirez_account_fix.sql':
     'One-off backfill writes users.password, a column dropped in a later migration. ' +
     'Harmless on the modern baseline — the row was already patched at its original epoch.',
+  // Migration 0164 adds a column and index to charge_code_employee_assignments, but that
+  // table was created at runtime by ensureChargeCodeAssignmentTable() in employees.ts, not
+  // by any migration file.  The schema-baseline replay starts from a pg_dump that includes
+  // the table (it exists in production), but a freshly seeded scratch DB does not have it
+  // yet when 0164 runs.  This is a structural artifact of the table being created outside
+  // the migration pipeline — not a step-ordering bug in any in-flight migration.
+  '0164_charge_code_production_line_controls.sql':
+    'Adds column/index to charge_code_employee_assignments, which is created at runtime ' +
+    '(ensureChargeCodeAssignmentTable in employees.ts), not via a migration. ' +
+    'Table exists in production but is absent in a fresh scratch-DB baseline replay.',
 };
 
 // ---------------------------------------------------------------------------

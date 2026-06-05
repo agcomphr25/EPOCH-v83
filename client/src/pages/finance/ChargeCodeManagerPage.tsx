@@ -7,6 +7,7 @@ import {
   Tag,
   Plus,
   Pencil,
+  Copy,
   Loader2,
   ChevronUp,
   ChevronDown,
@@ -14,10 +15,10 @@ import {
   Search,
   Users,
 } from 'lucide-react';
-import { queryClient, apiRequest } from '@/lib/queryClient';
-import { useToast } from '@/hooks/use-toast';
 import { insertChargeCodeSchema, type ChargeCode } from '@shared/schema';
 
+import { queryClient, apiRequest } from '@/lib/queryClient';
+import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
@@ -70,6 +71,14 @@ const chargeCodeFormSchema = insertChargeCodeSchema.extend({
     'UNALLOWABLE',
     'OTHER',
   ]),
+  productionLine: z.string().min(1, 'Production line is required'),
+  activityCategory: z.string().optional().nullable(),
+  costObjectivePolicy: z.string().optional().nullable(),
+  inventoryWipPolicy: z.string().optional().nullable(),
+  allowProject: z.boolean().optional(),
+  requireProject: z.boolean().optional(),
+  allowClin: z.boolean().optional(),
+  requireClin: z.boolean().optional(),
   maxHoursPerDay: z.string().optional(),
   active: z.boolean().optional(),
 });
@@ -105,18 +114,42 @@ type ChargeCodeAssignments = {
   chargeCodeId: number;
   scope: 'ALL_EMPLOYEES' | 'SELECTED_EMPLOYEES';
   employeeIds: number[];
+  defaultEmployeeIds: number[];
   assignedEmployees: EmployeeOption[];
 };
 
-function defaultValues(code?: ChargeCode): ChargeCodeFormValues {
+const PRODUCTION_LINE_OPTIONS = [
+  { value: 'P1', label: 'P1 - Production Line 1' },
+  { value: 'P2', label: 'P2 - Production Line 2' },
+  { value: 'P3', label: 'P3 - Production Line 3' },
+  { value: 'P4', label: 'P4 - Production Line 4' },
+  { value: 'GENERAL', label: 'General' },
+  { value: 'R_AND_D', label: 'R&D' },
+];
+
+function defaultValues(
+  code?: ChargeCode,
+  mode: 'create' | 'edit' | 'copy' = 'create'
+): ChargeCodeFormValues {
+  const isCopy = mode === 'copy';
   return {
     code: code?.code ?? '',
-    description: code?.description ?? '',
+    description: isCopy
+      ? `${code?.description?.trim() || code?.code || 'Charge code'} - Copy`
+      : (code?.description ?? ''),
     type: (code?.type as ChargeCodeType) ?? 'DIRECT',
     costHandling:
       (code?.costHandling as ChargeCodeFormValues['costHandling']) ??
       'DIRECT_CONTRACT',
     department: code?.department ?? '',
+    productionLine: (code as any)?.productionLine ?? 'P1',
+    activityCategory: (code as any)?.activityCategory ?? '',
+    costObjectivePolicy: (code as any)?.costObjectivePolicy ?? 'NONE',
+    inventoryWipPolicy: (code as any)?.inventoryWipPolicy ?? '',
+    allowProject: (code as any)?.allowProject ?? false,
+    requireProject: (code as any)?.requireProject ?? false,
+    allowClin: (code as any)?.allowClin ?? false,
+    requireClin: (code as any)?.requireClin ?? false,
     contractReference: code?.contractReference ?? '',
     billable: code?.billable ?? true,
     requiresApproval: code?.requiresApproval ?? false,
@@ -128,17 +161,23 @@ function defaultValues(code?: ChargeCode): ChargeCodeFormValues {
 
 function ChargeCodeForm({
   editTarget,
+  copySource,
+  existingChargeCodes,
   onClose,
 }: {
   editTarget: ChargeCode | null;
+  copySource: ChargeCode | null;
+  existingChargeCodes: ChargeCode[];
   onClose: () => void;
 }) {
   const { toast } = useToast();
   const isEdit = editTarget !== null;
+  const isCopy = copySource !== null;
   const [assignmentScope, setAssignmentScope] = useState<
     'ALL_EMPLOYEES' | 'SELECTED_EMPLOYEES'
   >('ALL_EMPLOYEES');
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<number[]>([]);
+  const [defaultEmployeeIds, setDefaultEmployeeIds] = useState<number[]>([]);
 
   const { data: employees = [] } = useQuery<EmployeeOption[]>({
     queryKey: ['/api/employees'],
@@ -147,21 +186,31 @@ function ChargeCodeForm({
 
   const { data: assignments, isLoading: assignmentsLoading } =
     useQuery<ChargeCodeAssignments>({
-      queryKey: ['/api/charge-codes', editTarget?.id, 'assignments'],
+      queryKey: [
+        '/api/charge-codes',
+        editTarget?.id ?? copySource?.id,
+        'assignments',
+      ],
       queryFn: () =>
-        apiRequest(`/api/charge-codes/${editTarget!.id}/assignments`),
-      enabled: isEdit,
+        apiRequest(
+          `/api/charge-codes/${(editTarget ?? copySource)!.id}/assignments`
+        ),
+      enabled: isEdit || isCopy,
     });
 
   useEffect(() => {
     if (!assignments) return;
     setAssignmentScope(assignments.scope);
     setSelectedEmployeeIds(assignments.employeeIds);
+    setDefaultEmployeeIds(assignments.defaultEmployeeIds ?? []);
   }, [assignments]);
 
   const form = useForm<ChargeCodeFormValues>({
     resolver: zodResolver(chargeCodeFormSchema),
-    defaultValues: defaultValues(editTarget ?? undefined),
+    defaultValues: defaultValues(
+      editTarget ?? copySource ?? undefined,
+      isEdit ? 'edit' : isCopy ? 'copy' : 'create'
+    ),
   });
 
   async function saveAssignments(chargeCodeId: number) {
@@ -171,6 +220,8 @@ function ChargeCodeForm({
         scope: assignmentScope,
         employeeIds:
           assignmentScope === 'ALL_EMPLOYEES' ? [] : selectedEmployeeIds,
+        defaultEmployeeIds:
+          assignmentScope === 'ALL_EMPLOYEES' ? [] : defaultEmployeeIds,
       },
     });
   }
@@ -272,14 +323,51 @@ function ChargeCodeForm({
         ? current.filter((id) => id !== employeeId)
         : [...current, employeeId].sort((a, b) => a - b)
     );
+    setDefaultEmployeeIds((current) => current.filter((id) => id !== employeeId));
+  }
+
+  function toggleDefaultEmployee(employeeId: number) {
+    if (!selectedEmployeeIds.includes(employeeId)) return;
+    setDefaultEmployeeIds((current) =>
+      current.includes(employeeId)
+        ? current.filter((id) => id !== employeeId)
+        : [...current, employeeId].sort((a, b) => a - b)
+    );
   }
 
   function onSubmit(values: ChargeCodeFormValues) {
+    const normalizedCode = values.code.trim().toLowerCase();
+    const duplicate = existingChargeCodes.find((chargeCode) => {
+      if (isEdit && chargeCode.id === editTarget.id) return false;
+      return chargeCode.code.trim().toLowerCase() === normalizedCode;
+    });
+
+    if (duplicate) {
+      form.setError('code', {
+        type: 'manual',
+        message: `Charge code "${values.code}" already exists.`,
+      });
+      toast({
+        title: 'Duplicate charge code',
+        description: 'Change the code before saving this copy.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     const payload = {
-      code: values.code,
+      code: values.code.trim(),
       description: values.description || null,
       type: values.type,
       costHandling: values.costHandling,
+      productionLine: values.productionLine.trim().toUpperCase(),
+      activityCategory: values.activityCategory || null,
+      costObjectivePolicy: values.costObjectivePolicy || null,
+      inventoryWipPolicy: values.inventoryWipPolicy || null,
+      allowProject: values.allowProject,
+      requireProject: values.requireProject,
+      allowClin: values.allowClin,
+      requireClin: values.requireClin,
       department: values.department || null,
       contractReference: values.contractReference || null,
       billable: values.billable,
@@ -374,6 +462,98 @@ function ChargeCodeForm({
               </FormItem>
             )}
           />
+
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="productionLine"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Production Line *</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select line" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {PRODUCTION_LINE_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="activityCategory"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Activity Category</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Layup, QC, Cleanup, CSR" {...field} value={field.value ?? ''} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 rounded-md border p-3">
+            <FormField
+              control={form.control}
+              name="allowProject"
+              render={({ field }) => (
+                <FormItem className="flex items-center gap-2 space-y-0">
+                  <FormControl>
+                    <Switch checked={field.value} onCheckedChange={field.onChange} />
+                  </FormControl>
+                  <FormLabel className="cursor-pointer">Allow Project</FormLabel>
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="requireProject"
+              render={({ field }) => (
+                <FormItem className="flex items-center gap-2 space-y-0">
+                  <FormControl>
+                    <Switch checked={field.value} onCheckedChange={field.onChange} />
+                  </FormControl>
+                  <FormLabel className="cursor-pointer">Require Project</FormLabel>
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="allowClin"
+              render={({ field }) => (
+                <FormItem className="flex items-center gap-2 space-y-0">
+                  <FormControl>
+                    <Switch checked={field.value} onCheckedChange={field.onChange} />
+                  </FormControl>
+                  <FormLabel className="cursor-pointer">Allow CLIN</FormLabel>
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="requireClin"
+              render={({ field }) => (
+                <FormItem className="flex items-center gap-2 space-y-0">
+                  <FormControl>
+                    <Switch checked={field.value} onCheckedChange={field.onChange} />
+                  </FormControl>
+                  <FormLabel className="cursor-pointer">Require CLIN</FormLabel>
+                </FormItem>
+              )}
+            />
+          </div>
 
           <FormField
             control={form.control}
@@ -509,7 +689,9 @@ function ChargeCodeForm({
           <div className="rounded-md border p-3 space-y-3">
             {!isEdit && (
               <p className="text-xs text-muted-foreground">
-                Access settings will be applied when the charge code is created.
+                {isCopy
+                  ? 'Copied access settings will be applied when the new charge code is created.'
+                  : 'Access settings will be applied when the charge code is created.'}
               </p>
             )}
             <div className="flex items-center justify-between gap-3">
@@ -569,6 +751,18 @@ function ChargeCodeForm({
                           ? ` - ${employee.employeeCode}`
                           : ''}
                         {employee.department ? ` - ${employee.department}` : ''}
+                      </span>
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Checkbox
+                          checked={defaultEmployeeIds.includes(employee.id)}
+                          disabled={!selectedEmployeeIds.includes(employee.id)}
+                          onCheckedChange={(event) => {
+                            event?.valueOf();
+                            toggleDefaultEmployee(employee.id);
+                          }}
+                          onClick={(event) => event.stopPropagation()}
+                        />
+                        Default
                       </span>
                     </span>
                   </label>
@@ -630,6 +824,8 @@ function ChargeCodeForm({
 type SortColumn =
   | 'code'
   | 'description'
+  | 'productionLine'
+  | 'activityCategory'
   | 'type'
   | 'costHandling'
   | 'pool'
@@ -754,6 +950,7 @@ export default function ChargeCodeManagerPage() {
   const [showInactive, setShowInactive] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<ChargeCode | null>(null);
+  const [copySource, setCopySource] = useState<ChargeCode | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortColumn, setSortColumn] = useState<SortColumn | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
@@ -786,6 +983,8 @@ export default function ChargeCodeManagerPage() {
         (c) =>
           c.code.toLowerCase().includes(q) ||
           (c.description ?? '').toLowerCase().includes(q) ||
+          ((c as any).productionLine ?? '').toLowerCase().includes(q) ||
+          ((c as any).activityCategory ?? '').toLowerCase().includes(q) ||
           (c.costHandling ?? '').toLowerCase().includes(q) ||
           resolvePoolContext(c, pools, bases).pool.toLowerCase().includes(q) ||
           (c.department ?? '').toLowerCase().includes(q)
@@ -839,17 +1038,26 @@ export default function ChargeCodeManagerPage() {
 
   function openCreate() {
     setEditTarget(null);
+    setCopySource(null);
     setDialogOpen(true);
   }
 
   function openEdit(code: ChargeCode) {
     setEditTarget(code);
+    setCopySource(null);
+    setDialogOpen(true);
+  }
+
+  function openCopy(code: ChargeCode) {
+    setEditTarget(null);
+    setCopySource(code);
     setDialogOpen(true);
   }
 
   function closeDialog() {
     setDialogOpen(false);
     setEditTarget(null);
+    setCopySource(null);
   }
 
   const typeLabel: Record<string, string> = {
@@ -920,6 +1128,8 @@ export default function ChargeCodeManagerPage() {
                 [
                   { key: 'code', label: 'Code' },
                   { key: 'description', label: 'Description' },
+                  { key: 'productionLine', label: 'Line' },
+                  { key: 'activityCategory', label: 'Activity' },
                   { key: 'type', label: 'Type' },
                   { key: 'costHandling', label: 'DCAA Handling' },
                   { key: 'pool', label: 'Pool' },
@@ -943,14 +1153,14 @@ export default function ChargeCodeManagerPage() {
                   />
                 </TableHead>
               ))}
-              <TableHead className="w-12" />
+              <TableHead className="w-24" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <TableRow key={i}>
-                  {Array.from({ length: 11 }).map((__, j) => (
+                  {Array.from({ length: 13 }).map((__, j) => (
                     <TableCell key={j}>
                       <Skeleton className="h-4 w-full" />
                     </TableCell>
@@ -960,7 +1170,7 @@ export default function ChargeCodeManagerPage() {
             ) : displayed.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={11}
+                  colSpan={13}
                   className="text-center text-muted-foreground py-10"
                 >
                   {chargeCodes?.length === 0
@@ -971,7 +1181,12 @@ export default function ChargeCodeManagerPage() {
                 </TableCell>
               </TableRow>
             ) : (
-              displayed.map((code) => {
+              displayed.map((rawCode) => {
+                const code = {
+                  ...rawCode,
+                  activityCategory:
+                    (rawCode as any).activityCategory || '-',
+                } as ChargeCode;
                 const poolContext = resolvePoolContext(code, pools, bases);
                 return (
                   <TableRow
@@ -986,6 +1201,14 @@ export default function ChargeCodeManagerPage() {
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground max-w-xs truncate">
                       {code.description ?? '—'}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline">
+                        {(code as any).productionLine ?? '-'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {(code as any).activityCategory ?? 'â€”'}
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline">
@@ -1035,16 +1258,32 @@ export default function ChargeCodeManagerPage() {
                       )}
                     </TableCell>
                     <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openEdit(code);
-                        }}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          aria-label={`Copy charge code ${code.code}`}
+                          title="Copy charge code"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openCopy(code);
+                          }}
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          aria-label={`Edit charge code ${code.code}`}
+                          title="Edit charge code"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEdit(code);
+                          }}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
@@ -1058,11 +1297,20 @@ export default function ChargeCodeManagerPage() {
         <DialogContent className="max-w-lg max-h-[90vh] overflow-hidden">
           <DialogHeader className="pb-2">
             <DialogTitle>
-              {editTarget ? `Edit: ${editTarget.code}` : 'Add Charge Code'}
+              {editTarget
+                ? `Edit: ${editTarget.code}`
+                : copySource
+                  ? `Copy: ${copySource.code}`
+                  : 'Add Charge Code'}
             </DialogTitle>
           </DialogHeader>
           {dialogOpen && (
-            <ChargeCodeForm editTarget={editTarget} onClose={closeDialog} />
+            <ChargeCodeForm
+              editTarget={editTarget}
+              copySource={copySource}
+              existingChargeCodes={chargeCodes ?? []}
+              onClose={closeDialog}
+            />
           )}
         </DialogContent>
       </Dialog>

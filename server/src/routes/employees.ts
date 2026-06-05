@@ -152,16 +152,16 @@ function ensureEmployeeTerminationSchema(): Promise<void> {
         ADD COLUMN IF NOT EXISTS termination_notes TEXT,
         ADD COLUMN IF NOT EXISTS terminated_by_user_id INTEGER REFERENCES users(id),
         ADD COLUMN IF NOT EXISTS terminated_by_name TEXT,
-        ADD COLUMN IF NOT EXISTS terminated_at TIMESTAMP;
-
+        ADD COLUMN IF NOT EXISTS terminated_at TIMESTAMP
+    `).then(() => pool.query(`
       ALTER TABLE users
         ADD COLUMN IF NOT EXISTS access_status TEXT NOT NULL DEFAULT 'ACTIVE',
         ADD COLUMN IF NOT EXISTS access_exception_reason TEXT,
         ADD COLUMN IF NOT EXISTS access_exception_approved_by_user_id INTEGER REFERENCES users(id),
         ADD COLUMN IF NOT EXISTS access_exception_approved_by_name TEXT,
         ADD COLUMN IF NOT EXISTS access_exception_approved_at TIMESTAMP,
-        ADD COLUMN IF NOT EXISTS access_exception_expires_at TIMESTAMP;
-    `).then(() => undefined).catch((error) => {
+        ADD COLUMN IF NOT EXISTS access_exception_expires_at TIMESTAMP
+    `)).then(() => undefined).catch((error) => {
       employeeTerminationSchemaReady = null;
       throw error;
     });
@@ -189,12 +189,15 @@ function ensureChargeCodeAssignmentTable(): Promise<void> {
           charge_code_id INTEGER NOT NULL REFERENCES charge_codes(id) ON DELETE CASCADE,
           employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
           assigned_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          is_default BOOLEAN NOT NULL DEFAULT FALSE,
           assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           UNIQUE (charge_code_id, employee_id)
         )
       `);
+      await pool.query(`ALTER TABLE charge_code_employee_assignments ADD COLUMN IF NOT EXISTS is_default BOOLEAN NOT NULL DEFAULT FALSE`);
       await pool.query(`CREATE INDEX IF NOT EXISTS charge_code_employee_assignments_charge_code_idx ON charge_code_employee_assignments(charge_code_id)`);
       await pool.query(`CREATE INDEX IF NOT EXISTS charge_code_employee_assignments_employee_idx ON charge_code_employee_assignments(employee_id)`);
+      await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS charge_code_employee_assignments_one_default_per_employee_idx ON charge_code_employee_assignments(employee_id) WHERE is_default = TRUE`);
     })().catch((error) => {
       chargeCodeAssignmentTableReady = null;
       throw error;
@@ -211,6 +214,12 @@ function normalizeEmployeeChargeCodeIds(value: unknown): number[] | null {
   return Array.from(new Set(ids)).sort((a, b) => a - b);
 }
 
+function normalizeOptionalPositiveInteger(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : NaN;
+}
+
 async function getEmployeeAssignedChargeCodes(employeeId: number) {
   await ensureChargeCodeAssignmentTable();
   return pool.query(
@@ -224,6 +233,7 @@ async function getEmployeeAssignedChargeCodes(employeeId: number) {
        cc.billable,
        cc.requires_approval AS "requiresApproval",
        cc.active,
+       cca.is_default AS "isDefault",
        cca.assigned_at AS "assignedAt"
      FROM charge_code_employee_assignments cca
      JOIN charge_codes cc ON cc.id = cca.charge_code_id
@@ -420,6 +430,7 @@ router.get('/:id/charge-codes', authenticateToken, async (req: Request, res: Res
     res.json({
       employeeId,
       assignedChargeCodeIds: assignedChargeCodes.map((code: any) => code.id),
+      defaultChargeCodeId: assignedChargeCodes.find((code: any) => code.isDefault)?.id ?? null,
       assignedChargeCodes,
     });
   } catch (error) {
@@ -440,6 +451,15 @@ router.put('/:id/charge-codes', authenticateToken, requireRole('ADMIN'), async (
     res.status(400).json({ error: 'chargeCodeIds must be an array' });
     return;
   }
+  const defaultChargeCodeId = normalizeOptionalPositiveInteger(req.body?.defaultChargeCodeId);
+  if (Number.isNaN(defaultChargeCodeId)) {
+    res.status(400).json({ error: 'defaultChargeCodeId must be a positive integer or null' });
+    return;
+  }
+  if (defaultChargeCodeId !== null && !nextChargeCodeIds.includes(defaultChargeCodeId)) {
+    res.status(400).json({ error: 'Default charge code must be assigned to the employee' });
+    return;
+  }
 
   try {
     const employeeRows = await pool.query(
@@ -453,12 +473,19 @@ router.put('/:id/charge-codes', authenticateToken, requireRole('ADMIN'), async (
     }
 
     if (nextChargeCodeIds.length > 0) {
-      const validRows = await pool.query(`SELECT id FROM charge_codes WHERE id = ANY($1::int[])`, [nextChargeCodeIds]);
+      const validRows = await pool.query(`SELECT id, active FROM charge_codes WHERE id = ANY($1::int[])`, [nextChargeCodeIds]);
       const validIds = new Set(validRows.map((row: any) => row.id));
       const missingIds = nextChargeCodeIds.filter((chargeCodeId) => !validIds.has(chargeCodeId));
       if (missingIds.length > 0) {
         res.status(400).json({ error: `Unknown charge code id(s): ${missingIds.join(', ')}` });
         return;
+      }
+      if (defaultChargeCodeId !== null) {
+        const defaultRow = validRows.find((row: any) => row.id === defaultChargeCodeId);
+        if (!defaultRow?.active) {
+          res.status(400).json({ error: 'Default charge code must be active' });
+          return;
+        }
       }
     }
 
@@ -471,10 +498,11 @@ router.put('/:id/charge-codes', authenticateToken, requireRole('ADMIN'), async (
       await client.query(`DELETE FROM charge_code_employee_assignments WHERE employee_id = $1`, [employeeId]);
       if (nextChargeCodeIds.length > 0) {
         await client.query(
-          `INSERT INTO charge_code_employee_assignments (charge_code_id, employee_id, assigned_by_user_id)
-           SELECT unnest($1::int[]), $2, $3
+          `INSERT INTO charge_code_employee_assignments (charge_code_id, employee_id, assigned_by_user_id, is_default)
+           SELECT t.charge_code_id, $2, $3, t.charge_code_id = $4
+           FROM unnest($1::int[]) AS t(charge_code_id)
            ON CONFLICT (charge_code_id, employee_id) DO NOTHING`,
-          [nextChargeCodeIds, employeeId, req.user?.id ?? null]
+          [nextChargeCodeIds, employeeId, req.user?.id ?? null, defaultChargeCodeId]
         );
       }
       await client.query('COMMIT');
@@ -501,6 +529,10 @@ router.put('/:id/charge-codes', authenticateToken, requireRole('ADMIN'), async (
           before: beforeIds,
           after: assignedChargeCodes.map((code: any) => code.id),
         },
+        defaultChargeCodeId: {
+          before: beforeCodes.find((code: any) => code.isDefault)?.id ?? null,
+          after: assignedChargeCodes.find((code: any) => code.isDefault)?.id ?? null,
+        },
       },
       meta: { employeeName: employee.name },
       ipAddress: req.ip ?? null,
@@ -515,6 +547,7 @@ router.put('/:id/charge-codes', authenticateToken, requireRole('ADMIN'), async (
     res.json({
       employeeId,
       assignedChargeCodeIds: assignedChargeCodes.map((code: any) => code.id),
+      defaultChargeCodeId: assignedChargeCodes.find((code: any) => code.isDefault)?.id ?? null,
       assignedChargeCodes,
     });
   } catch (error) {

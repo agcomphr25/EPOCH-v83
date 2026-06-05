@@ -1336,7 +1336,7 @@ export interface IStorage {
   ): Promise<PartsRequest>;
   deletePartsRequest(id: number): Promise<void>;
   getPartsRequestsByDepartment(departmentId: number): Promise<PartsRequest[]>;
-  getPartsRequestsByUser(username: string): Promise<PartsRequest[]>;
+  getPartsRequestsByUser(username: string, userId?: number | null, employeeId?: number | null): Promise<PartsRequest[]>;
   getConsolidatedPartsNeeds(): Promise<PartsRequest[]>; // All PENDING/APPROVED requests for inventory manager
 
   // Departments CRUD
@@ -7197,12 +7197,20 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(partsRequests.requestDate));
   }
 
-  async getPartsRequestsByUser(username: string): Promise<PartsRequest[]> {
+  async getPartsRequestsByUser(username: string, userId?: number | null, employeeId?: number | null): Promise<PartsRequest[]> {
+    const participantFilters = [eq(partsRequests.requestedBy, username)];
+    if (userId) {
+      participantFilters.push(eq(partsRequests.requestedByUserId, userId));
+    }
+    if (employeeId) {
+      participantFilters.push(eq(partsRequests.requestedForEmployeeId, employeeId));
+    }
+
     return await db
       .select()
       .from(partsRequests)
       .where(and(
-        eq(partsRequests.requestedBy, username),
+        or(...participantFilters),
         eq(partsRequests.isActive, true)
       ))
       .orderBy(desc(partsRequests.requestDate));
@@ -22059,8 +22067,8 @@ export class DatabaseStorage implements IStorage {
     orderData: InsertOrderDraft,
     finalizedBy?: string
   ): Promise<AllOrder> {
-    // If status is PENDING_SIGNATURE, don't auto-route to production
-    const isPendingSignature = orderData.status === 'PENDING_SIGNATURE';
+    // PENDING_SIGNATURE is retired for new P1 orders.
+    const requestedStatus = orderData.status === 'PENDING_SIGNATURE' ? 'FINALIZED' : orderData.status;
     
     // Special handling for orders with no stock model - route directly to Shipping QC (unless pending signature)
     const hasNoStockModel =
@@ -22072,28 +22080,33 @@ export class DatabaseStorage implements IStorage {
     let barcode: string;
     let status: string;
 
-    if (isPendingSignature) {
+    if (orderData.currentDepartment) {
       console.log(
-        `📝 Order ${orderData.orderId} created with PENDING_SIGNATURE status - awaiting customer confirmation`
+        `Order ${orderData.orderId} created with status "${requestedStatus || 'FINALIZED'}" in department "${orderData.currentDepartment}"`
       );
-      currentDepartment = orderData.currentDepartment || 'Awaiting Customer Signature';
-      barcode = orderData.barcode || `PENDING-${orderData.orderId}`;
-      status = 'PENDING_SIGNATURE';
+      currentDepartment = orderData.currentDepartment;
+      barcode = orderData.barcode || `P1-${orderData.orderId}`;
+      status = requestedStatus || 'FINALIZED';
     } else if (hasNoStockModel) {
       console.log(
-        `🚀 CREATE APPROVED: Order ${orderData.orderId} has no stock model - routing directly to Shipping QC`
+        `CREATE APPROVED: Order ${orderData.orderId} has no stock model - routing to P1 Production Queue`
       );
-      currentDepartment = 'Shipping QC';
-      barcode = orderData.barcode || `NOSTOCK-${orderData.orderId}`;
-      status = ALL_ORDERS_STATUS.IN_PROGRESS;
+      currentDepartment = ALL_ORDERS_DEPARTMENT.P1_PRODUCTION_QUEUE;
+      barcode = orderData.barcode || `P1-${orderData.orderId}`;
+      status = requestedStatus || 'FINALIZED';
     } else {
       console.log(
         `✅ CREATE APPROVED: Order ${orderData.orderId} has valid stock model "${orderData.modelId}" - going directly to P1 Production Queue`
       );
       currentDepartment = ALL_ORDERS_DEPARTMENT.P1_PRODUCTION_QUEUE;
       barcode = orderData.barcode || `P1-${orderData.orderId}`;
-      status = ALL_ORDERS_STATUS.FINALIZED;
+      status = requestedStatus || 'FINALIZED';
     }
+
+    const canonicalCreateState = deriveCanonicalAllOrdersState({
+      status,
+      currentDepartment,
+    });
 
     // Create the finalized order data directly - exclude id field explicitly
     const finalizedOrderData = {
@@ -22124,10 +22137,10 @@ export class DatabaseStorage implements IStorage {
       flattopPriceOverride: (orderData.flattopPriceOverride !== '' && orderData.flattopPriceOverride != null) ? Number(orderData.flattopPriceOverride) : null,
       shipping: (orderData.shipping !== '' && orderData.shipping != null) ? Number(orderData.shipping) : 0,
       tikkaOption: orderData.tikkaOption,
-      status: status,
+      status: canonicalCreateState.status,
       statusId: orderData.statusId,
       barcode: barcode,
-      currentDepartment: currentDepartment,
+      currentDepartment: canonicalCreateState.currentDepartment,
       currentDepartmentId: orderData.currentDepartmentId,
       departmentHistory: [],
       scrappedQuantity: 0,
@@ -22236,21 +22249,6 @@ export class DatabaseStorage implements IStorage {
       `🎯 AUTO-ADDED TO P1 PRODUCTION QUEUE: Order ${orderData.orderId} with stock model "${orderData.modelId}"`
     );
 
-    // Check if this order needs a signature email (no stock model + no review)
-    if (hasNoStockModel && orderData.isCustomOrder === 'no') {
-      console.log(
-        `📧 Order ${orderData.orderId} has no stock model and no review needed - triggering signature email`
-      );
-      
-      // Trigger signature email in the background
-      this.sendSignatureEmailForOrder(finalizedOrder.orderId).catch((error) => {
-        console.error(
-          `❌ Failed to send signature email for order ${finalizedOrder.orderId}:`,
-          error
-        );
-      });
-    }
-
     return finalizedOrder;
   }
 
@@ -22280,10 +22278,10 @@ export class DatabaseStorage implements IStorage {
 
     if (hasNoStockModel) {
       console.log(
-        `🚀 FINALIZE APPROVED: Order ${orderId} has no stock model - routing directly to Shipping QC (ready-to-sell product)`
+        `CREATE APPROVED: Order ${orderId} has no stock model - routing to P1 Production Queue`
       );
-      currentDepartment = 'Shipping QC';
-      barcode = `NOSTOCK-${orderId}`; // Force NOSTOCK barcode for ready-to-sell products
+      currentDepartment = 'P1 Production Queue';
+      barcode = draft.barcode || `P1-${orderId}`;
     } else {
       console.log(
         `✅ FINALIZE APPROVED: Order ${orderId} has valid stock model "${draft.modelId}" - proceeding to P1 Production Queue`
@@ -22405,31 +22403,7 @@ export class DatabaseStorage implements IStorage {
     // Remove from order_drafts table
     await db.delete(orderDrafts).where(eq(orderDrafts.orderId, orderId));
 
-    // Log the finalization result based on department
-    if (hasNoStockModel) {
-      console.log(
-        `🚀 FINALIZED TO SHIPPING QC: Order ${orderId} (ready-to-sell product) sent to Shipping QC department`
-      );
-    } else {
-      console.log(
-        `🎯 FINALIZED TO PRODUCTION: Order ${orderId} sent to P1 Production Queue for manufacturing`
-      );
-    }
-
-    // Check if this order needs a signature email (no stock model + no review)
-    if (hasNoStockModel && draft.isCustomOrder === 'no') {
-      console.log(
-        `📧 Order ${orderId} has no stock model and no review needed - triggering signature email`
-      );
-      
-      // Trigger signature email in the background
-      this.sendSignatureEmailForOrder(finalizedOrder.orderId).catch((error) => {
-        console.error(
-          `❌ Failed to send signature email for order ${finalizedOrder.orderId}:`,
-          error
-        );
-      });
-    }
+    console.log(`FINALIZED TO PRODUCTION: Order ${orderId} sent to P1 Production Queue`);
 
     return finalizedOrder;
   }
@@ -24269,18 +24243,6 @@ export class DatabaseStorage implements IStorage {
       sortOrder: index + 1,
       isActive: true
     }));
-
-    // Ensure "Awaiting Customer Signature" is always available as an option
-    const awaitingSignature = 'Awaiting Customer Signature';
-    if (!departments.some((d: any) => d.name === awaitingSignature)) {
-      departments.push({
-        id: departments.length + 1,
-        name: awaitingSignature,
-        displayName: awaitingSignature,
-        sortOrder: departments.length + 1,
-        isActive: true
-      });
-    }
 
     return departments;
   }

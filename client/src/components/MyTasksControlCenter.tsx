@@ -45,10 +45,12 @@ import {
   RefreshCw,
   ExternalLink,
   Loader2,
+  Receipt,
 } from 'lucide-react';
 import { format, isAfter, isBefore, startOfDay } from 'date-fns';
 import { Link } from 'wouter';
 import PendingSignatureTasks from './PendingSignatureTasks';
+import P2InvoicePreviewButton from './p2/P2InvoicePreviewButton';
 
 interface AssignedTask {
   id: string;
@@ -87,7 +89,7 @@ interface MyTasksResponse {
 
 interface TimekeepingApprovalTask {
   id: string;
-  type: 'pto_approval' | 'punch_correction_approval' | 'salaried_timesheet_approval' | 'hourly_timesheet_approval' | 'hourly_timesheet_blocked' | 'salaried_timesheet_blocked' | 'forklift_evaluation';
+  type: 'pto_approval' | 'punch_correction_approval' | 'salaried_timesheet_approval' | 'hourly_timesheet_approval' | 'hourly_timesheet_blocked' | 'salaried_timesheet_blocked' | 'forklift_evaluation' | 'p2_invoice_posting_group';
   title: string;
   description: string;
   employeeName: string;
@@ -103,6 +105,28 @@ interface TimekeepingApprovalTask {
   requestType?: string;
   writtenScore?: number;
   testType?: string;
+  customerId?: string;
+  customerName?: string;
+  packingSlipCount?: number;
+  oldestCreatedAt?: string;
+  newestCreatedAt?: string;
+  graceDays?: number;
+  overdueDays?: number;
+  items?: P2BillingTaskItem[];
+}
+
+interface P2BillingTaskItem {
+  id: string;
+  packingSlipNumber: string;
+  poNumber: string | null;
+  lotNumberId: string | null;
+  shipmentNumber: string | null;
+  createdAt: string;
+  shipDate: string | null;
+  status: string | null;
+  invoiceId: string | null;
+  invoiceNumber: string | null;
+  invoiceStatus: string | null;
 }
 
 interface TimekeepingTasksResponse {
@@ -205,17 +229,20 @@ export default function MyTasksControlCenter({
 
   const tasks = tasksData?.tasks || [];
   const timekeepingTasks = timekeepingTasksError ? [] : timekeepingTasksData?.tasks || [];
+  const billingTasks = timekeepingTasks.filter((task) => task.type === 'p2_invoice_posting_group');
+  const workflowTimekeepingTasks = timekeepingTasks.filter((task) => task.type !== 'p2_invoice_posting_group');
   const approvalTasks = approvalTasksData?.tasks || [];
   const baseStats = tasksData?.stats || { total: 0, completed: 0, pending: 0, overdue: 0 };
   const sigPending = signatureStats?.pending || 0;
   const timekeepingPending = timekeepingTasksError ? 0 : timekeepingTasksData?.stats?.pending || 0;
+  const timekeepingOverdue = timekeepingTasksError ? 0 : timekeepingTasksData?.stats?.overdue || 0;
   const approvalPending = approvalTasksData?.stats?.pending || 0;
   const approvalOverdue = approvalTasksData?.stats?.overdue || 0;
   const stats = {
     total: baseStats.total + sigPending + timekeepingPending + approvalPending,
     completed: baseStats.completed,
     pending: baseStats.pending + sigPending + timekeepingPending + approvalPending,
-    overdue: baseStats.overdue + approvalOverdue,
+    overdue: baseStats.overdue + timekeepingOverdue + approvalOverdue,
   };
 
   const filteredTasks = tasks.filter((task) => {
@@ -316,7 +343,9 @@ export default function MyTasksControlCenter({
 
               <ApprovalRequestTasks tasks={approvalTasks} compact={true} />
 
-              <TimekeepingApprovalTasks tasks={timekeepingTasks} compact={true} />
+              <P2BillingTasks tasks={billingTasks} compact={true} />
+
+              <TimekeepingApprovalTasks tasks={workflowTimekeepingTasks} compact={true} />
 
               {filteredTasks.some((t) => !t.isCompleted) && (
                 <div className="space-y-2">
@@ -422,7 +451,9 @@ export default function MyTasksControlCenter({
 
         <ApprovalRequestTasks tasks={approvalTasks} />
 
-        <TimekeepingApprovalTasks tasks={timekeepingTasks} />
+        <P2BillingTasks tasks={billingTasks} />
+
+        <TimekeepingApprovalTasks tasks={workflowTimekeepingTasks} />
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList>
@@ -587,6 +618,142 @@ export default function MyTasksControlCenter({
         </Tabs>
       </CardContent>
     </Card>
+  );
+}
+
+function P2BillingTasks({
+  tasks,
+  compact = false,
+}: {
+  tasks: TimekeepingApprovalTask[];
+  compact?: boolean;
+}) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const snoozeMutation = useMutation({
+    mutationFn: (customerId: string) =>
+      apiRequest(`/api/timekeeping/my-tasks/p2-billing/${encodeURIComponent(customerId)}/snooze`, {
+        method: 'POST',
+      }),
+    onSuccess: () => {
+      toast({
+        title: 'Billing task snoozed',
+        description: 'It will return tomorrow if the invoice still has not been posted.',
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/my-tasks'] });
+    },
+    onError: (err: Error) => {
+      toast({
+        title: 'Unable to snooze billing task',
+        description: err.message || 'Please try again.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  if (tasks.length === 0) return null;
+
+  const visibleTasks = compact ? tasks.slice(0, 2) : tasks;
+
+  return (
+    <div className="space-y-2" data-testid="p2-billing-tasks">
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-muted-foreground font-medium">
+          Billing Follow-up
+        </p>
+        <Badge variant="outline">{tasks.reduce((sum, task) => sum + Number(task.packingSlipCount || 0), 0)}</Badge>
+      </div>
+      {visibleTasks.map((task) => {
+        const items = task.items || [];
+        return (
+          <div
+            key={task.id}
+            className={`space-y-3 p-3 border rounded-lg ${
+              task.priority === 'overdue'
+                ? 'bg-red-50/70 border-red-200'
+                : 'bg-amber-50/70 border-amber-200'
+            }`}
+          >
+            <div className="flex items-start gap-3">
+              {task.priority === 'overdue' ? (
+                <AlertTriangle className="h-4 w-4 mt-0.5 text-red-700 shrink-0" />
+              ) : (
+                <Receipt className="h-4 w-4 mt-0.5 text-amber-700 shrink-0" />
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold truncate">{task.title}</p>
+                <p className="text-xs text-muted-foreground truncate">{task.description}</p>
+                {task.oldestCreatedAt && (
+                  <p className="text-xs text-muted-foreground">
+                    Oldest packing slip: {format(new Date(task.oldestCreatedAt), 'MMM d, yyyy')}
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => task.customerId && snoozeMutation.mutate(task.customerId)}
+                  disabled={!task.customerId || snoozeMutation.isPending}
+                >
+                  Snooze
+                </Button>
+                <Link href={task.actionUrl}>
+                  <Button variant="outline" size="sm">
+                    Review
+                  </Button>
+                </Link>
+              </div>
+            </div>
+
+            {!compact && items.length > 0 && (
+              <div className="space-y-2">
+                {items.slice(0, 5).map((item) => (
+                  <div key={item.id} className="flex items-center gap-2 rounded-md bg-white/70 border px-2 py-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate">
+                        {item.packingSlipNumber}
+                        {item.poNumber ? ` - PO ${item.poNumber}` : ''}
+                      </p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {item.invoiceNumber
+                          ? `Invoice ${item.invoiceNumber} is ${item.invoiceStatus || 'not posted'}`
+                          : 'No invoice created yet'}
+                      </p>
+                    </div>
+                    <Link href={`/p2/packing-slip/${item.id}`}>
+                      <Button variant="ghost" size="sm">
+                        <ExternalLink className="h-4 w-4" />
+                      </Button>
+                    </Link>
+                    {item.invoiceId ? (
+                      <Link href={`/finance/invoices/${item.invoiceId}`}>
+                        <Button variant="outline" size="sm">
+                          Open Invoice
+                        </Button>
+                      </Link>
+                    ) : (
+                      <P2InvoicePreviewButton
+                        packingSlipId={item.id}
+                        size="sm"
+                        label="Create Invoice"
+                        onCreated={() => queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/my-tasks'] })}
+                      />
+                    )}
+                  </div>
+                ))}
+                {items.length > 5 && (
+                  <p className="text-xs text-muted-foreground px-1">
+                    {items.length - 5} more packing slip{items.length - 5 === 1 ? '' : 's'} need review.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 

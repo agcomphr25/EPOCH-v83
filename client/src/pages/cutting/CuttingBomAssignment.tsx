@@ -84,6 +84,7 @@ type PacketBOMMaterial = {
   commonName: string | null;
   quantityNeeded: number;
   rollsRequired: number;
+  squareMetersRequired?: number | null;
 };
 
 type PacketBOMPart = {
@@ -117,6 +118,14 @@ type WizardPart = {
   quantityNeeded: number;
   fabricId: number | null;
   fabricName: string;
+};
+
+type PacketBomMaterialFormRow = {
+  fabricType: string;
+  commonName: string;
+  quantityNeeded: number;
+  rollsRequired: number;
+  squareMetersRequired: number | "";
 };
 
 type CutProgram = {
@@ -155,7 +164,7 @@ export default function CuttingBomAssignment() {
     yieldPerCut: "4",
     squareMetersPerCut: "0.5",
     wasteFactor: "0.05",
-    materials: [] as { fabricType: string; commonName: string; quantityNeeded: number }[],
+    materials: [] as PacketBomMaterialFormRow[],
     parts: [] as { partNumber: string; partDescription: string; quantity: number }[],
     cuts: [] as CutDefinition[],
   });
@@ -492,6 +501,55 @@ export default function CuttingBomAssignment() {
     ));
   };
 
+  const addPacketBomMaterial = () => {
+    setPacketBomForm(prev => ({
+      ...prev,
+      materials: [
+        ...prev.materials,
+        {
+          fabricType: "",
+          commonName: "",
+          quantityNeeded: 1,
+          rollsRequired: 1,
+          squareMetersRequired: "",
+        },
+      ],
+    }));
+  };
+
+  const updatePacketBomMaterial = (index: number, field: keyof PacketBomMaterialFormRow, value: string | number) => {
+    setPacketBomForm(prev => ({
+      ...prev,
+      materials: prev.materials.map((material, materialIndex) =>
+        materialIndex === index ? { ...material, [field]: value } : material
+      ),
+    }));
+  };
+
+  const selectPacketBomMaterialFabric = (index: number, fabricId: string) => {
+    const fabric = fabricItems.find(item => String(item.id) === fabricId);
+    if (!fabric) return;
+    setPacketBomForm(prev => ({
+      ...prev,
+      materials: prev.materials.map((material, materialIndex) =>
+        materialIndex === index
+          ? {
+              ...material,
+              fabricType: fabric.name || fabric.fabric || "",
+              commonName: fabric.agPartNumber || fabric.fabric || fabric.name || "",
+            }
+          : material
+      ),
+    }));
+  };
+
+  const removePacketBomMaterial = (index: number) => {
+    setPacketBomForm(prev => ({
+      ...prev,
+      materials: prev.materials.filter((_, materialIndex) => materialIndex !== index),
+    }));
+  };
+
   const handleAddPart = () => {
     if (!newPartForm.partNumber) return;
     setPacketBomForm(prev => ({
@@ -591,7 +649,15 @@ export default function CuttingBomAssignment() {
       yieldPerCut: totalYield > 0 ? totalYield : (parseInt(packetBomForm.yieldPerCut) || 4),
       squareMetersPerCut: totalSqMeters > 0 ? totalSqMeters : (parseFloat(packetBomForm.squareMetersPerCut) || 0.5),
       wasteFactor: parseFloat(packetBomForm.wasteFactor) || 0.05,
-      materials: packetBomForm.materials,
+      materials: packetBomForm.materials
+        .filter(material => material.fabricType.trim())
+        .map(material => ({
+          fabricType: material.fabricType.trim(),
+          commonName: material.commonName.trim(),
+          quantityNeeded: material.quantityNeeded || 1,
+          rollsRequired: material.rollsRequired || 1,
+          squareMetersRequired: material.squareMetersRequired === "" ? undefined : Number(material.squareMetersRequired),
+        })),
       parts: partsData,
       cutPrograms: programsData,
       cuts: packetBomForm.cuts,
@@ -625,6 +691,8 @@ export default function CuttingBomAssignment() {
         fabricType: m.fabricType,
         commonName: m.commonName || "",
         quantityNeeded: m.quantityNeeded || 1,
+        rollsRequired: m.rollsRequired || 1,
+        squareMetersRequired: m.squareMetersRequired ?? "",
       })) || [],
       parts: bom.parts?.map(p => ({
         partNumber: p.partNumber,
@@ -764,6 +832,30 @@ export default function CuttingBomAssignment() {
                           <p className="font-medium">{bom.cutPrograms?.length || 0} programs</p>
                         </div>
                       </div>
+
+                      {/* Fabric requirements from Step 2 */}
+                      {bom.materials && bom.materials.length > 0 && (
+                        <div>
+                          <Label className="text-muted-foreground mb-2 block">Fabric Requirements</Label>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            {bom.materials.map((material: any, idx) => (
+                              <div key={idx} className="rounded border bg-muted/30 p-2 text-sm">
+                                <div className="flex items-center justify-between gap-2">
+                                  <div>
+                                    <p className="font-medium">{material.fabricType}</p>
+                                    {material.commonName && <p className="text-xs text-muted-foreground font-mono">{material.commonName}</p>}
+                                  </div>
+                                  <Badge variant="outline">Qty {material.quantityNeeded || 1}</Badge>
+                                </div>
+                                <div className="mt-1 flex flex-wrap gap-1 text-xs text-muted-foreground">
+                                  <span>{material.rollsRequired || 1} roll(s)</span>
+                                  {material.squareMetersRequired != null && <span>{material.squareMetersRequired} sq m</span>}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Parts from Step 2 */}
                       {bom.parts && bom.parts.length > 0 && (
@@ -1096,6 +1188,96 @@ export default function CuttingBomAssignment() {
                   </div>
                 </div>
               )}
+
+              <div className="border rounded-lg p-4 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <Label className="text-base font-medium">BOM Fabric Requirements</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Add one row for each fabric required by this packet. Use multiple rows when the packet uses more than one fabric.
+                    </p>
+                  </div>
+                  <Button type="button" variant="outline" size="sm" onClick={addPacketBomMaterial} data-testid="button-add-bom-fabric">
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add Fabric
+                  </Button>
+                </div>
+
+                {packetBomForm.materials.length === 0 ? (
+                  <div className="border border-dashed rounded-lg p-4 text-sm text-muted-foreground text-center">
+                    No BOM fabric rows yet. Add every fabric that must be traced for this packet.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {packetBomForm.materials.map((material, index) => (
+                      <div key={index} className="grid grid-cols-12 gap-2 items-end border rounded-lg p-3">
+                        <div className="col-span-12 md:col-span-5 space-y-1">
+                          <Label className="text-xs">Fabric entry</Label>
+                          <Select
+                            value=""
+                            onValueChange={(value) => selectPacketBomMaterialFabric(index, value)}
+                          >
+                            <SelectTrigger className="h-8 text-sm" data-testid={`select-bom-fabric-${index}`}>
+                              <SelectValue placeholder={material.fabricType || "Select fabric"} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {fabricItems.map((fabric) => (
+                                <SelectItem key={fabric.id} value={String(fabric.id)}>
+                                  {(fabric.agPartNumber || "No part #") + " - " + (fabric.name || fabric.fabric)}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {(material.commonName || material.fabricType) && (
+                            <p className="text-xs text-muted-foreground">
+                              {material.commonName && <span className="font-mono">{material.commonName}</span>}
+                              {material.commonName && material.fabricType && " - "}
+                              {material.fabricType}
+                            </p>
+                          )}
+                        </div>
+                        <div className="col-span-4 md:col-span-2 space-y-1">
+                          <Label className="text-xs">Qty / packet</Label>
+                          <Input
+                            type="number"
+                            min="1"
+                            value={material.quantityNeeded}
+                            onChange={(e) => updatePacketBomMaterial(index, "quantityNeeded", parseInt(e.target.value) || 1)}
+                            className="h-8 text-sm"
+                          />
+                        </div>
+                        <div className="col-span-4 md:col-span-2 space-y-1">
+                          <Label className="text-xs">Rolls</Label>
+                          <Input
+                            type="number"
+                            min="1"
+                            value={material.rollsRequired}
+                            onChange={(e) => updatePacketBomMaterial(index, "rollsRequired", parseInt(e.target.value) || 1)}
+                            className="h-8 text-sm"
+                          />
+                        </div>
+                        <div className="col-span-4 md:col-span-2 space-y-1">
+                          <Label className="text-xs">Sq m</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={material.squareMetersRequired}
+                            onChange={(e) => updatePacketBomMaterial(index, "squareMetersRequired", e.target.value === "" ? "" : Number(e.target.value))}
+                            className="h-8 text-sm"
+                            placeholder="Optional"
+                          />
+                        </div>
+                        <div className="col-span-12 md:col-span-1 flex md:justify-end">
+                          <Button type="button" variant="ghost" size="sm" onClick={() => removePacketBomMaterial(index)} data-testid={`button-remove-bom-fabric-${index}`}>
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

@@ -250,6 +250,11 @@ async function calculateOrderPricing(
 
 // POST /api/followup-orders - Create and send a follow-up order
 router.post('/', async (req, res) => {
+  return res.status(410).json({
+    error: 'Customer signature requests have been retired. Orders are finalized directly and sent to P1 Production Queue.',
+    code: 'CUSTOMER_SIGNATURE_RETIRED',
+  });
+
   try {
     const { orderId } = req.body;
 
@@ -1130,6 +1135,11 @@ router.get('/:id', async (req, res) => {
 // POST /api/followup-orders/:id/sign - Submit signature for follow-up order
 // Accepts EITHER publicSignatureId (new) OR signatureToken (legacy)
 router.post('/:id/sign', async (req, res) => {
+  return res.status(410).json({
+    error: 'Customer signatures have been retired. Orders are finalized directly and sent to P1 Production Queue.',
+    code: 'CUSTOMER_SIGNATURE_RETIRED',
+  });
+
   try {
     const id = parseInt(req.params.id);
     console.log(`📝 Sign request received for followup order ID: ${id}`);
@@ -1334,6 +1344,11 @@ router.post('/:id/sign', async (req, res) => {
 // If the order has changed since the snapshot was created, this will REFUSE to resend
 // Use sendUpdatedOrderForSignature instead for changed orders
 router.post('/:orderId/resend-email', async (req, res) => {
+  return res.status(410).json({
+    error: 'Customer signature emails have been retired. Use the sales order PDF email flow instead.',
+    code: 'CUSTOMER_SIGNATURE_RETIRED',
+  });
+
   try {
     const { orderId } = req.params;
     console.log(`📧 [RESEND] Starting resend-email for order ${orderId}`);
@@ -1588,6 +1603,11 @@ router.post('/:orderId/resend-email', async (req, res) => {
 // Supersedes any existing unsigned followup order for this order
 // Use this when order data has changed and customer must re-approve
 router.post('/:orderId/send-updated-order', async (req, res) => {
+  return res.status(410).json({
+    error: 'Customer signature requests have been retired. Use the sales order PDF email flow instead.',
+    code: 'CUSTOMER_SIGNATURE_RETIRED',
+  });
+
   try {
     const { orderId } = req.params;
     console.log(`📧 [UPDATED-ORDER] Starting send-updated-order for order ${orderId}`);

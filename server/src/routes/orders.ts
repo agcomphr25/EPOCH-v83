@@ -802,7 +802,7 @@ router.get('/draft/:id', async (req: Request, res: Response) => {
 // each blocked attempt is written to order_activity_events for observability.
 const ordersBeingFinalized = new Set<string>();
 
-// Create order - with or without signature requirement based on whether stock is selected
+// Create order directly into production and email the customer a Sales Order PDF.
 router.post('/finalized', async (req: Request, res: Response) => {
   // Declare outside try so finally can release the guard reliably
   let incomingOrderId: string | null = null;
@@ -829,16 +829,8 @@ router.post('/finalized', async (req: Request, res: Response) => {
     }
     if (incomingOrderId) ordersBeingFinalized.add(incomingOrderId);
     
-    // Determine if stock is selected (has modelId and it's not "no_stock" or similar)
-    // Normalize the modelId for checking (trim whitespace and convert to lowercase)
-    const normalizedModelId = orderData.modelId?.trim().toLowerCase() || '';
-    const noStockIdentifiers = ['', 'no_stock', 'no stock', 'none'];
-    const hasStock: boolean = !noStockIdentifiers.includes(normalizedModelId);
-    
-    // If has stock: PENDING_SIGNATURE status, awaiting customer signature
-    // If no stock: IN_PROGRESS status, skip production pipeline, go directly to Shipping QC
-    const orderStatus = hasStock ? 'PENDING_SIGNATURE' : 'IN_PROGRESS';
-    const orderDepartment = hasStock ? 'Awaiting Customer Signature' : 'Shipping QC';
+    const orderStatus = 'FINALIZED';
+    const orderDepartment = 'P1 Production Queue';
     
     // Compute bottomMetalSource upfront to set it on creation (no interim incorrect state)
     const bottomMetalSource = computeBottomMetalSource(orderData.features as Record<string, any>);
@@ -872,11 +864,7 @@ router.post('/finalized', async (req: Request, res: Response) => {
       console.warn('⚠️ reconcileRailDemand skipped on order create:', railErr?.message);
     }
     
-    if (hasStock) {
-      console.log(`📧 Order ${order.orderId} created with PENDING_SIGNATURE status - sending confirmation email to customer...`);
-    } else {
-      console.log(`📧 Order ${order.orderId} created as IN_PROGRESS (no stock) - skipping production, going to Shipping QC - sending thank you email to customer...`);
-    }
+    console.log(`Order ${order.orderId} created as FINALIZED and routed to P1 Production Queue - sending Sales Order PDF to customer...`);
     
     // Track email outcome for API response (declared outside inner try block for scoping)
     let emailOutcome: OrderConfirmationOutcome | undefined;
@@ -884,9 +872,6 @@ router.post('/finalized', async (req: Request, res: Response) => {
     
     // Automatically create followup order and send email
     try {
-      // Import dependencies
-      const { nanoid } = await import('nanoid');
-      const { sendFollowupOrderEmail } = await import('../../utils/followupOrderEmail');
       const { sendThankYouOrderEmail } = await import('../../utils/thankYouOrderEmail');
       const fs = await import('fs');
       const path = await import('path');
@@ -920,7 +905,70 @@ router.post('/finalized', async (req: Request, res: Response) => {
           emailError,
         });
       }
-      
+
+      const pdfResult = await generateOrderPdf(order.orderId, PdfIntent.CUSTOMER_VIEW);
+      const pdfDir = path.join(process.cwd(), 'uploads', 'order-confirmations');
+      fs.mkdirSync(pdfDir, { recursive: true });
+      const safeOrderId = order.orderId.replace(/[^a-zA-Z0-9_-]/g, '_');
+      const pdfPath = path.join(pdfDir, `sales_order_${safeOrderId}_${Date.now()}.pdf`);
+      fs.writeFileSync(pdfPath, pdfResult.buffer);
+
+      const thankYouResult = await sendThankYouOrderEmail(
+        {
+          orderId: order.orderId,
+          customerName: customer.name,
+          customerEmail: customer.email,
+          customerPO: order.customerPO || '',
+          orderDate: new Date(order.orderDate).toISOString().split('T')[0],
+          dueDate: new Date(order.dueDate).toISOString().split('T')[0],
+          notes: order.notes || '',
+        },
+        pdfPath
+      );
+
+      if (thankYouResult.success) {
+        emailOutcome = 'sent';
+        console.log(`Sales Order PDF email sent for order ${order.orderId}`);
+
+        await db.insert(communicationLogs).values({
+          orderId: order.orderId,
+          customerId: order.customerId || '',
+          messageType: 'transactional',
+          method: 'email',
+          type: 'order-confirmation',
+          context: 'initial',
+          recipient: customer.email,
+          status: 'sent',
+          signatureToken: null,
+          externalId: thankYouResult.messageId,
+          message: `Sales Order PDF emailed for ${order.orderId}`,
+          sentAt: new Date(),
+        });
+      } else {
+        emailOutcome = 'failed';
+        emailError = thankYouResult.error;
+        console.error(`Failed to send Sales Order PDF email for order ${order.orderId}: ${thankYouResult.error}`);
+
+        await db.insert(communicationLogs).values({
+          orderId: order.orderId,
+          customerId: order.customerId || '',
+          messageType: 'transactional',
+          method: 'email',
+          type: 'order-confirmation',
+          context: 'initial',
+          recipient: customer.email,
+          status: 'failed',
+          signatureToken: null,
+          error: thankYouResult.error,
+          message: `Failed Sales Order PDF email for ${order.orderId}: ${thankYouResult.error}`,
+          sentAt: new Date(),
+        });
+      }
+
+      /*
+       * Legacy signature follow-up workflow intentionally disabled.
+       * New orders now enter production immediately and only receive the Sales Order PDF.
+       *
       // Get customer address
       const addresses = await storage.getCustomerAddresses(String(customer.id));
       const defaultAddress = addresses.find(addr => addr.isDefault) || addresses[0];
@@ -1299,6 +1347,7 @@ router.post('/finalized', async (req: Request, res: Response) => {
           // Continue to success response with emailOutcome='failed' for frontend to display warning
         }
       }
+      */
     } catch (sendError: any) {
       // MANDATORY OUTCOME: Any thrown error results in 'failed' outcome
       // NOTE: sendOrderConfirmationNotification handles its own logging internally
@@ -1322,7 +1371,7 @@ router.post('/finalized', async (req: Request, res: Response) => {
             context: 'initial',
             recipient: 'N/A - exception during preparation',
             status: 'failed',
-            signatureToken: signatureToken || null, // May be null if exception occurred before token generation
+            signatureToken: null,
             error: errorMessage,
             message: `Order confirmation failed for ${order.orderId}: ${errorMessage}`,
             sentAt: new Date(),
@@ -1440,19 +1489,19 @@ router.post('/pending-payment', async (req: Request, res: Response) => {
   }
 });
 
-// Create draft order (legacy method - now creates PENDING_SIGNATURE orders)
+// Create draft order (legacy method - now creates finalized production orders)
 router.post('/draft', requirePermission('orders.create'), async (req: Request, res: Response) => {
   try {
     const orderData = insertAllOrderSchema.parse(req.body);
 
-    // Create as PENDING_SIGNATURE or FINALIZED based on status
-    const finalStatus = orderData.status === 'FINALIZED' ? 'FINALIZED' : 'PENDING_SIGNATURE';
+    const finalStatus = 'FINALIZED';
     
     console.log(`🔄 Creating order ${orderData.orderId} with status: ${finalStatus}`);
     
     const order = await storage.createFinalizedOrder({
       ...orderData,
-      status: finalStatus
+      status: finalStatus,
+      currentDepartment: 'P1 Production Queue',
     }, req.body.finalizedBy);
     
     res.status(201).json(order);
@@ -1914,7 +1963,7 @@ router.get('/:id', async (req: Request, res: Response, next: Function) => {
     const orderId = req.params.id;
     
     // Skip static routes that should be handled by other handlers defined later
-    const staticRoutes = ['heat-map', 'stats', 'all', 'generate-id', 'last-id', 'reference', 'awaiting-signature'];
+    const staticRoutes = ['heat-map', 'stats', 'all', 'generate-id', 'last-id', 'reference'];
     if (staticRoutes.some(route => orderId === route || orderId.startsWith(route + '/'))) {
       return next('route');
     }
@@ -5096,74 +5145,6 @@ router.post('/:orderId/email-pdf-copy', authenticateToken, async (req: Request, 
       error: 'Failed to send PDF copy',
       details: error instanceof Error ? error.message : 'Unknown error',
     });
-  }
-});
-
-// GET /api/orders/awaiting-signature - All orders in Awaiting Customer Signature department
-router.get('/awaiting-signature', async (req: Request, res: Response) => {
-  try {
-    const { search, sort = 'due_date', dir = 'asc' } = req.query as Record<string, string>;
-
-    const allowedSorts: Record<string, string> = {
-      due_date: 'ao.due_date',
-      order_date: 'ao.order_date',
-      order_id: 'ao.order_id',
-      customer: 'c.name',
-      days_waiting: 'ao.created_at',
-    };
-    const sortCol = allowedSorts[sort] || 'ao.due_date';
-    const sortDir = dir === 'desc' ? 'DESC' : 'ASC';
-
-    let searchClause = '';
-    const params: any[] = [];
-
-    if (search && search.trim()) {
-      params.push(`%${search.trim().toLowerCase()}%`);
-      searchClause = `AND (LOWER(ao.order_id) LIKE $${params.length} OR LOWER(c.name) LIKE $${params.length} OR LOWER(ao.model_id) LIKE $${params.length})`;
-    }
-
-    const query = `
-      SELECT
-        ao.order_id AS "orderId",
-        ao.order_date AS "orderDate",
-        ao.due_date AS "dueDate",
-        ao.status,
-        ao.model_id AS "modelId",
-        ao.handedness,
-        ao.notes,
-        ao.urgency,
-        ao.customer_id AS "customerId",
-        ao.created_at AS "createdAt",
-        ao.signature_data IS NOT NULL AND ao.signature_data != '' AS "hasSigned",
-        ao.signed_at AS "signedAt",
-        ao.is_replacement AS "isReplacement",
-        c.name AS "customerName",
-        c.email AS "customerEmail",
-        NOW() - ao.created_at AS "waitingDuration",
-        EXTRACT(EPOCH FROM (NOW() - ao.created_at)) / 86400 AS "daysWaiting"
-      FROM all_orders ao
-      LEFT JOIN customers c ON c.id::text = ao.customer_id
-      WHERE ao.current_department = 'Awaiting Customer Signature'
-        AND ao.status != 'CANCELLED'
-        ${searchClause}
-      ORDER BY ${sortCol} ${sortDir}
-    `;
-
-    const rows = await pool.query(query, params);
-
-    const orders = (Array.isArray(rows) ? rows : (rows as any).rows || rows).map((r: any) => ({
-      ...r,
-      daysWaiting: Math.floor(Number(r.daysWaiting) || 0),
-    }));
-
-    const total = orders.length;
-    const overdue = orders.filter((o: any) => new Date(o.dueDate) < new Date()).length;
-    const signed = orders.filter((o: any) => o.hasSigned).length;
-
-    res.json({ orders, total, overdue, signed });
-  } catch (error) {
-    console.error('Error fetching awaiting-signature orders:', error);
-    res.status(500).json({ error: 'Failed to fetch awaiting-signature orders' });
   }
 });
 

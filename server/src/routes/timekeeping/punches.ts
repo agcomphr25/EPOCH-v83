@@ -138,12 +138,15 @@ function ensureChargeCodeAssignmentTable(): Promise<void> {
           charge_code_id INTEGER NOT NULL REFERENCES charge_codes(id) ON DELETE CASCADE,
           employee_id INTEGER NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
           assigned_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          is_default BOOLEAN NOT NULL DEFAULT FALSE,
           assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           UNIQUE (charge_code_id, employee_id)
         )
       `);
+      await pool.query(`ALTER TABLE charge_code_employee_assignments ADD COLUMN IF NOT EXISTS is_default BOOLEAN NOT NULL DEFAULT FALSE`);
       await pool.query(`CREATE INDEX IF NOT EXISTS charge_code_employee_assignments_charge_code_idx ON charge_code_employee_assignments(charge_code_id)`);
       await pool.query(`CREATE INDEX IF NOT EXISTS charge_code_employee_assignments_employee_idx ON charge_code_employee_assignments(employee_id)`);
+      await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS charge_code_employee_assignments_one_default_per_employee_idx ON charge_code_employee_assignments(employee_id) WHERE is_default = TRUE`);
     })().catch((error) => {
       chargeCodeAssignmentTableReady = null;
       throw error;
@@ -164,8 +167,20 @@ async function listVisibleChargeCodes(employeeId: number | null, includeDepartme
        cc.code,
        cc.description,
        ${includeDepartment ? 'cc.department,' : ''}
-       cc.type
+       cc.type,
+       cc.production_line AS "productionLine",
+       cc.activity_category AS "activityCategory",
+       cc.cost_objective_policy AS "costObjectivePolicy",
+       cc.inventory_wip_policy AS "inventoryWipPolicy",
+       cc.allow_project AS "allowProject",
+       cc.require_project AS "requireProject",
+       cc.allow_clin AS "allowClin",
+       cc.require_clin AS "requireClin",
+       COALESCE(cca_default.is_default, FALSE) AS "isDefault"
      FROM charge_codes cc
+     LEFT JOIN charge_code_employee_assignments cca_default
+       ON cca_default.charge_code_id = cc.id
+      AND cca_default.employee_id = $1::int
      WHERE cc.active = true
        AND (
          $1::int IS NULL
@@ -185,6 +200,26 @@ async function listVisibleChargeCodes(employeeId: number | null, includeDepartme
     [employeeId]
   ));
   return rows;
+}
+
+async function employeeCanUseChargeCode(employeeId: number, chargeCodeId: number): Promise<boolean> {
+  await ensureChargeCodeAssignmentTable();
+  const rows = rowsOf(await pool.query(
+    `SELECT
+       NOT EXISTS (
+         SELECT 1
+         FROM charge_code_employee_assignments cca_any
+         WHERE cca_any.charge_code_id = $1
+       )
+       OR EXISTS (
+         SELECT 1
+         FROM charge_code_employee_assignments cca_emp
+         WHERE cca_emp.charge_code_id = $1
+           AND cca_emp.employee_id = $2
+       ) AS allowed`,
+    [chargeCodeId, employeeId]
+  ));
+  return rows[0]?.allowed === true;
 }
 
 const PunchCorrectionChangesSchema = z.object({
@@ -1259,6 +1294,13 @@ router.post("/punches/my", authenticateToken, h(async (req, res): Promise<void> 
   if ((type === "clock_in" || type === "break_end") && chargeCodeId == null) {
     res.status(422).json({ error: "A charge code is required before clocking in." });
     return;
+  }
+  if ((type === "clock_in" || type === "break_end") && chargeCodeId != null) {
+    const allowed = await employeeCanUseChargeCode(epochEmployeeId, chargeCodeId);
+    if (!allowed) {
+      res.status(403).json({ error: "Employee is not assigned to this charge code." });
+      return;
+    }
   }
 
   let entry;

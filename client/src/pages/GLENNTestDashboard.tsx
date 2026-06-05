@@ -133,6 +133,28 @@ export default function GLENNTestDashboard() {
           </div>
         </div>
 
+        {/* My Tasks Control Center */}
+        {isUserLoading ? (
+          <div className="mb-8">
+            <div className="depth-card space-y-3">
+              <div className="h-6 w-48 bg-white/10 rounded animate-pulse" />
+              <div className="h-4 w-full bg-white/10 rounded animate-pulse" />
+              <div className="h-4 w-3/4 bg-white/10 rounded animate-pulse" />
+              <div className="h-4 w-5/6 bg-white/10 rounded animate-pulse" />
+            </div>
+          </div>
+        ) : dashboardEmployeeId ? (
+          <div className="mb-8">
+            <div className="depth-card">
+              <MyTasksControlCenter
+                employeeId={dashboardEmployeeId}
+                userName={currentUser?.username ?? 'glennj'}
+                compact={false}
+              />
+            </div>
+          </div>
+        ) : null}
+
         {/* KPI Row */}
         <div className="dashboard-grid mb-8">
           <div className="depth-card">
@@ -497,28 +519,6 @@ export default function GLENNTestDashboard() {
           <SystemHealthWidget variant="premium" />
         </div>
 
-        {/* My Tasks Control Center */}
-        {isUserLoading ? (
-          <div className="mt-8">
-            <div className="depth-card space-y-3">
-              <div className="h-6 w-48 bg-white/10 rounded animate-pulse" />
-              <div className="h-4 w-full bg-white/10 rounded animate-pulse" />
-              <div className="h-4 w-3/4 bg-white/10 rounded animate-pulse" />
-              <div className="h-4 w-5/6 bg-white/10 rounded animate-pulse" />
-            </div>
-          </div>
-        ) : dashboardEmployeeId ? (
-          <div className="mt-8">
-            <div className="depth-card">
-              <MyTasksControlCenter
-                employeeId={dashboardEmployeeId}
-                userName={currentUser?.username ?? 'glennj'}
-                compact={false}
-              />
-            </div>
-          </div>
-        ) : null}
-
         {/* Footer */}
         <div className="section-divider"></div>
         <div className="text-center text-gray-500 text-sm">
@@ -662,6 +662,22 @@ function LightModeDashboard({
         </div>
       </div>
 
+      {/* My Tasks Control Center */}
+      {isUserLoading ? (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 space-y-3">
+          <div className="h-6 w-48 bg-gray-200 rounded animate-pulse" />
+          <div className="h-4 w-full bg-gray-100 rounded animate-pulse" />
+          <div className="h-4 w-3/4 bg-gray-100 rounded animate-pulse" />
+          <div className="h-4 w-5/6 bg-gray-100 rounded animate-pulse" />
+        </div>
+      ) : dashboardEmployeeId ? (
+        <MyTasksControlCenter
+          employeeId={dashboardEmployeeId}
+          userName={currentUser?.username ?? 'glennj'}
+          compact={false}
+        />
+      ) : null}
+
 
       {/* Main Navigation Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -701,22 +717,6 @@ function LightModeDashboard({
       )}
 
       <PartsRequestOwnerApprovals userName={currentUser?.username} />
-
-      {/* My Tasks Control Center */}
-      {isUserLoading ? (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 space-y-3">
-          <div className="h-6 w-48 bg-gray-200 rounded animate-pulse" />
-          <div className="h-4 w-full bg-gray-100 rounded animate-pulse" />
-          <div className="h-4 w-3/4 bg-gray-100 rounded animate-pulse" />
-          <div className="h-4 w-5/6 bg-gray-100 rounded animate-pulse" />
-        </div>
-      ) : dashboardEmployeeId ? (
-        <MyTasksControlCenter
-          employeeId={dashboardEmployeeId}
-          userName={currentUser?.username ?? 'glennj'}
-          compact={false}
-        />
-      ) : null}
 
       {/* Additional Navigation Items */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">

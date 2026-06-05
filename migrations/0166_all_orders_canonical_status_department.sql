@@ -92,7 +92,7 @@ SELECT
   'system',
   'migration 0163',
   'migration',
-  'migrations/0163_all_orders_canonical_status_department.sql',
+  'migrations/0166_all_orders_canonical_status_department.sql',
   'CANONICAL_STATUS_DEPARTMENT',
   'Canonicalized All Orders status and department according to the P1 order lifecycle policy.',
   old_status,
@@ -103,7 +103,7 @@ SELECT
     'status', jsonb_build_object('before', old_status, 'after', new_status, 'label', 'Order Status'),
     'currentDepartment', jsonb_build_object('before', old_department, 'after', new_department, 'label', 'Current Department')
   ),
-  jsonb_build_object('migration', '0163_all_orders_canonical_status_department')
+  jsonb_build_object('migration', '0166_all_orders_canonical_status_department')
 FROM tmp_all_orders_canonical_status_department;
 
 UPDATE all_orders ao

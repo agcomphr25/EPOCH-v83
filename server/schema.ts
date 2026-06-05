@@ -822,6 +822,9 @@ export const partsRequests = pgTable('parts_requests', {
   partNumber: text('part_number').notNull(), // Part number (can be AG part or external)
   partName: text('part_name').notNull(),
   requestedBy: text('requested_by').notNull(),
+  requestedByUserId: integer('requested_by_user_id').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
+  requestedForEmployeeId: integer('requested_for_employee_id').references((): AnyPgColumn => employees.id, { onDelete: 'set null' }),
+  requestedForDisplayName: text('requested_for_display_name'),
   productionLine: text('production_line'), // Optional P1/P2/P3 line requested for this part
   projectId: uuid('project_id').references((): AnyPgColumn => projects.id, { onDelete: 'set null' }),
   department: text('department'), // Department name (legacy text field)
@@ -1944,6 +1947,7 @@ export const punchLedger = pgTable('punch_ledger', {
 
   // WAD/project traceability (Task #1235 — derived server-side, never from client)
   projectId: uuid('project_id').references((): AnyPgColumn => projects.id, { onDelete: 'set null' }),
+  clinId: integer('clin_id').references((): AnyPgColumn => projectClins.id, { onDelete: 'set null' }),
   travelerStepId: varchar('traveler_step_id', { length: 255 }),
 
   // Certification and budget state at session/step start (phase 1: WARN policy)
@@ -2002,6 +2006,7 @@ export const laborAllocations = pgTable('labor_allocations', {
   travelerStepId: varchar('traveler_step_id', { length: 255 }),
   productionWorkOrderId: uuid('production_work_order_id').references((): AnyPgColumn => productionWorkOrders.id, { onDelete: 'set null' }),
   projectId: uuid('project_id').references((): AnyPgColumn => projects.id, { onDelete: 'set null' }),
+  clinId: integer('clin_id').references((): AnyPgColumn => projectClins.id, { onDelete: 'set null' }),
   department: text('department'),
   operation: text('operation'),
 
@@ -5995,6 +6000,14 @@ export const chargeCodes = pgTable('charge_codes', {
   description: text('description'),
   type: text('type').notNull().default('DIRECT'), // DIRECT | OVERHEAD | G_AND_A
   costHandling: text('cost_handling').notNull().default('DIRECT_CONTRACT'), // DIRECT_CONTRACT | IRAD | BID_PROPOSAL | FRINGE | OVERHEAD | G_AND_A | UNALLOWABLE | OTHER
+  productionLine: text('production_line'), // P1 | P2 | P3 | P4...
+  activityCategory: text('activity_category'), // Reporting rollup, e.g. Layup, QC, Cleanup, CSR
+  costObjectivePolicy: text('cost_objective_policy').notNull().default('NONE'), // NONE | P1_INVENTORY_WIP_GENERAL_STOCK | PROJECT_REQUIRED | CONFIGURED
+  inventoryWipPolicy: text('inventory_wip_policy'), // P1_INVENTORY_WIP_GENERAL_STOCK when P1 direct stock should capitalize after approval
+  allowProject: boolean('allow_project').notNull().default(false),
+  requireProject: boolean('require_project').notNull().default(false),
+  allowClin: boolean('allow_clin').notNull().default(false),
+  requireClin: boolean('require_clin').notNull().default(false),
   contractReference: text('contract_reference'),
   department: text('department'),
   requiresApproval: boolean('requires_approval').notNull().default(false),
@@ -6018,9 +6031,11 @@ export const chargeCodeEmployeeAssignments = pgTable('charge_code_employee_assig
   chargeCodeId: integer('charge_code_id').notNull().references(() => chargeCodes.id, { onDelete: 'cascade' }),
   employeeId: integer('employee_id').notNull().references(() => employees.id, { onDelete: 'cascade' }),
   assignedByUserId: integer('assigned_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  isDefault: boolean('is_default').notNull().default(false),
   assignedAt: timestamp('assigned_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => ({
   uniqueChargeCodeEmployee: unique().on(table.chargeCodeId, table.employeeId),
+  oneDefaultPerEmployee: uniqueIndex('charge_code_employee_assignments_one_default_per_employee_idx').on(table.employeeId).where(sql`is_default = true`),
   chargeCodeIdx: index('charge_code_employee_assignments_charge_code_idx').on(table.chargeCodeId),
   employeeIdx: index('charge_code_employee_assignments_employee_idx').on(table.employeeId),
 }));
@@ -11673,6 +11688,29 @@ export const insertProjectSchema = createInsertSchema(projects).omit({
 
 export type Project = typeof projects.$inferSelect;
 export type InsertProject = z.infer<typeof insertProjectSchema>;
+
+export const projectClins = pgTable('project_clins', {
+  id: serial('id').primaryKey(),
+  projectId: uuid('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+  clinNumber: text('clin_number').notNull(),
+  description: text('description'),
+  active: boolean('active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => ({
+  uniqueProjectClin: unique('project_clins_project_id_clin_number_unique').on(table.projectId, table.clinNumber),
+  projectIdIdx: index('project_clins_project_id_idx').on(table.projectId),
+  activeIdx: index('project_clins_active_idx').on(table.active),
+}));
+
+export const insertProjectClinSchema = createInsertSchema(projectClins).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ProjectClin = typeof projectClins.$inferSelect;
+export type InsertProjectClin = z.infer<typeof insertProjectClinSchema>;
 
 // Project Revisions - Controlled changes to project scope, PO linkage, and production basis
 export const projectRevisions = pgTable('project_revisions', {
@@ -17602,8 +17640,13 @@ export const laborCostRecords = pgTable('labor_cost_records', {
   // WAD attribution — nullable; populated when punch session carries a work-order assignment
   productionWorkOrderId: uuid('production_work_order_id'),
   projectId: uuid('project_id'),
+  clinId: integer('clin_id').references((): AnyPgColumn => projectClins.id, { onDelete: 'set null' }),
   travelerId: text('traveler_id'),
   chargeCodeId: integer('charge_code_id'),
+  costObjectivePolicy: text('cost_objective_policy'),
+  costObjectiveSnapshot: text('cost_objective_snapshot'),
+  productionLine: text('production_line'),
+  activityCategory: text('activity_category'),
   createdAt: timestamp('created_at').defaultNow(),
 });
 

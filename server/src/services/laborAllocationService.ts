@@ -36,6 +36,7 @@ export interface SwitchAssignment {
   travelerStepId: string | null;
   productionWorkOrderId: string | null;
   projectId: string | null;
+  clinId: number | null;
   department: string | null;
   operation: string | null;
 }
@@ -115,6 +116,7 @@ export async function switchAllocation(
         travelerStepId: newAssignment.travelerStepId ?? punchLedgerRow.travelerStepId,
         productionWorkOrderId: newAssignment.productionWorkOrderId ?? punchLedgerRow.productionWorkOrderId,
         projectId: newAssignment.projectId ?? punchLedgerRow.projectId,
+        clinId: newAssignment.clinId ?? punchLedgerRow.clinId,
         department: newAssignment.department ?? punchLedgerRow.department,
         operation: newAssignment.operation ?? punchLedgerRow.operation,
       });
@@ -162,6 +164,7 @@ export async function switchAllocation(
       travelerStepId: newAssignment.travelerStepId ?? null,
       productionWorkOrderId: newAssignment.productionWorkOrderId ?? null,
       projectId: newAssignment.projectId ?? null,
+      clinId: newAssignment.clinId ?? null,
       department: newAssignment.department ?? null,
       operation: newAssignment.operation ?? null,
       laborClass: punchLedgerRow.laborClass ?? 'REGULAR',

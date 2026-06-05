@@ -15,6 +15,93 @@ export interface ResolvedRate {
   rateSource: RateSource;
 }
 
+interface ChargeCodeCostMetadata {
+  productionLine: string | null;
+  activityCategory: string | null;
+  costObjectivePolicy: string | null;
+  costObjectiveSnapshot: string | null;
+  policyConfigured: boolean;
+  allowProject: boolean;
+  requireProject: boolean;
+  allowClin: boolean;
+  requireClin: boolean;
+}
+
+const P1_GENERAL_STOCK_WIP_OBJECTIVE = 'P1 Inventory WIP - General Stock';
+
+async function resolveChargeCodeCostMetadata(
+  chargeCodeId: number | null | undefined,
+  cache: Map<number, ChargeCodeCostMetadata>,
+): Promise<ChargeCodeCostMetadata> {
+  if (chargeCodeId == null) {
+    return {
+      productionLine: null,
+      activityCategory: null,
+      costObjectivePolicy: null,
+      costObjectiveSnapshot: null,
+      policyConfigured: false,
+      allowProject: false,
+      requireProject: false,
+      allowClin: false,
+      requireClin: false,
+    };
+  }
+  const cached = cache.get(chargeCodeId);
+  if (cached) return cached;
+
+  const chargeCode = await storage.getChargeCodeById(chargeCodeId);
+  const policy = (chargeCode as any)?.costObjectivePolicy ?? null;
+  const metadata: ChargeCodeCostMetadata = {
+    productionLine: (chargeCode as any)?.productionLine ?? null,
+    activityCategory: (chargeCode as any)?.activityCategory ?? null,
+    costObjectivePolicy: policy,
+    costObjectiveSnapshot:
+      policy === 'P1_INVENTORY_WIP_GENERAL_STOCK'
+        ? P1_GENERAL_STOCK_WIP_OBJECTIVE
+        : null,
+    policyConfigured:
+      Boolean((chargeCode as any)?.productionLine) ||
+      Boolean((chargeCode as any)?.activityCategory) ||
+      (policy != null && policy !== 'NONE') ||
+      (chargeCode as any)?.allowProject === true ||
+      (chargeCode as any)?.allowClin === true ||
+      (chargeCode as any)?.requireProject === true ||
+      (chargeCode as any)?.requireClin === true,
+    requireProject: (chargeCode as any)?.requireProject === true,
+    allowProject: (chargeCode as any)?.allowProject === true,
+    allowClin: (chargeCode as any)?.allowClin === true,
+    requireClin: (chargeCode as any)?.requireClin === true,
+  };
+  cache.set(chargeCodeId, metadata);
+  return metadata;
+}
+
+function assertRequiredAttribution(
+  metadata: ChargeCodeCostMetadata,
+  attribution: { chargeCodeId: number | null | undefined; projectId: string | null | undefined; clinId: number | null | undefined; sourceLabel: string },
+) {
+  if (metadata.requireProject && !attribution.projectId) {
+    throw new Error(
+      `Labor costing blocked: charge code ${attribution.chargeCodeId} requires a project, but ${attribution.sourceLabel} has no project attribution.`,
+    );
+  }
+  if (metadata.policyConfigured && !metadata.allowProject && attribution.projectId) {
+    throw new Error(
+      `Labor costing blocked: charge code ${attribution.chargeCodeId} does not allow project attribution, but ${attribution.sourceLabel} is linked to a project.`,
+    );
+  }
+  if (metadata.requireClin && attribution.clinId == null) {
+    throw new Error(
+      `Labor costing blocked: charge code ${attribution.chargeCodeId} requires a CLIN, but ${attribution.sourceLabel} has no CLIN attribution.`,
+    );
+  }
+  if (metadata.policyConfigured && !metadata.allowClin && attribution.clinId != null) {
+    throw new Error(
+      `Labor costing blocked: charge code ${attribution.chargeCodeId} does not allow CLIN attribution, but ${attribution.sourceLabel} is linked to a CLIN.`,
+    );
+  }
+}
+
 /**
  * Resolve the effective hourly rate for an employee.
  * Priority: hourlyRate → salary / 2080 → defaultLaborRate fallback
@@ -131,6 +218,7 @@ interface AllocationRow {
   department: string | null;
   productionWorkOrderId: string | null;
   projectId: string | null;
+  clinId: number | null;
   travelerId: string | null;
   laborClass: string;
   status: string;
@@ -170,6 +258,7 @@ export async function processLaborCostsFromAllocations(
       la.department,
       la.production_work_order_id AS "productionWorkOrderId",
       la.project_id             AS "projectId",
+      la.clin_id                AS "clinId",
       la.traveler_id            AS "travelerId",
       la.labor_class            AS "laborClass",
       la.status,
@@ -282,6 +371,7 @@ export async function processLaborCostsFromAllocations(
 
   const toInsert: InsertLaborCostRecord[] = [];
   const totalsByType: Record<CostType, number> = { DIRECT: 0, OVERHEAD: 0, G_AND_A: 0 };
+  const chargeCodeMetadataCache = new Map<number, ChargeCodeCostMetadata>();
 
   for (const alloc of allocRows) {
     const aStart = new Date(alloc.allocationStart);
@@ -297,6 +387,13 @@ export async function processLaborCostsFromAllocations(
       alloc.department ?? null,
     );
     const dollarCost = hoursWorked * resolvedRate.rate;
+    const metadata = await resolveChargeCodeCostMetadata(alloc.chargeCodeId, chargeCodeMetadataCache);
+    assertRequiredAttribution(metadata, {
+      chargeCodeId: alloc.chargeCodeId,
+      projectId: alloc.projectId,
+      clinId: alloc.clinId,
+      sourceLabel: `allocation ${alloc.id}`,
+    });
 
     totalsByType[costType] += dollarCost;
 
@@ -318,8 +415,13 @@ export async function processLaborCostsFromAllocations(
       rateSource: resolvedRate.rateSource,
       productionWorkOrderId: alloc.productionWorkOrderId ?? null,
       projectId: alloc.projectId ?? null,
+      clinId: alloc.clinId ?? null,
       travelerId: alloc.travelerId ?? null,
       chargeCodeId: alloc.chargeCodeId ?? null,
+      costObjectivePolicy: metadata.costObjectivePolicy,
+      costObjectiveSnapshot: metadata.costObjectiveSnapshot,
+      productionLine: metadata.productionLine,
+      activityCategory: metadata.activityCategory,
     });
   }
 
@@ -417,6 +519,7 @@ async function runLegacyPath(
 
   const toInsert: InsertLaborCostRecord[] = [];
   const totalsByType: Record<CostType, number> = { DIRECT: 0, OVERHEAD: 0, G_AND_A: 0 };
+  const chargeCodeMetadataCache = new Map<number, ChargeCodeCostMetadata>();
 
   for (const [employeeId, sessions] of byEmployee) {
     for (const session of sessions) {
@@ -433,6 +536,13 @@ async function runLegacyPath(
         session.department ?? null,
       );
       const dollarCost = hoursWorked * resolvedRate.rate;
+      const metadata = await resolveChargeCodeCostMetadata(session.chargeCodeId, chargeCodeMetadataCache);
+      assertRequiredAttribution(metadata, {
+        chargeCodeId: session.chargeCodeId,
+        projectId: session.projectId,
+        clinId: (session as any).clinId ?? null,
+        sourceLabel: `punch ${session.id}`,
+      });
 
       totalsByType[costType] += dollarCost;
 
@@ -454,8 +564,13 @@ async function runLegacyPath(
         rateSource: resolvedRate.rateSource,
         productionWorkOrderId: session.productionWorkOrderId ?? null,
         projectId: session.projectId ?? null,
+        clinId: (session as any).clinId ?? null,
         travelerId: session.travelerId ?? null,
         chargeCodeId: session.chargeCodeId ?? null,
+        costObjectivePolicy: metadata.costObjectivePolicy,
+        costObjectiveSnapshot: metadata.costObjectiveSnapshot,
+        productionLine: metadata.productionLine,
+        activityCategory: metadata.activityCategory,
       });
     }
   }

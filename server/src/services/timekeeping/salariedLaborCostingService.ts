@@ -49,6 +49,8 @@ import { resolveEmployeeRate, classifyLaborCost } from "../laborCostingService";
 import { postLaborEntryDraft } from "./laborEntryDraftPostingService";
 import type { InsertLaborCostRecord } from "../../../schema";
 
+const P1_GENERAL_STOCK_WIP_OBJECTIVE = "P1 Inventory WIP - General Stock";
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -295,6 +297,17 @@ export async function createSalariedLaborCostRecords(
   for (const line of lines) {
     const ccId = line.chargeCodeId!;
     const cc = chargeCodeCache.get(ccId)!;
+    const costObjectivePolicy = (cc as any).costObjectivePolicy ?? null;
+    if ((cc as any).requireProject === true) {
+      throw new Error(
+        `Salaried labor costing blocked: charge code ${cc.code} requires project attribution and cannot be posted from a non-project salaried line.`,
+      );
+    }
+    if ((cc as any).requireClin === true) {
+      throw new Error(
+        `Salaried labor costing blocked: charge code ${cc.code} requires CLIN attribution and cannot be posted from a non-project salaried line.`,
+      );
+    }
 
     // Classify cost type via charge_codes.type — no text-label routing
     const costType = await classifyLaborCost(ccId, null, null);
@@ -327,6 +340,13 @@ export async function createSalariedLaborCostRecords(
       projectId: null,
       travelerId: null,
       chargeCodeId: ccId,
+      costObjectivePolicy,
+      costObjectiveSnapshot:
+        costObjectivePolicy === "P1_INVENTORY_WIP_GENERAL_STOCK"
+          ? P1_GENERAL_STOCK_WIP_OBJECTIVE
+          : null,
+      productionLine: (cc as any).productionLine ?? null,
+      activityCategory: (cc as any).activityCategory ?? null,
     });
 
     if (!totalsByType[costType]) totalsByType[costType] = { hours: 0, dollarCost: 0 };

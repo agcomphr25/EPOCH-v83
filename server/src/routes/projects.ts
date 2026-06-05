@@ -40,6 +40,7 @@ const uploadProjectDoc = multer({
 const router = Router();
 
 let projectRevisionSchemaReady = false;
+let projectClinSchemaReady = false;
 
 async function ensureProjectRevisionSchema() {
   if (projectRevisionSchemaReady) return;
@@ -79,6 +80,32 @@ async function ensureProjectRevisionSchema() {
 
   projectRevisionSchemaReady = true;
 }
+
+async function ensureProjectClinSchema() {
+  if (projectClinSchemaReady) return;
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS project_clins (
+      id SERIAL PRIMARY KEY,
+      project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      clin_number TEXT NOT NULL,
+      description TEXT,
+      active BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(project_id, clin_number)
+    )
+  `);
+  await pool.query(`CREATE INDEX IF NOT EXISTS project_clins_project_id_idx ON project_clins(project_id)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS project_clins_active_idx ON project_clins(active)`);
+  projectClinSchemaReady = true;
+}
+
+const projectClinBodySchema = z.object({
+  clinNumber: z.string().trim().min(1),
+  description: z.string().trim().optional().nullable(),
+  active: z.boolean().optional(),
+});
 
 async function getNextProjectRevisionNumber(projectId: string): Promise<number> {
   const rows = await pool.query<{ next_revision: number }>(
@@ -853,6 +880,96 @@ router.post('/:id/link-po', async (req, res) => {
   } catch (error) {
     console.error('Error linking PO to project:', error);
     res.status(500).json({ message: 'Failed to link PO' });
+  }
+});
+
+router.get('/:id/clins', async (req, res) => {
+  try {
+    await ensureProjectClinSchema();
+    const rows = await pool.query(
+      `SELECT id, project_id AS "projectId", clin_number AS "clinNumber", description, active, created_at AS "createdAt", updated_at AS "updatedAt"
+         FROM project_clins
+        WHERE project_id = $1
+        ORDER BY clin_number`,
+      [req.params.id]
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error('Get project CLINs error:', error);
+    res.status(500).json({ error: 'Failed to fetch project CLINs' });
+  }
+});
+
+router.post('/:id/clins', async (req, res) => {
+  try {
+    await ensureProjectClinSchema();
+    const parsed = projectClinBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Invalid CLIN data', details: parsed.error.flatten() });
+      return;
+    }
+
+    const projectRows = await pool.query(`SELECT id FROM projects WHERE id = $1 LIMIT 1`, [req.params.id]);
+    if (projectRows.length === 0) {
+      res.status(404).json({ error: 'Project not found' });
+      return;
+    }
+
+    const [created] = await pool.query(
+      `INSERT INTO project_clins (project_id, clin_number, description, active)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, project_id AS "projectId", clin_number AS "clinNumber", description, active, created_at AS "createdAt", updated_at AS "updatedAt"`,
+      [req.params.id, parsed.data.clinNumber, parsed.data.description ?? null, parsed.data.active ?? true]
+    );
+    res.status(201).json(created);
+  } catch (error: any) {
+    if (error?.code === '23505') {
+      res.status(409).json({ error: 'CLIN number already exists for this project' });
+      return;
+    }
+    console.error('Create project CLIN error:', error);
+    res.status(500).json({ error: 'Failed to create project CLIN' });
+  }
+});
+
+router.patch('/:id/clins/:clinId', async (req, res) => {
+  try {
+    await ensureProjectClinSchema();
+    const parsed = projectClinBodySchema.partial().safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Invalid CLIN data', details: parsed.error.flatten() });
+      return;
+    }
+
+    const [updated] = await pool.query(
+      `UPDATE project_clins
+          SET clin_number = COALESCE($3, clin_number),
+              description = CASE WHEN $4::boolean THEN $5 ELSE description END,
+              active = COALESCE($6, active),
+              updated_at = NOW()
+        WHERE project_id = $1 AND id = $2
+        RETURNING id, project_id AS "projectId", clin_number AS "clinNumber", description, active, created_at AS "createdAt", updated_at AS "updatedAt"`,
+      [
+        req.params.id,
+        Number(req.params.clinId),
+        parsed.data.clinNumber ?? null,
+        Object.prototype.hasOwnProperty.call(parsed.data, 'description'),
+        parsed.data.description ?? null,
+        parsed.data.active ?? null,
+      ]
+    );
+    if (!updated) {
+      res.status(404).json({ error: 'CLIN not found' });
+      return;
+    }
+    res.json(updated);
+  } catch (error: any) {
+    if (error?.code === '23505') {
+      res.status(409).json({ error: 'CLIN number already exists for this project' });
+      return;
+    }
+    console.error('Update project CLIN error:', error);
+    res.status(500).json({ error: 'Failed to update project CLIN' });
   }
 });
 

@@ -6,13 +6,14 @@ import { assertPostingAllowedForPeriod } from './accountingPeriodService';
 
 // Compound grouping key for WAD-linked labor cost records.
 // Every WAD record must resolve to exactly one journal entry.
-// All five dimensions are used so that two records differing on any single
+// All six dimensions are used so that two records differing on any single
 // field produce separate GL lines — costing stays attributable.
 interface WadGroupKey {
   costType: string;
   chargeCodeId: number;
   productionWorkOrderId: string;
   projectId: string;
+  clinId: number | null;
   departmentCode: string | null;
 }
 
@@ -22,6 +23,7 @@ function wadGroupMapKey(k: WadGroupKey): string {
     k.chargeCodeId,
     k.productionWorkOrderId,
     k.projectId,
+    k.clinId ?? '__null__',
     k.departmentCode ?? '__null__',
   ].join('\x00');
 }
@@ -37,7 +39,7 @@ function wadGroupMapKey(k: WadGroupKey): string {
  *
  * WAD-linked records (productionWorkOrderId IS NOT NULL):
  *   Group by the full compound key:
- *     (costType, chargeCodeId, productionWorkOrderId, projectId, departmentCode)
+ *     (costType, chargeCodeId, productionWorkOrderId, projectId, clinId, departmentCode)
  *   → one journal entry per unique combination.
  *   Reason: two punch sessions on the same WAD but different charge codes,
  *   or the same charge code on different WADs, must never be collapsed into
@@ -233,6 +235,7 @@ export async function postLaborToGL(year: number, month: number, postedBy: strin
         chargeCodeId: rec.chargeCodeId as number,
         productionWorkOrderId: rec.productionWorkOrderId as string,
         projectId: rec.projectId as string,
+        clinId: rec.clinId ?? null,
         departmentCode: rec.departmentCode ?? null,
       };
       const mk = wadGroupMapKey(key);
@@ -303,6 +306,7 @@ export async function postLaborToGL(year: number, month: number, postedBy: strin
         `cc=${key.chargeCodeId}`,
         `wad=${key.productionWorkOrderId}`,
         `proj=${key.projectId}`,
+        key.clinId !== null ? `clin=${key.clinId}` : null,
         key.departmentCode ? `dept=${key.departmentCode}` : null,
         `${key.costType}`,
         periodStr,
@@ -338,6 +342,9 @@ export async function postLaborToGL(year: number, month: number, postedBy: strin
       const deptCondition = key.departmentCode !== null
         ? eq(laborCostRecords.departmentCode, key.departmentCode)
         : isNull(laborCostRecords.departmentCode);
+      const clinCondition = key.clinId !== null
+        ? eq(laborCostRecords.clinId, key.clinId)
+        : isNull(laborCostRecords.clinId);
 
       await tx
         .update(laborCostRecords)
@@ -348,6 +355,7 @@ export async function postLaborToGL(year: number, month: number, postedBy: strin
             isNotNull(laborCostRecords.productionWorkOrderId),
             eq(laborCostRecords.productionWorkOrderId, key.productionWorkOrderId),
             eq(laborCostRecords.projectId, key.projectId),
+            clinCondition,
             eq(laborCostRecords.chargeCodeId, key.chargeCodeId),
             eq(laborCostRecords.costType, key.costType),
             deptCondition,

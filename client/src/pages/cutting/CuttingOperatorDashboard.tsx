@@ -32,7 +32,6 @@ import {
 } from "@/components/ui/dialog";
 import { GroupedPOsBadge } from "@/components/cutting/GroupedPOsBadge";
 import { CuttingQueueTraceSheet } from "@/components/cutting/CuttingQueueTraceSheet";
-import { CuttingQueueHealthBadges } from "@/components/cutting/CuttingQueueHealthBadges";
 import { CuttingBomMatchBadge } from "@/components/cutting/CuttingBomMatchBadge";
 import { CuttingQueueNextActionBadge } from "@/components/cutting/CuttingQueueNextActionBadge";
 import { CuttingQueueProductionLockNotice } from "@/components/cutting/CuttingQueueProductionLockNotice";
@@ -2263,8 +2262,7 @@ export default function CuttingOperatorDashboard() {
                           disabled={printableQueueItems.length === 0}
                         />
                       </TableHead>
-                      <TableHead>Part Number</TableHead>
-                      <TableHead>Name</TableHead>
+                      <TableHead className="min-w-[320px]">Packet</TableHead>
                       <TableHead className="text-center">Progress</TableHead>
                       <TableHead className="text-center">Cuts</TableHead>
                       <TableHead className="text-center w-24"># to Print</TableHead>
@@ -2302,24 +2300,30 @@ export default function CuttingOperatorDashboard() {
                           <span className="text-xs text-muted-foreground">-</span>
                         )}
                       </TableCell>
-                      <TableCell className="font-mono font-medium">{item.partNumber || '-'}</TableCell>
-                      <TableCell className="max-w-[240px]">
-                        <div className="flex items-center gap-2">
-                          <span className="truncate">{item.displayName || item.partName || '-'}</span>
-                          <GroupedPOsBadge
-                            poNumbers={item.poNumbers}
-                            testIdPrefix={`pos-${item.id}`}
-                          />
-                          <CuttingBomMatchBadge
-                            reason={item.bomMatchReason}
-                            confidence={item.bomMatchConfidence}
-                            compact
-                          />
+                      <TableCell className="max-w-[420px]">
+                        <div className="space-y-1.5">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span className="truncate font-medium" title={item.displayName || item.partName || ""}>
+                              {item.displayName || item.partName || '-'}
+                            </span>
+                            <GroupedPOsBadge
+                              poNumbers={item.poNumbers}
+                              className="h-6 shrink-0 bg-muted px-1.5 text-[11px] text-muted-foreground hover:bg-muted"
+                              testIdPrefix={`pos-${item.id}`}
+                            />
+                          </div>
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                            <span className="font-mono text-foreground">{item.partNumber || '-'}</span>
+                            <span title={`BOM match: ${item.bomMatchReason || "none"}`}>
+                              <CuttingBomMatchBadge
+                                reason={item.bomMatchReason}
+                                confidence={item.bomMatchConfidence}
+                                compact
+                              />
+                            </span>
+                          </div>
+                          <CuttingQueueProductionLockNotice item={item} compact />
                         </div>
-                        <div className="mt-1">
-                          <CuttingQueueHealthBadges item={item} compact />
-                        </div>
-                        <CuttingQueueProductionLockNotice item={item} compact />
                       </TableCell>
                       <TableCell className="text-center">
                         <div className="flex items-center justify-center gap-1">

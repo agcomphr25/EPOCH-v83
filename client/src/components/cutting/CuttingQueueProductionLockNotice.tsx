@@ -32,13 +32,33 @@ export function CuttingQueueProductionLockNotice({ item, compact = false }: Prop
 
   if (!isProtected) return null;
 
+  const traceParts = [
+    builtPacketCount > 0 ? `${builtPacketCount} built` : null,
+    allocatedPacketCount > 0 ? `${allocatedPacketCount} traced` : null,
+    quantityCompleted > 0 ? `${quantityCompleted} completed` : null,
+  ].filter(Boolean);
+  const title = [
+    "This queue row is read-only because production trace already exists.",
+    lockReasonLabel(item.productionProtectionReason),
+    traceParts.join(", "),
+  ].filter(Boolean).join(" ");
+
+  if (compact) {
+    return (
+      <Badge variant="outline" className="mt-1 h-6 w-fit gap-1 px-1.5 text-[11px]" title={title}>
+        <LockKeyhole className="h-3 w-3" />
+        Locked
+      </Badge>
+    );
+  }
+
   const className = compact
     ? "mt-1 flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground"
     : "mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground";
 
   return (
     <div className={className}>
-      <Badge variant="outline" className="h-6 gap-1 px-1.5 text-[11px]" title="This queue row is read-only because production trace already exists">
+      <Badge variant="outline" className="h-6 gap-1 px-1.5 text-[11px]" title={title}>
         <LockKeyhole className="h-3 w-3" />
         Production locked
       </Badge>

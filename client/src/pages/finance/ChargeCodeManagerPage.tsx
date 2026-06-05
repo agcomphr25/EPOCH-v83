@@ -7,6 +7,7 @@ import {
   Tag,
   Plus,
   Pencil,
+  Copy,
   Loader2,
   ChevronUp,
   ChevronDown,
@@ -14,10 +15,10 @@ import {
   Search,
   Users,
 } from 'lucide-react';
-import { queryClient, apiRequest } from '@/lib/queryClient';
-import { useToast } from '@/hooks/use-toast';
 import { insertChargeCodeSchema, type ChargeCode } from '@shared/schema';
 
+import { queryClient, apiRequest } from '@/lib/queryClient';
+import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
@@ -108,10 +109,16 @@ type ChargeCodeAssignments = {
   assignedEmployees: EmployeeOption[];
 };
 
-function defaultValues(code?: ChargeCode): ChargeCodeFormValues {
+function defaultValues(
+  code?: ChargeCode,
+  mode: 'create' | 'edit' | 'copy' = 'create'
+): ChargeCodeFormValues {
+  const isCopy = mode === 'copy';
   return {
     code: code?.code ?? '',
-    description: code?.description ?? '',
+    description: isCopy
+      ? `${code?.description?.trim() || code?.code || 'Charge code'} - Copy`
+      : (code?.description ?? ''),
     type: (code?.type as ChargeCodeType) ?? 'DIRECT',
     costHandling:
       (code?.costHandling as ChargeCodeFormValues['costHandling']) ??
@@ -128,13 +135,18 @@ function defaultValues(code?: ChargeCode): ChargeCodeFormValues {
 
 function ChargeCodeForm({
   editTarget,
+  copySource,
+  existingChargeCodes,
   onClose,
 }: {
   editTarget: ChargeCode | null;
+  copySource: ChargeCode | null;
+  existingChargeCodes: ChargeCode[];
   onClose: () => void;
 }) {
   const { toast } = useToast();
   const isEdit = editTarget !== null;
+  const isCopy = copySource !== null;
   const [assignmentScope, setAssignmentScope] = useState<
     'ALL_EMPLOYEES' | 'SELECTED_EMPLOYEES'
   >('ALL_EMPLOYEES');
@@ -147,10 +159,16 @@ function ChargeCodeForm({
 
   const { data: assignments, isLoading: assignmentsLoading } =
     useQuery<ChargeCodeAssignments>({
-      queryKey: ['/api/charge-codes', editTarget?.id, 'assignments'],
+      queryKey: [
+        '/api/charge-codes',
+        editTarget?.id ?? copySource?.id,
+        'assignments',
+      ],
       queryFn: () =>
-        apiRequest(`/api/charge-codes/${editTarget!.id}/assignments`),
-      enabled: isEdit,
+        apiRequest(
+          `/api/charge-codes/${(editTarget ?? copySource)!.id}/assignments`
+        ),
+      enabled: isEdit || isCopy,
     });
 
   useEffect(() => {
@@ -161,7 +179,10 @@ function ChargeCodeForm({
 
   const form = useForm<ChargeCodeFormValues>({
     resolver: zodResolver(chargeCodeFormSchema),
-    defaultValues: defaultValues(editTarget ?? undefined),
+    defaultValues: defaultValues(
+      editTarget ?? copySource ?? undefined,
+      isEdit ? 'edit' : isCopy ? 'copy' : 'create'
+    ),
   });
 
   async function saveAssignments(chargeCodeId: number) {
@@ -275,8 +296,27 @@ function ChargeCodeForm({
   }
 
   function onSubmit(values: ChargeCodeFormValues) {
+    const normalizedCode = values.code.trim().toLowerCase();
+    const duplicate = existingChargeCodes.find((chargeCode) => {
+      if (isEdit && chargeCode.id === editTarget.id) return false;
+      return chargeCode.code.trim().toLowerCase() === normalizedCode;
+    });
+
+    if (duplicate) {
+      form.setError('code', {
+        type: 'manual',
+        message: `Charge code "${values.code}" already exists.`,
+      });
+      toast({
+        title: 'Duplicate charge code',
+        description: 'Change the code before saving this copy.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     const payload = {
-      code: values.code,
+      code: values.code.trim(),
       description: values.description || null,
       type: values.type,
       costHandling: values.costHandling,
@@ -509,7 +549,9 @@ function ChargeCodeForm({
           <div className="rounded-md border p-3 space-y-3">
             {!isEdit && (
               <p className="text-xs text-muted-foreground">
-                Access settings will be applied when the charge code is created.
+                {isCopy
+                  ? 'Copied access settings will be applied when the new charge code is created.'
+                  : 'Access settings will be applied when the charge code is created.'}
               </p>
             )}
             <div className="flex items-center justify-between gap-3">
@@ -754,6 +796,7 @@ export default function ChargeCodeManagerPage() {
   const [showInactive, setShowInactive] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<ChargeCode | null>(null);
+  const [copySource, setCopySource] = useState<ChargeCode | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortColumn, setSortColumn] = useState<SortColumn | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
@@ -839,17 +882,26 @@ export default function ChargeCodeManagerPage() {
 
   function openCreate() {
     setEditTarget(null);
+    setCopySource(null);
     setDialogOpen(true);
   }
 
   function openEdit(code: ChargeCode) {
     setEditTarget(code);
+    setCopySource(null);
+    setDialogOpen(true);
+  }
+
+  function openCopy(code: ChargeCode) {
+    setEditTarget(null);
+    setCopySource(code);
     setDialogOpen(true);
   }
 
   function closeDialog() {
     setDialogOpen(false);
     setEditTarget(null);
+    setCopySource(null);
   }
 
   const typeLabel: Record<string, string> = {
@@ -943,7 +995,7 @@ export default function ChargeCodeManagerPage() {
                   />
                 </TableHead>
               ))}
-              <TableHead className="w-12" />
+              <TableHead className="w-24" />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -1035,16 +1087,32 @@ export default function ChargeCodeManagerPage() {
                       )}
                     </TableCell>
                     <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openEdit(code);
-                        }}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          aria-label={`Copy charge code ${code.code}`}
+                          title="Copy charge code"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openCopy(code);
+                          }}
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          aria-label={`Edit charge code ${code.code}`}
+                          title="Edit charge code"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEdit(code);
+                          }}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
@@ -1058,11 +1126,20 @@ export default function ChargeCodeManagerPage() {
         <DialogContent className="max-w-lg max-h-[90vh] overflow-hidden">
           <DialogHeader className="pb-2">
             <DialogTitle>
-              {editTarget ? `Edit: ${editTarget.code}` : 'Add Charge Code'}
+              {editTarget
+                ? `Edit: ${editTarget.code}`
+                : copySource
+                  ? `Copy: ${copySource.code}`
+                  : 'Add Charge Code'}
             </DialogTitle>
           </DialogHeader>
           {dialogOpen && (
-            <ChargeCodeForm editTarget={editTarget} onClose={closeDialog} />
+            <ChargeCodeForm
+              editTarget={editTarget}
+              copySource={copySource}
+              existingChargeCodes={chargeCodes ?? []}
+              onClose={closeDialog}
+            />
           )}
         </DialogContent>
       </Dialog>

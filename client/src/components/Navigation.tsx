@@ -10,7 +10,6 @@ import {
   Plus,
   Settings,
   Package,
-  FilePenLine,
   ClipboardList,
   BarChart,
   BarChart3,
@@ -741,12 +740,6 @@ export default function Navigation() {
       label: 'Calendar',
       icon: Calendar,
       description: 'Multi-user calendar system',
-    },
-    {
-      path: '/awaiting-signature',
-      label: 'Awaiting Signature',
-      icon: FilePenLine,
-      description: 'Orders pending customer signature',
     },
     {
       path: '/shipping-tracker',

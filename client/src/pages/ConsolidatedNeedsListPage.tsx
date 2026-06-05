@@ -73,6 +73,8 @@ type PartsRequest = {
   partNumber: string;
   partName: string;
   requestedBy: string;
+  requestedForEmployeeId?: number | null;
+  requestedForDisplayName?: string | null;
   department: string;
   departmentId: number;
   quantity: number;
@@ -398,7 +400,8 @@ export default function ConsolidatedNeedsListPage() {
         (request.partNumber && request.partNumber.toLowerCase().includes(search)) ||
         (request.partName && request.partName.toLowerCase().includes(search)) ||
         (request.department && request.department.toLowerCase().includes(search)) ||
-        (request.requestedBy && request.requestedBy.toLowerCase().includes(search))
+        (request.requestedBy && request.requestedBy.toLowerCase().includes(search)) ||
+        (request.requestedForDisplayName && request.requestedForDisplayName.toLowerCase().includes(search))
       );
     });
   }, [allRequests, searchTerm]);
@@ -620,7 +623,7 @@ export default function ConsolidatedNeedsListPage() {
   };
 
   const exportVendorCSV = (vendorGroup: VendorGroup) => {
-    const headers = ['Part Number', 'Part Name', 'Vendor SKU', 'Quantity', 'Est. Cost', 'Department', 'Urgency', 'Status'];
+    const headers = ['Part Number', 'Part Name', 'Vendor SKU', 'Quantity', 'Est. Cost', 'Department', 'Requested By', 'Requested For', 'Urgency', 'Status'];
     const rows = vendorGroup.requests.map(r => [
       r.partNumber,
       r.partName,
@@ -628,6 +631,8 @@ export default function ConsolidatedNeedsListPage() {
       r.quantity.toString(),
       r.estimatedCost?.toFixed(2) || '',
       r.department,
+      r.requestedBy,
+      r.requestedForDisplayName || '',
       r.urgency,
       r.status,
     ]);
@@ -809,6 +814,7 @@ export default function ConsolidatedNeedsListPage() {
                       <tr>
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Department</th>
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Requested By</th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Requested For</th>
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Qty</th>
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Urgency</th>
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Reason</th>
@@ -820,6 +826,7 @@ export default function ConsolidatedNeedsListPage() {
                         <tr key={request.id} className="bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800">
                           <td className="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">{request.department}</td>
                           <td className="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">{request.requestedBy}</td>
+                          <td className="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">{request.requestedForDisplayName || '—'}</td>
                           <td className="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">{request.quantity}</td>
                           <td className="px-4 py-2 text-sm">{getUrgencyBadge(request.urgency)}</td>
                           <td className="px-4 py-2 text-sm text-gray-900 dark:text-gray-100 max-w-xs truncate">{request.reason}</td>
@@ -1047,7 +1054,8 @@ export default function ConsolidatedNeedsListPage() {
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Qty</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Est. Cost</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Department</th>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Requester</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Requested By</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Requested For</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Urgency</th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">Status</th>
                         <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400">Actions</th>
@@ -1089,6 +1097,7 @@ export default function ConsolidatedNeedsListPage() {
                           </td>
                           <td className="px-3 py-2 text-sm text-gray-900 dark:text-gray-100">{request.department}</td>
                           <td className="px-3 py-2 text-sm text-gray-900 dark:text-gray-100">{request.requestedBy}</td>
+                          <td className="px-3 py-2 text-sm text-gray-900 dark:text-gray-100">{request.requestedForDisplayName || '—'}</td>
                           <td className="px-3 py-2">{getUrgencyBadge(request.urgency)}</td>
                           <td className="px-3 py-2">
                             <div className="flex flex-col gap-1">
@@ -1156,7 +1165,7 @@ export default function ConsolidatedNeedsListPage() {
       <Card>
         <CardContent className="pt-6">
           <Input
-            placeholder="Search by part number, name, department, or requester..."
+            placeholder="Search by part number, name, department, requester, or requested for..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             data-testid="input-search-requests"
@@ -1311,6 +1320,10 @@ export default function ConsolidatedNeedsListPage() {
                 <div>
                   <span className="text-muted-foreground">Requested By:</span>
                   <p className="font-medium">{selectedRequest?.requestedBy}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Requested For:</span>
+                  <p className="font-medium">{selectedRequest?.requestedForDisplayName || '—'}</p>
                 </div>
                 <div>
                   <span className="text-muted-foreground">Urgency:</span>

@@ -822,6 +822,9 @@ export const partsRequests = pgTable('parts_requests', {
   partNumber: text('part_number').notNull(), // Part number (can be AG part or external)
   partName: text('part_name').notNull(),
   requestedBy: text('requested_by').notNull(),
+  requestedByUserId: integer('requested_by_user_id').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
+  requestedForEmployeeId: integer('requested_for_employee_id').references((): AnyPgColumn => employees.id, { onDelete: 'set null' }),
+  requestedForDisplayName: text('requested_for_display_name'),
   productionLine: text('production_line'), // Optional P1/P2/P3 line requested for this part
   projectId: uuid('project_id').references((): AnyPgColumn => projects.id, { onDelete: 'set null' }),
   department: text('department'), // Department name (legacy text field)

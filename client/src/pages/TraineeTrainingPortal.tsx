@@ -133,18 +133,11 @@ interface ProgramAssignment {
   }[];
 }
 
-const forkliftLearningObjectives = [
-  'Inspect the truck before use and remove unsafe equipment from service.',
-  'Keep the load, forks, speed, and travel direction under control.',
-  'Work safely around pedestrians, corners, intersections, and blind spots.',
-  'Park, secure, and report the truck correctly at the end of operation.',
-];
-
 const forkliftPracticalPath = [
-  { title: 'Training review', detail: 'Read the operator material and acknowledge it before testing.' },
-  { title: 'Written test', detail: 'Pass the randomized knowledge check at 80% or better.' },
-  { title: 'Mini-course', detail: 'Demonstrate safe operation while agrace observes the practical checklist.' },
-  { title: 'Certification', detail: 'A satisfactory practical evaluation issues the forklift badge record.' },
+  { title: '1. Training review', detail: 'Read the operator material in full.' },
+  { title: '2. Written test', detail: 'Score at least 80% on the knowledge check.' },
+  { title: '3. Practical evaluation', detail: 'Complete the mini-course observed by agrace.' },
+  { title: '4. Certification record', detail: 'Receive the forklift operator badge record.' },
 ];
 
 const stepDescriptions = [
@@ -431,48 +424,63 @@ export default function TraineeTrainingPortal({ embedded = false, defaultTab = '
                 </div>
               </div>
             </div>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Award className="h-5 w-5 text-primary" />
-                Certification path
-              </CardTitle>
-              <CardDescription>Each step must be completed in order before the practical evaluation task is sent to agrace.</CardDescription>
-            </CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid gap-3 md:grid-cols-4">
-                {forkliftPracticalPath.map((step, index) => (
-                  <div key={step.title} className="rounded-md border bg-background p-4">
-                    <div className="mb-3 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
-                      {index + 1}
-                    </div>
-                    <div className="text-sm font-semibold">{step.title}</div>
+              <div className="grid gap-3 border-b pb-6 pt-6 md:grid-cols-4">
+                {forkliftPracticalPath.map((step) => (
+                  <div key={step.title} className="border-l pl-4">
+                    <div className="text-sm font-semibold text-slate-900">{step.title}</div>
                     <p className="mt-1 text-xs leading-5 text-muted-foreground">{step.detail}</p>
                   </div>
                 ))}
               </div>
 
-              <div className="rounded-lg border bg-muted/30 p-4">
-                <div className="mb-4">
-                  <div className="text-sm font-semibold">What this training emphasizes</div>
-                  <p className="text-sm text-muted-foreground">Focus on the decisions that prevent tip-overs, struck-by incidents, and unsafe equipment use.</p>
-                </div>
-                <div className="grid gap-3 md:grid-cols-2">
-                  {forkliftLearningObjectives.map((objective) => (
-                    <div key={objective} className="flex items-start gap-3 rounded-md border bg-background p-3 text-sm">
-                      <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-                      <span>{objective}</span>
-                    </div>
-                  ))}
+              <div className="rounded-md border bg-slate-50 p-4">
+                <div className="grid gap-4 text-sm md:grid-cols-3">
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Regulatory basis</div>
+                    <div className="mt-1 font-medium text-slate-900">OSHA 29 CFR 1910.178</div>
+                  </div>
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Equipment scope</div>
+                    <div className="mt-1 font-medium text-slate-900">Sit-down counterbalance forklift</div>
+                  </div>
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Evaluator</div>
+                    <div className="mt-1 font-medium text-slate-900">agrace</div>
+                  </div>
                 </div>
               </div>
 
-              <div className="rounded-lg border p-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="rounded-md border">
+                <div className="border-b bg-slate-50 px-5 py-4">
                   <div>
-                    <div className="text-sm font-semibold">Step 1: Review training material</div>
+                    <div className="text-sm font-semibold text-slate-900">Training material</div>
                     <p className="text-sm text-muted-foreground">
                       Use this as the reference material for the written test and the practical mini-course.
                     </p>
+                  </div>
+                </div>
+
+                <div className="max-h-[560px] overflow-y-auto bg-white px-8 py-7 selection:bg-slate-200 selection:text-slate-950">
+                  {forkliftTrainingModule?.contentHtml ? (
+                    <div
+                      className="prose prose-slate max-w-none prose-headings:tracking-tight prose-headings:text-slate-950 prose-h1:text-2xl prose-h2:border-b prose-h2:border-slate-200 prose-h2:pb-2 prose-h2:text-xl prose-h3:text-base prose-p:text-[15px] prose-p:leading-7 prose-li:text-[15px] prose-li:leading-7"
+                      dangerouslySetInnerHTML={{ __html: forkliftTrainingModule.contentHtml }}
+                    />
+                  ) : forkliftTrainingModule?.content ? (
+                    <div className="whitespace-pre-wrap text-[15px] leading-7 text-slate-800">{forkliftTrainingModule.content}</div>
+                  ) : (
+                    <div className="flex items-start gap-3 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                      <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                      <div>No forklift module content was found. Publish a training module with forklift or powered industrial truck in the title, description, or category.</div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-3 border-t bg-slate-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <div className="text-sm font-semibold text-slate-900">Review acknowledgement</div>
+                    <p className="text-sm text-muted-foreground">Acknowledge this only after reviewing the material above.</p>
                   </div>
                   <Button
                     variant={forkliftTrainingReviewed ? 'default' : 'outline'}
@@ -480,24 +488,8 @@ export default function TraineeTrainingPortal({ embedded = false, defaultTab = '
                     data-testid="button-mark-forklift-training-reviewed"
                   >
                     <CheckCircle className="h-4 w-4 mr-2" />
-                    {forkliftTrainingReviewed ? 'Reviewed' : 'Mark Reviewed'}
+                    {forkliftTrainingReviewed ? 'Material Reviewed' : 'I Reviewed the Material'}
                   </Button>
-                </div>
-
-                <div className="mt-4 max-h-[520px] overflow-y-auto rounded-md border bg-background p-5">
-                  {forkliftTrainingModule?.contentHtml ? (
-                    <div
-                      className="prose prose-sm max-w-none prose-headings:tracking-tight prose-headings:text-slate-900 prose-p:leading-7 prose-li:leading-7"
-                      dangerouslySetInnerHTML={{ __html: forkliftTrainingModule.contentHtml }}
-                    />
-                  ) : forkliftTrainingModule?.content ? (
-                    <div className="whitespace-pre-wrap text-sm leading-7">{forkliftTrainingModule.content}</div>
-                  ) : (
-                    <div className="flex items-start gap-3 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                      <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-                      <div>No forklift module content was found. Publish a training module with forklift or powered industrial truck in the title, description, or category.</div>
-                    </div>
-                  )}
                 </div>
               </div>
 

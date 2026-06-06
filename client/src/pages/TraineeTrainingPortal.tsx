@@ -133,6 +133,20 @@ interface ProgramAssignment {
   }[];
 }
 
+const forkliftLearningObjectives = [
+  'Inspect the truck before use and remove unsafe equipment from service.',
+  'Keep the load, forks, speed, and travel direction under control.',
+  'Work safely around pedestrians, corners, intersections, and blind spots.',
+  'Park, secure, and report the truck correctly at the end of operation.',
+];
+
+const forkliftPracticalPath = [
+  { title: 'Training review', detail: 'Read the operator material and acknowledge it before testing.' },
+  { title: 'Written test', detail: 'Pass the randomized knowledge check at 80% or better.' },
+  { title: 'Mini-course', detail: 'Demonstrate safe operation while agrace observes the practical checklist.' },
+  { title: 'Certification', detail: 'A satisfactory practical evaluation issues the forklift badge record.' },
+];
+
 const stepDescriptions = [
   { step: 1, title: "Trainer Does / Trainer Explains", icon: Eye, bgClass: "bg-blue-500", description: "Watch the trainer demonstrate while explaining the process" },
   { step: 2, title: "Trainer Does / Trainee Explains", icon: MessageCircle, bgClass: "bg-teal-500", description: "Explain back what the trainer is doing to verify understanding" },
@@ -199,6 +213,14 @@ export default function TraineeTrainingPortal({ embedded = false, defaultTab = '
     const searchable = `${module.title || ''} ${module.description || ''} ${module.category || ''}`.toLowerCase();
     return searchable.includes('forklift') || searchable.includes('powered industrial truck');
   });
+  const canStartForkliftTest = !!traineeId && !!forkliftTrainingModule && forkliftTrainingReviewed;
+  const forkliftTestDisabledReason = !traineeId
+    ? 'Sign in with an employee-linked account before starting the test.'
+    : !forkliftTrainingModule
+      ? 'The forklift training module is missing or is not published.'
+      : !forkliftTrainingReviewed
+        ? 'Mark the training material reviewed to unlock the written test.'
+        : null;
 
   const startQuizMutation = useMutation({
     mutationFn: async ({ planId, stepNumber }: { planId: number; stepNumber: number }) => {
@@ -380,23 +402,76 @@ export default function TraineeTrainingPortal({ embedded = false, defaultTab = '
         </TabsList>
 
         <TabsContent value="forklift" className="space-y-4">
-          <Card>
+          <Card className="overflow-hidden">
+            <div className="border-b bg-slate-950 px-6 py-5 text-white">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <div className="mb-2 flex items-center gap-2 text-sm font-medium text-emerald-200">
+                    <ClipboardCheck className="h-4 w-4" />
+                    Powered Industrial Truck Training
+                  </div>
+                  <h2 className="text-2xl font-semibold tracking-tight">Sit-Down Counterbalance Forklift Operator</h2>
+                  <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
+                    Review the operating standard, pass the written knowledge check, then complete a practical mini-course observed by agrace.
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
+                  <div className="rounded-md border border-white/15 bg-white/10 px-3 py-2">
+                    <div className="text-slate-300">Written</div>
+                    <div className="font-semibold">80% pass</div>
+                  </div>
+                  <div className="rounded-md border border-white/15 bg-white/10 px-3 py-2">
+                    <div className="text-slate-300">AGC refresh</div>
+                    <div className="font-semibold">6 months</div>
+                  </div>
+                  <div className="rounded-md border border-white/15 bg-white/10 px-3 py-2">
+                    <div className="text-slate-300">OSHA eval</div>
+                    <div className="font-semibold">3 years</div>
+                  </div>
+                </div>
+              </div>
+            </div>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Award className="h-5 w-5 text-primary" />
-                Sit-Down Counterbalance Forklift Operator
+                Certification path
               </CardTitle>
-              <CardDescription>
-                Review the training material first, then complete the randomized written test. A passing score creates a practical evaluation task for agrace.
-              </CardDescription>
+              <CardDescription>Each step must be completed in order before the practical evaluation task is sent to agrace.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-5">
+            <CardContent className="space-y-6">
+              <div className="grid gap-3 md:grid-cols-4">
+                {forkliftPracticalPath.map((step, index) => (
+                  <div key={step.title} className="rounded-md border bg-background p-4">
+                    <div className="mb-3 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
+                      {index + 1}
+                    </div>
+                    <div className="text-sm font-semibold">{step.title}</div>
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">{step.detail}</p>
+                  </div>
+                ))}
+              </div>
+
               <div className="rounded-lg border bg-muted/30 p-4">
+                <div className="mb-4">
+                  <div className="text-sm font-semibold">What this training emphasizes</div>
+                  <p className="text-sm text-muted-foreground">Focus on the decisions that prevent tip-overs, struck-by incidents, and unsafe equipment use.</p>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  {forkliftLearningObjectives.map((objective) => (
+                    <div key={objective} className="flex items-start gap-3 rounded-md border bg-background p-3 text-sm">
+                      <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                      <span>{objective}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-lg border p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <div className="text-sm font-semibold">Step 1: Review training material</div>
                     <p className="text-sm text-muted-foreground">
-                      This material is pulled from the OSHA Forklift Certification training module and should be reviewed before the written test.
+                      Use this as the reference material for the written test and the practical mini-course.
                     </p>
                   </div>
                   <Button
@@ -409,18 +484,18 @@ export default function TraineeTrainingPortal({ embedded = false, defaultTab = '
                   </Button>
                 </div>
 
-                <div className="mt-4 max-h-[420px] overflow-y-auto rounded-md border bg-background p-4">
+                <div className="mt-4 max-h-[520px] overflow-y-auto rounded-md border bg-background p-5">
                   {forkliftTrainingModule?.contentHtml ? (
                     <div
-                      className="prose prose-sm max-w-none"
+                      className="prose prose-sm max-w-none prose-headings:tracking-tight prose-headings:text-slate-900 prose-p:leading-7 prose-li:leading-7"
                       dangerouslySetInnerHTML={{ __html: forkliftTrainingModule.contentHtml }}
                     />
                   ) : forkliftTrainingModule?.content ? (
-                    <div className="whitespace-pre-wrap text-sm leading-6">{forkliftTrainingModule.content}</div>
+                    <div className="whitespace-pre-wrap text-sm leading-7">{forkliftTrainingModule.content}</div>
                   ) : (
-                    <div className="flex items-start gap-3 text-sm text-muted-foreground">
+                    <div className="flex items-start gap-3 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                       <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-                      <div>No forklift module content was found. The written test is held until training material is available.</div>
+                      <div>No forklift module content was found. Publish a training module with forklift or powered industrial truck in the title, description, or category.</div>
                     </div>
                   )}
                 </div>
@@ -431,7 +506,7 @@ export default function TraineeTrainingPortal({ embedded = false, defaultTab = '
                   <div>
                     <div className="text-sm font-semibold">Step 2: Written test</div>
                     <p className="text-sm text-muted-foreground">
-                      Passing score: 80%. AGC refresh: 6 months. OSHA evaluation: 3 years.
+                      Passing score: 80%. The passing attempt creates a practical evaluation task for agrace.
                     </p>
                   </div>
                   <div className="w-full sm:w-[240px]">
@@ -449,7 +524,7 @@ export default function TraineeTrainingPortal({ embedded = false, defaultTab = '
                   </div>
                   <Button
                     onClick={() => startForkliftWrittenTestMutation.mutate()}
-                    disabled={startForkliftWrittenTestMutation.isPending || !traineeId || !forkliftTrainingReviewed || !forkliftTrainingModule}
+                    disabled={startForkliftWrittenTestMutation.isPending || !canStartForkliftTest}
                     data-testid="button-start-forklift-written-test"
                   >
                     {startForkliftWrittenTestMutation.isPending ? (
@@ -465,15 +540,11 @@ export default function TraineeTrainingPortal({ embedded = false, defaultTab = '
                     )}
                   </Button>
                 </div>
-                {!forkliftTrainingReviewed && (
-                  <p className="mt-3 text-xs text-muted-foreground">
-                    Mark the training material reviewed to unlock the written test.
-                  </p>
-                )}
-                {!forkliftTrainingModule && (
-                  <p className="mt-3 text-xs text-destructive">
-                    OSHA Forklift Certification module content is missing or not published.
-                  </p>
+                {forkliftTestDisabledReason && (
+                  <div className="mt-3 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>{forkliftTestDisabledReason}</span>
+                  </div>
                 )}
               </div>
             </CardContent>

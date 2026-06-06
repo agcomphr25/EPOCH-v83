@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { Link } from 'wouter';
+import { Link, useLocation } from 'wouter';
 import {
   Card,
   CardContent,
@@ -201,8 +201,14 @@ interface TrainingProps {
   lang?: 'en' | 'es';
 }
 
+function isForkliftModule(module: any) {
+  const searchable = `${module?.title || ''} ${module?.description || ''} ${module?.category || ''}`.toLowerCase();
+  return searchable.includes('forklift') || searchable.includes('powered industrial truck');
+}
+
 export default function Training({ lang = 'en' }: TrainingProps) {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const t = trainingTranslations[lang];
   const [createOpen, setCreateOpen] = useState(false);
   const [createTab, setCreateTab] = useState('basic');
@@ -358,12 +364,25 @@ export default function Training({ lang = 'en' }: TrainingProps) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {Array.isArray(modules) &&
-          modules.map((module: any) => (
-            <Card
-              key={module.id}
-              className="hover:shadow-lg transition-shadow"
-              data-testid={`card-training-module-${module.id}`}
-            >
+          modules.map((module: any) => {
+            const forkliftModule = isForkliftModule(module);
+            const moduleHref = forkliftModule ? '/training/my-training?tab=forklift' : `/training/${module.id}`;
+
+            return (
+              <Card
+                key={module.id}
+                className={`hover:shadow-lg transition-shadow ${forkliftModule ? 'cursor-pointer' : ''}`}
+                data-testid={`card-training-module-${module.id}`}
+                role={forkliftModule ? 'button' : undefined}
+                tabIndex={forkliftModule ? 0 : undefined}
+                onClick={forkliftModule ? () => navigate(moduleHref) : undefined}
+                onKeyDown={forkliftModule ? (event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    navigate(moduleHref);
+                  }
+                } : undefined}
+              >
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <CardTitle className="flex items-start gap-2">
@@ -394,7 +413,10 @@ export default function Training({ lang = 'en' }: TrainingProps) {
                       variant="outline"
                       size="sm"
                       className="flex-1"
-                      onClick={() => aiTransformMutation.mutate(module.id)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        aiTransformMutation.mutate(module.id);
+                      }}
                       disabled={transformingModuleId === module.id}
                     >
                       {transformingModuleId === module.id ? (
@@ -409,19 +431,20 @@ export default function Training({ lang = 'en' }: TrainingProps) {
                         </>
                       )}
                     </Button>
-                    <Link href={`/training/${module.id}`} className="flex-1">
+                    <Link href={moduleHref} className="flex-1">
                       <Button
                         className="w-full"
                         data-testid={`button-start-training-${module.id}`}
                       >
-                        {t.previewModule}
+                        {forkliftModule ? 'Open Forklift' : t.previewModule}
                       </Button>
                     </Link>
                   </div>
                 </div>
               </CardContent>
             </Card>
-          ))}
+            );
+          })}
           </div>
 
           {(!modules || (Array.isArray(modules) && modules.length === 0)) && (

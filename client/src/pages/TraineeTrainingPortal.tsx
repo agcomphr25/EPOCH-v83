@@ -132,19 +132,67 @@ const forkliftPracticalPath = [
 ];
 
 function AgcForkliftOperatorStandard() {
-  const operatingRules = [
-    ['Pre-use inspection', 'Complete a visual and functional inspection before operating. Do not use a truck with a safety defect. Tag it out and report it to supervision.'],
-    ['Pedestrian control', 'Slow at intersections, blind corners, doorways, and aisle crossings. Sound the horn where visibility is limited and maintain separation from pedestrians.'],
-    ['Speed and control', 'Operate at a speed that allows a controlled stop. Avoid abrupt starts, stops, turns, and direction changes.'],
-    ['Load handling', 'Verify the load is stable, within rated capacity, and carried low with the mast tilted back as appropriate. Do not travel with an elevated load.'],
-    ['Visibility', 'Look in the direction of travel. If the load blocks forward view, travel in reverse or use a spotter when conditions require it.'],
-    ['Parking and shutdown', 'Park in an approved location, lower forks, neutralize controls, set the parking brake, and secure the truck before leaving it unattended.'],
+  const trainingTopics = [
+    {
+      topic: 'Truck stability',
+      standard: 'A sit-down counterbalance forklift depends on the stability triangle formed by the two front wheels and the rear pivot point. The truck is most stable when the load is low, centered, tilted back as appropriate, and moved without sudden steering or braking.',
+      operatorMust: 'Keep forks and loads low while traveling, avoid abrupt turns, and never use the truck in a way that exceeds its rated capacity.',
+    },
+    {
+      topic: 'Pre-use inspection',
+      standard: 'Operators must inspect the truck before use at the start of operation. Inspection includes visible damage, leaks, tires, forks, mast, chains, seat belt, horn, lights, controls, steering, brakes, and warning devices.',
+      operatorMust: 'Remove unsafe equipment from service, tag or report it, and do not operate until the condition has been corrected.',
+    },
+    {
+      topic: 'Pedestrian and intersection control',
+      standard: 'Pedestrians have priority. Blind corners, doorways, aisle crossings, and intersections require reduced speed, active observation, and horn use when visibility is limited.',
+      operatorMust: 'Slow down, look in the direction of travel, sound the horn as needed, and maintain separation from people on foot.',
+    },
+    {
+      topic: 'Seat belt and operator position',
+      standard: 'The seat belt keeps the operator inside the protective zone if the truck tips. Leaning outside the operator compartment increases injury risk.',
+      operatorMust: 'Wear the seat belt, keep hands and feet inside the operator compartment, and never jump from a tipping truck.',
+    },
+    {
+      topic: 'Load rating and handling',
+      standard: 'The capacity plate controls what the truck can lift. Load weight, load center, attachments, damaged pallets, and unstable stacking can all affect safe handling.',
+      operatorMust: 'Confirm the load is stable and within capacity before lifting, carry it low, and avoid traveling with the load raised.',
+    },
+    {
+      topic: 'Visibility and travel direction',
+      standard: 'Operators must be able to see the path of travel. If a load blocks forward visibility, forward travel is not the safe choice.',
+      operatorMust: 'Travel in reverse while looking in the direction of travel, or use a spotter when conditions require additional control.',
+    },
+    {
+      topic: 'Speed, turning, and stopping',
+      standard: 'Speed must allow a controlled stop for the condition of the floor, load, traffic, visibility, and aisle space. Sudden steering or braking can destabilize the truck or load.',
+      operatorMust: 'Drive slowly enough to stop safely, slow before turns, and avoid sudden direction changes.',
+    },
+    {
+      topic: 'Parking and shutdown',
+      standard: 'A parked forklift must not create a tripping, struck-by, or runaway hazard. Forks left raised or controls left active create unnecessary risk.',
+      operatorMust: 'Lower forks, set controls to neutral, set the parking brake, and park only in an approved location before leaving the truck.',
+    },
+    {
+      topic: 'Refresher training triggers',
+      standard: 'Refresher training or re-evaluation may be required after unsafe operation, an accident, a near miss, assignment to a different truck type, or workplace changes that affect safe operation.',
+      operatorMust: 'Report incidents and changed conditions promptly so supervision can determine whether refresher training is required.',
+    },
   ];
 
-  const unsafeConditions = [
-    'Brake, steering, horn, lights, backup alarm, seat belt, mast, fork, tire, chain, leak, or control defects.',
-    'Unstable loads, damaged pallets, obstructed aisles, wet floors, blind intersections, or pedestrian congestion.',
-    'Any collision, near miss, unsafe operation, change in truck type, or changed workplace condition requiring refresher review.',
+  const inspectionStopItems = [
+    'Brake, steering, horn, lights, alarm, seat belt, mast, fork, tire, chain, leak, or control defects.',
+    'Unstable loads, damaged pallets, blocked aisles, wet floors, blind intersections, or pedestrian congestion.',
+    'Any collision, near miss, unsafe operation, different truck type, or workplace change that affects safe operation.',
+  ];
+
+  const readinessItems = [
+    'Explain why loads and forks are kept low while traveling.',
+    'State when the pre-use inspection is required and what to do with a defective truck.',
+    'Describe what to do at intersections, blind corners, and pedestrian areas.',
+    'Explain why the seat belt is required on a sit-down forklift.',
+    'Identify how to handle blocked visibility, unstable loads, and parking/shutdown.',
+    'Recognize the events that require refresher training or re-evaluation.',
   ];
 
   return (
@@ -153,7 +201,7 @@ function AgcForkliftOperatorStandard() {
         <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Internal AGC Operator Standard</div>
         <h3 className="text-xl font-semibold tracking-tight">Sit-Down Counterbalance Forklift Operation</h3>
         <p className="max-w-4xl text-[15px] leading-7 text-slate-700">
-          AGC forklift operators are expected to operate powered industrial trucks in a controlled, deliberate, and safety-focused manner. Certification requires review of this standard, a passing written test, and a practical evaluation observed by the designated evaluator.
+          AGC forklift operators are expected to operate powered industrial trucks in a controlled, deliberate, and safety-focused manner. This standard combines AGC operating expectations with the OSHA powered industrial truck topics needed for the written test and practical evaluation.
         </p>
       </section>
 
@@ -176,20 +224,22 @@ function AgcForkliftOperatorStandard() {
       </section>
 
       <section className="space-y-3">
-        <h4 className="text-base font-semibold">Operating Requirements</h4>
+        <h4 className="text-base font-semibold">Required Knowledge and Operating Expectations</h4>
         <div className="overflow-hidden rounded-md border">
           <table className="w-full border-collapse text-left text-sm">
             <thead className="bg-slate-100 text-xs uppercase tracking-wide text-slate-600">
               <tr>
-                <th className="w-56 px-4 py-3 font-semibold">Area</th>
-                <th className="px-4 py-3 font-semibold">AGC expectation</th>
+                <th className="w-56 px-4 py-3 font-semibold">Topic</th>
+                <th className="px-4 py-3 font-semibold">What the operator must understand</th>
+                <th className="px-4 py-3 font-semibold">AGC operating rule</th>
               </tr>
             </thead>
             <tbody className="divide-y">
-              {operatingRules.map(([area, expectation]) => (
-                <tr key={area} className="align-top">
-                  <td className="bg-slate-50 px-4 py-3 font-medium text-slate-900">{area}</td>
-                  <td className="px-4 py-3 leading-6 text-slate-700">{expectation}</td>
+              {trainingTopics.map((row) => (
+                <tr key={row.topic} className="align-top">
+                  <td className="bg-slate-50 px-4 py-3 font-medium text-slate-900">{row.topic}</td>
+                  <td className="px-4 py-3 leading-6 text-slate-700">{row.standard}</td>
+                  <td className="px-4 py-3 leading-6 text-slate-700">{row.operatorMust}</td>
                 </tr>
               ))}
             </tbody>
@@ -200,7 +250,7 @@ function AgcForkliftOperatorStandard() {
       <section className="space-y-3">
         <h4 className="text-base font-semibold">Conditions Requiring Stop, Report, or Refresher Review</h4>
         <ul className="space-y-2 text-sm leading-6 text-slate-700">
-          {unsafeConditions.map((condition) => (
+          {inspectionStopItems.map((condition) => (
             <li key={condition} className="rounded-md border-l-4 border-slate-300 bg-slate-50 px-4 py-3">
               {condition}
             </li>
@@ -213,6 +263,17 @@ function AgcForkliftOperatorStandard() {
         <p className="mt-2 text-sm leading-6 text-slate-700">
           After a passing written test, agrace will observe the operator completing the practical mini-course. Required items include pre-operation inspection, seat belt and control checks, controlled travel, safe fork and load position, intersection awareness, parking and shutdown, and correct response to unsafe conditions.
         </p>
+      </section>
+
+      <section className="space-y-3">
+        <h4 className="text-base font-semibold">Before Starting the Written Test</h4>
+        <div className="grid gap-2 md:grid-cols-2">
+          {readinessItems.map((item) => (
+            <div key={item} className="rounded-md border bg-white px-4 py-3 text-sm leading-6 text-slate-700">
+              {item}
+            </div>
+          ))}
+        </div>
       </section>
     </div>
   );

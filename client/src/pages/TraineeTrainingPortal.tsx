@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
 import {
   GraduationCap,
   Lock,
@@ -95,15 +95,6 @@ interface ForkliftWrittenResult {
   evaluation?: { id: number; status: string } | null;
 }
 
-interface TrainingModuleSummary {
-  id: number;
-  title: string;
-  description?: string | null;
-  category?: string | null;
-  content?: string | null;
-  contentHtml?: string | null;
-}
-
 interface ProgramAssignment {
   id: number;
   programId: number;
@@ -140,6 +131,93 @@ const forkliftPracticalPath = [
   { title: '4. Certification record', detail: 'Receive the forklift operator badge record.' },
 ];
 
+function AgcForkliftOperatorStandard() {
+  const operatingRules = [
+    ['Pre-use inspection', 'Complete a visual and functional inspection before operating. Do not use a truck with a safety defect. Tag it out and report it to supervision.'],
+    ['Pedestrian control', 'Slow at intersections, blind corners, doorways, and aisle crossings. Sound the horn where visibility is limited and maintain separation from pedestrians.'],
+    ['Speed and control', 'Operate at a speed that allows a controlled stop. Avoid abrupt starts, stops, turns, and direction changes.'],
+    ['Load handling', 'Verify the load is stable, within rated capacity, and carried low with the mast tilted back as appropriate. Do not travel with an elevated load.'],
+    ['Visibility', 'Look in the direction of travel. If the load blocks forward view, travel in reverse or use a spotter when conditions require it.'],
+    ['Parking and shutdown', 'Park in an approved location, lower forks, neutralize controls, set the parking brake, and secure the truck before leaving it unattended.'],
+  ];
+
+  const unsafeConditions = [
+    'Brake, steering, horn, lights, backup alarm, seat belt, mast, fork, tire, chain, leak, or control defects.',
+    'Unstable loads, damaged pallets, obstructed aisles, wet floors, blind intersections, or pedestrian congestion.',
+    'Any collision, near miss, unsafe operation, change in truck type, or changed workplace condition requiring refresher review.',
+  ];
+
+  return (
+    <div className="space-y-8 text-slate-900">
+      <section className="space-y-3">
+        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Internal AGC Operator Standard</div>
+        <h3 className="text-xl font-semibold tracking-tight">Sit-Down Counterbalance Forklift Operation</h3>
+        <p className="max-w-4xl text-[15px] leading-7 text-slate-700">
+          AGC forklift operators are expected to operate powered industrial trucks in a controlled, deliberate, and safety-focused manner. Certification requires review of this standard, a passing written test, and a practical evaluation observed by the designated evaluator.
+        </p>
+      </section>
+
+      <section className="grid gap-4 md:grid-cols-3">
+        <div className="rounded-md border p-4">
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Passing score</div>
+          <div className="mt-1 text-lg font-semibold">80%</div>
+          <p className="mt-1 text-sm leading-6 text-slate-600">Minimum written-test score before practical evaluation.</p>
+        </div>
+        <div className="rounded-md border p-4">
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">AGC refresher</div>
+          <div className="mt-1 text-lg font-semibold">6 months</div>
+          <p className="mt-1 text-sm leading-6 text-slate-600">Internal refresher cadence after certification.</p>
+        </div>
+        <div className="rounded-md border p-4">
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">OSHA evaluation</div>
+          <div className="mt-1 text-lg font-semibold">3 years</div>
+          <p className="mt-1 text-sm leading-6 text-slate-600">Formal operator evaluation interval under OSHA rules.</p>
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <h4 className="text-base font-semibold">Operating Requirements</h4>
+        <div className="overflow-hidden rounded-md border">
+          <table className="w-full border-collapse text-left text-sm">
+            <thead className="bg-slate-100 text-xs uppercase tracking-wide text-slate-600">
+              <tr>
+                <th className="w-56 px-4 py-3 font-semibold">Area</th>
+                <th className="px-4 py-3 font-semibold">AGC expectation</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {operatingRules.map(([area, expectation]) => (
+                <tr key={area} className="align-top">
+                  <td className="bg-slate-50 px-4 py-3 font-medium text-slate-900">{area}</td>
+                  <td className="px-4 py-3 leading-6 text-slate-700">{expectation}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <h4 className="text-base font-semibold">Conditions Requiring Stop, Report, or Refresher Review</h4>
+        <ul className="space-y-2 text-sm leading-6 text-slate-700">
+          {unsafeConditions.map((condition) => (
+            <li key={condition} className="rounded-md border-l-4 border-slate-300 bg-slate-50 px-4 py-3">
+              {condition}
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section className="rounded-md border bg-slate-50 p-4">
+        <h4 className="text-base font-semibold">Practical Evaluation</h4>
+        <p className="mt-2 text-sm leading-6 text-slate-700">
+          After a passing written test, agrace will observe the operator completing the practical mini-course. Required items include pre-operation inspection, seat belt and control checks, controlled travel, safe fork and load position, intersection awareness, parking and shutdown, and correct response to unsafe conditions.
+        </p>
+      </section>
+    </div>
+  );
+}
+
 const stepDescriptions = [
   { step: 1, title: "Trainer Does / Trainer Explains", icon: Eye, bgClass: "bg-blue-500", description: "Watch the trainer demonstrate while explaining the process" },
   { step: 2, title: "Trainer Does / Trainee Explains", icon: MessageCircle, bgClass: "bg-teal-500", description: "Explain back what the trainer is doing to verify understanding" },
@@ -149,18 +227,9 @@ const stepDescriptions = [
 
 interface TraineeTrainingPortalProps {
   embedded?: boolean;
-  defaultTab?: 'programs' | '4step' | 'forklift';
 }
 
-const traineeTrainingTabs = new Set(['programs', '4step', 'forklift']);
-
-function getTraineeTrainingTab(defaultTab: TraineeTrainingPortalProps['defaultTab']) {
-  const query = typeof window !== 'undefined' ? window.location.search.replace(/^\?/, '') : '';
-  const tab = new URLSearchParams(query).get('tab');
-  return traineeTrainingTabs.has(tab || '') ? tab! : defaultTab || 'programs';
-}
-
-export default function TraineeTrainingPortal({ embedded = false, defaultTab = 'programs' }: TraineeTrainingPortalProps = {}) {
+export default function TraineeTrainingPortal({ embedded = false }: TraineeTrainingPortalProps = {}) {
   const [location] = useLocation();
   const { toast } = useToast();
   const [quizDialogOpen, setQuizDialogOpen] = useState(false);
@@ -198,22 +267,12 @@ export default function TraineeTrainingPortal({ embedded = false, defaultTab = '
     enabled: !!traineeId,
   });
 
-  const { data: trainingModules = [] } = useQuery<TrainingModuleSummary[]>({
-    queryKey: ['/api/training/modules'],
-  });
-
-  const forkliftTrainingModule = trainingModules.find((module) => {
-    const searchable = `${module.title || ''} ${module.description || ''} ${module.category || ''}`.toLowerCase();
-    return searchable.includes('forklift') || searchable.includes('powered industrial truck');
-  });
-  const canStartForkliftTest = !!traineeId && !!forkliftTrainingModule && forkliftTrainingReviewed;
+  const canStartForkliftTest = !!traineeId && forkliftTrainingReviewed;
   const forkliftTestDisabledReason = !traineeId
     ? 'Sign in with an employee-linked account before starting the test.'
-    : !forkliftTrainingModule
-      ? 'The forklift training module is missing or is not published.'
-      : !forkliftTrainingReviewed
-        ? 'Mark the training material reviewed to unlock the written test.'
-        : null;
+    : !forkliftTrainingReviewed
+      ? 'Mark the training material reviewed to unlock the written test.'
+      : null;
 
   const startQuizMutation = useMutation({
     mutationFn: async ({ planId, stepNumber }: { planId: number; stepNumber: number }) => {
@@ -364,36 +423,15 @@ export default function TraineeTrainingPortal({ embedded = false, defaultTab = '
       <div className="mb-8">
         <h1 className="text-3xl font-bold flex items-center gap-3">
           <GraduationCap className="h-8 w-8 text-primary" />
-          My Training
+          Forklift Operator Training
         </h1>
         <p className="text-muted-foreground mt-2">
-          Complete your assigned training programs and quizzes
+          Sit-down counterbalance forklift certification and practical evaluation
         </p>
       </div>
       )}
 
-      <Tabs key={`${location}-${getTraineeTrainingTab(defaultTab)}`} defaultValue={getTraineeTrainingTab(defaultTab)} className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="programs" className="gap-2">
-            <BookOpen className="h-4 w-4" />
-            Training Programs
-            {programAssignments.length > 0 && (
-              <Badge variant="secondary" className="ml-1">{programAssignments.length}</Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="4step" className="gap-2">
-            <Target className="h-4 w-4" />
-            4-Step Training
-            {trainingPlans.length > 0 && (
-              <Badge variant="secondary" className="ml-1">{trainingPlans.length}</Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="forklift" className="gap-2">
-            <ClipboardCheck className="h-4 w-4" />
-            Forklift
-          </TabsTrigger>
-        </TabsList>
-
+      <Tabs key={`${location}-forklift`} defaultValue="forklift" className="space-y-6">
         <TabsContent value="forklift" className="space-y-4">
           <Card className="overflow-hidden">
             <div className="border-b bg-slate-950 px-6 py-5 text-white">
@@ -461,20 +499,8 @@ export default function TraineeTrainingPortal({ embedded = false, defaultTab = '
                   </div>
                 </div>
 
-                <div className="max-h-[560px] overflow-y-auto bg-white px-8 py-7 selection:bg-slate-200 selection:text-slate-950">
-                  {forkliftTrainingModule?.contentHtml ? (
-                    <div
-                      className="prose prose-slate max-w-none prose-headings:tracking-tight prose-headings:text-slate-950 prose-h1:text-2xl prose-h2:border-b prose-h2:border-slate-200 prose-h2:pb-2 prose-h2:text-xl prose-h3:text-base prose-p:text-[15px] prose-p:leading-7 prose-li:text-[15px] prose-li:leading-7"
-                      dangerouslySetInnerHTML={{ __html: forkliftTrainingModule.contentHtml }}
-                    />
-                  ) : forkliftTrainingModule?.content ? (
-                    <div className="whitespace-pre-wrap text-[15px] leading-7 text-slate-800">{forkliftTrainingModule.content}</div>
-                  ) : (
-                    <div className="flex items-start gap-3 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                      <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-                      <div>No forklift module content was found. Publish a training module with forklift or powered industrial truck in the title, description, or category.</div>
-                    </div>
-                  )}
+                <div className="max-h-[620px] overflow-y-auto bg-white px-8 py-7 selection:bg-slate-200 selection:text-slate-950">
+                  <AgcForkliftOperatorStandard />
                 </div>
 
                 <div className="flex flex-col gap-3 border-t bg-slate-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">

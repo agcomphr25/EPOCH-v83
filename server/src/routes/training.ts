@@ -224,6 +224,116 @@ const FORKLIFT_WRITTEN_QUESTIONS = [
     ],
     correctAnswer: 'Unsafe operation, accident, near miss, different truck type, or changed workplace condition',
   },
+  {
+    id: 'stability-triangle-risk',
+    question: 'Which condition most increases the chance of a forklift becoming unstable?',
+    options: [
+      'Turning sharply with an elevated or unstable load',
+      'Keeping the forks low while traveling',
+      'Inspecting the truck before use',
+      'Traveling slowly through an intersection',
+    ],
+    correctAnswer: 'Turning sharply with an elevated or unstable load',
+  },
+  {
+    id: 'capacity-plate',
+    question: 'What should the operator use to confirm whether a forklift can safely handle a load?',
+    options: [
+      'The forklift capacity/rating information and the load condition',
+      'A guess based on how heavy the load looks',
+      'Whether another employee says it should be fine',
+      'The highest shelf the forklift can reach',
+    ],
+    correctAnswer: 'The forklift capacity/rating information and the load condition',
+  },
+  {
+    id: 'inspection-defect',
+    question: 'During pre-use inspection, the operator finds a brake or steering defect. What is the correct response?',
+    options: [
+      'Remove the truck from service and report the defect',
+      'Use the truck only at low speed',
+      'Finish the shift and report it later',
+      'Operate only if the load is light',
+    ],
+    correctAnswer: 'Remove the truck from service and report the defect',
+  },
+  {
+    id: 'pedestrian-priority',
+    question: 'What is the safest assumption when operating near pedestrians?',
+    options: [
+      'Pedestrians have priority and may not see or hear the forklift',
+      'Pedestrians will always move out of the way',
+      'The horn gives the forklift the right of way',
+      'Forklifts can pass closely if moving slowly',
+    ],
+    correctAnswer: 'Pedestrians have priority and may not see or hear the forklift',
+  },
+  {
+    id: 'load-center',
+    question: 'Why can a long, off-center, or unstable load be dangerous even if it does not look heavy?',
+    options: [
+      'It can affect the load center and truck stability',
+      'It makes the horn harder to hear',
+      'It prevents the parking brake from working',
+      'It automatically increases the forklift rating',
+    ],
+    correctAnswer: 'It can affect the load center and truck stability',
+  },
+  {
+    id: 'unattended-truck',
+    question: 'Before leaving a forklift unattended, what must the operator do?',
+    options: [
+      'Lower the forks, neutralize controls, set the parking brake, and secure the truck',
+      'Leave the forks raised so others can see them',
+      'Park wherever the next task will begin',
+      'Leave the truck running if returning soon',
+    ],
+    correctAnswer: 'Lower the forks, neutralize controls, set the parking brake, and secure the truck',
+  },
+  {
+    id: 'direction-of-travel',
+    question: 'Where should the operator be looking while traveling?',
+    options: [
+      'In the direction of travel',
+      'Only at the load',
+      'Only at the steering wheel',
+      'At the nearest pedestrian after passing them',
+    ],
+    correctAnswer: 'In the direction of travel',
+  },
+  {
+    id: 'speed-control',
+    question: 'How should forklift speed be selected?',
+    options: [
+      'Slow enough to stop safely for the load, floor, visibility, and traffic conditions',
+      'As fast as needed to finish the task quickly',
+      'Based only on the posted speed for vehicles outside',
+      'Fast in open aisles and unchanged around corners',
+    ],
+    correctAnswer: 'Slow enough to stop safely for the load, floor, visibility, and traffic conditions',
+  },
+  {
+    id: 'fork-height-hazard',
+    question: 'Why should forks not be carried high while traveling?',
+    options: [
+      'Raised forks and elevated loads increase struck-by and stability hazards',
+      'Raised forks make the truck easier to steer',
+      'Raised forks reduce the need to watch intersections',
+      'Raised forks increase the truck capacity',
+    ],
+    correctAnswer: 'Raised forks and elevated loads increase struck-by and stability hazards',
+  },
+  {
+    id: 'changed-workplace',
+    question: 'Which situation can require refresher review even if the operator was previously certified?',
+    options: [
+      'A changed workplace condition that affects safe operation',
+      'The operator changes lunch times',
+      'The operator uses the same truck on the same route',
+      'The operator reads the standard again voluntarily',
+    ],
+    correctAnswer: 'A changed workplace condition that affects safe operation',
+  },
 ];
 
 const FORKLIFT_PRACTICAL_ITEMS = [

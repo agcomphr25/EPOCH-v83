@@ -111,20 +111,21 @@ export async function buildInvoicePreviewFromPackingSlip(
 
   if (!lot) throw new Error(`Lot ${lotId} not found`);
 
-  let poItems: { id: number; partNumber: string; unitPrice: number | null }[] = [];
+  let poItems: { id: number; partNumber: string; partName: string; unitPrice: number | null }[] = [];
   if (lot.poId) {
     poItems = await db
       .select({
         id: p2PurchaseOrderItems.id,
         partNumber: p2PurchaseOrderItems.partNumber,
+        partName: p2PurchaseOrderItems.partName,
         unitPrice: p2PurchaseOrderItems.unitPrice,
       })
       .from(p2PurchaseOrderItems)
       .where(eq(p2PurchaseOrderItems.poId, lot.poId));
   }
 
-  const poItemsById = new Map<number, { id: number; partNumber: string; unitPrice: number | null }>();
-  const poItemsByPart = new Map<string, { id: number; partNumber: string; unitPrice: number | null }[]>();
+  const poItemsById = new Map<number, { id: number; partNumber: string; partName: string; unitPrice: number | null }>();
+  const poItemsByPart = new Map<string, { id: number; partNumber: string; partName: string; unitPrice: number | null }[]>();
   for (const item of poItems) {
     poItemsById.set(item.id, item);
     const existing = poItemsByPart.get(item.partNumber) ?? [];
@@ -160,11 +161,15 @@ export async function buildInvoicePreviewFromPackingSlip(
 
     const qty = money(line.quantity);
     const effectiveUnitPrice = isNoCharge ? 0 : unitPrice;
+    const customerPartNumber = linkedPoItem?.partNumber || line.partNumber || null;
+    const customerPartName = linkedPoItem?.partName || line.partName || customerPartNumber || '';
 
     return {
       poItemId: resolvedPoItemId,
-      partNumber: line.partNumber ?? null,
-      description: line.partName ? `${line.partNumber} - ${line.partName}` : line.partNumber,
+      partNumber: customerPartNumber,
+      description: customerPartName && customerPartNumber
+        ? `${customerPartNumber} - ${customerPartName}`
+        : customerPartName || customerPartNumber || '',
       qty,
       unitPrice: effectiveUnitPrice,
       lineTotal: effectiveUnitPrice * qty,
@@ -313,7 +318,10 @@ export async function createInvoiceFromPackingSlip(
 
       await tx
         .update(p2PackingSlips)
-        .set({ invoiceNumber: preview.invoiceNumber })
+        .set({
+          invoiceNumber: preview.invoiceNumber,
+          packingSlipNumber: preview.invoiceNumber,
+        })
         .where(eq(p2PackingSlips.id, packingSlipId));
     });
 

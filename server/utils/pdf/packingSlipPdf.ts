@@ -180,7 +180,7 @@ export async function generatePackingSlipPdf(data: PackingSlipData): Promise<Buf
 
   const renderTableHeader = (pg: PDFPage, startY: number) => {
     const columns = [
-      { text: 'Part #', x: colX[0] + 3 },
+      { text: 'Customer Part #', x: colX[0] + 3 },
       { text: 'Description', x: colX[1] + 3 },
       { text: 'Qty', x: colX[2] + 3 },
       { text: 'Serial / Unit #s', x: colX[3] + 3 },

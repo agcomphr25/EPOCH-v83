@@ -304,7 +304,6 @@ async function logP2DocumentAccess(
     );
   } catch (err) {
     console.error('[P2Shipping] Failed to write document access log:', { entityType, entityId, actor, err });
-    throw err;
   }
 }
 
@@ -945,14 +944,22 @@ router.get('/packing-slips/:id/pdf', async (req: Request, res: Response) => {
       sku: string | null;
       drawing_name: string | null;
     };
-    const serialRows: PackingSlipSerialIdentity[] = lineItemSerialNumbers.length > 0
-      ? await pool.query<PackingSlipSerialIdentity>(
+    let serialRows: PackingSlipSerialIdentity[] = [];
+    if (lineItemSerialNumbers.length > 0) {
+      try {
+        serialRows = await pool.query<PackingSlipSerialIdentity>(
           `SELECT serial_number, sku, drawing_name
              FROM p2_serialized_items
             WHERE serial_number = ANY($1::text[])`,
           [lineItemSerialNumbers]
-        )
-      : [];
+        );
+      } catch (err) {
+        console.warn('[P2Shipping] Packing slip serial identity enrichment unavailable:', {
+          packingSlipId: slip.id,
+          err,
+        });
+      }
+    }
     const serialIdentityByNumber = new Map<string, PackingSlipSerialIdentity>(
       serialRows.map((row) => [row.serial_number, row])
     );

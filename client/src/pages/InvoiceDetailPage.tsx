@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useRoute, useLocation, Link } from 'wouter';
 import {
@@ -96,6 +96,13 @@ function formatDate(val: string | null | undefined) {
   }
 }
 
+function formatFileSize(bytes: number | null | undefined) {
+  const size = Number(bytes || 0);
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 interface PaymentFormData {
   paymentDate: string;
   paymentMethod: string;
@@ -125,6 +132,27 @@ type EmailRecipient = {
   name: string;
   email: string;
   type: 'primary' | 'additional' | 'contact';
+};
+
+type InvoiceAttachment = {
+  attachment: {
+    id: string;
+    mediaId: string;
+    entityType: string;
+    entityId: string;
+  };
+  media: {
+    id: string;
+    filename: string;
+    title?: string | null;
+    mimeType?: string | null;
+    fileSize?: number | null;
+  };
+};
+
+type SendInvoicePayload = {
+  recipients: string[];
+  attachmentMediaIds: string[];
 };
 
 function RecipientPickerList({
@@ -204,6 +232,8 @@ export default function InvoiceDetailPage() {
   const [sendDialogOpen, setSendDialogOpen] = useState(false);
   const [dialogRecipients, setDialogRecipients] = useState<EmailRecipient[]>([]);
   const [selectedRecipients, setSelectedRecipients] = useState<string[]>([]);
+  const [activeTab, setActiveTab] = useState('overview');
+  const [selectedAttachmentMediaIds, setSelectedAttachmentMediaIds] = useState<string[]>([]);
   const [isLoadingRecipients, setIsLoadingRecipients] = useState(false);
 
   const { data: invoice, isLoading } = useQuery<any>({
@@ -216,6 +246,21 @@ export default function InvoiceDetailPage() {
     queryFn: () => fetch(`/api/credit-memos/invoice/${id}`, { credentials: 'include' }).then(r => r.ok ? r.json() : []),
     enabled: !!id,
   });
+
+  const { data: invoiceAttachments = [], isLoading: isLoadingInvoiceAttachments } = useQuery<InvoiceAttachment[]>({
+    queryKey: ['/api/media/attachments', 'invoice', id],
+    queryFn: async () => {
+      const res = await fetch(`/api/media/attachments/invoice/${id}`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to load invoice attachments');
+      return res.json();
+    },
+    enabled: !!id,
+  });
+
+  useEffect(() => {
+    if (!sendDialogOpen) return;
+    setSelectedAttachmentMediaIds(invoiceAttachments.map((item) => item.media.id));
+  }, [sendDialogOpen, invoiceAttachments]);
 
   const { data: packingSlipInfo } = useQuery<any>({
     queryKey: ['/api/p2/packing-slips', invoice?.packingSlipId],
@@ -260,10 +305,10 @@ export default function InvoiceDetailPage() {
   });
 
   const sendInvoiceMutation = useMutation({
-    mutationFn: (recipients: string[]) =>
+    mutationFn: ({ recipients, attachmentMediaIds }: SendInvoicePayload) =>
       apiRequest(`/api/ar-invoices/${id}/send`, {
         method: 'POST',
-        body: { recipients },
+        body: { recipients, attachmentMediaIds },
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ predicate: (query) =>
@@ -303,7 +348,21 @@ export default function InvoiceDetailPage() {
 
   const handleOpenSendDialog = () => {
     setSendDialogOpen(true);
+    queryClient.invalidateQueries({ queryKey: ['/api/media/attachments', 'invoice', id] });
     loadInvoiceRecipients();
+  };
+
+  const handleManageAttachments = () => {
+    setSendDialogOpen(false);
+    setActiveTab('attachments');
+  };
+
+  const toggleAttachmentSelection = (mediaId: string) => {
+    setSelectedAttachmentMediaIds((current) =>
+      current.includes(mediaId)
+        ? current.filter((item) => item !== mediaId)
+        : [...current, mediaId]
+    );
   };
 
   const createPaymentMutation = useMutation({
@@ -558,6 +617,15 @@ export default function InvoiceDetailPage() {
               </Button>
             }
           />
+          <Button variant="outline" onClick={() => setActiveTab('attachments')}>
+            <Paperclip className="mr-2 h-4 w-4" />
+            Attachments
+            {invoiceAttachments.length > 0 && (
+              <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
+                {invoiceAttachments.length}
+              </Badge>
+            )}
+          </Button>
           {['DRAFT', 'REVIEW'].includes(invoice.status) && (
             <Button
               variant="outline"
@@ -597,7 +665,7 @@ export default function InvoiceDetailPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="overview">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="line-items">Line Items</TabsTrigger>
@@ -1022,21 +1090,98 @@ export default function InvoiceDetailPage() {
               Select the recipients for invoice {invoice.invoiceNumber}. The primary recipient is sent directly when selected; other selected recipients are copied.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Email Recipients</Label>
-            <RecipientPickerList
-              recipients={dialogRecipients}
-              selected={selectedRecipients}
-              onChange={setSelectedRecipients}
-              isLoading={isLoadingRecipients}
-            />
+          <div className="max-h-[60vh] space-y-5 overflow-y-auto pr-1">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Email Recipients</Label>
+              <RecipientPickerList
+                recipients={dialogRecipients}
+                selected={selectedRecipients}
+                onChange={setSelectedRecipients}
+                isLoading={isLoadingRecipients}
+              />
+            </div>
+
+            <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <Label className="text-sm font-medium">Documents to Attach</Label>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    The invoice PDF is always included. Select any uploaded invoice documents that should go with this email.
+                  </p>
+                </div>
+                <Button variant="outline" size="sm" onClick={handleManageAttachments}>
+                  <Paperclip className="mr-2 h-4 w-4" />
+                  Manage
+                </Button>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-start gap-3 rounded-md border bg-background p-2.5">
+                  <FileText className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium">Invoice-{invoice.invoiceNumber}.pdf</div>
+                    <div className="text-xs text-muted-foreground">Generated invoice PDF</div>
+                  </div>
+                  <Badge variant="secondary">Required</Badge>
+                </div>
+
+                {isLoadingInvoiceAttachments ? (
+                  <div className="flex items-center gap-2 py-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading uploaded documents...
+                  </div>
+                ) : invoiceAttachments.length === 0 ? (
+                  <div className="rounded-md border border-dashed bg-background p-3 text-sm text-muted-foreground">
+                    No uploaded invoice documents yet. Use Manage to upload PDFs or supporting files before sending.
+                  </div>
+                ) : (
+                  invoiceAttachments.map((item) => {
+                    const checked = selectedAttachmentMediaIds.includes(item.media.id);
+                    return (
+                      <div
+                        key={item.attachment.id}
+                        className="flex cursor-pointer items-start gap-3 rounded-md border bg-background p-2.5 transition-colors hover:bg-muted/40"
+                        onClick={() => toggleAttachmentSelection(item.media.id)}
+                      >
+                        <Checkbox
+                          id={`invoice-attachment-${item.media.id}`}
+                          checked={checked}
+                          onCheckedChange={() => toggleAttachmentSelection(item.media.id)}
+                          onClick={(event) => event.stopPropagation()}
+                          className="mt-0.5"
+                        />
+                        <Paperclip className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-medium">
+                            {item.media.title || item.media.filename}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {item.media.filename}
+                            {item.media.fileSize ? ` - ${formatFileSize(item.media.fileSize)}` : ''}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {(invoice.packingSlipId || invoice.lotId) && (
+                <p className="text-xs text-muted-foreground">
+                  Linked packing slip and lot backup documents are also included automatically when available.
+                </p>
+              )}
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setSendDialogOpen(false)}>
               Cancel
             </Button>
             <Button
-              onClick={() => sendInvoiceMutation.mutate(selectedRecipients)}
+              onClick={() => sendInvoiceMutation.mutate({
+                recipients: selectedRecipients,
+                attachmentMediaIds: selectedAttachmentMediaIds,
+              })}
               disabled={sendInvoiceMutation.isPending || isLoadingRecipients || selectedRecipients.length === 0}
             >
               {sendInvoiceMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

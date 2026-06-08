@@ -1405,7 +1405,10 @@ async function isP1Invoice(invoice: typeof arInvoices.$inferSelect): Promise<boo
   return !!line;
 }
 
-async function getMediaEmailAttachments(entityRefs: Array<{ entityType: string; entityId: string }>) {
+async function getMediaEmailAttachments(
+  entityRefs: Array<{ entityType: string; entityId: string }>,
+  options: { invoiceAttachmentMediaIds?: Set<string> } = {}
+) {
   const attachments: Array<{ content: string; filename: string; type?: string; disposition?: string }> = [];
   for (const ref of entityRefs) {
     const rows = await db
@@ -1415,6 +1418,13 @@ async function getMediaEmailAttachments(entityRefs: Array<{ entityType: string; 
       .where(and(eq(mediaAttachments.entityType, ref.entityType), eq(mediaAttachments.entityId, ref.entityId)));
 
     for (const row of rows) {
+      if (
+        ref.entityType === 'invoice' &&
+        options.invoiceAttachmentMediaIds &&
+        !options.invoiceAttachmentMediaIds.has(row.media.id)
+      ) {
+        continue;
+      }
       try {
         const buffer = await getFileStorageProviderForObjectPath(row.media.storagePath).downloadBuffer(row.media.storagePath);
         attachments.push({
@@ -1489,7 +1499,10 @@ router.post('/:id/send', requirePermission('finance.post_invoice'), async (req: 
   try {
     const { id } = req.params;
     const user = (req as any).user?.username || null;
-    const { recipients: selectedRecipients, customerMessage } = req.body || {};
+    const { recipients: selectedRecipients, customerMessage, attachmentMediaIds } = req.body || {};
+    const selectedInvoiceAttachmentIds = Array.isArray(attachmentMediaIds)
+      ? new Set(attachmentMediaIds.filter((mediaId: unknown): mediaId is string => typeof mediaId === 'string' && Boolean(mediaId.trim())))
+      : undefined;
 
     const [invoice] = await db.select().from(arInvoices).where(eq(arInvoices.id, id));
     if (!invoice) {
@@ -1521,6 +1534,7 @@ router.post('/:id/send', requirePermission('finance.post_invoice'), async (req: 
         type: recipient.type,
       })),
       requestedRecipientCount: Array.isArray(selectedRecipients) ? selectedRecipients.length : null,
+      selectedInvoiceAttachmentCount: selectedInvoiceAttachmentIds?.size ?? null,
       customerMessageIncluded: Boolean(customerMessage),
       invoiceSource: isP1 ? 'P1' : 'P2',
     };
@@ -1538,7 +1552,7 @@ router.post('/:id/send', requirePermission('finance.post_invoice'), async (req: 
       { entityType: 'invoice', entityId: id },
       ...(invoice.packingSlipId ? [{ entityType: 'packing_slip', entityId: invoice.packingSlipId }] : []),
       ...(invoice.lotId ? [{ entityType: 'lot', entityId: invoice.lotId }] : []),
-    ]);
+    ], { invoiceAttachmentMediaIds: selectedInvoiceAttachmentIds });
     const lotAttachments = await getLotFileAttachments(invoice.lotId);
 
     const attachments = [

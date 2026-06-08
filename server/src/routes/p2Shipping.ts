@@ -745,10 +745,20 @@ router.get('/packing-slips/:id', async (req: Request, res: Response) => {
       .from(p2PackingSlips)
       .where(eq(p2PackingSlips.replacesPackingSlipId, slip.id));
 
-    const hydratedLineItems = await hydratePackingSlipLineItemSkus((slip.lineItems as any[]) || []);
+    let lineItems: PackingSlipLineRecord[];
+    try {
+      lineItems = await enrichPackingSlipLineItemsWithPoParts(slip.lineItems);
+    } catch (err) {
+      console.warn('[P2Shipping] Packing slip PO line enrichment unavailable:', {
+        packingSlipId: slip.id,
+        err,
+      });
+      lineItems = Array.isArray(slip.lineItems) ? (slip.lineItems as PackingSlipLineRecord[]) : [];
+    }
 
     return res.json({ ...slip, lineItems: hydratedLineItems, originalPackingSlip, replacementSlips });
   } catch (err: any) {
+    console.error('Get packing slip error:', err);
     return res.status(500).json({ error: 'Failed to fetch packing slip' });
   }
 });

@@ -44,6 +44,20 @@ export default function TIMSTestDashboard() {
 
       {/* Quick Navigation Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+        <Link href="/employee-portal">
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-purple-200">
+            <CardContent className="p-4 text-center">
+              <User className="w-8 h-8 text-purple-600 mx-auto mb-3" />
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                Employee Portal
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Time clock, requests, and personal tools
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
+
         <Link href="/department-queue/cnc">
           <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-blue-200">
             <CardContent className="p-4 text-center">
@@ -123,20 +137,6 @@ export default function TIMSTestDashboard() {
               </h3>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 Complete training courses
-              </p>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Link href="/employee-portal">
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer border-2 hover:border-purple-200">
-            <CardContent className="p-4 text-center">
-              <User className="w-8 h-8 text-purple-600 mx-auto mb-3" />
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                Employee Portal
-              </h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Time clock, requests, and personal tools
               </p>
             </CardContent>
           </Card>

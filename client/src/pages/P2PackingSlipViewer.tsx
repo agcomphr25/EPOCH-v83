@@ -20,6 +20,8 @@ import P2InvoicePreviewButton from '@/components/p2/P2InvoicePreviewButton';
 interface PackingSlipLineItem {
   partNumber: string;
   partName: string;
+  sku?: string | null;
+  customerSku?: string | null;
   quantity: number;
   serialNumbers?: string | string[];
 }
@@ -453,10 +455,6 @@ export default function P2PackingSlipViewer() {
                 <p className="font-semibold" data-testid="text-po-number">{packingSlip.poNumber || 'N/A'}</p>
               </div>
               <div className="mb-4">
-                <span className="text-sm text-gray-500">Invoice Number:</span>
-                <p className="font-semibold font-mono" data-testid="text-invoice-number">{packingSlip.invoiceNumber || linkedInvoice?.invoiceNumber || packingSlip.packingSlipNumber || 'N/A'}</p>
-              </div>
-              <div className="mb-4">
                 <span className="text-sm text-gray-500">Lot Number:</span>
                 <p className="font-mono" data-testid="text-lot-number">{packingSlip.lotNumber || 'N/A'}</p>
               </div>
@@ -470,23 +468,27 @@ export default function P2PackingSlipViewer() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Customer Part #</TableHead>
+                  <TableHead>Part Number</TableHead>
                   <TableHead>Description</TableHead>
                   <TableHead className="text-center">Quantity</TableHead>
                   <TableHead>Serial Numbers</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {lineItems.map((item: any, index: number) => (
-                  <TableRow key={index} data-testid={`row-line-item-${index}`}>
-                    <TableCell className="font-mono">{item.partNumber}</TableCell>
-                    <TableCell>{item.partName || item.partNumber || 'N/A'}</TableCell>
-                    <TableCell className="text-center">{item.quantity}</TableCell>
-                    <TableCell className="font-mono text-xs">
-                      {Array.isArray(item.serialNumbers) ? item.serialNumbers.join(', ') : item.serialNumbers || 'N/A'}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {lineItems.map((item: any, index: number) => {
+                  const displayPartNumber = item.customerSku || item.sku || item.partNumber;
+
+                  return (
+                    <TableRow key={index} data-testid={`row-line-item-${index}`}>
+                      <TableCell className="font-mono">{displayPartNumber}</TableCell>
+                      <TableCell>{item.partName || item.partNumber || 'N/A'}</TableCell>
+                      <TableCell className="text-center">{item.quantity}</TableCell>
+                      <TableCell className="font-mono text-xs">
+                        {Array.isArray(item.serialNumbers) ? item.serialNumbers.join(', ') : item.serialNumbers || 'N/A'}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>

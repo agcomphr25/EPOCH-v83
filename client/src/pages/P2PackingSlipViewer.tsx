@@ -20,6 +20,8 @@ import P2InvoicePreviewButton from '@/components/p2/P2InvoicePreviewButton';
 interface PackingSlipLineItem {
   partNumber: string;
   partName: string;
+  sku?: string | null;
+  customerSku?: string | null;
   quantity: number;
   serialNumbers?: string | string[];
 }
@@ -473,16 +475,20 @@ export default function P2PackingSlipViewer() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {lineItems.map((item: any, index: number) => (
-                  <TableRow key={index} data-testid={`row-line-item-${index}`}>
-                    <TableCell className="font-mono">{item.partNumber}</TableCell>
-                    <TableCell>{item.partName || item.partNumber || 'N/A'}</TableCell>
-                    <TableCell className="text-center">{item.quantity}</TableCell>
-                    <TableCell className="font-mono text-xs">
-                      {Array.isArray(item.serialNumbers) ? item.serialNumbers.join(', ') : item.serialNumbers || 'N/A'}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {lineItems.map((item: any, index: number) => {
+                  const displayPartNumber = item.customerSku || item.sku || item.partNumber;
+
+                  return (
+                    <TableRow key={index} data-testid={`row-line-item-${index}`}>
+                      <TableCell className="font-mono">{displayPartNumber}</TableCell>
+                      <TableCell>{item.partName || item.partNumber || 'N/A'}</TableCell>
+                      <TableCell className="text-center">{item.quantity}</TableCell>
+                      <TableCell className="font-mono text-xs">
+                        {Array.isArray(item.serialNumbers) ? item.serialNumbers.join(', ') : item.serialNumbers || 'N/A'}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>

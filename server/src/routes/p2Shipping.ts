@@ -176,6 +176,39 @@ function assignedSkuFromSerials(serials: Array<{ sku?: string | null }>): string
   return skus.length > 0 ? skus.join(', ') : null;
 }
 
+async function hydratePackingSlipLineItemSkus(lineItems: any[]): Promise<any[]> {
+  const serialNumbers = Array.from(
+    new Set(
+      lineItems.flatMap((item) =>
+        Array.isArray(item.serialNumbers)
+          ? item.serialNumbers.filter((serial: unknown): serial is string => typeof serial === 'string' && serial.trim().length > 0)
+          : []
+      )
+    )
+  );
+
+  if (serialNumbers.length === 0) return lineItems;
+
+  const serialRows = await pool.query<{ serial_number: string; sku: string | null }>(
+    `SELECT serial_number, sku
+       FROM p2_serialized_items
+      WHERE serial_number = ANY($1::text[])`,
+    [serialNumbers]
+  );
+  const skuBySerialNumber = new Map(serialRows.map((row) => [row.serial_number, row.sku]));
+
+  return lineItems.map((item) => {
+    const customerSku = assignedSkuFromSerials(
+      (Array.isArray(item.serialNumbers) ? item.serialNumbers : [])
+        .map((serialNumber: string) => ({ sku: skuBySerialNumber.get(serialNumber) }))
+    );
+
+    return customerSku && !item.customerSku && !item.sku
+      ? { ...item, customerSku }
+      : item;
+  });
+}
+
 async function getAssignedSkuForLot(lotNumberId: string | null | undefined): Promise<string | null> {
   if (!lotNumberId) return null;
 
@@ -615,14 +648,19 @@ router.post('/packing-slips', authenticateToken, requirePermission('shipping.rel
       byPart[key].push(s);
     }
 
-    const lineItems = Object.values(byPart).map((group) => ({
-      poItemId: group[0].poItemId,
-      partNumber: assignedSkuFromSerials(group) || group[0].sku || group[0].partNumber,
-      partName: group[0].drawingName || group[0].partName,
-      quantity: group.length,
-      serialNumbers: group.map((s) => s.serialNumber),
-      lotNumber: lot.lotNumber,
-    }));
+    const lineItems = Object.values(byPart).map((group) => {
+      const assignedSku = assignedSkuFromSerials(group) || group[0].sku || null;
+
+      return {
+        poItemId: group[0].poItemId,
+        sku: assignedSku,
+        partNumber: assignedSku || group[0].partNumber,
+        partName: group[0].drawingName || group[0].partName,
+        quantity: group.length,
+        serialNumbers: group.map((s) => s.serialNumber),
+        lotNumber: lot.lotNumber,
+      };
+    });
 
     const [customer] = await db
       .select()
@@ -708,7 +746,9 @@ router.get('/packing-slips/:id', async (req: Request, res: Response) => {
       .from(p2PackingSlips)
       .where(eq(p2PackingSlips.replacesPackingSlipId, slip.id));
 
-    return res.json({ ...slip, originalPackingSlip, replacementSlips });
+    const hydratedLineItems = await hydratePackingSlipLineItemSkus((slip.lineItems as any[]) || []);
+
+    return res.json({ ...slip, lineItems: hydratedLineItems, originalPackingSlip, replacementSlips });
   } catch (err: any) {
     return res.status(500).json({ error: 'Failed to fetch packing slip' });
   }
@@ -922,7 +962,7 @@ router.get('/packing-slips/:id/pdf', async (req: Request, res: Response) => {
         (Array.isArray(item.serialNumbers) ? item.serialNumbers : [])
           .map((serialNumber: string) => serialIdentityByNumber.get(serialNumber))
           .filter((row: unknown): row is { sku: string | null } => Boolean(row))
-      ) || item.sku || item.partNumber || '',
+      ) || item.customerSku || item.sku || item.partNumber || '',
       description: Array.from(
         new Set(
           (Array.isArray(item.serialNumbers) ? item.serialNumbers : [])

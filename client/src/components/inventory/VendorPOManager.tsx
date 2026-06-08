@@ -458,6 +458,7 @@ type VendorPO = {
     | 'Partially Received'
     | 'Fully Received'
     | 'Cancelled';
+  orderDate?: string;
   expectedDeliveryDate?: string;
   shipVia?: string;
   notes?: string;
@@ -550,6 +551,7 @@ type VendorPOItem = {
 type CreateVendorPOData = {
   vendorId: number;
   productionLine?: 'P1' | 'P2' | 'GENERAL' | 'R_AND_D';
+  orderDate?: string;
   expectedDeliveryDate?: string;
   shipVia?: string;
   notes?: string;
@@ -1063,6 +1065,17 @@ function VendorPOCard({
 
       <CardContent className="pt-0">
         <div className="grid grid-cols-2 gap-4 text-sm mb-4">
+          {(vendorPo.orderDate || vendorPo.createdAt) && (
+            <div>
+              <span className="text-gray-500">Issue Date:</span>
+              <p
+                className="font-medium"
+                data-testid={`text-order-date-${vendorPo.id}`}
+              >
+                {formatDateOnlyMedium(vendorPo.orderDate || vendorPo.createdAt)}
+              </p>
+            </div>
+          )}
           <div>
             <span className="text-gray-500">Total Cost:</span>
             <p
@@ -1208,11 +1221,20 @@ function VendorPOForm({
   const [formData, setFormData] = useState<CreateVendorPOData>({
     vendorId: vendorPo?.vendorId || 0,
     productionLine: (vendorPo?.productionLine as CreateVendorPOData['productionLine']) || undefined,
+    orderDate: vendorPo?.orderDate || '',
     expectedDeliveryDate: vendorPo?.expectedDeliveryDate || '',
     shipVia: vendorPo?.shipVia || '',
     notes: vendorPo?.notes || '',
     externalPoNumber: vendorPo?.externalPoNumber || '',
   });
+
+  const [orderDate, setOrderDate] = useState<Date | undefined>(
+    vendorPo?.orderDate
+      ? toLocalDate(vendorPo.orderDate)
+      : vendorPo?.createdAt
+        ? toLocalDate(vendorPo.createdAt)
+        : new Date()
+  );
 
   const [deliveryDate, setDeliveryDate] = useState<Date | undefined>(
     vendorPo?.expectedDeliveryDate
@@ -1220,6 +1242,7 @@ function VendorPOForm({
       : undefined
   );
 
+  const [isOrderDatePickerOpen, setIsOrderDatePickerOpen] = useState(false);
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
 
   // Fetch vendors for the dropdown
@@ -1244,6 +1267,9 @@ function VendorPOForm({
 
     onSubmit({
       ...formData,
+      orderDate: orderDate
+        ? formatDateInputValue(orderDate)
+        : undefined,
       expectedDeliveryDate: deliveryDate
         ? formatDateInputValue(deliveryDate)
         : undefined,
@@ -1315,6 +1341,36 @@ function VendorPOForm({
             R&D purchases can push through project allocation without the P2 compliance hold.
           </p>
         )}
+      </div>
+
+      <div>
+        <Label htmlFor="orderDate">Issue Date</Label>
+        <Popover open={isOrderDatePickerOpen} onOpenChange={setIsOrderDatePickerOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              className={cn(
+                'w-full justify-start text-left font-normal',
+                !orderDate && 'text-muted-foreground'
+              )}
+              data-testid="button-order-date"
+            >
+              <CalendarIcon className="mr-2 h-4 w-4" />
+              {orderDate ? format(orderDate, 'PPP') : 'Select date'}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="single"
+              selected={orderDate}
+              onSelect={(date) => {
+                setOrderDate(date);
+                setIsOrderDatePickerOpen(false);
+              }}
+              initialFocus
+            />
+          </PopoverContent>
+        </Popover>
       </div>
 
       <div>
@@ -3149,7 +3205,11 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
       const docTitle = isRFQ ? 'REQUEST FOR QUOTE' : 'PURCHASE ORDER';
       const accentColor = isRFQ ? '#e67e22' : '#1a3a5c';
       const formattedPONumber = po.poNumber ? po.poNumber.replace('VPO-', '') : '';
-      const orderDate = po.createdAt ? formatDateOnlyMedium(po.createdAt) : 'N/A';
+      const orderDate = po.orderDate
+        ? formatDateOnlyMedium(po.orderDate)
+        : po.createdAt
+          ? formatDateOnlyMedium(po.createdAt)
+          : 'N/A';
       const deliveryDate = po.expectedDeliveryDate ? formatDateOnlyMedium(po.expectedDeliveryDate) : 'N/A';
       const lineItemTotal = items.reduce((sum, item) => sum + ((Number(item.quantity) || 0) * (Number(item.unitPrice) || 0)), 0);
       const escapeHtml = (value: unknown) => String(value ?? '')

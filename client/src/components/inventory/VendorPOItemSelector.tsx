@@ -41,6 +41,13 @@ function formatCurrency(value: number | undefined | null, decimals: number = 2):
   });
 }
 
+function parseWholeQuantity(value: string): number {
+  if (value.trim() === '') return 0;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(0, Math.trunc(parsed));
+}
+
 type VendorPOItemSelectorProps = {
   vendorPoId: number;
   vendorId: number;
@@ -805,9 +812,11 @@ export default function VendorPOItemSelector({
                   <Input
                     id="quantity"
                     type="number"
-                    step="0.01"
+                    step="1"
+                    min="1"
+                    inputMode="numeric"
                     value={newItem.quantity || ''}
-                    onChange={(e) => setNewItem({ ...newItem, quantity: parseFloat(e.target.value) || 0 })}
+                    onChange={(e) => setNewItem({ ...newItem, quantity: parseWholeQuantity(e.target.value) })}
                     data-testid="input-quantity"
                   />
                 </div>
@@ -1036,9 +1045,11 @@ export default function VendorPOItemSelector({
                     {isEditing ? (
                       <Input
                         type="number"
-                        step="0.01"
+                        step="1"
+                        min="1"
+                        inputMode="numeric"
                         value={editedItem.quantity || 0}
-                        onChange={(e) => setEditedItem({ ...editedItem, quantity: parseFloat(e.target.value) || 0 })}
+                        onChange={(e) => setEditedItem({ ...editedItem, quantity: parseWholeQuantity(e.target.value) })}
                         className="w-20"
                         data-testid={`input-edit-quantity-${item.id}`}
                       />

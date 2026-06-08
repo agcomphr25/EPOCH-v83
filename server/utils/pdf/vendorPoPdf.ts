@@ -282,7 +282,7 @@ export async function generateVendorPoPdf(poId: number): Promise<Buffer> {
 
   let detailY = y;
   const details = [
-    ['Date:', formatDate(po.createdAt)],
+    ['Date:', formatDate(po.orderDate || po.createdAt)],
     ['Delivery:', formatDate(po.expectedDeliveryDate)],
     po.poNumber ? ['PO #:', displayPoNumber] : null,
     po.externalPoNumber ? ['Legacy ERP PO #:', po.externalPoNumber] : null,

@@ -24,6 +24,7 @@ import {
   ClipboardCheck,
   Award,
   Target,
+  ChevronLeft,
   ChevronRight,
   AlertCircle,
   BookOpen,
@@ -131,7 +132,14 @@ const forkliftPracticalPath = [
   { title: '4. Certification record', detail: 'Receive the forklift operator badge record.' },
 ];
 
-function AgcForkliftOperatorStandard() {
+function AgcForkliftOperatorStandard({
+  reviewed,
+  onReviewed,
+}: {
+  reviewed: boolean;
+  onReviewed: () => void;
+}) {
+  const [currentTopicIndex, setCurrentTopicIndex] = useState(0);
   const trainingTopics = [
     {
       topic: 'Truck stability',
@@ -195,86 +203,151 @@ function AgcForkliftOperatorStandard() {
     'Recognize the events that require refresher training or re-evaluation.',
   ];
 
+  const totalLessons = trainingTopics.length + 4;
+  const currentLesson = currentTopicIndex + 1;
+  const progress = (currentLesson / totalLessons) * 100;
+  const topicLessonIndex = currentTopicIndex - 1;
+  const currentTopic = topicLessonIndex >= 0 ? trainingTopics[topicLessonIndex] ?? null : null;
+  const isIntro = currentTopicIndex === 0;
+  const isReadiness = currentTopicIndex === trainingTopics.length + 1;
+  const isPractical = currentTopicIndex === trainingTopics.length + 2;
+  const isComplete = currentTopicIndex === trainingTopics.length + 3;
+  const canGoBack = currentTopicIndex > 0;
+  const canGoNext = currentTopicIndex < totalLessons - 1;
+
+  const goBack = () => setCurrentTopicIndex((index) => Math.max(0, index - 1));
+  const goNext = () => setCurrentTopicIndex((index) => Math.min(totalLessons - 1, index + 1));
+
   return (
-    <div className="space-y-8 text-slate-900">
-      <section className="space-y-3">
-        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Internal AGC Operator Standard</div>
-        <h3 className="text-xl font-semibold tracking-tight">Sit-Down Counterbalance Forklift Operation</h3>
-        <p className="max-w-4xl text-[15px] leading-7 text-slate-700">
-          AGC forklift operators are expected to operate powered industrial trucks in a controlled, deliberate, and safety-focused manner. This standard combines AGC operating expectations with the OSHA powered industrial truck topics needed for the written test and practical evaluation.
-        </p>
-      </section>
-
-      <section className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-md border p-4">
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Passing score</div>
-          <div className="mt-1 text-lg font-semibold">80%</div>
-          <p className="mt-1 text-sm leading-6 text-slate-600">Minimum written-test score before practical evaluation.</p>
+    <div className="space-y-5 text-slate-900">
+      <div className="space-y-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Internal AGC Operator Standard</div>
+            <h3 className="text-xl font-semibold tracking-tight">Sit-Down Counterbalance Forklift Operation</h3>
+          </div>
+          <Badge variant="outline" className="w-fit">Lesson {currentLesson} of {totalLessons}</Badge>
         </div>
-        <div className="rounded-md border p-4">
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">AGC refresher</div>
-          <div className="mt-1 text-lg font-semibold">6 months</div>
-          <p className="mt-1 text-sm leading-6 text-slate-600">Internal refresher cadence after certification.</p>
-        </div>
-        <div className="rounded-md border p-4">
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">OSHA evaluation</div>
-          <div className="mt-1 text-lg font-semibold">3 years</div>
-          <p className="mt-1 text-sm leading-6 text-slate-600">Formal operator evaluation interval under OSHA rules.</p>
-        </div>
-      </section>
+        <Progress value={progress} className="h-2" />
+      </div>
 
-      <section className="space-y-3">
-        <h4 className="text-base font-semibold">Required Knowledge and Operating Expectations</h4>
-        <div className="overflow-hidden rounded-md border">
-          <table className="w-full border-collapse text-left text-sm">
-            <thead className="bg-slate-100 text-xs uppercase tracking-wide text-slate-600">
-              <tr>
-                <th className="w-56 px-4 py-3 font-semibold">Topic</th>
-                <th className="px-4 py-3 font-semibold">What the operator must understand</th>
-                <th className="px-4 py-3 font-semibold">AGC operating rule</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {trainingTopics.map((row) => (
-                <tr key={row.topic} className="align-top">
-                  <td className="bg-slate-50 px-4 py-3 font-medium text-slate-900">{row.topic}</td>
-                  <td className="px-4 py-3 leading-6 text-slate-700">{row.standard}</td>
-                  <td className="px-4 py-3 leading-6 text-slate-700">{row.operatorMust}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="space-y-3">
-        <h4 className="text-base font-semibold">Conditions Requiring Stop, Report, or Refresher Review</h4>
-        <ul className="space-y-2 text-sm leading-6 text-slate-700">
-          {inspectionStopItems.map((condition) => (
-            <li key={condition} className="rounded-md border-l-4 border-slate-300 bg-slate-50 px-4 py-3">
-              {condition}
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section className="rounded-md border bg-slate-50 p-4">
-        <h4 className="text-base font-semibold">Practical Evaluation</h4>
-        <p className="mt-2 text-sm leading-6 text-slate-700">
-          After a passing written test, agrace will observe the operator completing the practical mini-course. Required items include pre-operation inspection, seat belt and control checks, controlled travel, safe fork and load position, intersection awareness, parking and shutdown, and correct response to unsafe conditions.
-        </p>
-      </section>
-
-      <section className="space-y-3">
-        <h4 className="text-base font-semibold">Before Starting the Written Test</h4>
-        <div className="grid gap-2 md:grid-cols-2">
-          {readinessItems.map((item) => (
-            <div key={item} className="rounded-md border bg-white px-4 py-3 text-sm leading-6 text-slate-700">
-              {item}
+      <section className="min-h-[360px] rounded-md border bg-white p-6 shadow-sm">
+        {isIntro && (
+          <div className="space-y-5">
+            <div>
+              <h4 className="text-lg font-semibold">Training purpose and certification path</h4>
+              <p className="mt-3 max-w-4xl text-[15px] leading-7 text-slate-700">
+                AGC forklift operators are expected to operate powered industrial trucks in a controlled, deliberate, and safety-focused manner. This standard combines AGC operating expectations with the OSHA powered industrial truck topics needed for the written test and practical evaluation.
+              </p>
             </div>
-          ))}
-        </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="rounded-md border bg-slate-50 p-4">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Passing score</div>
+                <div className="mt-1 text-lg font-semibold">80%</div>
+                <p className="mt-1 text-sm leading-6 text-slate-600">Minimum written-test score before practical evaluation.</p>
+              </div>
+              <div className="rounded-md border bg-slate-50 p-4">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">AGC refresher</div>
+                <div className="mt-1 text-lg font-semibold">6 months</div>
+                <p className="mt-1 text-sm leading-6 text-slate-600">Internal refresher cadence after certification.</p>
+              </div>
+              <div className="rounded-md border bg-slate-50 p-4">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">OSHA evaluation</div>
+                <div className="mt-1 text-lg font-semibold">3 years</div>
+                <p className="mt-1 text-sm leading-6 text-slate-600">Formal operator evaluation interval under OSHA rules.</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {!isIntro && currentTopic && (
+          <div className="grid gap-5 lg:grid-cols-[220px_1fr]">
+            <div className="rounded-md bg-slate-50 p-4">
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Concept</div>
+              <h4 className="mt-2 text-lg font-semibold leading-6">{currentTopic.topic}</h4>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <div className="text-sm font-semibold text-slate-900">What the operator must understand</div>
+                <p className="mt-2 text-[15px] leading-7 text-slate-700">{currentTopic.standard}</p>
+              </div>
+              <div className="rounded-md border-l-4 border-slate-400 bg-slate-50 px-4 py-3">
+                <div className="text-sm font-semibold text-slate-900">AGC operating rule</div>
+                <p className="mt-1 text-[15px] leading-7 text-slate-700">{currentTopic.operatorMust}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {isReadiness && (
+          <div className="space-y-4">
+            <div>
+              <h4 className="text-lg font-semibold">Stop, report, or request refresher review</h4>
+              <p className="mt-2 text-[15px] leading-7 text-slate-700">
+                These conditions require the operator to stop and bring the issue to supervision instead of continuing as normal.
+              </p>
+            </div>
+            <div className="grid gap-3">
+              {inspectionStopItems.map((condition) => (
+                <div key={condition} className="rounded-md border-l-4 border-slate-300 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">
+                  {condition}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {isPractical && (
+          <div className="space-y-4">
+            <div>
+              <h4 className="text-lg font-semibold">Practical evaluation with agrace</h4>
+              <p className="mt-2 text-[15px] leading-7 text-slate-700">
+                After a passing written test, agrace will observe the operator completing the practical mini-course. Required items include pre-operation inspection, seat belt and control checks, controlled travel, safe fork and load position, intersection awareness, parking and shutdown, and correct response to unsafe conditions.
+              </p>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              {readinessItems.map((item) => (
+                <div key={item} className="rounded-md border bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">
+                  {item}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {isComplete && (
+          <div className="flex min-h-[300px] flex-col items-center justify-center text-center">
+            <CheckCircle className="h-10 w-10 text-green-600" />
+            <h4 className="mt-4 text-lg font-semibold">Training material complete</h4>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-700">
+              You have reached the end of the forklift training material. Acknowledge review when you are ready to unlock the written test.
+            </p>
+            <Button
+              className="mt-5"
+              variant={reviewed ? 'default' : 'outline'}
+              onClick={onReviewed}
+              data-testid="button-mark-forklift-training-reviewed"
+            >
+              <CheckCircle className="h-4 w-4 mr-2" />
+              {reviewed ? 'Material Reviewed' : 'I Reviewed the Material'}
+            </Button>
+          </div>
+        )}
       </section>
+
+      <div className="flex items-center justify-between gap-3">
+        <Button variant="outline" onClick={goBack} disabled={!canGoBack}>
+          <ChevronLeft className="mr-2 h-4 w-4" />
+          Back
+        </Button>
+        <div className="text-sm text-muted-foreground">
+          {isComplete ? 'Ready for acknowledgement' : 'Review each concept before continuing'}
+        </div>
+        <Button onClick={goNext} disabled={!canGoNext}>
+          Next
+          <ChevronRight className="ml-2 h-4 w-4" />
+        </Button>
+      </div>
     </div>
   );
 }
@@ -560,23 +633,11 @@ export default function TraineeTrainingPortal({ embedded = false }: TraineeTrain
                   </div>
                 </div>
 
-                <div className="max-h-[620px] overflow-y-auto bg-white px-8 py-7 selection:bg-slate-200 selection:text-slate-950">
-                  <AgcForkliftOperatorStandard />
-                </div>
-
-                <div className="flex flex-col gap-3 border-t bg-slate-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <div className="text-sm font-semibold text-slate-900">Review acknowledgement</div>
-                    <p className="text-sm text-muted-foreground">Acknowledge this only after reviewing the material above.</p>
-                  </div>
-                  <Button
-                    variant={forkliftTrainingReviewed ? 'default' : 'outline'}
-                    onClick={() => setForkliftTrainingReviewed(true)}
-                    data-testid="button-mark-forklift-training-reviewed"
-                  >
-                    <CheckCircle className="h-4 w-4 mr-2" />
-                    {forkliftTrainingReviewed ? 'Material Reviewed' : 'I Reviewed the Material'}
-                  </Button>
+                <div className="bg-white px-5 py-5 selection:bg-slate-200 selection:text-slate-950">
+                  <AgcForkliftOperatorStandard
+                    reviewed={forkliftTrainingReviewed}
+                    onReviewed={() => setForkliftTrainingReviewed(true)}
+                  />
                 </div>
               </div>
 

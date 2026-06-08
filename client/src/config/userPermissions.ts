@@ -541,6 +541,7 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/asset-dashboard',
       '/inventory/parts-request',
       '/metal-accessories',
+      '/employee-portal',
     ],
   },
 };

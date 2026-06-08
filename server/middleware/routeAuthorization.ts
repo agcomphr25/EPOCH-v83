@@ -218,6 +218,7 @@ const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/orders-management',
       '/maintenance',
       '/inventory/parts-request',
+      '/employee-portal',
     ],
   },
 };

@@ -1699,11 +1699,24 @@ router.get('/:id/traceability', async (req, res) => {
     );
     const po = poRows[0] ?? null;
 
+    const optionalTraceQuery = async <T>(
+      label: string,
+      query: string,
+      params: unknown[],
+    ): Promise<T[]> => {
+      try {
+        return await pool.query<T>(query, params);
+      } catch (error) {
+        console.warn(`[Project Traceability] ${label} unavailable for project ${id}:`, error);
+        return [];
+      }
+    };
+
     // Lot — most recent for this PO
-    const lots = await pool.query<{
+    const lots = await optionalTraceQuery<{
       id: string; lot_number: string; status: string; shipped_at: string | null;
       created_at: string; quantity: number; po_number: string;
-    }>(
+    }>('lot lookup',
       `SELECT id, lot_number, status, shipped_at, created_at, quantity, po_number
        FROM p2_lot_numbers
        WHERE po_id = $1
@@ -1720,11 +1733,11 @@ router.get('/:id/traceability', async (req, res) => {
 
     if (lot) {
       // Packing slip — most recent for Shipment Summary
-      const slips = await pool.query<{
+      const slips = await optionalTraceQuery<{
         id: string; packing_slip_number: string; status: string;
         ship_date: string | null; carrier: string | null; tracking_number: string | null;
         total_quantity: number; created_at: string;
-      }>(
+      }>('packing slip lookup',
         `SELECT id, packing_slip_number, status, ship_date, carrier, tracking_number,
                 total_quantity, created_at
          FROM p2_packing_slips
@@ -1736,10 +1749,10 @@ router.get('/:id/traceability', async (req, res) => {
       packingSlip = slips[0] ?? null;
 
       // Certificate of Conformance
-      const cocs = await pool.query<{
+      const cocs = await optionalTraceQuery<{
         id: string; certificate_number: string; status: string;
         approved_at: string | null; issued_at: string | null; created_at: string;
-      }>(
+      }>('certificate lookup',
         `SELECT id, certificate_number, status, approved_at, issued_at, created_at
          FROM p2_certificates_of_conformance
          WHERE lot_number_id = $1
@@ -1755,10 +1768,10 @@ router.get('/:id/traceability', async (req, res) => {
         invoiceWhere += ` OR packing_slip_id = $2`;
         invoiceParams.push(packingSlip.id);
       }
-      const invoices = await pool.query<{
+      const invoices = await optionalTraceQuery<{
         id: string; invoice_number: string; status: string;
         total_amount: string; invoice_date: string; created_at: string;
-      }>(
+      }>('invoice lookup',
         `SELECT id, invoice_number, status, total_amount, invoice_date, created_at
          FROM ar_invoices ${invoiceWhere}
          ORDER BY created_at DESC
@@ -1769,11 +1782,11 @@ router.get('/:id/traceability', async (req, res) => {
     }
 
     // All packing slips across all lots for this PO (for Documents section)
-    const allSlipsResult = await pool.query<{
+    const allSlipsResult = await optionalTraceQuery<{
       id: string; packing_slip_number: string; status: string;
       ship_date: string | null; carrier: string | null; tracking_number: string | null;
       total_quantity: number; created_at: string; external_pdf_url: string | null;
-    }>(
+    }>('all packing slips lookup',
       `SELECT ps.id, ps.packing_slip_number, ps.status, ps.ship_date, ps.carrier,
               ps.tracking_number, ps.total_quantity, ps.created_at, ps.external_pdf_url
        FROM p2_packing_slips ps
@@ -1785,11 +1798,11 @@ router.get('/:id/traceability', async (req, res) => {
     packingSlips = allSlipsResult;
 
     // Serialized items for this PO
-    const serials = await pool.query<{
+    const serials = await optionalTraceQuery<{
       id: string; serial_number: string; barcode: string; part_number: string;
       part_name: string; status: string; completed_at: string | null; finalized_at: string | null;
       current_department: string; sku: string | null; sequence_number: number;
-    }>(
+    }>('serialized items lookup',
       `SELECT id, serial_number, barcode, part_number, part_name, status,
               completed_at, finalized_at, current_department, sku, sequence_number
        FROM p2_serialized_items

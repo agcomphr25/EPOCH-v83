@@ -322,7 +322,6 @@ async function logP2DocumentAccess(
     );
   } catch (err) {
     console.error('[P2Shipping] Failed to write document access log:', { entityType, entityId, actor, err });
-    throw err;
   }
 }
 
@@ -784,10 +783,20 @@ router.get('/packing-slips/:id', async (req: Request, res: Response) => {
       .from(p2PackingSlips)
       .where(eq(p2PackingSlips.replacesPackingSlipId, slip.id));
 
-    const lineItems = await enrichPackingSlipLineItemsWithPoParts(slip.lineItems);
+    let lineItems: PackingSlipLineRecord[];
+    try {
+      lineItems = await enrichPackingSlipLineItemsWithPoParts(slip.lineItems);
+    } catch (err) {
+      console.warn('[P2Shipping] Packing slip PO line enrichment unavailable:', {
+        packingSlipId: slip.id,
+        err,
+      });
+      lineItems = Array.isArray(slip.lineItems) ? (slip.lineItems as PackingSlipLineRecord[]) : [];
+    }
 
     return res.json({ ...slip, lineItems, originalPackingSlip, replacementSlips });
   } catch (err: any) {
+    console.error('Get packing slip error:', err);
     return res.status(500).json({ error: 'Failed to fetch packing slip' });
   }
 });
@@ -983,14 +992,22 @@ router.get('/packing-slips/:id/pdf', async (req: Request, res: Response) => {
       sku: string | null;
       drawing_name: string | null;
     };
-    const serialRows: PackingSlipSerialIdentity[] = lineItemSerialNumbers.length > 0
-      ? await pool.query<PackingSlipSerialIdentity>(
+    let serialRows: PackingSlipSerialIdentity[] = [];
+    if (lineItemSerialNumbers.length > 0) {
+      try {
+        serialRows = await pool.query<PackingSlipSerialIdentity>(
           `SELECT serial_number, sku, drawing_name
              FROM p2_serialized_items
             WHERE serial_number = ANY($1::text[])`,
           [lineItemSerialNumbers]
-        )
-      : [];
+        );
+      } catch (err) {
+        console.warn('[P2Shipping] Packing slip serial identity enrichment unavailable:', {
+          packingSlipId: slip.id,
+          err,
+        });
+      }
+    }
     const serialIdentityByNumber = new Map<string, PackingSlipSerialIdentity>(
       serialRows.map((row) => [row.serial_number, row])
     );

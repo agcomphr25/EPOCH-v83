@@ -453,10 +453,6 @@ export default function P2PackingSlipViewer() {
                 <p className="font-semibold" data-testid="text-po-number">{packingSlip.poNumber || 'N/A'}</p>
               </div>
               <div className="mb-4">
-                <span className="text-sm text-gray-500">Invoice Number:</span>
-                <p className="font-semibold font-mono" data-testid="text-invoice-number">{packingSlip.invoiceNumber || linkedInvoice?.invoiceNumber || packingSlip.packingSlipNumber || 'N/A'}</p>
-              </div>
-              <div className="mb-4">
                 <span className="text-sm text-gray-500">Lot Number:</span>
                 <p className="font-mono" data-testid="text-lot-number">{packingSlip.lotNumber || 'N/A'}</p>
               </div>
@@ -470,7 +466,7 @@ export default function P2PackingSlipViewer() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Customer Part #</TableHead>
+                  <TableHead>Part Number</TableHead>
                   <TableHead>Description</TableHead>
                   <TableHead className="text-center">Quantity</TableHead>
                   <TableHead>Serial Numbers</TableHead>

@@ -1,29 +1,24 @@
--- Repair P1 orders that were incorrectly moved from the retired
--- customer-signature queue into the fulfilled/shipping-management bucket.
+-- Repair P1 orders that were left in the retired customer-signature queue or
+-- incorrectly moved into the fulfilled/shipping-management bucket.
 --
--- This intentionally requires both current bad state and audit evidence of the
--- prior signature queue state so genuinely fulfilled shipments are not touched.
+-- This intentionally requires no shipment evidence so genuinely shipped orders
+-- are not touched.
 
 CREATE TEMP TABLE tmp_customer_signature_fulfilled_repair AS
-WITH signature_history AS (
-  SELECT DISTINCT order_id
-  FROM order_activity_events
-  WHERE status_from = 'PENDING_SIGNATURE'
-     OR department_from = 'Awaiting Customer Signature'
-     OR before_snapshot->>'status' = 'PENDING_SIGNATURE'
-     OR before_snapshot->>'currentDepartment' = 'Awaiting Customer Signature'
-     OR field_diff @> '{"status":{"before":"PENDING_SIGNATURE"}}'::jsonb
-     OR field_diff @> '{"currentDepartment":{"before":"Awaiting Customer Signature"}}'::jsonb
-)
 SELECT
   ao.id,
   ao.order_id,
   ao.status AS old_status,
   ao.current_department AS old_department
 FROM all_orders ao
-JOIN signature_history sh ON sh.order_id = ao.order_id
-WHERE ao.status = 'FULFILLED'
-  AND ao.current_department = 'Shipping Management'
+WHERE (
+    ao.status = 'PENDING_SIGNATURE'
+    OR ao.current_department = 'Awaiting Customer Signature'
+    OR (
+      ao.status = 'FULFILLED'
+      AND ao.current_department = 'Shipping Management'
+    )
+  )
   AND ao.is_cancelled IS DISTINCT FROM TRUE
   AND ao.shipped_date IS NULL
   AND ao.shipping_completed_at IS NULL
@@ -57,7 +52,7 @@ SELECT
   'migration',
   'migrations/0167_repair_customer_signature_fulfilled_orders.sql',
   'CUSTOMER_SIGNATURE_FULFILLED_REPAIR',
-  'Repaired retired customer-signature orders that were incorrectly marked fulfilled during finalization.',
+  'Repaired unshipped P1 orders that were left in retired customer-signature or fulfilled/shipping-management states.',
   old_status,
   'FINALIZED',
   old_department,

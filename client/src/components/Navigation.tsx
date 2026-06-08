@@ -262,6 +262,7 @@ export default function Navigation() {
   const [inventoryExpanded, setInventoryExpanded] = useState(false);
   const [employeesExpanded, setEmployeesExpanded] = useState(false);
   const [qcMaintenanceExpanded, setQcMaintenanceExpanded] = useState(false);
+  const [qmsExpanded, setQmsExpanded] = useState(false);
   const [financeExpanded, setFinanceExpanded] = useState(false);
   const [userDashboardsExpanded, setUserDashboardsExpanded] = useState(false);
   const [purchaseOrdersExpanded, setPurchaseOrdersExpanded] = useState(false);
@@ -279,6 +280,7 @@ export default function Navigation() {
     setTrainingExpanded(false);
     setInventoryExpanded(false);
     setQcMaintenanceExpanded(false);
+    setQmsExpanded(false);
     setEmployeesExpanded(false);
     setFinanceExpanded(false);
     setUserDashboardsExpanded(false);
@@ -307,6 +309,7 @@ export default function Navigation() {
         if (dropdownName !== 'training') setTrainingExpanded(false);
         if (dropdownName !== 'inventory') setInventoryExpanded(false);
         if (dropdownName !== 'qcMaintenance') setQcMaintenanceExpanded(false);
+        if (dropdownName !== 'qms') setQmsExpanded(false);
         if (dropdownName !== 'employees') setEmployeesExpanded(false);
         if (dropdownName !== 'finance') setFinanceExpanded(false);
         if (dropdownName !== 'userDashboards') setUserDashboardsExpanded(false);
@@ -936,6 +939,51 @@ export default function Navigation() {
       label: 'Timer Station',
       icon: Clock,
       description: 'Step-based timing programs for production processes',
+    },
+  ];
+
+  const qmsItems: NavItemDef[] = [
+    {
+      path: '/qms/change-control',
+      label: 'Change Control',
+      icon: FileSignature,
+      description: 'Controlled change request intake, approvals, and implementation records',
+    },
+    {
+      path: '/qms/cars',
+      label: 'CARs',
+      icon: ShieldCheck,
+      description: 'Corrective Action Reports and effectiveness checks',
+    },
+    {
+      path: '/qms/ncr-central-record',
+      label: 'NCR Central Record',
+      icon: XCircle,
+      description: 'Central register for nonconformance records and closure evidence',
+    },
+    {
+      path: '/qms/nsia-registrar',
+      label: 'NSIA Registrar',
+      icon: FileCheck,
+      description: 'Registrar records, evidence, renewal dates, and owners',
+    },
+    {
+      path: '/qms/design-control',
+      label: 'Design Control',
+      icon: Route,
+      description: 'Design inputs, review gates, validation, and release controls',
+    },
+    {
+      path: '/qms/parts-equipment',
+      label: 'Parts and Equipment',
+      icon: PackageCheck,
+      description: 'Quality-facing parts and equipment control register',
+    },
+    {
+      path: '/assets',
+      label: 'Assets',
+      icon: Boxes,
+      description: 'Existing asset registry and equipment records',
     },
   ];
 
@@ -1715,6 +1763,10 @@ export default function Navigation() {
     () => filterByPermissions(qcMaintenanceItems, currentUser?.username, userRole),
     [qcMaintenanceItems, currentUser?.username, userRole, navCapSet]
   );
+  const filteredQmsItems = useMemo(
+    () => filterByPermissions(qmsItems, currentUser?.username, userRole),
+    [qmsItems, currentUser?.username, userRole, navCapSet]
+  );
   const filteredTrainingItems = useMemo(
     () => filterByPermissions(trainingItems, currentUser?.username, userRole),
     [trainingItems, currentUser?.username, userRole, navCapSet]
@@ -1808,6 +1860,7 @@ export default function Navigation() {
   const isQcMaintenanceActive = qcMaintenanceItems.some(
     (item) => location === item.path
   );
+  const isQmsActive = qmsItems.some((item) => location === item.path);
   const isEmployeesActive = employeesItems.some(
     (item) => location === item.path
   );
@@ -2340,6 +2393,60 @@ export default function Navigation() {
                             } else {
                               setLocation(item.path);
                             }
+                          }}
+                        >
+                          <Icon className="h-4 w-4" />
+                          {item.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* QMS Dropdown */}
+            {filteredQmsItems.length > 0 && (
+              <div className="relative">
+                <Button
+                  variant={isQmsActive ? 'default' : 'ghost'}
+                  className={cn(
+                    'flex items-center gap-2 text-sm',
+                    isQmsActive && 'bg-primary text-white'
+                  )}
+                  onClick={() =>
+                    toggleDropdown(
+                      'qms',
+                      qmsExpanded,
+                      setQmsExpanded
+                    )
+                  }
+                >
+                  <ShieldCheck className="h-4 w-4" />
+                  QMS
+                  {qmsExpanded ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </Button>
+
+                {qmsExpanded && (
+                  <div className="absolute top-full left-0 mt-0 pt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50 min-w-[220px]">
+                    {filteredQmsItems.map((item) => {
+                      const Icon = item.icon;
+                      const isActive = location === item.path;
+
+                      return (
+                        <button
+                          key={item.path}
+                          className={cn(
+                            'w-full text-left px-3 py-2 text-sm flex items-center gap-2 hover:bg-gray-100',
+                            isActive && 'bg-primary text-white hover:bg-primary'
+                          )}
+                          onClick={() => {
+                            closeAllDropdowns();
+                            setLocation(item.path);
                           }}
                         >
                           <Icon className="h-4 w-4" />

@@ -81,12 +81,34 @@ function isCommentLine(line: string): boolean {
   return t.startsWith('--') || t.startsWith('/*') || t.startsWith('*');
 }
 
+/** Extract table name from a CREATE TEMP TABLE statement. */
+const TEMP_TABLE_CREATE_RE = /CREATE\s+(?:GLOBAL\s+|LOCAL\s+)?TEMP(?:ORARY)?\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\S+)/i;
+/** Extract table name from a DROP TABLE statement. */
+const DROP_TABLE_NAME_RE   = /DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?(\S+)/i;
+
+/**
+ * Pre-scan: collect all table names created via CREATE TEMP TABLE in the SQL.
+ * DROP TABLE on these tables is legitimate cleanup — not a destructive schema change.
+ */
+function collectTempTableNames(lines: string[]): Set<string> {
+  const names = new Set<string>();
+  for (const line of lines) {
+    if (isCommentLine(line) || !line.trim()) continue;
+    const m = line.match(TEMP_TABLE_CREATE_RE);
+    if (m) names.add(m[1].replace(/;$/, '').toLowerCase());
+  }
+  return names;
+}
+
 export function scanMigrationSql(sql: string): SafetyCheckResult {
   const safeMode = (process.env.MIGRATION_SAFE_MODE ?? 'true').toLowerCase() !== 'false';
 
   const violations: SafetyViolation[] = [];
   const diff: DiffEntry[] = [];
   const lines = sql.split('\n');
+
+  // Tables created as TEMP in this same migration block — dropping them is safe.
+  const tempTables = collectTempTableNames(lines);
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -99,6 +121,23 @@ export function scanMigrationSql(sql: string): SafetyCheckResult {
     for (const { name, re } of DESTRUCTIVE_PATTERNS) {
       const m = line.match(re);
       if (m) {
+        // DROP TABLE on a temp table created within this same migration is
+        // legitimate cleanup, not a destructive schema change — skip it.
+        if (name === 'DROP TABLE') {
+          const dropMatch = line.match(DROP_TABLE_NAME_RE);
+          const droppedName = dropMatch ? dropMatch[1].replace(/;$/, '').toLowerCase() : '';
+          if (droppedName && tempTables.has(droppedName)) {
+            // Emit as an informational ❌ diff entry but do NOT add a violation.
+            diff.push({
+              symbol: '❌',
+              label: 'Drop temp table (safe — created in same migration)',
+              detail: m[0].trim().slice(0, 100),
+              line: lineNo,
+            });
+            break;
+          }
+        }
+
         violations.push({ pattern: name, match: m[0].trim(), line: lineNo });
         diff.push({
           symbol: '❌',

@@ -242,6 +242,30 @@ export async function ensureVendorPOAttachmentRules(db: any): Promise<void> {
 
 // ─── Template Definitions ─────────────────────────────────────────────────────
 
+export async function ensureVendorRFQContactEmail(db: any): Promise<void> {
+  try {
+    const oldEmail = 'laurie.tandy@agadvanced.com';
+    const newEmail = 'glenn@agadvanced.com';
+    const result = await db.execute(sql`
+      UPDATE email_templates
+      SET body_html = REPLACE(body_html, ${oldEmail}, ${newEmail}),
+          body_text = REPLACE(body_text, ${oldEmail}, ${newEmail}),
+          updated_at = NOW()
+      WHERE key = 'vendor_rfq'
+        AND (
+          body_html LIKE ${`%${oldEmail}%`}
+          OR body_text LIKE ${`%${oldEmail}%`}
+        )
+    `);
+    const count = result.rowCount ?? result.count ?? 0;
+    if (count > 0) {
+      console.log(`  Patched ${count} vendor RFQ template(s) to use ${newEmail}`);
+    }
+  } catch (err: any) {
+    console.warn('[ensureVendorRFQContactEmail] Failed to patch RFQ contact email:', err.message);
+  }
+}
+
 const VENDOR_RFQ_TEMPLATE = {
   key: 'vendor_rfq',
   name: 'Vendor RFQ',
@@ -326,7 +350,7 @@ const VENDOR_RFQ_TEMPLATE = {
       <div class="notice">
         <strong>Note:</strong> This is a Request for Quote only. No commitment to purchase is implied. Please reply to this email with your pricing and availability.
       </div>
-      <p>If you have any questions, please contact us at laurie.tandy@agadvanced.com or call 256-723-8381.</p>
+      <p>If you have any questions, please contact us at glenn@agadvanced.com or call 256-723-8381.</p>
     </div>
     <div class="footer">
       <p>
@@ -334,7 +358,7 @@ const VENDOR_RFQ_TEMPLATE = {
         230 Hamer Road<br>
         Owens Cross Roads, AL 35763<br>
         Phone: 256-723-8381<br>
-        Email: laurie.tandy@agadvanced.com
+        Email: glenn@agadvanced.com
       </p>
     </div>
   </div>
@@ -354,14 +378,14 @@ Desired Delivery Date: {{desired_delivery_date}}
 Note: This is a Request for Quote only. No commitment to purchase is implied.
 Please reply to this email with your pricing and availability.
 
-If you have any questions, please contact us at laurie.tandy@agadvanced.com or call 256-723-8381.
+If you have any questions, please contact us at glenn@agadvanced.com or call 256-723-8381.
 
 ---
 AG Composites
 230 Hamer Road
 Owens Cross Roads, AL 35763
 Phone: 256-723-8381
-Email: laurie.tandy@agadvanced.com`,
+Email: glenn@agadvanced.com`,
 };
 
 const VENDOR_PO_ISSUE_TEMPLATE = {

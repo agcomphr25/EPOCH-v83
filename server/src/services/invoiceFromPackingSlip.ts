@@ -1,4 +1,4 @@
-import { db } from '../../db';
+import { db, pool } from '../../db';
 import {
   arInvoices,
   arInvoiceLines,
@@ -9,6 +9,19 @@ import {
 } from '../../schema';
 import { eq } from 'drizzle-orm';
 import { buildRevenueDimensionTags } from './productionLineAccounting';
+
+let p2PackingSlipInvoiceNumberSchemaReady: Promise<void> | null = null;
+
+function ensureP2PackingSlipInvoiceNumberSchema(): Promise<void> {
+  if (!p2PackingSlipInvoiceNumberSchemaReady) {
+    p2PackingSlipInvoiceNumberSchemaReady = pool.query(`
+      ALTER TABLE p2_packing_slips
+        ADD COLUMN IF NOT EXISTS invoice_number text
+    `).then(() => undefined);
+  }
+
+  return p2PackingSlipInvoiceNumberSchemaReady;
+}
 
 interface LineItem {
   poItemId?: number;
@@ -97,6 +110,8 @@ export async function buildInvoicePreviewFromPackingSlip(
   lotId: string,
   overrides: InvoicePreviewInput = {},
 ): Promise<InvoicePreview> {
+  await ensureP2PackingSlipInvoiceNumberSchema();
+
   const [slip] = await db
     .select()
     .from(p2PackingSlips)

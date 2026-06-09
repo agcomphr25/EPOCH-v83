@@ -631,12 +631,17 @@ export default function VendorPOItemSelector({
     const originalItem = items.find(item => item.id === itemId);
     if (!originalItem) return;
 
+    const nextQuantity = editedItem.quantity ?? originalItem.quantity;
+    const nextUnitPrice = editedItem.unitPrice ?? originalItem.unitPrice;
     const nextProjectId = 'projectId' in editedItem ? editedItem.projectId : originalItem.projectId;
     const nextProductionWorkOrderId = 'productionWorkOrderId' in editedItem ? editedItem.productionWorkOrderId : originalItem.productionWorkOrderId;
     const nextChargeCodeId = 'chargeCodeId' in editedItem ? editedItem.chargeCodeId : originalItem.chargeCodeId;
     const nextCustomerPoId = 'customerPoId' in editedItem ? editedItem.customerPoId : originalItem.customerPoId;
+    const materialChanged =
+      Math.abs(Number(nextQuantity) - Number(originalItem.quantity)) > 0.0001 ||
+      Math.abs(Number(nextUnitPrice) - Number(originalItem.unitPrice)) > 0.0001;
 
-    if (isP2Purchase && !nextCustomerPoId && !nextProjectId && !nextProductionWorkOrderId && !nextChargeCodeId) {
+    if (isP2Purchase && !materialChanged && !nextCustomerPoId && !nextProjectId && !nextProductionWorkOrderId && !nextChargeCodeId) {
       toast.error('P2 line items need at least one traceability link: customer PO, project, WAD/work order, or charge code');
       return;
     }
@@ -644,8 +649,8 @@ export default function VendorPOItemSelector({
     const updatedData = {
       agPartNumber: editedItem.agPartNumber ?? originalItem.agPartNumber,
       description: editedItem.description ?? originalItem.description,
-      quantity: editedItem.quantity ?? originalItem.quantity,
-      unitPrice: editedItem.unitPrice ?? originalItem.unitPrice,
+      quantity: nextQuantity,
+      unitPrice: nextUnitPrice,
       notes: editedItem.notes ?? originalItem.notes,
       customerPoId: nextCustomerPoId,
       projectId: nextProjectId,

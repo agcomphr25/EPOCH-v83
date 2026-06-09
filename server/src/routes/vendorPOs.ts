@@ -1507,21 +1507,9 @@ router.put('/items/:itemId', async (req: Request, res: Response) => {
         chargeCodeId: data.chargeCodeId !== undefined ? data.chargeCodeId : oldItem.chargeCodeId,
       };
 
-      if (changedField && hasTraceabilityLink(finalTraceability)) {
-        const vendorPO = await storage.getVendorPO(oldItem.vendorPoId);
-        if (isP2ProductionLine(vendorPO?.productionLine)) {
-          const error: any = new Error(
-            `Cannot keep a P2 line linked to project traceability while changing ${changedField.label}. Clear the traceability links, save the material change, complete compliance review, then allocate it again.`
-          );
-          error.status = 422;
-          error.blockingReasons = [error.message];
-          throw error;
-        }
-      }
-
-      // A P2 material change intentionally clears allocation first, invalidates
-      // compliance below, and then gets reallocated after review. For ordinary
-      // line edits, keep requiring at least one traceability link.
+      // Material changes are allowed on linked P2 lines, but they invalidate
+      // compliance below. Traceability remains required unless the same save is
+      // intentionally clearing allocation as part of the material change.
       if (!changedField || hasTraceabilityLink(finalTraceability)) {
         await requireP2LineTraceability(oldItem.vendorPoId, finalTraceability);
         await requireP2ComplianceBeforeProjectAllocation(oldItem.vendorPoId, finalTraceability);

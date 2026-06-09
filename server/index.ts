@@ -2086,13 +2086,14 @@ async function initializeBackgroundServices() {
         await db.execute(sqlComm`ALTER TABLE communication_logs ADD COLUMN IF NOT EXISTS provider_message_id VARCHAR(255)`);
 
         // 3. Seed vendor email templates (idempotent — skip if already present)
-        const { seedVendorEmailTemplates, ensureVendorPOAttachmentRules } = await import('./communication/registry');
+        const { seedVendorEmailTemplates, ensureVendorPOAttachmentRules, ensureVendorRFQContactEmail } = await import('./communication/registry');
         await seedVendorEmailTemplates(db);
 
         // 3a. Ensure vendor PO templates have the PDF attachment rule enabled.
         //     The seed is insert-only so existing rows with attachment_rules:{}
         //     were never updated when the flag was added to the seed definition.
         await ensureVendorPOAttachmentRules(db);
+        await ensureVendorRFQContactEmail(db);
 
         // 4. One-shot: migrate vendor_rfq body_text {{items_table}} → {{items_list}}
         await db.execute(sqlComm`

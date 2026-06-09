@@ -78,10 +78,106 @@ function ensureP2PackingSlipInvoiceNumberSchema(): Promise<void> {
     p2PackingSlipInvoiceNumberSchemaReady = pool.query(`
       ALTER TABLE p2_packing_slips
         ADD COLUMN IF NOT EXISTS invoice_number text
-    `).then(() => undefined);
+    `)
+      .then(() => undefined)
+      .catch((err) => {
+        p2PackingSlipInvoiceNumberSchemaReady = null;
+        throw err;
+      });
   }
 
   return p2PackingSlipInvoiceNumberSchemaReady;
+}
+
+function mapP2PackingSlipRow(row: any) {
+  if (!row) return null;
+
+  return {
+    id: row.id,
+    packingSlipNumber: row.packing_slip_number,
+    lotNumberId: row.lot_number_id,
+    lotNumber: row.lot_number,
+    customerId: row.customer_id,
+    customerName: row.customer_name,
+    customerAddress: row.customer_address,
+    poNumber: row.po_number,
+    invoiceNumber: row.invoice_number ?? null,
+    shipDate: row.ship_date,
+    shipmentNumber: row.shipment_number,
+    carrier: row.carrier,
+    trackingNumber: row.tracking_number,
+    lineItems: row.line_items,
+    totalQuantity: row.total_quantity,
+    packedBy: row.packed_by,
+    packedBySignature: row.packed_by_signature,
+    verifiedBy: row.verified_by,
+    verifiedBySignature: row.verified_by_signature,
+    status: row.status,
+    notes: row.notes,
+    externalPdfUrl: row.external_pdf_url,
+    replacesPackingSlipId: row.replaces_packing_slip_id,
+    replacementReason: row.replacement_reason,
+    isNoChargeReplacement: row.is_no_charge_replacement,
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+async function selectP2PackingSlipFallback(id: string) {
+  const result = await pool.query(
+    `
+      SELECT
+        id, packing_slip_number, lot_number_id, lot_number, customer_id,
+        customer_name, customer_address, po_number, ship_date, shipment_number,
+        carrier, tracking_number, line_items, total_quantity, packed_by,
+        packed_by_signature, verified_by, verified_by_signature, status, notes,
+        external_pdf_url, replaces_packing_slip_id, replacement_reason,
+        is_no_charge_replacement, created_by, created_at, updated_at
+      FROM p2_packing_slips
+      WHERE id = $1
+      LIMIT 1
+    `,
+    [id]
+  );
+
+  return mapP2PackingSlipRow(result.rows[0]);
+}
+
+async function selectP2ReplacementSlipsFallback(replacesPackingSlipId: string) {
+  const result = await pool.query(
+    `
+      SELECT
+        id, packing_slip_number, lot_number_id, lot_number, customer_id,
+        customer_name, customer_address, po_number, ship_date, shipment_number,
+        carrier, tracking_number, line_items, total_quantity, packed_by,
+        packed_by_signature, verified_by, verified_by_signature, status, notes,
+        external_pdf_url, replaces_packing_slip_id, replacement_reason,
+        is_no_charge_replacement, created_by, created_at, updated_at
+      FROM p2_packing_slips
+      WHERE replaces_packing_slip_id = $1
+      ORDER BY created_at DESC
+    `,
+    [replacesPackingSlipId]
+  );
+
+  return result.rows.map(mapP2PackingSlipRow).filter(Boolean);
+}
+
+async function selectP2PackingSlipById(id: string) {
+  try {
+    await ensureP2PackingSlipInvoiceNumberSchema();
+
+    const [slip] = await db
+      .select()
+      .from(p2PackingSlips)
+      .where(eq(p2PackingSlips.id, id));
+
+    return slip ?? null;
+  } catch (err) {
+    console.warn('[P2Shipping] Falling back to compatibility packing slip lookup:', { id, err });
+    return selectP2PackingSlipFallback(id);
+  }
 }
 
 function ensureP2CertificateTemplateMetadataSchema(): Promise<void> {
@@ -737,29 +833,26 @@ router.post('/packing-slips', authenticateToken, requirePermission('shipping.rel
 // ============================================================
 router.get('/packing-slips/:id', async (req: Request, res: Response) => {
   try {
-    await ensureP2PackingSlipInvoiceNumberSchema();
-
-    const [slip] = await db
-      .select()
-      .from(p2PackingSlips)
-      .where(eq(p2PackingSlips.id, req.params.id));
+    const slip = await selectP2PackingSlipById(req.params.id);
     if (!slip) return res.status(404).json({ error: 'Packing slip not found' });
 
     // Fetch original slip (if this slip is a replacement)
     let originalPackingSlip: typeof slip | null = null;
     if (slip.replacesPackingSlipId) {
-      const [original] = await db
-        .select()
-        .from(p2PackingSlips)
-        .where(eq(p2PackingSlips.id, slip.replacesPackingSlipId));
-      originalPackingSlip = original ?? null;
+      originalPackingSlip = await selectP2PackingSlipById(slip.replacesPackingSlipId);
     }
 
     // Fetch any replacement slips that reference this one as the original
-    const replacementSlips = await db
-      .select()
-      .from(p2PackingSlips)
-      .where(eq(p2PackingSlips.replacesPackingSlipId, slip.id));
+    let replacementSlips: any[] = [];
+    try {
+      replacementSlips = await db
+        .select()
+        .from(p2PackingSlips)
+        .where(eq(p2PackingSlips.replacesPackingSlipId, slip.id));
+    } catch (err) {
+      console.warn('[P2Shipping] Falling back to compatibility replacement slip lookup:', { id: slip.id, err });
+      replacementSlips = await selectP2ReplacementSlipsFallback(slip.id);
+    }
 
     let lineItems: PackingSlipLineRecord[];
     try {
@@ -772,7 +865,7 @@ router.get('/packing-slips/:id', async (req: Request, res: Response) => {
       lineItems = Array.isArray(slip.lineItems) ? (slip.lineItems as PackingSlipLineRecord[]) : [];
     }
 
-    return res.json({ ...slip, lineItems: hydratedLineItems, originalPackingSlip, replacementSlips });
+    return res.json({ ...slip, lineItems, originalPackingSlip, replacementSlips });
   } catch (err: any) {
     console.error('Get packing slip error:', err);
     return res.status(500).json({ error: 'Failed to fetch packing slip' });
@@ -948,12 +1041,7 @@ router.get('/packing-slips/:id/pdf', async (req: Request, res: Response) => {
   );
 
   try {
-    await ensureP2PackingSlipInvoiceNumberSchema();
-
-    const [slip] = await db
-      .select()
-      .from(p2PackingSlips)
-      .where(eq(p2PackingSlips.id, req.params.id));
+    const slip = await selectP2PackingSlipById(req.params.id);
     if (!slip) return res.status(404).json({ error: 'Packing slip not found' });
 
     // Map slip DB record to PackingSlipData

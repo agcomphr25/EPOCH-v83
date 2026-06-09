@@ -71,6 +71,18 @@ const MANUFACTURER_COC_FALLBACK = {
 };
 
 let p2CertificateTemplateMetadataSchemaReady: Promise<void> | null = null;
+let p2PackingSlipInvoiceNumberSchemaReady: Promise<void> | null = null;
+
+function ensureP2PackingSlipInvoiceNumberSchema(): Promise<void> {
+  if (!p2PackingSlipInvoiceNumberSchemaReady) {
+    p2PackingSlipInvoiceNumberSchemaReady = pool.query(`
+      ALTER TABLE p2_packing_slips
+        ADD COLUMN IF NOT EXISTS invoice_number text
+    `).then(() => undefined);
+  }
+
+  return p2PackingSlipInvoiceNumberSchemaReady;
+}
 
 function ensureP2CertificateTemplateMetadataSchema(): Promise<void> {
   if (!p2CertificateTemplateMetadataSchemaReady) {
@@ -573,6 +585,8 @@ const createPackingSlipSchema = z.object({
 
 router.post('/packing-slips', authenticateToken, requirePermission('shipping.release_shipment'), async (req: Request, res: Response) => {
   try {
+    await ensureP2PackingSlipInvoiceNumberSchema();
+
     const input = createPackingSlipSchema.parse(req.body);
 
     const [lot] = await db
@@ -686,6 +700,8 @@ router.post('/packing-slips', authenticateToken, requirePermission('shipping.rel
 // ============================================================
 router.get('/packing-slips/:id', async (req: Request, res: Response) => {
   try {
+    await ensureP2PackingSlipInvoiceNumberSchema();
+
     const [slip] = await db
       .select()
       .from(p2PackingSlips)
@@ -883,6 +899,8 @@ router.get('/packing-slips/:id/pdf', async (req: Request, res: Response) => {
   );
 
   try {
+    await ensureP2PackingSlipInvoiceNumberSchema();
+
     const [slip] = await db
       .select()
       .from(p2PackingSlips)

@@ -553,6 +553,15 @@ function hasTraceabilityLink(data: Record<string, unknown>): boolean {
   });
 }
 
+function numericValuesDiffer(next: unknown, current: unknown): boolean {
+  const nextNumber = Number(next);
+  const currentNumber = Number(current);
+  if (!Number.isFinite(nextNumber) || !Number.isFinite(currentNumber)) {
+    return next !== current;
+  }
+  return Math.abs(nextNumber - currentNumber) > 0.0001;
+}
+
 async function requireP2ComplianceBeforeProjectAllocation(
   vendorPoId: number,
   traceability: { customerPoId?: unknown; projectId?: unknown; productionWorkOrderId?: unknown }
@@ -1486,7 +1495,7 @@ router.put('/items/:itemId', async (req: Request, res: Response) => {
     ];
     const changedField = oldItem
       ? materialFields.find(
-          (f) => data[f.key as keyof typeof data] !== undefined && Number(data[f.key as keyof typeof data]) !== Number(oldItem[f.key])
+          (f) => data[f.key as keyof typeof data] !== undefined && numericValuesDiffer(data[f.key as keyof typeof data], oldItem[f.key])
         )
       : undefined;
 
@@ -1497,8 +1506,6 @@ router.put('/items/:itemId', async (req: Request, res: Response) => {
         productionWorkOrderId: data.productionWorkOrderId !== undefined ? data.productionWorkOrderId : oldItem.productionWorkOrderId,
         chargeCodeId: data.chargeCodeId !== undefined ? data.chargeCodeId : oldItem.chargeCodeId,
       };
-      await requireP2LineTraceability(oldItem.vendorPoId, finalTraceability);
-      await requireP2ComplianceBeforeProjectAllocation(oldItem.vendorPoId, finalTraceability);
 
       if (changedField && hasTraceabilityLink(finalTraceability)) {
         const vendorPO = await storage.getVendorPO(oldItem.vendorPoId);
@@ -1510,6 +1517,14 @@ router.put('/items/:itemId', async (req: Request, res: Response) => {
           error.blockingReasons = [error.message];
           throw error;
         }
+      }
+
+      // A P2 material change intentionally clears allocation first, invalidates
+      // compliance below, and then gets reallocated after review. For ordinary
+      // line edits, keep requiring at least one traceability link.
+      if (!changedField || hasTraceabilityLink(finalTraceability)) {
+        await requireP2LineTraceability(oldItem.vendorPoId, finalTraceability);
+        await requireP2ComplianceBeforeProjectAllocation(oldItem.vendorPoId, finalTraceability);
       }
     }
 

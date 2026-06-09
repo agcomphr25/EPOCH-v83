@@ -24,45 +24,50 @@ WHERE (
   AND ao.shipping_completed_at IS NULL
   AND NULLIF(TRIM(COALESCE(ao.tracking_number, '')), '') IS NULL;
 
-INSERT INTO order_activity_events (
-  order_id,
-  event_type,
-  event_category,
-  occurred_at,
-  actor_type,
-  actor_display_name,
-  source,
-  source_route,
-  reason_code,
-  reason_text,
-  status_from,
-  status_to,
-  department_from,
-  department_to,
-  field_diff,
-  metadata
-)
-SELECT
-  order_id,
-  'STATUS_DEPARTMENT_REPAIRED',
-  'admin',
-  NOW(),
-  'system',
-  'migration 0167',
-  'migration',
-  'migrations/0167_repair_customer_signature_fulfilled_orders.sql',
-  'CUSTOMER_SIGNATURE_FULFILLED_REPAIR',
-  'Repaired unshipped P1 orders that were left in retired customer-signature or fulfilled/shipping-management states.',
-  old_status,
-  'FINALIZED',
-  old_department,
-  'P1 Production Queue',
-  jsonb_build_object(
-    'status', jsonb_build_object('before', old_status, 'after', 'FINALIZED', 'label', 'Order Status'),
-    'currentDepartment', jsonb_build_object('before', old_department, 'after', 'P1 Production Queue', 'label', 'Current Department')
-  ),
-  jsonb_build_object('migration', '0167_repair_customer_signature_fulfilled_orders')
-FROM tmp_customer_signature_fulfilled_repair;
+DO $$
+BEGIN
+  IF to_regclass('public.order_activity_events') IS NOT NULL THEN
+    INSERT INTO order_activity_events (
+      order_id,
+      event_type,
+      event_category,
+      occurred_at,
+      actor_type,
+      actor_display_name,
+      source,
+      source_route,
+      reason_code,
+      reason_text,
+      status_from,
+      status_to,
+      department_from,
+      department_to,
+      field_diff,
+      metadata
+    )
+    SELECT
+      order_id,
+      'STATUS_DEPARTMENT_REPAIRED',
+      'admin',
+      NOW(),
+      'system',
+      'migration 0167',
+      'migration',
+      'migrations/0167_repair_customer_signature_fulfilled_orders.sql',
+      'CUSTOMER_SIGNATURE_FULFILLED_REPAIR',
+      'Repaired unshipped P1 orders that were left in retired customer-signature or fulfilled/shipping-management states.',
+      old_status,
+      'FINALIZED',
+      old_department,
+      'P1 Production Queue',
+      jsonb_build_object(
+        'status', jsonb_build_object('before', old_status, 'after', 'FINALIZED', 'label', 'Order Status'),
+        'currentDepartment', jsonb_build_object('before', old_department, 'after', 'P1 Production Queue', 'label', 'Current Department')
+      ),
+      jsonb_build_object('migration', '0167_repair_customer_signature_fulfilled_orders')
+    FROM tmp_customer_signature_fulfilled_repair;
+  END IF;
+END $$;
 
 UPDATE all_orders ao
 SET

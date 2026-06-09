@@ -117,22 +117,24 @@ interface VendorPOData {
   items: any[];
   companySettings: any;
   poSettings: any;
+  optionalSettings: any[];
 }
 
 async function fetchVendorPOData(poId: number): Promise<VendorPOData> {
   const po = await storage.getVendorPO(poId);
   if (!po) throw new Error(`Vendor PO #${poId} not found`);
 
-  const [vendor, items, companySettings, poSettings] = await Promise.all([
+  const [vendor, items, companySettings, poSettings, optionalSettings] = await Promise.all([
     storage.getVendor(po.vendorId),
     storage.getVendorPOItems(poId),
     storage.getCompanySettings(),
     storage.getVendorPOSettings(),
+    storage.getPOOptionalSettings(poId),
   ]);
 
   if (!vendor) throw new Error(`Vendor #${po.vendorId} not found for PO #${poId}`);
 
-  return { po, vendor, items: items ?? [], companySettings, poSettings };
+  return { po, vendor, items: items ?? [], companySettings, poSettings, optionalSettings: optionalSettings ?? [] };
 }
 
 function formatDate(dateValue: any): string {
@@ -145,7 +147,13 @@ function formatDate(dateValue: any): string {
 function formatCurrency(value: any): string {
   const num = Number(value);
   if (isNaN(num)) return '$0.00';
-  return `$${num.toFixed(2)}`;
+  return num.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+}
+
+function formatNumber(value: any): string {
+  const num = Number(value);
+  if (isNaN(num)) return '0.00';
+  return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function truncateText(text: string, maxWidth: number, font: PDFFont, fontSize: number): string {
@@ -202,7 +210,7 @@ function buildTableColumnPositions(margin: number, withNotes: boolean) {
 
 export async function generateVendorPoPdf(poId: number): Promise<Buffer> {
   const data = await fetchVendorPOData(poId);
-  const { po, vendor, items, companySettings, poSettings } = data;
+  const { po, vendor, items, companySettings, poSettings, optionalSettings } = data;
 
   const isRFQ = !po.poNumber;
   const docTitle = isRFQ ? 'REQUEST FOR QUOTE' : 'PURCHASE ORDER';
@@ -334,7 +342,10 @@ export async function generateVendorPoPdf(poId: number): Promise<Buffer> {
     const itemTotal = qty * price;
     lineTotal += itemTotal;
 
-    const descText = item.description || item.itemDescription || '';
+    const purchaseDetail = item.purchaseQty != null && Number(item.purchaseQty) > 0 && item.purchaseUnit
+      ? ` (${formatNumber(item.purchaseQty)} ${item.purchaseUnit} ordered)`
+      : '';
+    const descText = `${item.description || item.itemDescription || ''}${purchaseDetail}`;
     const descLines = wrapText(descText, activeDescWidth - SPACING.CELL_PAD, font, FONT_SIZE.TABLE_CELL);
 
     const noteText = hasAnyNotes ? (item.notes?.trim() || '') : '';
@@ -368,8 +379,8 @@ export async function generateVendorPoPdf(poId: number): Promise<Buffer> {
       }
     }
 
-    page.drawText(item.unit || 'EA', { x: cols.unit + SPACING.CELL_PAD, y: textY, size: FONT_SIZE.TABLE_CELL, font, color: COLOR.SECONDARY_TEXT });
-    page.drawText(String(qty), { x: cols.qty + SPACING.CELL_PAD, y: textY, size: FONT_SIZE.TABLE_CELL, font, color: COLOR.PRIMARY_TEXT });
+    page.drawText(item.vendorUnit || item.unit || item.uom || '-', { x: cols.unit + SPACING.CELL_PAD, y: textY, size: FONT_SIZE.TABLE_CELL, font, color: COLOR.SECONDARY_TEXT });
+    page.drawText(formatNumber(qty), { x: cols.qty + SPACING.CELL_PAD, y: textY, size: FONT_SIZE.TABLE_CELL, font, color: COLOR.PRIMARY_TEXT });
     page.drawText(formatCurrency(price), { x: cols.unitPrice + SPACING.CELL_PAD, y: textY, size: FONT_SIZE.TABLE_CELL, font, color: COLOR.PRIMARY_TEXT });
     page.drawText(formatCurrency(itemTotal), { x: cols.total + SPACING.CELL_PAD, y: textY, size: FONT_SIZE.TABLE_CELL, font: boldFont, color: COLOR.PRIMARY_TEXT });
 
@@ -403,7 +414,7 @@ export async function generateVendorPoPdf(poId: number): Promise<Buffer> {
   const paymentTerms = vendor.paymentTerms || poSettings?.paymentTerms;
   const shippingInstructions = vendor.shippingInstructions || poSettings?.shippingInstructions;
 
-  if (paymentTerms || shippingInstructions || terms) {
+  if (paymentTerms || shippingInstructions || terms || optionalSettings.length > 0) {
     if (y < PAGE.MARGIN + PAGE_BREAK.TERMS_SECTION) {
       page = pdfDoc.addPage([PAGE.WIDTH, PAGE.HEIGHT]);
       y = height - PAGE.MARGIN;
@@ -445,6 +456,34 @@ export async function generateVendorPoPdf(poId: number): Promise<Buffer> {
         }
         page.drawText(line, { x: PAGE.MARGIN + SPACING.TEXT_INSET, y, size: FONT_SIZE.SECTION_LABEL, font, color: COLOR.SECONDARY_TEXT });
         y -= LINE_HEIGHT.SMALL;
+      }
+    }
+
+    if (optionalSettings.length > 0) {
+      if (y < PAGE.MARGIN + PAGE_BREAK.TERMS_INNER) {
+        page = pdfDoc.addPage([PAGE.WIDTH, PAGE.HEIGHT]);
+        y = height - PAGE.MARGIN;
+      }
+      y -= SPACING.TERMS_SUBSECTION_TAIL;
+      page.drawText('Additional Requirements:', { x: PAGE.MARGIN, y, size: FONT_SIZE.SECTION_LABEL, font: boldFont, color: COLOR.SECONDARY_TEXT });
+      y -= SPACING.TERMS_SUBSECTION_GAP;
+
+      for (let i = 0; i < optionalSettings.length; i++) {
+        const setting = optionalSettings[i];
+        const title = `${i + 1}. ${setting.name || 'Requirement'}`;
+        const statementLines = wrapText(setting.statement || '', PRINTABLE_WIDTH - (SPACING.DETAIL_LABEL_OFFSET * 2), font, FONT_SIZE.SECTION_LABEL);
+        const requiredHeight = LINE_HEIGHT.SMALL * (statementLines.length + 1) + SPACING.TERMS_SUBSECTION_TAIL;
+        if (y < PAGE.MARGIN + requiredHeight) {
+          page = pdfDoc.addPage([PAGE.WIDTH, PAGE.HEIGHT]);
+          y = height - PAGE.MARGIN;
+        }
+        page.drawText(title, { x: PAGE.MARGIN + SPACING.TEXT_INSET, y, size: FONT_SIZE.SECTION_LABEL, font: boldFont, color: COLOR.SECONDARY_TEXT });
+        y -= LINE_HEIGHT.SMALL;
+        for (const line of statementLines) {
+          page.drawText(line, { x: PAGE.MARGIN + SPACING.DETAIL_LABEL_OFFSET, y, size: FONT_SIZE.SECTION_LABEL, font, color: COLOR.SECONDARY_TEXT });
+          y -= LINE_HEIGHT.SMALL;
+        }
+        y -= SPACING.TERMS_SUBSECTION_TAIL;
       }
     }
   }

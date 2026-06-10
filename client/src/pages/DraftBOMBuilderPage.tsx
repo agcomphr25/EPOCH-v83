@@ -13,11 +13,18 @@ import {
   Send,
   SlidersHorizontal,
   Trash2,
-  X,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -40,7 +47,9 @@ type BomLine = PrivateerDraftBomLine & {
   inventoryItemName?: string | null;
   isDraftPart?: boolean;
 };
-type WorkspaceTabId = 'po-draft' | 'parts-request' | 'bom-wizard' | 'assembly-tree';
+type BuiltInWorkspaceTabId = 'po-draft' | 'parts-request' | 'bom-wizard' | 'assembly-tree';
+type CustomWorkspaceTabId = `custom:${string}`;
+type WorkspaceTabId = BuiltInWorkspaceTabId | CustomWorkspaceTabId;
 type PoColumnId =
   | 'filter'
   | 'supplier'
@@ -68,6 +77,7 @@ type BomDraft = {
   lines: BomLine[];
   poVisibleColumns?: PoColumnId[];
   customPoColumns?: string[];
+  workspaceTabs?: WorkspaceTabId[];
 };
 
 type ProjectOption = {
@@ -101,8 +111,8 @@ const R_AND_D_PROJECT_VALUE = '__r_and_d__';
 const actions: BomAction[] = ['Order / Quote', 'Use in RFQ', 'Do Not Order', 'Hold'];
 const statuses: BomStatus[] = ['Needs Review', 'Needs Quote', 'RFQ Sent', 'On Order', 'On Hand', 'ETA / Inbound', 'Hold'];
 const defaultFilterNames = ['Avionics/Sensors', 'Electrical', 'Propulsion/Mechanical', 'Structural', 'Hardware/Misc.', 'Tooling'];
-const defaultWorkspaceTabs: WorkspaceTabId[] = ['po-draft', 'parts-request', 'bom-wizard', 'assembly-tree'];
-const workspaceTabLabels: Record<WorkspaceTabId, string> = {
+const defaultWorkspaceTabs: BuiltInWorkspaceTabId[] = ['po-draft', 'parts-request', 'bom-wizard', 'assembly-tree'];
+const workspaceTabLabels: Record<BuiltInWorkspaceTabId, string> = {
   'po-draft': 'PO draft',
   'parts-request': 'Parts/request',
   'bom-wizard': 'BOM wizard',
@@ -163,6 +173,7 @@ function createPrivateerDraft(): BomDraft {
     lines: privateerDraftBomLines,
     poVisibleColumns: defaultPoColumns,
     customPoColumns: [],
+    workspaceTabs: defaultWorkspaceTabs,
   };
 }
 
@@ -179,7 +190,13 @@ function normalizeDraft(draft: BomDraft): BomDraft {
     projectType: draft.projectType ?? null,
     poVisibleColumns: draft.poVisibleColumns ?? defaultPoColumns,
     customPoColumns: draft.customPoColumns ?? [],
+    workspaceTabs: draft.workspaceTabs ?? defaultWorkspaceTabs,
   };
+}
+
+function workspaceTabLabel(tabId: WorkspaceTabId) {
+  if (tabId.startsWith('custom:')) return tabId.replace(/^custom:/, '');
+  return workspaceTabLabels[tabId as BuiltInWorkspaceTabId];
 }
 
 function money(value: number) {
@@ -215,12 +232,13 @@ export default function DraftBOMBuilderPage() {
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
-  const [visibleWorkspaceTabs, setVisibleWorkspaceTabs] = useState<WorkspaceTabId[]>(defaultWorkspaceTabs);
+  const [visibleWorkspaceTabs, setVisibleWorkspaceTabs] = useState<WorkspaceTabId[]>(() => draft.workspaceTabs ?? defaultWorkspaceTabs);
   const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<WorkspaceTabId>('po-draft');
   const [poDescription, setPoDescription] = useState('');
   const [visiblePoColumns, setVisiblePoColumns] = useState<PoColumnId[]>(() => draft.poVisibleColumns ?? defaultPoColumns);
   const [customPoColumns, setCustomPoColumns] = useState<string[]>(() => draft.customPoColumns ?? []);
   const [newPoColumnName, setNewPoColumnName] = useState('');
+  const [newWorkspaceTabName, setNewWorkspaceTabName] = useState('');
 
   const { data: projects = [], isLoading: projectsLoading } = useQuery<ProjectOption[]>({
     queryKey: ['/api/projects'],
@@ -252,10 +270,6 @@ export default function DraftBOMBuilderPage() {
   const filterOptions = useMemo(() => {
     return [...new Set([...defaultFilterNames, ...draft.lines.map((line) => line.category).filter(Boolean)])].sort();
   }, [draft.lines]);
-  const hiddenWorkspaceTabs = useMemo(
-    () => defaultWorkspaceTabs.filter((tabId) => !visibleWorkspaceTabs.includes(tabId)),
-    [visibleWorkspaceTabs],
-  );
   const activeInventoryItems = useMemo(
     () => inventoryItems.filter((item) => item.isActive !== false),
     [inventoryItems],
@@ -424,6 +438,7 @@ export default function DraftBOMBuilderPage() {
       ...draft,
       poVisibleColumns: visiblePoColumns,
       customPoColumns,
+      workspaceTabs: visibleWorkspaceTabs,
       updatedAt: new Date().toISOString(),
     };
     const withoutCurrent = savedDrafts.filter((item) => item.id !== nextDraft.id);
@@ -448,6 +463,8 @@ export default function DraftBOMBuilderPage() {
     setDraft(nextDraft);
     setVisiblePoColumns(nextDraft.poVisibleColumns ?? defaultPoColumns);
     setCustomPoColumns(nextDraft.customPoColumns ?? []);
+    setVisibleWorkspaceTabs(nextDraft.workspaceTabs ?? defaultWorkspaceTabs);
+    setActiveWorkspaceTab((nextDraft.workspaceTabs ?? defaultWorkspaceTabs)[0] ?? 'po-draft');
   }
 
   function updateDraftProject(value: string) {
@@ -492,11 +509,14 @@ export default function DraftBOMBuilderPage() {
       lines: [newLine()],
       poVisibleColumns: defaultPoColumns,
       customPoColumns: [],
+      workspaceTabs: defaultWorkspaceTabs,
     };
     setSelectedDraftId('');
     setDraft(blankDraft);
     setVisiblePoColumns(defaultPoColumns);
     setCustomPoColumns([]);
+    setVisibleWorkspaceTabs(defaultWorkspaceTabs);
+    setActiveWorkspaceTab('po-draft');
   }
 
   function markSelectedFinalized() {
@@ -528,21 +548,29 @@ export default function DraftBOMBuilderPage() {
     });
   }
 
-  function addWorkspaceTab(tabId: string) {
-    if (!defaultWorkspaceTabs.includes(tabId as WorkspaceTabId)) return;
-    const nextTabId = tabId as WorkspaceTabId;
-    setVisibleWorkspaceTabs((current) => (current.includes(nextTabId) ? current : [...current, nextTabId]));
-    setActiveWorkspaceTab(nextTabId);
-  }
-
-  function removeWorkspaceTab(tabId: WorkspaceTabId) {
+  function setWorkspaceTabVisible(tabId: WorkspaceTabId, visible: boolean) {
     setVisibleWorkspaceTabs((current) => {
+      if (visible) {
+        const next = current.includes(tabId) ? current : [...current, tabId];
+        setActiveWorkspaceTab(tabId);
+        return next;
+      }
+
       const next = current.filter((item) => item !== tabId);
-      if (activeWorkspaceTab === tabId) {
+      if (activeWorkspaceTab === tabId && next.length > 0) {
         setActiveWorkspaceTab(next[0] ?? 'po-draft');
       }
       return next;
     });
+  }
+
+  function createWorkspaceTab() {
+    const label = newWorkspaceTabName.trim();
+    if (!label) return;
+    const tabId = `custom:${label}` as WorkspaceTabId;
+    setVisibleWorkspaceTabs((current) => (current.includes(tabId) ? current : [...current, tabId]));
+    setActiveWorkspaceTab(tabId);
+    setNewWorkspaceTabName('');
   }
 
   return (
@@ -721,43 +749,71 @@ export default function DraftBOMBuilderPage() {
             <div className="flex flex-col gap-3 border-b border-slate-200 pb-3 lg:flex-row lg:items-center lg:justify-between">
               <TabsList className="h-auto flex-wrap justify-start">
                 {visibleWorkspaceTabs.map((tabId) => (
-                  <div key={tabId} className="group flex items-center rounded-sm data-[state=active]:bg-background">
-                    <TabsTrigger value={tabId} className="pr-1">
-                      {workspaceTabLabels[tabId]}
-                    </TabsTrigger>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 w-7 p-0 text-slate-500 hover:text-slate-900"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        removeWorkspaceTab(tabId);
-                      }}
-                      aria-label={`Remove ${workspaceTabLabels[tabId]} tab`}
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
+                  <TabsTrigger key={tabId} value={tabId}>
+                    {workspaceTabLabel(tabId)}
+                  </TabsTrigger>
                 ))}
               </TabsList>
 
               <div className="flex flex-wrap gap-2">
-                <Select value="add-tab" onValueChange={addWorkspaceTab} disabled={hiddenWorkspaceTabs.length === 0}>
-                  <SelectTrigger className="w-[150px]">
-                    <SelectValue placeholder="Add tab" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="add-tab" disabled>
-                      Add tab
-                    </SelectItem>
-                    {hiddenWorkspaceTabs.map((tabId) => (
-                      <SelectItem key={tabId} value={tabId}>
-                        {workspaceTabLabels[tabId]}
-                      </SelectItem>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button type="button" variant="outline">
+                      <Plus className="mr-2 h-4 w-4" />
+                      Tabs
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-[280px]" align="end">
+                    <DropdownMenuLabel>Visible tabs</DropdownMenuLabel>
+                    {defaultWorkspaceTabs.map((tabId) => (
+                      <DropdownMenuCheckboxItem
+                        key={tabId}
+                        checked={visibleWorkspaceTabs.includes(tabId)}
+                        onSelect={(event) => event.preventDefault()}
+                        onCheckedChange={(checked) => setWorkspaceTabVisible(tabId, checked === true)}
+                      >
+                        {workspaceTabLabel(tabId)}
+                      </DropdownMenuCheckboxItem>
                     ))}
-                  </SelectContent>
-                </Select>
+                    {visibleWorkspaceTabs
+                      .filter((tabId) => tabId.startsWith('custom:'))
+                      .map((tabId) => (
+                        <DropdownMenuCheckboxItem
+                          key={tabId}
+                          checked
+                          onSelect={(event) => event.preventDefault()}
+                          onCheckedChange={(checked) => setWorkspaceTabVisible(tabId, checked === true)}
+                        >
+                          {workspaceTabLabel(tabId)}
+                        </DropdownMenuCheckboxItem>
+                      ))}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel>Add new tab</DropdownMenuLabel>
+                    <div className="grid gap-2 p-2">
+                      <Input
+                        value={newWorkspaceTabName}
+                        onChange={(event) => setNewWorkspaceTabName(event.target.value)}
+                        placeholder="Tab name"
+                        onKeyDown={(event) => {
+                          event.stopPropagation();
+                          if (event.key === 'Enter') {
+                            event.preventDefault();
+                            createWorkspaceTab();
+                          }
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={createWorkspaceTab}
+                        disabled={!newWorkspaceTabName.trim()}
+                      >
+                        Add tab
+                      </Button>
+                    </div>
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 <Select value={categoryFilter} onValueChange={setCategoryFilter}>
                   <SelectTrigger className="w-[190px]">
                     <SelectValue placeholder="Filters" />
@@ -900,6 +956,19 @@ export default function DraftBOMBuilderPage() {
                 </section>
               </TabsContent>
             ) : null}
+
+            {visibleWorkspaceTabs
+              .filter((tabId) => tabId.startsWith('custom:'))
+              .map((tabId) => (
+                <TabsContent key={tabId} value={tabId} className="mt-4">
+                  <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+                    <h2 className="font-semibold text-slate-950">{workspaceTabLabel(tabId)}</h2>
+                    <p className="mt-1 text-sm text-slate-600">
+                      Custom workspace tab for this draft BOM.
+                    </p>
+                  </section>
+                </TabsContent>
+              ))}
           </Tabs>
         </section>
       </div>

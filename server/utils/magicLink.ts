@@ -64,20 +64,12 @@ export function getAppBaseUrl(): string {
   }
   if (process.env.NODE_ENV === 'production') {
     const msg = '[FATAL] getAppBaseUrl: running in production but neither APP_URL nor PRODUCTION_DOMAIN is set. ' +
-      'Vendor PO confirmation links would silently point to localhost. ' +
+      'Public magic links would silently point to localhost. ' +
       'Set APP_URL or PRODUCTION_DOMAIN before deploying.';
     console.error(msg);
     throw new Error(msg);
   }
   return 'http://localhost:5000';
-}
-
-/**
- * Create a frontend vendor-confirm URL for a given token.
- * The frontend page loads PO details via a safe GET and only consumes the token on explicit POST.
- */
-export function createVendorConfirmFrontendUrl(token: string): string {
-  return `${getAppBaseUrl()}/vendor-confirm?token=${token}&purpose=vendor_po_confirmation`;
 }
 
 /**

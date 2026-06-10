@@ -11,7 +11,6 @@ import {
 import { z } from 'zod';
 import { storage } from '../../storage';
 import { requirePermission } from '../../middleware/requirePermission';
-import { generateMagicLink, peekMagicLink, validateMagicLink, createVendorConfirmFrontendUrl } from '../../utils/magicLink';
 import { sendCommunication } from '../../communication/send';
 import { db, queryRows } from '../../db';
 import { sql } from 'drizzle-orm';
@@ -730,7 +729,7 @@ router.get('/', async (req: Request, res: Response) => {
                   used_at AS "usedAt",
                   expires_at AS "expiresAt"
             FROM magic_link_tokens
-            WHERE purpose = 'vendor_po_confirmation'
+            WHERE purpose = 'retired_vendor_po_acknowledgement'
               AND metadata->>'vendorPoId' ~ '^\d+$'
             ORDER BY (metadata->>'vendorPoId')::int, created_at DESC`
       ),
@@ -2179,7 +2178,7 @@ router.post('/:id/direct-po-exception', requirePermission('purchasing.direct_po_
   }
 });
 
-// POST /api/vendor-pos/:id/issue - Issue a PO, optionally sending confirmation email to vendor
+// POST /api/vendor-pos/:id/issue - Issue a PO, optionally sending email to vendor
 router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id);
@@ -2474,7 +2473,7 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
       });
     }
 
-    // ── PATH B: Issue WITH vendor confirmation email (default path) ──────────
+    // ── PATH B: Issue WITH vendor email (default path) ──────────
     const vendor = await storage.getVendor(vendorPO.vendorId);
     if (!vendor) {
       return res.status(404).json({ error: 'Vendor not found' });
@@ -2524,9 +2523,6 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
       });
     }
 
-    // Invalidate any prior unused confirmation tokens for this PO before issuing a new one
-    await storage.invalidateVendorPoConfirmationTokens(id);
-
     // Atomic transactional issuance: lock row, generate number, update status
     const { vendorPO: issuedPO, poNumber } = await storage.issueVendorPO(id);
     await markLinkedPartsRequestsOrdered(id, performedBy);
@@ -2537,20 +2533,6 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
       actor,
       meta: { vendorPoId: id, vendorId: vendorPO.vendorId, poNumber, issuedWithoutEmail: false },
     });
-
-    // Generate magic link for PO confirmation — produce a frontend URL, not the raw API endpoint
-    const { token: confirmToken, expiresAt } = await generateMagicLink({
-      email: vendor.email,
-      purpose: 'vendor_po_confirmation',
-      metadata: {
-        vendorPoId: id,
-        poNumber: poNumber,
-        vendorId: vendor.id,
-        vendorName: vendor.name,
-      },
-      expiresInMinutes: 60 * 24 * 7, // 7 days expiration
-    });
-    const link = createVendorConfirmFrontendUrl(confirmToken);
 
     // Build standard email routing from Vendor PO settings plus the issuing user's email.
     const issuingUserEmail = (req as any).user?.email as string | undefined;
@@ -2572,7 +2554,6 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
       requested_delivery_date: issuedPO.expectedDeliveryDate
         ? new Date(issuedPO.expectedDeliveryDate).toLocaleDateString()
         : '',
-      confirmation_link: link,
     };
 
     const emailResult = await sendCommunication({
@@ -2609,8 +2590,7 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
         retryAction: 'resend',
         poNumber,
         requestId,
-        confirmationLinkExpires: expiresAt,
-        message: 'PO issued successfully, but the confirmation email was not sent. Use resend to notify the vendor.',
+        message: 'PO issued successfully, but the email was not sent. Use resend to notify the vendor.',
       });
     }
 
@@ -2657,8 +2637,7 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
       emailSent: true,
       emailRecipient: issueToEmail,
       emailCc: issueCcList,
-      confirmationLinkExpires: expiresAt,
-      message: `PO issued successfully. Confirmation email sent to ${issueToEmail}.`,
+      message: `PO issued successfully. Email sent to ${issueToEmail}.`,
     });
   } catch (error: any) {
     console.error('Issue vendor PO error:', error);
@@ -2772,7 +2751,7 @@ router.get('/:id/confirmation', async (req: Request, res: Response) => {
     const result = await db.execute(
       sql`SELECT email, expires_at AS "expiresAt", used_at AS "usedAt"
           FROM magic_link_tokens
-          WHERE purpose = 'vendor_po_confirmation'
+          WHERE purpose = 'retired_vendor_po_acknowledgement'
             AND (metadata->>'vendorPoId')::int = ${id}
           ORDER BY created_at DESC
           LIMIT 1`
@@ -2839,22 +2818,6 @@ router.post('/:id/resend', async (req: Request, res: Response) => {
 
     const { recipients: additionalRecipients } = req.body ?? {};
 
-    // Invalidate any prior unused confirmation tokens for this PO before generating a fresh one
-    await storage.invalidateVendorPoConfirmationTokens(id);
-
-    const { token: resendConfirmToken, expiresAt } = await generateMagicLink({
-      email: vendor.email,
-      purpose: 'vendor_po_confirmation',
-      metadata: {
-        vendorPoId: id,
-        poNumber: vendorPO.poNumber,
-        vendorId: vendor.id,
-        vendorName: vendor.name,
-      },
-      expiresInMinutes: 60 * 24 * 7,
-    });
-    const link = createVendorConfirmFrontendUrl(resendConfirmToken);
-
     const poNumber = vendorPO.poNumber;
 
     const resendingUserEmail = (req as any).user?.email as string | undefined;
@@ -2875,7 +2838,6 @@ router.post('/:id/resend', async (req: Request, res: Response) => {
       requested_delivery_date: vendorPO.expectedDeliveryDate
         ? new Date(vendorPO.expectedDeliveryDate).toLocaleDateString()
         : '',
-      confirmation_link: link,
     };
 
     const emailResult = await sendCommunication({
@@ -2890,11 +2852,11 @@ router.post('/:id/resend', async (req: Request, res: Response) => {
     });
 
     if (!emailResult.success) {
-      console.error('Failed to resend PO confirmation email:', emailResult.error);
+      console.error('Failed to resend PO email:', emailResult.error);
       const emailError: any = new Error(emailResult.error || 'Email service unavailable.');
       emailError.status = 503;
       return sendApiError(res, emailError, {
-        fallbackMessage: 'Failed to resend PO confirmation email',
+        fallbackMessage: 'Failed to resend PO email',
         source: 'vendorPO.resend.email',
         exposeMessage: true,
       });
@@ -2906,8 +2868,7 @@ router.post('/:id/resend', async (req: Request, res: Response) => {
       emailSent: true,
       emailRecipient: resendToEmail,
       emailCc: resendCcList,
-      confirmationLinkExpires: expiresAt,
-      message: `PO resent successfully. Confirmation email sent to ${resendToEmail}.`,
+      message: `PO resent successfully. Email sent to ${resendToEmail}.`,
     });
   } catch (error) {
     console.error('Resend vendor PO error:', error);
@@ -2919,134 +2880,21 @@ router.post('/:id/resend', async (req: Request, res: Response) => {
   }
 });
 
-// ── GET /confirm/preview — safe, non-consuming token validation ──────────────
-// Email scanners (Safe Links, Proofpoint, etc.) may prefetch this URL on delivery.
-// This endpoint NEVER consumes the token — it only validates and returns PO details.
-router.get('/confirm/preview', async (req: Request, res: Response) => {
-  // Fetch contact info outside the main try/catch so it is available in the
-  // error path and we can still include it in 500 responses.
-  let contactInfo = { companyName: '', companyAddress: '', companyPhone: '', companyEmail: '' };
-  try {
-    const row = await storage.getCompanySettings();
-    if (row) {
-      contactInfo = {
-        companyName: row.companyName || '',
-        companyAddress: row.companyAddress || '',
-        companyPhone: row.companyPhone || '',
-        companyEmail: row.companyEmail || '',
-      };
-    }
-  } catch {
-    // Non-fatal — the confirm page has graceful empty-field handling.
-  }
-
-  try {
-    const { token, purpose } = req.query;
-
-    if (!token || typeof token !== 'string') {
-      return res.status(400).json({ valid: false, errorCode: 'TOKEN_NOT_FOUND', error: 'Token is required', contactInfo });
-    }
-
-    const purposeStr = typeof purpose === 'string' ? purpose : 'vendor_po_confirmation';
-    const result = await peekMagicLink(token, purposeStr);
-
-    if (!result.isValid || !result.token) {
-      console.log(`[VendorPOConfirmPreview] ${result.errorCode} token=${token.substring(0, 8)}...`);
-      return res.status(200).json({ valid: false, errorCode: result.errorCode || 'TOKEN_NOT_FOUND', error: result.error, contactInfo });
-    }
-
-    const metadata = (result.token.metadata as Record<string, any>) || {};
-    const vendorPoId = metadata.vendorPoId ? parseInt(String(metadata.vendorPoId)) : null;
-
-    // Check if PO is already confirmed
-    if (vendorPoId) {
-      const po = await storage.getVendorPO(vendorPoId);
-      if (po?.vendorConfirmedAt) {
-        console.log(`[VendorPOConfirmPreview] PO_ALREADY_CONFIRMED poId=${vendorPoId} token=${token.substring(0, 8)}...`);
-        return res.status(200).json({ valid: false, errorCode: 'PO_ALREADY_CONFIRMED', error: 'This PO has already been confirmed', contactInfo });
-      }
-    }
-
-    console.log(`[VendorPOConfirmPreview] valid token=${token.substring(0, 8)}... poNumber=${metadata.poNumber}`);
-    return res.status(200).json({
-      valid: true,
-      poNumber: metadata.poNumber || null,
-      vendorName: metadata.vendorName || null,
-      expectedDeliveryDate: vendorPoId
-        ? (await storage.getVendorPO(vendorPoId))?.expectedDeliveryDate ?? null
-        : null,
-      contactInfo,
-    });
-  } catch (error) {
-    console.error('[VendorPOConfirmPreview] error:', error);
-    res.status(500).json({
-      valid: false,
-      errorCode: 'TOKEN_NOT_FOUND',
-      error: 'Failed to preview confirmation',
-      requestId: res.locals.requestId,
-      contactInfo,
-    });
-  }
+// Vendor PO confirmation is retired. The routes remain only to give
+// old emailed URLs a deterministic response instead of falling through.
+router.get('/confirm/preview', async (_req: Request, res: Response) => {
+  return res.status(410).json({
+    valid: false,
+    errorCode: 'VENDOR_CONFIRMATION_DISABLED',
+    error: 'Vendor PO confirmation is no longer supported.',
+  });
 });
 
-// ── POST /confirm — consumes token and records vendor action ─────────────────
-router.post('/confirm', async (req: Request, res: Response) => {
-  try {
-    const { token, purpose, action } = req.body ?? {};
-
-    if (!token || typeof token !== 'string') {
-      return res.status(400).json({ success: false, errorCode: 'TOKEN_NOT_FOUND', error: 'Token is required' });
-    }
-
-    const validActions = ['confirm', 'reject', 'acknowledge'];
-    const vendorAction = typeof action === 'string' && validActions.includes(action) ? action : 'confirm';
-    const purposeStr = typeof purpose === 'string' ? purpose : 'vendor_po_confirmation';
-
-    const result = await validateMagicLink(token, purposeStr);
-
-    if (!result.isValid || !result.token) {
-      console.log(`[VendorPOConfirm] ${result.errorCode} token=${token.substring(0, 8)}...`);
-      return res.status(200).json({ success: false, errorCode: result.errorCode || 'TOKEN_NOT_FOUND', error: result.error });
-    }
-
-    const metadata = (result.token.metadata as Record<string, any>) || {};
-    const vendorPoId = metadata.vendorPoId ? parseInt(String(metadata.vendorPoId)) : null;
-
-    if (!vendorPoId) {
-      return res.status(400).json({ success: false, errorCode: 'TOKEN_NOT_FOUND', error: 'Token metadata is missing PO reference' });
-    }
-
-    const po = await storage.getVendorPO(vendorPoId);
-    if (!po) {
-      return res.status(404).json({ success: false, errorCode: 'TOKEN_NOT_FOUND', error: 'PO not found' });
-    }
-
-    if (po.vendorConfirmedAt) {
-      console.log(`[VendorPOConfirm] PO_ALREADY_CONFIRMED poId=${vendorPoId} token=${token.substring(0, 8)}...`);
-      return res.status(200).json({ success: false, errorCode: 'PO_ALREADY_CONFIRMED', error: 'This PO has already been confirmed' });
-    }
-
-    await storage.updateVendorPO(vendorPoId, {
-      vendorConfirmedAt: new Date(),
-      vendorConfirmedAction: vendorAction,
-    });
-
-    console.log(`[VendorPOConfirm] CONFIRMED poId=${vendorPoId} poNumber=${metadata.poNumber} vendorName=${metadata.vendorName} action=${vendorAction} token=${token.substring(0, 8)}...`);
-
-    return res.status(200).json({
-      success: true,
-      poNumber: metadata.poNumber || null,
-      vendorName: metadata.vendorName || null,
-    });
-  } catch (error) {
-    console.error('[VendorPOConfirm] error:', error);
-    res.status(500).json({
-      success: false,
-      errorCode: 'TOKEN_NOT_FOUND',
-      error: 'Failed to process confirmation',
-      requestId: res.locals.requestId,
-    });
-  }
+router.post('/confirm', async (_req: Request, res: Response) => {
+  return res.status(410).json({
+    success: false,
+    errorCode: 'VENDOR_CONFIRMATION_DISABLED',
+    error: 'Vendor PO confirmation is no longer supported.',
+  });
 });
-
 export default router;

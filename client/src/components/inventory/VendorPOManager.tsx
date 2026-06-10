@@ -485,9 +485,7 @@ type VendorPO = {
   // Vendor confirmation badge (augmented by the list endpoint, no extra per-row calls)
   // null = non-issued PO; 'no_link' = issued but no confirmation email ever sent
   confirmationBadge?: 'confirmed' | 'awaiting' | 'expired' | 'no_link' | null;
-  // ISO timestamp of when the vendor clicked the confirmation link (only set when confirmationBadge === 'confirmed')
   confirmationUsedAt?: string | null;
-  // ISO timestamp of when the confirmation link expires (set for 'awaiting' and 'expired' badges)
   confirmationExpiresAt?: string | null;
   // Archived flag
   archived?: boolean;
@@ -1490,335 +1488,6 @@ function VendorPOForm({
   );
 }
 
-// Small self-contained badge that opens a resend popover for 'awaiting' and 'expired' states
-export function ConfirmationBadgeResend({ vendorPo }: { vendorPo: VendorPO }) {
-  const [open, setOpen] = useState(false);
-
-  const { data: confirmationInfo } = useQuery<{
-    found: boolean;
-    email?: string;
-    expiresAt?: string;
-    usedAt?: string | null;
-  }>({
-    queryKey: ['/api/vendor-pos', vendorPo.id, 'confirmation'],
-    queryFn: () => apiRequest(`/api/vendor-pos/${vendorPo.id}/confirmation`),
-    enabled: open,
-    staleTime: 30_000,
-  });
-
-  const resendMutation = useMutation<
-    { message?: string; emailSent: boolean; emailRecipient: string },
-    Error
-  >({
-    mutationFn: () =>
-      apiRequest(`/api/vendor-pos/${vendorPo.id}/resend`, { method: 'POST' }),
-    onSuccess: (data) => {
-      toast.success(data?.message ?? 'Confirmation email resent successfully.');
-      setOpen(false);
-      queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', vendorPo.id, 'confirmation'] });
-    },
-    onError: (err) => {
-      toast.error(err?.message ?? 'Failed to resend confirmation email.');
-    },
-  });
-
-  const isAwaiting = vendorPo.confirmationBadge === 'awaiting';
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <span
-          role="button"
-          tabIndex={0}
-          onClick={(e) => {
-            e.stopPropagation();
-            setOpen(true);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.stopPropagation();
-              e.preventDefault();
-              setOpen(true);
-            }
-          }}
-          className={cn(
-            'inline-flex items-center gap-1 text-xs font-medium cursor-pointer hover:underline focus:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded',
-            isAwaiting
-              ? 'text-amber-600 dark:text-amber-400'
-              : 'text-red-600 dark:text-red-400'
-          )}
-        >
-          {isAwaiting ? (
-            <>
-              <Clock className="w-3.5 h-3.5" />
-              Awaiting
-            </>
-          ) : (
-            <>
-              <AlertTriangle className="w-3.5 h-3.5" />
-              Link Expired
-            </>
-          )}
-        </span>
-      </PopoverTrigger>
-      <PopoverContent
-        className="w-64 p-3"
-        side="top"
-        align="start"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="space-y-2">
-          <p className="text-sm font-medium">
-            {isAwaiting ? 'Awaiting vendor confirmation' : 'Confirmation link expired'}
-          </p>
-          {confirmationInfo?.found && confirmationInfo.email ? (
-            <p className="text-xs text-muted-foreground">
-              Last link sent to{' '}
-              <span className="font-medium text-foreground">{confirmationInfo.email}</span>
-              .
-            </p>
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              Resend the confirmation link to{' '}
-              <span className="font-medium">{vendorPo.vendorName ?? 'the vendor'}</span>
-              .
-            </p>
-          )}
-          <Button
-            size="sm"
-            className="w-full"
-            disabled={resendMutation.isPending}
-            onClick={() => resendMutation.mutate()}
-          >
-            {resendMutation.isPending ? (
-              <>
-                <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                Resending…
-              </>
-            ) : (
-              <>
-                <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
-                Resend Confirmation
-              </>
-            )}
-          </Button>
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-// ── Vendor Confirmation card content ──────────────────────────────────────────
-// Exported so automated tests can render it in isolation without needing the
-// entire VendorPOManager context.
-
-export type ConfirmationStatus = {
-  found: boolean;
-  email?: string;
-  usedAt?: string | null;
-  expiresAt?: string | null;
-};
-
-export interface VendorConfirmationCardContentProps {
-  isLoading: boolean;
-  confirmationStatus: ConfirmationStatus | undefined | null;
-  isPending: boolean;
-  onResend: () => void;
-}
-
-export function VendorConfirmationCardContent({
-  isLoading,
-  confirmationStatus,
-  isPending,
-  onResend,
-  confirmationUsedAt,
-}: VendorConfirmationCardContentProps & { confirmationUsedAt?: string | null }) {
-  if (isLoading) {
-    return (
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        Loading confirmation status…
-      </div>
-    );
-  }
-
-  if (!confirmationStatus || !confirmationStatus.found) {
-    return (
-      <div className="space-y-2">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground italic">
-          <AlertTriangle className="h-4 w-4 shrink-0" />
-          No confirmation link on record for this PO.
-        </div>
-        <div className="pt-1">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onResend}
-            disabled={isPending}
-            data-testid="button-send-confirmation-link"
-          >
-            <RefreshCw className={`w-4 h-4 mr-2 ${isPending ? 'animate-spin' : ''}`} />
-            {isPending ? 'Sending…' : 'Send Confirmation Link'}
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  if (confirmationStatus.usedAt) {
-    return (
-      <div className="space-y-1">
-        <div className="flex items-center gap-2 text-sm font-medium text-green-700 dark:text-green-400">
-          <CheckCircle className="h-4 w-4 shrink-0" />
-          Confirmed
-        </div>
-        <div className="text-sm text-muted-foreground">
-          {(() => {
-            const usedAt = confirmationUsedAt || confirmationStatus.usedAt;
-            const d = new Date(usedAt!);
-            const datePart = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-            const timePart = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-            return <>Confirmed on{' '}<span className="font-medium text-foreground">{datePart} at {timePart}</span></>;
-          })()}
-        </div>
-        <div className="text-sm text-muted-foreground">
-          Link sent to{' '}
-          <span className="font-medium text-foreground">
-            {confirmationStatus.email}
-          </span>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-1">
-      <div className="flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-400">
-        <AlertTriangle className="h-4 w-4 shrink-0" />
-        Awaiting confirmation
-      </div>
-      <div className="text-sm text-muted-foreground">
-        Link sent to{' '}
-        <span className="font-medium text-foreground">
-          {confirmationStatus.email}
-        </span>
-      </div>
-      {confirmationStatus.expiresAt && (
-        <div className="text-sm text-muted-foreground">
-          Link expires{' '}
-          <span
-            className={`font-medium ${
-              new Date(confirmationStatus.expiresAt) < new Date()
-                ? 'text-red-600 dark:text-red-400'
-                : 'text-foreground'
-            }`}
-          >
-            {new Date(confirmationStatus.expiresAt) < new Date()
-              ? `expired on ${new Date(confirmationStatus.expiresAt).toLocaleString()}`
-              : new Date(confirmationStatus.expiresAt).toLocaleString()}
-          </span>
-        </div>
-      )}
-      <div className="pt-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onResend}
-          disabled={isPending}
-          data-testid="button-resend-confirmation-link"
-        >
-          <RefreshCw className={`w-4 h-4 mr-2 ${isPending ? 'animate-spin' : ''}`} />
-          {isPending ? 'Resending…' : 'Resend Link'}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function NoLinkBadgeSend({ vendorPo }: { vendorPo: VendorPO }) {
-  const [open, setOpen] = useState(false);
-
-  const sendMutation = useMutation<
-    { message?: string; emailSent: boolean; emailRecipient: string },
-    Error
-  >({
-    mutationFn: () =>
-      apiRequest(`/api/vendor-pos/${vendorPo.id}/resend`, { method: 'POST' }),
-    onSuccess: (data) => {
-      toast.success(data?.message ?? 'Confirmation email sent successfully.');
-      setOpen(false);
-      queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
-    },
-    onError: (err) => {
-      toast.error(err?.message ?? 'Failed to send confirmation email.');
-    },
-  });
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <span
-          role="button"
-          tabIndex={0}
-          onClick={(e) => {
-            e.stopPropagation();
-            setOpen(true);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.stopPropagation();
-              e.preventDefault();
-              setOpen(true);
-            }
-          }}
-          className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground cursor-pointer hover:underline focus:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded"
-        >
-          <XCircle className="w-3.5 h-3.5" />
-          No Link
-        </span>
-      </PopoverTrigger>
-      <PopoverContent
-        className="w-64 p-3"
-        side="top"
-        align="start"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="space-y-2">
-          <p className="text-sm font-medium">No confirmation sent yet</p>
-          <p className="text-xs text-muted-foreground">
-            Send the first confirmation link to{' '}
-            <span className="font-medium text-foreground">
-              {vendorPo.vendorName ?? 'the vendor'}
-            </span>
-            .
-          </p>
-          <Button
-            size="sm"
-            className="w-full"
-            disabled={sendMutation.isPending}
-            onClick={() => sendMutation.mutate()}
-          >
-            {sendMutation.isPending ? (
-              <>
-                <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                Sending…
-              </>
-            ) : (
-              <>
-                <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
-                Send Confirmation
-              </>
-            )}
-          </Button>
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-// ── Receipt history types ──────────────────────────────────────────────────────
-
 type ReceiptSummary = {
   id: number;
   receiptNumber: string;
@@ -2656,16 +2325,6 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
   });
 
   const issuedStatuses = ['Sent', 'Partially Received', 'Fully Received'];
-  const { data: confirmationStatus, isLoading: isConfirmationLoading } = useQuery<{
-    found: boolean;
-    email?: string;
-    expiresAt?: string;
-    usedAt?: string | null;
-  }>({
-    queryKey: ['/api/vendor-pos', selectedVendorPO?.id, 'confirmation'],
-    queryFn: () => apiRequest(`/api/vendor-pos/${selectedVendorPO!.id}/confirmation`),
-    enabled: !!selectedVendorPO && issuedStatuses.includes(selectedVendorPO.status),
-  });
 
   // Merge per-PO detail (totalLines / receivedLines / status) into selected state
   // whenever the dedicated query returns fresher data.
@@ -2812,7 +2471,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
     },
   });
 
-  // Issue PO mutation - sends confirmation email to vendor
+  // Issue PO mutation - sends PO email to vendor
   const issuePOMutation = useMutation({
     mutationFn: ({ id, skipEmail = false, reason, recipients }: { id: number; skipEmail?: boolean; reason?: string; recipients?: string[] }) =>
       apiRequest(`/api/vendor-pos/${id}/issue`, {
@@ -2884,7 +2543,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
     onSuccess: (data: any, variables) => {
       queryClient.invalidateQueries({ queryKey: getResendConfirmationKey(variables.id) });
       if (data.emailSent) {
-        toast.success(`PO resent! Confirmation email sent to ${data.emailRecipient}`);
+        toast.success(`PO resent! Email sent to ${data.emailRecipient}`);
       } else {
         toast.error(data.message || 'Failed to resend PO');
       }
@@ -4265,7 +3924,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
             <AlertDialogHeader>
               <AlertDialogTitle>Resend Purchase Order</AlertDialogTitle>
               <AlertDialogDescription>
-                Select the recipients for this resend email. A fresh confirmation link will be included. At least one recipient must be checked.
+                Select the recipients for this resend email. At least one recipient must be checked.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <div className="space-y-2">
@@ -4350,58 +4009,6 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
               </CardContent>
             </Card>
 
-            {!issuedStatuses.includes(selectedVendorPO.status) && selectedVendorPO.confirmationUsedAt && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <CheckCircle className="w-5 h-5 text-muted-foreground" />
-                    Vendor Confirmation
-                  </CardTitle>
-                  <CardDescription>
-                    This PO has a recorded vendor confirmation date
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2 text-sm font-medium text-green-700 dark:text-green-400">
-                      <CheckCircle className="h-4 w-4 shrink-0" />
-                      Confirmed
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      {(() => {
-                        const d = new Date(selectedVendorPO.confirmationUsedAt!);
-                        const datePart = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-                        const timePart = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-                        return <>Confirmed on{' '}<span className="font-medium text-foreground">{datePart} at {timePart}</span></>;
-                      })()}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {issuedStatuses.includes(selectedVendorPO.status) && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <CheckCircle className="w-5 h-5 text-muted-foreground" />
-                    Vendor Confirmation
-                  </CardTitle>
-                  <CardDescription>
-                    Whether the vendor has acknowledged receipt of this purchase order
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <VendorConfirmationCardContent
-                    isLoading={isConfirmationLoading}
-                    confirmationStatus={confirmationStatus}
-                    isPending={resendPOMutation.isPending}
-                    onResend={handleOpenResendDialog}
-                    confirmationUsedAt={selectedVendorPO.confirmationUsedAt}
-                  />
-                </CardContent>
-              </Card>
-            )}
           </TabsContent>
 
           <TabsContent value="items" className="space-y-4">
@@ -4626,72 +4233,6 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
                     <Badge className={getStatusColor(vendorPo.status)}>
                       {vendorPo.status}
                     </Badge>
-                    {vendorPo.confirmationBadge === 'confirmed' && (
-                      <TooltipProvider>
-                        <Tooltip className="inline-flex w-auto">
-                          <TooltipTrigger asChild>
-                            <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-400 cursor-default">
-                              <CheckCircle className="w-3.5 h-3.5" />
-                              Confirmed
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent className="w-auto px-3 py-1.5 text-xs">
-                            {vendorPo.confirmationUsedAt
-                              ? `Vendor confirmed on ${new Date(vendorPo.confirmationUsedAt).toLocaleString()}`
-                              : 'Vendor confirmed'}
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    )}
-                    {(vendorPo.confirmationBadge === 'awaiting' ||
-                      vendorPo.confirmationBadge === 'expired') &&
-                      (['Sent', 'Partially Received'].includes(vendorPo.status) ? (
-                        <ConfirmationBadgeResend vendorPo={vendorPo} />
-                      ) : (
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span
-                                className={cn(
-                                  'inline-flex items-center gap-1 text-xs font-medium',
-                                  vendorPo.confirmationBadge === 'awaiting'
-                                    ? 'text-amber-600 dark:text-amber-400'
-                                    : 'text-red-600 dark:text-red-400'
-                                )}
-                              >
-                                {vendorPo.confirmationBadge === 'awaiting' ? (
-                                  <>
-                                    <Clock className="w-3.5 h-3.5" />
-                                    Awaiting
-                                  </>
-                                ) : (
-                                  <>
-                                    <AlertTriangle className="w-3.5 h-3.5" />
-                                    Link Expired
-                                  </>
-                                )}
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent className="w-auto px-3 py-1.5 text-xs">
-                              {vendorPo.confirmationBadge === 'awaiting'
-                                ? 'Awaiting vendor confirmation'
-                                : 'Confirmation link expired'}
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      ))}
-                    {vendorPo.confirmationBadge === 'no_link' &&
-                      (['Sent', 'Partially Received'].includes(vendorPo.status) ? (
-                        <NoLinkBadgeSend vendorPo={vendorPo} />
-                      ) : (
-                        <span
-                          title="No confirmation link sent — send not available for fully received POs"
-                          className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground"
-                        >
-                          <XCircle className="w-3.5 h-3.5" />
-                          No Link
-                        </span>
-                      ))}
                     {/* Compliance status badge — shown for all POs at all statuses */}
                     <ComplianceBadge
                       status={vendorPo.complianceStatus}

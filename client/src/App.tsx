@@ -300,7 +300,6 @@ const FabricInventoryPage = React.lazy(() => import('./pages/FabricInventoryPage
 const MetalAccessoriesTracker = React.lazy(() => import('./pages/MetalAccessoriesTracker'));
 const DocumentIntelligence = React.lazy(() => import('./pages/DocumentIntelligence'));
 const SignOrderPage = React.lazy(() => import('./pages/SignOrderPage'));
-const VendorConfirmPage = React.lazy(() => import('./pages/VendorConfirmPage'));
 const FillAndSignPage = React.lazy(() => import('./pages/FillAndSignPage'));
 const QRCodeAdminPage = React.lazy(() => import('./pages/QRCodeAdminPage'));
 const QRErrorPage = React.lazy(() => import('./pages/QRErrorPage'));
@@ -408,7 +407,7 @@ function ConditionalOfflineIndicator() {
 function ConditionalMainWrapper({ children }: { children: React.ReactNode }) {
   const isEmbed = useIsEmbedMode();
   const [location] = useLocation();
-  if (isEmbed || isFloorOperatorRoute(location) || location.startsWith('/vendor-confirm')) {
+  if (isEmbed || isFloorOperatorRoute(location)) {
     return <div className="w-full min-h-screen overflow-auto">{children}</div>;
   }
   return <main className="container mx-auto px-4 py-8">{children}</main>;
@@ -426,7 +425,6 @@ function ConditionalNavigation() {
     location === '/login' ||
     location.startsWith('/sign-order') || // Hide navigation on customer sign order page
     location.startsWith('/fill-and-sign') || // Hide navigation on customer fill-and-sign page
-    location.startsWith('/vendor-confirm') || // Hide navigation on vendor PO confirmation page
     location.startsWith('/tv-display') || // Hide navigation on TV display page
     location.startsWith('/tv-timer-board') || // Hide navigation on timer board page
     isFloorOperatorRoute(location); // Hide navigation on badge/PIN based production floor pages
@@ -1472,8 +1470,6 @@ function App() {
                   </Route>
 
                   {/* Vendor PO Confirmation — public route for external vendors */}
-                  <Route path="/vendor-confirm" component={VendorConfirmPage} />
-
                   {/* Fill and Sign Routes - Public routes for customers */}
                   <Route
                     path="/fill-and-sign/:publicSignatureId"

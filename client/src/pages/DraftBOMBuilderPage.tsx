@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   Archive,
   Calculator,
@@ -37,13 +38,25 @@ type BomDraft = {
   revision: string;
   owner: string;
   project: string;
+  projectId?: string | null;
+  projectCode?: string | null;
+  projectName?: string | null;
+  projectType?: 'P2_PROJECT' | 'R_AND_D' | null;
   notes: string;
   updatedAt: string;
   lines: BomLine[];
 };
 
+type ProjectOption = {
+  id: string;
+  projectCode: string;
+  projectName: string;
+  status?: string;
+};
+
 const STORAGE_KEY = 'epoch:draft-boms';
 const PRIVATEER_DRAFT_ID = 'privateer';
+const R_AND_D_PROJECT_VALUE = '__r_and_d__';
 
 const actions: BomAction[] = ['Order / Quote', 'Use in RFQ', 'Do Not Order', 'Hold'];
 const statuses: BomStatus[] = ['Needs Review', 'Needs Quote', 'RFQ Sent', 'On Order', 'On Hand', 'ETA / Inbound', 'Hold'];
@@ -77,9 +90,27 @@ function createPrivateerDraft(): BomDraft {
     revision: 'Draft A',
     owner: '',
     project: 'Privateer',
+    projectId: null,
+    projectCode: null,
+    projectName: 'Privateer',
+    projectType: null,
     notes: 'First draft sourcing BOM modeled after the Google Sheet layout.',
     updatedAt: new Date().toISOString(),
     lines: privateerDraftBomLines,
+  };
+}
+
+function projectLabel(project: ProjectOption) {
+  return [project.projectCode, project.projectName].filter(Boolean).join(' - ');
+}
+
+function normalizeDraft(draft: BomDraft): BomDraft {
+  return {
+    ...draft,
+    projectId: draft.projectId ?? null,
+    projectCode: draft.projectCode ?? null,
+    projectName: draft.projectName ?? draft.project ?? null,
+    projectType: draft.projectType ?? null,
   };
 }
 
@@ -95,7 +126,7 @@ function loadDrafts(): BomDraft[] {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return [createPrivateerDraft()];
-    const drafts = JSON.parse(raw) as BomDraft[];
+    const drafts = (JSON.parse(raw) as BomDraft[]).map(normalizeDraft);
     const privateer = drafts.find((item) => item.id === PRIVATEER_DRAFT_ID);
     if (privateer) return [privateer, ...drafts.filter((item) => item.id !== PRIVATEER_DRAFT_ID)];
     return [createPrivateerDraft(), ...drafts];
@@ -115,6 +146,15 @@ export default function DraftBOMBuilderPage() {
   const [draft, setDraft] = useState<BomDraft>(() => loadDrafts()[0] ?? createPrivateerDraft());
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+
+  const { data: projects = [], isLoading: projectsLoading } = useQuery<ProjectOption[]>({
+    queryKey: ['/api/projects'],
+  });
+
+  const projectOptions = useMemo(() => {
+    return [...projects].sort((a, b) => projectLabel(a).localeCompare(projectLabel(b)));
+  }, [projects]);
+  const selectedProjectValue = draft.projectType === 'R_AND_D' ? R_AND_D_PROJECT_VALUE : draft.projectId ?? '';
 
   const visibleLines = useMemo(() => {
     return draft.lines.filter((line) => {
@@ -225,7 +265,33 @@ export default function DraftBOMBuilderPage() {
     const match = savedDrafts.find((item) => item.id === id);
     if (!match) return;
     setSelectedDraftId(id);
-    setDraft(match);
+    setDraft(normalizeDraft(match));
+  }
+
+  function updateDraftProject(value: string) {
+    if (value === R_AND_D_PROJECT_VALUE) {
+      setDraft((current) => ({
+        ...current,
+        project: 'R&D',
+        projectId: null,
+        projectCode: null,
+        projectName: 'R&D',
+        projectType: 'R_AND_D',
+      }));
+      return;
+    }
+
+    const selectedProject = projectOptions.find((project) => project.id === value);
+    if (!selectedProject) return;
+
+    setDraft((current) => ({
+      ...current,
+      project: projectLabel(selectedProject),
+      projectId: selectedProject.id,
+      projectCode: selectedProject.projectCode,
+      projectName: selectedProject.projectName,
+      projectType: 'P2_PROJECT',
+    }));
   }
 
   function startBlankDraft() {
@@ -235,6 +301,10 @@ export default function DraftBOMBuilderPage() {
       revision: 'Draft A',
       owner: '',
       project: '',
+      projectId: null,
+      projectCode: null,
+      projectName: null,
+      projectType: null,
       notes: '',
       updatedAt: new Date().toISOString(),
       lines: [newLine()],
@@ -244,6 +314,15 @@ export default function DraftBOMBuilderPage() {
   }
 
   function markSelectedFinalized() {
+    if (!draft.project) {
+      toast({
+        title: 'Select a project first',
+        description: 'Choose a P2 project or R&D before finalizing lines for inventory-item creation.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setDraft((current) => ({
       ...current,
       lines: current.lines.map((line) =>
@@ -324,11 +403,25 @@ export default function DraftBOMBuilderPage() {
                   </div>
                   <div className="grid gap-1.5">
                     <Label htmlFor="draft-project">Project</Label>
-                    <Input
-                      id="draft-project"
-                      value={draft.project}
-                      onChange={(event) => setDraft((current) => ({ ...current, project: event.target.value }))}
-                    />
+                    <Select value={selectedProjectValue} onValueChange={updateDraftProject}>
+                      <SelectTrigger id="draft-project">
+                        <SelectValue placeholder={draft.project || 'Select a P2 project or R&D'} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={R_AND_D_PROJECT_VALUE}>R&D</SelectItem>
+                        {projectsLoading ? (
+                          <SelectItem value="__projects_loading__" disabled>
+                            Loading P2 projects...
+                          </SelectItem>
+                        ) : (
+                          projectOptions.map((project) => (
+                            <SelectItem key={project.id} value={project.id}>
+                              {projectLabel(project)}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
                 <div className="grid gap-1.5">

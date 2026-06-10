@@ -2617,9 +2617,9 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
         queryClient.invalidateQueries({ queryKey: key }),
       );
       if (data.emailSent) {
-        toast.success(`RFQ sent to ${data.emailRecipient}`);
+        toast.success(`${data.wasResend ? 'RFQ resent' : 'RFQ sent'} to ${data.emailRecipient}`);
       } else if (data.emailSent === false) {
-        toast.success('RFQ prepared without sending email');
+        toast.success(data.wasResend ? 'RFQ resend prepared without sending email' : 'RFQ prepared without sending email');
       } else {
         toast.error(data.message || 'Failed to send RFQ');
       }
@@ -3571,6 +3571,20 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
               </Button>
             )}
 
+            {selectedVendorPO.status === 'RFQ Sent' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleOpenRFQDialog}
+                disabled={sendRFQMutation.isPending}
+                className="text-orange-600 hover:text-orange-800 border-orange-300 hover:border-orange-400"
+                data-testid="button-resend-rfq"
+              >
+                <RefreshCw className={`w-4 h-4 mr-2 ${sendRFQMutation.isPending ? 'animate-spin' : ''}`} />
+                {sendRFQMutation.isPending ? 'Resending...' : 'Resend RFQ'}
+              </Button>
+            )}
+
             {/* RFQ Lifecycle Transition Buttons (only when RFQ Sent) */}
             {selectedVendorPO.status === 'RFQ Sent' && (
               <>
@@ -3964,7 +3978,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
         <AlertDialog open={showRFQDialog} onOpenChange={setShowRFQDialog}>
           <AlertDialogContent className="sm:max-w-md">
             <AlertDialogHeader>
-              <AlertDialogTitle>Send Request for Quote</AlertDialogTitle>
+              <AlertDialogTitle>{selectedVendorPO?.status === 'RFQ Sent' ? 'Resend Request for Quote' : 'Send Request for Quote'}</AlertDialogTitle>
               <AlertDialogDescription>
                 Select the recipients for this RFQ email, or print it without sending email.
               </AlertDialogDescription>
@@ -4010,8 +4024,8 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
                 data-testid="button-confirm-send-rfq"
               >
                 {sendRFQMutation.isPending ? (
-                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Sending…</>
-                ) : 'Send RFQ'}
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />{selectedVendorPO?.status === 'RFQ Sent' ? 'Resending...' : 'Sending...'}</>
+                ) : selectedVendorPO?.status === 'RFQ Sent' ? 'Resend RFQ' : 'Send RFQ'}
               </Button>
             </AlertDialogFooter>
           </AlertDialogContent>

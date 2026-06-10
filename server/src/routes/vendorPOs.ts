@@ -1983,10 +1983,18 @@ router.post('/:id/send-rfq', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Vendor PO not found' });
     }
 
-    if (vendorPO.status !== 'Draft') {
+    const isRfqResend = vendorPO.status === 'RFQ Sent';
+    if (!['Draft', 'RFQ Sent'].includes(vendorPO.status)) {
       return res.status(400).json({
-        error: 'RFQ can only be sent from Draft status',
+        error: 'RFQ can only be sent from Draft or RFQ Sent status',
         message: `PO is currently in ${vendorPO.status} status`,
+      });
+    }
+
+    if (vendorPO.poNumber) {
+      return res.status(400).json({
+        error: 'RFQ resend not allowed after PO issue',
+        message: 'This record has already been issued as a PO. Use Resend PO instead.',
       });
     }
 
@@ -2026,6 +2034,7 @@ router.post('/:id/send-rfq', async (req: Request, res: Response) => {
         emailRecipient: rfqTo,
         emailCc: rfqCc,
         printOnly: true,
+        wasResend: isRfqResend,
         message: `RFQ prepared for printing only.`,
       });
     }
@@ -2106,6 +2115,7 @@ router.post('/:id/send-rfq', async (req: Request, res: Response) => {
       emailSent: true,
       emailRecipient: rfqTo,
       emailCc: rfqCc,
+      wasResend: isRfqResend,
       message: `RFQ sent successfully to ${rfqTo}.`,
     });
   } catch (error) {

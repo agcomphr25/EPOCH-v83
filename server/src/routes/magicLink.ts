@@ -33,6 +33,12 @@ router.post(
   async (req: Request, res: Response) => {
     try {
       const validatedData = generateMagicLinkSchema.parse(req.body);
+      if (validatedData.purpose === 'vendor_po_confirmation') {
+        return res.status(410).json({
+          success: false,
+          error: 'Vendor PO confirmation is no longer supported.',
+        });
+      }
 
       const result = await generateMagicLink({
         ...validatedData,
@@ -66,6 +72,12 @@ router.post(
 router.post('/send', authenticateToken, async (req: Request, res: Response) => {
   try {
     const validatedData = sendMagicLinkSchema.parse(req.body);
+    if (validatedData.purpose === 'vendor_po_confirmation') {
+      return res.status(410).json({
+        success: false,
+        error: 'Vendor PO confirmation is no longer supported.',
+      });
+    }
 
     const result = await sendMagicLink({
       ...validatedData,
@@ -110,6 +122,13 @@ router.get('/verify', async (req: Request, res: Response) => {
       return res.status(400).json({
         success: false,
         error: 'Token is required',
+      });
+    }
+
+    if (purpose === 'vendor_po_confirmation') {
+      return res.status(410).json({
+        success: false,
+        error: 'Vendor PO confirmation is no longer supported.',
       });
     }
 

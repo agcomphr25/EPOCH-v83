@@ -38,7 +38,6 @@ const PUBLIC_ROUTE_PREFIXES = [
   '/app/production/timer-programs', // Timer Programs - public access for production floor
   '/fill-and-sign/', // Fill and sign PDF forms - public access for customers
   '/kiosk', // Time-clock kiosk — PIN-based auth, no EPOCH login required
-  '/vendor-confirm', // Vendor PO confirmation page - public access for vendors
 ];
 
 function isDeploymentEnvironment(): boolean {

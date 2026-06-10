@@ -14,7 +14,7 @@ import { requirePermission } from '../../middleware/requirePermission';
 import { sendCommunication } from '../../communication/send';
 import { db, queryRows } from '../../db';
 import { sql } from 'drizzle-orm';
-import { appendUniqueEmail, resolveVendorPoReturnEmail } from '../../utils/vendorPoContact';
+import { appendUniqueEmail, resolveVendorPoContactName, resolveVendorPoReturnEmail } from '../../utils/vendorPoContact';
 import {
   getVendorQualificationBlockers,
   emitProcurementLedgerEvent,
@@ -868,6 +868,7 @@ router.get('/settings', async (req: Request, res: Response) => {
     if (!settings) {
       // Return default settings if none exist
       return res.json({
+        contactName: resolveVendorPoContactName(),
         contactEmail: resolveVendorPoReturnEmail(),
         termsAndConditions: '',
         paymentTerms: '',
@@ -876,6 +877,7 @@ router.get('/settings', async (req: Request, res: Response) => {
     }
     res.json({
       ...settings,
+      contactName: resolveVendorPoContactName(settings),
       contactEmail: resolveVendorPoReturnEmail(settings),
     });
   } catch (error) {

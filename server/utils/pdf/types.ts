@@ -14,6 +14,7 @@ export interface PackingSlipItem {
 
 export interface PackingSlipData {
   packingSlipNumber: string;
+  invoiceNumber?: string;
   poNumber?: string;
   lotNumber?: string;
   date: string;

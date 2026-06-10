@@ -559,6 +559,12 @@ export default function Navigation() {
       icon: FileSpreadsheet,
       description: 'Create reusable draft BOMs and sourcing picklists',
     },
+    {
+      path: '/design/rd-projects',
+      label: 'R & D Projects',
+      icon: FlaskConical,
+      description: 'Create R & D projects, attach draft builder tabs, and track prototype readiness',
+    },
   ];
 
   const orderManagementItems = [

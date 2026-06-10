@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useLocation } from 'wouter';
 import {
   Archive,
   Calculator,
@@ -46,6 +47,8 @@ type BomLine = PrivateerDraftBomLine & {
   inventoryItemId?: number | null;
   inventoryItemName?: string | null;
   isDraftPart?: boolean;
+  actualCost?: number | '';
+  service?: boolean;
 };
 type BuiltInWorkspaceTabId = 'po-draft' | 'parts-request' | 'bom-wizard' | 'assembly-tree';
 type CustomWorkspaceTabId = `custom:${string}`;
@@ -104,6 +107,7 @@ type InventoryItemOption = {
 };
 
 const STORAGE_KEY = 'epoch:draft-boms';
+const VENDOR_PO_HANDOFF_KEY = 'epoch:draft-bom-vendor-po-handoff';
 const PRIVATEER_DRAFT_ID = 'privateer';
 const NEW_DRAFT_VALUE = '__new_draft__';
 const R_AND_D_PROJECT_VALUE = '__r_and_d__';
@@ -154,6 +158,8 @@ function newLine(): BomLine {
     inventoryItemId: null,
     inventoryItemName: null,
     isDraftPart: true,
+    actualCost: '',
+    service: false,
   };
 }
 
@@ -226,6 +232,7 @@ function saveDrafts(drafts: BomDraft[]) {
 
 export default function DraftBOMBuilderPage() {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [savedDrafts, setSavedDrafts] = useState<BomDraft[]>(() => loadDrafts());
   const [selectedDraftId, setSelectedDraftId] = useState<string>(PRIVATEER_DRAFT_ID);
   const [draft, setDraft] = useState<BomDraft>(() => loadDrafts()[0] ?? createPrivateerDraft());
@@ -235,6 +242,8 @@ export default function DraftBOMBuilderPage() {
   const [visibleWorkspaceTabs, setVisibleWorkspaceTabs] = useState<WorkspaceTabId[]>(() => draft.workspaceTabs ?? defaultWorkspaceTabs);
   const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<WorkspaceTabId>('po-draft');
   const [poDescription, setPoDescription] = useState('');
+  const [partsRequestDescription, setPartsRequestDescription] = useState('');
+  const [sortPartsByVendor, setSortPartsByVendor] = useState(false);
   const [visiblePoColumns, setVisiblePoColumns] = useState<PoColumnId[]>(() => draft.poVisibleColumns ?? defaultPoColumns);
   const [customPoColumns, setCustomPoColumns] = useState<string[]>(() => draft.customPoColumns ?? []);
   const [newPoColumnName, setNewPoColumnName] = useState('');
@@ -295,6 +304,36 @@ export default function DraftBOMBuilderPage() {
       })
       .slice(0, 6);
   }, [activeInventoryItems, poDescription]);
+  const partsRequestMatches = useMemo(() => {
+    const query = partsRequestDescription.trim().toLowerCase();
+    if (query.length < 2) return [];
+
+    return activeInventoryItems
+      .filter((item) => {
+        const haystack = [
+          item.name,
+          item.description,
+          item.agPartNumber,
+          item.supplierPartNumber,
+          item.manufacturerPartNumber,
+          item.manufacturer,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        return haystack.includes(query);
+      })
+      .slice(0, 6);
+  }, [activeInventoryItems, partsRequestDescription]);
+  const partsRequestLines = useMemo(() => {
+    const lines = [...draft.lines];
+    if (!sortPartsByVendor) return lines;
+    return lines.sort((a, b) => {
+      const vendorCompare = (a.supplier || '').localeCompare(b.supplier || '');
+      if (vendorCompare !== 0) return vendorCompare;
+      return (a.description || '').localeCompare(b.description || '');
+    });
+  }, [draft.lines, sortPartsByVendor]);
 
   const totals = useMemo(() => {
     const lineTotal = (line: BomLine) => asNumber(line.unitCost) * asNumber(line.qtyNeeded);
@@ -393,6 +432,46 @@ export default function DraftBOMBuilderPage() {
     toast({
       title: item ? 'Inventory item added' : 'Draft part created',
       description: item ? `${description} was added to the PO draft.` : `${description} was added as a draft part.`,
+    });
+  }
+
+  function createLineFromPartsRequestDescription(item?: InventoryItemOption) {
+    const description = item?.name || item?.description || partsRequestDescription.trim();
+    const itemCost = Number(item?.costPer);
+    if (!description) {
+      toast({
+        title: 'Part description required',
+        description: 'Start with a part description before adding a parts/request line.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const nextLine: BomLine = {
+      ...newLine(),
+      description,
+      agPartNumber: item?.agPartNumber || '',
+      supplier: item?.source || item?.supplier || '',
+      supplierItemId: item?.supplierPartNumber || item?.manufacturerPartNumber || '',
+      manufacturer: item?.manufacturer || '',
+      unit: item?.usageUnit || item?.unit || 'EA',
+      unitCost: Number.isFinite(itemCost) ? itemCost : '',
+      actualCost: '',
+      qtyNeeded: 1,
+      service: false,
+      status: item ? 'Needs Review' : 'Needs Quote',
+      note: item ? `Matched inventory item #${item.id}` : 'Draft part - create inventory item when finalized',
+      inventoryItemId: item?.id ?? null,
+      inventoryItemName: item?.name || item?.description || null,
+      isDraftPart: !item,
+      customFields: {},
+    };
+
+    setDraft((current) => ({ ...current, lines: [nextLine, ...current.lines] }));
+    setPartsRequestDescription('');
+    toast({
+      title: item ? 'Inventory item added' : 'Draft part created',
+      description: item ? `${description} was added to parts/request.` : `${description} was added as a draft part.`,
     });
   }
 
@@ -539,6 +618,64 @@ export default function DraftBOMBuilderPage() {
       title: 'Inventory finalization staged',
       description: 'Selected lines are marked final and ready for inventory-item creation when backend submission is wired.',
     });
+  }
+
+  function createVendorPoHandoff() {
+    const selectedRequestLines = draft.lines.filter((line) => line.include);
+    if (selectedRequestLines.length === 0) {
+      toast({
+        title: 'Select parts first',
+        description: 'Check the parts/request lines that should go to the Vendor PO page.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const vendors = [...new Set(selectedRequestLines.map((line) => line.supplier || 'Unassigned vendor'))].sort();
+    if (vendors.length !== 1 || vendors[0] === 'Unassigned vendor') {
+      toast({
+        title: 'Choose one vendor',
+        description: 'Select checked lines for a single vendor before creating a Vendor PO draft.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const payload = {
+      source: 'draft-bom',
+      draftId: draft.id,
+      draftName: draft.name,
+      revision: draft.revision,
+      project: draft.project,
+      projectId: draft.projectId,
+      projectType: draft.projectType,
+      createdAt: new Date().toISOString(),
+      vendors,
+      lines: selectedRequestLines
+        .slice()
+        .sort((a, b) => (a.supplier || '').localeCompare(b.supplier || '') || (a.description || '').localeCompare(b.description || ''))
+        .map((line) => ({
+          id: line.id,
+          vendor: line.supplier || '',
+          supplierPartNumber: line.supplierItemId || '',
+          manufacturer: line.manufacturer || '',
+          description: line.description || '',
+          estimatedCost: asNumber(line.unitCost),
+          actualCost: asNumber(line.actualCost ?? ''),
+          quantity: asNumber(line.qtyNeeded),
+          service: line.service === true,
+          agPartNumber: line.agPartNumber || '',
+          status: line.status,
+          note: line.note || '',
+        })),
+    };
+
+    window.localStorage.setItem(VENDOR_PO_HANDOFF_KEY, JSON.stringify(payload));
+    toast({
+      title: 'Vendor PO handoff ready',
+      description: `${selectedRequestLines.length} line(s) grouped by ${vendors.length} vendor(s).`,
+    });
+    setLocation('/vendor-pos?draftBomHandoff=1');
   }
 
   function showHandoffToast(target: 'RFQ package' | 'PO draft' | 'parts request' | 'inventory items' | 'assembly tree') {
@@ -871,29 +1008,19 @@ export default function DraftBOMBuilderPage() {
 
             {visibleWorkspaceTabs.includes('parts-request') ? (
               <TabsContent value="parts-request" className="mt-4">
-                <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
-                  <div className="flex flex-col gap-3 border-b border-slate-200 p-4 lg:flex-row lg:items-center lg:justify-between">
-                    <div>
-                      <h2 className="font-semibold text-slate-950">Parts/request</h2>
-                      <p className="text-sm text-slate-600">
-                        {selectedLines.length} selected line(s) ready for request staging
-                      </p>
-                    </div>
-                    <Button
-                      variant="outline"
-                      disabled={selectedLines.length === 0}
-                      onClick={() => showHandoffToast('parts request')}
-                    >
-                      <PackagePlus className="mr-2 h-4 w-4" />
-                      Create parts request
-                    </Button>
-                  </div>
-
-                  <SourcingLineTable
-                    lines={selectedLines}
-                    emptyMessage="Select BOM lines to stage a parts request."
-                  />
-                </section>
+                <PartsRequestWorkspace
+                  lines={partsRequestLines}
+                  description={partsRequestDescription}
+                  matches={partsRequestMatches}
+                  sortByVendor={sortPartsByVendor}
+                  onDescriptionChange={setPartsRequestDescription}
+                  onCreateLine={createLineFromPartsRequestDescription}
+                  onSortByVendorChange={setSortPartsByVendor}
+                  onUpdateLine={updateLine}
+                  onUpdateNumberLine={(id, field, value) => updateLine(id, { [field]: value === '' ? '' : Number(value) } as Partial<BomLine>)}
+                  onCreateVendorPoDraft={createVendorPoHandoff}
+                  onFinalizeSelected={markSelectedFinalized}
+                />
               </TabsContent>
             ) : null}
 
@@ -1190,6 +1317,227 @@ function poColumnValue(line: BomLine, columnId: PoColumnId) {
   if (columnId === 'status') return line.status;
   if (columnId === 'source') return line.inventoryItemId ? `Inventory #${line.inventoryItemId}` : 'Draft part';
   return '-';
+}
+
+function PartsRequestWorkspace({
+  lines,
+  description,
+  matches,
+  sortByVendor,
+  onDescriptionChange,
+  onCreateLine,
+  onSortByVendorChange,
+  onUpdateLine,
+  onUpdateNumberLine,
+  onCreateVendorPoDraft,
+  onFinalizeSelected,
+}: {
+  lines: BomLine[];
+  description: string;
+  matches: InventoryItemOption[];
+  sortByVendor: boolean;
+  onDescriptionChange: (value: string) => void;
+  onCreateLine: (item?: InventoryItemOption) => void;
+  onSortByVendorChange: (value: boolean) => void;
+  onUpdateLine: (id: string, patch: Partial<BomLine>) => void;
+  onUpdateNumberLine: (id: string, field: 'unitCost' | 'actualCost' | 'qtyNeeded', value: string) => void;
+  onCreateVendorPoDraft: () => void;
+  onFinalizeSelected: () => void;
+}) {
+  const typedDescription = description.trim();
+  const selectedCount = lines.filter((line) => line.include).length;
+
+  return (
+    <section className="space-y-4">
+      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div className="min-w-0 flex-1 space-y-3">
+            <div>
+              <h2 className="font-semibold text-slate-950">Parts/request</h2>
+              <p className="text-sm text-slate-600">
+                Add draft part lines, match inventory items, then stage selected vendor lines for RFQ or Vendor PO creation.
+              </p>
+            </div>
+            <div className="grid gap-2 lg:grid-cols-[minmax(280px,520px)_auto]">
+              <Input
+                value={description}
+                onChange={(event) => onDescriptionChange(event.target.value)}
+                placeholder="Part description"
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    onCreateLine(matches[0]);
+                  }
+                }}
+              />
+              <Button type="button" onClick={() => onCreateLine(matches[0])} disabled={!typedDescription}>
+                <Plus className="mr-2 h-4 w-4" />
+                Add part line
+              </Button>
+            </div>
+
+            {typedDescription.length >= 2 ? (
+              <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                {matches.length > 0 ? (
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Inventory matches</p>
+                    <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                      {matches.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          className="rounded-md border border-slate-200 bg-white p-3 text-left text-sm hover:border-blue-300 hover:bg-blue-50"
+                          onClick={() => onCreateLine(item)}
+                        >
+                          <span className="block font-medium text-slate-950">{item.name || item.description || 'Inventory item'}</span>
+                          <span className="mt-1 block text-xs text-slate-500">
+                            {[item.agPartNumber, item.source || item.supplier].filter(Boolean).join(' - ') || `Item #${item.id}`}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                    <Button type="button" variant="outline" size="sm" onClick={() => onCreateLine()}>
+                      Create draft part instead
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-sm text-slate-600">No inventory match found.</span>
+                    <Button type="button" variant="outline" size="sm" onClick={() => onCreateLine()}>
+                      Create draft part
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant={sortByVendor ? 'default' : 'outline'}
+              onClick={() => onSortByVendorChange(!sortByVendor)}
+            >
+              <Filter className="mr-2 h-4 w-4" />
+              Sort by vendor
+            </Button>
+            <Button type="button" variant="outline" onClick={onCreateVendorPoDraft} disabled={selectedCount === 0}>
+              <PackagePlus className="mr-2 h-4 w-4" />
+              Create Vendor PO draft
+            </Button>
+            <Button type="button" onClick={onFinalizeSelected} disabled={selectedCount === 0}>
+              <Check className="mr-2 h-4 w-4" />
+              Finalize checked
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-[56px]">Use</TableHead>
+                <TableHead className="min-w-[300px]">Part description</TableHead>
+                <TableHead className="w-[160px]">Vendor / Supplier</TableHead>
+                <TableHead className="w-[170px]">Supplier Part #</TableHead>
+                <TableHead className="w-[160px]">Manufacturer</TableHead>
+                <TableHead className="w-[130px] text-right">Estimated Cost</TableHead>
+                <TableHead className="w-[120px] text-right">Actual Cost</TableHead>
+                <TableHead className="w-[100px] text-right">Quantity</TableHead>
+                <TableHead className="w-[90px]">Service</TableHead>
+                <TableHead className="w-[130px]">AG Part #</TableHead>
+                <TableHead className="w-[150px]">Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {lines.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={11} className="h-24 text-center text-slate-500">
+                    Add a part description to begin the parts/request draft.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                lines.map((line) => (
+                  <TableRow key={line.id} className={cn(line.finalized && 'bg-emerald-50/60')}>
+                    <TableCell>
+                      <Checkbox
+                        checked={line.include}
+                        onCheckedChange={(checked) => onUpdateLine(line.id, { include: checked === true })}
+                        aria-label={`Select ${line.description || 'parts/request line'}`}
+                      />
+                    </TableCell>
+                    <EditableCell value={line.description} onChange={(value) => onUpdateLine(line.id, { description: value })} wide />
+                    <EditableCell value={line.supplier} onChange={(value) => onUpdateLine(line.id, { supplier: value })} />
+                    <EditableCell value={line.supplierItemId} onChange={(value) => onUpdateLine(line.id, { supplierItemId: value })} />
+                    <EditableCell value={line.manufacturer} onChange={(value) => onUpdateLine(line.id, { manufacturer: value })} />
+                    <TableCell>
+                      <Input
+                        className="h-9 text-right"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={line.unitCost}
+                        onChange={(event) => onUpdateNumberLine(line.id, 'unitCost', event.target.value)}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        className="h-9 text-right"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={line.actualCost ?? ''}
+                        onChange={(event) => onUpdateNumberLine(line.id, 'actualCost', event.target.value)}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        className="h-9 text-right"
+                        type="number"
+                        min="0"
+                        step="0.001"
+                        value={line.qtyNeeded}
+                        onChange={(event) => onUpdateNumberLine(line.id, 'qtyNeeded', event.target.value)}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Checkbox
+                        checked={line.service === true}
+                        onCheckedChange={(checked) => onUpdateLine(line.id, { service: checked === true })}
+                        aria-label={`Mark ${line.description || 'line'} as service`}
+                      />
+                    </TableCell>
+                    <EditableCell value={line.agPartNumber} onChange={(value) => onUpdateLine(line.id, { agPartNumber: value })} />
+                    <TableCell>
+                      <Select value={line.status} onValueChange={(value) => onUpdateLine(line.id, { status: value as BomStatus })}>
+                        <SelectTrigger className="h-9">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {statuses.map((status) => (
+                            <SelectItem key={status} value={status}>
+                              {status}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+        <Separator />
+        <div className="flex flex-wrap items-center justify-between gap-2 p-3 text-xs text-slate-500">
+          <span>{selectedCount} checked line{selectedCount === 1 ? '' : 's'} ready for Vendor PO/RFQ or inventory finalization.</span>
+          <span>Vendor PO handoff keeps draft BOM line status visible while the PO workflow owns RFQ sending.</span>
+        </div>
+      </section>
+    </section>
+  );
 }
 
 function SourcingLineTable({ lines, emptyMessage }: { lines: BomLine[]; emptyMessage: string }) {

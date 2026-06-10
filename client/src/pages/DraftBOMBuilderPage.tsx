@@ -13,6 +13,7 @@ import {
   Send,
   SlidersHorizontal,
   Trash2,
+  X,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -33,6 +34,7 @@ type BomAction = 'Order / Quote' | 'Use in RFQ' | 'Do Not Order' | 'Hold';
 type BomStatus = 'Needs Review' | 'Needs Quote' | 'RFQ Sent' | 'On Order' | 'On Hand' | 'ETA / Inbound' | 'Hold';
 
 type BomLine = PrivateerDraftBomLine;
+type WorkspaceTabId = 'po-draft' | 'parts-request' | 'bom-wizard' | 'assembly-tree';
 
 type BomDraft = {
   id: string;
@@ -64,6 +66,13 @@ const R_AND_D_PROJECT_VALUE = '__r_and_d__';
 const actions: BomAction[] = ['Order / Quote', 'Use in RFQ', 'Do Not Order', 'Hold'];
 const statuses: BomStatus[] = ['Needs Review', 'Needs Quote', 'RFQ Sent', 'On Order', 'On Hand', 'ETA / Inbound', 'Hold'];
 const defaultFilterNames = ['Avionics/Sensors', 'Electrical', 'Propulsion/Mechanical', 'Structural', 'Hardware/Misc.', 'Tooling'];
+const defaultWorkspaceTabs: WorkspaceTabId[] = ['po-draft', 'parts-request', 'bom-wizard', 'assembly-tree'];
+const workspaceTabLabels: Record<WorkspaceTabId, string> = {
+  'po-draft': 'PO draft',
+  'parts-request': 'Parts/request',
+  'bom-wizard': 'BOM wizard',
+  'assembly-tree': 'Assembly tree',
+};
 
 function newLine(): BomLine {
   return {
@@ -150,6 +159,8 @@ export default function DraftBOMBuilderPage() {
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [visibleWorkspaceTabs, setVisibleWorkspaceTabs] = useState<WorkspaceTabId[]>(defaultWorkspaceTabs);
+  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<WorkspaceTabId>('po-draft');
 
   const { data: projects = [], isLoading: projectsLoading } = useQuery<ProjectOption[]>({
     queryKey: ['/api/projects'],
@@ -176,6 +187,10 @@ export default function DraftBOMBuilderPage() {
   const filterOptions = useMemo(() => {
     return [...new Set([...defaultFilterNames, ...draft.lines.map((line) => line.category).filter(Boolean)])].sort();
   }, [draft.lines]);
+  const hiddenWorkspaceTabs = useMemo(
+    () => defaultWorkspaceTabs.filter((tabId) => !visibleWorkspaceTabs.includes(tabId)),
+    [visibleWorkspaceTabs],
+  );
 
   const totals = useMemo(() => {
     const lineTotal = (line: BomLine) => asNumber(line.unitCost) * asNumber(line.qtyNeeded);
@@ -344,10 +359,27 @@ export default function DraftBOMBuilderPage() {
     });
   }
 
-  function showHandoffToast(target: 'RFQ package' | 'PO draft' | 'inventory items') {
+  function showHandoffToast(target: 'RFQ package' | 'PO draft' | 'parts request' | 'inventory items' | 'assembly tree') {
     toast({
       title: `${selectedLines.length} line(s) ready`,
       description: `The ${target} handoff is staged in the UI and ready for backend wiring.`,
+    });
+  }
+
+  function addWorkspaceTab(tabId: string) {
+    if (!defaultWorkspaceTabs.includes(tabId as WorkspaceTabId)) return;
+    const nextTabId = tabId as WorkspaceTabId;
+    setVisibleWorkspaceTabs((current) => (current.includes(nextTabId) ? current : [...current, nextTabId]));
+    setActiveWorkspaceTab(nextTabId);
+  }
+
+  function removeWorkspaceTab(tabId: WorkspaceTabId) {
+    setVisibleWorkspaceTabs((current) => {
+      const next = current.filter((item) => item !== tabId);
+      if (activeWorkspaceTab === tabId) {
+        setActiveWorkspaceTab(next[0] ?? 'po-draft');
+      }
+      return next;
     });
   }
 
@@ -519,14 +551,51 @@ export default function DraftBOMBuilderPage() {
         </Sheet>
 
         <section>
-          <Tabs defaultValue="draft" className="min-w-0">
+          <Tabs
+            value={activeWorkspaceTab}
+            onValueChange={(value) => setActiveWorkspaceTab(value as WorkspaceTabId)}
+            className="min-w-0"
+          >
             <div className="flex flex-col gap-3 border-b border-slate-200 pb-3 lg:flex-row lg:items-center lg:justify-between">
-              <TabsList>
-                <TabsTrigger value="draft">BOM Draft Lines</TabsTrigger>
-                <TabsTrigger value="picklist">RFQ / Order Picklist</TabsTrigger>
+              <TabsList className="h-auto flex-wrap justify-start">
+                {visibleWorkspaceTabs.map((tabId) => (
+                  <div key={tabId} className="group flex items-center rounded-sm data-[state=active]:bg-background">
+                    <TabsTrigger value={tabId} className="pr-1">
+                      {workspaceTabLabels[tabId]}
+                    </TabsTrigger>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0 text-slate-500 hover:text-slate-900"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        removeWorkspaceTab(tabId);
+                      }}
+                      aria-label={`Remove ${workspaceTabLabels[tabId]} tab`}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ))}
               </TabsList>
 
               <div className="flex flex-wrap gap-2">
+                <Select value="add-tab" onValueChange={addWorkspaceTab} disabled={hiddenWorkspaceTabs.length === 0}>
+                  <SelectTrigger className="w-[150px]">
+                    <SelectValue placeholder="Add tab" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="add-tab" disabled>
+                      Add tab
+                    </SelectItem>
+                    {hiddenWorkspaceTabs.map((tabId) => (
+                      <SelectItem key={tabId} value={tabId}>
+                        {workspaceTabLabels[tabId]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <Select value={categoryFilter} onValueChange={setCategoryFilter}>
                   <SelectTrigger className="w-[190px]">
                     <SelectValue placeholder="Filters" />
@@ -556,7 +625,72 @@ export default function DraftBOMBuilderPage() {
               </div>
             </div>
 
-            <TabsContent value="draft" className="mt-4">
+            {visibleWorkspaceTabs.length === 0 ? (
+              <div className="mt-4 rounded-lg border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-600">
+                Add a workspace tab to continue.
+              </div>
+            ) : null}
+
+            {visibleWorkspaceTabs.includes('po-draft') ? (
+              <TabsContent value="po-draft" className="mt-4">
+                <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
+                  <div className="flex flex-col gap-3 border-b border-slate-200 p-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                      <h2 className="font-semibold text-slate-950">PO Draft</h2>
+                      <p className="text-sm text-slate-600">
+                        {selectedLines.length} selected line(s), {orderableLines.length} open orderable line(s)
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        disabled={selectedLines.length === 0}
+                        onClick={() => showHandoffToast('PO draft')}
+                      >
+                        <FileSpreadsheet className="mr-2 h-4 w-4" />
+                        Generate PO draft
+                      </Button>
+                    </div>
+                  </div>
+
+                  <SourcingLineTable
+                    lines={selectedLines}
+                    emptyMessage="Select BOM lines to build the PO draft."
+                  />
+                </section>
+              </TabsContent>
+            ) : null}
+
+            {visibleWorkspaceTabs.includes('parts-request') ? (
+              <TabsContent value="parts-request" className="mt-4">
+                <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
+                  <div className="flex flex-col gap-3 border-b border-slate-200 p-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                      <h2 className="font-semibold text-slate-950">Parts/request</h2>
+                      <p className="text-sm text-slate-600">
+                        {selectedLines.length} selected line(s) ready for request staging
+                      </p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      disabled={selectedLines.length === 0}
+                      onClick={() => showHandoffToast('parts request')}
+                    >
+                      <PackagePlus className="mr-2 h-4 w-4" />
+                      Create parts request
+                    </Button>
+                  </div>
+
+                  <SourcingLineTable
+                    lines={selectedLines}
+                    emptyMessage="Select BOM lines to stage a parts request."
+                  />
+                </section>
+              </TabsContent>
+            ) : null}
+
+            {visibleWorkspaceTabs.includes('bom-wizard') ? (
+              <TabsContent value="bom-wizard" className="mt-4">
               <div className="mb-3 flex flex-wrap gap-2">
                 <Button variant="outline" onClick={addLine}>
                   <Plus className="mr-2 h-4 w-4" />
@@ -585,90 +719,35 @@ export default function DraftBOMBuilderPage() {
                 updateLine={updateLine}
                 updateNumberLine={updateNumberLine}
               />
-            </TabsContent>
+              </TabsContent>
+            ) : null}
 
-            <TabsContent value="picklist" className="mt-4">
-              <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
-                <div className="flex flex-col gap-3 border-b border-slate-200 p-4 lg:flex-row lg:items-center lg:justify-between">
-                  <div>
-                    <h2 className="font-semibold text-slate-950">Selected Sourcing Lines</h2>
-                    <p className="text-sm text-slate-600">
-                      {selectedLines.length} selected line(s), {orderableLines.length} open orderable line(s)
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
+            {visibleWorkspaceTabs.includes('assembly-tree') ? (
+              <TabsContent value="assembly-tree" className="mt-4">
+                <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
+                  <div className="flex flex-col gap-3 border-b border-slate-200 p-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                      <h2 className="font-semibold text-slate-950">Assembly Tree</h2>
+                      <p className="text-sm text-slate-600">
+                        {selectedLines.length} selected line(s) available for assembly planning
+                      </p>
+                    </div>
                     <Button
                       variant="outline"
                       disabled={selectedLines.length === 0}
-                      onClick={() => showHandoffToast('RFQ package')}
+                      onClick={() => showHandoffToast('assembly tree')}
                     >
                       <Send className="mr-2 h-4 w-4" />
-                      Prepare RFQ package
-                    </Button>
-                    <Button
-                      variant="outline"
-                      disabled={selectedLines.length === 0}
-                      onClick={() => showHandoffToast('PO draft')}
-                    >
-                      <FileSpreadsheet className="mr-2 h-4 w-4" />
-                      Generate PO draft
-                    </Button>
-                    <Button disabled={selectedLines.length === 0} onClick={() => showHandoffToast('inventory items')}>
-                      <PackagePlus className="mr-2 h-4 w-4" />
-                      Add to inventory items
+                      Build assembly tree
                     </Button>
                   </div>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-[140px]">Supplier</TableHead>
-                        <TableHead className="w-[130px]">Supplier Item</TableHead>
-                        <TableHead className="w-[110px]">AG Part #</TableHead>
-                        <TableHead className="min-w-[320px]">Description</TableHead>
-                        <TableHead className="w-[80px] text-right">Qty</TableHead>
-                        <TableHead className="w-[110px] text-right">Unit Cost</TableHead>
-                        <TableHead className="w-[120px] text-right">Ext Cost</TableHead>
-                        <TableHead className="w-[140px]">Action</TableHead>
-                        <TableHead className="w-[130px]">Status</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {selectedLines.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={9} className="h-24 text-center text-slate-500">
-                            Select BOM lines to build the RFQ/order picklist.
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        selectedLines.map((line) => {
-                          const extCost = asNumber(line.unitCost) * asNumber(line.qtyNeeded);
-                          return (
-                            <TableRow key={line.id}>
-                              <TableCell className="font-medium">{line.supplier || 'Unassigned'}</TableCell>
-                              <TableCell>{line.supplierItemId || '-'}</TableCell>
-                              <TableCell>{line.agPartNumber || '-'}</TableCell>
-                              <TableCell>{line.description || '-'}</TableCell>
-                              <TableCell className="text-right tabular-nums">{line.qtyNeeded || '-'}</TableCell>
-                              <TableCell className="text-right tabular-nums">
-                                {line.unitCost === '' ? '-' : money(asNumber(line.unitCost))}
-                              </TableCell>
-                              <TableCell className="text-right tabular-nums">{money(extCost)}</TableCell>
-                              <TableCell>{line.action}</TableCell>
-                              <TableCell>
-                                <StatusBadge status={line.status} />
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
-              </section>
-            </TabsContent>
+                  <SourcingLineTable
+                    lines={selectedLines}
+                    emptyMessage="Select BOM lines to build an assembly tree."
+                  />
+                </section>
+              </TabsContent>
+            ) : null}
           </Tabs>
         </section>
       </div>
@@ -681,6 +760,58 @@ function SummaryMetric({ label, value }: { label: string; value: string }) {
     <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
       <dt className="text-xs font-medium text-slate-500">{label}</dt>
       <dd className="mt-1 text-base font-semibold tabular-nums text-slate-950">{value}</dd>
+    </div>
+  );
+}
+
+function SourcingLineTable({ lines, emptyMessage }: { lines: BomLine[]; emptyMessage: string }) {
+  return (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-[140px]">Supplier</TableHead>
+            <TableHead className="w-[130px]">Supplier Item</TableHead>
+            <TableHead className="w-[110px]">AG Part #</TableHead>
+            <TableHead className="min-w-[320px]">Description</TableHead>
+            <TableHead className="w-[80px] text-right">Qty</TableHead>
+            <TableHead className="w-[110px] text-right">Unit Cost</TableHead>
+            <TableHead className="w-[120px] text-right">Ext Cost</TableHead>
+            <TableHead className="w-[140px]">Action</TableHead>
+            <TableHead className="w-[130px]">Status</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {lines.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={9} className="h-24 text-center text-slate-500">
+                {emptyMessage}
+              </TableCell>
+            </TableRow>
+          ) : (
+            lines.map((line) => {
+              const extCost = asNumber(line.unitCost) * asNumber(line.qtyNeeded);
+              return (
+                <TableRow key={line.id}>
+                  <TableCell className="font-medium">{line.supplier || 'Unassigned'}</TableCell>
+                  <TableCell>{line.supplierItemId || '-'}</TableCell>
+                  <TableCell>{line.agPartNumber || '-'}</TableCell>
+                  <TableCell>{line.description || '-'}</TableCell>
+                  <TableCell className="text-right tabular-nums">{line.qtyNeeded || '-'}</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {line.unitCost === '' ? '-' : money(asNumber(line.unitCost))}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">{money(extCost)}</TableCell>
+                  <TableCell>{line.action}</TableCell>
+                  <TableCell>
+                    <StatusBadge status={line.status} />
+                  </TableCell>
+                </TableRow>
+              );
+            })
+          )}
+        </TableBody>
+      </Table>
     </div>
   );
 }

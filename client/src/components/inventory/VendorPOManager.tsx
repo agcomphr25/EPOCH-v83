@@ -503,6 +503,22 @@ type VendorPO = {
   directPoExceptionApprovedAt?: string | null;
 };
 
+type VendorPOTransaction = {
+  id: number;
+  action: string;
+  actorName?: string | null;
+  actorRole?: string | null;
+  reason?: string | null;
+  fieldsChanged?: Record<string, { before: unknown; after: unknown }> | null;
+  meta?: Record<string, any> | null;
+  payloadJson?: Record<string, any> | null;
+  occurredAt?: string | null;
+  timestamp?: string | null;
+  recordedAt?: string | null;
+  sequenceNumber?: number | null;
+  rowHash?: string | null;
+};
+
 type IssueReadinessSection = {
   key: string;
   label: string;
@@ -1788,6 +1804,111 @@ function ReceiptHistoryTab({ vendorPoId }: { vendorPoId: number }) {
   );
 }
 
+// Transaction audit helpers for the PO detail view
+function formatTransactionAction(action: string): string {
+  return action
+    .toLowerCase()
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function formatTransactionValue(value: unknown): string {
+  if (value === null || value === undefined || value === '') return '-';
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
+function VendorPOTransactionsTab({
+  transactions,
+  isLoading,
+}: {
+  transactions: VendorPOTransaction[];
+  isLoading: boolean;
+}) {
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="pt-6 space-y-3">
+          <Skeleton className="h-16 w-full rounded-lg" />
+          <Skeleton className="h-16 w-full rounded-lg" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <ClipboardList className="h-5 w-5" />
+          Vendor PO Transactions
+        </CardTitle>
+        <CardDescription>
+          Audit ledger activity for this RFQ / purchase order
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {transactions.length === 0 ? (
+          <p className="text-sm text-muted-foreground italic">No audit transactions recorded for this PO yet.</p>
+        ) : (
+          <div className="divide-y rounded-md border">
+            {transactions.map((transaction) => {
+              const when = transaction.occurredAt || transaction.timestamp || transaction.recordedAt;
+              const changedEntries = Object.entries(transaction.fieldsChanged ?? {});
+              const hashPreview = transaction.rowHash ? transaction.rowHash.slice(0, 12) : null;
+
+              return (
+                <div key={transaction.id} className="p-4 space-y-2">
+                  <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <div className="font-medium text-sm">
+                        {formatTransactionAction(transaction.action)}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {transaction.actorName || 'System'}
+                        {transaction.actorRole ? ` (${transaction.actorRole})` : ''}
+                      </div>
+                    </div>
+                    <div className="text-xs text-muted-foreground md:text-right">
+                      {when ? new Date(when).toLocaleString() : 'Date not recorded'}
+                      {transaction.sequenceNumber ? (
+                        <div>Ledger #{transaction.sequenceNumber}{hashPreview ? ` | ${hashPreview}` : ''}</div>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  {transaction.reason ? (
+                    <div className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                      <span className="font-medium">Reason:</span> {transaction.reason}
+                    </div>
+                  ) : null}
+
+                  {changedEntries.length > 0 ? (
+                    <div className="space-y-1 text-xs">
+                      {changedEntries.slice(0, 8).map(([field, change]) => (
+                        <div key={field} className="grid gap-1 rounded bg-muted/40 px-2 py-1 md:grid-cols-[160px_1fr]">
+                          <span className="font-medium text-muted-foreground">{field}</span>
+                          <span>
+                            {formatTransactionValue(change.before)} {'->'} {formatTransactionValue(change.after)}
+                          </span>
+                        </div>
+                      ))}
+                      {changedEntries.length > 8 ? (
+                        <div className="text-muted-foreground">+ {changedEntries.length - 8} more changed fields</div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // Compliance Summary Card — shows all compliance fields at a glance in the PO detail view
 function ComplianceSummaryCard({
   vendorPoId,
@@ -2355,6 +2476,9 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
   const [showRevisionDialog, setShowRevisionDialog] = useState(false);
   const [revisionReason, setRevisionReason] = useState('');
   const [revisionPO, setRevisionPO] = useState<VendorPO | null>(null);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteReason, setDeleteReason] = useState('');
+  const [deletePO, setDeletePO] = useState<VendorPO | null>(null);
 
   // Compliance review modal state
   const [showComplianceModal, setShowComplianceModal] = useState(false);
@@ -2363,6 +2487,12 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
   const [compliancePoOptionalIds, setCompliancePoOptionalIds] = useState<number[]>([]);
 
   const queryClient = useQueryClient();
+
+  const invalidateVendorPOTransactions = (vendorPoId?: number | null) => {
+    if (vendorPoId != null) {
+      queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', vendorPoId, 'transactions'] });
+    }
+  };
 
   const clearDraftBomHandoff = () => {
     window.localStorage.removeItem(DRAFT_BOM_VENDOR_PO_HANDOFF_KEY);
@@ -2411,6 +2541,15 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
     queryKey: ['/api/vendor-pos', selectedVendorPO?.id, 'issue-readiness'],
     queryFn: () => apiRequest(`/api/vendor-pos/${selectedVendorPO!.id}/issue-readiness`),
     enabled: !!selectedVendorPO && ['Draft', 'RFQ Sent', 'Quote Received'].includes(selectedVendorPO.status),
+  });
+
+  const {
+    data: vendorPOTransactions = [],
+    isLoading: transactionsLoading,
+  } = useQuery<VendorPOTransaction[]>({
+    queryKey: ['/api/vendor-pos', selectedVendorPO?.id, 'transactions'],
+    queryFn: () => apiRequest(`/api/vendor-pos/${selectedVendorPO!.id}/transactions`),
+    enabled: !!selectedVendorPO,
   });
 
   const issuedStatuses = ['Sent', 'Partially Received', 'Fully Received'];
@@ -2490,6 +2629,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
       if (vars?.id != null) {
         queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', vars.id] });
         queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', vars.id, 'compliance-review'] });
+        invalidateVendorPOTransactions(vars.id);
       }
       toast.success('Vendor purchase order updated successfully');
       if (showForm) {
@@ -2510,13 +2650,18 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
 
   // Delete mutation
   const deleteMutation = useMutation({
-    mutationFn: (id: number) =>
+    mutationFn: ({ id, reason }: { id: number; reason: string }) =>
       apiRequest(`/api/vendor-pos/${id}`, {
         method: 'DELETE',
+        body: JSON.stringify({ reason }),
       }),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
+      invalidateVendorPOTransactions(variables.id);
       toast.success('Vendor purchase order deleted successfully');
+      setShowDeleteDialog(false);
+      setDeleteReason('');
+      setDeletePO(null);
     },
     onError: (error: any) => {
       toast.error(error?.message || 'Failed to delete vendor purchase order');
@@ -2532,6 +2677,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
+      invalidateVendorPOTransactions(selectedVendorPO?.id);
       toast.success('Status updated successfully');
       setShowStatusChangeDialog(false);
       setPendingStatus('');
@@ -2554,6 +2700,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
       }),
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
+      invalidateVendorPOTransactions(data?.parentPoId ?? data?.id);
       toast.success(`Revision created${data.poNumber ? `: ${data.poNumber}` : ''}. You can now edit the new draft.`);
       setShowRevisionDialog(false);
       setRevisionReason('');
@@ -2579,6 +2726,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
       }),
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
+      invalidateVendorPOTransactions(selectedVendorPO?.id);
       if (data.emailSent === false) {
         toast.success('PO issued internally (vendor not notified)');
       } else if (data.emailSent) {
@@ -2616,6 +2764,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
       getSendRFQInvalidationKeys(variables.id).forEach((key) =>
         queryClient.invalidateQueries({ queryKey: key }),
       );
+      invalidateVendorPOTransactions(variables.id);
       if (data.emailSent) {
         toast.success(`${data.wasResend ? 'RFQ resent' : 'RFQ sent'} to ${data.emailRecipient}`);
       } else if (data.emailSent === false) {
@@ -2641,6 +2790,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
       }),
     onSuccess: (data: any, variables) => {
       queryClient.invalidateQueries({ queryKey: getResendConfirmationKey(variables.id) });
+      invalidateVendorPOTransactions(variables.id);
       if (data.emailSent) {
         toast.success(`PO resent! Email sent to ${data.emailRecipient}`);
       } else {
@@ -2662,6 +2812,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
       }),
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
+      invalidateVendorPOTransactions(selectedVendorPO?.id);
       toast.success(`RFQ marked as ${data.status}`);
       if (selectedVendorPO) {
         setSelectedVendorPO({ ...selectedVendorPO, status: data.status, rfqOutcomeNotes: data.rfqOutcomeNotes ?? null });
@@ -2681,6 +2832,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
       }),
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
+      invalidateVendorPOTransactions(selectedVendorPO?.id);
       toast.success(data.archived ? 'RFQ archived' : 'RFQ unarchived');
       if (selectedVendorPO) {
         setSelectedVendorPO({ ...selectedVendorPO, archived: data.archived });
@@ -2738,11 +2890,20 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
   };
 
   const handleDelete = (id: number) => {
-    if (
-      confirm('Are you sure you want to delete this vendor purchase order?')
-    ) {
-      deleteMutation.mutate(id);
+    const po = vendorPOs.find((candidate) => candidate.id === id) ?? selectedVendorPO;
+    setDeletePO(po && po.id === id ? po : ({ id } as VendorPO));
+    setDeleteReason('');
+    setShowDeleteDialog(true);
+  };
+
+  const confirmDelete = () => {
+    if (!deletePO) return;
+    const reason = deleteReason.trim();
+    if (reason.length < 10) {
+      toast.error('Enter a delete reason of at least 10 characters');
+      return;
     }
+    deleteMutation.mutate({ id: deletePO.id, reason });
   };
 
   const loadRecipientsForPO = async (poId: number) => {
@@ -4084,6 +4245,15 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
             <TabsTrigger value="receipts" data-testid="tab-receipts">
               Receipts
             </TabsTrigger>
+            <TabsTrigger value="transactions" data-testid="tab-transactions">
+              <ClipboardList className="mr-1 h-4 w-4" />
+              Transactions
+              {vendorPOTransactions.length > 0 ? (
+                <span className="ml-1 rounded-full bg-muted px-1.5 text-xs">
+                  {vendorPOTransactions.length}
+                </span>
+              ) : null}
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="details" className="space-y-4">
@@ -4168,6 +4338,13 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
 
           <TabsContent value="receipts" className="space-y-4">
             <ReceiptHistoryTab vendorPoId={selectedVendorPO.id} />
+          </TabsContent>
+
+          <TabsContent value="transactions" className="space-y-4">
+            <VendorPOTransactionsTab
+              transactions={vendorPOTransactions}
+              isLoading={transactionsLoading}
+            />
           </TabsContent>
         </Tabs>
 
@@ -4445,6 +4622,56 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
         onSubmit={handleFormSubmit}
         draftBomHandoff={!selectedVendorPO ? draftBomHandoff : null}
       />
+
+      {/* Delete Vendor PO Dialog */}
+      <AlertDialog
+        open={showDeleteDialog}
+        onOpenChange={(open) => {
+          setShowDeleteDialog(open);
+          if (!open) {
+            setDeleteReason('');
+            setDeletePO(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Delete {deletePO?.poNumber || (deletePO ? `Draft #${deletePO.id}` : 'Vendor PO')}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently deletes the vendor purchase order. A reason is required and will be saved to the audit ledger.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="vendor-po-delete-reason" className="text-sm font-medium">
+              Delete Reason *
+            </Label>
+            <Textarea
+              id="vendor-po-delete-reason"
+              placeholder="Explain why this vendor PO is being deleted..."
+              value={deleteReason}
+              onChange={(e) => setDeleteReason(e.target.value)}
+              rows={3}
+              data-testid="input-delete-vendor-po-reason"
+            />
+            <p className="text-xs text-muted-foreground">
+              Minimum 10 characters.
+            </p>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete-vendor-po">Cancel</AlertDialogCancel>
+            <Button
+              variant="destructive"
+              onClick={confirmDelete}
+              disabled={deleteMutation.isPending || deleteReason.trim().length < 10}
+              data-testid="button-confirm-delete-vendor-po"
+            >
+              {deleteMutation.isPending ? 'Deleting...' : 'Delete PO'}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Create Revision Dialog */}
       <AlertDialog open={showRevisionDialog} onOpenChange={setShowRevisionDialog}>

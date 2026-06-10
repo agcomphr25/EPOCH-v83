@@ -13,7 +13,7 @@ import { storage } from '../../storage';
 import { requirePermission } from '../../middleware/requirePermission';
 import { sendCommunication } from '../../communication/send';
 import { db, queryRows } from '../../db';
-import { sql } from 'drizzle-orm';
+import { and, desc, eq, or, sql } from 'drizzle-orm';
 import {
   appendUniqueEmail,
   DEFAULT_VENDOR_PO_RETURN_EMAIL,
@@ -25,6 +25,7 @@ import {
   emitProcurementLedgerEvent,
   hasCurrentVendorMasterApproval,
 } from '../services/procurementControlsService';
+import { recordAuditEvent } from '../services/auditLedgerService';
 import { sendApiError } from '../../utils/apiErrors';
 
 const router = Router();
@@ -32,6 +33,114 @@ const router = Router();
 // Temporary operational override: purchasing leadership is transitioning, so
 // vendor PO issuance must not be blocked by procurement/compliance gates.
 const VENDOR_PO_ISSUE_GATES_DEACTIVATED = true;
+
+type VendorPoAuditOptions = {
+  reason?: string | null;
+  before?: Record<string, unknown> | null;
+  after?: Record<string, unknown> | null;
+  fieldsChanged?: Record<string, { before: unknown; after: unknown }> | null;
+  meta?: Record<string, any> | null;
+};
+
+const VENDOR_PO_AUDIT_SUBJECT = 'vendor_po';
+
+function getRequestActor(req: Request) {
+  const user: any = (req as any).user;
+  return {
+    id: null,
+    username: user?.fullName || user?.username || user?.email || null,
+    role: user?.role || null,
+  };
+}
+
+function normalizeAuditReason(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function requireAuditReason(value: unknown, actionLabel: string): string {
+  const reason = normalizeAuditReason(value);
+  if (reason.length < 10) {
+    const err: any = new Error(`${actionLabel} requires a reason of at least 10 characters for the audit trail.`);
+    err.status = 400;
+    err.expose = true;
+    throw err;
+  }
+  return reason;
+}
+
+function buildFieldChanges(
+  before: Record<string, any> | null | undefined,
+  after: Record<string, any> | null | undefined,
+  candidateFields?: string[],
+): Record<string, { before: unknown; after: unknown }> | null {
+  if (!before || !after) return null;
+  const fields = candidateFields ?? Array.from(new Set([...Object.keys(before), ...Object.keys(after)]));
+  const changes: Record<string, { before: unknown; after: unknown }> = {};
+  for (const field of fields) {
+    const beforeValue = before[field] ?? null;
+    const afterValue = after[field] ?? null;
+    if (JSON.stringify(beforeValue) !== JSON.stringify(afterValue)) {
+      changes[field] = { before: beforeValue, after: afterValue };
+    }
+  }
+  return Object.keys(changes).length > 0 ? changes : null;
+}
+
+function summarizeVendorPO(po: Record<string, any> | null | undefined) {
+  if (!po) return null;
+  return {
+    id: po.id,
+    poNumber: po.poNumber ?? null,
+    vendorId: po.vendorId ?? null,
+    vendorName: po.vendorName ?? null,
+    status: po.status ?? null,
+    externalPoNumber: po.externalPoNumber ?? null,
+    expectedDeliveryDate: po.expectedDeliveryDate ?? null,
+    archived: po.archived ?? null,
+  };
+}
+
+async function recordVendorPoAudit(
+  req: Request,
+  vendorPoId: number,
+  action: string,
+  options: VendorPoAuditOptions = {},
+) {
+  const beforeSummary = summarizeVendorPO(options.before ?? null);
+  const afterSummary = summarizeVendorPO(options.after ?? null);
+  const meta = {
+    ...(options.meta ?? {}),
+    vendorPoId,
+    actorUserId: (req as any).user?.id ?? null,
+    poNumber: (options.after as any)?.poNumber ?? (options.before as any)?.poNumber ?? null,
+    vendorId: (options.after as any)?.vendorId ?? (options.before as any)?.vendorId ?? null,
+    status: (options.after as any)?.status ?? (options.before as any)?.status ?? null,
+  };
+
+  await recordAuditEvent({
+    eventType: action,
+    subjectType: VENDOR_PO_AUDIT_SUBJECT,
+    subjectId: String(vendorPoId),
+    sourceService: 'vendorPOs.route',
+    actor: getRequestActor(req),
+    reason: options.reason ?? null,
+    fieldsChanged: options.fieldsChanged ?? null,
+    meta,
+    payload: {
+      vendorPoId,
+      action,
+      reason: options.reason ?? null,
+      before: beforeSummary,
+      after: afterSummary,
+      fieldsChanged: (options.fieldsChanged ?? null) as any,
+      meta,
+    },
+    entityType: VENDOR_PO_AUDIT_SUBJECT,
+    entityId: String(vendorPoId),
+    ipAddress: req.ip,
+    userAgent: req.get('user-agent') ?? null,
+  });
+}
 
 async function markLinkedPartsRequestsOrdered(vendorPoId: number, actor: string) {
   const updated = await queryRows<{ id: number; status: string }>(
@@ -1262,6 +1371,10 @@ router.post('/', requirePermission('purchasing.manage_pos'), async (req: Request
     }
 
     const vendorPO = await storage.createVendorPO(data);
+    await recordVendorPoAudit(req, vendorPO.id, 'VENDOR_PO_CREATED', {
+      after: vendorPO,
+      meta: { source: 'create' },
+    });
     res.status(201).json(vendorPO);
   } catch (error) {
     console.error('Create vendor PO error:', error);
@@ -1342,6 +1455,14 @@ router.put('/:id', requirePermission('purchasing.manage_pos'), async (req: Reque
       return res.status(404).json({ error: 'Vendor PO not found' });
     }
 
+    await recordVendorPoAudit(req, id, 'VENDOR_PO_UPDATED', {
+      before: existingPO,
+      after: vendorPO,
+      fieldsChanged: buildFieldChanges(existingPO, vendorPO, Object.keys(data)),
+      reason: normalizeAuditReason((req.body ?? {}).reason) || null,
+      meta: { source: 'update' },
+    });
+
     res.json(vendorPO);
   } catch (error) {
     console.error('Update vendor PO error:', error);
@@ -1386,6 +1507,12 @@ router.post('/:id/revisions', async (req: Request, res: Response) => {
 
     // Create revision using storage function
     const revision = await storage.createVendorPORevision(id, changeReason, revisedBy);
+    await recordVendorPoAudit(req, id, 'VENDOR_PO_REVISION_CREATED', {
+      before: originalPO,
+      after: revision,
+      reason: changeReason,
+      meta: { revisionId: revision?.id ?? null, revisionNumber: revision?.revisionNumber ?? null },
+    });
 
     res.status(201).json(revision);
   } catch (error) {
@@ -1418,6 +1545,48 @@ router.get('/:id/history', async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/vendor-pos/:id/transactions - Get audit ledger entries for a PO
+router.get('/:id/transactions', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid vendor PO ID' });
+    }
+
+    const events = await db
+      .select({
+        id: auditEvents.id,
+        action: auditEvents.action,
+        actorName: auditEvents.actorName,
+        actorRole: auditEvents.actorRole,
+        reason: auditEvents.reason,
+        fieldsChanged: auditEvents.fieldsChanged,
+        meta: auditEvents.meta,
+        payloadJson: auditEvents.payloadJson,
+        occurredAt: auditEvents.occurredAt,
+        timestamp: auditEvents.timestamp,
+        recordedAt: auditEvents.recordedAt,
+        sequenceNumber: auditEvents.sequenceNumber,
+        rowHash: auditEvents.rowHash,
+      })
+      .from(auditEvents)
+      .where(
+        or(
+          and(eq(auditEvents.subjectType, VENDOR_PO_AUDIT_SUBJECT), eq(auditEvents.subjectId, String(id))),
+          and(eq(auditEvents.entityType, VENDOR_PO_AUDIT_SUBJECT), eq(auditEvents.entityId, String(id))),
+          and(eq(auditEvents.entityType, 'vendor'), eq(auditEvents.entityId, String(id))),
+        ),
+      )
+      .orderBy(desc(auditEvents.occurredAt), desc(auditEvents.timestamp), desc(auditEvents.id))
+      .limit(250);
+
+    res.json(events);
+  } catch (error) {
+    console.error('Get vendor PO transactions error:', error);
+    res.status(500).json({ error: 'Failed to retrieve vendor PO transactions' });
+  }
+});
+
 // DELETE /api/vendor-pos/:id - Delete a vendor PO
 router.delete('/:id', requirePermission('purchasing.manage_pos'), async (req: Request, res: Response) => {
   try {
@@ -1426,11 +1595,31 @@ router.delete('/:id', requirePermission('purchasing.manage_pos'), async (req: Re
       return res.status(400).json({ error: 'Invalid vendor PO ID' });
     }
 
+    const reason = requireAuditReason((req.body ?? {}).reason, 'Deleting a vendor PO');
+    const existingPO = await storage.getVendorPO(id);
+    if (!existingPO) {
+      return res.status(404).json({ error: 'Vendor PO not found' });
+    }
+
+    await recordVendorPoAudit(req, id, 'VENDOR_PO_DELETE_REQUESTED', {
+      before: existingPO,
+      reason,
+      meta: { source: 'delete' },
+    });
     await storage.deleteVendorPO(id);
-    res.status(204).send();
+    await recordVendorPoAudit(req, id, 'VENDOR_PO_DELETED', {
+      before: existingPO,
+      reason,
+      meta: { source: 'delete' },
+    });
+    res.json({ ok: true, deleted: true });
   } catch (error) {
     console.error('Delete vendor PO error:', error);
-    res.status(500).json({ error: 'Failed to delete vendor PO' });
+    return sendApiError(res, error, {
+      fallbackMessage: 'Failed to delete vendor PO',
+      source: 'vendorPO.delete',
+      exposeMessage: true,
+    });
   }
 });
 
@@ -1468,6 +1657,10 @@ router.post('/:id/items', async (req: Request, res: Response) => {
     await requireP2ComplianceBeforeProjectAllocation(vendorPoId, data);
 
     const item = await storage.createVendorPOItem(data);
+    await recordVendorPoAudit(req, vendorPoId, 'VENDOR_PO_ITEM_CREATED', {
+      after: item,
+      meta: { itemId: item?.id ?? null, lineNumber: item?.lineNumber ?? null },
+    });
     res.status(201).json(item);
   } catch (error) {
     console.error('Create vendor PO item error:', error);
@@ -1545,6 +1738,16 @@ router.put('/items/:itemId', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Vendor PO item not found' });
     }
 
+    const itemVendorPoId = item.vendorPoId ?? oldItem?.vendorPoId;
+    if (itemVendorPoId != null) {
+      await recordVendorPoAudit(req, itemVendorPoId, 'VENDOR_PO_ITEM_UPDATED', {
+        before: oldItem,
+        after: item,
+        fieldsChanged: buildFieldChanges(oldItem, item, Object.keys(data)),
+        meta: { itemId, lineNumber: item?.lineNumber ?? oldItem?.lineNumber ?? null },
+      });
+    }
+
     res.json(item);
   } catch (error) {
     console.error('Update vendor PO item error:', error);
@@ -1586,6 +1789,12 @@ router.delete('/items/:itemId', async (req: Request, res: Response) => {
     }
 
     await storage.deleteVendorPOItem(itemId);
+    if (itemToDelete) {
+      await recordVendorPoAudit(req, itemToDelete.vendorPoId, 'VENDOR_PO_ITEM_DELETED', {
+        before: itemToDelete,
+        meta: { itemId, lineNumber: itemToDelete.lineNumber ?? null },
+      });
+    }
     res.status(204).send();
   } catch (error) {
     console.error('Delete vendor PO item error:', error);
@@ -1636,6 +1845,18 @@ router.post('/items/:itemId/receive', async (req: Request, res: Response) => {
     if (receivedItem?.vendorPoId) {
       const actor = String((req as any).user?.username ?? createdBy ?? 'unknown');
       await markLinkedPartsRequestsReceivedForPo(receivedItem.vendorPoId, actor);
+      await recordVendorPoAudit(req, receivedItem.vendorPoId, 'VENDOR_PO_ITEM_RECEIVED', {
+        after: receivedItem,
+        reason: normalizeAuditReason(notes) || null,
+        meta: {
+          itemId,
+          receivedQuantity,
+          receivedDate: receivedDate ?? null,
+          cocLink: cocLink ?? null,
+          documentUrl: documentUrl ?? null,
+          receipt: result as any,
+        },
+      });
     }
 
     res.json(result);
@@ -1722,6 +1943,19 @@ router.put('/:id/optional-settings', async (req: Request, res: Response) => {
     }
 
     await storage.updatePOOptionalSettings(vendorPoId, optionalSettingIds);
+    await recordVendorPoAudit(req, vendorPoId, 'VENDOR_PO_OPTIONAL_SETTINGS_UPDATED', {
+      fieldsChanged: {
+        optionalSettingIds: {
+          before: currentSettings.map((setting: any) => setting.id),
+          after: optionalSettingIds,
+        },
+      },
+      meta: {
+        removedSettingIds: removedSettings.map((setting: any) => setting.id),
+        addedSettingIds: optionalSettingIds.filter((id) => !currentSettings.some((setting: any) => setting.id === id)),
+        complianceRelatedRemoval,
+      },
+    });
     res.status(204).send();
   } catch (error) {
     console.error('Update PO optional settings error:', error);
@@ -1893,6 +2127,25 @@ router.put('/:id/compliance-review', async (req: Request, res: Response) => {
     if (!body.secondPartyComplete) blockingReasons.push('Second-party approval is not complete');
     if (!body.vendorApproved) blockingReasons.push('Vendor is not approved');
 
+    await recordVendorPoAudit(req, id, 'VENDOR_PO_COMPLIANCE_REVIEW_SAVED', {
+      before: existingReview ?? null,
+      after: review,
+      reason: body.reviewNotes,
+      fieldsChanged: buildFieldChanges(existingReview, review, [
+        'governmentContract',
+        'farRequired',
+        'dpasRequired',
+        'cocRequired',
+        'mtrRequired',
+        'sourceInspectionRequired',
+        'secondPartyComplete',
+        'vendorApproved',
+        'reviewStatus',
+        'reviewNotes',
+      ]),
+      meta: { reviewStatus: review.reviewStatus, blockingReasons },
+    });
+
     res.json({ ...review, blockingReasons });
   } catch (error) {
     console.error('Save compliance review error:', error);
@@ -1946,7 +2199,7 @@ router.put('/:id/legacy-exception-flag', async (req: Request, res: Response) => 
 
     const { auditService } = await import('../services/auditService');
     await auditService.logEvent({
-      entityType: 'vendor_po_compliance_review',
+      entityType: 'vendor_po_compliance_review' as any,
       entityId: `vendor-po-${id}`,
       action: body.legacyExceptionFlagged ? 'LEGACY_EXCEPTION_FLAG_SET' : 'LEGACY_EXCEPTION_FLAG_CLEARED',
       actor: { id: performedById, username: performedBy, role: userRole },
@@ -2028,6 +2281,13 @@ router.post('/:id/send-rfq', async (req: Request, res: Response) => {
 
     if (shouldPrintOnly) {
       const updatedPO = await storage.updateVendorPO(id, { status: 'RFQ Sent' });
+      await recordVendorPoAudit(req, id, isRfqResend ? 'VENDOR_RFQ_RESEND_PRINT_ONLY' : 'VENDOR_RFQ_PRINT_ONLY', {
+        before: vendorPO,
+        after: updatedPO,
+        reason: normalizeAuditReason((req.body ?? {}).reason) || 'Prepared without sending email',
+        fieldsChanged: buildFieldChanges(vendorPO, updatedPO, ['status']),
+        meta: { to: rfqTo, cc: rfqCc, printOnly: true, wasResend: isRfqResend },
+      });
       return res.json({
         ...updatedPO,
         emailSent: false,
@@ -2107,6 +2367,12 @@ router.post('/:id/send-rfq', async (req: Request, res: Response) => {
 
     // Update status to RFQ Sent (no PO number assigned — stays null)
     const updatedPO = await storage.updateVendorPO(id, { status: 'RFQ Sent' });
+    await recordVendorPoAudit(req, id, isRfqResend ? 'VENDOR_RFQ_RESENT' : 'VENDOR_RFQ_SENT', {
+      before: vendorPO,
+      after: updatedPO,
+      fieldsChanged: buildFieldChanges(vendorPO, updatedPO, ['status']),
+      meta: { to: rfqTo, cc: rfqCc, wasResend: isRfqResend },
+    });
 
     console.log(`✅ RFQ sent to ${rfqTo} for vendor PO ID ${id} (cc: ${rfqCc.join(', ')})`);
 
@@ -2185,6 +2451,18 @@ router.post('/:id/direct-po-exception', requirePermission('purchasing.direct_po_
       action: 'DIRECT_PO_EXCEPTION_APPROVED',
       actor: { id: approverId, username: u?.username, role: u?.role },
       reason: trimmed,
+      meta: { poNumber: existing.poNumber ?? null },
+    });
+    await recordVendorPoAudit(req, id, 'DIRECT_PO_EXCEPTION_APPROVED', {
+      before: existing,
+      after: updated,
+      reason: trimmed,
+      fieldsChanged: buildFieldChanges(existing, updated, [
+        'directPoExceptionApprovedAt',
+        'directPoExceptionApprovedById',
+        'directPoExceptionApprovedByName',
+        'directPoExceptionReason',
+      ]),
       meta: { poNumber: existing.poNumber ?? null },
     });
 
@@ -2449,6 +2727,13 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
         reason: trimmedReason,
         meta: { vendorPoId: id, vendorId: vendorPO.vendorId, poNumber, issuedWithoutEmail: true },
       });
+      await recordVendorPoAudit(req, id, 'VENDOR_PO_ISSUED_WITHOUT_EMAIL', {
+        before: vendorPO,
+        after: issuedPO,
+        reason: trimmedReason,
+        fieldsChanged: buildFieldChanges(vendorPO, issuedPO, ['status', 'poNumber', 'issuedWithoutEmail', 'issuedWithoutEmailReason']),
+        meta: { poNumber, issuedWithoutEmail: true },
+      });
 
       // Task #83: NOW (post-issuance success) record po_issuance debarment evidence
       try {
@@ -2519,6 +2804,13 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
         reason: fallbackReason,
         meta: { vendorPoId: id, vendorId: vendorPO.vendorId, poNumber, issuedWithoutEmail: true, vendorEmailMissing: true },
       });
+      await recordVendorPoAudit(req, id, 'VENDOR_PO_ISSUED_WITHOUT_EMAIL', {
+        before: vendorPO,
+        after: issuedPO,
+        reason: fallbackReason,
+        fieldsChanged: buildFieldChanges(vendorPO, issuedPO, ['status', 'poNumber', 'issuedWithoutEmail', 'issuedWithoutEmailReason']),
+        meta: { poNumber, issuedWithoutEmail: true, vendorEmailMissing: true },
+      });
 
       if (vendorPO.requisitionId) {
         try {
@@ -2553,6 +2845,12 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
       entityId: id,
       actor,
       meta: { vendorPoId: id, vendorId: vendorPO.vendorId, poNumber, issuedWithoutEmail: false },
+    });
+    await recordVendorPoAudit(req, id, 'VENDOR_PO_ISSUED', {
+      before: vendorPO,
+      after: issuedPO,
+      fieldsChanged: buildFieldChanges(vendorPO, issuedPO, ['status', 'poNumber', 'issuedWithoutEmail']),
+      meta: { poNumber, issuedWithoutEmail: false },
     });
 
     // Build standard email routing from Vendor PO settings plus the issuing user's email.
@@ -2614,6 +2912,10 @@ router.post('/:id/issue', requirePermission('purchasing.approve_po'), async (req
         message: 'PO issued successfully, but the email was not sent. Use resend to notify the vendor.',
       });
     }
+    await recordVendorPoAudit(req, id, 'VENDOR_PO_EMAIL_SENT', {
+      after: issuedPO,
+      meta: { poNumber, to: issueToEmail, cc: issueCcList, templateKey: 'vendor_po_issue' },
+    });
 
     console.log(`[VendorPOIssuedEmailSent] PO ${poNumber} issued by ${performedBy} — email sent to ${issueToEmail}, cc: ${issueCcList.join(', ')}`);
 
@@ -2702,6 +3004,13 @@ router.post('/:id/rfq-transition', async (req: Request, res: Response) => {
       updatePayload.rfqOutcomeNotes = rfqOutcomeNotes || null;
     }
     const updated = await storage.updateVendorPO(id, updatePayload);
+    await recordVendorPoAudit(req, id, 'VENDOR_RFQ_STATUS_CHANGED', {
+      before: vendorPO,
+      after: updated,
+      reason: normalizeAuditReason(rfqOutcomeNotes) || null,
+      fieldsChanged: buildFieldChanges(vendorPO, updated, ['status', 'rfqOutcomeNotes']),
+      meta: { fromStatus: vendorPO.status, toStatus: status },
+    });
     return res.json(updated);
   } catch (error) {
     console.error('RFQ transition error:', error);
@@ -2741,6 +3050,12 @@ router.post('/:id/archive', async (req: Request, res: Response) => {
     }
 
     const updated = await storage.updateVendorPO(id, { archived });
+    await recordVendorPoAudit(req, id, archived ? 'VENDOR_PO_ARCHIVED' : 'VENDOR_PO_UNARCHIVED', {
+      before: vendorPO,
+      after: updated,
+      fieldsChanged: buildFieldChanges(vendorPO, updated, ['archived']),
+      meta: { archived },
+    });
     return res.json(updated);
   } catch (error) {
     console.error('Archive toggle error:', error);
@@ -2781,7 +3096,7 @@ router.get('/:id/confirmation', async (req: Request, res: Response) => {
     type ConfirmationRow = { email: string; expiresAt: string; usedAt: string | null };
     const rows: ConfirmationRow[] = (
       result && typeof result === 'object' && 'rows' in result
-        ? (result as { rows: ConfirmationRow[] }).rows
+        ? (result as unknown as { rows: ConfirmationRow[] }).rows
         : result
     ) as ConfirmationRow[];
 
@@ -2884,6 +3199,10 @@ router.post('/:id/resend', async (req: Request, res: Response) => {
     }
 
     console.log(`[VendorPOResent] PO ${poNumber} resent by user ${(req as any).user?.username ?? 'unknown'} — email sent to ${resendToEmail}, cc: ${resendCcList.join(', ')}`);
+    await recordVendorPoAudit(req, id, 'VENDOR_PO_RESENT', {
+      after: vendorPO,
+      meta: { poNumber, to: resendToEmail, cc: resendCcList, templateKey: 'vendor_po_resend' },
+    });
 
     res.json({
       emailSent: true,

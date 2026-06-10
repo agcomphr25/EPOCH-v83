@@ -7,6 +7,7 @@ import {
 } from '@shared/schema';
 import path from 'path';
 import fs from 'fs';
+import { recordAuditEvent } from '../services/auditLedgerService';
 
 const router = express.Router();
 
@@ -17,6 +18,36 @@ const vendorPoAttachmentsDir = path.join(
 );
 if (!fs.existsSync(vendorPoAttachmentsDir)) {
   fs.mkdirSync(vendorPoAttachmentsDir, { recursive: true });
+}
+
+function attachmentAuditActor(req: express.Request) {
+  const user: any = (req as any).user;
+  return {
+    id: null,
+    username: user?.fullName || user?.username || user?.email || null,
+    role: user?.role || null,
+  };
+}
+
+async function recordVendorPoAttachmentAudit(
+  req: express.Request,
+  vendorPoId: number,
+  action: string,
+  meta: Record<string, any>,
+) {
+  await recordAuditEvent({
+    eventType: action,
+    subjectType: 'vendor_po',
+    subjectId: String(vendorPoId),
+    sourceService: 'vendorPoAttachments.route',
+    actor: attachmentAuditActor(req),
+    meta: { vendorPoId, actorUserId: (req as any).user?.id ?? null, ...meta },
+    payload: { vendorPoId, action, meta },
+    entityType: 'vendor_po',
+    entityId: String(vendorPoId),
+    ipAddress: req.ip,
+    userAgent: req.get('user-agent') ?? null,
+  });
 }
 
 router.get('/download/:attachmentId', async (req, res) => {
@@ -132,6 +163,11 @@ router.post(
         notes: att.notes,
         createdAt: att.createdAt,
       }));
+      await recordVendorPoAttachmentAudit(req, vendorPoId, 'VENDOR_PO_ATTACHMENTS_UPLOADED', {
+        attachmentIds: safeAttachments.map((attachment) => attachment.id),
+        fileNames: safeAttachments.map((attachment) => attachment.originalFileName),
+        count: safeAttachments.length,
+      });
       res.json(safeAttachments);
     } catch (error) {
       console.error('Error uploading vendor PO attachments:', error);
@@ -158,6 +194,10 @@ router.delete('/delete/:attachmentId', async (req, res) => {
     }
 
     await storage.deleteVendorPoAttachment(attachmentId);
+    await recordVendorPoAttachmentAudit(req, attachment.vendorPoId, 'VENDOR_PO_ATTACHMENT_DELETED', {
+      attachmentId,
+      fileName: attachment.originalFileName,
+    });
     res.json({ message: 'Attachment deleted successfully' });
   } catch (error) {
     console.error('Error deleting vendor PO attachment:', error);

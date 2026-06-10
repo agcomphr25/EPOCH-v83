@@ -11,6 +11,7 @@ import {
   Plus,
   Save,
   Send,
+  SlidersHorizontal,
   Trash2,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -20,6 +21,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
@@ -61,7 +63,7 @@ const R_AND_D_PROJECT_VALUE = '__r_and_d__';
 
 const actions: BomAction[] = ['Order / Quote', 'Use in RFQ', 'Do Not Order', 'Hold'];
 const statuses: BomStatus[] = ['Needs Review', 'Needs Quote', 'RFQ Sent', 'On Order', 'On Hand', 'ETA / Inbound', 'Hold'];
-const baseCategories = ['Avionics/Sensors', 'Electrical', 'Propulsion/Mechanical', 'Structural', 'Hardware/Misc.', 'Tooling'];
+const defaultFilterNames = ['Avionics/Sensors', 'Electrical', 'Propulsion/Mechanical', 'Structural', 'Hardware/Misc.', 'Tooling'];
 
 function newLine(): BomLine {
   return {
@@ -147,6 +149,7 @@ export default function DraftBOMBuilderPage() {
   const [draft, setDraft] = useState<BomDraft>(() => loadDrafts()[0] ?? createPrivateerDraft());
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
 
   const { data: projects = [], isLoading: projectsLoading } = useQuery<ProjectOption[]>({
     queryKey: ['/api/projects'],
@@ -170,8 +173,8 @@ export default function DraftBOMBuilderPage() {
     () => draft.lines.filter((line) => line.action !== 'Do Not Order' && !line.finalized),
     [draft.lines],
   );
-  const categoryOptions = useMemo(() => {
-    return [...new Set([...baseCategories, ...draft.lines.map((line) => line.category).filter(Boolean)])].sort();
+  const filterOptions = useMemo(() => {
+    return [...new Set([...defaultFilterNames, ...draft.lines.map((line) => line.category).filter(Boolean)])].sort();
   }, [draft.lines]);
 
   const totals = useMemo(() => {
@@ -194,7 +197,7 @@ export default function DraftBOMBuilderPage() {
     };
   }, [draft.lines, selectedLines]);
 
-  const categoryTotals = useMemo(() => {
+  const filterTotals = useMemo(() => {
     const grouped = new Map<string, { count: number; total: number }>();
     for (const line of draft.lines) {
       const existing = grouped.get(line.category) ?? { count: 0, total: 0 };
@@ -383,6 +386,10 @@ export default function DraftBOMBuilderPage() {
               </Select>
             </div>
             <div className="flex flex-wrap items-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setIsDetailsOpen(true)}>
+                <SlidersHorizontal className="mr-2 h-4 w-4" />
+                BOM details
+              </Button>
               <Button type="button" variant="outline" onClick={startBlankDraft}>
                 <Plus className="mr-2 h-4 w-4" />
                 New draft
@@ -403,8 +410,15 @@ export default function DraftBOMBuilderPage() {
           </div>
         </section>
 
-        <section className="grid gap-4 xl:grid-cols-[minmax(320px,420px)_1fr]">
-          <div className="space-y-4">
+        <Sheet open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
+          <SheetContent className="w-full overflow-y-auto sm:max-w-[480px]">
+            <SheetHeader>
+              <SheetTitle>Draft BOM Details</SheetTitle>
+              <SheetDescription>
+                Edit setup fields and review totals for the active draft BOM.
+              </SheetDescription>
+            </SheetHeader>
+            <div className="mt-6 space-y-4">
             <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-700">BOM Setup</h2>
@@ -489,19 +503,22 @@ export default function DraftBOMBuilderPage() {
             </div>
 
             <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-700">Category Rollup</h2>
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-700">Filter Rollup</h2>
               <div className="mt-3 space-y-2">
-                {categoryTotals.map(([category, data]) => (
-                  <div key={category} className="grid grid-cols-[1fr_auto_auto] gap-3 text-sm">
-                    <span className="truncate text-slate-700">{category}</span>
+                {filterTotals.map(([filterName, data]) => (
+                  <div key={filterName} className="grid grid-cols-[1fr_auto_auto] gap-3 text-sm">
+                    <span className="truncate text-slate-700">{filterName}</span>
                     <span className="tabular-nums text-slate-500">{data.count}</span>
                     <span className="tabular-nums font-medium text-slate-900">{money(data.total)}</span>
                   </div>
                 ))}
               </div>
             </div>
-          </div>
+            </div>
+          </SheetContent>
+        </Sheet>
 
+        <section>
           <Tabs defaultValue="draft" className="min-w-0">
             <div className="flex flex-col gap-3 border-b border-slate-200 pb-3 lg:flex-row lg:items-center lg:justify-between">
               <TabsList>
@@ -512,13 +529,13 @@ export default function DraftBOMBuilderPage() {
               <div className="flex flex-wrap gap-2">
                 <Select value={categoryFilter} onValueChange={setCategoryFilter}>
                   <SelectTrigger className="w-[190px]">
-                    <SelectValue />
+                    <SelectValue placeholder="Filters" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All categories</SelectItem>
-                    {categoryOptions.map((category) => (
-                      <SelectItem key={category} value={category}>
-                        {category}
+                    <SelectItem value="all">All filters</SelectItem>
+                    {filterOptions.map((filterName) => (
+                      <SelectItem key={filterName} value={filterName}>
+                        {filterName}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -564,7 +581,7 @@ export default function DraftBOMBuilderPage() {
 
               <BomLineGrid
                 lines={visibleLines}
-                categoryOptions={categoryOptions}
+                filterOptions={filterOptions}
                 updateLine={updateLine}
                 updateNumberLine={updateNumberLine}
               />
@@ -670,24 +687,29 @@ function SummaryMetric({ label, value }: { label: string; value: string }) {
 
 function BomLineGrid({
   lines,
-  categoryOptions,
+  filterOptions,
   updateLine,
   updateNumberLine,
 }: {
   lines: BomLine[];
-  categoryOptions: string[];
+  filterOptions: string[];
   updateLine: (id: string, patch: Partial<BomLine>) => void;
   updateNumberLine: (id: string, field: 'unitCost' | 'qtyNeeded', value: string) => void;
 }) {
   return (
     <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
+      <datalist id="draft-bom-filter-options">
+        {filterOptions.map((filterName) => (
+          <option key={filterName} value={filterName} />
+        ))}
+      </datalist>
       <div className="overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead className="w-[56px]">Use</TableHead>
               <TableHead className="w-[150px]">Order Action</TableHead>
-              <TableHead className="w-[180px]">Category</TableHead>
+              <TableHead className="w-[180px]">Filter</TableHead>
               <TableHead className="w-[150px]">Supplier</TableHead>
               <TableHead className="w-[150px]">Manufacturer</TableHead>
               <TableHead className="w-[150px]">Supplier Item ID</TableHead>
@@ -737,18 +759,13 @@ function BomLineGrid({
                       </Select>
                     </TableCell>
                     <TableCell>
-                      <Select value={line.category} onValueChange={(value) => updateLine(line.id, { category: value })}>
-                        <SelectTrigger className="h-9">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {categoryOptions.map((category) => (
-                            <SelectItem key={category} value={category}>
-                              {category}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <Input
+                        className="h-9"
+                        list="draft-bom-filter-options"
+                        value={line.category}
+                        onChange={(event) => updateLine(line.id, { category: event.target.value })}
+                        placeholder="Filter name"
+                      />
                     </TableCell>
                     <EditableCell value={line.supplier} onChange={(value) => updateLine(line.id, { supplier: value })} />
                     <EditableCell value={line.manufacturer} onChange={(value) => updateLine(line.id, { manufacturer: value })} />

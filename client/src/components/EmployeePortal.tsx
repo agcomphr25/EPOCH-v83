@@ -1223,6 +1223,27 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
     },
   });
 
+  const ptoSubmitDisabledReason = submitTimeOffMutation.isPending
+    ? null
+    : ptoBalanceLoading
+      ? 'Loading your PTO balance...'
+      : !ptoBalance?.hasSchedule
+        ? 'Your PTO schedule has not been set up yet. Ask HR or payroll to complete PTO Setup before submitting a request.'
+        : !timeOffForm.startDate || !timeOffForm.endDate
+          ? 'Choose the PTO date before submitting.'
+          : timeOffForm.startDate > timeOffForm.endDate
+            ? 'The start date must be on or before the end date.'
+            : timeOffForm.requestUnit === 'hourly' && (!timeOffForm.requestedHours || Number(timeOffForm.requestedHours) <= 0)
+              ? 'Enter the number of PTO hours you want to request.'
+              : estimatedPtoHours == null
+                ? 'Select a PTO request type and date so the system can calculate the hours.'
+                : estimatedPtoHours <= 0
+                  ? 'The selected date does not have scheduled PTO hours. Check the date or have HR update your PTO schedule.'
+                  : ptoRequestBlocked
+                    ? `This request needs ${estimatedPtoHours.toFixed(2)}h, but only ${(ptoBalance?.availableHours ?? 0).toFixed(2)}h is available.`
+                    : null;
+  const ptoSubmitDisabled = !!ptoSubmitDisabledReason || submitTimeOffMutation.isPending;
+
   const cancelTimeOffMutation = useMutation({
     mutationFn: async (requestId: number) => {
       const res = await portalFetch(`/api/timekeeping/time-off/${requestId}/cancel`, {
@@ -2528,18 +2549,7 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
 
                 <Button
                   className="w-full gap-2"
-                  disabled={
-                    submitTimeOffMutation.isPending ||
-                    ptoBalanceLoading ||
-                    !ptoBalance?.hasSchedule ||
-                    !timeOffForm.startDate ||
-                    !timeOffForm.endDate ||
-                    timeOffForm.startDate > timeOffForm.endDate ||
-                    estimatedPtoHours == null ||
-                    estimatedPtoHours <= 0 ||
-                    ptoRequestBlocked ||
-                    (timeOffForm.requestUnit === 'hourly' && (!timeOffForm.requestedHours || Number(timeOffForm.requestedHours) <= 0))
-                  }
+                  disabled={ptoSubmitDisabled}
                   onClick={() => submitTimeOffMutation.mutate()}
                 >
                   {submitTimeOffMutation.isPending ? (
@@ -2554,6 +2564,12 @@ export default function EmployeePortal({ employeeId, epochEmployeeId }: Employee
                     </>
                   )}
                 </Button>
+                {ptoSubmitDisabledReason && (
+                  <p className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>{ptoSubmitDisabledReason}</span>
+                  </p>
+                )}
               </CardContent>
             </Card>
 

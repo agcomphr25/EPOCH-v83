@@ -717,7 +717,7 @@ export default function DraftBOMBuilderPage() {
           <div>
             <div className="flex items-center gap-2">
               <FileSpreadsheet className="h-7 w-7 text-teal-700" aria-hidden="true" />
-              <h1 className="text-2xl font-semibold tracking-normal text-slate-950">Draft BOM Builder</h1>
+              <h1 className="text-2xl font-semibold tracking-normal text-slate-950">Draft Builder</h1>
               <Badge variant="outline" className="border-orange-300 bg-orange-50 text-orange-800">
                 Spreadsheet style
               </Badge>

@@ -1,0 +1,85 @@
+import { PDFDocument } from 'pdf-lib';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('../storage', () => ({
+  storage: {
+    getVendorPO: vi.fn(),
+    getVendor: vi.fn(),
+    getVendorPOItems: vi.fn(),
+    getCompanySettings: vi.fn(),
+    getVendorPOSettings: vi.fn(),
+    getPOOptionalSettings: vi.fn(),
+  },
+}));
+
+import { storage } from '../storage';
+import { generateVendorPoPdf } from '../utils/pdf/vendorPoPdf';
+
+describe('vendor PO/RFQ PDF generator', () => {
+  beforeEach(() => {
+    vi.mocked(storage.getVendorPO).mockResolvedValue({
+      id: 42,
+      vendorId: 7,
+      poNumber: null,
+      orderDate: '2026-06-10',
+      createdAt: '2026-06-10',
+      expectedDeliveryDate: '2026-06-17',
+      shipVia: 'UPS',
+      status: 'RFQ Sent',
+      notes: 'Please quote price and availability.',
+      totalCost: null,
+      shippingCost: null,
+    } as any);
+    vi.mocked(storage.getVendor).mockResolvedValue({
+      id: 7,
+      name: "Glenn's Metal Supplies",
+      street: '100 Industrial Way',
+      city: 'Huntsville',
+      state: 'AL',
+      zip_code: '35801',
+      phone: '256-555-1234',
+      email: 'sales@example.com',
+      contactPerson: 'Glenn',
+      termsAndConditions: 'Quote valid for 30 days.',
+      paymentTerms: 'Net 30',
+      shippingInstructions: 'Ship complete.',
+    } as any);
+    vi.mocked(storage.getVendorPOItems).mockResolvedValue([
+      {
+        lineNumber: 1,
+        supplierPartNumber: '201GAJ-Metal',
+        description: "Glenn's Metal Part 1",
+        notes: 'Include mill certs.',
+        quantity: '2',
+        unitPrice: '12.5',
+        vendorUnit: 'EA',
+      },
+    ] as any);
+    vi.mocked(storage.getCompanySettings).mockResolvedValue({
+      companyName: 'AG Composites',
+      companyAddress: '101 AG Way\nOwens Cross Roads, AL',
+      companyPhone: '256-723-8381',
+      companyEmail: 'glenn@agadvanced.com',
+      companyWebsite: 'agcomposites.com',
+    } as any);
+    vi.mocked(storage.getVendorPOSettings).mockResolvedValue({
+      contactName: 'Glenn Jones',
+      contactTitle: 'Purchasing',
+      contactPhone: '256-723-8381',
+      contactEmail: 'glenn@agadvanced.com',
+      returnEmail: 'glenn@agadvanced.com',
+    } as any);
+    vi.mocked(storage.getPOOptionalSettings).mockResolvedValue([
+      { name: 'Certification', statement: 'Certificate of conformance required.' },
+    ] as any);
+  });
+
+  it('renders the preview-style RFQ PDF without falling back to the old attachment stub', async () => {
+    const pdfBuffer = await generateVendorPoPdf(42);
+
+    expect(pdfBuffer.subarray(0, 4).toString()).toBe('%PDF');
+
+    const pdf = await PDFDocument.load(pdfBuffer);
+    expect(pdf.getPageCount()).toBeGreaterThanOrEqual(1);
+  });
+});

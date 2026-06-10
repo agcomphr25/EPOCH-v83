@@ -556,6 +556,33 @@ type CreateVendorPOData = {
   externalPoNumber?: string;
 };
 
+const DRAFT_BOM_VENDOR_PO_HANDOFF_KEY = 'epoch:draft-bom-vendor-po-handoff';
+
+type DraftBomVendorPoHandoff = {
+  source: 'draft-bom';
+  draftId: string;
+  draftName: string;
+  revision: string;
+  project?: string | null;
+  projectId?: string | null;
+  projectType?: 'P2_PROJECT' | 'R_AND_D' | null;
+  vendors: string[];
+  lines: Array<{
+    id: string;
+    vendor: string;
+    supplierPartNumber: string;
+    manufacturer: string;
+    description: string;
+    estimatedCost: number;
+    actualCost: number;
+    quantity: number;
+    service: boolean;
+    agPartNumber: string;
+    status: string;
+    note: string;
+  }>;
+};
+
 function formatProductionLineLabel(value?: string | null): string {
   switch (value) {
     case 'GENERAL':
@@ -1208,12 +1235,14 @@ function VendorPOForm({
   isOpen,
   onClose,
   onSubmit,
+  draftBomHandoff,
   inline = false,
 }: {
   vendorPo?: VendorPO;
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (data: CreateVendorPOData) => void;
+  draftBomHandoff?: DraftBomVendorPoHandoff | null;
   inline?: boolean;
 }) {
   const [formData, setFormData] = useState<CreateVendorPOData>({
@@ -1250,6 +1279,44 @@ function VendorPOForm({
   const vendors = (vendorsResponse?.data || []).slice().sort((a: any, b: any) =>
     a.name.localeCompare(b.name)
   );
+  const [handoffApplied, setHandoffApplied] = useState(false);
+
+  useEffect(() => {
+    if (vendorPo || handoffApplied || !draftBomHandoff || vendors.length === 0) return;
+
+    const handoffVendor = draftBomHandoff.vendors[0] || '';
+    const matchedVendor = vendors.find((vendor: any) => vendor.name.toLowerCase() === handoffVendor.toLowerCase());
+    const lineSummary = draftBomHandoff.lines
+      .map((line) =>
+        [
+          line.quantity ? `Qty ${line.quantity}` : 'Qty 0',
+          line.agPartNumber || line.description,
+          line.supplierPartNumber ? `Supplier #${line.supplierPartNumber}` : '',
+          line.estimatedCost ? `Est ${formatCurrency(line.estimatedCost)}` : '',
+          line.service ? 'Service' : '',
+        ]
+          .filter(Boolean)
+          .join(' | ')
+      )
+      .join('\n');
+
+    setFormData((current) => ({
+      ...current,
+      vendorId: matchedVendor?.id ?? current.vendorId,
+      productionLine: draftBomHandoff.projectType === 'R_AND_D' ? 'R_AND_D' : draftBomHandoff.projectType === 'P2_PROJECT' ? 'P2' : current.productionLine,
+      notes: [
+        `Draft BOM handoff: ${draftBomHandoff.draftName} ${draftBomHandoff.revision}`,
+        draftBomHandoff.project ? `Project: ${draftBomHandoff.project}` : '',
+        `Vendor: ${handoffVendor}`,
+        '',
+        lineSummary,
+        current.notes,
+      ]
+        .filter(Boolean)
+        .join('\n'),
+    }));
+    setHandoffApplied(true);
+  }, [draftBomHandoff, handoffApplied, vendorPo, vendors]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1309,6 +1376,15 @@ function VendorPOForm({
           </SelectContent>
         </Select>
       </div>
+
+      {!vendorPo && draftBomHandoff ? (
+        <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+          <div className="font-medium">Draft BOM handoff loaded</div>
+          <div className="mt-1">
+            {draftBomHandoff.lines.length} line{draftBomHandoff.lines.length === 1 ? '' : 's'} from {draftBomHandoff.draftName} for {draftBomHandoff.vendors[0]}.
+          </div>
+        </div>
+      ) : null}
 
       <div>
         <Label htmlFor="productionLine">Production Line *</Label>
@@ -2242,6 +2318,14 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
   const [showForm, setShowForm] = useState(false);
   const [showDetailView, setShowDetailView] = useState(false);
   const [activeTab, setActiveTab] = useState('details');
+  const [draftBomHandoff, setDraftBomHandoff] = useState<DraftBomVendorPoHandoff | null>(() => {
+    try {
+      const raw = window.localStorage.getItem(DRAFT_BOM_VENDOR_PO_HANDOFF_KEY);
+      return raw ? (JSON.parse(raw) as DraftBomVendorPoHandoff) : null;
+    } catch {
+      return null;
+    }
+  });
   // Task #83: Purchasing Controls modal
   const [purchasingControlsOpen, setPurchasingControlsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -2279,6 +2363,11 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
   const [compliancePoOptionalIds, setCompliancePoOptionalIds] = useState<number[]>([]);
 
   const queryClient = useQueryClient();
+
+  const clearDraftBomHandoff = () => {
+    window.localStorage.removeItem(DRAFT_BOM_VENDOR_PO_HANDOFF_KEY);
+    setDraftBomHandoff(null);
+  };
 
   // Fetch all optional settings (needed for compliance auto-selection)
   const { data: allOptionalSettings = [] } = useQuery<OptionalSetting[]>({
@@ -2353,6 +2442,11 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
     }
   }, [preSelectedPoId, vendorPOs, preSelectApplied]);
 
+  useEffect(() => {
+    if (!draftBomHandoff || selectedVendorPO || showDetailView) return;
+    setShowForm(true);
+  }, [draftBomHandoff, selectedVendorPO, showDetailView]);
+
   // Create mutation
   const createMutation = useMutation({
     mutationFn: (data: CreateVendorPOData) =>
@@ -2360,10 +2454,15 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
         method: 'POST',
         body: JSON.stringify(data),
       }),
-    onSuccess: () => {
+    onSuccess: (created: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
       toast.success('Vendor purchase order created successfully');
       setShowForm(false);
+      if (created && draftBomHandoff) {
+        setSelectedVendorPO(created);
+        setShowDetailView(true);
+        setActiveTab('items');
+      }
     },
     onError: (error: any) => {
       toast.error(error?.message || 'Failed to create vendor purchase order');
@@ -4012,6 +4111,33 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
           </TabsContent>
 
           <TabsContent value="items" className="space-y-4">
+            {draftBomHandoff ? (
+              <Card className="border-blue-200 bg-blue-50/70">
+                <CardContent className="flex flex-col gap-3 p-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <div className="text-sm font-semibold text-blue-950">
+                      Draft BOM lines ready for this Vendor PO
+                    </div>
+                    <div className="mt-1 text-sm text-blue-900">
+                      {draftBomHandoff.lines.length} line{draftBomHandoff.lines.length === 1 ? '' : 's'} from {draftBomHandoff.draftName}.
+                    </div>
+                    <div className="mt-2 space-y-1 text-xs text-blue-900">
+                      {draftBomHandoff.lines.slice(0, 5).map((line) => (
+                        <div key={line.id}>
+                          {line.quantity} x {line.agPartNumber || line.description}
+                          {line.supplierPartNumber ? ` | Supplier #${line.supplierPartNumber}` : ''}
+                          {line.estimatedCost ? ` | Est ${formatCurrency(line.estimatedCost)}` : ''}
+                        </div>
+                      ))}
+                      {draftBomHandoff.lines.length > 5 ? <div>...and {draftBomHandoff.lines.length - 5} more</div> : null}
+                    </div>
+                  </div>
+                  <Button type="button" size="sm" variant="outline" onClick={clearDraftBomHandoff}>
+                    Clear handoff
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : null}
             <VendorPOItemSelector
               vendorPoId={selectedVendorPO.id}
               vendorId={selectedVendorPO.vendorId}
@@ -4070,6 +4196,31 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
           Create Vendor PO
         </Button>
       </div>
+
+      {draftBomHandoff ? (
+        <Card className="border-blue-200 bg-blue-50/70">
+          <CardContent className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <div className="text-sm font-semibold text-blue-950">
+                Draft BOM handoff: {draftBomHandoff.draftName} {draftBomHandoff.revision}
+              </div>
+              <div className="mt-1 text-sm text-blue-900">
+                {draftBomHandoff.lines.length} line{draftBomHandoff.lines.length === 1 ? '' : 's'} for {draftBomHandoff.vendors[0]}.
+                Create the Vendor PO draft, then use Line Items to finish RFQ details.
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" size="sm" onClick={handleCreate}>
+                <Plus className="mr-2 h-4 w-4" />
+                Create from BOM
+              </Button>
+              <Button type="button" size="sm" variant="outline" onClick={clearDraftBomHandoff}>
+                Clear
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {/* Tab Filter Bar */}
       <div className="flex items-center gap-2">
@@ -4278,6 +4429,7 @@ export default function VendorPOManager({ preSelectedPoId }: { preSelectedPoId?:
           setSelectedVendorPO(null);
         }}
         onSubmit={handleFormSubmit}
+        draftBomHandoff={!selectedVendorPO ? draftBomHandoff : null}
       />
 
       {/* Create Revision Dialog */}

@@ -308,11 +308,9 @@ function drawDocumentHeader(state: DrawState, data: VendorPOData, settings: any,
 
   drawMetaRow(page, 'Date', formatDate(data.po.orderDate || data.po.createdAt), titleX + 16, titleX + metaWidth - 16, metaY, fonts);
   metaY -= 15;
-  drawMetaRow(page, 'Delivery', formatDate(data.po.expectedDeliveryDate), titleX + 16, titleX + metaWidth - 16, metaY, fonts);
+  drawMetaRow(page, 'Requested Delivery Date', formatDate(data.po.expectedDeliveryDate), titleX + 16, titleX + metaWidth - 16, metaY, fonts);
   metaY -= 15;
   drawMetaRow(page, 'Ship Via', data.po.shipVia || 'N/A', titleX + 16, titleX + metaWidth - 16, metaY, fonts);
-  metaY -= 15;
-  drawMetaRow(page, 'Status', data.po.status || 'N/A', titleX + 16, titleX + metaWidth - 16, metaY, fonts);
 
   const dividerY = Math.min(companyY - 12, titleY - titleHeight - 20);
   page.drawLine({ start: { x: PAGE.MARGIN, y: dividerY }, end: { x: PAGE.WIDTH - PAGE.MARGIN, y: dividerY }, thickness: 1, color: COLOR.BORDER });

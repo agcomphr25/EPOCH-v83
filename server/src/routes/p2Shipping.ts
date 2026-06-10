@@ -311,7 +311,7 @@ async function hydratePackingSlipLineItemSkus(lineItems: any[]): Promise<any[]> 
         .map((serialNumber: string) => ({ sku: skuBySerialNumber.get(serialNumber) }))
     );
 
-    return customerSku && !item.customerSku && !item.sku
+    return customerSku
       ? { ...item, customerSku }
       : item;
   });
@@ -854,15 +854,17 @@ router.get('/packing-slips/:id', async (req: Request, res: Response) => {
       replacementSlips = await selectP2ReplacementSlipsFallback(slip.id);
     }
 
-    let lineItems: PackingSlipLineRecord[];
+    let lineItems: any[];
     try {
-      lineItems = await enrichPackingSlipLineItemsWithPoParts(slip.lineItems);
+      lineItems = await hydratePackingSlipLineItemSkus(
+        Array.isArray(slip.lineItems) ? slip.lineItems : []
+      );
     } catch (err) {
-      console.warn('[P2Shipping] Packing slip PO line enrichment unavailable:', {
+      console.warn('[P2Shipping] Packing slip serial SKU enrichment unavailable:', {
         packingSlipId: slip.id,
         err,
       });
-      lineItems = Array.isArray(slip.lineItems) ? (slip.lineItems as PackingSlipLineRecord[]) : [];
+      lineItems = Array.isArray(slip.lineItems) ? slip.lineItems : [];
     }
 
     return res.json({ ...slip, lineItems, originalPackingSlip, replacementSlips });
@@ -1128,6 +1130,7 @@ router.get('/packing-slips/:id/pdf', async (req: Request, res: Response) => {
 
     const slipData: PackingSlipData = {
       packingSlipNumber: slip.packingSlipNumber,
+      invoiceNumber: slip.invoiceNumber || slip.packingSlipNumber,
       poNumber: slip.poNumber || undefined,
       lotNumber: slip.lotNumber || undefined,
       date: (slip.shipDate || slip.createdAt)

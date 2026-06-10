@@ -260,6 +260,7 @@ export default function P2PackingSlipViewer() {
   const linkedInvoice = Array.isArray(linkedInvoices) && linkedInvoices.length > 0
     ? linkedInvoices[0]
     : null;
+  const displayInvoiceNumber = packingSlip.invoiceNumber || packingSlip.packingSlipNumber;
 
   return (
     <div className="container mx-auto px-4 py-6 max-w-4xl">
@@ -430,7 +431,8 @@ export default function P2PackingSlipViewer() {
             </div>
             <div className="text-right">
               <h2 className="text-xl font-bold text-gray-800">PACKING SLIP</h2>
-              <p className="font-mono font-bold text-lg" data-testid="text-packing-slip-number">{packingSlip.packingSlipNumber}</p>
+              <p className="text-xs text-gray-500">Invoice #</p>
+              <p className="font-mono font-bold text-lg" data-testid="text-packing-slip-number">{displayInvoiceNumber}</p>
               <Badge className={packingSlip.status === 'COMPLETED' ? 'bg-green-100 text-green-800' : packingSlip.status === 'DRAFT' ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800'}>
                 {packingSlip.status}
               </Badge>
@@ -446,6 +448,10 @@ export default function P2PackingSlipViewer() {
               <p className="text-sm whitespace-pre-line">{packingSlip.customerAddress || 'Address on file'}</p>
             </div>
             <div className="text-right">
+              <div className="mb-4">
+                <span className="text-sm text-gray-500">Invoice #:</span>
+                <p className="font-mono font-semibold" data-testid="text-invoice-number">{displayInvoiceNumber}</p>
+              </div>
               <div className="mb-4">
                 <span className="text-sm text-gray-500">Date:</span>
                 <p data-testid="text-date">{displayDate}</p>

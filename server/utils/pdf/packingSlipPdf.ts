@@ -30,6 +30,7 @@ export async function generatePackingSlipPdf(data: PackingSlipData): Promise<Buf
   let page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
 
   let y = PAGE_HEIGHT - margin;
+  const invoiceNumber = data.invoiceNumber || data.packingSlipNumber;
 
   page.drawText('AG Advanced Technologies', {
     x: margin,
@@ -69,8 +70,8 @@ export async function generatePackingSlipPdf(data: PackingSlipData): Promise<Buf
     color: COLORS.TEXT_PRIMARY,
   });
 
-  const slipNumWidth = font.widthOfTextAtSize(data.packingSlipNumber, FONT_SIZES.BODY_MEDIUM);
-  page.drawText(data.packingSlipNumber, {
+  const slipNumWidth = font.widthOfTextAtSize(invoiceNumber, FONT_SIZES.BODY_MEDIUM);
+  page.drawText(invoiceNumber, {
     x: PAGE_WIDTH - margin - slipNumWidth,
     y: PAGE_HEIGHT - margin - LINE_HEIGHTS.COMPACT - 4,
     size: FONT_SIZES.BODY_MEDIUM,
@@ -87,9 +88,9 @@ export async function generatePackingSlipPdf(data: PackingSlipData): Promise<Buf
   });
   y -= SPACING.SECTION_GAP_TINY;
 
-  // ── Info row: Packing Slip #, Date, PO #, Lot # ──
+  // ── Info row: Invoice #, Date, PO #, Lot # ──
   const infoItems: Array<{ label: string; value: string }> = [
-    { label: 'Packing Slip #', value: data.packingSlipNumber },
+    { label: 'Invoice #', value: invoiceNumber },
     { label: 'Date', value: data.date },
   ];
   if (data.poNumber) infoItems.push({ label: 'PO #', value: data.poNumber });

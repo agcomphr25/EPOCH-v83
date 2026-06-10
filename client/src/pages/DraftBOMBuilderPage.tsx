@@ -28,13 +28,30 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { privateerDraftBomLines, type PrivateerDraftBomLine } from '@/data/privateerDraftBom';
 import { useToast } from '@/hooks/use-toast';
+import { apiRequest } from '@/lib/queryClient';
 import { cn } from '@/lib/utils';
 
 type BomAction = 'Order / Quote' | 'Use in RFQ' | 'Do Not Order' | 'Hold';
 type BomStatus = 'Needs Review' | 'Needs Quote' | 'RFQ Sent' | 'On Order' | 'On Hand' | 'ETA / Inbound' | 'Hold';
 
-type BomLine = PrivateerDraftBomLine;
+type BomLine = PrivateerDraftBomLine & {
+  customFields?: Record<string, string>;
+  inventoryItemId?: number | null;
+  inventoryItemName?: string | null;
+  isDraftPart?: boolean;
+};
 type WorkspaceTabId = 'po-draft' | 'parts-request' | 'bom-wizard' | 'assembly-tree';
+type PoColumnId =
+  | 'filter'
+  | 'supplier'
+  | 'supplierItemId'
+  | 'agPartNumber'
+  | 'qtyNeeded'
+  | 'unitCost'
+  | 'extCost'
+  | 'action'
+  | 'status'
+  | 'source';
 
 type BomDraft = {
   id: string;
@@ -49,6 +66,8 @@ type BomDraft = {
   notes: string;
   updatedAt: string;
   lines: BomLine[];
+  poVisibleColumns?: PoColumnId[];
+  customPoColumns?: string[];
 };
 
 type ProjectOption = {
@@ -56,6 +75,22 @@ type ProjectOption = {
   projectCode: string;
   projectName: string;
   status?: string;
+};
+
+type InventoryItemOption = {
+  id: number;
+  agPartNumber?: string | null;
+  name?: string | null;
+  description?: string | null;
+  costPer?: number | string | null;
+  usageUnit?: string | null;
+  unit?: string | null;
+  source?: string | null;
+  supplier?: string | null;
+  supplierPartNumber?: string | null;
+  manufacturerPartNumber?: string | null;
+  manufacturer?: string | null;
+  isActive?: boolean | null;
 };
 
 const STORAGE_KEY = 'epoch:draft-boms';
@@ -73,6 +108,19 @@ const workspaceTabLabels: Record<WorkspaceTabId, string> = {
   'bom-wizard': 'BOM wizard',
   'assembly-tree': 'Assembly tree',
 };
+const poColumnLabels: Record<PoColumnId, string> = {
+  filter: 'Filter',
+  supplier: 'Supplier',
+  supplierItemId: 'Supplier Item',
+  agPartNumber: 'AG Part #',
+  qtyNeeded: 'Qty',
+  unitCost: 'Unit Cost',
+  extCost: 'Ext Cost',
+  action: 'Action',
+  status: 'Status',
+  source: 'Source',
+};
+const defaultPoColumns: PoColumnId[] = ['agPartNumber', 'qtyNeeded', 'unitCost', 'extCost', 'status', 'source'];
 
 function newLine(): BomLine {
   return {
@@ -92,6 +140,10 @@ function newLine(): BomLine {
     targetNeedDate: '',
     finalized: false,
     note: '',
+    customFields: {},
+    inventoryItemId: null,
+    inventoryItemName: null,
+    isDraftPart: true,
   };
 }
 
@@ -109,6 +161,8 @@ function createPrivateerDraft(): BomDraft {
     notes: 'First draft sourcing BOM modeled after the Google Sheet layout.',
     updatedAt: new Date().toISOString(),
     lines: privateerDraftBomLines,
+    poVisibleColumns: defaultPoColumns,
+    customPoColumns: [],
   };
 }
 
@@ -123,6 +177,8 @@ function normalizeDraft(draft: BomDraft): BomDraft {
     projectCode: draft.projectCode ?? null,
     projectName: draft.projectName ?? draft.project ?? null,
     projectType: draft.projectType ?? null,
+    poVisibleColumns: draft.poVisibleColumns ?? defaultPoColumns,
+    customPoColumns: draft.customPoColumns ?? [],
   };
 }
 
@@ -161,9 +217,18 @@ export default function DraftBOMBuilderPage() {
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [visibleWorkspaceTabs, setVisibleWorkspaceTabs] = useState<WorkspaceTabId[]>(defaultWorkspaceTabs);
   const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<WorkspaceTabId>('po-draft');
+  const [poDescription, setPoDescription] = useState('');
+  const [visiblePoColumns, setVisiblePoColumns] = useState<PoColumnId[]>(() => draft.poVisibleColumns ?? defaultPoColumns);
+  const [customPoColumns, setCustomPoColumns] = useState<string[]>(() => draft.customPoColumns ?? []);
+  const [newPoColumnName, setNewPoColumnName] = useState('');
 
   const { data: projects = [], isLoading: projectsLoading } = useQuery<ProjectOption[]>({
     queryKey: ['/api/projects'],
+  });
+
+  const { data: inventoryItems = [] } = useQuery<InventoryItemOption[]>({
+    queryKey: ['/api/inventory'],
+    queryFn: () => apiRequest('/api/inventory'),
   });
 
   const projectOptions = useMemo(() => {
@@ -191,6 +256,31 @@ export default function DraftBOMBuilderPage() {
     () => defaultWorkspaceTabs.filter((tabId) => !visibleWorkspaceTabs.includes(tabId)),
     [visibleWorkspaceTabs],
   );
+  const activeInventoryItems = useMemo(
+    () => inventoryItems.filter((item) => item.isActive !== false),
+    [inventoryItems],
+  );
+  const poDescriptionMatches = useMemo(() => {
+    const query = poDescription.trim().toLowerCase();
+    if (query.length < 2) return [];
+
+    return activeInventoryItems
+      .filter((item) => {
+        const haystack = [
+          item.name,
+          item.description,
+          item.agPartNumber,
+          item.supplierPartNumber,
+          item.manufacturerPartNumber,
+          item.manufacturer,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        return haystack.includes(query);
+      })
+      .slice(0, 6);
+  }, [activeInventoryItems, poDescription]);
 
   const totals = useMemo(() => {
     const lineTotal = (line: BomLine) => asNumber(line.unitCost) * asNumber(line.qtyNeeded);
@@ -255,6 +345,66 @@ export default function DraftBOMBuilderPage() {
     setDraft((current) => ({ ...current, lines: [...current.lines, newLine()] }));
   }
 
+  function createLineFromPoDescription(item?: InventoryItemOption) {
+    const description = item?.name || item?.description || poDescription.trim();
+    const itemCost = Number(item?.costPer);
+    if (!description) {
+      toast({
+        title: 'Part description required',
+        description: 'Start with a part description before adding a PO draft line.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const nextLine: BomLine = {
+      ...newLine(),
+      description,
+      agPartNumber: item?.agPartNumber || '',
+      supplier: item?.source || item?.supplier || '',
+      supplierItemId: item?.supplierPartNumber || item?.manufacturerPartNumber || '',
+      manufacturer: item?.manufacturer || '',
+      unit: item?.usageUnit || item?.unit || 'EA',
+      unitCost: Number.isFinite(itemCost) ? itemCost : '',
+      status: item ? 'Needs Review' : 'Needs Quote',
+      note: item ? `Matched inventory item #${item.id}` : 'Draft part - create inventory item when finalized',
+      inventoryItemId: item?.id ?? null,
+      inventoryItemName: item?.name || item?.description || null,
+      isDraftPart: !item,
+      customFields: {},
+    };
+
+    setDraft((current) => ({ ...current, lines: [nextLine, ...current.lines] }));
+    setPoDescription('');
+    toast({
+      title: item ? 'Inventory item added' : 'Draft part created',
+      description: item ? `${description} was added to the PO draft.` : `${description} was added as a draft part.`,
+    });
+  }
+
+  function togglePoColumn(columnId: PoColumnId, checked: boolean) {
+    setVisiblePoColumns((current) => {
+      if (checked) return current.includes(columnId) ? current : [...current, columnId];
+      return current.filter((item) => item !== columnId);
+    });
+  }
+
+  function addCustomPoColumn() {
+    const columnName = newPoColumnName.trim();
+    if (!columnName) return;
+    setCustomPoColumns((current) => (current.includes(columnName) ? current : [...current, columnName]));
+    setNewPoColumnName('');
+  }
+
+  function updateLineCustomField(lineId: string, columnName: string, value: string) {
+    updateLine(lineId, {
+      customFields: {
+        ...(draft.lines.find((line) => line.id === lineId)?.customFields ?? {}),
+        [columnName]: value,
+      },
+    });
+  }
+
   function duplicateSelected() {
     const copies = selectedLines.map((line) => ({
       ...line,
@@ -270,7 +420,12 @@ export default function DraftBOMBuilderPage() {
   }
 
   function saveDraft() {
-    const nextDraft = { ...draft, updatedAt: new Date().toISOString() };
+    const nextDraft = {
+      ...draft,
+      poVisibleColumns: visiblePoColumns,
+      customPoColumns,
+      updatedAt: new Date().toISOString(),
+    };
     const withoutCurrent = savedDrafts.filter((item) => item.id !== nextDraft.id);
     const nextDrafts = [nextDraft, ...withoutCurrent].slice(0, 12);
     saveDrafts(nextDrafts);
@@ -288,8 +443,11 @@ export default function DraftBOMBuilderPage() {
 
     const match = savedDrafts.find((item) => item.id === id);
     if (!match) return;
+    const nextDraft = normalizeDraft(match);
     setSelectedDraftId(id);
-    setDraft(normalizeDraft(match));
+    setDraft(nextDraft);
+    setVisiblePoColumns(nextDraft.poVisibleColumns ?? defaultPoColumns);
+    setCustomPoColumns(nextDraft.customPoColumns ?? []);
   }
 
   function updateDraftProject(value: string) {
@@ -332,9 +490,13 @@ export default function DraftBOMBuilderPage() {
       notes: '',
       updatedAt: new Date().toISOString(),
       lines: [newLine()],
+      poVisibleColumns: defaultPoColumns,
+      customPoColumns: [],
     };
     setSelectedDraftId('');
     setDraft(blankDraft);
+    setVisiblePoColumns(defaultPoColumns);
+    setCustomPoColumns([]);
   }
 
   function markSelectedFinalized() {
@@ -633,31 +795,21 @@ export default function DraftBOMBuilderPage() {
 
             {visibleWorkspaceTabs.includes('po-draft') ? (
               <TabsContent value="po-draft" className="mt-4">
-                <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
-                  <div className="flex flex-col gap-3 border-b border-slate-200 p-4 lg:flex-row lg:items-center lg:justify-between">
-                    <div>
-                      <h2 className="font-semibold text-slate-950">PO Draft</h2>
-                      <p className="text-sm text-slate-600">
-                        {selectedLines.length} selected line(s), {orderableLines.length} open orderable line(s)
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        variant="outline"
-                        disabled={selectedLines.length === 0}
-                        onClick={() => showHandoffToast('PO draft')}
-                      >
-                        <FileSpreadsheet className="mr-2 h-4 w-4" />
-                        Generate PO draft
-                      </Button>
-                    </div>
-                  </div>
-
-                  <SourcingLineTable
-                    lines={selectedLines}
-                    emptyMessage="Select BOM lines to build the PO draft."
-                  />
-                </section>
+                <PoDraftWorkspace
+                  lines={selectedLines}
+                  description={poDescription}
+                  matches={poDescriptionMatches}
+                  visibleColumns={visiblePoColumns}
+                  customColumns={customPoColumns}
+                  newColumnName={newPoColumnName}
+                  onDescriptionChange={setPoDescription}
+                  onCreateLine={createLineFromPoDescription}
+                  onToggleColumn={togglePoColumn}
+                  onNewColumnNameChange={setNewPoColumnName}
+                  onAddCustomColumn={addCustomPoColumn}
+                  onUpdateCustomField={updateLineCustomField}
+                  onGeneratePoDraft={() => showHandoffToast('PO draft')}
+                />
               </TabsContent>
             ) : null}
 
@@ -762,6 +914,213 @@ function SummaryMetric({ label, value }: { label: string; value: string }) {
       <dd className="mt-1 text-base font-semibold tabular-nums text-slate-950">{value}</dd>
     </div>
   );
+}
+
+function PoDraftWorkspace({
+  lines,
+  description,
+  matches,
+  visibleColumns,
+  customColumns,
+  newColumnName,
+  onDescriptionChange,
+  onCreateLine,
+  onToggleColumn,
+  onNewColumnNameChange,
+  onAddCustomColumn,
+  onUpdateCustomField,
+  onGeneratePoDraft,
+}: {
+  lines: BomLine[];
+  description: string;
+  matches: InventoryItemOption[];
+  visibleColumns: PoColumnId[];
+  customColumns: string[];
+  newColumnName: string;
+  onDescriptionChange: (value: string) => void;
+  onCreateLine: (item?: InventoryItemOption) => void;
+  onToggleColumn: (columnId: PoColumnId, checked: boolean) => void;
+  onNewColumnNameChange: (value: string) => void;
+  onAddCustomColumn: () => void;
+  onUpdateCustomField: (lineId: string, columnName: string, value: string) => void;
+  onGeneratePoDraft: () => void;
+}) {
+  const typedDescription = description.trim();
+  const totalColumns = 2 + visibleColumns.length + customColumns.length;
+
+  return (
+    <section className="space-y-4">
+      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0 flex-1 space-y-3">
+            <div>
+              <h2 className="font-semibold text-slate-950">PO Draft</h2>
+              <p className="text-sm text-slate-600">
+                Start with a part description. Existing inventory matches can be selected, or a new draft part can be created.
+              </p>
+            </div>
+            <div className="grid gap-2 lg:grid-cols-[minmax(280px,520px)_auto]">
+              <Input
+                value={description}
+                onChange={(event) => onDescriptionChange(event.target.value)}
+                placeholder="Part description"
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    onCreateLine(matches[0]);
+                  }
+                }}
+              />
+              <Button type="button" onClick={() => onCreateLine(matches[0])} disabled={!typedDescription}>
+                <Plus className="mr-2 h-4 w-4" />
+                Add line
+              </Button>
+            </div>
+
+            {typedDescription.length >= 2 ? (
+              <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                {matches.length > 0 ? (
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Inventory matches</p>
+                    <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                      {matches.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          className="rounded-md border border-slate-200 bg-white p-3 text-left text-sm hover:border-blue-300 hover:bg-blue-50"
+                          onClick={() => onCreateLine(item)}
+                        >
+                          <span className="block font-medium text-slate-950">{item.name || item.description || 'Inventory item'}</span>
+                          <span className="mt-1 block text-xs text-slate-500">
+                            {[item.agPartNumber, item.source || item.supplier].filter(Boolean).join(' - ') || `Item #${item.id}`}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                    <Button type="button" variant="outline" size="sm" onClick={() => onCreateLine()}>
+                      Create draft part instead
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-sm text-slate-600">No inventory match found.</span>
+                    <Button type="button" variant="outline" size="sm" onClick={() => onCreateLine()}>
+                      Create draft part
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </div>
+
+          <Button variant="outline" disabled={lines.length === 0} onClick={onGeneratePoDraft}>
+            <FileSpreadsheet className="mr-2 h-4 w-4" />
+            Generate PO draft
+          </Button>
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700">Columns</h3>
+            <p className="text-sm text-slate-600">Show existing BOM fields or create a new PO draft column.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Input
+              className="w-[220px]"
+              value={newColumnName}
+              onChange={(event) => onNewColumnNameChange(event.target.value)}
+              placeholder="New column name"
+            />
+            <Button type="button" variant="outline" onClick={onAddCustomColumn} disabled={!newColumnName.trim()}>
+              Add column
+            </Button>
+          </div>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-3">
+          {(Object.keys(poColumnLabels) as PoColumnId[]).map((columnId) => (
+            <label key={columnId} className="flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm">
+              <Checkbox
+                checked={visibleColumns.includes(columnId)}
+                onCheckedChange={(checked) => onToggleColumn(columnId, checked === true)}
+              />
+              {poColumnLabels[columnId]}
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="min-w-[320px]">Part description</TableHead>
+                {visibleColumns.map((columnId) => (
+                  <TableHead key={columnId} className="min-w-[130px]">
+                    {poColumnLabels[columnId]}
+                  </TableHead>
+                ))}
+                {customColumns.map((columnName) => (
+                  <TableHead key={columnName} className="min-w-[160px]">
+                    {columnName}
+                  </TableHead>
+                ))}
+                <TableHead className="w-[110px]">Part type</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {lines.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={totalColumns} className="h-24 text-center text-slate-500">
+                    Add a part description to begin the PO draft.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                lines.map((line) => (
+                  <TableRow key={line.id}>
+                    <TableCell className="font-medium">{line.description || '-'}</TableCell>
+                    {visibleColumns.map((columnId) => (
+                      <TableCell key={columnId}>{poColumnValue(line, columnId)}</TableCell>
+                    ))}
+                    {customColumns.map((columnName) => (
+                      <TableCell key={columnName}>
+                        <Input
+                          className="h-9"
+                          value={line.customFields?.[columnName] ?? ''}
+                          onChange={(event) => onUpdateCustomField(line.id, columnName, event.target.value)}
+                        />
+                      </TableCell>
+                    ))}
+                    <TableCell>
+                      <Badge variant={line.inventoryItemId ? 'outline' : 'secondary'}>
+                        {line.inventoryItemId ? 'Inventory' : 'Draft part'}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </section>
+    </section>
+  );
+}
+
+function poColumnValue(line: BomLine, columnId: PoColumnId) {
+  if (columnId === 'filter') return line.category || '-';
+  if (columnId === 'supplier') return line.supplier || '-';
+  if (columnId === 'supplierItemId') return line.supplierItemId || '-';
+  if (columnId === 'agPartNumber') return line.agPartNumber || '-';
+  if (columnId === 'qtyNeeded') return line.qtyNeeded || '-';
+  if (columnId === 'unitCost') return line.unitCost === '' ? '-' : money(asNumber(line.unitCost));
+  if (columnId === 'extCost') return money(asNumber(line.unitCost) * asNumber(line.qtyNeeded));
+  if (columnId === 'action') return line.action;
+  if (columnId === 'status') return line.status;
+  if (columnId === 'source') return line.inventoryItemId ? `Inventory #${line.inventoryItemId}` : 'Draft part';
+  return '-';
 }
 
 function SourcingLineTable({ lines, emptyMessage }: { lines: BomLine[]; emptyMessage: string }) {

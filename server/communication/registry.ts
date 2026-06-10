@@ -2,6 +2,22 @@ import { sql } from 'drizzle-orm';
 import type { EmailTemplate } from './types';
 import { enforceTemplateEditCapability, logTemplateEdit } from './capabilities';
 
+export const VENDOR_CONTACT_EMAIL = 'glenn@agadvanced.com';
+export const LEGACY_VENDOR_CONTACT_EMAILS = ['laurie.tandy@agadvanced.com'];
+
+export function normalizeVendorTemplateContactText(value: string | null | undefined): string {
+  if (!value) return value ?? '';
+  let normalized = value;
+  for (const legacyEmail of LEGACY_VENDOR_CONTACT_EMAILS) {
+    normalized = normalized.replace(new RegExp(escapeRegExp(legacyEmail), 'gi'), VENDOR_CONTACT_EMAIL);
+  }
+  return normalized;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 export async function getTemplateByKey(
   db: any,
   key: string
@@ -244,8 +260,8 @@ export async function ensureVendorPOAttachmentRules(db: any): Promise<void> {
 
 export async function ensureVendorRFQContactEmail(db: any): Promise<void> {
   try {
-    const oldEmail = 'laurie.tandy@agadvanced.com';
-    const newEmail = 'glenn@agadvanced.com';
+    const oldEmail = LEGACY_VENDOR_CONTACT_EMAILS[0];
+    const newEmail = VENDOR_CONTACT_EMAIL;
     const result = await db.execute(sql`
       UPDATE email_templates
       SET body_html = REPLACE(body_html, ${oldEmail}, ${newEmail}),
@@ -288,7 +304,7 @@ export async function ensureVendorPONoMagicLinkTemplates(db: any): Promise<void>
   }
 }
 
-const VENDOR_RFQ_TEMPLATE = {
+export const VENDOR_RFQ_TEMPLATE = {
   key: 'vendor_rfq',
   name: 'Vendor RFQ',
   subject: 'Request for Quote from AG Composites',

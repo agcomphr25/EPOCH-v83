@@ -358,9 +358,9 @@ async function main() {
     END $$;
   `, 'Ensure routing_operations.required_calibration_asset_tags column');
 
-  await runSql(`
-    CREATE SCHEMA IF NOT EXISTS timekeeping;
+  await runSql(`CREATE SCHEMA IF NOT EXISTS timekeeping`, 'Ensure timekeeping schema (pto_balance_events)');
 
+  await runSql(`
     CREATE TABLE IF NOT EXISTS timekeeping.pto_balance_events (
       id SERIAL PRIMARY KEY,
       employee_id INTEGER NOT NULL REFERENCES public.employees(id) ON DELETE CASCADE,
@@ -383,9 +383,9 @@ async function main() {
       ON timekeeping.pto_balance_events (time_off_request_id)
   `, 'Ensure PTO balance events request index');
 
-  await runSql(`
-    CREATE SCHEMA IF NOT EXISTS timekeeping;
+  await runSql(`CREATE SCHEMA IF NOT EXISTS timekeeping`, 'Ensure timekeeping schema (employee_pto_schedules)');
 
+  await runSql(`
     CREATE TABLE IF NOT EXISTS timekeeping.employee_pto_schedules (
       id SERIAL PRIMARY KEY,
       employee_id INTEGER NOT NULL REFERENCES public.employees(id) ON DELETE CASCADE,

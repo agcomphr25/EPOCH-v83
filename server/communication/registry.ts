@@ -251,7 +251,7 @@ export async function ensureVendorRFQContactEmail(db: any): Promise<void> {
       SET body_html = REPLACE(body_html, ${oldEmail}, ${newEmail}),
           body_text = REPLACE(body_text, ${oldEmail}, ${newEmail}),
           updated_at = NOW()
-      WHERE key = 'vendor_rfq'
+      WHERE key IN ('vendor_rfq', 'vendor_po_issue', 'vendor_po_resend')
         AND (
           body_html LIKE ${`%${oldEmail}%`}
           OR body_text LIKE ${`%${oldEmail}%`}
@@ -259,7 +259,7 @@ export async function ensureVendorRFQContactEmail(db: any): Promise<void> {
     `);
     const count = result.rowCount ?? result.count ?? 0;
     if (count > 0) {
-      console.log(`  Patched ${count} vendor RFQ template(s) to use ${newEmail}`);
+      console.log(`  Patched ${count} vendor email template(s) to use ${newEmail}`);
     }
   } catch (err: any) {
     console.warn('[ensureVendorRFQContactEmail] Failed to patch RFQ contact email:', err.message);

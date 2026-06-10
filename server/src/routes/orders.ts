@@ -1504,8 +1504,12 @@ router.put('/draft/:id', async (req: Request, res: Response) => {
     console.log('Update order endpoint called for ID:', orderId);
     console.log('Update data received:', req.body);
 
-    // Validate the input data using the schema
-    const updates = stripImmutableDueDate(insertAllOrderSchema.partial().parse(req.body));
+    // Validate the input data using the schema. Order Entry edit mode is allowed
+    // to update the visible Estimated Completion Date, which is stored as dueDate.
+    const updates = insertAllOrderSchema.partial().parse(req.body);
+    if (Object.prototype.hasOwnProperty.call(updates, 'dueDate') && updates.dueDate != null) {
+      updates.dueDate = normalizeDueDateForStorage(updates.dueDate);
+    }
     console.log('Validated updates:', updates);
 
     // CRITICAL SERVER-SIDE VALIDATION: Prevent null/empty modelId for non-custom orders
@@ -1522,7 +1526,9 @@ router.put('/draft/:id', async (req: Request, res: Response) => {
     const beforeOrder = await storage.getFinalizedOrderById(orderId);
 
     // Update the order in all_orders table
-    const updatedOrder = await storage.updateFinalizedOrder(orderId, updates);
+    const updatedOrder = await storage.updateFinalizedOrder(orderId, updates, {
+      allowDueDateUpdate: true,
+    });
     console.log('Updated order successfully:', updatedOrder);
 
     // Log field-level audit changes (price, discount, shipping, etc.)

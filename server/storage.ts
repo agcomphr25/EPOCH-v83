@@ -2579,7 +2579,8 @@ export interface IStorage {
   getFinalizedOrderById(orderId: string): Promise<AllOrder | undefined>;
   updateFinalizedOrder(
     orderId: string,
-    data: Partial<InsertAllOrder>
+    data: Partial<InsertAllOrder>,
+    options?: { allowDueDateUpdate?: boolean }
   ): Promise<AllOrder>;
   fulfillOrder(orderId: string): Promise<AllOrder>;
   syncVerificationStatus(): Promise<{ updatedOrders: number; message: string }>;
@@ -22540,11 +22541,12 @@ export class DatabaseStorage implements IStorage {
   // Update finalized order
   async updateFinalizedOrder(
     orderId: string,
-    data: Partial<InsertAllOrder>
+    data: Partial<InsertAllOrder>,
+    options: { allowDueDateUpdate?: boolean } = {}
   ): Promise<AllOrder> {
     try {
       const updateData: Partial<InsertAllOrder> = { ...data };
-      if (Object.prototype.hasOwnProperty.call(updateData, 'dueDate')) {
+      if (!options.allowDueDateUpdate && Object.prototype.hasOwnProperty.call(updateData, 'dueDate')) {
         delete updateData.dueDate;
       }
 
@@ -22552,7 +22554,7 @@ export class DatabaseStorage implements IStorage {
 
       // Check upfront whether a production_orders record exists so we can sync it atomically.
       const productionRecord =
-        updateData.currentDepartment !== undefined
+        updateData.currentDepartment !== undefined || updateData.dueDate !== undefined
           ? await this.getProductionOrderByOrderId(orderId)
           : undefined;
 
@@ -22582,6 +22584,14 @@ export class DatabaseStorage implements IStorage {
             sql`UPDATE production_orders SET current_department = ${updateData.currentDepartment}, updated_at = NOW() WHERE order_id = ${orderId}`
           );
           console.log(`[updateFinalizedOrder] Synced production_orders.current_department for ${orderId} → ${updateData.currentDepartment}`);
+        }
+
+        if (updateData.dueDate !== undefined && productionRecord) {
+          await tx
+            .update(productionOrders)
+            .set({ dueDate: updateData.dueDate, updatedAt: new Date() })
+            .where(eq(productionOrders.orderId, orderId));
+          console.log(`[updateFinalizedOrder] Synced production_orders.due_date for ${orderId}`);
         }
 
         return updated;

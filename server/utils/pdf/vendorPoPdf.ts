@@ -1,6 +1,6 @@
 import { PDFDocument, rgb, StandardFonts, degrees, type PDFFont, type PDFPage } from 'pdf-lib';
 import { storage } from '../../storage';
-import { resolveVendorPoReturnEmail } from '../vendorPoContact';
+import { resolveVendorPoContactName, resolveVendorPoReturnEmail } from '../vendorPoContact';
 
 const PAGE = { WIDTH: 612, HEIGHT: 792, MARGIN: 40 } as const;
 const PRINTABLE_WIDTH = PAGE.WIDTH - PAGE.MARGIN * 2;
@@ -531,7 +531,7 @@ export async function generateVendorPoPdf(poId: number): Promise<Buffer> {
     companyPhone: companySettings?.companyPhone || '',
     companyEmail: companySettings?.companyEmail || '',
     companyWebsite: companySettings?.companyWebsite || '',
-    contactName: poSettings?.contactName || '',
+    contactName: resolveVendorPoContactName(poSettings),
     contactTitle: poSettings?.contactTitle || '',
     contactPhone: poSettings?.contactPhone || '',
     contactEmail: resolveVendorPoReturnEmail(poSettings) || companySettings?.companyEmail || '',

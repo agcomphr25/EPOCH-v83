@@ -1,4 +1,5 @@
 import { PDFDocument } from 'pdf-lib';
+import { PDFParse } from 'pdf-parse';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../storage', () => ({
@@ -63,7 +64,7 @@ describe('vendor PO/RFQ PDF generator', () => {
       companyWebsite: 'agcomposites.com',
     } as any);
     vi.mocked(storage.getVendorPOSettings).mockResolvedValue({
-      contactName: 'Glenn Jones',
+      contactName: 'Laurie Tandy',
       contactTitle: 'Purchasing',
       contactPhone: '256-723-8381',
       contactEmail: 'glenn@agadvanced.com',
@@ -81,5 +82,15 @@ describe('vendor PO/RFQ PDF generator', () => {
 
     const pdf = await PDFDocument.load(pdfBuffer);
     expect(pdf.getPageCount()).toBeGreaterThanOrEqual(1);
+
+    const parser = new PDFParse({ data: pdfBuffer });
+    try {
+      const extracted = await parser.getText();
+      expect(extracted.text).toContain('Glenn Jones');
+      expect(extracted.text).not.toContain('Laurie');
+      expect(extracted.text).not.toContain('Laurie Tandy');
+    } finally {
+      await parser.destroy();
+    }
   });
 });

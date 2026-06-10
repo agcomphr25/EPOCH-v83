@@ -234,7 +234,7 @@ export async function seedVendorEmailTemplates(db: any): Promise<void> {
   }
 }
 
-// ─── One-time patch: ensure vendor PO templates have PDF attachment rule ──────
+// ─── One-time patch: ensure vendor email templates have PDF attachment rule ──────
 // The seed above is insert-only (skips existing rows), so if these templates
 // were seeded before attachVendorPOPDF was added they never got the flag.
 // This function is idempotent — it only updates rows that are still missing it.
@@ -244,12 +244,12 @@ export async function ensureVendorPOAttachmentRules(db: any): Promise<void> {
     const result = await db.execute(sql`
       UPDATE email_templates
       SET attachment_rules = ${rules}::jsonb
-      WHERE key IN ('vendor_po_issue', 'vendor_po_resend')
+      WHERE key IN ('vendor_rfq', 'vendor_po_issue', 'vendor_po_resend')
         AND (attachment_rules->>'attachVendorPOPDF') IS DISTINCT FROM 'true'
     `);
     const count = result.rowCount ?? result.count ?? 0;
     if (count > 0) {
-      console.log(`  ✅ Patched ${count} vendor PO template(s) to include PDF attachment rule`);
+      console.log(`  ✅ Patched ${count} vendor email template(s) to include PDF attachment rule`);
     }
   } catch (err: any) {
     console.warn('[ensureVendorPOAttachmentRules] Failed to patch attachment rules:', err.message);
@@ -315,7 +315,7 @@ export const VENDOR_RFQ_TEMPLATE = {
     'items_table',
     'items_list',
   ],
-  attachmentRules: {},
+  attachmentRules: { attachVendorPOPDF: true, systemNotice: true },
   bodyHtml: `<!DOCTYPE html>
 <html>
 <head>

@@ -30,6 +30,13 @@ describe('vendor RFQ email contact', () => {
     }
   });
 
+  it('requests a generated RFQ PDF attachment', () => {
+    expect(VENDOR_RFQ_TEMPLATE.attachmentRules).toMatchObject({
+      attachVendorPOPDF: true,
+      systemNotice: true,
+    });
+  });
+
   it('normalizes legacy saved-template contact text', () => {
     const repaired = normalizeVendorTemplateContactText(
       `Questions: Laurie.Tandy@agadvanced.com / ${LEGACY_VENDOR_CONTACT_EMAILS[0]}`

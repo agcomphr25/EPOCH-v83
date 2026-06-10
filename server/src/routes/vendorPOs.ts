@@ -14,7 +14,12 @@ import { requirePermission } from '../../middleware/requirePermission';
 import { sendCommunication } from '../../communication/send';
 import { db, queryRows } from '../../db';
 import { sql } from 'drizzle-orm';
-import { appendUniqueEmail, resolveVendorPoContactName, resolveVendorPoReturnEmail } from '../../utils/vendorPoContact';
+import {
+  appendUniqueEmail,
+  DEFAULT_VENDOR_PO_RETURN_EMAIL,
+  resolveVendorPoContactName,
+  resolveVendorPoReturnEmail,
+} from '../../utils/vendorPoContact';
 import {
   getVendorQualificationBlockers,
   emitProcurementLedgerEvent,
@@ -680,7 +685,10 @@ function deriveToAndCc(
 async function getVendorPoEmailRouting(userEmail?: string | null): Promise<{ returnEmail: string; cc: string[] }> {
   const settings = await storage.getVendorPOSettings();
   const returnEmail = resolveVendorPoReturnEmail(settings);
-  const cc = appendUniqueEmail(appendUniqueEmail([], returnEmail), userEmail);
+  const cc = appendUniqueEmail(
+    appendUniqueEmail(appendUniqueEmail([], returnEmail), DEFAULT_VENDOR_PO_RETURN_EMAIL),
+    userEmail
+  );
   return { returnEmail, cc };
 }
 
@@ -2056,6 +2064,7 @@ router.post('/:id/send-rfq', async (req: Request, res: Response) => {
       : 'No specific items listed. Please contact us for details.';
 
     const rfqContext = {
+      po_number: vendorPO.poNumber || `RFQ-${id}`,
       vendor_name: vendor.name,
       vendor_contact_person: vendor.contactPerson ? ` ${vendor.contactPerson}` : '',
       desired_delivery_date: vendorPO.expectedDeliveryDate

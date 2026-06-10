@@ -36,7 +36,9 @@ export async function buildAttachments(
       if (!isNaN(poId)) {
         const buffer = await generateVendorPoPdf(poId);
         const poNumber = context.po_number || `PO-${poId}`;
-        const filename = `Vendor_PO_${poNumber}.pdf`;
+        const filename = templateKey === 'vendor_rfq'
+          ? `Vendor_RFQ_${poNumber}.pdf`
+          : `Vendor_PO_${poNumber}.pdf`;
         const result = attachmentFromBuffer(buffer, filename, 'application/pdf');
         attachments.push(result.attachment);
         meta.push(result.meta);

@@ -555,7 +555,7 @@ export default function Navigation() {
     },
     {
       path: '/estimating/bom-drafts',
-      label: 'Draft BOM Builder',
+      label: 'Draft Builder',
       icon: FileSpreadsheet,
       description: 'Create reusable draft BOMs and sourcing picklists',
     },

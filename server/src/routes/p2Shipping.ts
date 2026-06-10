@@ -262,6 +262,124 @@ async function downloadStoredBuffer(storagePath: string): Promise<Buffer> {
   return getFileStorageProviderForObjectPath(storagePath).downloadBuffer(storagePath);
 }
 
+function buildStructuredPackingSlipAddress(slip: any): PackingSlipData['customerAddress'] {
+  const rawAddress = slip.customerAddress || '';
+  const addrLines = rawAddress
+    .split('\n')
+    .map((line: string) => line.trim())
+    .filter((line: string, index: number, lines: string[]) =>
+      line.length > 0 &&
+      line.toLowerCase() !== (slip.customerName || '').trim().toLowerCase() &&
+      lines.findIndex((candidate) => candidate.toLowerCase() === line.toLowerCase()) === index
+    );
+
+  if (addrLines.length === 0) return undefined;
+
+  const lastLine = addrLines[addrLines.length - 1];
+  const cityStateZip = lastLine.match(/^(.+),\s+([A-Z]{2})\s+(\S+)$/);
+  if (!cityStateZip) return { rawLines: addrLines };
+
+  return {
+    street: addrLines[0] || '',
+    street2: addrLines.length > 2 ? addrLines[1] : undefined,
+    city: cityStateZip[1].trim(),
+    state: cityStateZip[2],
+    zip: cityStateZip[3],
+  };
+}
+
+async function buildP2PackingSlipPdfData(slip: any): Promise<PackingSlipData> {
+  const lineItems = (slip.lineItems as any[]) || [];
+  const lineItemSerialNumbers = Array.from(
+    new Set(
+      lineItems.flatMap((item) =>
+        Array.isArray(item.serialNumbers)
+          ? item.serialNumbers.filter((serial: unknown): serial is string => typeof serial === 'string' && serial.trim().length > 0)
+          : []
+      )
+    )
+  );
+  type PackingSlipSerialIdentity = {
+    serial_number: string;
+    sku: string | null;
+    drawing_name: string | null;
+  };
+  let serialRows: PackingSlipSerialIdentity[] = [];
+  if (lineItemSerialNumbers.length > 0) {
+    try {
+      serialRows = await pool.query<PackingSlipSerialIdentity>(
+        `SELECT serial_number, sku, drawing_name
+           FROM p2_serialized_items
+          WHERE serial_number = ANY($1::text[])`,
+        [lineItemSerialNumbers]
+      );
+    } catch (err) {
+      console.warn('[P2Shipping] Packing slip serial identity enrichment unavailable:', {
+        packingSlipId: slip.id,
+        err,
+      });
+    }
+  }
+  const serialIdentityByNumber = new Map<string, PackingSlipSerialIdentity>(
+    serialRows.map((row) => [row.serial_number, row])
+  );
+
+  const slipItems: PackingSlipItem[] = lineItems.map((item) => ({
+    partNumber: assignedSkuFromSerials(
+      (Array.isArray(item.serialNumbers) ? item.serialNumbers : [])
+        .map((serialNumber: string) => serialIdentityByNumber.get(serialNumber))
+        .filter((row: unknown): row is { sku: string | null } => Boolean(row))
+    ) || item.customerSku || item.sku || item.partNumber || '',
+    description: Array.from(
+      new Set(
+        (Array.isArray(item.serialNumbers) ? item.serialNumbers : [])
+          .map((serialNumber: string) => serialIdentityByNumber.get(serialNumber)?.drawing_name?.trim())
+          .filter((drawingName: unknown): drawingName is string => typeof drawingName === 'string' && drawingName.length > 0)
+      )
+    ).join(', ') || item.drawingName || item.partName || item.partNumber || 'N/A',
+    quantity: item.quantity ?? (Array.isArray(item.serialNumbers) ? item.serialNumbers.length : 1),
+    serialNumbers: Array.isArray(item.serialNumbers) ? item.serialNumbers : [],
+    lotNumber: item.lotNumber || slip.lotNumber || undefined,
+  }));
+
+  return {
+    packingSlipNumber: slip.packingSlipNumber,
+    invoiceNumber: slip.invoiceNumber || slip.packingSlipNumber,
+    poNumber: slip.poNumber || undefined,
+    lotNumber: slip.lotNumber || undefined,
+    date: (slip.shipDate || slip.createdAt)
+      ? new Date(slip.shipDate || slip.createdAt!).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      : new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+    customerName: slip.customerName,
+    customerAddress: buildStructuredPackingSlipAddress(slip),
+    trackingNumber: slip.trackingNumber || undefined,
+    totalQuantity: slip.totalQuantity ?? 0,
+    packedBy: slip.packedBy || undefined,
+    verifiedBy: slip.verifiedBy || undefined,
+    items: slipItems,
+  };
+}
+
+async function persistP2PackingSlipPdfSnapshot(slip: any): Promise<{ bytes: Buffer; slip: any }> {
+  const slipData = await buildP2PackingSlipPdfData(slip);
+  const bytes = await generatePackingSlipPdf(slipData);
+  const storagePath = await getFileStorageProvider().uploadBuffer({
+    buffer: bytes,
+    fileName: `packing-slip-${slip.packingSlipNumber}.pdf`,
+    contentType: 'application/pdf',
+    scope: 'p2-packing-slip-issued',
+    entityId: slip.id,
+  });
+
+  const [updatedSlip] = await db
+    .update(p2PackingSlips)
+    .set({ externalPdfUrl: storagePath, updatedAt: new Date() })
+    .where(eq(p2PackingSlips.id, slip.id))
+    .returning();
+
+  return { bytes, slip: updatedSlip || { ...slip, externalPdfUrl: storagePath } };
+}
+
 function auditActor(req: Request) {
   const user = (req as any).user;
   return {
@@ -782,7 +900,7 @@ router.post('/packing-slips', authenticateToken, requirePermission('shipping.rel
     const invoiceNumber = await storage.getNextInvoiceNumber(lot.customerId || '', lot.customerName || '');
     const packingSlipNumber = invoiceNumber;
 
-    const [slip] = await db
+    let [slip] = await db
       .insert(p2PackingSlips)
       .values({
         packingSlipNumber,
@@ -802,6 +920,23 @@ router.post('/packing-slips', authenticateToken, requirePermission('shipping.rel
         isNoChargeReplacement: input.isNoChargeReplacement ?? false,
       })
       .returning();
+
+    try {
+      const snapshot = await persistP2PackingSlipPdfSnapshot(slip);
+      slip = snapshot.slip;
+    } catch (snapshotErr) {
+      await db.delete(p2PackingSlips).where(eq(p2PackingSlips.id, slip.id)).catch((cleanupErr) => {
+        console.error('[P2Shipping] Failed to clean up packing slip after PDF snapshot failure:', {
+          packingSlipId: slip.id,
+          cleanupErr,
+        });
+      });
+      console.error('[P2Shipping] Packing slip PDF snapshot failed; creation aborted:', {
+        packingSlipId: slip.id,
+        snapshotErr,
+      });
+      return res.status(500).json({ error: 'Failed to create durable packing slip PDF' });
+    }
 
     if (input.replacesPackingSlipId) {
       console.log(`[P2Shipping] Replacement packing slip ${slip.packingSlipNumber} (${slip.id}) created, replacing original slip ${input.replacesPackingSlipId}`);
@@ -1021,13 +1156,9 @@ router.patch(
 );
 
 // ============================================================
-// GET /api/p2/packing-slips/:id/pdf — Generate Packing Slip PDF
-// NOTE: This route generates the PDF on-the-fly from the persisted p2_packing_slips record.
-// The slip metadata is already stored in DB (created via POST /packing-slips); however,
-// the rendered PDF bytes are NOT re-saved here — they are streamed directly to the client.
-// RULE: All packing slips MUST be persisted to DB immediately after generation.
-// If this route is ever refactored to generate slips outside of an existing DB record,
-// a DB write MUST follow immediately — otherwise the console.error below must fire.
+// GET /api/p2/packing-slips/:id/pdf — Stream the frozen packing slip PDF.
+// New slips store their generated PDF at creation time. Legacy slips without a
+// stored PDF are rendered once, saved to the slip record, then streamed.
 // TODO: unify P1 + P2 packing slip storage into single document system
 // ============================================================
 router.get('/packing-slips/:id/pdf', async (req: Request, res: Response) => {
@@ -1045,6 +1176,27 @@ router.get('/packing-slips/:id/pdf', async (req: Request, res: Response) => {
   try {
     const slip = await selectP2PackingSlipById(req.params.id);
     if (!slip) return res.status(404).json({ error: 'Packing slip not found' });
+    let shouldPersistSnapshot = !slip.externalPdfUrl;
+
+    if (slip.externalPdfUrl) {
+      try {
+        const storedBytes = await downloadStoredBuffer(slip.externalPdfUrl);
+        res.set('Content-Type', 'application/pdf');
+        res.set(
+          'Content-Disposition',
+          `inline; filename="packing-slip-${slip.packingSlipNumber}.pdf"`
+        );
+        await logP2DocumentAccess('packing_slip', slip.id, sessionUser.username, ipAddress);
+        return res.send(storedBytes);
+      } catch (downloadErr) {
+        shouldPersistSnapshot = true;
+        console.warn('[P2Shipping] Stored packing slip PDF unavailable; regenerating fallback snapshot:', {
+          packingSlipId: slip.id,
+          externalPdfUrl: slip.externalPdfUrl,
+          downloadErr,
+        });
+      }
+    }
 
     // Map slip DB record to PackingSlipData
     const lineItems = (slip.lineItems as any[]) || [];
@@ -1245,6 +1397,26 @@ router.get('/packing-slips/:id/pdf', async (req: Request, res: Response) => {
       console.error("WARNING: Packing slip generated without persistence");
     }
     const bytes = await generatePackingSlipPdf(slipData);
+    if (shouldPersistSnapshot) {
+      try {
+        const storagePath = await getFileStorageProvider().uploadBuffer({
+          buffer: bytes,
+          fileName: `packing-slip-${slip.packingSlipNumber}.pdf`,
+          contentType: 'application/pdf',
+          scope: 'p2-packing-slip-issued',
+          entityId: slip.id,
+        });
+        await db
+          .update(p2PackingSlips)
+          .set({ externalPdfUrl: storagePath, updatedAt: new Date() })
+          .where(eq(p2PackingSlips.id, slip.id));
+      } catch (snapshotErr) {
+        console.warn('[P2Shipping] Failed to persist regenerated packing slip PDF snapshot:', {
+          packingSlipId: slip.id,
+          snapshotErr,
+        });
+      }
+    }
     res.set('Content-Type', 'application/pdf');
     res.set(
       'Content-Disposition',

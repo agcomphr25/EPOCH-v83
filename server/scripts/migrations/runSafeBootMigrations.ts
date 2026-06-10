@@ -169,6 +169,7 @@ const safeFiles = [
   '0129_receiving_inspection_plans.sql',
   '0130_vendor_po_support_tables_safe.sql',
   '0130_audit_dcaa_security_section11.sql',
+  '0131_nonconformance_schema_alignment.sql',
   '0131_user_sessions_login_compatibility.sql',
   '0132_daily_time_certifications.sql',
   '0133_voice_notes_persistence.sql',

@@ -27,6 +27,7 @@ import {
 } from '../services/procurementControlsService';
 import { recordAuditEvent } from '../services/auditLedgerService';
 import { sendApiError } from '../../utils/apiErrors';
+import { generateVendorPoPdf } from '../../utils/pdf/vendorPoPdf';
 
 const router = Router();
 
@@ -1201,6 +1202,36 @@ router.get('/compliance-effective-date', async (_req: Request, res: Response) =>
   } catch (error) {
     console.error('[VendorPO] Get compliance effective date error:', error);
     res.status(500).json({ error: 'Failed to retrieve compliance effective date' });
+  }
+});
+
+// GET /api/vendor-pos/:id/pdf - Serve the same Vendor PO/RFQ PDF used for emailed attachments.
+// Must be defined BEFORE /:id to avoid route conflicts.
+router.get('/:id/pdf', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid vendor PO ID' });
+    }
+
+    const vendorPO = await storage.getVendorPO(id);
+    if (!vendorPO) {
+      return res.status(404).json({ error: 'Vendor PO not found' });
+    }
+
+    const buffer = await generateVendorPoPdf(id);
+    const poNumber = vendorPO.poNumber || `RFQ-${id}`;
+    const filePrefix = vendorPO.poNumber ? 'Vendor_PO' : 'Vendor_RFQ';
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${filePrefix}_${poNumber}.pdf"`);
+    res.send(buffer);
+  } catch (error) {
+    console.error('Generate vendor PO/RFQ PDF error:', error);
+    return sendApiError(res, error, {
+      fallbackMessage: 'Failed to generate vendor PO/RFQ PDF',
+      source: 'vendorPO.pdf',
+      exposeMessage: true,
+    });
   }
 });
 

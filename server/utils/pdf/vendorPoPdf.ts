@@ -25,7 +25,7 @@ const FONT_SIZE = {
   COMPANY: 22,
   META_TITLE: 14,
   SECTION_LABEL: 11,
-  BODY: 10,
+  BODY: 10.5,
   SMALL: 8.5,
 } as const;
 
@@ -197,20 +197,21 @@ function drawHeaderBox(
   title: string,
   fonts: Fonts,
 ) {
+  const headerHeight = 22;
   page.drawRectangle({ x, y: yTop - height, width, height, borderColor: COLOR.BORDER, borderWidth: 1 });
-  page.drawRectangle({ x, y: yTop - 20, width, height: 20, color: COLOR.HEADER_BG, borderColor: COLOR.BORDER, borderWidth: 1 });
-  drawText(page, title, x + 12, yTop - 14, fonts.bold, FONT_SIZE.SECTION_LABEL, COLOR.MUTED_TEXT);
+  page.drawRectangle({ x, y: yTop - headerHeight, width, height: headerHeight, color: COLOR.HEADER_BG, borderColor: COLOR.BORDER, borderWidth: 1 });
+  drawText(page, title.toUpperCase(), x + 14, yTop - 15, fonts.bold, FONT_SIZE.SECTION_LABEL, COLOR.MUTED_TEXT);
 }
 
 function drawPanel(page: PDFPage, x: number, yTop: number, width: number, title: string, lines: TextLine[], fonts: Fonts): number {
-  const bodyLineHeight = 13;
-  const bodyHeight = Math.max(46, lines.length * bodyLineHeight + 20);
-  const panelHeight = bodyHeight + 20;
+  const bodyLineHeight = 14;
+  const bodyHeight = Math.max(52, lines.length * bodyLineHeight + 22);
+  const panelHeight = bodyHeight + 22;
   drawHeaderBox(page, x, yTop, width, panelHeight, title, fonts);
 
-  let y = yTop - 36;
+  let y = yTop - 39;
   for (const line of lines) {
-    drawText(page, line.text, x + 12, y, line.font ?? fonts.regular, line.size ?? FONT_SIZE.BODY, line.color ?? COLOR.PRIMARY_TEXT);
+    drawText(page, line.text, x + 14, y, line.font ?? fonts.regular, line.size ?? FONT_SIZE.BODY, line.color ?? COLOR.PRIMARY_TEXT);
     y -= bodyLineHeight;
   }
 
@@ -224,7 +225,7 @@ function drawContactStrip(page: PDFPage, yTop: number, settings: any, fonts: Fon
   const contactEmail = cleanText(settings.contactEmail);
   if (!contactName && !contactPhone && !contactEmail) return yTop;
 
-  const stripHeight = 30;
+  const stripHeight = 34;
   page.drawRectangle({
     x: PAGE.MARGIN,
     y: yTop - stripHeight,
@@ -235,20 +236,20 @@ function drawContactStrip(page: PDFPage, yTop: number, settings: any, fonts: Fon
     borderWidth: 1,
   });
 
-  drawText(page, 'Purchasing Contact:', PAGE.MARGIN + 12, yTop - 19, fonts.bold, FONT_SIZE.BODY, COLOR.MUTED_TEXT);
+  drawText(page, 'Purchasing Contact:', PAGE.MARGIN + 14, yTop - 21, fonts.bold, FONT_SIZE.BODY, COLOR.MUTED_TEXT);
   const contactLine = joinParts([contactName, contactTitle], contactTitle ? ', ' : '');
-  drawText(page, contactLine, PAGE.MARGIN + 112, yTop - 19, fonts.regular, FONT_SIZE.BODY, COLOR.PRIMARY_TEXT);
+  drawText(page, contactLine, PAGE.MARGIN + 122, yTop - 21, fonts.regular, FONT_SIZE.BODY, COLOR.PRIMARY_TEXT);
   drawRightText(
     page,
     [contactPhone, contactEmail].filter(Boolean).join(' | '),
     PAGE.WIDTH - PAGE.MARGIN - 12,
-    yTop - 19,
+    yTop - 21,
     fonts.regular,
     FONT_SIZE.BODY,
     COLOR.PRIMARY_TEXT,
   );
 
-  return yTop - stripHeight - 16;
+  return yTop - stripHeight - 20;
 }
 
 function drawMetaRow(page: PDFPage, label: string, value: unknown, x: number, rightX: number, y: number, fonts: Fonts) {
@@ -259,9 +260,10 @@ function drawMetaRow(page: PDFPage, label: string, value: unknown, x: number, ri
 function drawDocumentHeader(state: DrawState, data: VendorPOData, settings: any, isRFQ: boolean): number {
   const { page, fonts, accentColor } = state;
   const docTitle = isRFQ ? 'REQUEST FOR QUOTE' : 'PURCHASE ORDER';
-  const titleX = PAGE.WIDTH - PAGE.MARGIN - 220;
+  const metaWidth = 260;
+  const titleX = PAGE.WIDTH - PAGE.MARGIN - metaWidth;
   const titleY = PAGE.HEIGHT - PAGE.MARGIN;
-  const titleHeight = isRFQ ? 116 : 100;
+  const titleHeight = isRFQ ? 124 : 108;
 
   if (isRFQ) {
     page.drawText('REQUEST FOR QUOTE', {
@@ -285,9 +287,9 @@ function drawDocumentHeader(state: DrawState, data: VendorPOData, settings: any,
     drawText(page, settings.companyWebsite, PAGE.MARGIN, companyY - 2, fonts.regular, FONT_SIZE.BODY, COLOR.MUTED_TEXT);
   }
 
-  page.drawRectangle({ x: titleX, y: titleY - titleHeight, width: 220, height: titleHeight, borderColor: accentColor, borderWidth: 1.5 });
-  page.drawRectangle({ x: titleX, y: titleY - 30, width: 220, height: 30, color: accentColor });
-  drawText(page, docTitle, titleX + (220 - widthOf(docTitle, fonts.bold, FONT_SIZE.META_TITLE)) / 2, titleY - 20, fonts.bold, FONT_SIZE.META_TITLE, COLOR.WHITE);
+  page.drawRectangle({ x: titleX, y: titleY - titleHeight, width: metaWidth, height: titleHeight, borderColor: accentColor, borderWidth: 1.5 });
+  page.drawRectangle({ x: titleX, y: titleY - 32, width: metaWidth, height: 32, color: accentColor });
+  drawText(page, docTitle, titleX + (metaWidth - widthOf(docTitle, fonts.bold, FONT_SIZE.META_TITLE)) / 2, titleY - 21, fonts.bold, FONT_SIZE.META_TITLE, COLOR.WHITE);
 
   const displayPoNumber = data.po.poNumber?.startsWith('VPO-') ? data.po.poNumber.slice(4) : (data.po.poNumber ?? '');
   let metaY = titleY - 48;
@@ -295,22 +297,22 @@ function drawDocumentHeader(state: DrawState, data: VendorPOData, settings: any,
     drawText(page, 'Non-binding quote request', titleX + 46, metaY, fonts.bold, FONT_SIZE.SMALL, accentColor);
     metaY -= 16;
   } else {
-    drawMetaRow(page, 'PO Number', displayPoNumber, titleX + 14, titleX + 206, metaY, fonts);
+    drawMetaRow(page, 'PO Number', displayPoNumber, titleX + 16, titleX + metaWidth - 16, metaY, fonts);
     metaY -= 15;
   }
 
   if (data.po.externalPoNumber) {
-    drawMetaRow(page, 'Legacy ERP PO #', data.po.externalPoNumber, titleX + 14, titleX + 206, metaY, fonts);
+    drawMetaRow(page, 'Legacy ERP PO #', data.po.externalPoNumber, titleX + 16, titleX + metaWidth - 16, metaY, fonts);
     metaY -= 15;
   }
 
-  drawMetaRow(page, 'Date', formatDate(data.po.orderDate || data.po.createdAt), titleX + 14, titleX + 206, metaY, fonts);
+  drawMetaRow(page, 'Date', formatDate(data.po.orderDate || data.po.createdAt), titleX + 16, titleX + metaWidth - 16, metaY, fonts);
   metaY -= 15;
-  drawMetaRow(page, 'Delivery', formatDate(data.po.expectedDeliveryDate), titleX + 14, titleX + 206, metaY, fonts);
+  drawMetaRow(page, 'Delivery', formatDate(data.po.expectedDeliveryDate), titleX + 16, titleX + metaWidth - 16, metaY, fonts);
   metaY -= 15;
-  drawMetaRow(page, 'Ship Via', data.po.shipVia || 'N/A', titleX + 14, titleX + 206, metaY, fonts);
+  drawMetaRow(page, 'Ship Via', data.po.shipVia || 'N/A', titleX + 16, titleX + metaWidth - 16, metaY, fonts);
   metaY -= 15;
-  drawMetaRow(page, 'Status', data.po.status || 'N/A', titleX + 14, titleX + 206, metaY, fonts);
+  drawMetaRow(page, 'Status', data.po.status || 'N/A', titleX + 16, titleX + metaWidth - 16, metaY, fonts);
 
   const dividerY = Math.min(companyY - 12, titleY - titleHeight - 20);
   page.drawLine({ start: { x: PAGE.MARGIN, y: dividerY }, end: { x: PAGE.WIDTH - PAGE.MARGIN, y: dividerY }, thickness: 1, color: COLOR.BORDER });
@@ -352,12 +354,12 @@ function drawParties(state: DrawState, data: VendorPOData, settings: any, y: num
 }
 
 function drawTableHeader(page: PDFPage, y: number, fonts: Fonts): number {
-  const headerHeight = 24;
+  const headerHeight = 26;
   const cols = tableColumns();
   page.drawRectangle({ x: PAGE.MARGIN, y: y - headerHeight, width: PRINTABLE_WIDTH, height: headerHeight, color: COLOR.HEADER_BG });
-  page.drawLine({ start: { x: PAGE.MARGIN, y: y - headerHeight }, end: { x: PAGE.WIDTH - PAGE.MARGIN, y: y - headerHeight }, thickness: 1, color: COLOR.BORDER });
+  page.drawLine({ start: { x: PAGE.MARGIN, y: y - headerHeight }, end: { x: PAGE.WIDTH - PAGE.MARGIN, y: y - headerHeight }, thickness: 1.5, color: COLOR.BORDER });
 
-  const headerY = y - 16;
+  const headerY = y - 17;
   drawText(page, 'Line', cols.line, headerY, fonts.bold, FONT_SIZE.SMALL, COLOR.SECONDARY_TEXT);
   drawText(page, 'Supplier Part #', cols.part, headerY, fonts.bold, FONT_SIZE.SMALL, COLOR.SECONDARY_TEXT);
   drawText(page, 'Description', cols.description, headerY, fonts.bold, FONT_SIZE.SMALL, COLOR.SECONDARY_TEXT);
@@ -372,14 +374,14 @@ function tableColumns() {
   const x = PAGE.MARGIN;
   return {
     line: x + 10,
-    part: x + 44,
-    description: x + 134,
-    qtyRight: x + 354,
-    unit: x + 366,
-    priceRight: x + 474,
+    part: x + 50,
+    description: x + 152,
+    qtyRight: x + 374,
+    unit: x + 386,
+    priceRight: x + 482,
     totalRight: x + 526,
-    descWidth: 174,
-    partWidth: 82,
+    descWidth: 178,
+    partWidth: 92,
   };
 }
 
@@ -402,7 +404,7 @@ function drawItemsTable(state: DrawState, items: any[], startY: number): { y: nu
       ...wrapText(`${item.description || item.itemDescription || '-'}${purchaseDetail}`, cols.descWidth, state.fonts.regular, FONT_SIZE.BODY),
       ...(item.notes ? wrapText(`Details: ${item.notes}`, cols.descWidth, state.fonts.regular, FONT_SIZE.SMALL) : []),
     ];
-    const rowHeight = Math.max(28, descriptionLines.length * 11 + 14);
+    const rowHeight = Math.max(32, descriptionLines.length * 12 + 16);
 
     y = ensureSpace(state, y, rowHeight + 28);
     if (y === PAGE.HEIGHT - PAGE.MARGIN) {
@@ -414,7 +416,7 @@ function drawItemsTable(state: DrawState, items: any[], startY: number): { y: nu
     }
     state.page.drawLine({ start: { x: PAGE.MARGIN, y: y - rowHeight }, end: { x: PAGE.WIDTH - PAGE.MARGIN, y: y - rowHeight }, thickness: 0.5, color: COLOR.LIGHT_BORDER });
 
-    const textY = y - 16;
+    const textY = y - 18;
     drawText(state.page, item.lineNumber ?? i + 1, cols.line, textY, state.fonts.regular, FONT_SIZE.BODY, COLOR.PRIMARY_TEXT);
     drawText(state.page, cleanText(item.supplierPartNumber || item.agPartNumber || '-').slice(0, 22), cols.part, textY, state.fonts.regular, FONT_SIZE.BODY, COLOR.PRIMARY_TEXT);
 
@@ -422,7 +424,7 @@ function drawItemsTable(state: DrawState, items: any[], startY: number): { y: nu
     for (let index = 0; index < descriptionLines.length; index++) {
       const line = descriptionLines[index];
       drawText(state.page, line, cols.description, descY, state.fonts.regular, index === 0 ? FONT_SIZE.BODY : FONT_SIZE.SMALL, index === 0 ? COLOR.PRIMARY_TEXT : COLOR.SECONDARY_TEXT);
-      descY -= 11;
+      descY -= 12;
     }
 
     drawRightText(state.page, formatNumber(qty), cols.qtyRight, textY, state.fonts.regular, FONT_SIZE.BODY, COLOR.PRIMARY_TEXT);
@@ -444,18 +446,18 @@ function drawTotals(state: DrawState, y: number, subtotal: number, po: any): num
 
   y = ensureSpace(state, y, boxHeight + 20);
   state.page.drawRectangle({ x: boxX, y: y - boxHeight, width: boxWidth, height: boxHeight, color: COLOR.PANEL_BG, borderColor: COLOR.LIGHT_BORDER, borderWidth: 1 });
-  drawText(state.page, 'Subtotal', boxX + 16, y - 19, state.fonts.regular, FONT_SIZE.BODY, COLOR.MUTED_TEXT);
-  drawRightText(state.page, formatCurrency(subtotal), boxX + boxWidth - 16, y - 19, state.fonts.bold, FONT_SIZE.BODY, COLOR.PRIMARY_TEXT);
+  drawText(state.page, 'Subtotal', boxX + 20, y - 19, state.fonts.regular, FONT_SIZE.BODY, COLOR.MUTED_TEXT);
+  drawRightText(state.page, formatCurrency(subtotal), boxX + boxWidth - 20, y - 19, state.fonts.bold, FONT_SIZE.BODY, COLOR.PRIMARY_TEXT);
 
   let totalY = y - 39;
   if (shipping > 0) {
-    drawText(state.page, 'Shipping', boxX + 16, y - 39, state.fonts.regular, FONT_SIZE.BODY, COLOR.MUTED_TEXT);
-    drawRightText(state.page, formatCurrency(shipping), boxX + boxWidth - 16, y - 39, state.fonts.regular, FONT_SIZE.BODY, COLOR.PRIMARY_TEXT);
+    drawText(state.page, 'Shipping', boxX + 20, y - 39, state.fonts.regular, FONT_SIZE.BODY, COLOR.MUTED_TEXT);
+    drawRightText(state.page, formatCurrency(shipping), boxX + boxWidth - 20, y - 39, state.fonts.regular, FONT_SIZE.BODY, COLOR.PRIMARY_TEXT);
     totalY = y - 59;
   }
 
-  drawText(state.page, 'Total', boxX + 16, totalY, state.fonts.bold, FONT_SIZE.META_TITLE, COLOR.PRIMARY_TEXT);
-  drawRightText(state.page, formatCurrency(total), boxX + boxWidth - 16, totalY, state.fonts.bold, FONT_SIZE.META_TITLE, COLOR.PRIMARY_TEXT);
+  drawText(state.page, 'Total', boxX + 20, totalY, state.fonts.bold, FONT_SIZE.META_TITLE, COLOR.PRIMARY_TEXT);
+  drawRightText(state.page, formatCurrency(total), boxX + boxWidth - 20, totalY, state.fonts.bold, FONT_SIZE.META_TITLE, COLOR.PRIMARY_TEXT);
   return y - boxHeight - 22;
 }
 

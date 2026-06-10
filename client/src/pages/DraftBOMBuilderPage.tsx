@@ -56,6 +56,7 @@ type ProjectOption = {
 
 const STORAGE_KEY = 'epoch:draft-boms';
 const PRIVATEER_DRAFT_ID = 'privateer';
+const NEW_DRAFT_VALUE = '__new_draft__';
 const R_AND_D_PROJECT_VALUE = '__r_and_d__';
 
 const actions: BomAction[] = ['Order / Quote', 'Use in RFQ', 'Do Not Order', 'Hold'];
@@ -262,6 +263,11 @@ export default function DraftBOMBuilderPage() {
   }
 
   function loadDraft(id: string) {
+    if (id === NEW_DRAFT_VALUE) {
+      startBlankDraft();
+      return;
+    }
+
     const match = savedDrafts.find((item) => item.id === id);
     if (!match) return;
     setSelectedDraftId(id);
@@ -360,18 +366,40 @@ export default function DraftBOMBuilderPage() {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={selectOrderable}>
-              <Filter className="mr-2 h-4 w-4" />
-              Select orderable
-            </Button>
-            <Button variant="outline" onClick={saveDraft}>
-              <Save className="mr-2 h-4 w-4" />
-              Save draft
-            </Button>
-            <Button onClick={markSelectedFinalized} disabled={selectedLines.length === 0}>
-              <Check className="mr-2 h-4 w-4" />
-              Finalize to inventory
-            </Button>
+            <div className="flex min-w-[280px] flex-col gap-1.5">
+              <Label htmlFor="active-draft">Draft BOM</Label>
+              <Select value={selectedDraftId || NEW_DRAFT_VALUE} onValueChange={loadDraft}>
+                <SelectTrigger id="active-draft" className="bg-white">
+                  <SelectValue placeholder="Select a draft BOM" />
+                </SelectTrigger>
+                <SelectContent>
+                  {savedDrafts.map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {item.name} - {item.revision}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value={NEW_DRAFT_VALUE}>Create new draft BOM</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-wrap items-end gap-2">
+              <Button type="button" variant="outline" onClick={startBlankDraft}>
+                <Plus className="mr-2 h-4 w-4" />
+                New draft
+              </Button>
+              <Button variant="outline" onClick={selectOrderable}>
+                <Filter className="mr-2 h-4 w-4" />
+                Select orderable
+              </Button>
+              <Button variant="outline" onClick={saveDraft}>
+                <Save className="mr-2 h-4 w-4" />
+                Save draft
+              </Button>
+              <Button onClick={markSelectedFinalized} disabled={selectedLines.length === 0}>
+                <Check className="mr-2 h-4 w-4" />
+                Finalize to inventory
+              </Button>
+            </div>
           </div>
         </section>
 
@@ -441,33 +469,6 @@ export default function DraftBOMBuilderPage() {
                     onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))}
                     rows={3}
                   />
-                </div>
-                <div className="grid gap-1.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <Label>Saved BOM Drafts</Label>
-                    <Button type="button" variant="ghost" size="sm" onClick={startBlankDraft}>
-                      <Plus className="mr-2 h-4 w-4" />
-                      New blank draft
-                    </Button>
-                  </div>
-                  <Select value={selectedDraftId} onValueChange={loadDraft}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Load a saved draft" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {savedDrafts.length === 0 ? (
-                        <SelectItem value="none" disabled>
-                          No saved drafts yet
-                        </SelectItem>
-                      ) : (
-                        savedDrafts.map((item) => (
-                          <SelectItem key={item.id} value={item.id}>
-                            {item.name} - {item.revision}
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
                 </div>
               </div>
             </div>

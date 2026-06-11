@@ -135,6 +135,22 @@ type ProjectOption = {
   status?: string;
 };
 
+type RDProjectOption = {
+  id: string;
+  projectName: string;
+  status?: string;
+};
+
+type ProjectSelectOption = {
+  value: string;
+  id: string;
+  label: string;
+  project: string;
+  projectCode: string | null;
+  projectName: string;
+  projectType: 'P2_PROJECT' | 'R_AND_D';
+};
+
 type InventoryItemOption = {
   id: number;
   agPartNumber?: string | null;
@@ -161,10 +177,13 @@ type CsvImportResult = {
 };
 
 const STORAGE_KEY = 'epoch:draft-boms';
+const RD_PROJECTS_STORAGE_KEY = 'epoch.rdProjects.v1';
 const VENDOR_PO_HANDOFF_KEY = 'epoch:draft-bom-vendor-po-handoff';
 const PRIVATEER_DRAFT_ID = 'privateer';
 const NEW_DRAFT_VALUE = '__new_draft__';
-const R_AND_D_PROJECT_VALUE = '__r_and_d__';
+const LEGACY_R_AND_D_PROJECT_VALUE = '__r_and_d__';
+const P2_PROJECT_VALUE_PREFIX = 'p2:';
+const RD_PROJECT_VALUE_PREFIX = 'rd:';
 
 const statuses: BomStatus[] = ['Needs Review', 'Needs Quote', 'RFQ Sent', 'On Order', 'On Hand', 'ETA / Inbound', 'Hold'];
 const defaultWorkspaceTabs: BuiltInWorkspaceTabId[] = ['po-draft', 'parts-request', 'direct-labor', 'bom-wizard', 'assembly-tree'];
@@ -358,6 +377,18 @@ function createPrivateerDraft(): BomDraft {
 
 function projectLabel(project: ProjectOption) {
   return [project.projectCode, project.projectName].filter(Boolean).join(' - ');
+}
+
+function readRDProjectOptions(): RDProjectOption[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(RD_PROJECTS_STORAGE_KEY);
+    if (!raw) return [];
+    const projects = JSON.parse(raw) as RDProjectOption[];
+    return projects.filter((project) => project.id && project.projectName);
+  } catch {
+    return [];
+  }
 }
 
 function normalizeDraft(draft: BomDraft): BomDraft {
@@ -604,6 +635,7 @@ export default function DraftBOMBuilderPage() {
   const [savedDrafts, setSavedDrafts] = useState<BomDraft[]>(() => loadDrafts());
   const [selectedDraftId, setSelectedDraftId] = useState<string>(PRIVATEER_DRAFT_ID);
   const [draft, setDraft] = useState<BomDraft>(() => loadDrafts()[0] ?? createPrivateerDraft());
+  const [rdProjects, setRdProjects] = useState<RDProjectOption[]>(() => readRDProjectOptions());
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(true);
   const [visibleWorkspaceTabs, setVisibleWorkspaceTabs] = useState<WorkspaceTabId[]>(() => draft.workspaceTabs ?? defaultWorkspaceTabs);
@@ -630,7 +662,38 @@ export default function DraftBOMBuilderPage() {
   const projectOptions = useMemo(() => {
     return [...projects].sort((a, b) => projectLabel(a).localeCompare(projectLabel(b)));
   }, [projects]);
-  const selectedProjectValue = draft.projectType === 'R_AND_D' ? R_AND_D_PROJECT_VALUE : draft.projectId ?? '';
+  const rdProjectOptions = useMemo(() => {
+    return [...rdProjects].sort((a, b) => a.projectName.localeCompare(b.projectName));
+  }, [rdProjects]);
+  const combinedProjectOptions = useMemo<ProjectSelectOption[]>(() => {
+    const p2Options = projectOptions.map((project) => ({
+      value: `${P2_PROJECT_VALUE_PREFIX}${project.id}`,
+      id: project.id,
+      label: projectLabel(project),
+      project: projectLabel(project),
+      projectCode: project.projectCode,
+      projectName: project.projectName,
+      projectType: 'P2_PROJECT' as const,
+    }));
+    const rdOptions = rdProjectOptions.map((project) => ({
+      value: `${RD_PROJECT_VALUE_PREFIX}${project.id}`,
+      id: project.id,
+      label: project.projectName,
+      project: project.projectName,
+      projectCode: null,
+      projectName: project.projectName,
+      projectType: 'R_AND_D' as const,
+    }));
+    return [...rdOptions, ...p2Options];
+  }, [projectOptions, rdProjectOptions]);
+  const selectedProjectValue =
+    draft.projectType === 'P2_PROJECT' && draft.projectId
+      ? `${P2_PROJECT_VALUE_PREFIX}${draft.projectId}`
+      : draft.projectType === 'R_AND_D' && draft.projectId
+        ? `${RD_PROJECT_VALUE_PREFIX}${draft.projectId}`
+        : draft.projectType === 'R_AND_D'
+          ? LEGACY_R_AND_D_PROJECT_VALUE
+          : '';
 
   const selectedLines = useMemo(() => draft.lines.filter((line) => line.include), [draft.lines]);
   const laborDepartments = useMemo(() => {
@@ -702,6 +765,17 @@ export default function DraftBOMBuilderPage() {
       return (a.description || '').localeCompare(b.description || '');
     });
   }, [draft.lines, sortPartsByVendor]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const refreshRDProjects = () => setRdProjects(readRDProjectOptions());
+    window.addEventListener('focus', refreshRDProjects);
+    window.addEventListener('storage', refreshRDProjects);
+    return () => {
+      window.removeEventListener('focus', refreshRDProjects);
+      window.removeEventListener('storage', refreshRDProjects);
+    };
+  }, []);
 
   const totals = useMemo(() => {
     const lineTotal = (line: BomLine) => asNumber(line.unitCost) * asNumber(line.qtyNeeded);
@@ -1049,30 +1123,34 @@ export default function DraftBOMBuilderPage() {
     setActiveWorkspaceTab((nextDraft.workspaceTabs ?? defaultWorkspaceTabs)[0] ?? 'po-draft');
   }
 
-  function updateDraftProject(value: string) {
-    if (value === R_AND_D_PROJECT_VALUE) {
-      setDraft((current) => ({
-        ...current,
-        project: 'R&D',
-        projectId: null,
-        projectCode: null,
-        projectName: 'R&D',
-        projectType: 'R_AND_D',
-      }));
-      return;
-    }
-
-    const selectedProject = projectOptions.find((project) => project.id === value);
-    if (!selectedProject) return;
-
-    setDraft((current) => ({
+  function applyProjectToDraft(current: BomDraft, selectedProject: ProjectSelectOption): BomDraft {
+    const unnamedDraft = current.name === 'New Draft BOM' || current.name === current.project || current.name.trim() === '';
+    return {
       ...current,
-      project: projectLabel(selectedProject),
+      name: unnamedDraft ? selectedProject.projectName : current.name,
+      project: selectedProject.project,
       projectId: selectedProject.id,
       projectCode: selectedProject.projectCode,
       projectName: selectedProject.projectName,
-      projectType: 'P2_PROJECT',
-    }));
+      projectType: selectedProject.projectType,
+    };
+  }
+
+  function updateDraftProject(value: string) {
+    const selectedProject = combinedProjectOptions.find((project) => project.value === value);
+    if (!selectedProject) return;
+
+    const savedProjectDraft = savedDrafts.find(
+      (item) => item.projectType === selectedProject.projectType && item.projectId === selectedProject.id,
+    );
+
+    if (savedProjectDraft) {
+      loadDraft(savedProjectDraft.id);
+      return;
+    }
+
+    setSelectedDraftId('');
+    setDraft((current) => applyProjectToDraft(current, selectedProject));
   }
 
   function startBlankDraft() {
@@ -1081,11 +1159,11 @@ export default function DraftBOMBuilderPage() {
       name: 'New Draft BOM',
       revision: 'Draft A',
       owner: '',
-      project: '',
-      projectId: null,
-      projectCode: null,
-      projectName: null,
-      projectType: null,
+      project: draft.project,
+      projectId: draft.projectId ?? null,
+      projectCode: draft.projectCode ?? null,
+      projectName: draft.projectName ?? null,
+      projectType: draft.projectType ?? null,
       notes: '',
       updatedAt: new Date().toISOString(),
       lines: [newLine()],
@@ -1234,18 +1312,47 @@ export default function DraftBOMBuilderPage() {
 
           <div className="flex flex-wrap gap-2">
             <div className="flex min-w-[280px] flex-col gap-1.5">
-              <Label htmlFor="active-draft">Draft BOM</Label>
-              <Select value={selectedDraftId || NEW_DRAFT_VALUE} onValueChange={loadDraft}>
-                <SelectTrigger id="active-draft" className="bg-white">
-                  <SelectValue placeholder="Select a draft BOM" />
+              <Label htmlFor="active-project">Project</Label>
+              <Select value={selectedProjectValue} onValueChange={updateDraftProject} disabled={!isEditMode}>
+                <SelectTrigger id="active-project" className="bg-white">
+                  <SelectValue placeholder="Select an R&D or P2 project" />
                 </SelectTrigger>
                 <SelectContent>
-                  {savedDrafts.map((item) => (
-                    <SelectItem key={item.id} value={item.id}>
-                      {item.name} - {item.revision}
+                  {draft.projectType === 'R_AND_D' && !draft.projectId ? (
+                    <SelectItem value={LEGACY_R_AND_D_PROJECT_VALUE}>R&D</SelectItem>
+                  ) : null}
+                  <SelectItem value="__rd_projects_header__" disabled>
+                    R&D Projects
+                  </SelectItem>
+                  {rdProjectOptions.length === 0 ? (
+                    <SelectItem value="__no_rd_projects__" disabled>
+                      No R&D projects
                     </SelectItem>
-                  ))}
-                  <SelectItem value={NEW_DRAFT_VALUE}>Create new draft BOM</SelectItem>
+                  ) : (
+                    rdProjectOptions.map((project) => (
+                      <SelectItem key={`rd-${project.id}`} value={`${RD_PROJECT_VALUE_PREFIX}${project.id}`}>
+                        {project.projectName}
+                      </SelectItem>
+                    ))
+                  )}
+                  <SelectItem value="__p2_projects_header__" disabled>
+                    P2 Projects
+                  </SelectItem>
+                  {projectsLoading ? (
+                    <SelectItem value="__projects_loading__" disabled>
+                      Loading P2 projects...
+                    </SelectItem>
+                  ) : projectOptions.length === 0 ? (
+                    <SelectItem value="__no_p2_projects__" disabled>
+                      No P2 projects
+                    </SelectItem>
+                  ) : (
+                    projectOptions.map((project) => (
+                      <SelectItem key={`p2-${project.id}`} value={`${P2_PROJECT_VALUE_PREFIX}${project.id}`}>
+                        {projectLabel(project)}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -1324,17 +1431,40 @@ export default function DraftBOMBuilderPage() {
                     <Label htmlFor="draft-project">Project</Label>
                     <Select value={selectedProjectValue} onValueChange={updateDraftProject} disabled={!isEditMode}>
                       <SelectTrigger id="draft-project">
-                        <SelectValue placeholder={draft.project || 'Select a P2 project or R&D'} />
+                        <SelectValue placeholder={draft.project || 'Select an R&D or P2 project'} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value={R_AND_D_PROJECT_VALUE}>R&D</SelectItem>
+                        {draft.projectType === 'R_AND_D' && !draft.projectId ? (
+                          <SelectItem value={LEGACY_R_AND_D_PROJECT_VALUE}>R&D</SelectItem>
+                        ) : null}
+                        <SelectItem value="__details_rd_projects_header__" disabled>
+                          R&D Projects
+                        </SelectItem>
+                        {rdProjectOptions.length === 0 ? (
+                          <SelectItem value="__details_no_rd_projects__" disabled>
+                            No R&D projects
+                          </SelectItem>
+                        ) : (
+                          rdProjectOptions.map((project) => (
+                            <SelectItem key={`details-rd-${project.id}`} value={`${RD_PROJECT_VALUE_PREFIX}${project.id}`}>
+                              {project.projectName}
+                            </SelectItem>
+                          ))
+                        )}
+                        <SelectItem value="__details_p2_projects_header__" disabled>
+                          P2 Projects
+                        </SelectItem>
                         {projectsLoading ? (
                           <SelectItem value="__projects_loading__" disabled>
                             Loading P2 projects...
                           </SelectItem>
+                        ) : projectOptions.length === 0 ? (
+                          <SelectItem value="__details_no_p2_projects__" disabled>
+                            No P2 projects
+                          </SelectItem>
                         ) : (
                           projectOptions.map((project) => (
-                            <SelectItem key={project.id} value={project.id}>
+                            <SelectItem key={`details-p2-${project.id}`} value={`${P2_PROJECT_VALUE_PREFIX}${project.id}`}>
                               {projectLabel(project)}
                             </SelectItem>
                           ))

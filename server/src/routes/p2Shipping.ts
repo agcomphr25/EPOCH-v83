@@ -961,17 +961,14 @@ router.post('/packing-slips', authenticateToken, requirePermission('shipping.rel
       const snapshot = await persistP2PackingSlipPdfSnapshot(slip);
       slip = snapshot.slip;
     } catch (snapshotErr) {
-      await db.delete(p2PackingSlips).where(eq(p2PackingSlips.id, slip.id)).catch((cleanupErr) => {
-        console.error('[P2Shipping] Failed to clean up packing slip after PDF snapshot failure:', {
-          packingSlipId: slip.id,
-          cleanupErr,
-        });
-      });
-      console.error('[P2Shipping] Packing slip PDF snapshot failed; creation aborted:', {
+      console.warn('[P2Shipping] Packing slip PDF snapshot failed; continuing with persisted slip:', {
         packingSlipId: slip.id,
         snapshotErr,
       });
-      return res.status(500).json({ error: 'Failed to create durable packing slip PDF' });
+      slip = {
+        ...slip,
+        pdfSnapshotWarning: 'Packing slip was created, but the frozen PDF snapshot could not be stored. It will be regenerated on view.',
+      };
     }
 
     if (input.replacesPackingSlipId) {

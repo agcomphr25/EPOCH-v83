@@ -84,9 +84,17 @@ type DraftPartBom = {
   rootPart: DraftBomPart;
   parts: DraftBomPart[];
 };
-type BuiltInWorkspaceTabId = 'po-draft' | 'parts-request' | 'bom-wizard' | 'assembly-tree';
+type BuiltInWorkspaceTabId = 'po-draft' | 'parts-request' | 'direct-labor' | 'bom-wizard' | 'assembly-tree';
 type CustomWorkspaceTabId = `custom:${string}`;
 type WorkspaceTabId = BuiltInWorkspaceTabId | CustomWorkspaceTabId;
+type DraftLaborEstimateLine = {
+  id: string;
+  department: string;
+  employeeRole: string;
+  hourlyRate: number | '';
+  hoursPerPart: number | '';
+  quantityPerPo: number | '';
+};
 type PoColumnId =
   | 'filter'
   | 'supplier'
@@ -112,6 +120,8 @@ type BomDraft = {
   notes: string;
   updatedAt: string;
   lines: BomLine[];
+  laborEstimateLines?: DraftLaborEstimateLine[];
+  customLaborDepartments?: string[];
   poVisibleColumns?: PoColumnId[];
   customPoColumns?: string[];
   workspaceTabs?: WorkspaceTabId[];
@@ -156,10 +166,11 @@ const NEW_DRAFT_VALUE = '__new_draft__';
 const R_AND_D_PROJECT_VALUE = '__r_and_d__';
 
 const statuses: BomStatus[] = ['Needs Review', 'Needs Quote', 'RFQ Sent', 'On Order', 'On Hand', 'ETA / Inbound', 'Hold'];
-const defaultWorkspaceTabs: BuiltInWorkspaceTabId[] = ['po-draft', 'parts-request', 'bom-wizard', 'assembly-tree'];
+const defaultWorkspaceTabs: BuiltInWorkspaceTabId[] = ['po-draft', 'parts-request', 'direct-labor', 'bom-wizard', 'assembly-tree'];
 const workspaceTabLabels: Record<BuiltInWorkspaceTabId, string> = {
   'po-draft': 'PO draft',
   'parts-request': 'Parts/request',
+  'direct-labor': 'Draft Direct Labor Estimate',
   'bom-wizard': 'BOM wizard',
   'assembly-tree': 'Assembly tree',
 };
@@ -188,6 +199,26 @@ const departmentOptions = [
   { value: 'paint', label: 'Paint' },
   { value: 'final_qc', label: 'Final QC' },
 ];
+const employeeRoleOptions = [
+  'Operator',
+  'Technician',
+  'Assembler',
+  'CNC Operator',
+  'Quality Inspector',
+  'Engineer',
+  'Supervisor',
+];
+
+function newLaborEstimateLine(): DraftLaborEstimateLine {
+  return {
+    id: crypto.randomUUID(),
+    department: defaultDepartment,
+    employeeRole: '',
+    hourlyRate: '',
+    hoursPerPart: '',
+    quantityPerPo: 1,
+  };
+}
 
 function newLine(): BomLine {
   return {
@@ -316,6 +347,8 @@ function createPrivateerDraft(): BomDraft {
       firstDepartment: defaultDepartment,
       childDraftBoms: [],
     })),
+    laborEstimateLines: [newLaborEstimateLine()],
+    customLaborDepartments: [],
     poVisibleColumns: defaultPoColumns,
     customPoColumns: [],
     workspaceTabs: defaultWorkspaceTabs,
@@ -340,9 +373,18 @@ function normalizeDraft(draft: BomDraft): BomDraft {
       firstDepartment: line.firstDepartment ?? defaultDepartment,
       childDraftBoms: line.childDraftBoms ?? [],
     })),
+    laborEstimateLines: (draft.laborEstimateLines?.length ? draft.laborEstimateLines : [newLaborEstimateLine()]).map((line) => ({
+      ...line,
+      department: line.department || defaultDepartment,
+      employeeRole: line.employeeRole ?? '',
+      hourlyRate: line.hourlyRate ?? '',
+      hoursPerPart: line.hoursPerPart ?? '',
+      quantityPerPo: line.quantityPerPo ?? 1,
+    })),
+    customLaborDepartments: draft.customLaborDepartments ?? [],
     poVisibleColumns: draft.poVisibleColumns ?? defaultPoColumns,
     customPoColumns: draft.customPoColumns ?? [],
-    workspaceTabs: draft.workspaceTabs ?? defaultWorkspaceTabs,
+    workspaceTabs: normalizeWorkspaceTabs(draft.workspaceTabs),
   };
 }
 
@@ -516,6 +558,28 @@ function buildLinesFromCsv(csvText: string, inventoryItems: InventoryItemOption[
   return { lines, linkedCount };
 }
 
+function laborLineTotal(line: DraftLaborEstimateLine) {
+  return asNumber(line.hourlyRate) * asNumber(line.hoursPerPart) * asNumber(line.quantityPerPo);
+}
+
+function laborDepartmentValue(label: string) {
+  return label
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+function normalizeWorkspaceTabs(tabs?: WorkspaceTabId[]) {
+  const sourceTabs = tabs?.length ? tabs : defaultWorkspaceTabs;
+  if (sourceTabs.includes('direct-labor')) return sourceTabs;
+
+  const nextTabs = [...sourceTabs];
+  const partsRequestIndex = nextTabs.indexOf('parts-request');
+  nextTabs.splice(partsRequestIndex >= 0 ? partsRequestIndex + 1 : nextTabs.length, 0, 'direct-labor');
+  return nextTabs;
+}
+
 function loadDrafts(): BomDraft[] {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
@@ -549,6 +613,7 @@ export default function DraftBOMBuilderPage() {
   const [customPoColumns, setCustomPoColumns] = useState<string[]>(() => draft.customPoColumns ?? []);
   const [newPoColumnName, setNewPoColumnName] = useState('');
   const [newWorkspaceTabName, setNewWorkspaceTabName] = useState('');
+  const [newLaborDepartmentName, setNewLaborDepartmentName] = useState('');
   const [wizardSeedLineId, setWizardSeedLineId] = useState<string | null>(null);
 
   const { data: projects = [], isLoading: projectsLoading } = useQuery<ProjectOption[]>({
@@ -566,6 +631,16 @@ export default function DraftBOMBuilderPage() {
   const selectedProjectValue = draft.projectType === 'R_AND_D' ? R_AND_D_PROJECT_VALUE : draft.projectId ?? '';
 
   const selectedLines = useMemo(() => draft.lines.filter((line) => line.include), [draft.lines]);
+  const laborDepartments = useMemo(() => {
+    const customDepartments = draft.customLaborDepartments ?? [];
+    return [
+      ...departmentOptions,
+      ...customDepartments.map((department) => ({
+        value: laborDepartmentValue(department),
+        label: department,
+      })),
+    ];
+  }, [draft.customLaborDepartments]);
   const orderableLines = useMemo(
     () => draft.lines.filter((line) => line.action !== 'Do Not Order' && !line.finalized),
     [draft.lines],
@@ -635,16 +710,23 @@ export default function DraftBOMBuilderPage() {
       .reduce((sum, line) => sum + lineTotal(line), 0);
     const needsQuote = draft.lines.filter((line) => line.status === 'Needs Quote' || line.unitCost === '').length;
     const rfqSent = draft.lines.filter((line) => line.status === 'RFQ Sent').length;
+    const laborTotal = (draft.laborEstimateLines ?? []).reduce((sum, line) => sum + laborLineTotal(line), 0);
+    const laborHours = (draft.laborEstimateLines ?? []).reduce(
+      (sum, line) => sum + asNumber(line.hoursPerPart) * asNumber(line.quantityPerPo),
+      0,
+    );
 
     return {
       materialTotal,
+      laborTotal,
+      laborHours,
       selectedTotal,
       onHandTotal,
       needsQuote,
       rfqSent,
       lineCount: draft.lines.length,
     };
-  }, [draft.lines, selectedLines]);
+  }, [draft.laborEstimateLines, draft.lines, selectedLines]);
 
   const filterTotals = useMemo(() => {
     const grouped = new Map<string, { count: number; total: number }>();
@@ -662,6 +744,59 @@ export default function DraftBOMBuilderPage() {
       ...current,
       lines: current.lines.map((line) => (line.id === id ? { ...line, ...patch } : line)),
     }));
+  }
+
+  function updateLaborEstimateLine(id: string, patch: Partial<DraftLaborEstimateLine>) {
+    setDraft((current) => ({
+      ...current,
+      laborEstimateLines: (current.laborEstimateLines ?? []).map((line) =>
+        line.id === id ? { ...line, ...patch } : line,
+      ),
+    }));
+  }
+
+  function updateLaborEstimateNumberLine(
+    id: string,
+    field: 'hourlyRate' | 'hoursPerPart' | 'quantityPerPo',
+    value: string,
+  ) {
+    updateLaborEstimateLine(id, { [field]: value === '' ? '' : Number(value) } as Partial<DraftLaborEstimateLine>);
+  }
+
+  function addLaborEstimateLine() {
+    setDraft((current) => ({
+      ...current,
+      laborEstimateLines: [...(current.laborEstimateLines ?? []), newLaborEstimateLine()],
+    }));
+  }
+
+  function removeLaborEstimateLine(id: string) {
+    setDraft((current) => {
+      const remainingLines = (current.laborEstimateLines ?? []).filter((line) => line.id !== id);
+      return {
+        ...current,
+        laborEstimateLines: remainingLines.length > 0 ? remainingLines : [newLaborEstimateLine()],
+      };
+    });
+  }
+
+  function addLaborDepartment() {
+    const label = newLaborDepartmentName.trim();
+    const value = laborDepartmentValue(label);
+    if (!label || !value) return;
+
+    setDraft((current) => {
+      const customDepartments = current.customLaborDepartments ?? [];
+      const knownValues = new Set([
+        ...departmentOptions.map((department) => department.value),
+        ...customDepartments.map(laborDepartmentValue),
+      ]);
+      return {
+        ...current,
+        customLaborDepartments: knownValues.has(value) ? customDepartments : [...customDepartments, label],
+      };
+    });
+    setNewLaborDepartmentName('');
   }
 
   function selectOrderable() {
@@ -944,6 +1079,8 @@ export default function DraftBOMBuilderPage() {
       notes: '',
       updatedAt: new Date().toISOString(),
       lines: [newLine()],
+      laborEstimateLines: [newLaborEstimateLine()],
+      customLaborDepartments: [],
       poVisibleColumns: defaultPoColumns,
       customPoColumns: [],
       workspaceTabs: defaultWorkspaceTabs,
@@ -1211,6 +1348,8 @@ export default function DraftBOMBuilderPage() {
               </div>
               <dl className="grid grid-cols-2 gap-2 text-sm">
                 <SummaryMetric label="Total Material / Tooling" value={money(totals.materialTotal)} />
+                <SummaryMetric label="Direct Labor Estimate" value={money(totals.laborTotal)} />
+                <SummaryMetric label="Direct Labor Hours" value={totals.laborHours.toLocaleString(undefined, { maximumFractionDigits: 2 })} />
                 <SummaryMetric label="Selected for RFQ / Order" value={money(totals.selectedTotal)} />
                 <SummaryMetric label="On Hand Value" value={money(totals.onHandTotal)} />
                 <SummaryMetric label="Needs Quote Count" value={String(totals.needsQuote)} />
@@ -1354,6 +1493,24 @@ export default function DraftBOMBuilderPage() {
                   onImportCsv={importPartsRequestCsv}
                   onCreateVendorPoDraft={createVendorPoHandoff}
                   onFinalizeSelected={markSelectedFinalized}
+                />
+              </TabsContent>
+            ) : null}
+
+            {visibleWorkspaceTabs.includes('direct-labor') ? (
+              <TabsContent value="direct-labor" className="mt-4">
+                <DirectLaborEstimateWorkspace
+                  lines={draft.laborEstimateLines ?? []}
+                  departments={laborDepartments}
+                  newDepartmentName={newLaborDepartmentName}
+                  totalCost={totals.laborTotal}
+                  totalHours={totals.laborHours}
+                  onNewDepartmentNameChange={setNewLaborDepartmentName}
+                  onAddDepartment={addLaborDepartment}
+                  onAddLine={addLaborEstimateLine}
+                  onRemoveLine={removeLaborEstimateLine}
+                  onUpdateLine={updateLaborEstimateLine}
+                  onUpdateNumberLine={updateLaborEstimateNumberLine}
                 />
               </TabsContent>
             ) : null}
@@ -1897,6 +2054,186 @@ function PartsRequestWorkspace({
         <div className="flex flex-wrap items-center justify-between gap-2 p-3 text-xs text-slate-500">
           <span>{selectedCount} checked line{selectedCount === 1 ? '' : 's'} ready for Vendor PO/RFQ or inventory finalization.</span>
           <span>Vendor PO handoff keeps draft BOM line status visible while the PO workflow owns RFQ sending.</span>
+        </div>
+      </section>
+    </section>
+  );
+}
+
+function DirectLaborEstimateWorkspace({
+  lines,
+  departments,
+  newDepartmentName,
+  totalCost,
+  totalHours,
+  onNewDepartmentNameChange,
+  onAddDepartment,
+  onAddLine,
+  onRemoveLine,
+  onUpdateLine,
+  onUpdateNumberLine,
+}: {
+  lines: DraftLaborEstimateLine[];
+  departments: { value: string; label: string }[];
+  newDepartmentName: string;
+  totalCost: number;
+  totalHours: number;
+  onNewDepartmentNameChange: (value: string) => void;
+  onAddDepartment: () => void;
+  onAddLine: () => void;
+  onRemoveLine: (id: string) => void;
+  onUpdateLine: (id: string, patch: Partial<DraftLaborEstimateLine>) => void;
+  onUpdateNumberLine: (id: string, field: 'hourlyRate' | 'hoursPerPart' | 'quantityPerPo', value: string) => void;
+}) {
+  return (
+    <section className="space-y-4">
+      <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div>
+            <h2 className="font-semibold text-slate-950">Draft Direct Labor Estimate</h2>
+            <p className="text-sm text-slate-600">
+              Estimate direct labor by department, role, hourly rate, hours per part, and PO quantity.
+            </p>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-[minmax(220px,320px)_auto_auto]">
+            <Input
+              value={newDepartmentName}
+              onChange={(event) => onNewDepartmentNameChange(event.target.value)}
+              placeholder="New department"
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  onAddDepartment();
+                }
+              }}
+            />
+            <Button type="button" variant="outline" onClick={onAddDepartment} disabled={!newDepartmentName.trim()}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add department
+            </Button>
+            <Button type="button" onClick={onAddLine}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add labor row
+            </Button>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <SummaryMetric label="Total Direct Labor" value={money(totalCost)} />
+          <SummaryMetric label="Total Labor Hours" value={totalHours.toLocaleString(undefined, { maximumFractionDigits: 2 })} />
+          <SummaryMetric label="Labor Rows" value={String(lines.length)} />
+          <SummaryMetric label="Departments" value={String(departments.length)} />
+        </div>
+      </div>
+
+      <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="min-w-[220px]">Department</TableHead>
+                <TableHead className="min-w-[190px]">Employee role</TableHead>
+                <TableHead className="w-[150px] text-right">Hourly rate</TableHead>
+                <TableHead className="w-[150px] text-right">Hours / part</TableHead>
+                <TableHead className="w-[150px] text-right">Qty / PO</TableHead>
+                <TableHead className="w-[160px] text-right">Ext labor</TableHead>
+                <TableHead className="w-[70px]"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {lines.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="h-24 text-center text-slate-500">
+                    Add a labor row to begin the direct labor estimate.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                lines.map((line) => (
+                  <TableRow key={line.id}>
+                    <TableCell>
+                      <Select value={line.department || defaultDepartment} onValueChange={(value) => onUpdateLine(line.id, { department: value })}>
+                        <SelectTrigger className="h-9">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {departments.map((department) => (
+                            <SelectItem key={department.value} value={department.value}>
+                              {department.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                    <TableCell>
+                      <Select value={line.employeeRole} onValueChange={(value) => onUpdateLine(line.id, { employeeRole: value })}>
+                        <SelectTrigger className="h-9">
+                          <SelectValue placeholder="Select role" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {line.employeeRole && !employeeRoleOptions.includes(line.employeeRole) ? (
+                            <SelectItem value={line.employeeRole}>{line.employeeRole}</SelectItem>
+                          ) : null}
+                          {employeeRoleOptions.map((role) => (
+                            <SelectItem key={role} value={role}>
+                              {role}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        className="h-9 text-right"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={line.hourlyRate}
+                        onChange={(event) => onUpdateNumberLine(line.id, 'hourlyRate', event.target.value)}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        className="h-9 text-right"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={line.hoursPerPart}
+                        onChange={(event) => onUpdateNumberLine(line.id, 'hoursPerPart', event.target.value)}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        className="h-9 text-right"
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={line.quantityPerPo}
+                        onChange={(event) => onUpdateNumberLine(line.id, 'quantityPerPo', event.target.value)}
+                      />
+                    </TableCell>
+                    <TableCell className="text-right font-medium tabular-nums">
+                      {money(laborLineTotal(line))}
+                    </TableCell>
+                    <TableCell>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => onRemoveLine(line.id)} aria-label="Remove labor row">
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+        <Separator />
+        <div className="flex flex-wrap items-center justify-between gap-2 p-3 text-xs text-slate-500">
+          <span>
+            Estimate formula: hourly rate x hours per part x quantity per PO.
+          </span>
+          <span>
+            Selected departments include {departments.map((department) => department.label).slice(0, 4).join(', ')}
+            {departments.length > 4 ? `, +${departments.length - 4} more` : ''}.
+          </span>
         </div>
       </section>
     </section>

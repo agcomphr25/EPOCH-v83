@@ -835,7 +835,7 @@ router.get('/draft/:id', async (req: Request, res: Response) => {
 // each blocked attempt is written to order_activity_events for observability.
 const ordersBeingFinalized = new Set<string>();
 
-// Create order - with or without signature requirement based on whether stock is selected
+// Create order directly into the P1 production queue.
 router.post('/finalized', async (req: Request, res: Response) => {
   // Declare outside try so finally can release the guard reliably
   let incomingOrderId: string | null = null;
@@ -862,16 +862,9 @@ router.post('/finalized', async (req: Request, res: Response) => {
     }
     if (incomingOrderId) ordersBeingFinalized.add(incomingOrderId);
     
-    // Determine if stock is selected (has modelId and it's not "no_stock" or similar)
-    // Normalize the modelId for checking (trim whitespace and convert to lowercase)
-    const normalizedModelId = orderData.modelId?.trim().toLowerCase() || '';
-    const noStockIdentifiers = ['', 'no_stock', 'no stock', 'none'];
-    const hasStock: boolean = !noStockIdentifiers.includes(normalizedModelId);
-    
-    // If has stock: PENDING_SIGNATURE status, awaiting customer signature
-    // If no stock: IN_PROGRESS status, skip production pipeline, go directly to Shipping QC
-    const orderStatus = hasStock ? 'PENDING_SIGNATURE' : 'IN_PROGRESS';
-    const orderDepartment = hasStock ? 'Awaiting Customer Signature' : 'Shipping QC';
+    const orderStatus = 'FINALIZED';
+    const orderDepartment = 'P1 Production Queue';
+    const requiresCustomerSignature = false;
     
     // Compute bottomMetalSource upfront to set it on creation (no interim incorrect state)
     const bottomMetalSource = computeBottomMetalSource(orderData.features as Record<string, any>);
@@ -905,11 +898,7 @@ router.post('/finalized', async (req: Request, res: Response) => {
       console.warn('⚠️ reconcileRailDemand skipped on order create:', railErr?.message);
     }
     
-    if (hasStock) {
-      console.log(`📧 Order ${order.orderId} created with PENDING_SIGNATURE status - sending confirmation email to customer...`);
-    } else {
-      console.log(`📧 Order ${order.orderId} created as IN_PROGRESS (no stock) - skipping production, going to Shipping QC - sending thank you email to customer...`);
-    }
+    console.log(`Order ${order.orderId} created as FINALIZED and routed to P1 Production Queue - sending order confirmation email to customer...`);
     
     // Track email outcome for API response (declared outside inner try block for scoping)
     let emailOutcome: OrderConfirmationOutcome | undefined;
@@ -1152,7 +1141,7 @@ router.post('/finalized', async (req: Request, res: Response) => {
       // Declare signatureToken outside the if block for error handling access
       let signatureToken: string | undefined;
       
-      if (hasStock) {
+      if (requiresCustomerSignature) {
         // Generate PDF via unified service with frozen snapshot for signature workflow
         const pdfResult = await generateOrderPdf(order.orderId, PdfIntent.SIGNATURE_EMAIL);
         const pdfPath = pdfResult.filePath!;

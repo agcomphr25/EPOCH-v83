@@ -198,6 +198,7 @@ const safeFiles = [
   '0161_employee_termination_access_controls.sql',
   '0162_p2_project_revision_type_po_change.sql',
   '0166_p2_packing_slip_invoice_number.sql',
+  '0171_all_orders_finalize_to_p1_queue.sql',
   'investigation_308_order_duplication.sql',
 ];
 

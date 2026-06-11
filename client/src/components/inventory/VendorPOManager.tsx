@@ -1289,19 +1289,24 @@ function VendorPOForm({
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
 
   // Fetch vendors for the dropdown
-  const { data: vendorsResponse } = useQuery<{ data: any[]; meta: any }>({
+  const { data: vendorsResponse, isFetched: vendorsFetched } = useQuery<{ data: any[]; meta: any }>({
     queryKey: ['/api/vendors?pageSize=1000'],
   });
   const vendors = (vendorsResponse?.data || []).slice().sort((a: any, b: any) =>
     a.name.localeCompare(b.name)
   );
   const [handoffApplied, setHandoffApplied] = useState(false);
+  const [isCreatingHandoffVendor, setIsCreatingHandoffVendor] = useState(false);
+  const handoffVendorName = draftBomHandoff?.vendors[0]?.trim() ?? '';
+  const matchedHandoffVendor = handoffVendorName
+    ? vendors.find((vendor: any) => vendor.name.toLowerCase() === handoffVendorName.toLowerCase())
+    : null;
+  const shouldCreateInactiveHandoffVendor =
+    !vendorPo && !!draftBomHandoff && !!handoffVendorName && vendorsFetched && !matchedHandoffVendor;
 
   useEffect(() => {
-    if (vendorPo || handoffApplied || !draftBomHandoff || vendors.length === 0) return;
+    if (vendorPo || handoffApplied || !draftBomHandoff || !vendorsFetched) return;
 
-    const handoffVendor = draftBomHandoff.vendors[0] || '';
-    const matchedVendor = vendors.find((vendor: any) => vendor.name.toLowerCase() === handoffVendor.toLowerCase());
     const lineSummary = draftBomHandoff.lines
       .map((line) =>
         [
@@ -1318,12 +1323,12 @@ function VendorPOForm({
 
     setFormData((current) => ({
       ...current,
-      vendorId: matchedVendor?.id ?? current.vendorId,
+      vendorId: matchedHandoffVendor?.id ?? current.vendorId,
       productionLine: draftBomHandoff.projectType === 'R_AND_D' ? 'R_AND_D' : draftBomHandoff.projectType === 'P2_PROJECT' ? 'P2' : current.productionLine,
       notes: [
         `Draft BOM handoff: ${draftBomHandoff.draftName} ${draftBomHandoff.revision}`,
         draftBomHandoff.project ? `Project: ${draftBomHandoff.project}` : '',
-        `Vendor: ${handoffVendor}`,
+        `Vendor: ${handoffVendorName}`,
         '',
         lineSummary,
         current.notes,
@@ -1332,22 +1337,52 @@ function VendorPOForm({
         .join('\n'),
     }));
     setHandoffApplied(true);
-  }, [draftBomHandoff, handoffApplied, vendorPo, vendors]);
+  }, [draftBomHandoff, handoffApplied, matchedHandoffVendor, handoffVendorName, vendorPo, vendorsFetched]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (formData.vendorId === 0) {
-      toast.error('Please select a vendor');
-      return;
-    }
     if (!formData.productionLine) {
       toast.error('Please select the production line for this purchase');
       return;
     }
 
+    let vendorId = formData.vendorId;
+    if (vendorId === 0 && shouldCreateInactiveHandoffVendor) {
+      setIsCreatingHandoffVendor(true);
+      try {
+        const vendor = await apiRequest('/api/vendors', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: handoffVendorName,
+            approved: false,
+            evaluated: false,
+            isActive: false,
+            notes: `Created inactive from Draft BOM handoff: ${draftBomHandoff!.draftName} ${draftBomHandoff!.revision}`,
+            skipValidation: true,
+          }),
+        }) as { id: number; name: string };
+        vendorId = vendor.id;
+        setFormData((current) => ({ ...current, vendorId: vendor.id }));
+        queryClient.invalidateQueries({ queryKey: ['/api/vendors'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/vendors?pageSize=1000'] });
+        toast.success(`${vendor.name} was created as an inactive vendor`);
+      } catch (error: any) {
+        toast.error(error?.message || 'Failed to create inactive vendor from Draft BOM handoff');
+        setIsCreatingHandoffVendor(false);
+        return;
+      }
+      setIsCreatingHandoffVendor(false);
+    }
+
+    if (vendorId === 0) {
+      toast.error('Please select a vendor');
+      return;
+    }
+
     onSubmit({
       ...formData,
+      vendorId,
       orderDate: orderDate
         ? formatDateInputValue(orderDate)
         : undefined,
@@ -1399,6 +1434,11 @@ function VendorPOForm({
           <div className="mt-1">
             {draftBomHandoff.lines.length} line{draftBomHandoff.lines.length === 1 ? '' : 's'} from {draftBomHandoff.draftName} for {draftBomHandoff.vendors[0]}.
           </div>
+          {shouldCreateInactiveHandoffVendor ? (
+            <div className="mt-2 text-xs">
+              {handoffVendorName} is not in the active vendor list. Submitting will create it as an inactive vendor, then use it for this PO draft.
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -1543,8 +1583,14 @@ function VendorPOForm({
       </div>
 
       <div className="flex gap-2 pt-4">
-        <Button type="submit" className="flex-1" data-testid="button-submit">
-          {vendorPo ? 'Update' : 'Create'} Purchase Order
+        <Button type="submit" className="flex-1" data-testid="button-submit" disabled={isCreatingHandoffVendor}>
+          {isCreatingHandoffVendor
+            ? 'Creating inactive vendor...'
+            : vendorPo
+              ? 'Update Purchase Order'
+              : shouldCreateInactiveHandoffVendor
+                ? 'Create Inactive Vendor & Purchase Order'
+                : 'Create Purchase Order'}
         </Button>
         {!inline && (
           <Button

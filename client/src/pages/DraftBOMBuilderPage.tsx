@@ -39,6 +39,7 @@ import { privateerDraftBomLines, type PrivateerDraftBomLine } from '@/data/priva
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import { cn } from '@/lib/utils';
+import * as XLSX from 'xlsx';
 
 type BomStatus = 'Needs Review' | 'Needs Quote' | 'RFQ Sent' | 'On Order' | 'On Hand' | 'ETA / Inbound' | 'Hold';
 
@@ -208,6 +209,7 @@ type AssemblyTreeNode = {
 type CsvImportResult = {
   lines: BomLine[];
   linkedCount: number;
+  customColumns: string[];
 };
 
 const STORAGE_KEY = 'epoch:draft-boms';
@@ -566,6 +568,94 @@ function normalizeCsvHeader(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
 }
 
+const knownImportHeaders = new Set([
+  'action',
+  'actual',
+  'actualcost',
+  'agpart',
+  'agpartnumber',
+  'category',
+  'cost',
+  'description',
+  'estimatedcost',
+  'filter',
+  'inventoryitemid',
+  'isservice',
+  'item',
+  'itemdescription',
+  'itemnumber',
+  'manufacturer',
+  'mfg',
+  'name',
+  'note',
+  'notes',
+  'part',
+  'partdescription',
+  'partnumber',
+  'price',
+  'qnty',
+  'qty',
+  'qtyneeded',
+  'quantity',
+  'service',
+  'sku',
+  'source',
+  'status',
+  'supplier',
+  'supplieritem',
+  'supplieritemid',
+  'supplierpart',
+  'supplierpartnumber',
+  'targetneeddate',
+  'unit',
+  'unitcost',
+  'uom',
+  'vendor',
+]);
+
+const fallbackImportHeaderLabels = [
+  'Part Number',
+  'Description',
+  'Quantity',
+  'Supplier',
+  'Supplier Part Number',
+  'Manufacturer',
+  'Unit Cost',
+  'Unit',
+];
+
+type ImportColumn = {
+  key: string;
+  label: string;
+  isKnown: boolean;
+};
+
+function uniqueImportColumnName(label: string, existing: Set<string>) {
+  const base = label.trim() || 'Imported Column';
+  let candidate = base;
+  let suffix = 2;
+  while (existing.has(candidate.toLowerCase())) {
+    candidate = `${base} ${suffix}`;
+    suffix += 1;
+  }
+  existing.add(candidate.toLowerCase());
+  return candidate;
+}
+
+function buildImportColumns(rawHeaders: string[]): ImportColumn[] {
+  const usedKeys = new Map<string, number>();
+  const usedLabels = new Set<string>();
+
+  return rawHeaders.map((rawHeader, index) => {
+    const normalized = normalizeCsvHeader(rawHeader) || `column${index + 1}`;
+    const seenCount = usedKeys.get(normalized) ?? 0;
+    usedKeys.set(normalized, seenCount + 1);
+    const key = seenCount === 0 ? normalized : `${normalized}${seenCount + 1}`;
+    const label = uniqueImportColumnName(rawHeader.trim() || `Imported Column ${index + 1}`, usedLabels);
+    return { key, label, isKnown: seenCount === 0 && knownImportHeaders.has(normalized) };
+  });
+}
+
 function csvField(row: Record<string, string>, keys: string[]) {
   for (const key of keys) {
     const value = row[key];
@@ -579,6 +669,11 @@ function parseCsvNumber(value: string): number | '' {
   if (!normalized) return '';
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : '';
+}
+
+function parseImportStatus(value: string, fallback: BomStatus): BomStatus {
+  const match = statuses.find((status) => status.toLowerCase() === value.trim().toLowerCase());
+  return match ?? fallback;
 }
 
 function findInventoryMatch(partNumber: string, inventoryItems: InventoryItemOption[]) {
@@ -675,44 +770,50 @@ function buildAssemblyTree(lines: BomLine[], inventoryItems: InventoryItemOption
   });
 }
 
-function buildLinesFromCsv(csvText: string, inventoryItems: InventoryItemOption[], linkInventoryMatches: boolean): CsvImportResult {
-  const rows = parseCsvRows(csvText);
-  if (rows.length === 0) return { lines: [], linkedCount: 0 };
+async function readImportRows(file: File) {
+  const fileName = file.name.toLowerCase();
+  if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls') || file.type.includes('spreadsheet')) {
+    const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+    const firstSheetName = workbook.SheetNames[0];
+    if (!firstSheetName) return [];
+    const sheet = workbook.Sheets[firstSheetName];
+    return XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, raw: false, defval: '' })
+      .map((row) => row.map((cell) => String(cell).trim()))
+      .filter((row) => row.some((cell) => cell.length > 0));
+  }
+
+  return parseCsvRows(await file.text());
+}
+
+function buildLinesFromRows(rows: string[][], inventoryItems: InventoryItemOption[], linkInventoryMatches: boolean): CsvImportResult {
+  if (rows.length === 0) return { lines: [], linkedCount: 0, customColumns: [] };
 
   const normalizedFirstRow = rows[0].map(normalizeCsvHeader);
-  const knownHeaderCount = normalizedFirstRow.filter((header) =>
-    [
-      'part',
-      'partnumber',
-      'agpart',
-      'agpartnumber',
-      'description',
-      'name',
-      'qty',
-      'quantity',
-      'vendor',
-      'supplier',
-      'cost',
-      'unitcost',
-      'estimatedcost',
-    ].includes(header),
-  ).length;
-  const hasHeaders = knownHeaderCount >= 2;
-  const headers = hasHeaders
-    ? normalizedFirstRow
-    : ['partnumber', 'description', 'quantity', 'supplier', 'supplierpartnumber', 'manufacturer', 'unitcost', 'unit'];
+  const knownHeaderCount = normalizedFirstRow.filter((header) => knownImportHeaders.has(header)).length;
+  const hasHeaders = knownHeaderCount >= 1;
+  const maxColumnCount = Math.max(...rows.map((row) => row.length));
+  const headerLabels = hasHeaders
+    ? rows[0]
+    : Array.from({ length: maxColumnCount }, (_, index) => fallbackImportHeaderLabels[index] ?? `Imported Column ${index + 1}`);
+  const columns = buildImportColumns(headerLabels);
+  const customColumns = columns.filter((column) => !column.isKnown).map((column) => column.label);
   const dataRows = hasHeaders ? rows.slice(1) : rows;
   let linkedCount = 0;
 
   const lines = dataRows
     .map((cells) => {
-      const row = headers.reduce<Record<string, string>>((acc, header, index) => {
-        acc[header] = cells[index]?.trim() ?? '';
+      const row = columns.reduce<Record<string, string>>((acc, column, index) => {
+        acc[column.key] = cells[index]?.trim() ?? '';
+        return acc;
+      }, {});
+      const importedCustomFields = columns.reduce<Record<string, string>>((acc, column, index) => {
+        const value = cells[index]?.trim() ?? '';
+        if (!column.isKnown && value) acc[column.label] = value;
         return acc;
       }, {});
       const importedPartNumber = csvField(row, ['agpartnumber', 'agpart', 'partnumber', 'part', 'itemnumber', 'sku']);
       const description = csvField(row, ['description', 'partdescription', 'name', 'item', 'itemdescription']) || importedPartNumber;
-      if (!description && !importedPartNumber) return null;
+      if (!description && !importedPartNumber && Object.keys(importedCustomFields).length === 0) return null;
 
       const inventoryMatch = linkInventoryMatches ? findInventoryMatch(importedPartNumber, inventoryItems) : null;
       if (inventoryMatch) linkedCount += 1;
@@ -720,10 +821,14 @@ function buildLinesFromCsv(csvText: string, inventoryItems: InventoryItemOption[
       const actualCost = parseCsvNumber(csvField(row, ['actualcost', 'actual']));
       const quantity = parseCsvNumber(csvField(row, ['qtyneeded', 'quantity', 'qty', 'qnty']));
       const serviceValue = csvField(row, ['service', 'isservice']).toLowerCase();
+      const note = csvField(row, ['note', 'notes']);
+      const fallbackStatus = inventoryMatch ? 'Needs Review' : 'Needs Quote';
 
       return {
         ...newLine(),
-        description: inventoryMatch ? inventoryDescription(inventoryMatch) : description,
+        action: csvField(row, ['action']) || 'Order / Quote',
+        category: csvField(row, ['category', 'filter']) || 'Hardware/Misc.',
+        description: inventoryMatch ? inventoryDescription(inventoryMatch) : description || 'Imported spreadsheet line',
         agPartNumber: inventoryMatch?.agPartNumber || (linkInventoryMatches ? '' : importedPartNumber),
         supplier: csvField(row, ['supplier', 'vendor', 'source']) || inventoryMatch?.source || inventoryMatch?.supplier || '',
         supplierItemId:
@@ -736,24 +841,25 @@ function buildLinesFromCsv(csvText: string, inventoryItems: InventoryItemOption[
         actualCost,
         qtyNeeded: quantity || 1,
         service: ['true', 'yes', 'y', '1', 'service'].includes(serviceValue),
-        status: inventoryMatch ? 'Needs Review' : 'Needs Quote',
-        note: inventoryMatch
+        status: parseImportStatus(csvField(row, ['status']), fallbackStatus),
+        targetNeedDate: csvField(row, ['targetneeddate']),
+        note: note || (inventoryMatch
           ? `CSV import linked to inventory item #${inventoryMatch.id}`
           : importedPartNumber
             ? `CSV import draft part ${importedPartNumber}`
-            : 'CSV import draft part',
+            : 'CSV import draft part'),
         inventoryItemId: inventoryMatch?.id ?? null,
         inventoryItemName: inventoryMatch?.name || inventoryMatch?.description || null,
         isDraftPart: !inventoryMatch,
         isManufactured: isInventoryManufactured(inventoryMatch),
         firstDepartment: defaultDepartment,
         childDraftBoms: [],
-        customFields: {},
+        customFields: importedCustomFields,
       } satisfies BomLine;
     })
     .filter((line): line is BomLine => line !== null);
 
-  return { lines, linkedCount };
+  return { lines, linkedCount, customColumns };
 }
 
 function laborLineTotal(line: DraftLaborEstimateLine) {
@@ -1233,26 +1339,29 @@ export default function DraftBOMBuilderPage() {
   }
 
   async function importPartsRequestCsv(file: File, linkInventoryMatches: boolean) {
-    const csvText = await file.text();
-    const result = buildLinesFromCsv(csvText, activeInventoryItems, linkInventoryMatches);
+    const rows = await readImportRows(file);
+    const result = buildLinesFromRows(rows, activeInventoryItems, linkInventoryMatches);
 
     if (result.lines.length === 0) {
       toast({
-        title: 'No CSV rows imported',
+        title: 'No rows imported',
         description: 'Check that the file has part, description, quantity, supplier, or cost columns.',
         variant: 'destructive',
       });
       return;
     }
 
+    setCustomColumns((current) => uniqueColumnNames([...current, ...result.customColumns]));
     setDraft((current) => ({
       ...current,
       lines: [...result.lines, ...current.lines],
+      customColumns: uniqueColumnNames([...(current.customColumns ?? []), ...result.customColumns]),
+      customPoColumns: uniqueColumnNames([...(current.customPoColumns ?? []), ...result.customColumns]),
       updatedAt: new Date().toISOString(),
     }));
     toast({
-      title: 'CSV imported',
-      description: `${result.lines.length} part line(s) added${linkInventoryMatches ? `, ${result.linkedCount} linked to inventory items` : ''}.`,
+      title: 'Import complete',
+      description: `${result.lines.length} part line(s) added${result.customColumns.length ? ` with ${result.customColumns.length} imported column(s)` : ''}${linkInventoryMatches ? `, ${result.linkedCount} linked to inventory items` : ''}.`,
     });
   }
 
@@ -2517,11 +2626,11 @@ function PartsRequestWorkspace({
               )}
             >
               <Upload className="mr-2 h-4 w-4" />
-              {isImportingCsv ? 'Importing...' : 'Import CSV'}
+              {isImportingCsv ? 'Importing...' : 'Import'}
               <Input
                 className="sr-only"
                 type="file"
-                accept=".csv,text/csv"
+                accept=".csv,text/csv,.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 disabled={!isEditMode || isImportingCsv}
                 onChange={(event) => {
                   void handleCsvFileChange(event.target.files);

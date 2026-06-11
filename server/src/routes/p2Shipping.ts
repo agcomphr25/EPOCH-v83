@@ -675,14 +675,37 @@ router.post('/lots', authenticateToken, requirePermission('shipping.release_ship
     }
 
     // Guard: serial reuse — reject if any serial already exists in another lot
-    const existingLots = await pool.query<{ id: string; lot_number: string }>(
-      `SELECT id, lot_number
+    const existingLots = await pool.query<{
+      id: string;
+      lot_number: string;
+      serialized_item_ids: string[] | null;
+      packing_slip_id: string | null;
+    }>(
+      `SELECT id, lot_number, serialized_item_ids, packing_slip_id
          FROM p2_lot_numbers
         WHERE serialized_item_ids ?| $1::text[]
           AND COALESCE(status, '') <> 'VOID'`,
       [input.serialIds]
     );
     if (existingLots.length > 0) {
+      const requestedSerialIds = new Set(input.serialIds);
+      const recoverableLot = existingLots.find((lot) => {
+        const lotSerialIds = Array.isArray(lot.serialized_item_ids) ? lot.serialized_item_ids : [];
+        return (
+          !lot.packing_slip_id &&
+          lotSerialIds.length === requestedSerialIds.size &&
+          lotSerialIds.every((id) => requestedSerialIds.has(id))
+        );
+      });
+
+      if (recoverableLot && existingLots.length === 1) {
+        const [lot] = await db
+          .select()
+          .from(p2LotNumbers)
+          .where(eq(p2LotNumbers.id, recoverableLot.id));
+        if (lot) return res.status(200).json(lot);
+      }
+
       return res.status(409).json({
         error: 'One or more serial numbers already assigned to an existing shipment lot',
         lots: existingLots.map((r) => r.lot_number),
@@ -849,6 +872,19 @@ router.post('/packing-slips', authenticateToken, requirePermission('shipping.rel
     // have one packing slip regardless of whether the slip is a replacement.
     if (lot.packingSlipId) {
       return res.status(409).json({ error: 'Packing slip already exists for this lot' });
+    }
+
+    const [existingSlipForLot] = await db
+      .select({ id: p2PackingSlips.id, packingSlipNumber: p2PackingSlips.packingSlipNumber })
+      .from(p2PackingSlips)
+      .where(eq(p2PackingSlips.lotNumberId, lot.id));
+
+    if (existingSlipForLot) {
+      await db
+        .update(p2LotNumbers)
+        .set({ packingSlipId: existingSlipForLot.id })
+        .where(eq(p2LotNumbers.id, lot.id));
+      return res.status(200).json(existingSlipForLot);
     }
 
     // Validate that replacesPackingSlipId references an existing slip

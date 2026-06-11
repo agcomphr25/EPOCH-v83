@@ -598,6 +598,20 @@ async function initializeBackgroundServices() {
 
       const runHistoricalBootRepairs = shouldRunHistoricalBootRepairs();
       const runLegacyStartupDbMaintenance = shouldRunLegacyStartupDbMaintenance();
+      // Ensure P2 packing slips have replacement-linkage columns before the create route writes them.
+      try {
+        const { sql: sqlP2SlipReplacement } = await import('drizzle-orm');
+        await db.execute(sqlP2SlipReplacement`
+          ALTER TABLE p2_packing_slips
+            ADD COLUMN IF NOT EXISTS replaces_packing_slip_id uuid REFERENCES p2_packing_slips(id),
+            ADD COLUMN IF NOT EXISTS replacement_reason text,
+            ADD COLUMN IF NOT EXISTS is_no_charge_replacement boolean NOT NULL DEFAULT false
+        `);
+        console.log('âœ… Ensured p2_packing_slips replacement linkage columns exist');
+      } catch (p2SlipReplacementErr: any) {
+        console.warn('âš ï¸ p2_packing_slips replacement linkage migration skipped:', p2SlipReplacementErr.message);
+      }
+
       if (runHistoricalBootRepairs) {
         console.warn('RUN_BOOT_REPAIRS is enabled; historical boot repairs will run during startup.');
         const { inserted, missing } = await runLaborAllocationBackfill(pool);

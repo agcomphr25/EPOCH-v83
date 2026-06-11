@@ -1206,6 +1206,19 @@ export default function DraftBOMBuilderPage() {
     toast({ title: 'Draft saved', description: `${nextDraft.name} is available in saved BOM drafts.` });
   }
 
+  function applyDraftSelection(nextDraft: BomDraft) {
+    const normalizedDraft = normalizeDraft(nextDraft);
+    setSelectedDraftId(normalizedDraft.id);
+    setDraft(normalizedDraft);
+    setVisiblePoColumns(normalizedDraft.poVisibleColumns ?? defaultPoColumns);
+    setVisiblePartsRequestColumns(normalizedDraft.partsRequestVisibleColumns ?? defaultPartsRequestColumns);
+    setVisibleDirectLaborColumns(normalizedDraft.directLaborVisibleColumns ?? defaultDirectLaborColumns);
+    setVisibleAssemblyColumns(normalizedDraft.assemblyVisibleColumns ?? defaultSourcingColumns);
+    setCustomPoColumns(normalizedDraft.customPoColumns ?? []);
+    setVisibleWorkspaceTabs(normalizedDraft.workspaceTabs ?? defaultWorkspaceTabs);
+    setActiveWorkspaceTab((normalizedDraft.workspaceTabs ?? defaultWorkspaceTabs)[0] ?? 'po-draft');
+  }
+
   function loadDraft(id: string) {
     if (id === NEW_DRAFT_VALUE) {
       startBlankDraft();
@@ -1214,16 +1227,81 @@ export default function DraftBOMBuilderPage() {
 
     const match = savedDrafts.find((item) => item.id === id);
     if (!match) return;
-    const nextDraft = normalizeDraft(match);
-    setSelectedDraftId(id);
-    setDraft(nextDraft);
-    setVisiblePoColumns(nextDraft.poVisibleColumns ?? defaultPoColumns);
-    setVisiblePartsRequestColumns(nextDraft.partsRequestVisibleColumns ?? defaultPartsRequestColumns);
-    setVisibleDirectLaborColumns(nextDraft.directLaborVisibleColumns ?? defaultDirectLaborColumns);
-    setVisibleAssemblyColumns(nextDraft.assemblyVisibleColumns ?? defaultSourcingColumns);
-    setCustomPoColumns(nextDraft.customPoColumns ?? []);
-    setVisibleWorkspaceTabs(nextDraft.workspaceTabs ?? defaultWorkspaceTabs);
-    setActiveWorkspaceTab((nextDraft.workspaceTabs ?? defaultWorkspaceTabs)[0] ?? 'po-draft');
+    applyDraftSelection(match);
+  }
+
+  function deleteCurrentDraft() {
+    if (!selectedDraftId) {
+      toast({
+        title: 'Save the draft first',
+        description: 'Only saved draft BOMs can be deleted from settings.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (draft.id === PRIVATEER_DRAFT_ID) {
+      toast({
+        title: 'Privateer draft is locked',
+        description: 'The built-in Privateer seed draft stays available as a reference.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const savedMatch = savedDrafts.find((item) => item.id === draft.id);
+    if (!savedMatch) {
+      toast({
+        title: 'Draft is not saved',
+        description: 'This draft is only in the current workspace and does not have a saved record to delete.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const confirmed = window.confirm(`Delete draft BOM "${draft.name} - ${draft.revision}"? This cannot be undone.`);
+    if (!confirmed) return;
+
+    const remainingDrafts = savedDrafts.filter((item) => item.id !== draft.id);
+    const fallbackDraft = remainingDrafts[0] ?? createPrivateerDraft();
+
+    saveDrafts(remainingDrafts);
+    setSavedDrafts(remainingDrafts);
+    applyDraftSelection(fallbackDraft);
+    setIsDetailsOpen(false);
+    toast({ title: 'Draft deleted', description: `${draft.name} was removed from saved draft BOMs.` });
+  }
+
+  function clearCurrentDraft() {
+    const confirmed = window.confirm(`Clear "${draft.name} - ${draft.revision}" and start over? This cannot be undone.`);
+    if (!confirmed) return;
+
+    const clearedDraft: BomDraft = {
+      ...draft,
+      updatedAt: new Date().toISOString(),
+      lines: [newLine()],
+      laborEstimateLines: [newLaborEstimateLine()],
+      customLaborDepartments: [],
+      poVisibleColumns: defaultPoColumns,
+      partsRequestVisibleColumns: defaultPartsRequestColumns,
+      directLaborVisibleColumns: defaultDirectLaborColumns,
+      assemblyVisibleColumns: defaultSourcingColumns,
+      customPoColumns: [],
+      workspaceTabs: defaultWorkspaceTabs,
+    };
+
+    const shouldPersist = !!selectedDraftId && savedDrafts.some((item) => item.id === draft.id);
+    if (shouldPersist) {
+      const nextDrafts = savedDrafts.map((item) => (item.id === draft.id ? clearedDraft : item));
+      saveDrafts(nextDrafts);
+      setSavedDrafts(nextDrafts);
+    }
+
+    applyDraftSelection(clearedDraft);
+    toast({
+      title: 'Draft cleared',
+      description: shouldPersist ? `${draft.name} was reset and saved.` : `${draft.name} was reset in the current workspace.`,
+    });
   }
 
   function applyProjectToDraft(current: BomDraft, selectedProject: ProjectSelectOption): BomDraft {
@@ -1632,6 +1710,39 @@ export default function DraftBOMBuilderPage() {
                     <span className="tabular-nums font-medium text-slate-900">{money(data.total)}</span>
                   </div>
                 ))}
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-red-200 bg-red-50 p-4 shadow-sm">
+              <div className="flex flex-col gap-3">
+                <div>
+                  <h2 className="text-sm font-semibold uppercase tracking-wide text-red-800">Draft Actions</h2>
+                  <p className="mt-1 text-sm text-red-700">
+                    Reset this draft tab or remove the saved draft BOM from the selector.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={clearCurrentDraft}
+                    disabled={!isEditMode}
+                    className="border-red-300 bg-white text-red-700 hover:bg-red-100 hover:text-red-800"
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Clear and start over
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={deleteCurrentDraft}
+                    disabled={!selectedDraftId || draft.id === PRIVATEER_DRAFT_ID}
+                    className="border-red-300 bg-white text-red-700 hover:bg-red-100 hover:text-red-800"
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete draft
+                  </Button>
+                </div>
               </div>
             </div>
             </div>

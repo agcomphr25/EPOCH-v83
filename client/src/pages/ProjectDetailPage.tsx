@@ -1615,8 +1615,13 @@ export default function ProjectDetailPage() {
       )}
 
       <Tabs defaultValue={initialTab} className="space-y-4">
-        <TabsList>
+        <TabsList className="flex h-auto flex-wrap justify-start">
           <TabsTrigger value="workflow" data-testid="tab-workflow">Workflow</TabsTrigger>
+          <TabsTrigger value="bom-routing" data-testid="tab-bom-routing">BOM/Routing</TabsTrigger>
+          <TabsTrigger value="parts-request" data-testid="tab-parts-request">Parts/Request</TabsTrigger>
+          <TabsTrigger value="labor" data-testid="tab-labor">Labor</TabsTrigger>
+          <TabsTrigger value="nre" data-testid="tab-nre">NRE</TabsTrigger>
+          <TabsTrigger value="assembly-tree" data-testid="tab-assembly-tree">Assembly Tree</TabsTrigger>
           <TabsTrigger value="activity" data-testid="tab-activity">Activity Log</TabsTrigger>
           <TabsTrigger value="po" data-testid="tab-po">
             <Receipt className="h-4 w-4 mr-1.5" />
@@ -2270,6 +2275,249 @@ export default function ProjectDetailPage() {
 
               </div>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="bom-routing" className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Layers className="h-5 w-5" />
+                  BOM Setup
+                </CardTitle>
+                <CardDescription>
+                  Project BOM work is managed in the P2 setup flow for the linked purchase order.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="rounded-md border bg-muted/30 p-3 text-sm">
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">Linked PO</span>
+                    <span className="font-medium">{project.poId ? `#${project.poId}` : 'Not linked'}</span>
+                  </div>
+                </div>
+                <Button
+                  onClick={() => setLocation(`/p2-control-center?tab=setup&projectId=${encodeURIComponent(project.id)}${project.projectName ? `&projectName=${encodeURIComponent(project.projectName)}` : ''}${project.poId ? `&poId=${encodeURIComponent(String(project.poId))}` : ''}`)}
+                  data-testid="button-open-project-bom-routing-setup"
+                >
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Open BOM Setup
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ListChecks className="h-5 w-5" />
+                  Routing
+                </CardTitle>
+                <CardDescription>
+                  Part routings and routing documents stay in the P2 routing hub.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="rounded-md border bg-muted/30 p-3 text-sm">
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">Project</span>
+                    <span className="font-medium">{project.projectCode}</span>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setLocation('/p2-control-center?tab=routing')}
+                    data-testid="button-open-project-routing"
+                  >
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    Open Routing
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setLocation('/p2-control-center?tab=documents')}
+                    data-testid="button-open-project-routing-documents"
+                  >
+                    <FileText className="h-4 w-4 mr-2" />
+                    Routing Docs
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="parts-request" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Package className="h-5 w-5" />
+                Parts / Request
+              </CardTitle>
+              <CardDescription>
+                Review project material demand and create parts requests through the inventory request flow.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Project</p>
+                  <p className="font-medium">{project.projectCode}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Customer</p>
+                  <p className="font-medium">{project.customer?.name || project.customerId}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Linked PO</p>
+                  <p className="font-medium">{project.poId ? `#${project.poId}` : 'Not linked'}</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  onClick={() => setLocation(`/pm-control-center?project=${project.id}`)}
+                  data-testid="button-open-project-material-budget"
+                >
+                  <BarChart2 className="h-4 w-4 mr-2" />
+                  Material Budget
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setLocation(`/inventory/parts-request?projectId=${encodeURIComponent(project.id)}`)}
+                  data-testid="button-open-project-parts-request"
+                >
+                  <Package className="h-4 w-4 mr-2" />
+                  Parts Request
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="labor" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="h-5 w-5" />
+                Labor
+              </CardTitle>
+              <CardDescription>
+                Project labor budget and direct labor actuals are tracked from the PM Control Center.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Work Orders</p>
+                  <p className="font-medium">{projectWorkOrders.length}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Project Manager</p>
+                  <p className="font-medium">{project.projectManager?.name || 'Not assigned'}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Stage</p>
+                  <p className="font-medium">{project.currentStage ? STAGE_LABELS[project.currentStage] || project.currentStage : 'Not set'}</p>
+                </div>
+              </div>
+              <Button
+                onClick={() => setLocation(`/pm-control-center?project=${project.id}`)}
+                data-testid="button-open-project-labor"
+              >
+                <ExternalLink className="h-4 w-4 mr-2" />
+                Open Labor Dashboard
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="nre" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Receipt className="h-5 w-5" />
+                NRE (Non-recurring Expenses)
+              </CardTitle>
+              <CardDescription>
+                Non-recurring project costs such as tooling, setup, fixture, and engineering effort.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Project</p>
+                  <p className="font-medium">{project.projectCode}</p>
+                </div>
+                <div className="rounded-md border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Quote Comparison</p>
+                  <p className="font-medium">{quoteFeedback ? 'Available' : 'Not generated'}</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  onClick={() => setLocation(`/pm-control-center?project=${project.id}`)}
+                  data-testid="button-open-project-nre-costs"
+                >
+                  <BarChart2 className="h-4 w-4 mr-2" />
+                  Project Cost Dashboard
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => regenerateFeedbackMutation.mutate()}
+                  disabled={regenerateFeedbackMutation.isPending}
+                  data-testid="button-refresh-project-nre-feedback"
+                >
+                  <RefreshCw className={`h-4 w-4 mr-2 ${regenerateFeedbackMutation.isPending ? 'animate-spin' : ''}`} />
+                  {regenerateFeedbackMutation.isPending ? 'Refreshing...' : 'Refresh Quote Comparison'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="assembly-tree" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Layers className="h-5 w-5" />
+                Assembly Tree
+              </CardTitle>
+              <CardDescription>
+                Build structure is driven by the project BOM and production work orders.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {projectWorkOrders.length > 0 ? (
+                <div className="space-y-2">
+                  {projectWorkOrders.map(wo => (
+                    <button
+                      key={wo.id}
+                      onClick={() => setLocation(`/maintenance-events/${wo.id}`)}
+                      className="flex w-full items-center justify-between gap-3 rounded-md border p-3 text-left transition-colors hover:bg-muted/50"
+                      data-testid={`button-assembly-work-order-${wo.id}`}
+                    >
+                      <div className="min-w-0">
+                        <p className="font-medium">{wo.workOrderNumber}</p>
+                        <p className="text-sm text-muted-foreground truncate">{wo.description || 'Production work order'}</p>
+                      </div>
+                      <ExternalLink className="h-4 w-4 text-muted-foreground" />
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                  No production work orders are attached to this project yet.
+                </div>
+              )}
+              <Button
+                variant="outline"
+                onClick={() => setLocation(`/p2-control-center?tab=setup&projectId=${encodeURIComponent(project.id)}${project.poId ? `&poId=${encodeURIComponent(String(project.poId))}` : ''}`)}
+                data-testid="button-open-project-assembly-bom"
+              >
+                <Layers className="h-4 w-4 mr-2" />
+                Open BOM Setup
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>

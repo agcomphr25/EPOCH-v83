@@ -386,7 +386,7 @@ export default function RDProjectsPage() {
       <div className="mx-auto max-w-7xl space-y-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">R &amp; D Projects</h1>
+            <h1 className="text-3xl font-bold text-gray-900">Design and R&amp;D Projects</h1>
             <p className="mt-1 text-sm text-muted-foreground">
               Create research projects, attach draft BOM tabs, and track assembly readiness as parts are ordered or manufactured.
             </p>

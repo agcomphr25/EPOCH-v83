@@ -612,6 +612,131 @@ async function initializeBackgroundServices() {
         console.warn('âš ï¸ p2_packing_slips replacement linkage migration skipped:', p2SlipReplacementErr.message);
       }
 
+      // Targeted production repair for the RW26-221 shipment created during a packing-slip failure.
+      try {
+        const targetLots = await pool.query<{
+          id: string;
+          lot_number: string | null;
+          po_number: string | null;
+          customer_id: string | null;
+          customer_name: string | null;
+          serialized_item_ids: unknown;
+          quantity: number | null;
+        }>(
+          `SELECT id, lot_number, po_number, customer_id, customer_name, serialized_item_ids, quantity
+             FROM p2_lot_numbers
+            WHERE packing_slip_id IS NULL
+              AND COALESCE(status, '') <> 'VOID'
+              AND (po_number = $1 OR lot_number = $1)`,
+          ['RW26-221'],
+        );
+
+        let repairedRw26221Shipments = 0;
+        for (const lot of targetLots) {
+          const existingSlip = await pool.query<{ id: string; packing_slip_number: string }>(
+            `SELECT id, packing_slip_number
+               FROM p2_packing_slips
+              WHERE lot_number_id = $1
+              ORDER BY created_at DESC
+              LIMIT 1`,
+            [lot.id],
+          );
+
+          if (existingSlip[0]) {
+            await pool.query(
+              `UPDATE p2_lot_numbers SET packing_slip_id = $1, updated_at = NOW() WHERE id = $2`,
+              [existingSlip[0].id, lot.id],
+            );
+            repairedRw26221Shipments++;
+            continue;
+          }
+
+          const serializedItemIds = Array.isArray(lot.serialized_item_ids) ? lot.serialized_item_ids : [];
+          const lineItemRows = await pool.query<{
+            line_items: unknown;
+            total_quantity: number | null;
+          }>(
+            `WITH selected_items AS (
+               SELECT si.part_number, si.part_name, si.sku, si.serial_number
+                 FROM jsonb_array_elements_text($1::jsonb) AS selected(id)
+                 JOIN p2_serialized_items si ON si.id::text = selected.id
+             ),
+             grouped_items AS (
+               SELECT
+                 part_number,
+                 part_name,
+                 sku,
+                 COUNT(*)::int AS quantity,
+                 jsonb_agg(serial_number ORDER BY serial_number) AS serial_numbers
+               FROM selected_items
+               GROUP BY part_number, part_name, sku
+             )
+             SELECT
+               COALESCE(
+                 jsonb_agg(
+                   jsonb_build_object(
+                     'partNumber', part_number,
+                     'partName', part_name,
+                     'sku', sku,
+                     'quantity', quantity,
+                     'serialNumbers', serial_numbers,
+                     'lotNumber', $2::text
+                   )
+                   ORDER BY part_number, part_name, sku
+                 ),
+                 '[]'::jsonb
+               ) AS line_items,
+               COALESCE(SUM(quantity), 0)::int AS total_quantity
+             FROM grouped_items`,
+            [JSON.stringify(serializedItemIds), lot.lot_number],
+          );
+
+          const todayIso = new Date().toISOString();
+          const dateStr = todayIso.slice(2, 4) + todayIso.slice(5, 7) + todayIso.slice(8, 10);
+          const countRows = await pool.query<{ count: string }>(
+            `SELECT COUNT(*) AS count FROM p2_packing_slips WHERE packing_slip_number LIKE $1`,
+            [`${dateStr}-%`],
+          );
+          const packingSlipNumber = `${dateStr}-${(parseInt(countRows[0]?.count || '0', 10) + 1)
+            .toString()
+            .padStart(2, '0')}`;
+          const lineItems = lineItemRows[0]?.line_items ?? [];
+          const totalQuantity = lineItemRows[0]?.total_quantity ?? lot.quantity ?? 0;
+
+          const insertedSlip = await pool.query<{ id: string }>(
+            `INSERT INTO p2_packing_slips (
+               packing_slip_number, lot_number_id, lot_number, customer_id, customer_name,
+               customer_address, po_number, line_items, total_quantity, status, created_by
+             )
+             VALUES ($1, $2, $3, COALESCE($4, ''), COALESCE($5, ''), '', $6, $7::jsonb, $8, 'DRAFT', $9)
+             RETURNING id`,
+            [
+              packingSlipNumber,
+              lot.id,
+              lot.lot_number,
+              lot.customer_id,
+              lot.customer_name,
+              lot.po_number,
+              JSON.stringify(lineItems),
+              totalQuantity,
+              'system:rw26-221-packing-slip-repair',
+            ],
+          );
+
+          await pool.query(
+            `UPDATE p2_lot_numbers SET packing_slip_id = $1, updated_at = NOW() WHERE id = $2`,
+            [insertedSlip[0].id, lot.id],
+          );
+          repairedRw26221Shipments++;
+        }
+
+        if (repairedRw26221Shipments > 0) {
+          console.log(`✅ Repaired ${repairedRw26221Shipments} RW26-221 shipment lot(s) missing durable packing slips`);
+        }
+      } catch (rw26221RepairErr: any) {
+        console.warn('⚠️ RW26-221 shipment packing-slip repair skipped:', rw26221RepairErr.message);
+      }
+
       if (runHistoricalBootRepairs) {
         console.warn('RUN_BOOT_REPAIRS is enabled; historical boot repairs will run during startup.');
         const { inserted, missing } = await runLaborAllocationBackfill(pool);

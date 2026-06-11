@@ -426,7 +426,7 @@ Phone: 256-723-8381
 Email: glenn@agadvanced.com`,
 };
 
-const VENDOR_PO_ISSUE_TEMPLATE = {
+export const VENDOR_PO_ISSUE_TEMPLATE = {
   key: 'vendor_po_issue',
   name: 'Vendor PO Issue',
   subject: 'PO {{po_number}} from AG Composites',
@@ -529,7 +529,7 @@ Phone: 256-723-8381
 Email: glenn@agadvanced.com`,
 };
 
-const VENDOR_PO_RESEND_TEMPLATE = {
+export const VENDOR_PO_RESEND_TEMPLATE = {
   key: 'vendor_po_resend',
   name: 'Vendor PO Resend',
   subject: 'RESEND: PO {{po_number}} from AG Composites',

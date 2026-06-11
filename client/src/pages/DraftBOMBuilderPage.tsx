@@ -31,6 +31,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
@@ -604,6 +605,7 @@ export default function DraftBOMBuilderPage() {
   const [selectedDraftId, setSelectedDraftId] = useState<string>(PRIVATEER_DRAFT_ID);
   const [draft, setDraft] = useState<BomDraft>(() => loadDrafts()[0] ?? createPrivateerDraft());
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(true);
   const [visibleWorkspaceTabs, setVisibleWorkspaceTabs] = useState<WorkspaceTabId[]>(() => draft.workspaceTabs ?? defaultWorkspaceTabs);
   const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<WorkspaceTabId>('po-draft');
   const [poDescription, setPoDescription] = useState('');
@@ -806,6 +808,14 @@ export default function DraftBOMBuilderPage() {
         ...line,
         include: line.action !== 'Do Not Order' && line.status !== 'On Hand' && !line.finalized,
       })),
+    }));
+  }
+
+  function setAllPartsRequestIncluded(lineIds: string[], include: boolean) {
+    const visibleLineIds = new Set(lineIds);
+    setDraft((current) => ({
+      ...current,
+      lines: current.lines.map((line) => (visibleLineIds.has(line.id) ? { ...line, include } : line)),
     }));
   }
 
@@ -1240,11 +1250,22 @@ export default function DraftBOMBuilderPage() {
               </Select>
             </div>
             <div className="flex flex-wrap items-end gap-2">
+              <div className="flex h-10 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm">
+                <Switch
+                  id="draft-edit-mode"
+                  checked={isEditMode}
+                  onCheckedChange={setIsEditMode}
+                  aria-label="Toggle draft editing"
+                />
+                <Label htmlFor="draft-edit-mode" className="cursor-pointer">
+                  Editing
+                </Label>
+              </div>
               <Button type="button" variant="outline" onClick={() => setIsDetailsOpen(true)}>
                 <SlidersHorizontal className="mr-2 h-4 w-4" />
                 BOM details
               </Button>
-              <Button type="button" variant="outline" onClick={startBlankDraft}>
+              <Button type="button" variant="outline" onClick={startBlankDraft} disabled={!isEditMode}>
                 <Plus className="mr-2 h-4 w-4" />
                 New draft
               </Button>
@@ -1252,11 +1273,11 @@ export default function DraftBOMBuilderPage() {
                 <Filter className="mr-2 h-4 w-4" />
                 Select orderable
               </Button>
-              <Button variant="outline" onClick={saveDraft}>
+              <Button variant="outline" onClick={saveDraft} disabled={!isEditMode}>
                 <Save className="mr-2 h-4 w-4" />
                 Save draft
               </Button>
-              <Button onClick={markSelectedFinalized} disabled={selectedLines.length === 0}>
+              <Button onClick={markSelectedFinalized} disabled={!isEditMode || selectedLines.length === 0}>
                 <Check className="mr-2 h-4 w-4" />
                 Finalize to inventory
               </Button>
@@ -1286,6 +1307,7 @@ export default function DraftBOMBuilderPage() {
                     id="draft-name"
                     value={draft.name}
                     onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))}
+                    disabled={!isEditMode}
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -1295,11 +1317,12 @@ export default function DraftBOMBuilderPage() {
                       id="draft-revision"
                       value={draft.revision}
                       onChange={(event) => setDraft((current) => ({ ...current, revision: event.target.value }))}
+                      disabled={!isEditMode}
                     />
                   </div>
                   <div className="grid gap-1.5">
                     <Label htmlFor="draft-project">Project</Label>
-                    <Select value={selectedProjectValue} onValueChange={updateDraftProject}>
+                    <Select value={selectedProjectValue} onValueChange={updateDraftProject} disabled={!isEditMode}>
                       <SelectTrigger id="draft-project">
                         <SelectValue placeholder={draft.project || 'Select a P2 project or R&D'} />
                       </SelectTrigger>
@@ -1327,6 +1350,7 @@ export default function DraftBOMBuilderPage() {
                     value={draft.owner}
                     onChange={(event) => setDraft((current) => ({ ...current, owner: event.target.value }))}
                     placeholder="Inventory, Engineering, PM..."
+                    disabled={!isEditMode}
                   />
                 </div>
                 <div className="grid gap-1.5">
@@ -1336,6 +1360,7 @@ export default function DraftBOMBuilderPage() {
                     value={draft.notes}
                     onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))}
                     rows={3}
+                    disabled={!isEditMode}
                   />
                 </div>
               </div>
@@ -1474,6 +1499,7 @@ export default function DraftBOMBuilderPage() {
                   onUpdateCustomField={updateLineCustomField}
                   onGeneratePoDraft={() => showHandoffToast('PO draft')}
                   onCreateDraftBom={startDraftBomForLine}
+                  isEditMode={isEditMode}
                 />
               </TabsContent>
             ) : null}
@@ -1491,8 +1517,10 @@ export default function DraftBOMBuilderPage() {
                   onUpdateLine={updateLine}
                   onUpdateNumberLine={(id, field, value) => updateLine(id, { [field]: value === '' ? '' : Number(value) } as Partial<BomLine>)}
                   onImportCsv={importPartsRequestCsv}
+                  onToggleAllIncluded={(lineIds, include) => setAllPartsRequestIncluded(lineIds, include)}
                   onCreateVendorPoDraft={createVendorPoHandoff}
                   onFinalizeSelected={markSelectedFinalized}
+                  isEditMode={isEditMode}
                 />
               </TabsContent>
             ) : null}
@@ -1511,6 +1539,7 @@ export default function DraftBOMBuilderPage() {
                   onRemoveLine={removeLaborEstimateLine}
                   onUpdateLine={updateLaborEstimateLine}
                   onUpdateNumberLine={updateLaborEstimateNumberLine}
+                  isEditMode={isEditMode}
                 />
               </TabsContent>
             ) : null}
@@ -1523,6 +1552,7 @@ export default function DraftBOMBuilderPage() {
                   seedLineId={wizardSeedLineId}
                   onSeedLineConsumed={() => setWizardSeedLineId(null)}
                   onSaveWizardBom={saveWizardBom}
+                  isEditMode={isEditMode}
                 />
               </TabsContent>
             ) : null}
@@ -1597,6 +1627,7 @@ function PoDraftWorkspace({
   onUpdateCustomField,
   onGeneratePoDraft,
   onCreateDraftBom,
+  isEditMode,
 }: {
   lines: BomLine[];
   description: string;
@@ -1612,6 +1643,7 @@ function PoDraftWorkspace({
   onUpdateCustomField: (lineId: string, columnName: string, value: string) => void;
   onGeneratePoDraft: () => void;
   onCreateDraftBom: (lineId: string) => void;
+  isEditMode: boolean;
 }) {
   const typedDescription = description.trim();
   const totalColumns = 3 + visibleColumns.length + customColumns.length;
@@ -1632,6 +1664,7 @@ function PoDraftWorkspace({
                 value={description}
                 onChange={(event) => onDescriptionChange(event.target.value)}
                 placeholder="Part description"
+                disabled={!isEditMode}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') {
                     event.preventDefault();
@@ -1639,7 +1672,7 @@ function PoDraftWorkspace({
                   }
                 }}
               />
-              <Button type="button" onClick={() => onCreateLine(matches[0])} disabled={!typedDescription}>
+              <Button type="button" onClick={() => onCreateLine(matches[0])} disabled={!isEditMode || !typedDescription}>
                 <Plus className="mr-2 h-4 w-4" />
                 Add line
               </Button>
@@ -1657,6 +1690,7 @@ function PoDraftWorkspace({
                           type="button"
                           className="rounded-md border border-slate-200 bg-white p-3 text-left text-sm hover:border-blue-300 hover:bg-blue-50"
                           onClick={() => onCreateLine(item)}
+                          disabled={!isEditMode}
                         >
                           <span className="block font-medium text-slate-950">{item.name || item.description || 'Inventory item'}</span>
                           <span className="mt-1 block text-xs text-slate-500">
@@ -1665,14 +1699,14 @@ function PoDraftWorkspace({
                         </button>
                       ))}
                     </div>
-                    <Button type="button" variant="outline" size="sm" onClick={() => onCreateLine()}>
+                    <Button type="button" variant="outline" size="sm" onClick={() => onCreateLine()} disabled={!isEditMode}>
                       Create draft part instead
                     </Button>
                   </div>
                 ) : (
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-sm text-slate-600">No inventory match found.</span>
-                    <Button type="button" variant="outline" size="sm" onClick={() => onCreateLine()}>
+                    <Button type="button" variant="outline" size="sm" onClick={() => onCreateLine()} disabled={!isEditMode}>
                       Create draft part
                     </Button>
                   </div>
@@ -1700,8 +1734,9 @@ function PoDraftWorkspace({
               value={newColumnName}
               onChange={(event) => onNewColumnNameChange(event.target.value)}
               placeholder="New column name"
+              disabled={!isEditMode}
             />
-            <Button type="button" variant="outline" onClick={onAddCustomColumn} disabled={!newColumnName.trim()}>
+            <Button type="button" variant="outline" onClick={onAddCustomColumn} disabled={!isEditMode || !newColumnName.trim()}>
               Add column
             </Button>
           </div>
@@ -1712,6 +1747,7 @@ function PoDraftWorkspace({
               <Checkbox
                 checked={visibleColumns.includes(columnId)}
                 onCheckedChange={(checked) => onToggleColumn(columnId, checked === true)}
+                disabled={!isEditMode}
               />
               {poColumnLabels[columnId]}
             </label>
@@ -1759,6 +1795,7 @@ function PoDraftWorkspace({
                           className="h-9"
                           value={line.customFields?.[columnName] ?? ''}
                           onChange={(event) => onUpdateCustomField(line.id, columnName, event.target.value)}
+                          disabled={!isEditMode}
                         />
                       </TableCell>
                     ))}
@@ -1768,7 +1805,7 @@ function PoDraftWorkspace({
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Button type="button" variant="outline" size="sm" onClick={() => onCreateDraftBom(line.id)}>
+                      <Button type="button" variant="outline" size="sm" onClick={() => onCreateDraftBom(line.id)} disabled={!isEditMode}>
                         <Layers className="mr-2 h-4 w-4" />
                         {line.childDraftBoms?.length ? `${line.childDraftBoms.length} BOM` : 'BOM'}
                       </Button>
@@ -1809,8 +1846,10 @@ function PartsRequestWorkspace({
   onUpdateLine,
   onUpdateNumberLine,
   onImportCsv,
+  onToggleAllIncluded,
   onCreateVendorPoDraft,
   onFinalizeSelected,
+  isEditMode,
 }: {
   lines: BomLine[];
   description: string;
@@ -1822,11 +1861,15 @@ function PartsRequestWorkspace({
   onUpdateLine: (id: string, patch: Partial<BomLine>) => void;
   onUpdateNumberLine: (id: string, field: 'unitCost' | 'actualCost' | 'qtyNeeded', value: string) => void;
   onImportCsv: (file: File, linkInventoryMatches: boolean) => Promise<void>;
+  onToggleAllIncluded: (lineIds: string[], include: boolean) => void;
   onCreateVendorPoDraft: () => void;
   onFinalizeSelected: () => void;
+  isEditMode: boolean;
 }) {
   const typedDescription = description.trim();
   const selectedCount = lines.filter((line) => line.include).length;
+  const allVisibleSelected = lines.length > 0 && selectedCount === lines.length;
+  const someVisibleSelected = selectedCount > 0 && selectedCount < lines.length;
   const [linkInventoryMatches, setLinkInventoryMatches] = useState(false);
   const [isImportingCsv, setIsImportingCsv] = useState(false);
 
@@ -1857,6 +1900,7 @@ function PartsRequestWorkspace({
                 value={description}
                 onChange={(event) => onDescriptionChange(event.target.value)}
                 placeholder="Part description"
+                disabled={!isEditMode}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') {
                     event.preventDefault();
@@ -1864,7 +1908,7 @@ function PartsRequestWorkspace({
                   }
                 }}
               />
-              <Button type="button" onClick={() => onCreateLine(matches[0])} disabled={!typedDescription}>
+              <Button type="button" onClick={() => onCreateLine(matches[0])} disabled={!isEditMode || !typedDescription}>
                 <Plus className="mr-2 h-4 w-4" />
                 Add part line
               </Button>
@@ -1882,6 +1926,7 @@ function PartsRequestWorkspace({
                           type="button"
                           className="rounded-md border border-slate-200 bg-white p-3 text-left text-sm hover:border-blue-300 hover:bg-blue-50"
                           onClick={() => onCreateLine(item)}
+                          disabled={!isEditMode}
                         >
                           <span className="block font-medium text-slate-950">{item.name || item.description || 'Inventory item'}</span>
                           <span className="mt-1 block text-xs text-slate-500">
@@ -1890,14 +1935,14 @@ function PartsRequestWorkspace({
                         </button>
                       ))}
                     </div>
-                    <Button type="button" variant="outline" size="sm" onClick={() => onCreateLine()}>
+                    <Button type="button" variant="outline" size="sm" onClick={() => onCreateLine()} disabled={!isEditMode}>
                       Create draft part instead
                     </Button>
                   </div>
                 ) : (
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-sm text-slate-600">No inventory match found.</span>
-                    <Button type="button" variant="outline" size="sm" onClick={() => onCreateLine()}>
+                    <Button type="button" variant="outline" size="sm" onClick={() => onCreateLine()} disabled={!isEditMode}>
                       Create draft part
                     </Button>
                   </div>
@@ -1911,6 +1956,7 @@ function PartsRequestWorkspace({
               <Checkbox
                 checked={linkInventoryMatches}
                 onCheckedChange={(checked) => setLinkInventoryMatches(checked === true)}
+                disabled={!isEditMode}
               />
               Permit inventory linking
             </label>
@@ -1926,7 +1972,7 @@ function PartsRequestWorkspace({
                 className="sr-only"
                 type="file"
                 accept=".csv,text/csv"
-                disabled={isImportingCsv}
+                disabled={!isEditMode || isImportingCsv}
                 onChange={(event) => {
                   void handleCsvFileChange(event.target.files);
                   event.currentTarget.value = '';
@@ -1945,7 +1991,7 @@ function PartsRequestWorkspace({
               <PackagePlus className="mr-2 h-4 w-4" />
               Create Vendor PO draft
             </Button>
-            <Button type="button" onClick={onFinalizeSelected} disabled={selectedCount === 0}>
+            <Button type="button" onClick={onFinalizeSelected} disabled={!isEditMode || selectedCount === 0}>
               <Check className="mr-2 h-4 w-4" />
               Finalize checked
             </Button>
@@ -1958,7 +2004,17 @@ function PartsRequestWorkspace({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[56px]">Use</TableHead>
+                <TableHead className="w-[112px]">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      checked={allVisibleSelected ? true : someVisibleSelected ? 'indeterminate' : false}
+                      onCheckedChange={(checked) => onToggleAllIncluded(lines.map((line) => line.id), checked === true)}
+                      disabled={lines.length === 0}
+                      aria-label="Select all visible parts/request lines"
+                    />
+                    <span>Select all</span>
+                  </div>
+                </TableHead>
                 <TableHead className="min-w-[300px]">Part description</TableHead>
                 <TableHead className="w-[160px]">Vendor / Supplier</TableHead>
                 <TableHead className="w-[170px]">Supplier Part #</TableHead>
@@ -1988,10 +2044,10 @@ function PartsRequestWorkspace({
                         aria-label={`Select ${line.description || 'parts/request line'}`}
                       />
                     </TableCell>
-                    <EditableCell value={line.description} onChange={(value) => onUpdateLine(line.id, { description: value })} wide />
-                    <EditableCell value={line.supplier} onChange={(value) => onUpdateLine(line.id, { supplier: value })} />
-                    <EditableCell value={line.supplierItemId} onChange={(value) => onUpdateLine(line.id, { supplierItemId: value })} />
-                    <EditableCell value={line.manufacturer} onChange={(value) => onUpdateLine(line.id, { manufacturer: value })} />
+                    <EditableCell value={line.description} onChange={(value) => onUpdateLine(line.id, { description: value })} disabled={!isEditMode} wide />
+                    <EditableCell value={line.supplier} onChange={(value) => onUpdateLine(line.id, { supplier: value })} disabled={!isEditMode} />
+                    <EditableCell value={line.supplierItemId} onChange={(value) => onUpdateLine(line.id, { supplierItemId: value })} disabled={!isEditMode} />
+                    <EditableCell value={line.manufacturer} onChange={(value) => onUpdateLine(line.id, { manufacturer: value })} disabled={!isEditMode} />
                     <TableCell>
                       <Input
                         className="h-9 text-right"
@@ -2000,6 +2056,7 @@ function PartsRequestWorkspace({
                         step="0.01"
                         value={line.unitCost}
                         onChange={(event) => onUpdateNumberLine(line.id, 'unitCost', event.target.value)}
+                        disabled={!isEditMode}
                       />
                     </TableCell>
                     <TableCell>
@@ -2010,6 +2067,7 @@ function PartsRequestWorkspace({
                         step="0.01"
                         value={line.actualCost ?? ''}
                         onChange={(event) => onUpdateNumberLine(line.id, 'actualCost', event.target.value)}
+                        disabled={!isEditMode}
                       />
                     </TableCell>
                     <TableCell>
@@ -2020,6 +2078,7 @@ function PartsRequestWorkspace({
                         step="0.001"
                         value={line.qtyNeeded}
                         onChange={(event) => onUpdateNumberLine(line.id, 'qtyNeeded', event.target.value)}
+                        disabled={!isEditMode}
                       />
                     </TableCell>
                     <TableCell>
@@ -2027,11 +2086,12 @@ function PartsRequestWorkspace({
                         checked={line.service === true}
                         onCheckedChange={(checked) => onUpdateLine(line.id, { service: checked === true })}
                         aria-label={`Mark ${line.description || 'line'} as service`}
+                        disabled={!isEditMode}
                       />
                     </TableCell>
-                    <EditableCell value={line.agPartNumber} onChange={(value) => onUpdateLine(line.id, { agPartNumber: value })} />
+                    <EditableCell value={line.agPartNumber} onChange={(value) => onUpdateLine(line.id, { agPartNumber: value })} disabled={!isEditMode} />
                     <TableCell>
-                      <Select value={line.status} onValueChange={(value) => onUpdateLine(line.id, { status: value as BomStatus })}>
+                      <Select value={line.status} onValueChange={(value) => onUpdateLine(line.id, { status: value as BomStatus })} disabled={!isEditMode}>
                         <SelectTrigger className="h-9">
                           <SelectValue />
                         </SelectTrigger>
@@ -2072,6 +2132,7 @@ function DirectLaborEstimateWorkspace({
   onRemoveLine,
   onUpdateLine,
   onUpdateNumberLine,
+  isEditMode,
 }: {
   lines: DraftLaborEstimateLine[];
   departments: { value: string; label: string }[];
@@ -2084,6 +2145,7 @@ function DirectLaborEstimateWorkspace({
   onRemoveLine: (id: string) => void;
   onUpdateLine: (id: string, patch: Partial<DraftLaborEstimateLine>) => void;
   onUpdateNumberLine: (id: string, field: 'hourlyRate' | 'hoursPerPart' | 'quantityPerPo', value: string) => void;
+  isEditMode: boolean;
 }) {
   return (
     <section className="space-y-4">
@@ -2100,6 +2162,7 @@ function DirectLaborEstimateWorkspace({
               value={newDepartmentName}
               onChange={(event) => onNewDepartmentNameChange(event.target.value)}
               placeholder="New department"
+              disabled={!isEditMode}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') {
                   event.preventDefault();
@@ -2107,11 +2170,11 @@ function DirectLaborEstimateWorkspace({
                 }
               }}
             />
-            <Button type="button" variant="outline" onClick={onAddDepartment} disabled={!newDepartmentName.trim()}>
+            <Button type="button" variant="outline" onClick={onAddDepartment} disabled={!isEditMode || !newDepartmentName.trim()}>
               <Plus className="mr-2 h-4 w-4" />
               Add department
             </Button>
-            <Button type="button" onClick={onAddLine}>
+            <Button type="button" onClick={onAddLine} disabled={!isEditMode}>
               <Plus className="mr-2 h-4 w-4" />
               Add labor row
             </Button>
@@ -2151,7 +2214,7 @@ function DirectLaborEstimateWorkspace({
                 lines.map((line) => (
                   <TableRow key={line.id}>
                     <TableCell>
-                      <Select value={line.department || defaultDepartment} onValueChange={(value) => onUpdateLine(line.id, { department: value })}>
+                      <Select value={line.department || defaultDepartment} onValueChange={(value) => onUpdateLine(line.id, { department: value })} disabled={!isEditMode}>
                         <SelectTrigger className="h-9">
                           <SelectValue />
                         </SelectTrigger>
@@ -2165,7 +2228,7 @@ function DirectLaborEstimateWorkspace({
                       </Select>
                     </TableCell>
                     <TableCell>
-                      <Select value={line.employeeRole} onValueChange={(value) => onUpdateLine(line.id, { employeeRole: value })}>
+                      <Select value={line.employeeRole} onValueChange={(value) => onUpdateLine(line.id, { employeeRole: value })} disabled={!isEditMode}>
                         <SelectTrigger className="h-9">
                           <SelectValue placeholder="Select role" />
                         </SelectTrigger>
@@ -2189,6 +2252,7 @@ function DirectLaborEstimateWorkspace({
                         step="0.01"
                         value={line.hourlyRate}
                         onChange={(event) => onUpdateNumberLine(line.id, 'hourlyRate', event.target.value)}
+                        disabled={!isEditMode}
                       />
                     </TableCell>
                     <TableCell>
@@ -2199,6 +2263,7 @@ function DirectLaborEstimateWorkspace({
                         step="0.01"
                         value={line.hoursPerPart}
                         onChange={(event) => onUpdateNumberLine(line.id, 'hoursPerPart', event.target.value)}
+                        disabled={!isEditMode}
                       />
                     </TableCell>
                     <TableCell>
@@ -2209,13 +2274,14 @@ function DirectLaborEstimateWorkspace({
                         step="1"
                         value={line.quantityPerPo}
                         onChange={(event) => onUpdateNumberLine(line.id, 'quantityPerPo', event.target.value)}
+                        disabled={!isEditMode}
                       />
                     </TableCell>
                     <TableCell className="text-right font-medium tabular-nums">
                       {money(laborLineTotal(line))}
                     </TableCell>
                     <TableCell>
-                      <Button type="button" variant="ghost" size="sm" onClick={() => onRemoveLine(line.id)} aria-label="Remove labor row">
+                      <Button type="button" variant="ghost" size="sm" onClick={() => onRemoveLine(line.id)} aria-label="Remove labor row" disabled={!isEditMode}>
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
                     </TableCell>
@@ -2246,12 +2312,14 @@ function DraftBomWizardWorkspace({
   seedLineId,
   onSeedLineConsumed,
   onSaveWizardBom,
+  isEditMode,
 }: {
   draftLines: BomLine[];
   inventoryItems: InventoryItemOption[];
   seedLineId: string | null;
   onSeedLineConsumed: () => void;
   onSaveWizardBom: (part: DraftBomPart, bom: DraftPartBom) => void;
+  isEditMode: boolean;
 }) {
   const [sourceMode, setSourceMode] = useState<DraftBomSource>('draft-part');
   const [selectedLineId, setSelectedLineId] = useState('');
@@ -2445,7 +2513,7 @@ function DraftBomWizardWorkspace({
           </p>
 
           <div className="mt-4 grid gap-3">
-            <Select value={sourceMode} onValueChange={(value) => setSourceMode(value as DraftBomSource)}>
+            <Select value={sourceMode} onValueChange={(value) => setSourceMode(value as DraftBomSource)} disabled={!isEditMode}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -2457,7 +2525,7 @@ function DraftBomWizardWorkspace({
             </Select>
 
             {sourceMode === 'draft-part' ? (
-              <Select value={selectedLineId} onValueChange={setSelectedLineId}>
+              <Select value={selectedLineId} onValueChange={setSelectedLineId} disabled={!isEditMode}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select draft part" />
                 </SelectTrigger>
@@ -2473,8 +2541,8 @@ function DraftBomWizardWorkspace({
 
             {sourceMode === 'inventory-item' ? (
               <div className="grid gap-2">
-                <Input value={inventorySearch} onChange={(event) => setInventorySearch(event.target.value)} placeholder="Search inventory" />
-                <Select value={selectedInventoryId} onValueChange={setSelectedInventoryId}>
+                <Input value={inventorySearch} onChange={(event) => setInventorySearch(event.target.value)} placeholder="Search inventory" disabled={!isEditMode} />
+                <Select value={selectedInventoryId} onValueChange={setSelectedInventoryId} disabled={!isEditMode}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select inventory item" />
                   </SelectTrigger>
@@ -2491,12 +2559,12 @@ function DraftBomWizardWorkspace({
 
             {sourceMode === 'new-part' ? (
               <div className="grid gap-2">
-                <Input value={newPartNumber} onChange={(event) => setNewPartNumber(event.target.value)} placeholder="Part number" />
-                <Input value={newPartDescription} onChange={(event) => setNewPartDescription(event.target.value)} placeholder="Description" />
+                <Input value={newPartNumber} onChange={(event) => setNewPartNumber(event.target.value)} placeholder="Part number" disabled={!isEditMode} />
+                <Input value={newPartDescription} onChange={(event) => setNewPartDescription(event.target.value)} placeholder="Description" disabled={!isEditMode} />
               </div>
             ) : null}
 
-            <Button type="button" onClick={startNewBom}>
+            <Button type="button" onClick={startNewBom} disabled={!isEditMode}>
               <Plus className="mr-2 h-4 w-4" />
               Start draft BOM
             </Button>
@@ -2513,6 +2581,7 @@ function DraftBomWizardWorkspace({
                   type="button"
                   className="block w-full rounded-md border border-slate-200 p-3 text-left text-sm hover:border-teal-300 hover:bg-teal-50"
                   onClick={() => loadExistingBom(line, bom)}
+                  disabled={!isEditMode}
                 >
                   <span className="block font-medium text-slate-950">{bom.name} {bom.revision}</span>
                   <span className="mt-1 block text-xs text-slate-500">
@@ -2571,7 +2640,7 @@ function DraftBomWizardWorkspace({
 
             <div className="grid gap-3 rounded-md border border-slate-200 bg-slate-50 p-3">
               <div className="grid gap-3 lg:grid-cols-[160px_minmax(180px,1fr)_minmax(180px,1fr)_100px_150px_auto]">
-                <Select value={componentSource} onValueChange={(value) => setComponentSource(value as DraftBomSource)}>
+                <Select value={componentSource} onValueChange={(value) => setComponentSource(value as DraftBomSource)} disabled={!isEditMode}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -2583,7 +2652,7 @@ function DraftBomWizardWorkspace({
                 </Select>
 
                 {componentSource === 'draft-part' ? (
-                  <Select value={componentLineId} onValueChange={syncComponentFromDraftLine}>
+                  <Select value={componentLineId} onValueChange={syncComponentFromDraftLine} disabled={!isEditMode}>
                     <SelectTrigger>
                       <SelectValue placeholder="Draft part" />
                     </SelectTrigger>
@@ -2601,8 +2670,9 @@ function DraftBomWizardWorkspace({
                       value={componentInventorySearch}
                       onChange={(event) => setComponentInventorySearch(event.target.value)}
                       placeholder="Search inventory"
+                      disabled={!isEditMode}
                     />
-                    <Select value={componentInventoryId} onValueChange={syncComponentFromInventory}>
+                    <Select value={componentInventoryId} onValueChange={syncComponentFromInventory} disabled={!isEditMode}>
                       <SelectTrigger>
                         <SelectValue placeholder="Inventory item" />
                       </SelectTrigger>
@@ -2616,10 +2686,10 @@ function DraftBomWizardWorkspace({
                     </Select>
                   </div>
                 ) : (
-                  <Input value={componentPartNumber} onChange={(event) => setComponentPartNumber(event.target.value)} placeholder="Part number" />
+                  <Input value={componentPartNumber} onChange={(event) => setComponentPartNumber(event.target.value)} placeholder="Part number" disabled={!isEditMode} />
                 )}
 
-                <Input value={componentDescription} onChange={(event) => setComponentDescription(event.target.value)} placeholder="Description" />
+                <Input value={componentDescription} onChange={(event) => setComponentDescription(event.target.value)} placeholder="Description" disabled={!isEditMode} />
                 <Input
                   type="number"
                   min="0.001"
@@ -2627,8 +2697,9 @@ function DraftBomWizardWorkspace({
                   value={componentQuantity}
                   onChange={(event) => setComponentQuantity(event.target.value)}
                   placeholder="Qty"
+                  disabled={!isEditMode}
                 />
-                <Select value={componentDepartment} onValueChange={setComponentDepartment}>
+                <Select value={componentDepartment} onValueChange={setComponentDepartment} disabled={!isEditMode}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -2640,13 +2711,13 @@ function DraftBomWizardWorkspace({
                     ))}
                   </SelectContent>
                 </Select>
-                <Button type="button" onClick={addComponent} disabled={!componentPartNumber.trim()}>
+                <Button type="button" onClick={addComponent} disabled={!isEditMode || !componentPartNumber.trim()}>
                   <Plus className="mr-2 h-4 w-4" />
                   Add
                 </Button>
               </div>
               <label className="flex items-center gap-2 text-sm">
-                <Checkbox checked={componentManufactured} onCheckedChange={(checked) => setComponentManufactured(checked === true)} />
+                <Checkbox checked={componentManufactured} onCheckedChange={(checked) => setComponentManufactured(checked === true)} disabled={!isEditMode} />
                 Manufactured component
               </label>
             </div>
@@ -2683,7 +2754,7 @@ function DraftBomWizardWorkspace({
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <Button type="button" variant="ghost" size="sm" onClick={() => removeComponent(component.id)}>
+                          <Button type="button" variant="ghost" size="sm" onClick={() => removeComponent(component.id)} disabled={!isEditMode}>
                             <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
                         </TableCell>
@@ -2695,7 +2766,7 @@ function DraftBomWizardWorkspace({
             </div>
 
             <div className="flex justify-end">
-              <Button type="button" onClick={saveAndAdvance}>
+              <Button type="button" onClick={saveAndAdvance} disabled={!isEditMode}>
                 {currentPartIndex < activeBom.parts.length - 1 ? 'Save & Next' : 'Save Draft BOM'}
               </Button>
             </div>
@@ -2772,10 +2843,20 @@ function SourcingLineTable({ lines, emptyMessage }: { lines: BomLine[]; emptyMes
   );
 }
 
-function EditableCell({ value, onChange, wide = false }: { value: string; onChange: (value: string) => void; wide?: boolean }) {
+function EditableCell({
+  value,
+  onChange,
+  disabled = false,
+  wide = false,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  wide?: boolean;
+}) {
   return (
     <TableCell className={wide ? 'min-w-[260px]' : undefined}>
-      <Input className="h-9" value={value} onChange={(event) => onChange(event.target.value)} />
+      <Input className="h-9" value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled} />
     </TableCell>
   );
 }

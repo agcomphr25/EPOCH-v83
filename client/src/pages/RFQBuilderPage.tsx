@@ -160,6 +160,9 @@ type DraftBomRecord = {
   lines: PrivateerDraftBomLine[];
 };
 
+type BomSourceType = "draft-bom" | "draft-po" | "parts-list" | "existing";
+type ToolingFilter = "exclude" | "include" | "only";
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const defaultDepartmentOptions = [
@@ -228,6 +231,11 @@ function mapDraftCategoryToEstimateCategory(category: string): string {
   return "OTHER";
 }
 
+function isToolingDraftLine(line: PrivateerDraftBomLine): boolean {
+  const text = `${line.category} ${line.description} ${line.note}`.toUpperCase();
+  return text.includes("TOOLING") || text.includes("MANDREL") || text.includes("MOLD") || text.includes("FIXTURE");
+}
+
 const emptyProcessRow = (rfqPartId: string): ProcessRow => ({
   rfqPartId, departmentName: "LAYUP", sourceType: "MANUAL",
   setupHours: 0, hoursPerPart: 0, hourlyRate: 0, notes: "",
@@ -269,9 +277,10 @@ export default function RFQBuilderPage() {
   const [selectedBomPartId, setSelectedBomPartId] = useState("");
   const [bomLines, setBomLines] = useState<BomLineRow[]>([]);
   const [bomMessage, setBomMessage] = useState("");
-  const [bomSourceType, setBomSourceType] = useState<"draft" | "existing">("draft");
+  const [bomSourceType, setBomSourceType] = useState<BomSourceType>("draft-bom");
   const [selectedDraftBomId, setSelectedDraftBomId] = useState("privateer");
   const [selectedExistingBomId, setSelectedExistingBomId] = useState("");
+  const [toolingFilter, setToolingFilter] = useState<ToolingFilter>("exclude");
   const [bomSourceMessage, setBomSourceMessage] = useState("");
 
   const [selectedProcessPartId, setSelectedProcessPartId] = useState("");
@@ -650,41 +659,59 @@ export default function RFQBuilderPage() {
     return Array.isArray(data?.data) ? data.data : [];
   }, [robustBomsQuery.data]);
 
-  const loadDraftBomIntoRfq = () => {
+  const filterDraftSourceLines = (draft: DraftBomRecord) => {
+    return draft.lines.filter((line) => {
+      if (line.action === "Do Not Order" || line.finalized) return false;
+      const isTooling = isToolingDraftLine(line);
+      if (toolingFilter === "only") return isTooling;
+      if (toolingFilter === "exclude" && isTooling) return false;
+      if (bomSourceType === "draft-po") return line.action === "Order / Quote" || line.status === "Needs Quote";
+      if (bomSourceType === "parts-list") return Boolean(line.agPartNumber || line.supplierItemId || line.description);
+      return true;
+    });
+  };
+
+  const mapDraftLineToBomLine = (line: PrivateerDraftBomLine): BomLineRow => ({
+    rfqPartId: selectedBomPartId,
+    inventoryItemId: null,
+    childPartAgNumber: line.agPartNumber || line.supplierItemId || "",
+    description: line.description,
+    category: mapDraftCategoryToEstimateCategory(line.category),
+    quantityPerPart: Number(line.qtyNeeded || 0),
+    uom: line.unit || "EA",
+    estimatedUnitCost: Number(line.unitCost || 0),
+    scrapPercent: 0,
+    isEstimated: line.unitCost === "",
+    isDraftInventoryItem: !line.agPartNumber,
+    vendorNameSnapshot: line.supplier || "",
+    materialSpec: line.manufacturer || "",
+    notes: [
+      `${bomSourceType.replace("-", " ")} source`,
+      line.category,
+      line.supplierItemId,
+      line.note,
+    ].filter(Boolean).join(" | "),
+  });
+
+  const loadDraftSourceIntoRfq = () => {
     if (!selectedBomPartId) {
-      setBomSourceMessage("Select an RFQ part before loading a draft BOM.");
+      setBomSourceMessage("Select an RFQ part before loading captured draft data.");
       return;
     }
 
     const draft = draftBomRecords.find((item) => item.id === selectedDraftBomId);
     if (!draft) {
-      setBomSourceMessage("Select a draft BOM to load.");
+      setBomSourceMessage("Select a draft source to load.");
       return;
     }
 
-    const sourceLines = draft.lines.filter((line) => line.action !== "Do Not Order" && !line.finalized);
-    const mappedLines: BomLineRow[] = sourceLines.map((line) => ({
-      rfqPartId: selectedBomPartId,
-      inventoryItemId: null,
-      childPartAgNumber: line.agPartNumber || "",
-      description: line.description,
-      category: mapDraftCategoryToEstimateCategory(line.category),
-      quantityPerPart: Number(line.qtyNeeded || 0),
-      uom: line.unit || "EA",
-      estimatedUnitCost: Number(line.unitCost || 0),
-      scrapPercent: 0,
-      isEstimated: line.unitCost === "",
-      isDraftInventoryItem: !line.agPartNumber,
-      vendorNameSnapshot: line.supplier || "",
-      materialSpec: line.manufacturer || "",
-      notes: [line.supplierItemId, line.note].filter(Boolean).join(" | "),
-    }));
+    const mappedLines = filterDraftSourceLines(draft).map(mapDraftLineToBomLine);
 
     setBomLines((prev) => [
       ...prev.filter((line) => line.rfqPartId !== selectedBomPartId || line.id),
       ...mappedLines,
     ]);
-    setBomSourceMessage(`${mappedLines.length} line(s) loaded from ${draft.name}. Save individual lines to persist them to this RFQ.`);
+    setBomSourceMessage(`${mappedLines.length} line(s) loaded from ${draft.name}. Save individual lines to persist them to this ROM.`);
   };
 
   const loadExistingBomIntoRfq = async () => {
@@ -726,11 +753,12 @@ export default function RFQBuilderPage() {
   };
 
   const loadSelectedBomSource = async () => {
-    if (bomSourceType === "draft") {
-      loadDraftBomIntoRfq();
+    setBomSourceMessage("");
+    if (bomSourceType === "existing") {
+      await loadExistingBomIntoRfq();
       return;
     }
-    await loadExistingBomIntoRfq();
+    loadDraftSourceIntoRfq();
   };
 
   const updateBomLine = (index: number, field: keyof BomLineRow, value: string | number | boolean | null) => {
@@ -1428,26 +1456,44 @@ export default function RFQBuilderPage() {
             <div>
               <h2 className="text-lg font-semibold">BOM Source</h2>
               <p className="text-sm text-muted-foreground">
-                Load material lines from a draft BOM or an existing released BOM instead of building every line manually.
+                Load captured draft BOM, draft PO, parts list, or released BOM lines into the selected ROM part.
               </p>
             </div>
 
-            <div className="grid gap-4 lg:grid-cols-[180px_minmax(260px,1fr)_auto] lg:items-end">
+            <div className="grid gap-4 xl:grid-cols-[180px_minmax(260px,1fr)_180px_auto] xl:items-end">
               <div>
                 <label className="block text-sm mb-1">Source Type</label>
                 <select
                   className="w-full border rounded px-3 py-2"
                   value={bomSourceType}
-                  onChange={(event) => setBomSourceType(event.target.value as "draft" | "existing")}
+                  onChange={(event) => setBomSourceType(event.target.value as BomSourceType)}
                 >
-                  <option value="draft">Draft BOM</option>
+                  <option value="draft-bom">Draft BOM</option>
+                  <option value="draft-po">Draft PO</option>
+                  <option value="parts-list">Parts List</option>
                   <option value="existing">Existing BOM</option>
                 </select>
               </div>
 
-              {bomSourceType === "draft" ? (
+              {bomSourceType === "existing" ? (
                 <div>
-                  <label className="block text-sm mb-1">Draft BOM</label>
+                  <label className="block text-sm mb-1">Existing BOM</label>
+                  <select
+                    className="w-full border rounded px-3 py-2"
+                    value={selectedExistingBomId}
+                    onChange={(event) => setSelectedExistingBomId(event.target.value)}
+                  >
+                    <option value="">Select an existing BOM</option>
+                    {existingBomRecords.map((bom: any) => (
+                      <option key={bom.id} value={bom.id}>
+                        {bom.code} - {bom.parentInventoryItem?.name ?? bom.parentPartAgNumber ?? bom.id}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-sm mb-1">Captured Draft</label>
                   <select
                     className="w-full border rounded px-3 py-2"
                     value={selectedDraftBomId}
@@ -1460,26 +1506,24 @@ export default function RFQBuilderPage() {
                     ))}
                   </select>
                 </div>
-              ) : (
-                <div>
-                  <label className="block text-sm mb-1">Existing BOM</label>
-                  <select
-                    className="w-full border rounded px-3 py-2"
-                    value={selectedExistingBomId}
-                    onChange={(event) => setSelectedExistingBomId(event.target.value)}
-                  >
-                    <option value="">Select an existing BOM</option>
-                    {existingBomRecords.map((bom: any) => (
-                      <option key={bom.id} value={bom.id}>
-                        {bom.code} - {bom.parentInventoryItem?.name ?? bom.parentPartAgNumber}
-                      </option>
-                    ))}
-                  </select>
-                </div>
               )}
 
+              <div>
+                <label className="block text-sm mb-1">Tooling Filter</label>
+                <select
+                  className="w-full border rounded px-3 py-2"
+                  value={toolingFilter}
+                  onChange={(event) => setToolingFilter(event.target.value as ToolingFilter)}
+                  disabled={bomSourceType === "existing"}
+                >
+                  <option value="exclude">Exclude tooling</option>
+                  <option value="include">Include tooling</option>
+                  <option value="only">Tooling only</option>
+                </select>
+              </div>
+
               <button className="border rounded px-4 py-2" type="button" onClick={loadSelectedBomSource}>
-                Load BOM lines
+                Load lines
               </button>
             </div>
 

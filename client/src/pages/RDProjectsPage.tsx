@@ -6,9 +6,9 @@ import {
   Boxes,
   CheckCircle2,
   ChevronRight,
-  ClipboardList,
   FilePlus2,
   FlaskConical,
+  FolderOpen,
   GitBranch,
   PackageCheck,
   Plus,
@@ -437,35 +437,70 @@ export default function RDProjectsPage() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-6 lg:grid-cols-[340px_1fr]">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <ClipboardList className="h-5 w-5 text-cyan-700" />
-                  Project List
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {projects.map((project) => (
-                  <button
+          <div className="space-y-6">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {projects.map((project) => {
+                const projectParts = getPartsForProject(project, draftRecords);
+                const readiness = partReadiness(projectParts);
+                const attachedTabCount = project.draftTabIds.length;
+                const isSelected = selectedProject?.id === project.id;
+
+                return (
+                  <Card
                     key={project.id}
-                    type="button"
-                    className={`w-full rounded-md border px-3 py-3 text-left transition hover:bg-gray-50 ${
-                      selectedProject?.id === project.id ? 'border-primary bg-primary/5' : 'bg-white'
+                    className={`cursor-pointer transition hover:shadow-lg ${
+                      isSelected ? 'border-primary shadow-sm ring-1 ring-primary/20' : ''
                     }`}
                     onClick={() => setSelectedProjectId(project.id)}
+                    data-testid={`card-rd-project-${project.id}`}
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium">{project.projectName}</span>
-                      <Badge variant={project.status === 'active' ? 'default' : 'secondary'}>
-                        {project.status === 'active' ? 'Active' : 'Draft'}
-                      </Badge>
-                    </div>
-                    <p className="mt-1 text-xs text-muted-foreground">{project.owner}</p>
-                  </button>
-                ))}
-              </CardContent>
-            </Card>
+                    <CardHeader className="pb-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex min-w-0 items-start gap-3">
+                          <div className="rounded-md bg-amber-50 p-2">
+                            <FolderOpen className="h-6 w-6 text-amber-500" />
+                          </div>
+                          <div className="min-w-0">
+                            <CardTitle className="truncate text-lg">{project.projectName}</CardTitle>
+                            <CardDescription className="mt-1 truncate">
+                              Owner: {project.owner || 'Unassigned'}
+                            </CardDescription>
+                          </div>
+                        </div>
+                        <Badge variant={project.status === 'active' ? 'default' : 'secondary'}>
+                          {project.status === 'active' ? 'Active' : 'Draft'}
+                        </Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div className="rounded-md border bg-white px-3 py-2">
+                          <p className="text-xs text-muted-foreground">Draft tabs</p>
+                          <p className="font-semibold">{attachedTabCount}</p>
+                        </div>
+                        <div className="rounded-md border bg-white px-3 py-2">
+                          <p className="text-xs text-muted-foreground">Parts</p>
+                          <p className="font-semibold">{projectParts.length}</p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Readiness</span>
+                          <span className="font-medium">{readiness}%</span>
+                        </div>
+                        <Progress value={readiness} className="h-2" />
+                      </div>
+
+                      <div className="flex items-center justify-between text-sm text-muted-foreground">
+                        <span>{project.signoffRequired ? 'Signoff required' : 'No signoff required'}</span>
+                        <ChevronRight className="h-5 w-5" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
 
             {selectedProject && (
               <Card>

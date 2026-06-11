@@ -107,6 +107,18 @@ type PoColumnId =
   | 'action'
   | 'status'
   | 'source';
+type PartsRequestColumnId =
+  | 'supplier'
+  | 'supplierItemId'
+  | 'manufacturer'
+  | 'unitCost'
+  | 'actualCost'
+  | 'qtyNeeded'
+  | 'service'
+  | 'agPartNumber'
+  | 'status';
+type DirectLaborColumnId = 'employeeRole' | 'hourlyRate' | 'hoursPerPart' | 'quantityPerPo' | 'extLabor' | 'remove';
+type SourcingColumnId = 'supplier' | 'supplierItemId' | 'agPartNumber' | 'description' | 'qtyNeeded' | 'unitCost' | 'extCost' | 'action' | 'status';
 
 type BomDraft = {
   id: string;
@@ -124,6 +136,9 @@ type BomDraft = {
   laborEstimateLines?: DraftLaborEstimateLine[];
   customLaborDepartments?: string[];
   poVisibleColumns?: PoColumnId[];
+  partsRequestVisibleColumns?: PartsRequestColumnId[];
+  directLaborVisibleColumns?: DirectLaborColumnId[];
+  assemblyVisibleColumns?: SourcingColumnId[];
   customPoColumns?: string[];
   workspaceTabs?: WorkspaceTabId[];
 };
@@ -188,6 +203,49 @@ const poColumnLabels: Record<PoColumnId, string> = {
   source: 'Source',
 };
 const defaultPoColumns: PoColumnId[] = ['agPartNumber', 'qtyNeeded', 'unitCost', 'extCost', 'status', 'source'];
+const partsRequestColumnLabels: Record<PartsRequestColumnId, string> = {
+  supplier: 'Vendor / Supplier',
+  supplierItemId: 'Supplier Part #',
+  manufacturer: 'Manufacturer',
+  unitCost: 'Estimated Cost',
+  actualCost: 'Actual Cost',
+  qtyNeeded: 'Quantity',
+  service: 'Service',
+  agPartNumber: 'AG Part #',
+  status: 'Status',
+};
+const defaultPartsRequestColumns: PartsRequestColumnId[] = [
+  'supplier',
+  'supplierItemId',
+  'manufacturer',
+  'unitCost',
+  'actualCost',
+  'qtyNeeded',
+  'service',
+  'agPartNumber',
+  'status',
+];
+const directLaborColumnLabels: Record<DirectLaborColumnId, string> = {
+  employeeRole: 'Employee role',
+  hourlyRate: 'Hourly rate',
+  hoursPerPart: 'Hours / part',
+  quantityPerPo: 'Qty / PO',
+  extLabor: 'Ext labor',
+  remove: 'Remove',
+};
+const defaultDirectLaborColumns: DirectLaborColumnId[] = ['employeeRole', 'hourlyRate', 'hoursPerPart', 'quantityPerPo', 'extLabor', 'remove'];
+const sourcingColumnLabels: Record<SourcingColumnId, string> = {
+  supplier: 'Supplier',
+  supplierItemId: 'Supplier Item',
+  agPartNumber: 'AG Part #',
+  description: 'Description',
+  qtyNeeded: 'Qty',
+  unitCost: 'Unit Cost',
+  extCost: 'Ext Cost',
+  action: 'Action',
+  status: 'Status',
+};
+const defaultSourcingColumns: SourcingColumnId[] = ['supplier', 'supplierItemId', 'agPartNumber', 'description', 'qtyNeeded', 'unitCost', 'extCost', 'action', 'status'];
 const defaultDepartment = 'layup';
 const departmentOptions = [
   { value: 'cutting_table', label: 'Cutting Table' },
@@ -351,6 +409,9 @@ function createPrivateerDraft(): BomDraft {
     laborEstimateLines: [newLaborEstimateLine()],
     customLaborDepartments: [],
     poVisibleColumns: defaultPoColumns,
+    partsRequestVisibleColumns: defaultPartsRequestColumns,
+    directLaborVisibleColumns: defaultDirectLaborColumns,
+    assemblyVisibleColumns: defaultSourcingColumns,
     customPoColumns: [],
     workspaceTabs: defaultWorkspaceTabs,
   };
@@ -384,6 +445,9 @@ function normalizeDraft(draft: BomDraft): BomDraft {
     })),
     customLaborDepartments: draft.customLaborDepartments ?? [],
     poVisibleColumns: draft.poVisibleColumns ?? defaultPoColumns,
+    partsRequestVisibleColumns: draft.partsRequestVisibleColumns ?? defaultPartsRequestColumns,
+    directLaborVisibleColumns: draft.directLaborVisibleColumns ?? defaultDirectLaborColumns,
+    assemblyVisibleColumns: draft.assemblyVisibleColumns ?? defaultSourcingColumns,
     customPoColumns: draft.customPoColumns ?? [],
     workspaceTabs: normalizeWorkspaceTabs(draft.workspaceTabs),
   };
@@ -612,6 +676,15 @@ export default function DraftBOMBuilderPage() {
   const [partsRequestDescription, setPartsRequestDescription] = useState('');
   const [sortPartsByVendor, setSortPartsByVendor] = useState(false);
   const [visiblePoColumns, setVisiblePoColumns] = useState<PoColumnId[]>(() => draft.poVisibleColumns ?? defaultPoColumns);
+  const [visiblePartsRequestColumns, setVisiblePartsRequestColumns] = useState<PartsRequestColumnId[]>(
+    () => draft.partsRequestVisibleColumns ?? defaultPartsRequestColumns,
+  );
+  const [visibleDirectLaborColumns, setVisibleDirectLaborColumns] = useState<DirectLaborColumnId[]>(
+    () => draft.directLaborVisibleColumns ?? defaultDirectLaborColumns,
+  );
+  const [visibleAssemblyColumns, setVisibleAssemblyColumns] = useState<SourcingColumnId[]>(
+    () => draft.assemblyVisibleColumns ?? defaultSourcingColumns,
+  );
   const [customPoColumns, setCustomPoColumns] = useState<string[]>(() => draft.customPoColumns ?? []);
   const [newPoColumnName, setNewPoColumnName] = useState('');
   const [newWorkspaceTabName, setNewWorkspaceTabName] = useState('');
@@ -702,6 +775,9 @@ export default function DraftBOMBuilderPage() {
       return (a.description || '').localeCompare(b.description || '');
     });
   }, [draft.lines, sortPartsByVendor]);
+  const partsRequestSelectedCount = partsRequestLines.filter((line) => line.include).length;
+  const allPartsRequestVisibleSelected = partsRequestLines.length > 0 && partsRequestSelectedCount === partsRequestLines.length;
+  const somePartsRequestVisibleSelected = partsRequestSelectedCount > 0 && partsRequestSelectedCount < partsRequestLines.length;
 
   const totals = useMemo(() => {
     const lineTotal = (line: BomLine) => asNumber(line.unitCost) * asNumber(line.qtyNeeded);
@@ -999,6 +1075,27 @@ export default function DraftBOMBuilderPage() {
     });
   }
 
+  function togglePartsRequestColumn(columnId: PartsRequestColumnId, checked: boolean) {
+    setVisiblePartsRequestColumns((current) => {
+      if (checked) return current.includes(columnId) ? current : [...current, columnId];
+      return current.filter((item) => item !== columnId);
+    });
+  }
+
+  function toggleDirectLaborColumn(columnId: DirectLaborColumnId, checked: boolean) {
+    setVisibleDirectLaborColumns((current) => {
+      if (checked) return current.includes(columnId) ? current : [...current, columnId];
+      return current.filter((item) => item !== columnId);
+    });
+  }
+
+  function toggleAssemblyColumn(columnId: SourcingColumnId, checked: boolean) {
+    setVisibleAssemblyColumns((current) => {
+      if (checked) return current.includes(columnId) ? current : [...current, columnId];
+      return current.filter((item) => item !== columnId);
+    });
+  }
+
   function addCustomPoColumn() {
     const columnName = newPoColumnName.trim();
     if (!columnName) return;
@@ -1019,6 +1116,9 @@ export default function DraftBOMBuilderPage() {
     const nextDraft = {
       ...draft,
       poVisibleColumns: visiblePoColumns,
+      partsRequestVisibleColumns: visiblePartsRequestColumns,
+      directLaborVisibleColumns: visibleDirectLaborColumns,
+      assemblyVisibleColumns: visibleAssemblyColumns,
       customPoColumns,
       workspaceTabs: visibleWorkspaceTabs,
       updatedAt: new Date().toISOString(),
@@ -1044,6 +1144,9 @@ export default function DraftBOMBuilderPage() {
     setSelectedDraftId(id);
     setDraft(nextDraft);
     setVisiblePoColumns(nextDraft.poVisibleColumns ?? defaultPoColumns);
+    setVisiblePartsRequestColumns(nextDraft.partsRequestVisibleColumns ?? defaultPartsRequestColumns);
+    setVisibleDirectLaborColumns(nextDraft.directLaborVisibleColumns ?? defaultDirectLaborColumns);
+    setVisibleAssemblyColumns(nextDraft.assemblyVisibleColumns ?? defaultSourcingColumns);
     setCustomPoColumns(nextDraft.customPoColumns ?? []);
     setVisibleWorkspaceTabs(nextDraft.workspaceTabs ?? defaultWorkspaceTabs);
     setActiveWorkspaceTab((nextDraft.workspaceTabs ?? defaultWorkspaceTabs)[0] ?? 'po-draft');
@@ -1092,12 +1195,18 @@ export default function DraftBOMBuilderPage() {
       laborEstimateLines: [newLaborEstimateLine()],
       customLaborDepartments: [],
       poVisibleColumns: defaultPoColumns,
+      partsRequestVisibleColumns: defaultPartsRequestColumns,
+      directLaborVisibleColumns: defaultDirectLaborColumns,
+      assemblyVisibleColumns: defaultSourcingColumns,
       customPoColumns: [],
       workspaceTabs: defaultWorkspaceTabs,
     };
     setSelectedDraftId('');
     setDraft(blankDraft);
     setVisiblePoColumns(defaultPoColumns);
+    setVisiblePartsRequestColumns(defaultPartsRequestColumns);
+    setVisibleDirectLaborColumns(defaultDirectLaborColumns);
+    setVisibleAssemblyColumns(defaultSourcingColumns);
     setCustomPoColumns([]);
     setVisibleWorkspaceTabs(defaultWorkspaceTabs);
     setActiveWorkspaceTab('po-draft');
@@ -1415,6 +1524,70 @@ export default function DraftBOMBuilderPage() {
               </TabsList>
 
               <div className="flex flex-wrap gap-2">
+                {activeWorkspaceTab === 'parts-request' ? (
+                  <label className="flex h-10 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm">
+                    <Checkbox
+                      checked={allPartsRequestVisibleSelected ? true : somePartsRequestVisibleSelected ? 'indeterminate' : false}
+                      onCheckedChange={(checked) =>
+                        setAllPartsRequestIncluded(partsRequestLines.map((line) => line.id), checked === true)
+                      }
+                      disabled={partsRequestLines.length === 0}
+                      aria-label="Select all visible parts/request lines"
+                    />
+                    <span>Select all</span>
+                    <span className="text-xs tabular-nums text-slate-500">
+                      {partsRequestSelectedCount}/{partsRequestLines.length}
+                    </span>
+                  </label>
+                ) : null}
+                <div className="flex h-10 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm">
+                  <Switch
+                    id="draft-tabs-edit-mode"
+                    checked={isEditMode}
+                    onCheckedChange={setIsEditMode}
+                    aria-label="Toggle draft editing"
+                  />
+                  <Label htmlFor="draft-tabs-edit-mode" className="cursor-pointer">
+                    Editing
+                  </Label>
+                </div>
+                {activeWorkspaceTab === 'po-draft' ? (
+                  <ColumnSelectionMenu
+                    columns={(Object.keys(poColumnLabels) as PoColumnId[]).map((id) => ({ id, label: poColumnLabels[id] }))}
+                    visibleColumns={visiblePoColumns}
+                    onToggle={(columnId, checked) => togglePoColumn(columnId as PoColumnId, checked)}
+                  />
+                ) : null}
+                {activeWorkspaceTab === 'parts-request' ? (
+                  <ColumnSelectionMenu
+                    columns={(Object.keys(partsRequestColumnLabels) as PartsRequestColumnId[]).map((id) => ({
+                      id,
+                      label: partsRequestColumnLabels[id],
+                    }))}
+                    visibleColumns={visiblePartsRequestColumns}
+                    onToggle={(columnId, checked) => togglePartsRequestColumn(columnId as PartsRequestColumnId, checked)}
+                  />
+                ) : null}
+                {activeWorkspaceTab === 'direct-labor' ? (
+                  <ColumnSelectionMenu
+                    columns={(Object.keys(directLaborColumnLabels) as DirectLaborColumnId[]).map((id) => ({
+                      id,
+                      label: directLaborColumnLabels[id],
+                    }))}
+                    visibleColumns={visibleDirectLaborColumns}
+                    onToggle={(columnId, checked) => toggleDirectLaborColumn(columnId as DirectLaborColumnId, checked)}
+                  />
+                ) : null}
+                {activeWorkspaceTab === 'assembly-tree' ? (
+                  <ColumnSelectionMenu
+                    columns={(Object.keys(sourcingColumnLabels) as SourcingColumnId[]).map((id) => ({
+                      id,
+                      label: sourcingColumnLabels[id],
+                    }))}
+                    visibleColumns={visibleAssemblyColumns}
+                    onToggle={(columnId, checked) => toggleAssemblyColumn(columnId as SourcingColumnId, checked)}
+                  />
+                ) : null}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button type="button" variant="outline">
@@ -1508,6 +1681,7 @@ export default function DraftBOMBuilderPage() {
               <TabsContent value="parts-request" className="mt-4">
                 <PartsRequestWorkspace
                   lines={partsRequestLines}
+                  visibleColumns={visiblePartsRequestColumns}
                   description={partsRequestDescription}
                   matches={partsRequestMatches}
                   sortByVendor={sortPartsByVendor}
@@ -1529,6 +1703,7 @@ export default function DraftBOMBuilderPage() {
               <TabsContent value="direct-labor" className="mt-4">
                 <DirectLaborEstimateWorkspace
                   lines={draft.laborEstimateLines ?? []}
+                  visibleColumns={visibleDirectLaborColumns}
                   departments={laborDepartments}
                   newDepartmentName={newLaborDepartmentName}
                   totalCost={totals.laborTotal}
@@ -1578,6 +1753,7 @@ export default function DraftBOMBuilderPage() {
                   </div>
                   <SourcingLineTable
                     lines={selectedLines}
+                    visibleColumns={visibleAssemblyColumns}
                     emptyMessage="Select BOM lines to build an assembly tree."
                   />
                 </section>
@@ -1600,6 +1776,40 @@ export default function DraftBOMBuilderPage() {
         </section>
       </div>
     </main>
+  );
+}
+
+function ColumnSelectionMenu({
+  columns,
+  visibleColumns,
+  onToggle,
+}: {
+  columns: { id: string; label: string }[];
+  visibleColumns: string[];
+  onToggle: (columnId: string, checked: boolean) => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button type="button" variant="outline">
+          <SlidersHorizontal className="mr-2 h-4 w-4" />
+          Columns
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="w-[240px]" align="end">
+        <DropdownMenuLabel>Visible columns</DropdownMenuLabel>
+        {columns.map((column) => (
+          <DropdownMenuCheckboxItem
+            key={column.id}
+            checked={visibleColumns.includes(column.id)}
+            onSelect={(event) => event.preventDefault()}
+            onCheckedChange={(checked) => onToggle(column.id, checked === true)}
+          >
+            {column.label}
+          </DropdownMenuCheckboxItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -1837,6 +2047,7 @@ function poColumnValue(line: BomLine, columnId: PoColumnId) {
 
 function PartsRequestWorkspace({
   lines,
+  visibleColumns,
   description,
   matches,
   sortByVendor,
@@ -1852,6 +2063,7 @@ function PartsRequestWorkspace({
   isEditMode,
 }: {
   lines: BomLine[];
+  visibleColumns: PartsRequestColumnId[];
   description: string;
   matches: InventoryItemOption[];
   sortByVendor: boolean;
@@ -1870,6 +2082,7 @@ function PartsRequestWorkspace({
   const selectedCount = lines.filter((line) => line.include).length;
   const allVisibleSelected = lines.length > 0 && selectedCount === lines.length;
   const someVisibleSelected = selectedCount > 0 && selectedCount < lines.length;
+  const totalColumns = 2 + visibleColumns.length;
   const [linkInventoryMatches, setLinkInventoryMatches] = useState(false);
   const [isImportingCsv, setIsImportingCsv] = useState(false);
 
@@ -2016,21 +2229,21 @@ function PartsRequestWorkspace({
                   </div>
                 </TableHead>
                 <TableHead className="min-w-[300px]">Part description</TableHead>
-                <TableHead className="w-[160px]">Vendor / Supplier</TableHead>
-                <TableHead className="w-[170px]">Supplier Part #</TableHead>
-                <TableHead className="w-[160px]">Manufacturer</TableHead>
-                <TableHead className="w-[130px] text-right">Estimated Cost</TableHead>
-                <TableHead className="w-[120px] text-right">Actual Cost</TableHead>
-                <TableHead className="w-[100px] text-right">Quantity</TableHead>
-                <TableHead className="w-[90px]">Service</TableHead>
-                <TableHead className="w-[130px]">AG Part #</TableHead>
-                <TableHead className="w-[150px]">Status</TableHead>
+                {visibleColumns.includes('supplier') ? <TableHead className="w-[160px]">Vendor / Supplier</TableHead> : null}
+                {visibleColumns.includes('supplierItemId') ? <TableHead className="w-[170px]">Supplier Part #</TableHead> : null}
+                {visibleColumns.includes('manufacturer') ? <TableHead className="w-[160px]">Manufacturer</TableHead> : null}
+                {visibleColumns.includes('unitCost') ? <TableHead className="w-[130px] text-right">Estimated Cost</TableHead> : null}
+                {visibleColumns.includes('actualCost') ? <TableHead className="w-[120px] text-right">Actual Cost</TableHead> : null}
+                {visibleColumns.includes('qtyNeeded') ? <TableHead className="w-[100px] text-right">Quantity</TableHead> : null}
+                {visibleColumns.includes('service') ? <TableHead className="w-[90px]">Service</TableHead> : null}
+                {visibleColumns.includes('agPartNumber') ? <TableHead className="w-[130px]">AG Part #</TableHead> : null}
+                {visibleColumns.includes('status') ? <TableHead className="w-[150px]">Status</TableHead> : null}
               </TableRow>
             </TableHeader>
             <TableBody>
               {lines.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={11} className="h-24 text-center text-slate-500">
+                  <TableCell colSpan={totalColumns} className="h-24 text-center text-slate-500">
                     Add a part description to begin the parts/request draft.
                   </TableCell>
                 </TableRow>
@@ -2045,10 +2258,10 @@ function PartsRequestWorkspace({
                       />
                     </TableCell>
                     <EditableCell value={line.description} onChange={(value) => onUpdateLine(line.id, { description: value })} disabled={!isEditMode} wide />
-                    <EditableCell value={line.supplier} onChange={(value) => onUpdateLine(line.id, { supplier: value })} disabled={!isEditMode} />
-                    <EditableCell value={line.supplierItemId} onChange={(value) => onUpdateLine(line.id, { supplierItemId: value })} disabled={!isEditMode} />
-                    <EditableCell value={line.manufacturer} onChange={(value) => onUpdateLine(line.id, { manufacturer: value })} disabled={!isEditMode} />
-                    <TableCell>
+                    {visibleColumns.includes('supplier') ? <EditableCell value={line.supplier} onChange={(value) => onUpdateLine(line.id, { supplier: value })} disabled={!isEditMode} /> : null}
+                    {visibleColumns.includes('supplierItemId') ? <EditableCell value={line.supplierItemId} onChange={(value) => onUpdateLine(line.id, { supplierItemId: value })} disabled={!isEditMode} /> : null}
+                    {visibleColumns.includes('manufacturer') ? <EditableCell value={line.manufacturer} onChange={(value) => onUpdateLine(line.id, { manufacturer: value })} disabled={!isEditMode} /> : null}
+                    {visibleColumns.includes('unitCost') ? <TableCell>
                       <Input
                         className="h-9 text-right"
                         type="number"
@@ -2058,8 +2271,8 @@ function PartsRequestWorkspace({
                         onChange={(event) => onUpdateNumberLine(line.id, 'unitCost', event.target.value)}
                         disabled={!isEditMode}
                       />
-                    </TableCell>
-                    <TableCell>
+                    </TableCell> : null}
+                    {visibleColumns.includes('actualCost') ? <TableCell>
                       <Input
                         className="h-9 text-right"
                         type="number"
@@ -2069,8 +2282,8 @@ function PartsRequestWorkspace({
                         onChange={(event) => onUpdateNumberLine(line.id, 'actualCost', event.target.value)}
                         disabled={!isEditMode}
                       />
-                    </TableCell>
-                    <TableCell>
+                    </TableCell> : null}
+                    {visibleColumns.includes('qtyNeeded') ? <TableCell>
                       <Input
                         className="h-9 text-right"
                         type="number"
@@ -2080,17 +2293,17 @@ function PartsRequestWorkspace({
                         onChange={(event) => onUpdateNumberLine(line.id, 'qtyNeeded', event.target.value)}
                         disabled={!isEditMode}
                       />
-                    </TableCell>
-                    <TableCell>
+                    </TableCell> : null}
+                    {visibleColumns.includes('service') ? <TableCell>
                       <Checkbox
                         checked={line.service === true}
                         onCheckedChange={(checked) => onUpdateLine(line.id, { service: checked === true })}
                         aria-label={`Mark ${line.description || 'line'} as service`}
                         disabled={!isEditMode}
                       />
-                    </TableCell>
-                    <EditableCell value={line.agPartNumber} onChange={(value) => onUpdateLine(line.id, { agPartNumber: value })} disabled={!isEditMode} />
-                    <TableCell>
+                    </TableCell> : null}
+                    {visibleColumns.includes('agPartNumber') ? <EditableCell value={line.agPartNumber} onChange={(value) => onUpdateLine(line.id, { agPartNumber: value })} disabled={!isEditMode} /> : null}
+                    {visibleColumns.includes('status') ? <TableCell>
                       <Select value={line.status} onValueChange={(value) => onUpdateLine(line.id, { status: value as BomStatus })} disabled={!isEditMode}>
                         <SelectTrigger className="h-9">
                           <SelectValue />
@@ -2103,7 +2316,7 @@ function PartsRequestWorkspace({
                           ))}
                         </SelectContent>
                       </Select>
-                    </TableCell>
+                    </TableCell> : null}
                   </TableRow>
                 ))
               )}
@@ -2122,6 +2335,7 @@ function PartsRequestWorkspace({
 
 function DirectLaborEstimateWorkspace({
   lines,
+  visibleColumns,
   departments,
   newDepartmentName,
   totalCost,
@@ -2135,6 +2349,7 @@ function DirectLaborEstimateWorkspace({
   isEditMode,
 }: {
   lines: DraftLaborEstimateLine[];
+  visibleColumns: DirectLaborColumnId[];
   departments: { value: string; label: string }[];
   newDepartmentName: string;
   totalCost: number;
@@ -2147,6 +2362,8 @@ function DirectLaborEstimateWorkspace({
   onUpdateNumberLine: (id: string, field: 'hourlyRate' | 'hoursPerPart' | 'quantityPerPo', value: string) => void;
   isEditMode: boolean;
 }) {
+  const totalColumns = 1 + visibleColumns.length;
+
   return (
     <section className="space-y-4">
       <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
@@ -2195,18 +2412,18 @@ function DirectLaborEstimateWorkspace({
             <TableHeader>
               <TableRow>
                 <TableHead className="min-w-[220px]">Department</TableHead>
-                <TableHead className="min-w-[190px]">Employee role</TableHead>
-                <TableHead className="w-[150px] text-right">Hourly rate</TableHead>
-                <TableHead className="w-[150px] text-right">Hours / part</TableHead>
-                <TableHead className="w-[150px] text-right">Qty / PO</TableHead>
-                <TableHead className="w-[160px] text-right">Ext labor</TableHead>
-                <TableHead className="w-[70px]"></TableHead>
+                {visibleColumns.includes('employeeRole') ? <TableHead className="min-w-[190px]">Employee role</TableHead> : null}
+                {visibleColumns.includes('hourlyRate') ? <TableHead className="w-[150px] text-right">Hourly rate</TableHead> : null}
+                {visibleColumns.includes('hoursPerPart') ? <TableHead className="w-[150px] text-right">Hours / part</TableHead> : null}
+                {visibleColumns.includes('quantityPerPo') ? <TableHead className="w-[150px] text-right">Qty / PO</TableHead> : null}
+                {visibleColumns.includes('extLabor') ? <TableHead className="w-[160px] text-right">Ext labor</TableHead> : null}
+                {visibleColumns.includes('remove') ? <TableHead className="w-[70px]"></TableHead> : null}
               </TableRow>
             </TableHeader>
             <TableBody>
               {lines.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-24 text-center text-slate-500">
+                  <TableCell colSpan={totalColumns} className="h-24 text-center text-slate-500">
                     Add a labor row to begin the direct labor estimate.
                   </TableCell>
                 </TableRow>
@@ -2227,7 +2444,7 @@ function DirectLaborEstimateWorkspace({
                         </SelectContent>
                       </Select>
                     </TableCell>
-                    <TableCell>
+                    {visibleColumns.includes('employeeRole') ? <TableCell>
                       <Select value={line.employeeRole} onValueChange={(value) => onUpdateLine(line.id, { employeeRole: value })} disabled={!isEditMode}>
                         <SelectTrigger className="h-9">
                           <SelectValue placeholder="Select role" />
@@ -2243,8 +2460,8 @@ function DirectLaborEstimateWorkspace({
                           ))}
                         </SelectContent>
                       </Select>
-                    </TableCell>
-                    <TableCell>
+                    </TableCell> : null}
+                    {visibleColumns.includes('hourlyRate') ? <TableCell>
                       <Input
                         className="h-9 text-right"
                         type="number"
@@ -2254,8 +2471,8 @@ function DirectLaborEstimateWorkspace({
                         onChange={(event) => onUpdateNumberLine(line.id, 'hourlyRate', event.target.value)}
                         disabled={!isEditMode}
                       />
-                    </TableCell>
-                    <TableCell>
+                    </TableCell> : null}
+                    {visibleColumns.includes('hoursPerPart') ? <TableCell>
                       <Input
                         className="h-9 text-right"
                         type="number"
@@ -2265,8 +2482,8 @@ function DirectLaborEstimateWorkspace({
                         onChange={(event) => onUpdateNumberLine(line.id, 'hoursPerPart', event.target.value)}
                         disabled={!isEditMode}
                       />
-                    </TableCell>
-                    <TableCell>
+                    </TableCell> : null}
+                    {visibleColumns.includes('quantityPerPo') ? <TableCell>
                       <Input
                         className="h-9 text-right"
                         type="number"
@@ -2276,15 +2493,15 @@ function DirectLaborEstimateWorkspace({
                         onChange={(event) => onUpdateNumberLine(line.id, 'quantityPerPo', event.target.value)}
                         disabled={!isEditMode}
                       />
-                    </TableCell>
-                    <TableCell className="text-right font-medium tabular-nums">
+                    </TableCell> : null}
+                    {visibleColumns.includes('extLabor') ? <TableCell className="text-right font-medium tabular-nums">
                       {money(laborLineTotal(line))}
-                    </TableCell>
-                    <TableCell>
+                    </TableCell> : null}
+                    {visibleColumns.includes('remove') ? <TableCell>
                       <Button type="button" variant="ghost" size="sm" onClick={() => onRemoveLine(line.id)} aria-label="Remove labor row" disabled={!isEditMode}>
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
-                    </TableCell>
+                    </TableCell> : null}
                   </TableRow>
                 ))
               )}
@@ -2791,27 +3008,35 @@ function searchInventoryItems(items: InventoryItemOption[], query: string) {
   return source.slice(0, 50);
 }
 
-function SourcingLineTable({ lines, emptyMessage }: { lines: BomLine[]; emptyMessage: string }) {
+function SourcingLineTable({
+  lines,
+  visibleColumns,
+  emptyMessage,
+}: {
+  lines: BomLine[];
+  visibleColumns: SourcingColumnId[];
+  emptyMessage: string;
+}) {
   return (
     <div className="overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-[140px]">Supplier</TableHead>
-            <TableHead className="w-[130px]">Supplier Item</TableHead>
-            <TableHead className="w-[110px]">AG Part #</TableHead>
-            <TableHead className="min-w-[320px]">Description</TableHead>
-            <TableHead className="w-[80px] text-right">Qty</TableHead>
-            <TableHead className="w-[110px] text-right">Unit Cost</TableHead>
-            <TableHead className="w-[120px] text-right">Ext Cost</TableHead>
-            <TableHead className="w-[140px]">Action</TableHead>
-            <TableHead className="w-[130px]">Status</TableHead>
+            {visibleColumns.includes('supplier') ? <TableHead className="w-[140px]">Supplier</TableHead> : null}
+            {visibleColumns.includes('supplierItemId') ? <TableHead className="w-[130px]">Supplier Item</TableHead> : null}
+            {visibleColumns.includes('agPartNumber') ? <TableHead className="w-[110px]">AG Part #</TableHead> : null}
+            {visibleColumns.includes('description') ? <TableHead className="min-w-[320px]">Description</TableHead> : null}
+            {visibleColumns.includes('qtyNeeded') ? <TableHead className="w-[80px] text-right">Qty</TableHead> : null}
+            {visibleColumns.includes('unitCost') ? <TableHead className="w-[110px] text-right">Unit Cost</TableHead> : null}
+            {visibleColumns.includes('extCost') ? <TableHead className="w-[120px] text-right">Ext Cost</TableHead> : null}
+            {visibleColumns.includes('action') ? <TableHead className="w-[140px]">Action</TableHead> : null}
+            {visibleColumns.includes('status') ? <TableHead className="w-[130px]">Status</TableHead> : null}
           </TableRow>
         </TableHeader>
         <TableBody>
           {lines.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={9} className="h-24 text-center text-slate-500">
+              <TableCell colSpan={Math.max(visibleColumns.length, 1)} className="h-24 text-center text-slate-500">
                 {emptyMessage}
               </TableCell>
             </TableRow>
@@ -2820,19 +3045,19 @@ function SourcingLineTable({ lines, emptyMessage }: { lines: BomLine[]; emptyMes
               const extCost = asNumber(line.unitCost) * asNumber(line.qtyNeeded);
               return (
                 <TableRow key={line.id}>
-                  <TableCell className="font-medium">{line.supplier || 'Unassigned'}</TableCell>
-                  <TableCell>{line.supplierItemId || '-'}</TableCell>
-                  <TableCell>{line.agPartNumber || '-'}</TableCell>
-                  <TableCell>{line.description || '-'}</TableCell>
-                  <TableCell className="text-right tabular-nums">{line.qtyNeeded || '-'}</TableCell>
-                  <TableCell className="text-right tabular-nums">
+                  {visibleColumns.includes('supplier') ? <TableCell className="font-medium">{line.supplier || 'Unassigned'}</TableCell> : null}
+                  {visibleColumns.includes('supplierItemId') ? <TableCell>{line.supplierItemId || '-'}</TableCell> : null}
+                  {visibleColumns.includes('agPartNumber') ? <TableCell>{line.agPartNumber || '-'}</TableCell> : null}
+                  {visibleColumns.includes('description') ? <TableCell>{line.description || '-'}</TableCell> : null}
+                  {visibleColumns.includes('qtyNeeded') ? <TableCell className="text-right tabular-nums">{line.qtyNeeded || '-'}</TableCell> : null}
+                  {visibleColumns.includes('unitCost') ? <TableCell className="text-right tabular-nums">
                     {line.unitCost === '' ? '-' : money(asNumber(line.unitCost))}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">{money(extCost)}</TableCell>
-                  <TableCell>{line.action}</TableCell>
-                  <TableCell>
+                  </TableCell> : null}
+                  {visibleColumns.includes('extCost') ? <TableCell className="text-right tabular-nums">{money(extCost)}</TableCell> : null}
+                  {visibleColumns.includes('action') ? <TableCell>{line.action}</TableCell> : null}
+                  {visibleColumns.includes('status') ? <TableCell>
                     <StatusBadge status={line.status} />
-                  </TableCell>
+                  </TableCell> : null}
                 </TableRow>
               );
             })

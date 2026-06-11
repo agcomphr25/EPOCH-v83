@@ -10,11 +10,11 @@ import {
   PackagePlus,
   Plus,
   Save,
-  Send,
   SlidersHorizontal,
   Trash2,
   Upload,
 } from 'lucide-react';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -139,6 +139,7 @@ type BomDraft = {
   partsRequestVisibleColumns?: PartsRequestColumnId[];
   directLaborVisibleColumns?: DirectLaborColumnId[];
   assemblyVisibleColumns?: SourcingColumnId[];
+  customColumns?: string[];
   customPoColumns?: string[];
   workspaceTabs?: WorkspaceTabId[];
 };
@@ -180,10 +181,28 @@ type InventoryItemOption = {
   manufacturerPartNumber?: string | null;
   manufacturer?: string | null;
   isActive?: boolean | null;
+  onHand?: number | string | null;
+  available?: number | string | null;
+  quantityInStock?: number | string | null;
+  minimumStock?: number | string | null;
+  reorderPoint?: number | string | null;
   itemType?: string | null;
   type?: string | null;
   isPacket?: boolean | null;
   manufacturedCategory?: string | null;
+};
+
+type AssemblyStockState = 'on-hand' | 'low-stock' | 'blocked';
+type AssemblyTreeNode = {
+  id: string;
+  partNumber: string;
+  description: string;
+  quantityRequired: number;
+  inventoryItem: InventoryItemOption | null;
+  stockState: AssemblyStockState;
+  availableQuantity: number;
+  reorderPoint: number;
+  children: AssemblyTreeNode[];
 };
 
 type CsvImportResult = {
@@ -431,6 +450,7 @@ function createPrivateerDraft(): BomDraft {
     partsRequestVisibleColumns: defaultPartsRequestColumns,
     directLaborVisibleColumns: defaultDirectLaborColumns,
     assemblyVisibleColumns: defaultSourcingColumns,
+    customColumns: [],
     customPoColumns: [],
     workspaceTabs: defaultWorkspaceTabs,
   };
@@ -479,6 +499,7 @@ function normalizeDraft(draft: BomDraft): BomDraft {
     partsRequestVisibleColumns: draft.partsRequestVisibleColumns ?? defaultPartsRequestColumns,
     directLaborVisibleColumns: draft.directLaborVisibleColumns ?? defaultDirectLaborColumns,
     assemblyVisibleColumns: draft.assemblyVisibleColumns ?? defaultSourcingColumns,
+    customColumns: uniqueColumnNames([...(draft.customColumns ?? []), ...(draft.customPoColumns ?? [])]),
     customPoColumns: draft.customPoColumns ?? [],
     workspaceTabs: normalizeWorkspaceTabs(draft.workspaceTabs),
   };
@@ -571,6 +592,87 @@ function findInventoryMatch(partNumber: string, inventoryItems: InventoryItemOpt
         .some((value) => value?.trim().toLowerCase() === normalizedPartNumber),
     ) ?? null
   );
+}
+
+function inventoryStockQuantity(item?: InventoryItemOption | null) {
+  if (!item) return 0;
+  const quantity = Number(item.available ?? item.onHand ?? item.quantityInStock ?? 0);
+  return Number.isFinite(quantity) ? quantity : 0;
+}
+
+function inventoryReorderPoint(item?: InventoryItemOption | null) {
+  if (!item) return 0;
+  const point = Number(item.reorderPoint ?? item.minimumStock ?? 0);
+  return Number.isFinite(point) ? point : 0;
+}
+
+function resolveInventoryForPart(
+  inventoryItems: InventoryItemOption[],
+  inventoryItemId: number | null | undefined,
+  partNumber: string,
+) {
+  if (inventoryItemId) {
+    const byId = inventoryItems.find((item) => item.id === inventoryItemId);
+    if (byId) return byId;
+  }
+  return findInventoryMatch(partNumber, inventoryItems);
+}
+
+function assemblyStockState(item: InventoryItemOption | null, requiredQuantity: number): AssemblyStockState {
+  const available = inventoryStockQuantity(item);
+  const reorderPoint = inventoryReorderPoint(item);
+  if (!item || available <= 0) return 'blocked';
+  if (available < requiredQuantity || (reorderPoint > 0 && available <= reorderPoint)) return 'low-stock';
+  return 'on-hand';
+}
+
+function buildAssemblyTreeNode(
+  part: DraftBomPart | DraftBomComponent,
+  inventoryItems: InventoryItemOption[],
+  requiredQuantity: number,
+  children: DraftBomComponent[] = [],
+  partLookup = new Map<string, DraftBomPart>(),
+): AssemblyTreeNode {
+  const inventoryItem = resolveInventoryForPart(inventoryItems, part.inventoryItemId, part.partNumber);
+  const nodeQuantity = requiredQuantity || 1;
+  return {
+    id: `${part.id}-${part.partNumber}-${nodeQuantity}`,
+    partNumber: part.partNumber,
+    description: part.description,
+    quantityRequired: nodeQuantity,
+    inventoryItem,
+    stockState: assemblyStockState(inventoryItem, nodeQuantity),
+    availableQuantity: inventoryStockQuantity(inventoryItem),
+    reorderPoint: inventoryReorderPoint(inventoryItem),
+    children: children.map((component) => {
+      const componentPart = partLookup.get(component.partNumber);
+      const childQuantity = nodeQuantity * (component.quantity || 1);
+      return buildAssemblyTreeNode(
+        component,
+        inventoryItems,
+        childQuantity,
+        componentPart?.bomItems ?? [],
+        partLookup,
+      );
+    }),
+  };
+}
+
+function buildAssemblyTree(lines: BomLine[], inventoryItems: InventoryItemOption[]) {
+  return lines.map((line) => {
+    const rootPart = draftLineToPart(line);
+    const primaryBom = line.childDraftBoms?.[0];
+    const partLookup = new Map<string, DraftBomPart>(
+      primaryBom?.parts.map((part) => [part.partNumber, part]) ?? [],
+    );
+    return buildAssemblyTreeNode(
+      primaryBom?.rootPart ?? rootPart,
+      inventoryItems,
+      asNumber(line.qtyNeeded) || 1,
+      primaryBom?.rootPart.bomItems?.length ? primaryBom.rootPart.bomItems : primaryBom?.parts[0]?.bomItems ?? [],
+      partLookup,
+    );
+  });
 }
 
 function buildLinesFromCsv(csvText: string, inventoryItems: InventoryItemOption[], linkInventoryMatches: boolean): CsvImportResult {
@@ -676,6 +778,14 @@ function normalizeWorkspaceTabs(tabs?: WorkspaceTabId[]) {
   return nextTabs;
 }
 
+function uniqueColumnNames(columns: string[]) {
+  return columns.reduce<string[]>((result, column) => {
+    const label = column.trim();
+    if (!label || result.includes(label)) return result;
+    return [...result, label];
+  }, []);
+}
+
 function loadDrafts(): BomDraft[] {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
@@ -717,8 +827,8 @@ export default function DraftBOMBuilderPage() {
   const [visibleAssemblyColumns, setVisibleAssemblyColumns] = useState<SourcingColumnId[]>(
     () => draft.assemblyVisibleColumns ?? defaultSourcingColumns,
   );
-  const [customPoColumns, setCustomPoColumns] = useState<string[]>(() => draft.customPoColumns ?? []);
-  const [newPoColumnName, setNewPoColumnName] = useState('');
+  const [customColumns, setCustomColumns] = useState<string[]>(() => draft.customColumns ?? draft.customPoColumns ?? []);
+  const [newColumnName, setNewColumnName] = useState('');
   const [newWorkspaceTabName, setNewWorkspaceTabName] = useState('');
   const [newLaborDepartmentName, setNewLaborDepartmentName] = useState('');
   const [wizardSeedLineId, setWizardSeedLineId] = useState<string | null>(null);
@@ -838,6 +948,10 @@ export default function DraftBOMBuilderPage() {
       return (a.description || '').localeCompare(b.description || '');
     });
   }, [draft.lines, sortPartsByVendor]);
+  const assemblyTree = useMemo(
+    () => buildAssemblyTree(partsRequestLines, activeInventoryItems),
+    [activeInventoryItems, partsRequestLines],
+  );
   const partsRequestSelectedCount = partsRequestLines.filter((line) => line.include).length;
   const allPartsRequestVisibleSelected = partsRequestLines.length > 0 && partsRequestSelectedCount === partsRequestLines.length;
   const somePartsRequestVisibleSelected = partsRequestSelectedCount > 0 && partsRequestSelectedCount < partsRequestLines.length;
@@ -1170,11 +1284,11 @@ export default function DraftBOMBuilderPage() {
     });
   }
 
-  function addCustomPoColumn() {
-    const columnName = newPoColumnName.trim();
+  function addCustomColumn() {
+    const columnName = newColumnName.trim();
     if (!columnName) return;
-    setCustomPoColumns((current) => (current.includes(columnName) ? current : [...current, columnName]));
-    setNewPoColumnName('');
+    setCustomColumns((current) => (current.includes(columnName) ? current : [...current, columnName]));
+    setNewColumnName('');
   }
 
   function updateLineCustomField(lineId: string, columnName: string, value: string) {
@@ -1193,7 +1307,8 @@ export default function DraftBOMBuilderPage() {
       partsRequestVisibleColumns: visiblePartsRequestColumns,
       directLaborVisibleColumns: visibleDirectLaborColumns,
       assemblyVisibleColumns: visibleAssemblyColumns,
-      customPoColumns,
+      customColumns,
+      customPoColumns: customColumns,
       workspaceTabs: visibleWorkspaceTabs,
       updatedAt: new Date().toISOString(),
     };
@@ -1214,7 +1329,7 @@ export default function DraftBOMBuilderPage() {
     setVisiblePartsRequestColumns(normalizedDraft.partsRequestVisibleColumns ?? defaultPartsRequestColumns);
     setVisibleDirectLaborColumns(normalizedDraft.directLaborVisibleColumns ?? defaultDirectLaborColumns);
     setVisibleAssemblyColumns(normalizedDraft.assemblyVisibleColumns ?? defaultSourcingColumns);
-    setCustomPoColumns(normalizedDraft.customPoColumns ?? []);
+    setCustomColumns(normalizedDraft.customColumns ?? normalizedDraft.customPoColumns ?? []);
     setVisibleWorkspaceTabs(normalizedDraft.workspaceTabs ?? defaultWorkspaceTabs);
     setActiveWorkspaceTab((normalizedDraft.workspaceTabs ?? defaultWorkspaceTabs)[0] ?? 'po-draft');
   }
@@ -1286,6 +1401,7 @@ export default function DraftBOMBuilderPage() {
       partsRequestVisibleColumns: defaultPartsRequestColumns,
       directLaborVisibleColumns: defaultDirectLaborColumns,
       assemblyVisibleColumns: defaultSourcingColumns,
+      customColumns: [],
       customPoColumns: [],
       workspaceTabs: defaultWorkspaceTabs,
     };
@@ -1354,6 +1470,7 @@ export default function DraftBOMBuilderPage() {
       partsRequestVisibleColumns: defaultPartsRequestColumns,
       directLaborVisibleColumns: defaultDirectLaborColumns,
       assemblyVisibleColumns: defaultSourcingColumns,
+      customColumns: [],
       customPoColumns: [],
       workspaceTabs: defaultWorkspaceTabs,
     };
@@ -1363,7 +1480,7 @@ export default function DraftBOMBuilderPage() {
     setVisiblePartsRequestColumns(defaultPartsRequestColumns);
     setVisibleDirectLaborColumns(defaultDirectLaborColumns);
     setVisibleAssemblyColumns(defaultSourcingColumns);
-    setCustomPoColumns([]);
+    setCustomColumns([]);
     setVisibleWorkspaceTabs(defaultWorkspaceTabs);
     setActiveWorkspaceTab('po-draft');
   }
@@ -1701,6 +1818,42 @@ export default function DraftBOMBuilderPage() {
             </div>
 
             <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-700">Custom Columns</h2>
+              <p className="mt-1 text-sm text-slate-600">
+                Columns added here are available anywhere this draft shows BOM lines.
+              </p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
+                <Input
+                  value={newColumnName}
+                  onChange={(event) => setNewColumnName(event.target.value)}
+                  placeholder="New column name"
+                  disabled={!isEditMode}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      addCustomColumn();
+                    }
+                  }}
+                />
+                <Button type="button" variant="outline" onClick={addCustomColumn} disabled={!isEditMode || !newColumnName.trim()}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add column
+                </Button>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {customColumns.length === 0 ? (
+                  <span className="text-sm text-slate-500">No custom columns yet.</span>
+                ) : (
+                  customColumns.map((columnName) => (
+                    <Badge key={columnName} variant="secondary">
+                      {columnName}
+                    </Badge>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-700">Filter Rollup</h2>
               <div className="mt-3 space-y-2">
                 {filterTotals.map(([filterName, data]) => (
@@ -1819,16 +1972,6 @@ export default function DraftBOMBuilderPage() {
                     onToggle={(columnId, checked) => toggleDirectLaborColumn(columnId as DirectLaborColumnId, checked)}
                   />
                 ) : null}
-                {activeWorkspaceTab === 'assembly-tree' ? (
-                  <ColumnSelectionMenu
-                    columns={(Object.keys(sourcingColumnLabels) as SourcingColumnId[]).map((id) => ({
-                      id,
-                      label: sourcingColumnLabels[id],
-                    }))}
-                    visibleColumns={visibleAssemblyColumns}
-                    onToggle={(columnId, checked) => toggleAssemblyColumn(columnId as SourcingColumnId, checked)}
-                  />
-                ) : null}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button type="button" variant="outline">
@@ -1903,13 +2046,10 @@ export default function DraftBOMBuilderPage() {
                   description={poDescription}
                   matches={poDescriptionMatches}
                   visibleColumns={visiblePoColumns}
-                  customColumns={customPoColumns}
-                  newColumnName={newPoColumnName}
+                  customColumns={customColumns}
                   onDescriptionChange={setPoDescription}
                   onCreateLine={createLineFromPoDescription}
                   onToggleColumn={togglePoColumn}
-                  onNewColumnNameChange={setNewPoColumnName}
-                  onAddCustomColumn={addCustomPoColumn}
                   onUpdateCustomField={updateLineCustomField}
                   onGeneratePoDraft={() => showHandoffToast('PO draft')}
                   onCreateDraftBom={startDraftBomForLine}
@@ -1923,6 +2063,7 @@ export default function DraftBOMBuilderPage() {
                 <PartsRequestWorkspace
                   lines={partsRequestLines}
                   visibleColumns={visiblePartsRequestColumns}
+                  customColumns={customColumns}
                   description={partsRequestDescription}
                   matches={partsRequestMatches}
                   sortByVendor={sortPartsByVendor}
@@ -1930,6 +2071,7 @@ export default function DraftBOMBuilderPage() {
                   onCreateLine={createLineFromPartsRequestDescription}
                   onSortByVendorChange={setSortPartsByVendor}
                   onUpdateLine={updateLine}
+                  onUpdateCustomField={updateLineCustomField}
                   onUpdateNumberLine={(id, field, value) => updateLine(id, { [field]: value === '' ? '' : Number(value) } as Partial<BomLine>)}
                   onImportCsv={importPartsRequestCsv}
                   onToggleAllIncluded={(lineIds, include) => setAllPartsRequestIncluded(lineIds, include)}
@@ -1975,29 +2117,7 @@ export default function DraftBOMBuilderPage() {
 
             {visibleWorkspaceTabs.includes('assembly-tree') ? (
               <TabsContent value="assembly-tree" className="mt-4">
-                <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
-                  <div className="flex flex-col gap-3 border-b border-slate-200 p-4 lg:flex-row lg:items-center lg:justify-between">
-                    <div>
-                      <h2 className="font-semibold text-slate-950">Assembly Tree</h2>
-                      <p className="text-sm text-slate-600">
-                        {selectedLines.length} selected line(s) available for assembly planning
-                      </p>
-                    </div>
-                    <Button
-                      variant="outline"
-                      disabled={selectedLines.length === 0}
-                      onClick={() => showHandoffToast('assembly tree')}
-                    >
-                      <Send className="mr-2 h-4 w-4" />
-                      Build assembly tree
-                    </Button>
-                  </div>
-                  <SourcingLineTable
-                    lines={selectedLines}
-                    visibleColumns={visibleAssemblyColumns}
-                    emptyMessage="Select BOM lines to build an assembly tree."
-                  />
-                </section>
+                <AssemblyTreeWorkspace tree={assemblyTree} lineCount={partsRequestLines.length} />
               </TabsContent>
             ) : null}
 
@@ -2005,11 +2125,19 @@ export default function DraftBOMBuilderPage() {
               .filter((tabId) => tabId.startsWith('custom:'))
               .map((tabId) => (
                 <TabsContent key={tabId} value={tabId} className="mt-4">
-                  <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-                    <h2 className="font-semibold text-slate-950">{workspaceTabLabel(tabId)}</h2>
-                    <p className="mt-1 text-sm text-slate-600">
-                      Custom workspace tab for this draft BOM.
-                    </p>
+                  <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
+                    <div className="border-b border-slate-200 p-4">
+                      <h2 className="font-semibold text-slate-950">{workspaceTabLabel(tabId)}</h2>
+                      <p className="mt-1 text-sm text-slate-600">
+                        Use the draft-level custom columns against every BOM line.
+                      </p>
+                    </div>
+                    <CustomColumnLineTable
+                      lines={draft.lines}
+                      customColumns={customColumns}
+                      onUpdateCustomField={updateLineCustomField}
+                      isEditMode={isEditMode}
+                    />
                   </section>
                 </TabsContent>
               ))}
@@ -2069,12 +2197,9 @@ function PoDraftWorkspace({
   matches,
   visibleColumns,
   customColumns,
-  newColumnName,
   onDescriptionChange,
   onCreateLine,
   onToggleColumn,
-  onNewColumnNameChange,
-  onAddCustomColumn,
   onUpdateCustomField,
   onGeneratePoDraft,
   onCreateDraftBom,
@@ -2085,12 +2210,9 @@ function PoDraftWorkspace({
   matches: InventoryItemOption[];
   visibleColumns: PoColumnId[];
   customColumns: string[];
-  newColumnName: string;
   onDescriptionChange: (value: string) => void;
   onCreateLine: (item?: InventoryItemOption) => void;
   onToggleColumn: (columnId: PoColumnId, checked: boolean) => void;
-  onNewColumnNameChange: (value: string) => void;
-  onAddCustomColumn: () => void;
   onUpdateCustomField: (lineId: string, columnName: string, value: string) => void;
   onGeneratePoDraft: () => void;
   onCreateDraftBom: (lineId: string) => void;
@@ -2174,23 +2296,9 @@ function PoDraftWorkspace({
       </div>
 
       <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700">Columns</h3>
-            <p className="text-sm text-slate-600">Show existing BOM fields or create a new PO draft column.</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Input
-              className="w-[220px]"
-              value={newColumnName}
-              onChange={(event) => onNewColumnNameChange(event.target.value)}
-              placeholder="New column name"
-              disabled={!isEditMode}
-            />
-            <Button type="button" variant="outline" onClick={onAddCustomColumn} disabled={!isEditMode || !newColumnName.trim()}>
-              Add column
-            </Button>
-          </div>
+        <div>
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700">Visible PO Fields</h3>
+          <p className="text-sm text-slate-600">Show or hide standard PO draft fields.</p>
         </div>
         <div className="mt-3 flex flex-wrap gap-3">
           {(Object.keys(poColumnLabels) as PoColumnId[]).map((columnId) => (
@@ -2289,6 +2397,7 @@ function poColumnValue(line: BomLine, columnId: PoColumnId) {
 function PartsRequestWorkspace({
   lines,
   visibleColumns,
+  customColumns,
   description,
   matches,
   sortByVendor,
@@ -2296,6 +2405,7 @@ function PartsRequestWorkspace({
   onCreateLine,
   onSortByVendorChange,
   onUpdateLine,
+  onUpdateCustomField,
   onUpdateNumberLine,
   onImportCsv,
   onToggleAllIncluded,
@@ -2305,6 +2415,7 @@ function PartsRequestWorkspace({
 }: {
   lines: BomLine[];
   visibleColumns: PartsRequestColumnId[];
+  customColumns: string[];
   description: string;
   matches: InventoryItemOption[];
   sortByVendor: boolean;
@@ -2312,6 +2423,7 @@ function PartsRequestWorkspace({
   onCreateLine: (item?: InventoryItemOption) => void;
   onSortByVendorChange: (value: boolean) => void;
   onUpdateLine: (id: string, patch: Partial<BomLine>) => void;
+  onUpdateCustomField: (lineId: string, columnName: string, value: string) => void;
   onUpdateNumberLine: (id: string, field: 'unitCost' | 'actualCost' | 'qtyNeeded', value: string) => void;
   onImportCsv: (file: File, linkInventoryMatches: boolean) => Promise<void>;
   onToggleAllIncluded: (lineIds: string[], include: boolean) => void;
@@ -2323,7 +2435,7 @@ function PartsRequestWorkspace({
   const selectedCount = lines.filter((line) => line.include).length;
   const allVisibleSelected = lines.length > 0 && selectedCount === lines.length;
   const someVisibleSelected = selectedCount > 0 && selectedCount < lines.length;
-  const totalColumns = 2 + visibleColumns.length;
+  const totalColumns = 2 + visibleColumns.length + customColumns.length;
   const [linkInventoryMatches, setLinkInventoryMatches] = useState(false);
   const [isImportingCsv, setIsImportingCsv] = useState(false);
 
@@ -2479,6 +2591,11 @@ function PartsRequestWorkspace({
                 {visibleColumns.includes('service') ? <TableHead className="w-[90px]">Service</TableHead> : null}
                 {visibleColumns.includes('agPartNumber') ? <TableHead className="w-[130px]">AG Part #</TableHead> : null}
                 {visibleColumns.includes('status') ? <TableHead className="w-[150px]">Status</TableHead> : null}
+                {customColumns.map((columnName) => (
+                  <TableHead key={columnName} className="min-w-[160px]">
+                    {columnName}
+                  </TableHead>
+                ))}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -2558,6 +2675,16 @@ function PartsRequestWorkspace({
                         </SelectContent>
                       </Select>
                     </TableCell> : null}
+                    {customColumns.map((columnName) => (
+                      <TableCell key={columnName}>
+                        <Input
+                          className="h-9"
+                          value={line.customFields?.[columnName] ?? ''}
+                          onChange={(event) => onUpdateCustomField(line.id, columnName, event.target.value)}
+                          disabled={!isEditMode}
+                        />
+                      </TableCell>
+                    ))}
                   </TableRow>
                 ))
               )}
@@ -3235,6 +3362,128 @@ function DraftBomWizardWorkspace({
   );
 }
 
+function AssemblyTreeWorkspace({ tree, lineCount }: { tree: AssemblyTreeNode[]; lineCount: number }) {
+  const totals = tree.reduce(
+    (acc, node) => {
+      const nodes = flattenAssemblyTree(node);
+      acc.onHand += nodes.filter((item) => item.stockState === 'on-hand').length;
+      acc.lowStock += nodes.filter((item) => item.stockState === 'low-stock').length;
+      acc.blocked += nodes.filter((item) => item.stockState === 'blocked').length;
+      return acc;
+    },
+    { onHand: 0, lowStock: 0, blocked: 0 },
+  );
+
+  return (
+    <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
+      <div className="flex flex-col gap-3 border-b border-slate-200 p-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <h2 className="font-semibold text-slate-950">Assembly Tree</h2>
+          <p className="text-sm text-slate-600">
+            {lineCount} parts/request line{lineCount === 1 ? '' : 's'} mapped with BOM wizard children and inventory readiness.
+          </p>
+        </div>
+        <div className="grid grid-cols-3 gap-2 text-sm">
+          <AssemblyStatusCount label="On hand" value={totals.onHand} state="on-hand" />
+          <AssemblyStatusCount label="Low" value={totals.lowStock} state="low-stock" />
+          <AssemblyStatusCount label="Blocked" value={totals.blocked} state="blocked" />
+        </div>
+      </div>
+
+      {tree.length === 0 ? (
+        <div className="p-8 text-center text-sm text-slate-500">
+          Add parts/request lines to build an assembly tree.
+        </div>
+      ) : (
+        <Accordion type="multiple" className="divide-y divide-slate-200">
+          {tree.map((node) => (
+            <AssemblyTreeAccordionNode key={node.id} node={node} depth={0} />
+          ))}
+        </Accordion>
+      )}
+    </section>
+  );
+}
+
+function AssemblyTreeAccordionNode({ node, depth }: { node: AssemblyTreeNode; depth: number }) {
+  return (
+    <AccordionItem value={node.id} className="border-0">
+      <AccordionTrigger className="gap-4 px-4 text-left hover:no-underline">
+        <div className="grid min-w-0 flex-1 gap-2 md:grid-cols-[minmax(220px,1fr)_auto_auto_auto] md:items-center">
+          <div className="min-w-0" style={{ paddingLeft: `${depth * 16}px` }}>
+            <div className="truncate font-semibold text-slate-950">{node.partNumber}</div>
+            <div className="truncate text-sm font-normal text-slate-600">{node.description}</div>
+          </div>
+          <div className="text-sm font-normal tabular-nums text-slate-600">
+            Req {node.quantityRequired.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+          </div>
+          <div className="text-sm font-normal tabular-nums text-slate-600">
+            On hand {node.availableQuantity.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+          </div>
+          <AssemblyStockBadge node={node} />
+        </div>
+      </AccordionTrigger>
+      <AccordionContent className="px-4 pb-4">
+        {node.children.length === 0 ? (
+          <div className="rounded-md border border-dashed border-slate-200 bg-slate-50 p-3 text-sm text-slate-500">
+            No BOM wizard children configured.
+          </div>
+        ) : (
+          <Accordion type="multiple" className="rounded-md border border-slate-200">
+            {node.children.map((child) => (
+              <AssemblyTreeAccordionNode key={child.id} node={child} depth={depth + 1} />
+            ))}
+          </Accordion>
+        )}
+      </AccordionContent>
+    </AccordionItem>
+  );
+}
+
+function flattenAssemblyTree(node: AssemblyTreeNode): AssemblyTreeNode[] {
+  return [node, ...node.children.flatMap(flattenAssemblyTree)];
+}
+
+function AssemblyStatusCount({ label, value, state }: { label: string; value: number; state: AssemblyStockState }) {
+  return (
+    <div className={cn('rounded-md border px-3 py-2 text-center', assemblyStatusClassName(state, 'panel'))}>
+      <div className="text-xs font-medium uppercase text-slate-600">{label}</div>
+      <div className="text-lg font-semibold tabular-nums text-slate-950">{value}</div>
+    </div>
+  );
+}
+
+function AssemblyStockBadge({ node }: { node: AssemblyTreeNode }) {
+  const label =
+    node.stockState === 'on-hand'
+      ? 'On hand'
+      : node.stockState === 'low-stock'
+        ? 'Low stock'
+        : 'Blocked';
+
+  return (
+    <Badge className={cn('justify-center whitespace-nowrap border', assemblyStatusClassName(node.stockState, 'badge'))}>
+      {label}
+    </Badge>
+  );
+}
+
+function assemblyStatusClassName(state: AssemblyStockState, surface: 'badge' | 'panel') {
+  if (state === 'on-hand') {
+    return surface === 'badge'
+      ? 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-50'
+      : 'border-emerald-200 bg-emerald-50';
+  }
+  if (state === 'low-stock') {
+    return surface === 'badge'
+      ? 'border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-50'
+      : 'border-amber-200 bg-amber-50';
+  }
+  return surface === 'badge'
+    ? 'border-red-200 bg-red-50 text-red-800 hover:bg-red-50'
+    : 'border-red-200 bg-red-50';
+}
+
 function searchInventoryItems(items: InventoryItemOption[], query: string) {
   const normalized = query.trim().toLowerCase();
   const source = normalized.length >= 2
@@ -3252,12 +3501,16 @@ function searchInventoryItems(items: InventoryItemOption[], query: string) {
 function SourcingLineTable({
   lines,
   visibleColumns,
+  customColumns,
   emptyMessage,
 }: {
   lines: BomLine[];
   visibleColumns: SourcingColumnId[];
+  customColumns: string[];
   emptyMessage: string;
 }) {
+  const totalColumns = Math.max(visibleColumns.length + customColumns.length, 1);
+
   return (
     <div className="overflow-x-auto">
       <Table>
@@ -3272,12 +3525,17 @@ function SourcingLineTable({
             {visibleColumns.includes('extCost') ? <TableHead className="w-[120px] text-right">Ext Cost</TableHead> : null}
             {visibleColumns.includes('action') ? <TableHead className="w-[140px]">Action</TableHead> : null}
             {visibleColumns.includes('status') ? <TableHead className="w-[130px]">Status</TableHead> : null}
+            {customColumns.map((columnName) => (
+              <TableHead key={columnName} className="min-w-[160px]">
+                {columnName}
+              </TableHead>
+            ))}
           </TableRow>
         </TableHeader>
         <TableBody>
           {lines.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={Math.max(visibleColumns.length, 1)} className="h-24 text-center text-slate-500">
+              <TableCell colSpan={totalColumns} className="h-24 text-center text-slate-500">
                 {emptyMessage}
               </TableCell>
             </TableRow>
@@ -3299,9 +3557,74 @@ function SourcingLineTable({
                   {visibleColumns.includes('status') ? <TableCell>
                     <StatusBadge status={line.status} />
                   </TableCell> : null}
+                  {customColumns.map((columnName) => (
+                    <TableCell key={columnName}>{line.customFields?.[columnName] || '-'}</TableCell>
+                  ))}
                 </TableRow>
               );
             })
+          )}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
+function CustomColumnLineTable({
+  lines,
+  customColumns,
+  onUpdateCustomField,
+  isEditMode,
+}: {
+  lines: BomLine[];
+  customColumns: string[];
+  onUpdateCustomField: (lineId: string, columnName: string, value: string) => void;
+  isEditMode: boolean;
+}) {
+  const totalColumns = 2 + Math.max(customColumns.length, 1);
+
+  return (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="min-w-[260px]">Part description</TableHead>
+            <TableHead className="w-[130px]">AG Part #</TableHead>
+            {customColumns.length === 0 ? <TableHead className="min-w-[180px]">Custom columns</TableHead> : null}
+            {customColumns.map((columnName) => (
+              <TableHead key={columnName} className="min-w-[180px]">
+                {columnName}
+              </TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {lines.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={totalColumns} className="h-24 text-center text-slate-500">
+                Add BOM lines before using custom columns.
+              </TableCell>
+            </TableRow>
+          ) : (
+            lines.map((line) => (
+              <TableRow key={line.id}>
+                <TableCell className="font-medium">{line.description || '-'}</TableCell>
+                <TableCell>{line.agPartNumber || '-'}</TableCell>
+                {customColumns.length === 0 ? (
+                  <TableCell className="text-slate-500">Add custom columns from BOM details.</TableCell>
+                ) : null}
+                {customColumns.map((columnName) => (
+                  <TableCell key={columnName}>
+                    <Input
+                      className="h-9"
+                      value={line.customFields?.[columnName] ?? ''}
+                      onChange={(event) => onUpdateCustomField(line.id, columnName, event.target.value)}
+                      disabled={!isEditMode}
+                    />
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))
           )}
         </TableBody>
       </Table>

@@ -1934,17 +1934,6 @@ export default function DraftBOMBuilderPage() {
                     </span>
                   </label>
                 ) : null}
-                <div className="flex h-10 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm">
-                  <Switch
-                    id="draft-tabs-edit-mode"
-                    checked={isEditMode}
-                    onCheckedChange={setIsEditMode}
-                    aria-label="Toggle draft editing"
-                  />
-                  <Label htmlFor="draft-tabs-edit-mode" className="cursor-pointer">
-                    Editing
-                  </Label>
-                </div>
                 {activeWorkspaceTab === 'po-draft' ? (
                   <ColumnSelectionMenu
                     columns={(Object.keys(poColumnLabels) as PoColumnId[]).map((id) => ({ id, label: poColumnLabels[id] }))}
@@ -2074,7 +2063,6 @@ export default function DraftBOMBuilderPage() {
                   onUpdateCustomField={updateLineCustomField}
                   onUpdateNumberLine={(id, field, value) => updateLine(id, { [field]: value === '' ? '' : Number(value) } as Partial<BomLine>)}
                   onImportCsv={importPartsRequestCsv}
-                  onToggleAllIncluded={(lineIds, include) => setAllPartsRequestIncluded(lineIds, include)}
                   onCreateVendorPoDraft={createVendorPoHandoff}
                   onFinalizeSelected={markSelectedFinalized}
                   isEditMode={isEditMode}
@@ -2408,7 +2396,6 @@ function PartsRequestWorkspace({
   onUpdateCustomField,
   onUpdateNumberLine,
   onImportCsv,
-  onToggleAllIncluded,
   onCreateVendorPoDraft,
   onFinalizeSelected,
   isEditMode,
@@ -2426,15 +2413,12 @@ function PartsRequestWorkspace({
   onUpdateCustomField: (lineId: string, columnName: string, value: string) => void;
   onUpdateNumberLine: (id: string, field: 'unitCost' | 'actualCost' | 'qtyNeeded', value: string) => void;
   onImportCsv: (file: File, linkInventoryMatches: boolean) => Promise<void>;
-  onToggleAllIncluded: (lineIds: string[], include: boolean) => void;
   onCreateVendorPoDraft: () => void;
   onFinalizeSelected: () => void;
   isEditMode: boolean;
 }) {
   const typedDescription = description.trim();
   const selectedCount = lines.filter((line) => line.include).length;
-  const allVisibleSelected = lines.length > 0 && selectedCount === lines.length;
-  const someVisibleSelected = selectedCount > 0 && selectedCount < lines.length;
   const totalColumns = 2 + visibleColumns.length + customColumns.length;
   const [linkInventoryMatches, setLinkInventoryMatches] = useState(false);
   const [isImportingCsv, setIsImportingCsv] = useState(false);
@@ -2570,17 +2554,7 @@ function PartsRequestWorkspace({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[112px]">
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      checked={allVisibleSelected ? true : someVisibleSelected ? 'indeterminate' : false}
-                      onCheckedChange={(checked) => onToggleAllIncluded(lines.map((line) => line.id), checked === true)}
-                      disabled={lines.length === 0}
-                      aria-label="Select all visible parts/request lines"
-                    />
-                    <span>Select all</span>
-                  </div>
-                </TableHead>
+                <TableHead className="w-[112px]">Include</TableHead>
                 <TableHead className="min-w-[300px]">Part description</TableHead>
                 {visibleColumns.includes('supplier') ? <TableHead className="w-[160px]">Vendor / Supplier</TableHead> : null}
                 {visibleColumns.includes('supplierItemId') ? <TableHead className="w-[170px]">Supplier Part #</TableHead> : null}

@@ -447,7 +447,7 @@ function RootRedirect() {
     if (isLoading) return;
 
     if (!currentUser) {
-      setLocation('/login');
+      setLocation('/login', { replace: true });
       return;
     }
 
@@ -455,7 +455,7 @@ function RootRedirect() {
       const personalizedRoute = getDashboardRoute(currentUser.username);
       if (personalizedRoute !== '/') {
         console.log(`Redirecting ${currentUser.username} to ${personalizedRoute}`);
-        setLocation(personalizedRoute);
+        setLocation(personalizedRoute, { replace: true });
       }
     }
   }, [isLoading, currentUser, setLocation]);
@@ -525,7 +525,7 @@ function SessionAwareMessageNotificationPopup() {
 function RedirectToShippingTracker() {
   const [, setLocation] = useLocation();
   React.useEffect(() => {
-    setLocation('/shipping-tracker');
+    setLocation('/shipping-tracker', { replace: true });
   }, [setLocation]);
   return null;
 }

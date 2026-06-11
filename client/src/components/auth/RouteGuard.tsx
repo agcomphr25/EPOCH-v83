@@ -187,7 +187,7 @@ export default function RouteGuard({ children }: RouteGuardProps) {
   // performing navigation during render, which avoids React strict-mode warnings.
   useEffect(() => {
     if (!isLoading && !isPublicRoute(location) && currentUser === null) {
-      setLocation('/login');
+      setLocation('/login', { replace: true });
     }
   }, [isLoading, currentUser, location, setLocation]);
 

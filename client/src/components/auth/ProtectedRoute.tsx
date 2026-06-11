@@ -128,9 +128,9 @@ export default function ProtectedRoute({
 
   useEffect(() => {
     if (accessState === 'unauthenticated') {
-      setLocation('/login');
+      setLocation('/login', { replace: true });
     } else if (accessState === 'denied') {
-      setLocation('/access-denied');
+      setLocation('/access-denied', { replace: true });
     }
   }, [accessState, setLocation]);
 

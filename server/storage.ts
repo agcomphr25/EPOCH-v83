@@ -22061,40 +22061,25 @@ export class DatabaseStorage implements IStorage {
     orderData: InsertOrderDraft,
     finalizedBy?: string
   ): Promise<AllOrder> {
-    // If status is PENDING_SIGNATURE, don't auto-route to production
-    const isPendingSignature = orderData.status === 'PENDING_SIGNATURE';
+    // New All Orders always enter the P1 production queue as finalized.
+    const status = 'FINALIZED';
+    const currentDepartment = 'P1 Production Queue';
+    const barcode = orderData.barcode || `P1-${orderData.orderId}`;
     
-    // Special handling for orders with no stock model - route directly to Shipping QC (unless pending signature)
+    // Retained only for creation diagnostics.
     const hasNoStockModel =
       !orderData.modelId ||
       orderData.modelId.toLowerCase() === 'none' ||
       orderData.modelId.toLowerCase().trim() === '';
 
-    let currentDepartment: string;
-    let barcode: string;
-    let status: string;
-
-    if (isPendingSignature) {
+    if (hasNoStockModel) {
       console.log(
-        `📝 Order ${orderData.orderId} created with PENDING_SIGNATURE status - awaiting customer confirmation`
+        `CREATE APPROVED: Order ${orderData.orderId} has no stock model - routing to P1 Production Queue`
       );
-      currentDepartment = orderData.currentDepartment || 'Awaiting Customer Signature';
-      barcode = orderData.barcode || `PENDING-${orderData.orderId}`;
-      status = 'PENDING_SIGNATURE';
-    } else if (hasNoStockModel) {
-      console.log(
-        `🚀 CREATE APPROVED: Order ${orderData.orderId} has no stock model - routing directly to Shipping QC`
-      );
-      currentDepartment = 'Shipping QC';
-      barcode = orderData.barcode || `NOSTOCK-${orderData.orderId}`;
-      status = 'FINALIZED';
     } else {
       console.log(
         `✅ CREATE APPROVED: Order ${orderData.orderId} has valid stock model "${orderData.modelId}" - going directly to P1 Production Queue`
       );
-      currentDepartment = 'P1 Production Queue';
-      barcode = orderData.barcode || `P1-${orderData.orderId}`;
-      status = 'FINALIZED';
     }
 
     // Create the finalized order data directly - exclude id field explicitly

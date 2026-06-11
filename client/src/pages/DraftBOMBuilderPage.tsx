@@ -13,6 +13,7 @@ import {
   Send,
   SlidersHorizontal,
   Trash2,
+  Upload,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -141,6 +142,11 @@ type InventoryItemOption = {
   type?: string | null;
   isPacket?: boolean | null;
   manufacturedCategory?: string | null;
+};
+
+type CsvImportResult = {
+  lines: BomLine[];
+  linkedCount: number;
 };
 
 const STORAGE_KEY = 'epoch:draft-boms';
@@ -351,6 +357,163 @@ function money(value: number) {
 
 function asNumber(value: number | '') {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+function parseCsvRows(csvText: string) {
+  const rows: string[][] = [];
+  let current = '';
+  let row: string[] = [];
+  let quoted = false;
+
+  for (let index = 0; index < csvText.length; index += 1) {
+    const char = csvText[index];
+    const next = csvText[index + 1];
+
+    if (char === '"' && quoted && next === '"') {
+      current += '"';
+      index += 1;
+      continue;
+    }
+
+    if (char === '"') {
+      quoted = !quoted;
+      continue;
+    }
+
+    if (char === ',' && !quoted) {
+      row.push(current.trim());
+      current = '';
+      continue;
+    }
+
+    if ((char === '\n' || char === '\r') && !quoted) {
+      if (char === '\r' && next === '\n') index += 1;
+      row.push(current.trim());
+      if (row.some((cell) => cell.length > 0)) rows.push(row);
+      row = [];
+      current = '';
+      continue;
+    }
+
+    current += char;
+  }
+
+  row.push(current.trim());
+  if (row.some((cell) => cell.length > 0)) rows.push(row);
+  return rows;
+}
+
+function normalizeCsvHeader(value: string) {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function csvField(row: Record<string, string>, keys: string[]) {
+  for (const key of keys) {
+    const value = row[key];
+    if (value) return value;
+  }
+  return '';
+}
+
+function parseCsvNumber(value: string): number | '' {
+  const normalized = value.replace(/[$,]/g, '').trim();
+  if (!normalized) return '';
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : '';
+}
+
+function findInventoryMatch(partNumber: string, inventoryItems: InventoryItemOption[]) {
+  const normalizedPartNumber = partNumber.trim().toLowerCase();
+  if (!normalizedPartNumber) return null;
+
+  return (
+    inventoryItems.find((item) =>
+      [item.agPartNumber, item.supplierPartNumber, item.manufacturerPartNumber]
+        .filter(Boolean)
+        .some((value) => value?.trim().toLowerCase() === normalizedPartNumber),
+    ) ?? null
+  );
+}
+
+function buildLinesFromCsv(csvText: string, inventoryItems: InventoryItemOption[], linkInventoryMatches: boolean): CsvImportResult {
+  const rows = parseCsvRows(csvText);
+  if (rows.length === 0) return { lines: [], linkedCount: 0 };
+
+  const normalizedFirstRow = rows[0].map(normalizeCsvHeader);
+  const knownHeaderCount = normalizedFirstRow.filter((header) =>
+    [
+      'part',
+      'partnumber',
+      'agpart',
+      'agpartnumber',
+      'description',
+      'name',
+      'qty',
+      'quantity',
+      'vendor',
+      'supplier',
+      'cost',
+      'unitcost',
+      'estimatedcost',
+    ].includes(header),
+  ).length;
+  const hasHeaders = knownHeaderCount >= 2;
+  const headers = hasHeaders
+    ? normalizedFirstRow
+    : ['partnumber', 'description', 'quantity', 'supplier', 'supplierpartnumber', 'manufacturer', 'unitcost', 'unit'];
+  const dataRows = hasHeaders ? rows.slice(1) : rows;
+  let linkedCount = 0;
+
+  const lines = dataRows
+    .map((cells) => {
+      const row = headers.reduce<Record<string, string>>((acc, header, index) => {
+        acc[header] = cells[index]?.trim() ?? '';
+        return acc;
+      }, {});
+      const importedPartNumber = csvField(row, ['agpartnumber', 'agpart', 'partnumber', 'part', 'itemnumber', 'sku']);
+      const description = csvField(row, ['description', 'partdescription', 'name', 'item', 'itemdescription']) || importedPartNumber;
+      if (!description && !importedPartNumber) return null;
+
+      const inventoryMatch = linkInventoryMatches ? findInventoryMatch(importedPartNumber, inventoryItems) : null;
+      if (inventoryMatch) linkedCount += 1;
+      const estimatedCost = parseCsvNumber(csvField(row, ['unitcost', 'estimatedcost', 'cost', 'price']));
+      const actualCost = parseCsvNumber(csvField(row, ['actualcost', 'actual']));
+      const quantity = parseCsvNumber(csvField(row, ['qtyneeded', 'quantity', 'qty', 'qnty']));
+      const serviceValue = csvField(row, ['service', 'isservice']).toLowerCase();
+
+      return {
+        ...newLine(),
+        description: inventoryMatch ? inventoryDescription(inventoryMatch) : description,
+        agPartNumber: inventoryMatch?.agPartNumber || (linkInventoryMatches ? '' : importedPartNumber),
+        supplier: csvField(row, ['supplier', 'vendor', 'source']) || inventoryMatch?.source || inventoryMatch?.supplier || '',
+        supplierItemId:
+          csvField(row, ['supplierpartnumber', 'supplierpart', 'supplieritem', 'supplieritemid']) ||
+          inventoryMatch?.supplierPartNumber ||
+          '',
+        manufacturer: csvField(row, ['manufacturer', 'mfg']) || inventoryMatch?.manufacturer || '',
+        unit: csvField(row, ['unit', 'uom']) || inventoryMatch?.usageUnit || inventoryMatch?.unit || 'EA',
+        unitCost: estimatedCost || (Number.isFinite(Number(inventoryMatch?.costPer)) ? Number(inventoryMatch?.costPer) : ''),
+        actualCost,
+        qtyNeeded: quantity || 1,
+        service: ['true', 'yes', 'y', '1', 'service'].includes(serviceValue),
+        status: inventoryMatch ? 'Needs Review' : 'Needs Quote',
+        note: inventoryMatch
+          ? `CSV import linked to inventory item #${inventoryMatch.id}`
+          : importedPartNumber
+            ? `CSV import draft part ${importedPartNumber}`
+            : 'CSV import draft part',
+        inventoryItemId: inventoryMatch?.id ?? null,
+        inventoryItemName: inventoryMatch?.name || inventoryMatch?.description || null,
+        isDraftPart: !inventoryMatch,
+        isManufactured: isInventoryManufactured(inventoryMatch),
+        firstDepartment: defaultDepartment,
+        childDraftBoms: [],
+        customFields: {},
+      } satisfies BomLine;
+    })
+    .filter((line): line is BomLine => line !== null);
+
+  return { lines, linkedCount };
 }
 
 function loadDrafts(): BomDraft[] {
@@ -657,6 +820,30 @@ export default function DraftBOMBuilderPage() {
     toast({
       title: item ? 'Inventory item added' : 'Draft part created',
       description: item ? `${description} was added to parts/request.` : `${description} was added as a draft part.`,
+    });
+  }
+
+  async function importPartsRequestCsv(file: File, linkInventoryMatches: boolean) {
+    const csvText = await file.text();
+    const result = buildLinesFromCsv(csvText, activeInventoryItems, linkInventoryMatches);
+
+    if (result.lines.length === 0) {
+      toast({
+        title: 'No CSV rows imported',
+        description: 'Check that the file has part, description, quantity, supplier, or cost columns.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setDraft((current) => ({
+      ...current,
+      lines: [...result.lines, ...current.lines],
+      updatedAt: new Date().toISOString(),
+    }));
+    toast({
+      title: 'CSV imported',
+      description: `${result.lines.length} part line(s) added${linkInventoryMatches ? `, ${result.linkedCount} linked to inventory items` : ''}.`,
     });
   }
 
@@ -1164,6 +1351,7 @@ export default function DraftBOMBuilderPage() {
                   onSortByVendorChange={setSortPartsByVendor}
                   onUpdateLine={updateLine}
                   onUpdateNumberLine={(id, field, value) => updateLine(id, { [field]: value === '' ? '' : Number(value) } as Partial<BomLine>)}
+                  onImportCsv={importPartsRequestCsv}
                   onCreateVendorPoDraft={createVendorPoHandoff}
                   onFinalizeSelected={markSelectedFinalized}
                 />
@@ -1463,6 +1651,7 @@ function PartsRequestWorkspace({
   onSortByVendorChange,
   onUpdateLine,
   onUpdateNumberLine,
+  onImportCsv,
   onCreateVendorPoDraft,
   onFinalizeSelected,
 }: {
@@ -1475,11 +1664,25 @@ function PartsRequestWorkspace({
   onSortByVendorChange: (value: boolean) => void;
   onUpdateLine: (id: string, patch: Partial<BomLine>) => void;
   onUpdateNumberLine: (id: string, field: 'unitCost' | 'actualCost' | 'qtyNeeded', value: string) => void;
+  onImportCsv: (file: File, linkInventoryMatches: boolean) => Promise<void>;
   onCreateVendorPoDraft: () => void;
   onFinalizeSelected: () => void;
 }) {
   const typedDescription = description.trim();
   const selectedCount = lines.filter((line) => line.include).length;
+  const [linkInventoryMatches, setLinkInventoryMatches] = useState(false);
+  const [isImportingCsv, setIsImportingCsv] = useState(false);
+
+  async function handleCsvFileChange(fileList: FileList | null) {
+    const file = fileList?.[0];
+    if (!file) return;
+    setIsImportingCsv(true);
+    try {
+      await onImportCsv(file, linkInventoryMatches);
+    } finally {
+      setIsImportingCsv(false);
+    }
+  }
 
   return (
     <section className="space-y-4">
@@ -1546,7 +1749,33 @@ function PartsRequestWorkspace({
             ) : null}
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm">
+              <Checkbox
+                checked={linkInventoryMatches}
+                onCheckedChange={(checked) => setLinkInventoryMatches(checked === true)}
+              />
+              Permit inventory linking
+            </label>
+            <label
+              className={cn(
+                'inline-flex h-10 cursor-pointer items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground',
+                isImportingCsv && 'pointer-events-none opacity-50',
+              )}
+            >
+              <Upload className="mr-2 h-4 w-4" />
+              {isImportingCsv ? 'Importing...' : 'Import CSV'}
+              <Input
+                className="sr-only"
+                type="file"
+                accept=".csv,text/csv"
+                disabled={isImportingCsv}
+                onChange={(event) => {
+                  void handleCsvFileChange(event.target.files);
+                  event.currentTarget.value = '';
+                }}
+              />
+            </label>
             <Button
               type="button"
               variant={sortByVendor ? 'default' : 'outline'}

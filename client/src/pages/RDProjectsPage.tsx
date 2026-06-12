@@ -44,14 +44,46 @@ interface DraftBuilderTab {
 }
 
 interface DraftBomLine {
+  id?: string;
   agPartNumber?: string;
   supplierItemId?: string;
   description?: string;
   itemDescription?: string;
+  inventoryItemId?: number | null;
+  inventoryItemName?: string | null;
   qtyNeeded?: number | string;
   quantity?: number | string;
   status?: string;
   action?: string;
+  childDraftBoms?: DraftPartBom[];
+}
+
+interface DraftBomComponent {
+  id: string;
+  sourceLineId?: string | null;
+  inventoryItemId?: number | null;
+  partNumber: string;
+  description: string;
+  quantity: number;
+  isManufactured?: boolean;
+}
+
+interface DraftBomPart {
+  id: string;
+  sourceLineId?: string | null;
+  inventoryItemId?: number | null;
+  partNumber: string;
+  description: string;
+  quantity: number;
+  bomItems?: DraftBomComponent[];
+}
+
+interface DraftPartBom {
+  id: string;
+  name: string;
+  revision?: string;
+  rootPart: DraftBomPart;
+  parts?: DraftBomPart[];
 }
 
 interface DraftBomRecord {
@@ -222,6 +254,36 @@ function normalizePartStatus(line: DraftBomLine): PartStatus {
   return 'manufacturing';
 }
 
+function draftLinePartNumber(line: DraftBomLine, index = 0) {
+  return line.agPartNumber || line.supplierItemId || `RD-DRAFT-${String(index + 1).padStart(3, '0')}`;
+}
+
+function draftLineDescription(line: DraftBomLine) {
+  return line.description || line.itemDescription || line.inventoryItemName || 'Draft BOM line';
+}
+
+function normalizedPartKey(value?: string | null) {
+  return value?.trim().toLowerCase() ?? '';
+}
+
+function findDraftLineForComponent(component: DraftBomComponent | DraftBomPart, lines: DraftBomLine[]) {
+  if (component.sourceLineId) {
+    const match = lines.find((line) => line.id === component.sourceLineId);
+    if (match) return match;
+  }
+
+  if (component.inventoryItemId) {
+    const match = lines.find((line) => line.inventoryItemId === component.inventoryItemId);
+    if (match) return match;
+  }
+
+  const componentPart = normalizedPartKey(component.partNumber);
+  const componentDescription = normalizedPartKey(component.description);
+  return lines.find((line, index) => normalizedPartKey(draftLinePartNumber(line, index)) === componentPart)
+    ?? lines.find((line) => componentPart && normalizedPartKey(line.agPartNumber) === componentPart)
+    ?? lines.find((line) => componentDescription && normalizedPartKey(draftLineDescription(line)) === componentDescription);
+}
+
 function partReadiness(parts: RDPart[]) {
   const required = parts.reduce((sum, part) => sum + part.required, 0);
   const available = parts.reduce((sum, part) => sum + Math.min(part.required, part.onHand + part.manufactured), 0);
@@ -272,8 +334,8 @@ function getPartsForProject(project: RDProject | null, records: DraftBomRecord[]
     const required = Math.max(1, asNumber(line.qtyNeeded ?? line.quantity));
     const status = normalizePartStatus(line);
     return {
-      partNumber: line.agPartNumber || line.supplierItemId || `RD-DRAFT-${String(index + 1).padStart(3, '0')}`,
-      description: line.description || line.itemDescription || 'Draft BOM line',
+      partNumber: draftLinePartNumber(line, index),
+      description: draftLineDescription(line),
       required,
       onHand: status === 'on_hand' ? required : 0,
       ordered: status === 'ordered' ? required : 0,
@@ -283,40 +345,64 @@ function getPartsForProject(project: RDProject | null, records: DraftBomRecord[]
   });
 }
 
-function getAssemblyTreeForProject(project: RDProject | null, parts: RDPart[]) {
+function getComponentChildren(
+  components: DraftBomComponent[],
+  lines: DraftBomLine[],
+  visited: Set<string>,
+): AssemblyNode[] {
+  return components.map((component) => {
+    const matchingLine = findDraftLineForComponent(component, lines);
+    const status = matchingLine ? normalizePartStatus(matchingLine) : 'short';
+    const childBoms = matchingLine?.childDraftBoms ?? [];
+    const nextVisited = new Set(visited);
+    const componentKey = component.id || component.partNumber;
+    nextVisited.add(componentKey);
+
+    return {
+      id: componentKey,
+      label: `${component.partNumber} - ${component.description}`,
+      status,
+      children: childBoms.flatMap((bom) => getBomComponentNodes(bom, lines, nextVisited)),
+    };
+  });
+}
+
+function getBomComponentNodes(bom: DraftPartBom, lines: DraftBomLine[], visited: Set<string>): AssemblyNode[] {
+  if (visited.has(bom.id)) return [];
+  const nextVisited = new Set([...visited, bom.id]);
+  const rootPart = bom.parts?.[0] ?? bom.rootPart;
+  const components = rootPart.bomItems ?? bom.rootPart.bomItems ?? [];
+  return getComponentChildren(components, lines, nextVisited);
+}
+
+function getDraftLineAssemblyNode(line: DraftBomLine, index: number, allLines: DraftBomLine[]): AssemblyNode {
+  const partNumber = draftLinePartNumber(line, index);
+  return {
+    id: line.id ?? `${partNumber}-${index}`,
+    label: `${partNumber} - ${draftLineDescription(line)}`,
+    status: normalizePartStatus(line),
+    children: (line.childDraftBoms ?? []).flatMap((bom) => getBomComponentNodes(bom, allLines, new Set([line.id ?? partNumber]))),
+  };
+}
+
+function getAssemblyTreeForProject(project: RDProject | null, records: DraftBomRecord[], parts: RDPart[]) {
   if (!project) return [];
-  if (parts.length === 0) return [];
+  const attachedRecords = getDraftRecordsForProject(project, records);
+  const attachedLines = attachedRecords.flatMap((draft) => draft.lines ?? []);
+  if (attachedRecords.length === 0) return parts === fallbackParts ? fallbackAssemblyTree : [];
+  if (attachedLines.length === 0) return [];
   if (parts === fallbackParts) return fallbackAssemblyTree;
 
-  const grouped = parts.reduce<Record<PartStatus, RDPart[]>>(
-    (groups, part) => {
-      groups[part.status].push(part);
-      return groups;
-    },
-    { on_hand: [], ordered: [], manufacturing: [], short: [] },
-  );
-
-  const children = (Object.entries(grouped) as [PartStatus, RDPart[]][])
-    .filter(([, items]) => items.length > 0)
-    .map(([status, items]) => ({
-      id: status,
-      label: statusLabels[status],
-      status,
-      children: items.slice(0, 12).map((item) => ({
-        id: item.partNumber,
-        label: `${item.partNumber} - ${item.description}`,
-        status: item.status,
-      })),
-    }));
-
-  return [
-    {
-      id: project.id,
-      label: project.projectName,
-      status: parts.some((part) => part.status === 'short') ? 'short' : 'manufacturing',
+  return attachedRecords.map((draft) => {
+    const lines = draft.lines ?? [];
+    const children = lines.map((line, index) => getDraftLineAssemblyNode(line, index, lines));
+    return {
+      id: draft.id,
+      label: [draft.name, draft.revision].filter(Boolean).join(' - '),
+      status: children.some((node) => node.status === 'short') ? 'short' : 'manufacturing',
       children,
-    } satisfies AssemblyNode,
-  ];
+    } satisfies AssemblyNode;
+  });
 }
 
 function AssemblyTreeNode({ node, depth = 0 }: { node: AssemblyNode; depth?: number }) {
@@ -355,8 +441,8 @@ export default function RDProjectsPage() {
   );
   const selectedParts = useMemo(() => getPartsForProject(selectedProject, draftRecords), [draftRecords, selectedProject]);
   const selectedAssemblyTree = useMemo(
-    () => getAssemblyTreeForProject(selectedProject, selectedParts),
-    [selectedParts, selectedProject],
+    () => getAssemblyTreeForProject(selectedProject, draftRecords, selectedParts),
+    [draftRecords, selectedParts, selectedProject],
   );
   const activeProjects = projects.filter((project) => project.status === 'active').length;
   const draftProjects = projects.filter((project) => project.status === 'draft').length;

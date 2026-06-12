@@ -193,12 +193,14 @@ type InventoryItemOption = {
 };
 
 type AssemblyStockState = 'on-hand' | 'low-stock' | 'blocked';
+type AssemblyManufactureState = 'ready' | 'waiting' | 'needs-plan';
 type AssemblyTreeNode = {
   id: string;
   partNumber: string;
   description: string;
   quantityRequired: number;
   orderStatus: BomStatus;
+  manufactureState: AssemblyManufactureState;
   inventoryItem: InventoryItemOption | null;
   stockState: AssemblyStockState;
   availableQuantity: number;
@@ -770,6 +772,24 @@ function assemblyOrderStatus(
   return findPartsRequestLineForAssemblyPart(part, lines)?.status ?? 'Needs Quote';
 }
 
+function isOnHandStatus(status: BomStatus) {
+  return status === 'On Hand';
+}
+
+function isOrderedStatus(status: BomStatus) {
+  return status === 'RFQ Sent' || status === 'On Order' || status === 'ETA / Inbound';
+}
+
+function manufactureStateFor(orderStatus: BomStatus, children: AssemblyTreeNode[]): AssemblyManufactureState {
+  if (children.length === 0) {
+    return isOnHandStatus(orderStatus) ? 'ready' : 'waiting';
+  }
+  const childStates = children.map((child) => child.manufactureState);
+  if (childStates.every((state) => state === 'ready')) return 'ready';
+  if (childStates.every((state) => state === 'needs-plan')) return 'needs-plan';
+  return 'waiting';
+}
+
 function assemblyPartKey(partNumber: string) {
   return normalizedAssemblyPartKey(partNumber);
 }
@@ -797,30 +817,35 @@ function buildAssemblyTreeNode(
   const entry = entryLookup.get(key);
   const nextVisited = key ? new Set([...visited, key]) : visited;
   const childComponents = entry ? (visited.has(key) ? [] : entry.childComponents) : children;
+  const nodeChildren = childComponents.map((component) => {
+    const componentEntry = entryLookup.get(componentAssemblyKey(component));
+    const childQuantity = nodeQuantity * (component.quantity || 1);
+    return buildAssemblyTreeNode(
+      componentEntry?.part ?? component,
+      inventoryItems,
+      partsRequestLines,
+      childQuantity,
+      componentEntry?.childComponents ?? [],
+      entryLookup,
+      nextVisited,
+    );
+  });
+  const orderStatus = assemblyOrderStatus(part, partsRequestLines);
 
   return {
     id: `${part.id}-${part.partNumber}-${nodeQuantity}`,
     partNumber: entry ? linePartNumber(entry.line) : part.partNumber,
     description: entry ? lineDescription(entry.line) : part.description,
     quantityRequired: nodeQuantity,
-    orderStatus: assemblyOrderStatus(part, partsRequestLines),
+    orderStatus,
+    manufactureState: childComponents.length === 0 && !isOnHandStatus(orderStatus) && !isOrderedStatus(orderStatus)
+      ? 'needs-plan'
+      : manufactureStateFor(orderStatus, nodeChildren),
     inventoryItem,
     stockState: assemblyStockState(inventoryItem, nodeQuantity),
     availableQuantity: inventoryStockQuantity(inventoryItem),
     reorderPoint: inventoryReorderPoint(inventoryItem),
-    children: childComponents.map((component) => {
-      const componentEntry = entryLookup.get(componentAssemblyKey(component));
-      const childQuantity = nodeQuantity * (component.quantity || 1);
-      return buildAssemblyTreeNode(
-        componentEntry?.part ?? component,
-        inventoryItems,
-        partsRequestLines,
-        childQuantity,
-        componentEntry?.childComponents ?? [],
-        entryLookup,
-        nextVisited,
-      );
-    }),
+    children: nodeChildren,
   };
 }
 
@@ -842,7 +867,7 @@ function buildAssemblyTree(lines: BomLine[], inventoryItems: InventoryItemOption
     entries.flatMap((entry) => entry.childComponents.map(componentAssemblyKey)).filter(Boolean),
   );
   const rootEntries = entries.filter((entry) => !childKeys.has(lineAssemblyKey(entry.line)));
-  const treeRootEntries = rootEntries.length > 0 ? rootEntries : entries;
+  const treeRootEntries = (rootEntries.length > 0 ? rootEntries : entries).filter((entry) => entry.childComponents.length > 0);
 
   return treeRootEntries.map((entry) =>
     buildAssemblyTreeNode(
@@ -2352,7 +2377,7 @@ export default function DraftBOMBuilderPage() {
 
             {visibleWorkspaceTabs.includes('assembly-tree') ? (
               <TabsContent value="assembly-tree" className="mt-4">
-                <AssemblyTreeWorkspace tree={assemblyTree} lineCount={partsRequestLines.length} />
+                <AssemblyTreeWorkspace tree={assemblyTree} />
               </TabsContent>
             ) : null}
 
@@ -3724,16 +3749,17 @@ function DraftBomWizardWorkspace({
   );
 }
 
-function AssemblyTreeWorkspace({ tree, lineCount }: { tree: AssemblyTreeNode[]; lineCount: number }) {
+function AssemblyTreeWorkspace({ tree }: { tree: AssemblyTreeNode[] }) {
   const totals = tree.reduce(
     (acc, node) => {
       const nodes = flattenAssemblyTree(node);
-      acc.needsQuote += nodes.filter((item) => item.orderStatus === 'Needs Quote' || item.orderStatus === 'Needs Review').length;
-      acc.active += nodes.filter((item) => item.orderStatus === 'RFQ Sent' || item.orderStatus === 'On Order' || item.orderStatus === 'ETA / Inbound').length;
+      acc.ready += nodes.filter((item) => item.manufactureState === 'ready').length;
+      acc.ordered += nodes.filter((item) => isOrderedStatus(item.orderStatus)).length;
       acc.onHand += nodes.filter((item) => item.orderStatus === 'On Hand').length;
+      acc.needsPlan += nodes.filter((item) => item.manufactureState === 'needs-plan').length;
       return acc;
     },
-    { needsQuote: 0, active: 0, onHand: 0 },
+    { ready: 0, ordered: 0, onHand: 0, needsPlan: 0 },
   );
 
   return (
@@ -3742,19 +3768,20 @@ function AssemblyTreeWorkspace({ tree, lineCount }: { tree: AssemblyTreeNode[]; 
         <div>
           <h2 className="font-semibold text-slate-950">Assembly Tree</h2>
           <p className="text-sm text-slate-600">
-            {lineCount} parts/request line{lineCount === 1 ? '' : 's'} mapped with BOM wizard children and order status.
+            {tree.length} created BOM{tree.length === 1 ? '' : 's'} broken down by on-hand and ordered parts.
           </p>
         </div>
-        <div className="grid grid-cols-3 gap-2 text-sm">
-          <AssemblyOrderStatusCount label="Needs quote" value={totals.needsQuote} tone="quote" />
-          <AssemblyOrderStatusCount label="Active" value={totals.active} tone="active" />
+        <div className="grid grid-cols-4 gap-2 text-sm">
+          <AssemblyOrderStatusCount label="Ready" value={totals.ready} tone="ready" />
           <AssemblyOrderStatusCount label="On hand" value={totals.onHand} tone="on-hand" />
+          <AssemblyOrderStatusCount label="Ordered" value={totals.ordered} tone="active" />
+          <AssemblyOrderStatusCount label="Need plan" value={totals.needsPlan} tone="quote" />
         </div>
       </div>
 
       {tree.length === 0 ? (
         <div className="p-8 text-center text-sm text-slate-500">
-          Add parts/request lines to build an assembly tree.
+          Create a BOM in the BOM wizard to see what can be manufactured.
         </div>
       ) : (
         <Accordion type="multiple" className="divide-y divide-slate-200">
@@ -3769,7 +3796,7 @@ function AssemblyTreeWorkspace({ tree, lineCount }: { tree: AssemblyTreeNode[]; 
 
 function AssemblyTreeAccordionNode({ node, depth }: { node: AssemblyTreeNode; depth: number }) {
   const rowContent = (
-    <div className="grid min-w-0 flex-1 gap-2 md:grid-cols-[minmax(220px,1fr)_auto_auto_auto] md:items-center">
+    <div className="grid min-w-0 flex-1 gap-2 md:grid-cols-[minmax(220px,1fr)_auto_auto_auto_auto] md:items-center">
       <div className="min-w-0" style={{ paddingLeft: `${depth * 16}px` }}>
         <div className="truncate font-semibold text-slate-950">{node.description}</div>
         <div className="truncate text-sm font-normal text-slate-600">{node.partNumber}</div>
@@ -3780,6 +3807,7 @@ function AssemblyTreeAccordionNode({ node, depth }: { node: AssemblyTreeNode; de
       <div className="text-sm font-normal tabular-nums text-slate-600">
         On hand {node.availableQuantity.toLocaleString(undefined, { maximumFractionDigits: 2 })}
       </div>
+      <ManufactureStateBadge state={node.manufactureState} />
       <StatusBadge status={node.orderStatus} />
     </div>
   );
@@ -3812,9 +3840,30 @@ function flattenAssemblyTree(node: AssemblyTreeNode): AssemblyTreeNode[] {
   return [node, ...node.children.flatMap(flattenAssemblyTree)];
 }
 
-function AssemblyOrderStatusCount({ label, value, tone }: { label: string; value: number; tone: 'quote' | 'active' | 'on-hand' }) {
+function ManufactureStateBadge({ state }: { state: AssemblyManufactureState }) {
+  const label =
+    state === 'ready'
+      ? 'Can manufacture'
+      : state === 'needs-plan'
+        ? 'Needs plan'
+        : 'Waiting';
   const className =
-    tone === 'on-hand'
+    state === 'ready'
+      ? 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-50'
+      : state === 'needs-plan'
+        ? 'border-orange-200 bg-orange-50 text-orange-800 hover:bg-orange-50'
+        : 'border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-50';
+
+  return (
+    <Badge variant="outline" className={cn('justify-center whitespace-nowrap', className)}>
+      {label}
+    </Badge>
+  );
+}
+
+function AssemblyOrderStatusCount({ label, value, tone }: { label: string; value: number; tone: 'quote' | 'active' | 'on-hand' | 'ready' }) {
+  const className =
+    tone === 'ready' || tone === 'on-hand'
       ? 'border-emerald-200 bg-emerald-50'
       : tone === 'active'
         ? 'border-sky-200 bg-sky-50'

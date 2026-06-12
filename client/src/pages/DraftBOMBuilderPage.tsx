@@ -909,6 +909,11 @@ function saveDrafts(drafts: BomDraft[]) {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(drafts));
 }
 
+function savedDraftListWith(drafts: BomDraft[], draft: BomDraft) {
+  const withoutCurrent = drafts.filter((item) => item.id !== draft.id);
+  return [draft, ...withoutCurrent].slice(0, 12);
+}
+
 export default function DraftBOMBuilderPage() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
@@ -1073,6 +1078,40 @@ export default function DraftBOMBuilderPage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const nextDraft = normalizeDraft({
+      ...draft,
+      poVisibleColumns: visiblePoColumns,
+      partsRequestVisibleColumns: visiblePartsRequestColumns,
+      directLaborVisibleColumns: visibleDirectLaborColumns,
+      assemblyVisibleColumns: visibleAssemblyColumns,
+      customColumns,
+      customPoColumns: customColumns,
+      workspaceTabs: visibleWorkspaceTabs,
+      updatedAt: new Date().toISOString(),
+    });
+
+    setSavedDrafts((current) => {
+      const nextDrafts = savedDraftListWith(current, nextDraft);
+      saveDrafts(nextDrafts);
+      return nextDrafts;
+    });
+
+    if (selectedDraftId !== nextDraft.id) {
+      setSelectedDraftId(nextDraft.id);
+    }
+  }, [
+    customColumns,
+    draft,
+    selectedDraftId,
+    visibleAssemblyColumns,
+    visibleDirectLaborColumns,
+    visiblePartsRequestColumns,
+    visiblePoColumns,
+    visibleWorkspaceTabs,
+  ]);
+
   const totals = useMemo(() => {
     const lineTotal = (line: BomLine) => asNumber(line.unitCost) * asNumber(line.qtyNeeded);
     const materialTotal = draft.lines.reduce((sum, line) => sum + lineTotal(line), 0);
@@ -1206,12 +1245,13 @@ export default function DraftBOMBuilderPage() {
 
   function saveWizardBom(part: DraftBomPart, bom: DraftPartBom) {
     setDraft((current) => {
-      const sourceLine = part.sourceLineId ? current.lines.find((line) => line.id === part.sourceLineId) : null;
+      const rootLineId = part.sourceLineId ?? part.id;
+      const sourceLine = current.lines.find((line) => line.id === rootLineId) ?? null;
       const rootLine =
         sourceLine ??
         ({
           ...newLine(),
-          id: crypto.randomUUID(),
+          id: rootLineId,
           include: true,
           action: 'Hold',
           category: 'Hardware/Misc.',
@@ -1417,7 +1457,7 @@ export default function DraftBOMBuilderPage() {
   }
 
   function saveDraft() {
-    const nextDraft = {
+    const nextDraft = normalizeDraft({
       ...draft,
       poVisibleColumns: visiblePoColumns,
       partsRequestVisibleColumns: visiblePartsRequestColumns,
@@ -1427,9 +1467,8 @@ export default function DraftBOMBuilderPage() {
       customPoColumns: customColumns,
       workspaceTabs: visibleWorkspaceTabs,
       updatedAt: new Date().toISOString(),
-    };
-    const withoutCurrent = savedDrafts.filter((item) => item.id !== nextDraft.id);
-    const nextDrafts = [nextDraft, ...withoutCurrent].slice(0, 12);
+    });
+    const nextDrafts = savedDraftListWith(savedDrafts, nextDraft);
     saveDrafts(nextDrafts);
     setSavedDrafts(nextDrafts);
     setSelectedDraftId(nextDraft.id);
@@ -3198,6 +3237,8 @@ function DraftBomWizardWorkspace({
       updatedAt: new Date().toISOString(),
     };
 
+    onSaveWizardBom(nextBom.rootPart, nextBom);
+
     if (currentPartIndex < nextBom.parts.length - 1) {
       setActiveBom(nextBom);
       setCurrentPartIndex(currentPartIndex + 1);
@@ -3205,7 +3246,6 @@ function DraftBomWizardWorkspace({
       return;
     }
 
-    onSaveWizardBom(nextBom.rootPart, nextBom);
     setActiveBom(null);
     setCurrentPartIndex(0);
     resetComponentForm();

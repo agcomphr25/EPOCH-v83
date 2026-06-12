@@ -501,8 +501,8 @@ function normalizeDraft(draft: BomDraft): BomDraft {
     partsRequestVisibleColumns: draft.partsRequestVisibleColumns ?? defaultPartsRequestColumns,
     directLaborVisibleColumns: draft.directLaborVisibleColumns ?? defaultDirectLaborColumns,
     assemblyVisibleColumns: draft.assemblyVisibleColumns ?? defaultSourcingColumns,
-    customColumns: uniqueColumnNames([...(draft.customColumns ?? []), ...(draft.customPoColumns ?? [])]),
-    customPoColumns: draft.customPoColumns ?? [],
+    customColumns: sanitizeCustomColumns([...(draft.customColumns ?? []), ...(draft.customPoColumns ?? [])]),
+    customPoColumns: sanitizeCustomColumns(draft.customPoColumns ?? []),
     workspaceTabs: normalizeWorkspaceTabs(draft.workspaceTabs),
   };
 }
@@ -575,6 +575,10 @@ function normalizeCsvHeader(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
 }
 
+function isStatusDuplicateColumn(column: string) {
+  return ['status', 'orderstatus'].includes(normalizeCsvHeader(column));
+}
+
 const knownImportHeaders = new Set([
   'action',
   'actual',
@@ -596,6 +600,7 @@ const knownImportHeaders = new Set([
   'name',
   'note',
   'notes',
+  'orderstatus',
   'part',
   'partdescription',
   'partnumber',
@@ -884,7 +889,7 @@ function buildLinesFromRows(rows: string[][], inventoryItems: InventoryItemOptio
         actualCost,
         qtyNeeded: quantity || 1,
         service: ['true', 'yes', 'y', '1', 'service'].includes(serviceValue),
-        status: parseImportStatus(csvField(row, ['status']), fallbackStatus),
+        status: parseImportStatus(csvField(row, ['status', 'orderstatus']), fallbackStatus),
         targetNeedDate: csvField(row, ['targetneeddate']),
         note: note || (inventoryMatch
           ? `CSV import linked to inventory item #${inventoryMatch.id}`
@@ -933,6 +938,10 @@ function uniqueColumnNames(columns: string[]) {
     if (!label || result.includes(label)) return result;
     return [...result, label];
   }, []);
+}
+
+function sanitizeCustomColumns(columns: string[]) {
+  return uniqueColumnNames(columns).filter((column) => !isStatusDuplicateColumn(column));
 }
 
 function loadDrafts(): BomDraft[] {
@@ -1441,12 +1450,12 @@ export default function DraftBOMBuilderPage() {
       return;
     }
 
-    setCustomColumns((current) => uniqueColumnNames([...current, ...result.customColumns]));
+    setCustomColumns((current) => sanitizeCustomColumns([...current, ...result.customColumns]));
     setDraft((current) => ({
       ...current,
       lines: [...result.lines, ...current.lines],
-      customColumns: uniqueColumnNames([...(current.customColumns ?? []), ...result.customColumns]),
-      customPoColumns: uniqueColumnNames([...(current.customPoColumns ?? []), ...result.customColumns]),
+      customColumns: sanitizeCustomColumns([...(current.customColumns ?? []), ...result.customColumns]),
+      customPoColumns: sanitizeCustomColumns([...(current.customPoColumns ?? []), ...result.customColumns]),
       updatedAt: new Date().toISOString(),
     }));
     toast({

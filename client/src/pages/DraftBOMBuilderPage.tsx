@@ -198,6 +198,7 @@ type AssemblyTreeNode = {
   partNumber: string;
   description: string;
   quantityRequired: number;
+  orderStatus: BomStatus;
   inventoryItem: InventoryItemOption | null;
   stockState: AssemblyStockState;
   availableQuantity: number;
@@ -727,9 +728,42 @@ function assemblyStockState(item: InventoryItemOption | null, requiredQuantity: 
   return 'on-hand';
 }
 
+function normalizedAssemblyPartKey(value?: string | null) {
+  return value?.trim().toLowerCase() ?? '';
+}
+
+function findPartsRequestLineForAssemblyPart(
+  part: Pick<DraftBomPart | DraftBomComponent, 'sourceLineId' | 'inventoryItemId' | 'partNumber' | 'description'>,
+  lines: BomLine[],
+) {
+  if (part.sourceLineId) {
+    const match = lines.find((line) => line.id === part.sourceLineId);
+    if (match) return match;
+  }
+
+  if (part.inventoryItemId) {
+    const match = lines.find((line) => line.inventoryItemId === part.inventoryItemId);
+    if (match) return match;
+  }
+
+  const partNumber = normalizedAssemblyPartKey(part.partNumber);
+  const description = normalizedAssemblyPartKey(part.description);
+  return lines.find((line) => normalizedAssemblyPartKey(linePartNumber(line)) === partNumber)
+    ?? lines.find((line) => partNumber && normalizedAssemblyPartKey(line.agPartNumber) === partNumber)
+    ?? lines.find((line) => description && normalizedAssemblyPartKey(line.description) === description);
+}
+
+function assemblyOrderStatus(
+  part: Pick<DraftBomPart | DraftBomComponent, 'sourceLineId' | 'inventoryItemId' | 'partNumber' | 'description'>,
+  lines: BomLine[],
+): BomStatus {
+  return findPartsRequestLineForAssemblyPart(part, lines)?.status ?? 'Needs Quote';
+}
+
 function buildAssemblyTreeNode(
   part: DraftBomPart | DraftBomComponent,
   inventoryItems: InventoryItemOption[],
+  partsRequestLines: BomLine[],
   requiredQuantity: number,
   children: DraftBomComponent[] = [],
   partLookup = new Map<string, DraftBomPart>(),
@@ -741,6 +775,7 @@ function buildAssemblyTreeNode(
     partNumber: part.partNumber,
     description: part.description,
     quantityRequired: nodeQuantity,
+    orderStatus: assemblyOrderStatus(part, partsRequestLines),
     inventoryItem,
     stockState: assemblyStockState(inventoryItem, nodeQuantity),
     availableQuantity: inventoryStockQuantity(inventoryItem),
@@ -751,6 +786,7 @@ function buildAssemblyTreeNode(
       return buildAssemblyTreeNode(
         component,
         inventoryItems,
+        partsRequestLines,
         childQuantity,
         componentPart?.bomItems ?? [],
         partLookup,
@@ -769,6 +805,7 @@ function buildAssemblyTree(lines: BomLine[], inventoryItems: InventoryItemOption
     return buildAssemblyTreeNode(
       primaryBom?.rootPart ?? rootPart,
       inventoryItems,
+      lines,
       asNumber(line.qtyNeeded) || 1,
       primaryBom?.rootPart.bomItems?.length ? primaryBom.rootPart.bomItems : primaryBom?.parts[0]?.bomItems ?? [],
       partLookup,
@@ -3644,12 +3681,12 @@ function AssemblyTreeWorkspace({ tree, lineCount }: { tree: AssemblyTreeNode[]; 
   const totals = tree.reduce(
     (acc, node) => {
       const nodes = flattenAssemblyTree(node);
-      acc.onHand += nodes.filter((item) => item.stockState === 'on-hand').length;
-      acc.lowStock += nodes.filter((item) => item.stockState === 'low-stock').length;
-      acc.blocked += nodes.filter((item) => item.stockState === 'blocked').length;
+      acc.needsQuote += nodes.filter((item) => item.orderStatus === 'Needs Quote' || item.orderStatus === 'Needs Review').length;
+      acc.active += nodes.filter((item) => item.orderStatus === 'RFQ Sent' || item.orderStatus === 'On Order' || item.orderStatus === 'ETA / Inbound').length;
+      acc.onHand += nodes.filter((item) => item.orderStatus === 'On Hand').length;
       return acc;
     },
-    { onHand: 0, lowStock: 0, blocked: 0 },
+    { needsQuote: 0, active: 0, onHand: 0 },
   );
 
   return (
@@ -3658,13 +3695,13 @@ function AssemblyTreeWorkspace({ tree, lineCount }: { tree: AssemblyTreeNode[]; 
         <div>
           <h2 className="font-semibold text-slate-950">Assembly Tree</h2>
           <p className="text-sm text-slate-600">
-            {lineCount} parts/request line{lineCount === 1 ? '' : 's'} mapped with BOM wizard children and inventory readiness.
+            {lineCount} parts/request line{lineCount === 1 ? '' : 's'} mapped with BOM wizard children and order status.
           </p>
         </div>
         <div className="grid grid-cols-3 gap-2 text-sm">
-          <AssemblyStatusCount label="On hand" value={totals.onHand} state="on-hand" />
-          <AssemblyStatusCount label="Low" value={totals.lowStock} state="low-stock" />
-          <AssemblyStatusCount label="Blocked" value={totals.blocked} state="blocked" />
+          <AssemblyOrderStatusCount label="Needs quote" value={totals.needsQuote} tone="quote" />
+          <AssemblyOrderStatusCount label="Active" value={totals.active} tone="active" />
+          <AssemblyOrderStatusCount label="On hand" value={totals.onHand} tone="on-hand" />
         </div>
       </div>
 
@@ -3698,7 +3735,7 @@ function AssemblyTreeAccordionNode({ node, depth }: { node: AssemblyTreeNode; de
           <div className="text-sm font-normal tabular-nums text-slate-600">
             On hand {node.availableQuantity.toLocaleString(undefined, { maximumFractionDigits: 2 })}
           </div>
-          <AssemblyStockBadge node={node} />
+          <StatusBadge status={node.orderStatus} />
         </div>
       </AccordionTrigger>
       <AccordionContent className="px-4 pb-4">
@@ -3722,44 +3759,20 @@ function flattenAssemblyTree(node: AssemblyTreeNode): AssemblyTreeNode[] {
   return [node, ...node.children.flatMap(flattenAssemblyTree)];
 }
 
-function AssemblyStatusCount({ label, value, state }: { label: string; value: number; state: AssemblyStockState }) {
+function AssemblyOrderStatusCount({ label, value, tone }: { label: string; value: number; tone: 'quote' | 'active' | 'on-hand' }) {
+  const className =
+    tone === 'on-hand'
+      ? 'border-emerald-200 bg-emerald-50'
+      : tone === 'active'
+        ? 'border-sky-200 bg-sky-50'
+        : 'border-orange-200 bg-orange-50';
+
   return (
-    <div className={cn('rounded-md border px-3 py-2 text-center', assemblyStatusClassName(state, 'panel'))}>
+    <div className={cn('rounded-md border px-3 py-2 text-center', className)}>
       <div className="text-xs font-medium uppercase text-slate-600">{label}</div>
       <div className="text-lg font-semibold tabular-nums text-slate-950">{value}</div>
     </div>
   );
-}
-
-function AssemblyStockBadge({ node }: { node: AssemblyTreeNode }) {
-  const label =
-    node.stockState === 'on-hand'
-      ? 'On hand'
-      : node.stockState === 'low-stock'
-        ? 'Low stock'
-        : 'Blocked';
-
-  return (
-    <Badge className={cn('justify-center whitespace-nowrap border', assemblyStatusClassName(node.stockState, 'badge'))}>
-      {label}
-    </Badge>
-  );
-}
-
-function assemblyStatusClassName(state: AssemblyStockState, surface: 'badge' | 'panel') {
-  if (state === 'on-hand') {
-    return surface === 'badge'
-      ? 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-50'
-      : 'border-emerald-200 bg-emerald-50';
-  }
-  if (state === 'low-stock') {
-    return surface === 'badge'
-      ? 'border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-50'
-      : 'border-amber-200 bg-amber-50';
-  }
-  return surface === 'badge'
-    ? 'border-red-200 bg-red-50 text-red-800 hover:bg-red-50'
-    : 'border-red-200 bg-red-50';
 }
 
 function searchInventoryItems(items: InventoryItemOption[], query: string) {

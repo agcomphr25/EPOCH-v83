@@ -205,6 +205,11 @@ type AssemblyTreeNode = {
   reorderPoint: number;
   children: AssemblyTreeNode[];
 };
+type AssemblyLineEntry = {
+  line: BomLine;
+  part: DraftBomPart;
+  childComponents: DraftBomComponent[];
+};
 
 type CsvImportResult = {
   lines: BomLine[];
@@ -760,57 +765,90 @@ function assemblyOrderStatus(
   return findPartsRequestLineForAssemblyPart(part, lines)?.status ?? 'Needs Quote';
 }
 
+function assemblyPartKey(partNumber: string) {
+  return normalizedAssemblyPartKey(partNumber);
+}
+
+function lineAssemblyKey(line: BomLine) {
+  return assemblyPartKey(linePartNumber(line));
+}
+
+function componentAssemblyKey(component: DraftBomComponent) {
+  return assemblyPartKey(component.partNumber);
+}
+
 function buildAssemblyTreeNode(
   part: DraftBomPart | DraftBomComponent,
   inventoryItems: InventoryItemOption[],
   partsRequestLines: BomLine[],
   requiredQuantity: number,
   children: DraftBomComponent[] = [],
-  partLookup = new Map<string, DraftBomPart>(),
+  entryLookup = new Map<string, AssemblyLineEntry>(),
+  visited: Set<string> = new Set(),
 ): AssemblyTreeNode {
   const inventoryItem = resolveInventoryForPart(inventoryItems, part.inventoryItemId, part.partNumber);
   const nodeQuantity = requiredQuantity || 1;
+  const key = assemblyPartKey(part.partNumber);
+  const entry = entryLookup.get(key);
+  const nextVisited = key ? new Set([...visited, key]) : visited;
+  const childComponents = entry ? (visited.has(key) ? [] : entry.childComponents) : children;
+
   return {
     id: `${part.id}-${part.partNumber}-${nodeQuantity}`,
-    partNumber: part.partNumber,
-    description: part.description,
+    partNumber: entry ? linePartNumber(entry.line) : part.partNumber,
+    description: entry ? lineDescription(entry.line) : part.description,
     quantityRequired: nodeQuantity,
     orderStatus: assemblyOrderStatus(part, partsRequestLines),
     inventoryItem,
     stockState: assemblyStockState(inventoryItem, nodeQuantity),
     availableQuantity: inventoryStockQuantity(inventoryItem),
     reorderPoint: inventoryReorderPoint(inventoryItem),
-    children: children.map((component) => {
-      const componentPart = partLookup.get(component.partNumber);
+    children: childComponents.map((component) => {
+      const componentEntry = entryLookup.get(componentAssemblyKey(component));
       const childQuantity = nodeQuantity * (component.quantity || 1);
       return buildAssemblyTreeNode(
-        component,
+        componentEntry?.part ?? component,
         inventoryItems,
         partsRequestLines,
         childQuantity,
-        componentPart?.bomItems ?? [],
-        partLookup,
+        componentEntry?.childComponents ?? [],
+        entryLookup,
+        nextVisited,
       );
     }),
   };
 }
 
 function buildAssemblyTree(lines: BomLine[], inventoryItems: InventoryItemOption[]) {
-  return lines.map((line) => {
+  const entries = lines.map<AssemblyLineEntry>((line) => {
     const rootPart = draftLineToPart(line);
     const primaryBom = line.childDraftBoms?.[0];
-    const partLookup = new Map<string, DraftBomPart>(
-      primaryBom?.parts.map((part) => [part.partNumber, part]) ?? [],
-    );
-    return buildAssemblyTreeNode(
-      primaryBom?.rootPart ?? rootPart,
+    const childComponents = primaryBom?.rootPart.bomItems?.length
+      ? primaryBom.rootPart.bomItems
+      : primaryBom?.parts[0]?.bomItems ?? [];
+    return {
+      line,
+      part: primaryBom?.rootPart ?? rootPart,
+      childComponents,
+    };
+  });
+  const entryLookup = new Map(entries.map((entry) => [lineAssemblyKey(entry.line), entry]));
+  const childKeys = new Set(
+    entries.flatMap((entry) => entry.childComponents.map(componentAssemblyKey)).filter(Boolean),
+  );
+  const rootEntries = entries.filter((entry) => !childKeys.has(lineAssemblyKey(entry.line)));
+  const treeRootEntries = rootEntries.length > 0 ? rootEntries : entries;
+
+  return treeRootEntries.map((entry) =>
+    buildAssemblyTreeNode(
+      entry.part,
       inventoryItems,
       lines,
-      asNumber(line.qtyNeeded) || 1,
-      primaryBom?.rootPart.bomItems?.length ? primaryBom.rootPart.bomItems : primaryBom?.parts[0]?.bomItems ?? [],
-      partLookup,
-    );
-  });
+      asNumber(entry.line.qtyNeeded) || 1,
+      entry.childComponents,
+      entryLookup,
+    ),
+  );
 }
 
 async function readImportRows(file: File) {
@@ -3721,35 +3759,41 @@ function AssemblyTreeWorkspace({ tree, lineCount }: { tree: AssemblyTreeNode[]; 
 }
 
 function AssemblyTreeAccordionNode({ node, depth }: { node: AssemblyTreeNode; depth: number }) {
+  const rowContent = (
+    <div className="grid min-w-0 flex-1 gap-2 md:grid-cols-[minmax(220px,1fr)_auto_auto_auto] md:items-center">
+      <div className="min-w-0" style={{ paddingLeft: `${depth * 16}px` }}>
+        <div className="truncate font-semibold text-slate-950">{node.description}</div>
+        <div className="truncate text-sm font-normal text-slate-600">{node.partNumber}</div>
+      </div>
+      <div className="text-sm font-normal tabular-nums text-slate-600">
+        Req {node.quantityRequired.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+      </div>
+      <div className="text-sm font-normal tabular-nums text-slate-600">
+        On hand {node.availableQuantity.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+      </div>
+      <StatusBadge status={node.orderStatus} />
+    </div>
+  );
+
+  if (node.children.length === 0) {
+    return (
+      <div className="px-4 py-3">
+        {rowContent}
+      </div>
+    );
+  }
+
   return (
     <AccordionItem value={node.id} className="border-0">
       <AccordionTrigger className="gap-4 px-4 text-left hover:no-underline">
-        <div className="grid min-w-0 flex-1 gap-2 md:grid-cols-[minmax(220px,1fr)_auto_auto_auto] md:items-center">
-          <div className="min-w-0" style={{ paddingLeft: `${depth * 16}px` }}>
-            <div className="truncate font-semibold text-slate-950">{node.partNumber}</div>
-            <div className="truncate text-sm font-normal text-slate-600">{node.description}</div>
-          </div>
-          <div className="text-sm font-normal tabular-nums text-slate-600">
-            Req {node.quantityRequired.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-          </div>
-          <div className="text-sm font-normal tabular-nums text-slate-600">
-            On hand {node.availableQuantity.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-          </div>
-          <StatusBadge status={node.orderStatus} />
-        </div>
+        {rowContent}
       </AccordionTrigger>
       <AccordionContent className="px-4 pb-4">
-        {node.children.length === 0 ? (
-          <div className="rounded-md border border-dashed border-slate-200 bg-slate-50 p-3 text-sm text-slate-500">
-            No BOM wizard children configured.
-          </div>
-        ) : (
-          <Accordion type="multiple" className="rounded-md border border-slate-200">
-            {node.children.map((child) => (
-              <AssemblyTreeAccordionNode key={child.id} node={child} depth={depth + 1} />
-            ))}
-          </Accordion>
-        )}
+        <Accordion type="multiple" className="rounded-md border border-slate-200">
+          {node.children.map((child) => (
+            <AssemblyTreeAccordionNode key={child.id} node={child} depth={depth + 1} />
+          ))}
+        </Accordion>
       </AccordionContent>
     </AccordionItem>
   );

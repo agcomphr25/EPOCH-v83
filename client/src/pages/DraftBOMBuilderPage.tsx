@@ -106,7 +106,6 @@ type PoColumnId =
   | 'unitCost'
   | 'extCost'
   | 'action'
-  | 'status'
   | 'source';
 type PartsRequestColumnId =
   | 'supplier'
@@ -239,10 +238,10 @@ const poColumnLabels: Record<PoColumnId, string> = {
   unitCost: 'Unit Cost',
   extCost: 'Ext Cost',
   action: 'Action',
-  status: 'Status',
   source: 'Source',
 };
-const defaultPoColumns: PoColumnId[] = ['agPartNumber', 'qtyNeeded', 'unitCost', 'extCost', 'status', 'source'];
+const defaultPoColumns: PoColumnId[] = ['agPartNumber', 'qtyNeeded', 'unitCost', 'extCost', 'source'];
+const validPoColumnIds = new Set<PoColumnId>(Object.keys(poColumnLabels) as PoColumnId[]);
 const partsRequestColumnLabels: Record<PartsRequestColumnId, string> = {
   supplier: 'Vendor / Supplier',
   supplierItemId: 'Supplier Part #',
@@ -497,7 +496,7 @@ function normalizeDraft(draft: BomDraft): BomDraft {
       quantityPerPo: line.quantityPerPo ?? 1,
     })),
     customLaborDepartments: draft.customLaborDepartments ?? [],
-    poVisibleColumns: draft.poVisibleColumns ?? defaultPoColumns,
+    poVisibleColumns: sanitizePoColumns(draft.poVisibleColumns),
     partsRequestVisibleColumns: draft.partsRequestVisibleColumns ?? defaultPartsRequestColumns,
     directLaborVisibleColumns: draft.directLaborVisibleColumns ?? defaultDirectLaborColumns,
     assemblyVisibleColumns: draft.assemblyVisibleColumns ?? defaultSourcingColumns,
@@ -505,6 +504,13 @@ function normalizeDraft(draft: BomDraft): BomDraft {
     customPoColumns: draft.customPoColumns ?? [],
     workspaceTabs: normalizeWorkspaceTabs(draft.workspaceTabs),
   };
+}
+
+function sanitizePoColumns(columns?: readonly string[] | null): PoColumnId[] {
+  const sanitized = (columns ?? defaultPoColumns).filter((column): column is PoColumnId =>
+    validPoColumnIds.has(column as PoColumnId),
+  );
+  return sanitized.length ? sanitized : defaultPoColumns;
 }
 
 function workspaceTabLabel(tabId: WorkspaceTabId) {
@@ -2551,7 +2557,6 @@ function poColumnValue(line: BomLine, columnId: PoColumnId) {
   if (columnId === 'unitCost') return line.unitCost === '' ? '-' : money(asNumber(line.unitCost));
   if (columnId === 'extCost') return money(asNumber(line.unitCost) * asNumber(line.qtyNeeded));
   if (columnId === 'action') return line.action;
-  if (columnId === 'status') return line.status;
   if (columnId === 'source') return line.inventoryItemId ? `Inventory #${line.inventoryItemId}` : 'Draft part';
   return '-';
 }

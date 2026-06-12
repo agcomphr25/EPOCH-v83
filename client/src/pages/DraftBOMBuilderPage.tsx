@@ -3178,15 +3178,67 @@ function DraftBomWizardWorkspace({
   function removeComponent(componentId: string) {
     setActiveBom((current) => {
       if (!current) return current;
+      const queuedPartId = `mfg-${componentId}`;
       return {
         ...current,
-        parts: current.parts.map((part, index) =>
-          index === currentPartIndex
-            ? { ...part, bomItems: part.bomItems.filter((component) => component.id !== componentId) }
-            : part,
-        ),
+        parts: current.parts
+          .map((part, index) =>
+            index === currentPartIndex
+              ? { ...part, bomItems: part.bomItems.filter((component) => component.id !== componentId) }
+              : part,
+          )
+          .filter((part) => part.id !== queuedPartId),
         updatedAt: new Date().toISOString(),
       };
+    });
+  }
+
+  function updateComponent(componentId: string, patch: Partial<DraftBomComponent>) {
+    setActiveBom((current) => {
+      if (!current) return current;
+      const queuedPartId = `mfg-${componentId}`;
+      const currentComponent = current.parts[currentPartIndex]?.bomItems.find((component) => component.id === componentId);
+      if (!currentComponent) return current;
+
+      const updatedComponent = {
+        ...currentComponent,
+        ...patch,
+        partNumber: patch.partNumber ?? currentComponent.partNumber,
+        description: patch.description ?? currentComponent.description,
+      };
+
+      let parts = current.parts.map((part, index) =>
+        index === currentPartIndex
+          ? {
+              ...part,
+              bomItems: part.bomItems.map((component) => (component.id === componentId ? updatedComponent : component)),
+            }
+          : part,
+      );
+
+      const queuedIndex = parts.findIndex((part) => part.id === queuedPartId);
+      if (updatedComponent.isManufactured && updatedComponent.partNumber.trim()) {
+        const queuedPart: DraftBomPart = {
+          id: queuedPartId,
+          source: updatedComponent.source,
+          sourceLineId: updatedComponent.sourceLineId ?? null,
+          inventoryItemId: updatedComponent.inventoryItemId ?? null,
+          partNumber: updatedComponent.partNumber.trim(),
+          description: updatedComponent.description.trim() || updatedComponent.partNumber.trim(),
+          quantity: updatedComponent.quantity,
+          bomItems: queuedIndex >= 0 ? parts[queuedIndex].bomItems : [],
+          hasBOM: queuedIndex >= 0 ? parts[queuedIndex].hasBOM : false,
+        };
+        if (queuedIndex >= 0) {
+          parts = parts.map((part, index) => (index === queuedIndex ? queuedPart : part));
+        } else {
+          parts.splice(currentPartIndex + 1, 0, queuedPart);
+        }
+      } else if (queuedIndex >= 0) {
+        parts = parts.filter((part) => part.id !== queuedPartId);
+      }
+
+      return { ...current, parts, updatedAt: new Date().toISOString() };
     });
   }
 
@@ -3455,14 +3507,69 @@ function DraftBomWizardWorkspace({
                   ) : (
                     currentPart.bomItems.map((component) => (
                       <TableRow key={component.id}>
-                        <TableCell className="font-medium">{component.partNumber}</TableCell>
-                        <TableCell>{component.description}</TableCell>
-                        <TableCell className="text-right tabular-nums">{component.quantity}</TableCell>
-                        <TableCell>{departmentOptions.find((department) => department.value === component.firstDepartment)?.label ?? component.firstDepartment}</TableCell>
+                        <TableCell className="min-w-[160px]">
+                          <Input
+                            className="h-9 font-medium"
+                            value={component.partNumber}
+                            onChange={(event) => updateComponent(component.id, { partNumber: event.target.value })}
+                            disabled={!isEditMode}
+                            aria-label="BOM component part number"
+                          />
+                        </TableCell>
+                        <TableCell className="min-w-[240px]">
+                          <Input
+                            className="h-9"
+                            value={component.description}
+                            onChange={(event) => updateComponent(component.id, { description: event.target.value })}
+                            disabled={!isEditMode}
+                            aria-label="BOM component description"
+                          />
+                        </TableCell>
+                        <TableCell className="min-w-[100px]">
+                          <Input
+                            className="h-9 text-right tabular-nums"
+                            type="number"
+                            min="0.001"
+                            step="0.001"
+                            value={component.quantity}
+                            onChange={(event) => {
+                              const quantity = Number(event.target.value);
+                              updateComponent(component.id, { quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 1 });
+                            }}
+                            disabled={!isEditMode}
+                            aria-label="BOM component quantity"
+                          />
+                        </TableCell>
+                        <TableCell className="min-w-[160px]">
+                          <Select
+                            value={component.firstDepartment || defaultDepartment}
+                            onValueChange={(value) => updateComponent(component.id, { firstDepartment: value })}
+                            disabled={!isEditMode}
+                          >
+                            <SelectTrigger className="h-9">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {departmentOptions.map((department) => (
+                                <SelectItem key={department.value} value={department.value}>
+                                  {department.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
                         <TableCell>
-                          <Badge variant={component.isManufactured ? 'secondary' : 'outline'}>
-                            {component.isManufactured ? 'Manufactured' : 'Purchased'}
-                          </Badge>
+                          <label className="flex items-center gap-2 text-sm">
+                            <Checkbox
+                              checked={component.isManufactured}
+                              onCheckedChange={(checked) => updateComponent(component.id, { isManufactured: checked === true })}
+                              disabled={!isEditMode}
+                              aria-label="BOM component is manufactured"
+                            />
+                            <Badge variant={component.isManufactured ? 'secondary' : 'outline'}>
+                              {component.isManufactured ? 'Manufactured' : 'Purchased'}
+                            </Badge>
+                          </label>
                         </TableCell>
                         <TableCell>
                           <Button type="button" variant="ghost" size="sm" onClick={() => removeComponent(component.id)} disabled={!isEditMode}>

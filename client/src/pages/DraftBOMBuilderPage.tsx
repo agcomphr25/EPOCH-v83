@@ -1118,6 +1118,13 @@ export default function DraftBOMBuilderPage() {
     }));
   }
 
+  function deleteLine(id: string) {
+    setDraft((current) => ({
+      ...current,
+      lines: current.lines.filter((line) => line.id !== id),
+    }));
+  }
+
   function updateLaborEstimateLine(id: string, patch: Partial<DraftLaborEstimateLine>) {
     setDraft((current) => ({
       ...current,
@@ -2151,6 +2158,7 @@ export default function DraftBOMBuilderPage() {
                   onUpdateCustomField={updateLineCustomField}
                   onGeneratePoDraft={() => showHandoffToast('PO draft')}
                   onCreateDraftBom={startDraftBomForLine}
+                  onDeleteLine={deleteLine}
                   isEditMode={isEditMode}
                 />
               </TabsContent>
@@ -2174,6 +2182,7 @@ export default function DraftBOMBuilderPage() {
                   onImportCsv={importPartsRequestCsv}
                   onCreateVendorPoDraft={createVendorPoHandoff}
                   onFinalizeSelected={markSelectedFinalized}
+                  onDeleteLine={deleteLine}
                   isEditMode={isEditMode}
                 />
               </TabsContent>
@@ -2300,6 +2309,7 @@ function PoDraftWorkspace({
   onUpdateCustomField,
   onGeneratePoDraft,
   onCreateDraftBom,
+  onDeleteLine,
   isEditMode,
 }: {
   lines: BomLine[];
@@ -2313,10 +2323,11 @@ function PoDraftWorkspace({
   onUpdateCustomField: (lineId: string, columnName: string, value: string) => void;
   onGeneratePoDraft: () => void;
   onCreateDraftBom: (lineId: string) => void;
+  onDeleteLine: (lineId: string) => void;
   isEditMode: boolean;
 }) {
   const typedDescription = description.trim();
-  const totalColumns = 3 + visibleColumns.length + customColumns.length;
+  const totalColumns = 4 + visibleColumns.length + customColumns.length;
 
   return (
     <section className="space-y-4">
@@ -2429,6 +2440,7 @@ function PoDraftWorkspace({
                 ))}
                 <TableHead className="w-[110px]">Part type</TableHead>
                 <TableHead className="w-[120px]">BOMs</TableHead>
+                <TableHead className="w-[72px] text-right">Delete</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -2464,6 +2476,20 @@ function PoDraftWorkspace({
                       <Button type="button" variant="outline" size="sm" onClick={() => onCreateDraftBom(line.id)} disabled={!isEditMode}>
                         <Layers className="mr-2 h-4 w-4" />
                         {line.childDraftBoms?.length ? `${line.childDraftBoms.length} BOM` : 'BOM'}
+                      </Button>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 text-red-600 hover:bg-red-50 hover:text-red-700"
+                        onClick={() => onDeleteLine(line.id)}
+                        disabled={!isEditMode}
+                        title="Delete line"
+                        aria-label={`Delete ${line.description || 'draft line'}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -2507,6 +2533,7 @@ function PartsRequestWorkspace({
   onImportCsv,
   onCreateVendorPoDraft,
   onFinalizeSelected,
+  onDeleteLine,
   isEditMode,
 }: {
   lines: BomLine[];
@@ -2524,11 +2551,12 @@ function PartsRequestWorkspace({
   onImportCsv: (file: File, linkInventoryMatches: boolean) => Promise<void>;
   onCreateVendorPoDraft: () => void;
   onFinalizeSelected: () => void;
+  onDeleteLine: (lineId: string) => void;
   isEditMode: boolean;
 }) {
   const typedDescription = description.trim();
   const selectedCount = lines.filter((line) => line.include).length;
-  const totalColumns = 2 + visibleColumns.length + customColumns.length;
+  const totalColumns = 3 + visibleColumns.length + customColumns.length;
   const [linkInventoryMatches, setLinkInventoryMatches] = useState(false);
   const [isImportingCsv, setIsImportingCsv] = useState(false);
 
@@ -2679,6 +2707,7 @@ function PartsRequestWorkspace({
                     {columnName}
                   </TableHead>
                 ))}
+                <TableHead className="w-[72px] text-right">Delete</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -2768,6 +2797,20 @@ function PartsRequestWorkspace({
                         />
                       </TableCell>
                     ))}
+                    <TableCell className="text-right">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 text-red-600 hover:bg-red-50 hover:text-red-700"
+                        onClick={() => onDeleteLine(line.id)}
+                        disabled={!isEditMode}
+                        title="Delete line"
+                        aria-label={`Delete ${line.description || 'parts/request line'}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))
               )}

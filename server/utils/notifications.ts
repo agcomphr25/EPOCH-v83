@@ -180,7 +180,7 @@ export async function sendCustomerNotification(
   if (prefersSms && !allowSms) {
     console.warn(
       `[NOTIFY] SMS preferred for order ${data.orderId} but Twilio is not configured ` +
-      `(missing TWILIO_SID/TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, or TWILIO_NUMBER). ` +
+      `(missing TWILIO_ACCOUNT_SID/TWILIO_SID, TWILIO_AUTH_TOKEN, or TWILIO_FROM_NUMBER/TWILIO_NUMBER/TWILIO_PHONE_NUMBER). ` +
       `SMS will be skipped${email ? ' and email used as fallback' : ' and no SMS will be sent'}.`
     );
   }

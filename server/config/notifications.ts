@@ -7,11 +7,33 @@
  */
 
 // ============== TWILIO (SMS) ==============
-export const getTwilioConfig = () => ({
-  accountSid: process.env.TWILIO_SID || process.env.TWILIO_ACCOUNT_SID || '',
-  authToken: process.env.TWILIO_AUTH_TOKEN || '',
-  fromNumber: process.env.TWILIO_NUMBER || process.env.TWILIO_FROM_NUMBER || process.env.TWILIO_PHONE_NUMBER || '',
-});
+const firstPresentEnv = (entries) => {
+  const found = entries.find(([, value]) => Boolean(value?.trim()));
+  return {
+    value: found?.[1]?.trim() || '',
+    source: found?.[0] || null,
+  };
+};
+
+export const getTwilioConfig = () => {
+  const accountSid = firstPresentEnv([
+    ['TWILIO_ACCOUNT_SID', process.env.TWILIO_ACCOUNT_SID],
+    ['TWILIO_SID', process.env.TWILIO_SID],
+  ]);
+  const fromNumber = firstPresentEnv([
+    ['TWILIO_FROM_NUMBER', process.env.TWILIO_FROM_NUMBER],
+    ['TWILIO_NUMBER', process.env.TWILIO_NUMBER],
+    ['TWILIO_PHONE_NUMBER', process.env.TWILIO_PHONE_NUMBER],
+  ]);
+
+  return {
+    accountSid: accountSid.value,
+    accountSidSource: accountSid.source,
+    authToken: process.env.TWILIO_AUTH_TOKEN?.trim() || '',
+    fromNumber: fromNumber.value,
+    fromNumberSource: fromNumber.source,
+  };
+};
 
 export const isTwilioConfigured = (): boolean => {
   const config = getTwilioConfig();
@@ -34,6 +56,7 @@ export const getNotificationStatus = () => ({
   sms: {
     enabled: isTwilioConfigured(),
     fromNumber: getTwilioConfig().fromNumber || 'NOT SET',
+    accountSidSource: getTwilioConfig().accountSidSource || 'NOT SET',
   },
   email: {
     enabled: isSendGridConfigured(),
@@ -48,6 +71,7 @@ export const logNotificationConfig = (prefix: string = '📡') => {
     sms: {
       enabled: status.sms.enabled ? '✔' : '❌',
       from: status.sms.fromNumber,
+      accountSidSource: status.sms.accountSidSource,
     },
     email: {
       enabled: status.email.enabled ? '✔' : '❌', 

@@ -57,6 +57,11 @@ interface DraftBomLine {
 interface DraftBomRecord {
   id: string;
   name: string;
+  revision?: string;
+  projectId?: string | null;
+  projectType?: 'P2_PROJECT' | 'R_AND_D' | null;
+  projectName?: string | null;
+  project?: string | null;
   updatedAt?: string;
   lines?: DraftBomLine[];
 }
@@ -223,22 +228,45 @@ function partReadiness(parts: RDPart[]) {
   return required === 0 ? 0 : Math.round((available / required) * 100);
 }
 
-function getDraftTabs(records: DraftBomRecord[]): DraftBuilderTab[] {
-  const tabs = records.map((draft) => ({
+function draftRecordToTab(draft: DraftBomRecord): DraftBuilderTab {
+  return {
     id: draft.id,
-    name: draft.name,
+    name: [draft.name, draft.revision].filter(Boolean).join(' - '),
     partCount: draft.lines?.length ?? 0,
     updatedAt: draft.updatedAt ?? 'Not saved',
-  }));
+  };
+}
+
+function getDraftTabs(records: DraftBomRecord[]): DraftBuilderTab[] {
+  const tabs = records.map(draftRecordToTab);
   return tabs.length > 0 ? tabs : fallbackDraftTabs;
+}
+
+function isDraftLinkedToProject(project: RDProject, draft: DraftBomRecord) {
+  return project.draftTabIds.includes(draft.id)
+    || (draft.projectType === 'R_AND_D' && draft.projectId === project.id);
+}
+
+function getDraftRecordsForProject(project: RDProject | null, records: DraftBomRecord[]) {
+  if (!project) return [];
+  return records.filter((draft) => isDraftLinkedToProject(project, draft));
+}
+
+function getDraftTabsForProject(project: RDProject | null, records: DraftBomRecord[], allTabs: DraftBuilderTab[]) {
+  if (!project) return [];
+  const linkedRecords = getDraftRecordsForProject(project, records);
+  const linkedIds = new Set(linkedRecords.map((draft) => draft.id));
+  const linkedRecordTabs = linkedRecords.map(draftRecordToTab);
+  const manuallyAttachedTabs = allTabs.filter((tab) => project.draftTabIds.includes(tab.id) && !linkedIds.has(tab.id));
+  return [...linkedRecordTabs, ...manuallyAttachedTabs];
 }
 
 function getPartsForProject(project: RDProject | null, records: DraftBomRecord[]) {
   if (!project) return [];
-  const attachedRecords = records.filter((draft) => project.draftTabIds.includes(draft.id));
+  const attachedRecords = getDraftRecordsForProject(project, records);
   const lines = attachedRecords.flatMap((draft) => draft.lines ?? []);
 
-  if (lines.length === 0) return project.draftTabIds.length > 0 ? [] : fallbackParts;
+  if (lines.length === 0) return project.draftTabIds.length > 0 || attachedRecords.length > 0 ? [] : fallbackParts;
 
   return lines.slice(0, 80).map((line, index) => {
     const required = Math.max(1, asNumber(line.qtyNeeded ?? line.quantity));
@@ -322,8 +350,8 @@ export default function RDProjectsPage() {
   const draftTabs = useMemo(() => getDraftTabs(draftRecords), [draftRecords]);
   const selectedProject = projects.find((project) => project.id === selectedProjectId) ?? projects[0] ?? null;
   const selectedDraftTabs = useMemo(
-    () => draftTabs.filter((tab) => selectedProject?.draftTabIds.includes(tab.id)),
-    [draftTabs, selectedProject],
+    () => getDraftTabsForProject(selectedProject, draftRecords, draftTabs),
+    [draftRecords, draftTabs, selectedProject],
   );
   const selectedParts = useMemo(() => getPartsForProject(selectedProject, draftRecords), [draftRecords, selectedProject]);
   const selectedAssemblyTree = useMemo(
@@ -340,7 +368,11 @@ export default function RDProjectsPage() {
   useEffect(() => {
     const refreshDraftRecords = () => setDraftRecords(readJsonStorage(DRAFT_BOM_STORAGE_KEY, []));
     window.addEventListener('storage', refreshDraftRecords);
-    return () => window.removeEventListener('storage', refreshDraftRecords);
+    window.addEventListener('focus', refreshDraftRecords);
+    return () => {
+      window.removeEventListener('storage', refreshDraftRecords);
+      window.removeEventListener('focus', refreshDraftRecords);
+    };
   }, []);
 
   const resetForm = () => setForm(emptyProject);
@@ -442,7 +474,7 @@ export default function RDProjectsPage() {
               {projects.map((project) => {
                 const projectParts = getPartsForProject(project, draftRecords);
                 const readiness = partReadiness(projectParts);
-                const attachedTabCount = project.draftTabIds.length;
+                const attachedTabCount = getDraftTabsForProject(project, draftRecords, draftTabs).length;
                 const isSelected = selectedProject?.id === project.id;
 
                 return (
@@ -576,6 +608,38 @@ export default function RDProjectsPage() {
                         </CardHeader>
                         <CardContent className="text-sm text-muted-foreground">
                           {selectedProject.description || 'No notes entered.'}
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardHeader>
+                          <CardTitle className="text-base">Draft BOM Summary</CardTitle>
+                          <CardDescription>
+                            Draft Builder records linked to this R&amp;D project.
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          {selectedDraftTabs.length === 0 ? (
+                            <div className="flex flex-col items-start gap-3 text-sm text-muted-foreground">
+                              No Draft Builder tabs are linked to this project.
+                              <Button variant="outline" size="sm" onClick={() => setLocation('/estimating/bom-drafts')}>
+                                Open Draft Builder
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="grid gap-3 md:grid-cols-2">
+                              {selectedDraftTabs.map((tab) => (
+                                <div key={tab.id} className="rounded-md border bg-white px-3 py-2">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                      <p className="truncate text-sm font-medium text-slate-950">{tab.name}</p>
+                                      <p className="mt-1 text-xs text-muted-foreground">Updated {tab.updatedAt}</p>
+                                    </div>
+                                    <Badge variant="outline">{tab.partCount} parts</Badge>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </CardContent>
                       </Card>
                     </TabsContent>

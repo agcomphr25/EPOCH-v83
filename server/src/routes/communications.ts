@@ -271,16 +271,15 @@ router.get('/sms-status/:messageId', async (req, res) => {
   try {
     const { messageId } = req.params;
 
-    const accountSid = process.env.TWILIO_SID || process.env.TWILIO_ACCOUNT_SID;
-    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    const twilioConfig = getTwilioConfig();
 
-    if (!accountSid || !authToken) {
+    if (!twilioConfig.accountSid || !twilioConfig.authToken) {
       return res
         .status(500)
         .json({ error: 'Twilio credentials not configured' });
     }
 
-    const twilioClient = twilio(accountSid, authToken);
+    const twilioClient = twilio(twilioConfig.accountSid, twilioConfig.authToken);
     const message = await twilioClient.messages(messageId).fetch();
 
     res.json({

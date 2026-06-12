@@ -225,8 +225,10 @@ async function checkTwilioSMS(checkType: HealthCheckType): Promise<HealthCheckRe
         message: 'Twilio credentials not configured',
         details: { 
           accountSidSet: !!twilioConfig.accountSid, 
+          accountSidSource: twilioConfig.accountSidSource || 'NOT SET',
           authTokenSet: !!twilioConfig.authToken, 
-          fromNumberSet: !!twilioConfig.fromNumber 
+          fromNumberSet: !!twilioConfig.fromNumber,
+          fromNumberSource: twilioConfig.fromNumberSource || 'NOT SET',
         },
         executionTimeMs: Date.now() - startTime,
       };
@@ -259,6 +261,8 @@ async function checkTwilioSMS(checkType: HealthCheckType): Promise<HealthCheckRe
       details: { 
         messageSid: message.sid, 
         recipient: testPhone,
+        accountSidSource: twilioConfig.accountSidSource || 'NOT SET',
+        fromNumberSource: twilioConfig.fromNumberSource || 'NOT SET',
         sentAt: now.toISOString()
       },
       executionTimeMs: Date.now() - startTime,
@@ -394,6 +398,8 @@ async function checkTrackingNotificationPipeline(checkType: HealthCheckType): Pr
     smsSuccess,
     smsMessageId,
     smsError,
+    smsAccountSidSource: smsTwilioConfig.accountSidSource || 'NOT SET',
+    smsFromNumberSource: smsTwilioConfig.fromNumberSource || 'NOT SET',
     lastTestTimestamp: timestamp,
   };
   

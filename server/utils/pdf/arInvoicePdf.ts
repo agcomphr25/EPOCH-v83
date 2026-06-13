@@ -1,7 +1,7 @@
 import { PDFDocument, rgb, StandardFonts, type PDFFont } from 'pdf-lib';
 import { db } from '../../db';
-import { arInvoices, arInvoiceLines, customers, purchaseOrders, p2Customers, p2PurchaseOrders, p2PackingSlips, p2LotNumbers } from '../../schema';
-import { eq, sql } from 'drizzle-orm';
+import { arInvoices, arInvoiceLines, customers, purchaseOrders, p2Customers, p2PurchaseOrders, p2PackingSlips, p2LotNumbers, p2SerializedItems } from '../../schema';
+import { eq, inArray, sql } from 'drizzle-orm';
 import { COMPANY_INFO } from '../../../shared/company-config';
 import { resolveAssetPath } from '../../src/utils/assetPaths';
 import * as fs from 'fs';
@@ -28,14 +28,35 @@ const P1_COMPANY_INFO = {
   name: 'AG Composites',
 };
 
+const moneyFormatter = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+const numberFormatter = new Intl.NumberFormat('en-US', {
+  maximumFractionDigits: 3,
+});
+
 function money(value: unknown): string {
   const num = Number(value || 0);
-  return `$${num.toFixed(2)}`;
+  return moneyFormatter.format(Number.isFinite(num) ? num : 0);
+}
+
+function quantity(value: unknown): string {
+  const num = Number(value || 0);
+  if (!Number.isFinite(num)) return String(value || '');
+  return numberFormatter.format(num);
 }
 
 function date(value: unknown): string {
   if (!value) return 'N/A';
-  const d = new Date(String(value));
+  const raw = String(value);
+  const dateOnlyMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const d = dateOnlyMatch
+    ? new Date(Number(dateOnlyMatch[1]), Number(dateOnlyMatch[2]) - 1, Number(dateOnlyMatch[3]))
+    : new Date(raw);
   if (Number.isNaN(d.getTime())) return String(value);
   return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
 }
@@ -101,6 +122,91 @@ function consolidateLines(lines: any[]): any[] {
   return Array.from(grouped.values());
 }
 
+function assignedSkuFromSerials(serials: Array<{ sku?: string | null }>): string | null {
+  const skus = Array.from(
+    new Set(
+      serials
+        .map((serial) => serial.sku?.trim())
+        .filter((sku): sku is string => Boolean(sku)),
+    ),
+  );
+
+  return skus.length > 0 ? skus.join(', ') : null;
+}
+
+function stripPartPrefix(description: string, parts: Array<string | null | undefined>): string {
+  let cleaned = description.trim();
+  for (const part of parts) {
+    const normalized = part?.trim();
+    if (!normalized) continue;
+    const escaped = normalized.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    cleaned = cleaned.replace(new RegExp(`^${escaped}\\s*(-|–|—|:)\\s*`, 'i'), '').trim();
+  }
+  return cleaned || description;
+}
+
+function hasPartPrefix(description: string | null | undefined, part: string | null | undefined): boolean {
+  const normalized = part?.trim();
+  if (!description || !normalized) return false;
+  const escaped = normalized.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`^${escaped}\\s*(-|–|—|:)\\s*`, 'i').test(description.trim());
+}
+
+async function hydrateP2PdfLineDisplay(invoice: any, lines: any[]): Promise<any[]> {
+  if (invoice.invoiceSource === 'P1' || !Array.isArray(invoice.packingSlipLineItems)) return lines;
+
+  const slipLineItems = invoice.packingSlipLineItems as any[];
+  const serialNumbers = Array.from(
+    new Set(
+      slipLineItems.flatMap((item) =>
+        Array.isArray(item.serialNumbers)
+          ? item.serialNumbers.filter((serial: unknown): serial is string => typeof serial === 'string' && serial.trim().length > 0)
+          : [],
+      ),
+    ),
+  );
+
+  const skuBySerialNumber = new Map<string, string | null>();
+  if (serialNumbers.length > 0) {
+    const serialRows = await db
+      .select({ serialNumber: p2SerializedItems.serialNumber, sku: p2SerializedItems.sku })
+      .from(p2SerializedItems)
+      .where(inArray(p2SerializedItems.serialNumber, serialNumbers));
+    for (const row of serialRows) {
+      skuBySerialNumber.set(row.serialNumber, row.sku);
+    }
+  }
+
+  const slipLines = slipLineItems.map((item) => {
+    const customerSku = assignedSkuFromSerials(
+      (Array.isArray(item.serialNumbers) ? item.serialNumbers : [])
+        .map((serialNumber: string) => ({ sku: skuBySerialNumber.get(serialNumber) })),
+    ) || item.customerSku || item.sku || null;
+
+    return {
+      ...item,
+      customerPartNumber: customerSku || item.partNumber || null,
+    };
+  });
+
+  return lines.map((line) => {
+    const match = slipLines.find((item) =>
+      (line.poItemId && item.poItemId && String(line.poItemId) === String(item.poItemId)) ||
+      (line.partNumber && item.partNumber && String(line.partNumber).trim() === String(item.partNumber).trim()) ||
+      (line.dimensionTags?.internalPartNumber && item.partNumber && String(line.dimensionTags.internalPartNumber).trim() === String(item.partNumber).trim()) ||
+      hasPartPrefix(line.description, item.partNumber)
+    );
+    if (!match?.customerPartNumber) return line;
+
+    const originalPartNumber = line.partNumber || match.partNumber || line.dimensionTags?.internalPartNumber;
+    return {
+      ...line,
+      partNumber: match.customerPartNumber,
+      description: stripPartPrefix(line.description || '', [originalPartNumber, match.partNumber, match.customerPartNumber]),
+    };
+  });
+}
+
 const invoiceSourceSql = () => sql<string>`
   CASE WHEN EXISTS (
     SELECT 1
@@ -154,6 +260,7 @@ export async function generateArInvoicePdf(invoiceId: string): Promise<Buffer> {
       billingZip: sql<string | null>`CASE WHEN (${invoiceSourceSql()}) = 'P1' THEN NULL ELSE ${p2Customers.billingZip} END`,
       contactEmail: sql<string | null>`CASE WHEN (${invoiceSourceSql()}) = 'P1' THEN ${customers.email} ELSE ${p2Customers.contactEmail} END`,
       packingSlipNumber: p2PackingSlips.packingSlipNumber,
+      packingSlipLineItems: p2PackingSlips.lineItems,
       lotNumber: p2LotNumbers.lotNumber,
       p1ShipToName: sql<string | null>`(
         SELECT sr.ship_to_snapshot->>'name'
@@ -255,7 +362,7 @@ export async function generateArInvoicePdf(invoiceId: string): Promise<Buffer> {
     .select()
     .from(arInvoiceLines)
     .where(eq(arInvoiceLines.invoiceId, invoiceId));
-  const lines = consolidateLines(rawLines);
+  const lines = consolidateLines(await hydrateP2PdfLineDisplay(invoice, rawLines));
 
   const pdf = await PDFDocument.create();
   const font = await pdf.embedFont(StandardFonts.Helvetica);
@@ -359,7 +466,7 @@ export async function generateArInvoicePdf(invoiceId: string): Promise<Buffer> {
     if (idx % 2 === 1) page.drawRectangle({ x: PAGE.MARGIN, y: y - rowHeight + 3, width: PAGE.WIDTH - PAGE.MARGIN * 2, height: rowHeight, color: COLOR.ALT });
     page.drawText(isP1Invoice ? String(invoice.poOverride || invoice.poNumber || invoice.poId || '') : (line.partNumber || ''), { x: cols.part, y: y - 8, size: FONT_SIZE.TABLE, font, color: COLOR.TEXT });
     descLines.forEach((dl, i) => page.drawText(dl, { x: cols.desc, y: y - 8 - i * 10, size: FONT_SIZE.TABLE, font, color: COLOR.TEXT }));
-    page.drawText(String(line.qty), { x: cols.qty, y: y - 8, size: FONT_SIZE.TABLE, font, color: COLOR.TEXT });
+    page.drawText(quantity(line.qty), { x: cols.qty, y: y - 8, size: FONT_SIZE.TABLE, font, color: COLOR.TEXT });
     page.drawText(money(line.unitPrice), { x: cols.unit, y: y - 8, size: FONT_SIZE.TABLE, font, color: COLOR.TEXT });
     page.drawText(money(line.lineTotal), { x: cols.total, y: y - 8, size: FONT_SIZE.TABLE, font: bold, color: COLOR.TEXT });
     y -= rowHeight;

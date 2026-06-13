@@ -1117,7 +1117,18 @@ router.post('/scans', async (req: Request, res: Response) => {
 // Parts Requests
 router.get('/parts-requests', async (req: Request, res: Response) => {
   try {
-    const requests = await storage.getAllPartsRequests();
+    const canViewAll = await canViewAllPartsRequests(req);
+    const username = req.user?.username;
+    const requests = canViewAll
+      ? await storage.getAllPartsRequests()
+      : username
+        ? await storage.getPartsRequestsByUser(
+            username,
+            req.user?.id ?? null,
+            (req.user as any)?.employeeId ?? null,
+            await getPartsRequestRequestedByNameCandidates(req)
+          )
+        : [];
     res.json(requests);
   } catch (error) {
     console.error('Get parts requests error:', error);
@@ -1149,6 +1160,90 @@ async function userCan(req: Request, capabilityKey: string) {
   if (user.role === 'ADMIN' || user.role === 'OWNER') return true;
   const { permissionSet } = await getUserPermissions(user.id, user.role);
   return permissionSet.has(capabilityKey);
+}
+
+async function userCanAny(req: Request, capabilityKeys: string[]) {
+  const user = req.user as any;
+  if (!user) return false;
+  if (user.role === 'ADMIN' || user.role === 'OWNER') return true;
+  const { permissionSet } = await getUserPermissions(user.id, user.role);
+  return capabilityKeys.some((capabilityKey) => permissionSet.has(capabilityKey));
+}
+
+async function canViewAllPartsRequests(req: Request) {
+  const user = req.user as any;
+  if (!user) return false;
+  if (user.role === 'ADMIN' || user.role === 'OWNER') return true;
+
+  const username = String(user.username || '').trim().toLowerCase();
+  if (username === 'jens' || username === 'agrace') return true;
+
+  return userCanAny(req, [
+    'purchasing.manage_pos',
+    'purchasing.approve_po',
+    'purchasing.view_requisitions',
+  ]);
+}
+
+async function requireConsolidatedNeedsAccess(req: Request, res: Response) {
+  const allowed = await userCanAny(req, [
+    'purchasing.manage_pos',
+    'purchasing.approve_po',
+    'purchasing.view_requisitions',
+  ]);
+  if (!allowed) {
+    res.status(403).json({
+      error: 'Forbidden',
+      requiredCapability: 'purchasing.view_requisitions',
+      message: 'Admin or purchasing access is required to view consolidated parts needs.',
+    });
+  }
+  return allowed;
+}
+
+async function getPartsRequestRequestedByNameCandidates(req: Request) {
+  const user = req.user as any;
+  const names = new Set<string>();
+  if (!user) return [];
+  if (user.username) names.add(String(user.username));
+
+  try {
+    const { users } = await import('../../schema');
+    const [row] = await db
+      .select({
+        username: users.username,
+        firstName: users.firstName,
+        lastName: users.lastName,
+      })
+      .from(users)
+      .where(eq(users.id, user.id))
+      .limit(1);
+
+    if (row?.username) names.add(row.username);
+    const fullName = [row?.firstName, row?.lastName]
+      .filter((part) => typeof part === 'string' && part.trim().length > 0)
+      .join(' ')
+      .trim();
+    if (fullName) names.add(fullName);
+  } catch (error) {
+    console.warn('[parts-requests] requested-by name lookup failed:', error instanceof Error ? error.message : error);
+  }
+
+  return Array.from(names);
+}
+
+async function canAccessPartsRequest(req: Request, requestId: number) {
+  if (await canViewAllPartsRequests(req)) return true;
+  const user = req.user as any;
+  if (!user) return false;
+
+  const request = await storage.getPartsRequest(requestId);
+  if (!request || request.isActive === false) return false;
+  if (user.id && request.requestedByUserId === user.id) return true;
+  if (user.employeeId && request.requestedForEmployeeId === user.employeeId) return true;
+
+  const names = await getPartsRequestRequestedByNameCandidates(req);
+  return names.some((name) => name.trim() && request.requestedBy === name.trim());
 }
 
 async function requirePartsRequestApprovalAuthority(req: Request, res: Response) {
@@ -1262,8 +1357,11 @@ async function notifyPartsRequestParticipants(params: {
   }
 }
 
-router.get('/parts-requests/owner-approvals', async (_req: Request, res: Response) => {
+router.get('/parts-requests/owner-approvals', async (req: Request, res: Response) => {
   try {
+    if (!(await canViewAllPartsRequests(req))) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
     const requests = await storage.getAllPartsRequests();
     res.json(
       requests.filter(
@@ -1564,7 +1662,8 @@ router.get('/parts-requests/my', async (req: Request, res: Response) => {
     const requests = await storage.getPartsRequestsByUser(
       username,
       req.user?.id ?? null,
-      (req.user as any)?.employeeId ?? null
+      (req.user as any)?.employeeId ?? null,
+      await getPartsRequestRequestedByNameCandidates(req)
     );
     res.json(requests);
   } catch (error) {
@@ -1577,7 +1676,17 @@ router.get('/parts-requests/my', async (req: Request, res: Response) => {
 router.get('/parts-requests/department/:departmentId', async (req: Request, res: Response) => {
   try {
     const departmentId = parseInt(req.params.departmentId);
-    const requests = await storage.getPartsRequestsByDepartment(departmentId);
+    const username = req.user?.username;
+    const requests = await canViewAllPartsRequests(req)
+      ? storage.getPartsRequestsByDepartment(departmentId)
+      : username
+        ? (await storage.getPartsRequestsByUser(
+            username,
+            req.user?.id ?? null,
+            (req.user as any)?.employeeId ?? null,
+            await getPartsRequestRequestedByNameCandidates(req)
+          )).filter((request) => request.departmentId === departmentId)
+        : [];
     res.json(requests);
   } catch (error) {
     console.error('Get department parts requests error:', error);
@@ -1588,6 +1697,7 @@ router.get('/parts-requests/department/:departmentId', async (req: Request, res:
 // Get consolidated parts needs for inventory manager
 router.get('/parts-requests/consolidated/needs', async (req: Request, res: Response) => {
   try {
+    if (!(await requireConsolidatedNeedsAccess(req, res))) return;
     const needs = await storage.getConsolidatedPartsNeeds();
     res.json(needs);
   } catch (error) {
@@ -1599,6 +1709,7 @@ router.get('/parts-requests/consolidated/needs', async (req: Request, res: Respo
 // Get parts requests grouped by vendor for consolidated ordering view
 router.get('/parts-requests/by-vendor', async (req: Request, res: Response) => {
   try {
+    if (!(await requireConsolidatedNeedsAccess(req, res))) return;
     const { partsRequests, vendors, inventoryItems } = await import('../../schema');
     const { db } = await import('../../db');
     const { eq, and, inArray, isNotNull, isNull } = await import('drizzle-orm');
@@ -2158,6 +2269,7 @@ router.post('/parts-requests/batches', async (req: Request, res: Response) => {
 // Get all order batches with their order lines
 router.get('/parts-requests/batches', async (req: Request, res: Response) => {
   try {
+    if (!(await requireConsolidatedNeedsAccess(req, res))) return;
     const { partsRequestBatches, partsRequestOrderLines, partsRequestOrderAllocations, partsRequests } = await import('../../schema');
     const { db } = await import('../../db');
     const { eq, desc } = await import('drizzle-orm');
@@ -2664,6 +2776,9 @@ router.get('/parts-requests/:id/history', async (req: Request, res: Response) =>
     const { eq, desc } = await import('drizzle-orm');
 
     const requestId = parseInt(req.params.id);
+    if (!(await canAccessPartsRequest(req, requestId))) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
     const history = await db
       .select()
       .from(partsRequestStatusHistory)

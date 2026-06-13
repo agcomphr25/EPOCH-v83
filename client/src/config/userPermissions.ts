@@ -23,6 +23,7 @@ export const CAPABILITY_GATED_ROUTES: Record<string, string | string[]> = {
   '/finance/bulk-payment': 'finance.manage_payments',
   '/finance/bulk-payment-history': 'finance.view',
   '/inventory/cycle-counts': 'inventory.cycleCount.view',
+  '/inventory/consolidated-needs': 'purchasing.view_requisitions',
 };
 
 export function getRequiredCapability(route: string): string | string[] | undefined {
@@ -268,7 +269,6 @@ export const USER_PERMISSIONS: Record<string, UserPermissions> = {
       '/inventory/ledger',
       '/production/material-readiness',
       '/inventory/parts-request',
-      '/inventory/consolidated-needs',
       '/customers',
       '/tickets',
       '/gateway-reports',
@@ -692,6 +692,7 @@ export const ROLE_ROUTE_ACCESS: Record<string, string[]> = {
   '/inventory/enhanced-mrp': ['ADMIN', 'INVENTORY_MANAGER'],
   '/inventory/ledger': ['ADMIN', 'INVENTORY_MANAGER', 'OWNER'],
   '/inventory/traceability': ['ADMIN', 'OWNER', 'QUALITY', 'QUALITY_INSPECTOR', 'MATERIALS', 'MATERIALS_MANAGER', 'INVENTORY_MANAGER', 'COMPLIANCE'],
+  '/inventory/consolidated-needs': ['ADMIN', 'OWNER'],
   '/production/material-readiness': ['ADMIN', 'INVENTORY_MANAGER', 'OWNER'],
   '/user-management': ['ADMIN', 'OWNER'],
   '/employee': ['ADMIN', 'OWNER'],

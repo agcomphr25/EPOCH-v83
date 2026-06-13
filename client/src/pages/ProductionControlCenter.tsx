@@ -6,13 +6,25 @@ import ControlTowerRibbon from '@/components/widgets/ControlTowerRibbon';
 import MyTasksControlCenter from '@/components/MyTasksControlCenter';
 import { PCC_DASHBOARD_LAYOUT } from '@/config/pccDashboardLayout';
 import { DashboardFilterProvider } from '@/contexts/DashboardFilterContext';
+import { apiRequest } from '@/lib/queryClient';
+
+type CurrentUser = {
+  id: number;
+  username: string;
+  role: string;
+  employeeId?: number | null;
+};
 
 export default function ProductionControlCenter() {
-  const { data: currentUser } = useQuery<{ id: number; username: string; role: string; employeeId?: number }>({
+  const { data: currentUser } = useQuery<CurrentUser | null>({
     queryKey: ['currentUser'],
+    queryFn: () => apiRequest('/api/auth/session'),
+    staleTime: 5 * 60 * 1000,
+    retry: false,
   });
   const { data: resolvedEmployee } = useQuery<{ employeeId: number | null }>({
     queryKey: ['/api/timekeeping/my-employee-id'],
+    queryFn: () => apiRequest('/api/timekeeping/my-employee-id'),
     enabled: !!currentUser && !currentUser.employeeId,
   });
   const dashboardEmployeeId = currentUser?.employeeId ?? resolvedEmployee?.employeeId ?? null;

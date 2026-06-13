@@ -49,6 +49,12 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
 
 interface PartsRequestFormData {
   agPartNumber: string;
@@ -863,80 +869,88 @@ export default function PartsRequestsCard() {
           No parts requests found
         </div>
       ) : (
-        <div className="space-y-6">
+        <Accordion
+          type="multiple"
+          defaultValue={Object.keys(requestsByDepartment)}
+          className="space-y-3"
+        >
           {Object.entries(requestsByDepartment).map(
             ([department, deptRequests]) => (
-              <div key={department} className="space-y-4">
-                {/* Department Header */}
-                <div className="bg-gray-50 px-4 py-3 rounded-lg border">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-lg font-semibold text-gray-800">
+              <AccordionItem
+                key={department}
+                value={department}
+                className="rounded-md border bg-white px-4"
+              >
+                <AccordionTrigger className="hover:no-underline">
+                  <div className="flex w-full items-center justify-between pr-4">
+                    <span className="text-lg font-semibold text-gray-800">
                       {department}
-                    </h4>
-                    <span className="text-sm text-gray-600 bg-white px-2 py-1 rounded">
+                    </span>
+                    <span className="rounded bg-gray-50 px-2 py-1 text-sm text-gray-600">
                       {deptRequests.length} request
                       {deptRequests.length !== 1 ? 's' : ''}
                     </span>
                   </div>
-                </div>
+                </AccordionTrigger>
 
                 {/* Department Requests Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 ml-4">
-                  {deptRequests.map((request) => (
-                    <div
-                      key={request.id}
-                      className="border rounded-lg p-4 space-y-3 hover:shadow-md transition-shadow bg-white"
-                    >
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h5 className="font-medium">{request.partName}</h5>
-                          <p className="text-sm text-gray-600">
-                            Part: {request.partNumber}
-                          </p>
+                <AccordionContent className="pt-1">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {deptRequests.map((request) => (
+                      <div
+                        key={request.id}
+                        className="border rounded-lg p-4 space-y-3 hover:shadow-md transition-shadow bg-white"
+                      >
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h5 className="font-medium">{request.partName}</h5>
+                            <p className="text-sm text-gray-600">
+                              Part: {request.partNumber}
+                            </p>
+                          </div>
+                          <div className="flex space-x-1">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleEdit(request)}
+                              title="Edit"
+                            >
+                              <Edit className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDelete(request.id)}
+                              disabled={deleteMutation.isPending}
+                              title="Delete"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
                         </div>
-                        <div className="flex space-x-1">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleEdit(request)}
-                            title="Edit"
-                          >
-                            <Edit className="h-3 w-3" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleDelete(request.id)}
-                            disabled={deleteMutation.isPending}
-                            title="Delete"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      </div>
 
-                      <div className="flex items-center gap-2">
-                        <Badge className={getStatusBadgeColor(request.status)}>
-                          {request.status === 'PENDING_OWNER_APPROVAL'
-                            ? 'OWNER APPROVAL'
-                            : request.status}
-                        </Badge>
-                        <Badge
-                          className={getUrgencyBadgeColor(request.urgency)}
-                        >
-                          {request.urgency}
-                        </Badge>
-                      </div>
+                        <div className="flex items-center gap-2">
+                          <Badge className={getStatusBadgeColor(request.status)}>
+                            {request.status === 'PENDING_OWNER_APPROVAL'
+                              ? 'OWNER APPROVAL'
+                              : request.status}
+                          </Badge>
+                          <Badge
+                            className={getUrgencyBadgeColor(request.urgency)}
+                          >
+                            {request.urgency}
+                          </Badge>
+                        </div>
 
-                      <div className="space-y-2 text-sm">
-                        <div className="flex items-center gap-2">
-                          <User className="h-4 w-4 text-gray-400" />
-                          <span>By: {request.requestedBy}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <User className="h-4 w-4 text-gray-400" />
-                          <span>For: {request.requestedForDisplayName || '—'}</span>
-                        </div>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex items-center gap-2">
+                            <User className="h-4 w-4 text-gray-400" />
+                            <span>By: {request.requestedBy}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <User className="h-4 w-4 text-gray-400" />
+                            <span>For: {request.requestedForDisplayName || '—'}</span>
+                          </div>
 
                         {(request.productionLine || request.project) && (
                           <div className="flex flex-wrap gap-2">
@@ -1022,10 +1036,11 @@ export default function PartsRequestsCard() {
                     </div>
                   ))}
                 </div>
-              </div>
+                </AccordionContent>
+              </AccordionItem>
             )
           )}
-        </div>
+        </Accordion>
       )}
 
       {/* Edit Dialog */}

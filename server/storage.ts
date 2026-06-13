@@ -1330,7 +1330,7 @@ export interface IStorage {
   ): Promise<PartsRequest>;
   deletePartsRequest(id: number): Promise<void>;
   getPartsRequestsByDepartment(departmentId: number): Promise<PartsRequest[]>;
-  getPartsRequestsByUser(username: string, userId?: number | null, employeeId?: number | null): Promise<PartsRequest[]>;
+  getPartsRequestsByUser(username: string, userId?: number | null, employeeId?: number | null, requestedByNames?: string[]): Promise<PartsRequest[]>;
   getConsolidatedPartsNeeds(): Promise<PartsRequest[]>; // All PENDING/APPROVED requests for inventory manager
 
   // Departments CRUD
@@ -7192,13 +7192,19 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(partsRequests.requestDate));
   }
 
-  async getPartsRequestsByUser(username: string, userId?: number | null, employeeId?: number | null): Promise<PartsRequest[]> {
+  async getPartsRequestsByUser(username: string, userId?: number | null, employeeId?: number | null, requestedByNames: string[] = []): Promise<PartsRequest[]> {
     const participantFilters = [eq(partsRequests.requestedBy, username)];
     if (userId) {
       participantFilters.push(eq(partsRequests.requestedByUserId, userId));
     }
     if (employeeId) {
       participantFilters.push(eq(partsRequests.requestedForEmployeeId, employeeId));
+    }
+    for (const name of requestedByNames) {
+      const trimmed = name.trim();
+      if (trimmed && trimmed !== username) {
+        participantFilters.push(eq(partsRequests.requestedBy, trimmed));
+      }
     }
 
     return await db

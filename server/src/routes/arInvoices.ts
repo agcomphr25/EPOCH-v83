@@ -1314,50 +1314,125 @@ function deriveInvoiceToAndCc(rawRecipients: unknown, recipients: InvoiceEmailRe
   return { to, cc };
 }
 
+type CustomerRecipientSource = {
+  id: number;
+  name: string;
+  email: string | null;
+  contact: string | null;
+};
+
+async function findCustomerRecipientSourceById(customerId: string | null | undefined): Promise<CustomerRecipientSource | null> {
+  if (!customerId || !/^\d+$/.test(customerId)) return null;
+  const [customer] = await db
+    .select({ id: customers.id, name: customers.name, email: customers.email, contact: customers.contact })
+    .from(customers)
+    .where(eq(customers.id, Number(customerId)))
+    .limit(1);
+  return customer ?? null;
+}
+
+async function findCustomerRecipientSourceByName(customerName: string | null | undefined): Promise<CustomerRecipientSource | null> {
+  const normalizedName = customerName?.trim();
+  if (!normalizedName) return null;
+
+  const [customer] = await db
+    .select({ id: customers.id, name: customers.name, email: customers.email, contact: customers.contact })
+    .from(customers)
+    .where(sql`
+      lower(trim(${customers.name})) = lower(${normalizedName})
+      OR lower(trim(COALESCE(${customers.company}, ''))) = lower(${normalizedName})
+    `)
+    .orderBy(desc(customers.isActive), customers.name)
+    .limit(1);
+  return customer ?? null;
+}
+
+async function appendCustomerInvoiceRecipients(
+  recipients: InvoiceEmailRecipient[],
+  customer: CustomerRecipientSource | null,
+) {
+  if (!customer?.id) return;
+
+  const contacts = await db
+    .select({
+      name: customerContacts.name,
+      email: customerContacts.email,
+      isPrimary: customerContacts.isPrimary,
+    })
+    .from(customerContacts)
+    .where(and(
+      eq(customerContacts.customerId, customer.id),
+      eq(customerContacts.active, true),
+      eq(customerContacts.receivesInvoices, true),
+    ))
+    .orderBy(desc(customerContacts.isPrimary), customerContacts.name);
+
+  for (const contact of contacts) {
+    if (contact.email) {
+      appendRecipient(recipients, {
+        name: contact.name,
+        email: contact.email,
+        type: contact.isPrimary && recipients.length === 0 ? 'primary' : 'contact',
+      });
+    }
+  }
+
+  if (customer.email) {
+    appendRecipient(recipients, {
+      name: customer.contact || customer.name,
+      email: customer.email,
+      type: recipients.length === 0 ? 'primary' : 'additional',
+    });
+  }
+}
+
+async function appendP1InvoiceRecipients(
+  recipients: InvoiceEmailRecipient[],
+  invoice: typeof arInvoices.$inferSelect,
+) {
+  await appendCustomerInvoiceRecipients(
+    recipients,
+    await findCustomerRecipientSourceById(invoice.customerId),
+  );
+
+  const purchaseOrderRefs: Array<{ customerId: string | null; customerName: string | null }> = [];
+
+  if (invoice.poId && /^\d+$/.test(invoice.poId)) {
+    const [po] = await db
+      .select({ customerId: purchaseOrders.customerId, customerName: purchaseOrders.customerName })
+      .from(purchaseOrders)
+      .where(eq(purchaseOrders.id, Number(invoice.poId)))
+      .limit(1);
+    if (po) purchaseOrderRefs.push(po);
+  }
+
+  if (invoice.poOverride) {
+    const [po] = await db
+      .select({ customerId: purchaseOrders.customerId, customerName: purchaseOrders.customerName })
+      .from(purchaseOrders)
+      .where(eq(purchaseOrders.poNumber, invoice.poOverride))
+      .limit(1);
+    if (po) purchaseOrderRefs.push(po);
+  }
+
+  for (const po of purchaseOrderRefs) {
+    await appendCustomerInvoiceRecipients(
+      recipients,
+      await findCustomerRecipientSourceById(po.customerId),
+    );
+    await appendCustomerInvoiceRecipients(
+      recipients,
+      await findCustomerRecipientSourceByName(po.customerName),
+    );
+  }
+}
+
 async function getInvoiceEmailRecipients(invoice: typeof arInvoices.$inferSelect): Promise<InvoiceEmailRecipient[]> {
   const recipients: InvoiceEmailRecipient[] = [];
 
   const isP1 = await isP1Invoice(invoice);
   if (isP1) {
-    const [customer] = await db
-      .select({ id: customers.id, name: customers.name, email: customers.email, contact: customers.contact })
-      .from(customers)
-      .where(sql`(CASE WHEN ${invoice.customerId} ~ '^[0-9]+$' THEN ${invoice.customerId}::integer END) = ${customers.id}`);
-
-    if (customer?.id) {
-      const contacts = await db
-        .select({
-          name: customerContacts.name,
-          email: customerContacts.email,
-          phone: customerContacts.phone,
-          isPrimary: customerContacts.isPrimary,
-        })
-        .from(customerContacts)
-        .where(and(
-          eq(customerContacts.customerId, customer.id),
-          eq(customerContacts.active, true),
-          eq(customerContacts.receivesInvoices, true),
-        ))
-        .orderBy(desc(customerContacts.isPrimary), customerContacts.name);
-
-      for (const contact of contacts) {
-        if (contact.email) {
-          appendRecipient(recipients, {
-            name: contact.name,
-            email: contact.email,
-            type: contact.isPrimary && recipients.length === 0 ? 'primary' : 'contact',
-          });
-        }
-      }
-    }
-
-    if (customer?.email) {
-      appendRecipient(recipients, {
-        name: customer.contact || customer.name,
-        email: customer.email,
-        type: recipients.length === 0 ? 'primary' : 'additional',
-      });
-    }
+    await appendP1InvoiceRecipients(recipients, invoice);
   }
 
   const [p2Customer] = await db

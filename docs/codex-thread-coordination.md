@@ -16,6 +16,7 @@ Use this file when multiple Codex threads are making changes in different parts 
 | Status | Thread / Change Area | Branch | App Section | Files / Ownership | Notes |
 | --- | --- | --- | --- | --- | --- |
 | merged | Parts request visibility and Tandym PTO tasks | `main` | `/inventory/parts-request`, `/production-control-center` | `client/src/components/inventory/PartsRequestsCard.tsx`, `client/src/pages/ProductionControlCenter.tsx`, inventory routes and permissions | Pushed as `3b1a388ec` on `main`. |
+| ready | P1 invoice recipient automation | `codex/p1-invoice-recipient-automation` | `/finance/invoices/:id` | `server/src/routes/arInvoices.ts` | Send Invoice now finds P1 PO invoice recipients through the linked PO/customer fallback. |
 | available | Next thread | `codex/<name>` | TBD | TBD | Add a row before editing. |
 
 ## Thread Startup Checklist

@@ -9,6 +9,7 @@ import {
 } from '../../schema';
 import { eq } from 'drizzle-orm';
 import { buildRevenueDimensionTags } from './productionLineAccounting';
+import { assignReservedP2InvoiceNumberToPackingSlip } from './p2InvoiceNumberService';
 
 let p2PackingSlipInvoiceNumberSchemaReady: Promise<void> | null = null;
 
@@ -210,8 +211,11 @@ export async function buildInvoicePreviewFromPackingSlip(
   pricingMismatch = lines.some((line) => line.pricingStatus === 'missing');
   pricingAmbiguous = lines.some((line) => line.pricingStatus === 'ambiguous');
 
-  const { storage } = await import('../../storage');
-  const invoiceNumber = slip.invoiceNumber || await storage.getNextInvoiceNumber(slip.customerId, slip.customerName);
+  const invoiceNumber = slip.invoiceNumber || await assignReservedP2InvoiceNumberToPackingSlip({
+    packingSlipId,
+    reason: 'Reserved during invoice preview from P2 packing slip',
+    changedBy: 'system:invoice-preview',
+  });
 
   const [customer] = await db
     .select({ paymentTerms: p2Customers.paymentTerms })

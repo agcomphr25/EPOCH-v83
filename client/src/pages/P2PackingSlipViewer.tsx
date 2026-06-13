@@ -163,7 +163,6 @@ export default function P2PackingSlipViewer() {
       Array.isArray(query.queryKey) && query.queryKey[0] === '/api/ar-invoices'
     });
     qc.invalidateQueries({ queryKey: ['/api/p2/packing-slips', packingSlipId] });
-    if (invoice?.id) setLocation(`/finance/invoices/${invoice.id}`);
   };
 
   const handleStartEdit = () => {
@@ -216,6 +215,10 @@ export default function P2PackingSlipViewer() {
 
   const handleDownloadPdf = () => {
     window.open(`/api/p2/packing-slips/${packingSlipId}/pdf`, '_blank');
+  };
+
+  const handlePreviewInvoicePdf = (invoiceId: string) => {
+    window.open(`/api/ar-invoices/${invoiceId}/pdf`, '_blank');
   };
 
   if (isLoading) {
@@ -277,13 +280,22 @@ export default function P2PackingSlipViewer() {
             </Button>
           )}
           {linkedInvoice ? (
-            <Button
-              variant="outline"
-              onClick={() => setLocation(`/finance/invoices/${linkedInvoice.id}`)}
-            >
-              <Receipt className="h-4 w-4 mr-2" />
-              View Invoice
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                onClick={() => handlePreviewInvoicePdf(linkedInvoice.id)}
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Preview Invoice PDF
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setLocation(`/finance/invoices/${linkedInvoice.id}`)}
+              >
+                <Receipt className="h-4 w-4 mr-2" />
+                Edit Invoice
+              </Button>
+            </>
           ) : (
             <P2InvoicePreviewButton
               packingSlipId={packingSlipId}
@@ -335,7 +347,7 @@ export default function P2PackingSlipViewer() {
                   </div>
                 ) : (
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Use Preview Invoice to review and edit the invoice before creating it.
+                    Use Edit Invoice Details to review the draft details before creating a review invoice. Preview the invoice PDF after the review invoice exists.
                   </p>
                 )}
               </div>
@@ -343,7 +355,7 @@ export default function P2PackingSlipViewer() {
             {linkedInvoice ? (
               <Button size="sm" variant="outline" asChild>
                 <Link href={`/finance/invoices/${linkedInvoice.id}`}>
-                  Audit Invoice <ExternalLink className="h-3.5 w-3.5 ml-1" />
+                  Edit Invoice <ExternalLink className="h-3.5 w-3.5 ml-1" />
                 </Link>
               </Button>
             ) : (
@@ -682,8 +694,12 @@ export default function P2PackingSlipViewer() {
                       }>{inv.status}</Badge>
                       <Button size="sm" variant="outline" asChild>
                         <Link href={`/finance/invoices/${inv.id}`}>
-                          View Invoice <ExternalLink className="h-3 w-3 ml-1" />
+                          Edit Invoice <ExternalLink className="h-3 w-3 ml-1" />
                         </Link>
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => handlePreviewInvoicePdf(inv.id)}>
+                        <Download className="h-3 w-3 mr-1" />
+                        Preview PDF
                       </Button>
                     </div>
                   </div>

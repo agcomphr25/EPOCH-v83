@@ -645,9 +645,17 @@ router.post('/from-packing-slip/:packingSlipId', requirePermission('finance.post
 
 router.get('/:id/pdf', async (req: Request, res: Response) => {
   try {
+    const [invoice] = await db
+      .select({ invoiceNumber: arInvoices.invoiceNumber })
+      .from(arInvoices)
+      .where(eq(arInvoices.id, req.params.id));
+    if (!invoice) {
+      return res.status(404).json({ error: 'Invoice not found' });
+    }
+
     const pdf = await generateArInvoicePdf(req.params.id);
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename="Invoice-${req.params.id}.pdf"`);
+    res.setHeader('Content-Disposition', `inline; filename="Invoice-${invoice.invoiceNumber}.pdf"`);
     res.setHeader('Content-Length', pdf.length);
     res.end(pdf);
   } catch (error) {

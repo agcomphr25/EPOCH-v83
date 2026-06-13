@@ -27,6 +27,11 @@ import {
   getFileStorageProvider,
   getFileStorageProviderForObjectPath,
 } from '../services/fileStorageProvider';
+import {
+  recordP2InvoiceNumberAudit,
+  reserveP2InvoiceNumber,
+  syncP2InvoiceSequenceFromManualNumber,
+} from '../services/p2InvoiceNumberService';
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -932,8 +937,11 @@ router.post('/packing-slips', authenticateToken, requirePermission('shipping.rel
 
     const customerAddress = customer ? buildCustomerAddress(customer) : '';
 
-    const { storage } = await import('../../storage');
-    const invoiceNumber = await storage.getNextInvoiceNumber(lot.customerId || '', lot.customerName || '');
+    const reservation = await reserveP2InvoiceNumber({
+      customerId: lot.customerId || '',
+      customerName: lot.customerName || '',
+    });
+    const invoiceNumber = reservation.invoiceNumber;
     const packingSlipNumber = invoiceNumber;
 
     let [slip] = await db
@@ -956,6 +964,32 @@ router.post('/packing-slips', authenticateToken, requirePermission('shipping.rel
         isNoChargeReplacement: input.isNoChargeReplacement ?? false,
       })
       .returning();
+
+    try {
+      await recordP2InvoiceNumberAudit({
+        packingSlipId: slip.id,
+        customerId: lot.customerId || '',
+        oldPackingSlipNumber: null,
+        newPackingSlipNumber: invoiceNumber,
+        oldInvoiceNumber: null,
+        newInvoiceNumber: invoiceNumber,
+        action: 'RESERVE_FOR_PACKING_SLIP',
+        reason: 'Reserved during P2 packing slip creation',
+        changedBy: input.createdBy || 'system',
+        metadata: {
+          prefix: reservation.prefix,
+          year: reservation.year,
+          sequenceNumber: reservation.sequenceNumber,
+          lotId: lot.id,
+        },
+      });
+    } catch (auditErr) {
+      console.warn('[P2Shipping] P2 invoice number audit failed during packing slip creation:', {
+        packingSlipId: slip.id,
+        invoiceNumber,
+        auditErr,
+      });
+    }
 
     try {
       const snapshot = await persistP2PackingSlipPdfSnapshot(slip);
@@ -1068,11 +1102,14 @@ router.patch(
       const slipRows = await pool.query<{
         id: string;
         packing_slip_number: string;
+        invoice_number: string | null;
         ship_date: string | null;
         lot_number: string | null;
         lot_number_id: string | null;
+        customer_id: string;
+        customer_name: string;
       }>(
-        `SELECT id, packing_slip_number, ship_date, lot_number, lot_number_id FROM p2_packing_slips WHERE id = $1`,
+        `SELECT id, packing_slip_number, invoice_number, ship_date, lot_number, lot_number_id, customer_id, customer_name FROM p2_packing_slips WHERE id = $1`,
         [slipId]
       );
       if (slipRows.length === 0) {
@@ -1083,21 +1120,51 @@ router.patch(
       const setClauses: string[] = ['updated_at = NOW()'];
       const params: any[] = [];
       const auditEntries: { fieldName: string; oldValue: string | null; newValue: string | null }[] = [];
+      let invoiceNumberChanged = false;
+      let clearPdfSnapshot = false;
 
       if (input.packingSlipNumber !== undefined && input.packingSlipNumber !== slip.packing_slip_number) {
-        // Check uniqueness
+        const linkedInvoiceRows = await pool.query<{ id: string; invoice_number: string }>(
+          `SELECT id, invoice_number FROM ar_invoices WHERE packing_slip_id = $1 LIMIT 1`,
+          [slipId]
+        );
+        if (linkedInvoiceRows.length > 0) {
+          return res.status(409).json({
+            error: `Cannot change the invoice number after invoice ${linkedInvoiceRows[0].invoice_number} has been created. Edit or void the invoice instead.`,
+          });
+        }
+
+        // Check uniqueness across both visible packing-slip and AR invoice numbers.
         const dupRows = await pool.query<{ id: string }>(
-          `SELECT id FROM p2_packing_slips WHERE packing_slip_number = $1 AND id != $2`,
+          `SELECT id FROM p2_packing_slips
+            WHERE (packing_slip_number = $1 OR invoice_number = $1)
+              AND id != $2`,
           [input.packingSlipNumber, slipId]
         );
         if (dupRows.length > 0) {
           return res.status(409).json({ error: 'A packing slip with that number already exists' });
         }
+        const dupInvoiceRows = await pool.query<{ id: string }>(
+          `SELECT id FROM ar_invoices WHERE invoice_number = $1 LIMIT 1`,
+          [input.packingSlipNumber]
+        );
+        if (dupInvoiceRows.length > 0) {
+          return res.status(409).json({ error: 'An invoice with that number already exists' });
+        }
+
         params.push(input.packingSlipNumber);
         setClauses.push(`packing_slip_number = $${params.length}`);
+        setClauses.push(`invoice_number = $${params.length}`);
+        invoiceNumberChanged = true;
+        clearPdfSnapshot = true;
         auditEntries.push({
           fieldName: 'packing_slip_number',
           oldValue: slip.packing_slip_number,
+          newValue: input.packingSlipNumber,
+        });
+        auditEntries.push({
+          fieldName: 'invoice_number',
+          oldValue: slip.invoice_number,
           newValue: input.packingSlipNumber,
         });
       }
@@ -1108,6 +1175,7 @@ router.patch(
         if (oldVal !== newVal) {
           params.push(newVal);
           setClauses.push(`ship_date = $${params.length}`);
+          clearPdfSnapshot = true;
           auditEntries.push({
             fieldName: 'ship_date',
             oldValue: oldVal,
@@ -1130,6 +1198,7 @@ router.patch(
         }
         params.push(input.lotNumber);
         setClauses.push(`lot_number = $${params.length}`);
+        clearPdfSnapshot = true;
         auditEntries.push({
           fieldName: 'lot_number',
           oldValue: slip.lot_number,
@@ -1145,6 +1214,10 @@ router.patch(
           [slipId]
         );
         return res.json(currentRows[0]);
+      }
+
+      if (clearPdfSnapshot) {
+        setClauses.push(`external_pdf_url = NULL`);
       }
 
       // Execute update + audit log in a single transaction using one client connection
@@ -1172,6 +1245,32 @@ router.patch(
         }
 
         await client.query('COMMIT');
+        if (invoiceNumberChanged && input.packingSlipNumber !== undefined) {
+          try {
+            await syncP2InvoiceSequenceFromManualNumber({
+              customerId: slip.customer_id,
+              customerName: slip.customer_name,
+              invoiceNumber: input.packingSlipNumber,
+            });
+            await recordP2InvoiceNumberAudit({
+              packingSlipId: slipId,
+              customerId: slip.customer_id,
+              oldPackingSlipNumber: slip.packing_slip_number,
+              newPackingSlipNumber: input.packingSlipNumber,
+              oldInvoiceNumber: slip.invoice_number,
+              newInvoiceNumber: input.packingSlipNumber,
+              action: 'MANUAL_EDIT',
+              reason: input.reason,
+              changedBy: actor,
+            });
+          } catch (numberAuditErr) {
+            console.warn('[P2Shipping] P2 invoice number sequence/audit sync failed after manual edit:', {
+              packingSlipId: slipId,
+              invoiceNumber: input.packingSlipNumber,
+              numberAuditErr,
+            });
+          }
+        }
         return res.json(updated);
       } catch (txErr) {
         await client.query('ROLLBACK').catch(() => {});

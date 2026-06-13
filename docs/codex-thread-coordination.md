@@ -17,6 +17,7 @@ Use this file when multiple Codex threads are making changes in different parts 
 | --- | --- | --- | --- | --- | --- |
 | merged | Parts request visibility and Tandym PTO tasks | `main` | `/inventory/parts-request`, `/production-control-center` | `client/src/components/inventory/PartsRequestsCard.tsx`, `client/src/pages/ProductionControlCenter.tsx`, inventory routes and permissions | Pushed as `3b1a388ec` on `main`. |
 | ready | P1 invoice recipient automation | `codex/p1-invoice-recipient-automation` | `/finance/invoices/:id` | `server/src/routes/arInvoices.ts` | Send Invoice now finds P1 PO invoice recipients through the linked PO/customer fallback. |
+| editing | P2 packing slip and invoice PDF workflow | `codex/p2-packing-slip-invoice-workflow` | `/p2/packing-slip/:id`, AR invoice preview/send | `client/src/pages/P2PackingSlipViewer.tsx`, `client/src/components/p2/P2InvoicePreviewButton.tsx`, `server/src/routes/p2Shipping.ts`, `server/src/routes/arInvoices.ts`, `server/src/services/invoiceFromPackingSlip.ts`, PDF helpers/tests | Ensure the packing slip, invoice draft, preview PDF, and sent email PDF use the same reserved invoice number and review/edit loop. |
 | available | Next thread | `codex/<name>` | TBD | TBD | Add a row before editing. |
 
 ## Thread Startup Checklist

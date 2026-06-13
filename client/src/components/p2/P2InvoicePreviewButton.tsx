@@ -71,6 +71,22 @@ function fmt(value: unknown) {
   return money(value).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 }
 
+function getTermsDays(terms: string): number {
+  const normalized = terms.trim().toUpperCase();
+  const netMatch = normalized.match(/^NET[_\s-]?(\d+)$/);
+  if (netMatch) return Number(netMatch[1]);
+  if (normalized === 'DUE_ON_RECEIPT' || normalized === 'DUE RECEIPT') return 0;
+  return 30;
+}
+
+function addDays(dateValue: string, days: number): string {
+  if (!dateValue) return '';
+  const date = new Date(`${dateValue}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return '';
+  date.setDate(date.getDate() + days);
+  return date.toISOString().split('T')[0];
+}
+
 function statusBadge(status: PreviewLine['pricingStatus']) {
   if (status === 'matched') return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Matched</Badge>;
   if (status === 'manual') return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">Edited</Badge>;
@@ -85,7 +101,7 @@ export default function P2InvoicePreviewButton({
   variant = 'outline',
   className,
   disabled,
-  label = 'Preview Invoice',
+  label = 'Edit Invoice Details',
   loadingLabel = 'Loading...',
   onCreated,
 }: Props) {
@@ -195,6 +211,22 @@ export default function P2InvoicePreviewButton({
     setLines((prev) => prev.map((line, i) => i === index ? { ...line, ...patch, pricingStatus: 'manual' } : line));
   };
 
+  const updateInvoiceDate = (invoiceDate: string) => {
+    setHeader((h) => ({
+      ...h,
+      invoiceDate,
+      dueDate: addDays(invoiceDate, getTermsDays(h.terms)),
+    }));
+  };
+
+  const updateTerms = (terms: string) => {
+    setHeader((h) => ({
+      ...h,
+      terms,
+      dueDate: addDays(h.invoiceDate, getTermsDays(terms)),
+    }));
+  };
+
   return (
     <>
       <Button
@@ -211,16 +243,16 @@ export default function P2InvoicePreviewButton({
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Preview Invoice</DialogTitle>
+            <DialogTitle>Edit Invoice Details</DialogTitle>
             <DialogDescription>
-              Review and edit the invoice before creating the AR review invoice.
+              Review and edit the invoice details before creating the AR review invoice. After it is created, preview the invoice PDF before sending.
             </DialogDescription>
           </DialogHeader>
 
           {isFetching ? (
             <div className="py-12 flex items-center justify-center text-muted-foreground">
               <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-              Loading invoice preview...
+              Loading invoice details...
             </div>
           ) : error ? (
             <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
@@ -248,7 +280,7 @@ export default function P2InvoicePreviewButton({
                 </div>
                 <div>
                   <Label>Invoice Date</Label>
-                  <Input type="date" value={header.invoiceDate} onChange={(e) => setHeader((h) => ({ ...h, invoiceDate: e.target.value }))} />
+                  <Input type="date" value={header.invoiceDate} onChange={(e) => updateInvoiceDate(e.target.value)} />
                 </div>
                 <div>
                   <Label>Due Date</Label>
@@ -256,7 +288,7 @@ export default function P2InvoicePreviewButton({
                 </div>
                 <div>
                   <Label>Terms</Label>
-                  <Input value={header.terms} onChange={(e) => setHeader((h) => ({ ...h, terms: e.target.value }))} />
+                  <Input value={header.terms} onChange={(e) => updateTerms(e.target.value)} />
                 </div>
                 <div>
                   <Label>PO</Label>
@@ -337,7 +369,7 @@ export default function P2InvoicePreviewButton({
               disabled={!preview || isFetching || createMutation.isPending}
             >
               {createMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Receipt className="h-4 w-4 mr-2" />}
-              Create Invoice
+              Create Review Invoice
             </Button>
           </DialogFooter>
         </DialogContent>

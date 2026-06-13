@@ -54,6 +54,7 @@ function calculateDueDate(invoiceDate: string, terms: string): string {
 }
 
 interface InvoiceLine {
+  partNumber: string;
   description: string;
   qty: string;
   unitPrice: string;
@@ -80,6 +81,7 @@ interface InvoiceFormData {
 }
 
 const emptyLine = (): InvoiceLine => ({
+  partNumber: '',
   description: '',
   qty: '1',
   unitPrice: '0',
@@ -150,6 +152,45 @@ export default function InvoiceFormPage() {
     enabled: !!form.customerId && !isP1Invoice,
   });
 
+  const customerOptions = (() => {
+    const options = customers.map((customer: any) => ({
+      ...customer,
+      customerId: String(customer.customerId),
+    }));
+    const currentCustomerId = existingInvoice?.customerId ? String(existingInvoice.customerId) : '';
+    if (
+      isEditing &&
+      !isP1Invoice &&
+      currentCustomerId &&
+      !options.some((customer: any) => String(customer.customerId) === currentCustomerId)
+    ) {
+      options.unshift({
+        customerId: currentCustomerId,
+        customerName: existingInvoice?.customerName || `Customer ${currentCustomerId}`,
+        paymentTerms: existingInvoice?.terms || '',
+      });
+    }
+    return options;
+  })();
+
+  const poOptions = (() => {
+    const options = [...customerPos];
+    const currentPoId = existingInvoice?.poId ? String(existingInvoice.poId) : '';
+    if (
+      isEditing &&
+      !isP1Invoice &&
+      currentPoId &&
+      !options.some((po) => String(po.id) === currentPoId)
+    ) {
+      options.unshift({
+        id: Number(currentPoId),
+        poNumber: existingInvoice?.poNumber || existingInvoice?.poOverride || currentPoId,
+        status: 'linked',
+      });
+    }
+    return options;
+  })();
+
   useEffect(() => {
     if (existingInvoice && isEditing) {
       setForm({
@@ -171,6 +212,7 @@ export default function InvoiceFormPage() {
         lines:
           existingInvoice.lines && existingInvoice.lines.length > 0
             ? existingInvoice.lines.map((l: any) => ({
+                partNumber: l.partNumber || '',
                 description: l.description || '',
                 qty: l.qty || '1',
                 unitPrice: l.unitPrice || '0',
@@ -201,7 +243,7 @@ export default function InvoiceFormPage() {
   const updateField = (field: keyof InvoiceFormData, value: string) => {
     setForm((prev) => {
       if (field === 'customerId' && value !== prev.customerId) {
-        const customer = customers.find((c: any) => c.customerId === value);
+        const customer = customerOptions.find((c: any) => c.customerId === value);
         const prefillTerms = customer?.paymentTerms || '';
         const newDueDate = !dueDateManuallySet && prefillTerms
           ? calculateDueDate(prev.invoiceDate, prefillTerms)
@@ -268,6 +310,7 @@ export default function InvoiceFormPage() {
         retainagePercent: data.retainagePercent,
         retainageAmount: data.retainageAmount,
         lines: data.lines.map((l) => ({
+          partNumber: l.partNumber || null,
           description: l.description,
           qty: l.qty,
           unitPrice: l.unitPrice,
@@ -369,7 +412,7 @@ export default function InvoiceFormPage() {
                     <SelectValue placeholder="Select customer" />
                   </SelectTrigger>
                   <SelectContent>
-                    {customers.map((c: any) => (
+                    {customerOptions.map((c: any) => (
                       <SelectItem key={c.customerId} value={c.customerId}>
                         {c.customerName}
                       </SelectItem>
@@ -450,7 +493,7 @@ export default function InvoiceFormPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">None</SelectItem>
-                  {customerPos.map((po) => (
+                  {poOptions.map((po) => (
                     <SelectItem key={po.id} value={String(po.id)}>
                       {po.poNumber} ({po.status})
                     </SelectItem>

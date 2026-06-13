@@ -58,7 +58,7 @@ function date(value: unknown): string {
     ? new Date(Number(dateOnlyMatch[1]), Number(dateOnlyMatch[2]) - 1, Number(dateOnlyMatch[3]))
     : new Date(raw);
   if (Number.isNaN(d.getTime())) return String(value);
-  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'numeric', day: 'numeric' });
 }
 
 function wrap(text: string, width: number, font: PDFFont, size: number): string[] {

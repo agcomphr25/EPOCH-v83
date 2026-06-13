@@ -6,8 +6,9 @@ import {
   p2LotNumbers,
   p2PurchaseOrderItems,
   p2Customers,
+  p2SerializedItems,
 } from '../../schema';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { buildRevenueDimensionTags } from './productionLineAccounting';
 import { assignReservedP2InvoiceNumberToPackingSlip } from './p2InvoiceNumberService';
 
@@ -27,6 +28,8 @@ function ensureP2PackingSlipInvoiceNumberSchema(): Promise<void> {
 interface LineItem {
   poItemId?: number;
   partNumber: string;
+  customerSku?: string | null;
+  sku?: string | null;
   partName?: string;
   quantity: number;
   serialNumbers?: string[];
@@ -35,6 +38,7 @@ interface LineItem {
 export interface InvoicePreviewLine {
   poItemId: number | null;
   partNumber: string | null;
+  internalPartNumber: string | null;
   description: string;
   qty: number;
   unitPrice: number;
@@ -106,6 +110,53 @@ function addDays(dateValue: string, days: number): string {
   return dateOnly(date);
 }
 
+function assignedSkuFromSerials(serials: Array<{ sku?: string | null }>): string | null {
+  const skus = Array.from(
+    new Set(
+      serials
+        .map((serial) => serial.sku?.trim())
+        .filter((sku): sku is string => Boolean(sku)),
+    ),
+  );
+
+  return skus.length > 0 ? skus.join(', ') : null;
+}
+
+async function hydrateInvoiceLineItemCustomerParts(lineItems: LineItem[]): Promise<LineItem[]> {
+  const serialNumbers = Array.from(
+    new Set(
+      lineItems.flatMap((item) =>
+        Array.isArray(item.serialNumbers)
+          ? item.serialNumbers.filter((serial): serial is string => typeof serial === 'string' && serial.trim().length > 0)
+          : [],
+      ),
+    ),
+  );
+
+  if (serialNumbers.length === 0) return lineItems;
+
+  const serialRows = await db
+    .select({ serialNumber: p2SerializedItems.serialNumber, sku: p2SerializedItems.sku })
+    .from(p2SerializedItems)
+    .where(inArray(p2SerializedItems.serialNumber, serialNumbers));
+  const skuBySerialNumber = new Map(serialRows.map((row) => [row.serialNumber, row.sku]));
+
+  return lineItems.map((item) => {
+    const customerSku = assignedSkuFromSerials(
+      (Array.isArray(item.serialNumbers) ? item.serialNumbers : [])
+        .map((serialNumber) => ({ sku: skuBySerialNumber.get(serialNumber) })),
+    );
+
+    return customerSku && !item.customerSku
+      ? { ...item, customerSku }
+      : item;
+  });
+}
+
+function resolveCustomerFacingPartNumber(line: LineItem): string | null {
+  return line.customerSku?.trim() || line.sku?.trim() || line.partNumber || null;
+}
+
 export async function buildInvoicePreviewFromPackingSlip(
   packingSlipId: string,
   lotId: string,
@@ -148,7 +199,8 @@ export async function buildInvoicePreviewFromPackingSlip(
     poItemsByPart.set(item.partNumber, existing);
   }
 
-  const lineItems: LineItem[] = Array.isArray(slip.lineItems) ? (slip.lineItems as LineItem[]) : [];
+  const rawLineItems: LineItem[] = Array.isArray(slip.lineItems) ? (slip.lineItems as LineItem[]) : [];
+  const lineItems = await hydrateInvoiceLineItemCustomerParts(rawLineItems);
   const isNoCharge = slip.isNoChargeReplacement === true;
 
   let pricingMismatch = false;
@@ -176,10 +228,13 @@ export async function buildInvoicePreviewFromPackingSlip(
 
     const qty = money(line.quantity);
     const effectiveUnitPrice = isNoCharge ? 0 : unitPrice;
+    const invoicePartNumber = resolveCustomerFacingPartNumber(line);
+    const internalPartNumber = invoicePartNumber === line.partNumber ? null : line.partNumber;
     return {
       poItemId: resolvedPoItemId,
-      partNumber: line.partNumber ?? null,
-      description: line.partName ? `${line.partNumber} - ${line.partName}` : line.partNumber,
+      partNumber: invoicePartNumber,
+      internalPartNumber,
+      description: line.partName ? `${invoicePartNumber || line.partNumber} - ${line.partName}` : invoicePartNumber || line.partNumber,
       qty,
       unitPrice: effectiveUnitPrice,
       lineTotal: effectiveUnitPrice * qty,
@@ -197,6 +252,7 @@ export async function buildInvoicePreviewFromPackingSlip(
           return {
             poItemId: typeof line.poItemId === 'number' ? line.poItemId : base?.poItemId ?? null,
             partNumber: (line.partNumber ?? base?.partNumber ?? null) || null,
+            internalPartNumber: base?.internalPartNumber ?? null,
             description: String(line.description ?? base?.description ?? '').trim(),
             qty,
             unitPrice,
@@ -324,7 +380,10 @@ export async function createInvoiceFromPackingSlip(
             qty: String(line.qty),
             unitPrice: String(line.unitPrice),
             lineTotal: String(line.lineTotal),
-            dimensionTags: buildRevenueDimensionTags('P2'),
+            dimensionTags: {
+              ...buildRevenueDimensionTags('P2'),
+              ...(line.internalPartNumber ? { internalPartNumber: line.internalPartNumber } : {}),
+            },
           })),
         );
       }

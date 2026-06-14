@@ -403,13 +403,17 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
     });
   };
 
-  const handleCreateShipment = async (poNumber: string, serialIds: string[]) => {
+  const handleCreateShipment = async (
+    poNumber: string,
+    serialIds: string[],
+    billingAssignments: { serializedItemId: string; allocationId: string }[] = [],
+  ) => {
     if (serialIds.length === 0) return;
     setCreatingShipmentFor(poNumber);
     try {
       const lot = await apiRequest('/api/p2/lots', {
         method: 'POST',
-        body: JSON.stringify({ serialIds, createdBy: 'shipping' }),
+        body: JSON.stringify({ serialIds, createdBy: 'shipping', billingAssignments }),
       });
       const slip = await apiRequest('/api/p2/packing-slips', {
         method: 'POST',
@@ -552,12 +556,12 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
       {summaryModalPO && (
         <ShipmentSummaryModal
           serials={summaryModalSerials}
-          onConfirm={() => {
+          onConfirm={(billingAssignments) => {
             const po = summaryModalPO!;
             const ids = summaryModalSerials.map((s) => s.id);
             setSummaryModalPO(null);
             setSummaryModalSerials([]);
-            handleCreateShipment(po, ids);
+            handleCreateShipment(po, ids, billingAssignments);
           }}
           onCancel={() => {
             setSummaryModalPO(null);
@@ -972,8 +976,10 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
                     )}
 
                     {/* ── Created shipment documents ── */}
-                    {shipments.map((shipment) => (
-                      <div key={shipment.lotId} className="p-4 bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800 rounded-lg space-y-3">
+                    {shipments.map((shipment) => {
+                      const displayedShipmentDocumentNumber = shipment.invoiceNumber || shipment.slipNumber;
+                      return (
+                        <div key={shipment.lotId} className="p-4 bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800 rounded-lg space-y-3">
                         <div className="flex items-center gap-2 text-green-700 dark:text-green-400 text-sm font-semibold">
                           <CheckCircle className="w-4 h-4" />
                           Shipment Created
@@ -985,7 +991,7 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
                             >
                               {shipment.lotNumber}
                             </Link>
-                            {' '}· {shipment.slipNumber}
+                            {' '}· {displayedShipmentDocumentNumber}
                           </span>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
@@ -1080,8 +1086,9 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
                             </Badge>
                           )}
                         </div>
-                      </div>
-                    ))}
+                        </div>
+                      );
+                    })}
 
                     {allCompletedFinalized && shipments.length === 0 && (
                       <div className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800 rounded-lg">

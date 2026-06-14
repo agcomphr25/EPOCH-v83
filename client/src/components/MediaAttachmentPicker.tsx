@@ -208,6 +208,12 @@ export default function MediaAttachmentPicker({
     );
   };
 
+  const getMediaUrl = (mediaId: string) => `/api/media/${mediaId}/download`;
+
+  const openMedia = (mediaId: string) => {
+    window.open(getMediaUrl(mediaId), '_blank', 'noopener,noreferrer');
+  };
+
   const alreadyAttachedIds = attachments.map((a) => a.media.id);
 
   const availableMedia = mediaItems.filter((m) => !alreadyAttachedIds.includes(m.id));
@@ -303,7 +309,7 @@ export default function MediaAttachmentPicker({
               >
                 {att.media.mimeType.startsWith('image/') ? (
                   <img
-                    src={`/api/media/file/${att.media.storagePath.split('/').pop()}`}
+                    src={getMediaUrl(att.media.id)}
                     alt={att.media.title || att.media.filename}
                     className="w-16 h-16 object-cover"
                   />
@@ -315,6 +321,16 @@ export default function MediaAttachmentPicker({
                     </span>
                   </div>
                 )}
+                <Button
+                  size="icon"
+                  variant="secondary"
+                  className="absolute bottom-1 left-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={() => openMedia(att.media.id)}
+                  title="Open attachment"
+                  data-testid={`button-open-attachment-${att.attachment.id}`}
+                >
+                  <ExternalLink className="h-3 w-3" />
+                </Button>
                 <Button
                   size="icon"
                   variant="destructive"
@@ -459,7 +475,7 @@ export default function MediaAttachmentPicker({
                           <div className="aspect-square">
                             {media.mimeType.startsWith('image/') ? (
                               <img
-                                src={`/api/media/file/${media.storagePath.split('/').pop()}`}
+                                src={getMediaUrl(media.id)}
                                 alt={media.title || media.filename}
                                 className="w-full h-full object-cover rounded-t-lg"
                               />

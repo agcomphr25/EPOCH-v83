@@ -1053,11 +1053,24 @@ router.post('/:id/post', requirePermission('finance.post_invoice'), async (req: 
     if (!invoice) {
       return res.status(404).json({ error: 'Invoice not found' });
     }
-    if (!['DRAFT', 'REVIEW'].includes(invoice.status)) {
+    if (!['DRAFT', 'REVIEW', 'SENT'].includes(invoice.status)) {
       return res.status(409).json({ error: `Cannot post invoice with status ${invoice.status}` });
     }
     if (invoice.pricingMismatch || invoice.pricingAmbiguous) {
       return res.status(409).json({ error: 'Invoice pricing must be resolved before posting' });
+    }
+
+    const [existingEntry] = await db
+      .select({ id: journalEntries.id })
+      .from(journalEntries)
+      .where(and(
+        eq(journalEntries.referenceUuid, id),
+        eq(journalEntries.transactionType, 'AR_INVOICE'),
+      ))
+      .limit(1);
+
+    if (existingEntry) {
+      return res.status(409).json({ error: 'Invoice is already posted' });
     }
 
     await assertPostingAllowedForPeriod({
@@ -1113,7 +1126,12 @@ router.post('/:id/post', requirePermission('finance.post_invoice'), async (req: 
     const result = await db.transaction(async (tx) => {
       const [updated] = await tx
         .update(arInvoices)
-        .set({ status: 'POSTED', postedAt: new Date(), postedBy: user, updatedAt: new Date() })
+        .set({
+          status: invoice.status === 'SENT' ? 'SENT' : 'POSTED',
+          postedAt: new Date(),
+          postedBy: user,
+          updatedAt: new Date(),
+        })
         .where(eq(arInvoices.id, id))
         .returning();
 

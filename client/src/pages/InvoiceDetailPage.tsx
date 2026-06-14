@@ -630,7 +630,7 @@ export default function InvoiceDetailPage() {
               </Badge>
             )}
           </Button>
-          {['DRAFT', 'REVIEW'].includes(invoice.status) && (
+          {(['DRAFT', 'REVIEW'].includes(invoice.status) || (invoice.status === 'SENT' && !invoice.journalEntryId)) && (
             <Button
               variant="outline"
               onClick={() => postInvoiceMutation.mutate()}

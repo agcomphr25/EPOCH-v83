@@ -36,6 +36,28 @@ import {
 
 const LOCKED_STATUSES = ['POSTED', 'SENT', 'VOID', 'PAID'];
 
+let arInvoicePostingSchemaReady: Promise<void> | null = null;
+
+function ensureArInvoicePostingSchema(): Promise<void> {
+  if (!arInvoicePostingSchemaReady) {
+    arInvoicePostingSchemaReady = db.execute(sql`
+      CREATE TABLE IF NOT EXISTS production_line_accounting_map (
+        id SERIAL PRIMARY KEY,
+        production_line TEXT NOT NULL UNIQUE,
+        revenue_account_id INTEGER REFERENCES chart_of_accounts(id),
+        revenue_account_number TEXT,
+        revenue_account_name_snapshot TEXT,
+        quickbooks_class TEXT,
+        active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `).then(() => undefined);
+  }
+
+  return arInvoicePostingSchemaReady;
+}
+
 const REQUIRED_P2_INVOICE_COLUMNS = [
   'ar_invoices.discount_amount',
   'ar_invoices.freight_amount',
@@ -1090,6 +1112,8 @@ router.post('/:id/post', requirePermission('finance.post_invoice'), async (req: 
     const freight = parseFloat(invoice.freightAmount ?? '0') || 0;
     const tax = parseFloat(invoice.taxAmount ?? '0') || 0;
     const retainage = parseFloat(invoice.retainageAmount ?? '0') || 0;
+
+    await ensureArInvoicePostingSchema();
 
     const allAccounts = await db.select().from(chartOfAccounts);
     const revenueMaps = await db

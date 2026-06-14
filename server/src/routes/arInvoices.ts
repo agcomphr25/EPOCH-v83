@@ -1337,6 +1337,13 @@ type CustomerRecipientSource = {
   contact: string | null;
 };
 
+type P2CustomerRecipientSource = {
+  id: number;
+  customerId: string;
+  name: string;
+  email: string | null;
+};
+
 async function findCustomerRecipientSourceById(customerId: string | null | undefined): Promise<CustomerRecipientSource | null> {
   if (!customerId || !/^\d+$/.test(customerId)) return null;
   const [customer] = await db
@@ -1402,6 +1409,173 @@ async function appendCustomerInvoiceRecipients(
   }
 }
 
+function addP2RecipientRef(
+  refs: Array<{ customerId: string | null; customerName: string | null }>,
+  ref: { customerId?: string | null; customerName?: string | null } | null | undefined,
+) {
+  const customerId = ref?.customerId?.trim() || null;
+  const customerName = ref?.customerName?.trim() || null;
+  if (!customerId && !customerName) return;
+  if (refs.some((item) =>
+    (customerId && item.customerId === customerId) ||
+    (customerName && item.customerName?.trim().toLowerCase() === customerName.toLowerCase())
+  )) {
+    return;
+  }
+  refs.push({ customerId, customerName });
+}
+
+async function findP2CustomerRecipientSourcesByRef(
+  ref: { customerId: string | null; customerName: string | null },
+): Promise<P2CustomerRecipientSource[]> {
+  const customerId = ref.customerId?.trim();
+  const customerName = ref.customerName?.trim();
+  const customerNameMatch = customerName
+    ? sql`lower(trim(${p2Customers.customerName})) = lower(${customerName})`
+    : undefined;
+  const whereClause =
+    customerId && customerNameMatch ? or(eq(p2Customers.customerId, customerId), customerNameMatch) :
+    customerId ? eq(p2Customers.customerId, customerId) :
+    customerNameMatch;
+
+  if (!whereClause) return [];
+
+  return db
+    .select({
+      id: p2Customers.id,
+      customerId: p2Customers.customerId,
+      name: p2Customers.customerName,
+      email: p2Customers.contactEmail,
+    })
+    .from(p2Customers)
+    .where(whereClause)
+    .orderBy(p2Customers.customerName)
+    .limit(5);
+}
+
+async function appendP2CustomerInvoiceRecipients(
+  recipients: InvoiceEmailRecipient[],
+  customer: P2CustomerRecipientSource | null,
+) {
+  if (!customer?.id) return;
+
+  if (customer.email) {
+    appendRecipient(recipients, {
+      name: customer.name,
+      email: customer.email,
+      type: recipients.length === 0 ? 'primary' : 'additional',
+    });
+  }
+
+  const contacts = await db
+    .select({ name: p2CustomerContacts.name, email: p2CustomerContacts.email, isPrimary: p2CustomerContacts.isPrimary })
+    .from(p2CustomerContacts)
+    .where(eq(p2CustomerContacts.customerId, customer.id))
+    .orderBy(desc(p2CustomerContacts.isPrimary), p2CustomerContacts.name);
+
+  for (const contact of contacts) {
+    if (contact.email) {
+      appendRecipient(recipients, {
+        name: contact.name,
+        email: contact.email,
+        type: contact.isPrimary && recipients.length === 0 ? 'primary' : 'contact',
+      });
+    }
+  }
+}
+
+async function appendP2InvoiceRecipients(
+  recipients: InvoiceEmailRecipient[],
+  invoice: typeof arInvoices.$inferSelect,
+) {
+  const refs: Array<{ customerId: string | null; customerName: string | null }> = [];
+  addP2RecipientRef(refs, { customerId: invoice.customerId });
+
+  if (invoice.poId && /^\d+$/.test(invoice.poId)) {
+    const [po] = await db
+      .select({ customerId: p2PurchaseOrders.customerId, customerName: p2PurchaseOrders.customerName })
+      .from(p2PurchaseOrders)
+      .where(eq(p2PurchaseOrders.id, Number(invoice.poId)))
+      .limit(1);
+    addP2RecipientRef(refs, po);
+  }
+
+  if (invoice.poOverride) {
+    const [po] = await db
+      .select({ customerId: p2PurchaseOrders.customerId, customerName: p2PurchaseOrders.customerName })
+      .from(p2PurchaseOrders)
+      .where(eq(p2PurchaseOrders.poNumber, invoice.poOverride))
+      .limit(1);
+    addP2RecipientRef(refs, po);
+  }
+
+  if (invoice.packingSlipId) {
+    const [packingSlip] = await db
+      .select({
+        customerId: p2PackingSlips.customerId,
+        customerName: p2PackingSlips.customerName,
+        poNumber: p2PackingSlips.poNumber,
+      })
+      .from(p2PackingSlips)
+      .where(eq(p2PackingSlips.id, invoice.packingSlipId))
+      .limit(1);
+    addP2RecipientRef(refs, packingSlip);
+
+    if (packingSlip?.poNumber) {
+      const [po] = await db
+        .select({ customerId: p2PurchaseOrders.customerId, customerName: p2PurchaseOrders.customerName })
+        .from(p2PurchaseOrders)
+        .where(eq(p2PurchaseOrders.poNumber, packingSlip.poNumber))
+        .limit(1);
+      addP2RecipientRef(refs, po);
+    }
+  }
+
+  if (invoice.lotId) {
+    const [lot] = await db
+      .select({
+        customerId: p2LotNumbers.customerId,
+        customerName: p2LotNumbers.customerName,
+        poId: p2LotNumbers.poId,
+        poNumber: p2LotNumbers.poNumber,
+      })
+      .from(p2LotNumbers)
+      .where(eq(p2LotNumbers.id, invoice.lotId))
+      .limit(1);
+    addP2RecipientRef(refs, lot);
+
+    if (lot?.poId) {
+      const [po] = await db
+        .select({ customerId: p2PurchaseOrders.customerId, customerName: p2PurchaseOrders.customerName })
+        .from(p2PurchaseOrders)
+        .where(eq(p2PurchaseOrders.id, lot.poId))
+        .limit(1);
+      addP2RecipientRef(refs, po);
+    }
+
+    if (lot?.poNumber) {
+      const [po] = await db
+        .select({ customerId: p2PurchaseOrders.customerId, customerName: p2PurchaseOrders.customerName })
+        .from(p2PurchaseOrders)
+        .where(eq(p2PurchaseOrders.poNumber, lot.poNumber))
+        .limit(1);
+      addP2RecipientRef(refs, po);
+    }
+  }
+
+  for (const ref of refs) {
+    const p2Sources = await findP2CustomerRecipientSourcesByRef(ref);
+    for (const p2Customer of p2Sources) {
+      await appendP2CustomerInvoiceRecipients(recipients, p2Customer);
+    }
+
+    await appendCustomerInvoiceRecipients(
+      recipients,
+      await findCustomerRecipientSourceByName(ref.customerName),
+    );
+  }
+}
+
 async function appendP1InvoiceRecipients(
   recipients: InvoiceEmailRecipient[],
   invoice: typeof arInvoices.$inferSelect,
@@ -1451,35 +1625,7 @@ async function getInvoiceEmailRecipients(invoice: typeof arInvoices.$inferSelect
     await appendP1InvoiceRecipients(recipients, invoice);
   }
 
-  const [p2Customer] = await db
-    .select({ id: p2Customers.id, name: p2Customers.customerName, email: p2Customers.contactEmail })
-    .from(p2Customers)
-    .where(eq(p2Customers.customerId, invoice.customerId));
-
-  if (p2Customer?.email) {
-    appendRecipient(recipients, {
-      name: p2Customer.name,
-      email: p2Customer.email,
-      type: recipients.length === 0 ? 'primary' : 'additional',
-    });
-  }
-
-  if (p2Customer?.id) {
-    const contacts = await db
-      .select({ name: p2CustomerContacts.name, email: p2CustomerContacts.email, isPrimary: p2CustomerContacts.isPrimary })
-      .from(p2CustomerContacts)
-      .where(eq(p2CustomerContacts.customerId, p2Customer.id));
-
-    for (const contact of contacts) {
-      if (contact.email) {
-        appendRecipient(recipients, {
-          name: contact.name,
-          email: contact.email,
-          type: contact.isPrimary && recipients.length === 0 ? 'primary' : 'contact',
-        });
-      }
-    }
-  }
+  await appendP2InvoiceRecipients(recipients, invoice);
 
   return recipients;
 }

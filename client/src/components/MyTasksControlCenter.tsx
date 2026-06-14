@@ -709,40 +709,43 @@ function P2BillingTasks({
 
             {!compact && items.length > 0 && (
               <div className="space-y-2">
-                {items.slice(0, 5).map((item) => (
-                  <div key={item.id} className="flex items-center gap-2 rounded-md bg-white/70 border px-2 py-2">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium truncate">
-                        {item.packingSlipNumber}
-                        {item.poNumber ? ` - PO ${item.poNumber}` : ''}
-                      </p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {item.invoiceNumber
-                          ? `Invoice ${item.invoiceNumber} is ${item.invoiceStatus || 'not posted'}`
-                          : 'No invoice created yet'}
-                      </p>
-                    </div>
-                    <Link href={`/p2/packing-slip/${item.id}`}>
-                      <Button variant="ghost" size="sm">
-                        <ExternalLink className="h-4 w-4" />
-                      </Button>
-                    </Link>
-                    {item.invoiceId ? (
-                      <Link href={`/finance/invoices/${item.invoiceId}`}>
-                        <Button variant="outline" size="sm">
-                          Open Invoice
+                {items.slice(0, 5).map((item) => {
+                  const displayNumber = item.invoiceNumber || item.packingSlipNumber;
+                  return (
+                    <div key={item.id} className="flex items-center gap-2 rounded-md bg-white/70 border px-2 py-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium truncate">
+                          {displayNumber}
+                          {item.poNumber ? ` - PO ${item.poNumber}` : ''}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {item.invoiceNumber
+                            ? `Packing slip ${item.packingSlipNumber} - invoice ${item.invoiceStatus || 'not posted'}`
+                            : 'No invoice created yet'}
+                        </p>
+                      </div>
+                      <Link href={`/p2/packing-slip/${item.id}`}>
+                        <Button variant="ghost" size="sm">
+                          <ExternalLink className="h-4 w-4" />
                         </Button>
                       </Link>
-                    ) : (
-                      <P2InvoicePreviewButton
-                        packingSlipId={item.id}
-                        size="sm"
-                        label="Create Invoice"
-                        onCreated={() => queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/my-tasks'] })}
-                      />
-                    )}
-                  </div>
-                ))}
+                      {item.invoiceId ? (
+                        <Link href={`/finance/invoices/${item.invoiceId}`}>
+                          <Button variant="outline" size="sm">
+                            Open Invoice
+                          </Button>
+                        </Link>
+                      ) : (
+                        <P2InvoicePreviewButton
+                          packingSlipId={item.id}
+                          size="sm"
+                          label="Create Invoice"
+                          onCreated={() => queryClient.invalidateQueries({ queryKey: ['/api/timekeeping/my-tasks'] })}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
                 {items.length > 5 && (
                   <p className="text-xs text-muted-foreground px-1">
                     {items.length - 5} more packing slip{items.length - 5 === 1 ? '' : 's'} need review.

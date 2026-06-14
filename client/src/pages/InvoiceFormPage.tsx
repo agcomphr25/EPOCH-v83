@@ -244,7 +244,15 @@ export default function InvoiceFormPage() {
               }))
             : [emptyLine()],
       });
-      setDueDateManuallySet(true);
+      const calculatedDueDate =
+        existingInvoice.invoiceDate && existingInvoice.terms
+          ? calculateDueDate(existingInvoice.invoiceDate, existingInvoice.terms)
+          : '';
+      setDueDateManuallySet(
+        !!existingInvoice.dueDate &&
+          !!calculatedDueDate &&
+          existingInvoice.dueDate !== calculatedDueDate
+      );
     }
   }, [existingInvoice, isEditing]);
 

@@ -1157,6 +1157,7 @@ router.post('/:id/post', requirePermission('finance.post_invoice'), async (req: 
 
       const firstWith = <K extends keyof typeof invoiceLines[number]>(key: K) =>
         invoiceLines.find((line) => line[key] !== null && line[key] !== undefined)?.[key] ?? null;
+      const nullable = <T>(value: T | null | undefined) => value ?? null;
       const commonDimensions = {
         customerId: invoice.customerId,
         productionLine: invoiceLines.length === 1 ? invoiceLines[0].productionLine : 'MIXED',
@@ -1209,15 +1210,15 @@ router.post('/:id/post', requirePermission('finance.post_invoice'), async (req: 
           debitAmount: 0,
           creditAmount: parseFloat(String(line.lineTotal)) || 0,
           productionLine: lineProductionLine,
-          projectId: line.projectId,
-          projectNameSnapshot: line.projectNameSnapshot,
-          salespersonUserId: line.salespersonUserId,
-          salespersonNameSnapshot: line.salespersonNameSnapshot,
-          csrUserId: line.csrUserId,
-          csrNameSnapshot: line.csrNameSnapshot,
-          customerType: line.customerType,
-          inventoryItemId: line.inventoryItemId,
-          partNumber: line.partNumber,
+          projectId: nullable(line.projectId),
+          projectNameSnapshot: nullable(line.projectNameSnapshot),
+          salespersonUserId: nullable(line.salespersonUserId),
+          salespersonNameSnapshot: nullable(line.salespersonNameSnapshot),
+          csrUserId: nullable(line.csrUserId),
+          csrNameSnapshot: nullable(line.csrNameSnapshot),
+          customerType: nullable(line.customerType),
+          inventoryItemId: nullable(line.inventoryItemId),
+          partNumber: nullable(line.partNumber),
           dimensionTags: {
             ...commonDimensions.dimensionTags,
             ...(line.dimensionTags && typeof line.dimensionTags === 'object' ? line.dimensionTags : {}),
@@ -1252,7 +1253,9 @@ router.post('/:id/post', requirePermission('finance.post_invoice'), async (req: 
     res.json(result);
   } catch (error) {
     console.error('Failed to post invoice:', error);
-    res.status(500).json({ error: 'Failed to post invoice' });
+    const statusCode = Number((error as any)?.statusCode || (error as any)?.status);
+    const message = error instanceof Error && error.message ? error.message : 'Failed to post invoice';
+    res.status(Number.isFinite(statusCode) ? statusCode : 500).json({ error: message });
   }
 });
 

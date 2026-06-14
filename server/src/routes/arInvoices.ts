@@ -1244,6 +1244,8 @@ type InvoiceEmailRecipient = {
   type: 'primary' | 'additional' | 'contact';
 };
 
+const ACCOUNTING_INVOICE_CC = 'glenn@agadvanced.com';
+
 async function recordInvoiceSendAudit({
   req,
   invoice,
@@ -1320,6 +1322,12 @@ function deriveInvoiceToAndCc(rawRecipients: unknown, recipients: InvoiceEmailRe
   const toNorm = to.trim().toLowerCase();
   const cc = validated.filter((email) => email !== toNorm);
   return { to, cc };
+}
+
+function appendAccountingInvoiceCc(to: string, cc: string[]): string[] {
+  const accountingCcNorm = ACCOUNTING_INVOICE_CC.toLowerCase();
+  const existing = new Set([to, ...cc].map((email) => email.trim().toLowerCase()));
+  return existing.has(accountingCcNorm) ? cc : [...cc, ACCOUNTING_INVOICE_CC];
 }
 
 type CustomerRecipientSource = {
@@ -1600,10 +1608,11 @@ router.post('/:id/send', requirePermission('finance.post_invoice'), async (req: 
 
     const isP1 = await isP1Invoice(invoice);
     const availableRecipients = await getInvoiceEmailRecipients(invoice);
-    const { to, cc } = deriveInvoiceToAndCc(selectedRecipients, availableRecipients);
+    const { to, cc: selectedCc } = deriveInvoiceToAndCc(selectedRecipients, availableRecipients);
     if (!to) {
       return res.status(422).json({ error: 'No customer email found. Add a customer contact email or provide a recipient.' });
     }
+    const cc = appendAccountingInvoiceCc(to, selectedCc);
 
     const selectedRecipientRecords = availableRecipients.filter((recipient) =>
       [to, ...(Array.isArray(cc) ? cc : cc ? [cc] : [])].includes(recipient.email)

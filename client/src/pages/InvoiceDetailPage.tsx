@@ -357,6 +357,10 @@ export default function InvoiceDetailPage() {
     setActiveTab('attachments');
   };
 
+  const openAttachment = (mediaId: string) => {
+    window.open(`/api/media/${mediaId}/download`, '_blank', 'noopener,noreferrer');
+  };
+
   const toggleAttachmentSelection = (mediaId: string) => {
     setSelectedAttachmentMediaIds((current) =>
       current.includes(mediaId)
@@ -1160,6 +1164,19 @@ export default function InvoiceDetailPage() {
                             {item.media.fileSize ? ` - ${formatFileSize(item.media.fileSize)}` : ''}
                           </div>
                         </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 shrink-0"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openAttachment(item.media.id);
+                          }}
+                          title="Open attachment"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </Button>
                       </div>
                     );
                   })

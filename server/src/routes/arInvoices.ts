@@ -1344,6 +1344,30 @@ type P2CustomerRecipientSource = {
   email: string | null;
 };
 
+type RecipientDebugStep = {
+  step: string;
+  status: 'ok' | 'error';
+  detail?: unknown;
+};
+
+function debugRecipientStep(
+  debugSteps: RecipientDebugStep[] | undefined,
+  step: string,
+  status: RecipientDebugStep['status'],
+  detail?: unknown,
+) {
+  debugSteps?.push({ step, status, detail });
+}
+
+function recipientErrorDetail(error: unknown) {
+  const err = error as { message?: string; code?: string; detail?: string };
+  return {
+    message: err?.message || String(error),
+    code: err?.code || null,
+    detail: err?.detail || null,
+  };
+}
+
 async function findCustomerRecipientSourceById(customerId: string | null | undefined): Promise<CustomerRecipientSource | null> {
   if (!customerId || !/^\d+$/.test(customerId)) return null;
   const [customer] = await db
@@ -1487,6 +1511,7 @@ async function appendP2CustomerInvoiceRecipients(
 async function appendP2InvoiceRecipients(
   recipients: InvoiceEmailRecipient[],
   invoice: typeof arInvoices.$inferSelect,
+  debugSteps?: RecipientDebugStep[],
 ) {
   const refs: Array<{ customerId: string | null; customerName: string | null }> = [];
   addP2RecipientRef(refs, { customerId: invoice.customerId });
@@ -1564,15 +1589,49 @@ async function appendP2InvoiceRecipients(
   }
 
   for (const ref of refs) {
-    const p2Sources = await findP2CustomerRecipientSourcesByRef(ref);
-    for (const p2Customer of p2Sources) {
-      await appendP2CustomerInvoiceRecipients(recipients, p2Customer);
+    try {
+      const beforeCount = recipients.length;
+      const p2Sources = await findP2CustomerRecipientSourcesByRef(ref);
+      for (const p2Customer of p2Sources) {
+        await appendP2CustomerInvoiceRecipients(recipients, p2Customer);
+      }
+      debugRecipientStep(debugSteps, 'p2_customer_ref', 'ok', {
+        ref,
+        matchedCustomers: p2Sources.map((source) => ({
+          id: source.id,
+          customerId: source.customerId,
+          name: source.name,
+          hasEmail: Boolean(source.email),
+        })),
+        recipientsAdded: recipients.length - beforeCount,
+      });
+    } catch (error) {
+      console.warn('[InvoiceRecipients] P2 customer recipient lookup failed:', { invoiceId: invoice.id, ref, error });
+      debugRecipientStep(debugSteps, 'p2_customer_ref', 'error', {
+        ref,
+        error: recipientErrorDetail(error),
+      });
     }
 
-    await appendCustomerInvoiceRecipients(
-      recipients,
-      await findCustomerRecipientSourceByName(ref.customerName),
-    );
+    if (ref.customerName) {
+      try {
+        const beforeCount = recipients.length;
+        await appendCustomerInvoiceRecipients(
+          recipients,
+          await findCustomerRecipientSourceByName(ref.customerName),
+        );
+        debugRecipientStep(debugSteps, 'master_customer_name_ref', 'ok', {
+          customerName: ref.customerName,
+          recipientsAdded: recipients.length - beforeCount,
+        });
+      } catch (error) {
+        console.warn('[InvoiceRecipients] Master customer recipient lookup failed:', { invoiceId: invoice.id, customerName: ref.customerName, error });
+        debugRecipientStep(debugSteps, 'master_customer_name_ref', 'error', {
+          customerName: ref.customerName,
+          error: recipientErrorDetail(error),
+        });
+      }
+    }
   }
 }
 
@@ -1617,15 +1676,29 @@ async function appendP1InvoiceRecipients(
   }
 }
 
-async function getInvoiceEmailRecipients(invoice: typeof arInvoices.$inferSelect): Promise<InvoiceEmailRecipient[]> {
+async function getInvoiceEmailRecipients(
+  invoice: typeof arInvoices.$inferSelect,
+  debugSteps?: RecipientDebugStep[],
+): Promise<InvoiceEmailRecipient[]> {
   const recipients: InvoiceEmailRecipient[] = [];
 
   const isP1 = await isP1Invoice(invoice);
+  debugRecipientStep(debugSteps, 'invoice_source', 'ok', {
+    invoiceId: invoice.id,
+    invoiceNumber: invoice.invoiceNumber,
+    source: isP1 ? 'P1' : 'P2',
+    customerId: invoice.customerId,
+    poId: invoice.poId,
+    poOverride: invoice.poOverride,
+    packingSlipId: invoice.packingSlipId,
+    lotId: invoice.lotId,
+  });
+
   if (isP1) {
     await appendP1InvoiceRecipients(recipients, invoice);
   }
 
-  await appendP2InvoiceRecipients(recipients, invoice);
+  await appendP2InvoiceRecipients(recipients, invoice, debugSteps);
 
   return recipients;
 }
@@ -1719,15 +1792,32 @@ async function getLotFileAttachments(lotId: string | null) {
 router.get('/:id/email-recipients', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const debugMode = req.query.debug === '1' || req.query.debug === 'true';
+    const debugSteps: RecipientDebugStep[] = [];
     const [invoice] = await db.select().from(arInvoices).where(eq(arInvoices.id, id));
     if (!invoice) {
       return res.status(404).json({ error: 'Invoice not found' });
     }
 
-    const recipients = await getInvoiceEmailRecipients(invoice);
+    const recipients = await getInvoiceEmailRecipients(invoice, debugMode ? debugSteps : undefined);
+    if (debugMode) {
+      return res.json({
+        invoiceId: invoice.id,
+        invoiceNumber: invoice.invoiceNumber,
+        recipientCount: recipients.length,
+        recipients,
+        debugSteps,
+      });
+    }
     res.json(recipients);
   } catch (error) {
     console.error('Failed to retrieve invoice email recipients:', error);
+    if (req.query.debug === '1' || req.query.debug === 'true') {
+      return res.status(500).json({
+        error: 'Failed to retrieve invoice email recipients',
+        detail: recipientErrorDetail(error),
+      });
+    }
     res.status(500).json({ error: 'Failed to retrieve invoice email recipients' });
   }
 });

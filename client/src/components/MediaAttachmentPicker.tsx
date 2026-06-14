@@ -177,54 +177,13 @@ export default function MediaAttachmentPicker({
     setIsUploading(true);
 
     try {
-      const urlResponse = await fetch('/api/media/request-upload-url', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          name: file.name,
-          size: file.size,
-          contentType: file.type,
-        }),
-      });
-
-      if (!urlResponse.ok) {
-        throw new Error('Failed to get upload URL');
+      let newMedia: MediaItem;
+      try {
+        newMedia = await uploadViaPresignedUrl(file);
+      } catch (storageError) {
+        console.warn('[MediaAttachmentPicker] Presigned upload unavailable, falling back to media upload:', storageError);
+        newMedia = await uploadViaLegacyMediaEndpoint(file);
       }
-
-      const { uploadURL, objectPath } = await urlResponse.json();
-
-      const uploadResponse = await fetch(uploadURL, {
-        method: 'PUT',
-        body: file,
-        headers: { 'Content-Type': file.type },
-      });
-
-      if (!uploadResponse.ok) {
-        throw new Error('Failed to upload to cloud storage');
-      }
-
-      const isPdf = file.type === 'application/pdf';
-      const completeResponse = await fetch('/api/media/complete-upload', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          objectPath,
-          filename: file.name,
-          mimeType: file.type,
-          fileSize: file.size,
-          title: file.name,
-          category: isPdf ? 'document' : 'photo',
-        }),
-      });
-
-      if (!completeResponse.ok) {
-        const errorData = await completeResponse.json();
-        throw new Error(errorData.error || 'Failed to complete upload');
-      }
-
-      const newMedia = await completeResponse.json();
 
       await queryClient.invalidateQueries({ queryKey: ['/api/media'] });
 
@@ -252,6 +211,79 @@ export default function MediaAttachmentPicker({
   const alreadyAttachedIds = attachments.map((a) => a.media.id);
 
   const availableMedia = mediaItems.filter((m) => !alreadyAttachedIds.includes(m.id));
+
+  const uploadViaLegacyMediaEndpoint = async (file: File) => {
+    const isPdf = file.type === 'application/pdf';
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('title', file.name);
+    formData.append('category', isPdf ? 'document' : 'photo');
+
+    const response = await fetch('/api/media/upload', {
+      method: 'POST',
+      credentials: 'include',
+      body: formData,
+    });
+
+    const data = await response.json().catch(() => null);
+    if (!response.ok || !data?.id) {
+      throw new Error(data?.error || 'Failed to upload file');
+    }
+
+    return data;
+  };
+
+  const uploadViaPresignedUrl = async (file: File) => {
+    const urlResponse = await fetch('/api/media/request-upload-url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        name: file.name,
+        size: file.size,
+        contentType: file.type,
+      }),
+    });
+
+    if (!urlResponse.ok) {
+      const errorData = await urlResponse.json().catch(() => null);
+      throw new Error(errorData?.details || errorData?.reason || errorData?.error || 'Failed to get upload URL');
+    }
+
+    const { uploadURL, objectPath } = await urlResponse.json();
+
+    const uploadResponse = await fetch(uploadURL, {
+      method: 'PUT',
+      body: file,
+      headers: { 'Content-Type': file.type },
+    });
+
+    if (!uploadResponse.ok) {
+      throw new Error('Failed to upload to cloud storage');
+    }
+
+    const isPdf = file.type === 'application/pdf';
+    const completeResponse = await fetch('/api/media/complete-upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        objectPath,
+        filename: file.name,
+        mimeType: file.type,
+        fileSize: file.size,
+        title: file.name,
+        category: isPdf ? 'document' : 'photo',
+      }),
+    });
+
+    if (!completeResponse.ok) {
+      const errorData = await completeResponse.json().catch(() => null);
+      throw new Error(errorData?.error || 'Failed to complete upload');
+    }
+
+    return completeResponse.json();
+  };
 
   if (!entityId) {
     return null;

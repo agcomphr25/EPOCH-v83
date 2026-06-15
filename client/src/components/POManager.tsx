@@ -397,9 +397,14 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
     mutationFn: async (orderId: string) => {
       return apiRequest(`/api/production-orders/${orderId}/reactivate`, { method: 'POST' });
     },
-    onSuccess: (_data, orderId) => {
+    onSuccess: (data: any, orderId) => {
       queryClient.invalidateQueries({ queryKey: [`/api/production-orders/by-po/${poId}`] });
-      toast.success(`Order ${orderId} reactivated — status reset to Pending.`);
+      queryClient.invalidateQueries({ queryKey: ['/api/pos'] });
+      toast.success(
+        data?.purchaseOrderReopened
+          ? `Order ${orderId} reactivated — PO reopened as active.`
+          : `Order ${orderId} reactivated — status reset to Pending.`
+      );
     },
     onError: (error: any) => {
       toast.error('Failed to reactivate order: ' + (error.message || 'Unknown error'));

@@ -9423,8 +9423,18 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         currentDepartment: order.currentDepartment || 'P1 Production Queue',
       });
 
+      let purchaseOrderReopened = false;
+      if (order.poId) {
+        const parentPO = await storage.getPurchaseOrder(order.poId);
+        if (parentPO?.status === 'CLOSED') {
+          await storage.updatePurchaseOrder(order.poId, { status: 'OPEN' });
+          purchaseOrderReopened = true;
+          console.log(`🔄 Reopened CLOSED PO ${order.poId} after reactivating production order ${orderId}`);
+        }
+      }
+
       console.log(`🔄 Reactivated production order ${orderId} → PENDING`);
-      res.json({ success: true, order: updated });
+      res.json({ success: true, order: updated, purchaseOrderReopened });
     } catch (_error) {
       console.error('🔄 Reactivate production order error:', _error);
       res.status(500).json({ _error: 'Failed to reactivate production order' });

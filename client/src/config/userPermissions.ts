@@ -52,6 +52,7 @@ export const VALID_NAVBAR_ROUTES = [
   '/admin/queue-integrity',
   '/admin/control-tower',
   '/admin/shipping-status-audit',
+  '/admin/p1-po-status-repair',
   '/system-audits',
   '/admin/audit-ledger',
   '/admin/inventory-anomalies',

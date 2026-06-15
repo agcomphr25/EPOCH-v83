@@ -164,6 +164,7 @@ const ProductionOrderInspector = React.lazy(() => import('./pages/ProductionOrde
 const DomainTruthInspector = React.lazy(() => import('./pages/DomainTruthInspector'));
 const QueueIntegrityMonitor = React.lazy(() => import('./pages/admin/QueueIntegrityMonitor'));
 const ShippingStatusAuditPage = React.lazy(() => import('./pages/admin/ShippingStatusAuditPage'));
+const P1POStatusRepairPage = React.lazy(() => import('./pages/admin/P1POStatusRepairPage'));
 const ProductionControlTower = React.lazy(() => import('./pages/admin/ProductionControlTower'));
 const LocateOrder = React.lazy(() => import('./pages/LocateOrder'));
 const LinkGroupsReport = React.lazy(() => import('./pages/LinkGroupsReport'));
@@ -689,6 +690,7 @@ function App() {
                   <Route path="/admin/domain-truth" component={DomainTruthInspector} />
                   <Route path="/admin/queue-integrity" component={QueueIntegrityMonitor} />
                   <Route path="/admin/shipping-status-audit" component={ShippingStatusAuditPage} />
+                  <Route path="/admin/p1-po-status-repair" component={P1POStatusRepairPage} />
                   <Route path="/admin/control-tower" component={ProductionControlTower} />
                   <Route path="/admin/secure-vault" component={SecureVaultPage} />
                   <Route path="/admin/inventory-reconciliation" component={InventoryReconciliationPage} />

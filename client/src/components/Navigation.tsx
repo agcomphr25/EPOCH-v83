@@ -509,6 +509,12 @@ export default function Navigation() {
       description: 'Identify orders in Shipping Management with a FINISHED status mismatch',
     },
     {
+      path: '/admin/p1-po-status-repair',
+      label: 'P1 PO Status Repair',
+      icon: Wrench,
+      description: 'Review and apply P1 purchase order status repairs from dry-run results',
+    },
+    {
       path: '/system-audits',
       label: 'System Audit Library',
       icon: FileSearch,

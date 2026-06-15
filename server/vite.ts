@@ -93,7 +93,22 @@ export function serveStatic(app: Express) {
     console.error(`[serveStatic] index.html not found at ${indexPath} — build may have failed`);
   }
 
-  app.use(express.static(distPath));
+  app.use(
+    express.static(distPath, {
+      setHeaders(res, filePath) {
+        if (filePath.endsWith('.html') || filePath.endsWith('sw.js')) {
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+          res.setHeader('Pragma', 'no-cache');
+          res.setHeader('Expires', '0');
+          return;
+        }
+
+        if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        }
+      },
+    })
+  );
 
   // fall through to index.html if the file doesn't exist
   app.use('*', (req, res, next) => {
@@ -111,6 +126,11 @@ export function serveStatic(app: Express) {
         '<body><p>Application starting up, please refresh in a moment.</p></body></html>'
       );
     }
+    res.set({
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      Pragma: 'no-cache',
+      Expires: '0',
+    });
     res.sendFile(indexPath, (err) => {
       if (err) {
         console.error(`[serveStatic] sendFile error for ${req.path}:`, err);

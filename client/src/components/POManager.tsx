@@ -400,10 +400,16 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
     onSuccess: (data: any, orderId) => {
       queryClient.invalidateQueries({ queryKey: [`/api/production-orders/by-po/${poId}`] });
       queryClient.invalidateQueries({ queryKey: ['/api/pos'] });
+      const statusLabel =
+        data?.order?.productionStatus === 'LAID_UP'
+          ? 'In Progress'
+          : data?.order?.productionStatus === 'SHIPPED'
+            ? 'Shipped'
+            : 'Pending';
       toast.success(
         data?.purchaseOrderReopened
           ? `Order ${orderId} reactivated — PO reopened as active.`
-          : `Order ${orderId} reactivated — status reset to Pending.`
+          : `Order ${orderId} reactivated — status reset to ${statusLabel}.`
       );
     },
     onError: (error: any) => {
@@ -442,7 +448,7 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
       case 'ACTIVE':
         return <Badge className="bg-yellow-100 text-yellow-800">Active</Badge>;
       case 'LAID_UP':
-        return <Badge className="bg-orange-100 text-orange-800">Laid Up</Badge>;
+        return <Badge className="bg-orange-100 text-orange-800">In Progress</Badge>;
       case 'SHIPPED':
         return <Badge className="bg-green-100 text-green-800">Shipped</Badge>;
       case 'CANCELLED':

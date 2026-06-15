@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
 import {
+  ArrowUpDown,
   Calculator,
   Check,
   FileSpreadsheet,
@@ -10,9 +11,11 @@ import {
   PackagePlus,
   Plus,
   Save,
+  Search,
   SlidersHorizontal,
   Trash2,
   Upload,
+  X,
 } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
@@ -117,6 +120,11 @@ type PartsRequestColumnId =
   | 'service'
   | 'agPartNumber'
   | 'status';
+type PartsRequestTableColumnId = 'include' | 'description' | PartsRequestColumnId | `custom:${string}`;
+type PartsRequestSortState = {
+  columnId: PartsRequestTableColumnId;
+  direction: 'asc' | 'desc';
+} | null;
 type DirectLaborColumnId = 'employeeRole' | 'hourlyRate' | 'hoursPerPart' | 'quantityPerPo' | 'extLabor' | 'remove';
 type SourcingColumnId = 'supplier' | 'supplierItemId' | 'agPartNumber' | 'description' | 'qtyNeeded' | 'unitCost' | 'extCost' | 'action' | 'status';
 
@@ -1044,7 +1052,6 @@ export default function DraftBOMBuilderPage() {
   const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<WorkspaceTabId>('po-draft');
   const [poDescription, setPoDescription] = useState('');
   const [partsRequestDescription, setPartsRequestDescription] = useState('');
-  const [sortPartsByVendor, setSortPartsByVendor] = useState(false);
   const [visiblePoColumns, setVisiblePoColumns] = useState<PoColumnId[]>(() => draft.poVisibleColumns ?? defaultPoColumns);
   const [visiblePartsRequestColumns, setVisiblePartsRequestColumns] = useState<PartsRequestColumnId[]>(
     () => draft.partsRequestVisibleColumns ?? defaultPartsRequestColumns,
@@ -1167,15 +1174,7 @@ export default function DraftBOMBuilderPage() {
       })
       .slice(0, 6);
   }, [activeInventoryItems, partsRequestDescription]);
-  const partsRequestLines = useMemo(() => {
-    const lines = [...draft.lines];
-    if (!sortPartsByVendor) return lines;
-    return lines.sort((a, b) => {
-      const vendorCompare = (a.supplier || '').localeCompare(b.supplier || '');
-      if (vendorCompare !== 0) return vendorCompare;
-      return (a.description || '').localeCompare(b.description || '');
-    });
-  }, [draft.lines, sortPartsByVendor]);
+  const partsRequestLines = draft.lines;
   const assemblyTree = useMemo(
     () => buildAssemblyTree(partsRequestLines, activeInventoryItems),
     [activeInventoryItems, partsRequestLines],
@@ -2328,10 +2327,8 @@ export default function DraftBOMBuilderPage() {
                   customColumns={customColumns}
                   description={partsRequestDescription}
                   matches={partsRequestMatches}
-                  sortByVendor={sortPartsByVendor}
                   onDescriptionChange={setPartsRequestDescription}
                   onCreateLine={createLineFromPartsRequestDescription}
-                  onSortByVendorChange={setSortPartsByVendor}
                   onUpdateLine={updateLine}
                   onUpdateCustomField={updateLineCustomField}
                   onUpdateNumberLine={(id, field, value) => updateLine(id, { [field]: value === '' ? '' : Number(value) } as Partial<BomLine>)}
@@ -2672,16 +2669,42 @@ function poColumnValue(line: BomLine, columnId: PoColumnId) {
   return '-';
 }
 
+function partsRequestColumnLabel(columnId: PartsRequestTableColumnId) {
+  if (columnId === 'include') return 'Include';
+  if (columnId === 'description') return 'Part description';
+  if (columnId.startsWith('custom:')) return columnId.slice('custom:'.length);
+  return partsRequestColumnLabels[columnId as PartsRequestColumnId];
+}
+
+function partsRequestColumnValue(line: BomLine, columnId: PartsRequestTableColumnId): string | number {
+  if (columnId === 'include') return line.include ? 'yes' : 'no';
+  if (columnId === 'description') return line.description || '';
+  if (columnId === 'supplier') return line.supplier || '';
+  if (columnId === 'supplierItemId') return line.supplierItemId || '';
+  if (columnId === 'manufacturer') return line.manufacturer || '';
+  if (columnId === 'unitCost') return line.unitCost === '' ? '' : asNumber(line.unitCost);
+  if (columnId === 'actualCost') return line.actualCost === '' ? '' : asNumber(line.actualCost);
+  if (columnId === 'qtyNeeded') return line.qtyNeeded === '' ? '' : asNumber(line.qtyNeeded);
+  if (columnId === 'service') return line.service ? 'yes' : 'no';
+  if (columnId === 'agPartNumber') return line.agPartNumber || '';
+  if (columnId === 'status') return line.status || '';
+  if (columnId.startsWith('custom:')) return line.customFields?.[columnId.slice('custom:'.length)] ?? '';
+  return '';
+}
+
+function comparePartsRequestValues(a: string | number, b: string | number) {
+  if (typeof a === 'number' && typeof b === 'number') return a - b;
+  return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
+}
+
 function PartsRequestWorkspace({
   lines,
   visibleColumns,
   customColumns,
   description,
   matches,
-  sortByVendor,
   onDescriptionChange,
   onCreateLine,
-  onSortByVendorChange,
   onUpdateLine,
   onUpdateCustomField,
   onUpdateNumberLine,
@@ -2696,10 +2719,8 @@ function PartsRequestWorkspace({
   customColumns: string[];
   description: string;
   matches: InventoryItemOption[];
-  sortByVendor: boolean;
   onDescriptionChange: (value: string) => void;
   onCreateLine: (item?: InventoryItemOption) => void;
-  onSortByVendorChange: (value: boolean) => void;
   onUpdateLine: (id: string, patch: Partial<BomLine>) => void;
   onUpdateCustomField: (lineId: string, columnName: string, value: string) => void;
   onUpdateNumberLine: (id: string, field: 'unitCost' | 'actualCost' | 'qtyNeeded', value: string) => void;
@@ -2714,6 +2735,80 @@ function PartsRequestWorkspace({
   const totalColumns = 3 + visibleColumns.length + customColumns.length;
   const [linkInventoryMatches, setLinkInventoryMatches] = useState(false);
   const [isImportingCsv, setIsImportingCsv] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [columnFilters, setColumnFilters] = useState<Record<string, string>>({});
+  const [sortState, setSortState] = useState<PartsRequestSortState>(null);
+  const tableColumns = useMemo<PartsRequestTableColumnId[]>(
+    () => [
+      'include',
+      'description',
+      ...visibleColumns,
+      ...customColumns.map((columnName) => `custom:${columnName}` as PartsRequestTableColumnId),
+    ],
+    [customColumns, visibleColumns],
+  );
+  const activeFilterCount = Object.values(columnFilters).filter((value) => value.trim()).length + (searchQuery.trim() ? 1 : 0);
+  const displayedLines = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    const filters = Object.entries(columnFilters)
+      .map(([columnId, value]) => [columnId as PartsRequestTableColumnId, value.trim().toLowerCase()] as const)
+      .filter(([, value]) => value);
+    const filtered = lines.filter((line) => {
+      if (query && !tableColumns.some((columnId) => String(partsRequestColumnValue(line, columnId)).toLowerCase().includes(query))) {
+        return false;
+      }
+      return filters.every(([columnId, value]) => String(partsRequestColumnValue(line, columnId)).toLowerCase().includes(value));
+    });
+
+    if (!sortState) return filtered;
+    return [...filtered].sort((a, b) => {
+      const comparison = comparePartsRequestValues(
+        partsRequestColumnValue(a, sortState.columnId),
+        partsRequestColumnValue(b, sortState.columnId),
+      );
+      if (comparison !== 0) return sortState.direction === 'asc' ? comparison : -comparison;
+      return (a.description || '').localeCompare(b.description || '', undefined, { numeric: true, sensitivity: 'base' });
+    });
+  }, [columnFilters, lines, searchQuery, sortState, tableColumns]);
+
+  function updateColumnFilter(columnId: PartsRequestTableColumnId, value: string) {
+    setColumnFilters((current) => {
+      const next = { ...current };
+      if (value.trim()) {
+        next[columnId] = value;
+      } else {
+        delete next[columnId];
+      }
+      return next;
+    });
+  }
+
+  function toggleSort(columnId: PartsRequestTableColumnId) {
+    setSortState((current) => {
+      if (!current || current.columnId !== columnId) return { columnId, direction: 'asc' };
+      if (current.direction === 'asc') return { columnId, direction: 'desc' };
+      return null;
+    });
+  }
+
+  function sortableHeader(columnId: PartsRequestTableColumnId, className?: string) {
+    const isActive = sortState?.columnId === columnId;
+    return (
+      <TableHead key={columnId} className={className}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className={cn('h-8 px-1 font-semibold', className?.includes('text-right') && 'ml-auto')}
+          onClick={() => toggleSort(columnId)}
+        >
+          {partsRequestColumnLabel(columnId)}
+          <ArrowUpDown className={cn('ml-1 h-3.5 w-3.5', isActive ? 'text-blue-600' : 'text-slate-400')} />
+          {isActive ? <span className="ml-1 text-xs text-blue-700">{sortState.direction === 'asc' ? 'Asc' : 'Desc'}</span> : null}
+        </Button>
+      </TableHead>
+    );
+  }
 
   async function handleCsvFileChange(fileList: FileList | null) {
     const file = fileList?.[0];
@@ -2823,11 +2918,16 @@ function PartsRequestWorkspace({
             </label>
             <Button
               type="button"
-              variant={sortByVendor ? 'default' : 'outline'}
-              onClick={() => onSortByVendorChange(!sortByVendor)}
+              variant="outline"
+              onClick={() => {
+                setSearchQuery('');
+                setColumnFilters({});
+                setSortState(null);
+              }}
+              disabled={activeFilterCount === 0 && !sortState}
             >
-              <Filter className="mr-2 h-4 w-4" />
-              Sort by vendor
+              <X className="mr-2 h-4 w-4" />
+              Clear table
             </Button>
             <Button type="button" variant="outline" onClick={onCreateVendorPoDraft} disabled={selectedCount === 0}>
               <PackagePlus className="mr-2 h-4 w-4" />
@@ -2842,26 +2942,50 @@ function PartsRequestWorkspace({
       </div>
 
       <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div className="space-y-3 border-b border-slate-200 p-3">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div className="relative md:w-[360px]">
+              <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+              <Input
+                className="pl-9"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search parts/request"
+              />
+            </div>
+            <div className="text-sm text-slate-500">
+              {displayedLines.length} of {lines.length} line{lines.length === 1 ? '' : 's'}
+            </div>
+          </div>
+          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+            {tableColumns.map((columnId) => (
+              <div key={columnId} className="space-y-1">
+                <Label className="text-xs text-slate-500">{partsRequestColumnLabel(columnId)}</Label>
+                <Input
+                  className="h-8"
+                  value={columnFilters[columnId] ?? ''}
+                  onChange={(event) => updateColumnFilter(columnId, event.target.value)}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[112px]">Include</TableHead>
-                <TableHead className="min-w-[300px]">Part description</TableHead>
-                {visibleColumns.includes('supplier') ? <TableHead className="w-[160px]">Vendor / Supplier</TableHead> : null}
-                {visibleColumns.includes('supplierItemId') ? <TableHead className="w-[170px]">Supplier Part #</TableHead> : null}
-                {visibleColumns.includes('manufacturer') ? <TableHead className="w-[160px]">Manufacturer</TableHead> : null}
-                {visibleColumns.includes('unitCost') ? <TableHead className="w-[130px] text-right">Estimated Cost</TableHead> : null}
-                {visibleColumns.includes('actualCost') ? <TableHead className="w-[120px] text-right">Actual Cost</TableHead> : null}
-                {visibleColumns.includes('qtyNeeded') ? <TableHead className="w-[100px] text-right">Quantity</TableHead> : null}
-                {visibleColumns.includes('service') ? <TableHead className="w-[90px]">Service</TableHead> : null}
-                {visibleColumns.includes('agPartNumber') ? <TableHead className="w-[130px]">AG Part #</TableHead> : null}
-                {visibleColumns.includes('status') ? <TableHead className="w-[150px]">Status</TableHead> : null}
-                {customColumns.map((columnName) => (
-                  <TableHead key={columnName} className="min-w-[160px]">
-                    {columnName}
-                  </TableHead>
-                ))}
+                {sortableHeader('include', 'w-[112px]')}
+                {sortableHeader('description', 'min-w-[300px]')}
+                {visibleColumns.includes('supplier') ? sortableHeader('supplier', 'w-[160px]') : null}
+                {visibleColumns.includes('supplierItemId') ? sortableHeader('supplierItemId', 'w-[170px]') : null}
+                {visibleColumns.includes('manufacturer') ? sortableHeader('manufacturer', 'w-[160px]') : null}
+                {visibleColumns.includes('unitCost') ? sortableHeader('unitCost', 'w-[130px] text-right') : null}
+                {visibleColumns.includes('actualCost') ? sortableHeader('actualCost', 'w-[120px] text-right') : null}
+                {visibleColumns.includes('qtyNeeded') ? sortableHeader('qtyNeeded', 'w-[100px] text-right') : null}
+                {visibleColumns.includes('service') ? sortableHeader('service', 'w-[90px]') : null}
+                {visibleColumns.includes('agPartNumber') ? sortableHeader('agPartNumber', 'w-[130px]') : null}
+                {visibleColumns.includes('status') ? sortableHeader('status', 'w-[150px]') : null}
+                {customColumns.map((columnName) => sortableHeader(`custom:${columnName}` as PartsRequestTableColumnId, 'min-w-[160px]'))}
                 <TableHead className="w-[72px] text-right">Delete</TableHead>
               </TableRow>
             </TableHeader>
@@ -2872,8 +2996,14 @@ function PartsRequestWorkspace({
                     Add a part description to begin the parts/request draft.
                   </TableCell>
                 </TableRow>
+              ) : displayedLines.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={totalColumns} className="h-24 text-center text-slate-500">
+                    No parts/request lines match the current table controls.
+                  </TableCell>
+                </TableRow>
               ) : (
-                lines.map((line) => (
+                displayedLines.map((line) => (
                   <TableRow key={line.id} className={cn(line.finalized && 'bg-emerald-50/60')}>
                     <TableCell>
                       <Checkbox

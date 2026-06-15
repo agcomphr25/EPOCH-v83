@@ -686,7 +686,7 @@ function P2BillingTasks({
                 <p className="text-xs text-muted-foreground truncate">{task.description}</p>
                 {task.oldestCreatedAt && (
                   <p className="text-xs text-muted-foreground">
-                    Oldest packing slip: {format(new Date(task.oldestCreatedAt), 'MMM d, yyyy')}
+                    Oldest shipment record: {format(new Date(task.oldestCreatedAt), 'MMM d, yyyy')}
                   </p>
                 )}
               </div>
@@ -710,7 +710,7 @@ function P2BillingTasks({
             {!compact && items.length > 0 && (
               <div className="space-y-2">
                 {items.slice(0, 5).map((item) => {
-                  const displayNumber = item.invoiceNumber || item.packingSlipNumber;
+                  const displayNumber = item.invoiceNumber || item.lotNumberId || item.shipmentNumber || 'Pending invoice';
                   return (
                     <div key={item.id} className="flex items-center gap-2 rounded-md bg-white/70 border px-2 py-2">
                       <div className="flex-1 min-w-0">
@@ -720,7 +720,7 @@ function P2BillingTasks({
                         </p>
                         <p className="text-xs text-muted-foreground truncate">
                           {item.invoiceNumber
-                            ? `Packing slip ${item.packingSlipNumber} - invoice ${item.invoiceStatus || 'not posted'}`
+                            ? `Lot ${item.lotNumberId || item.shipmentNumber || 'unassigned'} - invoice ${item.invoiceStatus || 'not posted'}`
                             : 'No invoice created yet'}
                         </p>
                       </div>
@@ -748,7 +748,7 @@ function P2BillingTasks({
                 })}
                 {items.length > 5 && (
                   <p className="text-xs text-muted-foreground px-1">
-                    {items.length - 5} more packing slip{items.length - 5 === 1 ? '' : 's'} need review.
+                    {items.length - 5} more shipment record{items.length - 5 === 1 ? '' : 's'} need review.
                   </p>
                 )}
               </div>

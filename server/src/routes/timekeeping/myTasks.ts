@@ -175,7 +175,7 @@ async function getP2BillingTasksForUser(user: any) {
     const oldest = new Date(row.oldest_created_at);
     const ageDays = Math.max(0, Math.floor((Date.now() - oldest.getTime()) / 86_400_000));
     const count = Number(row.packing_slip_count ?? 0);
-    const label = count === 1 ? "packing slip" : "packing slips";
+    const label = count === 1 ? "shipment record" : "shipment records";
     return {
       id: `p2-billing-${row.customer_id}`,
       type: "p2_invoice_posting_group",

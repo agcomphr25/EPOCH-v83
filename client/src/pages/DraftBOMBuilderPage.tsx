@@ -198,6 +198,7 @@ type AssemblyTreeNode = {
   id: string;
   partNumber: string;
   description: string;
+  isManufactured: boolean;
   quantityRequired: number;
   orderStatus: BomStatus;
   manufactureState: AssemblyManufactureState;
@@ -836,6 +837,7 @@ function buildAssemblyTreeNode(
     id: `${part.id}-${part.partNumber}-${nodeQuantity}`,
     partNumber: entry ? linePartNumber(entry.line) : part.partNumber,
     description: entry ? lineDescription(entry.line) : part.description,
+    isManufactured: 'isManufactured' in part ? part.isManufactured : true,
     quantityRequired: nodeQuantity,
     orderStatus,
     manufactureState: childComponents.length === 0 && !isOnHandStatus(orderStatus) && !isOrderedStatus(orderStatus)
@@ -3795,6 +3797,7 @@ function AssemblyTreeWorkspace({ tree }: { tree: AssemblyTreeNode[] }) {
 }
 
 function AssemblyTreeAccordionNode({ node, depth }: { node: AssemblyTreeNode; depth: number }) {
+  const canExpand = node.children.length > 0 || node.isManufactured;
   const rowContent = (
     <div className="grid min-w-0 flex-1 gap-2 md:grid-cols-[minmax(220px,1fr)_auto_auto_auto_auto] md:items-center">
       <div className="min-w-0" style={{ paddingLeft: `${depth * 16}px` }}>
@@ -3812,7 +3815,7 @@ function AssemblyTreeAccordionNode({ node, depth }: { node: AssemblyTreeNode; de
     </div>
   );
 
-  if (node.children.length === 0) {
+  if (!canExpand) {
     return (
       <div className="px-4 py-3">
         {rowContent}
@@ -3826,11 +3829,17 @@ function AssemblyTreeAccordionNode({ node, depth }: { node: AssemblyTreeNode; de
         {rowContent}
       </AccordionTrigger>
       <AccordionContent className="px-4 pb-4">
-        <Accordion type="multiple" className="rounded-md border border-slate-200">
-          {node.children.map((child) => (
-            <AssemblyTreeAccordionNode key={child.id} node={child} depth={depth + 1} />
-          ))}
-        </Accordion>
+        {node.children.length > 0 ? (
+          <Accordion type="multiple" className="rounded-md border border-slate-200">
+            {node.children.map((child) => (
+              <AssemblyTreeAccordionNode key={child.id} node={child} depth={depth + 1} />
+            ))}
+          </Accordion>
+        ) : (
+          <div className="rounded-md border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            No BOM breakdown has been created for this manufactured part yet.
+          </div>
+        )}
       </AccordionContent>
     </AccordionItem>
   );

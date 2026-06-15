@@ -16,6 +16,47 @@ import { recordAuditEvent } from '../services/auditLedgerService';
 
 const router = Router();
 
+function rowsOf<T = any>(result: any): T[] {
+  return Array.isArray(result) ? result : result?.rows || [];
+}
+
+function clampPositiveInteger(value: unknown, fallback: number, max: number): number {
+  const parsed = Number.parseInt(String(value ?? fallback), 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(Math.max(parsed, 1), max);
+}
+
+const p1ProductionStatusExpectationSql = `
+  CASE
+    WHEN UPPER(COALESCE(NULLIF(TRIM(production_status), ''), '')) = 'CANCELLED'
+      THEN 'CANCELLED'
+    WHEN LOWER(COALESCE(NULLIF(TRIM(current_department), ''), '')) = 'p1 production queue'
+      THEN 'PENDING'
+    WHEN COALESCE(NULLIF(TRIM(current_department), ''), '') = ''
+      THEN CASE WHEN COALESCE(is_fulfilled, false) THEN 'SHIPPED' ELSE 'PENDING' END
+    WHEN LOWER(COALESCE(NULLIF(TRIM(current_department), ''), '')) IN ('fulfilled', 'shipped')
+      THEN 'SHIPPED'
+    ELSE 'LAID_UP'
+  END
+`;
+
+const p1ProductionStatusCandidateSql = `
+  SELECT
+    id,
+    order_id,
+    po_id,
+    po_item_id,
+    po_number,
+    customer_name,
+    production_status AS current_status,
+    current_department,
+    COALESCE(is_fulfilled, false) AS is_fulfilled,
+    ${p1ProductionStatusExpectationSql} AS expected_status,
+    updated_at
+  FROM production_orders
+  WHERE po_id IS NOT NULL
+`;
+
 router.post(
   '/seed-reference-tables',
   authenticateToken,
@@ -1216,6 +1257,222 @@ router.post(
       console.error('Pipeline repair error:', error);
       res.status(500).json({
         error: 'Failed to repair pipeline drift',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+);
+
+router.post(
+  '/p1-po-status-repair',
+  authenticateToken,
+  requireRole('ADMIN'),
+  async (req: Request, res: Response) => {
+    const apply = req.body?.apply === true || req.query.apply === 'true';
+    const sampleLimit = clampPositiveInteger(req.body?.sampleLimit ?? req.query.sampleLimit, 25, 100);
+    const maxApply = clampPositiveInteger(req.body?.maxApply ?? req.query.maxApply, 500, 5000);
+
+    try {
+      const [statusSummaryResult, statusSamplesResult, poReopenSummaryResult, poReopenSamplesResult] =
+        await Promise.all([
+          pool.query(`
+            WITH candidates AS (${p1ProductionStatusCandidateSql})
+            SELECT
+              COALESCE(NULLIF(TRIM(current_status), ''), '(blank)') AS current_status,
+              COALESCE(NULLIF(TRIM(current_department), ''), '(blank)') AS current_department,
+              is_fulfilled,
+              expected_status,
+              COUNT(*)::int AS count
+            FROM candidates
+            WHERE UPPER(COALESCE(NULLIF(TRIM(current_status), ''), '')) <> expected_status
+            GROUP BY 1, 2, 3, 4
+            ORDER BY count DESC, current_status ASC, current_department ASC
+          `),
+          pool.query(`
+            WITH candidates AS (${p1ProductionStatusCandidateSql})
+            SELECT
+              id,
+              order_id,
+              po_id,
+              po_item_id,
+              po_number,
+              customer_name,
+              current_status,
+              expected_status,
+              current_department,
+              is_fulfilled,
+              updated_at
+            FROM candidates
+            WHERE UPPER(COALESCE(NULLIF(TRIM(current_status), ''), '')) <> expected_status
+            ORDER BY updated_at DESC NULLS LAST, id ASC
+            LIMIT $1
+          `, [sampleLimit]),
+          pool.query(`
+            WITH production_with_expected AS (${p1ProductionStatusCandidateSql})
+            SELECT
+              po.status AS current_po_status,
+              COUNT(DISTINCT po.id)::int AS po_count,
+              COUNT(pwe.id)::int AS active_production_order_count
+            FROM purchase_orders po
+            JOIN production_with_expected pwe ON pwe.po_id = po.id
+            WHERE UPPER(COALESCE(po.status, '')) IN ('CLOSED', 'COMPLETE', 'COMPLETED')
+              AND pwe.expected_status NOT IN ('SHIPPED', 'CANCELLED')
+            GROUP BY po.status
+            ORDER BY po_count DESC, po.status ASC
+          `),
+          pool.query(`
+            WITH production_with_expected AS (${p1ProductionStatusCandidateSql})
+            SELECT
+              po.id AS po_id,
+              po.po_number,
+              po.customer_name,
+              po.status AS current_po_status,
+              COUNT(pwe.id)::int AS active_production_order_count,
+              MAX(pwe.updated_at) AS last_active_order_updated_at
+            FROM purchase_orders po
+            JOIN production_with_expected pwe ON pwe.po_id = po.id
+            WHERE UPPER(COALESCE(po.status, '')) IN ('CLOSED', 'COMPLETE', 'COMPLETED')
+              AND pwe.expected_status NOT IN ('SHIPPED', 'CANCELLED')
+            GROUP BY po.id, po.po_number, po.customer_name, po.status
+            ORDER BY last_active_order_updated_at DESC NULLS LAST, po.id ASC
+            LIMIT $1
+          `, [sampleLimit]),
+        ]);
+
+      let appliedProductionStatusRows: any[] = [];
+      let reopenedPurchaseOrders: any[] = [];
+
+      if (apply) {
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+
+          const statusRepairApplyResult = await client.query(`
+            WITH candidates AS (${p1ProductionStatusCandidateSql}),
+            mismatches AS (
+              SELECT *
+              FROM candidates
+              WHERE UPPER(COALESCE(NULLIF(TRIM(current_status), ''), '')) <> expected_status
+              ORDER BY updated_at DESC NULLS LAST, id ASC
+              LIMIT $1
+            )
+            UPDATE production_orders prod
+            SET production_status = mismatches.expected_status,
+                updated_at = NOW()
+            FROM mismatches
+            WHERE prod.id = mismatches.id
+            RETURNING
+              prod.id,
+              prod.order_id,
+              prod.po_id,
+              prod.po_item_id,
+              prod.po_number,
+              prod.customer_name,
+              mismatches.current_status AS previous_status,
+              prod.production_status AS new_status,
+              prod.current_department,
+              prod.is_fulfilled,
+              prod.updated_at
+          `, [maxApply]);
+
+          const poReopenApplyResult = await client.query(`
+            WITH production_with_expected AS (${p1ProductionStatusCandidateSql}),
+            target_pos AS (
+              SELECT
+                po.id AS po_id,
+                po.status AS previous_status,
+                COUNT(pwe.id)::int AS active_production_order_count
+              FROM purchase_orders po
+              JOIN production_with_expected pwe ON pwe.po_id = po.id
+              WHERE UPPER(COALESCE(po.status, '')) IN ('CLOSED', 'COMPLETE', 'COMPLETED')
+                AND pwe.expected_status NOT IN ('SHIPPED', 'CANCELLED')
+              GROUP BY po.id, po.status
+              ORDER BY po.id ASC
+              LIMIT $1
+            )
+            UPDATE purchase_orders po
+            SET status = 'OPEN',
+                updated_at = NOW()
+            FROM target_pos
+            WHERE po.id = target_pos.po_id
+            RETURNING
+              po.id AS po_id,
+              po.po_number,
+              po.customer_name,
+              target_pos.previous_status,
+              po.status AS new_status,
+              target_pos.active_production_order_count,
+              po.updated_at
+          `, [maxApply]);
+
+          await client.query('COMMIT');
+
+          appliedProductionStatusRows = rowsOf(statusRepairApplyResult);
+          reopenedPurchaseOrders = rowsOf(poReopenApplyResult);
+
+          try {
+            await recordAuditEvent({
+              eventType: 'P1_PO_STATUS_REPAIR',
+              subjectType: 'p1_po_status_repair',
+              subjectId: 'batch',
+              sourceService: 'admin.p1PoStatusRepair',
+              actor: {
+                id: typeof req.user?.id === 'number' ? req.user.id : null,
+                username: req.user?.username || 'System',
+                role: req.user?.role || 'ADMIN',
+              },
+              reason: 'Admin-applied P1 PO status repair',
+              fieldsChanged: {
+                productionStatusRows: {
+                  before: rowsOf(statusSummaryResult),
+                  after: appliedProductionStatusRows.length,
+                },
+                reopenedPurchaseOrders: {
+                  before: rowsOf(poReopenSummaryResult),
+                  after: reopenedPurchaseOrders.length,
+                },
+              },
+              payload: {
+                maxApply,
+                appliedProductionStatusCount: appliedProductionStatusRows.length,
+                reopenedPurchaseOrderCount: reopenedPurchaseOrders.length,
+              } as any,
+            });
+          } catch (auditError) {
+            console.warn('P1 PO status repair completed but audit event failed:', auditError);
+          }
+        } catch (error) {
+          await client.query('ROLLBACK');
+          throw error;
+        } finally {
+          client.release();
+        }
+      }
+
+      res.json({
+        success: true,
+        mode: apply ? 'applied' : 'dry_run',
+        generatedAt: new Date().toISOString(),
+        sampleLimit,
+        maxApply,
+        productionStatusRepairs: {
+          summary: rowsOf(statusSummaryResult),
+          samples: rowsOf(statusSamplesResult),
+          appliedCount: appliedProductionStatusRows.length,
+          appliedRows: appliedProductionStatusRows,
+        },
+        purchaseOrderReopens: {
+          summary: rowsOf(poReopenSummaryResult),
+          samples: rowsOf(poReopenSamplesResult),
+          appliedCount: reopenedPurchaseOrders.length,
+          appliedRows: reopenedPurchaseOrders,
+        },
+      });
+    } catch (error) {
+      console.error('P1 PO status repair error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to run P1 PO status repair',
         details: error instanceof Error ? error.message : 'Unknown error',
       });
     }

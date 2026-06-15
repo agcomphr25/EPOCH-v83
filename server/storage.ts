@@ -1771,6 +1771,7 @@ export interface IStorage {
 
   // Module 12: Purchase Orders CRUD
   getAllPurchaseOrders(): Promise<PurchaseOrder[]>;
+  reopenClosedP1PurchaseOrdersWithActiveProductionItems(): Promise<number>;
   getPurchaseOrder(
     id: number,
     options?: { includeItems?: boolean; includeOrderCount?: boolean }
@@ -12273,7 +12274,30 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Module 12: Purchase Orders CRUD
+  async reopenClosedP1PurchaseOrdersWithActiveProductionItems(): Promise<number> {
+    const result = await pool.query(`
+      UPDATE purchase_orders po
+         SET status = 'OPEN',
+             updated_at = NOW()
+       WHERE UPPER(COALESCE(po.status, '')) IN ('CLOSED', 'COMPLETE', 'COMPLETED')
+         AND EXISTS (
+           SELECT 1
+             FROM production_orders prod
+            WHERE prod.po_id = po.id
+              AND COALESCE(UPPER(prod.production_status), '') NOT IN ('SHIPPED', 'CANCELLED', 'CANCELED', 'SCRAPPED')
+         )
+    `);
+
+    const reopenedCount = result.rowCount ?? 0;
+    if (reopenedCount > 0) {
+      console.log(`📦 Reopened ${reopenedCount} P1 purchase order(s) with active production items`);
+    }
+    return reopenedCount;
+  }
+
   async getAllPurchaseOrders(): Promise<PurchaseOrder[]> {
+    await this.reopenClosedP1PurchaseOrdersWithActiveProductionItems();
+
     const rows = await db
       .select()
       .from(purchaseOrders)

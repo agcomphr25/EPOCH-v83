@@ -13911,6 +13911,17 @@ export class DatabaseStorage implements IStorage {
       const resolvedStatus = INITIAL_QUEUE_DEPARTMENTS.includes(department)
         ? status
         : 'IN_PROGRESS';
+      const normalizedDepartment = department.trim().toLowerCase();
+      const normalizedStatus = status.trim().toUpperCase();
+      const resolvedProductionStatus =
+        normalizedDepartment === 'p1 production queue'
+          ? 'PENDING'
+          : normalizedDepartment === 'fulfilled' ||
+            normalizedDepartment === 'shipped' ||
+            normalizedStatus === 'FULFILLED' ||
+            normalizedStatus === 'SHIPPED'
+            ? 'SHIPPED'
+            : 'LAID_UP';
 
       console.log(
         ` প্রক্র PRODUCTION FLOW: Updating order ${orderId} to department ${department} with status ${resolvedStatus}`
@@ -13948,7 +13959,7 @@ export class DatabaseStorage implements IStorage {
         .update(productionOrders)
         .set({
           currentDepartment: department,
-          productionStatus: resolvedStatus,
+          productionStatus: resolvedProductionStatus,
           updatedAt: new Date(),
         })
         .where(eq(productionOrders.orderId, orderId))
@@ -13960,7 +13971,7 @@ export class DatabaseStorage implements IStorage {
         );
         return {
           success: true,
-          message: `Production order ${orderId} updated to ${resolvedStatus} status`,
+          message: `Production order ${orderId} updated to ${resolvedProductionStatus} status`,
         };
       }
 
@@ -14656,6 +14667,17 @@ export class DatabaseStorage implements IStorage {
           departmentHistory: updatedHistory,
           updatedAt: now,
         };
+        const normalizedNextDepartment = String(nextDept).trim().toLowerCase();
+        if (normalizedNextDepartment === 'p1 production queue') {
+          productionCompletionUpdates.productionStatus = 'PENDING';
+        } else if (
+          normalizedNextDepartment === 'fulfilled' ||
+          normalizedNextDepartment === 'shipped'
+        ) {
+          productionCompletionUpdates.productionStatus = 'SHIPPED';
+        } else {
+          productionCompletionUpdates.productionStatus = 'LAID_UP';
+        }
         
         // Map completion timestamps for production orders (using schema column names)
         // Schema columns: barcodeCompletedAt, layupCompletedAt, cncCompletedAt, 
@@ -14667,7 +14689,6 @@ export class DatabaseStorage implements IStorage {
           case 'Layup/Plugging':
             productionCompletionUpdates.layupCompletedAt = now;
             productionCompletionUpdates.laidUpAt = now;
-            productionCompletionUpdates.productionStatus = 'LAID_UP';
             break;
           case 'CNC':
             productionCompletionUpdates.cncCompletedAt = now;
@@ -14689,7 +14710,6 @@ export class DatabaseStorage implements IStorage {
             break;
           case 'Shipping':
             productionCompletionUpdates.shippingCompletedAt = now;
-            productionCompletionUpdates.productionStatus = 'SHIPPED';
             productionCompletionUpdates.shippedAt = now;
             break;
         }

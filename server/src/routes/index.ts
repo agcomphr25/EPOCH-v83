@@ -9418,9 +9418,20 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         return res.status(400).json({ _error: `Order ${orderId} is not cancelled (current status: ${order.productionStatus})` });
       }
 
+      const reactivatedDepartment = order.currentDepartment || 'P1 Production Queue';
+      const normalizedDepartment = reactivatedDepartment.trim().toLowerCase();
+      const reactivatedStatus =
+        normalizedDepartment === 'p1 production queue'
+          ? 'PENDING'
+          : normalizedDepartment === 'fulfilled' ||
+            normalizedDepartment === 'shipped' ||
+            (order as any).isFulfilled
+            ? 'SHIPPED'
+            : 'LAID_UP';
+
       const updated = await storage.updateProductionOrder(order.id, {
-        productionStatus: 'PENDING',
-        currentDepartment: order.currentDepartment || 'P1 Production Queue',
+        productionStatus: reactivatedStatus,
+        currentDepartment: reactivatedDepartment,
       });
 
       let purchaseOrderReopened = false;
@@ -9433,7 +9444,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         }
       }
 
-      console.log(`🔄 Reactivated production order ${orderId} → PENDING`);
+      console.log(`🔄 Reactivated production order ${orderId} → ${reactivatedStatus}`);
       res.json({ success: true, order: updated, purchaseOrderReopened });
     } catch (_error) {
       console.error('🔄 Reactivate production order error:', _error);

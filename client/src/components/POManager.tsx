@@ -130,6 +130,7 @@ function POQuantityDisplay({ poId }: { poId: number }) {
 }
 
 type StatusFilter = 'ALL' | 'LAID_UP' | 'PENDING' | 'SHIPPED' | 'CANCELLED';
+type ProductionItemVisibilityFilter = 'active' | 'all' | 'cancelled';
 
 function getStatusLabel(filter: StatusFilter): string {
   switch (filter) {
@@ -321,6 +322,7 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [orderToCancel, setOrderToCancel] = useState<string>('');
   const [cancelReason, setCancelReason] = useState('');
+  const [visibilityFilter, setVisibilityFilter] = useState<ProductionItemVisibilityFilter>('active');
 
   const { data: productionOrders = [], isLoading } = useQuery({
     queryKey: [`/api/production-orders/by-po/${poId}`],
@@ -363,6 +365,14 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
   }, [productionOrders, poItems]);
 
   const duplicateCount = duplicateOrderIds.size;
+  const activeOrders = (productionOrders as any[]).filter((order: any) => order.productionStatus !== 'CANCELLED');
+  const cancelledOrders = (productionOrders as any[]).filter((order: any) => order.productionStatus === 'CANCELLED');
+  const visibleProductionOrders =
+    visibilityFilter === 'all'
+      ? (productionOrders as any[])
+      : visibilityFilter === 'cancelled'
+        ? cancelledOrders
+        : activeOrders;
 
   const cancelMutation = useMutation({
     mutationFn: async ({ orderId, reason }: { orderId: string; reason: string }) => {
@@ -469,25 +479,45 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
         <div className="flex items-start justify-between gap-2">
           <CardTitle className="text-lg flex items-center gap-2">
             <Package className="h-5 w-5" />
-            Production Orders ({productionOrders.length})
+            Production Orders ({visibleProductionOrders.length})
+            {visibilityFilter !== 'all' && (
+              <span className="text-sm font-normal text-muted-foreground">
+                of {productionOrders.length}
+              </span>
+            )}
             {duplicateCount > 0 && (
               <Badge className="bg-orange-100 text-orange-800 text-xs font-semibold ml-1">
                 ⚠ {duplicateCount} Duplicate{duplicateCount !== 1 ? 's' : ''} detected
               </Badge>
             )}
           </CardTitle>
-          {hasMetalAccessoryOrders && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="text-amber-700 border-amber-300 hover:bg-amber-50 h-7 px-2 text-xs shrink-0"
-              disabled={fixMetalAccessoriesMutation.isPending}
-              onClick={() => fixMetalAccessoriesMutation.mutate()}
-              title="Move metal accessory orders to Shipping QC and correct their material"
+          <div className="flex items-center gap-2">
+            <Select
+              value={visibilityFilter}
+              onValueChange={(value) => setVisibilityFilter(value as ProductionItemVisibilityFilter)}
             >
-              {fixMetalAccessoriesMutation.isPending ? 'Fixing...' : 'Fix Metal Accessories'}
-            </Button>
-          )}
+              <SelectTrigger className="h-8 w-40" data-testid="select-production-order-visibility">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="active">Active Items ({activeOrders.length})</SelectItem>
+                <SelectItem value="all">All Items ({productionOrders.length})</SelectItem>
+                <SelectItem value="cancelled">Cancelled Items ({cancelledOrders.length})</SelectItem>
+              </SelectContent>
+            </Select>
+            {hasMetalAccessoryOrders && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-amber-700 border-amber-300 hover:bg-amber-50 h-7 px-2 text-xs shrink-0"
+                disabled={fixMetalAccessoriesMutation.isPending}
+                onClick={() => fixMetalAccessoriesMutation.mutate()}
+                title="Move metal accessory orders to Shipping QC and correct their material"
+              >
+                {fixMetalAccessoriesMutation.isPending ? 'Fixing...' : 'Fix Metal Accessories'}
+              </Button>
+            )}
+          </div>
         </div>
         {duplicateCount > 0 && (
           <p className="text-xs text-orange-700 mt-1">
@@ -510,7 +540,13 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
               </tr>
             </thead>
             <tbody>
-              {productionOrders.map((order: any) => {
+              {visibleProductionOrders.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="p-8 text-center text-muted-foreground">
+                    No production orders match this filter.
+                  </td>
+                </tr>
+              ) : visibleProductionOrders.map((order: any) => {
                 const isDuplicate = duplicateOrderIds.has(order.id);
                 return (
                 <tr

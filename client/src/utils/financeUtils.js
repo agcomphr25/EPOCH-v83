@@ -21,6 +21,20 @@ export async function fetchP2APContext(poNumber) {
   return response.data;
 }
 
+export async function fetchAPCustomerOptions({ source = 'ALL', search = '' } = {}) {
+  const response = await axios.get('/api/ap-bills/customers', {
+    params: { source, search },
+  });
+  return response.data || [];
+}
+
+export async function fetchAPVendorPOOptions({ vendorId, vendorName, search = '' } = {}) {
+  const response = await axios.get('/api/ap-bills/vendor-pos', {
+    params: { vendorId, vendorName, search },
+  });
+  return response.data || [];
+}
+
 export async function fetchVendorOptions() {
   const response = await axios.get('/api/vendors', {
     params: { pageSize: 10000, sort: 'name:asc' },

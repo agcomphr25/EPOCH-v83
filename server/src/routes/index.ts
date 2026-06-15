@@ -9439,10 +9439,11 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       let purchaseOrderReopened = false;
       if (order.poId) {
         const parentPO = await storage.getPurchaseOrder(order.poId);
-        if (parentPO?.status === 'CLOSED') {
+        const parentStatus = String(parentPO?.status || '').trim().toUpperCase();
+        if (['CLOSED', 'COMPLETE', 'COMPLETED'].includes(parentStatus)) {
           await storage.updatePurchaseOrder(order.poId, { status: 'OPEN' });
           purchaseOrderReopened = true;
-          console.log(`🔄 Reopened CLOSED PO ${order.poId} after reactivating production order ${orderId}`);
+          console.log(`🔄 Reopened ${parentStatus} PO ${order.poId} after reactivating production order ${orderId}`);
         }
       }
 

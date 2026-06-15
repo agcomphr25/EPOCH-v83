@@ -55,6 +55,7 @@ interface DraftBomLine {
   quantity?: number | string;
   status?: string;
   action?: string;
+  isManufactured?: boolean;
   childDraftBoms?: DraftPartBom[];
 }
 
@@ -254,6 +255,10 @@ function normalizePartStatus(line: DraftBomLine): PartStatus {
   return 'manufacturing';
 }
 
+function hasPlanningGap(nodes: AssemblyNode[]) {
+  return nodes.some((node) => node.status === 'short' || hasPlanningGap(node.children ?? []));
+}
+
 function draftLinePartNumber(line: DraftBomLine, index = 0) {
   return line.agPartNumber || line.supplierItemId || `RD-DRAFT-${String(index + 1).padStart(3, '0')}`;
 }
@@ -352,17 +357,20 @@ function getComponentChildren(
 ): AssemblyNode[] {
   return components.map((component) => {
     const matchingLine = findDraftLineForComponent(component, lines);
-    const status = matchingLine ? normalizePartStatus(matchingLine) : 'short';
     const childBoms = matchingLine?.childDraftBoms ?? [];
     const nextVisited = new Set(visited);
     const componentKey = component.id || component.partNumber;
     nextVisited.add(componentKey);
+    const children = childBoms.flatMap((bom) => getBomComponentNodes(bom, lines, nextVisited));
+    const status = component.isManufactured
+      ? (hasPlanningGap(children) ? 'short' : 'manufacturing')
+      : matchingLine ? normalizePartStatus(matchingLine) : 'short';
 
     return {
       id: componentKey,
       label: `${component.partNumber} - ${component.description}`,
       status,
-      children: childBoms.flatMap((bom) => getBomComponentNodes(bom, lines, nextVisited)),
+      children,
     };
   });
 }
@@ -377,11 +385,15 @@ function getBomComponentNodes(bom: DraftPartBom, lines: DraftBomLine[], visited:
 
 function getDraftLineAssemblyNode(line: DraftBomLine, index: number, allLines: DraftBomLine[]): AssemblyNode {
   const partNumber = draftLinePartNumber(line, index);
+  const children = (line.childDraftBoms ?? []).flatMap((bom) => getBomComponentNodes(bom, allLines, new Set([line.id ?? partNumber])));
+  const status = line.isManufactured
+    ? (hasPlanningGap(children) ? 'short' : 'manufacturing')
+    : normalizePartStatus(line);
   return {
     id: line.id ?? `${partNumber}-${index}`,
     label: `${partNumber} - ${draftLineDescription(line)}`,
-    status: normalizePartStatus(line),
-    children: (line.childDraftBoms ?? []).flatMap((bom) => getBomComponentNodes(bom, allLines, new Set([line.id ?? partNumber]))),
+    status,
+    children,
   };
 }
 

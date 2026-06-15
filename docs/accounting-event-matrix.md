@@ -16,7 +16,7 @@ The live API version is exposed at `GET /api/accounting/event-matrix` for users 
 
 | Priority | Event | GAAP risk | First action |
 | --- | --- | --- | --- |
-| 1 | Vendor bill recorded | AP, expenses, and inventory are incomplete. | Initial vendor bill/AP posting exists for direct freight bills; expand next into full PO/receipt/vendor-invoice matching. |
+| 1 | Vendor bill recorded | AP, expenses, and inventory are incomplete. | Vendor bill/AP posting now captures generic bill lines, customer/project context, and optional vendor PO matching; expand next into full PO/receipt/vendor-invoice three-way matching. |
 | 2 | Inventory received | Inventory can exist operationally without financial value. | Receipt accrual now posts `Dr Inventory - Raw Materials / Cr GRNI - Received Not Invoiced`; next step is vendor invoice matching to clear GRNI to AP. |
 | 3 | Inventory issued to production | WIP/COGS cannot be trusted without material cost movement. | Add item valuation and debit WIP or direct materials on issue/consumption. |
 | 4 | Opening balance migration | Statement opening balances cannot tie out. | Add controlled QBO opening balance import with batch id and tie-out evidence. |
@@ -31,7 +31,7 @@ The live API version is exposed at `GET /api/accounting/event-matrix` for users 
 | P1 customer payment received | `P1_CUSTOMER_PAYMENT` / `p1_payment` | `server/src/services/p1PaymentPostingService.ts`; DR `Customer Payment Clearing`, CR `Customer Deposits`; tagged with P1 production line and customer type |
 | Labor cost posted | `LABOR_COST` / `labor_posting_run` | `server/src/services/laborPostingService.ts` |
 | Inventory received from vendor PO | `INVENTORY_RECEIPT_ACCRUAL` / `vendor_po_receipt` | `server/src/services/vendorPOReceiptAccountingService.ts`; DR `Inventory - Raw Materials`, CR `GRNI - Received Not Invoiced`; keyed by PO line and cumulative receipt quantity |
-| Vendor bill approved/posted | `AP_VENDOR_BILL` / `ap_vendor_bill` | `server/src/routes/apBills.ts`; initial direct freight/cargo insurance AP workflow with project/customer PO/lot/AR invoice allocation evidence |
+| Vendor bill approved/posted | `AP_VENDOR_BILL` / `ap_vendor_bill` | `server/src/routes/apBills.ts`; generic AP workflow with typed bill lines, P1/P2/general customer context, optional vendor PO match, project/customer PO/lot/AR invoice allocation evidence, and attached source documents |
 
 ## Known Partial Coverage
 
@@ -41,4 +41,4 @@ The live API version is exposed at `GET /api/accounting/event-matrix` for users 
 
 ## Next Implementation Recommendation
 
-Next, expand vendor bills/AP from the initial direct freight workflow into full three-way matching against vendor PO receipts and GRNI. Deposit application would clear `Customer Deposits` when the order is fulfilled/invoiced.
+Next, expand vendor bills/AP from PO-context capture into full three-way matching against vendor PO receipts and GRNI. Deposit application would clear `Customer Deposits` when the order is fulfilled/invoiced.

@@ -21,8 +21,25 @@ export async function fetchP2APContext(poNumber) {
   return response.data;
 }
 
+export async function fetchVendorOptions() {
+  const response = await axios.get('/api/vendors', {
+    params: { pageSize: 10000, sort: 'name:asc' },
+  });
+  return response.data?.data || [];
+}
+
+export async function fetchAPBill(id) {
+  const response = await axios.get(`/api/ap-bills/${id}`);
+  return response.data;
+}
+
 export async function createAPBill(payload) {
   const response = await axios.post('/api/ap-bills', payload);
+  return response.data;
+}
+
+export async function updateAPBill(id, payload) {
+  const response = await axios.put(`/api/ap-bills/${id}`, payload);
   return response.data;
 }
 
@@ -39,6 +56,10 @@ export async function uploadAPBillAttachments(billId, files) {
 export async function approveAndPostAPBill(billId) {
   const response = await axios.post(`/api/ap-bills/${billId}/approve-post`);
   return response.data;
+}
+
+export async function deleteAPBill(billId) {
+  await axios.delete(`/api/ap-bills/${billId}`);
 }
 
 /**

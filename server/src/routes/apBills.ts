@@ -261,6 +261,33 @@ router.get('/p2-context', requireAdminOrOwner, h(async (req, res) => {
   res.json(rows);
 }));
 
+router.get('/:id', requireAdminOrOwner, h(async (req, res) => {
+  await ensureApBillTables();
+  const billResult = await pgPool.query(`SELECT * FROM ap_vendor_bills WHERE id = $1`, [req.params.id]);
+  const bill = billResult.rows[0];
+  if (!bill || bill.status === 'VOID') {
+    res.status(404).json({ error: 'AP bill not found' });
+    return;
+  }
+  const [linesResult, allocationsResult, attachmentsResult] = await Promise.all([
+    pgPool.query(`SELECT * FROM ap_vendor_bill_lines WHERE bill_id = $1 ORDER BY created_at, id`, [bill.id]),
+    pgPool.query(`SELECT * FROM ap_vendor_bill_allocations WHERE bill_id = $1 ORDER BY created_at, id`, [bill.id]),
+    pgPool.query(`
+      SELECT id, original_file_name AS "originalFileName", mime_type AS "mimeType",
+             file_size_bytes AS "fileSizeBytes", uploaded_at AS "uploadedAt"
+      FROM ap_vendor_bill_attachments
+      WHERE bill_id = $1
+      ORDER BY uploaded_at DESC
+    `, [bill.id]),
+  ]);
+  res.json({
+    ...bill,
+    lines: linesResult.rows,
+    allocations: allocationsResult.rows,
+    attachments: attachmentsResult.rows,
+  });
+}));
+
 router.post('/', requireAdminOrOwner, h(async (req, res) => {
   await ensureApBillTables();
   const parsed = billInputSchema.safeParse(req.body);
@@ -341,6 +368,149 @@ router.post('/', requireAdminOrOwner, h(async (req, res) => {
     }
     await client.query('COMMIT');
     res.status(201).json({ ...bill, lines: lineRows });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}));
+
+router.put('/:id', requireAdminOrOwner, h(async (req, res) => {
+  await ensureApBillTables();
+  const parsed = billInputSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid AP bill', details: parsed.error.flatten() });
+    return;
+  }
+  const input = parsed.data;
+  const total = input.lines.reduce((sum, line) => sum + Number(toMoney(line.amount)), 0);
+  const client = await pgPool.connect();
+  try {
+    await client.query('BEGIN');
+    const currentResult = await client.query(`SELECT * FROM ap_vendor_bills WHERE id = $1 FOR UPDATE`, [req.params.id]);
+    const current = currentResult.rows[0];
+    if (!current || current.status === 'VOID') {
+      res.status(404).json({ error: 'AP bill not found' });
+      await client.query('ROLLBACK');
+      return;
+    }
+    if (current.posted_journal_entry_id) {
+      res.status(409).json({ error: 'Posted AP bills cannot be edited. Void/reverse support will be added separately.' });
+      await client.query('ROLLBACK');
+      return;
+    }
+
+    const updatedResult = await client.query(`
+      UPDATE ap_vendor_bills
+      SET vendor_name = $2,
+          vendor_invoice_number = $3,
+          invoice_date = $4,
+          due_date = $5,
+          ship_date = $6,
+          bol_number = $7,
+          customer_name = $8,
+          customer_po_number = $9,
+          project_id = $10,
+          total_amount = $11,
+          recovery_ar_invoice_id = $12,
+          recovery_amount = $13,
+          allocation_method = $14,
+          notes = $15,
+          updated_at = NOW()
+      WHERE id = $1
+      RETURNING *
+    `, [
+      req.params.id,
+      input.vendorName,
+      input.vendorInvoiceNumber,
+      input.invoiceDate,
+      input.dueDate || null,
+      input.shipDate || null,
+      input.bolNumber || null,
+      input.customerName || null,
+      input.customerPoNumber || null,
+      input.projectId || null,
+      toMoney(total),
+      input.recoveryArInvoiceId || null,
+      toMoney(input.recoveryAmount ?? 0),
+      input.allocationMethod || 'MANUAL',
+      input.notes || null,
+    ]);
+
+    await client.query(`DELETE FROM ap_vendor_bill_allocations WHERE bill_id = $1`, [req.params.id]);
+    await client.query(`DELETE FROM ap_vendor_bill_lines WHERE bill_id = $1`, [req.params.id]);
+
+    const lineRows = [];
+    for (const line of input.lines) {
+      const account = await getAccount(client, line.glAccountNumber || '54500');
+      const inserted = await client.query(`
+        INSERT INTO ap_vendor_bill_lines (bill_id, line_type, description, amount, gl_account_number, gl_account_name_snapshot)
+        VALUES ($1,$2,$3,$4,$5,$6)
+        RETURNING *
+      `, [req.params.id, line.lineType, line.description, toMoney(line.amount), account.account_number, account.account_name]);
+      lineRows.push(inserted.rows[0]);
+    }
+
+    const allocations: Array<any> = input.allocations?.length
+      ? input.allocations
+      : [{ allocatedAmount: total, allocationBasis: input.allocationMethod || 'MANUAL' }];
+    for (const allocation of allocations) {
+      await client.query(`
+        INSERT INTO ap_vendor_bill_allocations (
+          bill_id, customer_name, customer_po_number, project_id, lot_id, lot_number,
+          ar_invoice_id, ar_invoice_number, recovery_ar_invoice_id, allocation_basis, allocated_amount, notes
+        )
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+      `, [
+        req.params.id,
+        input.customerName || null,
+        input.customerPoNumber || null,
+        input.projectId || null,
+        allocation.lotId || null,
+        allocation.lotNumber || null,
+        allocation.arInvoiceId || null,
+        allocation.arInvoiceNumber || null,
+        input.recoveryArInvoiceId || null,
+        allocation.allocationBasis || input.allocationMethod || 'MANUAL',
+        toMoney(allocation.allocatedAmount),
+        allocation.notes || null,
+      ]);
+    }
+    await client.query('COMMIT');
+    res.json({ ...updatedResult.rows[0], lines: lineRows });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}));
+
+router.delete('/:id', requireAdminOrOwner, h(async (req, res) => {
+  await ensureApBillTables();
+  const client = await pgPool.connect();
+  try {
+    await client.query('BEGIN');
+    const currentResult = await client.query(`SELECT * FROM ap_vendor_bills WHERE id = $1 FOR UPDATE`, [req.params.id]);
+    const current = currentResult.rows[0];
+    if (!current || current.status === 'VOID') {
+      res.status(404).json({ error: 'AP bill not found' });
+      await client.query('ROLLBACK');
+      return;
+    }
+    if (current.posted_journal_entry_id) {
+      res.status(409).json({ error: 'Posted AP bills cannot be deleted. Void/reverse support will be added separately.' });
+      await client.query('ROLLBACK');
+      return;
+    }
+    await client.query(`
+      UPDATE ap_vendor_bills
+      SET status = 'VOID', updated_at = NOW(), notes = CONCAT(COALESCE(notes, ''), CASE WHEN notes IS NULL OR notes = '' THEN '' ELSE E'\n' END, 'Voided by ', $2, ' on ', NOW()::date)
+      WHERE id = $1
+    `, [req.params.id, actorName(req)]);
+    await client.query('COMMIT');
+    res.status(204).send();
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;

@@ -1,12 +1,16 @@
-import React, { useMemo, useState } from 'react';
-import { CheckCircle2, Paperclip, RefreshCw, Search } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { CheckCircle2, Edit, Paperclip, RefreshCw, Search, Trash2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import { useAPTransactions } from '../hooks/useTransactions';
 import {
   approveAndPostAPBill,
   createAPBill,
+  deleteAPBill,
+  fetchAPBill,
   fetchP2APContext,
+  fetchVendorOptions,
+  updateAPBill,
   uploadAPBillAttachments,
 } from '../utils/financeUtils';
 
@@ -17,7 +21,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 const initialForm = {
-  vendorName: 'R+L Truckload Services, LLC',
+  vendorName: '',
   vendorInvoiceNumber: '',
   invoiceDate: '',
   dueDate: '',
@@ -82,8 +86,12 @@ export default function APJournal({ dateFrom, dateTo }) {
   const [dateRange, setDateRange] = useState({ dateFrom, dateTo });
   const [form, setForm] = useState(initialForm);
   const [contextRows, setContextRows] = useState([]);
+  const [savedAllocations, setSavedAllocations] = useState([]);
+  const [vendors, setVendors] = useState([]);
   const [files, setFiles] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [editingBillId, setEditingBillId] = useState(null);
+  const [loadingBillId, setLoadingBillId] = useState(null);
   const [loadingContext, setLoadingContext] = useState(false);
   const { data, loading, error, refresh } = useAPTransactions(dateRange);
 
@@ -91,9 +99,34 @@ export default function APJournal({ dateFrom, dateTo }) {
     () => Number(form.freightAmount || 0) + Number(form.insuranceAmount || 0),
     [form.freightAmount, form.insuranceAmount],
   );
-  const allocationRows = useMemo(() => splitByQuantity(contextRows, totalAmount), [contextRows, totalAmount]);
+  const allocationRows = useMemo(
+    () => (contextRows.length ? splitByQuantity(contextRows, totalAmount) : savedAllocations),
+    [contextRows, savedAllocations, totalAmount],
+  );
 
   const setField = (field, value) => setForm((prev) => ({ ...prev, [field]: value }));
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchVendorOptions()
+      .then((rows) => {
+        if (!cancelled) setVendors(rows);
+      })
+      .catch(() => {
+        if (!cancelled) toast.error('Failed to load vendors.');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const resetForm = () => {
+    setForm(initialForm);
+    setContextRows([]);
+    setSavedAllocations([]);
+    setFiles([]);
+    setEditingBillId(null);
+  };
 
   const loadContext = async () => {
     if (!form.customerPoNumber.trim()) {
@@ -104,6 +137,7 @@ export default function APJournal({ dateFrom, dateTo }) {
     try {
       const rows = await fetchP2APContext(form.customerPoNumber.trim());
       setContextRows(rows);
+      setSavedAllocations([]);
       const first = rows[0];
       const recovery = rows.find((row) => Number(row.freightAmount || 0) > 0);
       setForm((prev) => ({
@@ -142,7 +176,7 @@ export default function APJournal({ dateFrom, dateTo }) {
         },
       ].filter(Boolean);
 
-      const bill = await createAPBill({
+      const payload = {
         vendorName: form.vendorName,
         vendorInvoiceNumber: form.vendorInvoiceNumber,
         invoiceDate: form.invoiceDate,
@@ -164,20 +198,78 @@ export default function APJournal({ dateFrom, dateTo }) {
           arInvoiceNumber: row.arInvoiceNumber || null,
           allocatedAmount: row.allocatedAmount,
           allocationBasis: 'QUANTITY',
-          notes: row.freightAmount ? `Customer freight recovery: ${formatCurrency(row.freightAmount)}` : null,
+          notes: row.notes || (row.freightAmount ? `Customer freight recovery: ${formatCurrency(row.freightAmount)}` : null),
         })),
-      });
+      };
+
+      const bill = editingBillId
+        ? await updateAPBill(editingBillId, payload)
+        : await createAPBill(payload);
 
       await uploadAPBillAttachments(bill.id, files);
-      toast.success(`AP bill ${bill.bill_number || bill.billNumber || form.vendorInvoiceNumber} created.`);
-      setForm(initialForm);
-      setContextRows([]);
-      setFiles([]);
+      toast.success(`AP bill ${bill.bill_number || bill.billNumber || form.vendorInvoiceNumber} ${editingBillId ? 'updated' : 'created'}.`);
+      resetForm();
       refresh();
     } catch (err) {
-      toast.error(err?.response?.data?.error || err.message || 'Failed to create AP bill.');
+      toast.error(err?.response?.data?.error || err.message || 'Failed to save AP bill.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const editBill = async (id) => {
+    setLoadingBillId(id);
+    try {
+      const bill = await fetchAPBill(id);
+      const freightLine = (bill.lines || []).find((line) => line.line_type === 'FREIGHT');
+      const insuranceLine = (bill.lines || []).find((line) => line.line_type === 'INSURANCE');
+      setForm({
+        vendorName: bill.vendor_name || '',
+        vendorInvoiceNumber: bill.vendor_invoice_number || '',
+        invoiceDate: String(bill.invoice_date || '').slice(0, 10),
+        dueDate: bill.due_date ? String(bill.due_date).slice(0, 10) : '',
+        shipDate: bill.ship_date ? String(bill.ship_date).slice(0, 10) : '',
+        bolNumber: bill.bol_number || '',
+        customerName: bill.customer_name || '',
+        customerPoNumber: bill.customer_po_number || '',
+        projectId: bill.project_id || '',
+        freightAmount: freightLine?.amount ? String(freightLine.amount) : '',
+        insuranceAmount: insuranceLine?.amount ? String(insuranceLine.amount) : '',
+        recoveryArInvoiceId: bill.recovery_ar_invoice_id || '',
+        recoveryAmount: bill.recovery_amount ? String(bill.recovery_amount) : '',
+        notes: bill.notes || '',
+      });
+      setSavedAllocations((bill.allocations || []).map((allocation) => ({
+        lotId: allocation.lot_id,
+        lotNumber: allocation.lot_number,
+        arInvoiceId: allocation.ar_invoice_id,
+        arInvoiceNumber: allocation.ar_invoice_number,
+        allocatedAmount: allocation.allocated_amount,
+        allocationBasis: allocation.allocation_basis || 'MANUAL',
+        notes: allocation.notes || null,
+      })));
+      setContextRows([]);
+      setFiles([]);
+      setEditingBillId(id);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (err) {
+      toast.error(err?.response?.data?.error || err.message || 'Failed to load AP bill.');
+    } finally {
+      setLoadingBillId(null);
+    }
+  };
+
+  const removeBill = async (bill) => {
+    if (!confirm(`Delete AP bill ${bill.vendorInvoiceNumber || bill.billNumber}? This will void the draft bill and preserve the audit trail.`)) {
+      return;
+    }
+    try {
+      await deleteAPBill(bill.id);
+      toast.success('AP bill deleted.');
+      if (editingBillId === bill.id) resetForm();
+      refresh();
+    } catch (err) {
+      toast.error(err?.response?.data?.error || err.message || 'Failed to delete AP bill.');
     }
   };
 
@@ -195,13 +287,35 @@ export default function APJournal({ dateFrom, dateTo }) {
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle>New Vendor Bill</CardTitle>
+          <div className="flex items-center justify-between gap-3">
+            <CardTitle>{editingBillId ? 'Edit Vendor Bill' : 'New Vendor Bill'}</CardTitle>
+            {editingBillId && (
+              <Button type="button" variant="outline" size="sm" onClick={resetForm}>
+                <X className="h-4 w-4 mr-1" />
+                Cancel Edit
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
               <Label>Vendor</Label>
-              <Input value={form.vendorName} onChange={(e) => setField('vendorName', e.target.value)} />
+              <select
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={form.vendorName}
+                onChange={(e) => setField('vendorName', e.target.value)}
+              >
+                <option value="">Select vendor...</option>
+                {form.vendorName && !vendors.some((vendor) => vendor.name === form.vendorName) && (
+                  <option value={form.vendorName}>{form.vendorName}</option>
+                )}
+                {vendors.map((vendor) => (
+                  <option key={vendor.id || vendor.name} value={vendor.name}>
+                    {vendor.name}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <Label>Vendor Invoice #</Label>
@@ -286,7 +400,7 @@ export default function APJournal({ dateFrom, dateTo }) {
             </div>
             <Button onClick={submitBill} disabled={saving}>
               <Paperclip className="h-4 w-4 mr-2" />
-              Create AP Bill
+              {editingBillId ? 'Update AP Bill' : 'Create AP Bill'}
             </Button>
           </div>
         </CardContent>
@@ -373,10 +487,20 @@ export default function APJournal({ dateFrom, dateTo }) {
                       </td>
                       <td className="p-4">
                         {bill.status !== 'POSTED' ? (
-                          <Button size="sm" onClick={() => approvePost(bill.id)}>
-                            <CheckCircle2 className="h-4 w-4 mr-1" />
-                            Approve/Post
-                          </Button>
+                          <div className="flex flex-wrap gap-2">
+                            <Button size="sm" variant="outline" onClick={() => editBill(bill.id)} disabled={loadingBillId === bill.id}>
+                              <Edit className="h-4 w-4 mr-1" />
+                              Edit
+                            </Button>
+                            <Button size="sm" onClick={() => approvePost(bill.id)}>
+                              <CheckCircle2 className="h-4 w-4 mr-1" />
+                              Approve/Post
+                            </Button>
+                            <Button size="sm" variant="destructive" onClick={() => removeBill(bill)}>
+                              <Trash2 className="h-4 w-4 mr-1" />
+                              Delete
+                            </Button>
+                          </div>
                         ) : (
                           <span className="text-xs text-muted-foreground">JE {bill.postedJournalEntryId}</span>
                         )}

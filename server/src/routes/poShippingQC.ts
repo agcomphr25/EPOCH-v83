@@ -16,6 +16,7 @@ import {
   reverseP1ShipmentRevenueDraftOrEntry,
 } from '../services/p1ShipmentRevenueService';
 import { buildRevenueDimensionTags } from '../services/productionLineAccounting';
+import { deriveP1ProductionStatus } from '../utils/p1ProductionStatus';
 
 const router = Router();
 
@@ -2610,7 +2611,7 @@ router.post(
       const updateResult = await pool.query(
         `
       UPDATE production_orders 
-      SET production_status = 'QC_PASSED',
+      SET production_status = 'LAID_UP',
           current_department = 'Shipping QC',
           shipped_at = NULL,
           is_fulfilled = false,
@@ -2770,10 +2771,19 @@ router.post('/toggle-fulfilled', authenticateToken, async (req, res) => {
         continue;
       }
 
-      // Update production status to SHIPPED or back to previous status
+      const nextProductionStatus = deriveP1ProductionStatus({
+        currentDepartment: order.currentDepartment,
+        isFulfilled: shouldFulfill,
+        currentStatus: order.productionStatus,
+        preserveCancelled: true,
+      });
+
+      // Update production status to SHIPPED or back to the status implied by its department.
       await storage.updateProductionOrder(order.id, {
-        productionStatus: shouldFulfill ? 'SHIPPED' : 'PENDING',
+        productionStatus: nextProductionStatus,
         shippedAt: shouldFulfill ? shippedAt : null,
+        isFulfilled: shouldFulfill,
+        fulfilledDate: shouldFulfill ? shippedAt : null,
       });
 
       if (shouldFulfill && order.poId) shippedPoIds.add(order.poId);
@@ -2905,13 +2915,13 @@ router.post('/reset-fulfilled', authenticateToken, async (req, res) => {
     let updateQuery = `
       UPDATE production_orders 
       SET 
-        production_status = 'QC_PASSED',
+        production_status = 'LAID_UP',
         current_department = 'Shipping QC',
         shipped_at = NULL,
         is_fulfilled = false,
         fulfilled_date = NULL,
         updated_at = NOW()
-      WHERE (production_status = 'Shipped' OR is_fulfilled = true)
+      WHERE (UPPER(production_status) = 'SHIPPED' OR is_fulfilled = true)
     `;
 
     const params: any[] = [];
@@ -2924,13 +2934,13 @@ router.post('/reset-fulfilled', authenticateToken, async (req, res) => {
       updateQuery = `
         UPDATE production_orders 
         SET 
-          production_status = 'QC_PASSED',
+          production_status = 'LAID_UP',
           current_department = 'Shipping QC',
           shipped_at = NULL,
           is_fulfilled = false,
           fulfilled_date = NULL,
           updated_at = NOW()
-        WHERE (production_status = 'Shipped' OR is_fulfilled = true)
+        WHERE (UPPER(production_status) = 'SHIPPED' OR is_fulfilled = true)
         AND po_item_id IN (
           SELECT poi.id FROM purchase_order_items poi
           JOIN purchase_orders po ON poi.po_id = po.id
@@ -3724,6 +3734,8 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
           await storage.updateProductionOrder(detail.order.id, {
             productionStatus: 'SHIPPED',
             shippedAt,
+            isFulfilled: true,
+            fulfilledDate: shippedAt,
           });
           console.log(`✅ Order ${detail.order.orderId} marked as SHIPPED`);
           const poId = detail.order?.poId ?? (detail.order as any)?.po_id;

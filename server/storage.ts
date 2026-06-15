@@ -771,6 +771,7 @@ import {
 import { DEFAULT_SESSIONS_LIMIT } from './src/constants/sessions';
 import { userHasScopedCapability as _userHasScopedCapability } from './src/services/permissionService';
 import { formatDates } from './utils/formatDates';
+import { deriveP1ProductionStatus } from './src/utils/p1ProductionStatus';
 import { ensureP2PurchaseOrderReadSchema } from './src/lib/p2PurchaseOrderReadiness';
 import {
   laborEntryDraftsTable,
@@ -13209,6 +13210,7 @@ export class DatabaseStorage implements IStorage {
       'productionStatus', 'laidUpAt', 'shippedAt', 'notes', 'createdAt', 'updatedAt',
       'priorityScore', 'currentPipelineConfig', 'hasP1Priority', 'currentDepartment',
       'materialCanonical', 'sourceSnapshot',
+      'isFulfilled', 'fulfilledDate',
       'finishAcceptedAt', 'finishAcceptedBy',
       'status', 'assignedTechnician', 'finishCompletedAt',
     ]);
@@ -14691,17 +14693,11 @@ export class DatabaseStorage implements IStorage {
           departmentHistory: updatedHistory,
           updatedAt: now,
         };
-        const normalizedNextDepartment = String(nextDept).trim().toLowerCase();
-        if (normalizedNextDepartment === 'p1 production queue') {
-          productionCompletionUpdates.productionStatus = 'PENDING';
-        } else if (
-          normalizedNextDepartment === 'fulfilled' ||
-          normalizedNextDepartment === 'shipped'
-        ) {
-          productionCompletionUpdates.productionStatus = 'SHIPPED';
-        } else {
-          productionCompletionUpdates.productionStatus = 'LAID_UP';
-        }
+        productionCompletionUpdates.productionStatus = deriveP1ProductionStatus({
+          currentDepartment: nextDept,
+          isFulfilled: (productionOrderRecord as any).isFulfilled,
+          currentStatus: productionOrderRecord.productionStatus,
+        });
         
         // Map completion timestamps for production orders (using schema column names)
         // Schema columns: barcodeCompletedAt, layupCompletedAt, cncCompletedAt, 

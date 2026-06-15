@@ -750,6 +750,7 @@ export default function ProductionStationDashboard() {
         <StartProductionTimerModal
           open={startModalOpen}
           onOpenChange={setStartModalOpen}
+          enableTravelerScan
         />
 
         {detailedRuns.length === 0 ? (

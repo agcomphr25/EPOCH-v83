@@ -164,20 +164,8 @@ async function ensureApBillTables() {
   await pgPool.query(`CREATE INDEX IF NOT EXISTS ap_vendor_bills_vendor_po_idx ON ap_vendor_bills(vendor_po_id, vendor_po_number)`);
   await pgPool.query(`CREATE INDEX IF NOT EXISTS ap_vendor_bill_allocations_bill_idx ON ap_vendor_bill_allocations(bill_id)`);
 
-  await pgPool.query(`
-    INSERT INTO chart_of_accounts (
-      account_number, account_name, account_type, normal_balance, financial_statement_section,
-      cost_pool, default_allowability, default_direct_indirect, billing_treatment,
-      requires_documentation, requires_review, system_controlled, is_active, description
-    )
-    VALUES (
-      '54500', 'Direct Customer Freight Expense', 'EXPENSE', 'DEBIT', 'Cost of Goods Sold',
-      'DIRECT', 'ALLOWABLE', 'DIRECT', 'BILLABLE',
-      TRUE, FALSE, FALSE, TRUE, 'Outbound customer freight and shipping costs traceable to a customer PO, project, lot, or invoice'
-    )
-    ON CONFLICT (account_number) DO NOTHING
-  `);
   const accountSeeds = [
+    ['54500', 'Direct Customer Freight Expense', 'Outbound customer freight and shipping costs traceable to a customer PO, project, lot, or invoice'],
     ['54000', 'Direct Materials Expense', 'Direct material costs traceable to a customer PO, project, vendor PO, or work order'],
     ['62000', 'Shop Supplies Expense', 'Shop supplies and indirect consumables approved through AP vendor bills'],
     ['70000', 'General Administrative Expense', 'General administrative vendor bill costs'],
@@ -190,10 +178,14 @@ async function ensureApBillTables() {
         cost_pool, default_allowability, default_direct_indirect, billing_treatment,
         requires_documentation, requires_review, system_controlled, is_active, description
       )
-      VALUES ($1, $2, 'EXPENSE', 'DEBIT', 'Cost of Goods Sold',
+      SELECT $1, $2, 'EXPENSE', 'DEBIT', 'Cost of Goods Sold',
         'DIRECT', 'ALLOWABLE', 'DIRECT', 'BILLABLE',
-        TRUE, FALSE, FALSE, TRUE, $3)
-      ON CONFLICT (account_number) DO NOTHING
+        TRUE, FALSE, FALSE, TRUE, $3
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM chart_of_accounts
+        WHERE account_number = $1 OR account_name = $2
+      )
     `, [accountNumber, accountName, description]);
   }
 }
@@ -307,7 +299,7 @@ router.get('/customers', requireAdminOrOwner, h(async (req, res) => {
   const like = `%${search}%`;
   const includeP1 = source === 'ALL' || source === 'P1' || source === 'GENERAL';
   const includeP2 = source === 'ALL' || source === 'P2' || source === 'GENERAL';
-  const queries = [];
+  const queries: Array<Promise<{ rows: any[] }>> = [];
 
   if (includeP1) {
     queries.push(pgPool.query(`
@@ -341,10 +333,31 @@ router.get('/customers', requireAdminOrOwner, h(async (req, res) => {
       ORDER BY customer_name
       LIMIT 50
     `, [search, like]));
+    queries.push(pgPool.query(`
+      SELECT DISTINCT ON (po.customer_id, po.customer_name)
+        'P2' AS source,
+        po.customer_id AS id,
+        po.customer_name AS name,
+        po.po_number AS "customerKey",
+        NULL::text AS email,
+        po.status <> 'CANCELED' AS "isActive"
+      FROM p2_purchase_orders po
+      WHERE ($1 = '' OR po.customer_name ILIKE $2 OR po.customer_id ILIKE $2 OR po.po_number ILIKE $2)
+        AND COALESCE(po.status, 'OPEN') <> 'CANCELED'
+      ORDER BY po.customer_id, po.customer_name, po.updated_at DESC NULLS LAST
+      LIMIT 50
+    `, [search, like]));
   }
 
   const results = await Promise.all(queries);
-  const rows = results.flatMap((result) => result.rows);
+  const seen = new Set<string>();
+  const rows: any[] = [];
+  for (const row of results.flatMap((result) => result.rows)) {
+    const key = `${row.source}:${row.id || row.name}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    rows.push(row);
+  }
   rows.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
   res.json(rows.slice(0, 100));
 }));

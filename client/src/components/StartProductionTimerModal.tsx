@@ -31,6 +31,46 @@ interface ProductionProgram {
   isActive: boolean;
 }
 
+interface TravelerScanResolution {
+  scannedTravelerBarcode: string;
+  traveler: {
+    id: string;
+    travelerNumber: string;
+    serialNumber: string | null;
+    lotNumber: string | null;
+    partNumber: string | null;
+    partName: string | null;
+    status: string;
+  } | null;
+  serializedItem: {
+    id: string;
+    barcode: string;
+    travelerBarcode: string | null;
+    serialNumber: string | null;
+    partNumber: string | null;
+    partName: string | null;
+    currentDepartment: string | null;
+    status: string;
+    mandrelNumber: number | null;
+  } | null;
+  routing: {
+    id: string;
+    ovenCureDepartment: string | null;
+    timerConfig: {
+      enabled?: boolean;
+      defaultProgramId?: string;
+      defaultProgramName?: string;
+    } | null;
+  } | null;
+  timerDefaults: {
+    serialNumber: string;
+    mandrelNumber: number | null;
+    programId: string | null;
+    programName: string | null;
+    departmentName: string | null;
+  };
+}
+
 
 interface StartProductionTimerModalProps {
   open: boolean;
@@ -44,6 +84,7 @@ interface StartProductionTimerModalProps {
   travelerStepId?: string;
   travelerTaskId?: string;
   departmentName?: string;
+  enableTravelerScan?: boolean;
 }
 
 export default function StartProductionTimerModal({
@@ -58,13 +99,17 @@ export default function StartProductionTimerModal({
   travelerStepId,
   travelerTaskId,
   departmentName,
+  enableTravelerScan = false,
 }: StartProductionTimerModalProps) {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const travelerInputRef = useRef<HTMLInputElement>(null);
   const serialInputRef = useRef<HTMLInputElement>(null);
 
+  const [travelerBarcode, setTravelerBarcode] = useState('');
+  const [resolvedTraveler, setResolvedTraveler] = useState<TravelerScanResolution | null>(null);
   const [programId, setProgramId] = useState('');
   const [serialNumber, setSerialNumber] = useState('');
   const [description, setDescription] = useState('');
@@ -75,6 +120,7 @@ export default function StartProductionTimerModal({
   const [scannedBy, setScannedBy] = useState('');
   const [isScanning, setIsScanning] = useState(false);
   const [barcodeSupported, setBarcodeSupported] = useState(false);
+  const [isResolvingTraveler, setIsResolvingTraveler] = useState(false);
 
   const { data: programs, isLoading: programsLoading } = useQuery<ProductionProgram[]>({
     queryKey: ['/api/production/timers/programs'],
@@ -96,13 +142,17 @@ export default function StartProductionTimerModal({
         setProgramId(defaultProgramId);
       }
       setTimeout(() => {
-        if (!defaultSerialNumber) {
+        if (enableTravelerScan && !defaultSerialNumber) {
+          travelerInputRef.current?.focus();
+        } else if (!defaultSerialNumber) {
           serialInputRef.current?.focus();
         }
       }, 100);
     } else {
       stopScanning();
       setProgramId('');
+      setTravelerBarcode('');
+      setResolvedTraveler(null);
       setSerialNumber('');
       setDescription('');
       setMandrelNumber('');
@@ -111,7 +161,43 @@ export default function StartProductionTimerModal({
       setNotes('');
       setScannedBy('');
     }
-  }, [open, defaultSerialNumber, defaultProgramId]);
+  }, [open, defaultSerialNumber, defaultProgramId, enableTravelerScan]);
+
+  const applyTravelerResolution = (resolution: TravelerScanResolution) => {
+    setResolvedTraveler(resolution);
+    setTravelerBarcode(resolution.scannedTravelerBarcode);
+    setSerialNumber(resolution.timerDefaults.serialNumber || '');
+    if (resolution.timerDefaults.mandrelNumber) {
+      setMandrelNumber(String(resolution.timerDefaults.mandrelNumber));
+    }
+    if (resolution.timerDefaults.programId) {
+      setProgramId(resolution.timerDefaults.programId);
+    }
+  };
+
+  const resolveTravelerScan = async (scanValue: string) => {
+    const trimmed = scanValue.trim();
+    if (!trimmed) return;
+
+    setIsResolvingTraveler(true);
+    try {
+      const resolution = await apiRequest(`/api/production/timers/traveler-scan/${encodeURIComponent(trimmed)}`);
+      applyTravelerResolution(resolution);
+      toast({
+        title: 'Traveler loaded',
+        description: resolution.traveler?.travelerNumber || resolution.serializedItem?.barcode || trimmed,
+      });
+    } catch (error: any) {
+      setResolvedTraveler(null);
+      toast({
+        title: 'Traveler not found',
+        description: error.message || 'Scan a traveler or serialized item barcode.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsResolvingTraveler(false);
+    }
+  };
 
   const startMutation = useMutation({
     mutationFn: async () => {
@@ -124,11 +210,14 @@ export default function StartProductionTimerModal({
           mandrelNumber: parseInt(mandrelNumber, 10),
           ovenNumber: parseInt(ovenNumber, 10),
           ovenSlot,
+          ...(resolvedTraveler?.scannedTravelerBarcode || travelerBarcode.trim()
+            ? { scannedTravelerBarcode: resolvedTraveler?.scannedTravelerBarcode || travelerBarcode.trim() }
+            : {}),
           ...(scannedBy.trim() ? { badgeId: scannedBy.trim() } : badgeId ? { badgeId } : {}),
-          ...(travelerId ? { travelerId } : {}),
+          ...(travelerId || resolvedTraveler?.traveler?.id ? { travelerId: travelerId || resolvedTraveler?.traveler?.id } : {}),
           ...(travelerStepId ? { travelerStepId } : {}),
           ...(travelerTaskId ? { travelerTaskId } : {}),
-          ...(departmentName ? { departmentName } : {}),
+          ...(departmentName || resolvedTraveler?.timerDefaults.departmentName ? { departmentName: departmentName || resolvedTraveler?.timerDefaults.departmentName } : {}),
         }),
       });
     },
@@ -178,7 +267,11 @@ export default function StartProductionTimerModal({
             const barcodes = await detector.detect(videoRef.current);
             if (barcodes.length > 0) {
               const scannedValue = barcodes[0].rawValue;
-              setSerialNumber(scannedValue);
+              if (enableTravelerScan) {
+                await resolveTravelerScan(scannedValue);
+              } else {
+                setSerialNumber(scannedValue);
+              }
               toast({ title: 'Barcode scanned', description: scannedValue });
               stopScanning();
               return;
@@ -245,6 +338,59 @@ export default function StartProductionTimerModal({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {enableTravelerScan && (
+            <div className="space-y-2">
+              <Label htmlFor="travelerBarcode">Traveler Scan</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="travelerBarcode"
+                  ref={travelerInputRef}
+                  value={travelerBarcode}
+                  onChange={(e) => setTravelerBarcode(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      resolveTravelerScan(travelerBarcode);
+                    }
+                  }}
+                  placeholder="Scan traveler barcode"
+                  className="flex-1 font-mono"
+                  autoComplete="off"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => resolveTravelerScan(travelerBarcode)}
+                  disabled={!travelerBarcode.trim() || isResolvingTraveler}
+                >
+                  {isResolvingTraveler ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <ScanBarcode className="w-4 h-4" />
+                  )}
+                </Button>
+              </div>
+              {resolvedTraveler && (
+                <div className="rounded-md border bg-slate-50 p-3 text-sm space-y-1">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="font-medium">
+                      {resolvedTraveler.traveler?.travelerNumber || resolvedTraveler.serializedItem?.barcode}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {resolvedTraveler.timerDefaults.departmentName || resolvedTraveler.serializedItem?.currentDepartment || 'No department'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                    <span>Serial: {resolvedTraveler.timerDefaults.serialNumber || '-'}</span>
+                    <span>Part: {resolvedTraveler.serializedItem?.partNumber || resolvedTraveler.traveler?.partNumber || '-'}</span>
+                    <span>Mandrel: {resolvedTraveler.timerDefaults.mandrelNumber || 'Enter below'}</span>
+                    <span>Program: {resolvedTraveler.timerDefaults.programName || 'Select below'}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="space-y-2">
             <Label htmlFor="program">Program *</Label>
             <Select value={programId} onValueChange={setProgramId}>

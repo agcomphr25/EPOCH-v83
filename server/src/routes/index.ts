@@ -148,6 +148,10 @@ import digitalSignaturesRoutes from './digitalSignatures';
 import traceabilityRoutes from './traceability';
 import cycleCountsRoutes from './cycleCounts';
 import { auditService } from '../services/auditService';
+import {
+  deriveP1ProductionStatus,
+  isClosedP1PurchaseOrderStatus,
+} from '../utils/p1ProductionStatus';
 import mediaRoutes from './media';
 import voiceNotesRoutes from './voiceNotes';
 import epochCopilotRoutes from './epochCopilot';
@@ -9270,7 +9274,9 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
               const today = new Date();
               return expectedDue > today ? expectedDue : today;
             })(),
-            productionStatus: 'PENDING' as const,
+            productionStatus: deriveP1ProductionStatus({
+              currentDepartment: initialDepartment,
+            }),
             currentDepartment: initialDepartment,
             poId: poId,
             poItemId: item.id,
@@ -9406,7 +9412,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     }
   });
 
-  // Reactivate a cancelled production order (sets status back to PENDING)
+  // Reactivate a cancelled production order into the status implied by its department.
   app.post('/api/production-orders/:orderId/reactivate', async (req, res) => {
     try {
       const { storage } = await import('../../storage');
@@ -9421,15 +9427,12 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       }
 
       const reactivatedDepartment = order.currentDepartment || 'P1 Production Queue';
-      const normalizedDepartment = reactivatedDepartment.trim().toLowerCase();
-      const reactivatedStatus =
-        normalizedDepartment === 'p1 production queue'
-          ? 'PENDING'
-          : normalizedDepartment === 'fulfilled' ||
-            normalizedDepartment === 'shipped' ||
-            (order as any).isFulfilled
-            ? 'SHIPPED'
-            : 'LAID_UP';
+      const reactivatedStatus = deriveP1ProductionStatus({
+        currentDepartment: reactivatedDepartment,
+        isFulfilled: (order as any).isFulfilled,
+        currentStatus: order.productionStatus,
+        preserveCancelled: false,
+      });
 
       const updated = await storage.updateProductionOrder(order.id, {
         productionStatus: reactivatedStatus,
@@ -9439,8 +9442,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       let purchaseOrderReopened = false;
       if (order.poId) {
         const parentPO = await storage.getPurchaseOrder(order.poId);
-        const parentStatus = String(parentPO?.status || '').trim().toUpperCase();
-        if (['CLOSED', 'COMPLETE', 'COMPLETED'].includes(parentStatus)) {
+        const parentStatus = parentPO?.status;
+        if (isClosedP1PurchaseOrderStatus(parentStatus)) {
           await storage.updatePurchaseOrder(order.poId, { status: 'OPEN' });
           purchaseOrderReopened = true;
           console.log(`🔄 Reopened ${parentStatus} PO ${order.poId} after reactivating production order ${orderId}`);
@@ -11494,6 +11497,13 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
             updatedAt: currentTimestamp,
             departmentHistory,
           };
+          if (isProductionOrder) {
+            updateData.productionStatus = deriveP1ProductionStatus({
+              currentDepartment: toDepartment,
+              isFulfilled: (order as any).isFulfilled,
+              currentStatus: (order as any).productionStatus,
+            });
+          }
 
           // Set completion timestamp for previous department
           if (currentDept === 'Barcode') {

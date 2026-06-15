@@ -710,7 +710,12 @@ function P2BillingTasks({
             {!compact && items.length > 0 && (
               <div className="space-y-2">
                 {items.slice(0, 5).map((item) => {
-                  const displayNumber = item.invoiceNumber || item.lotNumberId || item.shipmentNumber || 'Pending invoice';
+                  const displayNumber = item.invoiceNumber || 'Invoice not created';
+                  const statusText = item.invoiceNumber
+                    ? item.invoiceStatus === 'SENT'
+                      ? 'Invoice sent - waiting on posting'
+                      : `Invoice ${item.invoiceStatus || 'not posted'}`
+                    : 'No invoice created yet';
                   return (
                     <div key={item.id} className="flex items-center gap-2 rounded-md bg-white/70 border px-2 py-2">
                       <div className="flex-1 min-w-0">
@@ -719,16 +724,9 @@ function P2BillingTasks({
                           {item.poNumber ? ` - PO ${item.poNumber}` : ''}
                         </p>
                         <p className="text-xs text-muted-foreground truncate">
-                          {item.invoiceNumber
-                            ? `Lot ${item.lotNumberId || item.shipmentNumber || 'unassigned'} - invoice ${item.invoiceStatus || 'not posted'}`
-                            : 'No invoice created yet'}
+                          {statusText}
                         </p>
                       </div>
-                      <Link href={`/p2/packing-slip/${item.id}`}>
-                        <Button variant="ghost" size="sm">
-                          <ExternalLink className="h-4 w-4" />
-                        </Button>
-                      </Link>
                       {item.invoiceId ? (
                         <Link href={`/finance/invoices/${item.invoiceId}`}>
                           <Button variant="outline" size="sm">

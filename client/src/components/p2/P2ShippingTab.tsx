@@ -407,13 +407,22 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
     poNumber: string,
     serialIds: string[],
     billingAssignments: { serializedItemId: string; allocationId: string }[] = [],
+    billingBucketOverrides: {
+      poItemId: number;
+      bucketLabel: string;
+      description?: string;
+      customerPoLine?: string;
+      quantityAuthorized?: number;
+      unitPrice?: number;
+      serialIds?: string[];
+    }[] = [],
   ) => {
     if (serialIds.length === 0) return;
     setCreatingShipmentFor(poNumber);
     try {
       const lot = await apiRequest('/api/p2/lots', {
         method: 'POST',
-        body: JSON.stringify({ serialIds, createdBy: 'shipping', billingAssignments }),
+        body: JSON.stringify({ serialIds, createdBy: 'shipping', billingAssignments, billingBucketOverrides }),
       });
       const slip = await apiRequest('/api/p2/packing-slips', {
         method: 'POST',
@@ -556,12 +565,12 @@ export default function P2ShippingTab({ initialPO, initialUnits, selectedPOIds =
       {summaryModalPO && (
         <ShipmentSummaryModal
           serials={summaryModalSerials}
-          onConfirm={(billingAssignments) => {
+          onConfirm={(billingAssignments, billingBucketOverrides) => {
             const po = summaryModalPO!;
             const ids = summaryModalSerials.map((s) => s.id);
             setSummaryModalPO(null);
             setSummaryModalSerials([]);
-            handleCreateShipment(po, ids, billingAssignments);
+            handleCreateShipment(po, ids, billingAssignments, billingBucketOverrides);
           }}
           onCancel={() => {
             setSummaryModalPO(null);

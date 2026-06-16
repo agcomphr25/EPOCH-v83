@@ -27,15 +27,17 @@ export function deriveP1ProductionStatus({
     return 'CANCELLED';
   }
 
+  if (isFulfilled) {
+    return 'SHIPPED';
+  }
+
   const department = normalizeDepartment(currentDepartment);
 
   if (department === 'p1 production queue') {
     return 'PENDING';
   }
 
-  if (!department) {
-    return isFulfilled ? 'SHIPPED' : 'PENDING';
-  }
+  if (!department) return 'PENDING';
 
   if (department === 'fulfilled' || department === 'shipped') {
     return 'SHIPPED';

@@ -38,7 +38,7 @@ describe('deriveP1ProductionStatus', () => {
     })).toBe('SHIPPED');
   });
 
-  it('uses the fulfilled flag only when the department is blank', () => {
+  it('maps fulfilled items to shipped regardless of department', () => {
     expect(deriveP1ProductionStatus({
       currentDepartment: null,
       currentStatus: 'PENDING',
@@ -49,7 +49,7 @@ describe('deriveP1ProductionStatus', () => {
       currentDepartment: 'Shipping QC',
       currentStatus: 'SHIPPED',
       isFulfilled: true,
-    })).toBe('IN_PROGRESS');
+    })).toBe('SHIPPED');
   });
 
   it('preserves cancelled status unless the caller is explicitly reactivating', () => {

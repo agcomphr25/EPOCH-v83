@@ -136,6 +136,11 @@ function isP1InProgressStatus(status?: string | null): boolean {
   return ['IN_PROGRESS', 'LAID_UP'].includes(String(status || '').toUpperCase());
 }
 
+function getP1EffectiveStatus(order: any): string {
+  if (order?.isFulfilled) return 'SHIPPED';
+  return String(order?.productionStatus || '');
+}
+
 function getStatusLabel(filter: StatusFilter): string {
   switch (filter) {
     case 'ALL': return 'All Orders';
@@ -171,10 +176,10 @@ function ProductionStatusBadge({ productionOrders, totalPoQuantity, poNumber }: 
   }
 
   const total = productionOrders.length;
-  const pending = productionOrders.filter((o: any) => o.productionStatus === 'PENDING').length;
-  const inProgress = productionOrders.filter((o: any) => isP1InProgressStatus(o.productionStatus)).length;
-  const shipped = productionOrders.filter((o: any) => o.productionStatus === 'SHIPPED').length;
-  const cancelled = productionOrders.filter((o: any) => o.productionStatus === 'CANCELLED').length;
+  const pending = productionOrders.filter((o: any) => getP1EffectiveStatus(o) === 'PENDING').length;
+  const inProgress = productionOrders.filter((o: any) => isP1InProgressStatus(getP1EffectiveStatus(o))).length;
+  const shipped = productionOrders.filter((o: any) => getP1EffectiveStatus(o) === 'SHIPPED').length;
+  const cancelled = productionOrders.filter((o: any) => getP1EffectiveStatus(o) === 'CANCELLED').length;
   const active = total - cancelled;
   // Flag when orders outnumber the PO quantity — likely indicates duplicate generation
   const hasDuplicates = totalPoQuantity > 0 && total > totalPoQuantity;
@@ -182,8 +187,8 @@ function ProductionStatusBadge({ productionOrders, totalPoQuantity, poNumber }: 
   const filteredOrders = selectedFilter === null ? [] : selectedFilter === 'ALL'
     ? productionOrders
     : selectedFilter === 'IN_PROGRESS'
-      ? productionOrders.filter((o: any) => isP1InProgressStatus(o.productionStatus))
-      : productionOrders.filter((o: any) => o.productionStatus === selectedFilter);
+      ? productionOrders.filter((o: any) => isP1InProgressStatus(getP1EffectiveStatus(o)))
+      : productionOrders.filter((o: any) => getP1EffectiveStatus(o) === selectedFilter);
 
   const modalTitle = selectedFilter
     ? `${poNumber} — ${getStatusLabel(selectedFilter)} (${filteredOrders.length})`
@@ -300,7 +305,7 @@ function ProductionStatusBadge({ productionOrders, totalPoQuantity, poNumber }: 
                       </td>
                       <td className="p-3">{order.itemName || '—'}</td>
                       <td className="p-3 text-muted-foreground">{order.itemCode || order.materialCanonical || '—'}</td>
-                      <td className="p-3">{getOrderStatusBadge(order.productionStatus)}</td>
+                      <td className="p-3">{getOrderStatusBadge(getP1EffectiveStatus(order))}</td>
                       <td className="p-3 text-muted-foreground">{order.currentDepartment || '—'}</td>
                       <td className="p-3 text-muted-foreground">{order.operatorName || order.operator || order.assignedOperator || '—'}</td>
                       <td className="p-3 text-muted-foreground">
@@ -364,7 +369,7 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
     // Group orders by linked PO line, excluding cancelled orders.
     const groups = new Map<string, any[]>();
     for (const order of productionOrders) {
-      if (order.productionStatus === 'CANCELLED') continue;
+      if (getP1EffectiveStatus(order) === 'CANCELLED') continue;
       const key = order.poItemId
         ? `item:${order.poItemId}`
         : `name:${normalizeLineName(order.itemName || order.itemCode)}`;
@@ -383,8 +388,8 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
   }, [productionOrders, poItems]);
 
   const duplicateCount = duplicateOrderIds.size;
-  const activeOrders = (productionOrders as any[]).filter((order: any) => order.productionStatus !== 'CANCELLED');
-  const cancelledOrders = (productionOrders as any[]).filter((order: any) => order.productionStatus === 'CANCELLED');
+  const activeOrders = (productionOrders as any[]).filter((order: any) => getP1EffectiveStatus(order) !== 'CANCELLED');
+  const cancelledOrders = (productionOrders as any[]).filter((order: any) => getP1EffectiveStatus(order) === 'CANCELLED');
   const visibleProductionOrders =
     visibilityFilter === 'all'
       ? (productionOrders as any[])
@@ -636,13 +641,13 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
                     </div>
                   </td>
                   <td className="p-3">{order.materialCanonical || '—'}</td>
-                  <td className="p-3">{getStatusBadge(order.productionStatus)}</td>
+                  <td className="p-3">{getStatusBadge(getP1EffectiveStatus(order))}</td>
                   <td className="p-3 text-muted-foreground">{order.currentDepartment || '—'}</td>
                   <td className="p-3 text-muted-foreground">
                     {order.createdAt ? formatDate(new Date(order.createdAt), 'M/d/yy') : '—'}
                   </td>
                   <td className="p-3 flex items-center gap-1">
-                    {order.productionStatus === 'CANCELLED' ? (
+                    {getP1EffectiveStatus(order) === 'CANCELLED' ? (
                       <Button
                         variant="outline"
                         size="sm"
@@ -656,7 +661,7 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
                           : <RotateCcw className="h-3.5 w-3.5 mr-1" />}
                         Reactivate
                       </Button>
-                    ) : order.productionStatus !== 'SHIPPED' && (
+                    ) : getP1EffectiveStatus(order) !== 'SHIPPED' && (
                       <>
                       <Button
                         variant="outline"

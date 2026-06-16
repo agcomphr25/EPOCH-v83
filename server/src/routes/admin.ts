@@ -30,10 +30,12 @@ const p1ProductionStatusExpectationSql = `
   CASE
     WHEN UPPER(COALESCE(NULLIF(TRIM(production_status), ''), '')) = 'CANCELLED'
       THEN 'CANCELLED'
+    WHEN COALESCE(is_fulfilled, false)
+      THEN 'SHIPPED'
     WHEN LOWER(COALESCE(NULLIF(TRIM(current_department), ''), '')) = 'p1 production queue'
       THEN 'PENDING'
     WHEN COALESCE(NULLIF(TRIM(current_department), ''), '') = ''
-      THEN CASE WHEN COALESCE(is_fulfilled, false) THEN 'SHIPPED' ELSE 'PENDING' END
+      THEN 'PENDING'
     WHEN LOWER(COALESCE(NULLIF(TRIM(current_department), ''), '')) IN ('fulfilled', 'shipped')
       THEN 'SHIPPED'
     ELSE 'IN_PROGRESS'

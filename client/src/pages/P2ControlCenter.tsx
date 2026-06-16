@@ -102,6 +102,7 @@ export default function P2ControlCenter() {
   const tabFromUrl = urlParams.get('tab');
   const poFromUrl = urlParams.get('po') || undefined;
   const poIdFromUrl = urlParams.get('poId') ? Number(urlParams.get('poId')) : null;
+  const editPoIdFromUrl = urlParams.get('editPoId') ? Number(urlParams.get('editPoId')) : null;
   const unitsFromUrl = urlParams.get('units') || undefined;
   // Project context: passed from PM/WAD project workflow cards
   const wadProjectId = urlParams.get('projectId') || '';
@@ -122,6 +123,7 @@ export default function P2ControlCenter() {
   const [showBOMWizard, setShowBOMWizard] = useState(false);
   const [selectedPOForBOM, setSelectedPOForBOM] = useState<number | null>(null);
   const [selectedPOIds, setSelectedPOIds] = useState<number[]>([]);
+  const [editingPOId, setEditingPOId] = useState<number | null>(editPoIdFromUrl);
 
   const { data: stats } = useQuery<P2Stats>({
     queryKey: ['/api/p2/control-center/stats'],
@@ -216,8 +218,24 @@ export default function P2ControlCenter() {
     setSelectedPOIds([]);
   };
 
+  useEffect(() => {
+    if (!editPoIdFromUrl || !Number.isFinite(editPoIdFromUrl)) return;
+    setEditingPOId(editPoIdFromUrl);
+    setShowBOMWizard(false);
+    setSelectedPOForBOM(null);
+    setShowPOWizard(true);
+  }, [editPoIdFromUrl]);
+
   const handlePOCreated = (poId: number) => {
     setShowPOWizard(false);
+    if (editingPOId) {
+      setEditingPOId(null);
+      setSelectedPOIds([poId]);
+      queryClient.invalidateQueries({ queryKey: ['/api/p2-purchase-orders-bypass'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center/po-statuses'] });
+      setActiveTab('setup');
+      return;
+    }
     setSelectedPOForBOM(poId);
     setShowBOMWizard(true);
   };
@@ -266,8 +284,12 @@ export default function P2ControlCenter() {
     return (
       <div className="container mx-auto p-6">
         <P2POCreationWizard 
+          existingPoId={editingPOId}
           onComplete={handlePOCreated}
-          onCancel={() => setShowPOWizard(false)}
+          onCancel={() => {
+            setShowPOWizard(false);
+            setEditingPOId(null);
+          }}
         />
       </div>
     );

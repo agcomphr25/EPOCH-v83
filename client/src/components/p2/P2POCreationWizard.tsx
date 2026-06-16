@@ -82,6 +82,7 @@ interface P2POCreationWizardProps {
   initialProjectId?: string | null;
   initialCustomerId?: string | null;
   sourcePO?: SourcePO | null;
+  existingPoId?: number | null;
 }
 
 const NO_PROJECT_VALUE = '__no_project__';
@@ -125,8 +126,10 @@ export default function P2POCreationWizard({
   initialProjectId,
   initialCustomerId,
   sourcePO,
+  existingPoId,
 }: P2POCreationWizardProps) {
-  const isReviseMode = !!sourcePO;
+  const isReviseMode = !!sourcePO || !!existingPoId;
+  const activeSourcePoId = existingPoId ?? sourcePO?.id ?? null;
   const [currentStep, setCurrentStep] = useState(0);
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const [poDetails, setPODetails] = useState<z.infer<typeof detailsSchema> | null>(null);
@@ -165,10 +168,20 @@ export default function P2POCreationWizard({
     queryKey: ['/api/projects'],
   });
 
+  const { data: loadedRevisionPO } = useQuery<any>({
+    queryKey: ['/api/p2-purchase-orders', existingPoId],
+    queryFn: () => fetch(`/api/p2-purchase-orders/${existingPoId}`, { credentials: 'include' }).then((r) => {
+      if (!r.ok) throw new Error('Failed to load revised PO');
+      return r.json();
+    }),
+    enabled: !!existingPoId,
+  });
+  const editableSourcePO = loadedRevisionPO || sourcePO || null;
+
   // Fetch source PO items when in revise mode
   const { data: sourcePOItems = [] } = useQuery<any[]>({
-    queryKey: ['/api/p2-purchase-order-items', sourcePO?.id],
-    enabled: !!sourcePO?.id,
+    queryKey: ['/api/p2-purchase-order-items', activeSourcePoId],
+    enabled: !!activeSourcePoId && !loadedRevisionPO?.lineItems,
   });
 
   const openProjects = projects.filter((project) =>
@@ -256,44 +269,45 @@ export default function P2POCreationWizard({
 
   // Pre-populate from sourcePO (revise mode) — wait for all data to load
   useEffect(() => {
-    if (!sourcePO || sourcePrefilled || p2Customers.length === 0 || employees.length === 0) return;
+    if (!editableSourcePO || sourcePrefilled || p2Customers.length === 0 || employees.length === 0) return;
 
     // Customer
-    const customer = p2Customers.find((c: any) => c.customerId === sourcePO.customerId);
+    const customer = p2Customers.find((c: any) => c.customerId === editableSourcePO.customerId);
     if (customer) {
       customerForm.setValue('customerId', customer.id.toString());
       setSelectedCustomer(customer);
     }
 
     // PO Details — strip any -RX revision suffix from PO number for the new revision
-    const basePONumber = sourcePO.poNumber.replace(/-R[A-Z]+$/, '');
+    const basePONumber = existingPoId ? editableSourcePO.poNumber : editableSourcePO.poNumber.replace(/-R[A-Z]+$/, '');
     detailsForm.setValue('customerPONumber', basePONumber);
-    if (sourcePO.expectedDelivery) {
-      detailsForm.setValue('dueDate', sourcePO.expectedDelivery.split('T')[0]);
+    if (editableSourcePO.expectedDelivery) {
+      detailsForm.setValue('dueDate', editableSourcePO.expectedDelivery.split('T')[0]);
     }
-    if (sourcePO.toleranceAuthorizerId) {
-      detailsForm.setValue('toleranceAuthorizer', sourcePO.toleranceAuthorizerId.toString());
+    if (editableSourcePO.toleranceAuthorizerId) {
+      detailsForm.setValue('toleranceAuthorizer', editableSourcePO.toleranceAuthorizerId.toString());
     }
-    if (sourcePO.notes) {
-      detailsForm.setValue('notes', sourcePO.notes);
+    if (editableSourcePO.notes) {
+      detailsForm.setValue('notes', editableSourcePO.notes);
     }
-    if (sourcePO.assignedToId) {
-      detailsForm.setValue('assignedTo', sourcePO.assignedToId.toString());
+    if (editableSourcePO.assignedToId) {
+      detailsForm.setValue('assignedTo', editableSourcePO.assignedToId.toString());
     }
-    if (sourcePO.productionLeadId) {
-      detailsForm.setValue('productionLead', sourcePO.productionLeadId.toString());
+    if (editableSourcePO.productionLeadId) {
+      detailsForm.setValue('productionLead', editableSourcePO.productionLeadId.toString());
     }
-    if (sourcePO.projectId) {
-      detailsForm.setValue('projectId', sourcePO.projectId);
+    if (editableSourcePO.projectId) {
+      detailsForm.setValue('projectId', editableSourcePO.projectId);
     }
 
     setSourcePrefilled(true);
-  }, [sourcePO, p2Customers, employees, sourcePrefilled]);
+  }, [detailsForm, editableSourcePO, existingPoId, p2Customers, employees, sourcePrefilled]);
 
   // Pre-populate line items from source PO items
   useEffect(() => {
-    if (!sourcePO || sourcePOItems.length === 0) return;
-    const items: LineItem[] = sourcePOItems.map((item: any) => {
+    const sourceItems = loadedRevisionPO?.lineItems || loadedRevisionPO?.items || sourcePOItems;
+    if (!editableSourcePO || sourceItems.length === 0) return;
+    const items: LineItem[] = sourceItems.map((item: any) => {
       const revMatch = String(item.partNumber || '').match(/ Rev (.+)$/);
       const sku = String(item.partNumber || '').replace(/ Rev .+$/, '') || '';
       const revision = revMatch?.[1] || 'A';
@@ -309,7 +323,7 @@ export default function P2POCreationWizard({
       };
     });
     setLineItems(items);
-  }, [sourcePO, sourcePOItems]);
+  }, [editableSourcePO, loadedRevisionPO, sourcePOItems]);
 
   const createPOMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -343,29 +357,25 @@ export default function P2POCreationWizard({
 
   const revisePOMutation = useMutation({
     mutationFn: async (data: any) => {
-      const po = await apiRequest(`/api/p2-purchase-orders-bypass/${sourcePO!.id}/revise`, {
-        method: 'POST',
+      if (!activeSourcePoId) throw new Error('No revised PO selected');
+      return apiRequest(`/api/p2-purchase-orders-bypass/${activeSourcePoId}`, {
+        method: 'PUT',
         body: data,
       });
-      await apiRequest(`/api/p2-purchase-orders/${po.id}/lock`, {
-        method: 'POST',
-        body: { employeeId: data.toleranceAuthorizerId || null },
-      });
-      return po;
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['/api/p2-purchase-orders-bypass'] });
       queryClient.invalidateQueries({ queryKey: ['/api/p2/control-center'] });
       toast({
-        title: 'PO Revision Created & Locked',
-        description: `Revision ${data.poNumber} has been issued and locked.`,
+        title: 'PO Revision Updated',
+        description: `Revision ${data.poNumber} has been updated.`,
       });
       onComplete(data.id);
     },
     onError: (error: Error) => {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to create revision',
+        description: error.message || 'Failed to update revision',
         variant: 'destructive',
       });
     },
@@ -468,6 +478,7 @@ export default function P2POCreationWizard({
       projectId: poDetails?.projectId && poDetails.projectId !== NO_PROJECT_VALUE ? poDetails.projectId : null,
       projectName: poDetails?.projectName || null,
       lineItems: lineItems.map((item) => ({
+        id: Number(item.id) || undefined,
         partNumber: `${item.sku}${item.revision ? ` Rev ${item.revision}` : ''}`,
         description: item.description,
         quantity: item.quantity,
@@ -501,7 +512,7 @@ export default function P2POCreationWizard({
           <div>
             <CardTitle className="flex items-center gap-2">
               {isReviseMode && <GitBranch className="h-5 w-5 text-blue-600" />}
-              {isReviseMode ? 'Revise PO' : 'Create New P2 Order'}
+              {isReviseMode ? 'Edit PO Revision' : 'Create New P2 Order'}
             </CardTitle>
             <CardDescription>
               Step {currentStep + 1} of {steps.length}: {steps[currentStep].title}
@@ -516,11 +527,11 @@ export default function P2POCreationWizard({
           <Alert className="mt-2 border-blue-200 bg-blue-50 dark:bg-blue-950/20">
             <GitBranch className="h-4 w-4 text-blue-600" />
             <AlertDescription className="text-blue-800 dark:text-blue-200">
-              Issuing a new revision of <strong>{sourcePO.poNumber}</strong>
-              {sourcePO.revisionNumber !== undefined && sourcePO.revisionNumber > 0
-                ? ` (Rev ${sourcePO.revisionNumber})`
+              Editing PO revision <strong>{editableSourcePO?.poNumber}</strong>
+              {editableSourcePO?.revisionNumber !== undefined && editableSourcePO.revisionNumber > 0
+                ? ` (Rev ${editableSourcePO.revisionNumber})`
                 : ' (Rev 0 — original)'}
-              . The previous revision will be marked superseded and a new locked revision will be created.
+              . Changes update this revision and keep existing production work tied to it.
             </AlertDescription>
           </Alert>
         )}
@@ -905,11 +916,11 @@ export default function P2POCreationWizard({
                 }
                 <div>
                   <h4 className={`font-medium ${isReviseMode ? 'text-blue-800 dark:text-blue-200' : 'text-amber-800 dark:text-amber-200'}`}>
-                    {isReviseMode ? 'Ready to Issue Revision' : 'Ready to Create Order'}
+                    {isReviseMode ? 'Ready to Update Revision' : 'Ready to Create Order'}
                   </h4>
                   <p className={`text-sm mt-1 ${isReviseMode ? 'text-blue-700 dark:text-blue-300' : 'text-amber-700 dark:text-amber-300'}`}>
                     {isReviseMode
-                      ? `This will create a new locked revision of ${sourcePO.poNumber}. The previous revision will be marked superseded.`
+                      ? `This will update ${editableSourcePO?.poNumber}. Existing project work orders stay attached to this PO revision.`
                       : "Once created, the order will be locked and you'll be prompted to set up BOMs for each part."}
                   </p>
                 </div>
@@ -937,7 +948,7 @@ export default function P2POCreationWizard({
                   {isReviseMode && (
                     <p><span className="text-muted-foreground">New Revision:</span>{' '}
                       <Badge variant="outline" className="border-blue-500 text-blue-700 text-xs">
-                        Rev {(sourcePO.revisionNumber ?? 0) + 1}
+                        Rev {editableSourcePO?.revisionNumber ?? 0}
                       </Badge>
                     </p>
                   )}
@@ -997,8 +1008,8 @@ export default function P2POCreationWizard({
                 className={isReviseMode ? 'bg-blue-600 hover:bg-blue-700' : ''}
               >
                 {isPending
-                  ? (isReviseMode ? 'Issuing Revision...' : 'Creating...')
-                  : (isReviseMode ? 'Issue Revision & Lock' : 'Create Order & Setup BOMs')}
+                  ? (isReviseMode ? 'Updating Revision...' : 'Creating...')
+                  : (isReviseMode ? 'Update Revised PO' : 'Create Order & Setup BOMs')}
                 {isReviseMode ? <GitBranch className="ml-2 h-4 w-4" /> : <Check className="ml-2 h-4 w-4" />}
               </Button>
             </div>

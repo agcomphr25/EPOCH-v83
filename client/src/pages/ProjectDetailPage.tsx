@@ -662,7 +662,7 @@ export default function ProjectDetailPage() {
           createdByDisplayName: currentUser?.username,
         },
       }),
-    onSuccess: () => {
+    onSuccess: (createdRevision: ProjectRevision) => {
       queryClient.invalidateQueries({ queryKey: ['/api/projects', id] });
       queryClient.invalidateQueries({ queryKey: ['/api/projects', id, 'revisions'] });
       queryClient.invalidateQueries({ queryKey: ['/api/p2-purchase-orders-bypass'] });
@@ -676,6 +676,9 @@ export default function ProjectDetailPage() {
         revisedLineItems: [],
       });
       toast({ title: 'Revision created', description: 'Project revision history was updated.' });
+      if (createdRevision?.has_po_change && createdRevision.new_po_id) {
+        setLocation(`/p2-control-center?tab=setup&projectId=${encodeURIComponent(id || '')}&editPoId=${encodeURIComponent(String(createdRevision.new_po_id))}`);
+      }
     },
     onError: (err: any) => toast({ title: 'Revision failed', description: err?.message || 'Could not create revision.', variant: 'destructive' }),
   });
@@ -3216,7 +3219,7 @@ export default function ProjectDetailPage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => setLocation(`/p2-control-center?tab=pos&search=${encodeURIComponent(revision.new_po_number || String(revision.new_po_id))}`)}
+                          onClick={() => setLocation(`/p2-control-center?tab=setup&projectId=${encodeURIComponent(project.id)}&editPoId=${encodeURIComponent(String(revision.new_po_id))}`)}
                         >
                           <Edit className="h-4 w-4 mr-2" />
                           Edit Revised PO

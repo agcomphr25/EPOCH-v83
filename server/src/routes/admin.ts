@@ -32,6 +32,9 @@ const p1ProductionStatusExpectationSql = `
       THEN 'CANCELLED'
     WHEN COALESCE(is_fulfilled, false)
       THEN 'SHIPPED'
+    WHEN UPPER(COALESCE(NULLIF(TRIM(production_status), ''), '')) = 'SHIPPED'
+      AND LOWER(COALESCE(NULLIF(TRIM(current_department), ''), '')) = 'shipping qc'
+      THEN 'SHIPPED'
     WHEN LOWER(COALESCE(NULLIF(TRIM(current_department), ''), '')) = 'p1 production queue'
       THEN 'PENDING'
     WHEN COALESCE(NULLIF(TRIM(current_department), ''), '') = ''
@@ -57,6 +60,27 @@ const p1ProductionStatusCandidateSql = `
     updated_at
   FROM production_orders
   WHERE po_id IS NOT NULL
+`;
+
+const p1FulfilledDepartmentCandidateSql = `
+  SELECT
+    id,
+    order_id,
+    po_id,
+    po_item_id,
+    po_number,
+    customer_name,
+    current_department,
+    production_status,
+    is_fulfilled,
+    shipped_at,
+    fulfilled_date,
+    'Shipped' AS expected_department,
+    updated_at
+  FROM production_orders
+  WHERE po_id IS NOT NULL
+    AND UPPER(COALESCE(NULLIF(TRIM(production_status), ''), '')) = 'SHIPPED'
+    AND LOWER(COALESCE(NULLIF(TRIM(current_department), ''), '')) = 'shipping qc'
 `;
 
 router.post(
@@ -1275,7 +1299,14 @@ router.post(
     const maxApply = clampPositiveInteger(req.body?.maxApply ?? req.query.maxApply, 500, 5000);
 
     try {
-      const [statusSummaryResult, statusSamplesResult, poReopenSummaryResult, poReopenSamplesResult] =
+      const [
+        statusSummaryResult,
+        statusSamplesResult,
+        fulfilledDepartmentSummaryResult,
+        fulfilledDepartmentSamplesResult,
+        poReopenSummaryResult,
+        poReopenSamplesResult,
+      ] =
         await Promise.all([
           pool.query(`
             WITH candidates AS (${p1ProductionStatusCandidateSql})
@@ -1306,6 +1337,36 @@ router.post(
               updated_at
             FROM candidates
             WHERE UPPER(COALESCE(NULLIF(TRIM(current_status), ''), '')) <> expected_status
+            ORDER BY updated_at DESC NULLS LAST, id ASC
+            LIMIT $1
+          `, [sampleLimit]),
+          pool.query(`
+            WITH candidates AS (${p1FulfilledDepartmentCandidateSql})
+            SELECT
+              COALESCE(NULLIF(TRIM(current_department), ''), '(blank)') AS current_department,
+              COALESCE(NULLIF(TRIM(production_status), ''), '(blank)') AS production_status,
+              expected_department,
+              COUNT(*)::int AS count
+            FROM candidates
+            GROUP BY 1, 2, 3
+            ORDER BY count DESC, current_department ASC, production_status ASC
+          `),
+          pool.query(`
+            WITH candidates AS (${p1FulfilledDepartmentCandidateSql})
+            SELECT
+              id,
+              order_id,
+              po_id,
+              po_item_id,
+              po_number,
+              customer_name,
+              current_department,
+              production_status,
+              expected_department,
+              shipped_at,
+              fulfilled_date,
+              updated_at
+            FROM candidates
             ORDER BY updated_at DESC NULLS LAST, id ASC
             LIMIT $1
           `, [sampleLimit]),
@@ -1342,6 +1403,7 @@ router.post(
         ]);
 
       let appliedProductionStatusRows: any[] = [];
+      let appliedFulfilledDepartmentRows: any[] = [];
       let reopenedPurchaseOrders: any[] = [];
 
       if (apply) {
@@ -1407,9 +1469,43 @@ router.post(
               po.updated_at
           `, [maxApply]);
 
+          const fulfilledDepartmentApplyResult = await client.query(`
+            WITH candidates AS (${p1FulfilledDepartmentCandidateSql}),
+            mismatches AS (
+              SELECT *
+              FROM candidates
+              ORDER BY updated_at DESC NULLS LAST, id ASC
+              LIMIT $1
+            )
+            UPDATE production_orders prod
+            SET current_department = mismatches.expected_department,
+                production_status = 'SHIPPED',
+                is_fulfilled = true,
+                shipped_at = COALESCE(prod.shipped_at, prod.fulfilled_date, NOW()),
+                fulfilled_date = COALESCE(prod.fulfilled_date, prod.shipped_at, NOW()),
+                updated_at = NOW()
+            FROM mismatches
+            WHERE prod.id = mismatches.id
+            RETURNING
+              prod.id,
+              prod.order_id,
+              prod.po_id,
+              prod.po_item_id,
+              prod.po_number,
+              prod.customer_name,
+              mismatches.current_department AS previous_department,
+              prod.current_department AS new_department,
+              prod.production_status AS new_status,
+              prod.is_fulfilled,
+              prod.shipped_at,
+              prod.fulfilled_date,
+              prod.updated_at
+          `, [maxApply]);
+
           await client.query('COMMIT');
 
           appliedProductionStatusRows = rowsOf(statusRepairApplyResult);
+          appliedFulfilledDepartmentRows = rowsOf(fulfilledDepartmentApplyResult);
           reopenedPurchaseOrders = rowsOf(poReopenApplyResult);
 
           try {
@@ -1429,6 +1525,10 @@ router.post(
                   before: rowsOf(statusSummaryResult),
                   after: appliedProductionStatusRows.length,
                 },
+                fulfilledDepartmentRows: {
+                  before: rowsOf(fulfilledDepartmentSummaryResult),
+                  after: appliedFulfilledDepartmentRows.length,
+                },
                 reopenedPurchaseOrders: {
                   before: rowsOf(poReopenSummaryResult),
                   after: reopenedPurchaseOrders.length,
@@ -1437,6 +1537,7 @@ router.post(
               payload: {
                 maxApply,
                 appliedProductionStatusCount: appliedProductionStatusRows.length,
+                appliedFulfilledDepartmentCount: appliedFulfilledDepartmentRows.length,
                 reopenedPurchaseOrderCount: reopenedPurchaseOrders.length,
               } as any,
             });
@@ -1462,6 +1563,12 @@ router.post(
           samples: rowsOf(statusSamplesResult),
           appliedCount: appliedProductionStatusRows.length,
           appliedRows: appliedProductionStatusRows,
+        },
+        fulfilledDepartmentRepairs: {
+          summary: rowsOf(fulfilledDepartmentSummaryResult),
+          samples: rowsOf(fulfilledDepartmentSamplesResult),
+          appliedCount: appliedFulfilledDepartmentRows.length,
+          appliedRows: appliedFulfilledDepartmentRows,
         },
         purchaseOrderReopens: {
           summary: rowsOf(poReopenSummaryResult),

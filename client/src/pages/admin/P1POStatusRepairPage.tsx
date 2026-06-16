@@ -56,6 +56,28 @@ interface PoReopenSummaryRow {
   active_production_order_count: number;
 }
 
+interface FulfilledDepartmentSummaryRow {
+  current_department: string;
+  production_status: string;
+  expected_department: string;
+  count: number;
+}
+
+interface FulfilledDepartmentSampleRow {
+  id: number;
+  order_id: string;
+  po_id: number;
+  po_item_id: number | null;
+  po_number: string | null;
+  customer_name: string | null;
+  current_department: string | null;
+  production_status: string | null;
+  expected_department: string;
+  shipped_at: string | null;
+  fulfilled_date: string | null;
+  updated_at: string | null;
+}
+
 interface PoReopenSampleRow {
   po_id: number;
   po_number: string;
@@ -84,6 +106,17 @@ interface AppliedPoRow {
   active_production_order_count: number;
 }
 
+interface AppliedFulfilledDepartmentRow {
+  id: number;
+  order_id: string;
+  po_id: number;
+  po_item_id: number | null;
+  previous_department: string | null;
+  new_department: string;
+  new_status: string;
+  is_fulfilled: boolean;
+}
+
 interface RepairResponse {
   success: boolean;
   mode: 'dry_run' | 'applied';
@@ -95,6 +128,12 @@ interface RepairResponse {
     samples: StatusSampleRow[];
     appliedCount: number;
     appliedRows: AppliedStatusRow[];
+  };
+  fulfilledDepartmentRepairs?: {
+    summary: FulfilledDepartmentSummaryRow[];
+    samples: FulfilledDepartmentSampleRow[];
+    appliedCount: number;
+    appliedRows: AppliedFulfilledDepartmentRow[];
   };
   purchaseOrderReopens: {
     summary: PoReopenSummaryRow[];
@@ -159,7 +198,7 @@ export default function P1POStatusRepairPage() {
       setLastApplied(data);
       toast({
         title: 'P1 PO repair applied',
-        description: `${data.productionStatusRepairs.appliedCount} production statuses updated, ${data.purchaseOrderReopens.appliedCount} POs reopened.`,
+        description: `${data.productionStatusRepairs.appliedCount} production statuses updated, ${data.fulfilledDepartmentRepairs?.appliedCount ?? 0} shipped rows marked fulfilled, ${data.purchaseOrderReopens.appliedCount} POs reopened.`,
       });
       query.refetch();
     },
@@ -181,7 +220,11 @@ export default function P1POStatusRepairPage() {
     () => countRows(data?.purchaseOrderReopens.summary ?? []),
     [data?.purchaseOrderReopens.summary],
   );
-  const totalRepairCount = statusRepairCount + poReopenCount;
+  const fulfilledDepartmentRepairCount = useMemo(
+    () => countRows(data?.fulfilledDepartmentRepairs?.summary ?? []),
+    [data?.fulfilledDepartmentRepairs?.summary],
+  );
+  const totalRepairCount = statusRepairCount + fulfilledDepartmentRepairCount + poReopenCount;
   const isBusy = query.isFetching || applyMutation.isPending;
 
   return (
@@ -248,8 +291,8 @@ export default function P1POStatusRepairPage() {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Apply P1 PO Status Repair</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This will update up to {maxApply} drifted production statuses and reopen up to {maxApply} closed or complete POs with active production items.
-                    Departments, shipment dates, item descriptions, item stock fields, and shipment records will not be changed.
+                    This will update up to {maxApply} drifted production statuses, mark shipped P1 rows as fulfilled and move them to Shipped, and reopen up to {maxApply} closed or complete POs with active production items.
+                    Item descriptions, item stock fields, and shipment records will not be changed.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -276,12 +319,18 @@ export default function P1POStatusRepairPage() {
         </Card>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-muted-foreground">Production Status Repairs</CardTitle>
           </CardHeader>
           <CardContent className="text-3xl font-semibold">{statusRepairCount}</CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-muted-foreground">Shipped Rows In QC</CardTitle>
+          </CardHeader>
+          <CardContent className="text-3xl font-semibold">{fulfilledDepartmentRepairCount}</CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
@@ -297,6 +346,7 @@ export default function P1POStatusRepairPage() {
             {lastApplied ? (
               <div className="space-y-1">
                 <div>{lastApplied.productionStatusRepairs.appliedCount} statuses</div>
+                <div>{lastApplied.fulfilledDepartmentRepairs?.appliedCount ?? 0} shipped rows fulfilled</div>
                 <div>{lastApplied.purchaseOrderReopens.appliedCount} POs reopened</div>
               </div>
             ) : (
@@ -377,6 +427,72 @@ export default function P1POStatusRepairPage() {
                 </TableRow>
               ))}
               {!query.isFetching && (data?.productionStatusRepairs.samples ?? []).length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center text-muted-foreground py-6">No sample rows.</TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Shipped Rows Still In Shipping QC</CardTitle>
+          <CardDescription>SHIPPED P1 production rows in Shipping QC should be marked fulfilled, moved to Shipped, and display as SHIPPED in P1 PO Manage Items.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Current Department</TableHead>
+                <TableHead>Production Status</TableHead>
+                <TableHead>Repair Department</TableHead>
+                <TableHead className="text-right">Count</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {(data?.fulfilledDepartmentRepairs?.summary ?? []).map((row) => (
+                <TableRow key={`${row.current_department}-${row.production_status}-${row.expected_department}`}>
+                  <TableCell>{row.current_department}</TableCell>
+                  <TableCell><StatusBadge value={row.production_status} /></TableCell>
+                  <TableCell>{row.expected_department}</TableCell>
+                  <TableCell className="text-right tabular-nums">{row.count}</TableCell>
+                </TableRow>
+              ))}
+              {!query.isFetching && (data?.fulfilledDepartmentRepairs?.summary ?? []).length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center text-muted-foreground py-6">No shipped rows are still in Shipping QC.</TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Order</TableHead>
+                <TableHead>PO</TableHead>
+                <TableHead>Customer</TableHead>
+                <TableHead>Current Department</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Fulfilled</TableHead>
+                <TableHead>Shipped</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {(data?.fulfilledDepartmentRepairs?.samples ?? []).map((row) => (
+                <TableRow key={row.id}>
+                  <TableCell className="font-mono text-xs">{row.order_id}</TableCell>
+                  <TableCell>{row.po_number || row.po_id}</TableCell>
+                  <TableCell>{row.customer_name || '-'}</TableCell>
+                  <TableCell>{row.current_department || '-'}</TableCell>
+                  <TableCell><StatusBadge value={row.production_status} /></TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{formatDateTime(row.fulfilled_date)}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{formatDateTime(row.shipped_at)}</TableCell>
+                </TableRow>
+              ))}
+              {!query.isFetching && (data?.fulfilledDepartmentRepairs?.samples ?? []).length === 0 && (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center text-muted-foreground py-6">No sample rows.</TableCell>
                 </TableRow>

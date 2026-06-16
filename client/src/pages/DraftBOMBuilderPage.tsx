@@ -210,6 +210,7 @@ type AssemblyTreeNode = {
   isManufactured: boolean;
   quantityRequired: number;
   orderStatus: BomStatus;
+  displayStatus: BomStatus;
   manufactureState: AssemblyManufactureState;
   inventoryItem: InventoryItemOption | null;
   stockState: AssemblyStockState;
@@ -801,6 +802,10 @@ function manufactureStateFor(orderStatus: BomStatus, children: AssemblyTreeNode[
   return 'waiting';
 }
 
+function assemblyDisplayStatus(orderStatus: BomStatus, children: AssemblyTreeNode[], manufactureState: AssemblyManufactureState): BomStatus {
+  return children.length > 0 && manufactureState === 'ready' ? 'On Hand' : orderStatus;
+}
+
 function assemblyPartKey(partNumber: string) {
   return normalizedAssemblyPartKey(partNumber);
 }
@@ -864,6 +869,9 @@ function buildAssemblyTreeNode(
     ];
   });
   const orderStatus = assemblyOrderStatus(part, partsRequestLines);
+  const manufactureState = childComponents.length === 0 && !isOnHandStatus(orderStatus) && !isOrderedStatus(orderStatus)
+    ? 'needs-plan'
+    : manufactureStateFor(orderStatus, nodeChildren);
 
   return {
     id: `${entry?.bom.id ?? part.id}-${part.partNumber}-${nodeQuantity}`,
@@ -873,9 +881,8 @@ function buildAssemblyTreeNode(
     isManufactured: 'isManufactured' in part ? part.isManufactured : true,
     quantityRequired: nodeQuantity,
     orderStatus,
-    manufactureState: childComponents.length === 0 && !isOnHandStatus(orderStatus) && !isOrderedStatus(orderStatus)
-      ? 'needs-plan'
-      : manufactureStateFor(orderStatus, nodeChildren),
+    displayStatus: assemblyDisplayStatus(orderStatus, nodeChildren, manufactureState),
+    manufactureState,
     inventoryItem,
     stockState: assemblyStockState(inventoryItem, nodeQuantity),
     availableQuantity: inventoryStockQuantity(inventoryItem),
@@ -3914,8 +3921,8 @@ function AssemblyTreeWorkspace({ tree }: { tree: AssemblyTreeNode[] }) {
     (acc, node) => {
       const nodes = flattenAssemblyTree(node);
       acc.ready += nodes.filter((item) => item.manufactureState === 'ready').length;
-      acc.ordered += nodes.filter((item) => isOrderedStatus(item.orderStatus)).length;
-      acc.onHand += nodes.filter((item) => item.orderStatus === 'On Hand').length;
+      acc.ordered += nodes.filter((item) => isOrderedStatus(item.displayStatus)).length;
+      acc.onHand += nodes.filter((item) => item.displayStatus === 'On Hand').length;
       acc.needsPlan += nodes.filter((item) => item.manufactureState === 'needs-plan').length;
       return acc;
     },
@@ -3972,7 +3979,7 @@ function AssemblyTreeAccordionNode({ node, depth }: { node: AssemblyTreeNode; de
         On hand {node.availableQuantity.toLocaleString(undefined, { maximumFractionDigits: 2 })}
       </div>
       <ManufactureStateBadge state={node.manufactureState} />
-      <StatusBadge status={node.orderStatus} />
+      <StatusBadge status={node.displayStatus} />
     </div>
   );
 

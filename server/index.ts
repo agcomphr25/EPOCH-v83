@@ -2052,15 +2052,33 @@ async function initializeBackgroundServices() {
           ADD COLUMN IF NOT EXISTS po_id INTEGER REFERENCES p2_purchase_orders(id)
         `);
         await db.execute(sqlLot`
+          ALTER TABLE p2_lot_numbers
+          ADD COLUMN IF NOT EXISTS po_item_id INTEGER REFERENCES p2_purchase_order_items(id)
+        `);
+        await db.execute(sqlLot`
           UPDATE p2_lot_numbers l
           SET po_id = po.id
           FROM p2_purchase_orders po
           WHERE l.po_number = po.po_number
             AND l.po_id IS NULL
         `);
-        console.log('✅ Ensured p2_lot_numbers has po_id FK (backfilled from po_number)');
+        await db.execute(sqlLot`
+          UPDATE p2_lot_numbers l
+          SET po_item_id = matched.po_item_id
+          FROM (
+            SELECT l2.id AS lot_id, MIN(si.po_item_id) AS po_item_id
+            FROM p2_lot_numbers l2
+            JOIN p2_serialized_items si
+              ON l2.serialized_item_ids ? si.id::text
+            WHERE l2.po_item_id IS NULL
+            GROUP BY l2.id
+            HAVING COUNT(DISTINCT si.po_item_id) = 1
+          ) matched
+          WHERE l.id = matched.lot_id
+        `);
+        console.log('✅ Ensured p2_lot_numbers has PO FK columns (backfilled from po_number/serials)');
       } catch (lotPoIdError: any) {
-        console.warn('⚠️ p2_lot_numbers po_id migration warning:', lotPoIdError?.message);
+        console.warn('⚠️ p2_lot_numbers PO FK migration warning:', lotPoIdError?.message);
       }
 
       // GIN index on serialized_item_ids for fast JSONB containment lookups

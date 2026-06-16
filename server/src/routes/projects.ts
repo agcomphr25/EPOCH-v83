@@ -54,6 +54,14 @@ async function ensureProjectRevisionSchema() {
       ADD COLUMN IF NOT EXISTS current_revision_label TEXT NOT NULL DEFAULT 'Rev 0'
   `);
   await pool.query(`
+    ALTER TABLE projects
+      ADD COLUMN IF NOT EXISTS p2_po_item_id INTEGER REFERENCES p2_purchase_order_items(id)
+  `);
+  await pool.query(`
+    ALTER TABLE projects
+      ADD COLUMN IF NOT EXISTS p2_billing_allocation_id UUID
+  `);
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS project_revisions (
       id SERIAL PRIMARY KEY,
       project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -100,6 +108,8 @@ async function ensureProjectClinSchema() {
   await pool.query(`CREATE INDEX IF NOT EXISTS project_clins_active_idx ON project_clins(active)`);
   projectClinSchemaReady = true;
 }
+
+const uuidStringSchema = z.string().uuid();
 
 const projectClinBodySchema = z.object({
   clinNumber: z.string().trim().min(1),
@@ -751,11 +761,71 @@ router.post('/:id/revisions', async (req, res) => {
   }
 });
 
+router.get('/:id/po-link-options', async (req, res) => {
+  try {
+    const projectId = req.params.id;
+    const poId = Number(req.query.poId);
+    if (!Number.isFinite(poId) || poId <= 0) {
+      return res.status(400).json({ message: 'poId is required' });
+    }
+
+    const project = await storage.getProject(projectId);
+    if (!project) return res.status(404).json({ message: 'Project not found' });
+
+    const poRows = await pool.query<{ id: number; project_id: string | null }>(
+      `SELECT id, project_id::text FROM p2_purchase_orders WHERE id = $1`,
+      [poId]
+    );
+    if (poRows.length === 0) return res.status(404).json({ message: 'PO not found' });
+    if (poRows[0].project_id && poRows[0].project_id !== projectId) {
+      return res.status(409).json({ message: 'This PO is already assigned to another project' });
+    }
+
+    const poItems = await pool.query(
+      `SELECT id, po_id AS "poId", part_number AS "partNumber", part_name AS "partName", quantity, unit_price AS "unitPrice"
+         FROM p2_purchase_order_items
+        WHERE po_id = $1
+        ORDER BY id`,
+      [poId]
+    );
+
+    const allocationTable = await pool.query<{ exists: string | null }>(
+      `SELECT to_regclass('public.p2_billing_allocations')::text AS exists`
+    );
+
+    let billingBuckets: any[] = [];
+    if (allocationTable[0]?.exists) {
+      billingBuckets = await pool.query(
+        `SELECT id::text,
+                po_id AS "poId",
+                po_item_id AS "poItemId",
+                bucket_label AS "bucketLabel",
+                description,
+                customer_po_line AS "customerPoLine",
+                quantity_authorized AS "quantityAuthorized",
+                unit_price AS "unitPrice"
+           FROM p2_billing_allocations
+          WHERE po_id = $1
+            AND active = true
+          ORDER BY created_at, bucket_label`,
+        [poId]
+      );
+    }
+
+    res.json({ poItems, billingBuckets });
+  } catch (error) {
+    console.error('Error fetching project PO link options:', error);
+    res.status(500).json({ message: 'Failed to fetch PO link options' });
+  }
+});
+
 router.post('/:id/link-po', async (req, res) => {
   try {
     const { id } = req.params;
     const schema = z.object({
       poId: z.number().int().positive(),
+      poItemId: z.number().int().positive().optional().nullable(),
+      billingAllocationId: uuidStringSchema.optional().nullable(),
       reason: z.string().min(3).optional(),
       createdBy: z.number().int().positive().optional(),
       createdByDisplayName: z.string().optional(),
@@ -764,7 +834,7 @@ router.post('/:id/link-po', async (req, res) => {
     if (!parsed.success) {
       return res.status(400).json({ message: 'Invalid request: poId (number) required', errors: parsed.error.errors });
     }
-    const { poId, reason, createdBy, createdByDisplayName } = parsed.data;
+    const { poId, poItemId, billingAllocationId, reason, createdBy, createdByDisplayName } = parsed.data;
 
     const project = await storage.getProject(id);
     if (!project) return res.status(404).json({ message: 'Project not found' });
@@ -785,6 +855,44 @@ router.post('/:id/link-po', async (req, res) => {
     if (poRows.length === 0) return res.status(404).json({ message: 'PO not found' });
     if (poRows[0].project_id && poRows[0].project_id !== id) {
       return res.status(409).json({ message: 'This PO is already assigned to another project' });
+    }
+
+    let poItemLabel: string | null = null;
+    if (poItemId) {
+      const itemRows = await pool.query<{ id: number; part_number: string; part_name: string }>(
+        `SELECT id, part_number, part_name FROM p2_purchase_order_items WHERE id = $1 AND po_id = $2`,
+        [poItemId, poId]
+      );
+      if (itemRows.length === 0) {
+        return res.status(400).json({ message: 'Selected PO item does not belong to this PO' });
+      }
+      poItemLabel = `${itemRows[0].part_number} - ${itemRows[0].part_name}`;
+    }
+
+    let billingBucketLabel: string | null = null;
+    if (billingAllocationId) {
+      const allocationTable = await pool.query<{ exists: string | null }>(
+        `SELECT to_regclass('public.p2_billing_allocations')::text AS exists`
+      );
+      if (!allocationTable[0]?.exists) {
+        return res.status(400).json({ message: 'No CLIN/bucket allocations exist for this PO yet' });
+      }
+
+      const bucketRows = await pool.query<{ id: string; po_item_id: number | null; bucket_label: string }>(
+        `SELECT id::text, po_item_id, bucket_label
+           FROM p2_billing_allocations
+          WHERE id = $1::uuid
+            AND po_id = $2
+            AND active = true`,
+        [billingAllocationId, poId]
+      );
+      if (bucketRows.length === 0) {
+        return res.status(400).json({ message: 'Selected CLIN/bucket does not belong to this PO' });
+      }
+      if (poItemId && bucketRows[0].po_item_id && bucketRows[0].po_item_id !== poItemId) {
+        return res.status(400).json({ message: 'Selected CLIN/bucket does not belong to this PO item' });
+      }
+      billingBucketLabel = bucketRows[0].bucket_label;
     }
 
     // Ensure no other project already uses this poId
@@ -814,6 +922,8 @@ router.post('/:id/link-po', async (req, res) => {
       const updatedRows = await tx.execute(sql`
         UPDATE projects
            SET po_id = ${poId},
+               p2_po_item_id = ${poItemId ?? null},
+               p2_billing_allocation_id = ${billingAllocationId ?? null}::uuid,
                current_revision_number = ${nextRevision},
                current_revision_label = ${revisionLabel},
                updated_at = NOW()
@@ -847,7 +957,15 @@ router.post('/:id/link-po', async (req, res) => {
           ${revisionSummary}, ${revisionReason},
           ${previousPoId}, ${poId},
           ${createdBy ?? null}, ${createdByDisplayName ?? null},
-          ${JSON.stringify({ source: 'project_po_link', previousPoId, newPoId: poId })}::jsonb
+          ${JSON.stringify({
+            source: 'project_po_link',
+            previousPoId,
+            newPoId: poId,
+            poItemId: poItemId ?? null,
+            billingAllocationId: billingAllocationId ?? null,
+            poItemLabel,
+            billingBucketLabel,
+          })}::jsonb
         )
       `);
 
@@ -870,10 +988,21 @@ router.post('/:id/link-po', async (req, res) => {
     await storage.createProjectActivityLog({
       projectId: id,
       activityType: isRelink ? 'project_po_relinked' : 'project_po_linked',
-      description: `${revisionLabel}: ${revisionSummary}`,
+      description: [
+        `${revisionLabel}: ${revisionSummary}`,
+        poItemLabel ? `item ${poItemLabel}` : null,
+        billingBucketLabel ? `bucket ${billingBucketLabel}` : null,
+      ].filter(Boolean).join(', '),
       performedBy: createdBy,
       performedByDisplayName: createdByDisplayName,
-      metadata: { revisionNumber: nextRevision, previousPoId, newPoId: poId, reason: revisionReason },
+      metadata: {
+        revisionNumber: nextRevision,
+        previousPoId,
+        newPoId: poId,
+        poItemId: poItemId ?? null,
+        billingAllocationId: billingAllocationId ?? null,
+        reason: revisionReason,
+      },
     } as any);
 
     res.json(updated);

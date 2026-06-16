@@ -341,22 +341,33 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
     queryFn: () => fetchPOItems(poId),
   });
 
+  const poItemById = useMemo(() => {
+    return new Map((poItems as PurchaseOrderItem[]).map((item) => [item.id, item]));
+  }, [poItems]);
+
+  const getPoLineDisplayName = (item?: PurchaseOrderItem) =>
+    item?.itemName || item?.itemId || 'Unknown PO line';
+
+  const normalizeLineName = (value?: string | null) =>
+    String(value || '').trim().toUpperCase();
+
   // Build a set of production order IDs that are duplicates.
-  // Group by normalized itemName; expected count = matching PO item quantity.
+  // Group by poItemId; expected count = the linked PO line quantity.
   // Within each group, sort by id ascending (oldest = original); the tail are duplicates.
   const duplicateOrderIds = useMemo((): Set<number> => {
     const result = new Set<number>();
-    // Build expected quantity map: normalized itemName → quantity
+    // Build expected quantity map: poItemId → quantity
     const expectedQty = new Map<string, number>();
     for (const item of poItems as PurchaseOrderItem[]) {
-      const key = (item.itemName || item.stockModelId || item.itemId || '').toLowerCase().trim();
-      if (key) expectedQty.set(key, (expectedQty.get(key) ?? 0) + item.quantity);
+      expectedQty.set(`item:${item.id}`, item.quantity);
     }
-    // Group orders by normalized itemName, excluding cancelled orders
+    // Group orders by linked PO line, excluding cancelled orders.
     const groups = new Map<string, any[]>();
     for (const order of productionOrders) {
       if (order.productionStatus === 'CANCELLED') continue;
-      const key = (order.itemName || order.itemCode || '').toLowerCase().trim();
+      const key = order.poItemId
+        ? `item:${order.poItemId}`
+        : `name:${normalizeLineName(order.itemName || order.itemCode)}`;
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key)!.push(order);
     }
@@ -569,6 +580,7 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
             <thead>
               <tr className="border-b bg-muted/50">
                 <th className="text-left p-3 font-medium">Production Order #</th>
+                <th className="text-left p-3 font-medium">PO Line</th>
                 <th className="text-left p-3 font-medium">Item Name</th>
                 <th className="text-left p-3 font-medium">Material</th>
                 <th className="text-left p-3 font-medium">Status</th>
@@ -580,12 +592,16 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
             <tbody>
               {visibleProductionOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-muted-foreground">
+                  <td colSpan={8} className="p-8 text-center text-muted-foreground">
                     No production orders match this filter.
                   </td>
                 </tr>
               ) : visibleProductionOrders.map((order: any) => {
                 const isDuplicate = duplicateOrderIds.has(order.id);
+                const poLine = order.poItemId ? poItemById.get(order.poItemId) : undefined;
+                const poLineName = getPoLineDisplayName(poLine);
+                const productionName = order.itemName || order.itemCode || '';
+                const itemMismatch = !!poLine && normalizeLineName(productionName) !== normalizeLineName(poLineName);
                 return (
                 <tr
                   key={order.id}
@@ -599,7 +615,26 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
                       <Badge className="bg-orange-200 text-orange-900 text-[10px] ml-1.5 px-1 py-0">DUPE</Badge>
                     )}
                   </td>
-                  <td className="p-3">{order.itemName || '—'}</td>
+                  <td className="p-3">
+                    {poLine ? (
+                      <div className="space-y-0.5">
+                        <div className="font-medium">{poLineName}</div>
+                        <div className="text-xs text-muted-foreground">Line #{poLine.id} · Qty {poLine.quantity}</div>
+                      </div>
+                    ) : (
+                      <Badge variant="outline" className="text-amber-700 border-amber-300">No PO line link</Badge>
+                    )}
+                  </td>
+                  <td className="p-3">
+                    <div className="flex items-center gap-2">
+                      <span>{productionName || '—'}</span>
+                      {itemMismatch && (
+                        <Badge variant="outline" className="text-amber-700 border-amber-300">
+                          Mismatch
+                        </Badge>
+                      )}
+                    </div>
+                  </td>
                   <td className="p-3">{order.materialCanonical || '—'}</td>
                   <td className="p-3">{getStatusBadge(order.productionStatus)}</td>
                   <td className="p-3 text-muted-foreground">{order.currentDepartment || '—'}</td>

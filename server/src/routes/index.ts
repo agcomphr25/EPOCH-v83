@@ -3069,6 +3069,125 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         }
       }
 
+      if (body.isRevisionUpdate === true) {
+        const revisionProjectId = body.projectId || existingPO.projectId || null;
+        const revisionLineItems = Array.isArray(body.lineItems) ? body.lineItems : [];
+        if (revisionProjectId && revisionLineItems.length > 0) {
+          const { pool: dbPool } = await import('../../db');
+          const firstLine = revisionLineItems[0] || {};
+          const revisedPartNumber = String(firstLine.partNumber || firstLine.sku || '').trim() || existingPO.poNumber;
+          const revisedDescription = String(firstLine.description || firstLine.partName || revisedPartNumber).trim();
+          const revisedQuantity = revisionLineItems.reduce(
+            (sum: number, item: any) => sum + (Number(item.quantity) || 0),
+            0
+          ) || 1;
+          const revisedDueDate = body.dueDate || body.expectedDelivery || null;
+          const revisedPartNumbers = Array.from(new Set(
+            revisionLineItems
+              .map((item: any) => String(item.partNumber || item.sku || '').trim())
+              .filter(Boolean)
+          ));
+
+          const canonicalRows = await dbPool.query(
+            `SELECT
+               wo.id::text AS id,
+               wo.work_order_number AS "workOrderNumber",
+               wo.status,
+               COUNT(t.id)::int AS "travelerCount"
+             FROM production_work_orders wo
+             LEFT JOIN travelers t ON t.production_work_order_id = wo.id
+             WHERE wo.project_id = $1::uuid
+             GROUP BY wo.id
+             ORDER BY
+               (COUNT(t.id) > 0) DESC,
+               (COALESCE(UPPER(wo.status), '') NOT IN ('CANCELLED', 'CANCELED', 'COMPLETE', 'COMPLETED', 'CLOSED')) DESC,
+               wo.updated_at DESC NULLS LAST,
+               wo.created_at DESC NULLS LAST
+             LIMIT 1`,
+            [revisionProjectId]
+          );
+          const canonicalWad = canonicalRows.rows[0];
+
+          if (canonicalWad?.id) {
+            await dbPool.query(
+              `UPDATE production_work_orders
+               SET part_number = $2,
+                   description = $3,
+                   quantity = $4,
+                   due_date = $5::date,
+                   wizard_data = jsonb_set(
+                     COALESCE(wizard_data, '{}'::jsonb),
+                     '{poRevisionSync}',
+                     jsonb_build_object(
+                       'poId', $6::int,
+                       'poNumber', $7::text,
+                       'syncedAt', NOW()
+                     ),
+                     true
+                   ),
+                   updated_at = NOW()
+               WHERE id = $1::uuid`,
+              [
+                canonicalWad.id,
+                revisedPartNumber,
+                revisedDescription,
+                revisedQuantity,
+                revisedDueDate,
+                poId,
+                po.poNumber,
+              ]
+            );
+
+            await dbPool.query(
+              `UPDATE travelers
+               SET production_work_order_id = $1::uuid,
+                   updated_at = NOW()
+               WHERE project_id = $2::uuid
+                 AND (production_work_order_id IS NULL OR production_work_order_id <> $1::uuid)`,
+              [canonicalWad.id, revisionProjectId]
+            );
+
+            if (revisedPartNumbers.length > 0) {
+              const duplicateRows = await dbPool.query(
+                `UPDATE production_work_orders wo
+                 SET status = 'CANCELLED',
+                     wizard_data = jsonb_set(
+                       COALESCE(wizard_data, '{}'::jsonb),
+                       '{cancelledByPoRevisionSync}',
+                       jsonb_build_object(
+                         'canonicalWorkOrderId', $1::text,
+                         'poId', $3::int,
+                         'syncedAt', NOW()
+                       ),
+                       true
+                     ),
+                     updated_at = NOW()
+                 WHERE wo.project_id = $2::uuid
+                   AND wo.id <> $1::uuid
+                   AND TRIM(wo.part_number) = ANY($4::text[])
+                   AND COALESCE(UPPER(wo.status), '') NOT IN ('CANCELLED', 'CANCELED', 'COMPLETE', 'COMPLETED', 'CLOSED')
+                   AND NOT EXISTS (
+                     SELECT 1 FROM travelers t WHERE t.production_work_order_id = wo.id
+                   )
+                 RETURNING wo.id::text AS id`,
+                [canonicalWad.id, revisionProjectId, poId, revisedPartNumbers]
+              );
+              const duplicateWadIds = duplicateRows.rows.map((row: any) => String(row.id)).filter(Boolean);
+              if (duplicateWadIds.length > 0) {
+                await dbPool.query(
+                  `UPDATE manufacturing_queue
+                   SET source_id = $1,
+                       updated_at = NOW()
+                   WHERE source_type = 'production_work_order'
+                     AND source_id = ANY($2::text[])`,
+                  [canonicalWad.id, duplicateWadIds]
+                );
+              }
+            }
+          }
+        }
+      }
+
       console.log('Updated P2 purchase order:', po.id);
       res.json(po);
     } catch (_error) {

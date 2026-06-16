@@ -1105,6 +1105,10 @@ router.get('/:projectId/summary', h(async (req, res) => {
         AND NOT (
           work_order_number LIKE 'WAD-%'
           AND status NOT IN ('COMPLETE', 'COMPLETED', 'CLOSED')
+          AND NOT EXISTS (
+            SELECT 1 FROM travelers t
+            WHERE t.production_work_order_id = production_work_orders.id
+          )
           AND EXISTS (
             SELECT 1 FROM p2_superseding_parts psp
             WHERE psp.part_number = LOWER(TRIM(production_work_orders.part_number))
@@ -1345,6 +1349,10 @@ ${materialBudgetExpression}
          AND NOT (
            work_order_number LIKE 'WAD-%'
            AND status NOT IN ('COMPLETE', 'COMPLETED', 'CLOSED')
+           AND NOT EXISTS (
+             SELECT 1 FROM travelers t
+             WHERE t.production_work_order_id = production_work_orders.id
+           )
            AND EXISTS (
              SELECT 1 FROM p2_superseding_parts psp
              WHERE psp.part_number = LOWER(TRIM(production_work_orders.part_number))
@@ -1391,6 +1399,10 @@ ${materialBudgetExpression}
          AND NOT (
            work_order_number LIKE 'WAD-%'
            AND status NOT IN ('COMPLETE', 'COMPLETED', 'CLOSED')
+           AND NOT EXISTS (
+             SELECT 1 FROM travelers t
+             WHERE t.production_work_order_id = production_work_orders.id
+           )
            AND EXISTS (
              SELECT 1 FROM p2_superseding_parts psp
              WHERE psp.part_number = LOWER(TRIM(production_work_orders.part_number))
@@ -1588,6 +1600,10 @@ router.get('/:projectId/production', h(async (req, res) => {
         AND NOT (
           wo.work_order_number LIKE 'WAD-%'
           AND wo.status NOT IN ('COMPLETE', 'COMPLETED', 'CLOSED')
+          AND NOT EXISTS (
+            SELECT 1 FROM travelers t
+            WHERE t.production_work_order_id = wo.id
+          )
           AND EXISTS (
             SELECT 1 FROM p2_superseding_parts psp
             WHERE psp.part_number = LOWER(TRIM(wo.part_number))

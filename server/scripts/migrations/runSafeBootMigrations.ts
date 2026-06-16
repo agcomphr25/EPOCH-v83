@@ -200,6 +200,7 @@ const safeFiles = [
   '0166_p2_packing_slip_invoice_number.sql',
   '0168_p2_invoice_numbering.sql',
   '0171_all_orders_finalize_to_p1_queue.sql',
+  '0173_nonconformance_records_runtime_alignment.sql',
   'investigation_308_order_duplication.sql',
 ];
 

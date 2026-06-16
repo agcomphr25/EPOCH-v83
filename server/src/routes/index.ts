@@ -3069,6 +3069,125 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         }
       }
 
+      if (body.isRevisionUpdate === true) {
+        const revisionProjectId = body.projectId || existingPO.projectId || null;
+        const revisionLineItems = Array.isArray(body.lineItems) ? body.lineItems : [];
+        if (revisionProjectId && revisionLineItems.length > 0) {
+          const { pool: dbPool } = await import('../../db');
+          const firstLine = revisionLineItems[0] || {};
+          const revisedPartNumber = String(firstLine.partNumber || firstLine.sku || '').trim() || existingPO.poNumber;
+          const revisedDescription = String(firstLine.description || firstLine.partName || revisedPartNumber).trim();
+          const revisedQuantity = revisionLineItems.reduce(
+            (sum: number, item: any) => sum + (Number(item.quantity) || 0),
+            0
+          ) || 1;
+          const revisedDueDate = body.dueDate || body.expectedDelivery || null;
+          const revisedPartNumbers = Array.from(new Set(
+            revisionLineItems
+              .map((item: any) => String(item.partNumber || item.sku || '').trim())
+              .filter(Boolean)
+          ));
+
+          const canonicalRows = await dbPool.query(
+            `SELECT
+               wo.id::text AS id,
+               wo.work_order_number AS "workOrderNumber",
+               wo.status,
+               COUNT(t.id)::int AS "travelerCount"
+             FROM production_work_orders wo
+             LEFT JOIN travelers t ON t.production_work_order_id = wo.id
+             WHERE wo.project_id = $1::uuid
+             GROUP BY wo.id
+             ORDER BY
+               (COUNT(t.id) > 0) DESC,
+               (COALESCE(UPPER(wo.status), '') NOT IN ('CANCELLED', 'CANCELED', 'COMPLETE', 'COMPLETED', 'CLOSED')) DESC,
+               wo.updated_at DESC NULLS LAST,
+               wo.created_at DESC NULLS LAST
+             LIMIT 1`,
+            [revisionProjectId]
+          );
+          const canonicalWad = canonicalRows.rows[0];
+
+          if (canonicalWad?.id) {
+            await dbPool.query(
+              `UPDATE production_work_orders
+               SET part_number = $2,
+                   description = $3,
+                   quantity = $4,
+                   due_date = $5::date,
+                   wizard_data = jsonb_set(
+                     COALESCE(wizard_data, '{}'::jsonb),
+                     '{poRevisionSync}',
+                     jsonb_build_object(
+                       'poId', $6::int,
+                       'poNumber', $7::text,
+                       'syncedAt', NOW()
+                     ),
+                     true
+                   ),
+                   updated_at = NOW()
+               WHERE id = $1::uuid`,
+              [
+                canonicalWad.id,
+                revisedPartNumber,
+                revisedDescription,
+                revisedQuantity,
+                revisedDueDate,
+                poId,
+                po.poNumber,
+              ]
+            );
+
+            await dbPool.query(
+              `UPDATE travelers
+               SET production_work_order_id = $1::uuid,
+                   updated_at = NOW()
+               WHERE project_id = $2::uuid
+                 AND (production_work_order_id IS NULL OR production_work_order_id <> $1::uuid)`,
+              [canonicalWad.id, revisionProjectId]
+            );
+
+            if (revisedPartNumbers.length > 0) {
+              const duplicateRows = await dbPool.query(
+                `UPDATE production_work_orders wo
+                 SET status = 'CANCELLED',
+                     wizard_data = jsonb_set(
+                       COALESCE(wizard_data, '{}'::jsonb),
+                       '{cancelledByPoRevisionSync}',
+                       jsonb_build_object(
+                         'canonicalWorkOrderId', $1::text,
+                         'poId', $3::int,
+                         'syncedAt', NOW()
+                       ),
+                       true
+                     ),
+                     updated_at = NOW()
+                 WHERE wo.project_id = $2::uuid
+                   AND wo.id <> $1::uuid
+                   AND TRIM(wo.part_number) = ANY($4::text[])
+                   AND COALESCE(UPPER(wo.status), '') NOT IN ('CANCELLED', 'CANCELED', 'COMPLETE', 'COMPLETED', 'CLOSED')
+                   AND NOT EXISTS (
+                     SELECT 1 FROM travelers t WHERE t.production_work_order_id = wo.id
+                   )
+                 RETURNING wo.id::text AS id`,
+                [canonicalWad.id, revisionProjectId, poId, revisedPartNumbers]
+              );
+              const duplicateWadIds = duplicateRows.rows.map((row: any) => String(row.id)).filter(Boolean);
+              if (duplicateWadIds.length > 0) {
+                await dbPool.query(
+                  `UPDATE manufacturing_queue
+                   SET source_id = $1,
+                       updated_at = NOW()
+                   WHERE source_type = 'production_work_order'
+                     AND source_id = ANY($2::text[])`,
+                  [canonicalWad.id, duplicateWadIds]
+                );
+              }
+            }
+          }
+        }
+      }
+
       console.log('Updated P2 purchase order:', po.id);
       res.json(po);
     } catch (_error) {
@@ -4641,6 +4760,40 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const wadSummaryByProject = new Map<string, any>(
         wadSummaryRows.map((row: any) => [String(row.projectId), row])
       );
+      const travelerProjectRows = projectIds.length > 0
+        ? await optionalP2Rows(
+            'traveler project truth',
+            dbPool.query(
+            `SELECT
+               project_id::text AS "projectId",
+               COALESCE(SUM(COALESCE(quantity, 1)), 0)::int AS "totalQty",
+               COALESCE(SUM(
+                 CASE
+                   WHEN COALESCE(UPPER(status), '') IN ('COMPLETE', 'COMPLETED', 'CLOSED')
+                     OR completed_at IS NOT NULL
+                   THEN COALESCE(quantity, 1)
+                   ELSE 0
+                 END
+               ), 0)::int AS "completedQty",
+               COALESCE(SUM(
+                 CASE
+                   WHEN COALESCE(UPPER(status), '') IN ('ACTIVE', 'IN_PROGRESS', 'STARTED')
+                     AND completed_at IS NULL
+                   THEN COALESCE(quantity, 1)
+                   ELSE 0
+                 END
+               ), 0)::int AS "inProductionQty"
+             FROM travelers
+             WHERE project_id = ANY($1::uuid[])
+               AND COALESCE(UPPER(status), '') NOT IN ('CANCELLED', 'CANCELED', 'VOID')
+             GROUP BY project_id`,
+            [projectIds]
+          )
+          )
+        : [];
+      const travelerStatsByProject = new Map<string, any>(
+        travelerProjectRows.map((row: any) => [String(row.projectId), row])
+      );
 
       // Sum ordered quantities from all PO line items, grouped by po_id.
       // This ensures PO lines that haven't had serialized items generated yet
@@ -4685,6 +4838,13 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const poStatuses = pos.map((po: any) => {
         const poId = Number(po.id);
         const poItems = serializedItems.filter((s: any) => Number(s.poId ?? s.po_id) === poId);
+        const linkedProject = projectByPoId.get(poId);
+        const travelerProjectStats = linkedProject?.projectId
+          ? travelerStatsByProject.get(String(linkedProject.projectId))
+          : null;
+        const travelerCompletedItems = Number(travelerProjectStats?.completedQty ?? 0);
+        const travelerInProductionItems = Number(travelerProjectStats?.inProductionQty ?? 0);
+        const travelerTotalItems = Number(travelerProjectStats?.totalQty ?? 0);
         const legacyP2Stats = legacyStatsByPoId.get(poId);
         const legacyProjectStats = legacyProjectStatsByPoId.get(poId);
         const legacyStats = legacyP2Stats || legacyProjectStats
@@ -4706,7 +4866,12 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         }).length;
         const legacyCompletedItems = Number(legacyStats?.completedQty ?? 0);
         const shippedLotCompletedItems = shippedQtyByPoId.get(poId) ?? 0;
-        const completedItems = Math.max(serializedCompletedItems, legacyCompletedItems, shippedLotCompletedItems);
+        const completedItems = Math.max(
+          serializedCompletedItems,
+          legacyCompletedItems,
+          shippedLotCompletedItems,
+          travelerCompletedItems
+        );
 
         const scheduledItems = poItems.filter((s: any) => {
           if (s.status !== 'ACTIVE') return false;
@@ -4726,11 +4891,20 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           return dept !== 'Pending Layup' && dept !== 'Layup' && dept !== '';
         }).length;
         const legacyInProductionItems = Number(legacyStats?.inProductionQty ?? 0);
-        const rawInProductionItems = Math.max(serializedInProductionItems, legacyInProductionItems);
+        const rawInProductionItems = Math.max(
+          serializedInProductionItems,
+          legacyInProductionItems,
+          travelerInProductionItems
+        );
 
         // totalItems is the sum of ordered quantities across all line items so that
         // lines without serialized items generated yet are still reflected on the card.
-        const totalItems = orderedQtyByPoId.get(poId) ?? Number(legacyStats?.totalQty ?? poItems.length);
+        const totalItems = Math.max(
+          orderedQtyByPoId.get(poId) ?? 0,
+          Number(legacyStats?.totalQty ?? 0),
+          travelerTotalItems,
+          poItems.length
+        );
         const inProductionItems = Math.min(
           rawInProductionItems,
           Math.max(0, totalItems - completedItems)
@@ -4742,7 +4916,6 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         
         const rawStatus = normalizeP2Status(po.status) || 'OPEN';
 
-        const linkedProject = projectByPoId.get(poId);
         const wadContext = buildP2ProjectWadContext(
           linkedProject,
           linkedProject?.projectId ? wadSummaryByProject.get(String(linkedProject.projectId)) : null

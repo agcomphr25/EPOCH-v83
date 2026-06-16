@@ -4641,6 +4641,40 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const wadSummaryByProject = new Map<string, any>(
         wadSummaryRows.map((row: any) => [String(row.projectId), row])
       );
+      const travelerProjectRows = projectIds.length > 0
+        ? await optionalP2Rows(
+            'traveler project truth',
+            dbPool.query(
+            `SELECT
+               project_id::text AS "projectId",
+               COALESCE(SUM(COALESCE(quantity, 1)), 0)::int AS "totalQty",
+               COALESCE(SUM(
+                 CASE
+                   WHEN COALESCE(UPPER(status), '') IN ('COMPLETE', 'COMPLETED', 'CLOSED')
+                     OR completed_at IS NOT NULL
+                   THEN COALESCE(quantity, 1)
+                   ELSE 0
+                 END
+               ), 0)::int AS "completedQty",
+               COALESCE(SUM(
+                 CASE
+                   WHEN COALESCE(UPPER(status), '') IN ('ACTIVE', 'IN_PROGRESS', 'STARTED')
+                     AND completed_at IS NULL
+                   THEN COALESCE(quantity, 1)
+                   ELSE 0
+                 END
+               ), 0)::int AS "inProductionQty"
+             FROM travelers
+             WHERE project_id = ANY($1::uuid[])
+               AND COALESCE(UPPER(status), '') NOT IN ('CANCELLED', 'CANCELED', 'VOID')
+             GROUP BY project_id`,
+            [projectIds]
+          )
+          )
+        : [];
+      const travelerStatsByProject = new Map<string, any>(
+        travelerProjectRows.map((row: any) => [String(row.projectId), row])
+      );
 
       // Sum ordered quantities from all PO line items, grouped by po_id.
       // This ensures PO lines that haven't had serialized items generated yet
@@ -4685,6 +4719,13 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const poStatuses = pos.map((po: any) => {
         const poId = Number(po.id);
         const poItems = serializedItems.filter((s: any) => Number(s.poId ?? s.po_id) === poId);
+        const linkedProject = projectByPoId.get(poId);
+        const travelerProjectStats = linkedProject?.projectId
+          ? travelerStatsByProject.get(String(linkedProject.projectId))
+          : null;
+        const travelerCompletedItems = Number(travelerProjectStats?.completedQty ?? 0);
+        const travelerInProductionItems = Number(travelerProjectStats?.inProductionQty ?? 0);
+        const travelerTotalItems = Number(travelerProjectStats?.totalQty ?? 0);
         const legacyP2Stats = legacyStatsByPoId.get(poId);
         const legacyProjectStats = legacyProjectStatsByPoId.get(poId);
         const legacyStats = legacyP2Stats || legacyProjectStats
@@ -4706,7 +4747,12 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         }).length;
         const legacyCompletedItems = Number(legacyStats?.completedQty ?? 0);
         const shippedLotCompletedItems = shippedQtyByPoId.get(poId) ?? 0;
-        const completedItems = Math.max(serializedCompletedItems, legacyCompletedItems, shippedLotCompletedItems);
+        const completedItems = Math.max(
+          serializedCompletedItems,
+          legacyCompletedItems,
+          shippedLotCompletedItems,
+          travelerCompletedItems
+        );
 
         const scheduledItems = poItems.filter((s: any) => {
           if (s.status !== 'ACTIVE') return false;
@@ -4726,11 +4772,20 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           return dept !== 'Pending Layup' && dept !== 'Layup' && dept !== '';
         }).length;
         const legacyInProductionItems = Number(legacyStats?.inProductionQty ?? 0);
-        const rawInProductionItems = Math.max(serializedInProductionItems, legacyInProductionItems);
+        const rawInProductionItems = Math.max(
+          serializedInProductionItems,
+          legacyInProductionItems,
+          travelerInProductionItems
+        );
 
         // totalItems is the sum of ordered quantities across all line items so that
         // lines without serialized items generated yet are still reflected on the card.
-        const totalItems = orderedQtyByPoId.get(poId) ?? Number(legacyStats?.totalQty ?? poItems.length);
+        const totalItems = Math.max(
+          orderedQtyByPoId.get(poId) ?? 0,
+          Number(legacyStats?.totalQty ?? 0),
+          travelerTotalItems,
+          poItems.length
+        );
         const inProductionItems = Math.min(
           rawInProductionItems,
           Math.max(0, totalItems - completedItems)
@@ -4742,7 +4797,6 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         
         const rawStatus = normalizeP2Status(po.status) || 'OPEN';
 
-        const linkedProject = projectByPoId.get(poId);
         const wadContext = buildP2ProjectWadContext(
           linkedProject,
           linkedProject?.projectId ? wadSummaryByProject.get(String(linkedProject.projectId)) : null

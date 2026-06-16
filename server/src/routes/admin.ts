@@ -36,7 +36,7 @@ const p1ProductionStatusExpectationSql = `
       THEN CASE WHEN COALESCE(is_fulfilled, false) THEN 'SHIPPED' ELSE 'PENDING' END
     WHEN LOWER(COALESCE(NULLIF(TRIM(current_department), ''), '')) IN ('fulfilled', 'shipped')
       THEN 'SHIPPED'
-    ELSE 'LAID_UP'
+    ELSE 'IN_PROGRESS'
   END
 `;
 

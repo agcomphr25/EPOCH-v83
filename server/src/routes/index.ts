@@ -7823,7 +7823,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const updatedOrders = [];
       const skippedOrders = [];
       for (const orderId of orderIds) {
-        // Update production orders status to LAID_UP
+        // Update production orders status to IN_PROGRESS
         const productionOrder =
           await storage.getProductionOrderByOrderId(orderId);
         if (productionOrder) {
@@ -7847,12 +7847,12 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
             const updated = await storage.updateProductionOrder(
               productionOrder.id,
               {
-                productionStatus: 'LAID_UP',
+                productionStatus: 'IN_PROGRESS',
                 laidUpAt: new Date(),
               }
             );
             updatedOrders.push(updated);
-            console.log(`✅ Production order ${orderId} moved to LAID_UP status`);
+            console.log(`✅ Production order ${orderId} moved to IN_PROGRESS status`);
           }
         }
 

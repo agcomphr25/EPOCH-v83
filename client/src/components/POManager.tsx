@@ -129,13 +129,17 @@ function POQuantityDisplay({ poId }: { poId: number }) {
   );
 }
 
-type StatusFilter = 'ALL' | 'LAID_UP' | 'PENDING' | 'SHIPPED' | 'CANCELLED';
+type StatusFilter = 'ALL' | 'IN_PROGRESS' | 'PENDING' | 'SHIPPED' | 'CANCELLED';
 type ProductionItemVisibilityFilter = 'active' | 'all' | 'cancelled';
+
+function isP1InProgressStatus(status?: string | null): boolean {
+  return ['IN_PROGRESS', 'LAID_UP'].includes(String(status || '').toUpperCase());
+}
 
 function getStatusLabel(filter: StatusFilter): string {
   switch (filter) {
     case 'ALL': return 'All Orders';
-    case 'LAID_UP': return 'In Progress';
+    case 'IN_PROGRESS': return 'In Progress';
     case 'PENDING': return 'Pending';
     case 'SHIPPED': return 'Shipped';
     case 'CANCELLED': return 'Cancelled';
@@ -145,6 +149,7 @@ function getStatusLabel(filter: StatusFilter): string {
 function getOrderStatusBadge(status: string) {
   switch (status) {
     case 'PENDING': return <Badge className="bg-blue-100 text-blue-800 text-xs">Pending</Badge>;
+    case 'IN_PROGRESS': return <Badge className="bg-yellow-100 text-yellow-800 text-xs">In Progress</Badge>;
     case 'LAID_UP': return <Badge className="bg-yellow-100 text-yellow-800 text-xs">In Progress</Badge>;
     case 'ACTIVE': return <Badge className="bg-orange-100 text-orange-800 text-xs">Active</Badge>;
     case 'SHIPPED': return <Badge className="bg-green-100 text-green-800 text-xs">Shipped</Badge>;
@@ -167,7 +172,7 @@ function ProductionStatusBadge({ productionOrders, totalPoQuantity, poNumber }: 
 
   const total = productionOrders.length;
   const pending = productionOrders.filter((o: any) => o.productionStatus === 'PENDING').length;
-  const inProgress = productionOrders.filter((o: any) => o.productionStatus === 'LAID_UP').length;
+  const inProgress = productionOrders.filter((o: any) => isP1InProgressStatus(o.productionStatus)).length;
   const shipped = productionOrders.filter((o: any) => o.productionStatus === 'SHIPPED').length;
   const cancelled = productionOrders.filter((o: any) => o.productionStatus === 'CANCELLED').length;
   const active = total - cancelled;
@@ -176,7 +181,9 @@ function ProductionStatusBadge({ productionOrders, totalPoQuantity, poNumber }: 
 
   const filteredOrders = selectedFilter === null ? [] : selectedFilter === 'ALL'
     ? productionOrders
-    : productionOrders.filter((o: any) => o.productionStatus === selectedFilter);
+    : selectedFilter === 'IN_PROGRESS'
+      ? productionOrders.filter((o: any) => isP1InProgressStatus(o.productionStatus))
+      : productionOrders.filter((o: any) => o.productionStatus === selectedFilter);
 
   const modalTitle = selectedFilter
     ? `${poNumber} — ${getStatusLabel(selectedFilter)} (${filteredOrders.length})`
@@ -209,7 +216,7 @@ function ProductionStatusBadge({ productionOrders, totalPoQuantity, poNumber }: 
         {inProgress > 0 && (
           <Badge
             className="bg-yellow-100 text-yellow-800 text-xs cursor-pointer hover:bg-yellow-200 transition-colors"
-            onClick={(e) => handleBadgeClick(e, 'LAID_UP')}
+            onClick={(e) => handleBadgeClick(e, 'IN_PROGRESS')}
             title="Click to view in-progress orders"
           >
             {inProgress} In Progress
@@ -401,7 +408,7 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
       queryClient.invalidateQueries({ queryKey: [`/api/production-orders/by-po/${poId}`] });
       queryClient.invalidateQueries({ queryKey: ['/api/pos'] });
       const statusLabel =
-        data?.order?.productionStatus === 'LAID_UP'
+        isP1InProgressStatus(data?.order?.productionStatus)
           ? 'In Progress'
           : data?.order?.productionStatus === 'SHIPPED'
             ? 'Shipped'
@@ -414,6 +421,24 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
     },
     onError: (error: any) => {
       toast.error('Failed to reactivate order: ' + (error.message || 'Unknown error'));
+    },
+  });
+
+  const fulfillMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      return apiRequest('/api/po-orders/toggle-fulfilled', {
+        method: 'POST',
+        body: { orderId, isFulfilled: true },
+      });
+    },
+    onSuccess: (_data: any, orderId) => {
+      queryClient.invalidateQueries({ queryKey: [`/api/production-orders/by-po/${poId}`] });
+      queryClient.invalidateQueries({ queryKey: ['/api/pos'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/po-orders/oem-shipments'] });
+      toast.success(`Order ${orderId} marked fulfilled.`);
+    },
+    onError: (error: any) => {
+      toast.error('Failed to mark fulfilled: ' + (error.message || 'Unknown error'));
     },
   });
 
@@ -447,6 +472,8 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
         return <Badge className="bg-blue-100 text-blue-800">Pending</Badge>;
       case 'ACTIVE':
         return <Badge className="bg-yellow-100 text-yellow-800">Active</Badge>;
+      case 'IN_PROGRESS':
+        return <Badge className="bg-orange-100 text-orange-800">In Progress</Badge>;
       case 'LAID_UP':
         return <Badge className="bg-orange-100 text-orange-800">In Progress</Badge>;
       case 'SHIPPED':
@@ -595,6 +622,24 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
                         Reactivate
                       </Button>
                     ) : order.productionStatus !== 'SHIPPED' && (
+                      <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-green-700 hover:text-green-800 hover:bg-green-50 border-green-300 h-7 px-2"
+                        disabled={fulfillMutation.isPending}
+                        onClick={() => {
+                          if (window.confirm(`Mark ${order.orderId} as fulfilled/shipped off-system?`)) {
+                            fulfillMutation.mutate(order.orderId);
+                          }
+                        }}
+                        title="Mark this item as fulfilled because it was shipped outside EPOCH"
+                      >
+                        {fulfillMutation.isPending && fulfillMutation.variables === order.orderId
+                          ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                          : <Check className="h-3.5 w-3.5 mr-1" />}
+                        Fulfilled
+                      </Button>
                       <Button
                         variant={isDuplicate ? 'destructive' : 'ghost'}
                         size="sm"
@@ -608,6 +653,7 @@ function POProductionOrdersTab({ poId }: { poId: number }) {
                         <X className="h-3.5 w-3.5 mr-1" />
                         {isDuplicate ? 'Cancel Duplicate' : 'Cancel'}
                       </Button>
+                      </>
                     )}
                   </td>
                 </tr>

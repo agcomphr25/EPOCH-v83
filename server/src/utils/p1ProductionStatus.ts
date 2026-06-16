@@ -1,4 +1,4 @@
-export type P1ProductionStatus = 'PENDING' | 'LAID_UP' | 'SHIPPED' | 'CANCELLED';
+export type P1ProductionStatus = 'PENDING' | 'IN_PROGRESS' | 'SHIPPED' | 'CANCELLED';
 
 type DeriveP1ProductionStatusInput = {
   currentDepartment?: string | null;
@@ -41,7 +41,7 @@ export function deriveP1ProductionStatus({
     return 'SHIPPED';
   }
 
-  return 'LAID_UP';
+  return 'IN_PROGRESS';
 }
 
 export function isClosedP1PurchaseOrderStatus(status?: string | null): boolean {

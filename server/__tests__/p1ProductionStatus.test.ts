@@ -20,7 +20,7 @@ describe('deriveP1ProductionStatus', () => {
         currentDepartment,
         currentStatus: 'PENDING',
         isFulfilled: false,
-      })).toBe('LAID_UP');
+      })).toBe('IN_PROGRESS');
     }
   });
 
@@ -49,7 +49,7 @@ describe('deriveP1ProductionStatus', () => {
       currentDepartment: 'Shipping QC',
       currentStatus: 'SHIPPED',
       isFulfilled: true,
-    })).toBe('LAID_UP');
+    })).toBe('IN_PROGRESS');
   });
 
   it('preserves cancelled status unless the caller is explicitly reactivating', () => {
@@ -64,7 +64,7 @@ describe('deriveP1ProductionStatus', () => {
       currentStatus: 'CANCELLED',
       isFulfilled: false,
       preserveCancelled: false,
-    })).toBe('LAID_UP');
+    })).toBe('IN_PROGRESS');
   });
 });
 
@@ -78,6 +78,7 @@ describe('P1 PO status helpers', () => {
 
   it('treats pending and in-progress production statuses as active', () => {
     expect(isActiveP1ProductionStatus('PENDING')).toBe(true);
+    expect(isActiveP1ProductionStatus('IN_PROGRESS')).toBe(true);
     expect(isActiveP1ProductionStatus('LAID_UP')).toBe(true);
     expect(isActiveP1ProductionStatus('QC_PASSED')).toBe(true);
     expect(isActiveP1ProductionStatus('SHIPPED')).toBe(false);

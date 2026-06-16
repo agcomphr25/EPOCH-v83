@@ -659,6 +659,8 @@ let p2BillingAllocationSchemaReady: Promise<void> | null = null;
 function ensureP2BillingAllocationSchema(): Promise<void> {
   if (!p2BillingAllocationSchemaReady) {
     p2BillingAllocationSchemaReady = pool.query(`
+      CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
       CREATE TABLE IF NOT EXISTS p2_billing_allocations (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
         po_id integer NOT NULL REFERENCES p2_purchase_orders(id),
@@ -676,6 +678,25 @@ function ensureP2BillingAllocationSchema(): Promise<void> {
         created_at timestamp NOT NULL DEFAULT now(),
         updated_at timestamp NOT NULL DEFAULT now()
       );
+
+      ALTER TABLE p2_billing_allocations
+        ADD COLUMN IF NOT EXISTS po_item_id integer REFERENCES p2_purchase_order_items(id),
+        ADD COLUMN IF NOT EXISTS description text,
+        ADD COLUMN IF NOT EXISTS customer_po_line text,
+        ADD COLUMN IF NOT EXISTS notes text,
+        ADD COLUMN IF NOT EXISTS active boolean NOT NULL DEFAULT true,
+        ADD COLUMN IF NOT EXISTS created_by text,
+        ADD COLUMN IF NOT EXISTS created_at timestamp NOT NULL DEFAULT now(),
+        ADD COLUMN IF NOT EXISTS updated_at timestamp NOT NULL DEFAULT now();
+
+      ALTER TABLE p2_billing_allocations
+        ALTER COLUMN active SET DEFAULT true,
+        ALTER COLUMN created_at SET DEFAULT now(),
+        ALTER COLUMN updated_at SET DEFAULT now();
+
+      UPDATE p2_billing_allocations
+         SET active = true
+       WHERE active IS NULL;
 
       CREATE INDEX IF NOT EXISTS p2_billing_allocations_po_idx
         ON p2_billing_allocations(po_id)
@@ -701,6 +722,29 @@ function ensureP2BillingAllocationSchema(): Promise<void> {
         UNIQUE(serialized_item_id)
       );
 
+      ALTER TABLE p2_serial_billing_assignments
+        ADD COLUMN IF NOT EXISTS po_item_id integer REFERENCES p2_purchase_order_items(id),
+        ADD COLUMN IF NOT EXISTS lot_id uuid REFERENCES p2_lot_numbers(id),
+        ADD COLUMN IF NOT EXISTS packing_slip_id uuid REFERENCES p2_packing_slips(id),
+        ADD COLUMN IF NOT EXISTS invoice_id uuid REFERENCES ar_invoices(id),
+        ADD COLUMN IF NOT EXISTS assigned_at timestamp NOT NULL DEFAULT now(),
+        ADD COLUMN IF NOT EXISTS assigned_by text,
+        ADD COLUMN IF NOT EXISTS assignment_source text NOT NULL DEFAULT 'shipment',
+        ADD COLUMN IF NOT EXISTS locked_at timestamp,
+        ADD COLUMN IF NOT EXISTS locked_by text,
+        ADD COLUMN IF NOT EXISTS lock_reason text,
+        ADD COLUMN IF NOT EXISTS notes text,
+        ADD COLUMN IF NOT EXISTS updated_at timestamp NOT NULL DEFAULT now();
+
+      ALTER TABLE p2_serial_billing_assignments
+        ALTER COLUMN assigned_at SET DEFAULT now(),
+        ALTER COLUMN assignment_source SET DEFAULT 'shipment',
+        ALTER COLUMN updated_at SET DEFAULT now();
+
+      UPDATE p2_serial_billing_assignments
+         SET assignment_source = 'shipment'
+       WHERE assignment_source IS NULL;
+
       CREATE INDEX IF NOT EXISTS p2_serial_billing_assignments_allocation_idx
         ON p2_serial_billing_assignments(allocation_id);
 
@@ -715,6 +759,16 @@ function ensureP2BillingAllocationSchema(): Promise<void> {
         reason text,
         created_at timestamp NOT NULL DEFAULT now()
       );
+
+      ALTER TABLE p2_billing_allocation_audit
+        ADD COLUMN IF NOT EXISTS entity_type text NOT NULL DEFAULT 'billing_allocation',
+        ADD COLUMN IF NOT EXISTS entity_id text NOT NULL DEFAULT '',
+        ADD COLUMN IF NOT EXISTS action text NOT NULL DEFAULT 'UNKNOWN',
+        ADD COLUMN IF NOT EXISTS old_value jsonb,
+        ADD COLUMN IF NOT EXISTS new_value jsonb,
+        ADD COLUMN IF NOT EXISTS changed_by text,
+        ADD COLUMN IF NOT EXISTS reason text,
+        ADD COLUMN IF NOT EXISTS created_at timestamp NOT NULL DEFAULT now();
     `).then(() => undefined);
   }
 
@@ -729,14 +783,14 @@ router.get('/billing-allocations', authenticateToken, requirePermission('shippin
       return res.status(400).json({ error: 'poId is required' });
     }
 
-    const poItems = await pool.query(`
+    const poItemsResult = await pool.query(`
       SELECT id, part_number, part_name, quantity, unit_price
         FROM p2_purchase_order_items
        WHERE po_id = $1
        ORDER BY id
     `, [poId]);
 
-    const allocations = await pool.query(`
+    const allocationsResult = await pool.query(`
       SELECT
         a.id,
         a.po_id,
@@ -759,7 +813,7 @@ router.get('/billing-allocations', authenticateToken, requirePermission('shippin
       ORDER BY a.created_at, a.bucket_label
     `, [poId]);
 
-    return res.json({ poItems, allocations });
+    return res.json({ poItems: poItemsResult.rows, allocations: allocationsResult.rows });
   } catch (err: any) {
     console.error('P2 billing allocations fetch error:', err);
     return res.status(500).json({ error: 'Failed to fetch P2 billing allocations' });
@@ -783,19 +837,21 @@ router.post('/billing-allocations', authenticateToken, requirePermission('shippi
     const input = createBillingAllocationSchema.parse(req.body);
     const actor = (req as any).user?.username || 'shipping';
 
-    const poRows = await pool.query<{ id: number; po_number: string }>(
+    const poResult = await pool.query<{ id: number; po_number: string }>(
       `SELECT id, po_number FROM p2_purchase_orders WHERE id = $1`,
       [input.poId],
     );
+    const poRows = poResult.rows;
     if (poRows.length === 0) return res.status(404).json({ error: 'P2 PO not found' });
 
-    const itemRows = await pool.query<{ id: number; part_number: string }>(
+    const itemResult = await pool.query<{ id: number; part_number: string }>(
       `SELECT id, part_number FROM p2_purchase_order_items WHERE id = $1 AND po_id = $2`,
       [input.poItemId, input.poId],
     );
+    const itemRows = itemResult.rows;
     if (itemRows.length === 0) return res.status(404).json({ error: 'P2 PO item not found for this PO' });
 
-    const rows = await pool.query(`
+    const insertResult = await pool.query(`
       INSERT INTO p2_billing_allocations (
         po_id, po_item_id, po_number, part_number, bucket_label, description,
         customer_po_line, quantity_authorized, unit_price, notes, created_by
@@ -815,13 +871,14 @@ router.post('/billing-allocations', authenticateToken, requirePermission('shippi
       input.notes || null,
       actor,
     ]);
+    const createdAllocation = insertResult.rows[0];
 
     await pool.query(`
       INSERT INTO p2_billing_allocation_audit (entity_type, entity_id, action, new_value, changed_by, reason)
       VALUES ('billing_allocation', $1, 'CREATE', $2::jsonb, $3, 'Manual bucket setup from customer PO')
-    `, [rows[0].id, JSON.stringify(rows[0]), actor]);
+    `, [createdAllocation.id, JSON.stringify(createdAllocation), actor]);
 
-    return res.status(201).json(rows[0]);
+    return res.status(201).json(createdAllocation);
   } catch (err: any) {
     if (err instanceof z.ZodError) {
       return res.status(400).json({ error: err.errors[0].message });
@@ -880,7 +937,7 @@ router.post('/lots', authenticateToken, requirePermission('shipping.release_ship
       }
 
       const allocationIds = Array.from(new Set(incomingAssignments.map((assignment) => assignment.allocationId)));
-      const allocationRows = await pool.query<{
+      const allocationResult = await pool.query<{
         id: string;
         po_id: number;
         po_item_id: number | null;
@@ -904,6 +961,7 @@ router.post('/lots', authenticateToken, requirePermission('shipping.release_ship
         GROUP BY a.id
       `, [allocationIds, input.serialIds]);
 
+      const allocationRows = allocationResult.rows;
       if (allocationRows.length !== allocationIds.length) {
         return res.status(400).json({ error: 'One or more billing buckets were not found or are inactive' });
       }
@@ -977,11 +1035,12 @@ router.post('/lots', authenticateToken, requirePermission('shipping.release_ship
       }
     }
 
-    const assignmentRows = await pool.query<{ serialized_item_id: string }>(`
+    const assignmentResult = await pool.query<{ serialized_item_id: string }>(`
       SELECT serialized_item_id
       FROM p2_serial_billing_assignments
       WHERE serialized_item_id = ANY($1::uuid[])
     `, [input.serialIds]);
+    const assignmentRows = assignmentResult.rows;
     const assignedSerialIds = new Set(assignmentRows.map((row) => row.serialized_item_id));
     const missingAssignments = input.serialIds.filter((serialId) => !assignedSerialIds.has(serialId));
     if (missingAssignments.length > 0) {
@@ -992,7 +1051,7 @@ router.post('/lots', authenticateToken, requirePermission('shipping.release_ship
     }
 
     // Guard: serial reuse — reject if any serial already exists in another lot
-    const existingLots = await pool.query<{
+    const existingLotsResult = await pool.query<{
       id: string;
       lot_number: string;
       serialized_item_ids: string[] | null;
@@ -1004,6 +1063,7 @@ router.post('/lots', authenticateToken, requirePermission('shipping.release_ship
           AND COALESCE(status, '') <> 'VOID'`,
       [input.serialIds]
     );
+    const existingLots = existingLotsResult.rows;
     if (existingLots.length > 0) {
       const requestedSerialIds = new Set(input.serialIds);
       const recoverableLot = existingLots.find((lot) => {

@@ -43,6 +43,8 @@ interface LineItem {
 function ensureP2BillingAllocationSchema(): Promise<void> {
   if (!p2BillingAllocationSchemaReady) {
     p2BillingAllocationSchemaReady = pool.query(`
+      CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
       CREATE TABLE IF NOT EXISTS p2_billing_allocations (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
         po_id integer NOT NULL REFERENCES p2_purchase_orders(id),
@@ -60,6 +62,25 @@ function ensureP2BillingAllocationSchema(): Promise<void> {
         created_at timestamp NOT NULL DEFAULT now(),
         updated_at timestamp NOT NULL DEFAULT now()
       );
+
+      ALTER TABLE p2_billing_allocations
+        ADD COLUMN IF NOT EXISTS po_item_id integer REFERENCES p2_purchase_order_items(id),
+        ADD COLUMN IF NOT EXISTS description text,
+        ADD COLUMN IF NOT EXISTS customer_po_line text,
+        ADD COLUMN IF NOT EXISTS notes text,
+        ADD COLUMN IF NOT EXISTS active boolean NOT NULL DEFAULT true,
+        ADD COLUMN IF NOT EXISTS created_by text,
+        ADD COLUMN IF NOT EXISTS created_at timestamp NOT NULL DEFAULT now(),
+        ADD COLUMN IF NOT EXISTS updated_at timestamp NOT NULL DEFAULT now();
+
+      ALTER TABLE p2_billing_allocations
+        ALTER COLUMN active SET DEFAULT true,
+        ALTER COLUMN created_at SET DEFAULT now(),
+        ALTER COLUMN updated_at SET DEFAULT now();
+
+      UPDATE p2_billing_allocations
+         SET active = true
+       WHERE active IS NULL;
 
       CREATE TABLE IF NOT EXISTS p2_serial_billing_assignments (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -81,6 +102,29 @@ function ensureP2BillingAllocationSchema(): Promise<void> {
         UNIQUE(serialized_item_id)
       );
 
+      ALTER TABLE p2_serial_billing_assignments
+        ADD COLUMN IF NOT EXISTS po_item_id integer REFERENCES p2_purchase_order_items(id),
+        ADD COLUMN IF NOT EXISTS lot_id uuid REFERENCES p2_lot_numbers(id),
+        ADD COLUMN IF NOT EXISTS packing_slip_id uuid REFERENCES p2_packing_slips(id),
+        ADD COLUMN IF NOT EXISTS invoice_id uuid REFERENCES ar_invoices(id),
+        ADD COLUMN IF NOT EXISTS assigned_at timestamp NOT NULL DEFAULT now(),
+        ADD COLUMN IF NOT EXISTS assigned_by text,
+        ADD COLUMN IF NOT EXISTS assignment_source text NOT NULL DEFAULT 'shipment',
+        ADD COLUMN IF NOT EXISTS locked_at timestamp,
+        ADD COLUMN IF NOT EXISTS locked_by text,
+        ADD COLUMN IF NOT EXISTS lock_reason text,
+        ADD COLUMN IF NOT EXISTS notes text,
+        ADD COLUMN IF NOT EXISTS updated_at timestamp NOT NULL DEFAULT now();
+
+      ALTER TABLE p2_serial_billing_assignments
+        ALTER COLUMN assigned_at SET DEFAULT now(),
+        ALTER COLUMN assignment_source SET DEFAULT 'shipment',
+        ALTER COLUMN updated_at SET DEFAULT now();
+
+      UPDATE p2_serial_billing_assignments
+         SET assignment_source = 'shipment'
+       WHERE assignment_source IS NULL;
+
       CREATE TABLE IF NOT EXISTS p2_billing_allocation_audit (
         id serial PRIMARY KEY,
         entity_type text NOT NULL,
@@ -92,6 +136,16 @@ function ensureP2BillingAllocationSchema(): Promise<void> {
         reason text,
         created_at timestamp NOT NULL DEFAULT now()
       );
+
+      ALTER TABLE p2_billing_allocation_audit
+        ADD COLUMN IF NOT EXISTS entity_type text NOT NULL DEFAULT 'billing_allocation',
+        ADD COLUMN IF NOT EXISTS entity_id text NOT NULL DEFAULT '',
+        ADD COLUMN IF NOT EXISTS action text NOT NULL DEFAULT 'UNKNOWN',
+        ADD COLUMN IF NOT EXISTS old_value jsonb,
+        ADD COLUMN IF NOT EXISTS new_value jsonb,
+        ADD COLUMN IF NOT EXISTS changed_by text,
+        ADD COLUMN IF NOT EXISTS reason text,
+        ADD COLUMN IF NOT EXISTS created_at timestamp NOT NULL DEFAULT now();
     `).then(() => undefined);
   }
 

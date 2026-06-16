@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -179,7 +179,14 @@ export default function P2ControlCenter() {
     refetchInterval: 30000,
   });
 
-  const openPOs = allPOStatuses.filter((po) => po.status !== 'completed');
+  const openPOs = useMemo(
+    () => allPOStatuses.filter((po) => po.status !== 'completed'),
+    [allPOStatuses]
+  );
+  const poFilterOptions = useMemo(
+    () => activeTab === 'shipping' ? allPOStatuses : openPOs,
+    [activeTab, allPOStatuses, openPOs]
+  );
 
   useEffect(() => {
     if (selectedPOIds.length === 0) return;
@@ -617,7 +624,7 @@ export default function P2ControlCenter() {
       )}
 
       {/* PO Filter Bar */}
-      {openPOs.length > 1 && (
+      {poFilterOptions.length > 1 && (
         <div className="space-y-2">
           <div className="flex items-center gap-3 flex-wrap">
             <div className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
@@ -658,7 +665,7 @@ export default function P2ControlCenter() {
                   <div className="h-px bg-border my-1" />
 
                   {/* Individual PO options */}
-                  {openPOs.map((po) => {
+                  {poFilterOptions.map((po) => {
                     const isChecked = selectedPOIds.includes(po.id);
                     return (
                       <div
@@ -697,7 +704,7 @@ export default function P2ControlCenter() {
           {selectedPOIds.length > 0 && (
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs text-muted-foreground">Showing:</span>
-              {openPOs.filter((po) => selectedPOIds.includes(po.id)).map((po) => (
+              {poFilterOptions.filter((po) => selectedPOIds.includes(po.id)).map((po) => (
                 <Badge
                   key={po.id}
                   variant="secondary"

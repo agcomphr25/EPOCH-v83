@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   Dialog,
@@ -80,6 +80,26 @@ export default function ShipmentSummaryModal({
 
   const poItems = allocationData?.poItems ?? [];
   const allocations = allocationData?.allocations ?? [];
+  const serialPoItems = useMemo(() => {
+    const byPoItemId = new Map<number, PoItem>();
+    for (const serial of serials) {
+      if (!serial.poItemId || byPoItemId.has(serial.poItemId)) continue;
+      byPoItemId.set(serial.poItemId, {
+        id: serial.poItemId,
+        part_number: serial.partNumber,
+        part_name: serial.partName,
+        quantity: serials.filter((candidate) => candidate.poItemId === serial.poItemId).length,
+        unit_price: null,
+      });
+    }
+    return Array.from(byPoItemId.values()).sort((a, b) => a.id - b.id);
+  }, [serials]);
+  const selectablePoItems = poItems.length > 0 ? poItems : serialPoItems;
+
+  useEffect(() => {
+    if (newBucket.poItemId || selectablePoItems.length === 0) return;
+    setNewBucket((prev) => ({ ...prev, poItemId: String(selectablePoItems[0].id) }));
+  }, [newBucket.poItemId, selectablePoItems]);
 
   useEffect(() => {
     if (!allocations.length || !serials.length) return;
@@ -195,7 +215,7 @@ export default function ShipmentSummaryModal({
                     value={newBucket.poItemId}
                     onChange={(e) => setNewBucket((prev) => ({ ...prev, poItemId: e.target.value }))}
                   >
-                    {poItems.map((item) => (
+                    {selectablePoItems.map((item) => (
                       <option key={item.id} value={String(item.id)}>
                         {item.part_number} - {item.part_name}
                       </option>

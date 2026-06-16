@@ -2819,10 +2819,17 @@ router.post('/toggle-fulfilled', authenticateToken, async (req, res) => {
         currentStatus: order.productionStatus,
         preserveCancelled: true,
       });
+      const nextDepartment =
+        shouldFulfill
+          ? 'Shipped'
+          : ['shipped', 'fulfilled'].includes(String(order.currentDepartment || '').trim().toLowerCase())
+            ? 'Shipping QC'
+            : order.currentDepartment;
 
       // Update production status to SHIPPED or back to the status implied by its department.
       await storage.updateProductionOrder(order.id, {
         productionStatus: nextProductionStatus,
+        currentDepartment: nextDepartment,
         shippedAt: shouldFulfill ? shippedAt : null,
         isFulfilled: shouldFulfill,
         fulfilledDate: shouldFulfill ? shippedAt : null,
@@ -3775,6 +3782,7 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
         } else if (detail.order.id) {
           await storage.updateProductionOrder(detail.order.id, {
             productionStatus: 'SHIPPED',
+            currentDepartment: 'Shipped',
             shippedAt,
             isFulfilled: true,
             fulfilledDate: shippedAt,

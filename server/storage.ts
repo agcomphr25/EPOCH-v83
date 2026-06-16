@@ -12661,6 +12661,8 @@ export class DatabaseStorage implements IStorage {
           prod.order_id as "orderId",
           prod.current_department as "currentDepartment",
           prod.production_status as "productionStatus",
+          COALESCE(prod.is_fulfilled, false) as "isFulfilled",
+          prod.fulfilled_date as "fulfilledDate",
           pp.customer_product_number as "customerProductNumber"
         FROM purchase_orders po
         INNER JOIN purchase_order_items poi ON po.id = poi.po_id
@@ -12710,6 +12712,8 @@ export class DatabaseStorage implements IStorage {
           prod.order_id as "orderId",
           prod.current_department as "currentDepartment",
           prod.production_status as "productionStatus",
+          COALESCE(prod.is_fulfilled, false) as "isFulfilled",
+          prod.fulfilled_date as "fulfilledDate",
           pp.customer_product_number as "customerProductNumber"
         FROM production_orders prod
         INNER JOIN purchase_orders po ON prod.po_id = po.id
@@ -12776,6 +12780,8 @@ export class DatabaseStorage implements IStorage {
       orderId: string | null;
       currentDepartment: string | null;
       productionStatus: string | null;
+      isFulfilled: boolean;
+      fulfilledDate: Date | string | null;
       customerProductNumber: string | null;
     };
     const rows = (result.rows || []) as P1PORow[];
@@ -12849,7 +12855,7 @@ export class DatabaseStorage implements IStorage {
         // poi.stock_status can be stale (e.g. marked SHIPPED at the item level while individual
         // production orders are still LAID_UP in Shipping QC), which would incorrectly hide
         // those units from the queue (bug: PO002612 / RFPO-002612).
-        const isShipped = row.productionStatus === 'SHIPPED';
+        const isShipped = row.isFulfilled || row.productionStatus === 'SHIPPED';
         const isInShippingDept = row.currentDepartment === 'Shipping QC' || row.currentDepartment === 'Shipping';
 
         poItem.productionOrders.push({
@@ -12857,8 +12863,8 @@ export class DatabaseStorage implements IStorage {
           unitNumber,
           currentDepartment: row.currentDepartment,
           productionStatus: row.productionStatus,
-          isFulfilled: isShipped,
-          fulfilledDate: null,
+          isFulfilled: row.isFulfilled || isShipped,
+          fulfilledDate: row.fulfilledDate ? String(row.fulfilledDate) : null,
           fulfilledBy: null,
           isReadyToShip: isInShippingDept && !isShipped,
         });
@@ -12925,9 +12931,12 @@ export class DatabaseStorage implements IStorage {
               const isShippedProdOrder = prodOrder.isFulfilled || prodOrder.productionStatus === 'SHIPPED';
               let effectiveDepartment = prodOrder.currentDepartment;
               let effectiveStatus = prodOrder.productionStatus;
-              if (isMetalAccessoryWithProdOrder) {
-                effectiveDepartment = isShippedProdOrder ? 'Shipped' : 'Shipping QC';
-                effectiveStatus = isShippedProdOrder ? 'SHIPPED' : 'IN_SHIPPING_QC';
+              if (isShippedProdOrder) {
+                effectiveDepartment = 'Shipped';
+                effectiveStatus = 'SHIPPED';
+              } else if (isMetalAccessoryWithProdOrder) {
+                effectiveDepartment = 'Shipping QC';
+                effectiveStatus = 'IN_SHIPPING_QC';
               }
               allItems.push({
                 orderId: prodOrder.orderId,

@@ -3299,10 +3299,54 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
 
         const newPO = insertResult.rows[0];
 
-        // 5. Determine line items: use wizard payload if provided, otherwise copy source items
-        let itemsToInsert: Array<{ partNumber: string; partName: string; quantity: number; unitPrice: number; inventoryItemId: number | null }> = [];
+        // 5. Determine line items: use wizard payload if provided, otherwise copy source items.
+        // Preserve the source item id when possible so existing P2 production rows
+        // move to the new revision instead of looking "missing" and being generated again.
+        let itemsToInsert: Array<{
+          sourceItemId: number | null;
+          partNumber: string;
+          partName: string;
+          quantity: number;
+          unitPrice: number;
+          inventoryItemId: number | null;
+        }> = [];
+        const sourceItemsResult = await client.query(
+          `SELECT id, part_number, part_name, quantity, unit_price, inventory_item_id
+           FROM p2_purchase_order_items WHERE po_id = $1
+           ORDER BY id`,
+          [sourceId]
+        );
+        const sourceItems = sourceItemsResult.rows;
         if (lineItems && Array.isArray(lineItems) && lineItems.length > 0) {
-          itemsToInsert = lineItems.map((item: any) => ({
+          const unusedSourceIndexes = new Set(sourceItems.map((_: any, index: number) => index));
+          const takeSourceMatch = (item: any, index: number) => {
+            const explicitId = Number(item.sourceItemId ?? item.source_item_id ?? item.id);
+            if (Number.isInteger(explicitId) && sourceItems.some((source: any) => Number(source.id) === explicitId)) {
+              const matchedIndex = sourceItems.findIndex((source: any) => Number(source.id) === explicitId);
+              unusedSourceIndexes.delete(matchedIndex);
+              return explicitId;
+            }
+
+            const partNumber = String(item.partNumber || item.sku || '').trim().toLowerCase();
+            const matchingIndex = sourceItems.findIndex((source: any, sourceIndex: number) =>
+              unusedSourceIndexes.has(sourceIndex) &&
+              String(source.part_number || '').trim().toLowerCase() === partNumber
+            );
+            if (matchingIndex >= 0) {
+              unusedSourceIndexes.delete(matchingIndex);
+              return Number(sourceItems[matchingIndex].id);
+            }
+
+            if (unusedSourceIndexes.has(index)) {
+              unusedSourceIndexes.delete(index);
+              return Number(sourceItems[index].id);
+            }
+
+            return null;
+          };
+
+          itemsToInsert = lineItems.map((item: any, index: number) => ({
+            sourceItemId: takeSourceMatch(item, index),
             partNumber: item.partNumber,
             partName: item.description || item.partName || item.partNumber,
             quantity: item.quantity,
@@ -3311,12 +3355,8 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           }));
         } else {
           // Fall back to copying source PO's items exactly
-          const sourceItemsResult = await client.query(
-            `SELECT part_number, part_name, quantity, unit_price, inventory_item_id
-             FROM p2_purchase_order_items WHERE po_id = $1`,
-            [sourceId]
-          );
-          itemsToInsert = sourceItemsResult.rows.map((row: any) => ({
+          itemsToInsert = sourceItems.map((row: any) => ({
+            sourceItemId: Number(row.id),
             partNumber: row.part_number,
             partName: row.part_name,
             quantity: row.quantity,
@@ -3326,12 +3366,72 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         }
 
         // Insert line items within the same transaction using the dedicated client
+        const itemIdMap = new Map<number, number>();
         for (const item of itemsToInsert) {
           const totalPrice = item.quantity * item.unitPrice;
-          await client.query(
+          const insertedItem = await client.query(
             `INSERT INTO p2_purchase_order_items (po_id, part_number, part_name, quantity, unit_price, total_price, inventory_item_id)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             RETURNING id`,
             [newPO.id, item.partNumber, item.partName, item.quantity, item.unitPrice, totalPrice, item.inventoryItemId]
+          );
+          const newItemId = Number(insertedItem.rows[0]?.id);
+          if (item.sourceItemId && Number.isInteger(newItemId)) {
+            itemIdMap.set(item.sourceItemId, newItemId);
+          }
+        }
+
+        for (const [oldItemId, newItemId] of itemIdMap.entries()) {
+          await client.query(
+            `UPDATE p2_production_orders
+                SET p2_po_id = $1,
+                    p2_po_item_id = $2,
+                    updated_at = NOW()
+              WHERE p2_po_id = $3
+                AND p2_po_item_id = $4`,
+            [newPO.id, newItemId, sourcePO.id, oldItemId]
+          );
+
+          await client.query(
+            `UPDATE p2_serialized_items
+                SET po_id = $1,
+                    po_item_id = $2,
+                    po_number = $3,
+                    updated_at = NOW()
+              WHERE po_id = $4
+                AND po_item_id = $5`,
+            [newPO.id, newItemId, newPONumber, sourcePO.id, oldItemId]
+          );
+
+          await client.query(
+            `UPDATE manufacturing_queue
+                SET p2_po_id = $1,
+                    p2_po_item_id = $2,
+                    updated_at = NOW()
+              WHERE p2_po_id = $3
+                AND p2_po_item_id = $4`,
+            [newPO.id, newItemId, sourcePO.id, oldItemId]
+          );
+        }
+
+        if (resolvedProjectId) {
+          await client.query(
+            `UPDATE projects
+                SET po_id = $1,
+                    updated_at = NOW()
+              WHERE id = $2::uuid
+                AND (po_id = $3 OR po_id IS NULL)`,
+            [newPO.id, resolvedProjectId, sourcePO.id]
+          );
+
+          await client.query(
+            `UPDATE project_steps
+                SET linked_p2_order_id = $1,
+                    updated_at = NOW()
+              WHERE project_id = $2::uuid
+                AND step_type = 'p2_order'
+                AND (linked_p2_order_id = $3 OR linked_p2_order_id IS NULL)`,
+            [newPO.id, resolvedProjectId, sourcePO.id]
           );
         }
 
@@ -4278,6 +4378,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
            )
            WHERE po.project_name IS NOT NULL
              AND TRIM(po.project_name) <> ''
+             AND po.is_current_revision IS NOT FALSE
          ),
          work_order_quantities AS (
            SELECT
@@ -4347,11 +4448,14 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         legacyProjectProductionRows.map((row: any) => [Number(row.poId), row])
       );
       const poIdsWithLegacyProjectProduction = new Set<number>(legacyProjectStatsByPoId.keys());
-      const pos = allPos.filter((po: any) =>
-        P2_GATED_STATUSES.has(normalizeP2Status(po.status)) ||
-        poIdsWithSerializedUnits.has(Number(po.id)) ||
-        poIdsWithLegacyProjectProduction.has(Number(po.id))
-      );
+      const pos = allPos.filter((po: any) => {
+        if (po.isCurrentRevision === false) return false;
+        return (
+          P2_GATED_STATUSES.has(normalizeP2Status(po.status)) ||
+          poIdsWithSerializedUnits.has(Number(po.id)) ||
+          poIdsWithLegacyProjectProduction.has(Number(po.id))
+        );
+      });
 
       // Look up projects linked to these POs. PM Control Center resolves the
       // same relationship through either projects.po_id or the p2_order step.
@@ -4395,6 +4499,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
                )
                WHERE po.project_name IS NOT NULL
                  AND TRIM(po.project_name) <> ''
+                 AND po.is_current_revision IS NOT FALSE
              )
              SELECT DISTINCT ON (linked_po_id)
                linked_po_id AS "poId",
@@ -4807,6 +4912,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
            )
            WHERE po.project_name IS NOT NULL
              AND TRIM(po.project_name) <> ''
+             AND po.is_current_revision IS NOT FALSE
          )
          SELECT DISTINCT ON (wo.id)
            wo.id,
@@ -4929,6 +5035,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
                )
                WHERE po.project_name IS NOT NULL
                  AND TRIM(po.project_name) <> ''
+                 AND po.is_current_revision IS NOT FALSE
              )
              SELECT DISTINCT ON (linked_po_id)
                linked_po_id AS "poId",

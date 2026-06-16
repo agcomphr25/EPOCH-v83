@@ -1090,6 +1090,8 @@ router.post('/lots', authenticateToken, requirePermission('shipping.release_ship
     }
 
     const first = serials[0];
+    const poItemIds = Array.from(new Set(serials.map((serial) => serial.poItemId)));
+    const lotPoItemId = poItemIds.length === 1 ? poItemIds[0] : null;
     const lotNumber = await generateSequentialId('LOT', 'p2_lot_numbers', 'lot_number');
 
     const manufacturingDate =
@@ -1107,6 +1109,7 @@ router.post('/lots', authenticateToken, requirePermission('shipping.release_ship
         customerName: first.customerName,
         poNumber: first.poNumber, // kept for display/legacy
         poId: first.poId,         // hard FK — serial already carries the integer po_id
+        poItemId: lotPoItemId,
         quantity: serials.length,
         serializedItemIds: input.serialIds,
         barcodes: serials.map((s) => s.barcode),
@@ -1142,6 +1145,7 @@ router.get('/lots/existing-shipments', async (req: Request, res: Response) => {
   try {
     const rows = await pool.query<{
       po_id: number;
+      po_item_id: number | null;
       lot_id: string;
       lot_number: string;
       slip_id: string;
@@ -1158,6 +1162,7 @@ router.get('/lots/existing-shipments', async (req: Request, res: Response) => {
     }>(`
       SELECT
         l.po_id,
+        l.po_item_id,
         l.id           AS lot_id,
         l.lot_number,
         ps.id          AS slip_id,

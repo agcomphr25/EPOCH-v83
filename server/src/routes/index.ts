@@ -2971,6 +2971,14 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         return res.status(404).json({ error: 'PO not found' });
       }
       
+      // STATE GUARD: Superseded revisions are permanent audit history — read-only
+      if (existingPO.isCurrentRevision === false) {
+        return res.status(403).json({
+          error: 'This PO has been superseded by a newer revision and cannot be modified',
+          isCurrentRevision: false,
+        });
+      }
+
       // STATE GUARD: Check if PO is locked - prevent edits to locked POs
       if (existingPO.lockedAt) {
         return res.status(403).json({
@@ -3047,6 +3055,15 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const { storage } = await import('../../storage');
       const { pool } = await import('../../db');
       const { id } = req.params;
+
+      // STATE GUARD: Superseded revisions are permanent audit history — cannot be unlocked
+      const poToUnlock = await storage.getP2PurchaseOrder(parseInt(id));
+      if (poToUnlock && poToUnlock.isCurrentRevision === false) {
+        return res.status(403).json({
+          error: 'This PO has been superseded by a newer revision and cannot be unlocked',
+          isCurrentRevision: false,
+        });
+      }
       
       // Use raw SQL to avoid Drizzle null handling issues
       await pool.query(
@@ -3063,6 +3080,247 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
     }
   });
 
+  // Create a formal revision of a locked P2 PO
+  // Validates source is locked & not cancelled, creates new PO row with revision tracking,
+  // marks previous PO as not-current, copies wizard-submitted line items, returns new PO.
+  app.post('/api/p2-purchase-orders-bypass/:id/revise', softAuth, async (req, res) => {
+    try {
+      const { pool } = await import('../../db');
+      const { storage } = await import('../../storage');
+      const sourceId = parseInt(req.params.id);
+
+      // 1. Load source PO — all further logic uses its fields as defaults
+      const sourcePO = await storage.getP2PurchaseOrder(sourceId);
+      if (!sourcePO) {
+        return res.status(404).json({ error: 'P2 Purchase Order not found' });
+      }
+      if (!sourcePO.lockedAt) {
+        return res.status(400).json({ error: 'Only locked POs can be revised. Lock the PO first.' });
+      }
+      if (sourcePO.status === 'CANCELED' || sourcePO.status === 'CANCELLED') {
+        return res.status(400).json({ error: 'Cannot revise a cancelled PO' });
+      }
+      if (sourcePO.isCurrentRevision === false) {
+        return res.status(400).json({ error: 'Cannot revise a superseded PO — revise the current revision instead.' });
+      }
+
+      const {
+        customerId, customerPONumber, dueDate,
+        toleranceAuthorizerId, toleranceAuthorizerName, toleranceNotes, notes, lineItems,
+        assignedToId, assignedToName, productionLeadId, productionLeadName,
+        customerName: bodyCustomerName, poDate: bodyPoDate,
+        sourceQuoteId, projectId, projectName, contractReviewRole,
+      } = req.body;
+
+      const poNumber = customerPONumber || req.body.poNumber || sourcePO.poNumber;
+      const resolvedExpectedDelivery = dueDate || req.body.expectedDelivery || sourcePO.expectedDelivery || null;
+
+      // Resolve customer — fall back to source PO when wizard didn't change it
+      const resolvedCustomerId = customerId || sourcePO.customerId;
+      const resolvedCustomerName = bodyCustomerName || sourcePO.customerName;
+
+      // 2. Chain back to root of revision family
+      const rootParentId = sourcePO.parentPoId || sourcePO.id;
+
+      // 3. Obtain a single dedicated client so BEGIN/COMMIT are on the same connection
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+
+        // Lock all family rows first (FOR UPDATE on non-aggregate is valid),
+        // then compute max revision number from the now-locked set.
+        await client.query(
+          `SELECT id FROM p2_purchase_orders WHERE id = $1 OR parent_po_id = $1 FOR UPDATE`,
+          [rootParentId]
+        );
+        const familyResult = await client.query(
+          `SELECT COALESCE(MAX(revision_number), 0) AS max_rev
+           FROM p2_purchase_orders
+           WHERE id = $1 OR parent_po_id = $1`,
+          [rootParentId]
+        );
+        const nextRevisionNumber = parseInt(familyResult.rows[0]?.max_rev || '0') + 1;
+
+        // New PO number: strip any existing -RX suffix then append next letter (A=1, B=2, …)
+        const basePONumber = poNumber.replace(/-R[A-Z]+$/, '');
+        const revisionLetter = String.fromCharCode(64 + nextRevisionNumber);
+        const newPONumber = `${basePONumber}-R${revisionLetter}`;
+
+        // Mark all family POs as superseded
+        await client.query(
+          `UPDATE p2_purchase_orders
+           SET is_current_revision = false, updated_at = NOW()
+           WHERE id = $1 OR parent_po_id = $1`,
+          [rootParentId]
+        );
+
+        // 4. Insert new revision: start from source PO fields, overlay wizard edits
+        const resolvedNotes = notes !== undefined ? notes : sourcePO.notes;
+        const resolvedToleranceAuthorizerId = toleranceAuthorizerId !== undefined ? (toleranceAuthorizerId || null) : (sourcePO.toleranceAuthorizerId || null);
+        const resolvedToleranceAuthorizerName = toleranceAuthorizerName !== undefined ? (toleranceAuthorizerName || null) : (sourcePO.toleranceAuthorizerName || null);
+        const resolvedToleranceNotes = toleranceNotes !== undefined ? (toleranceNotes || null) : (sourcePO.toleranceNotes || null);
+        const resolvedSourceQuoteId = sourceQuoteId !== undefined ? (sourceQuoteId || null) : (sourcePO.sourceQuoteId || null);
+        const resolvedContractReviewRole = contractReviewRole === 'primary' ? 'primary' : (contractReviewRole === 'secondary' ? 'secondary' : (sourcePO.contractReviewRole || 'secondary'));
+        const resolvedAssignedToId = assignedToId !== undefined
+          ? (assignedToId && assignedToId !== 'none' ? parseInt(String(assignedToId)) : null)
+          : (sourcePO.assignedToId || null);
+        const resolvedAssignedToName = assignedToName !== undefined ? (assignedToName || null) : (sourcePO.assignedToName || null);
+        const resolvedProductionLeadId = productionLeadId !== undefined
+          ? (productionLeadId && productionLeadId !== 'none' ? parseInt(String(productionLeadId)) : null)
+          : (sourcePO.productionLeadId || null);
+        const resolvedProductionLeadName = productionLeadName !== undefined ? (productionLeadName || null) : (sourcePO.productionLeadName || null);
+        const resolvedProjectId = projectId !== undefined ? (projectId || null) : (sourcePO.projectId || null);
+        const resolvedProjectName = projectName !== undefined ? (projectName || null) : (sourcePO.projectName || null);
+
+        const insertResult = await client.query(`
+          INSERT INTO p2_purchase_orders (
+            po_number, customer_id, customer_name, po_date, expected_delivery,
+            status, notes, attachments,
+            tolerance_authorizer_id, tolerance_authorizer_name, tolerance_notes,
+            bom_configured, source_quote_id, contract_review_role,
+            created_by_id, created_by_name,
+            assigned_to_id, assigned_to_name,
+            bom_owner_id, bom_owner_name,
+            scheduled_by_id, scheduled_by_name,
+            production_lead_id, production_lead_name,
+            project_id, project_name,
+            revision_number, parent_po_id, is_current_revision, revised_at,
+            security_classification, cui_category, itar_category,
+            export_control_jurisdiction, customer_file_access_rule
+          ) VALUES (
+            $1, $2, $3, $4, $5,
+            'OPEN', $6, '[]'::jsonb,
+            $7, $8, $9,
+            false, $10, $11,
+            $12, $13,
+            $14, $15,
+            $16, $17,
+            $18, $19,
+            $20, $21,
+            $22, $23,
+            $24, $25, true, NOW(),
+            $26, $27, $28,
+            $29, $30
+          )
+          RETURNING id, po_number AS "poNumber"
+        `, [
+          newPONumber,
+          resolvedCustomerId,
+          resolvedCustomerName,
+          bodyPoDate || sourcePO.poDate || new Date().toISOString().split('T')[0],
+          resolvedExpectedDelivery,
+          resolvedNotes,
+          resolvedToleranceAuthorizerId,
+          resolvedToleranceAuthorizerName,
+          resolvedToleranceNotes,
+          resolvedSourceQuoteId,
+          resolvedContractReviewRole,
+          sourcePO.createdById || null,
+          sourcePO.createdByName || null,
+          resolvedAssignedToId,
+          resolvedAssignedToName,
+          sourcePO.bomOwnerId || null,
+          sourcePO.bomOwnerName || null,
+          sourcePO.scheduledById || null,
+          sourcePO.scheduledByName || null,
+          resolvedProductionLeadId,
+          resolvedProductionLeadName,
+          resolvedProjectId,
+          resolvedProjectName,
+          nextRevisionNumber,
+          rootParentId,
+          sourcePO.securityClassification || 'internal',
+          sourcePO.cuiCategory || null,
+          sourcePO.itarCategory || null,
+          sourcePO.exportControlJurisdiction || null,
+          sourcePO.customerFileAccessRule || 'authenticated',
+        ]);
+
+        const newPO = insertResult.rows[0];
+
+        // 5. Determine line items: use wizard payload if provided, otherwise copy source items
+        let itemsToInsert: Array<{ partNumber: string; partName: string; quantity: number; unitPrice: number; inventoryItemId: number | null }> = [];
+        if (lineItems && Array.isArray(lineItems) && lineItems.length > 0) {
+          itemsToInsert = lineItems.map((item: any) => ({
+            partNumber: item.partNumber,
+            partName: item.description || item.partName || item.partNumber,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice || 0,
+            inventoryItemId: item.inventoryItemId || null,
+          }));
+        } else {
+          // Fall back to copying source PO's items exactly
+          const sourceItemsResult = await client.query(
+            `SELECT part_number, part_name, quantity, unit_price, inventory_item_id
+             FROM p2_purchase_order_items WHERE po_id = $1`,
+            [sourceId]
+          );
+          itemsToInsert = sourceItemsResult.rows.map((row: any) => ({
+            partNumber: row.part_number,
+            partName: row.part_name,
+            quantity: row.quantity,
+            unitPrice: parseFloat(row.unit_price) || 0,
+            inventoryItemId: row.inventory_item_id || null,
+          }));
+        }
+
+        // Insert line items within the same transaction using the dedicated client
+        for (const item of itemsToInsert) {
+          const totalPrice = item.quantity * item.unitPrice;
+          await client.query(
+            `INSERT INTO p2_purchase_order_items (po_id, part_number, part_name, quantity, unit_price, total_price, inventory_item_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [newPO.id, item.partNumber, item.partName, item.quantity, item.unitPrice, totalPrice, item.inventoryItemId]
+          );
+        }
+
+        await client.query('COMMIT');
+
+        const finalPO = await storage.getP2PurchaseOrder(newPO.id);
+        console.log(`✏️ Created P2 PO revision: ${newPONumber} (Rev ${nextRevisionNumber}) from PO #${sourceId}`);
+        res.status(201).json(finalPO);
+      } catch (txErr: any) {
+        await client.query('ROLLBACK');
+        throw txErr;
+      } finally {
+        client.release();
+      }
+    } catch (error: any) {
+      console.error('P2 PO revise error:', error);
+      res.status(500).json({ error: 'Failed to create PO revision', message: error?.message });
+    }
+  });
+
+  // List all revisions in a PO's family (same root parentPoId)
+  app.get('/api/p2-purchase-orders-bypass/:id/revisions', softAuth, async (req, res) => {
+    try {
+      const { pool } = await import('../../db');
+      const { storage } = await import('../../storage');
+      const poId = parseInt(req.params.id);
+
+      const po = await storage.getP2PurchaseOrder(poId);
+      if (!po) {
+        return res.status(404).json({ error: 'P2 Purchase Order not found' });
+      }
+
+      const rootParentId = po.parentPoId || po.id;
+      const result = await pool.query(`
+        SELECT id, po_number as "poNumber", revision_number as "revisionNumber",
+               parent_po_id as "parentPoId", is_current_revision as "isCurrentRevision",
+               status, locked_at as "lockedAt", revised_at as "revisedAt",
+               revised_by as "revisedBy", created_at as "createdAt"
+        FROM p2_purchase_orders
+        WHERE id = $1 OR parent_po_id = $1
+        ORDER BY revision_number ASC
+      `, [rootParentId]);
+
+      res.json(result.rows);
+    } catch (error: any) {
+      console.error('P2 PO revisions error:', error);
+      res.status(500).json({ error: 'Failed to fetch PO revisions' });
+    }
+  });
+
   // SECURITY: softAuth enforces authentication in production
   app.delete('/api/p2-purchase-orders-bypass/:id', softAuth, async (req, res) => {
     try {
@@ -3070,8 +3328,14 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const { storage } = await import('../../storage');
       const { id } = req.params;
       
-      // Check if PO is locked - prevent deleting locked POs
+      // Check if PO is locked or superseded - prevent deleting
       const existingPO = await storage.getP2PurchaseOrder(parseInt(id));
+      if (existingPO?.isCurrentRevision === false) {
+        return res.status(403).json({
+          error: 'This PO has been superseded by a newer revision and cannot be deleted',
+          isCurrentRevision: false,
+        });
+      }
       if (existingPO?.lockedAt) {
         return res.status(403).json({
           error: 'This PO has been locked and cannot be deleted',

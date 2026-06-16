@@ -78,6 +78,32 @@ interface FulfilledDepartmentSampleRow {
   updated_at: string | null;
 }
 
+interface MissingProductionSummaryRow {
+  po_status: string;
+  po_count: number;
+  line_count: number;
+  missing_production_count: number;
+}
+
+interface MissingProductionSampleRow {
+  po_id: number;
+  po_number: string;
+  customer_name: string | null;
+  po_status: string;
+  po_item_id: number;
+  item_id: string | null;
+  item_name: string | null;
+  item_type: string | null;
+  quantity: number;
+  order_count: number;
+  active_production_count: number;
+  missing_production_count: number;
+  due_date: string | null;
+  expected_delivery: string | null;
+  stock_status: string | null;
+  updated_at: string | null;
+}
+
 interface PoReopenSampleRow {
   po_id: number;
   po_number: string;
@@ -117,6 +143,18 @@ interface AppliedFulfilledDepartmentRow {
   is_fulfilled: boolean;
 }
 
+interface AppliedMissingProductionRow {
+  id: number;
+  order_id: string;
+  po_id: number;
+  po_item_id: number;
+  po_number: string;
+  customer_name: string | null;
+  item_name: string | null;
+  production_status: string;
+  current_department: string;
+}
+
 interface RepairResponse {
   success: boolean;
   mode: 'dry_run' | 'applied';
@@ -134,6 +172,12 @@ interface RepairResponse {
     samples: FulfilledDepartmentSampleRow[];
     appliedCount: number;
     appliedRows: AppliedFulfilledDepartmentRow[];
+  };
+  missingProductionLineRepairs?: {
+    summary: MissingProductionSummaryRow[];
+    samples: MissingProductionSampleRow[];
+    appliedCount: number;
+    appliedRows: AppliedMissingProductionRow[];
   };
   purchaseOrderReopens: {
     summary: PoReopenSummaryRow[];
@@ -167,8 +211,8 @@ function formatDateTime(value: string | null | undefined) {
   return date.toLocaleString();
 }
 
-function countRows(rows: Array<{ count?: number; po_count?: number }>) {
-  return rows.reduce((sum, row) => sum + Number(row.count ?? row.po_count ?? 0), 0);
+function countRows(rows: Array<{ count?: number; po_count?: number; missing_production_count?: number }>) {
+  return rows.reduce((sum, row) => sum + Number(row.count ?? row.missing_production_count ?? row.po_count ?? 0), 0);
 }
 
 export default function P1POStatusRepairPage() {
@@ -198,7 +242,7 @@ export default function P1POStatusRepairPage() {
       setLastApplied(data);
       toast({
         title: 'P1 PO repair applied',
-        description: `${data.productionStatusRepairs.appliedCount} production statuses updated, ${data.fulfilledDepartmentRepairs?.appliedCount ?? 0} shipped rows marked fulfilled, ${data.purchaseOrderReopens.appliedCount} POs reopened.`,
+        description: `${data.productionStatusRepairs.appliedCount} statuses updated, ${data.missingProductionLineRepairs?.appliedCount ?? 0} production rows created, ${data.fulfilledDepartmentRepairs?.appliedCount ?? 0} shipped rows fulfilled, ${data.purchaseOrderReopens.appliedCount} POs reopened.`,
       });
       query.refetch();
     },
@@ -224,7 +268,11 @@ export default function P1POStatusRepairPage() {
     () => countRows(data?.fulfilledDepartmentRepairs?.summary ?? []),
     [data?.fulfilledDepartmentRepairs?.summary],
   );
-  const totalRepairCount = statusRepairCount + fulfilledDepartmentRepairCount + poReopenCount;
+  const missingProductionRepairCount = useMemo(
+    () => countRows(data?.missingProductionLineRepairs?.summary ?? []),
+    [data?.missingProductionLineRepairs?.summary],
+  );
+  const totalRepairCount = statusRepairCount + fulfilledDepartmentRepairCount + missingProductionRepairCount + poReopenCount;
   const isBusy = query.isFetching || applyMutation.isPending;
 
   return (
@@ -291,7 +339,7 @@ export default function P1POStatusRepairPage() {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Apply P1 PO Status Repair</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This will update up to {maxApply} drifted production statuses, mark shipped P1 rows as fulfilled and move them to Shipped, and reopen up to {maxApply} closed or complete POs with active production items.
+                    This will update up to {maxApply} drifted production statuses, create up to {maxApply} missing production rows for PO line items, mark shipped P1 rows as fulfilled and move them to Shipped, and reopen up to {maxApply} closed or complete POs with active production items.
                     Item descriptions, item stock fields, and shipment records will not be changed.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
@@ -319,7 +367,7 @@ export default function P1POStatusRepairPage() {
         </Card>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-muted-foreground">Production Status Repairs</CardTitle>
@@ -331,6 +379,12 @@ export default function P1POStatusRepairPage() {
             <CardTitle className="text-sm text-muted-foreground">Shipped Rows In QC</CardTitle>
           </CardHeader>
           <CardContent className="text-3xl font-semibold">{fulfilledDepartmentRepairCount}</CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-muted-foreground">Missing Production Lines</CardTitle>
+          </CardHeader>
+          <CardContent className="text-3xl font-semibold">{missingProductionRepairCount}</CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
@@ -346,6 +400,7 @@ export default function P1POStatusRepairPage() {
             {lastApplied ? (
               <div className="space-y-1">
                 <div>{lastApplied.productionStatusRepairs.appliedCount} statuses</div>
+                <div>{lastApplied.missingProductionLineRepairs?.appliedCount ?? 0} production rows created</div>
                 <div>{lastApplied.fulfilledDepartmentRepairs?.appliedCount ?? 0} shipped rows fulfilled</div>
                 <div>{lastApplied.purchaseOrderReopens.appliedCount} POs reopened</div>
               </div>
@@ -495,6 +550,76 @@ export default function P1POStatusRepairPage() {
               {!query.isFetching && (data?.fulfilledDepartmentRepairs?.samples ?? []).length === 0 && (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center text-muted-foreground py-6">No sample rows.</TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">PO Lines Missing Production Rows</CardTitle>
+          <CardDescription>Historical P1 PO line items whose quantity is greater than the active production rows currently tied to that line.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>PO Status</TableHead>
+                <TableHead className="text-right">POs</TableHead>
+                <TableHead className="text-right">Lines</TableHead>
+                <TableHead className="text-right">Missing Rows</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {(data?.missingProductionLineRepairs?.summary ?? []).map((row) => (
+                <TableRow key={row.po_status}>
+                  <TableCell><StatusBadge value={row.po_status} /></TableCell>
+                  <TableCell className="text-right tabular-nums">{row.po_count}</TableCell>
+                  <TableCell className="text-right tabular-nums">{row.line_count}</TableCell>
+                  <TableCell className="text-right tabular-nums">{row.missing_production_count}</TableCell>
+                </TableRow>
+              ))}
+              {!query.isFetching && (data?.missingProductionLineRepairs?.summary ?? []).length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center text-muted-foreground py-6">No PO line items are missing production rows.</TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>PO</TableHead>
+                <TableHead>Line</TableHead>
+                <TableHead>Customer</TableHead>
+                <TableHead>Item</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Qty</TableHead>
+                <TableHead className="text-right">Active</TableHead>
+                <TableHead className="text-right">Missing</TableHead>
+                <TableHead>Due</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {(data?.missingProductionLineRepairs?.samples ?? []).map((row) => (
+                <TableRow key={row.po_item_id}>
+                  <TableCell>{row.po_number}</TableCell>
+                  <TableCell className="font-mono text-xs">{row.po_item_id}</TableCell>
+                  <TableCell>{row.customer_name || '-'}</TableCell>
+                  <TableCell>{row.item_name || row.item_id || '-'}</TableCell>
+                  <TableCell><StatusBadge value={row.po_status} /></TableCell>
+                  <TableCell className="text-right tabular-nums">{row.quantity}</TableCell>
+                  <TableCell className="text-right tabular-nums">{row.active_production_count}</TableCell>
+                  <TableCell className="text-right tabular-nums">{row.missing_production_count}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{formatDateTime(row.due_date || row.expected_delivery)}</TableCell>
+                </TableRow>
+              ))}
+              {!query.isFetching && (data?.missingProductionLineRepairs?.samples ?? []).length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={9} className="text-center text-muted-foreground py-6">No sample rows.</TableCell>
                 </TableRow>
               )}
             </TableBody>

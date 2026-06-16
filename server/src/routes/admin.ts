@@ -13,6 +13,7 @@ import { simulateFactoryCompletion, invalidateSimulationCache } from '../service
 import { normalizeToTuesday } from '@shared/utils/dateNormalization';
 import { syncEmployeeRoles, findRoleMismatches } from '../migrations/syncEmployeeRoles';
 import { recordAuditEvent } from '../services/auditLedgerService';
+import { resolveItemDisplayName } from '../utils/resolveItemDisplayName';
 
 const router = Router();
 
@@ -81,6 +82,49 @@ const p1FulfilledDepartmentCandidateSql = `
   WHERE po_id IS NOT NULL
     AND UPPER(COALESCE(NULLIF(TRIM(production_status), ''), '')) = 'SHIPPED'
     AND LOWER(COALESCE(NULLIF(TRIM(current_department), ''), '')) = 'shipping qc'
+`;
+
+const p1MissingProductionLineCandidateSql = `
+  WITH production_counts AS (
+    SELECT
+      po_item_id,
+      COUNT(*) FILTER (
+        WHERE COALESCE(UPPER(production_status), '') NOT IN ('CANCELLED', 'CANCELED', 'SCRAPPED')
+      )::int AS active_production_count
+    FROM production_orders
+    WHERE po_item_id IS NOT NULL
+    GROUP BY po_item_id
+  )
+  SELECT
+    po.id AS po_id,
+    po.po_number,
+    po.customer_id,
+    po.customer_name,
+    po.status AS po_status,
+    poi.id AS po_item_id,
+    poi.item_id,
+    poi.item_name,
+    poi.item_type,
+    poi.quantity,
+    COALESCE(poi.order_count, 0)::int AS order_count,
+    COALESCE(pc.active_production_count, 0)::int AS active_production_count,
+    GREATEST(poi.quantity - COALESCE(pc.active_production_count, 0), 0)::int AS missing_production_count,
+    poi.due_date,
+    po.expected_delivery,
+    poi.specifications,
+    poi.notes,
+    poi.stock_status,
+    poi.updated_at
+  FROM purchase_order_items poi
+  JOIN purchase_orders po ON po.id = poi.po_id
+  LEFT JOIN production_counts pc ON pc.po_item_id = poi.id
+  WHERE poi.quantity > 0
+    AND GREATEST(poi.quantity - COALESCE(pc.active_production_count, 0), 0) > 0
+    AND COALESCE(UPPER(po.status), '') NOT IN ('CANCELED', 'CANCELLED')
+    AND COALESCE(po.is_cancelled, false) = false
+    AND COALESCE(UPPER(poi.stock_status), '') NOT IN ('SHIPPED', 'FULFILLED', 'CANCELLED', 'CANCELED')
+    AND COALESCE(NULLIF(TRIM(poi.item_id), ''), '') NOT IN ('', 'None', 'none')
+    AND COALESCE(LOWER(NULLIF(TRIM(poi.item_type), '')), 'stock_model') = 'stock_model'
 `;
 
 router.post(
@@ -1304,6 +1348,8 @@ router.post(
         statusSamplesResult,
         fulfilledDepartmentSummaryResult,
         fulfilledDepartmentSamplesResult,
+        missingProductionSummaryResult,
+        missingProductionSamplesResult,
         poReopenSummaryResult,
         poReopenSamplesResult,
       ] =
@@ -1371,31 +1417,79 @@ router.post(
             LIMIT $1
           `, [sampleLimit]),
           pool.query(`
-            WITH production_with_expected AS (${p1ProductionStatusCandidateSql})
+            WITH candidates AS (${p1MissingProductionLineCandidateSql})
+            SELECT
+              po_status,
+              COUNT(DISTINCT po_id)::int AS po_count,
+              COUNT(*)::int AS line_count,
+              SUM(missing_production_count)::int AS missing_production_count
+            FROM candidates
+            GROUP BY po_status
+            ORDER BY missing_production_count DESC, po_status ASC
+          `),
+          pool.query(`
+            WITH candidates AS (${p1MissingProductionLineCandidateSql})
+            SELECT *
+            FROM candidates
+            ORDER BY updated_at DESC NULLS LAST, po_id ASC, po_item_id ASC
+            LIMIT $1
+          `, [sampleLimit]),
+          pool.query(`
+            WITH production_with_expected AS (${p1ProductionStatusCandidateSql}),
+            missing_production_lines AS (${p1MissingProductionLineCandidateSql}),
+            po_active_counts AS (
+              SELECT
+                po_id,
+                COUNT(id)::int AS active_count
+              FROM production_with_expected
+              WHERE expected_status NOT IN ('SHIPPED', 'CANCELLED')
+              GROUP BY po_id
+              UNION ALL
+              SELECT
+                po_id,
+                SUM(missing_production_count)::int AS active_count
+              FROM missing_production_lines
+              GROUP BY po_id
+            )
             SELECT
               po.status AS current_po_status,
               COUNT(DISTINCT po.id)::int AS po_count,
-              COUNT(pwe.id)::int AS active_production_order_count
+              SUM(pac.active_count)::int AS active_production_order_count
             FROM purchase_orders po
-            JOIN production_with_expected pwe ON pwe.po_id = po.id
+            JOIN po_active_counts pac ON pac.po_id = po.id
             WHERE UPPER(COALESCE(po.status, '')) IN ('CLOSED', 'COMPLETE', 'COMPLETED')
-              AND pwe.expected_status NOT IN ('SHIPPED', 'CANCELLED')
             GROUP BY po.status
             ORDER BY po_count DESC, po.status ASC
           `),
           pool.query(`
-            WITH production_with_expected AS (${p1ProductionStatusCandidateSql})
+            WITH production_with_expected AS (${p1ProductionStatusCandidateSql}),
+            missing_production_lines AS (${p1MissingProductionLineCandidateSql}),
+            po_active_counts AS (
+              SELECT
+                po_id,
+                COUNT(id)::int AS active_count,
+                MAX(updated_at) AS last_active_order_updated_at
+              FROM production_with_expected
+              WHERE expected_status NOT IN ('SHIPPED', 'CANCELLED')
+              GROUP BY po_id
+              UNION ALL
+              SELECT
+                po_id,
+                SUM(missing_production_count)::int AS active_count,
+                MAX(updated_at) AS last_active_order_updated_at
+              FROM missing_production_lines
+              GROUP BY po_id
+            )
             SELECT
               po.id AS po_id,
               po.po_number,
               po.customer_name,
               po.status AS current_po_status,
-              COUNT(pwe.id)::int AS active_production_order_count,
-              MAX(pwe.updated_at) AS last_active_order_updated_at
+              SUM(pac.active_count)::int AS active_production_order_count,
+              MAX(pac.last_active_order_updated_at) AS last_active_order_updated_at
             FROM purchase_orders po
-            JOIN production_with_expected pwe ON pwe.po_id = po.id
+            JOIN po_active_counts pac ON pac.po_id = po.id
             WHERE UPPER(COALESCE(po.status, '')) IN ('CLOSED', 'COMPLETE', 'COMPLETED')
-              AND pwe.expected_status NOT IN ('SHIPPED', 'CANCELLED')
             GROUP BY po.id, po.po_number, po.customer_name, po.status
             ORDER BY last_active_order_updated_at DESC NULLS LAST, po.id ASC
             LIMIT $1
@@ -1404,6 +1498,7 @@ router.post(
 
       let appliedProductionStatusRows: any[] = [];
       let appliedFulfilledDepartmentRows: any[] = [];
+      let appliedMissingProductionRows: any[] = [];
       let reopenedPurchaseOrders: any[] = [];
 
       if (apply) {
@@ -1441,15 +1536,29 @@ router.post(
 
           const poReopenApplyResult = await client.query(`
             WITH production_with_expected AS (${p1ProductionStatusCandidateSql}),
+            missing_production_lines AS (${p1MissingProductionLineCandidateSql}),
+            po_active_counts AS (
+              SELECT
+                po_id,
+                COUNT(id)::int AS active_count
+              FROM production_with_expected
+              WHERE expected_status NOT IN ('SHIPPED', 'CANCELLED')
+              GROUP BY po_id
+              UNION ALL
+              SELECT
+                po_id,
+                SUM(missing_production_count)::int AS active_count
+              FROM missing_production_lines
+              GROUP BY po_id
+            ),
             target_pos AS (
               SELECT
                 po.id AS po_id,
                 po.status AS previous_status,
-                COUNT(pwe.id)::int AS active_production_order_count
+                SUM(pac.active_count)::int AS active_production_order_count
               FROM purchase_orders po
-              JOIN production_with_expected pwe ON pwe.po_id = po.id
+              JOIN po_active_counts pac ON pac.po_id = po.id
               WHERE UPPER(COALESCE(po.status, '')) IN ('CLOSED', 'COMPLETE', 'COMPLETED')
-                AND pwe.expected_status NOT IN ('SHIPPED', 'CANCELLED')
               GROUP BY po.id, po.status
               ORDER BY po.id ASC
               LIMIT $1
@@ -1502,6 +1611,145 @@ router.post(
               prod.updated_at
           `, [maxApply]);
 
+          const missingProductionCandidatesResult = await client.query(`
+            WITH candidates AS (${p1MissingProductionLineCandidateSql})
+            SELECT *
+            FROM candidates
+            ORDER BY updated_at DESC NULLS LAST, po_id ASC, po_item_id ASC
+          `);
+
+          let remainingCreates = maxApply;
+          const missingProductionCandidates = rowsOf(missingProductionCandidatesResult);
+
+          for (const candidate of missingProductionCandidates) {
+            if (remainingCreates <= 0) break;
+
+            const quantity = Number(candidate.quantity ?? 0);
+            const missingCount = Math.min(
+              Number(candidate.missing_production_count ?? 0),
+              remainingCreates,
+            );
+            if (quantity <= 0 || missingCount <= 0) continue;
+
+            const existingOrderRows = rowsOf(await client.query(
+              `SELECT order_id
+               FROM production_orders
+               WHERE po_item_id = $1`,
+              [candidate.po_item_id],
+            ));
+            const existingOrderIds = new Set(existingOrderRows.map((row: any) => String(row.order_id)));
+            let createdForLine = 0;
+
+            for (let seq = 1; seq <= quantity && createdForLine < missingCount; seq++) {
+              const orderId = `PO-${candidate.po_number}-${candidate.po_item_id}-${seq}`;
+              if (existingOrderIds.has(orderId)) continue;
+
+              const specs = candidate.specifications || {};
+              const dueDate = candidate.due_date || candidate.expected_delivery || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+              const itemName = resolveItemDisplayName(candidate.item_name || '');
+              const sourceSnapshot = {
+                repair: true,
+                repairSource: 'p1-po-status-repair',
+                poId: candidate.po_id,
+                poNumber: candidate.po_number,
+                poItemId: candidate.po_item_id,
+                quantity: candidate.quantity,
+                activeProductionCount: candidate.active_production_count,
+                missingProductionCount: candidate.missing_production_count,
+              };
+
+              const insertResult = await client.query(`
+                INSERT INTO production_orders (
+                  order_id, po_id, po_item_id, customer_id, customer_name,
+                  po_number, item_type, item_id, item_name, specifications,
+                  order_date, due_date, production_status, current_department,
+                  department_history, source_snapshot, item_code, created_at, updated_at
+                ) VALUES (
+                  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb,
+                  NOW(), $11, 'PENDING', 'P1 Production Queue',
+                  '[]'::jsonb, $12::jsonb, $13, NOW(), NOW()
+                )
+                ON CONFLICT (order_id) DO NOTHING
+                RETURNING
+                  id,
+                  order_id,
+                  po_id,
+                  po_item_id,
+                  po_number,
+                  customer_name,
+                  item_name,
+                  production_status,
+                  current_department
+              `, [
+                orderId,
+                candidate.po_id,
+                candidate.po_item_id,
+                candidate.customer_id || '',
+                candidate.customer_name || '',
+                candidate.po_number || '',
+                candidate.item_type || 'stock_model',
+                candidate.item_id || '',
+                itemName,
+                JSON.stringify(specs),
+                dueDate,
+                JSON.stringify(sourceSnapshot),
+                String(candidate.item_name || candidate.item_id || '').trim().toUpperCase(),
+              ]);
+
+              const insertedRows = rowsOf(insertResult);
+              if (insertedRows.length === 0) {
+                existingOrderIds.add(orderId);
+                continue;
+              }
+
+              existingOrderIds.add(orderId);
+              createdForLine++;
+              remainingCreates--;
+              appliedMissingProductionRows.push({
+                ...insertedRows[0],
+                previous_active_production_count: candidate.active_production_count,
+                target_quantity: candidate.quantity,
+              });
+
+              await client.query(
+                `INSERT INTO admin_audit_log
+                   (order_id, field_name, field_label, old_value, new_value, changed_by, user_role, change_type, reason, ip_address, user_agent, timestamp)
+                 VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7, $8, $9, $10, $11, NOW())`,
+                [
+                  orderId,
+                  'P1_PRODUCTION_ORDER_REPAIR_CREATED',
+                  'P1 Production Order Repair Created',
+                  JSON.stringify(null),
+                  JSON.stringify(insertedRows[0]),
+                  req.user?.username || 'SYSTEM',
+                  req.user?.role || 'SYSTEM',
+                  'ORDER_CREATE',
+                  `Missing production row created for PO #${candidate.po_number}, line ${candidate.po_item_id}`,
+                  req.ip ?? null,
+                  req.headers['user-agent'] ?? null,
+                ],
+              );
+            }
+
+            if (createdForLine > 0) {
+              const activeCountRows = rowsOf(await client.query(
+                `SELECT COUNT(*)::int AS active_count
+                 FROM production_orders
+                 WHERE po_item_id = $1
+                   AND COALESCE(UPPER(production_status), '') NOT IN ('CANCELLED', 'CANCELED', 'SCRAPPED')`,
+                [candidate.po_item_id],
+              ));
+              const activeCount = Number(activeCountRows[0]?.active_count ?? 0);
+              await client.query(
+                `UPDATE purchase_order_items
+                 SET order_count = GREATEST(COALESCE(order_count, 0), $1),
+                     updated_at = NOW()
+                 WHERE id = $2`,
+                [activeCount, candidate.po_item_id],
+              );
+            }
+          }
+
           await client.query('COMMIT');
 
           appliedProductionStatusRows = rowsOf(statusRepairApplyResult);
@@ -1529,6 +1777,10 @@ router.post(
                   before: rowsOf(fulfilledDepartmentSummaryResult),
                   after: appliedFulfilledDepartmentRows.length,
                 },
+                missingProductionRows: {
+                  before: rowsOf(missingProductionSummaryResult),
+                  after: appliedMissingProductionRows.length,
+                },
                 reopenedPurchaseOrders: {
                   before: rowsOf(poReopenSummaryResult),
                   after: reopenedPurchaseOrders.length,
@@ -1538,6 +1790,7 @@ router.post(
                 maxApply,
                 appliedProductionStatusCount: appliedProductionStatusRows.length,
                 appliedFulfilledDepartmentCount: appliedFulfilledDepartmentRows.length,
+                appliedMissingProductionCount: appliedMissingProductionRows.length,
                 reopenedPurchaseOrderCount: reopenedPurchaseOrders.length,
               } as any,
             });
@@ -1569,6 +1822,12 @@ router.post(
           samples: rowsOf(fulfilledDepartmentSamplesResult),
           appliedCount: appliedFulfilledDepartmentRows.length,
           appliedRows: appliedFulfilledDepartmentRows,
+        },
+        missingProductionLineRepairs: {
+          summary: rowsOf(missingProductionSummaryResult),
+          samples: rowsOf(missingProductionSamplesResult),
+          appliedCount: appliedMissingProductionRows.length,
+          appliedRows: appliedMissingProductionRows,
         },
         purchaseOrderReopens: {
           summary: rowsOf(poReopenSummaryResult),

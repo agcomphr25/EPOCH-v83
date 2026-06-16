@@ -3138,15 +3138,6 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
               ]
             );
 
-            await dbPool.query(
-              `UPDATE travelers
-               SET production_work_order_id = $1::uuid,
-                   updated_at = NOW()
-               WHERE project_id = $2::uuid
-                 AND (production_work_order_id IS NULL OR production_work_order_id <> $1::uuid)`,
-              [canonicalWad.id, revisionProjectId]
-            );
-
             if (revisedPartNumbers.length > 0) {
               const duplicateRows = await dbPool.query(
                 `UPDATE production_work_orders wo

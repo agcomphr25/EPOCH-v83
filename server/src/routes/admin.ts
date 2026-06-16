@@ -32,6 +32,9 @@ const p1ProductionStatusExpectationSql = `
       THEN 'CANCELLED'
     WHEN COALESCE(is_fulfilled, false)
       THEN 'SHIPPED'
+    WHEN UPPER(COALESCE(NULLIF(TRIM(production_status), ''), '')) = 'SHIPPED'
+      AND LOWER(COALESCE(NULLIF(TRIM(current_department), ''), '')) = 'shipping qc'
+      THEN 'SHIPPED'
     WHEN LOWER(COALESCE(NULLIF(TRIM(current_department), ''), '')) = 'p1 production queue'
       THEN 'PENDING'
     WHEN COALESCE(NULLIF(TRIM(current_department), ''), '') = ''
@@ -76,8 +79,8 @@ const p1FulfilledDepartmentCandidateSql = `
     updated_at
   FROM production_orders
   WHERE po_id IS NOT NULL
-    AND COALESCE(is_fulfilled, false)
-    AND LOWER(COALESCE(NULLIF(TRIM(current_department), ''), '')) NOT IN ('shipped', 'fulfilled')
+    AND UPPER(COALESCE(NULLIF(TRIM(production_status), ''), '')) = 'SHIPPED'
+    AND LOWER(COALESCE(NULLIF(TRIM(current_department), ''), '')) = 'shipping qc'
 `;
 
 router.post(
@@ -1477,6 +1480,7 @@ router.post(
             UPDATE production_orders prod
             SET current_department = mismatches.expected_department,
                 production_status = 'SHIPPED',
+                is_fulfilled = true,
                 shipped_at = COALESCE(prod.shipped_at, prod.fulfilled_date, NOW()),
                 fulfilled_date = COALESCE(prod.fulfilled_date, prod.shipped_at, NOW()),
                 updated_at = NOW()

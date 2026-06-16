@@ -198,7 +198,7 @@ export default function P1POStatusRepairPage() {
       setLastApplied(data);
       toast({
         title: 'P1 PO repair applied',
-        description: `${data.productionStatusRepairs.appliedCount} production statuses updated, ${data.fulfilledDepartmentRepairs?.appliedCount ?? 0} fulfilled rows moved to Shipped, ${data.purchaseOrderReopens.appliedCount} POs reopened.`,
+        description: `${data.productionStatusRepairs.appliedCount} production statuses updated, ${data.fulfilledDepartmentRepairs?.appliedCount ?? 0} shipped rows marked fulfilled, ${data.purchaseOrderReopens.appliedCount} POs reopened.`,
       });
       query.refetch();
     },
@@ -291,7 +291,7 @@ export default function P1POStatusRepairPage() {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Apply P1 PO Status Repair</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This will update up to {maxApply} drifted production statuses, move fulfilled P1 rows that are still in active departments to Shipped, and reopen up to {maxApply} closed or complete POs with active production items.
+                    This will update up to {maxApply} drifted production statuses, mark shipped P1 rows as fulfilled and move them to Shipped, and reopen up to {maxApply} closed or complete POs with active production items.
                     Item descriptions, item stock fields, and shipment records will not be changed.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
@@ -328,7 +328,7 @@ export default function P1POStatusRepairPage() {
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">Fulfilled Rows To Ship</CardTitle>
+            <CardTitle className="text-sm text-muted-foreground">Shipped Rows In QC</CardTitle>
           </CardHeader>
           <CardContent className="text-3xl font-semibold">{fulfilledDepartmentRepairCount}</CardContent>
         </Card>
@@ -346,7 +346,7 @@ export default function P1POStatusRepairPage() {
             {lastApplied ? (
               <div className="space-y-1">
                 <div>{lastApplied.productionStatusRepairs.appliedCount} statuses</div>
-                <div>{lastApplied.fulfilledDepartmentRepairs?.appliedCount ?? 0} fulfilled rows shipped</div>
+                <div>{lastApplied.fulfilledDepartmentRepairs?.appliedCount ?? 0} shipped rows fulfilled</div>
                 <div>{lastApplied.purchaseOrderReopens.appliedCount} POs reopened</div>
               </div>
             ) : (
@@ -438,8 +438,8 @@ export default function P1POStatusRepairPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Fulfilled Rows Still In Active Departments</CardTitle>
-          <CardDescription>Fulfilled P1 production rows should be in Shipped and display as SHIPPED in P1 PO Manage Items.</CardDescription>
+          <CardTitle className="text-base">Shipped Rows Still In Shipping QC</CardTitle>
+          <CardDescription>SHIPPED P1 production rows in Shipping QC should be marked fulfilled, moved to Shipped, and display as SHIPPED in P1 PO Manage Items.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
           <Table>
@@ -447,7 +447,7 @@ export default function P1POStatusRepairPage() {
               <TableRow>
                 <TableHead>Current Department</TableHead>
                 <TableHead>Production Status</TableHead>
-                <TableHead>Expected Department</TableHead>
+                <TableHead>Repair Department</TableHead>
                 <TableHead className="text-right">Count</TableHead>
               </TableRow>
             </TableHeader>
@@ -462,7 +462,7 @@ export default function P1POStatusRepairPage() {
               ))}
               {!query.isFetching && (data?.fulfilledDepartmentRepairs?.summary ?? []).length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center text-muted-foreground py-6">No fulfilled rows are stuck in active departments.</TableCell>
+                  <TableCell colSpan={4} className="text-center text-muted-foreground py-6">No shipped rows are still in Shipping QC.</TableCell>
                 </TableRow>
               )}
             </TableBody>

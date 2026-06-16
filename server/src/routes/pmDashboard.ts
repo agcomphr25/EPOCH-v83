@@ -462,6 +462,7 @@ async function getProjectLinkedP2PoIds(projectId: string): Promise<number[]> {
       WHERE p.id = $1
         AND po.project_name IS NOT NULL
         AND TRIM(po.project_name) <> ''
+        AND po.is_current_revision IS NOT FALSE
     )
     SELECT DISTINCT po_id::text AS "poId" FROM project_po_link WHERE po_id IS NOT NULL
   `, [projectId]);
@@ -538,6 +539,7 @@ async function getProjectP2PoStatusSummaries(projectId: string): Promise<P2PoSta
     LEFT JOIN ordered_qty oq ON oq.po_id = po.id
     LEFT JOIN item_state psi ON psi.po_id = po.id
     WHERE po.id = ANY($1::int[])
+      AND po.is_current_revision IS NOT FALSE
     GROUP BY po.id, po.po_number, po.customer_name, po.expected_delivery, po.status, oq.ordered_qty
     ORDER BY po.po_number ASC
   `, [linkedPoIds]);

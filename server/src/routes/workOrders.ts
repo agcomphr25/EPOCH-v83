@@ -106,6 +106,7 @@ async function getWadStatusP2Demand(projectIds: string[]): Promise<Map<string, W
       WHERE p.id = ANY($1::uuid[])
         AND po.project_name IS NOT NULL
         AND TRIM(po.project_name) <> ''
+        AND po.is_current_revision IS NOT FALSE
     ),
     distinct_links AS (
       SELECT DISTINCT project_id, po_id
@@ -683,6 +684,7 @@ router.get('/production/wad-status', authenticateToken, requirePermission('work_
             FROM p2_purchase_orders po
             WHERE po.project_name IS NOT NULL
               AND TRIM(po.project_name) <> ''
+              AND po.is_current_revision IS NOT FALSE
               AND LOWER(TRIM(po.project_name)) IN (
                 LOWER(TRIM(${projects.projectCode})),
                 LOWER(TRIM(${projects.projectName})),

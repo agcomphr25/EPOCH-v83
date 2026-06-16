@@ -668,6 +668,7 @@ router.post('/:id/revisions', async (req, res) => {
         partNumber: z.string().trim().min(1),
         partName: z.string().trim().min(1),
         quantity: z.number().int().positive(),
+        dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().nullable(),
         unitPrice: z.number().nonnegative().optional().nullable(),
         specifications: z.string().optional().nullable(),
         notes: z.string().optional().nullable(),
@@ -708,30 +709,16 @@ router.post('/:id/revisions', async (req, res) => {
       if (!data.revisedLineItems?.length) {
         return res.status(400).json({ message: 'At least one revised PO line item is required.' });
       }
-      const duplicatePo = await pool.query(
-        `SELECT id FROM p2_purchase_orders WHERE LOWER(po_number) = LOWER($1) LIMIT 1`,
-        [data.revisedPoNumber]
+      const currentPo = await pool.query(
+        `SELECT id, po_number FROM p2_purchase_orders WHERE id = $1 LIMIT 1`,
+        [project.poId]
       );
-      if (duplicatePo.rows.length > 0) {
-        return res.status(409).json({ message: `PO ${data.revisedPoNumber} already exists.` });
+      if (currentPo.rows.length === 0) {
+        return res.status(404).json({ message: 'Linked PO was not found.' });
       }
 
-      const revisedPo = await storage.createP2PurchaseOrderRevision(
-        project.poId,
-        data.reason,
-        data.createdByDisplayName,
-        {
-          poNumber: data.revisedPoNumber,
-          expectedDelivery: data.revisedDueDate,
-          lineItems: data.revisedLineItems.map((item) => ({
-            ...item,
-            sourceItemId: Number.isFinite(Number(item.id)) ? Number(item.id) : undefined,
-          })),
-        }
-      );
-      newPoId = revisedPo.id;
-      newPoNumber = revisedPo.poNumber;
-      await storage.updateProject(id, { poId: revisedPo.id } as any);
+      newPoId = project.poId;
+      newPoNumber = currentPo.rows[0].po_number;
     }
 
     const rows = await pool.query(

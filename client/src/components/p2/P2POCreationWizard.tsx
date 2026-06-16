@@ -115,6 +115,7 @@ interface LineItem {
   revision: string;
   description: string;
   quantity: number;
+  dueDate?: string | null;
   unitPrice: number;
   internalName: string;
   inventoryItemId?: number | null;
@@ -317,6 +318,7 @@ export default function P2POCreationWizard({
         revision,
         description: item.partName || item.description || '',
         quantity: Number(item.quantity) || 1,
+        dueDate: item.dueDate?.slice(0, 10) || editableSourcePO.expectedDelivery?.slice(0, 10) || '',
         unitPrice: parseFloat(item.unitPrice) || 0,
         internalName: '',
         inventoryItemId: item.inventoryItemId ?? null,
@@ -415,6 +417,7 @@ export default function P2POCreationWizard({
       revision: newItem.revision || 'A',
       description: newItem.description || '',
       quantity: newItem.quantity || 1,
+      dueDate: newItem.dueDate || poDetails?.dueDate || '',
       unitPrice: newItem.unitPrice || 0,
       internalName: newItem.internalName || '',
       inventoryItemId: newItem.inventoryItemId ?? null,
@@ -435,6 +438,7 @@ export default function P2POCreationWizard({
           revision: product.revision || 'A',
           description: product.description,
           unitPrice: parseFloat(product.unitPrice),
+          dueDate: newItem.dueDate || poDetails?.dueDate || '',
           internalName: product.internalName || '',
           inventoryItemId: product.inventoryItemId ?? null,
         });
@@ -482,9 +486,11 @@ export default function P2POCreationWizard({
         partNumber: `${item.sku}${item.revision ? ` Rev ${item.revision}` : ''}`,
         description: item.description,
         quantity: item.quantity,
+        dueDate: item.dueDate || null,
         unitPrice: item.unitPrice,
         inventoryItemId: item.inventoryItemId ?? null,
       })),
+      isRevisionUpdate: isReviseMode,
     };
   };
 
@@ -790,7 +796,7 @@ export default function P2POCreationWizard({
         {/* Step 3: Line Items */}
         {currentStep === 2 && (
           <div className="space-y-6">
-            <div className="grid grid-cols-6 gap-2 items-end">
+            <div className="grid grid-cols-1 gap-2 items-end md:grid-cols-[2fr_1.2fr_0.7fr_0.9fr_0.8fr_auto]">
               <div className="col-span-2">
                 <Label>P2 Product Item</Label>
                 <Select onValueChange={handleProductSelect} value="">
@@ -832,6 +838,15 @@ export default function P2POCreationWizard({
                 />
               </div>
               <div>
+                <Label>Line Date</Label>
+                <Input
+                  type="date"
+                  value={newItem.dueDate || poDetails?.dueDate || ''}
+                  onChange={(e) => setNewItem({ ...newItem, dueDate: e.target.value })}
+                  data-testid="input-line-due-date"
+                />
+              </div>
+              <div>
                 <Label>Unit Price</Label>
                 <Input
                   type="number"
@@ -863,6 +878,7 @@ export default function P2POCreationWizard({
                     <TableHead>SKU / Rev</TableHead>
                     <TableHead>Description</TableHead>
                     <TableHead className="text-right">Quantity</TableHead>
+                    <TableHead>Line Date</TableHead>
                     <TableHead className="text-right">Unit Price</TableHead>
                     <TableHead className="text-right">Total</TableHead>
                     <TableHead></TableHead>
@@ -874,6 +890,7 @@ export default function P2POCreationWizard({
                       <TableCell className="font-medium">{item.sku} Rev {item.revision}</TableCell>
                       <TableCell>{item.description}</TableCell>
                       <TableCell className="text-right">{item.quantity}</TableCell>
+                      <TableCell>{item.dueDate || poDetails?.dueDate || '-'}</TableCell>
                       <TableCell className="text-right">${item.unitPrice.toFixed(2)}</TableCell>
                       <TableCell className="text-right">
                         ${(item.quantity * item.unitPrice).toFixed(2)}
@@ -970,6 +987,7 @@ export default function P2POCreationWizard({
                       <TableHead>SKU / Rev</TableHead>
                       <TableHead>Description</TableHead>
                       <TableHead className="text-right">Quantity</TableHead>
+                      <TableHead>Line Date</TableHead>
                       <TableHead className="text-right">Total</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -979,6 +997,7 @@ export default function P2POCreationWizard({
                         <TableCell className="font-medium">{item.sku} Rev {item.revision}</TableCell>
                         <TableCell>{item.description}</TableCell>
                         <TableCell className="text-right">{item.quantity}</TableCell>
+                        <TableCell>{item.dueDate || poDetails?.dueDate || '-'}</TableCell>
                         <TableCell className="text-right">
                           ${(item.quantity * item.unitPrice).toFixed(2)}
                         </TableCell>

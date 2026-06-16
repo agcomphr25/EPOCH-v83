@@ -11661,6 +11661,8 @@ export const projects = pgTable('projects', {
   currentRevisionNumber: integer('current_revision_number').notNull().default(0),
   currentRevisionLabel: text('current_revision_label').notNull().default('Rev 0'),
   poId: integer('po_id').references(() => p2PurchaseOrders.id),
+  p2PoItemId: integer('p2_po_item_id').references(() => p2PurchaseOrderItems.id),
+  p2BillingAllocationId: uuid('p2_billing_allocation_id'),
   projectManagerId: integer('project_manager_id').references(() => employees.id),
   reminderDays: integer('reminder_days').default(3), // Days before reminder is sent for stuck steps
   lastReminderSentAt: timestamp('last_reminder_sent_at'),

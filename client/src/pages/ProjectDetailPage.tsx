@@ -117,6 +117,8 @@ interface Project {
   currentRevisionNumber: number;
   currentRevisionLabel: string;
   poId: number | null;
+  p2PoItemId: number | null;
+  p2BillingAllocationId: string | null;
   projectManagerId: number | null;
   reminderDays: number;
   notes: string | null;
@@ -145,6 +147,31 @@ interface P2PurchaseOrder {
   poDate?: string | null;
   expectedDelivery?: string | null;
   createdAt?: string;
+}
+
+interface P2PoItemOption {
+  id: number;
+  poId: number;
+  partNumber: string;
+  partName: string;
+  quantity: number;
+  unitPrice: number | null;
+}
+
+interface P2BillingBucketOption {
+  id: string;
+  poId: number;
+  poItemId: number | null;
+  bucketLabel: string;
+  description: string | null;
+  customerPoLine: string | null;
+  quantityAuthorized: number;
+  unitPrice: string | number;
+}
+
+interface P2PoLinkOptions {
+  poItems: P2PoItemOption[];
+  billingBuckets: P2BillingBucketOption[];
 }
 
 interface ProjectRevision {
@@ -419,6 +446,8 @@ export default function ProjectDetailPage() {
   const p2PurchaseOrderOptions = Array.isArray(p2PurchaseOrders) ? p2PurchaseOrders : [];
 
   const [linkPoId, setLinkPoId] = useState<string>('');
+  const [linkPoItemId, setLinkPoItemId] = useState<string>('');
+  const [linkBillingBucketId, setLinkBillingBucketId] = useState<string>('');
   const [linkPoSearch, setLinkPoSearch] = useState('');
   const [showManualLink, setShowManualLink] = useState(false);
   const [linkPoReason, setLinkPoReason] = useState('');
@@ -453,12 +482,38 @@ export default function ProjectDetailPage() {
       });
   }, [project, p2PurchaseOrders]);
 
+  const activeLinkPoId = showManualLink ? linkPoId : (suggestedPo?.id.toString() ?? linkPoId);
+
+  const { data: poLinkOptions } = useQuery<P2PoLinkOptions>({
+    queryKey: ['/api/projects', id, 'po-link-options', activeLinkPoId],
+    queryFn: () => apiRequest(`/api/projects/${id}/po-link-options?poId=${encodeURIComponent(activeLinkPoId)}`),
+    enabled: !!id && !!activeLinkPoId,
+  });
+
+  const poItemOptions = poLinkOptions?.poItems ?? [];
+  const billingBucketOptions = (poLinkOptions?.billingBuckets ?? []).filter((bucket) => {
+    if (!linkPoItemId) return true;
+    return !bucket.poItemId || bucket.poItemId === Number(linkPoItemId);
+  });
+
   const linkPoMutation = useMutation({
-    mutationFn: ({ poId, reason }: { poId: number; reason?: string }) =>
+    mutationFn: ({
+      poId,
+      poItemId,
+      billingAllocationId,
+      reason,
+    }: {
+      poId: number;
+      poItemId?: number | null;
+      billingAllocationId?: string | null;
+      reason?: string;
+    }) =>
       apiRequest(`/api/projects/${id}/link-po`, {
         method: 'POST',
         body: {
           poId,
+          poItemId,
+          billingAllocationId,
           reason,
           createdByDisplayName: currentUser?.username,
         },
@@ -470,6 +525,8 @@ export default function ProjectDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['/api/projects', id, 'revisions'] });
       queryClient.invalidateQueries({ queryKey: ['/api/p2-purchase-orders-bypass'] });
       setLinkPoId('');
+      setLinkPoItemId('');
+      setLinkBillingBucketId('');
       setLinkPoSearch('');
       setLinkPoReason('');
       setShowManualLink(false);
@@ -478,6 +535,16 @@ export default function ProjectDetailPage() {
       toast({ title: 'Link failed', description: err?.message || 'Failed to link PO.', variant: 'destructive' });
     },
   });
+
+  const linkSelectedPo = (poIdValue: string, reason?: string) => {
+    if (!poIdValue) return;
+    linkPoMutation.mutate({
+      poId: parseInt(poIdValue, 10),
+      poItemId: linkPoItemId ? parseInt(linkPoItemId, 10) : null,
+      billingAllocationId: linkBillingBucketId || null,
+      reason,
+    });
+  };
 
   const { data: projectRevisions = [] } = useQuery<ProjectRevision[]>({
     queryKey: ['/api/projects', id, 'revisions'],
@@ -2630,15 +2697,68 @@ export default function ProjectDetailPage() {
                           <p className="font-mono font-semibold text-blue-950">{suggestedPo.poNumber}</p>
                           <p className="text-sm text-blue-800">{suggestedPo.customerName}</p>
                         </div>
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                          <div className="space-y-2">
+                            <Label>PO Item</Label>
+                            <Select
+                              value={linkPoItemId}
+                              onValueChange={(value) => {
+                                setLinkPoItemId(value);
+                                setLinkBillingBucketId('');
+                              }}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select an item from this PO" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {poItemOptions.map(item => (
+                                  <SelectItem key={item.id} value={item.id.toString()}>
+                                    {item.partNumber} - {item.partName} ({item.quantity})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label>CLIN / Bucket</Label>
+                            <Select
+                              value={linkBillingBucketId}
+                              onValueChange={setLinkBillingBucketId}
+                              disabled={!linkPoItemId}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder={linkPoItemId ? 'Select a bucket from this PO' : 'Choose a PO item first'} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {billingBucketOptions.map(bucket => (
+                                  <SelectItem key={bucket.id} value={bucket.id}>
+                                    {bucket.bucketLabel}{bucket.customerPoLine ? ` - ${bucket.customerPoLine}` : ''}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            {linkPoItemId && billingBucketOptions.length === 0 && (
+                              <p className="text-xs text-amber-700">No active CLIN/bucket allocations are set up for this PO item.</p>
+                            )}
+                          </div>
+                        </div>
                         <div className="flex gap-2">
                           <Button
                             size="sm"
-                            onClick={() => linkPoMutation.mutate({ poId: suggestedPo.id })}
-                            disabled={linkPoMutation.isPending}
+                            onClick={() => linkSelectedPo(suggestedPo.id.toString())}
+                            disabled={linkPoMutation.isPending || !linkPoItemId || !linkBillingBucketId}
                           >
                             {linkPoMutation.isPending ? 'Linking...' : 'Accept'}
                           </Button>
-                          <Button size="sm" variant="outline" onClick={() => setShowManualLink(true)}>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setShowManualLink(true);
+                              setLinkPoItemId('');
+                              setLinkBillingBucketId('');
+                            }}
+                          >
                             Choose Different
                           </Button>
                         </div>
@@ -2646,7 +2766,17 @@ export default function ProjectDetailPage() {
                     ) : (
                       <div className="space-y-3">
                         {showManualLink && suggestedPo && (
-                          <Button variant="ghost" size="sm" className="text-muted-foreground -mb-1" onClick={() => setShowManualLink(false)}>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-muted-foreground -mb-1"
+                            onClick={() => {
+                              setShowManualLink(false);
+                              setLinkPoId('');
+                              setLinkPoItemId('');
+                              setLinkBillingBucketId('');
+                            }}
+                          >
                             Back to suggestion
                           </Button>
                         )}
@@ -2660,7 +2790,14 @@ export default function ProjectDetailPage() {
                         </div>
                         <div className="space-y-2">
                           <Label>Purchase Order</Label>
-                          <Select value={linkPoId} onValueChange={setLinkPoId}>
+                          <Select
+                            value={linkPoId}
+                            onValueChange={(value) => {
+                              setLinkPoId(value);
+                              setLinkPoItemId('');
+                              setLinkBillingBucketId('');
+                            }}
+                          >
                             <SelectTrigger>
                               <SelectValue placeholder="Select a purchase order" />
                             </SelectTrigger>
@@ -2679,9 +2816,55 @@ export default function ProjectDetailPage() {
                             </SelectContent>
                           </Select>
                         </div>
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                          <div className="space-y-2">
+                            <Label>PO Item</Label>
+                            <Select
+                              value={linkPoItemId}
+                              onValueChange={(value) => {
+                                setLinkPoItemId(value);
+                                setLinkBillingBucketId('');
+                              }}
+                              disabled={!linkPoId}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder={linkPoId ? 'Select an item from this PO' : 'Choose a PO first'} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {poItemOptions.map(item => (
+                                  <SelectItem key={item.id} value={item.id.toString()}>
+                                    {item.partNumber} - {item.partName} ({item.quantity})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label>CLIN / Bucket</Label>
+                            <Select
+                              value={linkBillingBucketId}
+                              onValueChange={setLinkBillingBucketId}
+                              disabled={!linkPoItemId}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder={linkPoItemId ? 'Select a bucket from this PO' : 'Choose a PO item first'} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {billingBucketOptions.map(bucket => (
+                                  <SelectItem key={bucket.id} value={bucket.id}>
+                                    {bucket.bucketLabel}{bucket.customerPoLine ? ` - ${bucket.customerPoLine}` : ''}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            {linkPoItemId && billingBucketOptions.length === 0 && (
+                              <p className="text-xs text-amber-700">No active CLIN/bucket allocations are set up for this PO item.</p>
+                            )}
+                          </div>
+                        </div>
                         <Button
-                          disabled={!linkPoId || linkPoMutation.isPending}
-                          onClick={() => linkPoMutation.mutate({ poId: parseInt(linkPoId, 10) })}
+                          disabled={!linkPoId || !linkPoItemId || !linkBillingBucketId || linkPoMutation.isPending}
+                          onClick={() => linkSelectedPo(linkPoId)}
                         >
                           {linkPoMutation.isPending ? 'Linking...' : 'Link PO'}
                         </Button>
@@ -2862,14 +3045,66 @@ export default function ProjectDetailPage() {
                         <p className="text-xs text-blue-500 dark:text-blue-400">Matched on customer</p>
                       )}
                     </div>
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>PO Item</Label>
+                        <Select
+                          value={linkPoItemId}
+                          onValueChange={(value) => {
+                            setLinkPoItemId(value);
+                            setLinkBillingBucketId('');
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select an item from this PO" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {poItemOptions.map(item => (
+                              <SelectItem key={item.id} value={item.id.toString()}>
+                                {item.partNumber} - {item.partName} ({item.quantity})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>CLIN / Bucket</Label>
+                        <Select
+                          value={linkBillingBucketId}
+                          onValueChange={setLinkBillingBucketId}
+                          disabled={!linkPoItemId}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder={linkPoItemId ? 'Select a bucket from this PO' : 'Choose a PO item first'} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {billingBucketOptions.map(bucket => (
+                              <SelectItem key={bucket.id} value={bucket.id}>
+                                {bucket.bucketLabel}{bucket.customerPoLine ? ` - ${bucket.customerPoLine}` : ''}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {linkPoItemId && billingBucketOptions.length === 0 && (
+                          <p className="text-xs text-amber-700">No active CLIN/bucket allocations are set up for this PO item.</p>
+                        )}
+                      </div>
+                    </div>
                     <div className="flex gap-2">
                       <Button
-                        onClick={() => linkPoMutation.mutate({ poId: suggestedPo.id })}
-                        disabled={linkPoMutation.isPending}
+                        onClick={() => linkSelectedPo(suggestedPo.id.toString())}
+                        disabled={linkPoMutation.isPending || !linkPoItemId || !linkBillingBucketId}
                       >
                         {linkPoMutation.isPending ? 'Linking…' : 'Accept'}
                       </Button>
-                      <Button variant="outline" onClick={() => setShowManualLink(true)}>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setShowManualLink(true);
+                          setLinkPoItemId('');
+                          setLinkBillingBucketId('');
+                        }}
+                      >
                         Choose Different
                       </Button>
                     </div>
@@ -2877,7 +3112,17 @@ export default function ProjectDetailPage() {
                 ) : (
                   <div className="space-y-4">
                     {showManualLink && suggestedPo && (
-                      <Button variant="ghost" size="sm" className="text-muted-foreground -mb-2" onClick={() => setShowManualLink(false)}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-muted-foreground -mb-2"
+                        onClick={() => {
+                          setShowManualLink(false);
+                          setLinkPoId('');
+                          setLinkPoItemId('');
+                          setLinkBillingBucketId('');
+                        }}
+                      >
                         ← Back to suggestion
                       </Button>
                     )}
@@ -2891,7 +3136,14 @@ export default function ProjectDetailPage() {
                     </div>
                     <div className="space-y-2">
                       <Label>Purchase Order</Label>
-                      <Select value={linkPoId} onValueChange={setLinkPoId}>
+                      <Select
+                        value={linkPoId}
+                        onValueChange={(value) => {
+                          setLinkPoId(value);
+                          setLinkPoItemId('');
+                          setLinkBillingBucketId('');
+                        }}
+                      >
                         <SelectTrigger>
                           <SelectValue placeholder="Select a purchase order" />
                         </SelectTrigger>
@@ -2909,6 +3161,52 @@ export default function ProjectDetailPage() {
                         </SelectContent>
                       </Select>
                     </div>
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>PO Item</Label>
+                        <Select
+                          value={linkPoItemId}
+                          onValueChange={(value) => {
+                            setLinkPoItemId(value);
+                            setLinkBillingBucketId('');
+                          }}
+                          disabled={!linkPoId}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder={linkPoId ? 'Select an item from this PO' : 'Choose a PO first'} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {poItemOptions.map(item => (
+                              <SelectItem key={item.id} value={item.id.toString()}>
+                                {item.partNumber} - {item.partName} ({item.quantity})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>CLIN / Bucket</Label>
+                        <Select
+                          value={linkBillingBucketId}
+                          onValueChange={setLinkBillingBucketId}
+                          disabled={!linkPoItemId}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder={linkPoItemId ? 'Select a bucket from this PO' : 'Choose a PO item first'} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {billingBucketOptions.map(bucket => (
+                              <SelectItem key={bucket.id} value={bucket.id}>
+                                {bucket.bucketLabel}{bucket.customerPoLine ? ` - ${bucket.customerPoLine}` : ''}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {linkPoItemId && billingBucketOptions.length === 0 && (
+                          <p className="text-xs text-amber-700">No active CLIN/bucket allocations are set up for this PO item.</p>
+                        )}
+                      </div>
+                    </div>
                     <div className="space-y-2">
                       <Label>Revision Reason</Label>
                       <Textarea
@@ -2918,8 +3216,8 @@ export default function ProjectDetailPage() {
                       />
                     </div>
                     <Button
-                      disabled={!linkPoId || linkPoMutation.isPending}
-                      onClick={() => linkPoMutation.mutate({ poId: parseInt(linkPoId), reason: linkPoReason })}
+                      disabled={!linkPoId || !linkPoItemId || !linkBillingBucketId || linkPoMutation.isPending}
+                      onClick={() => linkSelectedPo(linkPoId, linkPoReason)}
                     >
                       {linkPoMutation.isPending ? 'Linking…' : 'Link PO'}
                     </Button>
@@ -2986,6 +3284,8 @@ export default function ProjectDetailPage() {
                             onClick={() => {
                               setShowManualLink(false);
                               setLinkPoId('');
+                              setLinkPoItemId('');
+                              setLinkBillingBucketId('');
                               setLinkPoReason('');
                             }}
                           >
@@ -2995,7 +3295,14 @@ export default function ProjectDetailPage() {
                         <div className="grid gap-3 md:grid-cols-2">
                           <div className="space-y-2">
                             <Label>New P2 PO</Label>
-                            <Select value={linkPoId} onValueChange={setLinkPoId}>
+                            <Select
+                              value={linkPoId}
+                              onValueChange={(value) => {
+                                setLinkPoId(value);
+                                setLinkPoItemId('');
+                                setLinkBillingBucketId('');
+                              }}
+                            >
                               <SelectTrigger>
                                 <SelectValue placeholder="Select replacement PO" />
                               </SelectTrigger>
@@ -3011,6 +3318,50 @@ export default function ProjectDetailPage() {
                             </Select>
                           </div>
                           <div className="space-y-2">
+                            <Label>PO Item</Label>
+                            <Select
+                              value={linkPoItemId}
+                              onValueChange={(value) => {
+                                setLinkPoItemId(value);
+                                setLinkBillingBucketId('');
+                              }}
+                              disabled={!linkPoId}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder={linkPoId ? 'Select an item from this PO' : 'Choose a PO first'} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {poItemOptions.map(item => (
+                                  <SelectItem key={item.id} value={item.id.toString()}>
+                                    {item.partNumber} - {item.partName} ({item.quantity})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2">
+                            <Label>CLIN / Bucket</Label>
+                            <Select
+                              value={linkBillingBucketId}
+                              onValueChange={setLinkBillingBucketId}
+                              disabled={!linkPoItemId}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder={linkPoItemId ? 'Select a bucket from this PO' : 'Choose a PO item first'} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {billingBucketOptions.map(bucket => (
+                                  <SelectItem key={bucket.id} value={bucket.id}>
+                                    {bucket.bucketLabel}{bucket.customerPoLine ? ` - ${bucket.customerPoLine}` : ''}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            {linkPoItemId && billingBucketOptions.length === 0 && (
+                              <p className="text-xs text-amber-700">No active CLIN/bucket allocations are set up for this PO item.</p>
+                            )}
+                          </div>
+                          <div className="space-y-2">
                             <Label>Required Reason</Label>
                             <Textarea
                               placeholder="Why is this project moving to a different production PO?"
@@ -3020,8 +3371,8 @@ export default function ProjectDetailPage() {
                           </div>
                         </div>
                         <Button
-                          disabled={!linkPoId || linkPoReason.trim().length < 3 || linkPoMutation.isPending}
-                          onClick={() => linkPoMutation.mutate({ poId: parseInt(linkPoId), reason: linkPoReason })}
+                          disabled={!linkPoId || !linkPoItemId || !linkBillingBucketId || linkPoReason.trim().length < 3 || linkPoMutation.isPending}
+                          onClick={() => linkSelectedPo(linkPoId, linkPoReason)}
                         >
                           {linkPoMutation.isPending ? 'Saving Revision...' : 'Save PO Revision'}
                         </Button>

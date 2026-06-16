@@ -5061,6 +5061,8 @@ async function initializeBackgroundServices() {
         await db.execute(sqlProj`ALTER TABLE projects ADD COLUMN IF NOT EXISTS current_revision_number INTEGER NOT NULL DEFAULT 0`);
         await db.execute(sqlProj`ALTER TABLE projects ADD COLUMN IF NOT EXISTS current_revision_label TEXT NOT NULL DEFAULT 'Rev 0'`);
         await db.execute(sqlProj`ALTER TABLE projects ADD COLUMN IF NOT EXISTS po_id INTEGER REFERENCES p2_purchase_orders(id)`);
+        await db.execute(sqlProj`ALTER TABLE projects ADD COLUMN IF NOT EXISTS p2_po_item_id INTEGER REFERENCES p2_purchase_order_items(id)`);
+        await db.execute(sqlProj`ALTER TABLE projects ADD COLUMN IF NOT EXISTS p2_billing_allocation_id UUID`);
         // Backfill current_stage from current_step_type for existing rows that still have the default
         await db.execute(sqlProj`
           UPDATE projects SET current_stage = CASE current_step_type

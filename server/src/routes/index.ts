@@ -2837,7 +2837,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const { pool } = await import('../../db');
       const rows = await pool.query(`
         SELECT id, po_id as "poId", part_number as "partNumber", part_name as "partName", 
-               quantity, unit_price as "unitPrice", total_price as "totalPrice",
+               quantity, due_date as "dueDate", unit_price as "unitPrice", total_price as "totalPrice",
                specifications, notes, created_at as "createdAt", updated_at as "updatedAt"
         FROM p2_purchase_order_items 
         ORDER BY created_at DESC
@@ -2929,6 +2929,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
             partNumber: item.partNumber,
             partName: item.description || item.partName || item.partNumber,
             quantity: item.quantity,
+            dueDate: item.dueDate || null,
             unitPrice: item.unitPrice || 0,
           });
         }
@@ -2982,7 +2983,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       }
 
       // STATE GUARD: Check if PO is locked - prevent edits to locked POs
-      if (existingPO.lockedAt) {
+      if (existingPO.lockedAt && body.isRevisionUpdate !== true) {
         return res.status(403).json({
           error: 'This PO has been locked and cannot be modified',
           lockedAt: existingPO.lockedAt,
@@ -3044,6 +3045,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
             partNumber: item.partNumber,
             partName: item.description || item.partName || item.partNumber,
             quantity: Number(item.quantity) || 1,
+            dueDate: item.dueDate || null,
             unitPrice: Number(item.unitPrice) || 0,
           };
 
@@ -3311,7 +3313,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           inventoryItemId: number | null;
         }> = [];
         const sourceItemsResult = await client.query(
-          `SELECT id, part_number, part_name, quantity, unit_price, inventory_item_id
+          `SELECT id, part_number, part_name, quantity, due_date, unit_price, inventory_item_id
            FROM p2_purchase_order_items WHERE po_id = $1
            ORDER BY id`,
           [sourceId]
@@ -3350,6 +3352,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
             partNumber: item.partNumber,
             partName: item.description || item.partName || item.partNumber,
             quantity: item.quantity,
+            dueDate: item.dueDate || null,
             unitPrice: item.unitPrice || 0,
             inventoryItemId: item.inventoryItemId || null,
           }));
@@ -3360,6 +3363,7 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
             partNumber: row.part_number,
             partName: row.part_name,
             quantity: row.quantity,
+            dueDate: row.due_date || null,
             unitPrice: parseFloat(row.unit_price) || 0,
             inventoryItemId: row.inventory_item_id || null,
           }));
@@ -3370,10 +3374,10 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         for (const item of itemsToInsert) {
           const totalPrice = item.quantity * item.unitPrice;
           const insertedItem = await client.query(
-            `INSERT INTO p2_purchase_order_items (po_id, part_number, part_name, quantity, unit_price, total_price, inventory_item_id)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
+            `INSERT INTO p2_purchase_order_items (po_id, part_number, part_name, quantity, due_date, unit_price, total_price, inventory_item_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
              RETURNING id`,
-            [newPO.id, item.partNumber, item.partName, item.quantity, item.unitPrice, totalPrice, item.inventoryItemId]
+            [newPO.id, item.partNumber, item.partName, item.quantity, item.dueDate || null, item.unitPrice, totalPrice, item.inventoryItemId]
           );
           const newItemId = Number(insertedItem.rows[0]?.id);
           if (item.sourceItemId && Number.isInteger(newItemId)) {
@@ -4355,8 +4359,55 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       } catch (error) {
         console.warn('P2 Control Center optional serialized item lookup skipped:', error);
       }
+      const allPoIds = allPos
+        .map((po: any) => Number(po.id))
+        .filter(Number.isFinite);
       p2StatusStage = 'loading legacy project production rows';
-      const legacyProductionRows: any[] = [];
+      const legacyProductionRows = allPoIds.length > 0
+        ? await optionalP2Rows(
+            'P2 production orders',
+            dbPool.query(
+              `SELECT
+                 p2_po_id AS "poId",
+                 COALESCE(SUM(quantity), 0)::int AS "totalQty",
+                 COALESCE(SUM(
+                   CASE
+                     WHEN COALESCE(UPPER(status), '') IN ('COMPLETE', 'COMPLETED', 'CLOSED') THEN quantity
+                     ELSE LEAST(COALESCE(quantity_manufactured, 0), quantity)
+                   END
+                 ), 0)::int AS "completedQty",
+                 COALESCE(SUM(
+                   CASE
+                     WHEN COALESCE(UPPER(status), '') NOT IN ('', 'PENDING', 'PLANNED', 'COMPLETE', 'COMPLETED', 'CLOSED', 'CANCELLED', 'CANCELED')
+                     THEN GREATEST(quantity - LEAST(COALESCE(quantity_manufactured, 0), quantity), 0)
+                     ELSE 0
+                   END
+                 ), 0)::int AS "inProductionQty"
+               FROM p2_production_orders
+               WHERE p2_po_id = ANY($1)
+                 AND COALESCE(UPPER(status), '') NOT IN ('CANCELLED', 'CANCELED')
+               GROUP BY p2_po_id`,
+              [allPoIds]
+            )
+          )
+        : [];
+      const shippedVisibilityRows = allPoIds.length > 0
+        ? await optionalP2Rows(
+            'shipped lot visibility',
+            dbPool.query(
+              `SELECT po_id AS "poId"
+               FROM p2_lot_numbers
+               WHERE po_id = ANY($1)
+                 AND (
+                   COALESCE(UPPER(status), '') IN ('SHIPPED', 'CLOSED', 'COMPLETE', 'COMPLETED')
+                   OR shipped_at IS NOT NULL
+                   OR packing_slip_id IS NOT NULL
+                 )
+               GROUP BY po_id`,
+              [allPoIds]
+            )
+          )
+        : [];
       const legacyProjectProductionRows = await optionalP2Rows(
         'legacy project production',
         dbPool.query(
@@ -4448,12 +4499,55 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         legacyProjectProductionRows.map((row: any) => [Number(row.poId), row])
       );
       const poIdsWithLegacyProjectProduction = new Set<number>(legacyProjectStatsByPoId.keys());
+      const poIdsWithShippedHistory = new Set<number>(
+        shippedVisibilityRows.map((row: any) => Number(row.poId))
+      );
+      const projectVisibilityRows = allPoIds.length > 0
+        ? await optionalP2Rows(
+            'project visibility link',
+            dbPool.query(
+              `WITH project_po_link AS (
+                 SELECT p.po_id AS linked_po_id
+                 FROM projects p
+                 WHERE p.po_id IS NOT NULL
+                 UNION
+                 SELECT ps.linked_p2_order_id AS linked_po_id
+                 FROM project_steps ps
+                 WHERE ps.step_type = 'p2_order'
+                   AND ps.linked_p2_order_id IS NOT NULL
+                 UNION
+                 SELECT po.id AS linked_po_id
+                 FROM p2_purchase_orders po
+                 JOIN projects p ON LOWER(TRIM(po.project_name)) IN (
+                   LOWER(TRIM(p.project_code)),
+                   LOWER(TRIM(p.project_name)),
+                   LOWER(TRIM(CONCAT_WS(' - ', NULLIF(p.project_code, ''), NULLIF(p.project_name, ''))))
+                 )
+                 WHERE po.project_name IS NOT NULL
+                   AND TRIM(po.project_name) <> ''
+                   AND po.is_current_revision IS NOT FALSE
+               )
+               SELECT DISTINCT linked_po_id AS "poId"
+               FROM project_po_link
+               WHERE linked_po_id = ANY($1)`,
+              [allPoIds]
+            )
+          )
+        : [];
+      const poIdsWithProjectLink = new Set<number>(
+        projectVisibilityRows.map((row: any) => Number(row.poId))
+      );
       const pos = allPos.filter((po: any) => {
-        if (po.isCurrentRevision === false) return false;
+        const poId = Number(po.id);
+        const hasProductionHistory = poIdsWithSerializedUnits.has(poId)
+          || legacyStatsByPoId.has(poId)
+          || poIdsWithLegacyProjectProduction.has(poId)
+          || poIdsWithShippedHistory.has(poId);
+        if (po.isCurrentRevision === false && !hasProductionHistory) return false;
         return (
           P2_GATED_STATUSES.has(normalizeP2Status(po.status)) ||
-          poIdsWithSerializedUnits.has(Number(po.id)) ||
-          poIdsWithLegacyProjectProduction.has(Number(po.id))
+          hasProductionHistory ||
+          poIdsWithProjectLink.has(poId)
         );
       });
 
@@ -4566,6 +4660,26 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
       const orderedQtyByPoId = new Map<number, number>(
         orderedQtyRows.map((r: any) => [Number(r.poId), Number(r.orderedQty) || 0])
       );
+      const shippedQtyRows = poIds.length > 0
+        ? await optionalP2Rows(
+            'shipped lot quantity',
+            dbPool.query(
+              `SELECT po_id AS "poId", COALESCE(SUM(quantity), 0)::int AS "shippedQty"
+               FROM p2_lot_numbers
+               WHERE po_id = ANY($1)
+                 AND (
+                   COALESCE(UPPER(status), '') IN ('SHIPPED', 'CLOSED', 'COMPLETE', 'COMPLETED')
+                   OR shipped_at IS NOT NULL
+                   OR packing_slip_id IS NOT NULL
+                 )
+               GROUP BY po_id`,
+              [poIds]
+            )
+          )
+        : [];
+      const shippedQtyByPoId = new Map<number, number>(
+        shippedQtyRows.map((r: any) => [Number(r.poId), Number(r.shippedQty) || 0])
+      );
       
       p2StatusStage = 'building P2 status response';
       const poStatuses = pos.map((po: any) => {
@@ -4582,9 +4696,17 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
           : null;
         
         // Use actual column names: status (ACTIVE/COMPLETED/SCRAPPED/HOLD) and currentDepartment
-        const serializedCompletedItems = poItems.filter((s: any) => s.status === 'COMPLETED').length;
+        const serializedCompletedItems = poItems.filter((s: any) => {
+          const status = String(s.status || '').trim().toUpperCase();
+          const dept = String(s.currentDepartment || '').trim().toUpperCase();
+          return ['COMPLETED', 'COMPLETE', 'SHIPPED', 'CLOSED'].includes(status)
+            || ['SHIPPED', 'SHIPPING', 'CLOSED'].includes(dept)
+            || s.shippedAt
+            || s.packingSlipId;
+        }).length;
         const legacyCompletedItems = Number(legacyStats?.completedQty ?? 0);
-        const completedItems = Math.max(serializedCompletedItems, legacyCompletedItems);
+        const shippedLotCompletedItems = shippedQtyByPoId.get(poId) ?? 0;
+        const completedItems = Math.max(serializedCompletedItems, legacyCompletedItems, shippedLotCompletedItems);
 
         const scheduledItems = poItems.filter((s: any) => {
           if (s.status !== 'ACTIVE') return false;

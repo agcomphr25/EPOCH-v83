@@ -180,6 +180,7 @@ interface P2PurchaseOrderItem {
   partName: string;
   description?: string | null;
   quantity: number;
+  dueDate?: string | null;
   unitPrice?: number | null;
   specifications?: string | null;
   notes?: string | null;
@@ -489,7 +490,7 @@ export default function ProjectDetailPage() {
   const suggestedRevisionPoNumber = useMemo(() => {
     const base = linkedProjectPO?.poNumber?.trim();
     if (!base) return '';
-    return /-R[A-Z]+$/i.test(base) ? base.replace(/-R[A-Z]+$/i, '-RA') : `${base}-RA`;
+    return base;
   }, [linkedProjectPO?.poNumber]);
 
   useEffect(() => {
@@ -507,6 +508,7 @@ export default function ProjectDetailPage() {
               partName: item.partName || item.description || item.partNumber || '',
               quantity: Number(item.quantity) || 1,
               unitPrice: Number(item.unitPrice) || 0,
+              dueDate: item.dueDate?.slice(0, 10) || linkedProjectPO?.expectedDelivery?.slice(0, 10) || '',
               specifications: item.specifications || '',
               notes: item.notes || '',
               inventoryItemId: item.inventoryItemId ?? null,
@@ -541,6 +543,7 @@ export default function ProjectDetailPage() {
           partNumber: '',
           partName: '',
           quantity: 1,
+          dueDate: prev.revisedDueDate || '',
           unitPrice: 0,
           specifications: '',
           notes: '',
@@ -3125,7 +3128,7 @@ export default function ProjectDetailPage() {
                     ) : (
                       <div className="space-y-2">
                         {revisionForm.revisedLineItems.map((item, index) => (
-                          <div key={item.id ?? index} className="grid gap-2 rounded-md border p-3 md:grid-cols-[1fr_1.4fr_0.5fr_0.6fr_auto]">
+                          <div key={item.id ?? index} className="grid gap-2 rounded-md border p-3 md:grid-cols-[1fr_1.4fr_0.5fr_0.7fr_0.6fr_auto]">
                             <div className="space-y-1">
                               <Label className="text-xs">Part Number</Label>
                               <Input
@@ -3150,6 +3153,15 @@ export default function ProjectDetailPage() {
                                 value={item.quantity}
                                 onChange={(e) => updateRevisionLineItem(index, { quantity: parseInt(e.target.value, 10) || 0 })}
                                 data-testid={`input-revision-line-quantity-${index}`}
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">Line Date</Label>
+                              <Input
+                                type="date"
+                                value={item.dueDate?.slice(0, 10) || ''}
+                                onChange={(e) => updateRevisionLineItem(index, { dueDate: e.target.value } as Partial<P2PurchaseOrderItem>)}
+                                data-testid={`input-revision-line-due-date-${index}`}
                               />
                             </div>
                             <div className="space-y-1">

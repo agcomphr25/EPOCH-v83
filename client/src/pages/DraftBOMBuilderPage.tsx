@@ -206,6 +206,7 @@ type AssemblyTreeNode = {
   id: string;
   partNumber: string;
   description: string;
+  bomLabel?: string;
   isManufactured: boolean;
   quantityRequired: number;
   orderStatus: BomStatus;
@@ -218,6 +219,7 @@ type AssemblyTreeNode = {
 };
 type AssemblyLineEntry = {
   line: BomLine;
+  bom: DraftPartBom;
   part: DraftBomPart;
   childComponents: DraftBomComponent[];
 };
@@ -811,40 +813,63 @@ function componentAssemblyKey(component: DraftBomComponent) {
   return assemblyPartKey(component.partNumber);
 }
 
+function draftBomChildComponents(bom: DraftPartBom) {
+  return bom.rootPart.bomItems?.length ? bom.rootPart.bomItems : bom.parts[0]?.bomItems ?? [];
+}
+
 function buildAssemblyTreeNode(
   part: DraftBomPart | DraftBomComponent,
   inventoryItems: InventoryItemOption[],
   partsRequestLines: BomLine[],
   requiredQuantity: number,
   children: DraftBomComponent[] = [],
-  entryLookup = new Map<string, AssemblyLineEntry>(),
+  entryLookup = new Map<string, AssemblyLineEntry[]>(),
   visited: Set<string> = new Set(),
+  sourceEntry?: AssemblyLineEntry,
 ): AssemblyTreeNode {
   const inventoryItem = resolveInventoryForPart(inventoryItems, part.inventoryItemId, part.partNumber);
   const nodeQuantity = requiredQuantity || 1;
   const key = assemblyPartKey(part.partNumber);
-  const entry = entryLookup.get(key);
+  const entries = entryLookup.get(key) ?? [];
+  const entry = sourceEntry ?? entries[0];
   const nextVisited = key ? new Set([...visited, key]) : visited;
   const childComponents = entry ? (visited.has(key) ? [] : entry.childComponents) : children;
-  const nodeChildren = childComponents.map((component) => {
-    const componentEntry = entryLookup.get(componentAssemblyKey(component));
+  const nodeChildren = childComponents.flatMap((component) => {
+    const componentEntries = entryLookup.get(componentAssemblyKey(component)) ?? [];
     const childQuantity = nodeQuantity * (component.quantity || 1);
-    return buildAssemblyTreeNode(
-      componentEntry?.part ?? component,
-      inventoryItems,
-      partsRequestLines,
-      childQuantity,
-      componentEntry?.childComponents ?? [],
-      entryLookup,
-      nextVisited,
-    );
+    if (componentEntries.length > 0 && !visited.has(componentAssemblyKey(component))) {
+      return componentEntries.map((componentEntry) =>
+        buildAssemblyTreeNode(
+          componentEntry.part,
+          inventoryItems,
+          partsRequestLines,
+          childQuantity,
+          componentEntry.childComponents,
+          entryLookup,
+          nextVisited,
+          componentEntry,
+        ),
+      );
+    }
+    return [
+      buildAssemblyTreeNode(
+        component,
+        inventoryItems,
+        partsRequestLines,
+        childQuantity,
+        [],
+        entryLookup,
+        nextVisited,
+      ),
+    ];
   });
   const orderStatus = assemblyOrderStatus(part, partsRequestLines);
 
   return {
-    id: `${part.id}-${part.partNumber}-${nodeQuantity}`,
+    id: `${entry?.bom.id ?? part.id}-${part.partNumber}-${nodeQuantity}`,
     partNumber: entry ? linePartNumber(entry.line) : part.partNumber,
     description: entry ? lineDescription(entry.line) : part.description,
+    bomLabel: entry ? `${entry.bom.name} ${entry.bom.revision}` : undefined,
     isManufactured: 'isManufactured' in part ? part.isManufactured : true,
     quantityRequired: nodeQuantity,
     orderStatus,
@@ -860,24 +885,25 @@ function buildAssemblyTreeNode(
 }
 
 function buildAssemblyTree(lines: BomLine[], inventoryItems: InventoryItemOption[]) {
-  const entries = lines.map<AssemblyLineEntry>((line) => {
-    const rootPart = draftLineToPart(line);
-    const primaryBom = line.childDraftBoms?.[0];
-    const childComponents = primaryBom?.rootPart.bomItems?.length
-      ? primaryBom.rootPart.bomItems
-      : primaryBom?.parts[0]?.bomItems ?? [];
-    return {
+  const entries = lines.flatMap<AssemblyLineEntry>((line) =>
+    (line.childDraftBoms ?? []).map((bom) => ({
       line,
-      part: primaryBom?.rootPart ?? rootPart,
-      childComponents,
-    };
-  });
-  const entryLookup = new Map(entries.map((entry) => [lineAssemblyKey(entry.line), entry]));
+      bom,
+      part: bom.rootPart ?? draftLineToPart(line),
+      childComponents: draftBomChildComponents(bom),
+    })),
+  );
+  const entryLookup = entries.reduce((lookup, entry) => {
+    const key = lineAssemblyKey(entry.line);
+    const existing = lookup.get(key) ?? [];
+    lookup.set(key, [...existing, entry]);
+    return lookup;
+  }, new Map<string, AssemblyLineEntry[]>());
   const childKeys = new Set(
     entries.flatMap((entry) => entry.childComponents.map(componentAssemblyKey)).filter(Boolean),
   );
   const rootEntries = entries.filter((entry) => !childKeys.has(lineAssemblyKey(entry.line)));
-  const treeRootEntries = (rootEntries.length > 0 ? rootEntries : entries).filter((entry) => entry.childComponents.length > 0);
+  const treeRootEntries = rootEntries.length > 0 ? rootEntries : entries;
 
   return treeRootEntries.map((entry) =>
     buildAssemblyTreeNode(
@@ -887,6 +913,8 @@ function buildAssemblyTree(lines: BomLine[], inventoryItems: InventoryItemOption
       asNumber(entry.line.qtyNeeded) || 1,
       entry.childComponents,
       entryLookup,
+      new Set(),
+      entry,
     ),
   );
 }
@@ -3933,6 +3961,9 @@ function AssemblyTreeAccordionNode({ node, depth }: { node: AssemblyTreeNode; de
       <div className="min-w-0" style={{ paddingLeft: `${depth * 16}px` }}>
         <div className="truncate font-semibold text-slate-950">{node.description}</div>
         <div className="truncate text-sm font-normal text-slate-600">{node.partNumber}</div>
+        {node.bomLabel ? (
+          <div className="truncate text-xs font-normal text-teal-700">{node.bomLabel}</div>
+        ) : null}
       </div>
       <div className="text-sm font-normal tabular-nums text-slate-600">
         Req {node.quantityRequired.toLocaleString(undefined, { maximumFractionDigits: 2 })}

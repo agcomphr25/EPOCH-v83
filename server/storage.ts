@@ -1885,7 +1885,24 @@ export interface IStorage {
     options?: { includeItems?: boolean }
   ): Promise<(P2PurchaseOrder & { items?: P2PurchaseOrderItem[] }) | undefined>;
   createP2PurchaseOrder(data: InsertP2PurchaseOrder): Promise<P2PurchaseOrder>;
-  createP2PurchaseOrderRevision(poId: number, changeReason: string, revisedBy?: string): Promise<P2PurchaseOrder>;
+  createP2PurchaseOrderRevision(
+    poId: number,
+    changeReason: string,
+    revisedBy?: string,
+    overrides?: {
+      poNumber?: string;
+      expectedDelivery?: string;
+      lineItems?: Array<{
+        inventoryItemId?: number | null;
+        partNumber: string;
+        partName: string;
+        quantity: number;
+        unitPrice?: number | null;
+        specifications?: string | null;
+        notes?: string | null;
+      }>;
+    }
+  ): Promise<P2PurchaseOrder>;
   updateP2PurchaseOrder(
     id: number,
     data: Partial<InsertP2PurchaseOrder>
@@ -15599,7 +15616,20 @@ export class DatabaseStorage implements IStorage {
   async createP2PurchaseOrderRevision(
     poId: number,
     changeReason: string,
-    revisedBy?: string
+    revisedBy?: string,
+    overrides?: {
+      poNumber?: string;
+      expectedDelivery?: string;
+      lineItems?: Array<{
+        inventoryItemId?: number | null;
+        partNumber: string;
+        partName: string;
+        quantity: number;
+        unitPrice?: number | null;
+        specifications?: string | null;
+        notes?: string | null;
+      }>;
+    }
   ): Promise<P2PurchaseOrder> {
     await ensureP2PurchaseOrderReadSchema();
 
@@ -15631,7 +15661,8 @@ export class DatabaseStorage implements IStorage {
       const nextRevisionNumber = (existingRevisions[0]?.revisionNumber || 0) + 1;
       const basePONumber = originalPO.poNumber.replace(/-R[A-Z]+$/, '');
       const revisionLetter = String.fromCharCode(64 + nextRevisionNumber);
-      const newPONumber = `${basePONumber}-R${revisionLetter}`;
+      const newPONumber = overrides?.poNumber?.trim() || `${basePONumber}-R${revisionLetter}`;
+      const revisedExpectedDelivery = overrides?.expectedDelivery?.trim() || originalPO.expectedDelivery;
 
       await tx
         .update(p2PurchaseOrders)
@@ -15645,7 +15676,7 @@ export class DatabaseStorage implements IStorage {
           customerId: originalPO.customerId,
           customerName: originalPO.customerName,
           poDate: originalPO.poDate,
-          expectedDelivery: originalPO.expectedDelivery,
+          expectedDelivery: revisedExpectedDelivery,
           status: 'OPEN',
           notes: originalPO.notes,
           attachments: originalPO.attachments || [],
@@ -15689,17 +15720,31 @@ export class DatabaseStorage implements IStorage {
         .from(p2PurchaseOrderItems)
         .where(eq(p2PurchaseOrderItems.poId, originalPO.id));
 
-      for (const item of originalItems) {
+      const revisedItems = overrides?.lineItems?.length
+        ? overrides.lineItems
+        : originalItems.map((item) => ({
+            inventoryItemId: item.inventoryItemId,
+            partNumber: item.partNumber,
+            partName: item.partName,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            specifications: item.specifications,
+            notes: item.notes,
+          }));
+
+      for (const item of revisedItems) {
+        const quantity = Number(item.quantity) || 1;
+        const unitPrice = Number(item.unitPrice) || 0;
         await tx.insert(p2PurchaseOrderItems).values({
           poId: newRevision.id,
-          inventoryItemId: item.inventoryItemId,
+          inventoryItemId: item.inventoryItemId ?? null,
           partNumber: item.partNumber,
           partName: item.partName,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          totalPrice: item.totalPrice,
-          specifications: item.specifications,
-          notes: item.notes,
+          quantity,
+          unitPrice,
+          totalPrice: quantity * unitPrice,
+          specifications: item.specifications ?? null,
+          notes: item.notes ?? null,
         });
       }
 

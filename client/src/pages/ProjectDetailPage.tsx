@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from 'react';
+import { useState, useRef, useMemo, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useParams, useLocation } from 'wouter';
 import { queryClient, apiRequest } from '@/lib/queryClient';
@@ -173,6 +173,20 @@ interface P2PoLinkOptions {
   poItems: P2PoItemOption[];
   billingBuckets: P2BillingBucketOption[];
 }
+
+interface P2PurchaseOrderItem {
+  id?: number | string;
+  partNumber: string;
+  partName: string;
+  description?: string | null;
+  quantity: number;
+  unitPrice?: number | null;
+  specifications?: string | null;
+  notes?: string | null;
+  inventoryItemId?: number | null;
+}
+
+const EMPTY_P2_PO_ITEMS: P2PurchaseOrderItem[] = [];
 
 interface ProjectRevision {
   id: number;
@@ -456,8 +470,95 @@ export default function ProjectDetailPage() {
     revisionDate: new Date().toISOString().split('T')[0],
     reason: '',
     hasPoChange: false,
+    revisedPoNumber: '',
+    revisedDueDate: '',
+    revisedLineItems: [] as P2PurchaseOrderItem[],
   });
   const [showProjectPOWizard, setShowProjectPOWizard] = useState(false);
+
+  const linkedProjectPO = useMemo(() => {
+    if (!project?.poId) return null;
+    return p2PurchaseOrderOptions.find((po) => po.id === project.poId) ?? null;
+  }, [project?.poId, p2PurchaseOrderOptions]);
+
+  const { data: linkedPoItems = EMPTY_P2_PO_ITEMS } = useQuery<P2PurchaseOrderItem[]>({
+    queryKey: ['/api/p2-purchase-order-items', project?.poId],
+    enabled: !!project?.poId && revisionForm.hasPoChange,
+  });
+
+  const suggestedRevisionPoNumber = useMemo(() => {
+    const base = linkedProjectPO?.poNumber?.trim();
+    if (!base) return '';
+    return /-R[A-Z]+$/i.test(base) ? base.replace(/-R[A-Z]+$/i, '-RA') : `${base}-RA`;
+  }, [linkedProjectPO?.poNumber]);
+
+  useEffect(() => {
+    if (!revisionForm.hasPoChange) return;
+    setRevisionForm((prev) => ({
+      ...prev,
+      revisedPoNumber: prev.revisedPoNumber || suggestedRevisionPoNumber,
+      revisedDueDate: prev.revisedDueDate || linkedProjectPO?.expectedDelivery?.slice(0, 10) || '',
+      revisedLineItems:
+        prev.revisedLineItems.length > 0
+          ? prev.revisedLineItems
+          : linkedPoItems.map((item) => ({
+              id: item.id,
+              partNumber: item.partNumber || '',
+              partName: item.partName || item.description || item.partNumber || '',
+              quantity: Number(item.quantity) || 1,
+              unitPrice: Number(item.unitPrice) || 0,
+              specifications: item.specifications || '',
+              notes: item.notes || '',
+              inventoryItemId: item.inventoryItemId ?? null,
+            })),
+    }));
+  }, [
+    revisionForm.hasPoChange,
+    linkedPoItems,
+    linkedProjectPO?.expectedDelivery,
+    suggestedRevisionPoNumber,
+  ]);
+
+  const updateRevisionLineItem = (
+    index: number,
+    updates: Partial<P2PurchaseOrderItem>
+  ) => {
+    setRevisionForm((prev) => ({
+      ...prev,
+      revisedLineItems: prev.revisedLineItems.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, ...updates } : item
+      ),
+    }));
+  };
+
+  const addRevisionLineItem = () => {
+    setRevisionForm((prev) => ({
+      ...prev,
+      revisedLineItems: [
+        ...prev.revisedLineItems,
+        {
+          id: `new-${Date.now()}`,
+          partNumber: '',
+          partName: '',
+          quantity: 1,
+          unitPrice: 0,
+          specifications: '',
+          notes: '',
+        },
+      ],
+    }));
+  };
+
+  const removeRevisionLineItem = (index: number) => {
+    setRevisionForm((prev) => ({
+      ...prev,
+      revisedLineItems: prev.revisedLineItems.filter((_, itemIndex) => itemIndex !== index),
+    }));
+  };
+
+  const hasInvalidRevisedLineItems = revisionForm.hasPoChange && revisionForm.revisedLineItems.some((item) =>
+    !item.partNumber.trim() || !item.partName.trim() || Number(item.quantity) <= 0
+  );
 
   const suggestedPo = useMemo(() => {
     if (!project || p2PurchaseOrders.length === 0) return null;
@@ -570,6 +671,9 @@ export default function ProjectDetailPage() {
         revisionDate: new Date().toISOString().split('T')[0],
         reason: '',
         hasPoChange: false,
+        revisedPoNumber: '',
+        revisedDueDate: '',
+        revisedLineItems: [],
       });
       toast({ title: 'Revision created', description: 'Project revision history was updated.' });
     },
@@ -2900,6 +3004,9 @@ export default function ProjectDetailPage() {
                         ...prev,
                         revisionType: value,
                         hasPoChange: value === 'po' ? prev.hasPoChange : false,
+                        revisedPoNumber: value === 'po' ? prev.revisedPoNumber : '',
+                        revisedDueDate: value === 'po' ? prev.revisedDueDate : '',
+                        revisedLineItems: value === 'po' ? prev.revisedLineItems : [],
                       }))
                     }
                   >
@@ -2933,7 +3040,18 @@ export default function ProjectDetailPage() {
                 <div className="flex items-end">
                   <Button
                     className="w-full md:w-auto"
-                    disabled={!revisionForm.revisionDate || revisionForm.reason.trim().length < 3 || createRevisionMutation.isPending || (revisionForm.hasPoChange && !project.poId)}
+                    disabled={
+                      !revisionForm.revisionDate ||
+                      revisionForm.reason.trim().length < 3 ||
+                      createRevisionMutation.isPending ||
+                      (revisionForm.hasPoChange && (
+                        !project.poId ||
+                        !revisionForm.revisedPoNumber.trim() ||
+                        !revisionForm.revisedDueDate ||
+                        revisionForm.revisedLineItems.length === 0 ||
+                        hasInvalidRevisedLineItems
+                      ))
+                    }
                     onClick={() => createRevisionMutation.mutate(revisionForm)}
                   >
                     <Plus className="h-4 w-4 mr-1.5" />
@@ -2947,7 +3065,13 @@ export default function ProjectDetailPage() {
                   checked={revisionForm.hasPoChange}
                   disabled={revisionForm.revisionType !== 'po' || !project.poId}
                   onCheckedChange={(checked) =>
-                    setRevisionForm((prev) => ({ ...prev, hasPoChange: checked === true }))
+                    setRevisionForm((prev) => ({
+                      ...prev,
+                      hasPoChange: checked === true,
+                      revisedPoNumber: checked === true ? prev.revisedPoNumber : '',
+                      revisedDueDate: checked === true ? prev.revisedDueDate : '',
+                      revisedLineItems: checked === true ? prev.revisedLineItems : [],
+                    }))
                   }
                   data-testid="checkbox-project-po-change"
                 />
@@ -2961,6 +3085,99 @@ export default function ProjectDetailPage() {
                   )}
                 </div>
               </div>
+
+              {revisionForm.hasPoChange && (
+                <div className="rounded-md border p-4 space-y-4">
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Revised PO Number</Label>
+                      <Input
+                        value={revisionForm.revisedPoNumber}
+                        onChange={(e) => setRevisionForm((prev) => ({ ...prev, revisedPoNumber: e.target.value }))}
+                        placeholder="#####-RA"
+                        data-testid="input-revised-po-number"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Revised Due Date</Label>
+                      <Input
+                        type="date"
+                        value={revisionForm.revisedDueDate}
+                        onChange={(e) => setRevisionForm((prev) => ({ ...prev, revisedDueDate: e.target.value }))}
+                        data-testid="input-revised-po-due-date"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <Label>Revised Line Items</Label>
+                      <Button type="button" variant="outline" size="sm" onClick={addRevisionLineItem}>
+                        <Plus className="h-4 w-4 mr-1.5" />
+                        Add Line
+                      </Button>
+                    </div>
+                    {revisionForm.revisedLineItems.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">Add at least one line item for the revised PO.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {revisionForm.revisedLineItems.map((item, index) => (
+                          <div key={item.id ?? index} className="grid gap-2 rounded-md border p-3 md:grid-cols-[1fr_1.4fr_0.5fr_0.6fr_auto]">
+                            <div className="space-y-1">
+                              <Label className="text-xs">Part Number</Label>
+                              <Input
+                                value={item.partNumber}
+                                onChange={(e) => updateRevisionLineItem(index, { partNumber: e.target.value })}
+                                data-testid={`input-revision-line-part-${index}`}
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">Description</Label>
+                              <Input
+                                value={item.partName}
+                                onChange={(e) => updateRevisionLineItem(index, { partName: e.target.value })}
+                                data-testid={`input-revision-line-name-${index}`}
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">Qty</Label>
+                              <Input
+                                type="number"
+                                min="1"
+                                value={item.quantity}
+                                onChange={(e) => updateRevisionLineItem(index, { quantity: parseInt(e.target.value, 10) || 0 })}
+                                data-testid={`input-revision-line-quantity-${index}`}
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">Unit Price</Label>
+                              <Input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={item.unitPrice ?? 0}
+                                onChange={(e) => updateRevisionLineItem(index, { unitPrice: parseFloat(e.target.value) || 0 })}
+                                data-testid={`input-revision-line-unit-price-${index}`}
+                              />
+                            </div>
+                            <div className="flex items-end">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => removeRevisionLineItem(index)}
+                                aria-label="Remove revised PO line"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <Separator />
 

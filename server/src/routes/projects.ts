@@ -660,6 +660,17 @@ router.post('/:id/revisions', async (req, res) => {
       revisionType: z.enum(['po', 'drawing', 'contract']).default('po'),
       revisionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       hasPoChange: z.boolean().optional().default(false),
+      revisedPoNumber: z.string().trim().min(1).optional(),
+      revisedDueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      revisedLineItems: z.array(z.object({
+        inventoryItemId: z.number().int().positive().nullable().optional(),
+        partNumber: z.string().trim().min(1),
+        partName: z.string().trim().min(1),
+        quantity: z.number().int().positive(),
+        unitPrice: z.number().nonnegative().optional().nullable(),
+        specifications: z.string().optional().nullable(),
+        notes: z.string().optional().nullable(),
+      })).optional(),
       createdBy: z.number().int().positive().optional(),
       createdByDisplayName: z.string().optional(),
       metadata: z.record(z.any()).optional(),
@@ -687,11 +698,32 @@ router.post('/:id/revisions', async (req, res) => {
       if (!project.poId) {
         return res.status(400).json({ message: 'This project does not have a linked PO to revise.' });
       }
+      if (!data.revisedPoNumber?.trim()) {
+        return res.status(400).json({ message: 'Revised PO number is required for PO-change revisions.' });
+      }
+      if (!data.revisedDueDate) {
+        return res.status(400).json({ message: 'Revised due date is required for PO-change revisions.' });
+      }
+      if (!data.revisedLineItems?.length) {
+        return res.status(400).json({ message: 'At least one revised PO line item is required.' });
+      }
+      const duplicatePo = await pool.query(
+        `SELECT id FROM p2_purchase_orders WHERE LOWER(po_number) = LOWER($1) LIMIT 1`,
+        [data.revisedPoNumber]
+      );
+      if (duplicatePo.rows.length > 0) {
+        return res.status(409).json({ message: `PO ${data.revisedPoNumber} already exists.` });
+      }
 
       const revisedPo = await storage.createP2PurchaseOrderRevision(
         project.poId,
         data.reason,
-        data.createdByDisplayName
+        data.createdByDisplayName,
+        {
+          poNumber: data.revisedPoNumber,
+          expectedDelivery: data.revisedDueDate,
+          lineItems: data.revisedLineItems,
+        }
       );
       newPoId = revisedPo.id;
       newPoNumber = revisedPo.poNumber;
@@ -724,6 +756,8 @@ router.post('/:id/revisions', async (req, res) => {
           previousPoId,
           newPoId,
           newPoNumber,
+          revisedDueDate: data.revisedDueDate,
+          revisedLineItems: data.revisedLineItems,
         }),
       ]
     );
@@ -751,6 +785,8 @@ router.post('/:id/revisions', async (req, res) => {
         previousPoId,
         newPoId,
         newPoNumber,
+        revisedDueDate: data.revisedDueDate,
+        revisedLineItems: data.revisedLineItems,
       },
     } as any);
 

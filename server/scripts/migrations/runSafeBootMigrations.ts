@@ -201,6 +201,7 @@ const safeFiles = [
   '0168_p2_invoice_numbering.sql',
   '0171_all_orders_finalize_to_p1_queue.sql',
   '0173_nonconformance_records_runtime_alignment.sql',
+  '0175_repair_remaining_ff_signature_queue_orders.sql',
   'investigation_308_order_duplication.sql',
 ];
 

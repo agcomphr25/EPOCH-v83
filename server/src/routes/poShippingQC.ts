@@ -1524,7 +1524,30 @@ router.get('/oem-shipments', authenticateToken, async (req, res) => {
               'quantity', si.quantity,
               'description', COALESCE(NULLIF(si.description, ''), COALESCE(poi.stock_model_name, poi.item_name), prod_ord.item_name),
               'poNumber', COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number),
-              'hasPackingSlip', si.packing_slip_base64 IS NOT NULL,
+              'hasPackingSlip', EXISTS (
+                SELECT 1
+                FROM shipment_items slip_si
+                LEFT JOIN production_orders slip_prod_ord ON slip_si.order_id = slip_prod_ord.order_id
+                LEFT JOIN purchase_order_items slip_poi ON slip_poi.id = slip_si.po_item_id
+                LEFT JOIN purchase_orders slip_po ON slip_poi.po_id = slip_po.id
+                WHERE slip_si.shipment_id = sr.id
+                  AND COALESCE(NULLIF(slip_si.po_number, ''), slip_prod_ord.po_number, slip_po.po_number) =
+                    COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number)
+                  AND slip_si.packing_slip_base64 IS NOT NULL
+              ),
+              'packingSlipItemId', (
+                SELECT slip_si.id::text
+                FROM shipment_items slip_si
+                LEFT JOIN production_orders slip_prod_ord ON slip_si.order_id = slip_prod_ord.order_id
+                LEFT JOIN purchase_order_items slip_poi ON slip_poi.id = slip_si.po_item_id
+                LEFT JOIN purchase_orders slip_po ON slip_poi.po_id = slip_po.id
+                WHERE slip_si.shipment_id = sr.id
+                  AND COALESCE(NULLIF(slip_si.po_number, ''), slip_prod_ord.po_number, slip_po.po_number) =
+                    COALESCE(NULLIF(si.po_number, ''), prod_ord.po_number, po.po_number)
+                  AND slip_si.packing_slip_base64 IS NOT NULL
+                ORDER BY (slip_si.id = si.id) DESC, slip_si.created_at DESC
+                LIMIT 1
+              ),
               'itemType', COALESCE(poi.item_type, 'stock_model'),
               'unitPrice', CASE WHEN $${paramIndex + 2}::boolean THEN poi.unit_price ELSE NULL END,
               'lineTotal', CASE WHEN $${paramIndex + 2}::boolean THEN COALESCE(poi.unit_price, 0) * COALESCE(si.quantity, 1) ELSE NULL END,
@@ -2406,11 +2429,29 @@ router.post('/oem-shipments/:id/items', authenticateToken, async (req, res) => {
         .json({ _error: `Item ${orderId} already exists in this shipment` });
     }
 
+    const inheritedSlipRows = rowsOf<{ packing_slip_base64: string | null }>(
+      await pool.query(
+        `SELECT existing_si.packing_slip_base64
+         FROM shipment_items existing_si
+         LEFT JOIN production_orders existing_prod_ord ON existing_si.order_id = existing_prod_ord.order_id
+         LEFT JOIN purchase_order_items existing_poi ON existing_poi.id = existing_si.po_item_id
+         LEFT JOIN purchase_orders existing_po ON existing_poi.po_id = existing_po.id
+         WHERE existing_si.shipment_id = $1
+           AND COALESCE(NULLIF(existing_si.po_number, ''), existing_prod_ord.po_number, existing_po.po_number) = $2
+           AND existing_si.packing_slip_base64 IS NOT NULL
+         ORDER BY existing_si.created_at DESC
+         LIMIT 1`,
+        [id, poNumber]
+      )
+    );
+    const inheritedPackingSlipBase64 =
+      inheritedSlipRows[0]?.packing_slip_base64 || null;
+
     // Insert the new shipment item
     const insertQuery = `
-      INSERT INTO shipment_items (id, shipment_id, po_item_id, order_id, quantity, description, po_number)
-      VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6)
-      RETURNING id, shipment_id, po_item_id, order_id, quantity
+      INSERT INTO shipment_items (id, shipment_id, po_item_id, order_id, quantity, description, po_number, packing_slip_base64)
+      VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7)
+      RETURNING id, shipment_id, po_item_id, order_id, quantity, packing_slip_base64 IS NOT NULL AS has_packing_slip
     `;
 
     const result = await pool.query(insertQuery, [
@@ -2420,6 +2461,7 @@ router.post('/oem-shipments/:id/items', authenticateToken, async (req, res) => {
       quantity,
       description,
       poNumber,
+      inheritedPackingSlipBase64,
     ]);
     const newItem = (result.rows || result)[0];
 
@@ -2611,7 +2653,7 @@ router.post(
       const updateResult = await pool.query(
         `
       UPDATE production_orders 
-      SET production_status = 'LAID_UP',
+      SET production_status = 'IN_PROGRESS',
           current_department = 'Shipping QC',
           shipped_at = NULL,
           is_fulfilled = false,
@@ -2915,7 +2957,7 @@ router.post('/reset-fulfilled', authenticateToken, async (req, res) => {
     let updateQuery = `
       UPDATE production_orders 
       SET 
-        production_status = 'LAID_UP',
+        production_status = 'IN_PROGRESS',
         current_department = 'Shipping QC',
         shipped_at = NULL,
         is_fulfilled = false,
@@ -2934,7 +2976,7 @@ router.post('/reset-fulfilled', authenticateToken, async (req, res) => {
       updateQuery = `
         UPDATE production_orders 
         SET 
-          production_status = 'LAID_UP',
+          production_status = 'IN_PROGRESS',
           current_department = 'Shipping QC',
           shipped_at = NULL,
           is_fulfilled = false,
@@ -3158,7 +3200,7 @@ router.post('/process-shipment', authenticateToken, async (req, res) => {
           if (!order) {
             throw new Error(`Order ${item.orderId} not found`);
           }
-          // P1 PO orders use productionStatus (PENDING, LAID_UP, SHIPPED) not currentDepartment
+          // P1 PO orders use productionStatus (PENDING, IN_PROGRESS, SHIPPED) not currentDepartment
           const isDevMode = process.env.NODE_ENV === 'development';
           if (order.productionStatus === 'SHIPPED' && !isDevMode) {
             throw new Error(`Order ${item.orderId} has already been shipped`);

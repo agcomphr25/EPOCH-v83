@@ -16,7 +16,7 @@ export interface ProductionOrder {
   sourceSnapshot?: any;
   orderDate: string;
   dueDate: string;
-  productionStatus: 'PENDING' | 'LAID_UP' | 'SHIPPED';
+  productionStatus: 'PENDING' | 'IN_PROGRESS' | 'LAID_UP' | 'SHIPPED' | 'CANCELLED';
   currentDepartment?: string | null;
   laidUpAt?: string;
   shippedAt?: string;
@@ -26,7 +26,7 @@ export interface ProductionOrder {
 }
 
 export interface ProductionOrderUpdate {
-  productionStatus?: 'PENDING' | 'LAID_UP' | 'SHIPPED';
+  productionStatus?: 'PENDING' | 'IN_PROGRESS' | 'LAID_UP' | 'SHIPPED' | 'CANCELLED';
   laidUpAt?: string;
   shippedAt?: string;
   notes?: string;
@@ -78,6 +78,7 @@ export function getProductionSummary(orders: ProductionOrder[]) {
       case 'PENDING':
         summary.pending++;
         break;
+      case 'IN_PROGRESS':
       case 'LAID_UP':
         summary.laidUp++;
         break;
@@ -133,6 +134,7 @@ export function getProductionSummaryByPO(orders: ProductionOrder[]) {
       case 'PENDING':
         summary.pending++;
         break;
+      case 'IN_PROGRESS':
       case 'LAID_UP':
         summary.laidUp++;
         break;

@@ -6674,7 +6674,7 @@ export const productionOrders = pgTable('production_orders', {
   orderDate: timestamp('order_date').notNull(),
   dueDate: timestamp('due_date').notNull(),
   // Production tracking fields
-  productionStatus: text('production_status').notNull().default('PENDING'), // PENDING, LAID_UP, SHIPPED
+  productionStatus: text('production_status').notNull().default('PENDING'), // PENDING, IN_PROGRESS, SHIPPED
   currentDepartment: text('current_department').default('Barcode'), // Department progression tracking
   departmentHistory: jsonb('department_history').default('[]'), // History of department movements
   barcodeCompletedAt: timestamp('barcode_completed_at'),
@@ -7009,7 +7009,7 @@ export const insertProductionOrderSchema = createInsertSchema(productionOrders)
     orderDate: z.coerce.date(),
     dueDate: z.coerce.date(),
     productionStatus: z
-      .enum(['PENDING', 'LAID_UP', 'SHIPPED'])
+      .enum(['PENDING', 'IN_PROGRESS', 'LAID_UP', 'SHIPPED', 'CANCELLED'])
       .default('PENDING'),
     laidUpAt: z.coerce.date().optional().nullable(),
     shippedAt: z.coerce.date().optional().nullable(),

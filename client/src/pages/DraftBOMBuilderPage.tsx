@@ -141,6 +141,7 @@ type BomDraft = {
   notes: string;
   updatedAt: string;
   lines: BomLine[];
+  savedDraftBoms?: DraftPartBom[];
   laborEstimateLines?: DraftLaborEstimateLine[];
   customLaborDepartments?: string[];
   poVisibleColumns?: PoColumnId[];
@@ -465,6 +466,7 @@ function createPrivateerDraft(): BomDraft {
       firstDepartment: defaultDepartment,
       childDraftBoms: [],
     })),
+    savedDraftBoms: [],
     laborEstimateLines: [newLaborEstimateLine()],
     customLaborDepartments: [],
     poVisibleColumns: defaultPoColumns,
@@ -494,19 +496,25 @@ function readRDProjectOptions(): RDProjectOption[] {
 }
 
 function normalizeDraft(draft: BomDraft): BomDraft {
+  const lines = (draft.lines ?? []).map((line) => ({
+    ...line,
+    isDraftPart: line.isDraftPart ?? !line.inventoryItemId,
+    isManufactured: line.isManufactured ?? false,
+    firstDepartment: line.firstDepartment ?? defaultDepartment,
+    childDraftBoms: line.childDraftBoms ?? [],
+  }));
+
   return {
     ...draft,
     projectId: draft.projectId ?? null,
     projectCode: draft.projectCode ?? null,
     projectName: draft.projectName ?? draft.project ?? null,
     projectType: draft.projectType ?? null,
-    lines: (draft.lines ?? []).map((line) => ({
-      ...line,
-      isDraftPart: line.isDraftPart ?? !line.inventoryItemId,
-      isManufactured: line.isManufactured ?? false,
-      firstDepartment: line.firstDepartment ?? defaultDepartment,
-      childDraftBoms: line.childDraftBoms ?? [],
-    })),
+    lines,
+    savedDraftBoms: mergeDraftBoms([
+      ...(draft.savedDraftBoms ?? []),
+      ...lines.flatMap((line) => line.childDraftBoms ?? []),
+    ]),
     laborEstimateLines: (draft.laborEstimateLines?.length ? draft.laborEstimateLines : [newLaborEstimateLine()]).map((line) => ({
       ...line,
       department: line.department || defaultDepartment,
@@ -524,6 +532,15 @@ function normalizeDraft(draft: BomDraft): BomDraft {
     customPoColumns: sanitizeCustomColumns(draft.customPoColumns ?? []),
     workspaceTabs: normalizeWorkspaceTabs(draft.workspaceTabs),
   };
+}
+
+function mergeDraftBoms(boms: DraftPartBom[]) {
+  const seen = new Set<string>();
+  return boms.filter((bom) => {
+    if (seen.has(bom.id)) return false;
+    seen.add(bom.id);
+    return true;
+  });
 }
 
 function sanitizePoColumns(columns?: readonly string[] | null): PoColumnId[] {
@@ -822,6 +839,28 @@ function draftBomChildComponents(bom: DraftPartBom) {
   return bom.rootPart.bomItems?.length ? bom.rootPart.bomItems : bom.parts[0]?.bomItems ?? [];
 }
 
+function bomMatchesAssemblyPart(
+  bom: DraftPartBom,
+  part: Pick<DraftBomPart | DraftBomComponent, 'sourceLineId' | 'inventoryItemId' | 'partNumber' | 'description'>,
+) {
+  const rootPart = bom.rootPart;
+  if (part.sourceLineId && rootPart.sourceLineId === part.sourceLineId) return true;
+  if (part.inventoryItemId && rootPart.inventoryItemId === part.inventoryItemId) return true;
+  const partNumber = normalizedAssemblyPartKey(part.partNumber);
+  const description = normalizedAssemblyPartKey(part.description);
+  return (
+    (partNumber && normalizedAssemblyPartKey(rootPart.partNumber) === partNumber) ||
+    (description && normalizedAssemblyPartKey(rootPart.description) === description)
+  );
+}
+
+function draftBomsForAssemblyPart(
+  boms: DraftPartBom[],
+  part: Pick<DraftBomPart | DraftBomComponent, 'sourceLineId' | 'inventoryItemId' | 'partNumber' | 'description'>,
+) {
+  return boms.filter((bom) => bomMatchesAssemblyPart(bom, part));
+}
+
 function buildAssemblyTreeNode(
   part: DraftBomPart | DraftBomComponent,
   inventoryItems: InventoryItemOption[],
@@ -891,15 +930,17 @@ function buildAssemblyTreeNode(
   };
 }
 
-function buildAssemblyTree(lines: BomLine[], inventoryItems: InventoryItemOption[]) {
-  const entries = lines.flatMap<AssemblyLineEntry>((line) =>
-    (line.childDraftBoms ?? []).map((bom) => ({
+function buildAssemblyTree(lines: BomLine[], inventoryItems: InventoryItemOption[], savedDraftBoms: DraftPartBom[]) {
+  const entries = savedDraftBoms.flatMap<AssemblyLineEntry>((bom) => {
+    const line = findPartsRequestLineForAssemblyPart(bom.rootPart, lines);
+    if (!line) return [];
+    return [{
       line,
       bom,
       part: bom.rootPart ?? draftLineToPart(line),
       childComponents: draftBomChildComponents(bom),
-    })),
-  );
+    }];
+  });
   const entryLookup = entries.reduce((lookup, entry) => {
     const key = lineAssemblyKey(entry.line);
     const existing = lookup.get(key) ?? [];
@@ -1211,8 +1252,8 @@ export default function DraftBOMBuilderPage() {
   }, [activeInventoryItems, partsRequestDescription]);
   const partsRequestLines = draft.lines;
   const assemblyTree = useMemo(
-    () => buildAssemblyTree(partsRequestLines, activeInventoryItems),
-    [activeInventoryItems, partsRequestLines],
+    () => buildAssemblyTree(partsRequestLines, activeInventoryItems, draft.savedDraftBoms ?? []),
+    [activeInventoryItems, draft.savedDraftBoms, partsRequestLines],
   );
   const partsRequestSelectedCount = partsRequestLines.filter((line) => line.include).length;
   const allPartsRequestVisibleSelected = partsRequestLines.length > 0 && partsRequestSelectedCount === partsRequestLines.length;
@@ -1398,42 +1439,50 @@ export default function DraftBOMBuilderPage() {
     setDraft((current) => {
       const rootLineId = part.sourceLineId ?? part.id;
       const sourceLine = current.lines.find((line) => line.id === rootLineId) ?? null;
+      const shouldCreateRootLine = !sourceLine && !part.sourceLineId;
       const rootLine =
         sourceLine ??
-        ({
-          ...newLine(),
-          id: rootLineId,
-          include: true,
-          action: 'Hold',
-          category: 'Hardware/Misc.',
-          agPartNumber: part.partNumber,
-          description: part.description,
-          qtyNeeded: part.quantity || 1,
-          status: part.source === 'inventory-item' ? 'Needs Review' : 'Needs Quote',
-          note: part.source === 'inventory-item' ? `Draft BOM built from inventory item #${part.inventoryItemId}` : 'Draft BOM built from new part',
-          inventoryItemId: part.inventoryItemId ?? null,
-          inventoryItemName: part.source === 'inventory-item' ? part.description : null,
-          isDraftPart: part.source !== 'inventory-item',
-          isManufactured: true,
-          firstDepartment: defaultDepartment,
-          childDraftBoms: [],
-        } as BomLine);
+        (shouldCreateRootLine
+          ? ({
+              ...newLine(),
+              id: rootLineId,
+              include: true,
+              action: 'Hold',
+              category: 'Hardware/Misc.',
+              agPartNumber: part.partNumber,
+              description: part.description,
+              qtyNeeded: part.quantity || 1,
+              status: part.source === 'inventory-item' ? 'Needs Review' : 'Needs Quote',
+              note: part.source === 'inventory-item' ? `Draft BOM built from inventory item #${part.inventoryItemId}` : 'Draft BOM built from new part',
+              inventoryItemId: part.inventoryItemId ?? null,
+              inventoryItemName: part.source === 'inventory-item' ? part.description : null,
+              isDraftPart: part.source !== 'inventory-item',
+              isManufactured: true,
+              firstDepartment: defaultDepartment,
+              childDraftBoms: [],
+            } as BomLine)
+          : null);
 
-      const linkedPart = { ...part, sourceLineId: rootLine.id };
+      const linkedPart = { ...part, sourceLineId: rootLine?.id ?? part.sourceLineId ?? null };
       const linkedBom: DraftPartBom = {
         ...bom,
         rootPart: linkedPart,
         parts: bom.parts.map((queuedPart, index) =>
-          index === 0 ? { ...queuedPart, sourceLineId: rootLine.id } : queuedPart,
+          index === 0 ? { ...queuedPart, sourceLineId: rootLine?.id ?? queuedPart.sourceLineId ?? null } : queuedPart,
         ),
         updatedAt: new Date().toISOString(),
       };
 
-      const nextLines = sourceLine ? current.lines : [rootLine, ...current.lines];
+      const nextLines = rootLine && !sourceLine ? [rootLine, ...current.lines] : current.lines;
+      const nextSavedDraftBoms = mergeDraftBoms([
+        linkedBom,
+        ...(current.savedDraftBoms ?? []).filter((item) => item.id !== linkedBom.id),
+      ]);
       return {
         ...current,
+        savedDraftBoms: nextSavedDraftBoms,
         lines: nextLines.map((line) => {
-          if (line.id !== rootLine.id) return line;
+          if (!rootLine || line.id !== rootLine.id) return line;
           const childDraftBoms = line.childDraftBoms ?? [];
           const withoutCurrentBom = childDraftBoms.filter((item) => item.id !== linkedBom.id);
           return {
@@ -1451,6 +1500,17 @@ export default function DraftBOMBuilderPage() {
       title: 'Draft BOM saved',
       description: `${bom.name} ${bom.revision} is linked to ${part.partNumber}.`,
     });
+  }
+
+  function deleteWizardBom(bomId: string) {
+    setDraft((current) => ({
+      ...current,
+      savedDraftBoms: (current.savedDraftBoms ?? []).filter((bom) => bom.id !== bomId),
+      lines: current.lines.map((line) => ({
+        ...line,
+        childDraftBoms: (line.childDraftBoms ?? []).filter((bom) => bom.id !== bomId),
+      })),
+    }));
   }
 
   function createLineFromPoDescription(item?: InventoryItemOption) {
@@ -1701,6 +1761,7 @@ export default function DraftBOMBuilderPage() {
       ...draft,
       updatedAt: new Date().toISOString(),
       lines: [newLine()],
+      savedDraftBoms: [],
       laborEstimateLines: [newLaborEstimateLine()],
       customLaborDepartments: [],
       poVisibleColumns: defaultPoColumns,
@@ -1770,6 +1831,7 @@ export default function DraftBOMBuilderPage() {
       notes: '',
       updatedAt: new Date().toISOString(),
       lines: [newLine()],
+      savedDraftBoms: [],
       laborEstimateLines: [newLaborEstimateLine()],
       customLaborDepartments: [],
       poVisibleColumns: defaultPoColumns,
@@ -2400,10 +2462,12 @@ export default function DraftBOMBuilderPage() {
               <TabsContent value="bom-wizard" className="mt-4">
                 <DraftBomWizardWorkspace
                   draftLines={draft.lines}
+                  savedDraftBoms={draft.savedDraftBoms ?? []}
                   inventoryItems={activeInventoryItems}
                   seedLineId={wizardSeedLineId}
                   onSeedLineConsumed={() => setWizardSeedLineId(null)}
                   onSaveWizardBom={saveWizardBom}
+                  onDeleteWizardBom={deleteWizardBom}
                   isEditMode={isEditMode}
                 />
               </TabsContent>
@@ -3339,17 +3403,21 @@ function DirectLaborEstimateWorkspace({
 
 function DraftBomWizardWorkspace({
   draftLines,
+  savedDraftBoms,
   inventoryItems,
   seedLineId,
   onSeedLineConsumed,
   onSaveWizardBom,
+  onDeleteWizardBom,
   isEditMode,
 }: {
   draftLines: BomLine[];
+  savedDraftBoms: DraftPartBom[];
   inventoryItems: InventoryItemOption[];
   seedLineId: string | null;
   onSeedLineConsumed: () => void;
   onSaveWizardBom: (part: DraftBomPart, bom: DraftPartBom) => void;
+  onDeleteWizardBom: (bomId: string) => void;
   isEditMode: boolean;
 }) {
   const [sourceMode, setSourceMode] = useState<DraftBomSource>('draft-part');
@@ -3385,6 +3453,10 @@ function DraftBomWizardWorkspace({
   const currentPart = activeBom?.parts[currentPartIndex] ?? null;
   const queuedManufacturedParts = activeBom?.parts.filter((part, index) => index > currentPartIndex && !part.hasBOM) ?? [];
 
+  function findLineForBom(bom: DraftPartBom) {
+    return findPartsRequestLineForAssemblyPart(bom.rootPart, draftLines);
+  }
+
   useEffect(() => {
     if (!seedLineId) return;
     const line = draftLines.find((item) => item.id === seedLineId);
@@ -3394,10 +3466,10 @@ function DraftBomWizardWorkspace({
     }
     setSourceMode('draft-part');
     setSelectedLineId(line.id);
-    setActiveBom(createDraftPartBom(draftLineToPart(line), line.childDraftBoms?.length ?? 0));
+    setActiveBom(createDraftPartBom(draftLineToPart(line), draftBomsForAssemblyPart(savedDraftBoms, draftLineToPart(line)).length));
     setCurrentPartIndex(0);
     onSeedLineConsumed();
-  }, [draftLines, onSeedLineConsumed, seedLineId]);
+  }, [draftLines, onSeedLineConsumed, savedDraftBoms, seedLineId]);
 
   function startNewBom() {
     let rootPart: DraftBomPart | null = null;
@@ -3405,11 +3477,13 @@ function DraftBomWizardWorkspace({
 
     if (sourceMode === 'draft-part' && selectedLine) {
       rootPart = draftLineToPart(selectedLine);
-      existingCount = selectedLine.childDraftBoms?.length ?? 0;
+      existingCount = draftBomsForAssemblyPart(savedDraftBoms, rootPart).length;
     } else if (sourceMode === 'inventory-item' && selectedInventoryItem) {
       rootPart = inventoryItemToPart(selectedInventoryItem);
+      existingCount = draftBomsForAssemblyPart(savedDraftBoms, rootPart).length;
     } else if (sourceMode === 'new-part') {
       rootPart = newWizardPart(newPartNumber, newPartDescription);
+      existingCount = draftBomsForAssemblyPart(savedDraftBoms, rootPart).length;
     }
 
     if (!rootPart) return;
@@ -3417,9 +3491,10 @@ function DraftBomWizardWorkspace({
     setCurrentPartIndex(0);
   }
 
-  function loadExistingBom(line: BomLine, bom: DraftPartBom) {
-    setSourceMode('draft-part');
-    setSelectedLineId(line.id);
+  function loadExistingBom(bom: DraftPartBom) {
+    const line = findLineForBom(bom);
+    setSourceMode(line ? 'draft-part' : bom.rootPart.source);
+    setSelectedLineId(line?.id ?? '');
     setActiveBom(bom);
     setCurrentPartIndex(0);
   }
@@ -3658,23 +3733,45 @@ function DraftBomWizardWorkspace({
         <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
           <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-700">Existing draft BOMs</h3>
           <div className="mt-3 space-y-2">
-            {draftLines.flatMap((line) =>
-              (line.childDraftBoms ?? []).map((bom) => (
-                <button
+            {savedDraftBoms.map((bom) => {
+              const linkedLine = findLineForBom(bom);
+              return (
+                <div
                   key={bom.id}
-                  type="button"
-                  className="block w-full rounded-md border border-slate-200 p-3 text-left text-sm hover:border-teal-300 hover:bg-teal-50"
-                  onClick={() => loadExistingBom(line, bom)}
-                  disabled={!isEditMode}
+                  className="flex gap-2 rounded-md border border-slate-200 p-3 text-sm hover:border-teal-300 hover:bg-teal-50"
                 >
-                  <span className="block font-medium text-slate-950">{bom.name} {bom.revision}</span>
-                  <span className="mt-1 block text-xs text-slate-500">
-                    {linePartNumber(line)} - {bom.parts.length} configured part{bom.parts.length === 1 ? '' : 's'}
-                  </span>
-                </button>
-              )),
-            )}
-            {draftLines.every((line) => !line.childDraftBoms?.length) ? (
+                  <button
+                    type="button"
+                    className="min-w-0 flex-1 text-left"
+                    onClick={() => loadExistingBom(bom)}
+                    disabled={!isEditMode}
+                  >
+                    <span className="block font-medium text-slate-950">{bom.name} {bom.revision}</span>
+                    <span className="mt-1 block text-xs text-slate-500">
+                      {linkedLine ? linePartNumber(linkedLine) : `${bom.rootPart.partNumber} (part removed)`} - {bom.parts.length} configured part{bom.parts.length === 1 ? '' : 's'}
+                    </span>
+                  </button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0"
+                    onClick={() => {
+                      onDeleteWizardBom(bom.id);
+                      if (activeBom?.id === bom.id) {
+                        setActiveBom(null);
+                        setCurrentPartIndex(0);
+                      }
+                    }}
+                    disabled={!isEditMode}
+                    aria-label={`Delete ${bom.name}`}
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
+              );
+            })}
+            {savedDraftBoms.length === 0 ? (
               <p className="text-sm text-slate-500">No child draft BOMs have been saved yet.</p>
             ) : null}
           </div>

@@ -1893,6 +1893,7 @@ export interface IStorage {
       poNumber?: string;
       expectedDelivery?: string;
       lineItems?: Array<{
+        sourceItemId?: number;
         inventoryItemId?: number | null;
         partNumber: string;
         partName: string;
@@ -15621,6 +15622,7 @@ export class DatabaseStorage implements IStorage {
       poNumber?: string;
       expectedDelivery?: string;
       lineItems?: Array<{
+        sourceItemId?: number;
         inventoryItemId?: number | null;
         partNumber: string;
         partName: string;
@@ -15723,6 +15725,7 @@ export class DatabaseStorage implements IStorage {
       const revisedItems = overrides?.lineItems?.length
         ? overrides.lineItems
         : originalItems.map((item) => ({
+            sourceItemId: item.id,
             inventoryItemId: item.inventoryItemId,
             partNumber: item.partNumber,
             partName: item.partName,
@@ -15732,10 +15735,11 @@ export class DatabaseStorage implements IStorage {
             notes: item.notes,
           }));
 
+      const itemIdMap = new Map<number, number>();
       for (const item of revisedItems) {
         const quantity = Number(item.quantity) || 1;
         const unitPrice = Number(item.unitPrice) || 0;
-        await tx.insert(p2PurchaseOrderItems).values({
+        const [copiedItem] = await tx.insert(p2PurchaseOrderItems).values({
           poId: newRevision.id,
           inventoryItemId: item.inventoryItemId ?? null,
           partNumber: item.partNumber,
@@ -15745,8 +15749,46 @@ export class DatabaseStorage implements IStorage {
           totalPrice: quantity * unitPrice,
           specifications: item.specifications ?? null,
           notes: item.notes ?? null,
-        });
+        }).returning({ id: p2PurchaseOrderItems.id });
+
+        if (item.sourceItemId) {
+          itemIdMap.set(item.sourceItemId, copiedItem.id);
+        }
       }
+
+      for (const [oldItemId, newItemId] of itemIdMap.entries()) {
+        await tx
+          .update(p2ProductionOrders)
+          .set({ p2PoId: newRevision.id, p2PoItemId: newItemId, updatedAt: new Date() })
+          .where(and(
+            eq(p2ProductionOrders.p2PoId, originalPO.id),
+            eq(p2ProductionOrders.p2PoItemId, oldItemId)
+          ));
+
+        await tx
+          .update(p2SerializedItems)
+          .set({ poId: newRevision.id, poItemId: newItemId, updatedAt: new Date() })
+          .where(and(
+            eq(p2SerializedItems.poId, originalPO.id),
+            eq(p2SerializedItems.poItemId, oldItemId)
+          ));
+
+        await tx.execute(sql`
+          UPDATE manufacturing_queue
+             SET p2_po_id = ${newRevision.id},
+                 p2_po_item_id = ${newItemId},
+                 updated_at = NOW()
+           WHERE p2_po_id = ${originalPO.id}
+             AND p2_po_item_id = ${oldItemId}
+        `);
+      }
+
+      await tx.execute(sql`
+        UPDATE program_builds
+           SET p2_purchase_order_id = ${newRevision.id},
+               updated_at = NOW()
+         WHERE p2_purchase_order_id = ${originalPO.id}
+      `);
 
       return newRevision;
     });

@@ -663,6 +663,7 @@ router.post('/:id/revisions', async (req, res) => {
       revisedPoNumber: z.string().trim().min(1).optional(),
       revisedDueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       revisedLineItems: z.array(z.object({
+        id: z.union([z.number().int().positive(), z.string()]).optional(),
         inventoryItemId: z.number().int().positive().nullable().optional(),
         partNumber: z.string().trim().min(1),
         partName: z.string().trim().min(1),
@@ -722,7 +723,10 @@ router.post('/:id/revisions', async (req, res) => {
         {
           poNumber: data.revisedPoNumber,
           expectedDelivery: data.revisedDueDate,
-          lineItems: data.revisedLineItems,
+          lineItems: data.revisedLineItems.map((item) => ({
+            ...item,
+            sourceItemId: Number.isFinite(Number(item.id)) ? Number(item.id) : undefined,
+          })),
         }
       );
       newPoId = revisedPo.id;

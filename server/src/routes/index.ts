@@ -2956,22 +2956,24 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
   // SECURITY: softAuth enforces authentication in production
   app.put('/api/p2-purchase-orders-bypass/:id', softAuth, async (req, res) => {
     try {
-      console.log('🔧 P2 PURCHASE ORDER UPDATE BYPASS ROUTE CALLED');
+      console.log('P2 PURCHASE ORDER UPDATE BYPASS ROUTE CALLED');
       const { storage } = await import('../../storage');
       const { id } = req.params;
-      const poData = req.body;
-      if (poData.contractReviewRole && !['primary', 'secondary'].includes(poData.contractReviewRole)) {
+      const poId = parseInt(id, 10);
+      const body = req.body || {};
+
+      if (body.contractReviewRole && !['primary', 'secondary'].includes(body.contractReviewRole)) {
         return res.status(400).json({
           error: 'contractReviewRole must be primary or secondary',
         });
       }
-      
-      const existingPO = await storage.getP2PurchaseOrder(parseInt(id));
+
+      const existingPO = await storage.getP2PurchaseOrder(poId);
       if (!existingPO) {
         return res.status(404).json({ error: 'PO not found' });
       }
-      
-      // STATE GUARD: Superseded revisions are permanent audit history — read-only
+
+      // STATE GUARD: Superseded revisions are permanent audit history - read-only
       if (existingPO.isCurrentRevision === false) {
         return res.status(403).json({
           error: 'This PO has been superseded by a newer revision and cannot be modified',
@@ -2984,36 +2986,95 @@ export function registerRoutes(app: Express, existingServer?: Server): Server {
         return res.status(403).json({
           error: 'This PO has been locked and cannot be modified',
           lockedAt: existingPO.lockedAt,
-          lockedBy: existingPO.lockedBy
+          lockedBy: existingPO.lockedBy,
         });
       }
-      
+
       // STATE GUARD: Cannot modify CLOSED or CANCELED POs
       if (existingPO.status === 'CLOSED' || existingPO.status === 'CANCELED') {
         return res.status(400).json({
           error: `Cannot modify a ${existingPO.status} PO`,
-          currentStatus: existingPO.status
+          currentStatus: existingPO.status,
         });
       }
-      
+
       // STATE GUARD: Cannot move to CLOSED unless BOM is configured
-      if (poData.status === 'CLOSED' && !existingPO.bomConfigured) {
+      if (body.status === 'CLOSED' && !existingPO.bomConfigured) {
         return res.status(400).json({
           error: 'Cannot close PO - BOM has not been configured',
-          guard: 'BOM_REQUIRED'
+          guard: 'BOM_REQUIRED',
         });
       }
-      
-      const po = await storage.updateP2PurchaseOrder(parseInt(id), poData);
-      console.log('🔧 Updated P2 purchase order:', po.id);
+
+      const customerId = body.customerId || existingPO.customerId;
+      const customer = customerId ? await storage.getP2CustomerByCustomerId(customerId) : null;
+      const poData = {
+        poNumber: body.customerPONumber || body.poNumber || existingPO.poNumber,
+        customerId: customer?.customerId || customerId,
+        customerName: customer?.customerName || body.customerName || existingPO.customerName,
+        poDate: body.poDate || existingPO.poDate || new Date().toISOString().split('T')[0],
+        expectedDelivery: body.dueDate || body.expectedDelivery || existingPO.expectedDelivery || null,
+        status: body.status || existingPO.status || 'OPEN',
+        notes: body.notes ?? body.toleranceNotes ?? existingPO.notes ?? null,
+        toleranceAuthorizerId: body.toleranceAuthorizerId || null,
+        toleranceAuthorizerName: body.toleranceAuthorizerName || null,
+        toleranceNotes: body.toleranceNotes ?? body.notes ?? null,
+        assignedToId: body.assignedToId && body.assignedToId !== 'none' ? parseInt(String(body.assignedToId)) : null,
+        assignedToName: body.assignedToName || null,
+        productionLeadId: body.productionLeadId && body.productionLeadId !== 'none' ? parseInt(String(body.productionLeadId)) : null,
+        productionLeadName: body.productionLeadName || null,
+        sourceQuoteId: body.sourceQuoteId || existingPO.sourceQuoteId || null,
+        contractReviewRole: body.contractReviewRole === 'primary' ? 'primary' : 'secondary',
+        projectId: body.projectId || null,
+        projectName: body.projectName || null,
+      };
+
+      const po = await storage.updateP2PurchaseOrder(poId, poData);
+
+      if (Array.isArray(body.lineItems)) {
+        const existingItems = await storage.getP2PurchaseOrderItems(poId);
+        const existingById = new Map(existingItems.map((item: any) => [Number(item.id), item]));
+        const seenItemIds = new Set<number>();
+
+        for (const item of body.lineItems) {
+          const itemId = Number(item.id);
+          const itemData = {
+            poId,
+            inventoryItemId: item.inventoryItemId || null,
+            partNumber: item.partNumber,
+            partName: item.description || item.partName || item.partNumber,
+            quantity: Number(item.quantity) || 1,
+            unitPrice: Number(item.unitPrice) || 0,
+          };
+
+          if (itemId && existingById.has(itemId)) {
+            seenItemIds.add(itemId);
+            await storage.updateP2PurchaseOrderItem(itemId, itemData);
+          } else {
+            const created = await storage.createP2PurchaseOrderItem(itemData);
+            seenItemIds.add(created.id);
+          }
+        }
+
+        for (const existingItem of existingItems) {
+          if (!seenItemIds.has(Number(existingItem.id))) {
+            try {
+              await storage.deleteP2PurchaseOrderItem(existingItem.id);
+            } catch (deleteError) {
+              console.warn('Skipped deleting revised PO item with downstream references:', existingItem.id, deleteError);
+            }
+          }
+        }
+      }
+
+      console.log('Updated P2 purchase order:', po.id);
       res.json(po);
     } catch (_error) {
-      console.error('🔧 P2 purchase order update bypass _error:', _error);
-      res
-        .status(500)
-        .json({
-          _error: 'Failed to update P2 purchase order via bypass route',
-        });
+      console.error('P2 purchase order update bypass error:', _error);
+      res.status(500).json({
+        _error: 'Failed to update P2 purchase order via bypass route',
+        message: _error instanceof Error ? _error.message : 'Unknown error',
+      });
     }
   });
 

@@ -4,6 +4,7 @@ import { apiRequest } from '@/lib/queryClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
@@ -164,6 +165,27 @@ type InventoryItem = {
   supplierPartNumber?: string;
 };
 
+type PartsRequest = {
+  id: number;
+  agPartNumber?: string | null;
+  partNumber: string;
+  partName: string;
+  requestedBy: string;
+  department?: string | null;
+  quantity: number;
+  qtyOrdered?: number | null;
+  vendorPoId?: number | null;
+  status: string;
+  urgency: string;
+  requestDate?: string;
+};
+
+type PartsRequestVendorGroup = {
+  vendorId: number | null;
+  vendorName: string;
+  requests: PartsRequest[];
+};
+
 type NewItemState = {
   agPartNumber: string;
   description: string;
@@ -294,6 +316,7 @@ export default function VendorPOItemSelector({
     productionWorkOrderId?: string | null;
     chargeCodeId?: number | null;
   }>({});
+  const [linkedPartsRequestIds, setLinkedPartsRequestIds] = useState<number[]>([]);
 
   const { data: items = [], isLoading } = useQuery<VendorPOItem[]>({
     queryKey: ['/api/vendor-pos', vendorPoId, 'items'],
@@ -310,6 +333,11 @@ export default function VendorPOItemSelector({
 
   const { data: p2PurchaseOrders = [] } = useQuery<P2PurchaseOrder[]>({
     queryKey: ['/api/p2-purchase-orders-bypass'],
+  });
+
+  const { data: partsRequestGroups = [] } = useQuery<PartsRequestVendorGroup[]>({
+    queryKey: ['/api/inventory/parts-requests/by-vendor'],
+    queryFn: () => apiRequest('/api/inventory/parts-requests/by-vendor'),
   });
 
   const { data: traceabilityOptions } = useQuery<{
@@ -339,6 +367,33 @@ export default function VendorPOItemSelector({
     return productionWorkOrders.filter((wo) => wo.projectId === editedItem.projectId);
   }, [editedItem.projectId, productionWorkOrders]);
 
+  const matchingPartsRequests = useMemo(() => {
+    if (!newItem.agPartNumber && !newItem.description) return [];
+    const normalizedPart = newItem.agPartNumber.trim().toLowerCase();
+    const vendorGroup = partsRequestGroups.find((group) => group.vendorId === vendorId);
+    if (!vendorGroup) return [];
+
+    return vendorGroup.requests
+      .filter((request) => {
+        const requestPart = String(request.agPartNumber || request.partNumber || '').trim().toLowerCase();
+        const remaining = Number(request.quantity || 0) - Number(request.qtyOrdered || 0);
+        return requestPart === normalizedPart && remaining > 0 && !request.vendorPoId;
+      })
+      .sort((a, b) => {
+        const urgencyOrder: Record<string, number> = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+        return (urgencyOrder[a.urgency] ?? 4) - (urgencyOrder[b.urgency] ?? 4);
+      });
+  }, [newItem.agPartNumber, newItem.description, partsRequestGroups, vendorId]);
+
+  const selectedPartsRequestQuantities = useMemo(() => {
+    return linkedPartsRequestIds.reduce<Record<number, number>>((acc, requestId) => {
+      const request = matchingPartsRequests.find((item) => item.id === requestId);
+      if (!request) return acc;
+      acc[requestId] = Math.max(0, Number(request.quantity || 0) - Number(request.qtyOrdered || 0));
+      return acc;
+    }, {});
+  }, [linkedPartsRequestIds, matchingPartsRequests]);
+
   const hasUnitConversion = useMemo(() => {
     return selectedInventoryItem?.vendorUnit && 
            selectedInventoryItem?.purchaseUnit && 
@@ -367,6 +422,7 @@ export default function VendorPOItemSelector({
 
   const handlePartSelect = async (partId: string) => {
     setSelectedPartId(partId);
+    setLinkedPartsRequestIds([]);
     const selectedPart = vendorParts.find(p => p.id.toString() === partId);
     
     if (selectedPart) {
@@ -472,6 +528,9 @@ export default function VendorPOItemSelector({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos', vendorPoId, 'items'] });
       queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests/my'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests/by-vendor'] });
       toast.success('Item added successfully');
       resetForm();
       if (onTotalChange) {
@@ -547,6 +606,7 @@ export default function VendorPOItemSelector({
     });
     setSelectedPartId('');
     setSelectedInventoryItem(null);
+    setLinkedPartsRequestIds([]);
   };
 
   const handleAddItem = () => {
@@ -585,6 +645,8 @@ export default function VendorPOItemSelector({
         chargeCodeId: newItem.chargeCodeId || null,
         otherIdentifier: newItem.otherIdentifier || null,
         notes: newItem.notes || null,
+        partsRequestIds: linkedPartsRequestIds,
+        partsRequestQuantities: selectedPartsRequestQuantities,
       };
     } else {
       if (newItem.quantity <= 0 || newItem.unitPrice < 0) {
@@ -605,6 +667,8 @@ export default function VendorPOItemSelector({
         chargeCodeId: newItem.chargeCodeId || null,
         otherIdentifier: newItem.otherIdentifier || null,
         notes: newItem.notes || null,
+        partsRequestIds: linkedPartsRequestIds,
+        partsRequestQuantities: selectedPartsRequestQuantities,
       };
     }
     
@@ -797,7 +861,10 @@ export default function VendorPOItemSelector({
                   <Input
                     id="agPartNumber"
                     value={newItem.agPartNumber}
-                    onChange={(e) => setNewItem({ ...newItem, agPartNumber: e.target.value })}
+                    onChange={(e) => {
+                      setNewItem({ ...newItem, agPartNumber: e.target.value });
+                      setLinkedPartsRequestIds([]);
+                    }}
                     data-testid="input-ag-part-number"
                     placeholder="Auto-filled or manual"
                   />
@@ -838,6 +905,61 @@ export default function VendorPOItemSelector({
                 </div>
               </div>
               <p className="text-xs text-amber-700 dark:text-amber-300 mt-2">💡 Tip: Set up vendorUnit, purchaseUnit, and conversion factor in inventory items for automatic unit conversion</p>
+            </div>
+          )}
+
+          {matchingPartsRequests.length > 0 && (
+            <div className="border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/30 rounded-lg p-4">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <div>
+                  <p className="font-medium text-sm text-blue-900 dark:text-blue-100">
+                    Link User Part Requests
+                  </p>
+                  <p className="text-xs text-blue-700 dark:text-blue-300">
+                    Selected requests will be marked ordered and linked to this vendor PO.
+                  </p>
+                </div>
+                <Badge variant="outline" className="bg-white dark:bg-blue-950">
+                  {linkedPartsRequestIds.length} selected
+                </Badge>
+              </div>
+
+              <div className="space-y-2">
+                {matchingPartsRequests.map((request) => {
+                  const remaining = Math.max(0, Number(request.quantity || 0) - Number(request.qtyOrdered || 0));
+                  const checked = linkedPartsRequestIds.includes(request.id);
+                  return (
+                    <label
+                      key={request.id}
+                      className="flex items-start gap-3 rounded-md border bg-white dark:bg-gray-900 px-3 py-2 text-sm cursor-pointer"
+                    >
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={(value) => {
+                          setLinkedPartsRequestIds((current) =>
+                            value === true
+                              ? Array.from(new Set([...current, request.id]))
+                              : current.filter((id) => id !== request.id)
+                          );
+                        }}
+                        data-testid={`checkbox-link-parts-request-${request.id}`}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium">Request #{request.id}</span>
+                          <Badge variant="secondary">{request.urgency}</Badge>
+                          <span className="text-xs text-muted-foreground">
+                            {request.department || 'No department'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {request.requestedBy} requested {remaining} of {request.quantity} remaining
+                        </p>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
             </div>
           )}
 

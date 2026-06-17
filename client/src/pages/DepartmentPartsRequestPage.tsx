@@ -50,6 +50,8 @@ type PartsRequest = {
   department: string;
   departmentId: number;
   quantity: number;
+  qtyOrdered?: number;
+  qtyReceived?: number;
   quantityOrdered?: number;
   quantityReceived?: number;
   urgency: string;
@@ -63,6 +65,12 @@ type PartsRequest = {
   cancelReason?: string;
   catalogFixNeeded?: boolean;
   outOfDeptReason?: string;
+  vendorPO?: {
+    id: number | null;
+    poNumber: string | null;
+    externalPoNumber: string | null;
+    status: string | null;
+  };
 };
 
 type User = {
@@ -370,8 +378,8 @@ export default function DepartmentPartsRequestPage() {
 
   const getProgressIndicator = (request: PartsRequest) => {
     const requested = request.quantity || 0;
-    const ordered = request.quantityOrdered || 0;
-    const received = request.quantityReceived || 0;
+    const ordered = request.quantityOrdered ?? request.qtyOrdered ?? 0;
+    const received = request.quantityReceived ?? request.qtyReceived ?? 0;
     if (requested === 0) return null;
 
     const orderedPct = Math.min((ordered / requested) * 100, 100);
@@ -690,10 +698,10 @@ export default function DepartmentPartsRequestPage() {
                         {request.quantity}
                       </td>
                       <td className="px-4 py-3 text-sm text-center text-gray-900 dark:text-gray-100" data-testid={`text-request-qty-ordered-${request.id}`}>
-                        {request.quantityOrdered ?? '—'}
+                        {request.quantityOrdered ?? request.qtyOrdered ?? '—'}
                       </td>
                       <td className="px-4 py-3 text-sm text-center text-gray-900 dark:text-gray-100" data-testid={`text-request-qty-received-${request.id}`}>
-                        {request.quantityReceived ?? '—'}
+                        {request.quantityReceived ?? request.qtyReceived ?? '—'}
                       </td>
                       <td className="px-4 py-3 text-sm min-w-[120px]">
                         {getProgressIndicator(request)}
@@ -713,6 +721,11 @@ export default function DepartmentPartsRequestPage() {
                             <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
                               Reason: {request.cancelReason}
                             </p>
+                          )}
+                          {request.vendorPO && (
+                            <Badge className="bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                              PO {request.vendorPO.poNumber || `Draft #${request.vendorPO.id}`}
+                            </Badge>
                           )}
                         </div>
                       </td>

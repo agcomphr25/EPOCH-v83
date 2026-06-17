@@ -7118,10 +7118,14 @@ export class DatabaseStorage implements IStorage {
         invUsageUnit: inventoryItems.usageUnit,
         projectCode: projects.projectCode,
         projectName: projects.projectName,
+        vendorPoNumber: vendorPOs.poNumber,
+        vendorPoExternalNumber: vendorPOs.externalPoNumber,
+        vendorPoStatus: vendorPOs.status,
       })
       .from(partsRequests)
       .leftJoin(inventoryItems, eq(inventoryItems.agPartNumber, partsRequests.agPartNumber))
       .leftJoin(projects, eq(projects.id, partsRequests.projectId))
+      .leftJoin(vendorPOs, eq(vendorPOs.id, partsRequests.vendorPoId))
       .where(eq(partsRequests.isActive, true))
       .orderBy(desc(partsRequests.requestDate));
 
@@ -7132,6 +7136,7 @@ export class DatabaseStorage implements IStorage {
         agPartNumber: r.request.agPartNumber,
         name: r.invName,
         source: r.invSource,
+        vendorName: r.invSource,
         vendorId: r.invVendorId,
         usageUnit: r.invUsageUnit,
       } : undefined,
@@ -7139,6 +7144,12 @@ export class DatabaseStorage implements IStorage {
         id: r.request.projectId,
         projectCode: r.projectCode,
         projectName: r.projectName,
+      } : undefined,
+      vendorPO: r.request.vendorPoId ? {
+        id: r.request.vendorPoId,
+        poNumber: r.vendorPoNumber,
+        externalPoNumber: r.vendorPoExternalNumber,
+        status: r.vendorPoStatus,
       } : undefined,
     }));
   }
@@ -7227,14 +7238,30 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
-    return await db
-      .select()
+    const results = await db
+      .select({
+        request: partsRequests,
+        vendorPoNumber: vendorPOs.poNumber,
+        vendorPoExternalNumber: vendorPOs.externalPoNumber,
+        vendorPoStatus: vendorPOs.status,
+      })
       .from(partsRequests)
+      .leftJoin(vendorPOs, eq(vendorPOs.id, partsRequests.vendorPoId))
       .where(and(
         or(...participantFilters),
         eq(partsRequests.isActive, true)
       ))
       .orderBy(desc(partsRequests.requestDate));
+
+    return results.map((r) => ({
+      ...r.request,
+      vendorPO: r.request.vendorPoId ? {
+        id: r.request.vendorPoId,
+        poNumber: r.vendorPoNumber,
+        externalPoNumber: r.vendorPoExternalNumber,
+        status: r.vendorPoStatus,
+      } : undefined,
+    } as PartsRequest));
   }
 
   async getConsolidatedPartsNeeds(): Promise<any[]> {

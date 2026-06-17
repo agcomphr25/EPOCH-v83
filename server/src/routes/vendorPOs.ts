@@ -5,6 +5,8 @@ import {
   insertVendorPOSettingsSchema,
   insertOptionalSettingSchema,
   insertPOOptionalSettingSchema,
+  partsRequests,
+  partsRequestStatusHistory,
   procurementComplianceEffectiveDates,
   auditEvents,
 } from '@shared/schema';
@@ -13,7 +15,7 @@ import { storage } from '../../storage';
 import { requirePermission } from '../../middleware/requirePermission';
 import { sendCommunication } from '../../communication/send';
 import { db, queryRows } from '../../db';
-import { and, desc, eq, or, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, or, sql } from 'drizzle-orm';
 import {
   appendUniqueEmail,
   DEFAULT_VENDOR_PO_RETURN_EMAIL,
@@ -30,6 +32,91 @@ import { sendApiError } from '../../utils/apiErrors';
 import { generateVendorPoPdf } from '../../utils/pdf/vendorPoPdf';
 
 const router = Router();
+
+function parseLinkedPartsRequestIds(raw: unknown): number[] {
+  if (!Array.isArray(raw)) return [];
+  return Array.from(new Set(
+    raw
+      .map((value) => Number(value))
+      .filter((value) => Number.isInteger(value) && value > 0)
+  ));
+}
+
+function parsePartsRequestQuantities(raw: unknown): Map<number, number> {
+  const quantities = new Map<number, number>();
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return quantities;
+
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const requestId = Number(key);
+    const quantity = Number(value);
+    if (Number.isInteger(requestId) && requestId > 0 && Number.isFinite(quantity) && quantity > 0) {
+      quantities.set(requestId, Math.ceil(quantity));
+    }
+  }
+
+  return quantities;
+}
+
+async function linkPartsRequestsToVendorPO(params: {
+  requestIds: number[];
+  quantitiesByRequestId: Map<number, number>;
+  vendorPoId: number;
+  vendorId: number;
+  orderedQuantityFallback: number;
+  changedBy: string;
+}) {
+  const { requestIds, quantitiesByRequestId, vendorPoId, vendorId, orderedQuantityFallback, changedBy } = params;
+  if (requestIds.length === 0) return;
+
+  const linkedRequests = await db
+    .select()
+    .from(partsRequests)
+    .where(inArray(partsRequests.id, requestIds));
+
+  let fallbackRemaining = Math.max(0, Math.ceil(orderedQuantityFallback || 0));
+
+  for (const request of linkedRequests) {
+    if (!request.isActive || (request.vendorId != null && request.vendorId !== vendorId)) {
+      continue;
+    }
+
+    const remainingRequested = Math.max(0, Number(request.quantity || 0) - Number(request.qtyOrdered || 0));
+    const explicitQty = quantitiesByRequestId.get(request.id);
+    const allocatedQty = explicitQty ?? (remainingRequested > 0 ? remainingRequested : 0);
+    const qtyFromFallback = explicitQty == null && fallbackRemaining > 0
+      ? Math.min(remainingRequested || fallbackRemaining, fallbackRemaining)
+      : allocatedQty;
+    const qtyToApply = Math.max(0, Math.ceil(qtyFromFallback));
+    if (explicitQty == null && fallbackRemaining > 0) {
+      fallbackRemaining = Math.max(0, fallbackRemaining - qtyToApply);
+    }
+
+    const nextQtyOrdered = Number(request.qtyOrdered || 0) + qtyToApply;
+    const shouldMoveStatus = ['PENDING', 'APPROVED', 'ORDERED_PARTIAL', 'ORDERED'].includes(request.status);
+    const nextStatus = nextQtyOrdered >= Number(request.quantity || 0) ? 'ORDERED' : 'ORDERED_PARTIAL';
+
+    await db
+      .update(partsRequests)
+      .set({
+        vendorPoId,
+        vendorId,
+        orderMethod: request.orderMethod || 'PO',
+        qtyOrdered: nextQtyOrdered,
+        status: shouldMoveStatus ? nextStatus : request.status,
+        orderDate: request.orderDate || new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(partsRequests.id, request.id));
+
+    await db.insert(partsRequestStatusHistory).values({
+      partsRequestId: request.id,
+      fromStatus: request.status,
+      toStatus: shouldMoveStatus ? nextStatus : request.status,
+      changedBy,
+      reason: `Linked to vendor PO #${vendorPoId}${qtyToApply > 0 ? ` - ${qtyToApply} ordered` : ''}`,
+    });
+  }
+}
 
 // Temporary operational override: purchasing leadership is transitioning, so
 // vendor PO issuance must not be blocked by procurement/compliance gates.
@@ -1679,8 +1766,19 @@ router.post('/:id/items', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid vendor PO ID' });
     }
 
+    const vendorPOForLink = await storage.getVendorPO(vendorPoId);
+    if (!vendorPOForLink) {
+      return res.status(404).json({ error: 'Vendor PO not found' });
+    }
+
+    const linkedPartsRequestIds = parseLinkedPartsRequestIds(req.body?.partsRequestIds);
+    const linkedPartsRequestQuantities = parsePartsRequestQuantities(req.body?.partsRequestQuantities);
+    const sanitizedBody = { ...(req.body ?? {}) };
+    delete sanitizedBody.partsRequestIds;
+    delete sanitizedBody.partsRequestQuantities;
+
     const data = insertVendorPOItemSchema.parse({
-      ...req.body,
+      ...sanitizedBody,
       vendorPoId,
     });
 
@@ -1688,9 +1786,21 @@ router.post('/:id/items', async (req: Request, res: Response) => {
     await requireP2ComplianceBeforeProjectAllocation(vendorPoId, data);
 
     const item = await storage.createVendorPOItem(data);
+    await linkPartsRequestsToVendorPO({
+      requestIds: linkedPartsRequestIds,
+      quantitiesByRequestId: linkedPartsRequestQuantities,
+      vendorPoId,
+      vendorId: vendorPOForLink.vendorId,
+      orderedQuantityFallback: Number(data.purchaseQty ?? data.quantity ?? 0),
+      changedBy: (req as any).user?.username ?? (req as any).user?.email ?? 'system',
+    });
     await recordVendorPoAudit(req, vendorPoId, 'VENDOR_PO_ITEM_CREATED', {
       after: item,
-      meta: { itemId: item?.id ?? null, lineNumber: item?.lineNumber ?? null },
+      meta: {
+        itemId: item?.id ?? null,
+        lineNumber: item?.lineNumber ?? null,
+        linkedPartsRequestIds,
+      },
     });
     res.status(201).json(item);
   } catch (error) {

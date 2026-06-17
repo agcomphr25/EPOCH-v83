@@ -1987,21 +1987,65 @@ router.get('/:id/traceability', async (req, res) => {
     );
     packingSlips = allSlipsResult;
 
-    // Serialized items for this PO
-    const serials = await optionalTraceQuery<{
+    const currentPoItems = await optionalTraceQuery<{
+      poItemId: number;
+      orderedQuantity: number;
+    }>('current revision PO item lookup',
+      `SELECT id AS "poItemId",
+              quantity AS "orderedQuantity"
+       FROM p2_purchase_order_items
+       WHERE po_id = $1
+       ORDER BY created_at ASC, id ASC`,
+      [linkedPoId]
+    );
+    const currentRevisionQuantity = currentPoItems.reduce(
+      (sum, item) => sum + (Number(item.orderedQuantity) || 0),
+      0
+    );
+
+    // Serialized items for this PO revision family, capped to the current revised PO quantity.
+    const familySerials = await optionalTraceQuery<{
       id: string; serial_number: string; barcode: string; part_number: string;
       part_name: string; status: string; completed_at: string | null; finalized_at: string | null;
       current_department: string; sku: string | null; sequence_number: number;
-      po_id: number; po_number: string;
+      po_id: number; po_item_id: number; po_number: string;
     }>('serialized items lookup',
       `SELECT id, serial_number, barcode, part_number, part_name, status,
               completed_at, finalized_at, current_department, sku, sequence_number,
-              po_id, po_number
+              po_id, po_item_id, po_number
        FROM p2_serialized_items
        WHERE po_id = ANY($1::int[])
        ORDER BY po_id, part_number, sequence_number`,
       [traceabilityPoIds]
     );
+    const consumesTraceabilityCapacity = (serial: (typeof familySerials)[number]) => {
+      if (serial.status === 'COMPLETED' || serial.status === 'SCRAPPED') return true;
+      if (serial.status !== 'ACTIVE') return false;
+      const dept = String(serial.current_department || '').trim();
+      return dept !== '' && dept !== 'Pending Layup';
+    };
+    const sortSerials = (a: (typeof familySerials)[number], b: (typeof familySerials)[number]) =>
+      Number(a.po_id) - Number(b.po_id) ||
+      String(a.part_number || '').localeCompare(String(b.part_number || '')) ||
+      (Number(a.sequence_number) || 0) - (Number(b.sequence_number) || 0) ||
+      String(a.id).localeCompare(String(b.id));
+    const consumedSerials = familySerials
+      .filter(consumesTraceabilityCapacity)
+      .sort(sortSerials);
+    const consumedIds = new Set(consumedSerials.map((serial) => serial.id));
+    const pendingCurrentRevisionSerials = familySerials
+      .filter((serial) =>
+        !consumedIds.has(serial.id) &&
+        Number(serial.po_id) === linkedPoId &&
+        serial.status === 'ACTIVE'
+      )
+      .sort(sortSerials);
+    const currentCapacity = currentRevisionQuantity > 0
+      ? currentRevisionQuantity
+      : familySerials.length;
+    const serials = [...consumedSerials, ...pendingCurrentRevisionSerials]
+      .slice(0, currentCapacity)
+      .sort(sortSerials);
 
     return res.json({
       hasShipment: !!lot,

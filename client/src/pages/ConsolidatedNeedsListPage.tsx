@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
@@ -38,7 +38,9 @@ import {
   Building2,
   Globe,
   FileText,
-  Users
+  Users,
+  Eye,
+  Link as LinkIcon,
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
@@ -65,6 +67,18 @@ type Vendor = {
   email?: string;
   phone?: string;
   website?: string;
+};
+
+type VendorPO = {
+  id: number;
+  poNumber?: string | null;
+  vendorId: number;
+  vendorName?: string | null;
+  status: string;
+  productionLine?: string | null;
+  orderDate?: string | null;
+  expectedDeliveryDate?: string | null;
+  totalCost?: number | null;
 };
 
 type PartsRequest = {
@@ -149,6 +163,13 @@ export default function ConsolidatedNeedsListPage() {
   const [isCreateBatchDialogOpen, setIsCreateBatchDialogOpen] = useState(false);
   const [batchVendorGroup, setBatchVendorGroup] = useState<VendorGroup | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
+  const [detailRequest, setDetailRequest] = useState<PartsRequest | null>(null);
+  const [linkPoRequest, setLinkPoRequest] = useState<PartsRequest | null>(null);
+  const [selectedVendorPoId, setSelectedVendorPoId] = useState('');
+  const [linkPoCreateLine, setLinkPoCreateLine] = useState(true);
+  const [linkPoQuantity, setLinkPoQuantity] = useState('');
+  const [linkPoUnitPrice, setLinkPoUnitPrice] = useState('');
+  const [linkPoNotes, setLinkPoNotes] = useState('');
 
   // Get current user for approval tracking
   const { data: user } = useQuery<{ username: string; firstName: string; lastName: string }>({
@@ -165,6 +186,12 @@ export default function ConsolidatedNeedsListPage() {
     queryKey: ['/api/vendors'],
   });
   const vendors = vendorsResponse?.data ?? [];
+
+  const { data: vendorPOsResponse } = useQuery<{ data: VendorPO[]; total: number; page: number; pageSize: number }>({
+    queryKey: ['/api/vendor-pos', { pageSize: 200, status: 'any', archived: 'false' }],
+    queryFn: () => apiRequest('/api/vendor-pos?pageSize=200&status=any&archived=false'),
+  });
+  const vendorPOs = vendorPOsResponse?.data ?? [];
 
   // Update parts request mutation
   const updateRequestMutation = useMutation({
@@ -267,6 +294,54 @@ export default function ConsolidatedNeedsListPage() {
       toast({
         title: 'Error',
         description: error?.message || 'Failed to create Vendor PO draft.',
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const linkVendorPoMutation = useMutation({
+    mutationFn: async (data: {
+      requestId: number;
+      vendorPoId: number;
+      createLineItem: boolean;
+      quantity?: number;
+      unitPrice?: number;
+      notes?: string;
+    }) => {
+      return apiRequest(`/api/inventory/parts-requests/${data.requestId}/link-vendor-po`, {
+        method: 'POST',
+        body: JSON.stringify({
+          vendorPoId: data.vendorPoId,
+          createLineItem: data.createLineItem,
+          quantity: data.quantity,
+          unitPrice: data.unitPrice,
+          notes: data.notes,
+        }),
+      });
+    },
+    onSuccess: (result: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/inventory/parts-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/vendor-pos'] });
+      const lineMessage = result?.createdLine
+        ? ` Created PO line #${result.createdLine.lineNumber}.`
+        : result?.existingLine
+          ? ` Matched PO line #${result.existingLine.lineNumber}.`
+          : '';
+      toast({
+        title: 'Vendor PO Linked',
+        description: `Parts request is now linked to Vendor PO #${result?.vendorPO?.id}.${lineMessage}`,
+      });
+      setLinkPoRequest(null);
+      setSelectedVendorPoId('');
+      setLinkPoCreateLine(true);
+      setLinkPoQuantity('');
+      setLinkPoUnitPrice('');
+      setLinkPoNotes('');
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'Could not link Vendor PO',
+        description: error?.message || 'Failed to link this request to the selected Vendor PO.',
         variant: 'destructive',
       });
     },
@@ -418,6 +493,47 @@ export default function ConsolidatedNeedsListPage() {
     return map;
   }, [vendors]);
 
+  const normalizeVendorName = useCallback((value?: string | null) =>
+    (value || '').toLowerCase().replace(/[^a-z0-9]/g, ''), []);
+
+  const vendorNameMap = useMemo(() => {
+    const map = new Map<string, Vendor>();
+    vendors.forEach((vendor) => {
+      const key = normalizeVendorName(vendor.name);
+      if (key) map.set(key, vendor);
+    });
+    return map;
+  }, [vendors, normalizeVendorName]);
+
+  const getResolvedVendorForRequest = useCallback((request: PartsRequest): Vendor | null => {
+    if (request.vendorId && vendorMap.has(request.vendorId)) {
+      return vendorMap.get(request.vendorId)!;
+    }
+    const sourceKey = normalizeVendorName(request.inventoryItem?.source || request.supplier);
+    if (sourceKey && vendorNameMap.has(sourceKey)) {
+      return vendorNameMap.get(sourceKey)!;
+    }
+    for (const [vendorKey, vendor] of vendorNameMap) {
+      if (sourceKey && (vendorKey.includes(sourceKey) || sourceKey.includes(vendorKey))) {
+        return vendor;
+      }
+    }
+    return null;
+  }, [vendorMap, vendorNameMap, normalizeVendorName]);
+
+  const openLinkPoDialog = (request: PartsRequest) => {
+    setLinkPoRequest(request);
+    setSelectedVendorPoId(request.vendorPoId ? String(request.vendorPoId) : '');
+    setLinkPoCreateLine(true);
+    setLinkPoQuantity(String(request.quantity || ''));
+    setLinkPoUnitPrice(
+      request.estimatedCost && request.quantity
+        ? String(Number(request.estimatedCost / request.quantity).toFixed(2))
+        : ''
+    );
+    setLinkPoNotes('');
+  };
+
   const vendorGroups = useMemo(() => {
     const activeStatuses = ['PENDING', 'APPROVED', 'ORDERED', 'ORDERED_PARTIAL', 'RECEIVED', 'RECEIVED_PARTIAL', 'CANCEL_REQUESTED'];
     const activeRequests = filteredRequests.filter(r => activeStatuses.includes(r.status));
@@ -436,12 +552,11 @@ export default function ConsolidatedNeedsListPage() {
     };
 
     for (const request of activeRequests) {
-      const vendorId = request.vendorId;
+      const vendor = getResolvedVendorForRequest(request);
 
-      if (vendorId && vendorMap.has(vendorId)) {
+      if (vendor) {
         // Has a resolved vendor record — group under that vendor regardless of order method
-        const vendor = vendorMap.get(vendorId)!;
-        const key = `vendor-${vendorId}`;
+        const key = `vendor-${vendor.id}`;
         if (!groups[key]) {
           groups[key] = {
             key,
@@ -494,7 +609,7 @@ export default function ConsolidatedNeedsListPage() {
         if (b.vendorName === 'Website Orders') return -1;
         return a.vendorName.localeCompare(b.vendorName);
       });
-  }, [filteredRequests, vendorMap]);
+  }, [filteredRequests, getResolvedVendorForRequest]);
 
   const filteredVendorGroups = useMemo(() => {
     if (vendorFilterTab === 'po') {
@@ -504,6 +619,21 @@ export default function ConsolidatedNeedsListPage() {
     }
     return vendorGroups;
   }, [vendorGroups, vendorFilterTab]);
+
+  const linkRequestVendor = linkPoRequest ? getResolvedVendorForRequest(linkPoRequest) : null;
+  const availableVendorPOsForLink = useMemo(() => {
+    const vendorId = linkPoRequest?.vendorId ?? linkRequestVendor?.id ?? null;
+    return vendorPOs
+      .filter((po) => po.status !== 'Cancelled')
+      .filter((po) => !vendorId || po.vendorId === vendorId)
+      .sort((a, b) => {
+        const aDate = a.orderDate || '';
+        const bDate = b.orderDate || '';
+        return bDate.localeCompare(aDate) || b.id - a.id;
+      });
+  }, [vendorPOs, linkPoRequest, linkRequestVendor]);
+
+  const selectedVendorPO = availableVendorPOsForLink.find((po) => String(po.id) === selectedVendorPoId) ?? null;
 
   const toggleExpanded = (partNumber: string) => {
     setExpandedParts((prev) => {
@@ -619,6 +749,20 @@ export default function ConsolidatedNeedsListPage() {
         orderDate: new Date().toISOString(),
         expectedDelivery: bulkExpectedDelivery || null,
       },
+    });
+  };
+
+  const handleLinkVendorPo = () => {
+    if (!linkPoRequest || !selectedVendorPoId) return;
+    const quantity = linkPoQuantity ? Number(linkPoQuantity) : null;
+    const unitPrice = linkPoUnitPrice ? Number(linkPoUnitPrice) : null;
+    linkVendorPoMutation.mutate({
+      requestId: linkPoRequest.id,
+      vendorPoId: Number(selectedVendorPoId),
+      createLineItem: linkPoCreateLine,
+      quantity: quantity !== null && Number.isFinite(quantity) ? quantity : undefined,
+      unitPrice: unitPrice !== null && Number.isFinite(unitPrice) ? unitPrice : undefined,
+      notes: linkPoNotes.trim() || undefined,
     });
   };
 
@@ -1064,6 +1208,9 @@ export default function ConsolidatedNeedsListPage() {
                     <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
                       {vendorGroup.requests.map((request) => {
                         const selectableForPo = request.status === 'APPROVED' && request.orderMethod !== 'WEBSITE' && !request.vendorPoId;
+                        const canLinkExistingPo = !request.vendorPoId
+                          && request.orderMethod !== 'WEBSITE'
+                          && !['REJECTED', 'CANCELED', 'DELIVERED_TO_DEPT'].includes(request.status);
                         return (
                         <tr key={request.id} className="bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800">
                           <td className="px-3 py-2">
@@ -1075,8 +1222,17 @@ export default function ConsolidatedNeedsListPage() {
                             />
                           </td>
                           <td className="px-3 py-2">
-                            <div className="font-medium text-sm text-gray-900 dark:text-gray-100">{request.partName}</div>
-                            <div className="text-xs text-gray-500 dark:text-gray-400">{request.partNumber}</div>
+                            <button
+                              type="button"
+                              onClick={() => setDetailRequest(request)}
+                              className="text-left group"
+                              data-testid={`button-view-part-${request.id}`}
+                            >
+                              <div className="font-medium text-sm text-gray-900 dark:text-gray-100 group-hover:text-blue-700 dark:group-hover:text-blue-300 group-hover:underline">
+                                {request.partName}
+                              </div>
+                              <div className="text-xs text-gray-500 dark:text-gray-400">{request.partNumber}</div>
+                            </button>
                             {request.inventoryItem?.source && (
                               <div className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">
                                 Source: {request.inventoryItem.source}
@@ -1111,6 +1267,17 @@ export default function ConsolidatedNeedsListPage() {
                             </div>
                           </td>
                           <td className="px-3 py-2 text-right">
+                            <div className="flex flex-wrap justify-end gap-2">
+                            <Button size="sm" variant="ghost" onClick={() => setDetailRequest(request)} data-testid={`button-details-${request.id}`}>
+                              <Eye className="w-3 h-3 mr-1" />
+                              View
+                            </Button>
+                            {canLinkExistingPo && (
+                              <Button size="sm" variant="outline" onClick={() => openLinkPoDialog(request)} data-testid={`button-link-po-${request.id}`}>
+                                <LinkIcon className="w-3 h-3 mr-1" />
+                                Link PO
+                              </Button>
+                            )}
                             {selectableForPo && (
                               <Button size="sm" variant="default" onClick={() => toggleRequestSelection(request.id)} data-testid={`button-select-request-${request.id}`}>
                                 {selectedVendorRequests.has(request.id) ? 'Selected' : 'Select'}
@@ -1136,6 +1303,7 @@ export default function ConsolidatedNeedsListPage() {
                                 <ExternalLink className="w-3 h-3" />
                               </Button>
                             )}
+                            </div>
                           </td>
                         </tr>
                         );
@@ -1406,6 +1574,237 @@ export default function ConsolidatedNeedsListPage() {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Part / Request Details Dialog */}
+      <Dialog open={!!detailRequest} onOpenChange={(open) => { if (!open) setDetailRequest(null); }}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{detailRequest?.partName || 'Parts Request'}</DialogTitle>
+            <DialogDescription>
+              {detailRequest ? `Request PR-${detailRequest.id} | Part #${detailRequest.partNumber}` : 'Request details'}
+            </DialogDescription>
+          </DialogHeader>
+
+          {detailRequest && (
+            <div className="space-y-4 mt-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="rounded-md border p-3">
+                  <div className="text-xs text-muted-foreground">Status</div>
+                  <div className="mt-1">{getStatusBadge(detailRequest.status)}</div>
+                </div>
+                <div className="rounded-md border p-3">
+                  <div className="text-xs text-muted-foreground">Quantity</div>
+                  <div className="text-lg font-semibold">{detailRequest.quantity}</div>
+                </div>
+                <div className="rounded-md border p-3">
+                  <div className="text-xs text-muted-foreground">Urgency</div>
+                  <div className="mt-1">{getUrgencyBadge(detailRequest.urgency)}</div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <div>
+                  <div className="text-muted-foreground">Department</div>
+                  <div className="font-medium">{detailRequest.department || '-'}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground">Requested For</div>
+                  <div className="font-medium">{detailRequest.requestedForDisplayName || '-'}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground">Requested By</div>
+                  <div className="font-medium">{detailRequest.requestedBy}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground">Source / Vendor</div>
+                  <div className="font-medium">
+                    {getResolvedVendorForRequest(detailRequest)?.name || detailRequest.inventoryItem?.source || detailRequest.supplier || 'Unassigned'}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground">Vendor PO</div>
+                  <div className="font-medium">
+                    {detailRequest.vendorPoId ? `Vendor PO #${detailRequest.vendorPoId}` : 'Not linked'}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground">Estimated Cost</div>
+                  <div className="font-medium">
+                    {detailRequest.estimatedCost ? `$${detailRequest.estimatedCost.toFixed(2)}` : '-'}
+                  </div>
+                </div>
+              </div>
+
+              {(detailRequest.reason || detailRequest.notes) && (
+                <div className="rounded-md border p-3 text-sm">
+                  {detailRequest.reason && (
+                    <div>
+                      <div className="text-muted-foreground">Reason</div>
+                      <div>{detailRequest.reason}</div>
+                    </div>
+                  )}
+                  {detailRequest.notes && (
+                    <div className={detailRequest.reason ? 'mt-3' : ''}>
+                      <div className="text-muted-foreground">Notes</div>
+                      <div>{detailRequest.notes}</div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2">
+                {!detailRequest.vendorPoId && detailRequest.orderMethod !== 'WEBSITE' && !['REJECTED', 'CANCELED', 'DELIVERED_TO_DEPT'].includes(detailRequest.status) && (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      openLinkPoDialog(detailRequest);
+                      setDetailRequest(null);
+                    }}
+                  >
+                    <LinkIcon className="w-4 h-4 mr-2" />
+                    Link Existing PO
+                  </Button>
+                )}
+                <Button variant="outline" onClick={() => setDetailRequest(null)}>
+                  Close
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Link Existing Vendor PO Dialog */}
+      <Dialog
+        open={!!linkPoRequest}
+        onOpenChange={(open) => {
+          if (!open) {
+            setLinkPoRequest(null);
+            setSelectedVendorPoId('');
+            setLinkPoNotes('');
+          }
+        }}
+      >
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Link Existing Vendor PO</DialogTitle>
+            <DialogDescription>
+              {linkPoRequest
+                ? `Connect PR-${linkPoRequest.id} for ${linkPoRequest.partName} to an already-created Vendor PO.`
+                : 'Select a parts request and Vendor PO.'}
+            </DialogDescription>
+          </DialogHeader>
+
+          {linkPoRequest && (
+            <div className="space-y-4 mt-4">
+              <div className="rounded-md border p-3 text-sm">
+                <div className="font-medium">{linkPoRequest.partName}</div>
+                <div className="text-muted-foreground">
+                  Part #{linkPoRequest.partNumber} | Qty {linkPoRequest.quantity} | {linkPoRequest.department || 'No department'}
+                </div>
+                <div className="text-muted-foreground">
+                  Resolved vendor: {linkRequestVendor?.name || linkPoRequest.inventoryItem?.source || linkPoRequest.supplier || 'Unassigned'}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Vendor PO</label>
+                <Select value={selectedVendorPoId} onValueChange={setSelectedVendorPoId}>
+                  <SelectTrigger data-testid="select-existing-vendor-po">
+                    <SelectValue placeholder={availableVendorPOsForLink.length ? 'Select an existing Vendor PO' : 'No matching Vendor POs found'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableVendorPOsForLink.map((po) => (
+                      <SelectItem key={po.id} value={String(po.id)}>
+                        #{po.id}{po.poNumber ? ` | ${po.poNumber}` : ' | RFQ/PO number pending'} | {po.status} | {po.productionLine || 'No category'}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {linkRequestVendor && availableVendorPOsForLink.length === 0 && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    No open Vendor POs were found for {linkRequestVendor.name}. Clear the request vendor first or create/use a PO for this vendor.
+                  </p>
+                )}
+              </div>
+
+              {selectedVendorPO && (
+                <div className="rounded-md bg-gray-50 dark:bg-gray-900 p-3 text-sm">
+                  <div className="font-medium">Selected PO #{selectedVendorPO.id}{selectedVendorPO.poNumber ? ` (${selectedVendorPO.poNumber})` : ''}</div>
+                  <div className="text-muted-foreground">
+                    Status: {selectedVendorPO.status} | Category: {selectedVendorPO.productionLine || '-'} | Total: ${Number(selectedVendorPO.totalCost || 0).toFixed(2)}
+                  </div>
+                </div>
+              )}
+
+              <label className="flex items-start gap-3 rounded-md border p-3 text-sm cursor-pointer">
+                <Checkbox
+                  checked={linkPoCreateLine}
+                  onCheckedChange={(checked) => setLinkPoCreateLine(checked === true)}
+                  data-testid="checkbox-create-po-line"
+                />
+                <span>
+                  <span className="font-medium block">Add this part as a PO line if it is not already on the PO</span>
+                  <span className="text-muted-foreground">
+                    Leave this on when the PO exists but the request has not been represented as a line item yet.
+                  </span>
+                </span>
+              </label>
+
+              {linkPoCreateLine && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">PO Line Quantity</label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={linkPoQuantity}
+                      onChange={(e) => setLinkPoQuantity(e.target.value)}
+                      data-testid="input-link-po-quantity"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Unit Price</label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={linkPoUnitPrice}
+                      onChange={(e) => setLinkPoUnitPrice(e.target.value)}
+                      placeholder="0.00"
+                      data-testid="input-link-po-unit-price"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Link Notes</label>
+                <Textarea
+                  value={linkPoNotes}
+                  onChange={(e) => setLinkPoNotes(e.target.value)}
+                  placeholder="Optional note explaining why this request is being linked to an existing PO"
+                  rows={2}
+                  data-testid="textarea-link-po-notes"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setLinkPoRequest(null)}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleLinkVendorPo}
+                  disabled={!selectedVendorPoId || linkVendorPoMutation.isPending}
+                  data-testid="button-confirm-link-po"
+                >
+                  {linkVendorPoMutation.isPending ? 'Linking...' : 'Link Vendor PO'}
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 

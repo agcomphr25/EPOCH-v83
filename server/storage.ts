@@ -16461,12 +16461,54 @@ export class DatabaseStorage implements IStorage {
       .where(eq(p2SerializedItems.poId, po.id));
     const startSeq = (maxSeqResult[0]?.maxSeq ?? 0) + 1;
 
-    let itemRouting = await dbClient.query.partRoutings.findFirst({
-      where: and(eq(partRoutings.partNumber, poItem.partNumber), eq(partRoutings.isActive, true)),
-    });
+    const [projectForPoItem] = await dbClient
+      .select({ id: projects.id })
+      .from(projects)
+      .where(and(eq(projects.poId, po.id), eq(projects.p2PoItemId, poItem.id)))
+      .limit(1);
+    const [projectForPo] = projectForPoItem
+      ? [projectForPoItem]
+      : await dbClient
+          .select({ id: projects.id })
+          .from(projects)
+          .where(eq(projects.poId, po.id))
+          .limit(1);
+    const projectId = projectForPo?.id ?? null;
+
+    let itemRouting = projectId
+      ? await dbClient.query.partRoutings.findFirst({
+          where: and(
+            eq(partRoutings.projectId, projectId),
+            eq(partRoutings.partNumber, poItem.partNumber),
+            eq(partRoutings.isActive, true)
+          ),
+        })
+      : null;
+    if (!itemRouting && projectId) {
+      itemRouting = await dbClient.query.partRoutings.findFirst({
+        where: and(
+          eq(partRoutings.projectId, projectId),
+          ilike(partRoutings.partNumber, poItem.partNumber),
+          eq(partRoutings.isActive, true)
+        ),
+      });
+    }
     if (!itemRouting) {
       itemRouting = await dbClient.query.partRoutings.findFirst({
-        where: and(ilike(partRoutings.partNumber, poItem.partNumber), eq(partRoutings.isActive, true)),
+        where: and(
+          isNull(partRoutings.projectId),
+          eq(partRoutings.partNumber, poItem.partNumber),
+          eq(partRoutings.isActive, true)
+        ),
+      });
+    }
+    if (!itemRouting) {
+      itemRouting = await dbClient.query.partRoutings.findFirst({
+        where: and(
+          isNull(partRoutings.projectId),
+          ilike(partRoutings.partNumber, poItem.partNumber),
+          eq(partRoutings.isActive, true)
+        ),
       });
     }
     const baseMatch = poItem.partNumber.match(/^(.+?)\s*Rev\s*\w+$/i);

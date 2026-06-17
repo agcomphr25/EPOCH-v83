@@ -49,6 +49,7 @@ type InventoryItem = {
   agPartNumber: string;
   name: string;
   source?: string | null;
+  vendorName?: string | null;
   vendorId?: number | null;
   currentBalance?: number;
   minStock?: number;
@@ -509,7 +510,10 @@ export default function ConsolidatedNeedsListPage() {
     if (request.vendorId && vendorMap.has(request.vendorId)) {
       return vendorMap.get(request.vendorId)!;
     }
-    const sourceKey = normalizeVendorName(request.inventoryItem?.source || request.supplier);
+    if (request.inventoryItem?.vendorId && vendorMap.has(request.inventoryItem.vendorId)) {
+      return vendorMap.get(request.inventoryItem.vendorId)!;
+    }
+    const sourceKey = normalizeVendorName(request.inventoryItem?.vendorName || request.inventoryItem?.source || request.supplier);
     if (sourceKey && vendorNameMap.has(sourceKey)) {
       return vendorNameMap.get(sourceKey)!;
     }
@@ -573,11 +577,11 @@ export default function ConsolidatedNeedsListPage() {
         groups[key].totalQuantity += request.quantity;
         groups[key].totalEstimatedCost += request.estimatedCost || 0;
       } else if (request.orderMethod === 'WEBSITE') {
-        // WEBSITE order with no resolved vendor — group by source text so buyers see per-site buckets.
+        // WEBSITE order with no resolved vendor — group by vendor text so buyers see per-site buckets.
         // Future improvement: once source_vendor_id FK exists, all WEBSITE items will resolve to a vendor and this fallback will be rarely needed.
-        const source = request.inventoryItem?.source?.trim();
-        const key = source ? `website-${source.toLowerCase()}` : 'website-unresolved';
-        const groupName = source || 'Website Orders';
+        const vendorName = (request.inventoryItem?.vendorName || request.inventoryItem?.source || '').trim();
+        const key = vendorName ? `website-${vendorName.toLowerCase()}` : 'website-unresolved';
+        const groupName = vendorName || 'Website Orders';
         if (!groups[key]) {
           groups[key] = {
             key,
@@ -1233,14 +1237,9 @@ export default function ConsolidatedNeedsListPage() {
                               </div>
                               <div className="text-xs text-gray-500 dark:text-gray-400">{request.partNumber}</div>
                             </button>
-                            {request.inventoryItem?.source && (
+                            {(getResolvedVendorForRequest(request) || request.inventoryItem?.vendorName || request.inventoryItem?.source) && (
                               <div className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">
-                                Source: {request.inventoryItem.source}
-                              </div>
-                            )}
-                            {request.inventoryItem?.vendorId && vendorMap.has(request.inventoryItem.vendorId) && (
-                              <div className="text-xs text-gray-400 dark:text-gray-500">
-                                Mfr: {vendorMap.get(request.inventoryItem.vendorId)!.name}
+                                Vendor: {getResolvedVendorForRequest(request)?.name || request.inventoryItem?.vendorName || request.inventoryItem?.source}
                               </div>
                             )}
                           </td>
@@ -1618,9 +1617,9 @@ export default function ConsolidatedNeedsListPage() {
                   <div className="font-medium">{detailRequest.requestedBy}</div>
                 </div>
                 <div>
-                  <div className="text-muted-foreground">Source / Vendor</div>
+                  <div className="text-muted-foreground">Vendor</div>
                   <div className="font-medium">
-                    {getResolvedVendorForRequest(detailRequest)?.name || detailRequest.inventoryItem?.source || detailRequest.supplier || 'Unassigned'}
+                    {getResolvedVendorForRequest(detailRequest)?.name || detailRequest.inventoryItem?.vendorName || detailRequest.inventoryItem?.source || detailRequest.supplier || 'Unassigned'}
                   </div>
                 </div>
                 <div>
@@ -1705,7 +1704,7 @@ export default function ConsolidatedNeedsListPage() {
                   Part #{linkPoRequest.partNumber} | Qty {linkPoRequest.quantity} | {linkPoRequest.department || 'No department'}
                 </div>
                 <div className="text-muted-foreground">
-                  Resolved vendor: {linkRequestVendor?.name || linkPoRequest.inventoryItem?.source || linkPoRequest.supplier || 'Unassigned'}
+                  Resolved vendor: {linkRequestVendor?.name || linkPoRequest.inventoryItem?.vendorName || linkPoRequest.inventoryItem?.source || linkPoRequest.supplier || 'Unassigned'}
                 </div>
               </div>
 

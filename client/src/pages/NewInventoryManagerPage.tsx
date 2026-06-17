@@ -91,7 +91,7 @@ function InventorySplitView() {
               <tr className="border-b bg-muted/50">
                 <th className="h-10 px-4 text-left font-medium">AG Part #</th>
                 <th className="h-10 px-4 text-left font-medium">Name</th>
-                <th className="h-10 px-4 text-left font-medium">Source</th>
+                <th className="h-10 px-4 text-left font-medium">Vendor</th>
                 <th className="h-10 px-4 text-left font-medium">Cost Per</th>
                 <th className="h-10 px-4 text-left font-medium">Supplier Part #</th>
               </tr>
